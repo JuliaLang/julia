@@ -129,7 +129,7 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 ## reduce & mapreduce
 
 # mapreduce_***_impl require ifirst < ilast
-function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
+function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer)
     @inbounds fx1 = r_promote(op, f(A[ifirst]))
     @inbounds fx2 = f(A[ifirst+=1])
     @inbounds v = op(fx1, fx2)
@@ -153,7 +153,7 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays

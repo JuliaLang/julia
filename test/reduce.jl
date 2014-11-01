@@ -104,6 +104,8 @@ prod([3.0]) === 0.0
 prod(z) === 120
 prod(fz) === 120.0
 
+prod(1:big(16)) == big(20922789888000)
+
 # check type-stability
 prod2(itr) = invoke(prod, (Any,), itr)
 @test prod(Int[]) === prod2(Int[]) === 1
