@@ -12,12 +12,12 @@ const RTLD_NOLOAD    = 0x00000010
 const RTLD_DEEPBIND  = 0x00000020
 const RTLD_FIRST     = 0x00000040
 
-function dlsym(hnd::Ptr, s::Union(Symbol,String))
+function dlsym(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
     ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 end
 
-function dlsym_e(hnd::Ptr, s::Union(Symbol,String))
+function dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
     ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
 end
@@ -25,10 +25,10 @@ end
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     dlopen(string(s), flags)
 
-dlopen(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 
-dlopen_e(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
 
 dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
@@ -112,11 +112,11 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
     return ""
 end
 
-function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(String,Symbol)=string(f))
+function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{Uint8}), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::(Type...), name::Union(String,Symbol)=string(f))
+function ccallable(f::Function, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
     ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{Uint8}), f, C_NULL, argt, name)
 end
 

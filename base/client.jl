@@ -65,7 +65,7 @@ function repl_cmd(cmd)
     nothing
 end
 
-function repl_hook(input::String)
+function repl_hook(input::AbstractString)
     Expr(:call, :(Base.repl_cmd),
          macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
@@ -129,7 +129,7 @@ end
 
 _repl_start = Condition()
 
-function parse_input_line(s::String)
+function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
@@ -169,7 +169,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::String) = isfile(path) && include(path)
+try_include(path::AbstractString) = isfile(path) && include(path)
 
 function init_bind_addr(args::Vector{UTF8String})
     # Treat --bind-to in a position independent manner in ARGS since
@@ -335,8 +335,8 @@ function load_juliarc()
     try_include(abspath(homedir(),".juliarc.jl"))
 end
 
-function load_machine_file(path::String)
-    machines = String[]
+function load_machine_file(path::AbstractString)
+    machines = AbstractString[]
     for line in split(readall(path),'\n'; keep=false)
         s = split(line,'*'; keep=false)
         if length(s) > 1

@@ -8,7 +8,7 @@ function completes_global(x, name)
     return beginswith(x, name) && !('#' in x)
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::String, all::Bool=false, imported::Bool=false)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = UTF8String[string(s) for s in ssyms]
@@ -107,7 +107,7 @@ function complete_keyword(s::ByteString)
     sorted_keywords[r]
 end
 
-function complete_path(path::String, pos)
+function complete_path(path::AbstractString, pos)
     dir, prefix = splitdir(path)
     local files
     try
@@ -133,7 +133,7 @@ function complete_path(path::String, pos)
     matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
 end
 
-function complete_methods(input::String)
+function complete_methods(input::AbstractString)
     tokens = split(input, '.')
     fn = Main
     for token in tokens
@@ -254,7 +254,7 @@ function shell_completions(string, pos)
     # Now look at the last thing we parsed
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
-    if all(map(s -> isa(s, String), args.args[end].args))
+    if all(map(s -> isa(s, AbstractString), args.args[end].args))
         # Treat this as a path (perhaps give a list of comands in the future as well?)
         return complete_path(join(args.args[end].args), pos)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))

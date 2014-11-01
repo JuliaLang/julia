@@ -76,7 +76,7 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
         rows -= 2 # Subtract the summary and final ⋮ continuation lines
 
         # determine max key width to align the output, caching the strings
-        ks = Array(String, min(rows, length(t)))
+        ks = Array(AbstractString, min(rows, length(t)))
         keylen = 0
         for (i, k) in enumerate(keys(t))
             i > rows && break

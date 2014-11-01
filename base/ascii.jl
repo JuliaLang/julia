@@ -117,4 +117,4 @@ function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIStrin
     end
     convert(ASCIIString, a)
 end
-convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))
+convert(::Type{ASCIIString}, s::AbstractString) = ascii(bytestring(s))

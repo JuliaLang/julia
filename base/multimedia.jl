@@ -19,7 +19,7 @@ print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
     Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
-    if isa(s,String)
+    if isa(s,AbstractString)
         :(MIME{$(Expr(:quote, symbol(s)))})
     else
         :(MIME{symbol($s)})
@@ -38,8 +38,8 @@ mimewritable{mime}(::MIME{mime}, x) =
   method_exists(writemime, (IO, MIME{mime}, typeof(x)))
 
 # it is convenient to accept strings instead of ::MIME
-writemime(io::IO, m::String, x) = writemime(io, MIME(m), x)
-mimewritable(m::String, x) = mimewritable(MIME(m), x)
+writemime(io::IO, m::AbstractString, x) = writemime(io, MIME(m), x)
+mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
 # MIME types are assumed to be binary data except for a set of types known
@@ -50,7 +50,7 @@ mimewritable(m::String, x) = mimewritable(MIME(m), x)
 # is like reprmime except that it always returns a string, which in the
 # case of binary data is Base64-encoded.
 #
-# Also, if reprmime is passed a String for a text type or Vector{Uint8} for
+# Also, if reprmime is passed a AbstractString for a text type or Vector{Uint8} for
 # a binary type, the argument is assumed to already be in the corresponding
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
@@ -65,7 +65,7 @@ macro textmime(mime)
 
         Base.Multimedia.istext(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
-            Base.Multimedia.reprmime(m::mimeT, x::String) = x
+            Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
         Base.Multimedia.reprmime(m::mimeT, x) = sprint(writemime, m, x)
         Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
@@ -83,9 +83,9 @@ stringmime(m::MIME, x) = base64(writemime, m, x)
 stringmime(m::MIME, x::Vector{Uint8}) = base64(write, x)
 
 # it is convenient to accept strings instead of ::MIME
-istext(m::String) = istext(MIME(m))
-reprmime(m::String, x) = reprmime(MIME(m), x)
-stringmime(m::String, x) = stringmime(MIME(m), x)
+istext(m::AbstractString) = istext(MIME(m))
+reprmime(m::AbstractString, x) = reprmime(MIME(m), x)
+stringmime(m::AbstractString, x) = stringmime(MIME(m), x)
 
 for mime in ["text/vnd.graphviz", "text/latex", "text/calendar", "text/n3", "text/richtext", "text/x-setext", "text/sgml", "text/tab-separated-values", "text/x-vcalendar", "text/x-vcard", "text/cmd", "text/css", "text/csv", "text/html", "text/javascript", "text/markdown", "text/plain", "text/vcard", "text/xml", "application/atom+xml", "application/ecmascript", "application/json", "application/rdf+xml", "application/rss+xml", "application/xml-dtd", "application/postscript", "image/svg+xml", "application/x-latex", "application/xhtml+xml", "application/javascript", "application/xml", "model/x3d+xml", "model/x3d+vrml", "model/vrml"]
     @eval @textmime $mime
@@ -105,10 +105,10 @@ end
 abstract Display
 
 # it is convenient to accept strings instead of ::MIME
-display(d::Display, mime::String, x) = display(d, MIME(mime), x)
-display(mime::String, x) = display(MIME(mime), x)
-displayable(d::Display, mime::String) = displayable(d, MIME(mime))
-displayable(mime::String) = displayable(MIME(mime))
+display(d::Display, mime::AbstractString, x) = display(d, MIME(mime), x)
+display(mime::AbstractString, x) = display(MIME(mime), x)
+displayable(d::Display, mime::AbstractString) = displayable(d, MIME(mime))
+displayable(mime::AbstractString) = displayable(MIME(mime))
 
 # simplest display, which only knows how to display text/plain
 immutable TextDisplay <: Display
@@ -198,7 +198,7 @@ function redisplay(x)
     throw(MethodError(redisplay, (x,)))
 end
 
-function redisplay(m::Union(MIME,String), x)
+function redisplay(m::Union(MIME,AbstractString), x)
     for i = length(displays):-1:1
         xdisplayable(displays[i], m, x) &&
             @try_display return redisplay(displays[i], m, x)
@@ -208,7 +208,7 @@ end
 
 # default redisplay is simply to call display
 redisplay(d::Display, x) = display(d, x)
-redisplay(d::Display, m::Union(MIME,String), x) = display(d, m, x)
+redisplay(d::Display, m::Union(MIME,AbstractString), x) = display(d, m, x)
 
 ###########################################################################
 

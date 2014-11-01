@@ -12,7 +12,7 @@ type Regex
     ovec::Vector{Int32}
 
 
-    function Regex(pattern::String, options::Integer)
+    function Regex(pattern::AbstractString, options::Integer)
         pattern = bytestring(pattern)
         options = int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
@@ -28,7 +28,7 @@ type Regex
     end
 end
 
-function Regex(pattern::String, flags::String)
+function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_OPTS
     for f in flags
         options |= f=='i' ? PCRE.CASELESS  :
@@ -39,7 +39,7 @@ function Regex(pattern::String, flags::String)
     end
     Regex(pattern, options)
 end
-Regex(pattern::String) = Regex(pattern, DEFAULT_OPTS)
+Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_OPTS)
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
@@ -101,7 +101,7 @@ function show(io::IO, m::RegexMatch)
     print(io, ")")
 end
 
-function ismatch(r::Regex, s::String, offset::Integer=0)
+function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, r.extra, bytestring(s), offset, r.options & PCRE.EXECUTE_MASK,
                      r.ovec)
@@ -130,8 +130,8 @@ end
 match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Uint32=uint32(0)) =
     match(re, utf8(str), idx, add_opts)
 
-match(r::Regex, s::String) = match(r, s, start(s))
-match(r::Regex, s::String, i::Integer) =
+match(r::Regex, s::AbstractString) = match(r, s, start(s))
+match(r::Regex, s::AbstractString, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
 function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
@@ -186,16 +186,16 @@ function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
     PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec) ?
         ((re.ovec[1]+1):prevind(str,re.ovec[2]+1)) : (0:-1)
 end
-search(s::String, r::Regex, idx::Integer) =
+search(s::AbstractString, r::Regex, idx::Integer) =
     error("regex search is only available for bytestrings; use bytestring(s) to convert")
-search(s::String, r::Regex) = search(s,r,start(s))
+search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
 immutable RegexMatchIterator
     regex::Regex
     string::UTF8String
     overlap::Bool
 
-    function RegexMatchIterator(regex::Regex, string::String, ovr::Bool=false)
+    function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)
         new(regex, string, ovr)
     end
 end
@@ -238,11 +238,11 @@ function next(itr::RegexMatchIterator, prev_match)
     (prev_match, nothing)
 end
 
-function eachmatch(re::Regex, str::String, ovr::Bool=false)
+function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
     RegexMatchIterator(re,str,ovr)
 end
 
-eachmatch(re::Regex, str::String) = RegexMatchIterator(re,str)
+eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
 # miscellaneous methods that depend on Regex being defined
 

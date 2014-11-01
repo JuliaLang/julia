@@ -2,15 +2,15 @@
 #Adapted from http://www.mathworks.com/matlabcentral/fileexchange/23393
 #Original BSD Licence, (c) 2011, François Glineur
 
-function parse_json(strng::String)
+function parse_json(strng::AbstractString)
     pos = 1
     len = length(strng)
-    # String delimiters and escape characters are identified beforehand to improve speed
+    # AbstractString delimiters and escape characters are identified beforehand to improve speed
     # esc = regexp(str, "[\"\\\\]"); index_esc = 1; len_esc = length(esc);  #TODO Enable for speed
     
     function parse_object()
         parse_char('{')
-        object = Dict{String, Any}()
+        object = Dict{AbstractString, Any}()
         if next_char() != '}'
             while true
                 str = parse_string()
@@ -74,7 +74,7 @@ function parse_json(strng::String)
     
     function parse_string()
         if strng[pos] != '"'
-            error("String starting with quotation expected at position $pos")
+            error("AbstractString starting with quotation expected at position $pos")
         else
             pos = pos + 1
         end

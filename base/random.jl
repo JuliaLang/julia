@@ -92,7 +92,7 @@ function make_seed(n::Integer)
     end
 end
 
-function make_seed(filename::String, n::Integer)
+function make_seed(filename::AbstractString, n::Integer)
     open(filename) do io
         a = Array(Uint32, int(n))
         read!(io, a)
@@ -104,11 +104,11 @@ end
 
 srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
-srand(r::MersenneTwister, filename::String, n::Integer=4) = srand(r, make_seed(filename, n))
+srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
 
 srand() = srand(GLOBAL_RNG)
 srand(seed::Union(Integer, Vector{Uint32})) = srand(GLOBAL_RNG, seed)
-srand(filename::String, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
+srand(filename::AbstractString, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
 
 ## Global RNG
 
@@ -862,7 +862,7 @@ randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
 immutable UUID
     value::Uint128
 end
-UUID(u::String) = convert(UUID, u)
+UUID(u::AbstractString) = convert(UUID, u)
 
 function uuid4()
     u = rand(Uint128)
@@ -871,7 +871,7 @@ function uuid4()
     UUID(u)
 end
 
-function Base.convert(::Type{UUID}, s::String)
+function Base.convert(::Type{UUID}, s::AbstractString)
     s = lowercase(s)
 
     if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)

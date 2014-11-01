@@ -56,7 +56,7 @@ function merge_requires!(A::Requires, B::Requires)
     return A
 end
 
-satisfies(pkg::String, ver::VersionNumber, reqs::Requires) =
+satisfies(pkg::AbstractString, ver::VersionNumber, reqs::Requires) =
     !haskey(reqs, pkg) || in(ver, reqs[pkg])
 
 immutable Available

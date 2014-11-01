@@ -23,10 +23,10 @@ const VALUETODAYOFWEEK = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>englis
 const english_daysofweekabbr = Dict(1=>"Mon",2=>"Tue",3=>"Wed",
                                     4=>"Thu",5=>"Fri",6=>"Sat",7=>"Sun")
 const VALUETODAYOFWEEKABBR = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>english_daysofweekabbr)
-dayname(dt::Integer;locale::String="english") = VALUETODAYOFWEEK[locale][dt]
-dayabbr(dt::Integer;locale::String="english") = VALUETODAYOFWEEKABBR[locale][dt]
-dayname(dt::TimeType;locale::String="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
-dayabbr(dt::TimeType;locale::String="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
+dayname(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dt]
+dayabbr(dt::Integer;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dt]
+dayname(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEK[locale][dayofweek(dt)]
+dayabbr(dt::TimeType;locale::AbstractString="english") = VALUETODAYOFWEEKABBR[locale][dayofweek(dt)]
 
 # Convenience methods for each day
 ismonday(dt::TimeType) = dayofweek(dt) == Mon
@@ -72,10 +72,10 @@ const englishabbr_months = Dict(1=>"Jan",2=>"Feb",3=>"Mar",4=>"Apr",
                                 5=>"May",6=>"Jun",7=>"Jul",8=>"Aug",9=>"Sep",
                                 10=>"Oct",11=>"Nov",12=>"Dec")
 const VALUETOMONTHABBR = Dict{UTF8String,Dict{Int,UTF8String}}("english"=>englishabbr_months)
-monthname(dt::Integer;locale::String="english") = VALUETOMONTH[locale][dt]
-monthabbr(dt::Integer;locale::String="english") = VALUETOMONTHABBR[locale][dt]
-monthname(dt::TimeType;locale::String="english") = VALUETOMONTH[locale][month(dt)]
-monthabbr(dt::TimeType;locale::String="english") = VALUETOMONTHABBR[locale][month(dt)]
+monthname(dt::Integer;locale::AbstractString="english") = VALUETOMONTH[locale][dt]
+monthabbr(dt::Integer;locale::AbstractString="english") = VALUETOMONTHABBR[locale][dt]
+monthname(dt::TimeType;locale::AbstractString="english") = VALUETOMONTH[locale][month(dt)]
+monthabbr(dt::TimeType;locale::AbstractString="english") = VALUETOMONTHABBR[locale][month(dt)]
 
 daysinmonth(dt::TimeType) = ((y,m) = yearmonth(dt); return daysinmonth(y,m))
 

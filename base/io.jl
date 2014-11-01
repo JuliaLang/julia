@@ -179,13 +179,13 @@ function readuntil{T}(s::IO, delim::T)
 end
 
 # based on code by Glen Hertz
-function readuntil(s::IO, t::String)
+function readuntil(s::IO, t::AbstractString)
     l = length(t)
     if l == 0
         return ""
     end
     if l > 40
-        warn("readuntil(IO,String) will perform poorly with a long string")
+        warn("readuntil(IO,AbstractString) will perform poorly with a long string")
     end
     out = IOBuffer()
     m = Array(Char, l)  # last part of stream to match
@@ -245,7 +245,7 @@ function readall(s::IO)
     b = readbytes(s)
     return is_valid_ascii(b) ? ASCIIString(b) : UTF8String(b)
 end
-readall(filename::String) = open(readall, filename)
+readall(filename::AbstractString) = open(readall, filename)
 
 ## high-level iterator interfaces ##
 

@@ -1,6 +1,6 @@
 ## from base/boot.jl:
 #
-# immutable UTF8String <: String
+# immutable UTF8String <: AbstractString
 #     data::Array{Uint8,1}
 # end
 #
@@ -161,7 +161,7 @@ utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
 convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
-function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
+function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::AbstractString)
     l = length(a)
     idx = 1
     iscopy = false
@@ -182,7 +182,7 @@ function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
     end
     UTF8String(a)
 end
-convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))
+convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
 # The last case is the replacement character 0xfffd (3 bytes)
 utf8sizeof(c::Char) = c < char(0x80) ? 1 : c < char(0x800) ? 2 : c < char(0x10000) ? 3 : c < char(0x110000) ? 4 : 3

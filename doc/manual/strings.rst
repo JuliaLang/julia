@@ -32,15 +32,15 @@ handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
--  ``String`` is an abstraction, not a concrete type — many different
-   representations can implement the ``String`` interface, but they can
+-  ``AbstractString`` is an abstraction, not a concrete type — many different
+   representations can implement the ``AbstractString`` interface, but they can
    easily be used together and interact transparently. Any string type
-   can be used in any function expecting a ``String``.
+   can be used in any function expecting a ``AbstractString``.
 -  Like C and Java, but unlike most dynamic languages, Julia has a
    first-class type representing a single character, called ``Char``.
    This is just a special kind of 32-bit bitstype whose numeric value
    represents a Unicode code point.
--  As in Java, strings are immutable: the value of a ``String`` object
+-  As in Java, strings are immutable: the value of a ``AbstractString`` object
    cannot be changed. To construct a different string value, you
    construct a new string from parts of other strings.
 -  Conceptually, a string is a *partial function* from indices to
@@ -181,10 +181,10 @@ You can do comparisons and a limited amount of arithmetic with
     julia> 'A' + 1
     'B'
 
-String Basics
+AbstractString Basics
 -------------
 
-String literals are delimited by double quotes or triple double quotes:
+AbstractString literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
@@ -408,7 +408,7 @@ can interpolate any expression into a string using parentheses:
     "1 + 2 = 3"
 
 Both concatenation and string interpolation call the generic ``string``
-function to convert objects into ``String`` form. Most non-``String``
+function to convert objects into ``AbstractString`` form. Most non-``AbstractString``
 objects are converted to strings as they are shown in interactive
 sessions:
 
@@ -423,7 +423,7 @@ sessions:
     julia> "v: $v"
     "v: [1,2,3]"
 
-The ``string`` function is the identity for ``String`` and ``Char``
+The ``string`` function is the identity for ``AbstractString`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
 and unescaped:
 
@@ -516,7 +516,7 @@ Some other useful functions include:
 
 .. _man-non-standard-string-literals:
 
-Non-Standard String Literals
+Non-Standard AbstractString Literals
 ----------------------------
 
 There are situations when you want to construct a string or use string

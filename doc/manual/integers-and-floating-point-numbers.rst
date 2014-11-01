@@ -563,7 +563,7 @@ Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib
 The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
 integer and floating point numbers respectively. 
 
-Constructors exist to create these types from primitive numerical types, or from ``String``. 
+Constructors exist to create these types from primitive numerical types, or from ``AbstractString``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
 :ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
 
