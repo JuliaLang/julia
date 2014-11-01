@@ -21,7 +21,7 @@ include("../perfutil.jl")
 words(text) = eachmatch(r"[a-z]+", lowercase(text))
 
 function train(features)
-    model = DefaultDict(String, Int, 1)
+    model = DefaultDict(AbstractString, Int, 1)
     for f in features
         model[f.match] += 1
     end
@@ -32,7 +32,7 @@ const NWORDS = train(words(bytestring(get("http://norvig.com/big.txt").body)))
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz"
 
-function edits1(word::String)
+function edits1(word::AbstractString)
     splits     = [(word[1:i], word[i+1:end]) for i=0:length(word) ]
     deletes    = ["$a$(b[2:end])"               for (a,b) in splits[1:end-1]]
     transposes = ["$a$(b[2])$(b[1])$(b[3:end])" for (a,b) in splits[1:end-2]]
@@ -41,8 +41,8 @@ function edits1(word::String)
     return Set([deletes; transposes; replaces[:]; inserts[:]])
 end
 
-function known_edits2(word::String)
-    xs = Set{String}()
+function known_edits2(word::AbstractString)
+    xs = Set{AbstractString}()
     for e1 in edits1(word)
         for e2 in edits1(e1)
             haskey(NWORDS, e2) && push!(xs, e2)
@@ -52,14 +52,14 @@ function known_edits2(word::String)
 end
 
 function known(words)
-    xs = Set{String}()
+    xs = Set{AbstractString}()
     for word in words
         haskey(NWORDS, word) && push!(xs, word)
     end
     xs
 end
 
-function correct(word::String)
+function correct(word::AbstractString)
     candidates = known([word])
     length(candidates) == 0 && (candidates = known(edits1(word)))
     length(candidates) == 0 && (candidates = known_edits2(word) )

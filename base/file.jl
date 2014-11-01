@@ -7,12 +7,12 @@ function pwd()
     bytestring(b[1:len[1]-1])
 end
 
-function cd(dir::String) 
+function cd(dir::AbstractString) 
     uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{Uint8},), dir))
 end
 cd() = cd(homedir())
 
-@unix_only function cd(f::Function, dir::String, args...)
+@unix_only function cd(f::Function, dir::AbstractString, args...)
     fd = ccall(:open,Int32,(Ptr{Uint8},Int32),".",0)
     systemerror(:open, fd == -1)
     try
@@ -23,7 +23,7 @@ cd() = cd(homedir())
         systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
-@windows_only function cd(f::Function, dir::String, args...)
+@windows_only function cd(f::Function, dir::AbstractString, args...)
     old = pwd()
     try
         cd(dir)
@@ -34,13 +34,13 @@ end
 end
 cd(f::Function) = cd(f, homedir())
 
-function mkdir(path::String, mode::Unsigned=0o777)
+function mkdir(path::AbstractString, mode::Unsigned=0o777)
     @unix_only ret = ccall(:mkdir, Int32, (Ptr{Uint8},Uint32), path, mode)
     @windows_only ret = ccall(:_wmkdir, Int32, (Ptr{Uint16},), utf16(path))
     systemerror(:mkdir, ret != 0)
 end
 
-function mkpath(path::String, mode::Unsigned=0o777)
+function mkpath(path::AbstractString, mode::Unsigned=0o777)
     isdirpath(path) && (path = dirname(path))
     dir = dirname(path)
     (path == dir || isdir(path)) && return
@@ -48,10 +48,10 @@ function mkpath(path::String, mode::Unsigned=0o777)
     mkdir(path, mode)
 end
 
-mkdir(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
-mkpath(path::String, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkdir(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkpath(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
 
-function rm(path::String; recursive::Bool=false)
+function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)
         @windows_only if !iswritable(path); chmod(path, 0o777); end
         FS.unlink(path)
@@ -70,10 +70,10 @@ end
 
 # The following use Unix command line facilites
 
-cp(src::String, dst::String) = FS.sendfile(src, dst)
-mv(src::String, dst::String) = FS.rename(src, dst)
+cp(src::AbstractString, dst::AbstractString) = FS.sendfile(src, dst)
+mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
 
-function touch(path::String)
+function touch(path::AbstractString)
     f = FS.open(path,JL_O_WRONLY | JL_O_CREAT, 0o0666)
     @assert f.handle >= 0
     try
@@ -115,7 +115,7 @@ function tempdir()
     return utf8(UTF16String(temppath))
 end
 tempname(uunique::Uint32=uint32(0)) = tempname(tempdir(), uunique)
-function tempname(temppath::String,uunique::Uint32)
+function tempname(temppath::AbstractString,uunique::Uint32)
     tname = Array(Uint16,32767)
     uunique = ccall(:GetTempFileNameW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint16},Uint32,Ptr{Uint16}),
         utf16(temppath),utf16("jul"),uunique,tname)
@@ -156,7 +156,7 @@ end
     end
 end
 
-function readdir(path::String)
+function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(Uint8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
 

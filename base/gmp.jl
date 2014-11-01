@@ -48,9 +48,9 @@ widen(::Type{Uint128}) = BigInt
 widen(::Type{BigInt})  = BigInt
 
 BigInt(x::BigInt) = x
-BigInt(s::String) = parseint(BigInt,s)
+BigInt(s::AbstractString) = parseint(BigInt,s)
 
-function Base.parseint_nocheck(::Type{BigInt}, s::String, base::Int)
+function Base.parseint_nocheck(::Type{BigInt}, s::AbstractString, base::Int)
     s = bytestring(s)
     sgn, base, i = Base.parseint_preamble(true,s,base)
     z = BigInt()

@@ -88,7 +88,7 @@ const STDOUT_NO = 1
 const STDERR_NO = 2
 
 immutable FileRedirect
-    filename::String
+    filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
         if lowercase(filename) == (@unix? "/dev/null" : "nul")
@@ -154,11 +154,11 @@ setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
 (.>)(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
 
 # File redirects
-(|>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
-(|>)(src::String, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
-(.>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
-(>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
-(.>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
+(|>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
+(|>)(src::AbstractString, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
+(.>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
+(>>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
+(.>>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
 
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
@@ -423,7 +423,7 @@ end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
 # return a (Pipe,Process) pair to write/read to/from the pipeline
-function open(cmds::AbstractCmd, mode::String="r", stdio::AsyncStream=DevNull)
+function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
         start_reading(out)
@@ -467,7 +467,7 @@ function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
-function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream=DevNull)
+function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::AsyncStream=DevNull)
     open(cmd, "w", stdout) do io
         write(io, stdin)
     end
@@ -578,7 +578,7 @@ end
 ## implementation of `cmd` syntax ##
 
 arg_gen()          = ByteString[]
-arg_gen(x::String) = ByteString[x]
+arg_gen(x::AbstractString) = ByteString[x]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)

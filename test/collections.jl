@@ -96,14 +96,14 @@ let
     d = Dict{UTF8String, Vector{Int}}()
     d["a"] = [1, 2]
     @test_throws MethodError d["b"] = 1
-    @test isa(repr(d), String)  # check that printable without error
+    @test isa(repr(d), AbstractString)  # check that printable without error
 end
 
 # issue #2344
 let
     local bar
     bestkey(d, key) = key
-    bestkey{K<:String,V}(d::Associative{K,V}, key) = string(key)
+    bestkey{K<:AbstractString,V}(d::Associative{K,V}, key) = string(key)
     bar(x) = bestkey(x, :y)
     @test bar(Dict(:x => [1,2,5])) == :y
     @test bar(Dict("x" => [1,2,5])) == "y"
@@ -143,7 +143,7 @@ end
 data_in = [ (rand(1:1000), randstring(2)) for _ in 1:1001 ]
 
 # Populate the first dict
-d1 = Dict{Int, String}()
+d1 = Dict{Int, AbstractString}()
 for (k,v) in data_in
     d1[k] = v
 end
@@ -155,7 +155,7 @@ for i in 1:length(data_in)
 end
 # Inserting data in different (shuffled) order should result in
 # equivalent dict.
-d2 = Dict{Int, String}()
+d2 = Dict{Int, AbstractString}()
 for (k,v) in data_in
     d2[k] = v
 end
@@ -179,7 +179,7 @@ d4[1001] = randstring(3)
 # are compared. This is not necessarily desirable. These tests are
 # descriptive rather than proscriptive.
 @test !isequal(Dict(1 => 2), Dict("dog" => "bone"))
-@test isequal(Dict{Int,Int}(), Dict{String,String}())
+@test isequal(Dict{Int,Int}(), Dict{AbstractString,AbstractString}())
 
 # get! (get with default values assigned to the given location)
 
@@ -242,7 +242,7 @@ d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
 @test d == Dict('a'=>1, 'b'=>1, 'c'=> 1)
 
 # issue #2629
-d = Dict{String,String}([ a => "foo" for a in ["a","b","c"]])
+d = Dict{AbstractString,AbstractString}([ a => "foo" for a in ["a","b","c"]])
 @test d == Dict("a"=>"foo","b"=>"foo","c"=>"foo")
 
 # issue #5886
@@ -316,7 +316,7 @@ data_out = collect(s)
 
 # eltype
 @test is(eltype(Set([1,"hello"])), Any)
-@test is(eltype(Set{String}()), String)
+@test is(eltype(Set{AbstractString}()), AbstractString)
 
 # no duplicates
 s = Set([1,2,3])
@@ -473,10 +473,10 @@ s3 = Set{ASCIIString}(["baz"])
 
 # Comparison of unrelated types seems rather inconsistent
 
-@test  isequal(Set{Int}(), Set{String}())
-@test !isequal(Set{Int}(), Set{String}([""]))
-@test !isequal(Set{String}(), Set{Int}([0]))
-@test !isequal(Set{Int}([1]), Set{String}())
+@test  isequal(Set{Int}(), Set{AbstractString}())
+@test !isequal(Set{Int}(), Set{AbstractString}([""]))
+@test !isequal(Set{AbstractString}(), Set{Int}([0]))
+@test !isequal(Set{Int}([1]), Set{AbstractString}())
 
 @test  isequal(Set{Any}([1,2,3]), Set{Int}([1,2,3]))
 @test  isequal(Set{Int}([1,2,3]), Set{Any}([1,2,3]))

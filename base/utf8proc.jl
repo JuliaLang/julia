@@ -63,7 +63,7 @@ const UTF8PROC_STRIPMARK = (1<<13)
 let
     const p = Array(Ptr{Uint8}, 1)
     global utf8proc_map
-    function utf8proc_map(s::String, flags::Integer)
+    function utf8proc_map(s::AbstractString, flags::Integer)
         result = ccall(:utf8proc_map, Cssize_t,
                        (Ptr{Uint8}, Cssize_t, Ptr{Ptr{Uint8}}, Cint),
                        s, 0, p, flags | UTF8PROC_NULLTERM)
@@ -76,7 +76,7 @@ let
     end
 end
 
-function normalize_string(s::String; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
@@ -100,7 +100,7 @@ function normalize_string(s::String; stable::Bool=false, compat::Bool=false, com
     utf8proc_map(s, flags)
 end
 
-function normalize_string(s::String, nf::Symbol)
+function normalize_string(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
                     nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
                     nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
@@ -167,7 +167,7 @@ for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
     @eval begin
-        function $f(s::String)
+        function $f(s::AbstractString)
             for c in s
                 if !$f(c)
                     return false

@@ -1,4 +1,4 @@
-immutable UTF16String <: String
+immutable UTF16String <: AbstractString
     data::Array{Uint16,1} # includes 16-bit NULL termination after string chars
     function UTF16String(data::Vector{Uint16})
         if length(data) < 1 || data[end] != 0
@@ -29,7 +29,7 @@ function next(s::UTF16String, i::Int)
 end
 
 # TODO: optmize this
-function encode16(s::String)
+function encode16(s::AbstractString)
     buf = Uint16[]
     for ch in s
         c = reinterpret(Uint32, ch)
@@ -46,7 +46,7 @@ end
 
 utf16(x) = convert(UTF16String, x)
 convert(::Type{UTF16String}, s::UTF16String) = s
-convert(::Type{UTF16String}, s::String) = encode16(s)
+convert(::Type{UTF16String}, s::AbstractString) = encode16(s)
 convert(::Type{Array{Uint16,1}}, s::UTF16String) = s.data
 convert(::Type{Array{Uint16}}, s::UTF16String) = s.data
 

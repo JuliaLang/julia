@@ -13,8 +13,8 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     @eval _units(x::$p) = " " * lowercase(string($p)) * (abs(value(x)) == 1 ? "" : "s")
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
-    # String parsing (mainly for IO code)
-    @eval $p(x::String) = $p(parseint(Int64,x))
+    # AbstractString parsing (mainly for IO code)
+    @eval $p(x::AbstractString) = $p(parseint(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end

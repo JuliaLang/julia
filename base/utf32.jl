@@ -28,7 +28,7 @@ utf32(x) = convert(UTF32String, x)
 convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
-function convert(::Type{UTF32String}, s::String)
+function convert(::Type{UTF32String}, s::AbstractString)
     a = Array(Char, length(s) + 1)
     i = 0
     for c in s
@@ -48,7 +48,7 @@ end
 convert{T<:Union(Int32,Uint32)}(::Type{UTF32String}, data::AbstractVector{T}) =
     convert(UTF32String, reinterpret(Char, data))
 
-convert{T<:String}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
+convert{T<:AbstractString}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
 
 # specialize for performance reasons:
 function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
@@ -106,7 +106,7 @@ function map(f::Function, s::UTF32String)
     for i = 1:(length(d)-1)
         c2 = f(d[i])
         if !isa(c2, Char)
-            error("map(f,s::String) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
+            error("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
         end
         out[i] = (c2::Char)
     end

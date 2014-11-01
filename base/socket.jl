@@ -537,7 +537,7 @@ function getaddrinfo(cb::Function, host::ASCIIString)
     uv_error("getaddrinfo",ccall(:jl_getaddrinfo, Int32, (Ptr{Void}, Ptr{Uint8}, Ptr{Uint8}, Any),
         eventloop(), host, C_NULL, cb))
 end
-getaddrinfo(cb::Function, host::String) = getaddrinfo(cb,ascii(host))
+getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
 function getaddrinfo(host::ASCIIString)
     c = Condition()
@@ -548,7 +548,7 @@ function getaddrinfo(host::ASCIIString)
     isa(ip,UVError) && throw(ip)
     return ip::IPAddr
 end
-getaddrinfo(host::String) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
@@ -609,13 +609,13 @@ connect(sock::TCPSocket, port::Integer) = connect(sock,IPv4(127,0,0,1),port)
 connect(port::Integer) = connect(IPv4(127,0,0,1),port)
 
 # Valid connect signatures for TCP
-connect(host::String, port::Integer) = connect(TCPSocket(),host,port)
+connect(host::AbstractString, port::Integer) = connect(TCPSocket(),host,port)
 connect(addr::IPAddr, port::Integer) = connect(TCPSocket(),addr,port)
 connect(addr::InetAddr) = connect(TCPSocket(),addr)
 
 default_connectcb(sock,status) = nothing
 
-function connect!(sock::TCPSocket, host::String, port::Integer)
+function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     @assert sock.status == StatusInit
     ipaddr = getaddrinfo(host) 
     sock.status = StatusInit

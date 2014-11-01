@@ -564,18 +564,18 @@ Accordingly, a tuple of types can be used anywhere a type is expected:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,Any)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Any)
     (1,"foo",2.5)
 
-    julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    ERROR: type: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Float32)
+    ERROR: type: typeassert: expected (Int64,AbstractString,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
 get an error:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,3)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,3)
     ERROR: type: typeassert: expected Type{T<:Top}, got (DataType,DataType,Int64)
 
 Note that the empty tuple ``()`` is its own type:
@@ -592,13 +592,13 @@ example:
 
 .. doctest::
 
-    julia> (Int,String) <: (Real,Any)
+    julia> (Int,AbstractString) <: (Real,Any)
     true
 
-    julia> (Int,String) <: (Real,Real)
+    julia> (Int,AbstractString) <: (Real,Real)
     false
 
-    julia> (Int,String) <: (Real,)
+    julia> (Int,AbstractString) <: (Real,)
     false
 
 Intuitively, this corresponds to the type of a function's arguments
@@ -611,8 +611,8 @@ A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 ``Union`` function::
 
-    julia> IntOrString = Union(Int,String)
-    Union(String,Int64)
+    julia> IntOrString = Union(Int,AbstractString)
+    Union(AbstractString,Int64)
 
     julia> 1 :: IntOrString
     1
@@ -621,7 +621,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(String,Int64), got Float64
+    ERROR: type: typeassert: expected Union(AbstractString,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -694,7 +694,7 @@ all (or an integer, actually, although here it's clearly used as a
 type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
 ``Float64``. Thus, this single declaration actually declares an
-unlimited number of types: ``Point{Float64}``, ``Point{String}``,
+unlimited number of types: ``Point{Float64}``, ``Point{AbstractString}``,
 ``Point{Int64}``, etc. Each of these is now a usable concrete type:
 
 .. doctest::
@@ -702,11 +702,11 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
     julia> Point{Float64}
     Point{Float64} (constructor with 1 method)
 
-    julia> Point{String}
-    Point{String} (constructor with 1 method)
+    julia> Point{AbstractString}
+    Point{AbstractString} (constructor with 1 method)
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
-floating-point values, while the type ``Point{String}`` is a "point"
+floating-point values, while the type ``Point{AbstractString}`` is a "point"
 whose "coordinates" are string objects (see :ref:`man-strings`).
 However, ``Point`` itself is also a valid type object:
 
@@ -718,14 +718,14 @@ However, ``Point`` itself is also a valid type object:
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
 that contains all the specific instances ``Point{Float64}``,
-``Point{String}``, etc.:
+``Point{AbstractString}``, etc.:
 
 .. doctest::
 
     julia> Point{Float64} <: Point
     true
 
-    julia> Point{String} <: Point
+    julia> Point{AbstractString} <: Point
     true
 
 Other types, of course, are not subtypes of it:
@@ -735,7 +735,7 @@ Other types, of course, are not subtypes of it:
     julia> Float64 <: Point
     false
 
-    julia> String <: Point
+    julia> AbstractString <: Point
     false
 
 Concrete ``Point`` types with different values of ``T`` are never
@@ -899,7 +899,7 @@ as a subtype of ``Pointy{T}``:
     julia> Point{Real} <: Pointy{Real}
     true
 
-    julia> Point{String} <: Pointy{String}
+    julia> Point{AbstractString} <: Pointy{AbstractString}
     true
 
 This relationship is also invariant:
@@ -947,8 +947,8 @@ subtypes of ``Real``:
     julia> Pointy{Real}
     Pointy{Real}
 
-    julia> Pointy{String}
-    ERROR: type: Pointy: in T, expected T<:Real, got Type{String}
+    julia> Pointy{AbstractString}
+    ERROR: type: Pointy: in T, expected T<:Real, got Type{AbstractString}
 
     julia> Pointy{1}
     ERROR: type: Pointy: in T, expected T<:Real, got Int64
@@ -1212,7 +1212,7 @@ Only declared types (``DataType``) have unambiguous supertypes:
     julia> super(Number)
     Any
 
-    julia> super(String)
+    julia> super(AbstractString)
     Any
 
     julia> super(Any)

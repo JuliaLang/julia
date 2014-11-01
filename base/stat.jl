@@ -48,8 +48,8 @@ end
 
 stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
-stat(path::String)  = @stat_call jl_stat  Ptr{Uint8} path
-lstat(path::String) = @stat_call jl_lstat Ptr{Uint8} path
+stat(path::AbstractString)  = @stat_call jl_stat  Ptr{Uint8} path
+lstat(path::AbstractString) = @stat_call jl_lstat Ptr{Uint8} path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))
@@ -114,4 +114,4 @@ filesize(path...) = stat(path...).size
    ctime(path...) = stat(path...).ctime
 
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
-samefile(a::String, b::String) = samefile(stat(a),stat(b))
+samefile(a::AbstractString, b::AbstractString) = samefile(stat(a),stat(b))

@@ -154,21 +154,21 @@ end
 
 # join
 @test typejoin(Int8,Int16) === Signed
-@test typejoin(Int,String) === Any
+@test typejoin(Int,AbstractString) === Any
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
 @test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
                             (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
-                   (Any,String,Int...))
+                   (Any,AbstractString,Int...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
                    (Int8,Signed...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
                    (Int8,Signed...))
 @test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
                    (Int8,Integer...))
-@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
-@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -232,7 +232,7 @@ end
 
 type FooFoo{A,B} y::FooFoo{A} end
 
-@test FooFoo{Int} <: FooFoo{Int,String}.types[1]
+@test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
 
 x = (2,3)
@@ -929,7 +929,7 @@ begin
     Y(::Type{X1474}) = 3
     @test Y(X1474) == 3
     @test Y(X1474{Int}) == 2
-    @test Y(X1474{Int,String}) == 1
+    @test Y(X1474{Int,AbstractString}) == 1
 end
 
 # issue #2562
@@ -1063,7 +1063,7 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Void), 3)
+x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
 x[1] = 1.0
 x[2] = 2.0
 x[3] = 3.0
@@ -1146,7 +1146,7 @@ end
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
 
 type _0_test_ctor_syntax_
-    _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
+    _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
 end
 
 # issue #4413
@@ -1625,8 +1625,8 @@ end
 # issue #5577
 f5577(::Any) = false
 f5577(::Type) = true
-@test !f5577((Int,String,2))
-@test f5577(((Int,String),String))
+@test !f5577((Int,AbstractString,2))
+@test f5577(((Int,AbstractString),AbstractString))
 @test f5577(Int)
 @test !f5577(2)
 
@@ -1764,7 +1764,7 @@ f6980(::Union(Int, Float64), ::B6980) = true
 
 # issue #7049
 typealias Maybe7049{T} Union(T,Void)
-function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+function ttt7049(;init::Maybe7049{Union(AbstractString,(Int,Char))} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"

@@ -18,7 +18,7 @@
 
 error(e::Exception) = throw(e)
 error{E<:Exception}(::Type{E}) = throw(E())
-error(s::String) = throw(ErrorException(s))
+error(s::AbstractString) = throw(ErrorException(s))
 error(s...)      = throw(ErrorException(string(s...)))
 
 macro unexpected()

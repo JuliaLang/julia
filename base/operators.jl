@@ -171,7 +171,7 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 sizeof(x) = Core.sizeof(x)
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
+copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining

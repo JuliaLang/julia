@@ -92,12 +92,12 @@ type Worker
     manager::ClusterManager
     config::Dict
 
-    Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
+    Worker(host::AbstractString, port::Integer, sock::TCPSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), [], [], id, false)
 end
-Worker(host::String, port::Integer, sock::TCPSocket) =
+Worker(host::AbstractString, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
-function Worker(host::String, port::Integer)
+function Worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
     if host == string(LPROC.bind_addr)
         w = Worker(host, port, connect("127.0.0.1", uint16(port)))
@@ -117,7 +117,7 @@ function Worker(host::String, port::Integer)
     end
     w
 end
-function Worker(host::String, bind_addr::String, port::Integer, tunnel_user::String, sshflags) 
+function Worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags) 
     w = Worker(host, port,
                connect("localhost",
                        ssh_tunnel(tunnel_user, host, bind_addr, uint16(port), sshflags)))
@@ -208,7 +208,7 @@ let next_pid = 2    # 1 is reserved for the client (always)
 end
 
 type ProcessGroup
-    name::String
+    name::AbstractString
     workers::Array{Any,1}
 
     # global references
@@ -985,14 +985,14 @@ function read_cb_response(io::IO, config::Dict)
     return (io, host, port, host, config)
 end
 
-function read_cb_response(io::IO, host::String, config::Dict)
+function read_cb_response(io::IO, host::AbstractString, config::Dict)
     (bind_addr, port) = read_worker_host_port(io)
     return (io, bind_addr, port, host, config)
 end
 
-read_cb_response(io::IO, host::String, port::Integer, config::Dict) = (io, host, port, host, config)
+read_cb_response(io::IO, host::AbstractString, port::Integer, config::Dict) = (io, host, port, host, config)
 
-read_cb_response(host::String, port::Integer, config::Dict) = (nothing, host, port, host, config)
+read_cb_response(host::AbstractString, port::Integer, config::Dict) = (nothing, host, port, host, config)
 
 
 function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManager, resp_arr::Array, launched_ntfy::Condition)
@@ -1176,7 +1176,7 @@ end
 
 
 function launch_on_machine(manager::SSHManager, config::Dict, resp_arr::Array, machines_launch_ntfy::Condition,
-                           machine::String, cnt::Integer, plaunch_ntfy::Condition)
+                           machine::AbstractString, cnt::Integer, plaunch_ntfy::Condition)
     dir = config[:dir]
     exename = config[:exename]
     exeflags_base = config[:exeflags]

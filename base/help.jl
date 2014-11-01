@@ -10,7 +10,7 @@ function clear_cache()
     global FUNCTION_DICT = nothing
 end
 
-function decor_help_desc(func::String, mfunc::String, desc::String)
+function decor_help_desc(func::AbstractString, mfunc::AbstractString, desc::AbstractString)
     sd = convert(Array{ByteString,1}, split(desc, '\n'))
     for i = 1:length(sd)
         if beginswith(sd[i], func)
@@ -85,7 +85,7 @@ end
 
 func_expr_from_symbols(s::Vector{Symbol}) = length(s) == 1 ? s[1] : Expr(:., func_expr_from_symbols(s[1:end-1]), Expr(:quote, s[end]))
 
-function help(io::IO, fname::String, obj=0)
+function help(io::IO, fname::AbstractString, obj=0)
     init_help()
     found = false
     if haskey(FUNCTION_DICT, fname)
@@ -140,8 +140,8 @@ end
 
 apropos() = help()
 
-apropos(s::String) = apropos(STDOUT, s)
-function apropos(io::IO, txt::String)
+apropos(s::AbstractString) = apropos(STDOUT, s)
+function apropos(io::IO, txt::AbstractString)
     init_help()
     n = 0
     r = Regex("\\Q$txt", Base.PCRE.CASELESS)
