@@ -920,3 +920,8 @@ function pr8622()
     return indexin(x,y)
 end
 @test pr8622() == [0,3,1,0]
+
+# commit b718cbc72e90, getindex(::Number, ::Real)
+b718cbc = 5
+@test b718cbc[1.0] == 5
+@test_throws InexactError b718cbc[1.1]
