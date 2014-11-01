@@ -331,10 +331,10 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 
 ## Random ##
 
-function bitarray_rand_fill!(B::BitArray)
+function bitarray_rand_fill!(rng, B::BitArray) # rng is an AbstractRNG
     length(B) == 0 && return B
     Bc = B.chunks
-    rand!(Bc)
+    rand!(rng, Bc)
     Bc[end] &= @_msk_end length(B)
     return B
 end
