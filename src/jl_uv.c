@@ -24,9 +24,9 @@
 #include <sys/socket.h>
 #endif
 
-#include "julia.h"
 #include "julia_internal.h"
 #include "support/ios.h"
+#include "support/ios_internal.h"
 #include "uv.h"
 
 #ifdef __cplusplus

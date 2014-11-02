@@ -10,7 +10,6 @@
 //#include <sys/mman.h>
 #include <signal.h>
 #include <errno.h>
-#include "julia.h"
 #include "julia_internal.h"
 
 #ifdef __cplusplus

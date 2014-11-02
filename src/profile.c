@@ -1,7 +1,6 @@
 #include <stdlib.h>
 #include <stddef.h>
 #include <stdio.h>
-#include "julia.h"
 #include "julia_internal.h"
 
 #ifdef __cplusplus

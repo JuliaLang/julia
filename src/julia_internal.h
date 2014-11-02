@@ -3,10 +3,19 @@
 
 #include "options.h"
 #include "uv.h"
+#include "julia.h"
+#include "ios_internal.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct {
+    void *data;
+    uv_loop_t *loop;
+    uv_handle_type type;
+    uv_file file;
+} jl_uv_file_t;
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
@@ -139,8 +148,15 @@ extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
 
+DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
+                       uv_process_t *proc, jl_value_t *julia_struct,
+                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
+                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
+                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe,
+                       int detach, char **env, char *cwd);
 #ifdef __cplusplus
 }
+
 #endif
 
 #endif

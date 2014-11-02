@@ -2,8 +2,8 @@
   sys.c
   I/O and operating system utility functions
 */
-#include "julia.h"
 #include "julia_internal.h"
+#include "ios_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>

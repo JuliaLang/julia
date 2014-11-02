@@ -9,7 +9,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
-#include "julia.h"
+#include "julia_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

@@ -5,7 +5,6 @@
 #include <string.h>
 #include <stdarg.h>
 #include <assert.h>
-#include "julia.h"
 #include "julia_internal.h"
 
 #ifdef __cplusplus

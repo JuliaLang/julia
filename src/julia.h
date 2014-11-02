@@ -5,6 +5,18 @@
 extern "C" {
 #endif
 
+#ifndef UV_H
+typedef struct uv_stream_s uv_stream_t;
+typedef struct uv_async_s uv_async_t;
+typedef struct uv_loop_s uv_loop_t;
+typedef struct uv_process_s uv_process_t;
+typedef struct uv_pipe_s uv_pipe_t;
+typedef struct uv_handle_s uv_handle_t;
+typedef struct uv_idle_s uv_idle_t;
+typedef struct uv_timer_s uv_timer_t;
+typedef struct uv_tcp_s uv_tcp_t;
+#endif
+
 #include "options.h"
 
 #include "libsupport.h"
@@ -1244,12 +1256,6 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #define JL_PUTS	  jl_puts
 #define JL_WRITE  jl_write
 
-DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
-                       uv_process_t *proc, jl_value_t *julia_struct,
-                       uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
-                       uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe, 
-                       int detach, char **env, char *cwd);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT int jl_run_once(uv_loop_t *loop);
 DLLEXPORT int jl_process_events(uv_loop_t *loop);
@@ -1290,13 +1296,6 @@ DLLEXPORT jl_value_t *jl_takebuf_string(ios_t *s);
 DLLEXPORT void *jl_takebuf_raw(ios_t *s);
 DLLEXPORT jl_value_t *jl_readuntil(ios_t *s, uint8_t delim);
 DLLEXPORT void jl_free2(void *p, void *hint);
-
-typedef struct {
-    void *data;
-    uv_loop_t *loop;
-    uv_handle_type type;
-    uv_file file;
-} jl_uv_file_t;
 
 DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);

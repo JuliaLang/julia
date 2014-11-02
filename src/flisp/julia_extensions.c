@@ -4,6 +4,7 @@
 #include <assert.h>
 #include "flisp.h"
 #include "mojibake.h"
+#include "ios_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

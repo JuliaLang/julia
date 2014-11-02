@@ -4,7 +4,6 @@
 #ifdef _OS_WINDOWS_
 #include <malloc.h>
 #endif
-#include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
 

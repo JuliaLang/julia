@@ -18,7 +18,6 @@
 # include <sys/mman.h>
 # include <malloc.h>
 #endif
-#include "julia.h"
 #include "julia_internal.h"
 
 #ifdef _P64

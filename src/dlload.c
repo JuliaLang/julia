@@ -5,7 +5,6 @@
 #include <sys/stat.h>
 
 #include "platform.h"
-#include "julia.h"
 #include "julia_internal.h"
 #ifdef _OS_WINDOWS_
 #include <windows.h>

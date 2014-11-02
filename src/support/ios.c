@@ -25,7 +25,7 @@
 
 #include "utils.h"
 #include "utf8.h"
-#include "ios.h"
+#include "ios_internal.h"
 #include "timefuncs.h"
 
 #define MOST_OF(x) ((x) - ((x)>>4))

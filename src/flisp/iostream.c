@@ -6,6 +6,7 @@
 #include <sys/types.h>
 #include <setjmp.h>
 #include "flisp.h"
+#include "ios_internal.h"
 
 #ifdef __cplusplus
 extern "C" {

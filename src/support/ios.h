@@ -1,72 +1,24 @@
 #ifndef IOS_H
 #define IOS_H
 
+#include <sys/types.h>
 #include <stdarg.h>
-#include "uv.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+typedef struct ios_t ios_t;
 
 // this flag controls when data actually moves out to the underlying I/O
 // channel. memory streams are a special case of this where the data
 // never moves out.
 
 //make it compatible with UV Handles
-typedef enum { bm_none=UV_HANDLE_TYPE_MAX+1, bm_line, bm_block, bm_mem } bufmode_t;
 typedef enum { bst_none, bst_rd, bst_wr } bufstate_t;
 
 #define IOS_INLSIZE 54
 #define IOS_BUFSIZE 131072
-
-typedef struct {
-    // the state only indicates where the underlying file position is relative
-    // to the buffer. reading: at the end. writing: at the beginning.
-    // in general, you can do any operation in any state.
-    char *buf;        // start of buffer
-
-    int errcode;
-
-#ifdef _P64
-    int _pad_bm;      // put bm at same offset as type field of uv_stream_s
-#endif
-    bufmode_t bm;     //
-    bufstate_t state;
-
-    off_t maxsize;    // space allocated to buffer
-    off_t size;       // length of valid data in buf, >=ndirty
-    off_t bpos;       // current position in buffer
-    off_t ndirty;     // # bytes at &buf[0] that need to be written
-
-    off_t fpos;       // cached file pos
-    size_t lineno;    // current line number
-
-    // pointer-size integer to support platforms where it might have
-    // to be a pointer
-    long fd;
-
-    unsigned char readable:1;
-    unsigned char writable:1;
-    unsigned char ownbuf:1;
-    unsigned char ownfd:1;
-    unsigned char _eof:1;
-
-    // this means you can read, seek back, then read the same data
-    // again any number of times. usually only true for files and strings.
-    unsigned char rereadable:1;
-
-    // this enables "stenciled writes". you can alternately write and
-    // seek without flushing in between. this performs read-before-write
-    // to populate the buffer, so "rereadable" capability is required.
-    // this is off by default.
-    //unsigned char stenciled:1;
-
-    // request durable writes (fsync)
-    // unsigned char durable:1;
-
-    int64_t userdata;
-    char local[IOS_INLSIZE];
-} ios_t;
 
 /* low-level interface functions */
 DLLEXPORT size_t ios_read(ios_t *s, char *dest, size_t n);
@@ -85,7 +37,6 @@ DLLEXPORT int ios_isopen(ios_t *s);
 DLLEXPORT char *ios_takebuf(ios_t *s, size_t *psize);  // release buffer to caller
 // set buffer space to use
 DLLEXPORT int ios_setbuf(ios_t *s, char *buf, size_t size, int own);
-DLLEXPORT int ios_bufmode(ios_t *s, bufmode_t mode);
 DLLEXPORT int ios_get_readable(ios_t *s);
 DLLEXPORT int ios_get_writable(ios_t *s);
 DLLEXPORT void ios_set_readonly(ios_t *s);

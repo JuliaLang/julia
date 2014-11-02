@@ -144,7 +144,6 @@
 #define NOMINMAX
 #endif
 
-#include "julia.h"
 #include "julia_internal.h"
 
 #include <setjmp.h>

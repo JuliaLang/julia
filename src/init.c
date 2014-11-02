@@ -34,7 +34,6 @@
 #include <getopt.h>
 #endif
 
-#include "julia.h"
 #include "julia_internal.h"
 #include <stdio.h>
 

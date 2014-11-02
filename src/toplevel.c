@@ -14,7 +14,6 @@
 #else
 #include <unistd.h>
 #endif
-#include "julia.h"
 #include "julia_internal.h"
 #include "uv.h"
 

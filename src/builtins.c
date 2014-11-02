@@ -24,8 +24,8 @@
 #include <math.h>
 #endif
 #include <ctype.h>
-#include "julia.h"
 #include "julia_internal.h"
+#include "ios_internal.h"
 #include "builtin_proto.h"
 
 #ifdef __cplusplus

@@ -45,6 +45,7 @@
 
 #include "platform.h"
 #include "libsupport.h"
+#include "ios_internal.h"
 #include "flisp.h"
 #include "opcodes.h"
 
