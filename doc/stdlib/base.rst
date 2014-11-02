@@ -4467,6 +4467,27 @@ Statistics
    Compute the sample variance of a vector ``v`` with known mean ``m``.
    Note: Julia does not ignore ``NaN`` values in the computation.
 
+.. function:: middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself.
+   Note: the value is converted to ``float``.
+
+.. function:: middle(x, y)
+
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
+   to computing their mean (``(x + y) / 2``).
+   Note: As with ``middle(x)``, the returned value is of type ``float``.
+
+.. function:: middle(range)
+
+   Compute the middle of a range, that is, compute the mean of its extrema.
+   Since a range is sorted, the mean is performed with the first and last element.
+
+.. function:: middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and
+   then computing their mean.
+
 .. function:: median(v; checknan::Bool=true)
 
    Compute the median of a vector ``v``. If the keyword argument ``checknan``
