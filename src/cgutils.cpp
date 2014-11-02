@@ -629,7 +629,11 @@ static jl_value_t *julia_type_of(Value *v)
     MDNode *mdn;
     assert(v != NULL);
     if (dyn_cast<Instruction>(v) == NULL ||
+#ifdef LLVM36
+        (mdn = ((Instruction*)v)->getMDNode("julia_type")) == NULL) {
+#else
         (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
+#endif
         return julia_type_of_without_metadata(v, true);
     }
     MDString *md = (MDString*)mdn->getOperand(0);

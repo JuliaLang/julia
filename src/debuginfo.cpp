@@ -364,8 +364,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
             if (errorobj) {
-                obj = errorobj.get().getBinary().release();
-                errorobj.get().getBuffer().release();
+                auto binary = errorobj.get().takeBinary();
+                obj = binary.first.release();
+                binary.second.release();
 #elif LLVM35
             if (errorobj) {
                 obj = errorobj.get();
