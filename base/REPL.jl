@@ -483,7 +483,7 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):max_idx)
     for idx in idxs
-        if (idx == max_idx) || (beginswith(hist.history[idx], prefix) && hist.history[idx] != cur_response)
+        if (idx == max_idx) || (beginswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             history_move(s, hist, idx)
             LineEdit.move_input_end(s)
             LineEdit.refresh_line(s)
