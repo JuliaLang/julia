@@ -9,7 +9,7 @@ Bytes(s::AbstractString) = Bytes(bytestring(s).data)
 
 size(b::Bytes) = (length(b),)
 length(b::Bytes) = ifelse(b.neglen < 0, -b.neglen, b.neglen >>> ((sizeof(Int)-1) << 3))
-getindex(b::Bytes, i::Real) = ccall(:jl_bytesref, Uint8, (Bytes, Csize_t), b, i-1)
+getindex(b::Bytes, i::Real) = Core.bytesref(b, convert(Int,i))
 
 start(b::Bytes) = 1
 next(b::Bytes, i::Int) = (b[i], i+1)

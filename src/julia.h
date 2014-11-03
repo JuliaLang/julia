@@ -487,6 +487,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
+#define jl_is_bytes(v)       jl_typeis(v,jl_bytes_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
