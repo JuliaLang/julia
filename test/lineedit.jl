@@ -27,7 +27,7 @@ function run_test(f,buf)
     global a_foo, a_bar, b_bar
     a_foo = a_bar = b_bar = 0
     while !eof(buf)
-        f(buf,nothing)
+        f(buf,nothing,nothing)
     end
 end
 
