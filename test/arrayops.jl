@@ -705,6 +705,23 @@ begin
     @test size(n1) == (6,1,4) && size(n2) == (6,3,1)  && size(n3) == (2,6,1)
 end
 
+# arrayslice
+x = rand(3,5)
+y = arrayslice(x,7,(3,3))
+y[:] *= 5
+x[7:end] = y[:]*2
+@test reshape(x[7:end],(3,3)) == y
+y = arrayslice(x,1,4)
+@test Array{eltype(x),1} == typeof(y)
+@test length(y) == 4
+y = arrayslice(x,1,0)
+@test y == eltype(y)[]
+y = arrayslice(x,(1,3),2)
+@test y[1] == x[1,3]
+y = arrayslice(x,(3,1),(1,2))
+@test y[:] == x[3:4]
+y = arrayslice(x,1,(5,3))
+@test reshape(x,(5,3)) == y
 
 # single multidimensional index
 let

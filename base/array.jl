@@ -220,6 +220,18 @@ linspace(start::Real, stop::Real) = linspace(start, stop, 100)
 logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
 logspace(start::Real, stop::Real) = logspace(start, stop, 50)
 
+
+arrayslice(A, i::Int, n::Int) = arrayslice(A, i, (n,))
+arrayslice(A, dims::Tuple, n::Tuple) = arrayslice(A, sub2ind(size(A),dims...), n)
+arrayslice(A, dims::Tuple, n::Int) = arrayslice(A, dims, (n,))
+function arrayslice{T, N}(A::Array{T}, i::Int, n::NTuple{N,Int})
+    0 <= minimum(n) || throw(ArgumentError("negative dimension"))
+    0 < i <= length(A) || throw(BoundsError())
+    i-1+prod(n) <= length(A) || throw(BoundsError())
+    ccall(:jl_slice_owned_array, Array{T,N}, (Any, Any, Any, Uint),
+          Array{T,N}, A, n, uint(i-1))
+end
+
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
