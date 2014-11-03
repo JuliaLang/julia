@@ -20,6 +20,8 @@ import
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
         significand, frexp
 
+import Base.Rounding: get_rounding_raw, set_rounding_raw
+
 import Base.GMP: ClongMax, CulongMax, CdoubleMax
 
 import Base.Math.lgamma_r
@@ -117,6 +119,11 @@ convert(::Type{Float64}, x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
 convert(::Type{Float32}, x::BigFloat) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
+
+call(::Type{Float64}, x::BigFloat, r::RoundingMode) =
+    ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
+call(::Type{Float32}, x::BigFloat, r::RoundingMode) =
+    ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
 
 convert(::Type{Integer}, x::BigFloat) = convert(BigInt, x)
 
@@ -597,8 +604,10 @@ function from_mpfr(c::Integer)
     RoundingMode(c)
 end
 
-get_rounding(::Type{BigFloat}) = from_mpfr(ROUNDING_MODE[end])
-set_rounding(::Type{BigFloat},r::RoundingMode) = ROUNDING_MODE[end] = to_mpfr(r)
+get_rounding_raw(::Type{BigFloat}) = ROUNDING_MODE[end]
+set_rounding_raw(::Type{BigFloat},i::Integer) = ROUNDING_MODE[end] = i
+get_rounding(::Type{BigFloat}) = from_mpfr(get_rounding_raw(BigFloat))
+set_rounding(::Type{BigFloat},r::RoundingMode) = set_rounding_raw(BigFloat,to_mpfr(r))
 
 function copysign(x::BigFloat, y::BigFloat)
     z = BigFloat()
