@@ -139,10 +139,10 @@ const (:) = Colon()
 ==(w::WeakRef, v) = isequal(w.value, v)
 ==(w, v::WeakRef) = isequal(w, v.value)
 
-function finalizer(o::ANY, f::Union(Function,Ptr))
-    if isimmutable(o)
-        error("objects of type ", typeof(o), " cannot be finalized")
-    end
+finalizer(o::Function, f::Function) = error("invalid finalizer(f::Function, o::Function)")
+finalizer(o::Ptr, f::Ptr) = error("invalid finalizer(f::Ptr, o::Ptr)")
+finalizer(f::Union(Function,Ptr), o::ANY) = begin
+    isimmutable(o) && error("objects of type ", typeof(o), " cannot be finalized")
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 end
 

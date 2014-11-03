@@ -319,7 +319,7 @@ Any[
 
 "),
 
-("Base","finalizer","finalizer(x, function)
+("Base","finalizer","finalizer(function, x)
 
    Register a function \"f(x)\" to be called when there are no
    program-accessible references to \"x\". The behavior of this

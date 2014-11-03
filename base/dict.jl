@@ -717,7 +717,7 @@ function add_weak_key(t::Dict, k, v)
     # TODO: it might be better to avoid the finalizer, allow
     # wiped WeakRefs to remain in the table, and delete them as
     # they are discovered by getindex and setindex!.
-    finalizer(k, t.deleter)
+    finalizer(t.deleter, k)
     return t
 end
 
@@ -731,7 +731,7 @@ end
 
 function add_weak_value(t::Dict, k, v)
     t[k] = WeakRef(v)
-    finalizer(v, x->weak_value_delete!(t, k, x))
+    finalizer(x->weak_value_delete!(t, k, x), v)
     return t
 end
 

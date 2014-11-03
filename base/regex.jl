@@ -19,11 +19,10 @@ type Regex
             error("invalid regex options: $options")
         end
         re = compile(new(pattern, options, C_NULL, C_NULL, Array(Int32, 0)))
-        finalizer(re,
-            function(re::Regex)
-                re.extra != C_NULL && PCRE.free_study(re.extra)
-                re.regex != C_NULL && PCRE.free(re.regex)
-            end)
+        finalizer(re) do re
+            re.extra != C_NULL && PCRE.free_study(re.extra)
+            re.regex != C_NULL && PCRE.free(re.regex)
+        end
         re
     end
 end

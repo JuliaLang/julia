@@ -264,7 +264,7 @@ end
 function TCPSocket()
     this = TCPSocket(c_malloc(_sizeof_uv_tcp))
     associate_julia_struct(this.handle,this)
-    finalizer(this,uvfinalize)
+    finalizer(uvfinalize, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -294,7 +294,7 @@ end
 function TCPServer()
     this = TCPServer(c_malloc(_sizeof_uv_tcp))
     associate_julia_struct(this.handle, this)
-    finalizer(this,uvfinalize)
+    finalizer(uvfinalize, this)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0 
@@ -364,7 +364,7 @@ function UDPSocket()
     associate_julia_struct(this.handle, this)
     err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
-    finalizer(this, uvfinalize)
+    finalizer(uvfinalize, this)
     if err != 0 
         c_free(this.handle)
         this.handle = C_NULL
