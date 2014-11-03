@@ -6,11 +6,11 @@ export @printf, @sprintf
 const SmallFloatingPoint = Union(Float64,Float32,Float16)
 const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,Uint128,Int128)
 
-function gen(s::String)
+function gen(s::AbstractString)
     args = []
     blk = Expr(:block, :(local neg, pt, len, exp, do_out, args))
     for x in parse(s)
-        if isa(x,String)
+        if isa(x,AbstractString)
             push!(blk.args, :(write(out, $(length(x)==1 ? x[1] : x))))
         else
             c = lowercase(x[end])
@@ -32,7 +32,7 @@ end
 
 ### printf format string parsing ###
 
-function parse(s::String)
+function parse(s::AbstractString)
     # parse format string in to stings and format tuples
     list = []
     i = j = start(s)
@@ -54,9 +54,9 @@ function parse(s::String)
     # coalesce adjacent strings
     i = 1
     while i < length(list)
-        if isa(list[i],String)
+        if isa(list[i],AbstractString)
             for j = i+1:length(list)
-                if !isa(list[j],String)
+                if !isa(list[j],AbstractString)
                     j -= 1
                     break
                 end
@@ -80,10 +80,10 @@ end
 #   (h|hh|l|ll|L|j|t|z|q)?  # modifier (ignored)
 #   [diouxXeEfFgGaAcCsSp%]  # conversion
 
-next_or_die(s::String, k) = !done(s,k) ? next(s,k) :
+next_or_die(s::AbstractString, k) = !done(s,k) ? next(s,k) :
     error("invalid printf format string: ", repr(s))
 
-function parse1(s::String, k::Integer)
+function parse1(s::AbstractString, k::Integer)
     j = k
     width = 0
     precision = -1
@@ -814,7 +814,7 @@ is_str_expr(ex) =
     endswith(string(ex.args[1]),"str")))
 
 function _printf(macroname, io, fmt, args)
-    isa(fmt, String) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
+    isa(fmt, AbstractString) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
   
     has_splatting = false
@@ -863,10 +863,10 @@ end
 
 macro printf(args...)
     !isempty(args) || error("@printf: called with zero arguments")
-    if isa(args[1], String) || is_str_expr(args[1])
+    if isa(args[1], AbstractString) || is_str_expr(args[1])
         _printf("@printf", :STDOUT, args[1], args[2:end])
     else
-        (length(args) >= 2 && (isa(args[2], String) || is_str_expr(args[2]))) ||
+        (length(args) >= 2 && (isa(args[2], AbstractString) || is_str_expr(args[2]))) ||
             error("@printf: first or second argument must be a format string")
         _printf("@printf", esc(args[1]), args[2], args[3:end])
     end
@@ -874,7 +874,7 @@ end
 
 macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
-    isa(args[1], String) || is_str_expr(args[1]) || 
+    isa(args[1], AbstractString) || is_str_expr(args[1]) || 
         error("@sprintf: first argument must be a format string")
     blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
     push!(blk.args, :(takebuf_string(out)))

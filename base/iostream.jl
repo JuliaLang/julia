@@ -5,14 +5,14 @@ const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 type IOStream <: IO
     handle::Ptr{Void}
     ios::Array{Uint8,1}
-    name::String
+    name::AbstractString
     mark::Int64
 
-    IOStream(name::String, buf::Array{Uint8,1}) = new(pointer(buf), buf, name, -1)
+    IOStream(name::AbstractString, buf::Array{Uint8,1}) = new(pointer(buf), buf, name, -1)
 end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
 # in the case where we takebuf it.
-function IOStream(name::String, finalize::Bool)
+function IOStream(name::AbstractString, finalize::Bool)
     buf = zeros(Uint8,sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
@@ -20,7 +20,7 @@ function IOStream(name::String, finalize::Bool)
     end
     return x
 end
-IOStream(name::String) = IOStream(name, true)
+IOStream(name::AbstractString) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
@@ -100,7 +100,7 @@ position(h::CFILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
-function fdio(name::String, fd::Integer, own::Bool=false)
+function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Int32, Int32),
           s.ios, fd, 0, own);
@@ -108,7 +108,7 @@ function fdio(name::String, fd::Integer, own::Bool=false)
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
-function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
+function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Void},
@@ -119,9 +119,9 @@ function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     end
     return s
 end
-open(fname::String) = open(fname, true, false, false, false, false)
+open(fname::AbstractString) = open(fname, true, false, false, false, false)
 
-function open(fname::String, mode::String)
+function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :
     mode == "r+" ? open(fname, true , true , false, false, false) :
     mode == "w"  ? open(fname, false, true , true , true , false) :

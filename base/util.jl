@@ -201,27 +201,27 @@ function with_output_color(f::Function, color::Symbol, io::IO, args...)
     end
 end
 
-print_with_color(color::Symbol, io::IO, msg::String...) =
+print_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(print, color, io, msg...)
-print_with_color(color::Symbol, msg::String...) =
+print_with_color(color::Symbol, msg::AbstractString...) =
     print_with_color(color, STDOUT, msg...)
-println_with_color(color::Symbol, io::IO, msg::String...) =
+println_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(println, color, io, msg...)
-println_with_color(color::Symbol, msg::String...) =
+println_with_color(color::Symbol, msg::AbstractString...) =
     println_with_color(color, STDOUT, msg...)
 
 ## warnings and messages ##
 
-function info(msg::String...; prefix="INFO: ")
+function info(msg::AbstractString...; prefix="INFO: ")
     println_with_color(:blue, STDERR, prefix, chomp(string(msg...)))
 end
 
 # print a warning only once
 
 const have_warned = Set()
-warn_once(msg::String...) = warn(msg..., once=true)
+warn_once(msg::AbstractString...) = warn(msg..., once=true)
 
-function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+function warn(msg::AbstractString...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
     str = chomp(bytestring(msg...))
     if once
         if key === nothing

@@ -56,7 +56,7 @@ CPUinfo(info::UV_cpu_info_t) = CPUinfo(bytestring(info.model), info.speed,
     info.cpu_times!user, info.cpu_times!nice, info.cpu_times!sys,
     info.cpu_times!idle, info.cpu_times!irq)
 
-function show(io::IO, info::CPUinfo, header::Bool=true, prefix::String="    ")
+function show(io::IO, info::CPUinfo, header::Bool=true, prefix::AbstractString="    ")
     tck = SC_CLK_TCK
     if header
         println(io, info.model, ": ")
@@ -167,7 +167,7 @@ const shlib_ext = dlext
     end
 
     # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{String,1}} )
+    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{AbstractString,1}} )
         di = unsafe_load(di_ptr)
 
         # Skip over objects without a path (as they represent this own object)
@@ -181,10 +181,10 @@ const shlib_ext = dlext
 end #@linux_only
 
 function dllist()
-    dynamic_libraries = Array(String,0)
+    dynamic_libraries = Array(AbstractString,0)
 
     @linux_only begin
-        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{String,1}} ))
+        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{AbstractString,1}} ))
         ccall( cglobal("dl_iterate_phdr"), Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries) )
     end
 
@@ -212,7 +212,7 @@ function dlpath( handle::Ptr{Void} )
     return s
 end
 
-function dlpath{T<:Union(String, Symbol)}(libname::T)
+function dlpath{T<:Union(AbstractString, Symbol)}(libname::T)
     handle = dlopen(libname)
     path = dlpath(handle)
     dlclose(handle)

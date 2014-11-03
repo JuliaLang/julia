@@ -82,7 +82,7 @@ function config{T}(what::Integer, ::Type{T})
     reinterpret(T,buf)[1]
 end
 
-function compile(pattern::String, options::Integer)
+function compile(pattern::AbstractString, options::Integer)
     errstr = Array(Ptr{Uint8},1)
     erroff = Array(Int32,1)
     re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},

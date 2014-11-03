@@ -905,8 +905,8 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
-@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
-@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+@test split(SubString(ascii("x"), 2, 0), "y") == AbstractString[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == AbstractString[""]
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]

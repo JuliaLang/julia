@@ -71,7 +71,7 @@ const VERSION_REGEX = r"^
     ))
 $"ix
 
-function split_idents(s::String)
+function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
@@ -79,7 +79,7 @@ function split_idents(s::String)
     end
 end
 
-VersionNumber(v::String) = begin
+VersionNumber(v::AbstractString) = begin
     m = match(VERSION_REGEX, v)
     if m == nothing error("invalid version string: $v") end
     major, minor, patch, minus, prerl, plus, build = m.captures
@@ -94,7 +94,7 @@ VersionNumber(v::String) = begin
     VersionNumber(major, minor, patch, prerl, build)
 end
 
-convert(::Type{VersionNumber}, v::String) = VersionNumber(v)
+convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 
 macro v_str(v); VersionNumber(v); end 
 

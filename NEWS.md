@@ -99,6 +99,8 @@ Library improvements
 
   * The `machinefile` now supports an host count ([#7616]).
 
+  * `String` has been renamed to `AbstractString`.
+
 Deprecated or removed
 ---------------------
 

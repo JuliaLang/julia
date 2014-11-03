@@ -248,7 +248,7 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","
 
 is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (Uint32,), c) != 0
 is_id_char(c::Char) = ccall(:jl_id_char, Cint, (Uint32,), c) != 0
-function isidentifier(s::String)
+function isidentifier(s::AbstractString)
     i = start(s)
     done(s, i) && return false
     (c, i) = next(s, i)
@@ -588,7 +588,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "unless ")
         show_list(io, args, " goto ", indent)
 
-    elseif is(head, :string) && nargs == 1 && isa(args[1], String)
+    elseif is(head, :string) && nargs == 1 && isa(args[1], AbstractString)
         show(io, args[1])
 
     elseif is(head, :null)
@@ -601,7 +601,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif is(head, :string)
         a = map(args) do x
-            if !isa(x,String)
+            if !isa(x,AbstractString)
                 if isa(x,Symbol) && !(x in quoted_syms)
                     string("\$", x)
                 else
@@ -797,7 +797,7 @@ xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(io::IO, x::String, n::Int, indent) =
+dump(io::IO, x::AbstractString, n::Int, indent) =
                (print(io, typeof(x), " ");
                 show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
@@ -882,7 +882,7 @@ end
 
 function print_matrix_row(io::IO,
     X::AbstractVecOrMat, A::Vector,
-    i::Integer, cols::AbstractVector, sep::String
+    i::Integer, cols::AbstractVector, sep::AbstractString
 )
     for k = 1:length(A)
         j = cols[k]
@@ -902,7 +902,7 @@ function print_matrix_row(io::IO,
 end
 
 function print_matrix_vdots(io::IO,
-    vdots::String, A::Vector, sep::String, M::Integer, m::Integer
+    vdots::AbstractString, A::Vector, sep::AbstractString, M::Integer, m::Integer
 )
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
@@ -919,12 +919,12 @@ end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
                       sz::(Integer, Integer) = (s = tty_size(); (s[1]-4, s[2])),
-                      pre::String = " ",
-                      sep::String = "  ",
-                      post::String = "",
-                      hdots::String = "  \u2026  ",
-                      vdots::String = "\u22ee",
-                      ddots::String = "  \u22f1  ",
+                      pre::AbstractString = " ",
+                      sep::AbstractString = "  ",
+                      post::AbstractString = "",
+                      hdots::AbstractString = "  \u2026  ",
+                      vdots::AbstractString = "\u22ee",
+                      ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
     rows, cols = sz
     cols -= length(pre) + length(post)
@@ -1165,7 +1165,7 @@ end
 function array_eltype_show_how(X)
     e = eltype(X)
     leaf = isleaftype(e)
-    plain = e<:Number || e<:String
+    plain = e<:Number || e<:AbstractString
     if isa(e,DataType) && e === e.name.primary
         str = string(e.name)
     else

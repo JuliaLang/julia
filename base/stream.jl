@@ -817,16 +817,16 @@ end
 
 ## Libuv error handling ##
 type UVError <: Exception
-    prefix::String
+    prefix::AbstractString
     code::Int32
-    UVError(p::String,code::Integer)=new(p,int32(code))
+    UVError(p::AbstractString,code::Integer)=new(p,int32(code))
 end
 
 struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{Uint8},(Int32,),err.code))
 uverrorname(err::UVError) = bytestring(ccall(:uv_err_name,Ptr{Uint8},(Int32,),err.code))
 
 uv_error(prefix::Symbol, c::Integer) = uv_error(string(prefix),c)
-uv_error(prefix::String, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
+uv_error(prefix::AbstractString, c::Integer) = c < 0 ? throw(UVError(prefix,c)) : nothing
 show(io::IO, e::UVError) = print(io, e.prefix*": "*struverror(e)*" ("*uverrorname(e)*")")
 
 
@@ -905,7 +905,7 @@ function connect!(sock::Pipe, path::ByteString)
     sock.status = StatusConnecting
     sock
 end
-connect!(sock::Pipe, path::String) = connect(sock,bytestring(path))
+connect!(sock::Pipe, path::AbstractString) = connect(sock,bytestring(path))
 
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)
@@ -913,7 +913,7 @@ function connect(sock::AsyncStream, args...)
     sock
 end
 
-connect(path::String) = connect(Pipe(),path)
+connect(path::AbstractString) = connect(Pipe(),path)
 
 dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
 dup(src::RawFD,target::RawFD) = systemerror("dup",-1==

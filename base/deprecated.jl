@@ -78,7 +78,7 @@ const Stat = StatStruct
 export CharString
 const CharString = UTF32String
 @deprecate UTF32String(c::Integer...) utf32(c...)
-@deprecate UTF32String(s::String) utf32(s)
+@deprecate UTF32String(s::AbstractString) utf32(s)
 
 export Ranges
 const Ranges = Range
@@ -178,7 +178,7 @@ const UdpSocket = UDPSocket
 const IpAddr = IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
-@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+@deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
 @deprecate randbool! rand!
 
@@ -212,3 +212,5 @@ end
 @deprecate nan(x::FloatingPoint)  oftype(x,NaN)
 @deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
+
+const String = AbstractString

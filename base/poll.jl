@@ -67,7 +67,7 @@ abstract UVPollingWatcher
 
 type PollingFileWatcher <: UVPollingWatcher
     handle::Ptr{Void}
-    file::String
+    file::AbstractString
     open::Bool
     notify::Condition
     cb::Callback

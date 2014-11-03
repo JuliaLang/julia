@@ -128,7 +128,7 @@ export
     Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
     Uint64, Uint128, Unsigned,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
+    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
@@ -214,8 +214,8 @@ type UndefVarError      <: Exception
 end
 type InterruptException <: Exception end
 
-abstract String
-abstract DirectIndexString <: String
+abstract AbstractString
+abstract DirectIndexString <: AbstractString
 
 type SymbolNode
     name::Symbol
@@ -233,7 +233,7 @@ immutable ASCIIString <: DirectIndexString
     data::Array{Uint8,1}
 end
 
-immutable UTF8String <: String
+immutable UTF8String <: AbstractString
     data::Array{Uint8,1}
 end
 

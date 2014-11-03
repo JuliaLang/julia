@@ -12,7 +12,7 @@ const invalid_dlm = char(0xfffffffe)
 const offs_chunk_size = 5000
 
 countlines(nameorfile) = countlines(nameorfile, '\n')
-function countlines(filename::String, eol::Char)
+function countlines(filename::AbstractString, eol::Char)
     open(filename) do io
         countlines(io, eol)
     end
@@ -50,20 +50,20 @@ readdlm(input, dlm::Char, T::Type, eol::Char; opts...) = readdlm_auto(input, dlm
 function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, @windows ? false : true)
-    isa(input, String) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
+    isa(input, AbstractString) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
     sinp = isa(input, Vector{Uint8}) ? bytestring(input) :
            isa(input, IO) ? readall(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)
 end
 
-function as_mmap(fname::String, fsz::Int64)
+function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
         mmap_array(Uint8, (int(fsz),), io)
     end
 end
 
-function ascii_if_possible(sbuff::String)
+function ascii_if_possible(sbuff::AbstractString)
     isascii(sbuff) ? convert(ASCIIString,sbuff) : sbuff
 end
 
@@ -81,7 +81,7 @@ type DLMOffsets <: DLMHandler
     thresh::Int
     bufflen::Int
 
-    function DLMOffsets(sbuff::String)
+    function DLMOffsets(sbuff::AbstractString)
         offsets = Array(Array{Int,1}, 1)
         offsets[1] = Array(Int, offs_chunk_size)
         thresh = int(Base.Sys.total_memory() / sizeof(Int) / 5)
@@ -125,8 +125,8 @@ function result(dlmoffsets::DLMOffsets)
     dlmoffsets.oarr
 end
 
-type DLMStore{T,S<:String} <: DLMHandler
-    hdr::Array{String, 2}
+type DLMStore{T,S<:AbstractString} <: DLMHandler
+    hdr::Array{AbstractString, 2}
     data::Array{T, 2}
 
     nrows::Int
@@ -140,7 +140,7 @@ type DLMStore{T,S<:String} <: DLMHandler
     tmp64::Array{Float64,1}
 end
 
-function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
+function DLMStore{T,S<:AbstractString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
     (nrows,ncols) = dims
     ((nrows == 0) || (ncols == 0)) && error("Empty input")
     ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
@@ -148,7 +148,7 @@ function DLMStore{T,S<:String}(::Type{T}, dims::NTuple{2,Integer}, has_header::B
     DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
 end
 
-function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int) 
+function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int) 
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
@@ -170,7 +170,7 @@ function store_cell{T,S<:String}(dlmstore::DLMStore{T,S}, row::Int, col::Int, qu
                 lastrow += 1
             end
             for cidx in (lastcol+1):ncols
-                if (T <: String) || (T == Any)
+                if (T <: AbstractString) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
                 elseif ((T <: Number) || (T <: Char)) && dlmstore.auto
                     throw(TypeError(:store_cell, "", Any, T))
@@ -213,7 +213,7 @@ function result{T}(dlmstore::DLMStore{T})
         while lastrow <= nrows
             (lastcol == ncols) && (lastcol = 0; lastrow += 1)
             for cidx in (lastcol+1):ncols
-                if (T <: String) || (T == Any)
+                if (T <: AbstractString) || (T == Any)
                     cells[lastrow,cidx] = SubString(sbuff, 1, 0)
                 elseif ((T <: Number) || (T <: Char)) && dlmstore.auto
                     throw(TypeError(:store_cell, "", Any, T))
@@ -231,7 +231,7 @@ function result{T}(dlmstore::DLMStore{T})
 end
 
 
-function readdlm_string(sbuff::String, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
+function readdlm_string(sbuff::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm)
     quotes = get(optsd, :quotes, true)
     comments = get(optsd, :comments, true)
@@ -288,7 +288,7 @@ function val_opts(opts)
     d
 end
 
-function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::String, auto::Bool, eol::Char)
+function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::AbstractString, auto::Bool, eol::Char)
     idx = 1
     offidx = 1
     offsets = offarr[1]
@@ -313,12 +313,12 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
 end
 
 
-colval{T<:Bool, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((sval=="true") && (cells[row,col]=true; return false); (sval=="false") && (cells[row,col]=false; return false); true)
-colval{T<:Number, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = (float64_isvalid(sval, tmp64) ? ((cells[row,col] = tmp64[1]); false) : true)
-colval{T<:String, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = sval); false)
-colval{S<:String}(sval::S, cells::Array{Any,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = float64_isvalid(sval, tmp64) ? tmp64[1] : sval); false)
-colval{T<:Char, S<:String}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((length(sval) == 1) ? ((cells[row,col] = next(sval,1)[1]); false) : true)
-colval{S<:String}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
+colval{T<:Bool, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((sval=="true") && (cells[row,col]=true; return false); (sval=="false") && (cells[row,col]=false; return false); true)
+colval{T<:Number, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = (float64_isvalid(sval, tmp64) ? ((cells[row,col] = tmp64[1]); false) : true)
+colval{T<:AbstractString, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = sval); false)
+colval{S<:AbstractString}(sval::S, cells::Array{Any,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = float64_isvalid(sval, tmp64) ? tmp64[1] : sval); false)
+colval{T<:Char, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((length(sval) == 1) ? ((cells[row,col] = next(sval,1)[1]); false) : true)
+colval{S<:AbstractString}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
     dlm_parse(s.data, uint8(uint32(eol)), uint8(uint32(dlm)), uint8(uint32(qchar)), uint8(uint32(cchar)), 
@@ -487,7 +487,7 @@ readcsv(io, T::Type; opts...) = readdlm(io, ',', T; opts...)
 
 # todo: keyword argument for # of digits to print
 writedlm_cell(io::IO, elt::FloatingPoint, dlm, quotes) = print_shortest(io, elt)
-function writedlm_cell{T}(io::IO, elt::String, dlm::T, quotes::Bool)
+function writedlm_cell{T}(io::IO, elt::AbstractString, dlm::T, quotes::Bool)
     if quotes && !isempty(elt) && (('"' in elt) || ('\n' in elt) || ((T <: Char) ? (dlm in elt) : contains(elt, dlm)))
         print(io, '"', replace(elt, r"\"", "\"\""), '"')
     else
@@ -544,7 +544,7 @@ function writedlm(io::IO, itr, dlm; opts...)
     nothing
 end
 
-function writedlm(fname::String, a, dlm; opts...)
+function writedlm(fname::AbstractString, a, dlm; opts...)
     open(fname, "w") do io
         writedlm(io, a, dlm; opts...)
     end

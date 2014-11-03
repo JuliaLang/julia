@@ -1,8 +1,8 @@
 ## core libc calls ##
 
 @unix_only begin
-    _getenv(var::String) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
-    _hasenv(s::String) = _getenv(s) != C_NULL
+    _getenv(var::AbstractString) = ccall(:getenv, Ptr{Uint8}, (Ptr{Uint8},), var)
+    _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 end
 @windows_only begin
 const ERROR_ENVVAR_NOT_FOUND = uint32(203)
@@ -28,7 +28,7 @@ end
 
 _getenvlen(var::UTF16String) = ccall(:GetEnvironmentVariableW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint8},Uint32),utf16(var),C_NULL,0)
 _hasenv(s::UTF16String) = _getenvlen(s)!=0 || GetLastError()!=ERROR_ENVVAR_NOT_FOUND
-_hasenv(s::String) = _hasenv(utf16(s))
+_hasenv(s::AbstractString) = _hasenv(utf16(s))
 function _jl_win_getenv(s::UTF16String,len::Uint32)
     val=zeros(Uint16,len)
     ret=ccall(:GetEnvironmentVariableW,stdcall,Uint32,(Ptr{Uint16},Ptr{Uint16},Uint32),s,val,len)
@@ -62,7 +62,7 @@ macro accessEnv(var,errorcase)
     end
 end
 
-function _setenv(var::String, val::String, overwrite::Bool)
+function _setenv(var::AbstractString, val::AbstractString, overwrite::Bool)
     @unix_only begin
         ret = ccall(:setenv, Int32, (Ptr{Uint8},Ptr{Uint8},Int32), var, val, overwrite)
         systemerror(:setenv, ret != 0)
@@ -76,9 +76,9 @@ function _setenv(var::String, val::String, overwrite::Bool)
     end
 end
 
-_setenv(var::String, val::String) = _setenv(var, val, true)
+_setenv(var::AbstractString, val::AbstractString) = _setenv(var, val, true)
 
-function _unsetenv(var::String)
+function _unsetenv(var::AbstractString)
     @unix_only begin
         ret = ccall(:unsetenv, Int32, (Ptr{Uint8},), var)
         systemerror(:unsetenv, ret != 0)
@@ -96,12 +96,12 @@ const ENV = EnvHash()
 
 similar(::EnvHash) = Dict{ByteString,ByteString}()
 
-getindex(::EnvHash, k::String) = @accessEnv k throw(KeyError(k))
-get(::EnvHash, k::String, def) = @accessEnv k (return def)
-in(k::String, ::KeyIterator{EnvHash}) = _hasenv(k)
-pop!(::EnvHash, k::String) = (v = ENV[k]; _unsetenv(k); v)
-pop!(::EnvHash, k::String, def) = haskey(ENV,k) ? pop!(ENV,k) : def
-function delete!(::EnvHash, k::String)
+getindex(::EnvHash, k::AbstractString) = @accessEnv k throw(KeyError(k))
+get(::EnvHash, k::AbstractString, def) = @accessEnv k (return def)
+in(k::AbstractString, ::KeyIterator{EnvHash}) = _hasenv(k)
+pop!(::EnvHash, k::AbstractString) = (v = ENV[k]; _unsetenv(k); v)
+pop!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? pop!(ENV,k) : def
+function delete!(::EnvHash, k::AbstractString)
     warn_once("""
         delete!(ENV,key) now returns the modified environment.
         Use pop!(ENV,key) to retrieve the value instead.
@@ -109,9 +109,9 @@ function delete!(::EnvHash, k::String)
     _unsetenv(k)
     ENV
 end
-delete!(::EnvHash, k::String, def) = haskey(ENV,k) ? delete!(ENV,k) : def
-setindex!(::EnvHash, v, k::String) = _setenv(k,string(v))
-push!(::EnvHash, k::String, v) = setindex!(ENV, v, k)
+delete!(::EnvHash, k::AbstractString, def) = haskey(ENV,k) ? delete!(ENV,k) : def
+setindex!(::EnvHash, v, k::AbstractString) = _setenv(k,string(v))
+push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 
 @unix_only begin
 start(::EnvHash) = 0
@@ -171,7 +171,7 @@ function show(io::IO, ::EnvHash)
 end
 
 # temporarily set and then restore an environment value
-function with_env(f::Function, key::String, val)
+function with_env(f::Function, key::AbstractString, val)
     old = get(ENV,key,nothing)
     val != nothing ? (ENV[key]=val) : _unsetenv(key)
     try f()
