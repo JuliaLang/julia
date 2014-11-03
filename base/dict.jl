@@ -181,7 +181,15 @@ function merge!(d::Associative, others::Associative...)
     end
     return d
 end
-merge(d::Associative, others::Associative...) = merge!(copy(d), others...)
+function merge(d::Associative, others::Associative...)
+    K, V = eltype(d)
+    for other in others
+        (Ko, Vo) = eltype(other)
+        K = promote_type(K, Ko)
+        V = promote_type(V, Vo)
+    end
+    merge!(Dict{K,V}(), d, others...)
+end
 
 function filter!(f::Function, d::Associative)
     for (k,v) in d
