@@ -208,7 +208,7 @@ These notes apply to the Debian 7 image currently available on Google Compute En
 
 1. Install packages required to build on your instance:
   ```
-  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
+  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev cmake
   ```
 
 2. Now clone `JuliaLang:master`; you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
@@ -258,6 +258,7 @@ Building Julia requires that the following software be installed:
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
+- **[cmake]**                   — needed to build libgit2.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
@@ -277,6 +278,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[PCRE]**                — Perl-compatible regular expressions library.
 - **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
 - **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
+- **[libgit2]**             - the Git linkable library, used by Julia's package manager
 
 
 [GNU make]:     http://www.gnu.org/software/make/
@@ -289,6 +291,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
+[cmake]:        http://www.cmake.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
@@ -306,6 +309,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [MPFR]:         http://www.mpfr.org/
 [double-conversion]: http://double-conversion.googlecode.com/
 [libuv]:        https://github.com/JuliaLang/libuv
+[libgit2]:      https://libgit2.github.com/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries

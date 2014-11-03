@@ -20,6 +20,7 @@ MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
 #custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
+#CMake libs: libgit2
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -92,6 +93,10 @@ ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
 endif
 
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
+STAGE1_DEPS += libgit2
+endif
+
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
@@ -145,7 +150,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -358,12 +363,12 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC_BASE)" -DCMAKE_CXX_COMPILER="$(CXX_BASE)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 libcxxabi-build:
 	mkdir -p libcxxabi-build
 libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
 	cd libcxxabi-build && \
-        cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)" -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+        $(CMAKE) -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi -DCMAKE_C_COMPILER="$(CC_BASE)" -DCMAKE_CXX_COMPILER="$(CXX_BASE)" -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
 	cd libcxxabi-build && $(MAKE)
@@ -1664,42 +1669,6 @@ compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
-## Git
-
-GIT_SOURCE = git-$(GIT_VER)/src/git
-GIT_TARGET = $(build_prefix)/git
-
-git-$(GIT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
-git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
-	touch -c $@
-git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
-	cd git-$(GIT_VER) && \
-	./configure $(CONFIGURE_COMMON) --bindir="$(build_libexecdir)"
-	touch -c $@
-$(GIT_SOURCE): git-$(GIT_VER)/config.status
-	$(MAKE) -C git-$(GIT_VER)
-	touch -c $@
-git-$(GIT_VER)/checked: $(GIT_SOURCE)
-	echo 1 > $@
-$(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1 $(MAKE_COMMON)
-	touch -c $@
-
-clean-git:
-	-$(MAKE) -C git-$(GIT_VER) clean
-	-rm -f $(GIT_OBJ_TARGET)
-distclean-git:
-	-rm -rf git-$(GIT_VER).tar.gz git-$(GIT_VER)
-
-get-git: git-$(GIT_VER).tar.gz
-configure-git: git-$(GIT_VER)/config.status
-compile-git: $(GIT_SOURCE)
-check-git: git-$(GIT_VER)/checked
-install-git: $(GIT_TARGET)
-
 ## virtualenv
 
 VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
@@ -1726,6 +1695,60 @@ configure-virtualenv: get-virtualenv
 compile-virtualenv: $(VIRTUALENV_SOURCE)
 check-virtualenv: compile-virtualenv
 install-virtualenv: $(VIRTUALENV_TARGET)
+
+## libgit2
+
+LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
+LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+
+LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$(CC_BASE)"
+ifeq ($(OS),WINNT)
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
+ifeq ($(BUILD_OS),WINNT)
+LIBGIT2_OPTS += -G"MSYS Makefiles"
+else
+LIBGIT2_OPTS += -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+endif
+endif
+
+libgit2-$(LIBGIT2_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
+libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
+	$(JLCHECKSUM) $<
+ifeq ($(BUILD_OS),WINNT)
+	$(TAR) --exclude=libgit2-$(LIBGIT2_VER)/tests/resources/template/hooks/link.sample -zxf $<
+else
+	$(TAR) zxf $<
+endif
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
+	mkdir -p libgit2-$(LIBGIT2_VER)/build
+	cd libgit2-$(LIBGIT2_VER)/build/ && \
+	$(CMAKE) .. $(LIBGIT2_OPTS)
+	touch -c $@
+$(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
+	cd libgit2-$(LIBGIT2_VER)/build/ && \
+	$(CMAKE) --build .
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
+	#cd libgit2-$(LIBGIT2_VER)/build/ && \
+	#ctest
+	echo 1 > $@
+$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
+	cp $< $@
+
+clean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER)/build/
+	-rm -f $(LIBGIT2_OBJ_TARGET)
+distclean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
+
+get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
+configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
+compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
+check-libgit2: compile-libgit2
+install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##
 
