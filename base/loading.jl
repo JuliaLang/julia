@@ -1,6 +1,6 @@
 # require
 
-function find_in_path(name::String)
+function find_in_path(name::AbstractString)
     isabspath(name) && return name
     isfile(name) && return abspath(name)
     base = name
@@ -36,13 +36,13 @@ end
 package_list = Dict{ByteString,Float64}()
 # to synchronize multiple tasks trying to require something
 package_locks = Dict{ByteString,Any}()
-require(fname::String) = require(bytestring(fname))
-require(f::String, fs::String...) = (require(f); for x in fs require(x); end)
+require(fname::AbstractString) = require(bytestring(fname))
+require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs require(x); end)
 
 # only broadcast top-level (not nested) requires and reloads
 toplevel_load = true
 
-function require(name::String)
+function require(name::AbstractString)
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
 
@@ -71,7 +71,7 @@ function _require(path)
     end
 end
 
-function reload(name::String)
+function reload(name::AbstractString)
     global toplevel_load
     path = find_in_node1_path(name)
     path == nothing && error("$name not found")
@@ -94,12 +94,12 @@ end
 
 # remote/parallel load
 
-include_string(txt::String, fname::String) =
+include_string(txt::AbstractString, fname::AbstractString) =
     ccall(:jl_load_file_string, Any, (Ptr{Uint8},Ptr{Uint8}), txt, fname)
 
-include_string(txt::String) = include_string(txt, "string")
+include_string(txt::AbstractString) = include_string(txt, "string")
 
-function source_path(default::Union(String,Void)="")
+function source_path(default::Union(AbstractString,Void)="")
     t = current_task()
     while true
         s = t.storage
@@ -115,7 +115,7 @@ end
 
 macro __FILE__() source_path() end
 
-function include_from_node1(path::String)
+function include_from_node1(path::AbstractString)
     prev = source_path(nothing)
     path = (prev == nothing) ? abspath(path) : joinpath(dirname(prev),path)
     tls = task_local_storage()
@@ -140,7 +140,7 @@ function include_from_node1(path::String)
     result
 end
 
-function reload_path(path::String)
+function reload_path(path::AbstractString)
     had = haskey(package_list, path)
     if !had
         package_locks[path] = RemoteRef()
@@ -164,7 +164,7 @@ function reload_path(path::String)
     nothing
 end
 
-function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
+function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
     return eval(Module(:__anon__),
                 Expr(:toplevel,
                      :(const ARGS = $args),
@@ -172,4 +172,4 @@ function evalfile(path::String, args::Vector{UTF8String}=UTF8String[])
                      :(eval(m,x) = Core.eval(m,x)),
                      :(include($path))))
 end
-evalfile(path::String, args::Vector) = evalfile(path, UTF8String[args...])
+evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])

@@ -5,7 +5,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
-    segname::String
+    segname::AbstractString
 
     # Fields below are not to be serialized
     # Local shmem map.

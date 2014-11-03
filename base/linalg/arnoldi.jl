@@ -31,7 +31,7 @@ function eigs(A, B;
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
     
-    if isa(which,String)
+    if isa(which,AbstractString)
         warn("Use symbols instead of strings for specifying which eigenvalues to compute")
         which=symbol(which)
     end

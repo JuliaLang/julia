@@ -12,7 +12,7 @@ import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, 
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
-    message :: String
+    message :: AbstractString
 end
 
 function umferror(status::Int)

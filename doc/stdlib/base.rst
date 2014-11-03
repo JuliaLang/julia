@@ -41,7 +41,7 @@ Getting Around
    Print information about exported global variables in a module, optionally restricted
    to those matching ``pattern``.
 
-.. function:: edit(file::String, [line])
+.. function:: edit(file::AbstractString, [line])
 
    Edit a file optionally providing a line number to edit at. Returns to the julia prompt when you quit the editor.
 
@@ -53,7 +53,7 @@ Getting Around
 
    Evaluates the arguments to the function call, determines their types, and calls the ``edit`` function on the resulting expression
 
-.. function:: less(file::String, [line])
+.. function:: less(file::AbstractString, [line])
 
    Show a file using the default pager, optionally providing a starting line number. Returns to the julia prompt when you quit the pager.
 
@@ -69,25 +69,25 @@ Getting Around
 
    Send a printed form of ``x`` to the operating system clipboard ("copy").
 
-.. function:: clipboard() -> String
+.. function:: clipboard() -> AbstractString
 
    Return a string with the contents of the operating system clipboard ("paste").
 
-.. function:: require(file::String...)
+.. function:: require(file::AbstractString...)
 
    Load source files once, in the context of the ``Main`` module, on every active node, searching standard locations for files. ``require`` is considered a top-level operation, so it sets the current ``include`` path but does not use it to search for files (see help for ``include``). This function is typically used to load library code, and is implicitly called by ``using`` to load packages.
 
    When searching for files, ``require`` first looks in the current working directory, then looks for package code under ``Pkg.dir()``, then tries paths in the global array ``LOAD_PATH``.
 
-.. function:: reload(file::String)
+.. function:: reload(file::AbstractString)
 
    Like ``require``, except forces loading of files regardless of whether they have been loaded before. Typically used when interactively developing libraries.
 
-.. function:: include(path::String)
+.. function:: include(path::AbstractString)
 
    Evaluate the contents of a source file in the current context. During including, a task-local include path is set to the directory containing the file. Nested calls to ``include`` will search relative to that path. All paths refer to files on node 1 when running in parallel, and files will be fetched from node 1. This function is typically used to load source interactively, or to combine files in packages that are broken into multiple source files.
 
-.. function:: include_string(code::String)
+.. function:: include_string(code::AbstractString)
 
    Like ``include``, except reads code from the given string rather than from a file. Since there is no file path involved, no path processing or fetching from node 1 is done.
 
@@ -471,7 +471,7 @@ Syntax
 
    Evaluate an expression and return the value.
 
-.. function:: evalfile(path::String)
+.. function:: evalfile(path::AbstractString)
 
    Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
 
@@ -550,7 +550,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
         3 c
 
 
-Fully implemented by: ``Range``, ``UnitRange``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``String``, ``Set``, ``Task``.
+Fully implemented by: ``Range``, ``UnitRange``, ``NDRange``, ``Tuple``, ``Real``, ``AbstractArray``, ``IntSet``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``EachLine``, ``AbstractString``, ``Set``, ``Task``.
 
 General Collections
 -------------------
@@ -584,7 +584,7 @@ General Collections
    	julia> endof([1,2,4])
    	3
 
-Fully implemented by: ``Range``, ``UnitRange``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``String``, ``Set``.
+Fully implemented by: ``Range``, ``UnitRange``, ``Tuple``, ``Number``, ``AbstractArray``, ``IntSet``, ``Dict``, ``WeakKeyDict``, ``AbstractString``, ``Set``.
 
 Iterable Collections
 --------------------
@@ -947,7 +947,7 @@ Indexable Collections
    The syntax ``a[i,j,...] = x`` is converted by the compiler to
    ``setindex!(a, x, i, j, ...)``.
 
-Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``String``.
+Fully implemented by: ``Array``, ``DArray``, ``BitArray``, ``AbstractArray``, ``SubArray``, ``ObjectIdDict``, ``Dict``, ``WeakKeyDict``, ``AbstractString``.
 
 Partially implemented by: ``Range``, ``UnitRange``, ``Tuple``.
 
@@ -1208,7 +1208,7 @@ Strings
 
    The number of characters in string ``s``.
    
-.. function:: sizeof(s::String)
+.. function:: sizeof(s::AbstractString)
 
    The number of bytes in string ``s``.
 
@@ -1309,19 +1309,19 @@ Strings
 
    Returns true if the given char or integer is an assigned Unicode code point.
 
-.. function:: ismatch(r::Regex, s::String) -> Bool
+.. function:: ismatch(r::Regex, s::AbstractString) -> Bool
 
    Test whether a string contains a match of the given regular expression.
 
-.. function:: match(r::Regex, s::String[, idx::Integer[, addopts]])
+.. function:: match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
    Search for the first match of the regular expression ``r`` in ``s`` and return a RegexMatch object containing the match, or nothing if the match failed. The matching substring can be retrieved by accessing ``m.match`` and the captured sequences can be retrieved by accessing ``m.captures`` The optional ``idx`` argument specifies an index at which to start the search.
 
-.. function:: eachmatch(r::Regex, s::String[, overlap::Bool=false])
+.. function:: eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
    Search for all matches of a the regular expression ``r`` in ``s`` and return a iterator over the matches. If overlap is true, the matching sequences are allowed to overlap indices in the original string, otherwise they must be from distinct character ranges.
 
-.. function:: matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+.. function:: matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
    Return a vector of the matching substrings from eachmatch.
 
@@ -1451,74 +1451,74 @@ Strings
 
    Gives the number of columns needed to print a string.
 
-.. function:: isalnum(c::Union(Char,String)) -> Bool
+.. function:: isalnum(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is alphanumeric, or whether this
    is true for all elements of a string.  A character is classified as alphabetic
    if it belongs to the Unicode general category Letter or Number, i.e. a character whose
    category code begins with 'L' or 'N'.
 
-.. function:: isalpha(c::Union(Char,String)) -> Bool
+.. function:: isalpha(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is alphabetic, or whether this
    is true for all elements of a string. A character is classified as alphabetic
    if it belongs to the Unicode general category Letter, i.e. a character whose
    category code begins with 'L'.
 
-.. function:: isascii(c::Union(Char,String)) -> Bool
+.. function:: isascii(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or whether this
    is true for all elements of a string.
 
-.. function:: iscntrl(c::Union(Char,String)) -> Bool
+.. function:: iscntrl(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is a control character, or whether this
    is true for all elements of a string.  Control characters are the
    non-printing characters of the Latin-1 subset of Unicode.
 
-.. function:: isdigit(c::Union(Char,String)) -> Bool
+.. function:: isdigit(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
 
-.. function:: isgraph(c::Union(Char,String)) -> Bool
+.. function:: isgraph(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is printable, and not a space, or whether this
    is true for all elements of a string.  Any character that would cause a printer
    to use ink should be classified with isgraph(c)==true.
 
-.. function:: islower(c::Union(Char,String)) -> Bool
+.. function:: islower(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this
    is true for all elements of a string.  A character is classified as lowercase
    if it belongs to Unicode category Ll, Letter: Lowercase.
 
-.. function:: isnumber(c::Union(Char,String)) -> Bool
+.. function:: isnumber(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is numeric, or whether this
    is true for all elements of a string.   A character is classified as numeric
    if it belongs to the Unicode general category Number, i.e. a character whose
    category code begins with 'N'.
 
-.. function:: isprint(c::Union(Char,String)) -> Bool
+.. function:: isprint(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is printable, including spaces, but not a control character. For strings, tests whether this is true for all elements of the string.
 
-.. function:: ispunct(c::Union(Char,String)) -> Bool
+.. function:: ispunct(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character belongs to the Unicode general category Punctuation, i.e. a character whose category code begins with 'P'. For strings, tests whether this is true for all elements of the string.
 
-.. function:: isspace(c::Union(Char,String)) -> Bool
+.. function:: isspace(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is any whitespace character.  Includes ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ', Latin-1 character U+0085, and characters in Unicode category Zs.  For strings, tests whether this    is true for all elements of the string.
 
-.. function:: isupper(c::Union(Char,String)) -> Bool
+.. function:: isupper(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
    is true for all elements of a string.    A character is classified as uppercase
    if it belongs to Unicode category Lu, Letter: Uppercase, or Lt, Letter: Titlecase.
 
-.. function:: isxdigit(c::Union(Char,String)) -> Bool
+.. function:: isxdigit(c::Union(Char,AbstractString)) -> Bool
 
    Tests whether a character is a valid hexadecimal digit, or whether this
    is true for all elements of a string.
@@ -1527,11 +1527,11 @@ Strings
 
    Convert a string to a ``Symbol``.
 
-.. function:: escape_string(str::String) -> String
+.. function:: escape_string(str::AbstractString) -> AbstractString
 
    General escaping of traditional C and Unicode escape sequences. See :func:`print_escaped` for more general escaping.
 
-.. function:: unescape_string(s::String) -> String
+.. function:: unescape_string(s::AbstractString) -> AbstractString
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`escape_string`. See also :func:`print_unescaped`.
 
@@ -1655,7 +1655,7 @@ I/O
 
    Obtain the contents of an ``IOBuffer`` as a string, without copying. Afterwards, the IOBuffer is reset to its initial state.
 
-.. function:: fdio([name::String, ]fd::Integer[, own::Bool]) -> IOStream
+.. function:: fdio([name::AbstractString, ]fd::Integer[, own::Bool]) -> IOStream
 
    Create an ``IOStream`` object from an integer file descriptor. If ``own`` is true, closing this object will close the underlying descriptor. By default, an ``IOStream`` is closed when it is garbage collected. ``name`` allows you to associate the descriptor with a named file.
 
@@ -1801,11 +1801,11 @@ I/O
 
    Read a value written by ``serialize``.
    
-.. function:: print_escaped(io, str::String, esc::String)
+.. function:: print_escaped(io, str::AbstractString, esc::AbstractString)
 
    General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
 
-.. function:: print_unescaped(io, s::String)
+.. function:: print_unescaped(io, s::AbstractString)
 
    General unescaping of traditional C and Unicode escape sequences. Reverse of :func:`print_escaped`.
 
@@ -1937,7 +1937,7 @@ I/O
    Like uperm but gets the permissions for people who neither own the file nor are a 
    member of the group owning the file
 
-.. function:: cp(src::String,dst::String)
+.. function:: cp(src::AbstractString,dst::AbstractString)
 
    Copy a file from `src` to `dest`.
 
@@ -1949,16 +1949,16 @@ I/O
    use or situations in which more options are need, please use a package that provides the
    desired functionality instead. 
 
-.. function:: mv(src::String,dst::String)
+.. function:: mv(src::AbstractString,dst::AbstractString)
 
    Move a file from `src` to `dst`.
 
-.. function:: rm(path::String; recursive=false)
+.. function:: rm(path::AbstractString; recursive=false)
 
    Delete the file, link, or empty directory at the given path. If ``recursive=true`` is
    passed and the path is a directory, then all contents are removed recursively.
 
-.. function:: touch(path::String)
+.. function:: touch(path::AbstractString)
 
    Update the last-modified timestamp on a file to the current time.
 
@@ -2103,7 +2103,7 @@ Text I/O
 
    Read the entire contents of an I/O stream as a string.
 
-.. function:: readall(filename::String)
+.. function:: readall(filename::AbstractString)
 
    Open ``filename``, read the entire contents as a string, then close the file.
    Equivalent to ``open(readall, filename)``.
@@ -2128,7 +2128,7 @@ Text I/O
 
    Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
 
-   If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
+   If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``AbstractString``, and ``Any``.
 
    If ``header`` is ``true``, the first row of data will be read as header and the tuple ``(data_cells, header_cells)`` is returned instead of only ``data_cells``.
 
@@ -2168,7 +2168,7 @@ Text I/O
 
 .. function:: writedlm(f, A, delim='\t')
 
-   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``String``).
+   Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``).
 
    For example, two vectors ``x`` and ``y`` of the same length can
    be written as two columns of tab-delimited text to ``f`` by
@@ -2237,7 +2237,7 @@ Julia environments (such as the IPython-based IJulia notebook).
    requested MIME type *only*, throwing a ``MethodError`` if this type
    is not supported by either the display(s) or by ``x``.   With these
    variants, one can also supply the "raw" data in the requested MIME
-   type by passing ``x::String`` (for MIME types with text-based storage,
+   type by passing ``x::AbstractString`` (for MIME types with text-based storage,
    such as text/html or application/postscript) or ``x::Vector{Uint8}``
    (for binary MIME types).
 
@@ -2295,23 +2295,23 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 .. function:: reprmime(mime, x)
 
-   Returns a ``String`` or ``Vector{Uint8}`` containing the
+   Returns a ``AbstractString`` or ``Vector{Uint8}`` containing the
    representation of ``x`` in the requested ``mime`` type, as written
    by ``writemime`` (throwing a ``MethodError`` if no appropriate
-   ``writemime`` is available).  A ``String`` is returned for MIME
+   ``writemime`` is available).  A ``AbstractString`` is returned for MIME
    types with textual representations (such as ``"text/html"`` or
    ``"application/postscript"``), whereas binary data is returned as
    ``Vector{Uint8}``.  (The function ``istext(mime)`` returns whether
    or not Julia treats a given ``mime`` type as text.)
 
-   As a special case, if ``x`` is a ``String`` (for textual MIME types)
+   As a special case, if ``x`` is a ``AbstractString`` (for textual MIME types)
    or a ``Vector{Uint8}`` (for binary MIME types), the ``reprmime`` function
    assumes that ``x`` is already in the requested ``mime`` format and
    simply returns ``x``.
 
 .. function:: stringmime(mime, x)
 
-   Returns a ``String`` containing the representation of ``x`` in the
+   Returns a ``AbstractString`` containing the representation of ``x`` in the
    requested ``mime`` type.  This is similar to ``reprmime`` except
    that binary data is base64-encoded as an ASCII string.
 
@@ -3771,13 +3771,13 @@ Numbers
 
 .. function:: BigInt(x)
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``String``.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``AbstractString``.
    The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``.
 
 .. function:: BigFloat(x)
 
    Create an arbitrary precision floating point number. ``x`` may be
-   an ``Integer``, a ``Float64``, a ``String`` or a ``BigInt``. The
+   an ``Integer``, a ``Float64``, a ``AbstractString`` or a ``BigInt``. The
    usual mathematical operators are defined for this type, and results
    are promoted to a ``BigFloat``. Note that because floating-point
    numbers are not exactly-representable in decimal notation,
@@ -5348,7 +5348,7 @@ System
 
    Send a signal to a process. The default is to terminate the process.
 
-.. function:: open(command, mode::String="r", stdio=DevNull)
+.. function:: open(command, mode::AbstractString="r", stdio=DevNull)
 
    Start running ``command`` asynchronously, and return a tuple
    ``(stream,process)``.  If ``mode`` is ``"r"``, then ``stream``
@@ -5358,7 +5358,7 @@ System
    and ``stdio`` optionally specifies the process's standard output
    stream.
 
-.. function:: open(f::Function, command, mode::String="r", stdio=DevNull)
+.. function:: open(f::Function, command, mode::AbstractString="r", stdio=DevNull)
 
    Similar to ``open(command, mode, stdio)``, but calls ``f(stream)``
    on the resulting read or write stream, then closes the stream
@@ -5408,19 +5408,19 @@ System
 
    Redirect the standard error stream of a process.
 
-.. function:: gethostname() -> String
+.. function:: gethostname() -> AbstractString
 
    Get the local machine's host name.
 
-.. function:: getipaddr() -> String
+.. function:: getipaddr() -> AbstractString
 
    Get the IP address of the local machine, as a string of the form "x.x.x.x".
 
-.. function:: pwd() -> String
+.. function:: pwd() -> AbstractString
 
    Get the current working directory.
 
-.. function:: cd(dir::String)
+.. function:: cd(dir::AbstractString)
 
    Set the current working directory.
 
@@ -5533,7 +5533,7 @@ C Interface
 
 .. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
 
-   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a String or :Symbol. Alternatively,
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is a AbstractString or :Symbol. Alternatively,
    ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
    Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
 
@@ -5557,7 +5557,7 @@ C Interface
    	bar = cfunction(foo, Float64, ())
 
 
-.. function:: dlopen(libfile::String [, flags::Integer])
+.. function:: dlopen(libfile::AbstractString [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -5573,7 +5573,7 @@ C Interface
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
-.. function:: dlopen_e(libfile::String [, flags::Integer])
+.. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
 
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
@@ -5820,7 +5820,7 @@ C Interface
 Errors
 ------
 
-.. function:: error(message::String)
+.. function:: error(message::AbstractString)
 
    Raise an error with the given message
 

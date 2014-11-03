@@ -1,7 +1,7 @@
 include("../perfutil.jl")
 
 #If running from .. directory, include "shootout/" path to data file
-rpath(filename::String) = string(contains(pwd(), "shootout") ? "" : "shootout/", filename)
+rpath(filename::AbstractString) = string(contains(pwd(), "shootout") ? "" : "shootout/", filename)
 
 include("binary_trees.jl")
 @timeit binary_trees(10) "binary_trees" "Allocate and deallocate many many binary trees"

@@ -463,7 +463,7 @@ function CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}(tp::Ptr{c_CholmodTriplet{Tv
     ct
 end
 
-function chm_rdsp(fnm::String)
+function chm_rdsp(fnm::AbstractString)
     fd = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fnm, "r")
     res = ccall((:cholmod_read_sparse,:libcholmod), Ptr{c_CholmodSparse{Float64,Cint}},
                 (Ptr{Void},Ptr{Uint8}),fd,cmn(Cint))

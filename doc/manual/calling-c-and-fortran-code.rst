@@ -95,7 +95,7 @@ inconsistent about how they indicate error conditions. For example, the
 in
 `env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
 
-    function getenv(var::String)
+    function getenv(var::AbstractString)
       val = ccall( (:getenv, "libc"),
                   Ptr{Uint8}, (Ptr{Uint8},), var)
       if val == C_NULL

@@ -70,7 +70,7 @@ typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
 # around FFTW's internal file i/o buffering [see the BUFSZ constant in
 # FFTW's api/import-wisdom-from-file.c file].
 
-function export_wisdom(fname::String)
+function export_wisdom(fname::AbstractString)
     f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "w")
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
@@ -79,7 +79,7 @@ function export_wisdom(fname::String)
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
-function import_wisdom(fname::String)
+function import_wisdom(fname::AbstractString)
     f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "r")
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||

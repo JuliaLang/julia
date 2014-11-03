@@ -66,10 +66,10 @@ In addition to function names, complete function calls may be entered to see whi
        string. Optionally, an IOStream may be passed as the first argument
        to redirect output.
 
-    help> String
-    DataType   : String
+    help> AbstractString
+    DataType   : AbstractString
       supertype: Any
-      subtypes : {DirectIndexString,GenericString,RepString,RevString{T<:String},RopeString,SubString{T<:String},UTF16String,UTF8String}
+      subtypes : {DirectIndexString,GenericString,RepString,RevString{T<:AbstractString},RopeString,SubString{T<:AbstractString},UTF16String,UTF8String}
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 
@@ -189,7 +189,7 @@ In both the Julian and help modes of the REPL, one can enter the first few chara
     stride     strides     string      stringmime  strip
 
     julia> Stri
-    StridedArray    StridedVecOrMat  String
+    StridedArray    StridedVecOrMat  AbstractString
     StridedMatrix   StridedVector
 
 The tab key can also be used to substitute LaTeX math symbols with their Unicode equivalents,

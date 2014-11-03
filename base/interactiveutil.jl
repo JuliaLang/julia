@@ -1,6 +1,6 @@
 # editing files
 
-function edit(file::String, line::Integer)
+function edit(file::AbstractString, line::Integer)
     if OS_NAME == :Windows || OS_NAME == :Darwin
         default_editor = "open"
     elseif isreadable("/etc/alternatives/editor")
@@ -51,18 +51,18 @@ function edit( m::Method )
     edit( string(file), line )
 end
 
-edit(file::String) = edit(file, 1)
+edit(file::AbstractString) = edit(file, 1)
 edit(f::Callable)               = edit(functionloc(f)...)
 edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
 
 # terminal pager
 
-function less(file::String, line::Integer)
+function less(file::AbstractString, line::Integer)
     pager = get(ENV, "PAGER", "less")
     run(`$pager +$(line)g $file`)
 end
 
-less(file::String) = less(file, 1)
+less(file::AbstractString) = less(file, 1)
 less(f::Callable)               = less(functionloc(f)...)
 less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
 
@@ -106,7 +106,7 @@ end
 end
 
 @windows_only begin # TODO: these functions leak memory and memory locks if they throw an error
-    function clipboard(x::String)
+    function clipboard(x::AbstractString)
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = utf16(x)
@@ -313,7 +313,7 @@ end
 # file downloading
 
 downloadcmd = nothing
-@unix_only function download(url::String, filename::String)
+@unix_only function download(url::AbstractString, filename::AbstractString)
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
@@ -335,7 +335,7 @@ downloadcmd = nothing
     filename
 end
 
-@windows_only function download(url::String, filename::String)
+@windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
                 (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
     if res != 0
@@ -344,7 +344,7 @@ end
     filename
 end
 
-function download(url::String)
+function download(url::AbstractString)
     filename = tempname()
     download(url, filename)
 end
@@ -369,7 +369,7 @@ end
 # testing
 
 function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
-    if isa(tests,String)
+    if isa(tests,AbstractString)
         tests = split(tests)
     end
     ENV2 = copy(ENV)

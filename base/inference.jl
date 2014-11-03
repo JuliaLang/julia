@@ -1677,7 +1677,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
     i0 = is(head,:method) ? 2 : 1
     for i=i0:length(e.args)
         subex = e.args[i]
-        if !(isa(subex,Number) || isa(subex,String))
+        if !(isa(subex,Number) || isa(subex,AbstractString))
             e.args[i] = eval_annotate(subex, vtypes, sv, decls, clo)
         end
     end
@@ -1858,7 +1858,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
     elseif !is(e.head,:line)
         for i=1:length(e.args)
             subex = e.args[i]
-            if !(isa(subex,Number) || isa(subex,String))
+            if !(isa(subex,Number) || isa(subex,AbstractString))
                 e.args[i] = resolve_globals(subex, locals, args, from, to, env1, env2)
             end
         end
@@ -1958,7 +1958,7 @@ end
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
 function effect_free(e::ANY, sv, allow_volatile::Bool)
-    if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
+    if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,AbstractString) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
@@ -2963,7 +2963,7 @@ function tupleref_elim_pass(e::Expr, sv)
                     end
                 elseif isa(e1,Tuple) && (1 <= j <= length(e1))
                     e1j = e1[j]
-                    if !(isa(e1j,Number) || isa(e1j,String) || isa(e1j,Tuple) ||
+                    if !(isa(e1j,Number) || isa(e1j,AbstractString) || isa(e1j,Tuple) ||
                          isa(e1j,Type))
                         e1j = QuoteNode(e1j)
                     end
@@ -3006,7 +3006,7 @@ function tuple_elim_pass(ast::Expr)
             n_ins = 0
             for j=1:nv
                 tupelt = tup[j+1]
-                if isa(tupelt,Number) || isa(tupelt,String) || isa(tupelt,QuoteNode)
+                if isa(tupelt,Number) || isa(tupelt,AbstractString) || isa(tupelt,QuoteNode)
                     vals[j] = tupelt
                 else
                     elty = exprtype(tupelt)

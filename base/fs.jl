@@ -49,15 +49,15 @@ include("file_constants.jl")
 abstract AbstractFile <: IO
 
 type File <: AbstractFile
-    path::String
+    path::AbstractString
     open::Bool
     handle::Int32
-    File(path::String) = new(path,false,-1)
+    File(path::AbstractString) = new(path,false,-1)
     File(fd::RawFD) = new("",true,fd.fd)
 end
 
 type AsyncFile <: AbstractFile
-    path::String
+    path::AbstractString
     open::Bool
 end
 
@@ -79,8 +79,8 @@ function open(f::File,flags::Integer,mode::Integer)
     f.open = true
     f
 end
-open(f::String,flags,mode) = open(File(f),flags,mode)
-open(f::String,flags) = open(f,flags,0)
+open(f::AbstractString,flags,mode) = open(File(f),flags,mode)
+open(f::AbstractString,flags) = open(f,flags,0)
 
 function close(f::File)
     if !f.open
@@ -93,7 +93,7 @@ function close(f::File)
     f
 end
 
-function unlink(p::String)
+function unlink(p::AbstractString)
     err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), p)
     uv_error("unlink",err)
 end
@@ -109,7 +109,7 @@ function unlink(f::File)
 end
 
 # For move command
-function rename(src::String, dst::String)
+function rename(src::AbstractString, dst::AbstractString)
     err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), src, dst)
 
     # on error, default to cp && rm
@@ -124,7 +124,7 @@ function rename(src::String, dst::String)
 end
 
 # For copy command
-function sendfile(src::String, dst::String)
+function sendfile(src::AbstractString, dst::AbstractString)
     src_file = open(src, JL_O_RDONLY)
     if !src_file.open
         error("Src file is not open")
@@ -150,7 +150,7 @@ function sendfile(src::String, dst::String)
 end
 
 @windows_only const UV_FS_SYMLINK_JUNCTION = 0x0002
-@non_windowsxp_only function symlink(p::String, np::String)
+@non_windowsxp_only function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
     err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), p, np, flags)
@@ -159,10 +159,10 @@ end
     end
     uv_error("symlink",err)
 end
-@windowsxp_only symlink(p::String, np::String) = 
+@windowsxp_only symlink(p::AbstractString, np::AbstractString) = 
     error("WindowsXP does not support soft symlinks")
 
-function chmod(p::String, mode::Integer)
+function chmod(p::AbstractString, mode::Integer)
     err = ccall(:jl_fs_chmod, Int32, (Ptr{Uint8}, Cint), p, mode)
     uv_error("chmod",err)
 end
