@@ -9,7 +9,15 @@ Bytes(s::AbstractString) = Bytes(bytestring(s).data)
 
 size(b::Bytes) = (length(b),)
 length(b::Bytes) = ifelse(b.neglen < 0, -b.neglen, b.neglen >>> ((sizeof(Int)-1) << 3))
-getindex(b::Bytes, i::Real) = Core.bytesref(b, convert(Int,i))
+
+@inline function getindex(b::Bytes, i::Int)
+    n = length(b)
+    1 <= i <= n || throw(BoundsError())
+    b.neglen < 0 && return unsafe_load(b.pointer, i)
+    ifelse(i <= 8, (reinterpret(Uint, b.pointer) >>> (((i-1)&7) << 3)) % Uint8,
+                   (reinterpret(Uint, b.neglen)  >>> (((i-1)&7) << 3)) % Uint8)
+end
+getindex(b::Bytes, i::Real) = b[Int(i)]
 
 start(b::Bytes) = 1
 next(b::Bytes, i::Int) = (b[i], i+1)
