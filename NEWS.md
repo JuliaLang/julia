@@ -97,6 +97,8 @@ Library improvements
 
   * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
+  * The `machinefile` now supports an host count ([#7616]).
+
 Deprecated or removed
 ---------------------
 
@@ -1034,6 +1036,7 @@ Too numerous to mention.
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
+[#7616]: https://github.com/JuliaLang/julia/issues/7616
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
 [#7654]: https://github.com/JuliaLang/julia/issues/7654
 [#7704]: https://github.com/JuliaLang/julia/issues/7704
