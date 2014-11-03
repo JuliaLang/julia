@@ -764,6 +764,11 @@ static void push_root(jl_value_t *v, int d)
                 gc_push_root(elt, d);
         }
     }
+    else if (vt == (jl_value_t*)jl_bytes_type) {
+        jl_bytes_struct_t b = *(jl_bytes_struct_t*)jl_data_ptr(v);
+        if (b.there.neglen < 0)
+            gc_setmark_buf(b.there.data);
+    }
     else if (((jl_datatype_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
         if (a->how == 3) {

@@ -2,6 +2,7 @@ using Core.Intrinsics
 importall Core
 importall Base
 import Base: show_comma_array
+export Bytes, Str
 
 Bytes(a::Vector{Uint8}) = ccall(:jl_bytes, Bytes, (Ptr{Uint8}, Csize_t), a, length(a))
 Bytes(s::AbstractString) = Bytes(bytestring(s).data)
