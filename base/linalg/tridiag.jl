@@ -49,13 +49,31 @@ end
 /(A::SymTridiagonal, B::Number) = SymTridiagonal(A.dv/B, A.ev/B)
 ==(A::SymTridiagonal, B::SymTridiagonal) = (A.dv==B.dv) && (A.ev==B.ev)
 
-## Solver
-function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
-    if stride(rhs, 1) == 1
-        return LAPACK.gtsv!(copy(M.ev), copy(M.dv), copy(M.ev), copy(rhs))
+function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    m == size(S, 1) == size(C, 1) || throw(DimensionMismatch(""))
+    n == size(C, 2) || throw(DimensionMismatch(""))
+
+    α = S.dv
+    β = S.ev
+    @inbounds begin
+        for j = 1:n
+            x₀, x₊ = B[1, j], B[2, j]
+            β₀ = β[1]
+            C[1, j] = α[1]*x₀ + x₊*β₀
+            for i = 2:m - 1
+                x₋, x₀, x₊ = x₀, x₊, B[i + 1, j]
+                β₋, β₀ = β₀, β[i]
+                C[i, j] = β₋*x₋ + α[i]*x₀ + β₀*x₊
+            end
+            C[m, j] = β₀*x₀ + α[m]*x₊
+        end
     end
-    solve(Tridiagonal(M), rhs)  # use the Julia "fallback"
+
+    return C
 end
+
+factorize(S::SymTridiagonal) = ldltfact(S)
 
 #Wrap LAPACK DSTE{GR,BZ} to compute eigenvalues
 eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', m.dv, m.ev)...)
@@ -248,8 +266,3 @@ function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     end
     C
 end
-*(A::Tridiagonal, B::AbstractVecOrMat) = A_mul_B!(similar(B), A, B)
-
-A_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = A_ldiv_B!(lufact!(A), B)
-At_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = At_ldiv_B!(lufact!(A), B)
-Ac_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = Ac_ldiv_B!(lufact!(A), B)
