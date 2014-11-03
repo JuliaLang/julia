@@ -725,18 +725,18 @@ function normalize_keymap(keymap::Dict)
     ret
 end
 
-match_input(k::Function, s, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, last(cs)))
-match_input(k::Void, s, cs) = (s,p) -> return :ok
-function match_input(keymap::Dict, s, cs=Char[])
-    c = read(terminal(s), Char)
+match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, convert(ByteString, cs)))
+match_input(k::Void, s, term, cs) = (s,p) -> return :ok
+function match_input(keymap::Dict, s, term, cs=Char[])
+    c = read(term, Char)
     push!(cs, c)
     k = haskey(keymap, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(keymap, k, nothing), s, cs)
+    return match_input(get(keymap, k, nothing), s, term, cs)
 end
 
 keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, s, c::Char)
+function keymap_fcn(f::Function, s, c)
     return (s, p) -> begin
         r = f(s, p, c)
         if isa(r, Symbol)
@@ -830,7 +830,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     dict = map(normalize_keys, keymaps)
     dict = keymap_prepare(merge(reverse(dict)...))
-    return (s,p)->match_input(dict, s)(s,p)
+    return (term,s,p)->match_input(dict, s, term)(s,p)
 end
 
 const escape_defaults = merge!(
@@ -1315,34 +1315,12 @@ const prefix_history_keymap = AnyDict(
     "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
     # Down Arrow
     "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
-    # # Right Arrow
-    "\e[C" => (s,data,c)->(accept_result(s, data.histprompt); edit_move_right(s)),
-    # # Left Arrow
-    "\e[D" => (s,data,c)->(accept_result(s, data.histprompt); edit_move_left(s)),
-    '\r'   => (s,data,c)->begin
-        accept_result(s, data.histprompt)
-        if on_enter(s) || (eof(buffer(s)) && s.key_repeats > 1)
-            commit_line(s)
-            return :done
-        else
-            edit_insert(s, '\n')
-        end
-    end,
-    '\n'   => '\r',
-    "^C"   => (s,data,c)->begin
-        accept_result(s, data.histprompt)
-        try # raise the debugger if present
-            ccall(:jl_raise_debugger, Int, ())
-        end
-        move_input_end(s)
-        refresh_line(s)
-        print(terminal(s), "^C\n\n")
-        transition(s, :reset)
-        refresh_line(s)
-    end,
-    # by default I want to return to the parent mode and pass thru the character... how do I do that?
-    # "*"    => (s,data,c)->(accept_result(s, data.histprompt); write(terminal(s).in_stream, c))
-    "*"    => (s,data,c)->accept_result(s, data.histprompt)
+    # by default, pass thru to the parent mode
+    "*"    => (s,data,c)->begin
+        accept_result(s, data.histprompt);
+        ps = state(s, mode(s))
+        keymap(ps, mode(s))(IOBuffer(c), s, keymap_data(ps, mode(s)))
+    end
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
@@ -1455,24 +1433,24 @@ keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
 keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], ms.current_mode)
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
 
-function prompt!(terminal, prompt, s = init_state(terminal, prompt))
-    Base.reseteof(terminal)
-    raw!(terminal, true)
-    enable_bracketed_paste(terminal)
+function prompt!(term, prompt, s = init_state(term, prompt))
+    Base.reseteof(term)
+    raw!(term, true)
+    enable_bracketed_paste(term)
     try
-        start_reading(terminal)
-        activate(prompt, s, terminal)
+        start_reading(term)
+        activate(prompt, s, term)
         while true
-            state = keymap(s, prompt)(s, keymap_data(s, prompt))
+            state = keymap(s, prompt)(terminal(s), s, keymap_data(s, prompt))
             if state == :abort
-                stop_reading(terminal)
+                stop_reading(term)
                 return buffer(s), false, false
             elseif state == :done
-                stop_reading(terminal)
+                stop_reading(term)
                 return buffer(s), true, false
             elseif state == :suspend
                 @unix_only begin
-                    stop_reading(terminal)
+                    stop_reading(term)
                     return buffer(s), true, true
                 end
             else
@@ -1480,7 +1458,7 @@ function prompt!(terminal, prompt, s = init_state(terminal, prompt))
             end
         end
     finally
-        raw!(terminal, false) && disable_bracketed_paste(terminal)
+        raw!(term, false) && disable_bracketed_paste(term)
     end
 end
 
