@@ -183,9 +183,10 @@ end
 prompt_string(s::PromptState) = s.p.prompt
 prompt_string(s::AbstractString) = s
 
-refresh_multi_line(termbuf::TerminalBuffer, s::PromptState) = s.ias =
+refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
-
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     cols = width(terminal)
 
@@ -295,6 +296,16 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
+end
+
+function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
+    outbuf = IOBuffer()
+    termbuf = TerminalBuffer(outbuf)
+    ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
+    # Output the entire refresh at once
+    write(terminal, takebuf_array(outbuf))
+    flush(terminal)
+    return ret
 end
 
 
@@ -926,10 +937,11 @@ type PrefixSearchState <: ModeState
     prefix::ByteString
     response_buffer::IOBuffer
     ias::InputAreaState
+    indent::Int
     #The prompt whose input will be replaced by the matched history
     parent
     PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
-        new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0))
+        new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
 end
 
 input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
@@ -970,10 +982,6 @@ function replace_line(s::PrefixSearchState, l)
     write(s.response_buffer, l)
 end
 
-function refresh_multi_line(s::ModeState)
-    refresh_multi_line(terminal(s), s)
-end
-refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
     write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
@@ -985,19 +993,6 @@ function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf.ptr = offset + ptr - 1
     s.response_buffer.ptr = ptr
     s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
-end
-
-refresh_multi_line(termbuf::TerminalBuffer, s::PrefixSearchState) = s.ias =
-    refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s)
-
-function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
-    outbuf = IOBuffer()
-    termbuf = TerminalBuffer(outbuf)
-    ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
-    # Output the entire refresh at once
-    write(terminal, takebuf_array(outbuf))
-    flush(terminal)
-    return ret
 end
 
 state(s::MIState, p) = s.mode_state[p]
@@ -1053,6 +1048,7 @@ function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
     pss.parent = mode(s)
     pss.prefix = bytestring(pointer(buf.data), position(buf))
     copybuf!(pss.response_buffer, buf)
+    pss.indent = state(s, mode(s)).indent
     transition(s, p)
     if backward
         history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
