@@ -1,3 +1,4 @@
+
 ## reductions ##
 
 ###### Functors ######
@@ -129,7 +130,7 @@ foldr(op, itr) = mapfoldr(IdFun(), op, itr)
 ## reduce & mapreduce
 
 # mapreduce_***_impl require ifirst < ilast
-function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer)
+function mapreduce_seq_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int)
     @inbounds fx1 = r_promote(op, f(A[ifirst]))
     @inbounds fx2 = f(A[ifirst+=1])
     @inbounds v = op(fx1, fx2)
@@ -153,7 +154,7 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Integer, ilast::Integer) =
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
@@ -169,7 +170,7 @@ mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
 function _mapreduce{T}(f, op, A::AbstractArray{T})
-    n = length(A)
+    n = int(length(A))
     if n == 0
         return mr_empty(f, op, T)
     elseif n == 1
