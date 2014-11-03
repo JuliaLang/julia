@@ -2,6 +2,8 @@
 
 abstract Factorization{T}
 
+eltype{T}(F::Factorization{T}) = T
+
 macro assertposdef(A, info)
    :(($info)==0 ? $A : throw(PosDefException($info)))
 end
