@@ -792,6 +792,12 @@ U+0231E           ⌞            \\llcorner                  BOTTOM LEFT CORNER
 U+0231F           ⌟            \\lrcorner                  BOTTOM RIGHT CORNER                                                                                      
 U+02322           ⌢            \\frown                     FROWN                                                                                                    
 U+02323           ⌣            \\smile                     SMILE                                                                                                    
+U+027EA           ⟪            \\lAngle                    MATHEMATICAL LEFT DOUBLE ANGLE BRACKET
+U+027EB           ⟫            \\rAngle                    MATHEMATICAL RIGHT DOUBLE ANGLE BRACKET
+U+027E6           ⟦            \\lBrack                    MATHEMATICAL LEFT WHITE SQUARE BRACKET
+U+027E7           ⟧            \\rBrack                    MATHEMATICAL RIGHT WHITE SQUARE BRACKET
+U+02983           ⦃            \\lBrace                    LEFT WHITE CURLY BRACKET
+U+02984           ⦄            \\rBrace                    RIGHT WHITE CURLY BRACKET
 U+0232C           ⌬            \\varhexagonlrbonds         BENZENE RING                                                                                             
 U+02332           ⌲            \\conictaper                CONICAL TAPER                                                                                            
 U+02336           ⌶            \\topbot                    APL FUNCTIONAL SYMBOL I-BEAM                                                                             
