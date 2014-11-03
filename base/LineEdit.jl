@@ -8,6 +8,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, peek, show, AnyDict
 
 abstract TextInterface
+abstract ModeState
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
@@ -25,9 +26,6 @@ type MIState
     key_repeats::Int
 end
 MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
-
-type Mode <: TextInterface
-end
 
 type Prompt <: TextInterface
     prompt
@@ -53,7 +51,7 @@ immutable InputAreaState
     curs_row::Int64
 end
 
-type PromptState
+type PromptState <: ModeState
     terminal::TextTerminal
     p::Prompt
     input_buffer::IOBuffer
@@ -868,7 +866,7 @@ function write_response_buffer(s::PromptState, data)
     refresh_line(s)
 end
 
-type SearchState
+type SearchState <: ModeState
     terminal
     histprompt
     #rsearch (true) or ssearch (false)
@@ -922,7 +920,7 @@ end
 HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
-type PrefixSearchState
+type PrefixSearchState <: ModeState
     terminal
     histprompt
     prefix::ByteString
@@ -972,7 +970,10 @@ function replace_line(s::PrefixSearchState, l)
     write(s.response_buffer, l)
 end
 
-refresh_multi_line(termbuf::TerminalBuffer, term, s::Union(SearchState,PrefixSearchState,PromptState)) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
+function refresh_multi_line(s::ModeState)
+    refresh_multi_line(terminal(s), s)
+end
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
     buf = IOBuffer()
     write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
@@ -988,10 +989,6 @@ end
 
 refresh_multi_line(termbuf::TerminalBuffer, s::PrefixSearchState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s)
-
-function refresh_multi_line(s::Union(SearchState,PrefixSearchState,PromptState))
-    refresh_multi_line(terminal(s), s)
-end
 
 function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
     outbuf = IOBuffer()
@@ -1335,17 +1332,17 @@ function setup_prefix_keymap(hp, parent_prompt)
     (p, pkeymap)
 end
 
-function deactivate(p::Union(Prompt,HistoryPrompt,PrefixHistoryPrompt), s::Union(PrefixSearchState,SearchState,PromptState), termbuf)
+function deactivate(p::TextInterface, s::ModeState, termbuf)
     clear_input_area(termbuf, s)
     s
 end
 
-function activate(p::Union(Prompt,HistoryPrompt,PrefixHistoryPrompt), s::Union(PrefixSearchState,SearchState,PromptState), termbuf)
+function activate(p::TextInterface, s::ModeState, termbuf)
     s.ias = InputAreaState(0, 0)
     refresh_line(s, termbuf)
 end
 
-function activate(p::Union(Prompt,HistoryPrompt,PrefixHistoryPrompt), s::MIState, termbuf)
+function activate(p::TextInterface, s::MIState, termbuf)
     @assert p == s.current_mode
     activate(p, s.mode_state[s.current_mode], termbuf)
 end
