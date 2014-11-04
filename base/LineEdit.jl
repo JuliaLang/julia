@@ -1312,7 +1312,18 @@ const prefix_history_keymap = AnyDict(
         accept_result(s, data.histprompt);
         ps = state(s, mode(s))
         match_input(keymap(ps, mode(s)), s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
-    end
+    end,
+    # match escape sequences for pass thru
+    "\e*" => "*",
+    "\e[*" => "*",
+    "\e[1~" => "*",
+    "\e[3~" => "*",
+    "\e[4~" => "*",
+    "\e[5~" => "*",
+    "\e[6~" => "*",
+    "\e[7~" => "*",
+    "\e[8~" => "*",
+    "\e[200~" => "*"
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
