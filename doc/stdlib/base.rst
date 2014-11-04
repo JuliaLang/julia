@@ -233,9 +233,39 @@ All Objects
    With a single symbol argument, tests whether a global variable with that
    name is defined in ``current_module()``.
 
-.. function:: convert(type, x)
+.. function:: convert(T, x)
 
-   Try to convert ``x`` to the given type. Conversion to a different numeric type will raise an ``InexactError`` if ``x`` cannot be represented exactly in the new type.
+   Convert ``x`` to a value of type ``T``.
+
+   If ``T`` is an ``Integer`` type, an ``InexactError`` will be raised if
+   ``x`` is not representable by ``T``, for example if ``x`` is not
+   integer-valued, or is outside the range supported by ``T``.
+
+   .. doctest::
+
+      julia> convert(Int, 3.0)
+      3
+
+      julia> convert(Int, 3.5)
+      ERROR: InexactError()
+       in convert at int.jl:185
+
+   If ``T`` is a ``FloatingPoint`` or ``Rational`` type, then it will return
+   the closest value to ``x`` representable by ``T``.
+
+   .. doctest::
+
+      julia> x = 1/3
+      0.3333333333333333
+
+      julia> convert(Float32, x)
+      0.33333334f0
+
+      julia> convert(Rational{Int32}, x)
+      1//3
+
+      julia> convert(Rational{Int64}, x)
+      6004799503160661//18014398509481984
 
 .. function:: promote(xs...)
 
@@ -3768,6 +3798,36 @@ Numbers
 .. function:: isreal(x) -> Bool
 
    Test whether ``x`` or all its elements are numerically equal to some real number
+
+.. function:: Float32(x [, mode::RoundingMode])
+
+   Create a Float32 from ``x``. If ``x`` is not exactly representable then
+   ``mode`` determines how ``x`` is rounded.
+
+   .. doctest::
+
+      julia> Float32(1/3, RoundDown)
+      0.3333333f0
+
+      julia> Float32(1/3, RoundUp)
+      0.33333334f0
+
+   See ``get_rounding`` for available rounding modes.
+
+.. function:: Float64(x [, mode::RoundingMode])
+
+   Create a Float64 from ``x``. If ``x`` is not exactly representable then
+   ``mode`` determines how ``x`` is rounded.
+
+   .. doctest::
+
+      julia> Float64(pi, RoundDown)
+      3.141592653589793
+
+      julia> Float64(pi, RoundUp)
+      3.1415926535897936
+
+   See ``get_rounding`` for available rounding modes.
 
 .. function:: BigInt(x)
 

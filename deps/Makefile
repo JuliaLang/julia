@@ -1703,11 +1703,11 @@ LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
 LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER="$(CC_BASE)"
 ifeq ($(OS),WINNT)
-LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
+LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
 ifeq ($(BUILD_OS),WINNT)
 LIBGIT2_OPTS += -G"MSYS Makefiles"
 else
-LIBGIT2_OPTS += -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
 LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
 endif
 endif
@@ -1728,12 +1728,12 @@ libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	$(CMAKE) .. $(LIBGIT2_OPTS)
 	touch -c $@
 $(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
-	cd libgit2-$(LIBGIT2_VER)/build/ && \
-	$(CMAKE) --build .
+	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
-	#cd libgit2-$(LIBGIT2_VER)/build/ && \
-	#ctest
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build test
+endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
@@ -1747,7 +1747,7 @@ distclean-libgit2:
 get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
 configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
-check-libgit2: compile-libgit2
+check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
 install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##
