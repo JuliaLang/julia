@@ -257,8 +257,8 @@ end
 
 # issue #8877
 let
-    a = Dict(["foo"  => 0.0, "bar"  => 42.0])
-    b = Dict(["フー" => 17,  "バー" => 4711])
+    a = Dict("foo"  => 0.0, "bar" => 42.0)
+    b = Dict("フー" => 17, "バー" => 4711)
     @test is(typeof(merge(a, b)), Dict{UTF8String,Float64})
 end
 
