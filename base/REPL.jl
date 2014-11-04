@@ -471,7 +471,7 @@ end
 
 function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
-                             prefix::String,
+                             prefix::AbstractString,
                              backwards::Bool)
     cur_response = bytestring(LineEdit.buffer(s))
     cur_idx = hist.cur_idx
@@ -492,9 +492,9 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     end
     Terminals.beep(LineEdit.terminal(s))
 end
-history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::String) =
+history_next_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, false)
-history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::String) =
+history_prev_prefix(s::LineEdit.PrefixSearchState, hist::REPLHistoryProvider, prefix::AbstractString) =
     history_move_prefix(s, hist, prefix, true)
 
 function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, response_buffer::IOBuffer,
@@ -780,7 +780,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     a = Dict{Any,Any}[skeymap, repl_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(a, extra_repl_keymap)
 
-    julia_prompt.keymap_func = LineEdit.keymap(a)
+    julia_prompt.keymap_dict = LineEdit.keymap(a)
 
     const mode_keymap = AnyDict(
         '\b' => function (s,o...)
@@ -806,7 +806,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     b = Dict{Any,Any}[skeymap, mode_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)
 
-    shell_mode.keymap_func = help_mode.keymap_func = LineEdit.keymap(b)
+    shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
 
     ModalInterface([julia_prompt, shell_mode, help_mode, search_prompt, prefix_prompt])
 end

@@ -35,7 +35,7 @@ type Prompt <: TextInterface
     prompt_prefix
     # Same as prefix except after the prompt
     prompt_suffix
-    keymap_func
+    keymap_dict
     keymap_func_data
     complete
     on_enter
@@ -734,9 +734,9 @@ function normalize_keymap(keymap::Dict)
     ret
 end
 
-match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, convert(ByteString, cs)))
+match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
 match_input(k::Void, s, term, cs) = (s,p) -> return :ok
-function match_input(keymap::Dict, s, term, cs=Char[])
+function match_input(keymap::Dict, s, term=terminal(s), cs=Char[])
     c = read(term, Char)
     push!(cs, c)
     k = haskey(keymap, c) ? c : '\0'
@@ -838,8 +838,7 @@ end
 function keymap{D<:Dict}(keymaps::Array{D})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     dict = map(normalize_keys, keymaps)
-    dict = keymap_prepare(merge(reverse(dict)...))
-    return (term,s,p)->match_input(dict, s, term)(s,p)
+    return keymap_prepare(merge(reverse(dict)...))
 end
 
 const escape_defaults = merge!(
@@ -924,7 +923,7 @@ end
 type HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
-    keymap_func::Function
+    keymap_dict::Dict{Char,Any}
     HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
@@ -952,7 +951,7 @@ type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     parent_prompt::Prompt
     complete
-    keymap_func::Function
+    keymap_dict::Dict{Char,Any}
     PrefixHistoryPrompt(hp, parent_prompt) = new(hp, parent_prompt, EmptyCompletionProvider())
 end
 
@@ -1129,7 +1128,7 @@ function setup_search_keymap(hp)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
     )
-    p.keymap_func = keymap([pkeymap, escape_defaults])
+    p.keymap_dict = keymap([pkeymap, escape_defaults])
     skeymap = AnyDict(
         "^R"    => (s,o...)->(enter_search(s, p, true)),
         "^S"    => (s,o...)->(enter_search(s, p, false)),
@@ -1137,7 +1136,7 @@ function setup_search_keymap(hp)
     (p, skeymap)
 end
 
-keymap(state, p::Union(HistoryPrompt,PrefixHistoryPrompt)) = p.keymap_func
+keymap(state, p::Union(HistoryPrompt,PrefixHistoryPrompt)) = p.keymap_dict
 keymap_data(state, ::Union(HistoryPrompt, PrefixHistoryPrompt)) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
@@ -1312,13 +1311,13 @@ const prefix_history_keymap = AnyDict(
     "*"    => (s,data,c)->begin
         accept_result(s, data.histprompt);
         ps = state(s, mode(s))
-        keymap(ps, mode(s))(IOBuffer(c), s, keymap_data(ps, mode(s)))
+        match_input(keymap(ps, mode(s)), s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
     end
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
     p = PrefixHistoryPrompt(hp, parent_prompt)
-    p.keymap_func = keymap([prefix_history_keymap])
+    p.keymap_dict = keymap([prefix_history_keymap])
     pkeymap = AnyDict(
         # Up Arrow
         "\e[A" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
@@ -1374,13 +1373,13 @@ function reset_state(s::MIState)
     end
 end
 
-const default_keymap_func = keymap([default_keymap, escape_defaults])
+const default_keymap_dict = keymap([default_keymap, escape_defaults])
 
 function Prompt(prompt;
     first_prompt = prompt,
     prompt_prefix = "",
     prompt_suffix = "",
-    keymap_func = default_keymap_func,
+    keymap_dict = default_keymap_dict,
     keymap_func_data = nothing,
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
@@ -1388,7 +1387,7 @@ function Prompt(prompt;
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
+    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
         complete, on_enter, on_done, hist, sticky)
 end
 
@@ -1421,7 +1420,7 @@ buffer(s::PromptState) = s.input_buffer
 buffer(s::SearchState) = s.query_buffer
 buffer(s::PrefixSearchState) = s.response_buffer
 
-keymap(s::PromptState, prompt::Prompt) = prompt.keymap_func
+keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
 keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], ms.current_mode)
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
@@ -1434,7 +1433,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
         start_reading(term)
         activate(prompt, s, term)
         while true
-            state = keymap(s, prompt)(terminal(s), s, keymap_data(s, prompt))
+            state = match_input(keymap(s, prompt), s)(s, keymap_data(s, prompt))
             if state == :abort
                 stop_reading(term)
                 return buffer(s), false, false
