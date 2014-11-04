@@ -1,5 +1,11 @@
 module Compat
+
 using Base.Meta
+
+if VERSION < v"0.4.0-dev+1387"
+    typealias AbstractString String
+    export AbstractString
+end
 
 if VERSION < v"0.4.0-dev+980"
     macro Dict(pairs...)
