@@ -238,9 +238,10 @@ const Inf = box(Float64,unbox(Uint64,0x7ff0000000000000))
 const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
 
 ## precision, as defined by the effective number of bits in the mantissa ##
-precision(::Float16) = 11
-precision(::Float32) = 24
-precision(::Float64) = 53
+precision(::Type{Float16}) = 11
+precision(::Type{Float32}) = 24
+precision(::Type{Float64}) = 53
+precision{T<:FloatingPoint}(::T) = precision(T)
 
 function float_lex_order(f::Integer, delta::Integer)
     # convert from signed magnitude to 2's complement and back
