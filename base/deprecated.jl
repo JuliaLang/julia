@@ -213,4 +213,5 @@ end
 @deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
 
+export String
 const String = AbstractString
