@@ -21,8 +21,8 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <sstream>
 #include <string>
-#include <utility>
 
 #include "llvm/MC/MCExpr.h"
 #include "llvm/MC/MCInstrAnalysis.h"
@@ -79,8 +79,9 @@ void SymbolTable::createSymbols(MCContext &Ctx)
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
         uint64_t addr = isymb->first;
-        std::string name = std::string("L") + std::to_string(addr);
-        MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
+        std::ostringstream name;
+        name << "L" << addr;
+        MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
         symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
         isymb->second = symb;
     }
