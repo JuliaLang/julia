@@ -153,6 +153,10 @@ CMAKE ?= cmake
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+XC_HOST ?= $(shell uname -m)-w64-mingw32
+endif
+
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 HOSTCC = $(CC)
