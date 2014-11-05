@@ -23,6 +23,8 @@ New language features
 Language changes
 ----------------
 
+  * `String` has been renamed to `AbstractString` ([#8872]).
+
   * `None` is deprecated; use `Union()` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
@@ -98,8 +100,6 @@ Library improvements
   * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * The `machinefile` now supports an host count ([#7616]).
-
-  * `String` has been renamed to `AbstractString`.
 
   * Added optional rounding argument to floating-point constructors ([#8845])
 
@@ -1061,3 +1061,5 @@ Too numerous to mention.
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
+[#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8872]: https://github.com/JuliaLang/julia/issues/8872
