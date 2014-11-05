@@ -5,22 +5,26 @@ override CFLAGS += $(JCFLAGS)
 override CXXFLAGS += $(JCXXFLAGS)
 override CPPFLAGS += $(JCPPFLAGS)
 
-OBJS = hashing.o timefuncs.o ptrhash.o operators.o \
-	utf8.o ios.o htable.o bitvector.o \
-	int2str.o libsupportinit.o arraylist.o strtod.o
+BUILDDIR ?= .
 
+SRCS = hashing timefuncs ptrhash operators \
+	utf8 ios htable bitvector \
+	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-OBJS += asprintf.o wcwidth.o
+SRCS += asprintf wcwidth
 ifeq ($(ARCH),i686)
-OBJS += _setjmp.win32.o _longjmp.win32.o
+SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),i386)
-OBJS += _setjmp.win32.o _longjmp.win32.o
+SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),x86_64)
-OBJS += _setjmp.win64.o _longjmp.win64.o
+SRCS += _setjmp.win64 _longjmp.win64
 endif
 endif
 
-DOBJS = $(OBJS:%.o=%.dbg.obj)
+HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
+
+OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
+DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
 FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -DLIBRARY_EXPORTS
 ifneq ($(USEMSVC), 1)
@@ -32,42 +36,43 @@ SHIPFLAGS += $(FLAGS)
 
 default: release
 
-HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
+$(BUILDDIR):
+	mkdir $(BUILDDIR)
 
-%.o: %.c $(HEADERS)
+$(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
-%.dbg.obj: %.c $(HEADERS)
+$(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 ifneq ($(USEMSVC), 1)
-%.o: %.S
+$(BUILDDIR)/%.o: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(SHIPFLAGS) -c $< -o $@)
-%.dbg.obj: %.S
+$(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 else
-%.o: %.S
+$(BUILDDIR)/%.o: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(SHIPFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo$@ -c $*.i)
-%.dbg.obj: %.S
+$(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(DEBUGFLAGS) $<)
 	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo$@ -c $*.i)
 endif
 
-release: libsupport.a
-debug: libsupport-debug.a
+release: $(BUILDDIR)/libsupport.a
+debug: $(BUILDDIR)/libsupport-debug.a
 
-libsupport.a: $(OBJS)
+$(BUILDDIR)/libsupport.a: $(OBJS)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 
-libsupport-debug.a: $(DOBJS)
+$(BUILDDIR)/libsupport-debug.a: $(DOBJS)
 	rm -rf $@
 	@$(call PRINT_LINK, $(AR) -rcs $@ $^)
 
 clean:
-	rm -f *.o
-	rm -f *.dbg.obj
-	rm -f *.a
-	rm -f *~ *#
-	rm -f core*
-	rm -f libsupport.a
-	rm -f libsupport-debug.a
+	rm -f $(BUILDDIR)/*.o
+	rm -f $(BUILDDIR)/*.dbg.obj
+	rm -f $(BUILDDIR)/*.a
+	rm -f $(BUILDDIR)/*~ *#
+	rm -f $(BUILDDIR)/core*
+	rm -f $(BUILDDIR)/libsupport.a
+	rm -f $(BUILDDIR)/libsupport-debug.a
