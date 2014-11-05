@@ -88,11 +88,9 @@ void SymbolTable::createSymbols(MCContext &Ctx)
 }
 const char *SymbolTable::lookupSymbol(uint64_t addr)
 {
-    std::cout << "lookupSymbol(" << addr << ")\n";
     if (!Table.count(addr)) return NULL;
     MCSymbol *symb = Table[addr];
     TempName = symb->getName().str();
-    std::cout << "   found " << TempName << "\n";
     return TempName.c_str();
 }
 const char *SymbolLookup(void *DisInfo_,
