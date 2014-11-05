@@ -37,3 +37,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 * `@compat Dict{Foo,Bar}(foo => bar, baz => qux)` - type-declared `Dict` construction.
 
 * `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
+
+## Type Aliases
+
+* `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
