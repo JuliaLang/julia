@@ -17,7 +17,7 @@ import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
              isvalid, nnz, show, size, sort!, transpose, vcat
 
 import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 cholfact, cholfact!, copy, det, diag,
+                 A_ldiv_B!, cholfact, cholfact!, copy, det, diag,
                  full, isposdef!, logdet, norm, scale, scale!, sparse
 
 include("cholmod_h.jl")
@@ -837,8 +837,10 @@ end
 (*){Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::CholmodDense{Tv}) = chm_sdmult(A,false,1.,0.,B)
 (*){Tv<:CHMVTypes}(A::CholmodSparse{Tv},B::VecOrMat{Tv}) = chm_sdmult(A,false,1.,0.,CholmodDense(B))
 
-(\){T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)
-(\){T<:CHMVTypes}(L::CholmodFactor{T},B::VecOrMat{T}) = solve(L,CholmodDense!(B),CHOLMOD_A).mat
+A_ldiv_B!(L::CholmodFactor, B) = L\B # Revisit this to see if allocation can be avoided. It should be possible at least for the right hand side.
+(\){T<:CHMVTypes}(L::CholmodFactor{T}, B::CholmodDense{T}) = solve(L, B, CHOLMOD_A)
+(\){T<:CHMVTypes}(L::CholmodFactor{T}, b::Vector{T}) = reshape(solve(L, CholmodDense!(b), CHOLMOD_A).mat, length(b))
+(\){T<:CHMVTypes}(L::CholmodFactor{T}, B::Matrix{T}) = solve(L, CholmodDense!(B),CHOLMOD_A).mat
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)
 end
