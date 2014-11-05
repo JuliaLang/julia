@@ -52,7 +52,16 @@ end
 
 ## initialization
 
-__init__() = srand()
+function __init__()
+    srand()
+
+    # Temporary fix for #8874
+    ccall((:dsfmt_gv_init_by_array,:libdSFMT),
+          Void,
+          (Ptr{Uint32}, Int32),
+          1+GLOBAL_RNG.seed, length(GLOBAL_RNG.seed))
+
+end
 
 ## make_seed()
 # make_seed methods produce values of type Array{Uint32}, suitable for MersenneTwister seeding

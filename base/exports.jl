@@ -28,6 +28,7 @@ export
     BitArray,
     BitMatrix,
     BitVector,
+    Bytes,
     CFILE,
     Cmd,
     Colon,

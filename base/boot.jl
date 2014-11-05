@@ -128,7 +128,7 @@ export
     Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
     Uint64, Uint128, Unsigned,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
+    Char, Bytes, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
@@ -197,6 +197,11 @@ if is(Int,Int64)
     typealias Uint Uint64
 else
     typealias Uint Uint32
+end
+
+immutable Bytes <: AbstractArray{Uint8,1}
+    pointer::Ptr{Uint8} # or bytes 1-8
+    neglen::Int         # or bytes 9-15 & length
 end
 
 abstract Exception

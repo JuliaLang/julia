@@ -124,6 +124,19 @@ STATIC_INLINE int jl_array_ndimwords(uint32_t ndims)
     return (ndims < 3 ? 0 : ndims-2);
 }
 
+typedef struct {
+    union {
+        struct {
+            uint8_t data[2*sizeof(void*)-1];
+            uint8_t length;
+        } here;
+        struct {
+            uint8_t *data;
+            long neglen;
+        } there;
+    };
+} jl_bytes_struct_t;
+
 typedef jl_value_t *(*jl_fptr_t)(jl_value_t*, jl_value_t**, uint32_t);
 
 typedef struct _jl_lambda_info_t {
@@ -307,6 +320,7 @@ extern DLLEXPORT jl_tuple_t *jl_tuple_type;
 extern DLLEXPORT jl_value_t *jl_tupletype_type;
 extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
 extern DLLEXPORT jl_typename_t *jl_ntuple_typename;
+extern DLLEXPORT jl_datatype_t *jl_bytes_type;
 extern DLLEXPORT jl_datatype_t *jl_tvar_type;
 extern DLLEXPORT jl_datatype_t *jl_task_type;
 
@@ -473,6 +487,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #define jl_is_null(v)        (((jl_value_t*)(v)) == ((jl_value_t*)jl_null))
 #define jl_is_nothing(v)     (((jl_value_t*)(v)) == ((jl_value_t*)jl_nothing))
 #define jl_is_tuple(v)       jl_typeis(v,jl_tuple_type)
+#define jl_is_bytes(v)       jl_typeis(v,jl_bytes_type)
 #define jl_is_datatype(v)    jl_typeis(v,jl_datatype_type)
 #define jl_is_pointerfree(t) (((jl_datatype_t*)t)->pointerfree)
 #define jl_is_mutable(t)     (((jl_datatype_t*)t)->mutabl)
@@ -707,6 +722,10 @@ DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
 #endif
+
+// bytes
+DLLEXPORT jl_bytes_struct_t jl_bytes(const uint8_t *data, size_t n);
+DLLEXPORT uint8_t jl_bytesref(const jl_bytes_struct_t b, size_t i);
 
 // structs
 DLLEXPORT int         jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err);
