@@ -1,5 +1,5 @@
 function normalizedexponent(significand, exponent::Int32)
-    significand::Uint64    
+    significand::UInt64    
     while (significand & HiddenBit(Float64)) == 0
         significand <<= 1
         exponent -= 1

@@ -727,7 +727,7 @@ Byte Array Literals
 
 Another useful non-standard string literal is the byte-array string
 literal: ``b"..."``. This form lets you use string notation to express
-literal byte arrays — i.e. arrays of ``Uint8`` values. The convention is
+literal byte arrays — i.e. arrays of ``UInt8`` values. The convention is
 that non-standard literals with uppercase prefixes produce actual string
 objects, while those with lowercase prefixes produce non-string objects
 like byte arrays or compiled regular expressions. The rules for byte
@@ -749,7 +749,7 @@ three:
 .. doctest::
 
     julia> b"DATA\xff\u2200"
-    8-element Array{Uint8,1}:
+    8-element Array{UInt8,1}:
      0x44
      0x41
      0x54
@@ -779,11 +779,11 @@ bytes in UTF-8:
 .. doctest::
 
     julia> b"\xff"
-    1-element Array{Uint8,1}:
+    1-element Array{UInt8,1}:
      0xff
 
     julia> b"\uff"
-    2-element Array{Uint8,1}:
+    2-element Array{UInt8,1}:
      0xc3
      0xbf
 

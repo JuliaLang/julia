@@ -71,13 +71,13 @@ function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{Uint8},Int32,Int32),
+    #                   (Ptr{UInt8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
 function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
@@ -309,7 +309,7 @@ type REPLHistoryProvider <: HistoryProvider
 end
 REPLHistoryProvider(mode_mapping) =
     REPLHistoryProvider(AbstractString[], nothing, 0, -1, IOBuffer(),
-                        nothing, mode_mapping, Uint8[])
+                        nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
 Invalid history format. If you have a ~/.julia_history file left over from an older version of Julia, try renaming or deleting it.

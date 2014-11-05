@@ -19,7 +19,7 @@ function roundweed(buffer,len,rest,tk,unit,kappa)
 end
 
 function digitgen(w,buffer,requested_digits=1000)
-    unit::Uint64 = 1
+    unit::UInt64 = 1
     one = Float(unit << -w.e, w.e)
     integrals = w.s >> -one.e
     fractionals = w.s & (one.s-1)
@@ -57,7 +57,7 @@ function digitgen(w,buffer,requested_digits=1000)
     return r, kappa, len
 end
 
-function fastprecision(v,requested_digits,buffer=Array(Uint8,100))
+function fastprecision(v,requested_digits,buffer=Array(UInt8,100))
     f = normalize(float64(v))
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)

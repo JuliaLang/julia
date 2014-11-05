@@ -300,8 +300,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
 end
 
 # workaround issue #7197: comment out let-block
-#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
-S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+#let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[1,1] = 1
     S1290[5] = 2
     S1290[end] = 3

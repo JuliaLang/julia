@@ -44,7 +44,7 @@ function intersect(A::VersionSet, B::VersionSet)
     VersionSet(ivals)
 end
 ==(A::VersionSet, B::VersionSet) = A.intervals == B.intervals
-hash(s::VersionSet, h::Uint) = hash(s.intervals, h + (0x2fd2ca6efa023f44 % Uint))
+hash(s::VersionSet, h::UInt) = hash(s.intervals, h + (0x2fd2ca6efa023f44 % UInt))
 deepcopy_internal(vs::VersionSet, ::ObjectIdDict) = VersionSet(copy(vs.intervals))
 
 typealias Requires Dict{ByteString,VersionSet}

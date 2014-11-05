@@ -270,8 +270,8 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # Ensure subnormal flags functions don't segfault
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
 
 # isqrt (issue #4884)
 @test isqrt(9223372030926249000) == 3037000498
@@ -279,11 +279,11 @@ end
 @test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
 @test isqrt(0) == 0
 for i = 1:1000
-    n = rand(Uint128)
+    n = rand(UInt128)
     s = isqrt(n)
     @test s*s <= n
     @test (s+1)*(s+1) > n
-    n = rand(Uint64)
+    n = rand(UInt64)
     s = isqrt(n)
     @test s*s <= n
     @test (s+1)*(s+1) > n

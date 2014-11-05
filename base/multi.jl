@@ -81,7 +81,7 @@ abstract ClusterManager
 
 type Worker
     host::ByteString
-    port::Uint16
+    port::UInt16
     socket::TCPSocket
     sendbuf::IOBuffer
     del_msgs::Array{Any,1}
@@ -188,7 +188,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IPAddr
-    bind_port::Uint16
+    bind_port::UInt16
     LocalProcess() = new(1)
 end
 
@@ -437,7 +437,7 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
+hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)

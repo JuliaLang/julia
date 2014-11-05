@@ -51,7 +51,7 @@ r = fill(NaN, Base.reduced_dims(size(Breduc), 1))
 
 # Small integers
 @test @inferred(sum(Int8[1], 1)) == [1]
-@test @inferred(sum(Uint8[1], 1)) == [1]
+@test @inferred(sum(UInt8[1], 1)) == [1]
 
 # Complex types
 @test typeof(@inferred(sum([1.0+1.0im], 1))) == Vector{Complex128}

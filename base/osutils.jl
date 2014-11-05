@@ -48,7 +48,7 @@ end
 # Windows version macros
 
 @windows_only function windows_version()
-    verinfo = ccall(:GetVersion, Uint32, ())
+    verinfo = ccall(:GetVersion, UInt32, ())
     (verinfo & 0xFF, (verinfo >> 8) & 0xFF)
 end
 @unix_only windows_version() = (0,0)

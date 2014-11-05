@@ -19,21 +19,21 @@ const BLACK_TERRITORY = 4
 const UNKNOWN = 5
 
 type XorRand
-  state::Uint32
+  state::UInt32
 end
 
-function xor_srand(rand::XorRand, seed::Uint32)
+function xor_srand(rand::XorRand, seed::UInt32)
   rand.state = seed
 end
 
-function xor_randn(rand::XorRand, n::Uint32)
+function xor_randn(rand::XorRand, n::UInt32)
   rand.state $= rand.state << 13
   rand.state $= rand.state >> 17
   rand.state $= rand.state << 5
   rand.state % n
 end
 
-xor_randn(rand::XorRand, n::Int) = convert(Int, xor_randn(rand, convert(Uint32, n)))
+xor_randn(rand::XorRand, n::Int) = convert(Int, xor_randn(rand, convert(UInt32, n)))
 
 # Offsets for the four directly adjacent neighbors. Used for looping.
 const deltai = (-1, 1, 0, 0)
@@ -63,11 +63,11 @@ type Board
   rand::XorRand
 
   function Board(n::Int)
-    init(new(), n, convert(Uint32, 2463534242))
+    init(new(), n, convert(UInt32, 2463534242))
   end
 end
 
-function init(board::Board, n::Int, seed::Uint32)
+function init(board::Board, n::Int, seed::UInt32)
   board.size = n
   board.komi = 0.0
   board.board = zeros(Int, n, n)
@@ -92,7 +92,7 @@ function set_komi(board::Board, komi::Float64)
   board.komi = komi
 end
 
-function set_random_seed(board::Board, seed::Uint32)
+function set_random_seed(board::Board, seed::UInt32)
   xor_srand(board.rand, seed)
 end
 
@@ -433,7 +433,7 @@ function compute_score(board::Board)
 end
 
 function benchmark(num_games_per_point::Int)
-  random_seed = convert(Uint32, 1)
+  random_seed = convert(UInt32, 1)
   board_size = 9
   komi = 0.5
 

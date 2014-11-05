@@ -30,7 +30,7 @@ const Bottom = Union()
 @test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
     @test !is(Bottom, typeintersect(Array{Bottom},AbstractArray{T}))
-    @test  is(Bottom, typeintersect((Type{Ptr{Uint8}},Ptr{Bottom}),
+    @test  is(Bottom, typeintersect((Type{Ptr{UInt8}},Ptr{Bottom}),
                                   (Type{Ptr{T}},Ptr{T})))
     @test !(Type{T} <: TypeVar)
 
@@ -165,7 +165,7 @@ end
                    (Int8,Signed...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
                    (Int8,Signed...))
-@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
+@test Base.typeseq(typejoin((Int8,UInt8,Int...),(Int8,Int8...)),
                    (Int8,Integer...))
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
@@ -1187,7 +1187,7 @@ f4526(x) = isa(x.a, Void)
 # issue #4528
 function f4528(A, B)
     if A
-        reinterpret(Uint64, B)
+        reinterpret(UInt64, B)
     end
 end
 @test f4528(false, int32(12)) === nothing
@@ -1235,7 +1235,7 @@ type Z4681
     Z4681() = new(C_NULL)
 end
 Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
-@test_throws TypeError ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+@test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479
 f4479(::Real,c) = 1
@@ -1435,7 +1435,7 @@ end
 function read_file5374(fileobj)
     read(fileobj.io, Float32)
 end
-@test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)
+@test isa(read_file5374(FileObj5374(IOBuffer(UInt8[0,0,0,0]))), Float32)
 
 # issue #5457
 function f5457(obj_ptr::Ptr{Float64}, f)
@@ -1658,7 +1658,7 @@ end
 
 # issue #6634
 function crc6634(spec)
-    A = Uint
+    A = UInt
     remainder::A = 1
     function handler(append)
         remainder = append ? 1 : 2
@@ -1783,7 +1783,7 @@ f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
 
 # issue #7302
 function test7302()
-    t = [Uint64][1]
+    t = [UInt64][1]
     convert(t, "5")
 end
 @test_throws MethodError test7302()
@@ -1843,11 +1843,11 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 # issue 7897
 function issue7897!(data, arr)
-    data = reinterpret(Uint32, data)
+    data = reinterpret(UInt32, data)
     a = arr[1]
 end
 
-a = ones(Uint8, 10)
+a = ones(UInt8, 10)
 sa = sub(a,4:6)
 # This can throw an error, but shouldn't segfault
 try
@@ -1914,10 +1914,10 @@ c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
 # issue #8798
 let
     const npy_typestrs = Dict("b1"=>Bool,
-                              "i1"=>Int8,      "u1"=>Uint8,
-                              "i2"=>Int16,     "u2"=>Uint16,
-                              "i4"=>Int32,     "u4"=>Uint32,
-                              "i8"=>Int64,     "u8"=>Uint64)
+                              "i1"=>Int8,      "u1"=>UInt8,
+                              "i2"=>Int16,     "u2"=>UInt16,
+                              "i4"=>Int32,     "u4"=>UInt32,
+                              "i8"=>Int64,     "u8"=>UInt64)
     sizeof_lookup() = sizeof(npy_typestrs["i8"])
     @test sizeof_lookup() == 8
 end
