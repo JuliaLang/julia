@@ -400,6 +400,10 @@ ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
+else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
 ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
