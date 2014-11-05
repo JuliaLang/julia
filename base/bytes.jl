@@ -26,8 +26,8 @@ done(b::Bytes, i::Int) = length(b) < i
 function ==(x::Bytes, y::Bytes)
     x.neglen < 0 || return x === y
     x.neglen == y.neglen || return false
-    x.pointer == y.pointer || 0 ==
-    ccall(:memcmp, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t), x.pointer, y.pointer, -x.neglen)
+    x.pointer == y.pointer ||
+        0 == ccall(:memcmp, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t), x.pointer, y.pointer, -x.neglen)
 end
 
 function cmp(x::Bytes, y::Bytes)
