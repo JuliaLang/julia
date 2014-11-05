@@ -3,20 +3,20 @@
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert(::Type{Uint}, x::Ptr) = box(Uint, unbox(Ptr,x))
+convert(::Type{UInt}, x::Ptr) = box(UInt, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(Uint,uint(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,uint(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
 convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
 # object to pointer
-convert(::Type{Ptr{Uint8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Uint8}, (Any,), x)
+convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
 convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-convert(::Type{Ptr{Uint8}}, s::ByteString) = convert(Ptr{Uint8}, s.data)
+convert(::Type{Ptr{UInt8}}, s::ByteString) = convert(Ptr{UInt8}, s.data)
 convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
 
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
@@ -52,8 +52,8 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))
 pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 
-integer(x::Ptr) = convert(Uint, x)
-unsigned(x::Ptr) = convert(Uint, x)
+integer(x::Ptr) = convert(UInt, x)
+unsigned(x::Ptr) = convert(UInt, x)
 
 eltype{T}(::Ptr{T}) = T
 

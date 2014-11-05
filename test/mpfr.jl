@@ -26,14 +26,14 @@ y = BigFloat(12//1)
 x = BigFloat(12)
 y = BigFloat(30)
 @test x + y == BigFloat(42)
-@test x + typemax(Uint128) == x + BigInt(typemax(Uint128))
+@test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
 @test x + typemax(Int128) == x + BigInt(typemax(Int128))
 
 # -
 x = BigFloat(12)
 y = BigFloat(-30)
 @test x - y == BigFloat(42)
-@test x - typemax(Uint128) == x - BigInt(typemax(Uint128))
+@test x - typemax(UInt128) == x - BigInt(typemax(UInt128))
 @test x - typemax(Int128) == x - BigInt(typemax(Int128))
 
 # *
@@ -41,14 +41,14 @@ x = BigFloat(6)
 y = BigFloat(9)
 @test x * y != BigFloat(42)
 @test x * y == BigFloat(54)
-@test x * typemax(Uint128) == x * BigInt(typemax(Uint128))
+@test x * typemax(UInt128) == x * BigInt(typemax(UInt128))
 @test x * typemax(Int128) == x * BigInt(typemax(Int128))
 
 # /
 x = BigFloat(9)
 y = BigFloat(6)
 @test x / y == BigFloat(9/6)
-@test x / typemax(Uint128) == x / BigInt(typemax(Uint128))
+@test x / typemax(UInt128) == x / BigInt(typemax(UInt128))
 @test x / typemax(Int128) == x / BigInt(typemax(Int128))
 
 # iterated arithmetic
@@ -337,13 +337,13 @@ y = BigFloat(42)
 @test_throws InexactError convert(Int32, x)
 @test_throws InexactError convert(Int64, x)
 @test_throws InexactError convert(BigInt, x)
-@test_throws InexactError convert(Uint32, x)
-@test_throws InexactError convert(Uint32, x)
+@test_throws InexactError convert(UInt32, x)
+@test_throws InexactError convert(UInt32, x)
 @test convert(Int32, y) == 42
 @test convert(Int64, y) == 42
 @test convert(BigInt, y) == 42
-@test convert(Uint32, y) == 42
-@test convert(Uint32, y) == 42
+@test convert(UInt32, y) == 42
+@test convert(UInt32, y) == 42
 
 # iround
 x = BigFloat(42.42)
@@ -353,13 +353,13 @@ end
 z = BigInt("9223372036854775809")
 @test iround(x) == 42
 @test iround(y) == z
-@test typeof(iround(Uint8, x)) == Uint8 && iround(Uint8, x) == 0x2a
-@test typeof(iround(Uint16, x)) == Uint16 && iround(Uint16, x) == 0x2a
-@test typeof(iround(Uint32, x)) == Uint32 && iround(Uint32, x) == 0x2a
-@test typeof(iround(Uint64, x)) == Uint64 && iround(Uint64, x) == 0x2a
+@test typeof(iround(UInt8, x)) == UInt8 && iround(UInt8, x) == 0x2a
+@test typeof(iround(UInt16, x)) == UInt16 && iround(UInt16, x) == 0x2a
+@test typeof(iround(UInt32, x)) == UInt32 && iround(UInt32, x) == 0x2a
+@test typeof(iround(UInt64, x)) == UInt64 && iround(UInt64, x) == 0x2a
 @test typeof(iround(Int64, x)) == Int64 && iround(Int64, x) == 42
 @test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
-@test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
+@test typeof(iround(UInt, x)) == UInt && iround(UInt, x) == 0x2a
 
 # string representation
 str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
@@ -494,33 +494,33 @@ c = BigInt("123456789012345678901234567891")
 #@test itrunc(Int8, x) == int8(y)
 #@test typeof(itrunc(Int8, x)) == Int8
 
-@test iceil(Uint64, x) == uint64(z)
-@test typeof(iceil(Uint64, x)) == Uint64
-@test ifloor(Uint64, x) == uint64(y)
-@test typeof(ifloor(Uint64, x)) == Uint64
-@test itrunc(Uint64, x) == uint64(y)
-@test typeof(itrunc(Uint64, x)) == Uint64
+@test iceil(UInt64, x) == uint64(z)
+@test typeof(iceil(UInt64, x)) == UInt64
+@test ifloor(UInt64, x) == uint64(y)
+@test typeof(ifloor(UInt64, x)) == UInt64
+@test itrunc(UInt64, x) == uint64(y)
+@test typeof(itrunc(UInt64, x)) == UInt64
 
-@test iceil(Uint32, x) == uint32(z)
-@test typeof(iceil(Uint32, x)) == Uint32
-@test ifloor(Uint32, x) == uint32(y)
-@test typeof(ifloor(Uint32, x)) == Uint32
-@test itrunc(Uint32, x) == uint32(y)
-@test typeof(itrunc(Uint32, x)) == Uint32
+@test iceil(UInt32, x) == uint32(z)
+@test typeof(iceil(UInt32, x)) == UInt32
+@test ifloor(UInt32, x) == uint32(y)
+@test typeof(ifloor(UInt32, x)) == UInt32
+@test itrunc(UInt32, x) == uint32(y)
+@test typeof(itrunc(UInt32, x)) == UInt32
 
-@test iceil(Uint16, x) == uint16(z)
-@test typeof(iceil(Uint16, x)) == Uint16
-@test ifloor(Uint16, x) == uint16(y)
-@test typeof(ifloor(Uint16, x)) == Uint16
-@test itrunc(Uint16, x) == uint16(y)
-@test typeof(itrunc(Uint16, x)) == Uint16
+@test iceil(UInt16, x) == uint16(z)
+@test typeof(iceil(UInt16, x)) == UInt16
+@test ifloor(UInt16, x) == uint16(y)
+@test typeof(ifloor(UInt16, x)) == UInt16
+@test itrunc(UInt16, x) == uint16(y)
+@test typeof(itrunc(UInt16, x)) == UInt16
 
-#@test iceil(Uint8, x) == uint8(z)
-#@test typeof(iceil(Uint8, x)) == Uint8
-#@test ifloor(Uint8, x) == uint8(y)
-#@test typeof(ifloor(Uint8, x)) == Uint8
-#@test itrunc(Uint8, x) == uint8(y)
-#@test typeof(itrunc(Uint8, x)) == Uint8
+#@test iceil(UInt8, x) == uint8(z)
+#@test typeof(iceil(UInt8, x)) == UInt8
+#@test ifloor(UInt8, x) == uint8(y)
+#@test typeof(ifloor(UInt8, x)) == UInt8
+#@test itrunc(UInt8, x) == uint8(y)
+#@test typeof(itrunc(UInt8, x)) == UInt8
 
 @test iceil(a) == c
 @test typeof(iceil(a)) == BigInt
@@ -728,11 +728,11 @@ d = BigFloat("-24.69135780242")
 @test typeof(BigFloat(typemax(Int128))) == BigFloat
 
 @test typeof(BigFloat(true)) == BigFloat
-@test typeof(BigFloat(typemax(Uint8))) == BigFloat
-@test typeof(BigFloat(typemax(Uint16))) == BigFloat
-@test typeof(BigFloat(typemax(Uint32))) == BigFloat
-@test typeof(BigFloat(typemax(Uint64))) == BigFloat
-@test typeof(BigFloat(typemax(Uint128))) == BigFloat
+@test typeof(BigFloat(typemax(UInt8))) == BigFloat
+@test typeof(BigFloat(typemax(UInt16))) == BigFloat
+@test typeof(BigFloat(typemax(UInt32))) == BigFloat
+@test typeof(BigFloat(typemax(UInt64))) == BigFloat
+@test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
 @test typeof(BigFloat(realmax(Float32))) == BigFloat
 @test typeof(BigFloat(realmax(Float64))) == BigFloat
@@ -775,8 +775,8 @@ tol = 1e-3
 # issue #5963
 @test typemax(Int128) == convert(BigFloat, typemax(Int128))
 @test typemax(Int128)  * big(1.0) == convert(BigFloat, typemax(Int128))
-@test typemax(Uint64)  * big(1.0) == big(typemax(Uint64))
-@test typemax(Uint128) * big(1.0) == big(typemax(Uint128))
+@test typemax(UInt64)  * big(1.0) == big(typemax(UInt64))
+@test typemax(UInt128) * big(1.0) == big(typemax(UInt128))
 
 # issue #3399
 i1 = BigInt(10)^int32(1000)

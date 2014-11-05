@@ -103,7 +103,7 @@ end
 const bitcache_chunks = 64 # this can be changed
 const bitcache_size = 64 * bitcache_chunks # do not change this
 
-function dumpbitcache(Bc::Vector{Uint64}, bind::Int, C::Vector{Bool})
+function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
     ind = 1
     nc = min(bitcache_chunks, length(Bc)-bind+1)
     for i = 1:nc
@@ -332,7 +332,7 @@ for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
                                      (:.<=, :<=  , :bitle , :(~a | b)))
     @eval begin
         ($f)(A::AbstractArray, B::AbstractArray) = bitbroadcast($scalarf, A, B)
-        ($bitf)(a::Uint64, b::Uint64) = $bitfbody
+        ($bitf)(a::UInt64, b::UInt64) = $bitfbody
         function ($f)(A::AbstractArray{Bool}, B::AbstractArray{Bool})
             local shape
             try
@@ -406,7 +406,7 @@ end
 (.^)(A::BitArray, B::AbstractArray{Bool}) = (B .<= A)
 (.^)(A::AbstractArray{Bool}, B::AbstractArray{Bool}) = (B .<= A)
 
-function bitcache_pow{T}(Ac::Vector{Uint64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
+function bitcache_pow{T}(Ac::Vector{UInt64}, B::Array{T}, l::Int, ind::Int, C::Vector{Bool})
     left = l - ind + 1
     @inbounds begin
         for j = 1:min(bitcache_size, left)

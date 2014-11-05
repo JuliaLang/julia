@@ -57,17 +57,17 @@ end
 #     http://primes.utm.edu/prove/merged.html
 #     http://miller-rabin.appspot.com
 #
-witnesses(n::Union(Uint8,Int8,Uint16,Int16)) = (2,3)
-witnesses(n::Union(Uint32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
-witnesses(n::Union(Uint64,Int64)) =
+witnesses(n::Union(UInt8,Int8,UInt16,Int16)) = (2,3)
+witnesses(n::Union(UInt32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
+witnesses(n::Union(UInt64,Int64)) =
         n < 1373653         ? (2,3) :
         n < 4759123141      ? (2,7,61) :
         n < 2152302898747   ? (2,3,5,7,11) :
         n < 3474749660383   ? (2,3,5,7,11,13) :
                               (2,325,9375,28178,450775,9780504,1795265022)
 
-isprime(n::Uint128) =
-    n <= typemax(Uint64) ? isprime(uint64(n)) : isprime(BigInt(n))
+isprime(n::UInt128) =
+    n <= typemax(UInt64) ? isprime(uint64(n)) : isprime(BigInt(n))
 isprime(n::Int128) = n < 2 ? false :
     n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
 

@@ -3,7 +3,7 @@ using LRUExample
 TestLRU = LRUExample.UnboundedLRU{ASCIIString, ASCIIString}()
 TestBLRU = LRUExample.BoundedLRU{ASCIIString, ASCIIString}(1000)
 
-get_str(i) = ascii(vcat(map(x->[x>>4; x&0x0F], reinterpret(Uint8, [int32(i)]))...))
+get_str(i) = ascii(vcat(map(x->[x>>4; x&0x0F], reinterpret(UInt8, [int32(i)]))...))
 
 isbounded{L<:LRUExample.LRU}(::Type{L}) = any(map(n->n==:maxsize, L.names))
 isbounded{L<:LRUExample.LRU}(l::L) = isbounded(L)

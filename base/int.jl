@@ -1,7 +1,7 @@
 ## integer arithmetic ##
 
-const IntTypes = (Int8, Uint8, Int16, Uint16, Int32, Uint32,
-                  Int64, Uint64, Int128, Uint128)
+const IntTypes = (Int8, UInt8, Int16, UInt16, Int32, UInt32,
+                  Int64, UInt64, Int128, UInt128)
 
 +(x::Int, y::Int) = box(Int,add_int(unbox(Int,x),unbox(Int,y)))
 <(x::Int, y::Int) = slt_int(unbox(Int,x),unbox(Int,y))
@@ -67,7 +67,7 @@ cld(x::Unsigned, y::Signed) = div(x,y)+(!signbit(y)&(rem(x,y)!=0))
 # Don't promote integers for div/rem/mod since there no danger of overflow,
 # while there is a substantial performance penalty to 64-bit promotion.
 typealias Signed64 Union(Int8,Int16,Int32,Int64)
-typealias Unsigned64 Union(Uint8,Uint16,Uint32,Uint64)
+typealias Unsigned64 Union(UInt8,UInt16,UInt32,UInt64)
 typealias Integer64 Union(Signed64,Unsigned64)
 
 div{T<:Signed64}  (x::T, y::T) = box(T,sdiv_int(unbox(T,x),unbox(T,y)))
@@ -105,15 +105,15 @@ for T in IntTypes
 end
 
 bswap(x::Int8)    = x
-bswap(x::Uint8)   = x
+bswap(x::UInt8)   = x
 bswap(x::Int16)   = box(Int16,bswap_int(unbox(Int16,x)))
-bswap(x::Uint16)  = box(Uint16,bswap_int(unbox(Uint16,x)))
+bswap(x::UInt16)  = box(UInt16,bswap_int(unbox(UInt16,x)))
 bswap(x::Int32)   = box(Int32,bswap_int(unbox(Int32,x)))
-bswap(x::Uint32)  = box(Uint32,bswap_int(unbox(Uint32,x)))
+bswap(x::UInt32)  = box(UInt32,bswap_int(unbox(UInt32,x)))
 bswap(x::Int64)   = box(Int64,bswap_int(unbox(Int64,x)))
-bswap(x::Uint64)  = box(Uint64,bswap_int(unbox(Uint64,x)))
+bswap(x::UInt64)  = box(UInt64,bswap_int(unbox(UInt64,x)))
 bswap(x::Int128)  = box(Int128,bswap_int(unbox(Int128,x)))
-bswap(x::Uint128) = box(Uint128,bswap_int(unbox(Uint128,x)))
+bswap(x::UInt128) = box(UInt128,bswap_int(unbox(UInt128,x)))
 
 for T in IntTypes
     @eval begin
@@ -186,7 +186,7 @@ for to in (Int8, Int16, Int32, Int64)
     end
 end
 
-for to in (Uint8, Uint16, Uint32, Uint64)
+for to in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
         convert(::Type{$to}, x::Float32) = box($to,checked_fptoui($to,unbox(Float32,x)))
         convert(::Type{$to}, x::Float64) = box($to,checked_fptoui($to,unbox(Float64,x)))
@@ -197,39 +197,39 @@ function convert(::Type{Int128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
-    n = int128(convert(Uint64,top))<<64 + int128(convert(Uint64,bot))
+    n = int128(convert(UInt64,top))<<64 + int128(convert(UInt64,bot))
     return x<0 ? -n : n
 end
 convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
 
-function convert(::Type{Uint128}, x::FloatingPoint)
+function convert(::Type{UInt128}, x::FloatingPoint)
     ax = abs(x)
     top = trunc(ldexp(ax,-64))
     bot = ax - ldexp(top,64)
-    n = uint128(convert(Uint64,top))<<64 + uint128(convert(Uint64,bot))
+    n = uint128(convert(UInt64,top))<<64 + uint128(convert(UInt64,bot))
     return x<0 ? -n : n
 end
-convert(::Type{Uint128}, x::Float32) = convert(Uint128, float64(x))
+convert(::Type{UInt128}, x::Float32) = convert(UInt128, float64(x))
 
-convert(::Type{Signed}, x::Uint8  ) = convert(Int8,x)
-convert(::Type{Signed}, x::Uint16 ) = convert(Int16,x)
-convert(::Type{Signed}, x::Uint32 ) = convert(Int32,x)
-convert(::Type{Signed}, x::Uint64 ) = convert(Int64,x)
-convert(::Type{Signed}, x::Uint128) = convert(Int128,x)
+convert(::Type{Signed}, x::UInt8  ) = convert(Int8,x)
+convert(::Type{Signed}, x::UInt16 ) = convert(Int16,x)
+convert(::Type{Signed}, x::UInt32 ) = convert(Int32,x)
+convert(::Type{Signed}, x::UInt64 ) = convert(Int64,x)
+convert(::Type{Signed}, x::UInt128) = convert(Int128,x)
 convert(::Type{Signed}, x::Float32) = convert(Int,x)
 convert(::Type{Signed}, x::Float64) = convert(Int,x)
 convert(::Type{Signed}, x::Char)    = convert(Int,x)
 convert(::Type{Signed}, x::Bool)    = convert(Int,x)
 
-convert(::Type{Unsigned}, x::Int8   ) = convert(Uint8,x)
-convert(::Type{Unsigned}, x::Int16  ) = convert(Uint16,x)
-convert(::Type{Unsigned}, x::Int32  ) = convert(Uint32,x)
-convert(::Type{Unsigned}, x::Int64  ) = convert(Uint64,x)
-convert(::Type{Unsigned}, x::Int128 ) = convert(Uint128,x)
-convert(::Type{Unsigned}, x::Float32) = convert(Uint,x)
-convert(::Type{Unsigned}, x::Float64) = convert(Uint,x)
-convert(::Type{Unsigned}, x::Char)    = convert(Uint,x)
-convert(::Type{Unsigned}, x::Bool)    = convert(Uint,x)
+convert(::Type{Unsigned}, x::Int8   ) = convert(UInt8,x)
+convert(::Type{Unsigned}, x::Int16  ) = convert(UInt16,x)
+convert(::Type{Unsigned}, x::Int32  ) = convert(UInt32,x)
+convert(::Type{Unsigned}, x::Int64  ) = convert(UInt64,x)
+convert(::Type{Unsigned}, x::Int128 ) = convert(UInt128,x)
+convert(::Type{Unsigned}, x::Float32) = convert(UInt,x)
+convert(::Type{Unsigned}, x::Float64) = convert(UInt,x)
+convert(::Type{Unsigned}, x::Char)    = convert(UInt,x)
+convert(::Type{Unsigned}, x::Bool)    = convert(UInt,x)
 
 convert(::Type{Integer}, x::Float32) = convert(Int,x)
 convert(::Type{Integer}, x::Float64) = convert(Int,x)
@@ -240,15 +240,15 @@ int32(x) = convert(Int32,x)
 int64(x) = convert(Int64,x)
 int128(x) = convert(Int128,x)
 
-uint8(x) = convert(Uint8,x)
-uint8(x::Integer) = x % Uint8
-uint8(x::Int8) = box(Uint8,unbox(Int8,x))
-uint8(x::Bool) = convert(Uint8,x)
+uint8(x) = convert(UInt8,x)
+uint8(x::Integer) = x % UInt8
+uint8(x::Int8) = box(UInt8,unbox(Int8,x))
+uint8(x::Bool) = convert(UInt8,x)
 
-uint16(x) = convert(Uint16,x)
-uint32(x) = convert(Uint32,x)
-uint64(x) = convert(Uint64,x)
-uint128(x) = convert(Uint128,x)
+uint16(x) = convert(UInt16,x)
+uint32(x) = convert(UInt32,x)
+uint64(x) = convert(UInt64,x)
+uint128(x) = convert(UInt128,x)
 
 integer(x) = convert(Integer,x)
 
@@ -294,94 +294,94 @@ promote_rule(::Type{Int128}, ::Type{Int16}) = Int128
 promote_rule(::Type{Int128}, ::Type{Int32}) = Int128
 promote_rule(::Type{Int128}, ::Type{Int64}) = Int128
 
-promote_rule(::Type{Uint16},  ::Type{Uint8} ) = Uint16
-promote_rule(::Type{Uint32},  ::Type{Uint8} ) = Uint32
-promote_rule(::Type{Uint32},  ::Type{Uint16}) = Uint32
-promote_rule(::Type{Uint64},  ::Type{Uint8} ) = Uint64
-promote_rule(::Type{Uint64},  ::Type{Uint16}) = Uint64
-promote_rule(::Type{Uint64},  ::Type{Uint32}) = Uint64
-promote_rule(::Type{Uint128}, ::Type{Uint8} ) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Uint16}) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Uint32}) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Uint64}) = Uint128
+promote_rule(::Type{UInt16},  ::Type{UInt8} ) = UInt16
+promote_rule(::Type{UInt32},  ::Type{UInt8} ) = UInt32
+promote_rule(::Type{UInt32},  ::Type{UInt16}) = UInt32
+promote_rule(::Type{UInt64},  ::Type{UInt8} ) = UInt64
+promote_rule(::Type{UInt64},  ::Type{UInt16}) = UInt64
+promote_rule(::Type{UInt64},  ::Type{UInt32}) = UInt64
+promote_rule(::Type{UInt128}, ::Type{UInt8} ) = UInt128
+promote_rule(::Type{UInt128}, ::Type{UInt16}) = UInt128
+promote_rule(::Type{UInt128}, ::Type{UInt32}) = UInt128
+promote_rule(::Type{UInt128}, ::Type{UInt64}) = UInt128
 
-promote_rule(::Type{Uint8}, ::Type{Int8}  ) = Int
-promote_rule(::Type{Uint8}, ::Type{Int16} ) = Int
-promote_rule(::Type{Uint8}, ::Type{Int32} ) = Int
-promote_rule(::Type{Uint8}, ::Type{Int64} ) = Int64
-promote_rule(::Type{Uint8}, ::Type{Int128}) = Int128
+promote_rule(::Type{UInt8}, ::Type{Int8}  ) = Int
+promote_rule(::Type{UInt8}, ::Type{Int16} ) = Int
+promote_rule(::Type{UInt8}, ::Type{Int32} ) = Int
+promote_rule(::Type{UInt8}, ::Type{Int64} ) = Int64
+promote_rule(::Type{UInt8}, ::Type{Int128}) = Int128
 
-promote_rule(::Type{Uint16}, ::Type{Int8}  ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int16} ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int32} ) = Int
-promote_rule(::Type{Uint16}, ::Type{Int64} ) = Int64
-promote_rule(::Type{Uint16}, ::Type{Int128}) = Int128
+promote_rule(::Type{UInt16}, ::Type{Int8}  ) = Int
+promote_rule(::Type{UInt16}, ::Type{Int16} ) = Int
+promote_rule(::Type{UInt16}, ::Type{Int32} ) = Int
+promote_rule(::Type{UInt16}, ::Type{Int64} ) = Int64
+promote_rule(::Type{UInt16}, ::Type{Int128}) = Int128
 
 if WORD_SIZE == 64
-    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Int
-    promote_rule(::Type{Uint32}, ::Type{Int16}) = Int
-    promote_rule(::Type{Uint32}, ::Type{Int32}) = Int
+    promote_rule(::Type{UInt32}, ::Type{Int8} ) = Int
+    promote_rule(::Type{UInt32}, ::Type{Int16}) = Int
+    promote_rule(::Type{UInt32}, ::Type{Int32}) = Int
 else
-    promote_rule(::Type{Uint32}, ::Type{Int8} ) = Uint
-    promote_rule(::Type{Uint32}, ::Type{Int16}) = Uint
-    promote_rule(::Type{Uint32}, ::Type{Int32}) = Uint
+    promote_rule(::Type{UInt32}, ::Type{Int8} ) = UInt
+    promote_rule(::Type{UInt32}, ::Type{Int16}) = UInt
+    promote_rule(::Type{UInt32}, ::Type{Int32}) = UInt
 end
-promote_rule(::Type{Uint32}, ::Type{Int64} ) = Int64
-promote_rule(::Type{Uint32}, ::Type{Int128}) = Int128
+promote_rule(::Type{UInt32}, ::Type{Int64} ) = Int64
+promote_rule(::Type{UInt32}, ::Type{Int128}) = Int128
 
-promote_rule(::Type{Uint64}, ::Type{Int8}  ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int16} ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int32} ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int64} ) = Uint64
-promote_rule(::Type{Uint64}, ::Type{Int128}) = Int128
+promote_rule(::Type{UInt64}, ::Type{Int8}  ) = UInt64
+promote_rule(::Type{UInt64}, ::Type{Int16} ) = UInt64
+promote_rule(::Type{UInt64}, ::Type{Int32} ) = UInt64
+promote_rule(::Type{UInt64}, ::Type{Int64} ) = UInt64
+promote_rule(::Type{UInt64}, ::Type{Int128}) = Int128
 
-promote_rule(::Type{Uint128}, ::Type{Int8}  ) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Int16} ) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Int32} ) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Int64} ) = Uint128
-promote_rule(::Type{Uint128}, ::Type{Int128}) = Uint128
+promote_rule(::Type{UInt128}, ::Type{Int8}  ) = UInt128
+promote_rule(::Type{UInt128}, ::Type{Int16} ) = UInt128
+promote_rule(::Type{UInt128}, ::Type{Int32} ) = UInt128
+promote_rule(::Type{UInt128}, ::Type{Int64} ) = UInt128
+promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 ## traits ##
 
 typemin(::Type{Int8  }) = int8(-128)
 typemax(::Type{Int8  }) = int8(127)
-typemin(::Type{Uint8 }) = uint8(0)
-typemax(::Type{Uint8 }) = uint8(255)
+typemin(::Type{UInt8 }) = uint8(0)
+typemax(::Type{UInt8 }) = uint8(255)
 typemin(::Type{Int16 }) = int16(-32768)
 typemax(::Type{Int16 }) = int16(32767)
-typemin(::Type{Uint16}) = uint16(0)
-typemax(::Type{Uint16}) = uint16(65535)
+typemin(::Type{UInt16}) = uint16(0)
+typemax(::Type{UInt16}) = uint16(65535)
 typemin(::Type{Int32 }) = int32(-2147483648)
 typemax(::Type{Int32 }) = int32(2147483647)
-typemin(::Type{Uint32}) = uint32(0)
-typemax(::Type{Uint32}) = uint32(4294967295)
+typemin(::Type{UInt32}) = uint32(0)
+typemax(::Type{UInt32}) = uint32(4294967295)
 typemin(::Type{Int64 }) = -9223372036854775808
 typemax(::Type{Int64 }) = 9223372036854775807
-typemin(::Type{Uint64}) = uint64(0)
-typemax(::Type{Uint64}) = 0xffffffffffffffff
-@eval typemin(::Type{Uint128}) = $(uint128(0))
-@eval typemax(::Type{Uint128}) = $(box(Uint128,unbox(Int128,convert(Int128,-1))))
+typemin(::Type{UInt64}) = uint64(0)
+typemax(::Type{UInt64}) = 0xffffffffffffffff
+@eval typemin(::Type{UInt128}) = $(uint128(0))
+@eval typemax(::Type{UInt128}) = $(box(UInt128,unbox(Int128,convert(Int128,-1))))
 @eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<int32(127))
-@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(Uint128,typemax(Uint128)>>int32(1))))
+@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>int32(1))))
 
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
 widen(::Type{Int32}) = Int64
 widen(::Type{Int64}) = Int128
-widen(::Type{Uint8}) = Uint
-widen(::Type{Uint16}) = Uint
-widen(::Type{Uint32}) = Uint64
-widen(::Type{Uint64}) = Uint128
+widen(::Type{UInt8}) = UInt
+widen(::Type{UInt16}) = UInt
+widen(::Type{UInt32}) = UInt64
+widen(::Type{UInt64}) = UInt128
 
 ## float to integer coercion ##
 
 # requires int arithmetic defined, for the loops to work
 
-for (f,t) in ((:uint8,:Uint8), (:uint16,:Uint16), (:uint32,:Uint32), (:uint64,:Uint64),
+for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:UInt64),
               (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
-              (:int128,:Int128), (:uint128,:Uint128),
-              (:signed,:Int), (:unsigned,:Uint), (:integer,:Int),
-              (:int,:Int), (:uint,:Uint))
+              (:int128,:Int128), (:uint128,:UInt128),
+              (:signed,:Int), (:unsigned,:UInt), (:integer,:Int),
+              (:int,:Int), (:uint,:UInt))
     @eval ($f)(x::FloatingPoint) = iround($t,x)
 end
 
@@ -389,23 +389,23 @@ end
 
 if WORD_SIZE==32
     function widemul(u::Int64, v::Int64)
-        local u0::Uint64, v0::Uint64, w0::Uint64
-        local u1::Int64, v1::Int64, w1::Uint64, w2::Int64, t::Uint64
+        local u0::UInt64, v0::UInt64, w0::UInt64
+        local u1::Int64, v1::Int64, w1::UInt64, w2::Int64, t::UInt64
 
         u0 = u&0xffffffff; u1 = u>>32
         v0 = v&0xffffffff; v1 = v>>32
         w0 = u0*v0
-        t = reinterpret(Uint64,u1)*v0 + (w0>>>32)
+        t = reinterpret(UInt64,u1)*v0 + (w0>>>32)
         w2 = reinterpret(Int64,t) >> 32
-        w1 = u0*reinterpret(Uint64,v1) + (t&0xffffffff)
+        w1 = u0*reinterpret(UInt64,v1) + (t&0xffffffff)
         hi = u1*v1 + w2 + (reinterpret(Int64,w1) >> 32)
         lo = w0&0xffffffff + (w1 << 32)
         int128(hi)<<64 + int128(lo)
     end
 
-    function widemul(u::Uint64, v::Uint64)
-        local u0::Uint64, v0::Uint64, w0::Uint64
-        local u1::Uint64, v1::Uint64, w1::Uint64, w2::Uint64, t::Uint64
+    function widemul(u::UInt64, v::UInt64)
+        local u0::UInt64, v0::UInt64, w0::UInt64
+        local u1::UInt64, v1::UInt64, w1::UInt64, w2::UInt64, t::UInt64
 
         u0 = u&0xffffffff; u1 = u>>>32
         v0 = v&0xffffffff; v1 = v>>>32
@@ -419,19 +419,19 @@ if WORD_SIZE==32
     end
 
     function *(u::Int128, v::Int128)
-        u0 = u % Uint64; u1 = int64(u>>64)
-        v0 = v % Uint64; v1 = int64(v>>64)
+        u0 = u % UInt64; u1 = int64(u>>64)
+        v0 = v % UInt64; v1 = int64(v>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64,u0), v1)
         hilo = widemul(u1, reinterpret(Int64,v0))
-        t = reinterpret(Uint128,hilo) + (lolo>>>64)
-        w1 = reinterpret(Uint128,lohi) + (t&0xffffffffffffffff)
+        t = reinterpret(UInt128,hilo) + (lolo>>>64)
+        w1 = reinterpret(UInt128,lohi) + (t&0xffffffffffffffff)
         int128(lolo&0xffffffffffffffff) + reinterpret(Int128,w1)<<64
     end
 
-    function *(u::Uint128, v::Uint128)
-        u0 = u % Uint64; u1 = uint64(u>>>64)
-        v0 = v % Uint64; v1 = uint64(v>>>64)
+    function *(u::UInt128, v::UInt128)
+        u0 = u % UInt64; u1 = uint64(u>>>64)
+        v0 = v % UInt64; v1 = uint64(v>>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
@@ -441,28 +441,28 @@ if WORD_SIZE==32
     end
 
     div(x::Int128, y::Int128) = int128(div(BigInt(x),BigInt(y)))
-    div(x::Uint128, y::Uint128) = uint128(div(BigInt(x),BigInt(y)))
+    div(x::UInt128, y::UInt128) = uint128(div(BigInt(x),BigInt(y)))
 
     rem(x::Int128, y::Int128) = int128(rem(BigInt(x),BigInt(y)))
-    rem(x::Uint128, y::Uint128) = uint128(rem(BigInt(x),BigInt(y)))
+    rem(x::UInt128, y::UInt128) = uint128(rem(BigInt(x),BigInt(y)))
 
     mod(x::Int128, y::Int128) = int128(mod(BigInt(x),BigInt(y)))
 
     << (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
-    << (x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,shl_int(unbox(Uint128,x),unbox(Int32,y)))
+    << (x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int32,y)))
     >> (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,ashr_int(unbox(Int128,x),unbox(Int32,y)))
-    >> (x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
+    >> (x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int32,y)))
     >>>(x::Int128,  y::Int32) = y == 0 ? x : box(Int128,lshr_int(unbox(Int128,x),unbox(Int32,y)))
-    >>>(x::Uint128, y::Int32) = y == 0 ? x : box(Uint128,lshr_int(unbox(Uint128,x),unbox(Int32,y)))
+    >>>(x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,lshr_int(unbox(UInt128,x),unbox(Int32,y)))
 else
     *(x::Int128,  y::Int128)  = box(Int128,mul_int(unbox(Int128,x),unbox(Int128,y)))
-    *(x::Uint128, y::Uint128) = box(Uint128,mul_int(unbox(Uint128,x),unbox(Uint128,y)))
+    *(x::UInt128, y::UInt128) = box(UInt128,mul_int(unbox(UInt128,x),unbox(UInt128,y)))
 
     div(x::Int128,  y::Int128)  = box(Int128,sdiv_int(unbox(Int128,x),unbox(Int128,y)))
-    div(x::Uint128, y::Uint128) = box(Uint128,udiv_int(unbox(Uint128,x),unbox(Uint128,y)))
+    div(x::UInt128, y::UInt128) = box(UInt128,udiv_int(unbox(UInt128,x),unbox(UInt128,y)))
 
     rem(x::Int128,  y::Int128)  = box(Int128,srem_int(unbox(Int128,x),unbox(Int128,y)))
-    rem(x::Uint128, y::Uint128) = box(Uint128,urem_int(unbox(Uint128,x),unbox(Uint128,y)))
+    rem(x::UInt128, y::UInt128) = box(UInt128,urem_int(unbox(UInt128,x),unbox(UInt128,y)))
 
     mod(x::Int128, y::Int128) = box(Int128,smod_int(unbox(Int128,x),unbox(Int128,y)))
 end
@@ -480,13 +480,13 @@ for T in (Int16,Int32)
         checked_mul(x::$T, y::$T) = box($T,checked_smul(unbox($T,x),unbox($T,y)))
     end
 end
-for T in (Uint8,Uint16,Uint32,Uint64)#,Uint128) ## FIXME: #4905
+for T in (UInt8,UInt16,UInt32,UInt64)#,UInt128) ## FIXME: #4905
     @eval begin
         checked_add(x::$T, y::$T) = box($T,checked_uadd(unbox($T,x),unbox($T,y)))
         checked_sub(x::$T, y::$T) = box($T,checked_usub(unbox($T,x),unbox($T,y)))
     end
 end
-for T in (Uint16,Uint32)
+for T in (UInt16,UInt32)
     @eval begin
         checked_mul(x::$T, y::$T) = box($T,checked_umul(unbox($T,x),unbox($T,y)))
     end
@@ -494,7 +494,7 @@ end
 
 # checked mul is broken for 8-bit types (LLVM bug?) ## FIXME: #4905
 
-for T in (Int8,Uint8)
+for T in (Int8,UInt8)
     @eval function checked_mul(x::$T, y::$T)
         xy = widemul(x,y)
         (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
@@ -503,7 +503,7 @@ for T in (Int8,Uint8)
 end
 
 if WORD_SIZE == 32
-for T in (Int64,Uint64)
+for T in (Int64,UInt64)
     @eval function checked_mul(x::$T, y::$T)
         xy = int128(x)*int128(y)
         (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
@@ -512,7 +512,7 @@ for T in (Int64,Uint64)
 end
 else
     checked_mul(x::Int64, y::Int64)   = box(Int64,checked_smul(unbox(Int64,x),unbox(Int64,y)))
-    checked_mul(x::Uint64, y::Uint64) = box(Uint64,checked_umul(unbox(Uint64,x),unbox(Uint64,y)))
+    checked_mul(x::UInt64, y::UInt64) = box(UInt64,checked_umul(unbox(UInt64,x),unbox(UInt64,y)))
 end
 
 # checked ops are broken for 128-bit types (LLVM bug) ## FIXME: #4905
@@ -521,6 +521,6 @@ checked_add(x::Int128, y::Int128) = x + y
 checked_sub(x::Int128, y::Int128) = x - y
 checked_mul(x::Int128, y::Int128) = x * y
 
-checked_add(x::Uint128, y::Uint128) = x + y
-checked_sub(x::Uint128, y::Uint128) = x - y
-checked_mul(x::Uint128, y::Uint128) = x * y
+checked_add(x::UInt128, y::UInt128) = x + y
+checked_sub(x::UInt128, y::UInt128) = x - y
+checked_mul(x::UInt128, y::UInt128) = x * y

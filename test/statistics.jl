@@ -6,7 +6,7 @@
 @test middle([1:8]) === 4.5
 
 # ensure type-correctness
-for T in [Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128,Float16,Float32,Float64]
+for T in [Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128,Float16,Float32,Float64]
     @test middle(one(T)) === middle(one(T), one(T))
 end
 

@@ -382,13 +382,13 @@ Types
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
-       (0,:device,Uint64) 
-       (8,:inode,Uint64)  
-       (16,:mode,Uint64)  
+       (0,:device,UInt64) 
+       (8,:inode,UInt64)  
+       (16,:mode,UInt64)  
        (24,:nlink,Int64)  
-       (32,:uid,Uint64)   
-       (40,:gid,Uint64)   
-       (48,:rdev,Uint64)  
+       (32,:uid,UInt64)   
+       (40,:gid,UInt64)   
+       (48,:rdev,UInt64)  
        (56,:size,Int64)   
        (64,:blksize,Int64)
        (72,:blocks,Int64) 
@@ -405,7 +405,7 @@ Types
 
 .. function:: isbits(T)
 
-   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``Uint8``, ``Float64``, and ``Complex{Float64}``.
+   True if ``T`` is a "plain data" type, meaning it is immutable and contains no references to other values. Typical examples are numeric types such as ``UInt8``, ``Float64``, and ``Complex{Float64}``.
 
    .. doctest::
 
@@ -1268,7 +1268,7 @@ Strings
 
    Create a string from any value using the ``showall`` function.
 
-.. function:: bytestring(::Ptr{Uint8}, [length])
+.. function:: bytestring(::Ptr{UInt8}, [length])
 
    Create a string from the address of a C (0-terminated) string encoded in ASCII or UTF-8. A copy is made; the ptr can be safely freed. If ``length`` is specified, the string does not have to be 0-terminated.
 
@@ -1276,7 +1276,7 @@ Strings
 
    Convert a string to a contiguous byte array representation appropriate for passing it to C functions. The string will be encoded as either ASCII or UTF-8.
 
-.. function:: ascii(::Array{Uint8,1})
+.. function:: ascii(::Array{UInt8,1})
 
    Create an ASCII string from a byte array.
 
@@ -1284,7 +1284,7 @@ Strings
 
    Convert a string to a contiguous ASCII string (all characters must be valid ASCII characters).
 
-.. function:: utf8(::Array{Uint8,1})
+.. function:: utf8(::Array{UInt8,1})
 
    Create a UTF-8 string from a byte array.
 
@@ -1567,7 +1567,7 @@ Strings
 
 .. function:: utf16(s)
 
-   Create a UTF-16 string from a byte array, array of ``Uint16``, or
+   Create a UTF-16 string from a byte array, array of ``UInt16``, or
    any other string type.  (Data must be valid UTF-16.  Conversions of
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
@@ -1577,23 +1577,23 @@ Strings
    string (so that it is mostly invisible in Julia); this allows the
    string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   `utf16(s)` conversion function.  If you have a ``Uint16`` array
+   `utf16(s)` conversion function.  If you have a ``UInt16`` array
    ``A`` that is already NUL-terminated valid UTF-16 data, then you
    can instead use `UTF16String(A)`` to construct the string without
    making a copy of the data and treating the NUL as a terminator
    rather than as part of the string.
 
-.. function:: utf16(::Union(Ptr{Uint16},Ptr{Int16}) [, length])
+.. function:: utf16(::Union(Ptr{UInt16},Ptr{Int16}) [, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
 
 .. function:: is_valid_utf16(s) -> Bool
 
-   Returns true if the argument (``UTF16String`` or ``Uint16`` array) is valid UTF-16.
+   Returns true if the argument (``UTF16String`` or ``UInt16`` array) is valid UTF-16.
 
 .. function:: utf32(s)
 
-   Create a UTF-32 string from a byte array, array of ``Uint32``, or
+   Create a UTF-32 string from a byte array, array of ``UInt32``, or
    any other string type.  (Conversions of byte arrays check for a
    byte-order marker in the first four bytes, and do not include it in
    the resulting string.)
@@ -1603,13 +1603,13 @@ Strings
    string (so that it is mostly invisible in Julia); this allows the
    string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   `utf32(s)` conversion function.  If you have a ``Uint32`` array
+   `utf32(s)` conversion function.  If you have a ``UInt32`` array
    ``A`` that is already NUL-terminated UTF-32 data, then you
    can instead use `UTF32String(A)`` to construct the string without
    making a copy of the data and treating the NUL as a terminator
    rather than as part of the string.
 
-.. function:: utf32(::Union(Ptr{Char},Ptr{Uint32},Ptr{Int32}) [, length])
+.. function:: utf32(::Union(Ptr{Char},Ptr{UInt32},Ptr{Int32}) [, length])
 
    Create a string from the address of a NUL-terminated UTF-32 string. A copy is made; the pointer can be safely freed. If ``length`` is specified, the string does not have to be NUL-terminated.
 
@@ -1718,7 +1718,7 @@ I/O
 
    Read binary data from a stream, filling in the argument ``array``.
 
-.. function:: readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+.. function:: readbytes!(stream, b::Vector{UInt8}, nb=length(b))
 
    Read at most ``nb`` bytes from the stream into ``b``, returning the
    number of bytes read (increasing the size of ``b`` as needed).
@@ -1726,7 +1726,7 @@ I/O
 .. function:: readbytes(stream, nb=typemax(Int))
 
    Read at most ``nb`` bytes from the stream, returning a
-   ``Vector{Uint8}`` of the bytes read.
+   ``Vector{UInt8}`` of the bytes read.
 
 .. function:: position(s)
 
@@ -1899,7 +1899,7 @@ I/O
 
    An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. 
 
-.. function:: PipeBuffer(data::Vector{Uint8},[maxsize])
+.. function:: PipeBuffer(data::Vector{UInt8},[maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally specifying a size beyond which the underlying Array may not be grown.
 
@@ -2038,7 +2038,7 @@ Network I/O
    Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
    stream may be provided, in which case it will be used instead of creating a new stream.
 
-.. function:: listenany(port_hint) -> (Uint16,TcpServer)
+.. function:: listenany(port_hint) -> (UInt16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
    was created on and the server itself. 
@@ -2268,7 +2268,7 @@ Julia environments (such as the IPython-based IJulia notebook).
    is not supported by either the display(s) or by ``x``.   With these
    variants, one can also supply the "raw" data in the requested MIME
    type by passing ``x::AbstractString`` (for MIME types with text-based storage,
-   such as text/html or application/postscript) or ``x::Vector{Uint8}``
+   such as text/html or application/postscript) or ``x::Vector{UInt8}``
    (for binary MIME types).
 
 .. function:: redisplay(x)
@@ -2325,17 +2325,17 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 .. function:: reprmime(mime, x)
 
-   Returns a ``AbstractString`` or ``Vector{Uint8}`` containing the
+   Returns a ``AbstractString`` or ``Vector{UInt8}`` containing the
    representation of ``x`` in the requested ``mime`` type, as written
    by ``writemime`` (throwing a ``MethodError`` if no appropriate
    ``writemime`` is available).  A ``AbstractString`` is returned for MIME
    types with textual representations (such as ``"text/html"`` or
    ``"application/postscript"``), whereas binary data is returned as
-   ``Vector{Uint8}``.  (The function ``istext(mime)`` returns whether
+   ``Vector{UInt8}``.  (The function ``istext(mime)`` returns whether
    or not Julia treats a given ``mime`` type as text.)
 
    As a special case, if ``x`` is a ``AbstractString`` (for textual MIME types)
-   or a ``Vector{Uint8}`` (for binary MIME types), the ``reprmime`` function
+   or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function
    assumes that ``x`` is already in the requested ``mime`` format and
    simply returns ``x``.
 
@@ -2474,7 +2474,7 @@ Memory-mapped I/O
 Standard Numeric Types
 ----------------------
 
-``Bool`` ``Int8`` ``Uint8`` ``Int16`` ``Uint16`` ``Int32`` ``Uint32`` ``Int64`` ``Uint64`` ``Int128`` ``Uint128`` ``Float16`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
+``Bool`` ``Int8`` ``UInt8`` ``Int16`` ``UInt16`` ``Int32`` ``UInt32`` ``Int64`` ``UInt64`` ``Int128`` ``UInt128`` ``Float16`` ``Float32`` ``Float64`` ``Complex64`` ``Complex128``
 
 .. _mathematical-operators:
 
@@ -3526,7 +3526,7 @@ Data Formats
 
 .. function:: base(base, n, [pad])
 
-   Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``Uint8`` array of character values to use as digit symbols.
+   Convert an integer to a string in the given base, optionally specifying a number of digits to pad to. The base can be specified as either an integer, or as a ``UInt8`` array of character values to use as digit symbols.
 
 .. function:: digits(n, [base], [pad])
 
@@ -3602,23 +3602,23 @@ Data Formats
 
 .. function:: uint8(x)
 
-   Convert a number or array to ``Uint8`` data type
+   Convert a number or array to ``UInt8`` data type
 
 .. function:: uint16(x)
 
-   Convert a number or array to ``Uint16`` data type
+   Convert a number or array to ``UInt16`` data type
 
 .. function:: uint32(x)
 
-   Convert a number or array to ``Uint32`` data type
+   Convert a number or array to ``UInt32`` data type
 
 .. function:: uint64(x)
 
-   Convert a number or array to ``Uint64`` data type
+   Convert a number or array to ``UInt64`` data type
 
 .. function:: uint128(x)
 
-   Convert a number or array to ``Uint128`` data type
+   Convert a number or array to ``UInt128`` data type
 
 .. function:: float16(x)
 
@@ -3692,9 +3692,9 @@ Data Formats
 
 .. function:: hex2bytes(s::ASCIIString)
 
-   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+   Convert an arbitrarily long hexadecimal string to its binary representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
 
-.. function:: bytes2hex(bin_arr::Array{Uint8, 1})
+.. function:: bytes2hex(bin_arr::Array{UInt8, 1})
 
    Convert an array of bytes to its hexadecimal representation. All characters are in lower-case. Returns an ASCIIString.
 
@@ -3993,11 +3993,11 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 Most functions related to random generation accept an optional ``AbstractRNG`` as the first argument, ``rng`` , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications ``dims...`` (which can be given as a tuple) to generate arrays of random values.
 
-A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16, Float32, Float64, Bool, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128`` (or complex numbers or arrays of those types). Random floating point numbers are generated uniformly in [0,1).
+A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16, Float32, Float64, Bool, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128`` (or complex numbers or arrays of those types). Random floating point numbers are generated uniformly in [0,1).
 
 .. function:: srand([rng], [seed])
 
-   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``Uint32`` integers or a filename, in which case the seed is read from a file.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``UInt32`` integers or a filename, in which case the seed is read from a file.
 
 .. function:: MersenneTwister([seed])
 
@@ -5806,7 +5806,7 @@ C Interface
 
 .. data:: Cuchar
 
-   Equivalent to the native ``unsigned char`` c-type (Uint8)
+   Equivalent to the native ``unsigned char`` c-type (UInt8)
 
 .. data:: Cshort
 
@@ -5814,7 +5814,7 @@ C Interface
 
 .. data:: Cushort
 
-   Equivalent to the native ``unsigned short`` c-type (Uint16)
+   Equivalent to the native ``unsigned short`` c-type (UInt16)
 
 .. data:: Cint
 
@@ -5822,7 +5822,7 @@ C Interface
 
 .. data:: Cuint
 
-   Equivalent to the native ``unsigned int`` c-type (Uint32)
+   Equivalent to the native ``unsigned int`` c-type (UInt32)
 
 .. data:: Clong
 
@@ -5838,7 +5838,7 @@ C Interface
 
 .. data:: Culonglong
 
-   Equivalent to the native ``unsigned long long`` c-type (Uint64)
+   Equivalent to the native ``unsigned long long`` c-type (UInt64)
 
 .. data:: Cintmax_t
 
@@ -5846,11 +5846,11 @@ C Interface
 
 .. data:: Cuintmax_t
 
-   Equivalent to the native ``uintmax_t`` c-type (Uint64)
+   Equivalent to the native ``uintmax_t`` c-type (UInt64)
 
 .. data:: Csize_t
 
-   Equivalent to the native ``size_t`` c-type (Uint)
+   Equivalent to the native ``size_t`` c-type (UInt)
 
 .. data:: Cssize_t
 

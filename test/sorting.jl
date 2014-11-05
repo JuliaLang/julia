@@ -123,7 +123,7 @@ b = sort(a, alg=QuickSort, by=x->1/x)
 
 ## more advanced sorting tests ##
 
-randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
+randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
@@ -186,14 +186,14 @@ for n in [0:10, 100, 101, 1000, 1001]
         # test float sorting with NaNs
         s = sort(v, alg=alg, rev=rev)
         @test issorted(s, rev=rev)
-        @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
+        @test reinterpret(UInt64,v[isnan(v)]) == reinterpret(UInt64,s[isnan(s)])
 
         # test float permutation with NaNs
         p = sortperm(v, alg=alg, rev=rev)
         @test isperm(p)
         vp = v[p]
         @test isequal(vp,s)
-        @test reinterpret(Uint64,vp) == reinterpret(Uint64,s)
+        @test reinterpret(UInt64,vp) == reinterpret(UInt64,s)
     end
 end
 
