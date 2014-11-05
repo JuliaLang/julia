@@ -411,10 +411,10 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call the generic ``string``
-function to convert objects into ``String`` form. Most non-``String``
-objects are converted to strings as they are shown in interactive
-sessions:
+Both concatenation and string interpolation call the generic
+``string`` function to convert objects into string form. Most
+non-``String`` objects are converted to strings closely
+corresponding to how they are entered as literal expressions:
 
 .. doctest::
 
