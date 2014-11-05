@@ -528,3 +528,6 @@ for func in (:svd, :svdfact, :svdfact!, :svdvals)
         ($func)(A::Triangular) = ($func)(full(A))
     end
 end
+
+factorize(A::Triangular) = A
+
