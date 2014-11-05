@@ -180,7 +180,7 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
     cd julia
 ```
      *Tips:*
-     - If you get an `error: cannot fork() for fetch-pack: Resource temporarily unavailable` from git, add `alias git="PATH=/usr/bin git"` to `~/.bashrc` and restart Cygwin.
+     - If you get an `error: cannot fork() for fetch-pack: Resource temporarily unavailable` from git, add `alias git="env PATH=/usr/bin git"` to `~/.bashrc` and restart Cygwin.
 
   2. Set the `XC_HOST` variable in `Make.user` to indicate MinGW-w64 cross compilation
 
