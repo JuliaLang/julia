@@ -38,6 +38,8 @@ ctranspose(A::Hermitian) = A
 
 factorize(A::HermOrSym) = bkfact(A.S, symbol(A.uplo), issym(A))
 \(A::HermOrSym, B::StridedVecOrMat) = \(bkfact(A.S, symbol(A.uplo), issym(A)), B)
+inv{T<:BlasFloat}(A::Hermitian{T}) = Hermitian{T}(inv(bkfact(A.S, symbol(A.uplo))), A.uplo)
+inv{T<:BlasFloat}(A::Symmetric{T}) = Symmetric{T}(inv(bkfact(A.S, symbol(A.uplo), true)), A.uplo)
 
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
