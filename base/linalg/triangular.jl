@@ -2,15 +2,27 @@
 immutable Triangular{T,S<:AbstractMatrix,UpLo,IsUnit} <: AbstractMatrix{T}
     data::S
 end
-function Triangular{T}(A::AbstractMatrix{T}, uplo::Symbol, isunit::Bool=false)
-    chksquare(A)
-    Triangular{T,typeof(A),uplo,isunit}(A)
+for uplo in (:(:U), :(:L))
+    for isunit in (true, false)
+        @eval begin
+            function Triangular{T}(A::AbstractMatrix{T}, ::Type{Token{$uplo}}, ::Type{Token{$isunit}})
+                chksquare(A)
+                Triangular{T,typeof(A),$uplo,$isunit}(A)
+            end
+        end
+    end
+    @eval begin
+        function Triangular{T}(A::AbstractMatrix{T}, ::Type{Token{$uplo}})
+            chksquare(A)
+            Triangular{T,typeof(A),$uplo,false}(A)
+        end
+    end
 end
 
 size(A::Triangular, args...) = size(A.data, args...)
 
 convert{T,S,UpLo,IsUnit}(::Type{Triangular{T}}, A::Triangular{T,S,UpLo,IsUnit}) = A
-convert{Tnew,Told,S,UpLo,IsUnit}(::Type{Triangular{Tnew}}, A::Triangular{Told,S,UpLo,IsUnit}) = (Anew = convert(AbstractMatrix{Tnew}, A.data); Triangular(Anew, UpLo, IsUnit))
+convert{Tnew,Told,S,UpLo,IsUnit}(::Type{Triangular{Tnew}}, A::Triangular{Told,S,UpLo,IsUnit}) = (Anew = convert(AbstractMatrix{Tnew}, A.data); Triangular(Anew, Token{UpLo}, Token{IsUnit}))
 convert{Tnew,Told,S,UpLo,IsUnit}(::Type{AbstractMatrix{Tnew}}, A::Triangular{Told,S,UpLo,IsUnit}) = convert(Triangular{Tnew}, A)
 function convert{Tret,T,S,UpLo,IsUnit}(::Type{Matrix{Tret}}, A::Triangular{T,S,UpLo,IsUnit})
     B = Array(Tret, size(A, 1), size(A, 1))
@@ -81,21 +93,21 @@ function -{T, S, UpLo}(A::Triangular{T, S, UpLo, true})
 end
 
 # Binary operations
-+{TA, TB, SA, SB, uplo}(A::Triangular{TA, SA, uplo, false}, B::Triangular{TB, SB, uplo, false}) = Triangular(A.data + B.data, uplo)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, false}, B::Triangular{TB, SB, :U, true}) = Triangular(A.data + triu(B.data, 1) + I, :U)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, false}, B::Triangular{TB, SB, :L, true}) = Triangular(A.data + tril(B.data, -1) + I, :L)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, false}) = Triangular(triu(A.data, 1) + B.data + I, :U)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, false}) = Triangular(tril(A.data, -1) + B.data + I, :L)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, true}) = Triangular(triu(A.data, 1) + triu(B.data, 1) + 2I, :U)
-+{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, true}) = Triangular(tril(A.data, -1) + tril(B.data, -1) + 2I, :L)
++{TA, TB, SA, SB, uplo}(A::Triangular{TA, SA, uplo, false}, B::Triangular{TB, SB, uplo, false}) = Triangular(A.data + B.data, Token{uplo})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, false}, B::Triangular{TB, SB, :U, true}) = Triangular(A.data + triu(B.data, 1) + I, Token{:U})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, false}, B::Triangular{TB, SB, :L, true}) = Triangular(A.data + tril(B.data, -1) + I, Token{:L})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, false}) = Triangular(triu(A.data, 1) + B.data + I, Token{:U})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, false}) = Triangular(tril(A.data, -1) + B.data + I, Token{:L})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, true}) = Triangular(triu(A.data, 1) + triu(B.data, 1) + 2I, Token{:U})
++{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, true}) = Triangular(tril(A.data, -1) + tril(B.data, -1) + 2I, Token{:L})
 +{TA, SA, TB, SB, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{TA, SA, uplo1, IsUnit1}, B::Triangular{TB, SB, uplo2, IsUnit2}) = full(A) + full(B)
--{TA, SA, TB, SB, uplo}(A::Triangular{TA, SA, uplo, false}, B::Triangular{TB, SB, uplo, false}) = Triangular(A.data - B.data, uplo)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, false}, B::Triangular{TB, SB, :U, true}) = Triangular(A.data - triu(B.data, 1) - I, :U)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, false}, B::Triangular{TB, SB, :L, true}) = Triangular(A.data - tril(B.data, -1) - I, :L)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, false}) = Triangular(triu(A.data, 1) - B.data + I, :U)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, false}) = Triangular(tril(A.data, -1) - B.data + I, :L)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, true}) = Triangular(triu(A.data, 1) - triu(B.data, 1), :U)
--{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, true}) = Triangular(tril(A.data, -1) - tril(B.data, -1), :L)
+-{TA, SA, TB, SB, uplo}(A::Triangular{TA, SA, uplo, false}, B::Triangular{TB, SB, uplo, false}) = Triangular(A.data - B.data, Token{uplo})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, false}, B::Triangular{TB, SB, :U, true}) = Triangular(A.data - triu(B.data, 1) - I, Token{:U})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, false}, B::Triangular{TB, SB, :L, true}) = Triangular(A.data - tril(B.data, -1) - I, Token{:L})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, false}) = Triangular(triu(A.data, 1) - B.data + I, Token{:U})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, false}) = Triangular(tril(A.data, -1) - B.data + I, Token{:L})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :U, true}, B::Triangular{TB, SB, :U, true}) = Triangular(triu(A.data, 1) - triu(B.data, 1), Token{:U})
+-{TA, SA, TB, SB}(A::Triangular{TA, SA, :L, true}, B::Triangular{TB, SB, :L, true}) = Triangular(tril(A.data, -1) - tril(B.data, -1), Token{:L})
 -{TA, SA, TB, SB, uplo1, uplo2, IsUnit1, IsUnit2}(A::Triangular{TA, SA, uplo1, IsUnit1}, B::Triangular{TB, SB, uplo2, IsUnit2}) = full(A) - full(B)
 
 ######################
@@ -166,39 +178,39 @@ eigvecs{T<:BlasFloat,S<:StridedMatrix}(A::Triangular{T,S,:L,true}) = (for i = 1:
 # Generic routines #
 ####################
 
-(*){T,S,UpLo}(A::Triangular{T,S,UpLo,false}, x::Number) = Triangular(A.data*x, UpLo)
+(*){T,S,UpLo}(A::Triangular{T,S,UpLo,false}, x::Number) = Triangular(A.data*x, Token{UpLo})
 function (*){T,S,UpLo}(A::Triangular{T,S,UpLo,true}, x::Number)
     B = A.data*x
     for i = 1:size(A, 1)
         B[i,i] = x
     end
-    Triangular(B, UpLo)
+    Triangular(B, Token{UpLo})
 end
-(*){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,false}) = Triangular(x*A.data, UpLo)
+(*){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,false}) = Triangular(x*A.data, Token{UpLo})
 function (*){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,true})
     B = x*A.data
     for i = 1:size(A, 1)
         B[i,i] = x
     end
-    Triangular(B, UpLo)
+    Triangular(B, Token{UpLo})
 end
-(/){T,S,UpLo}(A::Triangular{T,S,UpLo,false}, x::Number) = Triangular(A.data/x, UpLo)
+(/){T,S,UpLo}(A::Triangular{T,S,UpLo,false}, x::Number) = Triangular(A.data/x, Token{UpLo})
 function (/){T,S,UpLo}(A::Triangular{T,S,UpLo,true}, x::Number)
     B = A.data*x
     invx = inv(x)
     for i = 1:size(A, 1)
         B[i,i] = x
     end
-    Triangular(B, UpLo)
+    Triangular(B, Token{UpLo})
 end
-(\){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,false}) = Triangular(x\A.data, UpLo)
+(\){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,false}) = Triangular(x\A.data, Token{UpLo})
 function (\){T,S,UpLo}(x::Number, A::Triangular{T,S,UpLo,true})
     B = x\A.data
     invx = inv(x)
     for i = 1:size(A, 1)
         B[i,i] = invx
     end
-    Triangular(B, UpLo)
+    Triangular(B, Token{UpLo})
 end
 
 ## Generic triangular multiplication
@@ -504,7 +516,7 @@ function sqrtm{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit})
                 r==0 || (R[i,j] = r / (R[i,i] + R[j,j]))
             end
         end
-        return Triangular(R, :U, IsUnit)
+        return Triangular(R, Token{:U}, Token{IsUnit})
     else # UpLo == :L #Not the usual case
         return sqrtm(A.').'
     end

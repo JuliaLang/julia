@@ -33,6 +33,7 @@ export
     Triangular,
     Diagonal,
     UniformScaling,
+    Token,
 
 # Functions
     axpy!,
@@ -189,10 +190,14 @@ macro chkuplo()
 Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
 
+immutable Token{T}
+end
+
+char_uplo(::Type{Token{:U}}) = 'U'
+char_uplo(::Type{Token{:L}}) = 'L'
 const CHARU = 'U'
 const CHARL = 'L'
 char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
-
 
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")

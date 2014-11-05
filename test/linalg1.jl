@@ -1,6 +1,6 @@
 debug = false
 
-import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
+using Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted, Token
 
 n = 10
 srand(1234321)
@@ -64,14 +64,14 @@ debug && println("(Automatic) upper Cholesky factor")
     @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
 debug && println("lower Cholesky factor")
-    lapd = cholfact(apd, :L)
+    lapd = cholfact(apd, Token{:L})
     @test_approx_eq full(lapd) apd
     l = lapd[:L]
     @test_approx_eq l*l' apd
 
 debug && println("pivoted Choleksy decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
-        cpapd = cholfact(apd, pivot=true)
+        cpapd = cholfact(apd, Token{:pivot})
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
