@@ -7,7 +7,7 @@ const SHORTEST = 1
 const FIXED = 2
 const PRECISION = 3
 
-const DIGITS = Array(Uint8,309+17)
+const DIGITS = Array(UInt8,309+17)
 
 include("grisu/float.jl")
 include("grisu/fastshortest.jl")

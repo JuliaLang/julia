@@ -21,7 +21,7 @@ end
 =={s}(::MathConst{s}, ::MathConst{s}) = true
 ==(::MathConst, ::MathConst) = false
 
-hash(x::MathConst, h::Uint) = hash(object_id(x), h)
+hash(x::MathConst, h::UInt) = hash(object_id(x), h)
 
 -(x::MathConst) = -float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]

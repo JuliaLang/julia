@@ -107,7 +107,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, Uint8, Vector{Int}, Float64, Range1{Int}))
+rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, Range1{Int}))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # sub
@@ -390,7 +390,7 @@ D = cat(3, B, B)
 immutable HashCollision
     x::Float64
 end
-Base.hash(::HashCollision, h::Uint) = h
+Base.hash(::HashCollision, h::UInt) = h
 @test map(x->x.x, unique(map(HashCollision, B), 1)) == C
 
 ## large matrices transpose ##
@@ -777,7 +777,7 @@ fill!(S, 2)
 S = sub(A, 1:2, 3)
 fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
-rt = Base.return_types(fill!, (Array{Int32, 3}, Uint8))
+rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # splice!

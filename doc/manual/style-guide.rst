@@ -244,7 +244,7 @@ Don't expose unsafe operations at the interface level
 If you have a type that uses a native pointer::
 
     type NativeType
-        p::Ptr{Uint8}
+        p::Ptr{UInt8}
         ...
     end
 

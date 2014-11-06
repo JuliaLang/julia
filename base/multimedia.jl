@@ -45,12 +45,12 @@ mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 # MIME types are assumed to be binary data except for a set of types known
 # to be text data (possibly Unicode).  istext(m) returns whether
 # m::MIME is text data, and reprmime(m, x) returns x written to either
-# a string (for text m::MIME) or a Vector{Uint8} (for binary m::MIME),
+# a string (for text m::MIME) or a Vector{UInt8} (for binary m::MIME),
 # assuming the corresponding write_mime method exists.  stringmime
 # is like reprmime except that it always returns a string, which in the
 # case of binary data is Base64-encoded.
 #
-# Also, if reprmime is passed a AbstractString for a text type or Vector{Uint8} for
+# Also, if reprmime is passed a AbstractString for a text type or Vector{UInt8} for
 # a binary type, the argument is assumed to already be in the corresponding
 # format and is returned unmodified.  This is useful so that raw data can be
 # passed to display(m::MIME, x).
@@ -59,9 +59,9 @@ macro textmime(mime)
     quote
         mimeT = MIME{symbol($mime)}
         # avoid method ambiguities with the general definitions below:
-        # (Q: should we treat Vector{Uint8} as a bytestring?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{Uint8}) = sprint(writemime, m, x)
-        Base.Multimedia.stringmime(m::mimeT, x::Vector{Uint8}) = reprmime(m, x)
+        # (Q: should we treat Vector{UInt8} as a bytestring?)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
+        Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
         Base.Multimedia.istext(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
@@ -78,9 +78,9 @@ function reprmime(m::MIME, x)
     writemime(s, m, x)
     takebuf_array(s)
 end
-reprmime(m::MIME, x::Vector{Uint8}) = x
+reprmime(m::MIME, x::Vector{UInt8}) = x
 stringmime(m::MIME, x) = base64(writemime, m, x)
-stringmime(m::MIME, x::Vector{Uint8}) = base64(write, x)
+stringmime(m::MIME, x::Vector{UInt8}) = base64(write, x)
 
 # it is convenient to accept strings instead of ::MIME
 istext(m::AbstractString) = istext(MIME(m))

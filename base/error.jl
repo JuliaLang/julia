@@ -34,7 +34,7 @@ catch_backtrace() = ccall(:jl_get_backtrace, Array{Ptr{Void},1}, ())
 
 errno() = ccall(:jl_errno, Cint, ())
 errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
-strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{Uint8}, (Int32,), e))
+strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
 strerror() = strerror(errno())
 systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 

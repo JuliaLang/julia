@@ -368,12 +368,12 @@ end
 
 @unix_only begin
 function shm_unlink(shm_seg_name)
-    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+    rc = ccall(:shm_unlink, Cint, (Ptr{UInt8},), shm_seg_name)
     systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
     rc
 end
 end
 
-@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
+@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{UInt8}, Int, Int), shm_seg_name, oflags, permissions)
 
 

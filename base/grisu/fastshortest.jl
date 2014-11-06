@@ -1,7 +1,7 @@
 const kMinExp = -60
 const kMaxExp = -32
 
-function roundweed(buffer,len,rest,tk,unit,kappa,too_high::Uint64,unsafe_interval::Uint64)
+function roundweed(buffer,len,rest,tk,unit,kappa,too_high::UInt64,unsafe_interval::UInt64)
     small = too_high - unit
     big = too_high + unit
     while rest < small &&
@@ -32,7 +32,7 @@ function bigpowten(n,n_bits)
 end
 
 function digitgen(low,w,high,buffer)
-    unit::Uint64 = 1
+    unit::UInt64 = 1
     one = Float(unit << -w.e, w.e)
     too_high = Float(high.s+unit,high.e)
     unsafe_interval = too_high - Float(low.s-unit,low.e)
@@ -72,7 +72,7 @@ function digitgen(low,w,high,buffer)
     end    
 end
 
-function fastshortest(v,buffer=Array(Uint8,17))
+function fastshortest(v,buffer=Array(UInt8,17))
     f = normalize(float64(v))
     bound_minus, bound_plus = normalizedbound(v)
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)

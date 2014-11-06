@@ -3,12 +3,12 @@ char(x::FloatingPoint) = char(iround(x))
 
 integer(x::Char) = int(x)
 
-convert(::Type{Char}, x::Float16) = char(convert(Uint32, x))
-convert(::Type{Char}, x::Float32) = char(convert(Uint32, x))
-convert(::Type{Char}, x::Float64) = char(convert(Uint32, x))
+convert(::Type{Char}, x::Float16) = char(convert(UInt32, x))
+convert(::Type{Char}, x::Float32) = char(convert(UInt32, x))
+convert(::Type{Char}, x::Float64) = char(convert(UInt32, x))
 
-typemax(::Type{Char}) = char(typemax(Uint32))
-typemin(::Type{Char}) = char(typemin(Uint32))
+typemax(::Type{Char}) = char(typemax(UInt32))
+typemin(::Type{Char}) = char(typemin(UInt32))
 
 ## character operations & comparisons ##
 size(c::Char) = ()

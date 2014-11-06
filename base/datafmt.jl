@@ -21,7 +21,7 @@ function countlines(io::IO, eol::Char)
     if !isascii(eol)
         error("only ASCII line terminators are supported")
     end
-    a = Array(Uint8, 8192)
+    a = Array(UInt8, 8192)
     nl = 0
     preceded_by_eol = true
     while !eof(io)
@@ -51,7 +51,7 @@ function readdlm_auto(input, dlm::Char, T::Type, eol::Char, auto::Bool; opts...)
     optsd = val_opts(opts)
     use_mmap = get(optsd, :use_mmap, @windows ? false : true)
     isa(input, AbstractString) && (fsz = filesize(input); input = use_mmap && (fsz > 0) && fsz < typemax(Int) ? as_mmap(input,fsz) : readall(input))
-    sinp = isa(input, Vector{Uint8}) ? bytestring(input) :
+    sinp = isa(input, Vector{UInt8}) ? bytestring(input) :
            isa(input, IO) ? readall(input) :
            input
     readdlm_string(sinp, dlm, T, eol, auto, optsd)
@@ -59,7 +59,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(Uint8, (int(fsz),), io)
+        mmap_array(UInt8, (int(fsz),), io)
     end
 end
 
@@ -326,7 +326,7 @@ dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_ad
 end 
 
 function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler)
-    all_ascii = (D <: Uint8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
+    all_ascii = (D <: UInt8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
     (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
     ncols = nrows = col = 0
     is_default_dlm = (dlm == uint32(invalid_dlm) % D)

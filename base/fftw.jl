@@ -71,16 +71,16 @@ typealias fftwTypeSingle Union(Type{Float32},Type{Complex64})
 # FFTW's api/import-wisdom-from-file.c file].
 
 function export_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "w")
+    f = ccall(:fopen, Ptr{Void}, (Ptr{UInt8},Ptr{UInt8}), fname, "w")
     systemerror("could not open wisdom file $fname for writing", f == C_NULL)
     ccall((:fftw_export_wisdom_to_file,libfftw), Void, (Ptr{Void},), f)
-    ccall(:fputs, Int32, (Ptr{Uint8},Ptr{Void}), " "^256, f)
+    ccall(:fputs, Int32, (Ptr{UInt8},Ptr{Void}), " "^256, f)
     ccall((:fftwf_export_wisdom_to_file,libfftwf), Void, (Ptr{Void},), f)
     ccall(:fclose, Void, (Ptr{Void},), f)
 end
 
 function import_wisdom(fname::AbstractString)
-    f = ccall(:fopen, Ptr{Void}, (Ptr{Uint8},Ptr{Uint8}), fname, "r")
+    f = ccall(:fopen, Ptr{Void}, (Ptr{UInt8},Ptr{UInt8}), fname, "r")
     systemerror("could not open wisdom file $fname for reading", f == C_NULL)
     if ccall((:fftw_import_wisdom_from_file,libfftw),Int32,(Ptr{Void},),f)==0||
        ccall((:fftwf_import_wisdom_from_file,libfftwf),Int32,(Ptr{Void},),f)==0
@@ -305,7 +305,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         plan = ccall(($(string(fftw,"_plan_guru64_dft")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
-                      Ptr{$Tc}, Ptr{$Tc}, Int32, Uint32),
+                      Ptr{$Tc}, Ptr{$Tc}, Int32, UInt32),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, direction, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
@@ -323,7 +323,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         plan = ccall(($(string(fftw,"_plan_guru64_dft_r2c")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
-                      Ptr{$Tr}, Ptr{$Tc}, Uint32),
+                      Ptr{$Tr}, Ptr{$Tc}, UInt32),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
@@ -341,7 +341,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         plan = ccall(($(string(fftw,"_plan_guru64_dft_c2r")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
-                      Ptr{$Tc}, Ptr{$Tr}, Uint32),
+                      Ptr{$Tc}, Ptr{$Tr}, UInt32),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
@@ -360,7 +360,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         plan = ccall(($(string(fftw,"_plan_guru64_r2r")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
-                      Ptr{$Tr}, Ptr{$Tr}, Ptr{Int32}, Uint32),
+                      Ptr{$Tr}, Ptr{$Tr}, Ptr{Int32}, UInt32),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, kinds, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
@@ -383,7 +383,7 @@ for (Tr,Tc,fftw,lib) in ((:Float64,:Complex128,"fftw",libfftw),
         plan = ccall(($(string(fftw,"_plan_guru64_r2r")),$lib),
                      Ptr{Void},
                      (Int32, Ptr{Int}, Int32, Ptr{Int},
-                      Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, Uint32),
+                      Ptr{$Tc}, Ptr{$Tc}, Ptr{Int32}, UInt32),
                      size(dims,2), dims, size(howmany,2), howmany,
                      X, Y, kinds, flags)
         set_timelimit($Tr, NO_TIMELIMIT)
