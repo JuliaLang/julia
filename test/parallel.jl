@@ -153,7 +153,7 @@ end
 et=toq()
 
 # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-try 
+try
     @test (et >= 1.0) && (et <= 1.5)
     @test !isready(rr3)
 catch
@@ -177,8 +177,8 @@ if haskey(ENV, "PTEST_FULL")
     # needs at least 4 processors (which are being created above for the @parallel tests)
     s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
     ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
-    @test ups == bytestring(Uint8[uint8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(Uint8[uint8(c) for c in pmap(x->uppercase(char(x)), s.data)])
+    @test ups == bytestring(UInt8[uint8(c) for c in pmap(x->uppercase(x), s)])
+    @test ups == bytestring(UInt8[uint8(c) for c in pmap(x->uppercase(char(x)), s.data)])
 
     # retry, on error exit
     res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=true);
@@ -193,7 +193,7 @@ if haskey(ENV, "PTEST_FULL")
     # retry, on error continue
     res = pmap(x->iseven(myid()) ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=false);
     @test length(res) == length(ups)
-    @test ups == bytestring(Uint8[uint8(c) for c in res])
+    @test ups == bytestring(UInt8[uint8(c) for c in res])
 
     # no retry, on error continue
     res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=false);

@@ -111,9 +111,9 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
     p = uint32((sizeof(path)>>2) + 1)
     while true
         buflength = p
-        buf = zeros(Uint16,buflength)
-        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall, 
-            Uint32, (Ptr{Uint16}, Uint32, Ptr{Uint16}, Ptr{Void}), 
+        buf = zeros(UInt16,buflength)
+        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
             path, buflength, buf, C_NULL)
         systemerror(:realpath, p == 0)
         if (p < buflength)
@@ -124,7 +124,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 end
 
 @unix_only function realpath(path::AbstractString)
-    p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
+    p = ccall(:realpath, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
     c_free(p)

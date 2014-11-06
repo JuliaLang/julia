@@ -41,10 +41,10 @@
 		  (if capt
 		      (and (equal? expr (cdr capt)) state)
 		      (cons (cons p expr) state))))))
-	
+
 	((procedure? p)
 	 (and (p expr) state))
-	
+
 	((pair? p)
 	 (cond ((eq? (car p) '-/)
 		(and (equal? (cadr p) expr)             state))
@@ -62,7 +62,7 @@
 		     (equal? (car p) (car expr))
 		     (match-seq (cdr p) (cdr expr) state (length
 							  (cdr expr)))))))
-	
+
 	(else
 	 (and (equal? p expr) state))))
 
@@ -98,7 +98,7 @@
    (else
     (or (match-star- p prest expr state var 0 0   L sofar)
 	(match-star- p prest expr state var 1 max L sofar)))))
-(define (match-star p prest expr state var min max L) 
+(define (match-star p prest expr state var min max L)
   (match-star- p prest expr state var min max L '()))
 
 ; match sequences of expressions
@@ -232,12 +232,12 @@
     (cond ((and (symbol? p)
 		(not (memq p '(_ ...))))
 	   (list p))
-	  
+
 	  ((pair? p)
 	   (if (eq? (car p) '-/)
 	       '()
 	       (delete-duplicates (apply append (map patargs- (to-proper (cdr p)))))))
-	  
+
 	  (else '())))
   (define (patargs p)
     (cons '__ (patargs- p)))

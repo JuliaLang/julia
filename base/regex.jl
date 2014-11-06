@@ -6,7 +6,7 @@ const DEFAULT_OPTS = PCRE.JAVASCRIPT_COMPAT | PCRE.UTF8 | PCRE.NO_UTF8_CHECK
 
 type Regex
     pattern::ByteString
-    options::Uint32
+    options::UInt32
     regex::Ptr{Void}
     extra::Ptr{Void}
     ovec::Vector{Int32}
@@ -113,7 +113,7 @@ function ismatch(r::Regex, s::SubString, offset::Integer=0)
                   r.ovec)
 end
 
-function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32(0))
+function match(re::Regex, str::UTF8String, idx::Integer, add_opts::UInt32=uint32(0))
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
     compile(re)
     if !PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec)
@@ -127,7 +127,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32
     RegexMatch(mat, cap, re.ovec[1]+1, off)
 end
 
-match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Uint32=uint32(0)) =
+match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::UInt32=uint32(0)) =
     match(re, utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
@@ -146,7 +146,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     ovec = Array(Int32, 3)
     while true
         result = ccall((:pcre_exec, :libpcre), Int32,
-                       (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+                       (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32,
                        Int32, Int32, Ptr{Int32}, Int32),
                        regex, extra, str, n,
                        offset, prevempty ? opts_nonempty : opts, ovec, 3)
@@ -256,12 +256,12 @@ filter(r::Regex,  d::Dict) = filter!(r,copy(d))
 # Don't serialize the pointers
 function serialize(s, r::Regex)
     serialize_type(s, typeof(r))
-    serialize(s, r.pattern) 
-    serialize(s, r.options) 
+    serialize(s, r.pattern)
+    serialize(s, r.options)
 end
 
 function deserialize(s, t::Type{Regex})
     pattern = deserialize(s)
     options = deserialize(s)
-    Regex(pattern, options)        
+    Regex(pattern, options)
 end

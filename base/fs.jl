@@ -70,7 +70,7 @@ _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer,mode::Integer)
     req = c_malloc(_sizeof_uv_fs)
-    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{Uint8},Int32,Int32,Ptr{Void}),
+    ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{UInt8},Int32,Int32,Ptr{Void}),
                 eventloop(), req, f.path, flags,mode, C_NULL)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
@@ -94,7 +94,7 @@ function close(f::File)
 end
 
 function unlink(p::AbstractString)
-    err = ccall(:jl_fs_unlink, Int32, (Ptr{Uint8},), p)
+    err = ccall(:jl_fs_unlink, Int32, (Ptr{UInt8},), p)
     uv_error("unlink",err)
 end
 function unlink(f::File)
@@ -110,7 +110,7 @@ end
 
 # For move command
 function rename(src::AbstractString, dst::AbstractString)
-    err = ccall(:jl_fs_rename, Int32, (Ptr{Uint8}, Ptr{Uint8}), src, dst)
+    err = ccall(:jl_fs_rename, Int32, (Ptr{UInt8}, Ptr{UInt8}), src, dst)
 
     # on error, default to cp && rm
     if err < 0
@@ -153,31 +153,31 @@ end
 @non_windowsxp_only function symlink(p::AbstractString, np::AbstractString)
     flags = 0
     @windows_only if isdir(p); flags |= UV_FS_SYMLINK_JUNCTION; p = abspath(p); end
-    err = ccall(:jl_fs_symlink, Int32, (Ptr{Uint8}, Ptr{Uint8}, Cint), p, np, flags)
+    err = ccall(:jl_fs_symlink, Int32, (Ptr{UInt8}, Ptr{UInt8}, Cint), p, np, flags)
     @windows_only if err < 0
         Base.warn_once("Note: on Windows, creating file symlinks requires Administrator privileges.")
     end
     uv_error("symlink",err)
 end
-@windowsxp_only symlink(p::AbstractString, np::AbstractString) = 
+@windowsxp_only symlink(p::AbstractString, np::AbstractString) =
     error("WindowsXP does not support soft symlinks")
 
 function chmod(p::AbstractString, mode::Integer)
-    err = ccall(:jl_fs_chmod, Int32, (Ptr{Uint8}, Cint), p, mode)
+    err = ccall(:jl_fs_chmod, Int32, (Ptr{UInt8}, Cint), p, mode)
     uv_error("chmod",err)
 end
 
-function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
+function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     if !f.open
         error("file is not open")
     end
-    err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
+    err = ccall(:jl_fs_write, Int32, (Int32, Ptr{UInt8}, Csize_t, Csize_t),
                 f.handle, buf, len, offset)
     uv_error("write",err)
     len
 end
 
-function write(f::File, c::Uint8)
+function write(f::File, c::UInt8)
     if !f.open
         error("file is not open")
     end
@@ -212,7 +212,7 @@ function futime(f::File, atime::Float64, mtime::Float64)
     f
 end
 
-function read(f::File, ::Type{Uint8})
+function read(f::File, ::Type{UInt8})
     if !f.open
         error("file is not open")
     end
@@ -238,7 +238,7 @@ end
 
 nb_available(f::File) = filesize(f) - position(f)
 
-function readbytes!(f::File, b::Array{Uint8}, nb=length(b))
+function readbytes!(f::File, b::Array{UInt8}, nb=length(b))
     nr = min(nb, nb_available(f))
     if length(b) < nr
         resize!(b, nr)
@@ -246,11 +246,11 @@ function readbytes!(f::File, b::Array{Uint8}, nb=length(b))
     read!(f, b, nr)
     return nr
 end
-readbytes(io::File) = read!(io, Array(Uint8, nb_available(io)))
-readbytes(io::File, nb) = read!(io, Array(Uint8, min(nb, nb_available(io))))
+readbytes(io::File) = read!(io, Array(UInt8, nb_available(io)))
+readbytes(io::File, nb) = read!(io, Array(UInt8, min(nb, nb_available(io))))
 
 function readbytes(f::File)
-    a = Array(Uint8, nb_available(f))
+    a = Array(UInt8, nb_available(f))
     read!(f,a)
     a
 end

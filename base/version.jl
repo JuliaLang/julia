@@ -96,7 +96,7 @@ end
 
 convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 
-macro v_str(v); VersionNumber(v); end 
+macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
@@ -150,8 +150,8 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-function hash(v::VersionNumber, h::Uint)
-    h += 0x8ff4ffdb75f9fede % Uint
+function hash(v::VersionNumber, h::UInt)
+    h += 0x8ff4ffdb75f9fede % UInt
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)

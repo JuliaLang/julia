@@ -70,7 +70,7 @@ DLLEXPORT int jl_profile_start_timer(void)
 {
     running = 1;
     if (hBtThread == 0) {
-        hBtThread = CreateThread( 
+        hBtThread = CreateThread(
             NULL,                   // default security attributes
             0,                      // use default stack size
             profile_bt,            // thread function name
@@ -187,7 +187,7 @@ void *mach_profile_listener(void *arg)
             HANDLE_MACH_ERROR("thread_get_state",ret);
 
             // Initialize the unwind context with the suspend thread's state
-            unw_context_t uc; 
+            unw_context_t uc;
             memset(&uc,0,sizeof(unw_context_t));
             memcpy(&uc,&state,sizeof(x86_thread_state64_t));
 
@@ -225,7 +225,7 @@ void *mach_profile_listener(void *arg)
             bt_data_prof[bt_size_cur] = 0;
             bt_size_cur++;
 
-            // We're done! Resume the thread. 
+            // We're done! Resume the thread.
             ret = thread_resume(main_thread);
             HANDLE_MACH_ERROR("thread_resume",ret)
 

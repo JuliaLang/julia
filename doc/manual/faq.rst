@@ -419,7 +419,7 @@ be inferred about an object of type ``MyAmbiguousType``:
 ``b`` and ``c`` have the same type, yet their underlying
 representation of data in memory is very different. Even if you stored
 just numeric values in field ``a``, the fact that the memory
-representation of a ``Uint8`` differs from a ``Float64`` also means
+representation of a ``UInt8`` differs from a ``Float64`` also means
 that the CPU needs to handle them using two different kinds of
 instructions.  Since the required information is not available in the
 type, such decisions have to be made at run-time. This slows

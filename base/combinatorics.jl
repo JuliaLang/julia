@@ -4,7 +4,7 @@ const _fact_table64 =
           121645100408832000,2432902008176640000]
 
 const _fact_table128 =
-    Uint128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
+    UInt128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
             0x00000000000000000000000000000006, 0x00000000000000000000000000000018,
             0x00000000000000000000000000000078, 0x000000000000000000000000000002d0,
             0x000000000000000000000000000013b0, 0x00000000000000000000000000009d80,
@@ -31,17 +31,17 @@ function factorial_lookup(n::Integer, table, lim)
 end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
-factorial(n::Uint128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,Uint64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
+factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,Uint8,Int16,Uint16)) = factorial(int32(n))
-factorial(n::Union(Int32,Uint32)) = factorial_lookup(n, _fact_table64, 12)
+factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(int32(n))
+factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
+factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(int64(n))
 end
 
-function gamma(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64))
+function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
