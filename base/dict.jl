@@ -76,7 +76,7 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
         rows -= 2 # Subtract the summary and final ⋮ continuation lines
 
         # determine max key width to align the output, caching the strings
-        ks = Array(String, min(rows, length(t)))
+        ks = Array(AbstractString, min(rows, length(t)))
         keylen = 0
         for (i, k) in enumerate(keys(t))
             i > rows && break
@@ -181,7 +181,15 @@ function merge!(d::Associative, others::Associative...)
     end
     return d
 end
-merge(d::Associative, others::Associative...) = merge!(copy(d), others...)
+function merge(d::Associative, others::Associative...)
+    K, V = eltype(d)
+    for other in others
+        (Ko, Vo) = eltype(other)
+        K = promote_type(K, Ko)
+        V = promote_type(V, Vo)
+    end
+    merge!(Dict{K,V}(), d, others...)
+end
 
 function filter!(f::Function, d::Associative)
     for (k,v) in d
@@ -257,7 +265,7 @@ type ObjectIdDict <: Associative{Any,Any}
     function ObjectIdDict(o::ObjectIdDict)
         N = length(o.ht)
         ht = cell(N)
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
               ht, o.ht, N*sizeof(Ptr))
         new(ht)
     end
@@ -307,7 +315,7 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 # dict
 
 type Dict{K,V} <: Associative{K,V}
-    slots::Array{Uint8,1}
+    slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
@@ -316,7 +324,7 @@ type Dict{K,V} <: Associative{K,V}
 
     function Dict()
         n = 16
-        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -421,7 +429,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
         return h
     end
 
-    slots = zeros(Uint8,newsz)
+    slots = zeros(UInt8,newsz)
     keys = Array(K, newsz)
     vals = Array(V, newsz)
     count0 = h.count
@@ -668,8 +676,8 @@ end
 
 function _delete!(h::Dict, index)
     h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h

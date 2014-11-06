@@ -29,7 +29,7 @@ size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 issym(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-inv{T<:BlasReal}(B::BunchKaufman{T})=copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
+inv{T<:BlasReal}(B::BunchKaufman{T}) = copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
 
 function inv{T<:BlasComplex}(B::BunchKaufman{T})
     if issym(B)

@@ -1,11 +1,11 @@
 immutable StatStruct
-    device  :: Uint
-    inode   :: Uint
-    mode    :: Uint
+    device  :: UInt
+    inode   :: UInt
+    mode    :: UInt
     nlink   :: Int
-    uid     :: Uint
-    gid     :: Uint
-    rdev    :: Uint
+    uid     :: UInt
+    gid     :: UInt
+    rdev    :: UInt
     size    :: Int64
     blksize :: Int64
     blocks  :: Int64
@@ -13,30 +13,30 @@ immutable StatStruct
     ctime   :: Float64
 end
 
-StatStruct(buf::Union(Vector{Uint8},Ptr{Uint8})) = StatStruct(
-     uint(ccall(:jl_stat_dev,     Uint32,  (Ptr{Uint8},), buf)),
-     uint(ccall(:jl_stat_ino,     Uint32,  (Ptr{Uint8},), buf)),
-     uint(ccall(:jl_stat_mode,    Uint32,  (Ptr{Uint8},), buf)),
-      int(ccall(:jl_stat_nlink,   Uint32,  (Ptr{Uint8},), buf)),
-     uint(ccall(:jl_stat_uid,     Uint32,  (Ptr{Uint8},), buf)),
-     uint(ccall(:jl_stat_gid,     Uint32,  (Ptr{Uint8},), buf)),
-     uint(ccall(:jl_stat_rdev,    Uint32,  (Ptr{Uint8},), buf)),
-    int64(ccall(:jl_stat_size,    Uint64,  (Ptr{Uint8},), buf)),
-    int64(ccall(:jl_stat_blksize, Uint64,  (Ptr{Uint8},), buf)),
-    int64(ccall(:jl_stat_blocks,  Uint64,  (Ptr{Uint8},), buf)),
-          ccall(:jl_stat_mtime,   Float64, (Ptr{Uint8},), buf),
-          ccall(:jl_stat_ctime,   Float64, (Ptr{Uint8},), buf),
+StatStruct(buf::Union(Vector{UInt8},Ptr{UInt8})) = StatStruct(
+     uint(ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf)),
+     uint(ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf)),
+     uint(ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf)),
+      int(ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf)),
+     uint(ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf)),
+     uint(ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf)),
+     uint(ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf)),
+    int64(ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf)),
+    int64(ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf)),
+    int64(ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf)),
+          ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
+          ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
 show(io::IO, st::StatStruct) = print("StatStruct(mode=$(oct(st.mode,6)), size=$(st.size))")
 
 # stat & lstat functions
 
-const stat_buf = Array(Uint8, ccall(:jl_sizeof_stat, Int32, ()))
+const stat_buf = Array(UInt8, ccall(:jl_sizeof_stat, Int32, ()))
 macro stat_call(sym, arg1type, arg)
     quote
         fill!(stat_buf,0)
-        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{Uint8}), $(esc(arg)), stat_buf)
+        r = ccall($(Expr(:quote,sym)), Int32, ($arg1type, Ptr{UInt8}), $(esc(arg)), stat_buf)
         r==0 || r==UV_ENOENT || r==UV_ENOTDIR || throw(UVError("stat",r))
         st = StatStruct(stat_buf)
         if ispath(st) != (r==0)
@@ -48,8 +48,8 @@ end
 
 stat(fd::RawFD)     = @stat_call jl_fstat Int32 fd.fd
 stat(fd::Integer)   = @stat_call jl_fstat Int32 fd
-stat(path::String)  = @stat_call jl_stat  Ptr{Uint8} path
-lstat(path::String) = @stat_call jl_lstat Ptr{Uint8} path
+stat(path::AbstractString)  = @stat_call jl_stat  Ptr{UInt8} path
+lstat(path::AbstractString) = @stat_call jl_lstat Ptr{UInt8} path
 
 stat(path...) = stat(joinpath(path...))
 lstat(path...) = lstat(joinpath(path...))
@@ -114,4 +114,4 @@ filesize(path...) = stat(path...).size
    ctime(path...) = stat(path...).ctime
 
 samefile(a::StatStruct, b::StatStruct) = a.device==b.device && a.inode==b.inode
-samefile(a::String, b::String) = samefile(stat(a),stat(b))
+samefile(a::AbstractString, b::AbstractString) = samefile(stat(a),stat(b))

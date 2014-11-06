@@ -36,6 +36,8 @@ ishermitian(D::Diagonal) = true
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
 
+factorize(D::Diagonal) = D
+
 tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 

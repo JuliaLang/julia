@@ -6,17 +6,17 @@ using ..Types
 
 abstract Line
 immutable Comment <: Line
-    content::String
+    content::AbstractString
 end
 immutable Requirement <: Line
-    content::String
-    package::String
+    content::AbstractString
+    package::AbstractString
     versions::VersionSet
-    system::Vector{String}
+    system::Vector{AbstractString}
 
-    function Requirement(content::String)
+    function Requirement(content::AbstractString)
         fields = split(replace(content, r"#.*$", ""))
-        system = String[]
+        system = AbstractString[]
         while !isempty(fields) && fields[1][1] == '@'
             push!(system,shift!(fields)[2:end])
         end
@@ -28,7 +28,7 @@ immutable Requirement <: Line
         issorted(versions) || error("invalid requires entry for $package: $content")
         new(content, package, VersionSet(versions), system)
     end
-    function Requirement(package::String, versions::VersionSet, system::Vector{String}=String[])
+    function Requirement(package::AbstractString, versions::VersionSet, system::Vector{AbstractString}=AbstractString[])
         content = ""
         for os in system
             content *= "@$os "
@@ -58,7 +58,7 @@ function read(readable::Union(IO,Base.AbstractCmd))
     end
     return lines
 end
-read(file::String) = isfile(file) ? open(read,file) : Line[]
+read(file::AbstractString) = isfile(file) ? open(read,file) : Line[]
 
 function write(io::IO, lines::Vector{Line})
     for line in lines
@@ -70,7 +70,7 @@ function write(io::IO, reqs::Requires)
         println(io, Requirement(pkg, reqs[pkg]).content)
     end
 end
-write(file::String, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
+write(file::AbstractString, r::Union(Vector{Line},Requires)) = open(io->write(io,r), file, "w")
 
 function parse(lines::Vector{Line})
     reqs = Requires()
@@ -96,8 +96,8 @@ function parse(lines::Vector{Line})
 end
 parse(x) = parse(read(x))
 
-function dependents(packagename::String)
-    pkgs = String[]
+function dependents(packagename::AbstractString)
+    pkgs = AbstractString[]
     cd(Pkg.dir()) do
         for (pkg,latest) in Pkg.Read.latest()
             if haskey(latest.requires, packagename)
@@ -110,7 +110,7 @@ end
 
 # add & rm – edit the content a requires file
 
-function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet())
+function add(lines::Vector{Line}, pkg::AbstractString, versions::VersionSet=VersionSet())
     v = VersionSet[]
     filtered = filter(lines) do line
         if !isa(line,Comment) && line.package == pkg && isempty(line.system)
@@ -124,7 +124,7 @@ function add(lines::Vector{Line}, pkg::String, versions::VersionSet=VersionSet()
     push!(filtered, Requirement(pkg, versions))
 end
 
-rm(lines::Vector{Line}, pkg::String) = filter(lines) do line
+rm(lines::Vector{Line}, pkg::AbstractString) = filter(lines) do line
     isa(line,Comment) || line.package != pkg
 end
 

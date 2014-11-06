@@ -120,7 +120,7 @@ public:
             objectmap[Addr] = tmp;
         }
         #else
-        error_code itererr; 
+        error_code itererr;
         object::symbol_iterator sym_iter = obj.begin_symbols();
         object::symbol_iterator sym_end = obj.end_symbols();
         for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
@@ -364,8 +364,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
             if (errorobj) {
-                obj = errorobj.get().getBinary().release();
-                errorobj.get().getBuffer().release();
+                auto binary = errorobj.get().takeBinary();
+                obj = binary.first.release();
+                binary.second.release();
 #elif LLVM35
             if (errorobj) {
                 obj = errorobj.get();
@@ -395,7 +396,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 }
                 else {
                     const llvm::object::pe32_header *pe32;
-                    coffobj->getPE32Header(pe32); 
+                    coffobj->getPE32Header(pe32);
                     if (pe32 == NULL) {
                         obj = NULL;
                         context = NULL;
@@ -579,7 +580,7 @@ public:
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
 
-#else 
+#else
 void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
     return NULL;

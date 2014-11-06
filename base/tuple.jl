@@ -86,11 +86,11 @@ function ==(t1::Tuple, t2::Tuple)
     return true
 end
 
-const tuplehash_seed = Uint === Uint64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::(), h::Uint) = h + tuplehash_seed
-hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
-hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
+const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
+hash(::(), h::UInt) = h + tuplehash_seed
+hash(x::(Any,), h::UInt)    = hash(x[1], hash((), h))
+hash(x::(Any,Any), h::UInt) = hash(x[1], hash(x[2], hash((), h)))
+hash(x::Tuple, h::UInt)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)

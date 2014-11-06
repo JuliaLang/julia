@@ -13,61 +13,61 @@ end
 const cd = Dir.cd
 
 dir(path...) = Dir.path(path...)
-init(meta::String=DEFAULT_META, branch::String=META_BRANCH) = Dir.init(meta,branch)
+init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH) = Dir.init(meta,branch)
 
 edit() = cd(Entry.edit)
-rm(pkg::String) = cd(Entry.rm,pkg)
-add(pkg::String, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
+rm(pkg::AbstractString) = cd(Entry.rm,pkg)
+add(pkg::AbstractString, vers::VersionNumber...) = cd(Entry.add,pkg,vers...)
 
 available() = cd(Entry.available)
-available(pkg::String) = cd(Entry.available,pkg)
+available(pkg::AbstractString) = cd(Entry.available,pkg)
 
 installed() = cd(Entry.installed)
-installed(pkg::String) = cd(Entry.installed,pkg)
+installed(pkg::AbstractString) = cd(Entry.installed,pkg)
 
 status(io::IO=STDOUT) = cd(Entry.status,io)
-status(pkg::String = "", io::IO=STDOUT) = cd(Entry.status,io,pkg)
+status(pkg::AbstractString = "", io::IO=STDOUT) = cd(Entry.status,io,pkg)
 
-clone(url_or_pkg::String) = cd(Entry.clone,url_or_pkg)
-clone(url::String, pkg::String) = cd(Entry.clone,url,pkg)
+clone(url_or_pkg::AbstractString) = cd(Entry.clone,url_or_pkg)
+clone(url::AbstractString, pkg::AbstractString) = cd(Entry.clone,url,pkg)
 
-checkout(pkg::String, branch::String="master"; merge::Bool=true, pull::Bool=true) =
+checkout(pkg::AbstractString, branch::AbstractString="master"; merge::Bool=true, pull::Bool=true) =
     cd(Entry.checkout,pkg,branch,merge,pull)
 
-free(pkg::String) = cd(Entry.free,pkg)
+free(pkg::AbstractString) = cd(Entry.free,pkg)
 
-pin(pkg::String) = cd(Entry.pin,pkg)
-pin(pkg::String, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
+pin(pkg::AbstractString) = cd(Entry.pin,pkg)
+pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 
 update() = cd(Entry.update,META_BRANCH)
 resolve() = cd(Entry.resolve)
 
-register(pkg::String) = cd(Entry.register,pkg)
-register(pkg::String, url::String) = cd(Entry.register,pkg,url)
+register(pkg::AbstractString) = cd(Entry.register,pkg)
+register(pkg::AbstractString, url::AbstractString) = cd(Entry.register,pkg,url)
 
-tag(pkg::String, sym::Symbol=:patch) = cd(Entry.tag,pkg,sym)
-tag(pkg::String, sym::Symbol, commit::String) = cd(Entry.tag,pkg,sym,false,commit)
+tag(pkg::AbstractString, sym::Symbol=:patch) = cd(Entry.tag,pkg,sym)
+tag(pkg::AbstractString, sym::Symbol, commit::AbstractString) = cd(Entry.tag,pkg,sym,false,commit)
 
-tag(pkg::String, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
-tag(pkg::String, ver::VersionNumber, commit::String; force::Bool=false) =
+tag(pkg::AbstractString, ver::VersionNumber; force::Bool=false) = cd(Entry.tag,pkg,ver,force)
+tag(pkg::AbstractString, ver::VersionNumber, commit::AbstractString; force::Bool=false) =
     cd(Entry.tag,pkg,ver,force,commit)
 
-submit(pkg::String) = cd(Entry.submit,pkg)
-submit(pkg::String, commit::String) = cd(Entry.submit,pkg,commit)
+submit(pkg::AbstractString) = cd(Entry.submit,pkg)
+submit(pkg::AbstractString, commit::AbstractString) = cd(Entry.submit,pkg,commit)
 
 publish() = cd(Entry.publish,META_BRANCH)
 
 build() = cd(Entry.build)
-build(pkgs::String...) = cd(Entry.build,[pkgs...])
+build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
 
-generate(pkg::String, license::String; force::Bool=false, authors::Union(String,Array) = [], config::Dict=Dict()) =
+generate(pkg::AbstractString, license::AbstractString; force::Bool=false, authors::Union(AbstractString,Array) = [], config::Dict=Dict()) =
     cd(Generate.package,pkg,license,force=force,authors=authors,config=config)
 
 
 test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
-test(pkgs::String...; coverage::Bool=false) = cd(Entry.test,String[pkgs...]; coverage=coverage)
+test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
-dependents(packagename::String) = Reqs.dependents(packagename)
+dependents(packagename::AbstractString) = Reqs.dependents(packagename)
 
 @deprecate release free
 @deprecate fixup build

@@ -40,7 +40,7 @@ function choose_char(cs)
 end
 function random_fasta(symb, pr, n)
     cs = cumsum(pr)
-    line = Array(Uint8, line_width)
+    line = Array(UInt8, line_width)
     k = n
     while k > 0
         m = min(k, line_width)

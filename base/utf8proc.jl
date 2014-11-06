@@ -61,22 +61,22 @@ const UTF8PROC_LUMP      = (1<<12)
 const UTF8PROC_STRIPMARK = (1<<13)
 
 let
-    const p = Array(Ptr{Uint8}, 1)
+    const p = Array(Ptr{UInt8}, 1)
     global utf8proc_map
-    function utf8proc_map(s::String, flags::Integer)
+    function utf8proc_map(s::AbstractString, flags::Integer)
         result = ccall(:utf8proc_map, Cssize_t,
-                       (Ptr{Uint8}, Cssize_t, Ptr{Ptr{Uint8}}, Cint),
+                       (Ptr{UInt8}, Cssize_t, Ptr{Ptr{UInt8}}, Cint),
                        s, 0, p, flags | UTF8PROC_NULLTERM)
-        result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{Uint8},
+        result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{UInt8},
                                              (Cssize_t,), result)))
-        a = ccall(:jl_ptr_to_array_1d, Vector{Uint8}, 
-                  (Any, Ptr{Uint8}, Csize_t, Cint),
-                  Vector{Uint8}, p[1], result, true)
+        a = ccall(:jl_ptr_to_array_1d, Vector{UInt8},
+                  (Any, Ptr{UInt8}, Csize_t, Cint),
+                  Vector{UInt8}, p[1], result, true)
         ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
     end
 end
 
-function normalize_string(s::String; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
+function normalize_string(s::AbstractString; stable::Bool=false, compat::Bool=false, compose::Bool=true, decompose::Bool=false, stripignore::Bool=false, rejectna::Bool=false, newline2ls::Bool=false, newline2ps::Bool=false, newline2lf::Bool=false, stripcc::Bool=false, casefold::Bool=false, lump::Bool=false, stripmark::Bool=false)
     flags = 0
     stable && (flags = flags | UTF8PROC_STABLE)
     compat && (flags = flags | UTF8PROC_COMPAT)
@@ -100,7 +100,7 @@ function normalize_string(s::String; stable::Bool=false, compat::Bool=false, com
     utf8proc_map(s, flags)
 end
 
-function normalize_string(s::String, nf::Symbol)
+function normalize_string(s::AbstractString, nf::Symbol)
     utf8proc_map(s, nf == :NFC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE) :
                     nf == :NFD ? (UTF8PROC_STABLE | UTF8PROC_DECOMPOSE) :
                     nf == :NFKC ? (UTF8PROC_STABLE | UTF8PROC_COMPOSE
@@ -109,11 +109,11 @@ function normalize_string(s::String, nf::Symbol)
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
-    
+
 # returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
     uint32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
-    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    cat = unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (Int32,), c))
     # note: utf8proc returns 0, not UTF8PROC_CATEGORY_CN, for unassigned c
     cat == 0 ? UTF8PROC_CATEGORY_CN : cat
 end
@@ -124,7 +124,7 @@ is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
 #  used by character class predicates for improved performance
 function _catcode(c::Char)
     c > char(0x10FFFF) && return uint16(0x0000) # see utf8proc_get_property docs
-    return unsafe_load(ccall(:utf8proc_get_property, Ptr{Uint16}, (Int32,), c))
+    return unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (Int32,), c))
 end
 
 # TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
@@ -167,7 +167,7 @@ for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
             "lower", "print", "punct", "space", "upper")
     f = symbol(string("is",name))
     @eval begin
-        function $f(s::String)
+        function $f(s::AbstractString)
             for c in s
                 if !$f(c)
                     return false

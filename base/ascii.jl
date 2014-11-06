@@ -1,7 +1,7 @@
 ## from base/boot.jl:
 #
 # immutable ASCIIString <: DirectIndexString
-#     data::Array{Uint8,1}
+#     data::Array{UInt8,1}
 # end
 #
 
@@ -28,7 +28,7 @@ function string(c::ASCIIString...)
     for s in c
         n += length(s.data)
     end
-    v = Array(Uint8,n)
+    v = Array(UInt8,n)
     o = 1
     for s in c
         ls = length(s.data)
@@ -98,8 +98,8 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{Uint8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
-function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIString)
+convert(::Type{ASCIIString}, a::Array{UInt8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
+function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
     idx = 1
     iscopy = false
@@ -117,4 +117,4 @@ function convert(::Type{ASCIIString}, a::Array{Uint8,1}, invalids_as::ASCIIStrin
     end
     convert(ASCIIString, a)
 end
-convert(::Type{ASCIIString}, s::String) = ascii(bytestring(s))
+convert(::Type{ASCIIString}, s::AbstractString) = ascii(bytestring(s))
