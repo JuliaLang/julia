@@ -18,6 +18,7 @@
 //===----------------------------------------------------------------------===//
 
 #include <cstdio>
+#include <cstring>
 #include <iostream>
 #include <map>
 #include <set>
@@ -60,12 +61,18 @@ class SymbolTable {
     typedef std::map<uint64_t, MCSymbol*> TableType;
     TableType Table;
     std::string TempName;
+    MCContext& Ctx;
+    const FuncMCView &MemObj;
     int Pass;
 public:
+    SymbolTable(MCContext &Ctx, const FuncMCView &MemObj):
+        Ctx(Ctx), MemObj(MemObj) {}
+    const FuncMCView &getMemoryObject() const { return MemObj; }
     void setPass(int Pass) { this->Pass = Pass; }
     int getPass() const { return Pass; }
     void insertAddress(uint64_t addr);
-    void createSymbols(MCContext &Ctx);
+    void createSymbol(const char *name, uint64_t addr);
+    void createSymbols();
     const char *lookupSymbol(uint64_t addr);
 };
 // Insert an address
@@ -73,8 +80,14 @@ void SymbolTable::insertAddress(uint64_t addr)
 {
     Table[addr] = NULL;
 }
+// Create a symbol
+void SymbolTable::createSymbol(const char *name, uint64_t addr)
+{
+    MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
+    // symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+}
 // Create symbols for all addresses
-void SymbolTable::createSymbols(MCContext &Ctx)
+void SymbolTable::createSymbols()
 {
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
@@ -93,17 +106,18 @@ const char *SymbolTable::lookupSymbol(uint64_t addr)
     TempName = symb->getName().str();
     return TempName.c_str();
 }
-const char *SymbolLookup(void *DisInfo_,
+
+const char *SymbolLookup(void *DisInfo,
                          uint64_t ReferenceValue,
                          uint64_t *ReferenceType,
                          uint64_t ReferencePC,
                          const char **ReferenceName)
 {
-    SymbolTable *DisInfo = (SymbolTable*)DisInfo_;
-    if (DisInfo->getPass() != 0) {
+    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    if (SymTab->getPass() != 0) {
         if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
             uint64_t addr = ReferenceValue;
-            const char *symbolName = DisInfo->lookupSymbol(addr);
+            const char *symbolName = SymTab->lookupSymbol(addr);
             *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
             *ReferenceName = NULL;
             return symbolName;
@@ -112,6 +126,45 @@ const char *SymbolLookup(void *DisInfo_,
     *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
     *ReferenceName = NULL;
     return NULL;
+}
+
+extern "C" void jl_getFunctionInfo
+  (const char **name, size_t *line, const char **filename, uintptr_t pointer,
+   int *fromC, int skipC);
+int OpInfoLookup(void *DisInfo, uint64_t PC,
+                 uint64_t Offset, uint64_t Size,
+                 int TagType, void *TagBuf)
+{
+    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    std::cout << "OpInfoLookup PC="<<PC<<" Offset="<<Offset<<" Size="<<Size<<" TagType="<<TagType<<"\n";
+    if (TagType != 1)
+        return 0;               // Unknown data format
+    LLVMOpInfoSymbol1 *info = (LLVMOpInfoSymbol1*)TagBuf;
+    size_t pointer = 0;
+    if (Size > sizeof pointer)
+        return 0;               // Input address size too large
+    for (int i=0; i<Size; ++i) {
+        uint8_t byte;
+        SymTab->getMemoryObject().readByte(PC+Offset+i, &byte);
+        std::memcpy((char*)&pointer+i, &byte, 1);
+    }
+    std::cout << "  pointer=" << pointer << "\n";
+    int skipC = 0;
+    const char *name;
+    size_t line;
+    const char *filename;
+    int fromC;
+    jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    if (!name)
+        return 0;               // Did not find symbolic information
+    std::cout << "getFunctionInfo name="<<name<<" line="<<line<<" filename="<<filename<<" fromC="<<fromC<<"\n";
+    // Create a symbol
+    SymTab->createSymbol(name, pointer);
+    // Describe the symbol
+    info->Present = 1;
+    info->Name = name;
+    info->Value = 0;            // offset
+    return 1;                   // Success
 }
 }
 
@@ -195,7 +248,6 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
         return;
     }
-    SymbolTable DisInfo;
 
     unsigned OutputAsmVariant = 1;
     bool ShowEncoding = false;
@@ -238,6 +290,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
+    SymbolTable DisInfo(Ctx, memoryObject);
 
     // Take two passes: In the first pass we record all branch labels,
     // in the second we actually perform the output
@@ -253,7 +306,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
             // this routine to handle this case correctly as well.)
             // Could add OpInfoLookup here
             DisAsm->setupForSymbolicDisassembly
-                (NULL, SymbolLookup, &DisInfo, &Ctx);
+                (OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
         }
 
         uint64_t Size = 0;
@@ -341,7 +394,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         }
 
         if (pass == 0)
-            DisInfo.createSymbols(Ctx);
+            DisInfo.createSymbols();
     }
 #else // MCJIT version
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
