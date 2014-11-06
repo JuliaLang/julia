@@ -30,7 +30,7 @@ for relty in (Float32, Float64), elty in (relty, )#XXX Complex{relty}) doesn't w
 
     A = SymTridiagonal(a, b)
     fA = (elty <: Complex ? complex128:float64)(full(A))
-    
+
     debug && println("Idempotent tests")
     for func in (conj, transpose, ctranspose)
         @test func(func(A)) == A

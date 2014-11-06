@@ -22,7 +22,7 @@ lastdayofweek(dt::DateTime) = DateTime(lastdayofweek(Date(dt)))
 
 firstdayofmonth(dt::Date) = Date(UTD(value(dt)-day(dt)+1))
 firstdayofmonth(dt::DateTime) = DateTime(firstdayofmonth(Date(dt)))
-function lastdayofmonth(dt::Date) 
+function lastdayofmonth(dt::Date)
     y,m,d = yearmonthday(dt)
     return Date(UTD(value(dt)+daysinmonth(y,m)-d))
 end

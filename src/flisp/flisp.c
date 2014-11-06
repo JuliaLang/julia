@@ -1804,20 +1804,20 @@ static value_t apply_cl(uint32_t nargs)
             assert(i < vector_size(v));
             PUSH(vector_elt(v, i));
             NEXT_OP;
-            
+
         OP(OP_LOADC0)
             PUSH(vector_elt(Stack[bp+nargs], 0));
             NEXT_OP;
         OP(OP_LOADC1)
             PUSH(vector_elt(Stack[bp+nargs], 1));
             NEXT_OP;
-            
+
         OP(OP_LOADCL)
             i = GET_INT32(ip); ip+=4;
             v = Stack[bp+nargs];
             PUSH(vector_elt(v, i));
             NEXT_OP;
-            
+
         OP(OP_CLOSURE)
             n = *ip++;
             assert(n > 0);
