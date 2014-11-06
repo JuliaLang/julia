@@ -654,7 +654,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
         on_done = respond(repl, julia_prompt) do line
-            parse("Base.@help $line", raise=false)
+            parse("Base.@help \"$line\"", raise=false)
         end)
 
     # Set up shell mode
