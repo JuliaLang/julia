@@ -52,24 +52,26 @@ end
 
 
 # Should be equivalent to:
-#   call(::Type{Float32},x::Float64,r::RoundingMode) = with_rounding(Float64,r) do
-#       convert(Float32,x)
+#   with_rounding(Float64,r) do
+#       convert(T,x)
 #   end
 # but explicit checks are currently quicker (~20x).
-# Assumes current rounding mode is RoundToNearest
+# Assumes conversion is performed by rounding to nearest value.
 
-call(::Type{Float32},x::Float64,r::RoundingMode{:TiesToEven}) = convert(Float32,x)
+# To avoid ambiguous dispatch with methods in mpfr.jl:
+call{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
 
-function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardNegative})
-    y = convert(Float32,x)
+_convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TiesToEven}) = convert(T,x)
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardNegative})
+    y = convert(T,x)
     y > x ? prevfloat(y) : y
 end
-function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardPositive})
-    y = convert(Float32,x)
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardPositive})
+    y = convert(T,x)
     y < x ? nextfloat(y) : y
 end
-function call(::Type{Float32},x::Float64,r::RoundingMode{:TowardZero})
-    y = convert(Float32,x)
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardZero})
+    y = convert(T,x)
     if x > 0.0
         y > x ? prevfloat(y) : y
     else
