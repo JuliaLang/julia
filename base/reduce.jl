@@ -74,7 +74,7 @@ function mapfoldl_impl(f, op, v0, itr, i)
         (x, i) = next(itr, i)
         v = op(v0, f(x))
         while !done(itr, i)
-            (x, i) = next(itr, i) 
+            (x, i) = next(itr, i)
             v = op(v, f(x))
         end
         return v
@@ -153,7 +153,7 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
@@ -226,7 +226,7 @@ sum_pairwise_blocksize(f) = 1024
 # This appears to show a benefit from a larger block size
 sum_pairwise_blocksize(::Abs2Fun) = 4096
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
 sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)

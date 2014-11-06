@@ -153,7 +153,7 @@ end
 et=toq()
 
 # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-try 
+try
     @test (et >= 1.0) && (et <= 1.5)
     @test !isready(rr3)
 catch

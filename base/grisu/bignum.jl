@@ -1,5 +1,5 @@
 function normalizedexponent(significand, exponent::Int32)
-    significand::UInt64    
+    significand::UInt64
     while (significand & HiddenBit(Float64)) == 0
         significand <<= 1
         exponent -= 1
@@ -49,7 +49,7 @@ function generateshortestdigits(num,den,minus,plus,is_even,buffer)
         len += 1
         in_delta_room_minus = is_even ? num <= minus : num < minus
         in_delta_room_plus = is_even ? num + plus >= den : num + plus > den
-        
+
         if !in_delta_room_minus && !in_delta_room_plus
             num *= 10
             minus *= 10

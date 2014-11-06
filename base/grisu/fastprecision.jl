@@ -50,7 +50,7 @@ function digitgen(w,buffer,requested_digits=1000)
         requested_digits -= 1
         fractionals &= one.s - 1
         kappa -= 1
-    end    
+    end
     requested_digits != 0 && return false, kappa, len
     r, kappa = roundweed(buffer,len,fractionals,one.s,
                          unit,kappa)

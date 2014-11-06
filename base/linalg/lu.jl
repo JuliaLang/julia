@@ -56,7 +56,7 @@ function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
                 for i = k+1:m
                     A[i,j] -= A[i,k]*A[k,j]
                 end
-            end        
+            end
         end
     end
     LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
@@ -75,7 +75,7 @@ end
 function convert{T}(::Type{LU{T}}, F::LU)
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
-end    
+end
 convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
 convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
 
@@ -129,7 +129,7 @@ function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     dg = diag(A.factors)
     s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
-    sum(log(abs(dg))), s 
+    sum(log(abs(dg))), s
 end
 
 function logdet{T<:Real,S}(A::LU{T,S})
@@ -140,10 +140,10 @@ end
 
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0) 
+    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0)
     r, a = reim(s)
-    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi] 
-    complex(r,a)    
+    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi]
+    complex(r,a)
 end
 
 inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info

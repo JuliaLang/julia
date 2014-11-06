@@ -1,10 +1,10 @@
-# 
+#
 # The Computer Language Benchmarks Game
 # nbody benchmark
 # http://shootout.alioth.debian.org/u32/performance.php?test=nbody
 #
 # A vectorized version of the Java port from nbody.jl
-# 
+#
 
 module NBodyVec
 
@@ -52,7 +52,7 @@ end
 function energy(bodies)
     local e::Float64 = 0.0
     for i = 1:length(bodies)
-        e += 0.5 * bodies[i].mass * 
+        e += 0.5 * bodies[i].mass *
              sum(bodies[i].v .^ 2)
         for j = i+1:length(bodies)
             delta = bodies[i].pos - bodies[j].pos
@@ -72,7 +72,7 @@ function nbody_vec(N::Int=1000)
                     7.69901118419740425e-03 * days_per_year,   # v[2] = vy
                     -6.90460016972063023e-05 * days_per_year], # v[3] = vz
                    9.54791938424326609e-04 * solar_mass)       # mass
-    
+
     saturn = Body( [8.34336671824457987e+00,
                     4.12479856412430479e+00,
                     -4.03523417114321381e-01],
@@ -80,7 +80,7 @@ function nbody_vec(N::Int=1000)
                    4.99852801234917238e-03 * days_per_year,
                    2.30417297573763929e-05 * days_per_year],
                   2.85885980666130812e-04 * solar_mass)
-    
+
     uranus = Body( [1.28943695621391310e+01,
                     -1.51111514016986312e+01,
                     -2.23307578892655734e-01],
@@ -88,7 +88,7 @@ function nbody_vec(N::Int=1000)
                    2.37847173959480950e-03 * days_per_year,
                    -2.96589568540237556e-05 * days_per_year],
                   4.36624404335156298e-05 * solar_mass)
-    
+
     neptune = Body( [1.53796971148509165e+01,
                      -2.59193146099879641e+01,
                      1.79258772950371181e-01],
@@ -96,9 +96,9 @@ function nbody_vec(N::Int=1000)
                     1.62824170038242295e-03 * days_per_year,
                     -9.51592254519715870e-05 * days_per_year],
                    5.15138902046611451e-05 * solar_mass)
-    
+
     sun = Body([0.0, 0.0, 0.0], [0.0, 0.0, 0.0], solar_mass)
-    
+
     bodies = [sun, jupiter, saturn, uranus, neptune]
 
     init_sun(bodies)

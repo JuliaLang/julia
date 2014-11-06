@@ -164,21 +164,21 @@ end
         c,r = test_scomplete(s)
         @test r == length(s)+1:length(s)
         @test temp_name * "\\\\" in c
-        
+
         s = "ls $(file[1:2])"
         c,r = test_scomplete(s)
         @test r == length(s)-1:length(s)
         @test file in c
-        
+
         s = "cd(\"..\\"
         c,r = test_complete(s)
         @test r == length(s)+1:length(s)
-        @test temp_name * "\\\\" in c 
-        
+        @test temp_name * "\\\\" in c
+
         s = "cd(\"$(file[1:2])"
         c,r = test_complete(s)
         @test r == length(s) - 1:length(s)
-        @test file  in c 
+        @test file  in c
     end
     rm(tmp)
 end

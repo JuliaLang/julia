@@ -18,7 +18,7 @@ a = randcycle(10)
 @test collect(partitions(8, 1)) == Any[[8]]
 @test collect(partitions(8, 9)) == []
 @test collect(partitions([1,2,3])) == Any[Any[[1,2,3]], Any[[1,2],[3]], Any[[1,3],[2]], Any[[1],[2,3]], Any[[1],[2],[3]]]
-@test collect(partitions([1,2,3,4],3)) == Any[Any[[1,2],[3],[4]], Any[[1,3],[2],[4]], Any[[1],[2,3],[4]], 
+@test collect(partitions([1,2,3,4],3)) == Any[Any[[1,2],[3],[4]], Any[[1,3],[2],[4]], Any[[1],[2,3],[4]],
                                               Any[[1,4],[2],[3]], Any[[1],[2,4],[3]], Any[[1],[2],[3,4]]]
 @test collect(partitions([1,2,3,4],1)) == Any[Any[[1, 2, 3, 4]]]
 @test collect(partitions([1,2,3,4],5)) == []
