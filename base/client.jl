@@ -133,13 +133,13 @@ function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{Uint8},Int32,Int32),
+    #                   (Ptr{UInt8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
 function parse_input_line(io::IO)
@@ -189,7 +189,7 @@ function init_bind_addr(args::Vector{UTF8String})
             bind_addr = getipaddr()
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used. 
+            # Will cause an exception to be raised only when used.
             bind_addr = ip"127.0.0.1"
         end
     end
@@ -309,7 +309,7 @@ const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))

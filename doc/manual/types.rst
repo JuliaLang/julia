@@ -163,12 +163,12 @@ type system more than just a collection of object implementations.
 
 Recall that in :ref:`man-integers-and-floating-point-numbers`, we
 introduced a variety of concrete types of numeric values: ``Int8``,
-``Uint8``, ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``,
-``Uint64``, ``Int128``, ``Uint128``, ``Float16``, ``Float32``, and
+``UInt8``, ``Int16``, ``UInt16``, ``Int32``, ``UInt32``, ``Int64``,
+``UInt64``, ``Int128``, ``UInt128``, ``Float16``, ``Float32``, and
 ``Float64``.  Although they have different representation sizes, ``Int8``,
 ``Int16``, ``Int32``, ``Int64``  and ``Int128`` all have in common that
-they are signed integer types. Likewise ``Uint8``, ``Uint16``, ``Uint32``,
-``Uint64`` and ``Uint128`` are all unsigned integer types, while
+they are signed integer types. Likewise ``UInt8``, ``UInt16``, ``UInt32``,
+``UInt64`` and ``UInt128`` are all unsigned integer types, while
 ``Float16``, ``Float32`` and ``Float64`` are distinct in being
 floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer,
@@ -287,15 +287,15 @@ the standard bits types are all defined in the language itself::
     bitstype 32 Char
 
     bitstype 8  Int8     <: Signed
-    bitstype 8  Uint8    <: Unsigned
+    bitstype 8  UInt8    <: Unsigned
     bitstype 16 Int16    <: Signed
-    bitstype 16 Uint16   <: Unsigned
+    bitstype 16 UInt16   <: Unsigned
     bitstype 32 Int32    <: Signed
-    bitstype 32 Uint32   <: Unsigned
+    bitstype 32 UInt32   <: Unsigned
     bitstype 64 Int64    <: Signed
-    bitstype 64 Uint64   <: Unsigned
+    bitstype 64 UInt64   <: Unsigned
     bitstype 128 Int128  <: Signed
-    bitstype 128 Uint128 <: Unsigned
+    bitstype 128 UInt128 <: Unsigned
 
 The general syntaxes for declaration of a ``bitstype`` are::
 
@@ -312,18 +312,18 @@ Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
+The types ``Bool``, ``Int8`` and ``UInt8`` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
 having identical structure. Another fundamental difference between them
 is that they have different supertypes: ``Bool``'s direct supertype is
-``Integer``, ``Int8``'s is ``Signed``, and ``Uint8``'s is ``Unsigned``.
-All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
+``Integer``, ``Int8``'s is ``Signed``, and ``UInt8``'s is ``Unsigned``.
+All other differences between ``Bool``, ``Int8``, and ``UInt8`` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
 dictates behavior, then it would be impossible to make ``Bool`` behave any
-differently than ``Int8`` or ``Uint8``.
+differently than ``Int8`` or ``UInt8``.
 
 .. _man-composite-types:
 
@@ -1077,23 +1077,23 @@ Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already
 expressible type. For such occasions, Julia provides the ``typealias``
-mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
-``Uint64`` as is appropriate for the size of pointers on the system::
+mechanism. For example, ``UInt`` is type aliased to either ``UInt32`` or
+``UInt64`` as is appropriate for the size of pointers on the system::
 
     # 32-bit system:
-    julia> Uint
-    Uint32
+    julia> UInt
+    UInt32
 
     # 64-bit system:
-    julia> Uint
-    Uint64
+    julia> UInt
+    UInt64
 
 This is accomplished via the following code in ``base/boot.jl``::
 
     if is(Int,Int64)
-        typealias Uint Uint64
+        typealias UInt UInt64
     else
-        typealias Uint Uint32
+        typealias UInt UInt32
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is

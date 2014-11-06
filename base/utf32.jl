@@ -45,14 +45,14 @@ function convert(::Type{UTF32String}, data::AbstractVector{Char})
     UTF32String(copy!(d,1, data,1, len))
 end
 
-convert{T<:Union(Int32,Uint32)}(::Type{UTF32String}, data::AbstractVector{T}) =
+convert{T<:Union(Int32,UInt32)}(::Type{UTF32String}, data::AbstractVector{T}) =
     convert(UTF32String, reinterpret(Char, data))
 
 convert{T<:AbstractString}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
 
 # specialize for performance reasons:
 function convert{T<:ByteString}(::Type{T}, data::AbstractVector{Char})
-    s = IOBuffer(Array(Uint8,length(data)), true, true)
+    s = IOBuffer(Array(UInt8,length(data)), true, true)
     truncate(s,0)
     for x in data
         print(s, x)
@@ -66,13 +66,13 @@ convert(::Type{Array{Char}}, s::UTF32String) = s.data
 reverse(s::UTF32String) = UTF32String(reverse!(copy(s.data), 1, length(s)))
 
 sizeof(s::UTF32String) = sizeof(s.data) - sizeof(Char)
-convert{T<:Union(Int32,Uint32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
+convert{T<:Union(Int32,UInt32,Char)}(::Type{Ptr{T}}, s::UTF32String) =
     convert(Ptr{T}, pointer(s))
 
-function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
+function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     isempty(bytes) && return UTF32String(Char[0])
     length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
-    data = reinterpret(Char, bytes)    
+    data = reinterpret(Char, bytes)
     # check for byte-order mark (BOM):
     if data[1] == char(0x0000feff) # native byte order
         d = Array(Char, length(data))
@@ -91,8 +91,8 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{Uint8})
 end
 
 utf32(p::Ptr{Char}, len::Integer) = utf32(pointer_to_array(p, len))
-utf32(p::Union(Ptr{Uint32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
-function utf32(p::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32}))
+utf32(p::Union(Ptr{UInt32}, Ptr{Int32}), len::Integer) = utf32(convert(Ptr{Char}, p), len)
+function utf32(p::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32}))
     len = 0
     while unsafe_load(p, len+1) != 0; len += 1; end
     utf32(p, len)

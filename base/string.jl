@@ -18,7 +18,7 @@ next(s::AbstractString, i::Integer) = next(s,int(i))
 
 function print_to_string(xs...)
     # specialized for performance reasons
-    s = IOBuffer(Array(Uint8,isa(xs[1],AbstractString) ? endof(xs[1]) : 0), true, true)
+    s = IOBuffer(Array(UInt8,isa(xs[1],AbstractString) ? endof(xs[1]) : 0), true, true)
     truncate(s,0)
     for x in xs
         print(s, x)
@@ -31,21 +31,21 @@ string(s::AbstractString) = s
 string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
-bytestring(s::Array{Uint8,1}) = bytestring(pointer(s),length(s))
+bytestring(s::Array{UInt8,1}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
-function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}))
+function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_cstr_to_string, ByteString, (Ptr{Uint8},), p)
+    ccall(:jl_cstr_to_string, ByteString, (Ptr{UInt8},), p)
 end
 
-function bytestring(p::Union(Ptr{Uint8},Ptr{Int8}),len::Integer)
+function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
     p == C_NULL ? error("cannot convert NULL to string") :
-    ccall(:jl_pchar_to_string, ByteString, (Ptr{Uint8},Int), p, len)
+    ccall(:jl_pchar_to_string, ByteString, (Ptr{UInt8},Int), p, len)
 end
 
-convert(::Type{Array{Uint8,1}}, s::AbstractString) = bytestring(s).data
-convert(::Type{Array{Uint8}}, s::AbstractString) = bytestring(s).data
+convert(::Type{Array{UInt8,1}}, s::AbstractString) = bytestring(s).data
+convert(::Type{Array{UInt8}}, s::AbstractString) = bytestring(s).data
 convert(::Type{ByteString}, s::AbstractString) = bytestring(s)
 convert(::Type{Array{Char,1}}, s::AbstractString) = collect(s)
 convert(::Type{Symbol}, s::AbstractString) = symbol(s)
@@ -296,7 +296,7 @@ function _searchindex(s::Array, t::Array, i)
     0
 end
 
-searchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
+searchindex(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString, i::Integer) = _searchindex(s,t,i)
 searchindex(s::AbstractString, t::AbstractString) = searchindex(s,t,start(s))
 
@@ -308,7 +308,7 @@ function searchindex(s::ByteString, t::ByteString, i::Integer=1)
     end
 end
 
-function search(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+function search(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i)
     idx = searchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -428,7 +428,7 @@ function _rsearchindex(s::Array, t::Array, k)
     0
 end
 
-rsearchindex(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
+rsearchindex(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString, i::Integer) = _rsearchindex(s,t,i)
 rsearchindex(s::AbstractString, t::AbstractString) = (isempty(s) && isempty(t)) ? 1 : rsearchindex(s,t,endof(s))
 
@@ -448,7 +448,7 @@ function rsearchindex(s::ByteString, t::ByteString, i::Integer)
     end
 end
 
-function rsearch(s::Union(Array{Uint8,1},Array{Int8,1}),t::Union(Array{Uint8,1},Array{Int8,1}),i)
+function rsearch(s::Union(Array{UInt8,1},Array{Int8,1}),t::Union(Array{UInt8,1},Array{Int8,1}),i)
     idx = rsearchindex(s,t,i)
     if isempty(t)
         idx:idx-1
@@ -523,22 +523,22 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
 # faster comparisons for byte strings and symbols
 
 cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
-cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}), a, b)))
+cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
 
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
 beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
-beginswith(a::Array{Uint8,1}, b::Array{Uint8,1}) =
-    (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint), a, b, length(b)) == 0)
+beginswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
+    (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (Uint32,), c)))
+charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (UInt32,), c)))
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{Uint8},), s.data))
+strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
 isascii(c::Char) = c < char(0x80)
@@ -596,7 +596,7 @@ sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
 function length(s::SubString{UTF8String})
-    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{Uint8}, Csize_t),
+    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
                                       pointer(s), next(s,s.endof)[2]-1))
 end
 
@@ -645,7 +645,7 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-function convert{P<:Union(Int8,Uint8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
+function convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
     if s.offset+s.endof < endof(s.string)
         error("a SubString must coincide with the end of the original string to be convertible to pointer")
     end
@@ -656,14 +656,14 @@ isascii(s::SubString{ASCIIString}) = true
 
 ## hashing strings ##
 
-const memhash = Uint === Uint64 ? :memhash_seed : :memhash32_seed
-const memhash_seed = Uint === Uint64 ? 0x71e729fd56419c81 : 0x56419c81
+const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
+const memhash_seed = UInt === UInt64 ? 0x71e729fd56419c81 : 0x56419c81
 
-function hash{T<:ByteString}(s::Union(T,SubString{T}), h::Uint)
+function hash{T<:ByteString}(s::Union(T,SubString{T}), h::UInt)
     h += memhash_seed
-    ccall(memhash, Uint, (Ptr{Uint8}, Csize_t, Uint32), s, sizeof(s), h % Uint32) + h
+    ccall(memhash, UInt, (Ptr{UInt8}, Csize_t, UInt32), pointer(s), sizeof(s), h % UInt32) + h
 end
-hash(s::AbstractString, h::Uint) = hash(bytestring(s), h)
+hash(s::AbstractString, h::UInt) = hash(bytestring(s), h)
 
 ## efficient representation of repeated strings ##
 
@@ -711,7 +711,7 @@ function repeat(s::ByteString, r::Integer)
         error("can't repeat a string ",r," times")
     end
     d = s.data; n = length(d)
-    out = Array(Uint8, n*r)
+    out = Array(UInt8, n*r)
     for i=1:r
         copy!(out, 1+(i-1)*n, d, 1, n)
     end
@@ -802,11 +802,11 @@ end
 
 ## string map, filter, has ##
 
-map_result(s::AbstractString, a::Vector{Uint8}) = UTF8String(a)
-map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{Uint8}) = bytestring(a)
+map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
+map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{UInt8}) = bytestring(a)
 
 function map(f::Function, s::AbstractString)
-    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s
         c2 = f(c)
@@ -819,7 +819,7 @@ function map(f::Function, s::AbstractString)
 end
 
 function filter(f::Function, s::AbstractString)
-    out = IOBuffer(Array(Uint8,endof(s)),true,true)
+    out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s
         if f(c)
@@ -954,15 +954,15 @@ unescape_string(s::AbstractString) = sprint(endof(s), print_unescaped, s)
 
 ## checking UTF-8 & ACSII validity ##
 
-byte_string_classify(data::Array{Uint8,1}) =
-    ccall(:u8_isvalid, Int32, (Ptr{Uint8}, Int), data, length(data))
+byte_string_classify(data::Array{UInt8,1}) =
+    ccall(:u8_isvalid, Int32, (Ptr{UInt8}, Int), data, length(data))
 byte_string_classify(s::ByteString) = byte_string_classify(s.data)
     # 0: neither valid ASCII nor UTF-8
     # 1: valid ASCII
     # 2: valid UTF-8
 
-is_valid_ascii(s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) == 1
-is_valid_utf8 (s::Union(Array{Uint8,1},ByteString)) = byte_string_classify(s) != 0
+is_valid_ascii(s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) == 1
+is_valid_utf8 (s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) != 0
 
 ## multiline strings ##
 
@@ -987,7 +987,7 @@ end
 
 function unindent(s::AbstractString, indent::Int)
     indent == 0 && return s
-    buf = IOBuffer(Array(Uint8,endof(s)), true, true)
+    buf = IOBuffer(Array(UInt8,endof(s)), true, true)
     truncate(buf,0)
     a = i = start(s)
     cutting = false
@@ -1216,7 +1216,7 @@ shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
     # returns (expr, end_pos). expr is () in case of parse error.
     ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{Uint8}, Int32, Int32),
+                    (Ptr{UInt8}, Int32, Int32),
                     str, pos-1, greedy ? 1:0)
     if raise && isa(ex,Expr) && is(ex.head,:error)
         throw(ParseError(ex.args[1]))
@@ -1405,7 +1405,7 @@ chomp(s::ByteString) =
 function chomp!(s::ByteString)
     if !isempty(s) && s.data[end] == 0x0a
         n = (endof(s) < 2 || s.data[end-1] != 0x0d) ? 1 : 2
-        ccall(:jl_array_del_end, Void, (Any, Uint), s.data, n)
+        ccall(:jl_array_del_end, Void, (Any, UInt), s.data, n)
     end
     return s
 end
@@ -1493,7 +1493,7 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
     c, i = parseint_next(s,i)
     base = convert(T,base)
     ## FIXME: remove 128-bit specific code once 128-bit div doesn't rely on BigInt
-    m::T = T===Uint128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
+    m::T = T===UInt128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
     n::T = 0
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
@@ -1539,17 +1539,17 @@ parseint(s::AbstractString) = parseint_nocheck(Int,s,0)
 integer (s::AbstractString) = int(s)
 unsigned(s::AbstractString) = uint(s)
 int     (s::AbstractString) = parseint(Int,s)
-uint    (s::AbstractString) = parseint(Uint,s)
+uint    (s::AbstractString) = parseint(UInt,s)
 int8    (s::AbstractString) = parseint(Int8,s)
-uint8   (s::AbstractString) = parseint(Uint8,s)
+uint8   (s::AbstractString) = parseint(UInt8,s)
 int16   (s::AbstractString) = parseint(Int16,s)
-uint16  (s::AbstractString) = parseint(Uint16,s)
+uint16  (s::AbstractString) = parseint(UInt16,s)
 int32   (s::AbstractString) = parseint(Int32,s)
-uint32  (s::AbstractString) = parseint(Uint32,s)
+uint32  (s::AbstractString) = parseint(UInt32,s)
 int64   (s::AbstractString) = parseint(Int64,s)
-uint64  (s::AbstractString) = parseint(Uint64,s)
+uint64  (s::AbstractString) = parseint(UInt64,s)
 int128  (s::AbstractString) = parseint(Int128,s)
-uint128 (s::AbstractString) = parseint(Uint128,s)
+uint128 (s::AbstractString) = parseint(UInt128,s)
 
 ## stringifying integers more efficiently ##
 
@@ -1558,14 +1558,14 @@ string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 ## string to float functions ##
 
 float64_isvalid(s::AbstractString, out::Array{Float64,1}) =
-    ccall(:jl_strtod, Int32, (Ptr{Uint8},Ptr{Float64}), s, out) == 0
+    ccall(:jl_strtod, Int32, (Ptr{UInt8},Ptr{Float64}), s, out) == 0
 float32_isvalid(s::AbstractString, out::Array{Float32,1}) =
-    ccall(:jl_strtof, Int32, (Ptr{Uint8},Ptr{Float32}), s, out) == 0
+    ccall(:jl_strtof, Int32, (Ptr{UInt8},Ptr{Float32}), s, out) == 0
 
 float64_isvalid(s::SubString, out::Array{Float64,1}) =
-    ccall(:jl_substrtod, Int32, (Ptr{Uint8},Csize_t,Cint,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
+    ccall(:jl_substrtod, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
 float32_isvalid(s::SubString, out::Array{Float32,1}) =
-    ccall(:jl_substrtof, Int32, (Ptr{Uint8},Csize_t,Cint,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+    ccall(:jl_substrtof, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
 
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
@@ -1599,14 +1599,14 @@ end
 
 # find the index of the first occurrence of a value in a byte array
 
-typealias ByteArray Union(Array{Uint8,1},Array{Int8,1})
+typealias ByteArray Union(Array{UInt8,1},Array{Int8,1})
 
-function search(a::ByteArray, b::Union(Int8,Uint8), i::Integer)
+function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     if i < 1 error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
-    q = ccall(:memchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p+i-1, b, n-i+1)
+    q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
 end
 function search(a::ByteArray, b::Char, i::Integer)
@@ -1616,14 +1616,14 @@ function search(a::ByteArray, b::Char, i::Integer)
         search(a,string(b).data,i).start
     end
 end
-search(a::ByteArray, b::Union(Int8,Uint8,Char)) = search(a,b,1)
+search(a::ByteArray, b::Union(Int8,UInt8,Char)) = search(a,b,1)
 
-function rsearch(a::Union(Array{Uint8,1},Array{Int8,1}), b::Union(Int8,Uint8), i::Integer)
+function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i::Integer)
     if i < 1 return i == 0 ? 0 : error(BoundsError) end
     n = length(a)
     if i > n return i == n+1 ? 0 : error(BoundsError) end
     p = pointer(a)
-    q = ccall(:memrchr, Ptr{Uint8}, (Ptr{Uint8}, Int32, Csize_t), p, b, i)
+    q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
     q == C_NULL ? 0 : int(q-p+1)
 end
 function rsearch(a::ByteArray, b::Char, i::Integer)
@@ -1633,7 +1633,7 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
         rsearch(a,string(b).data,i).start
     end
 end
-rsearch(a::ByteArray, b::Union(Int8,Uint8,Char)) = rsearch(a,b,length(a))
+rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
 let
@@ -1646,7 +1646,7 @@ end
 function hex2bytes(s::ASCIIString)
     len = length(s)
     iseven(len) || error("string length must be even: $(repr(s))")
-    arr = zeros(Uint8, div(len,2))
+    arr = zeros(UInt8, div(len,2))
     i = j = 0
     while i < len
         n = 0
@@ -1665,7 +1665,7 @@ function hex2bytes(s::ASCIIString)
     return arr
 end
 
-bytes2hex{T<:Uint8}(arr::Array{T,1}) = join([hex(i,2) for i in arr])
+bytes2hex{T<:UInt8}(arr::Array{T,1}) = join([hex(i,2) for i in arr])
 
 function repr(x)
     s = IOBuffer()

@@ -185,7 +185,7 @@ fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
 fftwcopy{T<:Real}(X::StridedArray{T}) = float(X)
 fftwcopy{T<:Complex}(X::StridedArray{T}) = complex128(X)
 
-for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number), 
+for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                          (:dct!, :r2r!, :X, :fftwNumber))
     plan_f = symbol(string("plan_",f))
     plan_fr2r = symbol(string("plan_",fr2r))
@@ -259,7 +259,7 @@ for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
     for (g,plan_g) in ((f,plan_f), (fi, plan_fi))
         @eval begin
             $g{T<:$Tx}(X::StridedArray{T}) = $g(X, 1:ndims(X))
-            
+
             $plan_g(X, region, flags::Unsigned) =
               $plan_g(X, region, flags, NO_TIMELIMIT)
             $plan_g(X, region) =

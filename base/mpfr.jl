@@ -66,13 +66,13 @@ end
 
 function BigFloat(x::BigInt)
     z = BigFloat()
-    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])   
+    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
 function BigFloat(x::AbstractString, base::Int)
     z = BigFloat()
-    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{Uint8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
+    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
     if err != 0; error("incorrectly formatted number"); end
     return z
 end
@@ -81,7 +81,7 @@ BigFloat(x::AbstractString) = BigFloat(x, 10)
 BigFloat(x::Integer) = BigFloat(BigInt(x))
 
 BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
-BigFloat(x::Union(Uint8,Uint16,Uint32)) = BigFloat(convert(Culong,x))
+BigFloat(x::Union(UInt8,UInt16,UInt32)) = BigFloat(convert(Culong,x))
 
 BigFloat(x::Union(Float16,Float32)) = BigFloat(float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
@@ -101,7 +101,7 @@ for to in (Int8, Int16, Int32, Int64)
     end
 end
 
-for to in (Uint8, Uint16, Uint32, Uint64)
+for to in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
         function convert(::Type{$to}, x::BigFloat)
             (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
@@ -150,7 +150,7 @@ deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 # Basic arithmetic without promotion
 for (fJ, fC) in ((:+,:add), (:*,:mul))
-    @eval begin 
+    @eval begin
         # BigFloat
         function ($fJ)(x::BigFloat, y::BigFloat)
             z = BigFloat()
@@ -193,7 +193,7 @@ for (fJ, fC) in ((:+,:add), (:*,:mul))
 end
 
 for (fJ, fC) in ((:-,:sub), (:/,:div))
-    @eval begin 
+    @eval begin
         # BigFloat
         function ($fJ)(x::BigFloat, y::BigFloat)
             z = BigFloat()
@@ -212,7 +212,7 @@ for (fJ, fC) in ((:-,:sub), (:/,:div))
             ccall(($(string(:mpfr_,:ui_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
             return z
         end
-        
+
         # Signed Integer
         function ($fJ)(x::BigFloat, c::ClongMax)
             z = BigFloat()
@@ -708,8 +708,8 @@ end
 function string(x::BigFloat)
     lng = 128
     for i = 1:2
-        z = Array(Uint8, lng + 1)
-        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
+        z = Array(UInt8, lng + 1)
+        lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), z, lng + 1, "%.Re", &x)
         if lng < 128 || i == 2
             return bytestring(z[1:lng])
         end

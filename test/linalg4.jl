@@ -93,7 +93,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Binary operations")
-        for isupper2 in (true, false) 
+        for isupper2 in (true, false)
             dv = convert(Vector{elty}, randn(n))
             ev = convert(Vector{elty}, randn(n-1))
             T2 = Bidiagonal(dv, ev, isupper2)

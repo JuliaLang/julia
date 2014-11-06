@@ -4,10 +4,10 @@
 time() = ccall(:clock_now, Float64, ())
 
 # high-resolution relative time, in nanoseconds
-time_ns() = ccall(:jl_hrtime, Uint64, ())
+time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # total time spend in garbage collection, in nanoseconds
-gc_time_ns() = ccall(:jl_gc_total_hrtime, Uint64, ())
+gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
@@ -24,7 +24,7 @@ function toq()
     if is(timers,())
         error("toc() without tic()")
     end
-    t0 = timers[1]::Uint64
+    t0 = timers[1]::UInt64
     task_local_storage(:TIMERS, timers[2])
     (t1-t0)/1e9
 end
@@ -117,10 +117,10 @@ end
 
 if blas_vendor() == :openblas64
     blasfunc(x) = string(x)*"64_"
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{Uint8}, () )))
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
     blasfunc(x) = string(x)
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
 
 function blas_set_num_threads(n::Integer)

@@ -265,7 +265,7 @@ type ObjectIdDict <: Associative{Any,Any}
     function ObjectIdDict(o::ObjectIdDict)
         N = length(o.ht)
         ht = cell(N)
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
               ht, o.ht, N*sizeof(Ptr))
         new(ht)
     end
@@ -315,7 +315,7 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 # dict
 
 type Dict{K,V} <: Associative{K,V}
-    slots::Array{Uint8,1}
+    slots::Array{UInt8,1}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
@@ -324,7 +324,7 @@ type Dict{K,V} <: Associative{K,V}
 
     function Dict()
         n = 16
-        new(zeros(Uint8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, identity)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -429,7 +429,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
         return h
     end
 
-    slots = zeros(Uint8,newsz)
+    slots = zeros(UInt8,newsz)
     keys = Array(K, newsz)
     vals = Array(V, newsz)
     count0 = h.count
@@ -676,8 +676,8 @@ end
 
 function _delete!(h::Dict, index)
     h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, Uint), h.vals, index-1)
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
     h.ndel += 1
     h.count -= 1
     h

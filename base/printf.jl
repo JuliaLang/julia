@@ -4,7 +4,7 @@ export @printf, @sprintf
 
 ### printf formatter generation ###
 const SmallFloatingPoint = Union(Float64,Float32,Float16)
-const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,Uint128,Int128)
+const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,UInt128,Int128)
 
 function gen(s::AbstractString)
     args = []
@@ -603,7 +603,7 @@ function decode_dec(d::Integer)
     return int32(pt), int32(pt), neg
 end
 
-function decode_hex(d::Integer, symbols::Array{Uint8,1})
+function decode_hex(d::Integer, symbols::Array{UInt8,1})
     neg, x = handlenegative(d)
     @handle_zero x
     pt = i = (sizeof(x)<<1)-(leading_zeros(x)>>2)
@@ -626,8 +626,8 @@ function decode(b::Int, x::BigInt)
     pt = Base.ndigits(x, abs(b))
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
-    ccall((:__gmpz_get_str, :libgmp), Ptr{Uint8},
-          (Ptr{Uint8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
+    ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
+          (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
     neg && (x.size = -x.size)
     return int32(pt), int32(pt), neg
 end
@@ -645,9 +645,9 @@ function decode_0ct(x::BigInt)
     pt = Base.ndigits0z(x, 8) + 1
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
     neg && (x.size = -x.size)
-    p = convert(Ptr{Uint8}, DIGITS) + 1
-    ccall((:__gmpz_get_str, :libgmp), Ptr{Uint8},
-          (Ptr{Uint8}, Cint, Ptr{BigInt}), p, 8, &x)
+    p = convert(Ptr{UInt8}, DIGITS) + 1
+    ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
+          (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
     neg && (x.size = -x.size)
     return neg, int32(pt), int32(pt)
 end
@@ -801,7 +801,7 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     write(fmt, uint8(0))
     printf_fmt = takebuf_array(fmt)
     @assert length(printf_fmt) == fmt_len
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), DIGITS, length(DIGITS)-1, printf_fmt, &d)
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{UInt8}, Culong, Ptr{UInt8}, Ptr{BigFloat}...), DIGITS, length(DIGITS)-1, printf_fmt, &d)
     lng > 0 || error("invalid printf formatting for BigFloat")
     write(out, pointer(DIGITS), lng)
     return (false, ())
@@ -816,10 +816,10 @@ is_str_expr(ex) =
 function _printf(macroname, io, fmt, args)
     isa(fmt, AbstractString) || error("$macroname: format must be a plain static string (no interpolation or prefix)")
     sym_args, blk = gen(fmt)
-  
+
     has_splatting = false
-    for arg in args 
-       if typeof(arg) == Expr && arg.head == :... 
+    for arg in args
+       if typeof(arg) == Expr && arg.head == :...
           has_splatting = true
           break
        end
@@ -827,7 +827,7 @@ function _printf(macroname, io, fmt, args)
 
     #
     #  Immediately check for corresponding arguments if there is no splatting
-    #  
+    #
     if !has_splatting && length(sym_args) != length(args)
        error("$macroname: wrong number of arguments ($(length(args))) should be ($(length(sym_args)))")
     end
@@ -874,7 +874,7 @@ end
 
 macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
-    isa(args[1], AbstractString) || is_str_expr(args[1]) || 
+    isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         error("@sprintf: first argument must be a format string")
     blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
     push!(blk.args, :(takebuf_string(out)))

@@ -31,7 +31,7 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 ## copy ##
 
 function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
-    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+    ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
           dest, src, N*sizeof(T))
     return dest
 end
@@ -150,7 +150,7 @@ function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
     return a
 end
 
-function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
+function fill!{T<:Union(Int8,UInt8)}(a::Array{T}, x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a, x, length(a))
     return a
 end
@@ -402,7 +402,7 @@ function _growat!(a::Vector, i::Integer, delta::Integer)
 end
 
 function _growat_beg!(a::Vector, i::Integer, delta::Integer)
-    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, delta)
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, delta)
     if i > 1
         ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
               pointer(a, 1), pointer(a, 1+delta), (i-1)*elsize(a))
@@ -411,7 +411,7 @@ function _growat_beg!(a::Vector, i::Integer, delta::Integer)
 end
 
 function _growat_end!(a::Vector, i::Integer, delta::Integer)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, delta)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, delta)
     n = length(a)
     if n >= i+delta
         ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
@@ -438,7 +438,7 @@ function _deleteat_beg!(a::Vector, i::Integer, delta::Integer)
         ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
               pointer(a, 1+delta), pointer(a, 1), (i-1)*elsize(a))
     end
-    ccall(:jl_array_del_beg, Void, (Any, Uint), a, delta)
+    ccall(:jl_array_del_beg, Void, (Any, UInt), a, delta)
     return a
 end
 
@@ -448,7 +448,7 @@ function _deleteat_end!(a::Vector, i::Integer, delta::Integer)
         ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t),
               pointer(a, i), pointer(a, i+delta), (n-i-delta+1)*elsize(a))
     end
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, delta)
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, delta)
     return a
 end
 
@@ -457,27 +457,27 @@ end
 function push!{T}(a::Array{T,1}, item)
     # convert first so we don't grow the array if the assignment won't work
     item = convert(T, item)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
     a[end] = item
     return a
 end
 
 function push!(a::Array{Any,1}, item::ANY)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, 1)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, 1)
     arrayset(a, item, length(a))
     return a
 end
 
 function append!{T}(a::Array{T,1}, items::AbstractVector)
     n = length(items)
-    ccall(:jl_array_grow_end, Void, (Any, Uint), a, n)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), a, n)
     copy!(a, length(a)-n+1, items, 1, n)
     return a
 end
 
 function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     n = length(items)
-    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, n)
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, n)
     if a === items
         copy!(a, 1, items, n+1, n)
     else
@@ -489,18 +489,18 @@ end
 function resize!(a::Vector, nl::Integer)
     l = length(a)
     if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, Uint), a, nl-l)
+        ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
     else
         if nl < 0
             throw(BoundsError())
         end
-        ccall(:jl_array_del_end, Void, (Any, Uint), a, l-nl)
+        ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
     end
     return a
 end
 
 function sizehint(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, Uint), a, sz)
+    ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
 end
 
@@ -509,13 +509,13 @@ function pop!(a::Vector)
         error("array must be non-empty")
     end
     item = a[end]
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, 1)
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, 1)
     return item
 end
 
 function unshift!{T}(a::Array{T,1}, item)
     item = convert(T, item)
-    ccall(:jl_array_grow_beg, Void, (Any, Uint), a, 1)
+    ccall(:jl_array_grow_beg, Void, (Any, UInt), a, 1)
     a[1] = item
     return a
 end
@@ -525,7 +525,7 @@ function shift!(a::Vector)
         error("array must be non-empty")
     end
     item = a[1]
-    ccall(:jl_array_del_beg, Void, (Any, Uint), a, 1)
+    ccall(:jl_array_del_beg, Void, (Any, UInt), a, 1)
     return item
 end
 
@@ -564,7 +564,7 @@ function deleteat!(a::Vector, inds)
     q = p+1
     while !done(inds, s)
         (i,s) = next(inds, s)
-        if !(q <= i <= n) 
+        if !(q <= i <= n)
             i < q && error("indices must be unique and sorted")
             throw(BoundsError())
         end
@@ -578,7 +578,7 @@ function deleteat!(a::Vector, inds)
         @inbounds a[p] = a[q]
         p += 1; q += 1
     end
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, n-p+1)
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, n-p+1)
     return a
 end
 
@@ -640,7 +640,7 @@ function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
 end
 
 function empty!(a::Vector)
-    ccall(:jl_array_del_end, Void, (Any, Uint), a, length(a))
+    ccall(:jl_array_del_end, Void, (Any, UInt), a, length(a))
     return a
 end
 
@@ -761,7 +761,7 @@ end
 
 # familiar aliases for broadcasting operations of array ± scalar (#7226):
 (+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A 
+(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
 (-)(A::AbstractArray{Bool},x::Bool) = A .- x
 (-)(x::Bool,A::AbstractArray{Bool}) = x .- A
 (+)(A::AbstractArray,x::Number) = A .+ x
@@ -795,7 +795,7 @@ for f in (:+, :-)
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
-            return F        
+            return F
         end
     end
 end
@@ -828,8 +828,8 @@ function complex{T<:Real}(A::Array{T}, B::Real)
 end
 
 # use memcmp for lexcmp on byte arrays
-function lexcmp(a::Array{Uint8,1}, b::Array{Uint8,1})
-    c = ccall(:memcmp, Int32, (Ptr{Uint8}, Ptr{Uint8}, Uint),
+function lexcmp(a::Array{UInt8,1}, b::Array{UInt8,1})
+    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
               a, b, min(length(a),length(b)))
     c < 0 ? -1 : c > 0 ? +1 : cmp(length(a),length(b))
 end
@@ -1001,7 +1001,7 @@ function vcat{T}(arrays::Vector{T}...)
     end
     for a in arrays
         nba = length(a)*elsz
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Uint),
+        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
               ptr+offset, a, nba)
         offset += nba
     end

@@ -549,13 +549,13 @@ Any[
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
-       (0,:device,Uint64)
-       (8,:inode,Uint64)
-       (16,:mode,Uint64)
+       (0,:device,UInt64)
+       (8,:inode,UInt64)
+       (16,:mode,UInt64)
        (24,:nlink,Int64)
-       (32,:uid,Uint64)
-       (40,:gid,Uint64)
-       (48,:rdev,Uint64)
+       (32,:uid,UInt64)
+       (40,:gid,UInt64)
+       (48,:rdev,UInt64)
        (56,:size,Int64)
        (64,:blksize,Int64)
        (72,:blocks,Int64)
@@ -582,7 +582,7 @@ Any[
 
    True if \"T\" is a \"plain data\" type, meaning it is immutable and
    contains no references to other values. Typical examples are
-   numeric types such as \"Uint8\", \"Float64\", and
+   numeric types such as \"UInt8\", \"Float64\", and
    \"Complex{Float64}\".
 
       julia> isbits(Complex{Float64})
@@ -1703,7 +1703,7 @@ Any[
 
 "),
 
-("Base","bytestring","bytestring(::Ptr{Uint8}[, length])
+("Base","bytestring","bytestring(::Ptr{UInt8}[, length])
 
    Create a string from the address of a C (0-terminated) string
    encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
@@ -1720,7 +1720,7 @@ Any[
 
 "),
 
-("Base","ascii","ascii(::Array{Uint8, 1})
+("Base","ascii","ascii(::Array{UInt8, 1})
 
    Create an ASCII string from a byte array.
 
@@ -1733,7 +1733,7 @@ Any[
 
 "),
 
-("Base","utf8","utf8(::Array{Uint8, 1})
+("Base","utf8","utf8(::Array{UInt8, 1})
 
    Create a UTF-8 string from a byte array.
 
@@ -2218,7 +2218,7 @@ Any[
 
 ("Base","utf16","utf16(s)
 
-   Create a UTF-16 string from a byte array, array of \"Uint16\", or
+   Create a UTF-16 string from a byte array, array of \"UInt16\", or
    any other string type.  (Data must be valid UTF-16.  Conversions of
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
@@ -2228,7 +2228,7 @@ Any[
    the string (so that it is mostly invisible in Julia); this allows
    the string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   *utf16(s)* conversion function.  If you have a \"Uint16\" array
+   *utf16(s)* conversion function.  If you have a \"UInt16\" array
    \"A\" that is already NUL-terminated valid UTF-16 data, then you
    can instead use *UTF16String(A)`* to construct the string without
    making a copy of the data and treating the NUL as a terminator
@@ -2236,7 +2236,7 @@ Any[
 
 "),
 
-("Base","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+("Base","utf16","utf16(::Union(Ptr{UInt16}, Ptr{Int16})[, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string.
    A copy is made; the pointer can be safely freed. If \"length\" is
@@ -2246,14 +2246,14 @@ Any[
 
 ("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
-   Returns true if the argument (\"UTF16String\" or \"Uint16\" array)
+   Returns true if the argument (\"UTF16String\" or \"UInt16\" array)
    is valid UTF-16.
 
 "),
 
 ("Base","utf32","utf32(s)
 
-   Create a UTF-32 string from a byte array, array of \"Uint32\", or
+   Create a UTF-32 string from a byte array, array of \"UInt32\", or
    any other string type.  (Conversions of byte arrays check for a
    byte-order marker in the first four bytes, and do not include it in
    the resulting string.)
@@ -2263,7 +2263,7 @@ Any[
    the string (so that it is mostly invisible in Julia); this allows
    the string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   *utf32(s)* conversion function.  If you have a \"Uint32\" array
+   *utf32(s)* conversion function.  If you have a \"UInt32\" array
    \"A\" that is already NUL-terminated UTF-32 data, then you can
    instead use *UTF32String(A)`* to construct the string without
    making a copy of the data and treating the NUL as a terminator
@@ -2271,7 +2271,7 @@ Any[
 
 "),
 
-("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32})[, length])
 
    Create a string from the address of a NUL-terminated UTF-32 string.
    A copy is made; the pointer can be safely freed. If \"length\" is
@@ -2447,7 +2447,7 @@ Any[
 
 "),
 
-("Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+("Base","readbytes!","readbytes!(stream, b::Vector{UInt8}, nb=length(b))
 
    Read at most \"nb\" bytes from the stream into \"b\", returning the
    number of bytes read (increasing the size of \"b\" as needed).
@@ -2457,7 +2457,7 @@ Any[
 ("Base","readbytes","readbytes(stream, nb=typemax(Int))
 
    Read at most \"nb\" bytes from the stream, returning a
-   \"Vector{Uint8}\" of the bytes read.
+   \"Vector{UInt8}\" of the bytes read.
 
 "),
 
@@ -2724,7 +2724,7 @@ Any[
 
 "),
 
-("Base","PipeBuffer","PipeBuffer(data::Vector{Uint8}[, maxsize])
+("Base","PipeBuffer","PipeBuffer(data::Vector{UInt8}[, maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally
    specifying a size beyond which the underlying Array may not be
@@ -2935,7 +2935,7 @@ Any[
 
 "),
 
-("Base","listenany","listenany(port_hint) -> (Uint16, TcpServer)
+("Base","listenany","listenany(port_hint) -> (UInt16, TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point.
    Returns a tuple of the actual port that the server was created on
@@ -3275,7 +3275,7 @@ display(d::Display, mime, x)
    With these variants, one can also supply the \"raw\" data in the
    requested MIME type by passing \"x::AbstractString\" (for MIME
    types with text-based storage, such as text/html or
-   application/postscript) or \"x::Vector{Uint8}\" (for binary MIME
+   application/postscript) or \"x::Vector{UInt8}\" (for binary MIME
    types).
 
 "),
@@ -3343,17 +3343,17 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","reprmime","reprmime(mime, x)
 
-   Returns a \"AbstractString\" or \"Vector{Uint8}\" containing the
+   Returns a \"AbstractString\" or \"Vector{UInt8}\" containing the
    representation of \"x\" in the requested \"mime\" type, as written
    by \"writemime\" (throwing a \"MethodError\" if no appropriate
    \"writemime\" is available).  A \"AbstractString\" is returned for
    MIME types with textual representations (such as \"\"text/html\"\"
    or \"\"application/postscript\"\"), whereas binary data is returned
-   as \"Vector{Uint8}\".  (The function \"istext(mime)\" returns
+   as \"Vector{UInt8}\".  (The function \"istext(mime)\" returns
    whether or not Julia treats a given \"mime\" type as text.)
 
    As a special case, if \"x\" is a \"AbstractString\" (for textual
-   MIME types) or a \"Vector{Uint8}\" (for binary MIME types), the
+   MIME types) or a \"Vector{UInt8}\" (for binary MIME types), the
    \"reprmime\" function assumes that \"x\" is already in the
    requested \"mime\" format and simply returns \"x\".
 
@@ -5068,7 +5068,7 @@ popdisplay(d::Display)
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to. The base can be specified
-   as either an integer, or as a \"Uint8\" array of character values
+   as either an integer, or as a \"UInt8\" array of character values
    to use as digit symbols.
 
 "),
@@ -5197,31 +5197,31 @@ popdisplay(d::Display)
 
 ("Base","uint8","uint8(x)
 
-   Convert a number or array to \"Uint8\" data type
+   Convert a number or array to \"UInt8\" data type
 
 "),
 
 ("Base","uint16","uint16(x)
 
-   Convert a number or array to \"Uint16\" data type
+   Convert a number or array to \"UInt16\" data type
 
 "),
 
 ("Base","uint32","uint32(x)
 
-   Convert a number or array to \"Uint32\" data type
+   Convert a number or array to \"UInt32\" data type
 
 "),
 
 ("Base","uint64","uint64(x)
 
-   Convert a number or array to \"Uint64\" data type
+   Convert a number or array to \"UInt64\" data type
 
 "),
 
 ("Base","uint128","uint128(x)
 
-   Convert a number or array to \"Uint128\" data type
+   Convert a number or array to \"UInt128\" data type
 
 "),
 
@@ -5338,11 +5338,11 @@ popdisplay(d::Display)
 ("Base","hex2bytes","hex2bytes(s::ASCIIString)
 
    Convert an arbitrarily long hexadecimal string to its binary
-   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+   representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
 
 "),
 
-("Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8, 1})
+("Base","bytes2hex","bytes2hex(bin_arr::Array{UInt8, 1})
 
    Convert an array of bytes to its hexadecimal representation. All
    characters are in lower-case. Returns an ASCIIString.
@@ -5685,7 +5685,7 @@ popdisplay(d::Display)
    Reseed the random number generator. If a \"seed\" is provided, the
    RNG will give a reproducible sequence of numbers, otherwise Julia
    will get entropy from the system. The \"seed\" may be a non-
-   negative integer, a vector of \"Uint32\" integers or a filename, in
+   negative integer, a vector of \"UInt32\" integers or a filename, in
    which case the seed is read from a file.
 
 "),
@@ -8251,7 +8251,7 @@ popdisplay(d::Display)
 
 ("Base","Cuchar","Cuchar
 
-   Equivalent to the native \"unsigned char\" c-type (Uint8)
+   Equivalent to the native \"unsigned char\" c-type (UInt8)
 
 "),
 
@@ -8263,7 +8263,7 @@ popdisplay(d::Display)
 
 ("Base","Cushort","Cushort
 
-   Equivalent to the native \"unsigned short\" c-type (Uint16)
+   Equivalent to the native \"unsigned short\" c-type (UInt16)
 
 "),
 
@@ -8275,7 +8275,7 @@ popdisplay(d::Display)
 
 ("Base","Cuint","Cuint
 
-   Equivalent to the native \"unsigned int\" c-type (Uint32)
+   Equivalent to the native \"unsigned int\" c-type (UInt32)
 
 "),
 
@@ -8299,7 +8299,7 @@ popdisplay(d::Display)
 
 ("Base","Culonglong","Culonglong
 
-   Equivalent to the native \"unsigned long long\" c-type (Uint64)
+   Equivalent to the native \"unsigned long long\" c-type (UInt64)
 
 "),
 
@@ -8311,13 +8311,13 @@ popdisplay(d::Display)
 
 ("Base","Cuintmax_t","Cuintmax_t
 
-   Equivalent to the native \"uintmax_t\" c-type (Uint64)
+   Equivalent to the native \"uintmax_t\" c-type (UInt64)
 
 "),
 
 ("Base","Csize_t","Csize_t
 
-   Equivalent to the native \"size_t\" c-type (Uint)
+   Equivalent to the native \"size_t\" c-type (UInt)
 
 "),
 

@@ -111,13 +111,13 @@ end
         systemerror(:EmptyClipboard, 0==ccall((:EmptyClipboard, "user32"), stdcall, Cint, ()))
         x_u16 = utf16(x)
         # copy data to locked, allocated space
-        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{Uint16}, (Uint16, Int32), 2, sizeof(x_u16)+2)
+        p = ccall((:GlobalAlloc, "kernel32"), stdcall, Ptr{UInt16}, (UInt16, Int32), 2, sizeof(x_u16)+2)
         systemerror(:GlobalAlloc, p==C_NULL)
-        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), p)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), p)
         systemerror(:GlobalLock, plock==C_NULL)
-        ccall(:memcpy, Ptr{Uint16}, (Ptr{Uint16},Ptr{Uint16},Int), plock, x_u16, sizeof(x_u16)+2)
+        ccall(:memcpy, Ptr{UInt16}, (Ptr{UInt16},Ptr{UInt16},Int), plock, x_u16, sizeof(x_u16)+2)
         systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Void},), plock))
-        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32, Ptr{Uint16}), 13, p)
+        pdata = ccall((:SetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32, Ptr{UInt16}), 13, p)
         systemerror(:SetClipboardData, pdata!=p)
         ccall((:CloseClipboard, "user32"), stdcall, Void, ())
     end
@@ -125,13 +125,13 @@ end
 
     function clipboard()
         systemerror(:OpenClipboard, 0==ccall((:OpenClipboard, "user32"), stdcall, Cint, (Ptr{Void},), C_NULL))
-        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{Uint16}, (Uint32,), 13)
+        pdata = ccall((:GetClipboardData, "user32"), stdcall, Ptr{UInt16}, (UInt32,), 13)
         systemerror(:SetClipboardData, pdata==C_NULL)
         systemerror(:CloseClipboard, 0==ccall((:CloseClipboard, "user32"), stdcall, Cint, ()))
-        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{Uint16}, (Ptr{Uint16},), pdata)
+        plock = ccall((:GlobalLock, "kernel32"), stdcall, Ptr{UInt16}, (Ptr{UInt16},), pdata)
         systemerror(:GlobalLock, plock==C_NULL)
         s = utf8(utf16(plock))
-        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{Uint16},), plock))
+        systemerror(:GlobalUnlock, 0==ccall((:GlobalUnlock, "kernel32"), stdcall, Cint, (Ptr{UInt16},), plock))
         return s
     end
 end
@@ -337,7 +337,7 @@ end
 
 @windows_only function download(url::AbstractString, filename::AbstractString)
     res = ccall((:URLDownloadToFileW,:urlmon),stdcall,Cuint,
-                (Ptr{Void},Ptr{Uint16},Ptr{Uint16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
+                (Ptr{Void},Ptr{UInt16},Ptr{UInt16},Cint,Ptr{Void}),0,utf16(url),utf16(filename),0,0)
     if res != 0
         error("automatic download failed (error: $res): $url")
     end

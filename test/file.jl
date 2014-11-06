@@ -169,16 +169,16 @@ write(s, "Hello World\n")
 close(s)
 s = open(file, "r")
 @test isreadonly(s) == true
-c = mmap_array(Uint8, (11,), s)
+c = mmap_array(UInt8, (11,), s)
 @test c == "Hello World".data
-c = mmap_array(Uint8, (uint16(11),), s)
+c = mmap_array(UInt8, (uint16(11),), s)
 @test c == "Hello World".data
-@test_throws ErrorException mmap_array(Uint8, (int16(-11),), s)
-@test_throws ErrorException mmap_array(Uint8, (typemax(Uint),), s)
+@test_throws ErrorException mmap_array(UInt8, (int16(-11),), s)
+@test_throws ErrorException mmap_array(UInt8, (typemax(UInt),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
-c = mmap_array(Uint8, (11,), s)
+c = mmap_array(UInt8, (11,), s)
 c[5] = uint8('x')
 msync(c)
 close(s)
@@ -323,7 +323,7 @@ write(f, "Hello, world!")
 close(f)
 f = open(file, "r")
 FILEp = convert(CFILE, f)
-buf = Array(Uint8, 8)
+buf = Array(UInt8, 8)
 str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp.ptr)
 @test bytestring(buf) == "Hello, w"
 @test position(FILEp) == 8
