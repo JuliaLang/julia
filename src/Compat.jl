@@ -2,6 +2,16 @@ module Compat
 
 using Base.Meta
 
+if VERSION < v"0.4.0-dev+1419"
+    export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
+    const UInt = Uint
+    const UInt8 = Uint8
+    const UInt16 = Uint16
+    const UInt32 = Uint32
+    const UInt64 = Uint64
+    const UInt128 = Uint128
+end
+
 if VERSION < v"0.4.0-dev+1387"
     typealias AbstractString String
     export AbstractString
