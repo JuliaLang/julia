@@ -255,12 +255,12 @@ for (f,t) in ((:char,   Char),
               (:int32,  Int32),
               (:int64,  Int64),
               (:int128, Int128),
-              (:uint,   Uint),
-              (:uint8,  Uint8),
-              (:uint16, Uint16),
-              (:uint32, Uint32),
-              (:uint64, Uint64),
-              (:uint128,Uint128))
+              (:uint,   UInt),
+              (:uint8,  UInt8),
+              (:uint16, UInt16),
+              (:uint32, UInt32),
+              (:uint64, UInt64),
+              (:uint128,UInt128))
     @eval begin
         ($f)(x::AbstractArray{$t}) = x
         ($f)(x::AbstractArray{$t}) = x
@@ -323,12 +323,12 @@ float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(ze
 complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
     convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
-function float(A::AbstractArray) 
+function float(A::AbstractArray)
     cnv(x) = convert(FloatingPoint,x)
     map_promote(cnv, A)
 end
 
-function complex(A::AbstractArray) 
+function complex(A::AbstractArray)
     cnv(x) = convert(Complex,x)
     map_promote(cnv, A)
 end
@@ -609,7 +609,7 @@ function cat(catdims, X...)
     for k = 1:length(catdims)
         dims2cat[catdims[k]]=k
     end
-    
+
     typeC = isa(X[1],AbstractArray) ? eltype(X[1]) : typeof(X[1])
     dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
     for k = 1:length(catdims)
@@ -627,12 +627,12 @@ function cat(catdims, X...)
             end
         end
     end
-    
+
     C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, tuple(dimsC...))
     if length(catdims)>1
         fill!(C,0)
     end
-    
+
     offsets = zeros(Int,length(catdims))
     for i=1:nargs
         cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
@@ -1378,7 +1378,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
         end
     else
         # Skip through A, in order, from each element i to the next element i+s
-        # included in S. The probability that the next included element is 
+        # included in S. The probability that the next included element is
         # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
         # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
         # from this probability distribution via the discrete inverse-transform

@@ -7,13 +7,13 @@ function hpl_seq(A::Matrix, b::Vector)
 
     n = size(A,1)
     A = [A b]
-    
+
     B_rows = linspace(0, n, div(n,blocksize)+1)
-    B_rows[end] = n 
+    B_rows[end] = n
     B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
     depend = zeros(Bool, nB, nB) # In parallel, depend needs to be able to hold futures
-    
+
     ## Small matrix case
     if nB <= 1
         x = A[1:n, 1:n] \ A[:,n+1]
@@ -22,27 +22,27 @@ function hpl_seq(A::Matrix, b::Vector)
 
     ## Add a ghost row of dependencies to boostrap the computation
     for j=1:nB; depend[1,j] = true; end
-    
+
     for i=1:(nB-1)
         ## Threads for panel factorizations
         I = (B_rows[i]+1):B_rows[i+1]
         #(depend[i+1,i], panel_p) = spawn(panel_factor_seq, I, depend[i,i])
         (depend[i+1,i], panel_p) = panel_factor_seq(A, I, depend[i,i])
-        
+
         ## Threads for trailing updates
         for j=(i+1):nB
-            J = (B_cols[j]+1):B_cols[j+1]    
+            J = (B_cols[j]+1):B_cols[j+1]
             #depend[i+1,j] = spawn(trailing_update_seq, I, J, panel_p, depend[i+1,i],depend[i,j])
             depend[i+1,j] = trailing_update_seq(A, I, J, panel_p, depend[i+1,i],depend[i,j])
         end
     end
-    
+
     ## Completion of the last diagonal block signals termination
     #wait(depend[nB, nB])
-    
+
     ## Solve the triangular system
     x = triu(A[1:n,1:n]) \ A[:,n+1]
-    
+
     return x
 
 end ## hpl()
@@ -55,16 +55,16 @@ function panel_factor_seq(A, I, col_dep)
 
     ## Enforce dependencies
     #wait(col_dep)
-    
+
     ## Factorize a panel
     K = I[1]:n
     panel_p = lufact!(sub(A, K, I))[:p] # Economy mode
-    
-    ## Panel permutation 
+
+    ## Panel permutation
     panel_p = K[panel_p]
-    
+
     return (true, panel_p)
-    
+
 end ## panel_factor_seq()
 
 
@@ -73,25 +73,25 @@ end ## panel_factor_seq()
 function trailing_update_seq(A, I, J, panel_p, row_dep, col_dep)
 
     n = size (A, 1)
-    
+
     ## Enforce dependencies
     #wait(row_dep, col_dep)
-    
-    ## Apply permutation from pivoting 
-    K = (I[end]+1):n       
+
+    ## Apply permutation from pivoting
+    K = (I[end]+1):n
     A[I[1]:n, J] = A[panel_p, J]
-    
-    ## Compute blocks of U 
+
+    ## Compute blocks of U
     L = tril(A[I,I],-1) + eye(length(I))
     A[I, J] = L \ A[I, J]
-    
+
     ## Trailing submatrix update
     if !isempty(K)
-        A[K,J] = A[K,J] - A[K,I]*A[I,J]  
+        A[K,J] = A[K,J] - A[K,I]*A[I,J]
     end
-    
+
     return true
-    
+
 end ## trailing_update_seq()
 
 # This version is written for a shared memory implementation.
@@ -106,17 +106,17 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
 
     n = size(A,1)
     A = [A b]
-    
+
     if blocksize < 1
        throw(ArgumentError("hpl_par: invalid blocksize: $blocksize < 1"))
     end
 
     B_rows = linspace(0, n, div(n,blocksize)+1)
-    B_rows[end] = n 
+    B_rows[end] = n
     B_cols = [B_rows, [n+1]]
     nB = length(B_rows)
     depend = cell(nB, nB)
-    
+
     ## Small matrix case
     if nB <= 1
         x = A[1:n, 1:n] \ A[:,n+1]
@@ -137,7 +137,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
         ## Write the factorized panel back to A
         A[K,I] = A_KI
 
-        ## Panel permutation 
+        ## Panel permutation
         panel_p = K[panel_p]
         depend[i+1,i] = true
 
@@ -152,7 +152,7 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
 
         for j=(i+1):nB
             J = (B_cols[j]+1):B_cols[j+1]
-            
+
             ## Do the trailing update (Compute U, and DGEMM - all flops are here)
             if run_parallel
                 A_IJ = A[I,J]
@@ -178,13 +178,13 @@ function hpl_par(A::Matrix, b::Vector, blocksize::Integer, run_parallel::Bool)
         end
 
     end
-    
+
     ## Completion of the last diagonal block signals termination
     @assert depend[nB, nB]
-    
+
     ## Solve the triangular system
     x = triu(A[1:n,1:n]) \ A[:,n+1]
-    
+
     return x
 
 end ## hpl()
@@ -195,23 +195,23 @@ end ## hpl()
 function panel_factor_par(A_KI, col_dep)
 
     @assert col_dep
-    
+
     ## Factorize a panel
     panel_p = lufact!(A_KI)[:p] # Economy mode
-    
+
     return (A_KI, panel_p)
-    
+
 end ## panel_factor_par()
 
 
 ### Trailing update ###
 
 function trailing_update_par(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
-    
+
     @assert row_dep
     @assert col_dep
 
-    ## Compute blocks of U 
+    ## Compute blocks of U
     A_IJ = L_II \ A_IJ
 
     ## Trailing submatrix update - All flops are here
@@ -221,9 +221,9 @@ function trailing_update_par(L_II, A_IJ, A_KI, A_KJ, row_dep, col_dep)
         blas_gemm('N','N',m,n,k,-1.0,A_KI,m,A_IJ,k,1.0,A_KJ,m)
         #A_KJ = A_KJ - A_KI*A_IJ
     end
-    
+
     return (A_IJ, A_KJ)
-    
+
 end ## trailing_update_par()
 
 
@@ -288,7 +288,7 @@ function hpl_par2(A::Matrix, b::Vector)
             end
         end
     end
-    
+
     A = convert(Array, C)
     x = triu(A[1:n,1:n]) \ A[:,n+1]
 end ## hpl_par2()
@@ -343,7 +343,7 @@ function trailing_update_par2(C, L_II, C_KI, i, j, n, flag, dep)
     else
         #(C.dist[i+1] == n+2) ? (I = (C.dist[i]):n) :
         #                       (I = (C.dist[i]):(C.dist[i+1]-1))
-        
+
         I = (C.dist[i]):(C.dist[i+1]-1)
         J = (C.dist[j]):(C.dist[j+1]-1)
         K = (I[length(I)]+1):n
@@ -353,7 +353,7 @@ function trailing_update_par2(C, L_II, C_KI, i, j, n, flag, dep)
         else
             C_KJ = zeros(0)
         end
-  
+
         ## Compute blocks of U
         C_IJ = L_II \ C_IJ
         C[I,J] = C_IJ
@@ -364,8 +364,8 @@ function trailing_update_par2(C, L_II, C_KI, i, j, n, flag, dep)
             blas_gemm('N','N',cm,cn,ck,-1.0,C_KI,cm,C_IJ,ck,1.0,C_KJ,cm)
             #C_KJ = C_KJ - C_KI*C_IJ
             C[K,J] = C_KJ
-        end   
-    end 
+        end
+    end
 end ## trailing_update_par2()
 
 ## Test n*n matrix on np processors

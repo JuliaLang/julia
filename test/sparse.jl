@@ -300,8 +300,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
 end
 
 # workaround issue #7197: comment out let-block
-#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
-S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+#let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[1,1] = 1
     S1290[5] = 2
     S1290[end] = 3
@@ -342,7 +342,7 @@ let A = spzeros(Int, 10, 20)
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
-let ASZ = 1000, TSZ = 800 
+let ASZ = 1000, TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
     nA = countnz(A)

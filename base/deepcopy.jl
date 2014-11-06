@@ -38,7 +38,7 @@ function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
         end
     else
         fields = Any[deepcopy_internal(x.(i), stackdict) for i in 1:length(T.names)]
-        y = ccall(:jl_new_structv, Any, (Any, Ptr{Void}, Uint32),
+        y = ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32),
                   T, pointer(fields), length(fields))
     end
     return y::T

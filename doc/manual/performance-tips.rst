@@ -532,8 +532,6 @@ These are some minor points that might help in tight inner loops.
 
 -  Avoid unnecessary arrays. For example, instead of ``sum([x,y,z])``
    use ``x+y+z``.
--  Use ``*`` instead of raising to small integer powers, for example
-   ``x*x*x`` instead of ``x^3``.
 -  Use ``abs2(z)`` instead of ``abs(z)^2`` for complex ``z``. In general,
    try to rewrite code to use ``abs2`` instead of ``abs`` for complex arguments.
 -  Use ``div(x,y)`` for truncating division of integers instead of

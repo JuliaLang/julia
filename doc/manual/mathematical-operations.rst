@@ -129,7 +129,7 @@ are::
    .. doctest::
 
       julia> x = 0x01; typeof(x)
-      Uint8
+      UInt8
 
       julia> x *= 2 #Same as x = x * 2
       2

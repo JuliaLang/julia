@@ -81,7 +81,7 @@ abstract ClusterManager
 
 type Worker
     host::ByteString
-    port::Uint16
+    port::UInt16
     socket::TCPSocket
     sendbuf::IOBuffer
     del_msgs::Array{Any,1}
@@ -92,12 +92,12 @@ type Worker
     manager::ClusterManager
     config::Dict
 
-    Worker(host::String, port::Integer, sock::TCPSocket, id::Int) =
+    Worker(host::AbstractString, port::Integer, sock::TCPSocket, id::Int) =
         new(bytestring(host), uint16(port), sock, IOBuffer(), [], [], id, false)
 end
-Worker(host::String, port::Integer, sock::TCPSocket) =
+Worker(host::AbstractString, port::Integer, sock::TCPSocket) =
     Worker(host, port, sock, 0)
-function Worker(host::String, port::Integer)
+function Worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
     if host == string(LPROC.bind_addr)
         w = Worker(host, port, connect("127.0.0.1", uint16(port)))
@@ -117,7 +117,7 @@ function Worker(host::String, port::Integer)
     end
     w
 end
-function Worker(host::String, bind_addr::String, port::Integer, tunnel_user::String, sshflags) 
+function Worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
     w = Worker(host, port,
                connect("localhost",
                        ssh_tunnel(tunnel_user, host, bind_addr, uint16(port), sshflags)))
@@ -188,7 +188,7 @@ end
 type LocalProcess
     id::Int
     bind_addr::IPAddr
-    bind_port::Uint16
+    bind_port::UInt16
     LocalProcess() = new(1)
 end
 
@@ -208,7 +208,7 @@ let next_pid = 2    # 1 is reserved for the client (always)
 end
 
 type ProcessGroup
-    name::String
+    name::AbstractString
     workers::Array{Any,1}
 
     # global references
@@ -224,7 +224,7 @@ function get_bind_addr(w::Union(Worker, LocalProcess))
         if w.id != myid()
             w.bind_addr = remotecall_fetch(w.id, get_bind_addr, w.id)
         else
-            error("LPROC.bind_addr not defined") # Should never happend since LPROC.bind_addr 
+            error("LPROC.bind_addr not defined") # Should never happend since LPROC.bind_addr
                                            # is defined early on during process init.
         end
     end
@@ -437,7 +437,7 @@ type RemoteRef
     next_id() = (id=(myid(),REQ_ID); REQ_ID+=1; id)
 end
 
-hash(r::RemoteRef, h::Uint) = hash(r.whence, hash(r.id, h))
+hash(r::RemoteRef, h::UInt) = hash(r.whence, hash(r.id, h))
 ==(r::RemoteRef, s::RemoteRef) = (r.whence==s.whence && r.id==s.id)
 
 rr2id(r::RemoteRef) = (r.whence, r.id)
@@ -876,7 +876,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                             # Connect to them
                             if self_is_local && r_is_local
                                 # If on localhost, use the loopback address - this addresses
-                                # the special case of system suspend wherein the local ip 
+                                # the special case of system suspend wherein the local ip
                                 # may be changed upon system awake.
                                 w = Worker("127.0.0.1", rport)
                             else
@@ -985,14 +985,14 @@ function read_cb_response(io::IO, config::Dict)
     return (io, host, port, host, config)
 end
 
-function read_cb_response(io::IO, host::String, config::Dict)
+function read_cb_response(io::IO, host::AbstractString, config::Dict)
     (bind_addr, port) = read_worker_host_port(io)
     return (io, bind_addr, port, host, config)
 end
 
-read_cb_response(io::IO, host::String, port::Integer, config::Dict) = (io, host, port, host, config)
+read_cb_response(io::IO, host::AbstractString, port::Integer, config::Dict) = (io, host, port, host, config)
 
-read_cb_response(host::String, port::Integer, config::Dict) = (nothing, host, port, host, config)
+read_cb_response(host::AbstractString, port::Integer, config::Dict) = (nothing, host, port, host, config)
 
 
 function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManager, resp_arr::Array, launched_ntfy::Condition)
@@ -1003,13 +1003,13 @@ function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManage
     t = @schedule launch(manager, np, config, instance_sets, instances_ntfy)
 
     while true
-        if (length(instance_sets) == 0) 
+        if (length(instance_sets) == 0)
             istaskdone(t) && break
             @schedule (sleep(1); notify(instances_ntfy))
             wait(instances_ntfy)
         end
 
-        if length(instance_sets) > 0 
+        if length(instance_sets) > 0
             instances = shift!(instance_sets)
             for inst in instances
                 (io, bind_addr, port, pubhost, wconfig) = read_cb_response(inst...)
@@ -1176,7 +1176,7 @@ end
 
 
 function launch_on_machine(manager::SSHManager, config::Dict, resp_arr::Array, machines_launch_ntfy::Condition,
-                           machine::String, cnt::Integer, plaunch_ntfy::Condition)
+                           machine::AbstractString, cnt::Integer, plaunch_ntfy::Condition)
     dir = config[:dir]
     exename = config[:exename]
     exeflags_base = config[:exeflags]
@@ -1279,12 +1279,12 @@ end
 # optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
-# Default value of kw arg max_parallel is the default value of MaxStartups in sshd_config 
+# Default value of kw arg max_parallel is the default value of MaxStartups in sshd_config
 function addprocs_internal(np::Integer;
                            tunnel=false, dir=JULIA_HOME,
                            exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
                            sshflags::Cmd=``, manager=LocalManager(), exeflags=``, max_parallel=10)
-    
+
     config = AnyDict(:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel)
     disable_threaded_libs()
 
@@ -1302,7 +1302,7 @@ function addprocs_internal(np::Integer;
             @schedule (sleep(1); notify(c))
             wait(c)
         end
-        
+
         if length(resp_arr) > 0
             w = shift!(resp_arr)
             id, rr = add_worker(PGRP, w)
@@ -1449,7 +1449,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                     try
                         result = remotecall_fetch(wpid, f, fvals...)
                         if isa(result, Exception)
-                            ((wpid == myid()) ? rethrow(result) : throw(result)) 
+                            ((wpid == myid()) ? rethrow(result) : throw(result))
                         else
                             results[idx] = result
                         end
@@ -1460,7 +1460,7 @@ function pmap(f, lsts...; err_retry=true, err_stop=false)
                             results[idx] = ex
                         end
                         set_task_in_error()
-                        break # remove this worker from accepting any more tasks 
+                        break # remove this worker from accepting any more tasks
                     end
 
                     tasklet = getnext_tasklet()

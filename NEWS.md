@@ -23,6 +23,10 @@ New language features
 Language changes
 ----------------
 
+  * `Uint` et al. are now spelled `UInt` ([#8905]).
+
+  * `String` has been renamed to `AbstractString` ([#8872]).
+
   * `None` is deprecated; use `Union()` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
@@ -96,6 +100,10 @@ Library improvements
   * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
 
   * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
+
+  * The `machinefile` now supports an host count ([#7616]).
+
+  * Added optional rounding argument to floating-point constructors ([#8845])
 
 Deprecated or removed
 ---------------------
@@ -1034,6 +1042,7 @@ Too numerous to mention.
 [#7435]: https://github.com/JuliaLang/julia/issues/7435
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
+[#7616]: https://github.com/JuliaLang/julia/issues/7616
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
 [#7654]: https://github.com/JuliaLang/julia/issues/7654
 [#7704]: https://github.com/JuliaLang/julia/issues/7704
@@ -1054,3 +1063,5 @@ Too numerous to mention.
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
+[#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8872]: https://github.com/JuliaLang/julia/issues/8872

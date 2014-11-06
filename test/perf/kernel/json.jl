@@ -2,15 +2,15 @@
 #Adapted from http://www.mathworks.com/matlabcentral/fileexchange/23393
 #Original BSD Licence, (c) 2011, François Glineur
 
-function parse_json(strng::String)
+function parse_json(strng::AbstractString)
     pos = 1
     len = length(strng)
-    # String delimiters and escape characters are identified beforehand to improve speed
+    # AbstractString delimiters and escape characters are identified beforehand to improve speed
     # esc = regexp(str, "[\"\\\\]"); index_esc = 1; len_esc = length(esc);  #TODO Enable for speed
-    
+
     function parse_object()
         parse_char('{')
-        object = Dict{String, Any}()
+        object = Dict{AbstractString, Any}()
         if next_char() != '}'
             while true
                 str = parse_string()
@@ -29,7 +29,7 @@ function parse_json(strng::String)
         parse_char('}')
         return object
     end
-    
+
     function parse_array()
         parse_char('[')
         object = Set()
@@ -46,7 +46,7 @@ function parse_json(strng::String)
         parse_char(']')
         return object
     end
-    
+
     function parse_char(c::Char)
         skip_whitespace()
         if pos > len || strng[pos] != c
@@ -56,31 +56,31 @@ function parse_json(strng::String)
             skip_whitespace()
         end
     end
-    
+
     function next_char()
         skip_whitespace()
         if pos > len
             c = '\0'
         else
             c = strng[pos]
-        end        
+        end
     end
-    
+
     function skip_whitespace()
         while pos <= len && isspace(strng[pos])
             pos = pos + 1
         end
     end
-    
+
     function parse_string()
         if strng[pos] != '"'
-            error("String starting with quotation expected at position $pos")
+            error("AbstractString starting with quotation expected at position $pos")
         else
             pos = pos + 1
         end
         str = ""
         while pos <= len
-            # while index_esc <= len_esc && esc(index_esc) < pos 
+            # while index_esc <= len_esc && esc(index_esc) < pos
             #     index_esc = index_esc + 1
             # end
             # if index_esc > len_esc
@@ -92,7 +92,7 @@ function parse_json(strng::String)
             #     pos = esc(index_esc)
             # end
             nc = strng[pos]
-            if nc == '"' 
+            if nc == '"'
                 pos = pos + 1
                 return string(str)
             elseif nc ==  '\\'
@@ -121,7 +121,7 @@ function parse_json(strng::String)
         end
         error("End of file while expecting end of string")
     end
-    
+
     function parse_number()
         num_regex = r"^[\w]?[-+]?[0-9]*\.?[0-9]+([eE][-+]?[0-9]+)?[\w]?"
         m = match(num_regex, strng[pos:min(len,pos+20)])
@@ -132,7 +132,7 @@ function parse_json(strng::String)
         pos = pos + delta -1
         return float(m.match)
     end
-    
+
     function  parse_value()
         nc = strng[pos]
         if nc == '"'
@@ -168,7 +168,7 @@ function parse_json(strng::String)
         end
         error("Value expected at position $pos")
     end
-    
+
     if pos <= len
         nc = next_char()
         if nc == '{'

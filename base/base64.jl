@@ -15,9 +15,9 @@ export Base64Pipe, base64
 type Base64Pipe <: IO
     io::IO
     # writing works in groups of 3, so we need to cache last two bytes written
-    b0::Uint8
-    b1::Uint8
-    nb::Uint8 # number of bytes in cache: 0, 1, or 2
+    b0::UInt8
+    b1::UInt8
+    nb::UInt8 # number of bytes in cache: 0, 1, or 2
 
     function Base64Pipe(io::IO)
         b = new(io,0,0,0)
@@ -32,7 +32,7 @@ end
 
 const b64chars = ['A':'Z','a':'z','0':'9','+','/']
 
-function b64(x::Uint8, y::Uint8, z::Uint8)
+function b64(x::UInt8, y::UInt8, z::UInt8)
     n = int(x)<<16 | int(y)<<8 | int(z)
     b64chars[(n >> 18) + 1],
     b64chars[(n >> 12) & 0b111111 + 1],
@@ -40,19 +40,19 @@ function b64(x::Uint8, y::Uint8, z::Uint8)
     b64chars[(n ) & 0b111111 + 1]
 end
 
-function b64(x::Uint8, y::Uint8)
+function b64(x::UInt8, y::UInt8)
     a, b, c = b64(x, y, 0x0)
     a, b, c, '='
 end
 
-function b64(x::Uint8)
+function b64(x::UInt8)
     a, b = b64(x, 0x0, 0x0)
     a, b, '=', '='
 end
 
 #############################################################################
 
-function write(b::Base64Pipe, x::AbstractVector{Uint8})
+function write(b::Base64Pipe, x::AbstractVector{UInt8})
     n = length(x)
     s = 1 # starting index
     # finish any cached data to write:
@@ -93,7 +93,7 @@ function write(b::Base64Pipe, x::AbstractVector{Uint8})
     end
 end
 
-function write(b::Base64Pipe, x::Uint8)
+function write(b::Base64Pipe, x::UInt8)
     if b.nb == 0
         b.b0 = x
         b.nb = 1
@@ -130,7 +130,7 @@ base64(x...) = base64(write, x...)
 
 #############################################################################
 
-# read(b::Base64Pipe, ::Type{Uint8}) = # TODO: decode base64
+# read(b::Base64Pipe, ::Type{UInt8}) = # TODO: decode base64
 
 #############################################################################
 

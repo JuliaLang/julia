@@ -67,7 +67,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
     parts of the new ``DateTime`` are assumed to be zero.
 
-.. function:: DateTime(dt::String, format::String; locale="english") -> DateTime
+.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
@@ -117,7 +117,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
     parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
-.. function:: Date(dt::String, format::String; locale="english") -> Date
+.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
@@ -172,12 +172,12 @@ Accessor Functions
 Query Functions
 ~~~~~~~~~~~~~~~
 
-.. function:: dayname(dt::TimeType; locale="english") -> String
+.. function:: dayname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full day name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
 
-.. function:: dayabbr(dt::TimeType; locale="english") -> String
+.. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
@@ -199,11 +199,11 @@ Query Functions
     the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)``
     in the adjuster function.
 
-.. function:: monthname(dt::TimeType; locale="english") -> String
+.. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full name of the month of the Date or DateTime in the given ``locale``.
 
-.. function:: monthabbr(dt::TimeType; locale="english") -> String
+.. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated month name of the Date or DateTime in the given ``locale``.
 

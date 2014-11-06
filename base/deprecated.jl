@@ -78,7 +78,7 @@ const Stat = StatStruct
 export CharString
 const CharString = UTF32String
 @deprecate UTF32String(c::Integer...) utf32(c...)
-@deprecate UTF32String(s::String) utf32(s)
+@deprecate UTF32String(s::AbstractString) utf32(s)
 
 export Ranges
 const Ranges = Range
@@ -135,10 +135,10 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
 
-@deprecate bitmix(x, y::Uint)                 hash(x, y)
+@deprecate bitmix(x, y::UInt)                 hash(x, y)
 @deprecate bitmix(x, y::Int)                  hash(x, uint(y))
-@deprecate bitmix(x, y::Union(Uint32, Int32)) convert(Uint32, hash(x, uint(y)))
-@deprecate bitmix(x, y::Union(Uint64, Int64)) convert(Uint64, hash(x, hash(y)))
+@deprecate bitmix(x, y::Union(UInt32, Int32)) convert(UInt32, hash(x, uint(y)))
+@deprecate bitmix(x, y::Union(UInt64, Int64)) convert(UInt64, hash(x, hash(y)))
 
 @deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
 @deprecate writesto(cmd, args...)      open(cmd, "w", args...)
@@ -152,7 +152,7 @@ function tty_cols()
     tty_size()[2]
 end
 
-@deprecate pointer{T}(::Type{T}, x::Uint) convert(Ptr{T}, x)
+@deprecate pointer{T}(::Type{T}, x::UInt) convert(Ptr{T}, x)
 @deprecate pointer{T}(::Type{T}, x::Ptr) convert(Ptr{T}, x)
 
 # 0.3 discontinued functions
@@ -178,7 +178,7 @@ const UdpSocket = UDPSocket
 const IpAddr = IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
-@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+@deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
 @deprecate randbool! rand!
 
@@ -212,3 +212,14 @@ end
 @deprecate nan(x::FloatingPoint)  oftype(x,NaN)
 @deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
 @deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
+
+export String
+const String = AbstractString
+
+export Uint, Uint8, Uint16, Uint32, Uint64, Uint128
+const Uint = UInt
+const Uint8 = UInt8
+const Uint16 = UInt16
+const Uint32 = UInt32
+const Uint64 = UInt64
+const Uint128 = UInt128

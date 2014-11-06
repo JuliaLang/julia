@@ -163,12 +163,12 @@ type system more than just a collection of object implementations.
 
 Recall that in :ref:`man-integers-and-floating-point-numbers`, we
 introduced a variety of concrete types of numeric values: ``Int8``,
-``Uint8``, ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``,
-``Uint64``, ``Int128``, ``Uint128``, ``Float16``, ``Float32``, and
+``UInt8``, ``Int16``, ``UInt16``, ``Int32``, ``UInt32``, ``Int64``,
+``UInt64``, ``Int128``, ``UInt128``, ``Float16``, ``Float32``, and
 ``Float64``.  Although they have different representation sizes, ``Int8``,
 ``Int16``, ``Int32``, ``Int64``  and ``Int128`` all have in common that
-they are signed integer types. Likewise ``Uint8``, ``Uint16``, ``Uint32``,
-``Uint64`` and ``Uint128`` are all unsigned integer types, while
+they are signed integer types. Likewise ``UInt8``, ``UInt16``, ``UInt32``,
+``UInt64`` and ``UInt128`` are all unsigned integer types, while
 ``Float16``, ``Float32`` and ``Float64`` are distinct in being
 floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer,
@@ -287,15 +287,15 @@ the standard bits types are all defined in the language itself::
     bitstype 32 Char
 
     bitstype 8  Int8     <: Signed
-    bitstype 8  Uint8    <: Unsigned
+    bitstype 8  UInt8    <: Unsigned
     bitstype 16 Int16    <: Signed
-    bitstype 16 Uint16   <: Unsigned
+    bitstype 16 UInt16   <: Unsigned
     bitstype 32 Int32    <: Signed
-    bitstype 32 Uint32   <: Unsigned
+    bitstype 32 UInt32   <: Unsigned
     bitstype 64 Int64    <: Signed
-    bitstype 64 Uint64   <: Unsigned
+    bitstype 64 UInt64   <: Unsigned
     bitstype 128 Int128  <: Signed
-    bitstype 128 Uint128 <: Unsigned
+    bitstype 128 UInt128 <: Unsigned
 
 The general syntaxes for declaration of a ``bitstype`` are::
 
@@ -312,18 +312,18 @@ Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
+The types ``Bool``, ``Int8`` and ``UInt8`` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
 having identical structure. Another fundamental difference between them
 is that they have different supertypes: ``Bool``'s direct supertype is
-``Integer``, ``Int8``'s is ``Signed``, and ``Uint8``'s is ``Unsigned``.
-All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
+``Integer``, ``Int8``'s is ``Signed``, and ``UInt8``'s is ``Unsigned``.
+All other differences between ``Bool``, ``Int8``, and ``UInt8`` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
 dictates behavior, then it would be impossible to make ``Bool`` behave any
-differently than ``Int8`` or ``Uint8``.
+differently than ``Int8`` or ``UInt8``.
 
 .. _man-composite-types:
 
@@ -564,18 +564,18 @@ Accordingly, a tuple of types can be used anywhere a type is expected:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,Any)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Any)
     (1,"foo",2.5)
 
-    julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    ERROR: type: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Float32)
+    ERROR: type: typeassert: expected (Int64,AbstractString,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
 get an error:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,3)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,3)
     ERROR: type: typeassert: expected Type{T<:Top}, got (DataType,DataType,Int64)
 
 Note that the empty tuple ``()`` is its own type:
@@ -592,13 +592,13 @@ example:
 
 .. doctest::
 
-    julia> (Int,String) <: (Real,Any)
+    julia> (Int,AbstractString) <: (Real,Any)
     true
 
-    julia> (Int,String) <: (Real,Real)
+    julia> (Int,AbstractString) <: (Real,Real)
     false
 
-    julia> (Int,String) <: (Real,)
+    julia> (Int,AbstractString) <: (Real,)
     false
 
 Intuitively, this corresponds to the type of a function's arguments
@@ -611,8 +611,8 @@ A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 ``Union`` function::
 
-    julia> IntOrString = Union(Int,String)
-    Union(String,Int64)
+    julia> IntOrString = Union(Int,AbstractString)
+    Union(AbstractString,Int64)
 
     julia> 1 :: IntOrString
     1
@@ -621,7 +621,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(String,Int64), got Float64
+    ERROR: type: typeassert: expected Union(AbstractString,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -694,7 +694,7 @@ all (or an integer, actually, although here it's clearly used as a
 type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
 ``Float64``. Thus, this single declaration actually declares an
-unlimited number of types: ``Point{Float64}``, ``Point{String}``,
+unlimited number of types: ``Point{Float64}``, ``Point{AbstractString}``,
 ``Point{Int64}``, etc. Each of these is now a usable concrete type:
 
 .. doctest::
@@ -702,11 +702,11 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
     julia> Point{Float64}
     Point{Float64} (constructor with 1 method)
 
-    julia> Point{String}
-    Point{String} (constructor with 1 method)
+    julia> Point{AbstractString}
+    Point{AbstractString} (constructor with 1 method)
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
-floating-point values, while the type ``Point{String}`` is a "point"
+floating-point values, while the type ``Point{AbstractString}`` is a "point"
 whose "coordinates" are string objects (see :ref:`man-strings`).
 However, ``Point`` itself is also a valid type object:
 
@@ -718,14 +718,14 @@ However, ``Point`` itself is also a valid type object:
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
 that contains all the specific instances ``Point{Float64}``,
-``Point{String}``, etc.:
+``Point{AbstractString}``, etc.:
 
 .. doctest::
 
     julia> Point{Float64} <: Point
     true
 
-    julia> Point{String} <: Point
+    julia> Point{AbstractString} <: Point
     true
 
 Other types, of course, are not subtypes of it:
@@ -735,7 +735,7 @@ Other types, of course, are not subtypes of it:
     julia> Float64 <: Point
     false
 
-    julia> String <: Point
+    julia> AbstractString <: Point
     false
 
 Concrete ``Point`` types with different values of ``T`` are never
@@ -899,7 +899,7 @@ as a subtype of ``Pointy{T}``:
     julia> Point{Real} <: Pointy{Real}
     true
 
-    julia> Point{String} <: Pointy{String}
+    julia> Point{AbstractString} <: Pointy{AbstractString}
     true
 
 This relationship is also invariant:
@@ -947,8 +947,8 @@ subtypes of ``Real``:
     julia> Pointy{Real}
     Pointy{Real}
 
-    julia> Pointy{String}
-    ERROR: type: Pointy: in T, expected T<:Real, got Type{String}
+    julia> Pointy{AbstractString}
+    ERROR: type: Pointy: in T, expected T<:Real, got Type{AbstractString}
 
     julia> Pointy{1}
     ERROR: type: Pointy: in T, expected T<:Real, got Int64
@@ -1077,23 +1077,23 @@ Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already
 expressible type. For such occasions, Julia provides the ``typealias``
-mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
-``Uint64`` as is appropriate for the size of pointers on the system::
+mechanism. For example, ``UInt`` is type aliased to either ``UInt32`` or
+``UInt64`` as is appropriate for the size of pointers on the system::
 
     # 32-bit system:
-    julia> Uint
-    Uint32
+    julia> UInt
+    UInt32
 
     # 64-bit system:
-    julia> Uint
-    Uint64
+    julia> UInt
+    UInt64
 
 This is accomplished via the following code in ``base/boot.jl``::
 
     if is(Int,Int64)
-        typealias Uint Uint64
+        typealias UInt UInt64
     else
-        typealias Uint Uint32
+        typealias UInt UInt32
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is
@@ -1212,7 +1212,7 @@ Only declared types (``DataType``) have unambiguous supertypes:
     julia> super(Number)
     Any
 
-    julia> super(String)
+    julia> super(AbstractString)
     Any
 
     julia> super(Any)

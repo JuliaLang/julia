@@ -10,18 +10,18 @@ function show(io::IO, x::ANY)
         recorded = false
         oid = object_id(x)
         shown_set = get(task_local_storage(), :SHOWNSET, nothing)
-        if shown_set == nothing 
+        if shown_set == nothing
             shown_set = Set()
-            task_local_storage(:SHOWNSET, shown_set) 
+            task_local_storage(:SHOWNSET, shown_set)
         end
-        
+
         try
             if oid in shown_set
                 print(io, "#= circular reference =#")
             else
                 push!(shown_set, oid)
                 recorded = true
-            
+
                 n = length(t.names)
                 for i=1:n
                     f = t.names[i]
@@ -37,7 +37,7 @@ function show(io::IO, x::ANY)
             end
         catch e
             rethrow(e)
-        
+
         finally
             if recorded delete!(shown_set, oid) end
         end
@@ -46,7 +46,7 @@ function show(io::IO, x::ANY)
         print(io, "0x")
         p = pointer_from_objref(x) + sizeof(Ptr{Void})
         for i=nb-1:-1:0
-            print(io, hex(unsafe_load(convert(Ptr{Uint8}, p+i)), 2))
+            print(io, hex(unsafe_load(convert(Ptr{UInt8}, p+i)), 2))
         end
     end
     print(io,')')
@@ -206,7 +206,7 @@ show(io::IO, s::Symbol) = show_unquoted(io, QuoteNode(s))
 #   print(io, ex) defers to show_unquoted(io, ex)
 #   show(io, ex) defers to show_unquoted(io, QuoteNode(ex))
 #   show_unquoted(io, ex) does the heavy lifting
-# 
+#
 # AST printing should follow two rules:
 #   1. parse(string(ex)) == ex
 #   2. eval(parse(repr(ex))) == ex
@@ -246,9 +246,9 @@ const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","
 
 ## AST decoding helpers ##
 
-is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (Uint32,), c) != 0
-is_id_char(c::Char) = ccall(:jl_id_char, Cint, (Uint32,), c) != 0
-function isidentifier(s::String)
+is_id_start_char(c::Char) = ccall(:jl_id_start_char, Cint, (UInt32,), c) != 0
+is_id_char(c::Char) = ccall(:jl_id_char, Cint, (UInt32,), c) != 0
+function isidentifier(s::AbstractString)
     i = start(s)
     done(s, i) && return false
     (c, i) = next(s, i)
@@ -260,9 +260,9 @@ function isidentifier(s::String)
     return true
 end
 
-isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{Uint8},), s) != 0
+isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{UInt8},), s) != 0
 operator_precedence(s::Symbol) = int(ccall(:jl_operator_precedence,
-                                           Cint, (Ptr{Uint8},), s))
+                                           Cint, (Ptr{UInt8},), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
 
@@ -442,7 +442,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # (:calldecl is a "fake" expr node created when we find a :function expr)
     elseif head == :calldecl && nargs >= 1
         show_call(io, head, args[1], args[2:end], indent)
-        
+
     # function call
     elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         func = args[1]
@@ -588,7 +588,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "unless ")
         show_list(io, args, " goto ", indent)
 
-    elseif is(head, :string) && nargs == 1 && isa(args[1], String)
+    elseif is(head, :string) && nargs == 1 && isa(args[1], AbstractString)
         show(io, args[1])
 
     elseif is(head, :null)
@@ -601,7 +601,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     elseif is(head, :string)
         a = map(args) do x
-            if !isa(x,String)
+            if !isa(x,AbstractString)
                 if isa(x,Symbol) && !(x in quoted_syms)
                     string("\$", x)
                 else
@@ -746,7 +746,7 @@ function dumptype(io::IO, x, n::Int, indent)
     # based on Jameson Nash's examples/typetree.jl
     println(io, x)
     if n == 0   # too deeply nested
-        return  
+        return
     end
     typargs(t) = split(string(t), "{")[1]
     # todo: include current module?
@@ -771,7 +771,7 @@ function dumptype(io::IO, x, n::Int, indent)
                     # type aliases
                     if string(s) != string(t.name)
                         println(io, indent, "  ", s, " = ", t.name)
-                    elseif t != Any 
+                    elseif t != Any
                         print(io, indent, "  ")
                         dump(io, t, n - 1, string(indent, "  "))
                     end
@@ -797,7 +797,7 @@ xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
 # Here are methods specifically for dump:
 dump(io::IO, x, n::Int) = dump(io, x, n, "")
 dump(io::IO, x) = dump(io, x, 5, "")  # default is 5 levels
-dump(io::IO, x::String, n::Int, indent) =
+dump(io::IO, x::AbstractString, n::Int, indent) =
                (print(io, typeof(x), " ");
                 show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
@@ -882,7 +882,7 @@ end
 
 function print_matrix_row(io::IO,
     X::AbstractVecOrMat, A::Vector,
-    i::Integer, cols::AbstractVector, sep::String
+    i::Integer, cols::AbstractVector, sep::AbstractString
 )
     for k = 1:length(A)
         j = cols[k]
@@ -902,7 +902,7 @@ function print_matrix_row(io::IO,
 end
 
 function print_matrix_vdots(io::IO,
-    vdots::String, A::Vector, sep::String, M::Integer, m::Integer
+    vdots::AbstractString, A::Vector, sep::AbstractString, M::Integer, m::Integer
 )
     for k = 1:length(A)
         w = A[k][1] + A[k][2]
@@ -919,12 +919,12 @@ end
 
 function print_matrix(io::IO, X::AbstractVecOrMat,
                       sz::(Integer, Integer) = (s = tty_size(); (s[1]-4, s[2])),
-                      pre::String = " ",
-                      sep::String = "  ",
-                      post::String = "",
-                      hdots::String = "  \u2026  ",
-                      vdots::String = "\u22ee",
-                      ddots::String = "  \u22f1  ",
+                      pre::AbstractString = " ",
+                      sep::AbstractString = "  ",
+                      post::AbstractString = "",
+                      hdots::AbstractString = "  \u2026  ",
+                      vdots::AbstractString = "\u22ee",
+                      ddots::AbstractString = "  \u22f1  ",
                       hmod::Integer = 5, vmod::Integer = 5)
     rows, cols = sz
     cols -= length(pre) + length(post)
@@ -1165,7 +1165,7 @@ end
 function array_eltype_show_how(X)
     e = eltype(X)
     leaf = isleaftype(e)
-    plain = e<:Number || e<:String
+    plain = e<:Number || e<:AbstractString
     if isa(e,DataType) && e === e.name.primary
         str = string(e.name)
     else
@@ -1193,7 +1193,7 @@ show(io::IO, v::AbstractVector) = show_vector(io, v, "[", "]")
 
 # (following functions not exported - mainly intended for debug)
 
-function print_bit_chunk(io::IO, c::Uint64, l::Integer)
+function print_bit_chunk(io::IO, c::UInt64, l::Integer)
     for s = 0 : l - 1
         d = (c >>> s) & 1
         print(io, "01"[d + 1])
@@ -1203,10 +1203,10 @@ function print_bit_chunk(io::IO, c::Uint64, l::Integer)
     end
 end
 
-print_bit_chunk(io::IO, c::Uint64) = print_bit_chunk(io, c, 64)
+print_bit_chunk(io::IO, c::UInt64) = print_bit_chunk(io, c, 64)
 
-print_bit_chunk(c::Uint64, l::Integer) = print_bit_chunk(STDOUT, c, l)
-print_bit_chunk(c::Uint64) = print_bit_chunk(STDOUT, c)
+print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
+print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
     if length(B) == 0

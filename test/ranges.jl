@@ -152,7 +152,7 @@ let s = 0
 
     # loops covering the full range of smaller integer types
     s = 0
-    for i = typemin(Uint8):typemax(Uint8)
+    for i = typemin(UInt8):typemax(UInt8)
         s += 1
     end
     @test s == 256
@@ -160,12 +160,12 @@ let s = 0
     # loops past typemax(Int)
     n = 0
     s = int128(0)
-    for i = typemax(Uint64)-2:typemax(Uint64)
+    for i = typemax(UInt64)-2:typemax(UInt64)
         n += 1
         s += i
     end
     @test n == 3
-    @test s == 3*int128(typemax(Uint64)) - 3
+    @test s == 3*int128(typemax(UInt64)) - 3
 
     # loops over empty ranges
     s = 0
@@ -302,8 +302,8 @@ for s in 3:100
 end
 
 @test length(uint(1):uint(1):uint(0)) == 0
-@test length(typemax(Uint):uint(1):(typemax(Uint)-1)) == 0
-@test length(typemax(Uint):uint(2):(typemax(Uint)-1)) == 0
+@test length(typemax(UInt):uint(1):(typemax(UInt)-1)) == 0
+@test length(typemax(UInt):uint(2):(typemax(UInt)-1)) == 0
 @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 
 # issue #6364
@@ -366,8 +366,8 @@ end
 
 # issue #8531
 let smallint = (Int === Int64 ?
-                (Int8,Uint8,Int16,Uint16,Int32,Uint32) :
-                (Int8,Uint8,Int16,Uint16))
+                (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
+                (Int8,UInt8,Int16,UInt16))
     for T in smallint
         @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
     end

@@ -45,13 +45,13 @@ call(::MinFun, x, y) = scalarmin(x, y)
 
 if Int === Int32
 typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(Uint8,Uint16)
+typealias SmallUnsigned Union(UInt8,UInt16)
 else
 typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+typealias SmallUnsigned Union(UInt8,UInt16,UInt32)
 end
 
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
+typealias CommonReduceResult Union(UInt64,UInt128,Int64,Int128,Float32,Float64)
 typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
 
 # r_promote: promote x to the type of reduce(op, [x])
@@ -74,7 +74,7 @@ function mapfoldl_impl(f, op, v0, itr, i)
         (x, i) = next(itr, i)
         v = op(v0, f(x))
         while !done(itr, i)
-            (x, i) = next(itr, i) 
+            (x, i) = next(itr, i)
             v = op(v, f(x))
         end
         return v
@@ -153,7 +153,7 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
@@ -169,7 +169,7 @@ mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
 function _mapreduce{T}(f, op, A::AbstractArray{T})
-    n = length(A)
+    n = Int(length(A))
     if n == 0
         return mr_empty(f, op, T)
     elseif n == 1
@@ -226,7 +226,7 @@ sum_pairwise_blocksize(f) = 1024
 # This appears to show a benefit from a larger block size
 sum_pairwise_blocksize(::Abs2Fun) = 4096
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
 sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)

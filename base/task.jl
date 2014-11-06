@@ -292,7 +292,7 @@ end
 
 function pause()
     @unix_only    ccall(:pause, Void, ())
-    @windows_only ccall(:Sleep,stdcall, Void, (Uint32,), 0xffffffff)
+    @windows_only ccall(:Sleep,stdcall, Void, (UInt32,), 0xffffffff)
 end
 
 
