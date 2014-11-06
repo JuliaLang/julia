@@ -66,7 +66,7 @@ end
 
 function BigFloat(x::BigInt)
     z = BigFloat()
-    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])   
+    ccall((:mpfr_set_z, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Int32), &z, &x, ROUNDING_MODE[end])
     return z
 end
 
@@ -150,7 +150,7 @@ deserialize(s, ::Type{BigFloat}) = BigFloat(deserialize(s))
 
 # Basic arithmetic without promotion
 for (fJ, fC) in ((:+,:add), (:*,:mul))
-    @eval begin 
+    @eval begin
         # BigFloat
         function ($fJ)(x::BigFloat, y::BigFloat)
             z = BigFloat()
@@ -193,7 +193,7 @@ for (fJ, fC) in ((:+,:add), (:*,:mul))
 end
 
 for (fJ, fC) in ((:-,:sub), (:/,:div))
-    @eval begin 
+    @eval begin
         # BigFloat
         function ($fJ)(x::BigFloat, y::BigFloat)
             z = BigFloat()
@@ -212,7 +212,7 @@ for (fJ, fC) in ((:-,:sub), (:/,:div))
             ccall(($(string(:mpfr_,:ui_,fC)), :libmpfr), Int32, (Ptr{BigFloat}, Culong, Ptr{BigFloat}, Int32), &z, c, &x, ROUNDING_MODE[end])
             return z
         end
-        
+
         # Signed Integer
         function ($fJ)(x::BigFloat, c::ClongMax)
             z = BigFloat()

@@ -9,7 +9,7 @@ local rshift = bit.rshift
 local format = string.format
 
 local gettime
-do 
+do
     ffi.cdef[[
          struct timeval {
             long tv_sec;
@@ -81,7 +81,7 @@ local function mandel(z)
     end
     return maxiter
 end
-function mandelperf() 
+function mandelperf()
     local a, re, im, z
     a = ffi.new("double[?]", 546)
     r = 0
@@ -95,7 +95,7 @@ function mandelperf()
     return a
 end
 
-do 
+do
     local a = mandelperf()
     local sum = 0
     for i = 0, 545 do sum = sum + a[i] end
@@ -216,7 +216,7 @@ end
 
 do
     local s1, s2 = randmatstat(1000)
-    assert( 0.5 < s1 and s1 < 1.0 
+    assert( 0.5 < s1 and s1 < 1.0
         and 0.5 < s2 and s2 < 1.0 )
 end
 

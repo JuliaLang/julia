@@ -24,7 +24,7 @@ end
 
 # Takes in the raw array of values in vals, along with the benchmark name, description, unit and whether less is better
 function submit_to_codespeed(vals,name,desc,unit,test_group,lessisbetter=true)
-    # Points to the server 
+    # Points to the server
     codespeed_host = "julia-codespeed.csail.mit.edu"
 
     csdata["benchmark"] = name
@@ -56,7 +56,7 @@ macro output_timings(t,name,desc,group)
         elseif print_output
             @printf "julia,%s,%f,%f,%f,%f\n" $name minimum($t) maximum($t) mean($t) std($t)
         end
-        gc()        
+        gc()
     end
 end
 

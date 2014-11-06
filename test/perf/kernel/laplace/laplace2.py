@@ -18,7 +18,7 @@ def calc(N, Niter=100):
     for i in range(Niter):
         py_update(u,N,N)
     return u
-    
+
 start = time.time()
 u = calc(150,8000)
 elapsed = time.time() - start

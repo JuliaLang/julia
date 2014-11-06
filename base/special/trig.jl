@@ -53,7 +53,7 @@ function sin_kernel(x::DoubleFloat32)
     S2 = 0.008333329385889463
     S3 = -0.00019839334836096632
     S4 = 2.718311493989822e-6
-    
+
     z = x.hi*x.hi
     w = z*z
     r = S3+z*S4
@@ -86,7 +86,7 @@ function mulpi_ext(x::Float64)
     u = 134217729.0*x # 0x1p27 + 1
     x_hi = u-(u-x)
     x_lo = x-x_hi
-    
+
     y_hi = m*x
     y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
 
@@ -223,7 +223,7 @@ function deg2rad_ext(x::Float64)
     u = 134217729.0*x # 0x1p27 + 1
     x_hi = u-(u-x)
     x_lo = x-x_hi
-    
+
     y_hi = m*x
     y_lo = x_hi * m_lo + (x_lo* m_hi + ((x_hi*m_hi-y_hi) + x_lo*m_lo))
 
@@ -243,7 +243,7 @@ function sind(x::Real)
     arx = abs(rx)
 
     if rx == zero(rx)
-        return rx 
+        return rx
     elseif arx < oftype(rx,45)
         return sin_kernel(deg2rad_ext(rx))
     elseif arx <= oftype(rx,135)

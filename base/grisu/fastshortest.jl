@@ -21,7 +21,7 @@ function roundweed(buffer,len,rest,tk,unit,kappa,too_high::UInt64,unsafe_interva
 end
 
 const SmallPowersOfTen = [
-        0, 1, 10, 100, 1000, 10000, 100000, 
+        0, 1, 10, 100, 1000, 10000, 100000,
         1000000, 10000000, 100000000, 1000000000]
 
 function bigpowten(n,n_bits)
@@ -69,7 +69,7 @@ function digitgen(low,w,high,buffer)
                         unit,kappa,(too_high - w).s*unit,unsafe_interval.s)
             return r, kappa, len
         end
-    end    
+    end
 end
 
 function fastshortest(v,buffer=Array(UInt8,17))

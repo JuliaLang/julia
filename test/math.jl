@@ -11,7 +11,7 @@ for T = (Float32,Float64,Rational{Int})
         @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
         @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
     end
-    
+
     @test sind(convert(T,0.0))::fT === zero(fT)
     @test sind(convert(T,180.0))::fT === zero(fT)
     @test sind(convert(T,360.0))::fT === zero(fT)

@@ -161,7 +161,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
-    
+
     # Issue #7551
     # Enter search mode and try accepting an empty result
     REPL.history_reset_state(hp)
