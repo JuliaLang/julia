@@ -73,13 +73,7 @@ function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     return C
 end
 
-## Solver
-function \{T<:BlasFloat}(M::SymTridiagonal{T}, rhs::StridedVecOrMat{T})
-    if stride(rhs, 1) == 1
-        return LAPACK.gtsv!(copy(M.ev), copy(M.dv), copy(M.ev), copy(rhs))
-    end
-    solve(Tridiagonal(M), rhs)  # use the Julia "fallback"
-end
+factorize(S::SymTridiagonal) = ldltfact(S)
 
 #Wrap LAPACK DSTE{GR,BZ} to compute eigenvalues
 eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', m.dv, m.ev)...)
@@ -274,7 +268,3 @@ function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
     end
     C
 end
-
-A_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = A_ldiv_B!(lufact!(A), B)
-At_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = At_ldiv_B!(lufact!(A), B)
-Ac_ldiv_B!(A::Tridiagonal,B::AbstractVecOrMat) = Ac_ldiv_B!(lufact!(A), B)
