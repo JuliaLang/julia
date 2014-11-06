@@ -139,13 +139,16 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     if (TagType != 1)
         return 0;               // Unknown data format
     LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    size_t pointer = 0;
-    if (Size > sizeof pointer)
-        return 0;               // Input address size too large
+    uint8_t bytes[Size];
     for (int i=0; i<Size; ++i) {
-        uint8_t byte;
-        SymTab->getMemoryObject().readByte(PC+Offset+i, &byte);
-        std::memcpy((char*)&pointer+i, &byte, 1);
+        SymTab->getMemoryObject().readByte(PC+Offset+i, &bytes[i]);
+    size_t pointer;
+    switch (Size) {
+    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
+    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
+    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
+    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
+    default: return 0;          // Cannot handle input address size
     }
     int skipC = 0;
     const char *name;
