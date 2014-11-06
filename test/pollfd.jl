@@ -26,15 +26,15 @@ function test_read(slval)
     t = Task(()->test_poll_fd(tval))
 
     sleep(slval)
-    @test 1 == ccall(:write, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[2], bytestring("A"), 1)
+    @test 1 == ccall(:write, Csize_t, (Cint, Ptr{UInt8},Csize_t), pipe_fds[2], bytestring("A"), 1)
 
     tr = consume(t)
     t_elapsed = toq()
 
     @test isreadable(tr) || iswritable(tr)
 
-    dout = Array(Uint8, 1)
-    @test 1 == ccall(:read, Csize_t, (Cint, Ptr{Uint8},Csize_t), pipe_fds[1], dout, 1)
+    dout = Array(UInt8, 1)
+    @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8},Csize_t), pipe_fds[1], dout, 1)
     @test dout[1] == int8('A')
 
     @test slval <= t_elapsed

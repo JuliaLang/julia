@@ -206,12 +206,12 @@ ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, i
 # TODO: vectorize ldexp
 
 function frexp(x::Float64)
-    xu = reinterpret(Uint64,x)
+    xu = reinterpret(UInt64,x)
     k = int(xu >> 52) & 0x07ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 1.8014398509481984e16 # 0x1p54, normalise significand
-        xu = reinterpret(Uint64,x)
+        xu = reinterpret(UInt64,x)
         k = int(xu >> 52) & 0x07ff - 54
     elseif k == 0x07ff # NaN or Inf
         return x,0
@@ -221,12 +221,12 @@ function frexp(x::Float64)
     reinterpret(Float64,xu), k
 end
 function frexp(x::Float32)
-    xu = reinterpret(Uint32,x)
+    xu = reinterpret(UInt32,x)
     k = int(xu >> 23) & 0x00ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
-        xu = reinterpret(Uint32,x)
+        xu = reinterpret(UInt32,x)
         k = int(xu >> 23) & 0x00ff - 25
     elseif k == 0x00ff # NaN or Inf
         return x,0

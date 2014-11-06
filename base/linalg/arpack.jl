@@ -206,7 +206,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
             ccall(($(string(naupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                   ido, bmat, &n, evtype, &nev, TOL, resid, &ncv, v, &ldv,
@@ -218,9 +218,9 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                   iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
 
             ccall(($(string(neupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T},
-                   Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt},
-                   Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T},
+                   Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{$T}, Ptr{UInt8}, Ptr{BlasInt},
+                   Ptr{UInt8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T},
                    Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                   &rvec, howmny, select, dr, di, z, &ldz, sigmar, sigmai,
@@ -233,7 +233,7 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info)
             
             ccall(($(string(saupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong),
                   ido, bmat, &n, which, &nev, TOL, resid, &ncv, v, &ldv,
@@ -246,8 +246,8 @@ for (T, saupd_name, seupd_name, naupd_name, neupd_name) in
                        iparam, ipntr, workd::Array{$T}, workl::Array{$T}, lworkl, info) 
 
             ccall(($(string(seupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
-                   Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T},
+                   Ptr{UInt8}, Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt},
                    Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt}, Clong, Clong, Clong),
                   &rvec, howmny, select, d, z, &ldz, sigma,
@@ -268,7 +268,7 @@ for (T, TR, naupd_name, neupd_name) in
                        rwork::Array{$TR}, info)
             
             ccall(($(string(naupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{BlasInt}),
@@ -283,8 +283,8 @@ for (T, TR, naupd_name, neupd_name) in
                        rwork::Array{$TR}, info)
 
             ccall(($(string(neupd_name)), :libarpack), Void,
-                  (Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
-                   Ptr{$T}, Ptr{$T}, Ptr{Uint8}, Ptr{BlasInt}, Ptr{Uint8}, Ptr{BlasInt},
+                  (Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt},
+                   Ptr{$T}, Ptr{$T}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{UInt8}, Ptr{BlasInt},
                    Ptr{$TR}, Ptr{$T}, Ptr{BlasInt}, Ptr{$T}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$T}, Ptr{$T}, Ptr{BlasInt}, Ptr{$TR}, Ptr{BlasInt}),
                   &rvec, howmny, select, d, z, &ldz, sigma, workev,

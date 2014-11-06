@@ -12,7 +12,7 @@ end
 
 function dsfmt_get_idstring()
     idstring = ccall((:dsfmt_get_idstring,:libdSFMT),
-                     Ptr{Uint8},
+                     Ptr{UInt8},
                      ())
     return bytestring(idstring)
 end
@@ -25,17 +25,17 @@ end
 
 const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
-function dsfmt_init_gen_rand(s::DSFMT_state, seed::Uint32)
+function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
     ccall((:dsfmt_init_gen_rand,:libdSFMT),
           Void, 
-          (Ptr{Void}, Uint32,), 
+          (Ptr{Void}, UInt32,), 
           s.val, seed)
 end
 
-function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{Uint32})
+function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
     ccall((:dsfmt_init_by_array,:libdSFMT),
           Void, 
-          (Ptr{Void}, Ptr{Uint32}, Int32), 
+          (Ptr{Void}, Ptr{UInt32}, Int32), 
           s.val, seed, length(seed))
 end
 
@@ -61,8 +61,8 @@ end
 ## Windows entropy
 
 @windows_only begin
-    function win32_SystemFunction036!(a::Array{Uint32})
-        ccall((:SystemFunction036,:Advapi32),stdcall,Uint8,(Ptr{Void},Uint32),a,length(a)*sizeof(eltype(a)))
+    function win32_SystemFunction036!(a::Array{UInt32})
+        ccall((:SystemFunction036,:Advapi32),stdcall,UInt8,(Ptr{Void},UInt32),a,length(a)*sizeof(eltype(a)))
     end
 end
 

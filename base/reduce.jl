@@ -45,13 +45,13 @@ call(::MinFun, x, y) = scalarmin(x, y)
 
 if Int === Int32
 typealias SmallSigned Union(Int8,Int16)
-typealias SmallUnsigned Union(Uint8,Uint16)
+typealias SmallUnsigned Union(UInt8,UInt16)
 else
 typealias SmallSigned Union(Int8,Int16,Int32)
-typealias SmallUnsigned Union(Uint8,Uint16,Uint32)
+typealias SmallUnsigned Union(UInt8,UInt16,UInt32)
 end
 
-typealias CommonReduceResult Union(Uint64,Uint128,Int64,Int128,Float32,Float64)
+typealias CommonReduceResult Union(UInt64,UInt128,Int64,Int128,Float32,Float64)
 typealias WidenReduceResult Union(SmallSigned, SmallUnsigned, Float16)
 
 # r_promote: promote x to the type of reduce(op, [x])

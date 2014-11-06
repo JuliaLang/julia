@@ -1080,11 +1080,11 @@ void jl_get_builtin_hooks(void)
 
     jl_char_type    = (jl_datatype_t*)core("Char");
     jl_int8_type    = (jl_datatype_t*)core("Int8");
-    jl_uint8_type   = (jl_datatype_t*)core("Uint8");
+    jl_uint8_type   = (jl_datatype_t*)core("UInt8");
     jl_int16_type   = (jl_datatype_t*)core("Int16");
-    jl_uint16_type  = (jl_datatype_t*)core("Uint16");
-    jl_uint32_type  = (jl_datatype_t*)core("Uint32");
-    jl_uint64_type  = (jl_datatype_t*)core("Uint64");
+    jl_uint16_type  = (jl_datatype_t*)core("UInt16");
+    jl_uint32_type  = (jl_datatype_t*)core("UInt32");
+    jl_uint64_type  = (jl_datatype_t*)core("UInt64");
 
     jl_float32_type = (jl_datatype_t*)core("Float32");
     jl_float64_type = (jl_datatype_t*)core("Float64");

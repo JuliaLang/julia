@@ -358,9 +358,9 @@ function generic_matmatmul{T,S}(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatri
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
-const Abuf = Array(Uint8, tilebufsize)
-const Bbuf = Array(Uint8, tilebufsize)
-const Cbuf = Array(Uint8, tilebufsize)
+const Abuf = Array(UInt8, tilebufsize)
+const Bbuf = Array(UInt8, tilebufsize)
+const Cbuf = Array(UInt8, tilebufsize)
 
 function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVecOrMat{T}, B::AbstractVecOrMat{S})
     mA, nA = lapack_size(tA, A)

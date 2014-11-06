@@ -1,5 +1,5 @@
 immutable Float
-    s::Uint64
+    s::UInt64
     e::Int32
     de::Int32
 end
@@ -45,7 +45,7 @@ end
 #ExponentBias(::Type{Float128}) = int32(0x00003fff + PhysicalSignificandSize(Float128))
 #SignificandMask(::Type{Float128}) = 0x0000ffffffffffffffffffffffffffff
 #HiddenBit(::Type{Float128}) = 0x00010000000000000000000000000000
-#uint_t(d::Float128) = reinterpret(Uint128,d)
+#uint_t(d::Float128) = reinterpret(UInt128,d)
 # Float64
 DenormalExponent(::Type{Float64}) = int32(-ExponentBias(Float64) + 1)
 ExponentMask(::Type{Float64}) = 0x7FF0000000000000
@@ -54,7 +54,7 @@ SignificandSize(::Type{Float64}) = int32(53)
 ExponentBias(::Type{Float64}) = int32(0x3FF + PhysicalSignificandSize(Float64))
 SignificandMask(::Type{Float64}) = 0x000FFFFFFFFFFFFF
 HiddenBit(::Type{Float64}) = 0x0010000000000000
-uint_t(d::Float64) = reinterpret(Uint64,d)
+uint_t(d::Float64) = reinterpret(UInt64,d)
 # Float32
 DenormalExponent(::Type{Float32}) = int32(-ExponentBias(Float32) + 1)
 ExponentMask(::Type{Float32}) = 0x7F800000
@@ -63,7 +63,7 @@ SignificandSize(::Type{Float32}) = int32(24)
 ExponentBias(::Type{Float32}) = int32(0x7F + PhysicalSignificandSize(Float32))
 SignificandMask(::Type{Float32}) = 0x007FFFFF
 HiddenBit(::Type{Float32}) = 0x00800000
-uint_t(d::Float32) = reinterpret(Uint32,d)
+uint_t(d::Float32) = reinterpret(UInt32,d)
 # Float16
 DenormalExponent(::Type{Float16}) = int32(-ExponentBias(Float16) + 1)
 ExponentMask(::Type{Float16}) = 0x7c00
@@ -72,7 +72,7 @@ SignificandSize(::Type{Float16}) = int32(11)
 ExponentBias(::Type{Float16}) = int32(0x000f + PhysicalSignificandSize(Float16))
 SignificandMask(::Type{Float16}) = 0x03ff
 HiddenBit(::Type{Float16}) = 0x0400
-uint_t(d::Float16) = reinterpret(Uint16,d)
+uint_t(d::Float16) = reinterpret(UInt16,d)
 
 function _exponent{T<:FloatingPoint}(d::T)
   isdenormal(d) && return DenormalExponent(T)
@@ -105,19 +105,19 @@ end
 const FloatM32 = 0xFFFFFFFF
 
 function (*)(this::Float,other::Float)
-    a::Uint64 = this.s >> 32
-    b::Uint64 = this.s & FloatM32
-    c::Uint64 = other.s >> 32
-    d::Uint64 = other.s & FloatM32
-    ac::Uint64 = a * c
-    bc::Uint64 = b * c
-    ad::Uint64 = a * d
-    bd::Uint64 = b * d
-    tmp::Uint64 = (bd >> 32) + (ad & FloatM32) + (bc & FloatM32)
+    a::UInt64 = this.s >> 32
+    b::UInt64 = this.s & FloatM32
+    c::UInt64 = other.s >> 32
+    d::UInt64 = other.s & FloatM32
+    ac::UInt64 = a * c
+    bc::UInt64 = b * c
+    ad::UInt64 = a * d
+    bd::UInt64 = b * d
+    tmp::UInt64 = (bd >> 32) + (ad & FloatM32) + (bc & FloatM32)
     # By adding 1U << 31 to tmp we round the final result.
     # Halfway cases will be round up.
     tmp += uint64(1) << 31
-    result_f::Uint64 = ac + (ad >> 32) + (bc >> 32) + (tmp >> 32)
+    result_f::UInt64 = ac + (ad >> 32) + (bc >> 32) + (tmp >> 32)
     return Float(result_f,this.e + other.e + 64,this.de)
 end
 

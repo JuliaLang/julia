@@ -17,8 +17,8 @@ call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
 call(T::Type{InterruptException}) = Core.call(T)
 call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
 call(T::Type{GetfieldNode}, value, name::Symbol, typ) = Core.call(T, value, name, typ)
-call(T::Type{ASCIIString}, d::Array{Uint8,1}) = Core.call(T, d)
-call(T::Type{UTF8String}, d::Array{Uint8,1}) = Core.call(T, d)
+call(T::Type{ASCIIString}, d::Array{UInt8,1}) = Core.call(T, d)
+call(T::Type{UTF8String}, d::Array{UInt8,1}) = Core.call(T, d)
 call(T::Type{TypeVar}, args...) = Core.call(T, args...)
 call(T::Type{TypeConstructor}, args...) = Core.call(T, args...)
 call(T::Type{Expr}, args::ANY...) = _expr(args...)
@@ -59,7 +59,7 @@ cconvert(T, x) = convert(T, x)
 # use the code in ccall.cpp to safely allocate temporary pointer arrays
 cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
 # convert strings to ByteString to pass as pointers
-cconvert{P<:Union(Int8,Uint8)}(::Type{Ptr{P}}, s::AbstractString) = bytestring(s)
+cconvert{P<:Union(Int8,UInt8)}(::Type{Ptr{P}}, s::AbstractString) = bytestring(s)
 
 reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
@@ -127,8 +127,8 @@ ccall(:jl_get_system_hooks, Void, ())
 
 int(x) = convert(Int, x)
 int(x::Int) = x
-uint(x) = convert(Uint, x)
-uint(x::Uint) = x
+uint(x) = convert(UInt, x)
+uint(x::UInt) = x
 
 # index colon
 type Colon
@@ -164,14 +164,14 @@ function append_any(xs...)
     for x in xs
         for y in x
             if i > l
-                ccall(:jl_array_grow_end, Void, (Any, Uint), out, 16)
+                ccall(:jl_array_grow_end, Void, (Any, UInt), out, 16)
                 l += 16
             end
             arrayset(out, y, i)
             i += 1
         end
     end
-    ccall(:jl_array_del_end, Void, (Any, Uint), out, l-i+1)
+    ccall(:jl_array_del_end, Void, (Any, UInt), out, l-i+1)
     out
 end
 

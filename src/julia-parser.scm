@@ -310,7 +310,7 @@
 		   (string.sub s 1)
 		   s)
 	       r is-float32-literal)))
-      ;; n is #f for integers > typemax(Uint64)
+      ;; n is #f for integers > typemax(UInt64)
       (cond (is-hex-float-literal (double n))
 	    ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
 	    ((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))

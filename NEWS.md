@@ -23,6 +23,8 @@ New language features
 Language changes
 ----------------
 
+  * `Uint` et al. are now spelled `UInt` ([#8905]).
+
   * `String` has been renamed to `AbstractString` ([#8872]).
 
   * `None` is deprecated; use `Union()` instead ([#8423]).

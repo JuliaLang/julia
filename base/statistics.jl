@@ -30,7 +30,7 @@ end
 
 momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
-momenttype{T<:Union(Float64,Int32,Int64,Uint32,Uint64)}(::Type{T}) = Float64
+momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
 
 mean{T}(A::AbstractArray{T}, region) = 
     mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
@@ -447,7 +447,7 @@ end
 
 ##### median & quantiles #####
 
-middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)) = float64(x)
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = float64(x)
 middle(x::FloatingPoint) = x
 middle(x::Float16) = float32(x)
 middle(x::Real) = (x + zero(x)) / 1

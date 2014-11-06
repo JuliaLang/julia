@@ -5,7 +5,7 @@ type FileMonitor
     notify::Condition
     function FileMonitor(cb, file)
         handle = c_malloc(_sizeof_uv_fs_event)
-        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32), eventloop(),handle,file,0)
+        err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32), eventloop(),handle,file,0)
         if err < 0
             c_free(handle)
             throw(UVError("FileMonitor",err))
@@ -249,7 +249,7 @@ start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_wa
 function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
-             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{Uint8},Uint32),
+             ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{UInt8},UInt32),
                    t.handle, t.file, iround(interval*1000)))
 end
 start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
@@ -267,7 +267,7 @@ function stop_watching(t::PollingFileWatcher)
 end
 
 function _uv_hook_fseventscb(t::FileMonitor,filename::Ptr,events::Int32,status::Int32)
-    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{Uint8},filename))
+    fname = filename == C_NULL ? "" : bytestring(convert(Ptr{UInt8},filename))
     fe = FileEvent(events)
     if isa(t.cb,Function)
         t.cb(fname, fe, status)
@@ -287,7 +287,7 @@ end
 
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
-        t.cb(t, StatStruct(convert(Ptr{Uint8},prev)), StatStruct(convert(Ptr{Uint8},cur)), status)
+        t.cb(t, StatStruct(convert(Ptr{UInt8},prev)), StatStruct(convert(Ptr{UInt8},cur)), status)
     end
 end
 
