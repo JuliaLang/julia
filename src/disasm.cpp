@@ -71,7 +71,7 @@ public:
     void setPass(int Pass) { this->Pass = Pass; }
     int getPass() const { return Pass; }
     void insertAddress(uint64_t addr);
-    void createSymbol(const char *name, uint64_t addr);
+    // void createSymbol(const char *name, uint64_t addr);
     void createSymbols();
     const char *lookupSymbol(uint64_t addr);
 };
@@ -81,11 +81,11 @@ void SymbolTable::insertAddress(uint64_t addr)
     Table[addr] = NULL;
 }
 // Create a symbol
-void SymbolTable::createSymbol(const char *name, uint64_t addr)
-{
-    MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
-    // symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
-}
+// void SymbolTable::createSymbol(const char *name, uint64_t addr)
+// {
+//     MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
+//     symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+// }
 // Create symbols for all addresses
 void SymbolTable::createSymbols()
 {
@@ -136,10 +136,9 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
                  int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
-    std::cout << "OpInfoLookup PC="<<PC<<" Offset="<<Offset<<" Size="<<Size<<" TagType="<<TagType<<"\n";
     if (TagType != 1)
         return 0;               // Unknown data format
-    LLVMOpInfoSymbol1 *info = (LLVMOpInfoSymbol1*)TagBuf;
+    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
     size_t pointer = 0;
     if (Size > sizeof pointer)
         return 0;               // Input address size too large
@@ -148,7 +147,6 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
         SymTab->getMemoryObject().readByte(PC+Offset+i, &byte);
         std::memcpy((char*)&pointer+i, &byte, 1);
     }
-    std::cout << "  pointer=" << pointer << "\n";
     int skipC = 0;
     const char *name;
     size_t line;
@@ -157,14 +155,12 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
     if (!name)
         return 0;               // Did not find symbolic information
-    std::cout << "getFunctionInfo name="<<name<<" line="<<line<<" filename="<<filename<<" fromC="<<fromC<<"\n";
-    // Create a symbol
-    SymTab->createSymbol(name, pointer);
     // Describe the symbol
-    info->Present = 1;
-    info->Name = name;
-    info->Value = 0;            // offset
-    return 1;                   // Success
+    info->AddSymbol.Present = 1;
+    info->AddSymbol.Name = name;
+    info->AddSymbol.Value = pointer; // unused by LLVM
+    info->Value = 0;                 // offset
+    return 1;                        // Success
 }
 }
 
