@@ -1595,11 +1595,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             nA    = size(A, 2)
             k     = length(tau)
             if side == 'L' && m != nA throw(DimensionMismatch("")) end
-<<<<<<< HEAD
             if side == 'R' && n != nA throw(DimensionMismatch("")) end
-=======
             if side == 'R' && n != nA throw(DimensionMismatch("")) end
->>>>>>> add Lapack LQ factorizations
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
