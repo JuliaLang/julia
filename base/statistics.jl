@@ -32,7 +32,7 @@ momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
 momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
 
-mean{T}(A::AbstractArray{T}, region) = 
+mean{T}(A::AbstractArray{T}, region) =
     mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
 
 
@@ -46,8 +46,8 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     count = 1
     value, state = next(iterable, state)
     if mean == nothing
-        # Use Welford algorithm as seen in (among other places) 
-        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
+        # Use Welford algorithm as seen in (among other places)
+        # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
         S = zero(M)
         while !done(iterable, state)
@@ -61,7 +61,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     elseif isa(mean, Number) # mean provided
         # Cannot use a compensated version, e.g. the one from
         # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
-        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
+        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773,
         # Department of Computer Science, Stanford University,
         # because user can provide mean value that is different to mean(iterable)
         sum2 = (value - mean::Number)^2
@@ -92,7 +92,7 @@ function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
     return R
 end
 
-varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) = 
+varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
     varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
 
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
@@ -122,12 +122,12 @@ centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
         # keep the accumulator as a local variable when reducing along the first dimension
         @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
             @inbounds r = (@nref N R j)
-            @inbounds m = (@nref N means j) 
+            @inbounds m = (@nref N means j)
             for i_1 = 1:sizA1
                 @inbounds r += abs2((@nref N A i) - m)
             end
             @inbounds (@nref N R j) = r
-        end 
+        end
     else
         # general implementation
         @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
@@ -154,7 +154,7 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
     return R
 end
 
-varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) = 
+varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
 
 
@@ -191,20 +191,20 @@ end
 
 ##### standard deviation #####
 
-function sqrt!(A::AbstractArray) 
+function sqrt!(A::AbstractArray)
     for i = 1:length(A)
         @inbounds A[i] = sqrt(A[i])
     end
     A
 end
 
-stdm(A::AbstractArray, m::Number; corrected::Bool=true) = 
+stdm(A::AbstractArray, m::Number; corrected::Bool=true) =
     sqrt(varm(A, m; corrected=corrected))
 
-std(A::AbstractArray; corrected::Bool=true, mean=nothing) = 
+std(A::AbstractArray; corrected::Bool=true, mean=nothing) =
     sqrt(var(A; corrected=corrected, mean=mean))
 
-std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
+std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
     sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
@@ -239,38 +239,38 @@ unscaled_covzm(x::AbstractVector) = dot(x, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
-unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) = 
+unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
-unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) = 
+unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
     (c = vardim == 1 ? At_mul_B(x, _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
-unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) = 
+unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : A_mul_Bc(x, y))
 
 # covzm (with centered data)
 
 covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
 
-covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) = 
+covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - int(corrected)))
 
-covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) = 
+covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     unscaled_covzm(x, y) / (length(x) - int(corrected))
 
-covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
 
 # covm (with provided mean)
 
-covm(x::AbstractVector, xmean; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean; corrected::Bool=true) =
     covzm(x .- xmean; corrected=corrected)
 
-covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) =
     covzm(x .- xmean; vardim=vardim, corrected=corrected)
 
-covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean; corrected=corrected)
 
-covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
 
 # cov (API)
@@ -352,7 +352,7 @@ end
 
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     nx, ny = size(C)
-    (length(xsd) == nx && length(ysd) == ny) || 
+    (length(xsd) == nx && length(ysd) == ny) ||
         throw(DimensionMismatch("Inconsistent dimensions."))
     for j = 1:ny
         for i = 1:nx
@@ -366,7 +366,7 @@ end
 
 corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
 
-corzm(x::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractMatrix; vardim::Int=1) =
     (c = unscaled_covzm(x, vardim); cov2cor!(c, sqrt!(diag(c))))
 
 function corzm(x::AbstractVector, y::AbstractVector)
@@ -389,13 +389,13 @@ function corzm(x::AbstractVector, y::AbstractVector)
     return xy / (sqrt(xx) * sqrt(yy))
 end
 
-corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
 
-corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) = 
+corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
 
-corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
 
 # corm
@@ -406,7 +406,7 @@ corm(x::AbstractMatrix, xmean; vardim::Int=1) = corzm(x .- xmean; vardim=vardim)
 
 corm(x::AbstractVector, xmean, y::AbstractVector, ymean) = corzm(x .- xmean, y .- ymean)
 
-corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) = 
+corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
     corzm(x .- xmean, y .- ymean; vardim=vardim)
 
 # cor
@@ -426,7 +426,7 @@ function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
 end
 
 function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
-    mean == 0 ? corzm(x, y) : 
+    mean == 0 ? corzm(x, y) :
     mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
     isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
     error("Invalid value of mean.")
@@ -435,7 +435,7 @@ end
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
     if mean == 0
         corzm(x, y; vardim=vardim)
-    elseif mean == nothing 
+    elseif mean == nothing
         corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
     elseif isa(mean, (Any,Any))
         corm(x, mean[1], y, mean[2]; vardim=vardim)
@@ -613,7 +613,7 @@ hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 
 ## hist2d
-function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
                      edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
     size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
     n = length(edg1) - 1
@@ -632,12 +632,12 @@ function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
     edg1, edg2, H
 end
 
-hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) = 
+hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) =
     hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
 
 hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
 
-hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) = 
+hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))

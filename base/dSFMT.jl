@@ -19,7 +19,7 @@ end
 
 function dsfmt_get_min_array_size()
     min_array_size = ccall((:dsfmt_get_min_array_size,:libdSFMT),
-                           Int32, 
+                           Int32,
                            ())
 end
 
@@ -27,15 +27,15 @@ const dsfmt_min_array_size = dsfmt_get_min_array_size()
 
 function dsfmt_init_gen_rand(s::DSFMT_state, seed::UInt32)
     ccall((:dsfmt_init_gen_rand,:libdSFMT),
-          Void, 
-          (Ptr{Void}, UInt32,), 
+          Void,
+          (Ptr{Void}, UInt32,),
           s.val, seed)
 end
 
 function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
     ccall((:dsfmt_init_by_array,:libdSFMT),
-          Void, 
-          (Ptr{Void}, Ptr{UInt32}, Int32), 
+          Void,
+          (Ptr{Void}, Ptr{UInt32}, Int32),
           s.val, seed, length(seed))
 end
 

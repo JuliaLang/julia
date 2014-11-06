@@ -7,7 +7,7 @@ function pwd()
     bytestring(b[1:len[1]-1])
 end
 
-function cd(dir::AbstractString) 
+function cd(dir::AbstractString)
     uv_error("chdir $dir", ccall(:uv_chdir, Cint, (Ptr{UInt8},), dir))
 end
 cd() = cd(homedir())
@@ -104,7 +104,7 @@ end
     return (b, fdio(p, true))
 end
 
-@windows_only begin 
+@windows_only begin
 function tempdir()
     temppath = Array(UInt16,32767)
     lentemppath = ccall(:GetTempPathW,stdcall,UInt32,(UInt32,Ptr{UInt16}),length(temppath),temppath)

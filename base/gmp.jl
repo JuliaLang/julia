@@ -459,7 +459,7 @@ function ndigits0z(x::BigInt, b::Integer=10)
         q,r = divrem(n,lb)
         iq = int(q)
         maxerr = q*eps(lb) # maximum error in remainder
-        if r-1.0 < maxerr 
+        if r-1.0 < maxerr
             abs(x) >= big(b)^iq ? iq+1 : iq
         elseif lb-r < maxerr
             abs(x) >= big(b)^(iq+1) ? iq+2 : iq+1

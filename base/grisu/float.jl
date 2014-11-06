@@ -34,7 +34,7 @@ function normalize(v::Float64)
     end
     s <<= uint64(FloatSignificandSize - SignificandSize(Float64))
     e -=  int32( FloatSignificandSize - SignificandSize(Float64))
-    return Float(s, e)  
+    return Float(s, e)
 end
 
 # Float128

@@ -120,7 +120,7 @@ DLLEXPORT void jl_init_frontend(void)
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
     ios_static_buffer(pi, (char*)flisp_system_image, sizeof(flisp_system_image));
-    
+
     if (fl_load_system_image(img)) {
         JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
         jl_exit(1);
@@ -295,7 +295,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 value_t largs = car_(e);
                 jl_cellset(ex->args, 0, full_list(largs,eo));
                 e = cdr_(e);
-                
+
                 value_t ee = car_(e);
                 jl_array_t *vinf = jl_alloc_cell_1d(3);
                 jl_cellset(vinf, 0, full_list(car_(ee),eo));
@@ -306,7 +306,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 assert(!iscons(cdr_(ee)));
                 jl_cellset(ex->args, 1, vinf);
                 e = cdr_(e);
-                
+
                 for(i=2; i < n; i++) {
                     assert(iscons(e));
                     jl_cellset(ex->args, i, scm_to_julia_(car_(e), eo));
@@ -367,7 +367,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
     jl_error("malformed tree");
-    
+
     return (jl_value_t*)jl_null;
 }
 
@@ -466,7 +466,7 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
-    
+
     return scm_to_julia(e,0);
 }
 

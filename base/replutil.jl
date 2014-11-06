@@ -31,9 +31,9 @@ function writemime(io::IO, ::MIME"text/plain", v::DataType)
     # TODO: maybe show constructor info?
 end
 
-writemime(io::IO, ::MIME"text/plain", t::Associative) = 
+writemime(io::IO, ::MIME"text/plain", t::Associative) =
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) = 
+writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
     showkv(io, t, limit=true)
 
 
@@ -65,7 +65,7 @@ end
 function showerror(io::IO, e, bt)
     try
         showerror(io, e)
-    finally 
+    finally
         show_backtrace(io, bt)
     end
 end

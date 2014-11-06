@@ -256,12 +256,12 @@ filter(r::Regex,  d::Dict) = filter!(r,copy(d))
 # Don't serialize the pointers
 function serialize(s, r::Regex)
     serialize_type(s, typeof(r))
-    serialize(s, r.pattern) 
-    serialize(s, r.options) 
+    serialize(s, r.pattern)
+    serialize(s, r.options)
 end
 
 function deserialize(s, t::Type{Regex})
     pattern = deserialize(s)
     options = deserialize(s)
-    Regex(pattern, options)        
+    Regex(pattern, options)
 end

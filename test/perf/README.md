@@ -13,7 +13,7 @@ the sub-directories and display the test name with the minimum,
 maximum, mean and standard deviation of the wall-time of five repeated
 test runs in micro seconds.
 
-Calling `make codespeed` is for generating the results displayed on 
+Calling `make codespeed` is for generating the results displayed on
 [http://speed.julialang.org/](http://speed.julialang.org/), probably
 not what you want.
 
@@ -33,11 +33,11 @@ suites:
 - `cat`: Performance tests for concatenation of vectors and matrices.
 - `kernel`: Performance tests used to track real-world code examples
   that previously ran slowly.
-- `shootout` Tracks the performance of tests taken from the 
+- `shootout` Tracks the performance of tests taken from the
   [Debian shootout](http://shootout.alioth.debian.org/) performance
   tests.
 - `sort`: Performance tests of sorting algorithms.
-- `spell` Performance tests of 
+- `spell` Performance tests of
   [Peter Norvig's spelling corrector](http://norvig.com/spell-correct.html).
 - `sparse`: Performance tests of sparse matrix operations.
 

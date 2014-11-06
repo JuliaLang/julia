@@ -175,7 +175,7 @@ end
 
 # multidimensional
 
-rand_m1m2() = rand(1:n1), rand(1:n2) 
+rand_m1m2() = rand(1:n1), rand(1:n2)
 
 b1 = randbool(n1, n2)
 
