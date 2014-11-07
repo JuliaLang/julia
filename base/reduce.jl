@@ -151,7 +151,7 @@ mr_empty(f, op::AndFun, T) = true
 mr_empty(f, op::OrFun, T) = false
 
 function _mapreduce{T}(f, op, A::AbstractArray{T})
-    n = Int(length(A))
+    n = int(length(A))
     if n == 0
         return mr_empty(f, op, T)
     elseif n == 1
