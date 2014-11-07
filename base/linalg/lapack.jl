@@ -256,7 +256,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqrt, geqp3, gerqf, getrf, elty, relty) in
                 ccall(($(blasfunc(geqrf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &lda), tau, work, &lwork, info)
+                      &m, &n, A, &lda, tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
