@@ -835,7 +835,7 @@ function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
             end
         end
     end
-end    
+end
 
 function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
@@ -852,7 +852,7 @@ function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
             end
         end
     end
-end       
+end
 
 
 
