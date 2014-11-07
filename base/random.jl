@@ -126,8 +126,8 @@ globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
-rand() = rand(GLOBAL_RNG)
-rand(T::Type) = rand(GLOBAL_RNG, T)
+@inline rand() = rand_close_open(GLOBAL_RNG)
+@inline rand(T::Type) = rand(GLOBAL_RNG, T)
 rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
 rand(dims::Int...) = rand(dims)
@@ -137,7 +137,7 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 ## random floating point values
 
-rand(r::AbstractRNG) = rand(r, Float64)
+@inline rand(r::AbstractRNG) = rand_close_open(r)
 
 # MersenneTwister
 rand(r::MersenneTwister, ::Type{Float64}) = rand_close_open(r)
