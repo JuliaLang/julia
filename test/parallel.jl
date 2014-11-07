@@ -1,8 +1,8 @@
 # NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 
-if nprocs() < 2
-    remotecall_fetch(1, () -> addprocs(1))
+if nprocs() < 3
+    remotecall_fetch(1, () -> addprocs(2))
 end
 
 id_me = myid()
@@ -92,7 +92,8 @@ d = Base.shmem_rand(dims)
 s = copy(sdata(d))
 ds = deepcopy(d)
 @test ds == d
-remotecall_fetch(findfirst(id->(id != myid()), procs(ds)), setindex!, ds, 1.0, 1:10)
+pids_ds = procs(ds)
+remotecall_fetch(pids_ds[findfirst(id->(id != myid()), pids_ds)], setindex!, ds, 1.0, 1:10)
 @test ds != d
 @test s == d
 
