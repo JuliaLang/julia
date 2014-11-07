@@ -41,7 +41,7 @@ before_install:
       fi
 script:
     - if git --no-pager grep --color -n --full-name ' $' -- \*.jl \*.scm \*.c \*.cpp \*.h; then
-        echo "Error: trailing whitespace found in source file(s)";
+        echo "Error:\ trailing whitespace found in source file(s)";
         exit 1;
       fi
     - make $BUILDOPTS prefix=/tmp/julia install
