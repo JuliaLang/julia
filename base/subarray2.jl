@@ -12,25 +12,23 @@ for i = 1:4
     push!(varsOther, :($sym::Union(Real, AbstractVector)))
     push!(vars_toindex, :(Base.to_index($sym)))
     ex = i == 1 ? quote
-         getindex(V::SubArray, $sym::Real) = getindex(V, Base.to_index($sym))
-        setindex!(V::SubArray, v, $sym::Real) = setindex!(V, v, Base.to_index($sym))
-         getindex(V::SubArray, $sym::AbstractVector{Bool}) = getindex(V, Base.to_index($sym))
-        setindex!(V::SubArray, v, $sym::AbstractVector{Bool}) = setindex!(V, v, Base.to_index($sym))
+         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::Real) = getindex(V, Base.to_index($sym))
+        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::Real) = setindex!(V, v, Base.to_index($sym))
+         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::AbstractVector{Bool}) = getindex(V, Base.to_index($sym))
+        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::AbstractVector{Bool}) = setindex!(V, v, Base.to_index($sym))
     end : quote
-         getindex(V::SubArray, $(varsOther...)) = getindex(V, $(vars_toindex...))
-        setindex!(V::SubArray, v, $(varsOther...)) = setindex!(V, v, $(vars_toindex...))
+         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $(varsOther...)) = getindex(V, $(vars_toindex...))
+        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $(varsOther...)) = setindex!(V, v, $(vars_toindex...))
     end
     @eval begin
-        stagedfunction getindex(V::SubArray, $(varsInt...))
-            T, N, P, IV = V.parameters
+        stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $(varsInt...))
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
             quote
                 $exhead
                 $ex
             end
         end
-        stagedfunction setindex!(V::SubArray, v, $(varsInt...))
-            T, N, P, IV = V.parameters
+        stagedfunction setindex!{T,N,P<:AbstractArray,IV}(V::SubArray{T,N,P,IV}, v, $(varsInt...))
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
             quote
                 $exhead
@@ -41,8 +39,7 @@ for i = 1:4
     end
 end
 # V[] notation (extracts the first element)
-stagedfunction getindex(V::SubArray)
-    T, N, P, IV = V.parameters
+stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV})
     Isyms = ones(Int, N)
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -51,8 +48,7 @@ stagedfunction getindex(V::SubArray)
     end
 end
 # Splatting variants
-stagedfunction getindex(V::SubArray, I::Int...)
-    T, N, P, IV = V.parameters
+stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Int...)
     Isyms = [:(I[$d]) for d = 1:length(I)]
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -60,8 +56,7 @@ stagedfunction getindex(V::SubArray, I::Int...)
         $ex
     end
 end
-stagedfunction setindex!(V::SubArray, v, I::Int...)
-    T, N, P, IV = V.parameters
+stagedfunction setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Int...)
     Isyms = [:(I[$d]) for d = 1:length(I)]
     exhead, ex = index_generate(ndims(P), IV, :V, Isyms)
     quote
@@ -72,24 +67,24 @@ end
 
 # Indexing with non-scalars. For now, this returns a copy, but changing that
 # is just a matter of deleting the explicit call to copy.
-getindex(V::SubArray, I::ViewIndex...) = copy(sub(V, I...))
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
 getindex{T,N}(V::SubArray{T,N}, I::AbstractArray{Bool,N}) = copy(sub(V, find(I)))   # this could be much better optimized
-getindex{T,N}(V::SubArray{T,N}, I::Union(Real, AbstractVector)...) = getindex(V, Base.to_index(I)...)
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractVector)...) = getindex(V, Base.to_index(I)...)
 
-function setindex!{T}(V::SubArray{T,1}, v, I::AbstractArray{Bool,1})
+function setindex!{T,P,IV}(V::SubArray{T,1,P,IV}, v, I::AbstractArray{Bool,1})
     length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
     setindex!(V, v, Base.to_index(I))
 end
-function setindex!{T,N}(V::SubArray{T,N}, v, I::AbstractArray{Bool,1})
+function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,1})
     length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
     setindex!(V, v, Base.to_index(I))
 end
-function setindex!{T,N}(V::SubArray{T,N}, v, I::AbstractArray{Bool,N})
+function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,N})
     size(I) == size(V) || throw(DimensionMismatch("size of Boolean mask must match array size"))
     _setindex!(V, v, find(I))  # this could be better optimized
 end
-setindex!{T,N}(V::SubArray{T,N}, v, I::Union(Real,AbstractVector)...) = setindex!(V, v, Base.to_index(I)...)
-setindex!(V::SubArray, x, J::Union(Int,AbstractVector)...) = _setindex!(V, x, J...)
+setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Union(Real,AbstractVector)...) = setindex!(V, v, Base.to_index(I)...)
+setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, x, J::Union(Int,AbstractVector)...) = _setindex!(V, x, J...)
 stagedfunction _setindex!(V::SubArray, x, J::Union(Real,AbstractVector)...)
     gen_setindex_body(length(J))
 end
