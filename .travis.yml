@@ -1,7 +1,7 @@
 language: cpp
 os:
     - linux
-    - osx
+#    - osx
 notifications:
     email: false
     irc:
