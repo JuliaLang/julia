@@ -27,7 +27,7 @@ parent(a::AbstractArray) = a
 parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
 
 ## SubArray creation
-stagedfunction slice(A::AbstractArray, I::ViewIndex...)
+stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     N = 0
     sizeexprs = Array(Any, 0)
     for k = 1:length(I)
@@ -38,12 +38,11 @@ stagedfunction slice(A::AbstractArray, I::ViewIndex...)
         end
     end
     dims = :(tuple($(sizeexprs...)))
-    T = eltype(A)
     :(Base.SubArray{$T,$N,$A,$I}(A, I, $dims))
 end
 
 # Conventional style (drop trailing singleton dimensions, keep any other singletons)
-stagedfunction sub(A::AbstractArray, I::ViewIndex...)
+stagedfunction sub{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
@@ -65,15 +64,13 @@ stagedfunction sub(A::AbstractArray, I::ViewIndex...)
     end
     dims = :(tuple($(sizeexprs...)))
     Iext = :(tuple($(Iexprs...)))
-    T = eltype(A)
     It = tuple(Itypes...)
     :(Base.SubArray{$T,$N,$A,$It}(A, $Iext, $dims))
 end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-stagedfunction slice(V::SubArray, I::ViewIndex...)
-    T, NV, PV, IV = V.parameters
+stagedfunction slice{T,NV,PV,IV}(V::SubArray{T,NV,PV,IV}, I::ViewIndex...)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
@@ -116,8 +113,7 @@ stagedfunction slice(V::SubArray, I::ViewIndex...)
     :(Base.SubArray{$T,$N,$PV,$It}(V.parent, $Inew, $dims))
 end
 
-stagedfunction sub(V::SubArray, I::ViewIndex...)
-    T, NV, PV, IV = V.parameters
+stagedfunction sub{T,NV,PV,IV}(V::SubArray{T,NV,PV,IV}, I::ViewIndex...)
     N = length(I)
     while N > 0 && I[N] <: Real
         N -= 1
