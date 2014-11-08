@@ -166,13 +166,13 @@ function hypot{T<:FloatingPoint}(x::T, y::T)
     x * sqrt(one(r)+r*r)
 end
 
-atan2(x::Real, y::Real) = atan2(promote(float(x),float(y))...)
-atan2{T<:FloatingPoint}(x::T, y::T) = Base.no_op_err("atan2", T)
+atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
+atan2{T<:FloatingPoint}(y::T, x::T) = Base.no_op_err("atan2", T)
 
 for f in (:atan2, :hypot)
     @eval begin
-        ($f)(x::Float64, y::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), x, y)
-        ($f)(x::Float32, y::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), x, y)
+        ($f)(y::Float64, x::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), y, x)
+        ($f)(y::Float32, x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), y, x)
         @vectorize_2arg Number $f
     end
 end
