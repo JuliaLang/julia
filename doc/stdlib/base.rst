@@ -4553,12 +4553,12 @@ Statistics
 
 .. function:: middle(x)
 
-   Compute the middle of a single real, which is equivalent to ``x`` itself.
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself.
    Note: the value is converted to ``float``.
 
 .. function:: middle(x, y)
 
-   Compute the middle of a couple of reals ``x`` and ``y``, which is equivalent
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
    to computing their mean (``(x + y) / 2``).
    Note: As with ``middle(x)``, the returned value is of type ``float``.
 
