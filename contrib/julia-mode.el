@@ -110,7 +110,14 @@ This function provides equivalent functionality, but makes no efforts to optimis
   "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
 
 (defconst julia-char-regex
-  "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|$!\\^~\\\\;:]\\|^\\)\\('\\(\\([^']*?[^\\\\]\\)\\|\\(\\\\\\\\\\)\\)'\\)")
+  (rx (submatch (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+                    (syntax open-parenthesis)
+                    (syntax whitespace)
+                    bol))
+      (submatch "'"
+                (or (*? (not (any "'"))) (not (any "\\"))
+                    "\\\\")
+                "'")))
 
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
