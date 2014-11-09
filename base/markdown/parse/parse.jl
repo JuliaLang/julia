@@ -39,7 +39,7 @@ innerparse(stream::IO, config::Config) =
   innerparse(stream, config.inner.parsers)
 
 function parseinline(stream::IO, config::Config)
-  content = {}
+  content = []
   buffer = IOBuffer()
   while !eof(stream)
     char = peek(stream)
