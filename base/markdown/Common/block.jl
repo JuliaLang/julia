@@ -6,7 +6,7 @@ type Paragraph
   content
 end
 
-Paragraph() = Paragraph({})
+Paragraph() = Paragraph([])
 
 function paragraph(stream::IO, md::MD, config::Config)
   buffer = IOBuffer()
@@ -90,7 +90,7 @@ type BlockQuote
   content
 end
 
-BlockQuote() = BlockQuote({})
+BlockQuote() = BlockQuote([])
 
 # TODO: Laziness
 @breaking true ->

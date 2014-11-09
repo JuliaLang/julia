@@ -1,6 +1,6 @@
 # Styles
 
-const text_formats = [
+const text_formats = Dict(
   :black   => "\e[30m",
   :red     => "\e[31m",
   :green   => "\e[32m",
@@ -13,7 +13,7 @@ const text_formats = [
   :bold    => "\e[1m",
   :underline => "\e[4m",
   :blink     => "\e[5m",
-  :negative  => "\e[7m"]
+  :negative  => "\e[7m")
 
 function with_output_format(f::Function, formats::Vector{Symbol}, io::IO, args...)
   Base.have_color && for format in formats
