@@ -222,6 +222,35 @@ This function provides equivalent functionality, but makes no efforts to optimis
 Handles both single-line and multi-line comments."
   (nth 4 (syntax-ppss)))
 
+(defun julia-in-string ()
+  "Return non-nil if point is inside a string."
+  (nth 3 (syntax-ppss)))
+
+(defun julia-in-char ()
+  "Return non-nil if point is inside a character."
+  (cond
+   ((julia-in-comment) nil)
+   ((julia-in-string) nil)
+   (:else
+    (save-excursion
+      ;; See if point is inside a character, e.g. '|x'
+      ;;
+      ;; Move back past the single quote.
+      (backward-char 1)
+      ;; Move back one more character, as julia-char-regex checks
+      ;; for whitespace/paren/etc before the single quote.
+      (backward-char 1)
+
+      (if (looking-at julia-char-regex)
+          t
+        ;; If point was in a \ character (i.e. we started at '\|\'),
+        ;; we need to move back once more.
+        (if (looking-at (rx "'\\"))
+            (progn
+              (backward-char 1)
+              (looking-at julia-char-regex))
+          nil))))))
+
 (defun julia-strcount (str chr)
   (let ((i 0)
 	(c 0))
