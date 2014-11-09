@@ -186,7 +186,7 @@ isname(n::Symbol) = true
 isname(ex::Expr) = ((ex.head == :. && isname(ex.args[1]) && isname(ex.args[2]))
                     || (ex.head == :quote && isname(ex.args[1])))
 
-macro help(ex)
+macro help_(ex)
     if ex === :? || ex === :help
         return Expr(:call, :help)
     elseif !isa(ex, Expr) || isname(ex)
@@ -197,6 +197,18 @@ macro help(ex)
     else
         return Expr(:macrocall, symbol("@which"), esc(ex))
     end
+end
+
+macro help (ex)
+  if ex === :? || ex === :help
+    return :(@help_ $(esc(ex)))
+  else
+    quote
+      let doc = @doc $(esc(ex))
+        doc ≠ nothing ? doc : @help_ $(esc(ex))
+      end
+    end
+  end
 end
 
 end # module
