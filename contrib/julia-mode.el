@@ -353,10 +353,10 @@ before point. Returns nil if we're not within nested parens."
     (indent-line-to
      (or
       ;; If we're inside an open paren, indent to line up arguments.
-      ;; If we're on a block end keyword, unindent.
       (save-excursion
         (beginning-of-line)
         (ignore-errors (julia-paren-indent)))
+      ;; Indent according to how many nested blocks we are in.
       (save-excursion
         (beginning-of-line)
         (forward-to-indentation 0)
