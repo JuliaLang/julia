@@ -153,6 +153,10 @@ CMAKE ?= cmake
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
 
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+XC_HOST ?= $(shell uname -m)-w64-mingw32
+endif
+
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
 HOSTCC = $(CC)
@@ -320,8 +324,15 @@ SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-CC := ccache $(CC)
-CXX := ccache $(CXX)
+# expand CC and CXX at declaration time because we will redefine them
+CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
+CXX_ARG  := $(CXX)        # the original definition and not the ccache version.
+CC_FULL  := ccache $(CC)  # Expand CC and CXX here already to avoid recursive
+CXX_FULL := ccache $(CXX) # referencing.
+CC        = $(CC_FULL)    # Add an extra indirection to make CC/CXX non-simple
+CXX       = $(CXX_FULL)   # vars (because of how -m$(BINARY) is added later on).
+CC_BASE   = ccache
+CXX_BASE  = ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -400,6 +411,10 @@ ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
+else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
 ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
