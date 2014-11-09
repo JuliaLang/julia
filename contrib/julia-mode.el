@@ -234,6 +234,7 @@ Handles both single-line and multi-line comments."
   (cond
    ((julia-in-comment) nil)
    ((julia-in-string) nil)
+   ((<= (point) (1+ (point-min))) nil)
    (:else
     (save-excursion
       ;; See if point is inside a character, e.g. '|x'
@@ -242,17 +243,18 @@ Handles both single-line and multi-line comments."
       (backward-char 1)
       ;; Move back one more character, as julia-char-regex checks
       ;; for whitespace/paren/etc before the single quote.
-      (backward-char 1)
+      (ignore-errors (backward-char 1)) ; ignore error from being at (point-min)
 
       (if (looking-at julia-char-regex)
           t
         ;; If point was in a \ character (i.e. we started at '\|\'),
         ;; we need to move back once more.
-        (if (looking-at (rx "'\\"))
-            (progn
-              (backward-char 1)
-              (looking-at julia-char-regex))
-          nil))))))
+        (ignore-errors
+          (if (looking-at (rx "'\\"))
+              (progn
+                (backward-char 1)
+                (looking-at julia-char-regex))
+            nil)))))))
 
 (defun julia-in-brackets ()
   "Return non-nil if point is inside square brackets."
@@ -322,6 +324,12 @@ Do not move back beyond MIN."
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
 
+(defsubst julia--safe-backward-char ()
+  "Move back one character, but don't error if we're at the
+beginning of the buffer."
+  (unless (eq (point) (point-min))
+    (backward-char)))
+
 (defun julia-paren-indent ()
   "Return the column position of the innermost containing paren
 before point. Returns nil if we're not within nested parens."
@@ -339,7 +347,7 @@ before point. Returns nil if we're not within nested parens."
                   ((looking-at (rx (any "]" ")")))
                    (decf open-count)))))
 
-        (backward-char))
+        (julia--safe-backward-char))
 
       (if (plusp open-count)
           (+ (current-column) 2)
@@ -364,14 +372,15 @@ before point. Returns nil if we're not within nested parens."
           (ignore-errors (+ (julia-last-open-block (point-min))
                             (if endtok (- julia-basic-offset) 0)))))
       ;; If the previous line ends in =, increase the indent.
-      (save-excursion
-        (if (and (not (equal (point-min) (line-beginning-position)))
-                 (progn
-                   (forward-line -1)
-                   (end-of-line) (backward-char 1)
-                   (equal (char-after (point)) ?=)))
-            (+ julia-basic-offset (current-indentation))
-          nil))
+      (ignore-errors ; if previous line is (point-min)
+        (save-excursion
+          (if (and (not (equal (point-min) (line-beginning-position)))
+                   (progn
+                     (forward-line -1)
+                     (end-of-line) (backward-char 1)
+                     (equal (char-after (point)) ?=)))
+              (+ julia-basic-offset (current-indentation))
+            nil)))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
                       (current-indentation))
