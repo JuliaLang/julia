@@ -295,21 +295,23 @@ a keyword if used as a field name, X.word, or quoted, :word."
       (ignore-errors (backward-char))))
 
 (defun julia-last-open-block-pos (min)
-  "Move back and return the position of the last open block, if one found.
+  "Return the position of the last open block, if one found.
 Do not move back beyond position MIN."
-  (let ((count 0))
-    (while (not (or (> count 0) (<= (point) min)))
-      (julia-safe-backward-sexp)
-      (setq count
-	    (cond ((julia-at-keyword julia-block-start-keywords)
-		   (+ count 1))
-		  ((and (equal (current-word t) "end")
-			(not (julia-in-comment)) (not (julia-in-brackets)))
-		   (- count 1))
-		  (t count))))
-    (if (> count 0)
-	(point)
-      nil)))
+  (save-excursion
+    (let ((count 0))
+      (while (not (or (> count 0) (<= (point) min)))
+        (julia-safe-backward-sexp)
+        (setq count
+              (cond ((julia-at-keyword julia-block-start-keywords)
+                     (+ count 1))
+                    ;; fixme: breaks on strings
+                    ((and (equal (current-word t) "end")
+                          (not (julia-in-comment)) (not (julia-in-brackets)))
+                     (- count 1))
+                    (t count))))
+      (if (> count 0)
+          (point)
+        nil))))
 
 (defun julia-last-open-block (min)
   "Move back and return indentation level for last open block.
