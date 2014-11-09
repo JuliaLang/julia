@@ -583,9 +583,25 @@ function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector;
         fill!(h, zero(HT))
     end
     for x in v
-        i = searchsortedfirst(edg, x)-1
+        i = searchsortedfirst(edg, x, Order.Forward)-1
         if 1 <= i <= n
             h[i] += 1
+        end
+    end
+    edg, h
+end
+
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::Range; init::Bool=true)
+    n = length(edg) - 1
+    length(h) == n || error("length(h) must equal length(edg) - 1.")
+    if init
+        fill!(h, zero(HT))
+    end
+    step(edg) <= 0 && error("step(edg) must be positive")
+    for x in v
+        f = (x-first(edg))/step(edg)
+        if 0 < f <= n
+            h[iceil(f)] += 1
         end
     end
     edg, h
@@ -641,4 +657,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
-
