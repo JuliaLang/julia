@@ -39,16 +39,20 @@ end
 
 @inline gen_rand_maybe(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
 
+abstract FloatInterval
+type CloseOpen <: FloatInterval end
+type Close1Open2 <: FloatInterval end
+
 # precondition: !mt_empty(r)
-@inline rand_close1_open2_inbounds(r::MersenneTwister) = mt_pop!(r)
-@inline rand_inbounds(r::MersenneTwister) = rand_close1_open2_inbounds(r) - 1.0
+@inline rand_inbounds(r::MersenneTwister, ::Type{Close1Open2}) = mt_pop!(r)
+@inline rand_inbounds(r::MersenneTwister, ::Type{CloseOpen}) = rand_inbounds(r, Close1Open2) - 1.0
+@inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen)
 
 # produce Float64 values
-@inline rand_close1_open2(r::MersenneTwister) = (gen_rand_maybe(r); rand_close1_open2_inbounds(r))
-@inline rand_close_open(r::MersenneTwister) = (gen_rand_maybe(r); rand_inbounds(r))
+@inline rand{I<:FloatInterval}(r::MersenneTwister, ::Type{I}) = (gen_rand_maybe(r); rand_inbounds(r, I))
 
 # this is similar to `dsfmt_genrand_uint32` from dSFMT.h:
-@inline rand_ui32(r::MersenneTwister) = reinterpret(UInt64, rand_close1_open2(r)) % UInt32
+@inline rand_ui32(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2)) % UInt32
 
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
@@ -134,7 +138,7 @@ globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
-@inline rand() = rand_close_open(GLOBAL_RNG)
+@inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
 rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
@@ -145,10 +149,10 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 ## random floating point values
 
-@inline rand(r::AbstractRNG) = rand_close_open(r)
+@inline rand(r::AbstractRNG) = rand(r, CloseOpen)
 
 # MersenneTwister
-rand(r::MersenneTwister, ::Type{Float64}) = rand_close_open(r)
+rand(r::MersenneTwister, ::Type{Float64}) = rand(r, CloseOpen)
 rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, Float64))
 
 ## random integers (MersenneTwister)
@@ -819,7 +823,7 @@ const ziggurat_nor_r      = 3.6541528853610087963519472518
 const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
-@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
+@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand(rng, Close1Open2)) & 0x000fffffffffffff
 
 function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
