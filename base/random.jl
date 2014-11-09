@@ -54,6 +54,8 @@ type Close1Open2 <: FloatInterval end
 # this is similar to `dsfmt_genrand_uint32` from dSFMT.h:
 @inline rand_ui32(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2)) % UInt32
 
+@inline rand_ui52_raw(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui2x52_raw(r::MersenneTwister) = (((rand_ui52_raw(r) % UInt128) << 64) | rand_ui52_raw(r))
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
     r.seed = seed
@@ -193,11 +195,10 @@ end
 
 # MersenneTwister
 
-function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64})
-    n = length(A)
+function rand_AbstractArray_Float64!{I<:FloatInterval}(r::MersenneTwister, A::AbstractArray{Float64}, n=length(A), ::Type{I}=CloseOpen)
     # what follows is equivalent to this simple loop but more efficient:
     # for i=1:n
-    #     @inbounds A[i] = rand(r)
+    #     @inbounds A[i] = rand(r, I)
     # end
     m = 0
     while m < n
@@ -208,7 +209,7 @@ function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float6
         end
         m2 = min(n, m+s)
         for i=m+1:m2
-            @inbounds A[i] = rand_inbounds(r)
+            @inbounds A[i] = rand_inbounds(r, I)
         end
         m = m2
     end
@@ -217,13 +218,50 @@ end
 
 rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
 
-function rand!(r::MersenneTwister, A::Array{Float64})
-    n = length(A)
+fill_array!(s::DSFMT_state, A::Array{Float64}, n::Int, ::Type{CloseOpen}) = dsfmt_fill_array_close_open!(s, A, n)
+fill_array!(s::DSFMT_state, A::Array{Float64}, n::Int, ::Type{Close1Open2}) = dsfmt_fill_array_close1_open2!(s, A, n)
+
+function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n=length(A), ::Type{I}=CloseOpen)
     if n < dsfmt_get_min_array_size()
-        rand_AbstractArray_Float64!(r, A)
+        rand_AbstractArray_Float64!(r, A, n, I)
     else
-        dsfmt_fill_array_close_open!(r.state, A, 2*(n ÷ 2))
-        isodd(n) && (A[n] = rand(r))
+        fill_array!(r.state, A, 2*(n ÷ 2), I)
+        isodd(n) && (A[n] = rand(r, I))
+    end
+    A
+end
+
+function rand!(r::MersenneTwister, A::Array{UInt128}, n=length(A))
+    Af = pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2n)
+    i = n
+    while true
+        rand!(r, Af, 2i, Close1Open2)
+        n < 5 && break
+        i = 0
+        @inbounds while n-i >= 5
+            u = A[i+=1]
+            A[n]    $= u << 48
+            A[n-=1] $= u << 36
+            A[n-=1] $= u << 24
+            A[n-=1] $= u << 12
+            n-=1
+        end
+    end
+    if n > 0
+        u = rand_ui2x52_raw(r)
+        for i = 1:n
+            @inbounds A[i] $= u << 12*i
+        end
+    end
+    A
+end
+
+function rand!{T<:Union(Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128)}(r::MersenneTwister, A::Array{T})
+    n=length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128))
+    for i = 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T)
     end
     A
 end
