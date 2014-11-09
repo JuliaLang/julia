@@ -35,6 +35,8 @@
 
 ;;; Code:
 
+(require 'cl) ;; incf, decf, plusp
+
 (defvar julia-mode-hook nil)
 
 (defvar julia-basic-offset)
@@ -258,19 +260,27 @@ Handles both single-line and multi-line comments."
               (looking-at julia-char-regex))
           nil))))))
 
-(defun julia-strcount (str chr)
-  (let ((i 0)
-	(c 0))
-    (while (< i (length str))
-      (if (equal (elt str i) chr)
-	  (setq c (+ c 1)))
-      (setq i (+ i 1)))
-    c))
-
 (defun julia-in-brackets ()
-  (let ((before (buffer-substring (line-beginning-position) (point))))
-    (> (julia-strcount before ?[)
-       (julia-strcount before ?]))))
+  "Return non-nil if point is inside square brackets."
+  (let ((start-pos (point))
+        (open-count 0))
+    ;; Count all the [ and ] characters on the current line.
+    (save-excursion
+      (beginning-of-line)
+
+      (while (< (point) start-pos)
+        ;; Don't count [ or ] inside strings, characters or comments.
+        (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+
+          (when (looking-at (rx "["))
+            (incf open-count))
+          (when (looking-at (rx "]"))
+            (decf open-count)))
+        
+        (forward-char 1)))
+
+    ;; If we've opened more than we've closed, we're inside brackets.
+    (plusp open-count)))
 
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
