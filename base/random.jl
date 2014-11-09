@@ -231,6 +231,45 @@ function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n=length
     A
 end
 
+@inline mask128(u::UInt128, ::Type{Float16}) = (u & 0x03ff03ff03ff03ff03ff03ff03ff03ff) | 0x3c003c003c003c003c003c003c003c00
+@inline mask128(u::UInt128, ::Type{Float32}) = (u & 0x007fffff007fffff007fffff007fffff) | 0x3f8000003f8000003f8000003f800000
+
+function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Type{Close1Open2})
+    n = length(A)
+    n128 = n * sizeof(T) ÷ 16
+    rand!(r, pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2*n128), 2*n128, Close1Open2)
+    A128 = pointer_to_array(convert(Ptr{UInt128}, pointer(A)), n128)
+    @inbounds for i in 1:n128
+        u = A128[i]
+        u $= u << 26
+        # at this point, the 64 low bits of u, "k" being the k-th bit of A128[i] and "+" the bit xor, are:
+        # [..., 58+32,..., 53+27, 52+26, ..., 33+7, 32+6, ..., 27+1, 26, ..., 1]
+        # the bits needing to be random are
+        # [1:10, 17:26, 33:42, 49:58] (for Float16)
+        # [1:23, 33:55] (for Float32)
+        # this is obviously satisfied on the 32 low bits side, and on the high side, the entropy comes
+        # from bits 33:52 of A128[i] and then from bits 27:32 (which are discarded on the low side)
+        # this is similar for the 64 high bits of u
+        A128[i] = mask128(u, T)
+    end
+    for i in 16*n128÷sizeof(T)+1:n
+        @inbounds A[i] = rand(r, T) + one(T)
+    end
+    A
+end
+
+function rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}, ::Type{CloseOpen})
+    rand!(r, A, Close1Open2)
+    I32 = one(Float32)
+    for i in 1:length(A)
+        @inbounds A[i] = T(Float32(A[i])-I32) # faster than "A[i] -= one(T)" for T==Float16
+    end
+    A
+end
+
+rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
+
+
 function rand!(r::MersenneTwister, A::Array{UInt128}, n=length(A))
     Af = pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2n)
     i = n
