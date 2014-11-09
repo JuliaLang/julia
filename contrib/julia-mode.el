@@ -325,20 +325,27 @@ Do not move back beyond MIN."
 	   (+ julia-basic-offset (current-indentation))))))
 
 (defun julia-paren-indent ()
-  "Return indent amount of the last opening paren."
-  (let* ((p (parse-partial-sexp
-             (save-excursion
-               ;; only indent by paren if the last open
-               ;; paren is closer than the last open
-               ;; block
-               (or (julia-last-open-block-pos (point-min))
-                   (point-min)))
-             (progn (beginning-of-line)
-                    (point))))
-         (pos (cadr p)))
-    (if (or (= 0 (car p)) (null pos))
-        nil
-      (progn (goto-char pos) (+ 1 (current-column))))))
+  "Return the column position of the innermost containing paren
+before point. Returns nil if we're not within nested parens."
+  (save-excursion
+    (let ((min-pos (or (julia-last-open-block-pos (point-min))
+                       (point-min)))
+          (open-count 0))
+      (while (and (> (point) min-pos)
+                  (not (plusp open-count)))
+
+        (when (looking-at (rx (any "[" "]" "(" ")")))
+          (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+            (cond ((looking-at (rx (any "[" "(")))
+                   (incf open-count))
+                  ((looking-at (rx (any "]" ")")))
+                   (decf open-count)))))
+
+        (backward-char))
+
+      (if (plusp open-count)
+          (+ (current-column) 2)
+        nil))))
 
 (defun julia-indent-line ()
   "Indent current line of julia code."
@@ -348,7 +355,7 @@ Do not move back beyond MIN."
     (indent-line-to
      (or
       ;; If we're inside an open paren, indent to line up arguments.
-      (save-excursion (ignore-errors (julia-paren-indent)))
+      (ignore-errors (julia-paren-indent))
       ;; If we're on a block end keyword, unindent.
       (save-excursion
         (beginning-of-line)
