@@ -516,7 +516,7 @@ end
 
 ## nice-valued ranges for histograms
 
-function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:FloatingPoint}(v::AbstractArray{T}, n::Integer)
     if length(v) == 0
         return 0.0:1.0:0.0
     end
@@ -540,7 +540,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     start:step:(start + nm1*step)
 end
 
-function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:Integer}(v::AbstractArray{T}, n::Integer)
     if length(v) == 0
         return 0:1:0
     end
@@ -564,6 +564,17 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     start = step*(ceil(lo/step)-1)
     nm1 = iceil((hi - start)/step)
     start:step:(start + nm1*step)
+end
+
+function histrange{T}(v::AbstractArray{T}, n::Integer)
+    if isempty(v)
+        return range(zero(T), one(T)/1, 0)
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        return range(lo, one(T)/1, 1)
+    end
+    range(lo, (hi-lo)/n, n+1)
 end
 
 ## midpoints of intervals
