@@ -126,8 +126,8 @@ globalRNG() = GLOBAL_RNG
 
 # rand: a non-specified RNG defaults to GLOBAL_RNG
 
-rand() = rand(GLOBAL_RNG)
-rand(T::Type) = rand(GLOBAL_RNG, T)
+@inline rand() = rand_close_open(GLOBAL_RNG)
+@inline rand(T::Type) = rand(GLOBAL_RNG, T)
 rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
 rand(dims::Int...) = rand(dims)
@@ -137,7 +137,7 @@ rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 ## random floating point values
 
-rand(r::AbstractRNG) = rand(r, Float64)
+@inline rand(r::AbstractRNG) = rand_close_open(r)
 
 # MersenneTwister
 rand(r::MersenneTwister, ::Type{Float64}) = rand_close_open(r)
@@ -806,61 +806,59 @@ const fe =
      2.1459677437189063e-03,1.5362997803015724e-03,9.6726928232717454e-04,
      4.5413435384149677e-04]
 
-ziggurat_nor_r      = 3.6541528853610087963519472518
-ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
-ziggurat_exp_r      = 7.6971174701310497140446280481
 
-@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(UInt64, rand_close1_open2(rng)) & 0x000fffffffffffff
-for (lhs, rhs) in (([], []),
-                  ([:(rng::MersenneTwister)], [:rng]))
-    @eval begin
-        function randmtzig_randn($(lhs...))
-            @inbounds begin
+const ziggurat_nor_r      = 3.6541528853610087963519472518
+const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
+const ziggurat_exp_r      = 7.6971174701310497140446280481
+
+@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
+
+function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
+    @inbounds begin
+        while true
+            r = randi(rng)
+            rabs = int64(r>>1) # One bit for the sign
+            idx = rabs & 0xFF
+            x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
+            if rabs < ki[idx+1]
+                return x # 99.3% of the time we return here 1st try
+            elseif idx == 0
                 while true
-                    r = randi($(rhs...))
-                    rabs = int64(r>>1) # One bit for the sign
-                    idx = rabs & 0xFF
-                    x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
-                    if rabs < ki[idx+1]
-                        return x # 99.3% of the time we return here 1st try
-                    elseif idx == 0
-                        while true
-                            xx = -$(ziggurat_nor_inv_r)*log(rand($(rhs...)))
-                            yy = -log(rand($(rhs...)))
-                            if yy+yy > xx*xx
-                                return (rabs & 0x100) != 0x000000000 ? -$(ziggurat_nor_r)-xx : $(ziggurat_nor_r)+xx
-                            end
-                        end
-                    elseif (fi[idx] - fi[idx+1])*rand($(rhs...)) + fi[idx+1] < exp(-0.5*x*x)
-                        return x # return from the triangular area
+                    xx = -ziggurat_nor_inv_r*log(rand(rng))
+                    yy = -log(rand(rng))
+                    if yy+yy > xx*xx
+                        return (rabs & 0x100) != 0x000000000 ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
                     end
                 end
-            end
-        end
-
-        function randmtzig_exprnd($(lhs...))
-            @inbounds begin
-                while true
-                    ri = randi($(rhs...))
-                    idx = ri & 0xFF
-                    x = ri*we[idx+1]
-                    if ri < ke[idx+1]
-                        return x # 98.9% of the time we return here 1st try
-                    elseif idx == 0
-                        return $(ziggurat_exp_r) - log(rand($(rhs...)))
-                    elseif (fe[idx] - fe[idx+1])*rand($(rhs...)) + fe[idx+1] < exp(-x)
-                        return x # return from the triangular area
-                    end
-                end
+            elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
+                return x # return from the triangular area
             end
         end
     end
 end
 
-randn() = randmtzig_randn()
-randn(rng::MersenneTwister) = randmtzig_randn(rng)
-randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
+function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
+    @inbounds begin
+        while true
+            ri = randi(rng)
+            idx = ri & 0xFF
+            x = ri*we[idx+1]
+            if ri < ke[idx+1]
+                return x # 98.9% of the time we return here 1st try
+            elseif idx == 0
+                return ziggurat_exp_r - log(rand(rng))
+            elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
+                return x # return from the triangular area
+            end
+        end
+    end
+end
+
+
+
+randn(rng::MersenneTwister=GLOBAL_RNG) = randmtzig_randn(rng)
 randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng);end;A)
+randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))

@@ -374,7 +374,8 @@ function resolve(
     for pkg in keys(reqs)
         if !haskey(deps,pkg)
             if "julia" in conflicts[pkg]
-                error("$pkg can't be installed because it has no versions that support ", VERSION, " of julia")
+                error("$pkg can't be installed because it has no versions that support ", VERSION, " of julia. " *
+                   "You may need to update METADATA by running `Pkg.update()`")
             else
                 error("$pkg's requirements can't be satisfied because of the following fixed packages: ",
                    join(conflicts[pkg], ", ", " and "))
