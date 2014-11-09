@@ -163,7 +163,7 @@ harm for called functions to attempt such modifications (that is,
 writing through the passed pointers). Moreover, ``&`` may be used with
 any expression, such as ``&0`` or ``&f(x)``.
 
-Currently, it is not possible to pass structs and other non-primitive
+Currently, it is not possible to reliably pass structs and other non-primitive
 types by *value* from Julia to/from C libraries. However, *pointers*
 to structs can be passed.  The simplest case is that of C functions
 that generate and use *opaque* pointers to struct types, which can be
@@ -267,10 +267,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 | ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{UInt8}}``            |
 +------------------------+-------------------+--------------------------------+
 | ``struct T*`` (where T represents an       | ``Ptr{T}`` (call using         |
-| appropriately defined bits type)           | &variable_name in the          |
-|                                            | parameter list)                |
-+------------------------+-------------------+--------------------------------+
-| ``struct T`` (where T represents  an       | ``T`` (call using              |
 | appropriately defined bits type)           | &variable_name in the          |
 |                                            | parameter list)                |
 +------------------------+-------------------+--------------------------------+
