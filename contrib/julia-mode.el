@@ -364,13 +364,6 @@ before point. Returns nil if we're not within nested parens."
       (save-excursion
         (beginning-of-line)
         (ignore-errors (julia-paren-indent)))
-      ;; Indent according to how many nested blocks we are in.
-      (save-excursion
-        (beginning-of-line)
-        (forward-to-indentation 0)
-        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
-          (ignore-errors (+ (julia-last-open-block (point-min))
-                            (if endtok (- julia-basic-offset) 0)))))
       ;; If the previous line ends in =, increase the indent.
       (ignore-errors ; if previous line is (point-min)
         (save-excursion
@@ -381,6 +374,13 @@ before point. Returns nil if we're not within nested parens."
                      (equal (char-after (point)) ?=)))
               (+ julia-basic-offset (current-indentation))
             nil)))
+      ;; Indent according to how many nested blocks we are in.
+      (save-excursion
+        (beginning-of-line)
+        (forward-to-indentation 0)
+        (let ((endtok (julia-at-keyword julia-block-end-keywords)))
+          (ignore-errors (+ (julia-last-open-block (point-min))
+                            (if endtok (- julia-basic-offset) 0)))))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
                       (current-indentation))
