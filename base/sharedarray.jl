@@ -31,6 +31,10 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     if isempty(pids)
         # only use workers on the current host
         pids = procs(myid())
+        if length(pids) > 1
+            pids = filter(x -> x != 1, pids)
+        end
+
         onlocalhost = true
     else
         if !check_same_host(pids)
@@ -133,7 +137,7 @@ indexpids(S::SharedArray) = S.pidx
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
-localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : error("SharedArray is not mapped to this process")
+localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
 
@@ -169,13 +173,14 @@ end
 
 sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 
-function init_loc_flds(S)
+function init_loc_flds{T}(S::SharedArray{T})
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         S.s = fetch(S.refs[S.pidx])
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
+        S.loc_subarr_1d = Array(T, 0)
     end
 end
 
@@ -196,9 +201,6 @@ end
 function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     S = invoke(deserialize, (Any, DataType), s, t)
     init_loc_flds(S)
-    if (S.pidx == 0)
-        error("SharedArray cannot be used on a non-participating process")
-    end
     S
 end
 
