@@ -813,6 +813,9 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 @inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
 
+# the @inline'd rand(rng) method makes randmtzig_randn slower
+rand_noinline(rng::MersenneTwister) = rand(rng)
+
 function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
         while true
@@ -824,13 +827,13 @@ function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
                 return x # 99.3% of the time we return here 1st try
             elseif idx == 0
                 while true
-                    xx = -ziggurat_nor_inv_r*log(rand(rng))
-                    yy = -log(rand(rng))
+                    xx = -ziggurat_nor_inv_r*log(rand_noinline(rng))
+                    yy = -log(rand_noinline(rng))
                     if yy+yy > xx*xx
                         return (rabs & 0x100) != 0x000000000 ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
                     end
                 end
-            elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
+            elseif (fi[idx] - fi[idx+1])*rand_noinline(rng) + fi[idx+1] < exp(-0.5*x*x)
                 return x # return from the triangular area
             end
         end
