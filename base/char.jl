@@ -23,12 +23,14 @@ getindex(c::Char, I::Integer...) = all(EqX(1), I) ? c : throw(BoundsError())
 getindex(c::Char, I::Real...) = getindex(c, to_index(I)...)
 first(c::Char) = c
 last(c::Char) = c
+eltype(c::Char) = Char
 
 start(c::Char) = false
 next(c::Char, state) = (c, true)
 done(c::Char, state) = state
 isempty(c::Char) = false
 in(x::Char, y::Char) = x == y
+
 
 ==(x::Char, y::Char) = uint32(x) == uint32(y)
 ==(x::Char, y::Integer) = uint32(x) == y
