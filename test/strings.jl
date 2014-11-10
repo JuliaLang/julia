@@ -885,6 +885,10 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%.4e" 1.2345) == "1.2345e+00"
 @test (@sprintf "%.0e" 3e142) == "3e+142"
 @test (@sprintf "%#.0e" 3e142) == "3.e+142"
+# hex float
+@test (@sprintf "%a" 1.5) == "0x1.8p+0"
+@test (@sprintf "%#.0a" 1.5) == "0x2.p+0"
+@test (@sprintf "%+30a" 1/3) == "         +0x1.5555555555555p-2"
 # chars
 @test (@sprintf "%c" 65) == "A"
 @test (@sprintf "%c" 'A') == "A"
