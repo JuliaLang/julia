@@ -801,9 +801,10 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     write(fmt, uint8(0))
     printf_fmt = takebuf_array(fmt)
     @assert length(printf_fmt) == fmt_len
-    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), DIGITS, BUFLEN-1, printf_fmt, &d)
+    bufsiz = length(DIGITS) - 1
+    lng = ccall((:mpfr_snprintf,:libmpfr), Int32, (Ptr{Uint8}, Culong, Ptr{Uint8}, Ptr{BigFloat}...), DIGITS, bufsiz, printf_fmt, &d)
     lng > 0 || error("invalid printf formatting for BigFloat")
-    write(out, pointer(DIGITS), lng)
+    write(out, pointer(DIGITS), min(lng,bufsiz))
     return (false, ())
 end
 
