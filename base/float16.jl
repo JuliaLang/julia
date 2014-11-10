@@ -135,7 +135,7 @@ for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
 end
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
-             :atanh,:exp,:log,:sqrt)
+             :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
         $func(a::Float16) = float16($func(float32(a)))
         $func(a::Complex32) = complex32($func(complex64(a)))
