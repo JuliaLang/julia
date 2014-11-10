@@ -2,6 +2,8 @@
 
 abstract Factorization{T}
 
+eltype{T}(F::Factorization{T}) = T
+
 macro assertposdef(A, info)
    :(($info)==0 ? $A : throw(PosDefException($info)))
 end
@@ -111,7 +113,7 @@ immutable QRPackedQ{T} <: AbstractMatrix{T}
     factors::Matrix{T}
     τ::Vector{T}
 end
-immutable QRCompactWYQ{S} <: AbstractMatrix{S} 
+immutable QRCompactWYQ{S} <: AbstractMatrix{S}
     factors::Matrix{S}
     T::Matrix{S}
 end
@@ -263,8 +265,11 @@ function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPacke
               convert(AbstractMatrix{TAB}, B))
 end
 
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedVector{T}) = A_ldiv_B!(Triangular(A[:R], :U), sub(Ac_mul_B!(A[:Q], B), 1:size(A, 2)))
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = A_ldiv_B!(Triangular(A[:R], :U), sub(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2)))
+
 # Julia implementation similarly to xgelsy
-function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedMatrix{T}, rcond::Real)
+function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
@@ -294,8 +299,9 @@ function A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::Strid
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
     return isa(A,QRPivoted) ? B[invperm(A[:p]::Vector{BlasInt}),:] : B[1:nA,:], rnk
 end
-A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!{T<:BlasFloat}(A::Union(QRCompactWY{T},QRPivoted{T}), B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, sqrt(eps(real(float(one(eltype(B)))))))[1]
+A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
+A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, sqrt(eps(real(float(one(eltype(B)))))))[1]
+
 function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
@@ -445,7 +451,7 @@ end
 function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     n = size(A, 2)
     n == 0 && return Eigen(zeros(T, 0), zeros(T, 0, 0))
-    ishermitian(A) && return eigfact!(Hermitian(A)) 
+    ishermitian(A) && return eigfact!(Hermitian(A))
     return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
 eigfact{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigfact!(copy(A), args...; kwargs...))
@@ -697,16 +703,16 @@ end
 convert{T}(::Type{Factorization{T}}, F::Factorization{T}) = F
 inv{T}(F::Factorization{T}) = A_ldiv_B!(F, eye(T, size(F,1)))
 function \{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     A_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
 function Ac_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     Ac_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
 
 function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArray{TB,N})
-    TFB = typeof(one(TF)/one(TB)) 
+    TFB = typeof(one(TF)/one(TB))
     At_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end

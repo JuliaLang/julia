@@ -310,7 +310,7 @@
 		   (string.sub s 1)
 		   s)
 	       r is-float32-literal)))
-      ;; n is #f for integers > typemax(Uint64)
+      ;; n is #f for integers > typemax(UInt64)
       (cond (is-hex-float-literal (double n))
 	    ((eq? pred char-hex?) (fix-uint-neg neg (sized-uint-literal n s 4)))
 	    ((eq? pred char-oct?) (fix-uint-neg neg (sized-uint-oct-literal n s)))
@@ -387,7 +387,7 @@
 (define (skip-comment port)
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
-      (if (eof-object? c) 
+      (if (eof-object? c)
           (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))
@@ -668,7 +668,7 @@
 			ex)
 		 (let ((argument
 			(cond ((closing-token? (peek-token s))
-			       (error  (string "missing last argument in \"" 
+			       (error  (string "missing last argument in \""
 					       (deparse ex) ":\" range expression ")))
 			      ((newline? (peek-token s))
 			       (error "line break in \":\" expression"))
@@ -1508,8 +1508,9 @@
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-		 (if (and (pair? isdict) (car isdict))
-		      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
+		 (if (or (and (pair? isdict) (not (car isdict)))
+			 (null? isdict))
+		     (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
 		 (parse-dict s first closer)))
               (case (peek-token s)
                 ((#\,)
@@ -1784,15 +1785,13 @@
 	  ((eqv? t #\{ )
 	   (take-token s)
 	   (if (eqv? (require-token s) #\})
-	       (begin 
-		      (syntax-deprecation-warning s "{}" "[]")
-		      (take-token s) 
+	       (begin (syntax-deprecation-warning s "{}" "[]")
+		      (take-token s)
 		      '(cell1d))
-	       (let ((vex (parse-cat s #\})))
+	       (let ((vex (parse-cat s #\} #t)))
                  (if (null? vex)
-		     (begin
-		         (syntax-deprecation-warning s "{}" "[]")
-                         '(cell1d))
+		     (begin (syntax-deprecation-warning s "{}" "[]")
+			    '(cell1d))
                      (case (car vex)
                        ((comprehension)
 		         (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")

@@ -185,7 +185,7 @@ end
 length(r::UnitRange) = integer(r.stop - r.start + 1)
 length(r::FloatRange) = integer(r.len)
 
-function length{T<:Union(Int,Uint,Int64,Uint64)}(r::StepRange{T})
+function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)
     if r.step > 1
         return checked_add(convert(T, div(unsigned(r.stop - r.start), r.step)), one(T))
@@ -196,13 +196,13 @@ function length{T<:Union(Int,Uint,Int64,Uint64)}(r::StepRange{T})
     end
 end
 
-length{T<:Union(Int,Uint,Int64,Uint64)}(r::UnitRange{T}) =
+length{T<:Union(Int,UInt,Int64,UInt64)}(r::UnitRange{T}) =
     checked_add(checked_sub(r.stop, r.start), one(T))
 
 # some special cases to favor default Int type
 let smallint = (Int === Int64 ?
-                Union(Int8,Uint8,Int16,Uint16,Int32,Uint32) :
-                Union(Int8,Uint8,Int16,Uint16))
+                Union(Int8,UInt8,Int16,UInt16,Int32,UInt32) :
+                Union(Int8,UInt8,Int16,UInt16))
     global length
 
     function length{T <: smallint}(r::StepRange{T})
@@ -561,4 +561,5 @@ function in(x, r::Range)
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(int(x)-first(r),step(r))==0)
+in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(int(x)-first(r),step(r)) == 0)
+in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(int(x) - int(first(r)), step(r)) == 0)

@@ -125,10 +125,10 @@ export
     Module, Symbol, Task, Array,
     # numeric types
     Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
-    Int32, Int64, Int128, Ptr, Real, Signed, Uint, Uint8, Uint16, Uint32,
-    Uint64, Uint128, Unsigned,
+    Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
+    UInt64, UInt128, Unsigned,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, String, UTF8String,
+    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
@@ -180,23 +180,23 @@ bitstype 32 Float32 <: FloatingPoint
 bitstype 64 Float64 <: FloatingPoint
 
 bitstype 8  Bool <: Integer
-bitstype 32 Char <: Integer
+bitstype 32 Char
 
 bitstype 8   Int8    <: Signed
-bitstype 8   Uint8   <: Unsigned
+bitstype 8   UInt8   <: Unsigned
 bitstype 16  Int16   <: Signed
-bitstype 16  Uint16  <: Unsigned
+bitstype 16  UInt16  <: Unsigned
 bitstype 32  Int32   <: Signed
-bitstype 32  Uint32  <: Unsigned
+bitstype 32  UInt32  <: Unsigned
 bitstype 64  Int64   <: Signed
-bitstype 64  Uint64  <: Unsigned
+bitstype 64  UInt64  <: Unsigned
 bitstype 128 Int128  <: Signed
-bitstype 128 Uint128 <: Unsigned
+bitstype 128 UInt128 <: Unsigned
 
 if is(Int,Int64)
-    typealias Uint Uint64
+    typealias UInt UInt64
 else
-    typealias Uint Uint32
+    typealias UInt UInt32
 end
 
 abstract Exception
@@ -214,8 +214,8 @@ type UndefVarError      <: Exception
 end
 type InterruptException <: Exception end
 
-abstract String
-abstract DirectIndexString <: String
+abstract AbstractString
+abstract DirectIndexString <: AbstractString
 
 type SymbolNode
     name::Symbol
@@ -230,11 +230,11 @@ type GetfieldNode
 end
 
 immutable ASCIIString <: DirectIndexString
-    data::Array{Uint8,1}
+    data::Array{UInt8,1}
 end
 
-immutable UTF8String <: String
-    data::Array{Uint8,1}
+immutable UTF8String <: AbstractString
+    data::Array{UInt8,1}
 end
 
 typealias ByteString Union(ASCIIString,UTF8String)

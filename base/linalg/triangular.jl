@@ -107,17 +107,17 @@ for (uplos, uploc) in ((:(:U), 'U'), (:(:L), 'L'))
         @eval begin
         # Vector multiplication
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, b::StridedVector{T}) = BLAS.trmv!($uploc, 'N', $isunitc, A.data, b)
-        
+
         # Matrix multiplication
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'N', $isunitc, one(T), A.data, B)
         A_mul_B!{T<:BlasFloat,S<:StridedMatrix}(A::StridedMatrix{T}, B::Triangular{T,S,$uplos,$isunitb}) = BLAS.trmm!('R', $uploc, 'N', $isunitc, one(T), B.data, A)
-        
+
         Ac_mul_B!{T<:BlasComplex,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'C', $isunitc, one(T), A.data, B)
         Ac_mul_B!{T<:BlasReal,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, B::StridedMatrix{T}) = BLAS.trmm!('L', $uploc, 'T', $isunitc, one(T), A.data, B)
-        
+
         A_mul_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::Triangular{T,S,$uplos,$isunitb}) = BLAS.trmm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
         A_mul_Bc!{T<:BlasReal,S<:StridedMatrix}(A::StridedMatrix{T}, B::Triangular{T,S,$uplos,$isunitb}) = BLAS.trmm!('R', $uploc, 'T', $isunitc, one(T), B.data, A)
-        
+
         # Left division
         A_ldiv_B!{T<:BlasFloat,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'N', $isunitc, A.data, B)
         Ac_ldiv_B!{T<:BlasReal,S<:StridedMatrix}(A::Triangular{T,S,$uplos,$isunitb}, B::StridedVecOrMat{T}) = LAPACK.trtrs!($uploc, 'T', $isunitc, A.data, B)
@@ -528,3 +528,6 @@ for func in (:svd, :svdfact, :svdfact!, :svdvals)
         ($func)(A::Triangular) = ($func)(full(A))
     end
 end
+
+factorize(A::Triangular) = A
+

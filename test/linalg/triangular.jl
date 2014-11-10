@@ -117,7 +117,7 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 
                             # Error bounds
                             elty1 != BigFloat && errorbounds(A1, A1\B, B)
-                            
+
                             # Determinant
                             @test_approx_eq det(A1) det(lufact(full(A1)))
 
@@ -167,13 +167,13 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
         εb = eps(abs(float(one(eltyb))))
         ε = max(εa,εb)
 
-        debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")        
+        debug && println("\ntype of A: ", eltya, " type of b: ", eltyb, "\n")
 
         debug && println("Solve upper triangular system")
         Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri) \ b
-    
+
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
             for i = 1:2
@@ -181,7 +181,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             end
         end
         debug && println("Test forward error [JIN 5705] if this is not a BigFloat")
-        
+
         x = Atri \ b
         γ = n*ε/(1 - n*ε)
         if eltya != BigFloat
@@ -191,17 +191,17 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)
             end
         end
-        
+
         debug && println("Test backward error [JIN 5705]")
         for i = 1:size(b, 2)
             @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)
         end
-    
+
         debug && println("Solve lower triangular system")
         Atri = Triangular(lufact(A)[:U], :U) |> t -> eltya <: Complex && eltyb <: Real ? real(t) : t # Here the triangular matrix can't be too badly conditioned
         b = convert(Matrix{eltyb}, eltya <: Complex ? full(Atri)*ones(n, 2) : full(Atri)*ones(n, 2))
         x = full(Atri)\b
-    
+
         debug && println("Test error estimates")
         if eltya != BigFloat && eltyb != BigFloat
             for i = 1:2
@@ -220,7 +220,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test norm(x̂[:,i] - x[:,i], Inf)/norm(x̂[:,i], Inf) <= condskeel(bigA, x̂[:,i])*γ/(1 - condskeel(bigA)*γ)
             end
         end
-    
+
         debug && println("Test backward error [JIN 5705]")
         for i = 1:size(b, 2)
             @test norm(abs(b[:,i] - Atri*x[:,i]), Inf) <= γ * norm(Atri, Inf) * norm(x[:,i], Inf)

@@ -6,8 +6,8 @@
 
 import Base.isless
 
-function count(data::String, n::Int)
-    counts = Dict{String, Int}()
+function count(data::AbstractString, n::Int)
+    counts = Dict{AbstractString, Int}()
     top = length(data) - n + 1
     for i = 1:top
         s = data[i : i+n-1]
@@ -20,12 +20,12 @@ function count(data::String, n::Int)
     counts
 end
 
-function count_one(data::String, s::String)
+function count_one(data::AbstractString, s::AbstractString)
     count(data, length(s))[s]
 end
 
 type KNuc
-    name::String
+    name::AbstractString
     count::Int
 end
 
@@ -37,7 +37,7 @@ function isless(x::KNuc, y::KNuc)
     x.count > y.count
 end
 
-function sorted_array(m::Dict{String, Int})
+function sorted_array(m::Dict{AbstractString, Int})
     kn = Array(KNuc, length(m))
     i = 1
     for elem in m

@@ -65,7 +65,7 @@ function repl_cmd(cmd)
     nothing
 end
 
-function repl_hook(input::String)
+function repl_hook(input::AbstractString)
     Expr(:call, :(Base.repl_cmd),
          macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
@@ -129,17 +129,17 @@ end
 
 _repl_start = Condition()
 
-function parse_input_line(s::String)
+function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{Uint8},Int32,Int32),
+    #                   (Ptr{UInt8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
 function parse_input_line(io::IO)
@@ -169,7 +169,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::String) = isfile(path) && include(path)
+try_include(path::AbstractString) = isfile(path) && include(path)
 
 function init_bind_addr(args::Vector{UTF8String})
     # Treat --bind-to in a position independent manner in ARGS since
@@ -189,7 +189,7 @@ function init_bind_addr(args::Vector{UTF8String})
             bind_addr = getipaddr()
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used. 
+            # Will cause an exception to be raised only when used.
             bind_addr = ip"127.0.0.1"
         end
     end
@@ -244,7 +244,7 @@ function process_options(args::Vector{UTF8String})
             addprocs(np)
         elseif args[i]=="--machinefile"
             i+=1
-            machines = split(readall(args[i]), '\n'; keep=false)
+            machines = load_machine_file(args[i])
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
@@ -309,7 +309,7 @@ const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
@@ -333,6 +333,19 @@ function load_juliarc()
         try_include(abspath(JULIA_HOME,"..","etc","julia","juliarc.jl"))
     end
     try_include(abspath(homedir(),".juliarc.jl"))
+end
+
+function load_machine_file(path::AbstractString)
+    machines = AbstractString[]
+    for line in split(readall(path),'\n'; keep=false)
+        s = split(line,'*'; keep=false)
+        if length(s) > 1
+            append!(machines,fill(s[2],int(s[1])))
+        else
+            push!(machines,line)
+        end
+    end
+    return machines
 end
 
 function early_init()

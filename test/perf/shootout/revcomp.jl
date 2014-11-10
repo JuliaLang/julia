@@ -39,7 +39,7 @@ end
 
 function revcomp(infile="revcomp-input.txt")
     input = open(infile, "r")
-    buff = Uint8[]
+    buff = UInt8[]
     while true
         line = readline(input).data
         if isempty(line)
@@ -47,7 +47,7 @@ function revcomp(infile="revcomp-input.txt")
             return
         elseif line[1] == '>'
 #            print_buff(buff)
-            buff = Uint8[]
+            buff = UInt8[]
 #            write(line)
         else
             l = length(line)-1

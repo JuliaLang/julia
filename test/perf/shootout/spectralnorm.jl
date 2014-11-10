@@ -4,7 +4,7 @@
 # http://shootout.alioth.debian.org/u32/performance.php?test=spectralnorm
 #
 # Based on the Javascript program
-# 
+#
 
 A(i,j) = 1.0 / ((i+j)*(i+j+1.0)/2.0+i+1.0)
 

@@ -13,61 +13,85 @@ abstract AbstractRNG
 
 type MersenneTwister <: AbstractRNG
     state::DSFMT_state
-    seed::Union(Uint32,Vector{Uint32})
+    vals::Vector{Float64}
+    idx::Int
+    seed::Vector{UInt32}
 
-    function MersenneTwister(seed::Vector{Uint32})
-        state = DSFMT_state()
-        dsfmt_init_by_array(state, seed)
-        return new(state, seed)
-    end
-
-    MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
+    MersenneTwister(seed) = srand(new(DSFMT_state(), Array(Float64, dsfmt_get_min_array_size())),
+                                  seed)
+    MersenneTwister() = MersenneTwister(0)
 end
 
-function srand(r::MersenneTwister, seed)
+## Low level API for MersenneTwister
+
+function gen_rand(r::MersenneTwister)
+    dsfmt_fill_array_close1_open2!(r.state, r.vals, length(r.vals))
+    r.idx = 0
+end
+
+@inline gen_rand_maybe(r::MersenneTwister) = r.idx == length(r.vals) && gen_rand(r)
+
+# precondition: r.idx < length(r.vals)
+@inline rand_close1_open2_inbounds(r::MersenneTwister) =  (r.idx += 1; @inbounds return r.vals[r.idx])
+@inline rand_inbounds(r::MersenneTwister) = rand_close1_open2_inbounds(r) - 1.0
+
+# produce Float64 values
+@inline rand_close1_open2(r::MersenneTwister) = (gen_rand_maybe(r); rand_close1_open2_inbounds(r))
+@inline rand_close_open(r::MersenneTwister) = (gen_rand_maybe(r); rand_inbounds(r))
+
+# this is similar to `dsfmt_genrand_uint32` from dSFMT.h:
+@inline rand_ui32(r::MersenneTwister) = reinterpret(UInt64, rand_close1_open2(r)) % UInt32
+
+
+function srand(r::MersenneTwister, seed::Vector{UInt32})
     r.seed = seed
-    dsfmt_init_gen_rand(r.state, seed)
+    dsfmt_init_by_array(r.state, r.seed)
+    r.idx = length(r.vals)
     return r
 end
 
 ## initialization
 
-function srand()
+function __init__()
+    srand()
+
+    # Temporary fix for #8874
+    ccall((:dsfmt_gv_init_by_array,:libdSFMT),
+          Void,
+          (Ptr{UInt32}, Int32),
+          1+GLOBAL_RNG.seed, length(GLOBAL_RNG.seed))
+
+end
+
+## make_seed()
+# make_seed methods produce values of type Array{UInt32}, suitable for MersenneTwister seeding
+
+function make_seed()
 
 @unix_only begin
     try
-        srand("/dev/urandom")
+        return make_seed("/dev/urandom", 4)
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
-        seed = reinterpret(Uint64, time())
+        seed = reinterpret(UInt64, time())
         seed = hash(seed, uint64(getpid()))
         try
-        seed = hash(seed, parseint(Uint64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
+        seed = hash(seed, parseint(UInt64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
         end
-        srand(seed)
+        return make_seed(seed)
     end
 end
 
 @windows_only begin
-    a = zeros(Uint32, 2)
+    a = zeros(UInt32, 2)
     win32_SystemFunction036!(a)
-    srand(a)
+    return a
 end
 end
-
-__init__() = srand()
-
-## srand()
-
-function srand(seed::Vector{Uint32})
-    global RANDOM_SEED = seed
-    dsfmt_gv_init_by_array(seed)
-end
-srand(n::Integer) = srand(make_seed(n))
 
 function make_seed(n::Integer)
     n < 0 && throw(DomainError())
-    seed = Uint32[]
+    seed = UInt32[]
     while true
         push!(seed, n & 0xffffffff)
         n >>= 32
@@ -77,63 +101,76 @@ function make_seed(n::Integer)
     end
 end
 
-function srand(filename::String, n::Integer)
+function make_seed(filename::AbstractString, n::Integer)
     open(filename) do io
-        a = Array(Uint32, int(n))
+        a = Array(UInt32, int(n))
         read!(io, a)
-        srand(a)
+        a
     end
 end
-srand(filename::String) = srand(filename, 4)
+
+## srand()
+
+srand(r::MersenneTwister) = srand(r, make_seed())
+srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
+srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
+
+srand() = srand(GLOBAL_RNG)
+srand(seed::Union(Integer, Vector{UInt32})) = srand(GLOBAL_RNG, seed)
+srand(filename::AbstractString, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
+
+## Global RNG
+
+const GLOBAL_RNG = MersenneTwister()
+globalRNG() = GLOBAL_RNG
+
+# rand: a non-specified RNG defaults to GLOBAL_RNG
+
+@inline rand() = rand_close_open(GLOBAL_RNG)
+@inline rand(T::Type) = rand(GLOBAL_RNG, T)
+rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
+rand(dims::Dims) = rand(GLOBAL_RNG, dims)
+rand(dims::Int...) = rand(dims)
+rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
+rand(T::Type, d1::Int, dims::Int...) = rand(T, tuple(d1, dims...))
+rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 ## random floating point values
 
-rand(::Type{Float64}) = dsfmt_gv_genrand_close_open()
-rand() = dsfmt_gv_genrand_close_open()
+@inline rand(r::AbstractRNG) = rand_close_open(r)
 
-rand(::Type{Float32}) = float32(rand())
-rand(::Type{Float16}) = float16(rand())
+# MersenneTwister
+rand(r::MersenneTwister, ::Type{Float64}) = rand_close_open(r)
+rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, Float64))
 
-rand{T<:Real}(::Type{Complex{T}}) = complex(rand(T),rand(T))
+## random integers (MersenneTwister)
 
+rand(r::MersenneTwister, ::Type{UInt8})   = rand(r, UInt32) % UInt8
+rand(r::MersenneTwister, ::Type{UInt16})  = rand(r, UInt32) % UInt16
+rand(r::MersenneTwister, ::Type{UInt32})  = rand_ui32(r)
+rand(r::MersenneTwister, ::Type{UInt64})  = uint64(rand(r, UInt32)) <<32 | rand(r, UInt32)
+rand(r::MersenneTwister, ::Type{UInt128}) = uint128(rand(r, UInt64))<<64 | rand(r, UInt64)
 
-rand(r::MersenneTwister) = dsfmt_genrand_close_open(r.state)
+rand(r::MersenneTwister, ::Type{Int8})    = rand(r, UInt32) % Int8
+rand(r::MersenneTwister, ::Type{Int16})   = rand(r, UInt32) % Int16
+rand(r::MersenneTwister, ::Type{Int32})   = reinterpret(Int32,  rand(r, UInt32))
+rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
+rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128))
 
-## random integers
+## random complex values
 
-dsfmt_randui32() = dsfmt_gv_genrand_uint32()
-dsfmt_randui64() = uint64(dsfmt_randui32()) | (uint64(dsfmt_randui32())<<32)
+rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, T))
 
-rand(::Type{Uint8})   = rand(Uint32) % Uint8
-rand(::Type{Uint16})  = rand(Uint32) % Uint16
-rand(::Type{Uint32})  = dsfmt_randui32()
-rand(::Type{Uint64})  = dsfmt_randui64()
-rand(::Type{Uint128}) = uint128(rand(Uint64))<<64 | rand(Uint64)
+## Arrays of random numbers
 
-rand(::Type{Int8})    = rand(Uint32) % Int8
-rand(::Type{Int16})   = rand(Uint32) % Int16
-rand(::Type{Int32})   = reinterpret(Int32,rand(Uint32))
-rand(::Type{Int64})   = reinterpret(Int64,rand(Uint64))
-rand(::Type{Int128})  = reinterpret(Int128,rand(Uint128))
-
-# Arrays of random numbers
-
-rand(::Type{Float64}, dims::Dims) = rand!(Array(Float64, dims))
-rand(::Type{Float64}, dims::Int...) = rand(Float64, dims)
-
-rand(dims::Dims) = rand(Float64, dims)
-rand(dims::Int...) = rand(Float64, dims)
-
-rand(r::AbstractRNG) = rand(r, Float64)
-rand(r::AbstractRNG, dims::Dims) = rand!(r, Array(Float64, dims))
+rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
 rand(r::AbstractRNG, dims::Int...) = rand(r, dims)
 
-function rand!{T}(A::Array{T})
-    for i = 1:length(A)
-        A[i] = rand(T)
-    end
-    A
-end
+rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
+rand(r::AbstractRNG, T::Type, d1::Int, dims::Int...) = rand(r, T, tuple(d1, dims...))
+# note: the above method would trigger an ambiguity warning if d1 was not separated out:
+# rand(r, ()) would match both this method and rand(r, dims::Dims)
+# moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
 function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     for i = 1:length(A)
@@ -142,25 +179,57 @@ function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
     A
 end
 
-rand(T::Type, dims::Dims) = rand!(Array(T, dims))
-rand{T<:Number}(::Type{T}) = error("no random number generator for type $T; try a more specific type")
-rand{T<:Number}(::Type{T}, dims::Int...) = rand(T, dims)
+# MersenneTwister
 
+function rand_AbstractArray_Float64!(r::MersenneTwister, A::AbstractArray{Float64})
+    n = length(A)
+    # what follows is equivalent to this simple loop but more efficient:
+    # for i=1:n
+    #     @inbounds A[i] = rand(r)
+    # end
+    m = 0
+    while m < n
+        s = length(r.vals) - r.idx
+        if s == 0
+            gen_rand(r)
+            s = length(r.vals)
+        end
+        m2 = min(n, m+s)
+        for i=m+1:m2
+            @inbounds A[i] = rand_inbounds(r)
+        end
+        m = m2
+    end
+    A
+end
+
+rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float64!(r, A)
+
+function rand!(r::MersenneTwister, A::Array{Float64})
+    n = length(A)
+    if n < dsfmt_get_min_array_size()
+        rand_AbstractArray_Float64!(r, A)
+    else
+        dsfmt_fill_array_close_open!(r.state, A, 2*(n ÷ 2))
+        isodd(n) && (A[n] = rand(r))
+    end
+    A
+end
 
 ## Generate random integer within a range
 
 # remainder function according to Knuth, where rem_knuth(a, 0) = a
-rem_knuth(a::Uint, b::Uint) = a % (b + (b == 0)) + a * (b == 0)
+rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
-maxmultiple(k::Uint32) = (div(0x0000000100000000,k + (k == 0))*k - 1) % Uint32
-maxmultiple(k::Uint64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % Uint64
-# maximum multiple of k within 1:typemax(Uint128)
-maxmultiple(k::Uint128) = div(typemax(Uint128), k + (k == 0))*k - 1
+maxmultiple(k::UInt32) = (div(0x0000000100000000,k + (k == 0))*k - 1) % UInt32
+maxmultiple(k::UInt64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % UInt64
+# maximum multiple of k within 1:typemax(UInt128)
+maxmultiple(k::UInt128) = div(typemax(UInt128), k + (k == 0))*k - 1
 # maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::Uint64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % Uint64
+maxmultiplemix(k::UInt64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % UInt64
 
 immutable RandIntGen{T<:Integer, U<:Unsigned}
     a::T   # first element of the range
@@ -168,38 +237,38 @@ immutable RandIntGen{T<:Integer, U<:Unsigned}
     u::U   # rejection threshold
 end
 # generators with 32, 128 bits entropy
-RandIntGen{T, U<:Union(Uint32, Uint128)}(a::T, k::U) = RandIntGen{T, U}(a, k, maxmultiple(k))
+RandIntGen{T, U<:Union(UInt32, UInt128)}(a::T, k::U) = RandIntGen{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
-RandIntGen{T}(a::T, k::Uint64) = RandIntGen{T,Uint64}(a, k, maxmultiplemix(k))
+RandIntGen{T}(a::T, k::UInt64) = RandIntGen{T,UInt64}(a, k, maxmultiplemix(k))
 
 
 # generator for ranges
 RandIntGen{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), last(r) - first(r) + one(T))
 
 # specialized versions
-for (T, U) in [(Uint8, Uint32), (Uint16, Uint32),
-               (Int8, Uint32), (Int16, Uint32), (Int32, Uint32), (Int64, Uint64), (Int128, Uint128),
-               (Bool, Uint32), (Char, Uint32)]
+for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
+               (Int8, UInt32), (Int16, UInt32), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128),
+               (Bool, UInt32)]
 
     @eval RandIntGen(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RandIntGen(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
 end
 
-# this function uses 32 bit entropy for small ranges of length <= typemax(Uint32) + 1
+# this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
 # RandIntGen is responsible for providing the right value of k
-function rand{T<:Union(Uint64, Int64)}(g::RandIntGen{T,Uint64})
-    local x::Uint64
+function rand{T<:Union(UInt64, Int64)}(g::RandIntGen{T,UInt64})
+    local x::UInt64
     if (g.k - 1) >> 32 == 0
-        x = rand(Uint32)
+        x = rand(UInt32)
         while x > g.u
-            x = rand(Uint32)
+            x = rand(UInt32)
         end
     else
-        x = rand(Uint64)
+        x = rand(UInt64)
         while x > g.u
-            x = rand(Uint64)
+            x = rand(UInt64)
         end
     end
-    return reinterpret(T, reinterpret(Uint64, g.a) + rem_knuth(x, g.k))
+    return reinterpret(T, reinterpret(UInt64, g.a) + rem_knuth(x, g.k))
 end
 
 function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
@@ -233,26 +302,30 @@ end
 rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
 rand(r::Range, dims::Int...) = rand(r, dims)
 
+## random BitArrays (AbstractRNG)
 
-## random Bools
+rand!(r::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(r, B)
 
-rand!(B::BitArray) = Base.bitarray_rand_fill!(B)
+randbool(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+randbool(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
-randbool(dims::Dims) = rand!(BitArray(dims))
+randbool(dims::Dims)   = rand!(BitArray(dims))
 randbool(dims::Int...) = rand!(BitArray(dims))
 
-randbool() = ((dsfmt_randui32() & 1) == 1)
-rand(::Type{Bool}) = randbool()
+randbool(r::MersenneTwister=GLOBAL_RNG) = ((rand(r, UInt32) & 1) == 1)
+
+rand(r::MersenneTwister, ::Type{Bool}) = randbool(r)
+
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 ## Tables for normal variates
-const ki = 
-    Uint64[0x0007799ec012f7b3,                 0,0x0006045f4c7de363,0x0006d1aa7d5ec0a6,
+const ki =
+    UInt64[0x0007799ec012f7b3,                 0,0x0006045f4c7de363,0x0006d1aa7d5ec0a6,
            0x000728fb3f60f778,0x0007592af4e9fbc0,0x000777a5c0bf655d,0x00078ca3857d2256,
            0x00079bf6b0ffe58c,0x0007a7a34ab092ae,0x0007b0d2f20dd1cb,0x0007b83d3aa9cb52,
            0x0007be597614224e,0x0007c3788631abea,0x0007c7d32bc192ef,0x0007cb9263a6e86d,
@@ -316,7 +389,7 @@ const ki =
            0x0007e8d0d3da63d6,0x0007e771023b0fcf,0x0007e5d46c2f08d9,0x0007e3e937669691,
            0x0007e195978f1176,0x0007deb2c0e05c1d,0x0007db0362002a1a,0x0007d6202c15143a,
            0x0007cf4b8f00a2cc,0x0007c4fd24520efe,0x0007b362fbf81816,0x00078d2d25998e25]
-const wi = 
+const wi =
     [1.7367254121602630e-15,9.5586603514556339e-17,1.2708704834810623e-16,
      1.4909740962495474e-16,1.6658733631586268e-16,1.8136120810119029e-16,
      1.9429720153135588e-16,2.0589500628482093e-16,2.1646860576895422e-16,
@@ -403,7 +476,7 @@ const wi =
      1.3446300925011171e-15,1.3693606835128518e-15,1.3979436672775240e-15,
      1.4319989869661328e-15,1.4744848603597596e-15,1.5317872741611144e-15,
      1.6227698675312968e-15]
-const fi = 
+const fi =
     [1.0000000000000000e+00,9.7710170126767082e-01,9.5987909180010600e-01,
      9.4519895344229909e-01,9.3206007595922991e-01,9.1999150503934646e-01,
      9.0872644005213032e-01,8.9809592189834297e-01,8.8798466075583282e-01,
@@ -492,8 +565,8 @@ const fi =
      1.2602859304985975e-03]
 
 ## Tables for exponential variates
-const ke = 
-Uint64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e08,
+const ke =
+UInt64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e08,
        0x000d4ddb99075857,0x000de893fb8ca23e,0x000e4a8e87c4328e,0x000e8dff16ae1cba,
        0x000ebf2deab58c5a,0x000ee49a6e8b9639,0x000f0204efd64ee5,0x000f19bdb8ea3c1c,
        0x000f2d458bbe5bd2,0x000f3da104b78236,0x000f4b86d784571f,0x000f577ad8a7784f,
@@ -558,7 +631,7 @@ Uint64[0x000e290a13924be4,0                 ,0x0009beadebce18c0,0x000c377ac71f9e
        0x000f930a1a281a05,0x000f889f023d820a,0x000f7b577d2be5f4,0x000f69c650c40a8f,
        0x000f51530f0916d9,0x000f2cb0e3c5933e,0x000eeefb15d605d9,0x000e6da6ecf27460]
 
-const we = 
+const we =
     [1.9311480126418366e-15,1.4178028487910829e-17,2.3278824993382448e-17,
      3.0487830247064320e-17,3.6665697714474878e-17,4.2179302189289733e-17,
      4.7222561556862764e-17,5.1911915446217879e-17,5.6323471083955047e-17,
@@ -645,7 +718,7 @@ const we =
      1.2174462832361815e-15,1.2581958069755114e-15,1.3060984107128082e-15,
      1.3642786158057857e-15,1.4384889932178723e-15,1.5412190700064194e-15,
      1.7091034077168055e-15]
-const fe = 
+const fe =
     [1.0000000000000000e+00,9.3814368086217470e-01,9.0046992992574648e-01,
      8.7170433238120359e-01,8.4778550062398961e-01,8.2699329664305032e-01,
      8.0842165152300838e-01,7.9152763697249562e-01,7.7595685204011555e-01,
@@ -733,63 +806,59 @@ const fe =
      2.1459677437189063e-03,1.5362997803015724e-03,9.6726928232717454e-04,
      4.5413435384149677e-04]
 
-ziggurat_nor_r      = 3.6541528853610087963519472518
-ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
-ziggurat_exp_r      = 7.6971174701310497140446280481
 
-rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
-randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
-randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
-for (lhs, rhs) in (([], []), 
-                  ([:(state::DSFMT_state)], [:state]))
-    @eval begin                
-        function randmtzig_randn($(lhs...))
-            @inbounds begin
+const ziggurat_nor_r      = 3.6541528853610087963519472518
+const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
+const ziggurat_exp_r      = 7.6971174701310497140446280481
+
+@inline randi(rng::MersenneTwister=GLOBAL_RNG) = reinterpret(Uint64, rand_close1_open2(rng)) & 0x000fffffffffffff
+
+function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
+    @inbounds begin
+        while true
+            r = randi(rng)
+            rabs = int64(r>>1) # One bit for the sign
+            idx = rabs & 0xFF
+            x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
+            if rabs < ki[idx+1]
+                return x # 99.3% of the time we return here 1st try
+            elseif idx == 0
                 while true
-                    r = randi($(rhs...))
-                    rabs = int64(r>>1) # One bit for the sign
-                    idx = rabs & 0xFF
-                    x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
-                    if rabs < ki[idx+1]
-                        return x # 99.3% of the time we return here 1st try
-                    elseif idx == 0
-                        while true
-                            xx = -$(ziggurat_nor_inv_r)*log(rand($(rhs...)))
-                            yy = -log(rand($(rhs...)))
-                            if yy+yy > xx*xx
-                                return (rabs & 0x100) != 0x000000000 ? -$(ziggurat_nor_r)-xx : $(ziggurat_nor_r)+xx
-                            end
-                        end
-                    elseif (fi[idx] - fi[idx+1])*rand($(rhs...)) + fi[idx+1] < exp(-0.5*x*x)
-                        return x # return from the triangular area
+                    xx = -ziggurat_nor_inv_r*log(rand(rng))
+                    yy = -log(rand(rng))
+                    if yy+yy > xx*xx
+                        return (rabs & 0x100) != 0x000000000 ? -ziggurat_nor_r-xx : ziggurat_nor_r+xx
                     end
                 end
+            elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
+                return x # return from the triangular area
             end
-        end    
-
-        function randmtzig_exprnd($(lhs...))
-            @inbounds begin
-                while true
-                    ri = randi($(rhs...))
-                    idx = ri & 0xFF
-                    x = ri*we[idx+1]
-                    if ri < ke[idx+1]
-                        return x # 98.9% of the time we return here 1st try
-                    elseif idx == 0
-                        return $(ziggurat_exp_r) - log(rand($(rhs...)))
-                    elseif (fe[idx] - fe[idx+1])*rand($(rhs...)) + fe[idx+1] < exp(-x)
-                        return x # return from the triangular area
-                    end
-                end
-            end
-        end       
+        end
     end
 end
 
-randn() = randmtzig_randn()
-randn(rng::MersenneTwister) = randmtzig_randn(rng.state)
-randn!(A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn();end;A)
-randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng.state);end;A)
+function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
+    @inbounds begin
+        while true
+            ri = randi(rng)
+            idx = ri & 0xFF
+            x = ri*we[idx+1]
+            if ri < ke[idx+1]
+                return x # 98.9% of the time we return here 1st try
+            elseif idx == 0
+                return ziggurat_exp_r - log(rand(rng))
+            elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
+                return x # return from the triangular area
+            end
+        end
+    end
+end
+
+
+
+randn(rng::MersenneTwister=GLOBAL_RNG) = randmtzig_randn(rng)
+randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng);end;A)
+randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
 randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
@@ -798,18 +867,18 @@ randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
 ## random UUID generation
 
 immutable UUID
-    value::Uint128
+    value::UInt128
 end
-UUID(u::String) = convert(UUID, u)
+UUID(u::AbstractString) = convert(UUID, u)
 
 function uuid4()
-    u = rand(Uint128)
+    u = rand(UInt128)
     u &= 0xffffffffffff0fff3fffffffffffffff
     u |= 0x00000000000040008000000000000000
     UUID(u)
 end
 
-function Base.convert(::Type{UUID}, s::String)
+function Base.convert(::Type{UUID}, s::AbstractString)
     s = lowercase(s)
 
     if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
@@ -827,7 +896,7 @@ end
 
 function Base.repr(u::UUID)
     u = u.value
-    a = Array(Uint8,36)
+    a = Array(UInt8,36)
     for i = [36:-1:25; 23:-1:20; 18:-1:15; 13:-1:10; 8:-1:1]
         d = u & 0xf
         a[i] = '0'+d+39*(d>9)

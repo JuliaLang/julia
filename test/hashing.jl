@@ -1,8 +1,8 @@
 types = Any[
-    Bool, Char,
-    Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
-    Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
-    Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}
+    Bool,
+    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
+    Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
 ]
 vals = [
     typemin(Int64),
@@ -34,9 +34,6 @@ end
 for T=types, S=types, x=vals
     a = coerce(T,x)
     b = coerce(S,x)
-    if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
-        continue
-    end
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))

@@ -88,7 +88,7 @@ const STDOUT_NO = 1
 const STDERR_NO = 2
 
 immutable FileRedirect
-    filename::String
+    filename::AbstractString
     append::Bool
     function FileRedirect(filename, append)
         if lowercase(filename) == (@unix? "/dev/null" : "nul")
@@ -154,11 +154,11 @@ setenv(cmd::Cmd; dir="") = (cmd.dir = dir; cmd)
 (.>)(src::AbstractCmd, dest::Redirectable) = CmdRedirect(src, dest, STDERR_NO)
 
 # File redirects
-(|>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
-(|>)(src::String, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
-(.>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
-(>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
-(.>>)(src::AbstractCmd, dest::String) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
+(|>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDOUT_NO)
+(|>)(src::AbstractString, dest::AbstractCmd) = CmdRedirect(dest, FileRedirect(src, false), STDIN_NO)
+(.>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, false), STDERR_NO)
+(>>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDOUT_NO)
+(.>>)(src::AbstractCmd, dest::AbstractString) = CmdRedirect(src, FileRedirect(dest, true), STDERR_NO)
 
 
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
@@ -201,12 +201,12 @@ type ProcessChain
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
-function _jl_spawn(cmd::Ptr{Uint8}, argv::Ptr{Ptr{Uint8}}, loop::Ptr{Void}, pp::Process,
+function _jl_spawn(cmd::Ptr{UInt8}, argv::Ptr{Ptr{UInt8}}, loop::Ptr{Void}, pp::Process,
                    in, out, err)
     proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
-        (Ptr{Uint8}, Ptr{Ptr{Uint8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
-         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{Uint8}}, Ptr{Uint8}),
+        (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
+         Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}),
          cmd, argv, loop, proc, pp, uvtype(in),
          uvhandle(in), uvtype(out), uvhandle(out), uvtype(err), uvhandle(err),
          pp.cmd.detach, pp.cmd.env === nothing ? C_NULL : pp.cmd.env, isempty(pp.cmd.dir) ? C_NULL : pp.cmd.dir)
@@ -344,7 +344,7 @@ function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callba
     ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
-    pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{Uint8}}, ptrs), loop, pp,
+    pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{UInt8}}, ptrs), loop, pp,
                           in, out, err)
     @cleanup_stdio
     if isa(pc, ProcessChain)
@@ -423,7 +423,7 @@ end
 eachline(cmd::AbstractCmd) = eachline(cmd, DevNull)
 
 # return a (Pipe,Process) pair to write/read to/from the pipeline
-function open(cmds::AbstractCmd, mode::String="r", stdio::AsyncStream=DevNull)
+function open(cmds::AbstractCmd, mode::AbstractString="r", stdio::AsyncStream=DevNull)
     if mode == "r"
         processes = @tmp_rpipe out tmp spawn(false, cmds, (stdio,tmp,STDERR))
         start_reading(out)
@@ -467,7 +467,7 @@ function readall(cmd::AbstractCmd, stdin::AsyncStream=DevNull)
     return bytestring(readbytes(cmd, stdin))
 end
 
-function writeall(cmd::AbstractCmd, stdin::String, stdout::AsyncStream=DevNull)
+function writeall(cmd::AbstractCmd, stdin::AbstractString, stdout::AsyncStream=DevNull)
     open(cmd, "w", stdout) do io
         write(io, stdin)
     end
@@ -567,7 +567,7 @@ function _jl_pre_exec(args::Vector{ByteString})
     if length(args) < 1
         error("too few arguments to exec")
     end
-    ptrs = Array(Ptr{Uint8}, length(args)+1)
+    ptrs = Array(Ptr{UInt8}, length(args)+1)
     for i = 1:length(args)
         ptrs[i] = args[i].data
     end
@@ -578,7 +578,7 @@ end
 ## implementation of `cmd` syntax ##
 
 arg_gen()          = ByteString[]
-arg_gen(x::String) = ByteString[x]
+arg_gen(x::AbstractString) = ByteString[x]
 arg_gen(cmd::Cmd)  = cmd.exec
 
 function arg_gen(head)

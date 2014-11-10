@@ -1,9 +1,9 @@
 type IntSet
-    bits::Array{Uint32,1}
+    bits::Array{UInt32,1}
     limit::Int
     fill1s::Bool
 
-    IntSet() = new(zeros(Uint32,256>>>5), 256, false)
+    IntSet() = new(zeros(UInt32,256>>>5), 256, false)
 end
 
 IntSet(itr) = (s=IntSet(); for a in itr; push!(s,a); end; s)
@@ -139,13 +139,13 @@ function next(s::IntSet, i)
     if i >= s.limit
         n = int64(i)
     else
-        n = int64(ccall(:bitvector_next, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, i, s.limit))
+        n = int64(ccall(:bitvector_next, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, i, s.limit))
     end
     (n, n+1)
 end
 
 isempty(s::IntSet) =
-    !s.fill1s && ccall(:bitvector_any1, Uint32, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)==0
+    !s.fill1s && ccall(:bitvector_any1, UInt32, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)==0
 
 function first(s::IntSet)
     n = next(s,0)[1]
@@ -169,7 +169,7 @@ function last(s::IntSet)
     error("set has no last element")
 end
 
-length(s::IntSet) = int(ccall(:bitvector_count, Uint64, (Ptr{Uint32}, Uint64, Uint64), s.bits, 0, s.limit)) +
+length(s::IntSet) = int(ccall(:bitvector_count, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)
 
 function show(io::IO, s::IntSet)
@@ -223,7 +223,7 @@ function intersect!(s::IntSet, s2::IntSet)
     for n = 1:lim
         s.bits[n] &= s2.bits[n]
     end
-    if !s2.fill1s   
+    if !s2.fill1s
         for n=lim+1:length(s.bits)
             s.bits[n] = uint32(0)
         end

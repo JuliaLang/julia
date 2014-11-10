@@ -52,7 +52,7 @@ cx = Any[
 ]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == cx[i,2]
+    @test cx[i,1] == convert(UInt32, cx[i,2])
     @test string(cx[i,2]) == unescape_string(cx[i,3])
     if isascii(cx[i,2]) || !isprint(cx[i,2])
         @test cx[i,3] == escape_string(string(cx[i,2]))
@@ -237,7 +237,7 @@ for T in (Int8, Int16, Int32, Int64)
     @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
 end
 
-for T in (Uint8,Uint16,Uint32,Uint64)
+for T in (UInt8,UInt16,UInt32,UInt64)
     @test parseint(T,string(typemin(T))) == typemin(T)
     @test parseint(T,string(typemax(T))) == typemax(T)
     @test_throws ErrorException parseint(T,string(big(typemin(T))-1))
@@ -475,8 +475,8 @@ end
 @test rsearch("foo,bar,baz", "az", 10) == 0:-1
 
 # array rsearch
-@test rsearch(Uint8[1,2,3],Uint8[2,3],3) == 2:3
-@test rsearch(Uint8[1,2,3],Uint8[2,3],1) == 0:-1
+@test rsearch(UInt8[1,2,3],UInt8[2,3],3) == 2:3
+@test rsearch(UInt8[1,2,3],UInt8[2,3],1) == 0:-1
 
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
@@ -834,7 +834,7 @@ bin_val = hex2bytes(hex_str)
 bin_val = hex2bytes("07bf")
 @test bin_val[1] == 7
 @test bin_val[2] == 191
-@test typeof(bin_val) == Array{Uint8, 1}
+@test typeof(bin_val) == Array{UInt8, 1}
 @test length(bin_val) == 2
 
 # all valid hex chars
@@ -905,8 +905,8 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
-@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
-@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+@test split(SubString(ascii("x"), 2, 0), "y") == AbstractString[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == AbstractString[""]
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
@@ -917,7 +917,7 @@ bin_val = hex2bytes("07bf")
 @test float(SubString("1 0",1,1)) === 1.0
 @test float32(SubString("10",1,1)) === 1.0f0
 
-for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt),
+for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
     @test parseint(T,base(b,n),b) == n

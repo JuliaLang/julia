@@ -42,7 +42,7 @@ end
 UTM(x) = UTInstant(Millisecond(x))
 UTD(x) = UTInstant(Day(x))
 
-# Calendar types provide rules for interpretating instant 
+# Calendar types provide rules for interpretating instant
 # timelines in human-readable form.
 abstract Calendar <: AbstractTime
 
@@ -60,7 +60,7 @@ abstract TimeType <: AbstractTime
 # DateTime is a millisecond precision UTInstant interpreted by ISOCalendar
 immutable DateTime <: TimeType
     instant::UTInstant{Millisecond}
-end 
+end
 
 # DateTime is a day precision UTInstant interpreted by ISOCalendar
 immutable Date <: TimeType

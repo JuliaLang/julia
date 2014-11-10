@@ -40,7 +40,7 @@ abstract TextTerminal <: Base.IO
 
 # INTERFACE
 size(::TextTerminal) = error("Unimplemented")
-writepos(t::TextTerminal, x, y, s::Array{Uint8,1}) = error("Unimplemented")
+writepos(t::TextTerminal, x, y, s::Array{UInt8,1}) = error("Unimplemented")
 cmove(t::TextTerminal, x, y) = error("Unimplemented")
 getX(t::TextTerminal) = error("Unimplemented")
 getY(t::TextTerminal) = error("Unimplemented")
@@ -74,7 +74,7 @@ hascolor(::TextTerminal) = false
 # Utility Functions
 function writepos{T}(t::TextTerminal, x, y, b::Array{T})
     if isbits(T)
-        writepos(t, x, y, reinterpret(Uint8, b))
+        writepos(t, x, y, reinterpret(UInt8, b))
     else
         cmove(t, x, y)
         invoke(write, (IO, Array), s, a)
@@ -183,14 +183,14 @@ clear_line(t::UnixTerminal) = write(t.out_stream, "\x1b[0G\x1b[0K")
 #beep(t::UnixTerminal) = write(t.err_stream,"\x7")
 
 write{T,N}(t::UnixTerminal, a::Array{T,N}) = write(t.out_stream, a)
-write(t::UnixTerminal, p::Ptr{Uint8}) = write(t.out_stream, p)
-write(t::UnixTerminal, p::Ptr{Uint8}, x::Integer) = write(t.out_stream, p, x)
-write(t::UnixTerminal, x::Uint8) = write(t.out_stream, x)
+write(t::UnixTerminal, p::Ptr{UInt8}) = write(t.out_stream, p)
+write(t::UnixTerminal, p::Ptr{UInt8}, x::Integer) = write(t.out_stream, p, x)
+write(t::UnixTerminal, x::UInt8) = write(t.out_stream, x)
 read{T,N}(t::UnixTerminal, x::Array{T,N}) = read(t.in_stream, x)
-readuntil(t::UnixTerminal, s::String) = readuntil(t.in_stream, s)
+readuntil(t::UnixTerminal, s::AbstractString) = readuntil(t.in_stream, s)
 readuntil(t::UnixTerminal, c::Char) = readuntil(t.in_stream, c)
 readuntil(t::UnixTerminal, s) = readuntil(t.in_stream, s)
-read(t::UnixTerminal, ::Type{Uint8}) = read(t.in_stream, Uint8)
+read(t::UnixTerminal, ::Type{UInt8}) = read(t.in_stream, UInt8)
 start_reading(t::UnixTerminal) = start_reading(t.in_stream)
 stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
 

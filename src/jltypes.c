@@ -244,7 +244,7 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
 {
     size_t n = count_union_components(types);
     jl_value_t **temp;
-    JL_GC_PUSHARGS(temp, n);
+    JL_GC_PUSHARGS(temp, n+1);
     size_t idx=0;
     flatten_type_union(types, temp, &idx);
     assert(idx == n);
@@ -265,7 +265,9 @@ jl_tuple_t *jl_compute_type_union(jl_tuple_t *types)
             }
         }
     }
+    temp[n] = NULL;
     jl_tuple_t *result = jl_alloc_tuple_uninit(n - ndel);
+    temp[n] = (jl_value_t*)result; // root result tuple while sorting
     j=0;
     for(i=0; i < n; i++) {
         if (temp[i] != NULL) {
@@ -2609,6 +2611,11 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (jl_is_typector(parent))
         parent = (jl_value_t*)((jl_typector_t*)parent)->body;
     size_t i, j;
+    if (match_intersection_mode && jl_is_typevar(child) && !jl_is_typevar(parent)) {
+        tmp = child;
+        child = parent;
+        parent = tmp;
+    }
     if (jl_is_typevar(parent)) {
         // make sure type is within this typevar's bounds
         if (morespecific) {
@@ -3061,7 +3068,7 @@ void jl_init_types(void)
                             tv);
 
     tv = jl_tuple2(tvar("T"), tvar("N"));
-    jl_array_type = 
+    jl_array_type =
         jl_new_datatype(jl_symbol("Array"),
                         (jl_datatype_t*)
                         jl_apply_type((jl_value_t*)jl_densearray_type, tv),
@@ -3075,12 +3082,12 @@ void jl_init_types(void)
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                    jl_tuple(2, jl_any_type,
                                             jl_box_long(1)));
-    
+
     jl_array_symbol_type =
         (jl_value_t*)jl_apply_type((jl_value_t*)jl_array_type,
                                    jl_tuple(2, jl_symbol_type,
                                             jl_box_long(1)));
-    
+
     jl_expr_type =
         jl_new_datatype(jl_symbol("Expr"),
                         jl_any_type, jl_null,

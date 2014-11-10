@@ -85,9 +85,9 @@ STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 
 STATIC_INLINE u_int64_t ByteSwap64(u_int64_t x)
 {
-    union { 
+    union {
         u_int64_t ll;
-        u_int32_t l[2]; 
+        u_int32_t l[2];
     } w, r;
     w.ll = x;
     r.l[0] = bswap_32 (w.l[1]);

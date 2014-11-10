@@ -5,9 +5,15 @@
 ##   your local machine, in a file named `Make.user` in this directory
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
+
+# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
+ifneq ($(OPENBLAS_TARGET_ARCH),)
+OPENBLAS_DYNAMIC_ARCH=0
+else
+OPENBLAS_DYNAMIC_ARCH=1
+endif
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
@@ -29,6 +35,7 @@ USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_MOJIBAKE=0
+USE_SYSTEM_LIBGIT2=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -140,8 +147,15 @@ BUILD_LLDB = 0
 #XC_HOST = i686-w64-mingw32
 #XC_HOST = x86_64-w64-mingw32
 
+# Path to cmake (override in Make.user if needed)
+CMAKE ?= cmake
+
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
+
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+XC_HOST ?= $(shell uname -m)-w64-mingw32
+endif
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -220,16 +234,11 @@ endif
 endif
 
 ifeq ($(USEIFC), 1)
-FC = ifort
+FC_BASE = ifort
 else
-FC = $(CROSS_COMPILE)gfortran
+FC_BASE = $(CROSS_COMPILE)gfortran
 endif
-
-ifeq ($(USEIFC), 1)
-FC = ifort
-else
-FC = $(CROSS_COMPILE)gfortran
-endif
+FC = $(FC_BASE)
 
 STDLIBCPP_FLAG = 
 
@@ -262,8 +271,10 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC = $(CROSS_COMPILE)gcc
-CXX = $(CROSS_COMPILE)g++
+CC_BASE = $(CROSS_COMPILE)gcc
+CXX_BASE = $(CROSS_COMPILE)g++
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -272,8 +283,10 @@ SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
 
 ifeq ($(USECLANG),1)
-CC = $(CROSS_COMPILE)clang
-CXX = $(CROSS_COMPILE)clang++
+CC_BASE = $(CROSS_COMPILE)clang
+CXX_BASE = $(CROSS_COMPILE)clang++
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -299,8 +312,10 @@ endif
 ifeq ($(SANITIZE),1)
 $(error Address Sanitizer only supported with clang. Try setting SANITIZE=0)
 endif
-CC  = icc
-CXX = icpc
+CC_BASE  = icc
+CXX_BASE = icpc
+CC = $(CC_BASE)
+CXX = $(CXX_BASE)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64 -fp-model precise -fp-model except -no-ftz
 JCPPFLAGS =
 JCXXFLAGS = -pipe $(fPIC) -fno-rtti
@@ -309,8 +324,15 @@ SHIPFLAGS = -O3 -g -falign-functions
 endif
 
 ifeq ($(USECCACHE), 1)
-CC := ccache $(CC)
-CXX := ccache $(CXX)
+# expand CC and CXX at declaration time because we will redefine them
+CC_ARG   := $(CC)         # Expand CC and CXX here already because we want
+CXX_ARG  := $(CXX)        # the original definition and not the ccache version.
+CC_FULL  := ccache $(CC)  # Expand CC and CXX here already to avoid recursive
+CXX_FULL := ccache $(CXX) # referencing.
+CC        = $(CC_FULL)    # Add an extra indirection to make CC/CXX non-simple
+CXX       = $(CXX_FULL)   # vars (because of how -m$(BINARY) is added later on).
+CC_BASE   = ccache
+CXX_BASE  = ccache
 ifeq ($(USECLANG),1)
 # ccache and Clang don't do well together
 # http://petereisentraut.blogspot.be/2011/05/ccache-and-clang.html
@@ -389,6 +411,10 @@ ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
+else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
 ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect
@@ -434,9 +460,9 @@ endif
 # Set some ARCH-specific flags
 ifneq ($(USEICC),1)
 ifneq ($(ARCH), arm)
-JCFLAGS += -m$(BINARY)
-JCXXFLAGS += -m$(BINARY)
-JFFLAGS += -m$(BINARY)
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
 endif
 endif
 

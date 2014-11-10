@@ -217,8 +217,8 @@
     <context id="module" style-ref="module">
       <!-- http://docs.julialang.org/en/latest/manual/modules/#standard-modules -->
       <keyword>Base</keyword>
-      <keyword>Core</keyword> 
-      <keyword>Main</keyword> 
+      <keyword>Core</keyword>
+      <keyword>Main</keyword>
       <!-- exports.jl -->
       <keyword>FFTW</keyword>
       <keyword>Collections</keyword>
