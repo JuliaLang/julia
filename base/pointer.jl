@@ -62,8 +62,8 @@ eltype{T}(::Ptr{T}) = T
 ==(x::Ptr, y::Ptr) = uint(x) == uint(y)
 -(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
-+(x::Ptr, y::Integer) = oftype(x, uint(uint(x) + y))
--(x::Ptr, y::Integer) = oftype(x, uint(uint(x) - y))
++(x::Ptr, y::Integer) = oftype(x, (uint(x) + (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, (uint(x) - (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x
 
 zero{T}(::Type{Ptr{T}}) = convert(Ptr{T}, 0)
