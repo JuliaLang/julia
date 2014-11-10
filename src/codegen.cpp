@@ -1491,7 +1491,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 MDNode *tbaa = sty->mutabl ? tbaa_user : tbaa_immut;
                 if (sty->fields[idx].isptr) {
                     Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt)));
-                    if (idx >= sty->ninitialized) {
+                    if (idx >= (unsigned)sty->ninitialized) {
                         null_pointer_check(fldv, ctx);
                     }
                     return fldv;
@@ -1516,7 +1516,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
-                else if (sty->fields[idx].isptr && idx >= sty->ninitialized) {
+                else if (sty->fields[idx].isptr && idx >= (unsigned)sty->ninitialized) {
                     null_pointer_check(fldv, ctx);
                 }
                 JL_GC_POP();
@@ -2146,7 +2146,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                        CreateGEP(builder.
                                                  CreateBitCast(strct, jl_ppvalue_llvmt),
                                                  builder.CreateAdd(idx,ConstantInt::get(T_size,1)))));
-                        if (stt->ninitialized != jl_tuple_len(stt->types)) {
+                        if ((unsigned)stt->ninitialized != jl_tuple_len(stt->types)) {
                             null_pointer_check(fld, ctx);
                         }
                         JL_GC_POP();
