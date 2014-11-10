@@ -223,3 +223,8 @@ const Uint16 = UInt16
 const Uint32 = UInt32
 const Uint64 = UInt64
 const Uint128 = UInt128
+
+@deprecate zero{T}(::Type{Ptr{T}}) Ptr{T}(0)
+@deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
+@deprecate one{T}(::Type{Ptr{T}})  Ptr{T}(1)
+@deprecate one{T}(x::Ptr{T})       Ptr{T}(1)
