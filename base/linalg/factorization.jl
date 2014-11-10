@@ -300,7 +300,8 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     return isa(A,QRPivoted) ? B[invperm(A[:p]::Vector{BlasInt}),:] : B[1:nA,:], rnk
 end
 A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
-A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, maximum(size(A))*eps(real(float(one(eltype(B))))))[1]
+A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVecOrMat{T}) = A_ldiv_B!(A, B, sqrt(eps(real(float(one(eltype(B)))))))[1]
+
 function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
@@ -575,9 +576,8 @@ svdvals(x::Number) = [abs(x)]
 function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
     n = length(A.S)
     Sinv = zeros(T, n)
-    k = length(find(A.S .> eps(real(float(one(T))))*maximum(A.S)))
-    Sinv[1:k] = one(T) ./ A.S[1:k]
-    A.Vt[1:k,:]' * (Sinv[1:k] .* (A.U[:,1:k]' * B))
+    Sinv[A.S .> sqrt(eps())] = 1.0 ./ A.S
+    scale(A.Vt', Sinv) * A.U[:,1:n]'B
 end
 
 # Generalized svd
