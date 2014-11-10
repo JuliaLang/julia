@@ -20,6 +20,8 @@ New language features
 
   * (TODO pending final syntax) staged functions ([#7311]).
 
+  * Extensible documentation system via `@doc` and pending syntax ([#8791]).
+
 Language changes
 ----------------
 
@@ -1061,7 +1063,9 @@ Too numerous to mention.
 [#8712]: https://github.com/JuliaLang/julia/issues/8712
 [#8734]: https://github.com/JuliaLang/julia/issues/8734
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
+[#8791]: https://github.com/JuliaLang/julia/issues/8791
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
 [#8845]: https://github.com/JuliaLang/julia/issues/8845
 [#8872]: https://github.com/JuliaLang/julia/issues/8872
+[#8905]: https://github.com/JuliaLang/julia/issues/8905
