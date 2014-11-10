@@ -20,7 +20,9 @@ New language features
 
   * (TODO pending final syntax) staged functions ([#7311]).
 
-  * Extensible documentation system via `@doc` and pending syntax ([#8791]).
+  * (Also with syntax todo) Documentation system for functions, methods, types
+    and macros in packages and user code ([#8791]). Type `?@doc` at the repl
+    to see the current syntax and more information.
 
 Language changes
 ----------------
@@ -44,10 +46,10 @@ Language changes
 
   * `Char` is no longer a subtype of `Integer`. ([#8816])
     Char now supports a more limited set of operations with `Integer` types:
-       
+
       * comparison / equality
       * `Char` + `Int` = `Char`
-      * `Char` - `Char` = `Int` 
+      * `Char` - `Char` = `Int`
 
 Compiler improvements
 ---------------------
@@ -96,7 +98,7 @@ Library improvements
   * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
 
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
- 
+
   * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
 
   * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
@@ -731,8 +733,8 @@ Library improvements
 
   * Improved backtraces on Windows and OS X.
 
-  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`, 
-    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability, 
+  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`,
+    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability,
     efficiency, and consistency. ([#6116], [#7035], [#7061], [#7106])
 
 Deprecated or removed
