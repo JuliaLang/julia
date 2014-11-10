@@ -1827,3 +1827,6 @@ ndigf(n) = float64(log(float32(n)))
 # issue #7911
 @test sum([int128(1) int128(2)]) == int128(3)
 
+let x = big(-0.0)
+    @test signbit(x) && !signbit(abs(x))
+end
