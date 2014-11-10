@@ -898,10 +898,10 @@ ini_HEX(x::Real, n::Int) = ini_hex(x,n,HEX_symbols)
 ini_hex(x::Real) = ini_hex(x,hex_symbols)
 ini_HEX(x::Real) = ini_hex(x,HEX_symbols)
 
-ini_hex(x::Real, n::Int, symbols::Array{Uint8,1}) = ini_hex(float(x), n, symbols)
-ini_hex(x::Real, symbols::Array{Uint8,1}) = ini_hex(float(x), symbols)
+ini_hex(x::Real, n::Int, symbols::Array{UInt8,1}) = ini_hex(float(x), n, symbols)
+ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
 
-function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{Uint8,1})
+function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
     x = float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
@@ -926,7 +926,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{Uint8,1})
     end
 end
 
-function ini_hex(x::SmallFloatingPoint, symbols::Array{Uint8,1})
+function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     x = float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
