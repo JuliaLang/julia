@@ -58,6 +58,10 @@ Compiler improvements
 
   * `@inline` before a function definition forces the compiler to inline the function ([#8297]).
 
+  * Loads from heap-allocated immutables are hoisted out of loops in more cases ([#8867]).
+
+  * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
+
 Library improvements
 --------------------
 
@@ -1068,6 +1072,8 @@ Too numerous to mention.
 [#8791]: https://github.com/JuliaLang/julia/issues/8791
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
+[#8827]: https://github.com/JuliaLang/julia/issues/8827
 [#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8867]: https://github.com/JuliaLang/julia/issues/8867
 [#8872]: https://github.com/JuliaLang/julia/issues/8872
 [#8905]: https://github.com/JuliaLang/julia/issues/8905
