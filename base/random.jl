@@ -51,11 +51,8 @@ type Close1Open2 <: FloatInterval end
 # produce Float64 values
 @inline rand{I<:FloatInterval}(r::MersenneTwister, ::Type{I}) = (gen_rand_maybe(r); rand_inbounds(r, I))
 
-# this is similar to `dsfmt_genrand_uint32` from dSFMT.h:
-@inline rand_ui32(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2)) % UInt32
-
 @inline rand_ui52_raw(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2))
-@inline rand_ui2x52_raw(r::MersenneTwister) = (((rand_ui52_raw(r) % UInt128) << 64) | rand_ui52_raw(r))
+@inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
     r.seed = seed
@@ -165,15 +162,11 @@ rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, ran
 
 ## random integers (MersenneTwister)
 
-rand(r::MersenneTwister, ::Type{UInt8})   = rand(r, UInt32) % UInt8
-rand(r::MersenneTwister, ::Type{UInt16})  = rand(r, UInt32) % UInt16
-rand(r::MersenneTwister, ::Type{UInt32})  = rand_ui32(r)
-rand(r::MersenneTwister, ::Type{UInt64})  = uint64(rand(r, UInt32)) <<32 | rand(r, UInt32)
-rand(r::MersenneTwister, ::Type{UInt128}) = uint128(rand(r, UInt64))<<64 | rand(r, UInt64)
+rand{T<:Union(Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
-rand(r::MersenneTwister, ::Type{Int8})    = rand(r, UInt32) % Int8
-rand(r::MersenneTwister, ::Type{Int16})   = rand(r, UInt32) % Int16
-rand(r::MersenneTwister, ::Type{Int32})   = reinterpret(Int32,  rand(r, UInt32))
+rand(r::MersenneTwister, ::Type{UInt64})  = rand_ui52_raw(r) << 32 $ rand_ui52_raw(r)
+rand(r::MersenneTwister, ::Type{UInt128}) = rand_ui52_raw(r) % UInt128 << 96 $ rand_ui52_raw(r) % UInt128 << 48 $ rand_ui52_raw(r)
+
 rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
 rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128))
 
