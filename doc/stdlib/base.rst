@@ -5375,8 +5375,10 @@ Shared Arrays (Experimental, UNIX-only feature)
     Construct a SharedArray of a bitstype ``T``  and size ``dims`` across the processes
     specified by ``pids`` - all of which have to be on the same host. 
     
-    If ``pids`` is left unspecified, the shared array will be mapped across all workers
-    on the current host.
+    If ``pids`` is left unspecified, the shared array will be mapped across all processes
+    on the current host, including the master. But, ``localindexes`` and ``indexpids``
+    will only refer to worker processes. This facilitates work distribution code to use 
+    workers for actual computation with the master process acting as a driver.
 
     If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
     it is called on all the participating workers. 
@@ -5393,8 +5395,6 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
    the SharedArray
-   
-
    
    
 System
