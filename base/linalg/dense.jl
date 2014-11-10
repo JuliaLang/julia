@@ -424,7 +424,7 @@ function pinv{T}(A::StridedMatrix{T})
     m, n        = size(A)
     (m == 0 || n == 0) && return Array(S, n, m)
     Sinv        = zeros(S, length(SVD[:S]))
-    index       = SVD[:S] .> eps(real(float(one(T))))*max(m,n)*maximum(SVD[:S])
+    index       = SVD[:S] .> sqrt(eps(real(float(one(T))))*maximum(SVD[:S]))
     Sinv[index] = one(S) ./ SVD[:S][index]
     return SVD[:Vt]'scale(Sinv, SVD[:U]')
 end

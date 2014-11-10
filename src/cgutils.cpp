@@ -865,7 +865,7 @@ static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) 
 static Value *ghostValue(jl_value_t *ty);
 
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                         jl_codectx_t *ctx)
+                         jl_codectx_t *ctx, MDNode* tbaa)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -878,7 +878,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    Value *elt = tbaa_decorate(tbaa_user, builder.CreateLoad(builder.CreateGEP(data, idx_0based), false));
+    Value *elt = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateGEP(data, idx_0based), false));
     if (elty == jl_pvalue_llvmt) {
         null_pointer_check(elt, ctx);
     }
@@ -890,7 +890,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
 static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx)
+                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode* tbaa)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -906,7 +906,7 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
+    tbaa_decorate(tbaa, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
 }
 
 // --- convert boolean value to julia ---

@@ -240,6 +240,7 @@ static Type *T_void;
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
 static MDNode* tbaa_user;           // User data
 static MDNode* tbaa_value;          // Julia value
+static MDNode* tbaa_immut;          // Data inside a heap-allocated immutable
 static MDNode* tbaa_array;              // Julia array
 static MDNode* tbaa_arrayptr;               // The pointer inside a jl_array_t
 static MDNode* tbaa_arraysize;              // A size in a jl_array_t
@@ -1487,13 +1488,16 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                                       ConstantInt::get(T_size,
                                                        sty->fields[idx].offset + sizeof(void*)));
                 JL_GC_POP();
+                MDNode *tbaa = sty->mutabl ? tbaa_user : tbaa_immut;
                 if (sty->fields[idx].isptr) {
-                    Value *fldv = builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt));
-                    null_pointer_check(fldv, ctx);
+                    Value *fldv = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateBitCast(addr,jl_ppvalue_llvmt)));
+                    if (idx >= (unsigned)sty->ninitialized) {
+                        null_pointer_check(fldv, ctx);
+                    }
                     return fldv;
                 }
                 else {
-                    return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx);
+                    return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa);
                 }
             }
             else {
@@ -1512,7 +1516,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                 if (jfty == (jl_value_t*)jl_bool_type) {
                     fldv = builder.CreateTrunc(fldv, T_int1);
                 }
-                else if (sty->fields[idx].isptr) {
+                else if (sty->fields[idx].isptr && idx >= (unsigned)sty->ninitialized) {
                     null_pointer_check(fldv, ctx);
                 }
                 JL_GC_POP();
@@ -1551,7 +1555,7 @@ static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
                                 builder.CreateBitCast(addr, jl_ppvalue_llvmt));
         }
         else {
-            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx);
+            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx, sty->mutabl ? tbaa_user : tbaa_immut);
         }
     }
     else {
@@ -2064,7 +2068,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         assert(((jl_datatype_t*)ety)->instance != NULL);
                         return literal_pointer_val(((jl_datatype_t*)ety)->instance);
                     }
-                    return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx);
+                    return typed_load(emit_arrayptr(ary, args[1], ctx), idx, ety, ctx, tbaa_user);
                 }
             }
         }
@@ -2097,7 +2101,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     else {
                         typed_store(emit_arrayptr(ary,args[1],ctx), idx,
                                     ety==(jl_value_t*)jl_any_type ? emit_expr(args[2],ctx) : emit_unboxed(args[2],ctx),
-                                    ety, ctx);
+                                    ety, ctx, tbaa_user);
                     }
                     JL_GC_POP();
                     return ary;
@@ -2142,7 +2146,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                                        CreateGEP(builder.
                                                  CreateBitCast(strct, jl_ppvalue_llvmt),
                                                  builder.CreateAdd(idx,ConstantInt::get(T_size,1)))));
-                        null_pointer_check(fld, ctx);
+                        if ((unsigned)stt->ninitialized != jl_tuple_len(stt->types)) {
+                            null_pointer_check(fld, ctx);
+                        }
                         JL_GC_POP();
                         return fld;
                     }
@@ -2152,7 +2158,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
                         Value *ptr = data_pointer(strct);
                         JL_GC_POP();
-                        return typed_load(ptr, idx, jt, ctx);
+                        return typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
                     }
                     else {
                         idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -2179,7 +2185,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         jl_value_t *jt = jl_t0(stt->types);
                         idx = emit_bounds_check(idx, ConstantInt::get(T_size, nfields), ctx);
                         Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
-                        fld = typed_load(ptr, idx, jt, ctx);
+                        fld = typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
                         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,Intrinsic::stackrestore),
                                            stacksave);
                     }
@@ -4188,6 +4194,7 @@ static void init_julia_llvm_env(Module *m)
     MDNode* tbaa_root = mbuilder->createTBAARoot("jtbaa");
     tbaa_user = tbaa_make_child("jtbaa_user",tbaa_root);
     tbaa_value = tbaa_make_child("jtbaa_value",tbaa_root);
+    tbaa_immut = tbaa_make_child("jtbaa_immut",tbaa_root);
     tbaa_array = tbaa_make_child("jtbaa_array",tbaa_value);
     tbaa_arrayptr = tbaa_make_child("jtbaa_arrayptr",tbaa_array);
     tbaa_arraysize = tbaa_make_child("jtbaa_arraysize",tbaa_array);

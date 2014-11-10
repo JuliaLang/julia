@@ -12,6 +12,8 @@ export
     Test,
     BLAS,
     LAPACK,
+    Docs,
+    Markdown,
 
 # Types
     AbstractMatrix,
@@ -1221,6 +1223,8 @@ export
     popdisplay,
     pushdisplay,
     redisplay,
+    HTML,
+    Text,
 
 # distributed arrays
     dfill,
@@ -1339,6 +1343,10 @@ export
     @r_str,
     @r_mstr,
     @v_str,
+    @text_str,
+    @text_mstr,
+    @html_str,
+    @html_mstr,
     @int128_str,
     @uint128_str,
     @bigint_str,
@@ -1392,4 +1400,7 @@ export
     @simd,
     @label,
     @goto,
-    @inline
+    @inline,
+    @doc,
+    @doc_str,
+    @doc_mstr
