@@ -20,6 +20,10 @@ New language features
 
   * (TODO pending final syntax) staged functions ([#7311]).
 
+  * (Also with syntax todo) Documentation system for functions, methods, types
+    and macros in packages and user code ([#8791]). Type `?@doc` at the repl
+    to see the current syntax and more information.
+
 Language changes
 ----------------
 
@@ -42,10 +46,10 @@ Language changes
 
   * `Char` is no longer a subtype of `Integer`. ([#8816])
     Char now supports a more limited set of operations with `Integer` types:
-       
+
       * comparison / equality
       * `Char` + `Int` = `Char`
-      * `Char` - `Char` = `Int` 
+      * `Char` - `Char` = `Int`
 
 Compiler improvements
 ---------------------
@@ -53,6 +57,10 @@ Compiler improvements
   * Functions may be annotated with metadata (`:meta` expressions) to be used by the compiler ([#8297]).
 
   * `@inline` before a function definition forces the compiler to inline the function ([#8297]).
+
+  * Loads from heap-allocated immutables are hoisted out of loops in more cases ([#8867]).
+
+  * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
 
 Library improvements
 --------------------
@@ -94,7 +102,7 @@ Library improvements
   * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
 
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
- 
+
   * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
 
   * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
@@ -729,8 +737,8 @@ Library improvements
 
   * Improved backtraces on Windows and OS X.
 
-  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`, 
-    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability, 
+  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`,
+    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability,
     efficiency, and consistency. ([#6116], [#7035], [#7061], [#7106])
 
 Deprecated or removed
@@ -1061,7 +1069,11 @@ Too numerous to mention.
 [#8712]: https://github.com/JuliaLang/julia/issues/8712
 [#8734]: https://github.com/JuliaLang/julia/issues/8734
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
+[#8791]: https://github.com/JuliaLang/julia/issues/8791
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
+[#8827]: https://github.com/JuliaLang/julia/issues/8827
 [#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8867]: https://github.com/JuliaLang/julia/issues/8867
 [#8872]: https://github.com/JuliaLang/julia/issues/8872
+[#8905]: https://github.com/JuliaLang/julia/issues/8905

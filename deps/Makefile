@@ -14,14 +14,17 @@ endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
-# prepare CMAKE_CC and CMAKE_CXX flags
-CMAKE_CC = -DCMAKE_C_COMPILER="$(CC_BASE)"
-ifdef CC_ARG
-CMAKE_CC += -DCMAKE_C_COMPILER_ARG1="$(CC_ARG)"
+CMAKE_COMMON = -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_BUILD_TYPE=Release
+ifneq ($(VERBOSE), 0)
+CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
-CMAKE_CXX = -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$(CC_BASE)"
+ifdef CC_ARG
+CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CC_ARG)"
+endif
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
 ifdef CXX_ARG
-CMAKE_CXX += -DCMAKE_CXX_COMPILER_ARG1="$(CXX_ARG)"
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CXX_ARG)"
 endif
 
 # If the top-level Makefile is called with environment variables,
@@ -373,12 +376,12 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		$(CMAKE) -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx $(CMAKE_CC) $(CMAKE_CXX) -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 libcxxabi-build:
 	mkdir -p libcxxabi-build
 libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
 	cd libcxxabi-build && \
-        $(CMAKE) -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi $(CMAKE_CC) $(CMAKE_CXX) -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLLVM_MAIN_SRC_DIR=../llvm-svn ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
 	cd libcxxabi-build && $(MAKE)
@@ -1679,6 +1682,43 @@ compile-patchelf: $(PATCHELF_SOURCE)
 check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
+## Git
+# only used for the mac binaries in contrib/mac/app/Makefile
+
+GIT_SOURCE = git-$(GIT_VER)/src/git
+GIT_TARGET = $(build_prefix)/git
+
+git-$(GIT_VER).tar.gz:
+	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
+git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
+	cd git-$(GIT_VER) && \
+	./configure $(CONFIGURE_COMMON) --bindir="$(build_libexecdir)"
+	touch -c $@
+$(GIT_SOURCE): git-$(GIT_VER)/config.status
+	$(MAKE) -C git-$(GIT_VER)
+	touch -c $@
+git-$(GIT_VER)/checked: $(GIT_SOURCE)
+	echo 1 > $@
+$(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
+	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1 $(MAKE_COMMON)
+	touch -c $@
+
+clean-git:
+	-$(MAKE) -C git-$(GIT_VER) clean
+	-rm -f $(GIT_OBJ_TARGET)
+distclean-git:
+	-rm -rf git-$(GIT_VER).tar.gz git-$(GIT_VER)
+
+get-git: git-$(GIT_VER).tar.gz
+configure-git: git-$(GIT_VER)/config.status
+compile-git: $(GIT_SOURCE)
+check-git: git-$(GIT_VER)/checked
+install-git: $(GIT_TARGET)
+
 ## virtualenv
 
 VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
@@ -1711,7 +1751,7 @@ install-virtualenv: $(VIRTUALENV_TARGET)
 LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
 LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
 
-LIBGIT2_OPTS = -DTHREADSAFE=ON -DCMAKE_BUILD_TYPE=Release $(CMAKE_CC)
+LIBGIT2_OPTS = $(CMAKE_COMMON) -DTHREADSAFE=ON
 ifeq ($(OS),WINNT)
 LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
 ifeq ($(BUILD_OS),WINNT)
