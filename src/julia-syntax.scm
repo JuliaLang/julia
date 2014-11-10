@@ -3020,14 +3020,23 @@ So far only the second case can actually occur.
 	((memq e '(false #f)) 'true)
 	(else                 `(call (top !) ,e))))
 
-; remove if, _while, block, break-block, and break
-; replaced with goto and gotoifnot
-; TODO: remove type-assignment-affecting expressions from conditional branch.
-;       needed because there's no program location after the condition
-;       is evaluated but before the branch's successors.
-;       pulling a complex condition out to a temporary variable creates
-;       such a location (the assignment to the variable).
+;; remove if, _while, block, break-block, and break
+;; replaced with goto and gotoifnot
+;; TODO: remove type-assignment-affecting expressions from conditional branch.
+;;       needed because there's no program location after the condition
+;;       is evaluated but before the branch's successors.
+;;       pulling a complex condition out to a temporary variable creates
+;;       such a location (the assignment to the variable).
 (define (goto-form e)
+  (cond ((or (not (pair? e)) (quoted? e)) e)
+	((eq? (car e) 'lambda)
+	 `(lambda ,(cadr e) ,(caddr e)
+		  ,(compile-body (cadddr e) (append (cadr (caddr e))
+						    (caddr (caddr e))))))
+	(else (cons (car e)
+		    (map goto-form (cdr e))))))
+
+(define (compile-body e vi)
   (let ((code '())
 	(label-counter 0)
 	(label-map (table))
@@ -3048,7 +3057,7 @@ So far only the second case can actually occur.
 	  (let ((l (make-label)))
 	    (mark-label l)
 	    l)))
-    (define (compile e break-labels vi)
+    (define (compile e break-labels)
       (if (or (not (pair? e)) (equal? e '(null)))
 	  ;; atom has no effect, but keep symbols for undefined-var checking
 	  #f #;(if (symbol? e) (emit e) #f)
@@ -3068,15 +3077,15 @@ So far only the second case can actually occur.
 			(tail     (and (pair? (caddr e))
 				       (eq? (car (caddr e)) 'return))))
 		    (emit test)
-		    (compile (caddr e) break-labels vi)
+		    (compile (caddr e) break-labels)
 		    (if (and (not tail)
 			     (not (equal? (cadddr e) '(null))))
 			(emit end-jump))
 		    (set-car! (cddr test) (make&mark-label))
-		    (compile (cadddr e) break-labels vi)
+		    (compile (cadddr e) break-labels)
 		    (if (not tail)
 			(set-car! (cdr end-jump) (make&mark-label)))))
-	    ((block) (for-each (lambda (x) (compile x break-labels vi))
+	    ((block) (for-each (lambda (x) (compile x break-labels))
 			       (cdr e)))
 	    ((_while)
 	     (let ((test-blk (cadr e))
@@ -3085,26 +3094,25 @@ So far only the second case can actually occur.
 		   ;; if condition is simple, compile it twice in order
 		   ;; to generate a single branch per iteration.
 		   (let ((topl (make-label)))
-		     (compile test-blk break-labels vi)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(goto-form (caddr e)) ,endl))
 		     (mark-label topl)
-		     (compile (cadddr e) break-labels vi)
-		     (compile test-blk break-labels vi)
+		     (compile (cadddr e) break-labels)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(not-bool (goto-form (caddr e))) ,topl))
 		     (mark-label endl))
 
 		   (let ((topl (make&mark-label)))
-		     (compile test-blk break-labels vi)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(goto-form (caddr e)) ,endl))
-		     (compile (cadddr e) break-labels vi)
+		     (compile (cadddr e) break-labels)
 		     (emit `(goto ,topl))
 		     (mark-label endl)))))
 
 	    ((break-block) (let ((endl (make-label)))
 			     (compile (caddr e)
 				      (cons (list (cadr e) endl handler-level)
-					    break-labels)
-				      vi)
+					    break-labels))
 			     (mark-label endl)))
 	    ((break) (let ((labl (assq (cadr e) break-labels)))
 		       (if (not labl)
@@ -3161,7 +3169,7 @@ So far only the second case can actually occur.
 		   (endl  (make-label)))
 	       (emit `(enter ,catch))
 	       (set! handler-level (+ handler-level 1))
-	       (compile (cadr e) break-labels vi)
+	       (compile (cadr e) break-labels)
 	       (set! handler-level (- handler-level 1))
 	       (if (not (and (pair? (car code)) (eq? (caar code) 'return)))
 		   ;; try ends in return, no need to handle flow off end of it
@@ -3170,7 +3178,7 @@ So far only the second case can actually occur.
 		   (set! endl #f))
 	       (mark-label catch)
 	       (emit `(leave 1))
-	       (compile (caddr e) break-labels vi)
+	       (compile (caddr e) break-labels)
 	       (if endl
 		   (mark-label endl))
 	       ))
@@ -3196,17 +3204,10 @@ So far only the second case can actually occur.
 		 (emit e)
 		 #f))
 	    (else  (emit (goto-form e))))))
-    (cond ((or (not (pair? e)) (quoted? e)) e)
-	  ((eq? (car e) 'lambda)
-	   (compile (cadddr e) '() (append (cadr (caddr e))
-					   (caddr (caddr e))))
-	   `(lambda ,(cadr e) ,(caddr e)
-		    ,(cons 'body (reverse! code))))
-	  (else (cons (car e)
-		      (map goto-form (cdr e)))))))
+    (compile e '())
+    (cons 'body (reverse! code))))
 
-(define (to-goto-form e)
-  (goto-form e))
+(define to-goto-form goto-form)
 
 ;; macro expander
 
