@@ -219,6 +219,13 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
+# Documentation
+
+include("markdown/Markdown.jl")
+include("docs.jl")
+using .Docs
+using .Markdown
+
 # (s)printf macros
 include("printf.jl")
 importall .Printf
