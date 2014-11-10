@@ -23,7 +23,7 @@ end
 ####
 function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = nothing)
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
-    delay_cur = ccall(:jl_profile_delay_nsec, Uint64, ())/10^9
+    delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n == nothing && delay == nothing
         return int(n_cur), delay_cur
     end
@@ -33,7 +33,7 @@ function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = n
 end
 
 function init(n::Integer, delay::Float64)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, Uint64), n, iround(10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, iround(10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
     end
@@ -61,12 +61,12 @@ function retrieve()
     copy(data), getdict(data)
 end
 
-function getdict(data::Vector{Uint})
+function getdict(data::Vector{UInt})
     uip = unique(data)
-    Dict{Uint, LineInfo}([ip=>lookup(ip) for ip in uip])
+    Dict{UInt, LineInfo}([ip=>lookup(ip) for ip in uip])
 end
 
-function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = nothing, linerange = nothing)
+function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = nothing, linerange = nothing)
     if filename == nothing && linerange == nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
@@ -79,8 +79,15 @@ function callers(funcname::ByteString, bt::Vector{Uint}, lidict; filename = noth
 end
 
 callers(funcname::ByteString; kwargs...) = callers(funcname, retrieve()...; kwargs...)
-callers(func::Function, bt::Vector{Uint}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
+callers(func::Function, bt::Vector{UInt}, lidict; kwargs...) = callers(string(func), bt, lidict; kwargs...)
 callers(func::Function; kwargs...) = callers(string(func), retrieve()...; kwargs...)
+
+##
+## For --track-allocation
+##
+# Reset the malloc log. Used to avoid counting memory allocated during
+# compilation.
+clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
 
 
 ####
@@ -103,8 +110,8 @@ const UNKNOWN = LineInfo("?", "?", -1, true, 0)
 #
 ==(a::LineInfo, b::LineInfo) = a.line == b.line && a.fromC == b.fromC && a.func == b.func && a.file == b.file
 
-function hash(li::LineInfo, h::Uint)
-    h += 0xf4fbda67fe20ce88 % Uint
+function hash(li::LineInfo, h::UInt)
+    h += 0xf4fbda67fe20ce88 % UInt
     h = hash(li.line, h)
     h = hash(li.file, h)
     h = hash(li.func, h)
@@ -117,13 +124,13 @@ stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
 
 is_running() = bool(ccall(:jl_profile_is_running, Cint, ()))
 
-get_data_pointer() = convert(Ptr{Uint}, ccall(:jl_profile_get_data, Ptr{Uint8}, ()))
+get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
 len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-function lookup(ip::Uint)
+function lookup(ip::UInt)
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 5
         return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int(info[5]))
@@ -411,7 +418,7 @@ function tree{T<:Unsigned}(io::IO, data::Vector{T}, lidict::Dict, C::Bool, combi
     tree(io, bt[keep], counts[keep], lidict, level, combine, cols)
 end
 
-function callersf(matchfunc::Function, bt::Vector{Uint}, lidict)
+function callersf(matchfunc::Function, bt::Vector{UInt}, lidict)
     counts = Dict{LineInfo, Int}()
     lastmatched = false
     for id in bt

@@ -31,9 +31,9 @@ function writemime(io::IO, ::MIME"text/plain", v::DataType)
     # TODO: maybe show constructor info?
 end
 
-writemime(io::IO, ::MIME"text/plain", t::Associative) = 
+writemime(io::IO, ::MIME"text/plain", t::Associative) =
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) = 
+writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
     showkv(io, t, limit=true)
 
 
@@ -65,7 +65,7 @@ end
 function showerror(io::IO, e, bt)
     try
         showerror(io, e)
-    finally 
+    finally
         show_backtrace(io, bt)
     end
 end
@@ -85,7 +85,8 @@ function showerror(io::IO, e::DomainError, bt)
                 print(io, "\n", code[1],
                       " will only return a complex result if called with a complex argument.",
                       "\ntry ", code[1], "(complex(x))")
-            elseif code[1] == :^ && code[2] == symbol("intfuncs.jl")
+            elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) ||
+                   code[1] == :power_by_squaring
                 print(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
                 print(io, "\na zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end

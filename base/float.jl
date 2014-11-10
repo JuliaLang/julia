@@ -1,28 +1,28 @@
 ## conversions to floating-point ##
 
-convert(::Type{Float32}, x::Int128)  = float32(reinterpret(Uint128,abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::Uint128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
+convert(::Type{Float32}, x::Int128)  = float32(reinterpret(UInt128,abs(x)))*(1-2(x<0))
+convert(::Type{Float32}, x::UInt128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
 promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
-promote_rule(::Type{Float32}, ::Type{Uint128}) = Float32
+promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
 
-convert(::Type{Float64}, x::Int128)  = float64(reinterpret(Uint128,abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::Uint128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
+convert(::Type{Float64}, x::Int128)  = float64(reinterpret(UInt128,abs(x)))*(1-2(x<0))
+convert(::Type{Float64}, x::UInt128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
 promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
-promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
+promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
 
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
-for t in (Bool,Char,Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64)
+for t in (Bool,Char,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
 
 for t1 in (Float32,Float64)
     for st in (Int8,Int16,Int32,Int64)
-        @eval begin 
+        @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,Char,Uint8,Uint16,Uint32,Uint64)
+    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64)
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
@@ -44,11 +44,11 @@ convert(::Type{FloatingPoint}, x::Int16)   = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int32)   = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int64)   = convert(Float64, x) # LOSSY
 convert(::Type{FloatingPoint}, x::Int128)  = convert(Float64, x) # LOSSY
-convert(::Type{FloatingPoint}, x::Uint8)   = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Uint16)  = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Uint32)  = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Uint64)  = convert(Float64, x) # LOSSY
-convert(::Type{FloatingPoint}, x::Uint128) = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::UInt8)   = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::UInt16)  = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::UInt32)  = convert(Float64, x)
+convert(::Type{FloatingPoint}, x::UInt64)  = convert(Float64, x) # LOSSY
+convert(::Type{FloatingPoint}, x::UInt128) = convert(Float64, x) # LOSSY
 
 float16(x) = convert(Float16, x)
 float32(x) = convert(Float32, x)
@@ -84,7 +84,7 @@ for to in (Int8, Int16, Int32, Int64)
     end
 end
 
-for to in (Uint8, Uint16, Uint32, Uint64)
+for to in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
         iround(::Type{$to}, x::Float32) = box($to,fpuiround($to,unbox(Float32,x)))
         iround(::Type{$to}, x::Float64) = box($to,fpuiround($to,unbox(Float64,x)))
@@ -95,8 +95,8 @@ end
 
 iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
 iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
-iround(::Type{Uint128}, x::Float32) = convert(Uint128,round(x))
-iround(::Type{Uint128}, x::Float64) = convert(Uint128,round(x))
+iround(::Type{UInt128}, x::Float32) = convert(UInt128,round(x))
+iround(::Type{UInt128}, x::Float64) = convert(UInt128,round(x))
 
 # this is needed very early because it is used by Range and colon
 round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
@@ -134,7 +134,17 @@ rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float
 
 cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 
-mod{T<:FloatingPoint}(x::T, y::T) = rem(y+rem(x,y),y)
+function mod{T<:FloatingPoint}(x::T, y::T)
+    r = rem(x,y)
+    if r == 0
+        copysign(r,y)
+    elseif (r > 0) $ (y > 0)
+        r+y
+    else
+        r
+    end
+end
+
 
 ## floating point comparisons ##
 
@@ -168,43 +178,43 @@ function cmp(x::FloatingPoint, y::Real)
 end
 
 ==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
-==(x::Float64, y::Uint64 ) = eqfui64(unbox(Float64,x),unbox(Uint64,y))
+==(x::Float64, y::UInt64 ) = eqfui64(unbox(Float64,x),unbox(UInt64,y))
 ==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
-==(x::Uint64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(Uint64,x))
+==(x::UInt64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(UInt64,x))
 
 ==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float32,x),unbox(Int64,y))
-==(x::Float32, y::Uint64 ) = eqfui64(unbox(Float32,x),unbox(Uint64,y))
+==(x::Float32, y::UInt64 ) = eqfui64(unbox(Float32,x),unbox(UInt64,y))
 ==(x::Int64  , y::Float32) = eqfsi64(unbox(Float32,y),unbox(Int64,x))
-==(x::Uint64 , y::Float32) = eqfui64(unbox(Float32,y),unbox(Uint64,x))
+==(x::UInt64 , y::Float32) = eqfui64(unbox(Float32,y),unbox(UInt64,x))
 
 < (x::Float64, y::Int64  ) = ltfsi64(unbox(Float64,x),unbox(Int64,y))
-< (x::Float64, y::Uint64 ) = ltfui64(unbox(Float64,x),unbox(Uint64,y))
+< (x::Float64, y::UInt64 ) = ltfui64(unbox(Float64,x),unbox(UInt64,y))
 < (x::Int64  , y::Float64) = ltsif64(unbox(Int64,x),unbox(Float64,y))
-< (x::Uint64 , y::Float64) = ltuif64(unbox(Uint64,x),unbox(Float64,y))
+< (x::UInt64 , y::Float64) = ltuif64(unbox(UInt64,x),unbox(Float64,y))
 
 < (x::Float32, y::Int64  ) = ltfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-< (x::Float32, y::Uint64 ) = ltfui64(unbox(Float64,float64(x)),unbox(Uint64,y))
+< (x::Float32, y::UInt64 ) = ltfui64(unbox(Float64,float64(x)),unbox(UInt64,y))
 < (x::Int64  , y::Float32) = ltsif64(unbox(Int64,x),unbox(Float64,float64(y)))
-< (x::Uint64 , y::Float32) = ltuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
+< (x::UInt64 , y::Float32) = ltuif64(unbox(UInt64,x),unbox(Float64,float64(y)))
 
 <=(x::Float64, y::Int64  ) = lefsi64(unbox(Float64,x),unbox(Int64,y))
-<=(x::Float64, y::Uint64 ) = lefui64(unbox(Float64,x),unbox(Uint64,y))
+<=(x::Float64, y::UInt64 ) = lefui64(unbox(Float64,x),unbox(UInt64,y))
 <=(x::Int64  , y::Float64) = lesif64(unbox(Int64,x),unbox(Float64,y))
-<=(x::Uint64 , y::Float64) = leuif64(unbox(Uint64,x),unbox(Float64,y))
+<=(x::UInt64 , y::Float64) = leuif64(unbox(UInt64,x),unbox(Float64,y))
 
 <=(x::Float32, y::Int64  ) = lefsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-<=(x::Float32, y::Uint64 ) = lefui64(unbox(Float64,float64(x)),unbox(Uint64,y))
+<=(x::Float32, y::UInt64 ) = lefui64(unbox(Float64,float64(x)),unbox(UInt64,y))
 <=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
-<=(x::Uint64 , y::Float32) = leuif64(unbox(Uint64,x),unbox(Float64,float64(y)))
+<=(x::UInt64 , y::Float32) = leuif64(unbox(UInt64,x),unbox(Float64,float64(y)))
 
-==(x::Float32, y::Union(Int32,Uint32)) = float64(x)==float64(y)
-==(x::Union(Int32,Uint32), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,UInt32)) = float64(x)==float64(y)
+==(x::Union(Int32,UInt32), y::Float32) = float64(x)==float64(y)
 
-<(x::Float32, y::Union(Int32,Uint32)) = float64(x)<float64(y)
-<(x::Union(Int32,Uint32), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,UInt32)) = float64(x)<float64(y)
+<(x::Union(Int32,UInt32), y::Float32) = float64(x)<float64(y)
 
-<=(x::Float32, y::Union(Int32,Uint32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,Uint32), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,UInt32)) = float64(x)<=float64(y)
+<=(x::Union(Int32,UInt32), y::Float32) = float64(x)<=float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
@@ -220,17 +230,18 @@ isinf(x::Real) = !isnan(x) & !isfinite(x)
 
 ## floating point traits ##
 
-const Inf16 = box(Float16,unbox(Uint16,0x7c00))
-const NaN16 = box(Float16,unbox(Uint16,0x7e00))
-const Inf32 = box(Float32,unbox(Uint32,0x7f800000))
-const NaN32 = box(Float32,unbox(Uint32,0x7fc00000))
-const Inf = box(Float64,unbox(Uint64,0x7ff0000000000000))
-const NaN = box(Float64,unbox(Uint64,0x7ff8000000000000))
+const Inf16 = box(Float16,unbox(UInt16,0x7c00))
+const NaN16 = box(Float16,unbox(UInt16,0x7e00))
+const Inf32 = box(Float32,unbox(UInt32,0x7f800000))
+const NaN32 = box(Float32,unbox(UInt32,0x7fc00000))
+const Inf = box(Float64,unbox(UInt64,0x7ff0000000000000))
+const NaN = box(Float64,unbox(UInt64,0x7ff8000000000000))
 
 ## precision, as defined by the effective number of bits in the mantissa ##
-precision(::Float16) = 11
-precision(::Float32) = 24
-precision(::Float64) = 53
+precision(::Type{Float16}) = 11
+precision(::Type{Float32}) = 24
+precision(::Type{Float64}) = 53
+precision{T<:FloatingPoint}(::T) = precision(T)
 
 function float_lex_order(f::Integer, delta::Integer)
     # convert from signed magnitude to 2's complement and back
@@ -253,10 +264,10 @@ nextfloat(x::FloatingPoint) = nextfloat(x,1)
 prevfloat(x::FloatingPoint) = nextfloat(x,-1)
 
 @eval begin
-    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(Uint32,0x00800000)))) & (x!=0)
-    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(Uint64,0x0010000000000000)))) & (x!=0)
+    issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(UInt32,0x00800000)))) & (x!=0)
+    issubnormal(x::Float64) = (abs(x) < $(box(Float64,unbox(UInt64,0x0010000000000000)))) & (x!=0)
 
-    typemin(::Type{Float16}) = $(box(Float16,unbox(Uint16,0xfc00)))
+    typemin(::Type{Float16}) = $(box(Float16,unbox(UInt16,0xfc00)))
     typemax(::Type{Float16}) = $(Inf16)
     typemin(::Type{Float32}) = $(-Inf32)
     typemax(::Type{Float32}) = $(Inf32)
@@ -265,21 +276,21 @@ prevfloat(x::FloatingPoint) = nextfloat(x,-1)
     typemin{T<:Real}(x::T) = typemin(T)
     typemax{T<:Real}(x::T) = typemax(T)
 
-    realmin(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x0400)))
-    realmin(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x00800000)))
-    realmin(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x0010000000000000)))
-    realmax(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x7bff)))
-    realmax(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x7f7fffff)))
-    realmax(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x7fefffffffffffff)))
+    realmin(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x0400)))
+    realmin(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x00800000)))
+    realmin(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x0010000000000000)))
+    realmax(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x7bff)))
+    realmax(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x7f7fffff)))
+    realmax(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x7fefffffffffffff)))
     realmin{T<:FloatingPoint}(x::T) = realmin(T)
     realmax{T<:FloatingPoint}(x::T) = realmax(T)
     realmin() = realmin(Float64)
     realmax() = realmax(Float64)
 
     eps(x::FloatingPoint) = isfinite(x) ? abs(x) >= realmin(x) ? ldexp(eps(typeof(x)),exponent(x)) : nextfloat(zero(x)) : oftype(x,NaN)
-    eps(::Type{Float16}) = $(box(Float16,unbox(Uint16,0x1400)))
-    eps(::Type{Float32}) = $(box(Float32,unbox(Uint32,0x34000000)))
-    eps(::Type{Float64}) = $(box(Float64,unbox(Uint64,0x3cb0000000000000)))
+    eps(::Type{Float16}) = $(box(Float16,unbox(UInt16,0x1400)))
+    eps(::Type{Float32}) = $(box(Float32,unbox(UInt32,0x34000000)))
+    eps(::Type{Float64}) = $(box(Float64,unbox(UInt64,0x3cb0000000000000)))
     eps() = eps(Float64)
 end
 

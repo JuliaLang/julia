@@ -517,13 +517,13 @@ end
 # TODO: this doesn't fit into the new hashing scheme in any obvious way
 
 immutable Prehashed
-    hash::Uint
+    hash::UInt
 end
 hash(x::Prehashed) = x.hash
 
 @ngenerate N typeof(A) function unique{T,N}(A::AbstractArray{T,N}, dim::Int)
     1 <= dim <= N || return copy(A)
-    hashes = zeros(Uint, size(A, dim))
+    hashes = zeros(UInt, size(A, dim))
 
     # Compute hash for each row
     k = 0

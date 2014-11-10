@@ -11,10 +11,10 @@ import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
 
 if Clong == Int32
     typealias ClongMax Union(Int8, Int16, Int32)
-    typealias CulongMax Union(Uint8, Uint16, Uint32)
+    typealias CulongMax Union(UInt8, UInt16, UInt32)
 else
     typealias ClongMax Union(Int8, Int16, Int32, Int64)
-    typealias CulongMax Union(Uint8, Uint16, Uint32, Uint64)
+    typealias CulongMax Union(UInt8, UInt16, UInt32, UInt64)
 end
 typealias CdoubleMax Union(Float16, Float32, Float64)
 
@@ -44,19 +44,19 @@ function __init__()
 end
 
 widen(::Type{Int128})  = BigInt
-widen(::Type{Uint128}) = BigInt
+widen(::Type{UInt128}) = BigInt
 widen(::Type{BigInt})  = BigInt
 
 BigInt(x::BigInt) = x
-BigInt(s::String) = parseint(BigInt,s)
+BigInt(s::AbstractString) = parseint(BigInt,s)
 
-function Base.parseint_nocheck(::Type{BigInt}, s::String, base::Int)
+function Base.parseint_nocheck(::Type{BigInt}, s::AbstractString, base::Int)
     s = bytestring(s)
     sgn, base, i = Base.parseint_preamble(true,s,base)
     z = BigInt()
     err = ccall((:__gmpz_set_str, :libgmp),
-               Int32, (Ptr{BigInt}, Ptr{Uint8}, Int32),
-               &z, convert(Ptr{Uint8},SubString(s,i)), base)
+               Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
+               &z, convert(Ptr{UInt8},SubString(s,i)), base)
     err == 0 || error("invalid big integer: $(repr(s))")
     return sgn < 0 ? -z : z
 end
@@ -66,7 +66,7 @@ function BigInt(x::Union(Clong,Int32))
     ccall((:__gmpz_set_si, :libgmp), Void, (Ptr{BigInt}, Clong), &z, x)
     return z
 end
-function BigInt(x::Union(Culong,Uint32))
+function BigInt(x::Union(Culong,UInt32))
     z = BigInt()
     ccall((:__gmpz_set_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
     return z
@@ -116,7 +116,7 @@ convert(::Type{BigInt}, x::Float16) = BigInt(x)
 convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 function convert(::Type{Int64}, x::BigInt)
-    lo = int64(convert(Culong, x & typemax(Uint32)))
+    lo = int64(convert(Culong, x & typemax(UInt32)))
     hi = int64(convert(Clong, x >> 32))
     hi << 32 | lo
 end
@@ -133,14 +133,14 @@ function convert(::Type{Clong}, n::BigInt)
     end
 end
 
-function convert(::Type{Uint64}, x::BigInt)
-    lo = uint64(convert(Culong, x & typemax(Uint32)))
+function convert(::Type{UInt64}, x::BigInt)
+    lo = uint64(convert(Culong, x & typemax(UInt32)))
     hi = uint64(convert(Culong, x >> 32))
     hi << 32 | lo
 end
-convert(::Type{Uint32}, x::BigInt) = uint32(convert(Culong, x))
-convert(::Type{Uint16}, x::BigInt) = uint16(convert(Culong, x))
-convert(::Type{Uint8}, x::BigInt) = uint8(convert(Culong, x))
+convert(::Type{UInt32}, x::BigInt) = uint32(convert(Culong, x))
+convert(::Type{UInt16}, x::BigInt) = uint16(convert(Culong, x))
+convert(::Type{UInt8}, x::BigInt) = uint8(convert(Culong, x))
 
 function convert(::Type{Culong}, n::BigInt)
     fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
@@ -152,17 +152,17 @@ function convert(::Type{Culong}, n::BigInt)
 end
 
 if sizeof(Int32) == sizeof(Clong)
-    function convert(::Type{Uint128}, x::BigInt)
+    function convert(::Type{UInt128}, x::BigInt)
         uint128(uint(x>>>96))<<96 +
-        uint128(uint((x>>>64) & typemax(Uint32)))<<64 +
-        uint128(uint((x>>>32) & typemax(Uint32)))<<32 +
-        uint128(uint(x & typemax(Uint32)))
+        uint128(uint((x>>>64) & typemax(UInt32)))<<64 +
+        uint128(uint((x>>>32) & typemax(UInt32)))<<32 +
+        uint128(uint(x & typemax(UInt32)))
     end
 end
 if sizeof(Int64) == sizeof(Clong)
-    function convert(::Type{Uint128}, x::BigInt)
+    function convert(::Type{UInt128}, x::BigInt)
         uint128(uint(x>>>64))<<64 +
-        uint128(uint(x & typemax(Uint64)))
+        uint128(uint(x & typemax(UInt64)))
     end
 end
 convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
@@ -339,7 +339,7 @@ function isqrt(x::BigInt)
     return z
 end
 
-function ^(x::BigInt, y::Uint)
+function ^(x::BigInt, y::UInt)
     z = BigInt()
     ccall((:__gmpz_pow_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, y)
     return z
@@ -349,7 +349,7 @@ function bigint_pow(x::BigInt, y::Integer)
     if y<0; throw(DomainError()); end
     if x== 1; return x; end
     if x==-1; return isodd(y) ? x : -x; end
-    if y>typemax(Uint); throw(DomainError()); end
+    if y>typemax(UInt); throw(DomainError()); end
     return x^uint(y)
 end
 
@@ -407,7 +407,7 @@ function factorial(x::BigInt)
     return z
 end
 
-function binomial(n::BigInt, k::Uint)
+function binomial(n::BigInt, k::UInt)
     z = BigInt()
     ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
     return z
@@ -442,8 +442,8 @@ hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || error("invalid base: $b")
-    p = ccall((:__gmpz_get_str,:libgmp), Ptr{Uint8}, (Ptr{Uint8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    len = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), p))
+    p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
+    len = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
 
@@ -459,7 +459,7 @@ function ndigits0z(x::BigInt, b::Integer=10)
         q,r = divrem(n,lb)
         iq = int(q)
         maxerr = q*eps(lb) # maximum error in remainder
-        if r-1.0 < maxerr 
+        if r-1.0 < maxerr
             abs(x) >= big(b)^iq ? iq+1 : iq
         elseif lb-r < maxerr
             abs(x) >= big(b)^(iq+1) ? iq+2 : iq+1
@@ -472,8 +472,8 @@ ndigits(x::BigInt, b::Integer=10) = x.size == 0 ? 1 : ndigits0z(x,b)
 
 isprime(x::BigInt, reps=25) = ccall((:__gmpz_probab_prime_p,:libgmp), Cint, (Ptr{BigInt}, Cint), &x, reps) > 0
 
-widemul(x::Int128, y::Uint128)  = BigInt(x)*BigInt(y)
-widemul(x::Uint128, y::Int128)  = BigInt(x)*BigInt(y)
+widemul(x::Int128, y::UInt128)  = BigInt(x)*BigInt(y)
+widemul(x::UInt128, y::Int128)  = BigInt(x)*BigInt(y)
 
 prevpow2(x::BigInt) = x.size < 0 ? -prevpow2(-x) : (x <= 2 ? x : one(BigInt) << (ndigits(x, 2)-1))
 nextpow2(x::BigInt) = x.size < 0 ? -nextpow2(-x) : (x <= 2 ? x : one(BigInt) << ndigits(x-1, 2))

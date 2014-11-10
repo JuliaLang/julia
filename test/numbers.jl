@@ -96,92 +96,92 @@ end
     1701411834604692317316873037158841057280
 
 # definition and printing of extreme integers
-@test bin(typemin(Uint8)) == "0"
-@test bin(typemax(Uint8)) == "1"^8
-@test oct(typemin(Uint8)) == "0"
-@test oct(typemax(Uint8)) == "377"
-@test dec(typemin(Uint8)) == "0"
-@test dec(typemax(Uint8)) == "255"
-@test hex(typemin(Uint8)) == "0"
-@test hex(typemax(Uint8)) == "ff"
-@test repr(typemin(Uint8)) == "0x00"
-@test string(typemin(Uint8)) == "0"
-@test repr(typemax(Uint8)) == "0xff"
-@test string(typemax(Uint8)) == "255"
-@test base(3,typemin(Uint8)) == "0"
-@test base(3,typemax(Uint8)) == "100110"
-@test base(12,typemin(Uint8)) == "0"
-@test base(12,typemax(Uint8)) == "193"
+@test bin(typemin(UInt8)) == "0"
+@test bin(typemax(UInt8)) == "1"^8
+@test oct(typemin(UInt8)) == "0"
+@test oct(typemax(UInt8)) == "377"
+@test dec(typemin(UInt8)) == "0"
+@test dec(typemax(UInt8)) == "255"
+@test hex(typemin(UInt8)) == "0"
+@test hex(typemax(UInt8)) == "ff"
+@test repr(typemin(UInt8)) == "0x00"
+@test string(typemin(UInt8)) == "0"
+@test repr(typemax(UInt8)) == "0xff"
+@test string(typemax(UInt8)) == "255"
+@test base(3,typemin(UInt8)) == "0"
+@test base(3,typemax(UInt8)) == "100110"
+@test base(12,typemin(UInt8)) == "0"
+@test base(12,typemax(UInt8)) == "193"
 
-@test bin(typemin(Uint16)) == "0"
-@test bin(typemax(Uint16)) == "1"^16
-@test oct(typemin(Uint16)) == "0"
-@test oct(typemax(Uint16)) == "177777"
-@test dec(typemin(Uint16)) == "0"
-@test dec(typemax(Uint16)) == "65535"
-@test hex(typemin(Uint16)) == "0"
-@test hex(typemax(Uint16)) == "ffff"
-@test repr(typemin(Uint16)) == "0x0000"
-@test string(typemin(Uint16)) == "0"
-@test repr(typemax(Uint16)) == "0xffff"
-@test string(typemax(Uint16)) == "65535"
-@test base(3,typemin(Uint16)) == "0"
-@test base(3,typemax(Uint16)) == "10022220020"
-@test base(12,typemin(Uint16)) == "0"
-@test base(12,typemax(Uint16)) == "31b13"
+@test bin(typemin(UInt16)) == "0"
+@test bin(typemax(UInt16)) == "1"^16
+@test oct(typemin(UInt16)) == "0"
+@test oct(typemax(UInt16)) == "177777"
+@test dec(typemin(UInt16)) == "0"
+@test dec(typemax(UInt16)) == "65535"
+@test hex(typemin(UInt16)) == "0"
+@test hex(typemax(UInt16)) == "ffff"
+@test repr(typemin(UInt16)) == "0x0000"
+@test string(typemin(UInt16)) == "0"
+@test repr(typemax(UInt16)) == "0xffff"
+@test string(typemax(UInt16)) == "65535"
+@test base(3,typemin(UInt16)) == "0"
+@test base(3,typemax(UInt16)) == "10022220020"
+@test base(12,typemin(UInt16)) == "0"
+@test base(12,typemax(UInt16)) == "31b13"
 
-@test bin(typemin(Uint32)) == "0"
-@test bin(typemax(Uint32)) == "1"^32
-@test oct(typemin(Uint32)) == "0"
-@test oct(typemax(Uint32)) == "37777777777"
-@test dec(typemin(Uint32)) == "0"
-@test dec(typemax(Uint32)) == "4294967295"
-@test hex(typemin(Uint32)) == "0"
-@test hex(typemax(Uint32)) == "ffffffff"
-@test repr(typemin(Uint32)) == "0x00000000"
-@test string(typemin(Uint32)) == "0"
-@test repr(typemax(Uint32)) == "0xffffffff"
-@test string(typemax(Uint32)) == "4294967295"
-@test base(3,typemin(Uint32)) == "0"
-@test base(3,typemax(Uint32)) == "102002022201221111210"
-@test base(12,typemin(Uint32)) == "0"
-@test base(12,typemax(Uint32)) == "9ba461593"
+@test bin(typemin(UInt32)) == "0"
+@test bin(typemax(UInt32)) == "1"^32
+@test oct(typemin(UInt32)) == "0"
+@test oct(typemax(UInt32)) == "37777777777"
+@test dec(typemin(UInt32)) == "0"
+@test dec(typemax(UInt32)) == "4294967295"
+@test hex(typemin(UInt32)) == "0"
+@test hex(typemax(UInt32)) == "ffffffff"
+@test repr(typemin(UInt32)) == "0x00000000"
+@test string(typemin(UInt32)) == "0"
+@test repr(typemax(UInt32)) == "0xffffffff"
+@test string(typemax(UInt32)) == "4294967295"
+@test base(3,typemin(UInt32)) == "0"
+@test base(3,typemax(UInt32)) == "102002022201221111210"
+@test base(12,typemin(UInt32)) == "0"
+@test base(12,typemax(UInt32)) == "9ba461593"
 
-@test bin(typemin(Uint64)) == "0"
-@test bin(typemax(Uint64)) == "1"^64
-@test oct(typemin(Uint64)) == "0"
-@test oct(typemax(Uint64)) == "1777777777777777777777"
-@test dec(typemin(Uint64)) == "0"
-@test dec(typemax(Uint64)) == "18446744073709551615"
-@test hex(typemin(Uint64)) == "0"
-@test hex(typemax(Uint64)) == "ffffffffffffffff"
-@test repr(typemin(Uint64)) == "0x0000000000000000"
-@test string(typemin(Uint64)) == "0"
-@test repr(typemax(Uint64)) == "0xffffffffffffffff"
-@test string(typemax(Uint64)) == "18446744073709551615"
-@test base(3,typemin(Uint64)) == "0"
-@test base(3,typemax(Uint64)) == "11112220022122120101211020120210210211220"
-@test base(12,typemin(Uint64)) == "0"
-@test base(12,typemax(Uint64)) == "839365134a2a240713"
+@test bin(typemin(UInt64)) == "0"
+@test bin(typemax(UInt64)) == "1"^64
+@test oct(typemin(UInt64)) == "0"
+@test oct(typemax(UInt64)) == "1777777777777777777777"
+@test dec(typemin(UInt64)) == "0"
+@test dec(typemax(UInt64)) == "18446744073709551615"
+@test hex(typemin(UInt64)) == "0"
+@test hex(typemax(UInt64)) == "ffffffffffffffff"
+@test repr(typemin(UInt64)) == "0x0000000000000000"
+@test string(typemin(UInt64)) == "0"
+@test repr(typemax(UInt64)) == "0xffffffffffffffff"
+@test string(typemax(UInt64)) == "18446744073709551615"
+@test base(3,typemin(UInt64)) == "0"
+@test base(3,typemax(UInt64)) == "11112220022122120101211020120210210211220"
+@test base(12,typemin(UInt64)) == "0"
+@test base(12,typemax(UInt64)) == "839365134a2a240713"
 
-@test bin(typemin(Uint128)) == "0"
-@test bin(typemax(Uint128)) == "1"^128
-@test oct(typemin(Uint128)) == "0"
-@test oct(typemax(Uint128)) == "3777777777777777777777777777777777777777777"
-@test hex(typemin(Uint128)) == "0"
-@test hex(typemax(Uint128)) == "ffffffffffffffffffffffffffffffff"
-@test repr(typemin(Uint128)) == "0x00000000000000000000000000000000"
-@test string(typemin(Uint128)) == "0"
-@test repr(typemax(Uint128)) == "0xffffffffffffffffffffffffffffffff"
-@test string(typemax(Uint128)) == "340282366920938463463374607431768211455"
+@test bin(typemin(UInt128)) == "0"
+@test bin(typemax(UInt128)) == "1"^128
+@test oct(typemin(UInt128)) == "0"
+@test oct(typemax(UInt128)) == "3777777777777777777777777777777777777777777"
+@test hex(typemin(UInt128)) == "0"
+@test hex(typemax(UInt128)) == "ffffffffffffffffffffffffffffffff"
+@test repr(typemin(UInt128)) == "0x00000000000000000000000000000000"
+@test string(typemin(UInt128)) == "0"
+@test repr(typemax(UInt128)) == "0xffffffffffffffffffffffffffffffff"
+@test string(typemax(UInt128)) == "340282366920938463463374607431768211455"
 
-@test dec(typemin(Uint128)) == "0"
-@test dec(typemax(Uint128)) == "340282366920938463463374607431768211455"
-@test base(3,typemin(Uint128)) == "0"
-@test base(3,typemax(Uint128)) ==
+@test dec(typemin(UInt128)) == "0"
+@test dec(typemax(UInt128)) == "340282366920938463463374607431768211455"
+@test base(3,typemin(UInt128)) == "0"
+@test base(3,typemax(UInt128)) ==
     "202201102121002021012000211012011021221022212021111001022110211020010021100121010"
-@test base(12,typemin(Uint128)) == "0"
-@test base(12,typemax(Uint128)) == "5916b64b41143526a777873841863a6a6993"
+@test base(12,typemin(UInt128)) == "0"
+@test base(12,typemax(UInt128)) == "5916b64b41143526a777873841863a6a6993"
 
 @test bin(typemin(Int8)) == "-1"*"0"^7
 @test bin(typemax(Int8)) == "1"^7
@@ -506,7 +506,7 @@ for x=-5:5, y=-5:5
     end
 end
 
-function _cmp_(x::Union(Int64,Uint64), y::Float64)
+function _cmp_(x::Union(Int64,UInt64), y::Float64)
     if x==int64(2)^53-2 && y==2.0^53-2; return  0; end
     if x==int64(2)^53-2 && y==2.0^53-1; return -1; end
     if x==int64(2)^53-2 && y==2.0^53  ; return -1; end
@@ -678,16 +678,16 @@ end
 @test 2.0^63 == uint64(2)^63
 @test 2.0^63 != uint64(2)^63+1
 
-@test typemax(Uint64) != 2.0^64
+@test typemax(UInt64) != 2.0^64
 
-@test typemax(Uint64) < float64(typemax(Uint64))
+@test typemax(UInt64) < float64(typemax(UInt64))
 @test typemax(Int64) < float64(typemax(Int64))
-@test typemax(Uint64) <= float64(typemax(Uint64))
+@test typemax(UInt64) <= float64(typemax(UInt64))
 @test typemax(Int64) <= float64(typemax(Int64))
 
-@test float64(typemax(Uint64)) > typemax(Uint64)
+@test float64(typemax(UInt64)) > typemax(UInt64)
 @test float64(typemax(Int64)) > typemax(Int64)
-@test float64(typemax(Uint64)) >= typemax(Uint64)
+@test float64(typemax(UInt64)) >= typemax(UInt64)
 @test float64(typemax(Int64)) >= typemax(Int64)
 
 @test float64(int128(0)) == 0.0
@@ -702,10 +702,10 @@ end
 @test float32(typemin(Int128)) == -2.0f0^127
 @test float64(typemax(Int128)) == 2.0^127
 @test float32(typemax(Int128)) == 2.0f0^127
-@test float64(typemin(Uint128)) == 0.0
-@test float32(typemin(Uint128)) == 0.0f0
-@test float64(typemax(Uint128)) == 2.0^128
-@test float32(typemax(Uint128)) == 2.0f0^128
+@test float64(typemin(UInt128)) == 0.0
+@test float32(typemin(UInt128)) == 0.0f0
+@test float64(typemax(UInt128)) == 2.0^128
+@test float32(typemax(UInt128)) == 2.0f0^128
 
 @test int128(-2.0^127) == typemin(Int128)
 @test float64(uint128(3.7e19)) == 3.7e19
@@ -816,13 +816,13 @@ for T in [Int8, Int16, Int32, Int64, Int128]
     #end
 end
 
-#for T in (Uint8,Uint16,Uint32,Uint64,Uint128)
+#for T in (UInt8,UInt16,UInt32,UInt64,UInt128)
 #    x in (typemin(T),one(T),typemax(T))
 #    @test unsigned(signed(x)) == x
 #end
 
 for S = [Int8,  Int16,  Int32,  Int64],
-    U = [Uint8, Uint16, Uint32, Uint64]
+    U = [UInt8, UInt16, UInt32, UInt64]
     @test !(-one(S) == typemax(U))
     @test -one(S) != typemax(U)
     @test -one(S) < typemax(U)
@@ -830,7 +830,7 @@ for S = [Int8,  Int16,  Int32,  Int64],
 end
 
 # check type of constructed rationals
-int_types = [Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64]
+int_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64]
 for N = int_types, D = int_types
     T = promote_type(N,D)
     @test typeof(convert(N,2)//convert(D,3)) <: Rational{T}
@@ -840,9 +840,9 @@ end
 @test typeof(convert(Rational{Integer},1)) === Rational{Integer}
 
 # check type of constructed complexes
-real_types = [Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
-              Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
-              Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}]
+real_types = [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
+              Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
+              Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}]
 for A = real_types, B = real_types
     T = promote_type(A,B)
     @test typeof(Complex(convert(A,2),convert(B,3))) <: Complex{T}
@@ -1144,7 +1144,7 @@ end
 
 for x=Any[typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
           typemax(Int64)-2, typemax(Int64)-1, typemax(Int64),
-          typemax(Uint64)-1, typemax(Uint64)-2, typemax(Uint64)],
+          typemax(UInt64)-1, typemax(UInt64)-2, typemax(UInt64)],
     y=[-7,-2,-1,1,2,7]
     if x >= 0
         @test div(unsigned(x),y) == unsigned(div(x,y))
@@ -1162,19 +1162,19 @@ for x=0:5, y=1:5
     @test div(uint(x),uint(y)) == div(x,y)
     @test div(uint(x),y) == div(x,y)
     @test div(x,uint(y)) == div(x,y)
-    @test div(uint(x),-y) == reinterpret(Uint,div(x,-y))
+    @test div(uint(x),-y) == reinterpret(UInt,div(x,-y))
     @test div(-x,uint(y)) == div(-x,y)
 
     @test fld(uint(x),uint(y)) == fld(x,y)
     @test fld(uint(x),y) == fld(x,y)
     @test fld(x,uint(y)) == fld(x,y)
-    @test fld(uint(x),-y) == reinterpret(Uint,fld(x,-y))
+    @test fld(uint(x),-y) == reinterpret(UInt,fld(x,-y))
     @test fld(-x,uint(y)) == fld(-x,y)
 
     @test cld(uint(x),uint(y)) == cld(x,y)
     @test cld(uint(x),y) == cld(x,y)
     @test cld(x,uint(y)) == cld(x,y)
-    @test cld(uint(x),-y) == reinterpret(Uint,cld(x,-y))
+    @test cld(uint(x),-y) == reinterpret(UInt,cld(x,-y))
     @test cld(-x,uint(y)) == cld(-x,y)
 
     @test rem(uint(x),uint(y)) == rem(x,y)
@@ -1190,12 +1190,12 @@ for x=0:5, y=1:5
     @test mod(-x,uint(y)) == mod(-x,y)
 end
 
-@test div(typemax(Uint64)  , 1) ==  typemax(Uint64)
-@test div(typemax(Uint64)  ,-1) == -typemax(Uint64)
-@test div(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
-@test div(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
-@test div(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
-@test div(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
+@test div(typemax(UInt64)  , 1) ==  typemax(UInt64)
+@test div(typemax(UInt64)  ,-1) == -typemax(UInt64)
+@test div(typemax(UInt64)-1, 1) ==  typemax(UInt64)-1
+@test div(typemax(UInt64)-1,-1) == -typemax(UInt64)+1
+@test div(typemax(UInt64)-2, 1) ==  typemax(UInt64)-2
+@test div(typemax(UInt64)-2,-1) == -typemax(UInt64)+2
 
 @test signed(div(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
 @test signed(div(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
@@ -1204,20 +1204,20 @@ end
 @test signed(div(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
 @test signed(div(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@test signed(div(typemax(Uint),typemax(Int)))        ==  2
-@test signed(div(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@test signed(div(typemax(Uint),typemax(Int)>>1))     ==  4
-@test signed(div(typemax(Uint),typemin(Int)))        == -1
-@test signed(div(typemax(Uint),typemin(Int)+1))      == -2
-@test signed(div(typemax(Uint),typemin(Int)>>1))     == -3
-@test signed(div(typemax(Uint),(typemin(Int)>>1)+1)) == -4
+@test signed(div(typemax(UInt),typemax(Int)))        ==  2
+@test signed(div(typemax(UInt),(typemax(Int)>>1)+1)) ==  3
+@test signed(div(typemax(UInt),typemax(Int)>>1))     ==  4
+@test signed(div(typemax(UInt),typemin(Int)))        == -1
+@test signed(div(typemax(UInt),typemin(Int)+1))      == -2
+@test signed(div(typemax(UInt),typemin(Int)>>1))     == -3
+@test signed(div(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
-@test fld(typemax(Uint64)  , 1) ==  typemax(Uint64)
-@test fld(typemax(Uint64)  ,-1) == -typemax(Uint64)
-@test fld(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
-@test fld(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
-@test fld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
-@test fld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
+@test fld(typemax(UInt64)  , 1) ==  typemax(UInt64)
+@test fld(typemax(UInt64)  ,-1) == -typemax(UInt64)
+@test fld(typemax(UInt64)-1, 1) ==  typemax(UInt64)-1
+@test fld(typemax(UInt64)-1,-1) == -typemax(UInt64)+1
+@test fld(typemax(UInt64)-2, 1) ==  typemax(UInt64)-2
+@test fld(typemax(UInt64)-2,-1) == -typemax(UInt64)+2
 
 @test signed(fld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
 @test signed(fld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
@@ -1226,20 +1226,20 @@ end
 @test signed(fld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
 @test signed(fld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@test signed(fld(typemax(Uint),typemax(Int)))        ==  2
-@test signed(fld(typemax(Uint),(typemax(Int)>>1)+1)) ==  3
-@test signed(fld(typemax(Uint),typemax(Int)>>1))     ==  4
-@test signed(fld(typemax(Uint),typemin(Int)))        == -2
-@test signed(fld(typemax(Uint),typemin(Int)+1))      == -3
-@test signed(fld(typemax(Uint),typemin(Int)>>1))     == -4
-@test signed(fld(typemax(Uint),(typemin(Int)>>1)+1)) == -5
+@test signed(fld(typemax(UInt),typemax(Int)))        ==  2
+@test signed(fld(typemax(UInt),(typemax(Int)>>1)+1)) ==  3
+@test signed(fld(typemax(UInt),typemax(Int)>>1))     ==  4
+@test signed(fld(typemax(UInt),typemin(Int)))        == -2
+@test signed(fld(typemax(UInt),typemin(Int)+1))      == -3
+@test signed(fld(typemax(UInt),typemin(Int)>>1))     == -4
+@test signed(fld(typemax(UInt),(typemin(Int)>>1)+1)) == -5
 
-@test cld(typemax(Uint64)  , 1) ==  typemax(Uint64)
-@test cld(typemax(Uint64)  ,-1) == -typemax(Uint64)
-@test cld(typemax(Uint64)-1, 1) ==  typemax(Uint64)-1
-@test cld(typemax(Uint64)-1,-1) == -typemax(Uint64)+1
-@test cld(typemax(Uint64)-2, 1) ==  typemax(Uint64)-2
-@test cld(typemax(Uint64)-2,-1) == -typemax(Uint64)+2
+@test cld(typemax(UInt64)  , 1) ==  typemax(UInt64)
+@test cld(typemax(UInt64)  ,-1) == -typemax(UInt64)
+@test cld(typemax(UInt64)-1, 1) ==  typemax(UInt64)-1
+@test cld(typemax(UInt64)-1,-1) == -typemax(UInt64)+1
+@test cld(typemax(UInt64)-2, 1) ==  typemax(UInt64)-2
+@test cld(typemax(UInt64)-2,-1) == -typemax(UInt64)+2
 
 @test signed(cld(unsigned(typemax(Int64))+2, 1)) ==  typemax(Int64)+2
 @test signed(cld(unsigned(typemax(Int64))+2,-1)) == -typemax(Int64)-2
@@ -1248,13 +1248,13 @@ end
 @test signed(cld(unsigned(typemax(Int64))  , 1)) ==  typemax(Int64)
 @test signed(cld(unsigned(typemax(Int64))  ,-1)) == -typemax(Int64)
 
-@test signed(cld(typemax(Uint),typemax(Int)))        ==  3
-@test signed(cld(typemax(Uint),(typemax(Int)>>1)+1)) ==  4
-@test signed(cld(typemax(Uint),typemax(Int)>>1))     ==  5
-@test signed(cld(typemax(Uint),typemin(Int)))        == -1
-@test signed(cld(typemax(Uint),typemin(Int)+1))      == -2
-@test signed(cld(typemax(Uint),typemin(Int)>>1))     == -3
-@test signed(cld(typemax(Uint),(typemin(Int)>>1)+1)) == -4
+@test signed(cld(typemax(UInt),typemax(Int)))        ==  3
+@test signed(cld(typemax(UInt),(typemax(Int)>>1)+1)) ==  4
+@test signed(cld(typemax(UInt),typemax(Int)>>1))     ==  5
+@test signed(cld(typemax(UInt),typemin(Int)))        == -1
+@test signed(cld(typemax(UInt),typemin(Int)+1))      == -2
+@test signed(cld(typemax(UInt),typemin(Int)>>1))     == -3
+@test signed(cld(typemax(UInt),(typemin(Int)>>1)+1)) == -4
 
 # issue #4156
 @test fld(1.4,0.35667494393873234) == 3.0
@@ -1262,6 +1262,10 @@ end
 @test fld(0.3,0.01) == 29.0
 @test div(0.3,0.01) == 29.0
 # see https://github.com/JuliaLang/julia/issues/3127
+
+# issue #8831
+@test rem(prevfloat(1.0),1.0) == prevfloat(1.0)
+@test mod(prevfloat(1.0),1.0) == prevfloat(1.0)
 
 # issue #3046
 @test mod(int64(2),typemax(Int64)) == 2
@@ -1329,14 +1333,14 @@ end
 @test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
 @test_throws InexactError iround(Int64, -9.223372036854778e18)
 @test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
-@test_throws InexactError iround(Uint64, 1.8446744073709552e19)
-@test       iround(Uint64, 1.844674407370955e19) == 0xfffffffffffff800
+@test_throws InexactError iround(UInt64, 1.8446744073709552e19)
+@test       iround(UInt64, 1.844674407370955e19) == 0xfffffffffffff800
 @test_throws InexactError iround(Int32, 2.1474836f9)
 @test       iround(Int32, 2.1474835f9) == 2147483520
 @test_throws InexactError iround(Int32, -2.147484f9)
 @test       iround(Int32, -2.1474836f9) == typemin(Int32)
-@test_throws InexactError iround(Uint32, 4.2949673f9)
-@test       iround(Uint32, 4.294967f9) == 0xffffff00
+@test_throws InexactError iround(UInt32, 4.2949673f9)
+@test       iround(UInt32, 4.294967f9) == 0xffffff00
 
 for n = 1:100
     m = 1
@@ -1346,7 +1350,7 @@ for n = 1:100
     @test n == m
 end
 
-@test iround(Uint,-0.0) == 0
+@test iround(UInt,-0.0) == 0
 @test iround(Int,-0.0) == 0
 
 @test iround(Int, 0.5) == 1
@@ -1354,20 +1358,20 @@ end
 @test iround(Int, -0.5) == -1
 @test iround(Int, nextfloat(-0.5)) == 0
 
-@test iround(Uint, 0.5) == 1
-@test iround(Uint, prevfloat(0.5)) == 0
-@test_throws InexactError iround(Uint, -0.5)
-@test iround(Uint, nextfloat(-0.5)) == 0
+@test iround(UInt, 0.5) == 1
+@test iround(UInt, prevfloat(0.5)) == 0
+@test_throws InexactError iround(UInt, -0.5)
+@test iround(UInt, nextfloat(-0.5)) == 0
 
 @test iround(Int, 0.5f0) == 1
 @test iround(Int, prevfloat(0.5f0)) == 0
 @test iround(Int, -0.5f0) == -1
 @test iround(Int, nextfloat(-0.5f0)) == 0
 
-@test iround(Uint, 0.5f0) == 1
-@test iround(Uint, prevfloat(0.5f0)) == 0
-@test_throws InexactError iround(Uint, -0.5f0)
-@test iround(Uint, nextfloat(-0.5f0)) == 0
+@test iround(UInt, 0.5f0) == 1
+@test iround(UInt, prevfloat(0.5f0)) == 0
+@test_throws InexactError iround(UInt, -0.5f0)
+@test iround(UInt, nextfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)
 @test iround(Int64, 2.0^52 + 1) == 4503599627370497
@@ -1376,25 +1380,25 @@ end
 # binary literals
 
 @test 0b1010101 == 0x55
-@test isa(0b00000000,Uint8)
-@test isa(0b000000000,Uint16)
-@test isa(0b0000000000000000,Uint16)
-@test isa(0b00000000000000000,Uint32)
-@test isa(0b00000000000000000000000000000000,Uint32)
-@test isa(0b000000000000000000000000000000000,Uint64)
-@test isa(0b0000000000000000000000000000000000000000000000000000000000000000,Uint64)
-@test isa(0b00000000000000000000000000000000000000000000000000000000000000000,Uint128)
-@test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,Uint128)
+@test isa(0b00000000,UInt8)
+@test isa(0b000000000,UInt16)
+@test isa(0b0000000000000000,UInt16)
+@test isa(0b00000000000000000,UInt32)
+@test isa(0b00000000000000000000000000000000,UInt32)
+@test isa(0b000000000000000000000000000000000,UInt64)
+@test isa(0b0000000000000000000000000000000000000000000000000000000000000000,UInt64)
+@test isa(0b00000000000000000000000000000000000000000000000000000000000000000,UInt128)
+@test isa(0b00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,UInt128)
 @test isa(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000,BigInt)
-@test isa(0b11111111,Uint8)
-@test isa(0b111111111,Uint16)
-@test isa(0b1111111111111111,Uint16)
-@test isa(0b11111111111111111,Uint32)
-@test isa(0b11111111111111111111111111111111,Uint32)
-@test isa(0b111111111111111111111111111111111,Uint64)
-@test isa(0b1111111111111111111111111111111111111111111111111111111111111111,Uint64)
-@test isa(0b11111111111111111111111111111111111111111111111111111111111111111,Uint128)
-@test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,Uint128)
+@test isa(0b11111111,UInt8)
+@test isa(0b111111111,UInt16)
+@test isa(0b1111111111111111,UInt16)
+@test isa(0b11111111111111111,UInt32)
+@test isa(0b11111111111111111111111111111111,UInt32)
+@test isa(0b111111111111111111111111111111111,UInt64)
+@test isa(0b1111111111111111111111111111111111111111111111111111111111111111,UInt64)
+@test isa(0b11111111111111111111111111111111111111111111111111111111111111111,UInt128)
+@test isa(0b11111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,UInt128)
 @test isa(0b111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111,BigInt)
 
 # octal literals
@@ -1403,52 +1407,52 @@ end
 @test 0o100 == 0x40
 @test 0o1000 == 0x200
 @test 0o724 == 0x1d4
-@test isa(0o377,Uint8)
-@test isa(0o00,Uint8)
-@test isa(0o000,Uint16)
-@test isa(0o00000,Uint16)
-@test isa(0o000000,Uint32)
-@test isa(0o0000000000,Uint32)
-@test isa(0o00000000000,Uint64)
-@test isa(0o000000000000000000000,Uint64)
-@test isa(0o0000000000000000000000,Uint128)
-@test isa(0o000000000000000000000000000000000000000000,Uint128)
+@test isa(0o377,UInt8)
+@test isa(0o00,UInt8)
+@test isa(0o000,UInt16)
+@test isa(0o00000,UInt16)
+@test isa(0o000000,UInt32)
+@test isa(0o0000000000,UInt32)
+@test isa(0o00000000000,UInt64)
+@test isa(0o000000000000000000000,UInt64)
+@test isa(0o0000000000000000000000,UInt128)
+@test isa(0o000000000000000000000000000000000000000000,UInt128)
 @test isa(0o0000000000000000000000000000000000000000000,BigInt)
-@test isa(0o11,Uint8)
-@test isa(0o111,Uint8)
-@test isa(0o11111,Uint16)
-@test isa(0o111111,Uint16)
-@test isa(0o1111111111,Uint32)
-@test isa(0o11111111111,Uint32)
-@test isa(0o111111111111111111111,Uint64)
-@test isa(0o1111111111111111111111,Uint64)
-@test isa(0o111111111111111111111111111111111111111111,Uint128)
-@test isa(0o1111111111111111111111111111111111111111111,Uint128)
+@test isa(0o11,UInt8)
+@test isa(0o111,UInt8)
+@test isa(0o11111,UInt16)
+@test isa(0o111111,UInt16)
+@test isa(0o1111111111,UInt32)
+@test isa(0o11111111111,UInt32)
+@test isa(0o111111111111111111111,UInt64)
+@test isa(0o1111111111111111111111,UInt64)
+@test isa(0o111111111111111111111111111111111111111111,UInt128)
+@test isa(0o1111111111111111111111111111111111111111111,UInt128)
 @test isa(0o11111111111111111111111111111111111111111111,BigInt)
 @test 0o4000000000000000000000000000000000000000000 ==
     340282366920938463463374607431768211456
 
 # hexadecimal literals
 
-@test isa(0x00,Uint8)
-@test isa(0x000,Uint16)
-@test isa(0x0000,Uint16)
-@test isa(0x00000,Uint32)
-@test isa(0x00000000,Uint32)
-@test isa(0x000000000,Uint64)
-@test isa(0x0000000000000000,Uint64)
-@test isa(0x00000000000000000,Uint128)
-@test isa(0x00000000000000000000000000000000,Uint128)
+@test isa(0x00,UInt8)
+@test isa(0x000,UInt16)
+@test isa(0x0000,UInt16)
+@test isa(0x00000,UInt32)
+@test isa(0x00000000,UInt32)
+@test isa(0x000000000,UInt64)
+@test isa(0x0000000000000000,UInt64)
+@test isa(0x00000000000000000,UInt128)
+@test isa(0x00000000000000000000000000000000,UInt128)
 @test isa(0x000000000000000000000000000000000,BigInt)
-@test isa(0x11,Uint8)
-@test isa(0x111,Uint16)
-@test isa(0x1111,Uint16)
-@test isa(0x11111,Uint32)
-@test isa(0x11111111,Uint32)
-@test isa(0x111111111,Uint64)
-@test isa(0x1111111111111111,Uint64)
-@test isa(0x11111111111111111,Uint128)
-@test isa(0x11111111111111111111111111111111,Uint128)
+@test isa(0x11,UInt8)
+@test isa(0x111,UInt16)
+@test isa(0x1111,UInt16)
+@test isa(0x11111,UInt32)
+@test isa(0x11111111,UInt32)
+@test isa(0x111111111,UInt64)
+@test isa(0x1111111111111111,UInt64)
+@test isa(0x11111111111111111,UInt128)
+@test isa(0x11111111111111111111111111111111,UInt128)
 @test isa(0x111111111111111111111111111111111,BigInt)
 
 # "-" is not part of unsigned literals
@@ -1468,10 +1472,10 @@ end
 @test -0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001 ==
     -(0b000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001)
 
-@test isa(-0x00,Uint8)
-@test isa(-0x0000000000000000,Uint64)
-@test isa(-0x00000000000000000,Uint128)
-@test isa(-0x00000000000000000000000000000000,Uint128)
+@test isa(-0x00,UInt8)
+@test isa(-0x0000000000000000,UInt64)
+@test isa(-0x00000000000000000,UInt128)
+@test isa(-0x00000000000000000000000000000000,UInt128)
 @test isa(-0x000000000000000000000000000000000,BigInt)
 
 # float32 literals
@@ -1591,7 +1595,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int16, 0.2264705884044309) == 77//340
 @test rationalize(Int16, 0.39999899264235683) == 2//5
 @test rationalize(Int16, 1.1264233500618559e-5) == 0//1
-@test rationalize(Uint16, 0.6666652791223875) == 2//3
+@test rationalize(UInt16, 0.6666652791223875) == 2//3
 @test rationalize(Int8, 0.9374813124660655) == 15//16
 @test rationalize(Int8, 0.003803032342443835) == 0//1
 
@@ -1804,7 +1808,7 @@ end
 @test !isprime(0xffffffffffffffc9)
 
 # issue #5210
-@test prod([ k^v for (k,v) in factor(typemax(Uint32)) ]) == typemax(Uint32)
+@test prod([ k^v for (k,v) in factor(typemax(UInt32)) ]) == typemax(UInt32)
 @test prod([ k^v for (k,v) in factor(typemax(Int8)) ]) == typemax(Int8)
 
 # rational-exponent promotion rules (issue #3155):
@@ -1929,7 +1933,7 @@ end
 
 # modular multiplicative inverses of odd numbers via exponentiation
 
-for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128)
+for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128)
     for n = 1:2:1000
         @test n*(n^typemax(T)) & typemax(T) == 1
         n = rand(T) | one(T)
@@ -1978,8 +1982,8 @@ end
 # issue #7441
 @test_throws InexactError int32(2.0^50)
 
-@test_throws InexactError iround(Uint8, 255.5)
-@test iround(Uint8, 255.4) === 0xff
+@test_throws InexactError iround(UInt8, 255.5)
+@test iround(UInt8, 255.4) === 0xff
 
 @test_throws InexactError iround(Int16, -32768.7)
 @test iround(Int16, -32768.1) === int16(-32768)
@@ -2021,8 +2025,8 @@ let a = zeros(Int,(2,4))
     @test a == [0 1 0 1;
                 0 0 1 1]
 end
-@test_throws InexactError convert(Uint8, 256)
-@test_throws InexactError convert(Uint, -1)
+@test_throws InexactError convert(UInt8, 256)
+@test_throws InexactError convert(UInt, -1)
 @test_throws InexactError convert(Int, big(2)^100)
 @test_throws InexactError convert(Int16, big(2)^100)
-@test_throws InexactError convert(Int, typemax(Uint))
+@test_throws InexactError convert(Int, typemax(UInt))

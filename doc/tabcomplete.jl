@@ -10,7 +10,7 @@ include("../base/latex_symbols.jl")
 #Sometimes there is more than one way...
 latexvals = Dict()
 for (key, val) in latex_symbols
-    latexvals[val] = push!(get(latexvals, val, String[]), "\\"*key)
+    latexvals[val] = push!(get(latexvals, val, AbstractString[]), "\\"*key)
 end
 
 #Join with Unicode names to aid in lookup
@@ -62,7 +62,7 @@ for entry in entries
         print(rpad(col, maxlen[i], " "), " ")
     end
     println()
-    if isheader 
+    if isheader
         println(underline("-", maxlen))
         isheader = false
     end

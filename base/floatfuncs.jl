@@ -24,11 +24,11 @@ maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
-num2hex(x::Float16) = hex(reinterpret(Uint16,x), 4)
-num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
-num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
+num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
+num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
+num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
-function hex2num(s::String)
+function hex2num(s::AbstractString)
     if length(s) <= 8
         return box(Float32,unbox(Int32,parseint(Int32,s,16)))
     end

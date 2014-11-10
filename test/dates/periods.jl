@@ -36,15 +36,15 @@ ms = Dates.Millisecond(1)
 @test Dates.Second(s) == s
 @test Dates.Millisecond(ms) == ms
 @test typeof(int8(y)) <: Int8
-@test typeof(uint8(y)) <: Uint8
+@test typeof(uint8(y)) <: UInt8
 @test typeof(int16(y)) <: Int16
-@test typeof(uint16(y)) <: Uint16
+@test typeof(uint16(y)) <: UInt16
 @test typeof(int32(y)) <: Int32
-@test typeof(uint32(y)) <: Uint32
+@test typeof(uint32(y)) <: UInt32
 @test typeof(int64(y)) <: Int64
-@test typeof(uint64(y)) <: Uint64
+@test typeof(uint64(y)) <: UInt64
 @test typeof(int128(y)) <: Int128
-@test typeof(uint128(y)) <: Uint128
+@test typeof(uint128(y)) <: UInt128
 @test typeof(convert(BigInt,y)) <: BigInt
 @test typeof(convert(BigFloat,y)) <: BigFloat
 @test typeof(convert(Complex,y)) <: Complex
@@ -53,15 +53,15 @@ ms = Dates.Millisecond(1)
 @test typeof(float32(y)) <: Float32
 @test typeof(float64(y)) <: Float64
 @test Dates.Year(convert(Int8,1)) == y
-@test Dates.Year(convert(Uint8,1)) == y
+@test Dates.Year(convert(UInt8,1)) == y
 @test Dates.Year(convert(Int16,1)) == y
-@test Dates.Year(convert(Uint16,1)) == y
+@test Dates.Year(convert(UInt16,1)) == y
 @test Dates.Year(convert(Int32,1)) == y
-@test Dates.Year(convert(Uint32,1)) == y
+@test Dates.Year(convert(UInt32,1)) == y
 @test Dates.Year(convert(Int64,1)) == y
-@test Dates.Year(convert(Uint64,1)) == y
+@test Dates.Year(convert(UInt64,1)) == y
 @test Dates.Year(convert(Int128,1)) == y
-@test Dates.Year(convert(Uint128,1)) == y
+@test Dates.Year(convert(UInt128,1)) == y
 @test Dates.Year(convert(BigInt,1)) == y
 @test Dates.Year(convert(BigFloat,1)) == y
 @test Dates.Year(convert(Complex,1)) == y
@@ -114,7 +114,6 @@ y2 = Dates.Year(2)
 @test_throws InexactError Dates.Year(float16(1.2)) == y
 @test Dates.Year(true) == y
 @test Dates.Year(false) != y
-@test Dates.Year('\x01') == y
 @test_throws MethodError Dates.Year(:hey) == y
 @test Dates.Year(real(1)) == y
 @test_throws ArgumentError Dates.Year(m) == y
@@ -144,8 +143,6 @@ y2 = Dates.Year(2)
 @test 1 + y == Dates.Year(2)
 @test y + true == Dates.Year(2)
 @test true + y == Dates.Year(2)
-@test y + '\x01' == Dates.Year(2)
-@test '\x01' + y == Dates.Year(2)
 @test y + 1.0 == Dates.Year(2)
 @test_throws InexactError y + 1.2
 @test y + 1f0 == Dates.Year(2)

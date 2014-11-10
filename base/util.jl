@@ -4,16 +4,13 @@
 time() = ccall(:clock_now, Float64, ())
 
 # high-resolution relative time, in nanoseconds
-time_ns() = ccall(:jl_hrtime, Uint64, ())
+time_ns() = ccall(:jl_hrtime, UInt64, ())
 
 # total time spend in garbage collection, in nanoseconds
-gc_time_ns() = ccall(:jl_gc_total_hrtime, Uint64, ())
+gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
-
-# reset the malloc log. Used to avoid counting memory allocated during compilation.
-clear_malloc_data() = ccall(:jl_clear_malloc_data, Void, ())
 
 function tic()
     t0 = time_ns()
@@ -27,7 +24,7 @@ function toq()
     if is(timers,())
         error("toc() without tic()")
     end
-    t0 = timers[1]::Uint64
+    t0 = timers[1]::UInt64
     task_local_storage(:TIMERS, timers[2])
     (t1-t0)/1e9
 end
@@ -120,10 +117,10 @@ end
 
 if blas_vendor() == :openblas64
     blasfunc(x) = string(x)*"64_"
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{Uint8}, () )))
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{UInt8}, () )))
 else
     blasfunc(x) = string(x)
-    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
+    openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{UInt8}, () )))
 end
 
 function blas_set_num_threads(n::Integer)
@@ -204,27 +201,27 @@ function with_output_color(f::Function, color::Symbol, io::IO, args...)
     end
 end
 
-print_with_color(color::Symbol, io::IO, msg::String...) =
+print_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(print, color, io, msg...)
-print_with_color(color::Symbol, msg::String...) =
+print_with_color(color::Symbol, msg::AbstractString...) =
     print_with_color(color, STDOUT, msg...)
-println_with_color(color::Symbol, io::IO, msg::String...) =
+println_with_color(color::Symbol, io::IO, msg::AbstractString...) =
     with_output_color(println, color, io, msg...)
-println_with_color(color::Symbol, msg::String...) =
+println_with_color(color::Symbol, msg::AbstractString...) =
     println_with_color(color, STDOUT, msg...)
 
 ## warnings and messages ##
 
-function info(msg::String...; prefix="INFO: ")
+function info(msg::AbstractString...; prefix="INFO: ")
     println_with_color(:blue, STDERR, prefix, chomp(string(msg...)))
 end
 
 # print a warning only once
 
 const have_warned = Set()
-warn_once(msg::String...) = warn(msg..., once=true)
+warn_once(msg::AbstractString...) = warn(msg..., once=true)
 
-function warn(msg::String...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+function warn(msg::AbstractString...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
     str = chomp(bytestring(msg...))
     if once
         if key === nothing

@@ -32,15 +32,15 @@ handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
--  ``String`` is an abstraction, not a concrete type — many different
-   representations can implement the ``String`` interface, but they can
+-  ``AbstractString`` is an abstraction, not a concrete type — many different
+   representations can implement the ``AbstractString`` interface, but they can
    easily be used together and interact transparently. Any string type
-   can be used in any function expecting a ``String``.
+   can be used in any function expecting a ``AbstractString``.
 -  Like C and Java, but unlike most dynamic languages, Julia has a
    first-class type representing a single character, called ``Char``.
-   This is just a special kind of 32-bit integer whose numeric value
+   This is just a special kind of 32-bit bitstype whose numeric value
    represents a Unicode code point.
--  As in Java, strings are immutable: the value of a ``String`` object
+-  As in Java, strings are immutable: the value of a ``AbstractString`` object
    cannot be changed. To construct a different string value, you
    construct a new string from parts of other strings.
 -  Conceptually, a string is a *partial function* from indices to
@@ -62,7 +62,7 @@ Characters
 ----------
 
 A ``Char`` value represents a single character: it is just a 32-bit
-integer with a special literal representation and appropriate arithmetic
+bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
 point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
 values are input and shown:
@@ -181,10 +181,10 @@ You can do comparisons and a limited amount of arithmetic with
     julia> 'A' + 1
     'B'
 
-String Basics
+AbstractString Basics
 -------------
 
-String literals are delimited by double quotes or triple double quotes:
+AbstractString literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
@@ -407,10 +407,10 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call the generic ``string``
-function to convert objects into ``String`` form. Most non-``String``
-objects are converted to strings as they are shown in interactive
-sessions:
+Both concatenation and string interpolation call the generic
+``string`` function to convert objects into string form. Most
+non-``AbstractString`` objects are converted to strings closely
+corresponding to how they are entered as literal expressions:
 
 .. doctest::
 
@@ -423,7 +423,7 @@ sessions:
     julia> "v: $v"
     "v: [1,2,3]"
 
-The ``string`` function is the identity for ``String`` and ``Char``
+The ``string`` function is the identity for ``AbstractString`` and ``Char``
 values, so these are interpolated into strings as themselves, unquoted
 and unescaped:
 
@@ -516,7 +516,7 @@ Some other useful functions include:
 
 .. _man-non-standard-string-literals:
 
-Non-Standard String Literals
+Non-Standard AbstractString Literals
 ----------------------------
 
 There are situations when you want to construct a string or use string
@@ -727,7 +727,7 @@ Byte Array Literals
 
 Another useful non-standard string literal is the byte-array string
 literal: ``b"..."``. This form lets you use string notation to express
-literal byte arrays — i.e. arrays of ``Uint8`` values. The convention is
+literal byte arrays — i.e. arrays of ``UInt8`` values. The convention is
 that non-standard literals with uppercase prefixes produce actual string
 objects, while those with lowercase prefixes produce non-string objects
 like byte arrays or compiled regular expressions. The rules for byte
@@ -749,7 +749,7 @@ three:
 .. doctest::
 
     julia> b"DATA\xff\u2200"
-    8-element Array{Uint8,1}:
+    8-element Array{UInt8,1}:
      0x44
      0x41
      0x54
@@ -779,11 +779,11 @@ bytes in UTF-8:
 .. doctest::
 
     julia> b"\xff"
-    1-element Array{Uint8,1}:
+    1-element Array{UInt8,1}:
      0xff
 
     julia> b"\uff"
-    2-element Array{Uint8,1}:
+    2-element Array{UInt8,1}:
      0xc3
      0xbf
 

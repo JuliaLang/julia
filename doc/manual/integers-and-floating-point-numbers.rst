@@ -30,22 +30,17 @@ The following are Julia's primitive numeric types:
 Type         Signed?  Number of bits  Smallest value Largest value
 -----------  -------  --------------  -------------- ------------------
 ``Int8``           ✓       8            -2^7             2^7 - 1
-``Uint8``                  8             0               2^8 - 1
+``UInt8``                  8             0               2^8 - 1
 ``Int16``          ✓       16           -2^15            2^15 - 1
-``Uint16``                 16            0               2^16 - 1
+``UInt16``                 16            0               2^16 - 1
 ``Int32``          ✓       32           -2^31            2^31 - 1
-``Uint32``                 32            0               2^32 - 1
+``UInt32``                 32            0               2^32 - 1
 ``Int64``          ✓       64           -2^63            2^63 - 1
-``Uint64``                 64            0               2^64 - 1
+``UInt64``                 64            0               2^64 - 1
 ``Int128``         ✓       128           -2^127          2^127 - 1
-``Uint128``                128           0               2^128 - 1
+``UInt128``                128           0               2^128 - 1
 ``Bool``         N/A       8           ``false`` (0)  ``true`` (1)
-``Char``         N/A       32          ``'\0'``       ``'\Uffffffff'``
 ===========  =======  ==============  ============== ==================
-
-``Char`` natively supports representation of
-`Unicode characters <http://en.wikipedia.org/wiki/Unicode>`_; see
-:ref:`man-strings` for more details.
 
 -  **Floating-point types:**
 
@@ -101,21 +96,21 @@ is 32-bit or 64-bit.::
     julia> WORD_SIZE
     64
  
-Julia also defines the types ``Int`` and ``Uint``, which are aliases for the
+Julia also defines the types ``Int`` and ``UInt``, which are aliases for the
 system's signed and unsigned native integer types respectively.::
 
     # 32-bit system:
     julia> Int
     Int32
-    julia> Uint
-    Uint32
+    julia> UInt
+    UInt32
 
 
     # 64-bit system:
     julia> Int
     Int64
-    julia> Uint
-    Uint64
+    julia> UInt
+    UInt64
 
 Larger integer literals that cannot be represented using only 32 bits
 but can be represented in 64 bits always create 64-bit integers,
@@ -135,25 +130,25 @@ The size of the unsigned value is determined by the number of hex digits used:
     0x01
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> 0x123
     0x0123
 
     julia> typeof(ans)
-    Uint16
+    UInt16
 
     julia> 0x1234567
     0x01234567
 
     julia> typeof(ans)
-    Uint32
+    UInt32
 
     julia> 0x123456789abcdef
     0x0123456789abcdef
 
     julia> typeof(ans)
-    Uint64
+    UInt64
 
 This behavior is based on the observation that when one uses unsigned
 hex literals for integer values, one typically is using them to
@@ -172,13 +167,13 @@ Binary and octal literals are also supported:
     0x02
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> 0o10
     0x08
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
 The minimum and maximum representable values of primitive numeric types
 such as integers are given by the ``typemin`` and ``typemax`` functions:
@@ -188,7 +183,7 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
     julia> (typemin(Int32), typemax(Int32))
     (-2147483648,2147483647)
 
-    julia> for T in [Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128]
+    julia> for T in [Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128]
              println("$(lpad(T,7)): [$(typemin(T)),$(typemax(T))]")
            end
        Int8: [-128,127]
@@ -196,11 +191,11 @@ such as integers are given by the ``typemin`` and ``typemax`` functions:
       Int32: [-2147483648,2147483647]
       Int64: [-9223372036854775808,9223372036854775807]
      Int128: [-170141183460469231731687303715884105728,170141183460469231731687303715884105727]
-      Uint8: [0,255]
-     Uint16: [0,65535]
-     Uint32: [0,4294967295]
-     Uint64: [0,18446744073709551615]
-    Uint128: [0,340282366920938463463374607431768211455]
+      UInt8: [0,255]
+     UInt16: [0,65535]
+     UInt32: [0,4294967295]
+     UInt64: [0,18446744073709551615]
+    UInt128: [0,340282366920938463463374607431768211455]
 
 The values returned by ``typemin`` and ``typemax`` are always of the
 given argument type. (The above expression uses several features we have
@@ -236,7 +231,7 @@ in :ref:`man-arbitrary-precision-arithmetic` is recommended instead.
 
 To minimize the practical impact of this overflow, integer addition,
 subtraction, multiplication, and exponentiation operands are promoted
-to ``Int`` or ``Uint`` from narrower integer types.  (However,
+to ``Int`` or ``UInt`` from narrower integer types.  (However,
 divisions, remainders, and bitwise operations do not promote narrower
 types.)
 
@@ -568,7 +563,7 @@ Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib
 The `BigInt` and `BigFloat` types are available in Julia for arbitrary precision 
 integer and floating point numbers respectively. 
 
-Constructors exist to create these types from primitive numerical types, or from ``String``. 
+Constructors exist to create these types from primitive numerical types, or from ``AbstractString``. 
 Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
 :ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
 

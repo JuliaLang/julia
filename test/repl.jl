@@ -161,7 +161,7 @@ begin
     LineEdit.accept_result(s, histp)
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
-    
+
     # Issue #7551
     # Enter search mode and try accepting an empty result
     REPL.history_reset_state(hp)
@@ -190,7 +190,7 @@ rc != 0 && error("grantpt failed")
 rc = ccall(:unlockpt,Cint,(Cint,),fdm)
 rc != 0 && error("unlockpt")
 
-fds = ccall(:open,Cint,(Ptr{Uint8},Cint),ccall(:ptsname,Ptr{Uint8},(Cint,),fdm), O_RDWR|O_NOCTTY)
+fds = ccall(:open,Cint,(Ptr{UInt8},Cint),ccall(:ptsname,Ptr{UInt8},(Cint,),fdm), O_RDWR|O_NOCTTY)
 
 # slave
 slave   = RawFD(fds)

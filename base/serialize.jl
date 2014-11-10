@@ -12,8 +12,8 @@ const deser_tag = ObjectIdDict()
 let i = 2
     global ser_tag, deser_tag
     for t = Any[
-             Symbol, Int8, Uint8, Int16, Uint16, Int32, Uint32,
-             Int64, Uint64, Int128, Uint128, Float32, Float64, Char, Ptr,
+             Symbol, Int8, UInt8, Int16, UInt16, Int32, UInt32,
+             Int64, UInt64, Int128, UInt128, Float32, Float64, Char, Ptr,
              DataType, UnionType, Function,
              Tuple, Array, Expr, LongSymbol, LongTuple, LongExpr,
              LineNumberNode, SymbolNode, LabelNode, GotoNode,
@@ -21,7 +21,7 @@ let i = 2
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
              UTF16String, UTF32String, Float16,
              :reserved9, :reserved10, :reserved11, :reserved12,
-             
+
              (), Bool, Any, :Any, Bottom, Top, Undef, Type,
              :Array, :TypeVar, :Box,
              :lambda, :body, :return, :call, symbol("::"),
@@ -84,8 +84,8 @@ function serialize(s, x::Symbol)
     if haskey(ser_tag, x)
         return write_as_tag(s, x)
     end
-    pname = convert(Ptr{Uint8}, x)
-    ln = int(ccall(:strlen, Csize_t, (Ptr{Uint8},), pname))
+    pname = convert(Ptr{UInt8}, x)
+    ln = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
     if ln <= 255
         writetag(s, Symbol)
         write(s, uint8(ln))
@@ -119,7 +119,7 @@ end
 function serialize(s, a::Array)
     writetag(s, Array)
     elty = eltype(a)
-    if elty !== Uint8
+    if elty !== UInt8
         serialize(s, elty)
     end
     if ndims(a) != 1
@@ -332,18 +332,18 @@ end
 ## deserializing values ##
 
 function deserialize(s)
-    handle_deserialize(s, int32(read(s, Uint8)))
+    handle_deserialize(s, int32(read(s, UInt8)))
 end
 
 function handle_deserialize(s, b)
     if b == 0
-        return deser_tag[int32(read(s, Uint8))]
+        return deser_tag[int32(read(s, UInt8))]
     end
     tag = deser_tag[b]
     if b >= VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
-        len = int32(read(s, Uint8))
+        len = int32(read(s, UInt8))
         return deserialize_tuple(s, len)
     elseif is(tag,LongTuple)
         len = read(s, Int32)
@@ -354,8 +354,8 @@ end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, Uint8, int32(read(s, Uint8))))
-deserialize(s, ::Type{LongSymbol}) = symbol(read(s, Uint8, read(s, Int32)))
+deserialize(s, ::Type{Symbol}) = symbol(read(s, UInt8, int32(read(s, UInt8))))
+deserialize(s, ::Type{LongSymbol}) = symbol(read(s, UInt8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})
     path = deserialize(s)
@@ -384,7 +384,7 @@ end
 const known_lambda_data = Dict()
 
 function deserialize(s, ::Type{Function})
-    b = read(s, Uint8)
+    b = read(s, UInt8)
     if b==0
         name = deserialize(s)::Symbol
         if !isdefined(Base,name)
@@ -437,7 +437,7 @@ function deserialize(s, ::Type{Array})
         elty = d1
         d1 = deserialize(s)
     else
-        elty = Uint8
+        elty = UInt8
     end
     if isa(d1,Integer)
         if elty !== Bool && isbits(elty)
@@ -453,7 +453,7 @@ function deserialize(s, ::Type{Array})
             A = Array(Bool, dims)
             i = 1
             while i <= n
-                b = read(s, Uint8)
+                b = read(s, UInt8)
                 v = bool(b>>7)
                 count = b&0x7f
                 nxt = i+count
@@ -468,7 +468,7 @@ function deserialize(s, ::Type{Array})
     end
     A = Array(elty, dims)
     for i = 1:length(A)
-        tag = int32(read(s, Uint8))
+        tag = int32(read(s, UInt8))
         if tag==0 || !is(deser_tag[tag], UndefRefTag)
             A[i] = handle_deserialize(s, tag)
         end
@@ -476,7 +476,7 @@ function deserialize(s, ::Type{Array})
     return A
 end
 
-deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, Uint8)))
+deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, UInt8)))
 deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
 
 function deserialize_expr(s, len)
@@ -494,7 +494,7 @@ function deserialize(s, ::Type{UnionType})
 end
 
 function deserialize(s, ::Type{DataType})
-    form = read(s, Uint8)
+    form = read(s, UInt8)
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
     ty = eval(mod,name)
@@ -548,13 +548,13 @@ function deserialize(s, t::DataType)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
             flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},Uint32),
+            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32),
                          t, flds, nf)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         for i in 1:length(t.names)
-            tag = int32(read(s, Uint8))
+            tag = int32(read(s, UInt8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
                 setfield!(x, i, handle_deserialize(s, tag))
             end

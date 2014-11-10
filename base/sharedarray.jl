@@ -5,7 +5,7 @@ type SharedArray{T,N} <: DenseArray{T,N}
 
     # The segname is currently used only in the test scripts to ensure that
     # the shmem segment has been unlinked.
-    segname::String
+    segname::AbstractString
 
     # Fields below are not to be serialized
     # Local shmem map.
@@ -31,12 +31,16 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     if isempty(pids)
         # only use workers on the current host
         pids = procs(myid())
+        if length(pids) > 1
+            pids = filter(x -> x != 1, pids)
+        end
+
         onlocalhost = true
     else
-        if !check_same_host(pids) 
+        if !check_same_host(pids)
             error("SharedArray requires all requested processes to be on the same machine.")
         end
-    
+
         onlocalhost = myid() in procs(pids[1])
     end
 
@@ -133,7 +137,7 @@ indexpids(S::SharedArray) = S.pidx
 sdata(S::SharedArray) = S.s
 sdata(A::AbstractArray) = A
 
-localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : error("SharedArray is not mapped to this process")
+localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
 convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
 
@@ -169,13 +173,14 @@ end
 
 sub_1dim(S::SharedArray, pidx) = sub(S.s, range_1dim(S, pidx))
 
-function init_loc_flds(S)
+function init_loc_flds{T}(S::SharedArray{T})
     if myid() in S.pids
         S.pidx = findfirst(S.pids, myid())
         S.s = fetch(S.refs[S.pidx])
         S.loc_subarr_1d = sub_1dim(S, S.pidx)
     else
         S.pidx = 0
+        S.loc_subarr_1d = Array(T, 0)
     end
 end
 
@@ -196,9 +201,6 @@ end
 function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
     S = invoke(deserialize, (Any, DataType), s, t)
     init_loc_flds(S)
-    if (S.pidx == 0)
-        error("SharedArray cannot be used on a non-participating process")
-    end
     S
 end
 
@@ -339,7 +341,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     if prod(dims) == 0
         return Array(T, dims)
     end
-    
+
     try
         fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
         systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
@@ -368,12 +370,12 @@ end
 
 @unix_only begin
 function shm_unlink(shm_seg_name)
-    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+    rc = ccall(:shm_unlink, Cint, (Ptr{UInt8},), shm_seg_name)
     systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
     rc
 end
 end
 
-@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
+@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{UInt8}, Int, Int), shm_seg_name, oflags, permissions)
 
 
