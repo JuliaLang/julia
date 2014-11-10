@@ -585,7 +585,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
 jl_datatype_t *jl_new_abstracttype(jl_value_t *name, jl_datatype_t *super,
                                    jl_tuple_t *parameters)
 {
-    jl_datatype_t *dt = jl_new_datatype((jl_sym_t*)name, super, parameters, jl_null, jl_null, 1, 0);
+    jl_datatype_t *dt = jl_new_datatype((jl_sym_t*)name, super, parameters, jl_null, jl_null, 1, 0, 0);
     dt->pointerfree = 0;
     return dt;
 }
@@ -638,7 +638,7 @@ extern int jl_boot_file_loaded;
 jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters,
                                jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                               int abstract, int mutabl)
+                               int abstract, int mutabl, int ninitialized)
 {
     jl_datatype_t *t=NULL;
     jl_typename_t *tn=NULL;
@@ -667,6 +667,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->abstract = abstract;
     t->mutabl = mutabl;
     t->pointerfree = 0;
+    t->ninitialized = ninitialized;
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
@@ -700,7 +701,7 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                jl_tuple_t *parameters, size_t nbits)
 {
     jl_datatype_t *bt = jl_new_datatype((jl_sym_t*)name, super, parameters,
-                                        jl_null, jl_null, 0, 0);
+                                        jl_null, jl_null, 0, 0, 0);
     bt->size = nbits/8;
     bt->alignment = bt->size;
     if (bt->alignment > MAX_ALIGN)

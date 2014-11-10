@@ -872,7 +872,7 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_any_type, jl_sym_type,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type, jl_function_type),
-                                   0, 1);
+                                   0, 1, 0);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
 
     done_sym = jl_symbol("done");

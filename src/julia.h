@@ -214,6 +214,7 @@ typedef struct _jl_datatype_t {
     uint8_t mutabl;
     uint8_t pointerfree;
     // hidden fields:
+    int32_t ninitialized;
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
@@ -629,7 +630,7 @@ DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
 DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                          jl_tuple_t *parameters,
                                          jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                                         int abstract, int mutabl);
+                                         int abstract, int mutabl, int ninitialized);
 DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                          jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
