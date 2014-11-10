@@ -73,3 +73,58 @@ end
 TupleName = TypeName(:Tuple, AnyT)
 TupleT = TagT(TupleName, (AnyT,), true)
 
+# subtype
+
+isequal_type(x::Ty, y::Ty) = issub(x, y, Dict(), true)
+issub(x::Ty, y::Ty) = issub(x, y, Dict(), false)
+
+function union_issub(x, t::UnionT, env, invariant)
+    for tt in t.types
+        e′ = copy(env)
+        if issub(x, tt, e′, false)
+            merge!(env, e′)
+            if invariant
+                return issub(t, x, env, false)
+            end
+            return true
+        end
+    end
+    return false
+end
+
+issub(x::Ty, t::UnionT, env, invariant) = union_issub(x, t, env, invariant)
+issub(x::UnionT, t::UnionT, env, invariant) = union_issub(x, t, env, invariant)
+
+function issub(x::UnionT, t::Ty, env, invariant)
+    for tt in x.types
+        if !issub(tt, t, env, false)
+            return false
+        end
+    end
+    if invariant
+        return issub(t, x, env, false)
+    end
+    return true
+end
+
+function issub(a::TagT, b::TagT, env, invariant)
+    a === b && return true
+    if !invariant
+        b === AnyT && return true
+        a === AnyT && return false
+    end
+    if a.name !== b.name
+        invariant && return false
+        return issub(super(a), b, env, false)
+    end
+    if a.name === TupleName
+        # TODO
+    else
+        for i = 1:length(a.params)
+            if !issub(a.params[i], b.params[i], env, true)
+                return false
+            end
+        end
+    end
+    return true
+end
