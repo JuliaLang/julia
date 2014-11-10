@@ -2030,3 +2030,7 @@ end
 @test_throws InexactError convert(Int, big(2)^100)
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
+
+let x = big(-0.0)
+    @test signbit(x) && !signbit(abs(x))
+end
