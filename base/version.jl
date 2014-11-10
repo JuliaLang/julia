@@ -229,8 +229,8 @@ function banner(io::IO = STDOUT)
         d3 = "\033[32m" # third dot
         d4 = "\033[35m" # fourth dot
 
-        print(io,"""\033[1m               $(d3)_
-           $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
+        print(io,"""\033[1m               $(d3)_$(tx)
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
