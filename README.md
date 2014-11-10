@@ -38,9 +38,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat split(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `split` function
 
+* `@compat rsplit(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `rsplit` function
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
+
+* For all unsigned integer types to their equivalents with uppercase `I`. [#8907](https://github.com/JuliaLang/julia/pull/8907)
 
 ## Renamed functions
 
