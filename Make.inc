@@ -655,7 +655,7 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
-JLDFLAGS = -Wl,-Bdynamic
+JLDFLAGS = -Wl,-Bdynamic -Wl,-Bsymbolic-functions
 endif
 
 ifeq ($(OS), FreeBSD)
