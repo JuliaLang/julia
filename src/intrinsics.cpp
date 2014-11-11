@@ -1028,6 +1028,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(bytevec_ref,2) {
         Value *b = JL_INT(x);
         Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
+        int check_bounds =
+#if CHECK_BOUNDS==1
+            ((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
+             jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
+              jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON;
+#else
+            0;
+#endif
         BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
         BasicBlock *check = BasicBlock::Create(getGlobalContext(), "check", ctx->f);
         BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
@@ -1044,7 +1052,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *is_here = builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0));
         builder.CreateCondBr(
             builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
-            here, check
+            here, check_bounds ? check : there
         );
 
         // decode here byte (known to be in-bounds)
@@ -1053,13 +1061,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.CreateBr(cont);
 
         // check bounds (here & there)
-        builder.SetInsertPoint(check);
-        Value *hi_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 1));
-        Value *there_len = builder.CreateSub(ConstantInt::get(T_size, 0), hi_word);
-        builder.CreateCondBr(
-            builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
-            there, oob
-        );
+        if (check_bounds) {
+            builder.SetInsertPoint(check);
+            Value *hi_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 1));
+            Value *there_len = builder.CreateSub(ConstantInt::get(T_size, 0), hi_word);
+            builder.CreateCondBr(
+                builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
+                there, oob
+            );
+        }
 
         // decode there byte (known to be in-bounds)
         builder.SetInsertPoint(there);
@@ -1070,13 +1080,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.CreateBr(cont);
 
         // raise out-of-bounds error
-        builder.SetInsertPoint(oob);
-        builder.CreateCall2(
-            prepare_call(jlthrow_line_func),
-            tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
-            ConstantInt::get(T_int32, ctx->lineno)
-        );
-        builder.CreateUnreachable();
+        if (check_bounds) {
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
+        }
 
         // merge branches
         builder.SetInsertPoint(cont);
