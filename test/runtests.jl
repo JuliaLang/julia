@@ -1,7 +1,8 @@
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings", "dates",
-    "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
+    "collections", "hashing", "remote", "iobuffer", "staged", "arrayops",
+    "reduce", "reducedim",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
@@ -9,7 +10,7 @@ testnames = [
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
-    "llvmcall", "grisu", "nullable", "meta", "staged", "profile",
+    "llvmcall", "grisu", "nullable", "meta", "profile",
     "libgit2"
 ]
 

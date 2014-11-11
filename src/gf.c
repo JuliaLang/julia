@@ -469,7 +469,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
-                                   jl_tuple_t *sparams, int isstaged)
+                                   jl_tuple_t *sparams)
 {
     size_t i;
     int need_guard_entries = 0;
@@ -724,7 +724,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!isstaged && jl_tuple_len(type) > mt->max_args &&
+    if (!mt->defs->isstaged && jl_tuple_len(type) > mt->max_args &&
         jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
         size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
@@ -1031,7 +1031,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
             JL_GC_POP();
             if (!cache)
                 return func;
-            return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null, m->isstaged);
+            return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null);
         }
         JL_GC_POP();
         return jl_bottom_func;
@@ -1061,7 +1061,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     if (!cache)
         nf = func;
     else
-        nf = cache_method(mt, tt, func, newsig, env, 0);
+        nf = cache_method(mt, tt, func, newsig, env);
     JL_GC_POP();
     return nf;
 }
@@ -1735,7 +1735,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                                                           jl_tuple_len(tpenv)/2);
             }
         }
-        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv, 0);
+        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv);
         JL_GC_POP();
     }
 
