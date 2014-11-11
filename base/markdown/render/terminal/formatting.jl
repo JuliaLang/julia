@@ -28,6 +28,9 @@ end
 with_output_format(f::Function, format::Symbol, args...) =
   with_output_format(f, [format], args...)
 
+with_output_format(format, f::Function, args...) =
+  with_output_format(f, format, args...)
+
 function print_with_format(format, io::IO, x)
   with_output_format(format, io) do io
     print(io, x)
