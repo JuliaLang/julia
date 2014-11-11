@@ -1169,7 +1169,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         end
     end
 end
-## Expert driver and generalized eigenvlua problem
+## Expert driver and generalized eigenvalue problem
 for (geevx, ggev, elty) in
     ((:dgeevx_,:dggev_,:Float64),
      (:sgeevx_,:sggev_,:Float32))
