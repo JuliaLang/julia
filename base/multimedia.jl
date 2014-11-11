@@ -1,7 +1,7 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istext,
+   MIME, @MIME_str, writemime, reprmime, stringmime, istext,
    mimewritable, TextDisplay
 
 ###########################################################################
@@ -34,16 +34,6 @@ next(t::MIME, i) = done(t.params, i)
 length(t::MIME) = length(t.params)
 
 MIME(s; kws...) = MIME{symbol(s)}(; kws...)
-
-# needs to be a macro so that we can use ::@mime(s) in type declarations
-macro MIME(s)
-    Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
-    if isa(s,AbstractString)
-        :(MIME{$(Expr(:quote, symbol(s)))})
-    else
-        :(MIME{symbol($s)})
-    end
-end
 
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, symbol(s)))})
