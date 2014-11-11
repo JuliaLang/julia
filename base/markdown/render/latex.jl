@@ -1,5 +1,3 @@
-import Base.writemime
-
 export latex
 
 function wrapblock(f, io, env)

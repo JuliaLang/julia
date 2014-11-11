@@ -106,7 +106,7 @@ export html
 
 html(md) = sprint(html, md)
 
-function Base.writemime(io::IO, ::MIME"text/html", md::MD)
+function writemime(io::IO, ::MIME"text/html", md::MD)
   println(io, """<div class="markdown">""")
   html(io, md)
   println(io, """</div>""")

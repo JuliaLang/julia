@@ -1,5 +1,7 @@
 module Markdown
 
+import Base: writemime
+
 typealias String AbstractString
 
 include("parse/config.jl")
@@ -8,6 +10,7 @@ include("parse/parse.jl")
 
 include("Common/Common.jl")
 include("GitHub/GitHub.jl")
+include("IPython/IPython.jl")
 include("Julia/Julia.jl")
 
 include("render/plain.jl")
@@ -58,12 +61,6 @@ end
 macro doc_mstr(s, t...)
   s = Base.triplequoted(s)
   docexpr(s, t...)
-end
-
-function writemime(io::IO, m, md::Vector{MD})
-  for md in md
-    writemime(io, m, md)
-  end
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
