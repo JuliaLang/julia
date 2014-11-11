@@ -462,3 +462,6 @@ end
 # issue #8363
 @test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
 
+# issue #8976
+@test conj(sparse([1im])) == sparse(conj([1im]))
+@test conj!(sparse([1im])) == sparse(conj!([1im]))

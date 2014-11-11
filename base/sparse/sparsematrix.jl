@@ -476,7 +476,7 @@ end # macro
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros
 # Result is sparse
-for op in (:-, :abs, :abs2, :log1p, :expm1)
+for op in (:-, :abs, :abs2, :log1p, :expm1, :conj)
     @eval begin
 
         function ($op)(A::SparseMatrixCSC)
