@@ -476,7 +476,7 @@ end # macro
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros
 # Result is sparse
-for op in (:-, :abs, :abs2, :log1p, :expm1, :conj)
+for op in (:-, :abs, :abs2, :log1p, :expm1)
     @eval begin
 
         function ($op)(A::SparseMatrixCSC)
@@ -491,6 +491,16 @@ for op in (:-, :abs, :abs2, :log1p, :expm1, :conj)
 
     end
 end
+
+function conj!(A::SparseMatrixCSC)
+    nzvalA = A.nzval
+    @simd for i=1:length(nzvalA)
+        @inbounds nzvalA[i] = conj(nzvalA[i])
+    end
+    return A
+end
+
+conj(A::SparseMatrixCSC) = conj!(copy(A))
 
 # Operations that map nonzeros to nonzeros, and zeros to nonzeros
 # Result is dense
