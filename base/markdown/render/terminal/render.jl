@@ -4,6 +4,7 @@ const margin = 2
 cols() = Base.tty_size()[2]
 
 function term(io::IO, content::Vector, cols)
+  isempty(content) && return
   for md in content[1:end-1]
     term(io, md, cols)
     println(io)

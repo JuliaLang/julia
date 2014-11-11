@@ -24,8 +24,8 @@ function interp(stream::IO)
 end
 
 function blockinterp(stream::IO, md::MD, config::Config)
-  r=withstream(stream) do
-    ex = interpinner(stream, true)
+  withstream(stream) do
+    ex = interpinner(stream)
     if ex ≡ nothing
       return false
     else
@@ -33,7 +33,6 @@ function blockinterp(stream::IO, md::MD, config::Config)
       return true
     end
   end
-  return r
 end
 
 toexpr(x) = x
