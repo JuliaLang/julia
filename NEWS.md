@@ -111,7 +111,9 @@ Library improvements
 
   * The `machinefile` now supports an host count ([#7616]).
 
-  * Added optional rounding argument to floating-point constructors ([#8845])
+  * Added optional rounding argument to floating-point constructors ([#8845]).
+
+  * `code_native` now outputs branch labels ([#8897]).
 
 Deprecated or removed
 ---------------------
