@@ -6,7 +6,7 @@
 # isdocumented(v)         :  true if v is documented
 # undefined_exports(m)    :  returns a list of undefined exports in module m
 # undocumented(m)         :  returns a list of undocumented exports in module m
-# undocumented_by_file(m) :  returns a dictionary of undocumented exports, 
+# undocumented_by_file(m) :  returns a dictionary of undocumented exports,
 #                            with file, function, and line number information
 # undocumented_rst(m)     :  produce a list of undocumented function suitable for
 #                            pasting into github issue #2242
@@ -25,7 +25,7 @@ isdeprecated(v)            = try endswith(functionloc(eval(v))[1], "deprecated.j
 isdocumented(v) = (s=string(v); haskey(FUNCTION_DICT, s) || haskey(MODULE_DICT, s))
 
 
-modfuncjoin(m::String, f::String) = beginswith(f, '@') ? "@$m.$(f[2:end])" : "$m.$f"
+modfuncjoin(m::AbstractString, f::AbstractString) = beginswith(f, '@') ? "@$m.$(f[2:end])" : "$m.$f"
 modfuncjoin(m, f) = modfuncjoin(string(m), string(f))
 
 # return a list of undefined exports in a module
@@ -33,7 +33,7 @@ undefined_exports(m::Module) = sort(filter(x->!isdefined(x), names(m)))
 undefined_exports() = undefined(Base)
 
 # Check for exported names that aren't documented,
-# and return a Dict with (fn::Symbol, fullname::String) pairs
+# and return a Dict with (fn::Symbol, fullname::AbstractString) pairs
 function undocumented(m::Module)
     init_help()
     undoc = Dict{Symbol, Array}()
@@ -51,7 +51,7 @@ undocumented() = undocumented(Base)
 # return the file, function names, and line numbers, if available
 function undocumented_by_file(m::Module)
     init_help()
-    undocf = Dict{String, Dict}()
+    undocf = Dict{AbstractString, Dict}()
     for (f,_) in undocumented(m)
         s = string(f)
         try
@@ -60,7 +60,7 @@ function undocumented_by_file(m::Module)
                     file = replace(file, JULIA_HOME, "\$JULIA_HOME", 1)
                 end
                 if !haskey(undocf, file)
-                    undocf[file] = Dict{String, Vector{Integer}}()
+                    undocf[file] = Dict{AbstractString, Vector{Integer}}()
                 end
                 if !haskey(undocf[file], s)
                     undocf[file][s] = [line]
@@ -70,7 +70,7 @@ function undocumented_by_file(m::Module)
             end
         catch
             if !haskey(undocf, "UNKNOWN_FILE")
-                undocf["UNKNOWN_FILE"] = Dict{String, Vector{Integer}}()
+                undocf["UNKNOWN_FILE"] = Dict{AbstractString, Vector{Integer}}()
             end
             undocf["UNKNOWN_FILE"][s] = Integer[-1]
         end
@@ -90,7 +90,7 @@ undocumented_by_file() = undocumented_by_file(Base)
 function _undocumented_rst()
     init_help()
     depdoc = havecount = total = 0
-    out = String["The following exports are not documented:"]
+    out = AbstractString["The following exports are not documented:"]
     undoc_exports = Set()
     exports=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/exports.jl"),",",""),"\n")]
     for line in exports
@@ -116,7 +116,7 @@ function _undocumented_rst()
         push!(out, line)
     end
 
-    append!(out, String["", "Documented and deprecated functions/exports (please update docs)", ""])
+    append!(out, AbstractString["", "Documented and deprecated functions/exports (please update docs)", ""])
 
     deprecated=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/deprecated.jl"),",",""),"\n")]
     for line in deprecated
@@ -129,7 +129,7 @@ function _undocumented_rst()
             end
         end
     end
-    prepend!(out, String["$havecount/$total exports have been documented",
+    prepend!(out, AbstractString["$havecount/$total exports have been documented",
                          "(Additionally, $depdoc deprecated functions are still documentated)",
                          ""])
     (join(out, "\n"), undoc_exports)

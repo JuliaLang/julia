@@ -32,7 +32,7 @@ before_install:
         brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
@@ -40,6 +40,10 @@ before_install:
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
+    - if git --no-pager grep --color -n --full-name ' $' -- \*.jl \*.scm \*.c \*.cpp \*.h; then
+        echo "Error trailing whitespace found in source file(s)";
+        exit 1;
+      fi
     - make $BUILDOPTS prefix=/tmp/julia install
     - if [ `uname` = "Darwin" ]; then
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do

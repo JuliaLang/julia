@@ -183,7 +183,7 @@ function _clear_input_area(terminal, state::InputAreaState)
 end
 
 prompt_string(s::PromptState) = s.p.prompt
-prompt_string(s::String) = s
+prompt_string(s::AbstractString) = s
 
 refresh_multi_line(termbuf::TerminalBuffer, s::PromptState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
@@ -457,7 +457,7 @@ end
 
 # splice! for IOBuffer: convert from 0-indexed positions, update the size,
 # and keep the cursor position stable with the text
-function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::String = "")
+function splice_buffer!{T<:Integer}(buf::IOBuffer, r::UnitRange{T}, ins::AbstractString = "")
     pos = position(buf)
     if !isempty(r) && pos in r
         seek(buf, first(r))
@@ -652,7 +652,7 @@ write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
 normalize_key(key::Char) = string(key)
 normalize_key(key::Integer) = normalize_key(char(key))
-function normalize_key(key::String)
+function normalize_key(key::AbstractString)
     '\0' in key && error("Matching \\0 not currently supported.")
     buf = IOBuffer()
     i = start(key)

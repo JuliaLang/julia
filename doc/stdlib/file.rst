@@ -63,64 +63,64 @@ Filesystem
    Returns ``true`` if the current user has permission to write to ``path``,
    ``false`` otherwise.
 
-.. function:: homedir() -> String
+.. function:: homedir() -> AbstractString
 
    Return the current user's home directory.
 
-.. function:: dirname(path::String) -> String
+.. function:: dirname(path::AbstractString) -> AbstractString
 
    Get the directory part of a path.
 
-.. function:: basename(path::String) -> String
+.. function:: basename(path::AbstractString) -> AbstractString
 
    Get the file name part of a path.
 
-.. function:: @__FILE__() -> String
+.. function:: @__FILE__() -> AbstractString
 
    ``@__FILE__`` expands to a string with the absolute path and file name of the script being run.
    Returns ``nothing`` if run from a REPL or an empty string if evaluated by ``julia -e <expr>``.
 
-.. function:: isabspath(path::String) -> Bool
+.. function:: isabspath(path::AbstractString) -> Bool
 
    Determines whether a path is absolute (begins at the root directory).
 
-.. function:: isdirpath(path::String) -> Bool
+.. function:: isdirpath(path::AbstractString) -> Bool
 
    Determines whether a path refers to a directory (for example, ends with a path separator).
 
-.. function:: joinpath(parts...) -> String
+.. function:: joinpath(parts...) -> AbstractString
 
    Join path components into a full path. If some argument is an absolute
    path, then prior components are dropped.
 
-.. function:: abspath(path::String) -> String
+.. function:: abspath(path::AbstractString) -> AbstractString
 
    Convert a path to an absolute path by adding the current directory if
    necessary.
 
-.. function:: normpath(path::String) -> String
+.. function:: normpath(path::AbstractString) -> AbstractString
 
    Normalize a path, removing "." and ".." entries.
 
-.. function:: realpath(path::String) -> String
+.. function:: realpath(path::AbstractString) -> AbstractString
 
    Canonicalize a path by expanding symbolic links and removing "." and ".." entries.
 
-.. function:: expanduser(path::String) -> String
+.. function:: expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path with the
    current user's home directory.
 
-.. function:: splitdir(path::String) -> (String,String)
+.. function:: splitdir(path::AbstractString) -> (AbstractString,AbstractString)
 
    Split a path into a tuple of the directory name and file name.
 
-.. function:: splitdrive(path::String) -> (String,String)
+.. function:: splitdrive(path::AbstractString) -> (AbstractString,AbstractString)
 
    On Windows, split a path into the drive letter part and the path part. On Unix
    systems, the first component is always the empty string.
 
-.. function:: splitext(path::String) -> (String,String)
+.. function:: splitext(path::AbstractString) -> (AbstractString,AbstractString)
 
    If the last component of a path contains a dot, split the path into everything
    before the dot and everything including and after the dot. Otherwise, return
@@ -128,11 +128,11 @@ Filesystem
 
 .. function:: tempname()
 
-   Generate a unique temporary filename.
+   Generate a unique temporary file path.
 
 .. function:: tempdir()
 
-   Obtain the path of a temporary directory.
+   Obtain the path of a temporary directory (possibly shared with other processes).
 
 .. function:: mktemp()
 

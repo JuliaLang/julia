@@ -1,6 +1,5 @@
 types = [
     Bool,
-    Char,
     Float16,
     Float32,
     Float64,
@@ -9,10 +8,10 @@ types = [
     Int32,
     Int64,
     Int8,
-    Uint16,
-    Uint32,
-    Uint64,
-    Uint8,
+    UInt16,
+    UInt32,
+    UInt64,
+    UInt8,
 ]
 
 # Nullable{T}() = new(true)
@@ -65,10 +64,10 @@ p1s = [
     "Nullable{Int32}()",
     "Nullable{Int64}()",
     "Nullable{Int8}()",
-    "Nullable{Uint16}()",
-    "Nullable{Uint32}()",
-    "Nullable{Uint64}()",
-    "Nullable{Uint8}()",
+    "Nullable{UInt16}()",
+    "Nullable{UInt32}()",
+    "Nullable{UInt64}()",
+    "Nullable{UInt8}()",
 ]
 
 p2s = [
@@ -209,17 +208,17 @@ for T in types
     @test_throws NullException (x4 == x4)
 end
 
-# function hash(x::Nullable, h::Uint)
+# function hash(x::Nullable, h::UInt)
 for T in types
     x1 = Nullable{T}()
     x2 = Nullable{T}()
     x3 = Nullable(zero(T))
     x4 = Nullable(one(T))
 
-    @test isa(hash(x1), Uint)
-    @test isa(hash(x2), Uint)
-    @test isa(hash(x3), Uint)
-    @test isa(hash(x4), Uint)
+    @test isa(hash(x1), UInt)
+    @test isa(hash(x2), UInt)
+    @test isa(hash(x3), UInt)
+    @test isa(hash(x4), UInt)
 
     @test hash(x1) == hash(x2)
     @test hash(x1) != hash(x3)

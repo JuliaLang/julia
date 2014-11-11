@@ -293,6 +293,42 @@ as well as increase it; however, the overhead of profiling grows once
 the delay becomes similar to the amount of time needed to take a
 backtrace (~30 microseconds on the author's laptop).
 
+.. _stdlib-track-allocation:
+
+Direct analysis of memory allocation
+====================================
+
+One of the most common techniques to improve performance is to reduce
+memory allocation.  The total amount of allocation can be measured
+with ``@time`` and ``@allocated``, and specific lines triggering
+allocation can often be inferred from profiling via the cost of
+garbage collection that these lines incur.  However, sometimes it is
+more efficient to directly measure the amount of memory allocated by
+each line of code.
+
+To measure allocation line-by-line, start julia with the
+``--track-allocation=<setting>`` command-line option, for which you
+can choose ``none`` (the default, do not measure allocation), ``user``
+(measure memory allocation everywhere except julia's core code), or
+``all`` (measure memory allocation at each line of julia code).
+Allocation gets measured for each line of compiled code.  When you quit
+julia, the cumulative results are written to text files with ``.mem``
+appended after the file name, residing in the same directory as the
+source file.  Each line lists the total number of bytes allocated.
+The ``Coverage`` package contains some elementary analysis tools, for
+example to sort the lines in order of number of bytes allocated.
+
+In interpreting the results, there are a few important details.  Under
+the ``user`` setting, the first line of any function directly called
+from the REPL will exhibit allocation due to events that happen in the
+REPL code itself.  More significantly, JIT-compilation also adds to
+allocation counts, because much of julia's compiler is written in
+Julia (and compilation usually requires memory allocation).  The
+recommended procedure it to force compilation by executing all the
+commands you want to analyze, then call ``clear_malloc_data()`` to
+reset all allocation counters.  Finally, execute the desired commands
+and quit julia to trigger the generation of the ``.mem`` files.
+
 Function reference
 ------------------
 
@@ -366,3 +402,11 @@ Function reference
    about the caller.  One can optionally supply backtrace data
    obtained from ``retrieve``; otherwise, the current internal profile
    buffer is used.
+
+.. function:: clear_malloc_data()
+
+   Clears any stored memory allocation data when running julia with
+   ``--track-allocation``.  Execute the command(s) you want to test
+   (to force JIT-compilation), then call ``clear_malloc_data()``.
+   Then execute your command(s) again, quit julia, and examine the
+   resulting ``*.mem`` files.

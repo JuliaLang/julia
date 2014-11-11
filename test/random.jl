@@ -4,7 +4,7 @@ srand(0); rand(); x = rand(384);
 
 @test rand() != rand()
 @test 0.0 <= rand() < 1.0
-@test rand(Uint32) >= 0
+@test rand(UInt32) >= 0
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
@@ -19,12 +19,17 @@ srand(0); rand(); x = rand(384);
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
-# Test array filling, Issue #7643
+# Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
 A = zeros(2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
+@test rand(MersenneTwister(0), Int64, 1) == [172014471070449746]
+A = zeros(Int64, 2, 2)
+rand!(MersenneTwister(0), A)
+@test A == [  172014471070449746  -193283627354378518;
+            -4679130500738884555 -9008350441255501549]
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
@@ -33,8 +38,8 @@ randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
 
-for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
-          Char, Float16, Float32, Float64, Rational{Int})
+for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
+          Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
     @test 97 <= r <= 122
@@ -43,7 +48,7 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test 97 <= r <= 122
     @test mod(r,2)==1
 
-    if T<:Integer && T!==Char
+    if T<:Integer
         x = rand(typemin(T):typemax(T))
         @test isa(x,T)
         @test typemin(T) <= x <= typemax(T)
@@ -73,11 +78,11 @@ emantissa           = int64(2)^52
 ziggurat_exp_r      = BigFloat("7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-const ki = Array(Uint64, ziggurat_table_size)
+const ki = Array(UInt64, ziggurat_table_size)
 const wi = Array(Float64, ziggurat_table_size)
 const fi = Array(Float64, ziggurat_table_size)
 # Tables for exponential variates
-const ke = Array(Uint64, ziggurat_table_size)
+const ke = Array(UInt64, ziggurat_table_size)
 const we = Array(Float64, ziggurat_table_size)
 const fe = Array(Float64, ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
@@ -131,7 +136,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
         feb[i] = exp(-x)
         x1 = x
     end
-    ke[2] = zero(Uint64)
+    ke[2] = zero(UInt64)
 
     wi[:] = float64(wib)
     fi[:] = float64(fib)
@@ -149,7 +154,7 @@ randmtzig_fill_ziggurat_tables()
 
 #same random numbers on for small ranges on all systems
 
-seed = rand(Uint) #leave state nondeterministic as above
+seed = rand(UInt) #leave state nondeterministic as above
 srand(seed)
 r = int64(rand(int32(97:122)))
 srand(seed)

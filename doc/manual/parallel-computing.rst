@@ -711,16 +711,16 @@ the following forms::
 
     (io::IO, config::Dict)
     
-    (io::IO, host::String, config::Dict)
+    (io::IO, host::AbstractString, config::Dict)
     
-    (io::IO, host::String, port::Integer, config::Dict)
+    (io::IO, host::AbstractString, port::Integer, config::Dict)
     
-    (host::String, port::Integer, config::Dict)
+    (host::AbstractString, port::Integer, config::Dict)
 
 where:
 
     - ``io::IO`` is the output stream of the worker.
-    - ``host::String`` and ``port::Integer`` are the host:port to connect to. If not provided
+    - ``host::AbstractString`` and ``port::Integer`` are the host:port to connect to. If not provided
       they are read from the ``io`` stream provided.
     - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
       function can add/modify any data that may be required for managing 

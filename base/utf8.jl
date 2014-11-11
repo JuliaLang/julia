@@ -1,7 +1,7 @@
 ## from base/boot.jl:
 #
-# immutable UTF8String <: String
-#     data::Array{Uint8,1}
+# immutable UTF8String <: AbstractString
+#     data::Array{UInt8,1}
 # end
 #
 
@@ -24,7 +24,7 @@ const utf8_trailing = [
     2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2, 3,3,3,3,3,3,3,3,4,4,4,4,5,5,5,5,
 ]
 
-is_utf8_start(byte::Uint8) = ((byte&0xc0)!=0x80)
+is_utf8_start(byte::UInt8) = ((byte&0xc0)!=0x80)
 
 ## required core functionality ##
 
@@ -37,17 +37,17 @@ function endof(s::UTF8String)
     end
     i
 end
-length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{Uint8},), s.data))
+length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{UInt8},), s.data))
 
 function next(s::UTF8String, i::Int)
     # potentially faster version
     # d = s.data
-    # a::Uint32 = d[i]
+    # a::UInt32 = d[i]
     # if a < 0x80; return char(a); end
     # #if a&0xc0==0x80; return '\ufffd'; end
-    # b::Uint32 = a<<6 + d[i+1]
+    # b::UInt32 = a<<6 + d[i+1]
     # if a < 0xe0; return char(b - 0x00003080); end
-    # c::Uint32 = b<<6 + d[i+2]
+    # c::UInt32 = b<<6 + d[i+2]
     # if a < 0xf0; return char(c - 0x000e2080); end
     # return char(c<<6 + d[i+3] - 0x03c82080)
 
@@ -69,7 +69,7 @@ function next(s::UTF8String, i::Int)
     if length(d) < i + trailing
         return '\ufffd', i+1
     end
-    c::Uint32 = 0
+    c::UInt32 = 0
     for j = 1:trailing+1
         c <<= 6
         c += d[i]
@@ -79,11 +79,12 @@ function next(s::UTF8String, i::Int)
     char(c), i
 end
 
-function first_utf8_byte(c::Char)
-    c < 0x80    ? uint8(c)            :
-    c < 0x800   ? uint8((c>>6 )|0xc0) :
-    c < 0x10000 ? uint8((c>>12)|0xe0) :
-                  uint8((c>>18)|0xf0)
+function first_utf8_byte(ch::Char)
+    c = reinterpret(UInt32, ch)
+    c < 0x80    ? uint8(c) :
+    c < 0x800   ? uint8((c>>6)  | 0xc0) :
+    c < 0x10000 ? uint8((c>>12) | 0xe0) :
+                  uint8((c>>18) | 0xf0)
 end
 
 ## overload methods for efficiency ##
@@ -93,7 +94,7 @@ sizeof(s::UTF8String) = sizeof(s.data)
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])
 
-const empty_utf8 = UTF8String(Uint8[])
+const empty_utf8 = UTF8String(UInt8[])
 
 function getindex(s::UTF8String, r::UnitRange{Int})
     isempty(r) && return empty_utf8
@@ -110,20 +111,20 @@ function getindex(s::UTF8String, r::UnitRange{Int})
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return search(s.data, uint8(c), i) end
+    c < char(0x80) && return search(s.data, uint8(c), i)
     while true
         i = search(s.data, first_utf8_byte(c), i)
-        if i==0 || s[i]==c return i end
+        (i==0 || s[i] == c) && return i
         i = next(s,i)[2]
     end
 end
 
 function rsearch(s::UTF8String, c::Char, i::Integer)
-    if c < 0x80 return rsearch(s.data, uint8(c), i) end
+    c < char(0x80) && return rsearch(s.data, uint8(c), i)
     b = first_utf8_byte(c)
     while true
         i = rsearch(s.data, b, i)
-        if i==0 || s[i]==c return i end
+        (i==0 || s[i] == c) && return i
         i = prevind(s,i)
     end
 end
@@ -133,7 +134,7 @@ function string(a::ByteString...)
         return a[1]::UTF8String
     end
     # ^^ at least one must be UTF-8 or the ASCII-only method would get called
-    data = Array(Uint8,0)
+    data = Array(UInt8,0)
     for d in a
         append!(data,d.data)
     end
@@ -142,7 +143,7 @@ end
 
 function reverse(s::UTF8String)
     out = similar(s.data)
-    if ccall(:u8_reverse, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t),
+    if ccall(:u8_reverse, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
              out, s.data, length(out)) == 1
         error("invalid UTF-8 data")
     end
@@ -151,7 +152,7 @@ end
 
 ## outputing UTF-8 strings ##
 
-print(io::IO, s::UTF8String) = (write(io, s.data);nothing)
+print(io::IO, s::UTF8String) = (write(io, s.data); nothing)
 write(io::IO, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
@@ -159,8 +160,8 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{Uint8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
-function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
+convert(::Type{UTF8String}, a::Array{UInt8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
+function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractString)
     l = length(a)
     idx = 1
     iscopy = false
@@ -181,7 +182,7 @@ function convert(::Type{UTF8String}, a::Array{Uint8,1}, invalids_as::String)
     end
     UTF8String(a)
 end
-convert(::Type{UTF8String}, s::String) = utf8(bytestring(s))
+convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
 # The last case is the replacement character 0xfffd (3 bytes)
-utf8sizeof(c::Char) = c < 0x80 ? 1 : c < 0x800 ? 2 : c < 0x10000 ? 3 : c < 0x110000 ? 4 : 3
+utf8sizeof(c::Char) = c < char(0x80) ? 1 : c < char(0x800) ? 2 : c < char(0x10000) ? 3 : c < char(0x110000) ? 4 : 3

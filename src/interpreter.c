@@ -377,7 +377,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         temp = eval(args[2], locals, nl);  // field names
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)temp, NULL,
-                             0, args[5]==jl_true ? 1 : 0);
+                             0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
 
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;  // save old value
@@ -420,6 +420,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_sym_t *nm = (jl_sym_t*)args[0];
         assert(jl_is_symbol(nm));
         jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
+        JL_GC_PUSH1(&f);
         assert(jl_is_function(f));
         if (jl_boot_file_loaded &&
             f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
@@ -428,6 +429,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
             li->name = nm;
         }
         jl_set_global(jl_current_module, nm, (jl_value_t*)f);
+        JL_GC_POP();
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == line_sym) {

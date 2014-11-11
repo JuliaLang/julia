@@ -21,7 +21,7 @@ last(x::Number) = x
 divrem(x,y) = (div(x,y),rem(x,y))
 signbit(x::Real) = x < 0
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
-abs(x::Real) = ifelse(x < 0, -x, x)
+abs(x::Real) = ifelse(signbit(x), -x, x)
 abs2(x::Real) = x*x
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 
@@ -38,8 +38,6 @@ next(x::Number, state) = (x, true)
 done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
-
-reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
 map(f::Callable, x::Number) = f(x)
 

@@ -255,12 +255,12 @@ for (f,t) in ((:char,   Char),
               (:int32,  Int32),
               (:int64,  Int64),
               (:int128, Int128),
-              (:uint,   Uint),
-              (:uint8,  Uint8),
-              (:uint16, Uint16),
-              (:uint32, Uint32),
-              (:uint64, Uint64),
-              (:uint128,Uint128))
+              (:uint,   UInt),
+              (:uint8,  UInt8),
+              (:uint16, UInt16),
+              (:uint32, UInt32),
+              (:uint64, UInt64),
+              (:uint128,UInt128))
     @eval begin
         ($f)(x::AbstractArray{$t}) = x
         ($f)(x::AbstractArray{$t}) = x
@@ -323,12 +323,12 @@ float{T<:Integer64}(x::AbstractArray{T}) = convert(AbstractArray{typeof(float(ze
 complex{T<:Union(Integer64,Float64,Float32,Float16)}(x::AbstractArray{T}) =
     convert(AbstractArray{typeof(complex(zero(T)))}, x)
 
-function float(A::AbstractArray) 
+function float(A::AbstractArray)
     cnv(x) = convert(FloatingPoint,x)
     map_promote(cnv, A)
 end
 
-function complex(A::AbstractArray) 
+function complex(A::AbstractArray)
     cnv(x) = convert(Complex,x)
     map_promote(cnv, A)
 end
@@ -599,60 +599,47 @@ function vcat{T}(A::AbstractMatrix{T}...)
 end
 
 ## cat: general case
-
-function cat(catdim::Integer, X...)
+function cat(catdims, X...)
+    catdims = collect(catdims)
     nargs = length(X)
-    dimsX = map((a->isa(a,AbstractArray) ? size(a) : (1,)), X)
-    ndimsX = map((a->isa(a,AbstractArray) ? ndims(a) : 1), X)
-    d_max = maximum(ndimsX)
+    ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
+    ndimsC = max(maximum(ndimsX), maximum(catdims))
+    catsizes = zeros(Int,(nargs,length(catdims)))
+    dims2cat = zeros(Int,ndimsC)
+    for k = 1:length(catdims)
+        dims2cat[catdims[k]]=k
+    end
 
-    if catdim > d_max + 1
-        for i=1:nargs
-            if dimsX[1] != dimsX[i]
-                error("all inputs must have same dimensions when concatenating along a higher dimension");
-            end
-        end
-    elseif nargs >= 2
-        for d=1:d_max
-            if d == catdim; continue; end
-            len = d <= ndimsX[1] ? dimsX[1][d] : 1
-            for i = 2:nargs
-                if len != (d <= ndimsX[i] ? dimsX[i][d] : 1)
-                    error("mismatch in dimension ", d)
-                end
+    typeC = isa(X[1],AbstractArray) ? eltype(X[1]) : typeof(X[1])
+    dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
+    for k = 1:length(catdims)
+        catsizes[1,k] = dimsC[catdims[k]]
+    end
+    for i = 2:nargs
+        typeC = promote_type(typeC, isa(X[i], AbstractArray) ? eltype(X[i]) : typeof(X[i]))
+        for d = 1:ndimsC
+            currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
+            if dims2cat[d]==0
+                dimsC[d] == currentdim || error("mismatch in dimension ", d)
+            else
+                dimsC[d] += currentdim
+                catsizes[i,dims2cat[d]] = currentdim
             end
         end
     end
 
-    cat_ranges = [ catdim <= ndimsX[i] ? dimsX[i][catdim] : 1 for i=1:nargs ]
-
-    function compute_dims(d)
-        if d == catdim
-            if catdim <= d_max
-                return sum(cat_ranges)
-            else
-                return nargs
-            end
-        else
-            if d <= ndimsX[1]
-                return dimsX[1][d]
-            else
-                return 1
-            end
-        end
+    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, tuple(dimsC...))
+    if length(catdims)>1
+        fill!(C,0)
     end
 
-    ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    typeC = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
-    C = similar(isa(X[1],AbstractArray) ? full(X[1]) : [X[1]], typeC, dimsC)
-
-    range = 1
-    for k=1:nargs
-        nextrange = range+cat_ranges[k]
-        cat_one = [ i != catdim ? (1:dimsC[i]) : (range:nextrange-1) for i=1:ndimsC ]
-        C[cat_one...] = X[k]
-        range = nextrange
+    offsets = zeros(Int,length(catdims))
+    for i=1:nargs
+        cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
+        C[cat_one...] = X[i]
+        for k = 1:length(catdims)
+            offsets[k] += catsizes[i,k]
+        end
     end
     return C
 end
@@ -660,65 +647,50 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
-cat{T}(catdim::Integer, A::AbstractArray{T}...) = cat_t(catdim, T, A...)
+cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
-cat(catdim::Integer, A::AbstractArray...) =
-    cat_t(catdim, promote_eltype(A...), A...)
+cat(catdims, A::AbstractArray...) =
+    cat_t(catdims, promote_eltype(A...), A...)
 
-function cat_t(catdim::Integer, typeC, A::AbstractArray...)
-    # ndims of all input arrays should be in [d-1, d]
-
+function cat_t(catdims, typeC, A::AbstractArray...)
+    catdims = collect(catdims)
     nargs = length(A)
-    dimsA = map(size, A)
-    ndimsA = map(ndims, A)
-    d_max = maximum(ndimsA)
+    ndimsA = Int[ndims(a) for a in A]
+    ndimsC = max(maximum(ndimsA), maximum(catdims))
+    catsizes = zeros(Int,(nargs,length(catdims)))
+    dims2cat = zeros(Int,ndimsC)
+    for k = 1:length(catdims)
+        dims2cat[catdims[k]]=k
+    end
 
-    if catdim > d_max + 1
-        for i=1:nargs
-            if dimsA[1] != dimsA[i]
-                error("all inputs must have same dimensions when concatenating along a higher dimension");
-            end
-        end
-    elseif nargs >= 2
-        for d=1:d_max
-            if d == catdim; continue; end
-            len = d <= ndimsA[1] ? dimsA[1][d] : 1
-            for i = 2:nargs
-                if len != (d <= ndimsA[i] ? dimsA[i][d] : 1)
-                    error("mismatch in dimension ", d)
-                end
+    dimsC = Int[d <= ndimsA[1] ? size(A[1],d) : 1 for d=1:ndimsC]
+    for k = 1:length(catdims)
+        catsizes[1,k] = dimsC[catdims[k]]
+    end
+    for i = 2:nargs
+        for d = 1:ndimsC
+            currentdim = (d <= ndimsA[i] ? size(A[i],d) : 1)
+            if dims2cat[d]==0
+                dimsC[d] == currentdim || error("mismatch in dimension ", d)
+            else
+                dimsC[d] += currentdim
+                catsizes[i,dims2cat[d]] = currentdim
             end
         end
     end
 
-    cat_ranges = [ catdim <= ndimsA[i] ? dimsA[i][catdim] : 1 for i=1:nargs ]
-
-    function compute_dims(d)
-        if d == catdim
-            if catdim <= d_max
-                return sum(cat_ranges)
-            else
-                return nargs
-            end
-        else
-            if d <= ndimsA[1]
-                return dimsA[1][d]
-            else
-                return 1
-            end
-        end
+    C = similar(full(A[1]), typeC, tuple(dimsC...))
+    if length(catdims)>1
+        fill!(C,0)
     end
 
-    ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    C = similar(full(A[1]), typeC, dimsC)
-
-    range = 1
-    for k=1:nargs
-        nextrange = range+cat_ranges[k]
-        cat_one = [ i != catdim ? (1:dimsC[i]) : (range:nextrange-1) for i=1:ndimsC ]
-        C[cat_one...] = A[k]
-        range = nextrange
+    offsets = zeros(Int,length(catdims))
+    for i=1:nargs
+        cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
+        C[cat_one...] = A[i]
+        for k = 1:length(catdims)
+            offsets[k] += catsizes[i,k]
+        end
     end
     return C
 end
@@ -1406,7 +1378,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
         end
     else
         # Skip through A, in order, from each element i to the next element i+s
-        # included in S. The probability that the next included element is 
+        # included in S. The probability that the next included element is
         # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
         # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
         # from this probability distribution via the discrete inverse-transform

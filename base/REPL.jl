@@ -47,7 +47,6 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 put!(backend.response_channel, (lasterr, bt))
                 iserr, lasterr = false, ()
             else
-                ast = expand(ast)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
@@ -68,17 +67,17 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
     end
 end
 
-function parse_input_line(s::String)
+function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{Uint8},Int32,Int32),
+    #                   (Ptr{UInt8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
 function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
@@ -233,11 +232,11 @@ end
 type LineEditREPL <: AbstractREPL
     t::TextTerminal
     hascolor::Bool
-    prompt_color::String
-    input_color::String
-    answer_color::String
-    shell_color::String
-    help_color::String
+    prompt_color::AbstractString
+    input_color::AbstractString
+    answer_color::AbstractString
+    shell_color::AbstractString
+    help_color::AbstractString
     no_history_file::Bool
     in_shell::Bool
     in_help::Bool
@@ -299,7 +298,7 @@ end
 
 
 type REPLHistoryProvider <: HistoryProvider
-    history::Array{String,1}
+    history::Array{AbstractString,1}
     history_file
     cur_idx::Int
     last_idx::Int
@@ -309,8 +308,8 @@ type REPLHistoryProvider <: HistoryProvider
     modes::Array{Symbol,1}
 end
 REPLHistoryProvider(mode_mapping) =
-    REPLHistoryProvider(String[], nothing, 0, -1, IOBuffer(),
-                        nothing, mode_mapping, Uint8[])
+    REPLHistoryProvider(AbstractString[], nothing, 0, -1, IOBuffer(),
+                        nothing, mode_mapping, UInt8[])
 
 const invalid_history_message = """
 Invalid history format. If you have a ~/.julia_history file left over from an older version of Julia, try renaming or deleting it.
@@ -837,9 +836,9 @@ end
 
 type StreamREPL <: AbstractREPL
     stream::IO
-    prompt_color::String
-    input_color::String
-    answer_color::String
+    prompt_color::AbstractString
+    input_color::AbstractString
+    answer_color::AbstractString
     waserror::Bool
     StreamREPL(stream,pc,ic,ac) = new(stream,pc,ic,ac,false)
 end

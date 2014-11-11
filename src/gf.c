@@ -469,7 +469,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
 
 static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                                    jl_function_t *method, jl_tuple_t *decl,
-                                   jl_tuple_t *sparams, int isstaged)
+                                   jl_tuple_t *sparams)
 {
     size_t i;
     int need_guard_entries = 0;
@@ -643,7 +643,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               might be passed.
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
-              
+
               TypeConstructors are problematic because they can be alternate
               representations of any type. Extensionally, TC == TC.body, but
               typeof(TC) != typeof(TC.body). This creates an ambiguity:
@@ -651,7 +651,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               x::TypeConstructor matches the first but not the second, while
               also matching all other TypeConstructors. This means neither
               Type{TC} nor TypeConstructor is more specific.
-              
+
               To solve this, we identify "kind slots", which are slots
               for which some definition specifies a kind (e.g. DataType).
               Those tend to be in reflective functions that look at types
@@ -724,7 +724,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!isstaged && jl_tuple_len(type) > mt->max_args &&
+    if (!mt->defs->isstaged && jl_tuple_len(type) > mt->max_args &&
         jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
         size_t nspec = mt->max_args + 2;
         jl_tuple_t *limited = jl_alloc_tuple(nspec);
@@ -1031,7 +1031,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
             JL_GC_POP();
             if (!cache)
                 return func;
-            return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null, m->isstaged);
+            return cache_method(mt, tt, func, (jl_tuple_t*)m->sig, jl_null);
         }
         JL_GC_POP();
         return jl_bottom_func;
@@ -1061,7 +1061,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     if (!cache)
         nf = func;
     else
-        nf = cache_method(mt, tt, func, newsig, env, 0);
+        nf = cache_method(mt, tt, func, newsig, env);
     JL_GC_POP();
     return nf;
 }
@@ -1118,16 +1118,16 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 /*
   warn about ambiguous method priorities
-  
+
   the relative priority of A and B is ambiguous if
   !subtype(A,B) && !subtype(B,A) && no corresponding tuple
   elements are disjoint.
-  
+
   for example, (AbstractArray, AbstractMatrix) and (AbstractMatrix, AbstractArray) are ambiguous.
   however, (AbstractArray, AbstractMatrix, Foo) and (AbstractMatrix, AbstractArray, Bar) are fine
   since Foo and Bar are disjoint, so there would be no confusion over
   which one to call.
-  
+
   There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
   In this case jl_types_equal() is true, but one is jl_type_morespecific
   or jl_type_match_morespecific than the other.
@@ -1148,15 +1148,17 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         !jl_args_morespecific((jl_value_t*)sig, (jl_value_t*)type)) {
         jl_value_t *isect = jl_type_intersection((jl_value_t*)type,
                                                  (jl_value_t*)sig);
+        JL_GC_PUSH1(&isect);
         if (isect == (jl_value_t*)jl_bottom_type ||
             // we're ok if the new definition is actually the one we just
             // inferred to be required (see issue #3609). ideally this would
             // never happen, since if New ⊓ Old == New then we should have
             // considered New more specific, but jl_args_morespecific is not
             // perfect, so this is a useful fallback.
-            sigs_eq(isect, (jl_value_t*)type, 1))
+            sigs_eq(isect, (jl_value_t*)type, 1)) {
+            JL_GC_POP();
             return;
-        JL_GC_PUSH1(&isect);
+        }
         jl_methlist_t *l = ml;
         char *n;
         jl_value_t *errstream;
@@ -1607,7 +1609,7 @@ JL_CALLABLE(jl_apply_generic)
     jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
 
     if (mfunc != jl_bottom_func) {
-        if (mfunc->linfo != NULL && 
+        if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
@@ -1689,7 +1691,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     else
         mfunc = jl_method_table_assoc_exact(m->invokes, args, nargs);
     if (mfunc != jl_bottom_func) {
-        if (mfunc->linfo != NULL && 
+        if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
@@ -1733,7 +1735,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                                                           jl_tuple_len(tpenv)/2);
             }
         }
-        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv, 0);
+        mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv);
         JL_GC_POP();
     }
 

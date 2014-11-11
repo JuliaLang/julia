@@ -208,7 +208,7 @@ These notes apply to the Debian 7 image currently available on Google Compute En
 
 1. Install packages required to build on your instance:
   ```
-  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev
+  apt-get install bzip2 gcc gfortran git g++ make m4 ncurses-dev cmake
   ```
 
 2. Now clone `JuliaLang:master`; you should be able to build using the generic Linux instructions. These instructions were tested on a `g1-small` instance on 2014-03-28. Other resources include [information on Google Compute Engine](https://cloud.google.com/products/compute-engine/) and a series of [tutorials by Julia Ferraioli](http://www.blog.juliaferraioli.com/2013/12/julia-on-google-compute-engine.html).
@@ -251,32 +251,34 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** or **[Clang][clang]** — compiling and linking C, C++ (if clang, need at least v3.1, Xcode 4.3.3 on OS X)
+- **[gcc & g++][gcc]** (>= 4.4) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
 - **[git]**                     — version control and package management.
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
+- **[cmake]**                   — needed to build libgit2.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]**                — compiler infrastructure.
-- **[FemtoLisp]**           — packaged with Julia source, and used to implement the compiler front-end.
-- **[libuv]**               — portable, high-performance event-based I/O library
-- **[OpenLibm]**            — a portable libm library containing elementary math functions.
-- **[OpenSpecFun]**         — a library containing Bessel and error functions of complex arguments.
-- **[DSFMT]**               — a fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**            — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
-- **[LAPACK]**              — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
-- **[MKL]** (optional)      – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
-- **[AMOS]**                — subroutines for computing Bessel and Airy functions.
-- **[SuiteSparse]**         — a library of linear algebra routines for sparse matrices.
-- **[ARPACK]**              — a collection of subroutines designed to solve large, sparse eigenvalue problems.
-- **[FFTW]**                — library for computing fast Fourier transforms very quickly and efficiently.
-- **[PCRE]**                — Perl-compatible regular expressions library.
-- **[GMP]**                 — the GNU multiple precision arithmetic library, needed for bigint support.
-- **[MPFR]**                — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
+- **[LLVM]** (>= 3.3)        — compiler infrastructure.
+- **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
+- **[libuv]**                — portable, high-performance event-based I/O library
+- **[OpenLibm]**             — a portable libm library containing elementary math functions.
+- **[OpenSpecFun]** (>= 0.4) — a library containing Bessel and error functions of complex arguments.
+- **[DSFMT]**                — a fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS]**             — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
+- **[LAPACK]** (>= 3.4)      — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
+- **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
+- **[SuiteSparse]**          — a library of linear algebra routines for sparse matrices.
+- **[ARPACK]**               — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+- **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
+- **[PCRE]** (>= 8.31)       — Perl-compatible regular expressions library.
+- **[GMP]** (>= 5.0)         — the GNU multiple precision arithmetic library, needed for bigint support.
+- **[MPFR]** (>= 3.0)        — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
+- **[libgit2]** (>= 0.21)    — the Git linkable library, used by Julia's package manager
 
 
 [GNU make]:     http://www.gnu.org/software/make/
@@ -289,6 +291,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
 [git]:          http://git-scm.com/
 [perl]:         http://www.perl.org/
+[cmake]:        http://www.cmake.org/
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
@@ -306,6 +309,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 [MPFR]:         http://www.mpfr.org/
 [double-conversion]: http://double-conversion.googlecode.com/
 [libuv]:        https://github.com/JuliaLang/libuv
+[libgit2]:      https://libgit2.github.com/
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries

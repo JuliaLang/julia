@@ -21,10 +21,10 @@
 ;; distribute, sublicense, and/or sell copies of the Software, and to
 ;; permit persons to whom the Software is furnished to do so, subject to
 ;; the following conditions:
-;; 
+;;
 ;; The above copyright notice and this permission notice shall be
 ;; included in all copies or substantial portions of the Software.
-;; 
+;;
 ;; THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 ;; EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 ;; MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
@@ -34,6 +34,8 @@
 ;; WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 ;;; Code:
+
+(require 'cl) ;; incf, decf, plusp
 
 (defvar julia-mode-hook nil)
 
@@ -110,7 +112,14 @@ This function provides equivalent functionality, but makes no efforts to optimis
   "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
 
 (defconst julia-char-regex
-  "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|$!\\^~\\\\;:]\\|^\\)\\('\\(\\([^']*?[^\\\\]\\)\\|\\(\\\\\\\\\\)\\)'\\)")
+  (rx (submatch (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+                    (syntax open-parenthesis)
+                    (syntax whitespace)
+                    bol))
+      (submatch "'"
+                (or (repeat 0 7 (not (any "'"))) (not (any "\\"))
+                    "\\\\")
+                "'")))
 
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
@@ -211,30 +220,63 @@ This function provides equivalent functionality, but makes no efforts to optimis
 (defconst julia-block-end-keywords
   (list "end" "else" "elseif" "catch" "finally"))
 
-(defun julia-member (item lst)
-  (if (null lst)
-      nil
-    (or (equal item (car lst))
-	(julia-member item (cdr lst)))))
-
 (defun julia-in-comment ()
   "Return non-nil if point is inside a comment.
 Handles both single-line and multi-line comments."
   (nth 4 (syntax-ppss)))
 
-(defun julia-strcount (str chr)
-  (let ((i 0)
-	(c 0))
-    (while (< i (length str))
-      (if (equal (elt str i) chr)
-	  (setq c (+ c 1)))
-      (setq i (+ i 1)))
-    c))
+(defun julia-in-string ()
+  "Return non-nil if point is inside a string."
+  (nth 3 (syntax-ppss)))
+
+(defun julia-in-char ()
+  "Return non-nil if point is inside a character."
+  (cond
+   ((julia-in-comment) nil)
+   ((julia-in-string) nil)
+   ((<= (point) (1+ (point-min))) nil)
+   (:else
+    (save-excursion
+      ;; See if point is inside a character, e.g. '|x'
+      ;;
+      ;; Move back past the single quote.
+      (backward-char 1)
+      ;; Move back one more character, as julia-char-regex checks
+      ;; for whitespace/paren/etc before the single quote.
+      (ignore-errors (backward-char 1)) ; ignore error from being at (point-min)
+
+      (if (looking-at julia-char-regex)
+          t
+        ;; If point was in a \ character (i.e. we started at '\|\'),
+        ;; we need to move back once more.
+        (ignore-errors
+          (if (looking-at (rx "'\\"))
+              (progn
+                (backward-char 1)
+                (looking-at julia-char-regex))
+            nil)))))))
 
 (defun julia-in-brackets ()
-  (let ((before (buffer-substring (line-beginning-position) (point))))
-    (> (julia-strcount before ?[)
-       (julia-strcount before ?]))))
+  "Return non-nil if point is inside square brackets."
+  (let ((start-pos (point))
+        (open-count 0))
+    ;; Count all the [ and ] characters on the current line.
+    (save-excursion
+      (beginning-of-line)
+
+      (while (< (point) start-pos)
+        ;; Don't count [ or ] inside strings, characters or comments.
+        (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+
+          (when (looking-at (rx "["))
+            (incf open-count))
+          (when (looking-at (rx "]"))
+            (decf open-count)))
+        
+        (forward-char 1)))
+
+    ;; If we've opened more than we've closed, we're inside brackets.
+    (plusp open-count)))
 
 (defun julia-at-keyword (kw-list)
   "Return the word at point if it matches any keyword in KW-LIST.
@@ -243,9 +285,11 @@ a keyword if used as a field name, X.word, or quoted, :word."
   (and (or (= (point) 1)
 	   (and (not (equal (char-before (point)) ?.))
 		(not (equal (char-before (point)) ?:))))
+       (member (current-word t) kw-list)
        (not (julia-in-comment))
-       (not (julia-in-brackets))
-       (julia-member (current-word t) kw-list)))
+       ;; 'end' is not a keyword when used for indexing, e.g. foo[end-2]
+       (or (not (equal (current-word t) "end"))
+           (not (julia-in-brackets)))))
 
 ;; if backward-sexp gives an error, move back 1 char to move over the '('
 (defun julia-safe-backward-sexp ()
@@ -253,21 +297,23 @@ a keyword if used as a field name, X.word, or quoted, :word."
       (ignore-errors (backward-char))))
 
 (defun julia-last-open-block-pos (min)
-  "Move back and return the position of the last open block, if one found.
+  "Return the position of the last open block, if one found.
 Do not move back beyond position MIN."
-  (let ((count 0))
-    (while (not (or (> count 0) (<= (point) min)))
-      (julia-safe-backward-sexp)
-      (setq count
-	    (cond ((julia-at-keyword julia-block-start-keywords)
-		   (+ count 1))
-		  ((and (equal (current-word t) "end")
-			(not (julia-in-comment)) (not (julia-in-brackets)))
-		   (- count 1))
-		  (t count))))
-    (if (> count 0)
-	(point)
-      nil)))
+  (save-excursion
+    (let ((count 0))
+      (while (not (or (> count 0) (<= (point) min)))
+        (julia-safe-backward-sexp)
+        (setq count
+              (cond ((julia-at-keyword julia-block-start-keywords)
+                     (+ count 1))
+                    ;; fixme: breaks on strings
+                    ((and (equal (current-word t) "end")
+                          (not (julia-in-comment)) (not (julia-in-brackets)))
+                     (- count 1))
+                    (t count))))
+      (if (> count 0)
+          (point)
+        nil))))
 
 (defun julia-last-open-block (min)
   "Move back and return indentation level for last open block.
@@ -278,21 +324,34 @@ Do not move back beyond MIN."
 	   (goto-char pos)
 	   (+ julia-basic-offset (current-indentation))))))
 
+(defsubst julia--safe-backward-char ()
+  "Move back one character, but don't error if we're at the
+beginning of the buffer."
+  (unless (eq (point) (point-min))
+    (backward-char)))
+
 (defun julia-paren-indent ()
-  "Return indent amount of the last opening paren."
-  (let* ((p (parse-partial-sexp
-             (save-excursion
-               ;; only indent by paren if the last open
-               ;; paren is closer than the last open
-               ;; block
-               (or (julia-last-open-block-pos (point-min))
-                   (point-min)))
-             (progn (beginning-of-line)
-                    (point))))
-         (pos (cadr p)))
-    (if (or (= 0 (car p)) (null pos))
-        nil
-      (progn (goto-char pos) (+ 1 (current-column))))))
+  "Return the column position of the innermost containing paren
+before point. Returns nil if we're not within nested parens."
+  (save-excursion
+    (let ((min-pos (or (julia-last-open-block-pos (point-min))
+                       (point-min)))
+          (open-count 0))
+      (while (and (> (point) min-pos)
+                  (not (plusp open-count)))
+
+        (when (looking-at (rx (any "[" "]" "(" ")")))
+          (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+            (cond ((looking-at (rx (any "[" "(")))
+                   (incf open-count))
+                  ((looking-at (rx (any "]" ")")))
+                   (decf open-count)))))
+
+        (julia--safe-backward-char))
+
+      (if (plusp open-count)
+          (+ (current-column) 2)
+        nil))))
 
 (defun julia-indent-line ()
   "Indent current line of julia code."
@@ -302,23 +361,26 @@ Do not move back beyond MIN."
     (indent-line-to
      (or
       ;; If we're inside an open paren, indent to line up arguments.
-      (save-excursion (ignore-errors (julia-paren-indent)))
-      ;; If we're on a block end keyword, unindent.
+      (save-excursion
+        (beginning-of-line)
+        (ignore-errors (julia-paren-indent)))
+      ;; If the previous line ends in =, increase the indent.
+      (ignore-errors ; if previous line is (point-min)
+        (save-excursion
+          (if (and (not (equal (point-min) (line-beginning-position)))
+                   (progn
+                     (forward-line -1)
+                     (end-of-line) (backward-char 1)
+                     (equal (char-after (point)) ?=)))
+              (+ julia-basic-offset (current-indentation))
+            nil)))
+      ;; Indent according to how many nested blocks we are in.
       (save-excursion
         (beginning-of-line)
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords)))
           (ignore-errors (+ (julia-last-open-block (point-min))
                             (if endtok (- julia-basic-offset) 0)))))
-      ;; If the previous line ends in =, increase the indent.
-      (save-excursion
-        (if (and (not (equal (point-min) (line-beginning-position)))
-                 (progn
-                   (forward-line -1)
-                   (end-of-line) (backward-char 1)
-                   (equal (char-after (point)) ?=)))
-            (+ julia-basic-offset (current-indentation))
-          nil))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
                       (current-indentation))

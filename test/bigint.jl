@@ -47,11 +47,11 @@ end
 @test typeof(BigInt(typemax(Int128))) == BigInt
 
 @test typeof(BigInt(true)) == BigInt
-@test typeof(BigInt(typemax(Uint8))) == BigInt
-@test typeof(BigInt(typemax(Uint16))) == BigInt
-@test typeof(BigInt(typemax(Uint32))) == BigInt
-@test typeof(BigInt(typemax(Uint64))) == BigInt
-@test typeof(BigInt(typemax(Uint128))) == BigInt
+@test typeof(BigInt(typemax(UInt8))) == BigInt
+@test typeof(BigInt(typemax(UInt16))) == BigInt
+@test typeof(BigInt(typemax(UInt32))) == BigInt
+@test typeof(BigInt(typemax(UInt64))) == BigInt
+@test typeof(BigInt(typemax(UInt128))) == BigInt
 
 @test typeof(BigInt(BigInt(1))) == BigInt
 

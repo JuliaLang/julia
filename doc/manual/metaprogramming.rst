@@ -538,7 +538,7 @@ is occasionally quite handy.
 
 .. _man-non-standard-string-literals2:
 
-Non-Standard String Literals
+Non-Standard AbstractString Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Recall from :ref:`Strings <man-non-standard-string-literals>` that

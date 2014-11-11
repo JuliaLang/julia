@@ -200,5 +200,5 @@ no_op_err(name, T) = error(name," not defined for ",T)
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
 
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
-min{T<:Real}(x::T, y::T) = ifelse(x < y, x, y)
-minmax{T<:Real}(x::T, y::T) = x < y ? (x, y) : (y, x)
+min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
+minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)

@@ -227,11 +227,11 @@ Julia language. Core operations typically have dozens of methods::
     +(A::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)}),B::Union(DenseArray{Bool,N},SubArray{Bool,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)})) at array.jl:797
     +{S,T}(A::Union(SubArray{S,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{S,N}),B::Union(SubArray{T,N,A<:DenseArray{T,N},I<:(Union(Range{Int64},Int64)...,)},DenseArray{T,N})) at array.jl:719
     +{T<:Union(Int16,Int32,Int8)}(x::T<:Union(Int16,Int32,Int8),y::T<:Union(Int16,Int32,Int8)) at int.jl:16
-    +{T<:Union(Uint32,Uint16,Uint8)}(x::T<:Union(Uint32,Uint16,Uint8),y::T<:Union(Uint32,Uint16,Uint8)) at int.jl:20
+    +{T<:Union(UInt32,UInt16,UInt8)}(x::T<:Union(UInt32,UInt16,UInt8),y::T<:Union(UInt32,UInt16,UInt8)) at int.jl:20
     +(x::Int64,y::Int64) at int.jl:33
-    +(x::Uint64,y::Uint64) at int.jl:34
+    +(x::UInt64,y::UInt64) at int.jl:34
     +(x::Int128,y::Int128) at int.jl:35
-    +(x::Uint128,y::Uint128) at int.jl:36
+    +(x::UInt128,y::UInt128) at int.jl:36
     +(x::Float32,y::Float32) at float.jl:119
     +(x::Float64,y::Float64) at float.jl:120
     +(z::Complex{T<:Real},w::Complex{T<:Real}) at complex.jl:110
@@ -246,16 +246,16 @@ Julia language. Core operations typically have dozens of methods::
     +(a::BigInt,b::BigInt,c::BigInt) at gmp.jl:217
     +(a::BigInt,b::BigInt,c::BigInt,d::BigInt) at gmp.jl:223
     +(a::BigInt,b::BigInt,c::BigInt,d::BigInt,e::BigInt) at gmp.jl:230
-    +(x::BigInt,c::Uint64) at gmp.jl:242
-    +(c::Uint64,x::BigInt) at gmp.jl:246
-    +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigInt) at gmp.jl:247
-    +(x::BigInt,c::Union(Uint32,Uint16,Uint8,Uint64)) at gmp.jl:248
+    +(x::BigInt,c::UInt64) at gmp.jl:242
+    +(c::UInt64,x::BigInt) at gmp.jl:246
+    +(c::Union(UInt32,UInt16,UInt8,UInt64),x::BigInt) at gmp.jl:247
+    +(x::BigInt,c::Union(UInt32,UInt16,UInt8,UInt64)) at gmp.jl:248
     +(x::BigInt,c::Union(Int64,Int16,Int32,Int8)) at gmp.jl:249
     +(c::Union(Int64,Int16,Int32,Int8),x::BigInt) at gmp.jl:250
-    +(x::BigFloat,c::Uint64) at mpfr.jl:147
-    +(c::Uint64,x::BigFloat) at mpfr.jl:151
-    +(c::Union(Uint32,Uint16,Uint8,Uint64),x::BigFloat) at mpfr.jl:152
-    +(x::BigFloat,c::Union(Uint32,Uint16,Uint8,Uint64)) at mpfr.jl:153
+    +(x::BigFloat,c::UInt64) at mpfr.jl:147
+    +(c::UInt64,x::BigFloat) at mpfr.jl:151
+    +(c::Union(UInt32,UInt16,UInt8,UInt64),x::BigFloat) at mpfr.jl:152
+    +(x::BigFloat,c::Union(UInt32,UInt16,UInt8,UInt64)) at mpfr.jl:153
     +(x::BigFloat,c::Int64) at mpfr.jl:157
     +(c::Int64,x::BigFloat) at mpfr.jl:161
     +(x::BigFloat,c::Union(Int64,Int16,Int32,Int8)) at mpfr.jl:162

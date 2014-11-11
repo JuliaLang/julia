@@ -16,7 +16,11 @@ extern "C" {
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
-#  define MAX_ALIGN sizeof(void*)
+#  if defined(__arm__)
+#    define MAX_ALIGN 8
+#  else
+#    define MAX_ALIGN sizeof(void*)
+#  endif
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
@@ -210,6 +214,7 @@ typedef struct _jl_datatype_t {
     uint8_t mutabl;
     uint8_t pointerfree;
     // hidden fields:
+    int32_t ninitialized;
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
@@ -625,7 +630,7 @@ DLLEXPORT jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields);
 DLLEXPORT jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
                                          jl_tuple_t *parameters,
                                          jl_tuple_t *fnames, jl_tuple_t *ftypes,
-                                         int abstract, int mutabl);
+                                         int abstract, int mutabl, int ninitialized);
 DLLEXPORT jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
                                          jl_tuple_t *parameters, size_t nbits);
 jl_datatype_t *jl_wrap_Type(jl_value_t *t);  // x -> Type{x}
@@ -1244,7 +1249,7 @@ DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
                        uv_handle_type stdin_type,uv_pipe_t *stdin_pipe,
                        uv_handle_type stdout_type,uv_pipe_t *stdout_pipe,
-                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe, 
+                       uv_handle_type stderr_type,uv_pipe_t *stderr_pipe,
                        int detach, char **env, char *cwd);
 DLLEXPORT void jl_run_event_loop(uv_loop_t *loop);
 DLLEXPORT int jl_run_once(uv_loop_t *loop);

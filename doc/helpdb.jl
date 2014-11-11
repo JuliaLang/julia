@@ -35,7 +35,7 @@ Any[
 
 "),
 
-("Base","edit","edit(file::String[, line])
+("Base","edit","edit(file::AbstractString[, line])
 
    Edit a file optionally providing a line number to edit at. Returns
    to the julia prompt when you quit the editor.
@@ -56,7 +56,7 @@ Any[
 
 "),
 
-("Base","less","less(file::String[, line])
+("Base","less","less(file::AbstractString[, line])
 
    Show a file using the default pager, optionally providing a
    starting line number. Returns to the julia prompt when you quit the
@@ -86,14 +86,14 @@ Any[
 
 "),
 
-("Base","clipboard","clipboard() -> String
+("Base","clipboard","clipboard() -> AbstractString
 
    Return a string with the contents of the operating system clipboard
    (\"paste\").
 
 "),
 
-("Base","require","require(file::String...)
+("Base","require","require(file::AbstractString...)
 
    Load source files once, in the context of the \"Main\" module, on
    every active node, searching standard locations for files.
@@ -109,7 +109,7 @@ Any[
 
 "),
 
-("Base","reload","reload(file::String)
+("Base","reload","reload(file::AbstractString)
 
    Like \"require\", except forces loading of files regardless of
    whether they have been loaded before. Typically used when
@@ -117,7 +117,7 @@ Any[
 
 "),
 
-("Base","include","include(path::String)
+("Base","include","include(path::AbstractString)
 
    Evaluate the contents of a source file in the current context.
    During including, a task-local include path is set to the directory
@@ -130,7 +130,7 @@ Any[
 
 "),
 
-("Base","include_string","include_string(code::String)
+("Base","include_string","include_string(code::AbstractString)
 
    Like \"include\", except reads code from the given string rather
    than from a file. Since there is no file path involved, no path
@@ -549,13 +549,13 @@ Any[
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
-       (0,:device,Uint64)
-       (8,:inode,Uint64)
-       (16,:mode,Uint64)
+       (0,:device,UInt64)
+       (8,:inode,UInt64)
+       (16,:mode,UInt64)
        (24,:nlink,Int64)
-       (32,:uid,Uint64)
-       (40,:gid,Uint64)
-       (48,:rdev,Uint64)
+       (32,:uid,UInt64)
+       (40,:gid,UInt64)
+       (48,:rdev,UInt64)
        (56,:size,Int64)
        (64,:blksize,Int64)
        (72,:blocks,Int64)
@@ -564,10 +564,10 @@ Any[
 
 "),
 
-("Base","fieldtype","fieldtype(value, name::Symbol)
+("Base","fieldtype","fieldtype(type, name::Symbol | index::Int)
 
-   Determine the declared type of a named field in a value of
-   composite type.
+   Determine the declared type of a field (specified by name or index)
+   in a composite type.
 
 "),
 
@@ -582,7 +582,7 @@ Any[
 
    True if \"T\" is a \"plain data\" type, meaning it is immutable and
    contains no references to other values. Typical examples are
-   numeric types such as \"Uint8\", \"Float64\", and
+   numeric types such as \"UInt8\", \"Float64\", and
    \"Complex{Float64}\".
 
       julia> isbits(Complex{Float64})
@@ -698,7 +698,7 @@ Any[
 
 "),
 
-("Base","evalfile","evalfile(path::String)
+("Base","evalfile","evalfile(path::AbstractString)
 
    Evaluate all expressions in the given file, and return the value of
    the last one. No other processing (path searching, fetching from
@@ -1665,7 +1665,7 @@ Any[
 
 "),
 
-("Base","sizeof","sizeof(s::String)
+("Base","sizeof","sizeof(s::AbstractString)
 
    The number of bytes in string \"s\".
 
@@ -1703,7 +1703,7 @@ Any[
 
 "),
 
-("Base","bytestring","bytestring(::Ptr{Uint8}[, length])
+("Base","bytestring","bytestring(::Ptr{UInt8}[, length])
 
    Create a string from the address of a C (0-terminated) string
    encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
@@ -1720,7 +1720,7 @@ Any[
 
 "),
 
-("Base","ascii","ascii(::Array{Uint8, 1})
+("Base","ascii","ascii(::Array{UInt8, 1})
 
    Create an ASCII string from a byte array.
 
@@ -1733,7 +1733,7 @@ Any[
 
 "),
 
-("Base","utf8","utf8(::Array{Uint8, 1})
+("Base","utf8","utf8(::Array{UInt8, 1})
 
    Create a UTF-8 string from a byte array.
 
@@ -1801,15 +1801,15 @@ Any[
 
 ("Base","is_valid_ascii","is_valid_ascii(s) -> Bool
 
-   Returns true if the string or byte vector is valid ASCII, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid ASCII, false otherwise.
 
 "),
 
 ("Base","is_valid_utf8","is_valid_utf8(s) -> Bool
 
-   Returns true if the string or byte vector is valid UTF-8, false
-   otherwise.
+   Returns true if the argument (\"ASCIIString\", \"UTF8String\", or
+   byte vector) is valid UTF-8, false otherwise.
 
 "),
 
@@ -1827,14 +1827,14 @@ Any[
 
 "),
 
-("Base","ismatch","ismatch(r::Regex, s::String) -> Bool
+("Base","ismatch","ismatch(r::Regex, s::AbstractString) -> Bool
 
    Test whether a string contains a match of the given regular
    expression.
 
 "),
 
-("Base","match","match(r::Regex, s::String[, idx::Integer[, addopts]])
+("Base","match","match(r::Regex, s::AbstractString[, idx::Integer[, addopts]])
 
    Search for the first match of the regular expression \"r\" in \"s\"
    and return a RegexMatch object containing the match, or nothing if
@@ -1845,7 +1845,7 @@ Any[
 
 "),
 
-("Base","eachmatch","eachmatch(r::Regex, s::String[, overlap::Bool=false])
+("Base","eachmatch","eachmatch(r::Regex, s::AbstractString[, overlap::Bool=false])
 
    Search for all matches of a the regular expression \"r\" in \"s\"
    and return a iterator over the matches. If overlap is true, the
@@ -1854,7 +1854,7 @@ Any[
 
 "),
 
-("Base","matchall","matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+("Base","matchall","matchall(r::Regex, s::AbstractString[, overlap::Bool=false]) -> Vector{AbstractString}
 
    Return a vector of the matching substrings from eachmatch.
 
@@ -2086,7 +2086,7 @@ Any[
 
 "),
 
-("Base","isalnum","isalnum(c::Union(Char, String)) -> Bool
+("Base","isalnum","isalnum(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is alphanumeric, or whether this is true
    for all elements of a string.  A character is classified as
@@ -2096,7 +2096,7 @@ Any[
 
 "),
 
-("Base","isalpha","isalpha(c::Union(Char, String)) -> Bool
+("Base","isalpha","isalpha(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is alphabetic, or whether this is true
    for all elements of a string. A character is classified as
@@ -2105,14 +2105,14 @@ Any[
 
 "),
 
-("Base","isascii","isascii(c::Union(Char, String)) -> Bool
+("Base","isascii","isascii(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character belongs to the ASCII character set, or
    whether this is true for all elements of a string.
 
 "),
 
-("Base","iscntrl","iscntrl(c::Union(Char, String)) -> Bool
+("Base","iscntrl","iscntrl(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is a control character, or whether this
    is true for all elements of a string.  Control characters are the
@@ -2120,14 +2120,14 @@ Any[
 
 "),
 
-("Base","isdigit","isdigit(c::Union(Char, String)) -> Bool
+("Base","isdigit","isdigit(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is a numeric digit (0-9), or whether this
    is true for all elements of a string.
 
 "),
 
-("Base","isgraph","isgraph(c::Union(Char, String)) -> Bool
+("Base","isgraph","isgraph(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is printable, and not a space, or whether
    this is true for all elements of a string.  Any character that
@@ -2136,7 +2136,7 @@ Any[
 
 "),
 
-("Base","islower","islower(c::Union(Char, String)) -> Bool
+("Base","islower","islower(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is a lowercase letter, or whether this is
    true for all elements of a string.  A character is classified as
@@ -2144,7 +2144,7 @@ Any[
 
 "),
 
-("Base","isnumber","isnumber(c::Union(Char, String)) -> Bool
+("Base","isnumber","isnumber(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is numeric, or whether this is true for
    all elements of a string.   A character is classified as numeric if
@@ -2153,7 +2153,7 @@ Any[
 
 "),
 
-("Base","isprint","isprint(c::Union(Char, String)) -> Bool
+("Base","isprint","isprint(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is printable, including spaces, but not a
    control character. For strings, tests whether this is true for all
@@ -2161,7 +2161,7 @@ Any[
 
 "),
 
-("Base","ispunct","ispunct(c::Union(Char, String)) -> Bool
+("Base","ispunct","ispunct(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character belongs to the Unicode general category
    Punctuation, i.e. a character whose category code begins with 'P'.
@@ -2170,17 +2170,17 @@ Any[
 
 "),
 
-("Base","isspace","isspace(c::Union(Char, String)) -> Bool
+("Base","isspace","isspace(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is any whitespace character.  Includes
-   ASCII characters 't', 'n', 'v', 'f', 'r', and ' ', Latin-1
-   character U+0085, and characters in Unicode category Zs.  For
-   strings, tests whether this    is true for all elements of the
+   ASCII characters '\\t', '\\n', '\\v', '\\f', '\\r', and ' ',
+   Latin-1 character U+0085, and characters in Unicode category Zs.
+   For strings, tests whether this    is true for all elements of the
    string.
 
 "),
 
-("Base","isupper","isupper(c::Union(Char, String)) -> Bool
+("Base","isupper","isupper(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is an uppercase letter, or whether this
    is true for all elements of a string.    A character is classified
@@ -2189,7 +2189,7 @@ Any[
 
 "),
 
-("Base","isxdigit","isxdigit(c::Union(Char, String)) -> Bool
+("Base","isxdigit","isxdigit(c::Union(Char, AbstractString)) -> Bool
 
    Tests whether a character is a valid hexadecimal digit, or whether
    this is true for all elements of a string.
@@ -2202,14 +2202,14 @@ Any[
 
 "),
 
-("Base","escape_string","escape_string(str::String) -> String
+("Base","escape_string","escape_string(str::AbstractString) -> AbstractString
 
    General escaping of traditional C and Unicode escape sequences. See
    \"print_escaped()\" for more general escaping.
 
 "),
 
-("Base","unescape_string","unescape_string(s::String) -> String
+("Base","unescape_string","unescape_string(s::AbstractString) -> AbstractString
 
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of \"escape_string()\". See also \"print_unescaped()\".
@@ -2218,7 +2218,7 @@ Any[
 
 ("Base","utf16","utf16(s)
 
-   Create a UTF-16 string from a byte array, array of \"Uint16\", or
+   Create a UTF-16 string from a byte array, array of \"UInt16\", or
    any other string type.  (Data must be valid UTF-16.  Conversions of
    byte arrays check for a byte-order marker in the first two bytes,
    and do not include it in the resulting string.)
@@ -2228,7 +2228,7 @@ Any[
    the string (so that it is mostly invisible in Julia); this allows
    the string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   *utf16(s)* conversion function.  If you have a \"Uint16\" array
+   *utf16(s)* conversion function.  If you have a \"UInt16\" array
    \"A\" that is already NUL-terminated valid UTF-16 data, then you
    can instead use *UTF16String(A)`* to construct the string without
    making a copy of the data and treating the NUL as a terminator
@@ -2236,7 +2236,7 @@ Any[
 
 "),
 
-("Base","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+("Base","utf16","utf16(::Union(Ptr{UInt16}, Ptr{Int16})[, length])
 
    Create a string from the address of a NUL-terminated UTF-16 string.
    A copy is made; the pointer can be safely freed. If \"length\" is
@@ -2246,13 +2246,14 @@ Any[
 
 ("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
 
-   Returns true if the string or \"Uint16\" array is valid UTF-16.
+   Returns true if the argument (\"UTF16String\" or \"UInt16\" array)
+   is valid UTF-16.
 
 "),
 
 ("Base","utf32","utf32(s)
 
-   Create a UTF-32 string from a byte array, array of \"Uint32\", or
+   Create a UTF-32 string from a byte array, array of \"UInt32\", or
    any other string type.  (Conversions of byte arrays check for a
    byte-order marker in the first four bytes, and do not include it in
    the resulting string.)
@@ -2262,7 +2263,7 @@ Any[
    the string (so that it is mostly invisible in Julia); this allows
    the string to be passed directly to external functions requiring
    NUL-terminated data.  This NUL is appended automatically by the
-   *utf32(s)* conversion function.  If you have a \"Uint32\" array
+   *utf32(s)* conversion function.  If you have a \"UInt32\" array
    \"A\" that is already NUL-terminated UTF-32 data, then you can
    instead use *UTF32String(A)`* to construct the string without
    making a copy of the data and treating the NUL as a terminator
@@ -2270,7 +2271,7 @@ Any[
 
 "),
 
-("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32})[, length])
 
    Create a string from the address of a NUL-terminated UTF-32 string.
    A copy is made; the pointer can be safely freed. If \"length\" is
@@ -2388,7 +2389,7 @@ Any[
 
 "),
 
-("Base","fdio","fdio([name::String], fd::Integer[, own::Bool]) -> IOStream
+("Base","fdio","fdio([name::AbstractString], fd::Integer[, own::Bool]) -> IOStream
 
    Create an \"IOStream\" object from an integer file descriptor. If
    \"own\" is true, closing this object will close the underlying
@@ -2446,7 +2447,7 @@ Any[
 
 "),
 
-("Base","readbytes!","readbytes!(stream, b::Vector{Uint8}, nb=length(b))
+("Base","readbytes!","readbytes!(stream, b::Vector{UInt8}, nb=length(b))
 
    Read at most \"nb\" bytes from the stream into \"b\", returning the
    number of bytes read (increasing the size of \"b\" as needed).
@@ -2456,7 +2457,7 @@ Any[
 ("Base","readbytes","readbytes(stream, nb=typemax(Int))
 
    Read at most \"nb\" bytes from the stream, returning a
-   \"Vector{Uint8}\" of the bytes read.
+   \"Vector{UInt8}\" of the bytes read.
 
 "),
 
@@ -2605,14 +2606,14 @@ Any[
 
 "),
 
-("Base","print_escaped","print_escaped(io, str::String, esc::String)
+("Base","print_escaped","print_escaped(io, str::AbstractString, esc::AbstractString)
 
    General escaping of traditional C and Unicode escape sequences,
    plus any characters in esc are also escaped (with a backslash).
 
 "),
 
-("Base","print_unescaped","print_unescaped(io, s::String)
+("Base","print_unescaped","print_unescaped(io, s::AbstractString)
 
    General unescaping of traditional C and Unicode escape sequences.
    Reverse of \"print_escaped()\".
@@ -2723,7 +2724,7 @@ Any[
 
 "),
 
-("Base","PipeBuffer","PipeBuffer(data::Vector{Uint8}[, maxsize])
+("Base","PipeBuffer","PipeBuffer(data::Vector{UInt8}[, maxsize])
 
    Create a PipeBuffer to operate on a data vector, optionally
    specifying a size beyond which the underlying Array may not be
@@ -2832,7 +2833,7 @@ Any[
 
 "),
 
-("Base","cp","cp(src::String, dst::String)
+("Base","cp","cp(src::AbstractString, dst::AbstractString)
 
    Copy a file from *src* to *dest*.
 
@@ -2849,13 +2850,13 @@ Any[
 
 "),
 
-("Base","mv","mv(src::String, dst::String)
+("Base","mv","mv(src::AbstractString, dst::AbstractString)
 
    Move a file from *src* to *dst*.
 
 "),
 
-("Base","rm","rm(path::String; recursive=false)
+("Base","rm","rm(path::AbstractString; recursive=false)
 
    Delete the file, link, or empty directory at the given path. If
    \"recursive=true\" is passed and the path is a directory, then all
@@ -2863,7 +2864,7 @@ Any[
 
 "),
 
-("Base","touch","touch(path::String)
+("Base","touch","touch(path::AbstractString)
 
    Update the last-modified timestamp on a file to the current time.
 
@@ -2934,7 +2935,7 @@ Any[
 
 "),
 
-("Base","listenany","listenany(port_hint) -> (Uint16, TcpServer)
+("Base","listenany","listenany(port_hint) -> (UInt16, TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point.
    Returns a tuple of the actual port that the server was created on
@@ -3088,7 +3089,7 @@ Any[
 
 "),
 
-("Base","readall","readall(filename::String)
+("Base","readall","readall(filename::AbstractString)
 
    Open \"filename\", read the entire contents as a string, then close
    the file. Equivalent to \"open(readall, filename)\".
@@ -3132,7 +3133,7 @@ Any[
    If \"T\" is a numeric type, the result is an array of that type,
    with any non-numeric elements as \"NaN\" for floating-point types,
    or zero. Other useful values of \"T\" include \"ASCIIString\",
-   \"String\", and \"Any\".
+   \"AbstractString\", and \"Any\".
 
    If \"header\" is \"true\", the first row of data will be read as
    header and the tuple \"(data_cells, header_cells)\" is returned
@@ -3208,11 +3209,11 @@ Any[
 
 ("Base","writedlm","writedlm(f, A, delim='t')
 
-   Write \"A\" (a vector, matrix or an iterable collection of
-   iterable rows) as text to \"f\" (either a filename string or an
-   \"IO\" stream) using the given delimeter \"delim\" (which defaults
-   to tab, but can be any printable Julia object, typically a \"Char\"
-   or \"String\").
+   Write \"A\" (a vector, matrix or an iterable collection of iterable
+   rows) as text to \"f\" (either a filename string or an \"IO\"
+   stream) using the given delimeter \"delim\" (which defaults to tab,
+   but can be any printable Julia object, typically a \"Char\" or
+   \"AbstractString\").
 
    For example, two vectors \"x\" and \"y\" of the same length can be
    written as two columns of tab-delimited text to \"f\" by either
@@ -3272,9 +3273,10 @@ display(d::Display, mime, x)
    using the requested MIME type *only*, throwing a \"MethodError\" if
    this type is not supported by either the display(s) or by \"x\".
    With these variants, one can also supply the \"raw\" data in the
-   requested MIME type by passing \"x::String\" (for MIME types with
-   text-based storage, such as text/html or application/postscript) or
-   \"x::Vector{Uint8}\" (for binary MIME types).
+   requested MIME type by passing \"x::AbstractString\" (for MIME
+   types with text-based storage, such as text/html or
+   application/postscript) or \"x::Vector{UInt8}\" (for binary MIME
+   types).
 
 "),
 
@@ -3341,17 +3343,17 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","reprmime","reprmime(mime, x)
 
-   Returns a \"String\" or \"Vector{Uint8}\" containing the
+   Returns a \"AbstractString\" or \"Vector{UInt8}\" containing the
    representation of \"x\" in the requested \"mime\" type, as written
    by \"writemime\" (throwing a \"MethodError\" if no appropriate
-   \"writemime\" is available).  A \"String\" is returned for MIME
-   types with textual representations (such as \"\"text/html\"\" or
-   \"\"application/postscript\"\"), whereas binary data is returned as
-   \"Vector{Uint8}\".  (The function \"istext(mime)\" returns whether
-   or not Julia treats a given \"mime\" type as text.)
+   \"writemime\" is available).  A \"AbstractString\" is returned for
+   MIME types with textual representations (such as \"\"text/html\"\"
+   or \"\"application/postscript\"\"), whereas binary data is returned
+   as \"Vector{UInt8}\".  (The function \"istext(mime)\" returns
+   whether or not Julia treats a given \"mime\" type as text.)
 
-   As a special case, if \"x\" is a \"String\" (for textual MIME
-   types) or a \"Vector{Uint8}\" (for binary MIME types), the
+   As a special case, if \"x\" is a \"AbstractString\" (for textual
+   MIME types) or a \"Vector{UInt8}\" (for binary MIME types), the
    \"reprmime\" function assumes that \"x\" is already in the
    requested \"mime\" format and simply returns \"x\".
 
@@ -3359,9 +3361,9 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","stringmime","stringmime(mime, x)
 
-   Returns a \"String\" containing the representation of \"x\" in the
-   requested \"mime\" type.  This is similar to \"reprmime\" except
-   that binary data is base64-encoded as an ASCII string.
+   Returns a \"AbstractString\" containing the representation of \"x\"
+   in the requested \"mime\" type.  This is similar to \"reprmime\"
+   except that binary data is base64-encoded as an ASCII string.
 
 "),
 
@@ -3603,28 +3605,30 @@ popdisplay(d::Display)
 
 "),
 
-("Base","div","div(a, b)
-÷(a, b)
+("Base","div","div(x, y)
+÷(x, y)
 
-   Compute a/b, truncating to an integer.
-
-"),
-
-("Base","fld","fld(a, b)
-
-   Largest integer less than or equal to a/b.
+   The quotient from Euclidean division. Computes \"x/y\", truncated
+   to an integer.
 
 "),
 
-("Base","cld","cld(a, b)
+("Base","fld","fld(x, y)
 
-   Smallest integer larger than or equal to a/b.
+   Largest integer less than or equal to \"x/y\".
 
 "),
 
-("Base","mod","mod(x, m)
+("Base","cld","cld(x, y)
 
-   Modulus after division, returning in the range [0,m).
+   Smallest integer larger than or equal to \"x/y\".
+
+"),
+
+("Base","mod","mod(x, y)
+
+   Modulus after division, returning in the range [0,``y``), if \"y\"
+   is positive, or (\"y\",0] if \"y\" is negative.
 
 "),
 
@@ -3639,21 +3643,19 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rem","rem(x, m)
+("Base","rem","rem(x, y)
+%(x, y)
 
-   Remainder after division.
+   Remainder from Euclidean division, returning a value of the same
+   sign as``x``, and smaller in magnitude than \"y\". This value is
+   always exact.
 
 "),
 
 ("Base","divrem","divrem(x, y)
 
-   Returns \"(x/y, x%y)\".
-
-"),
-
-("Base","%","%(x, m)
-
-   Remainder after division. The operator form of \"rem\".
+   The quotient and remainder from Euclidean division. Equivalent to
+   \"(x÷y, x%y)\".
 
 "),
 
@@ -5066,7 +5068,7 @@ popdisplay(d::Display)
 
    Convert an integer to a string in the given base, optionally
    specifying a number of digits to pad to. The base can be specified
-   as either an integer, or as a \"Uint8\" array of character values
+   as either an integer, or as a \"UInt8\" array of character values
    to use as digit symbols.
 
 "),
@@ -5195,31 +5197,31 @@ popdisplay(d::Display)
 
 ("Base","uint8","uint8(x)
 
-   Convert a number or array to \"Uint8\" data type
+   Convert a number or array to \"UInt8\" data type
 
 "),
 
 ("Base","uint16","uint16(x)
 
-   Convert a number or array to \"Uint16\" data type
+   Convert a number or array to \"UInt16\" data type
 
 "),
 
 ("Base","uint32","uint32(x)
 
-   Convert a number or array to \"Uint32\" data type
+   Convert a number or array to \"UInt32\" data type
 
 "),
 
 ("Base","uint64","uint64(x)
 
-   Convert a number or array to \"Uint64\" data type
+   Convert a number or array to \"UInt64\" data type
 
 "),
 
 ("Base","uint128","uint128(x)
 
-   Convert a number or array to \"Uint128\" data type
+   Convert a number or array to \"UInt128\" data type
 
 "),
 
@@ -5336,11 +5338,11 @@ popdisplay(d::Display)
 ("Base","hex2bytes","hex2bytes(s::ASCIIString)
 
    Convert an arbitrarily long hexadecimal string to its binary
-   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+   representation. Returns an Array{UInt8, 1}, i.e. an array of bytes.
 
 "),
 
-("Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8, 1})
+("Base","bytes2hex","bytes2hex(bin_arr::Array{UInt8, 1})
 
    Convert an array of bytes to its hexadecimal representation. All
    characters are in lower-case. Returns an ASCIIString.
@@ -5502,21 +5504,22 @@ popdisplay(d::Display)
 ("Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
-   anything that can be converted to an \"Int\") or a \"String\". The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a \"BigInt\".
+   anything that can be converted to an \"Int\") or a
+   \"AbstractString\". The usual mathematical operators are defined
+   for this type, and results are promoted to a \"BigInt\".
 
 "),
 
 ("Base","BigFloat","BigFloat(x)
 
    Create an arbitrary precision floating point number. \"x\" may be
-   an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a \"BigFloat\". Note that because floating-point
-   numbers are not exactly-representable in decimal notation,
-   \"BigFloat(2.1)\" may not yield what you expect. You may prefer to
-   initialize constants using strings, e.g., \"BigFloat(\"2.1\")\".
+   an \"Integer\", a \"Float64\", a \"AbstractString\" or a
+   \"BigInt\". The usual mathematical operators are defined for this
+   type, and results are promoted to a \"BigFloat\". Note that because
+   floating-point numbers are not exactly-representable in decimal
+   notation, \"BigFloat(2.1)\" may not yield what you expect. You may
+   prefer to initialize constants using strings, e.g.,
+   \"BigFloat(\"2.1\")\".
 
 "),
 
@@ -5681,10 +5684,9 @@ popdisplay(d::Display)
 
    Reseed the random number generator. If a \"seed\" is provided, the
    RNG will give a reproducible sequence of numbers, otherwise Julia
-   will get entropy from the system. The \"seed\" may be an unsigned
-   integer, a vector of unsigned integers or a filename, in which case
-   the seed is read from a file. If the argument \"rng\" is not
-   provided, the default global RNG is seeded.
+   will get entropy from the system. The \"seed\" may be a non-
+   negative integer, a vector of \"UInt32\" integers or a filename, in
+   which case the seed is read from a file.
 
 "),
 
@@ -5696,38 +5698,16 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand() -> Float64
+("Base","rand","rand([rng][, t::Type][, dims...])
 
-   Generate a \"Float64\" random number uniformly in [0,1)
+   Generate a random value or an array of random values of the given
+   type, \"t\", which defaults to \"Float64\".
 
 "),
 
 ("Base","rand!","rand!([rng], A)
 
-   Populate the array A with random number generated from the
-   specified RNG.
-
-"),
-
-("Base","rand","rand(rng::AbstractRNG[, dims...])
-
-   Generate a random \"Float64\" number or array of the size specified
-   by dims, using the specified RNG object. Currently,
-   \"MersenneTwister\" is the only available Random Number Generator
-   (RNG), which may be seeded using srand.
-
-"),
-
-("Base","rand","rand(dims or [dims...])
-
-   Generate a random \"Float64\" array of the size specified by dims
-
-"),
-
-("Base","rand","rand(t::Type[, dims...])
-
-   Generate a random number or array of random numbes of the given
-   type.
+   Populate the array A with random values.
 
 "),
 
@@ -5738,14 +5718,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","randbool","randbool([dims...])
+("Base","randbool","randbool([rng][, dims...])
 
-   Generate a random boolean value. Optionally, generate an array of
-   random boolean values.
+   Generate a random boolean value. Optionally, generate a
+   \"BitArray\" of random boolean values.
 
 "),
 
-("Base","randn","randn([rng], dims or [dims...])
+("Base","randn","randn([rng][, dims...])
 
    Generate a normally-distributed random number with mean 0 and
    standard deviation 1. Optionally generate an array of normally-
@@ -6070,9 +6050,22 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cat","cat(dim, A...)
+("Base","cat","cat(dims, A...)
 
-   Concatenate the input arrays along the specified dimension
+   Concatenate the input arrays along the specified dimensions in the
+   iterable \"dims\". For dimensions not in \"dims\", all input arrays
+   should have the same size, which will also be the size of the
+   output array along that dimension. For dimensions in \"dims\", the
+   size of the output array is the sum of the sizes of the input
+   arrays along that dimension. If \"dims\" is a single number, the
+   different arrays are tightly stacked along that dimension. If
+   \"dims\" is an iterable containing several dimensions, this allows
+   to construct block diagonal matrices and their higher-dimensional
+   analogues by simultaneously increasing several dimensions for every
+   new input array and putting zero blocks elsewhere. For example,
+   *cat([1,2], matrices...)* builds a block diagonal matrix, i.e. a
+   block matrix with *matrices[1]*, *matrices[2]*, ... as diagonal
+   blocks and matching zero blocks away from the diagonal.
 
 "),
 
@@ -7639,7 +7632,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","open","open(command, mode::String=\"r\", stdio=DevNull)
+("Base","open","open(command, mode::AbstractString=\"r\", stdio=DevNull)
 
    Start running \"command\" asynchronously, and return a tuple
    \"(stream,process)\".  If \"mode\" is \"\"r\"\", then \"stream\"
@@ -7651,7 +7644,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","open","open(f::Function, command, mode::String=\"r\", stdio=DevNull)
+("Base","open","open(f::Function, command, mode::AbstractString=\"r\", stdio=DevNull)
 
    Similar to \"open(command, mode, stdio)\", but calls \"f(stream)\"
    on the resulting read or write stream, then closes the stream and
@@ -7724,26 +7717,26 @@ popdisplay(d::Display)
 
 "),
 
-("Base","gethostname","gethostname() -> String
+("Base","gethostname","gethostname() -> AbstractString
 
    Get the local machine's host name.
 
 "),
 
-("Base","getipaddr","getipaddr() -> String
+("Base","getipaddr","getipaddr() -> AbstractString
 
    Get the IP address of the local machine, as a string of the form
    \"x.x.x.x\".
 
 "),
 
-("Base","pwd","pwd() -> String
+("Base","pwd","pwd() -> AbstractString
 
    Get the current working directory.
 
 "),
 
-("Base","cd","cd(dir::String)
+("Base","cd","cd(dir::AbstractString)
 
    Set the current working directory.
 
@@ -7933,8 +7926,8 @@ popdisplay(d::Display)
 
    Call function in C-exported shared library, specified by
    \"(function name, library)\" tuple, where each component is a
-   String or :Symbol. Alternatively, ccall may be used to call a
-   function pointer returned by dlsym, but note that this usage is
+   AbstractString or :Symbol. Alternatively, ccall may be used to call
+   a function pointer returned by dlsym, but note that this usage is
    generally discouraged to facilitate future static compilation. Note
    that the argument type tuple must be a literal tuple, and not a
    tuple-valued variable or expression.
@@ -7970,7 +7963,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","dlopen","dlopen(libfile::String[, flags::Integer])
+("Base","dlopen","dlopen(libfile::AbstractString[, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -7989,7 +7982,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","dlopen_e","dlopen_e(libfile::String[, flags::Integer])
+("Base","dlopen_e","dlopen_e(libfile::AbstractString[, flags::Integer])
 
    Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
    of raising errors.
@@ -8258,7 +8251,7 @@ popdisplay(d::Display)
 
 ("Base","Cuchar","Cuchar
 
-   Equivalent to the native \"unsigned char\" c-type (Uint8)
+   Equivalent to the native \"unsigned char\" c-type (UInt8)
 
 "),
 
@@ -8270,7 +8263,7 @@ popdisplay(d::Display)
 
 ("Base","Cushort","Cushort
 
-   Equivalent to the native \"unsigned short\" c-type (Uint16)
+   Equivalent to the native \"unsigned short\" c-type (UInt16)
 
 "),
 
@@ -8282,7 +8275,7 @@ popdisplay(d::Display)
 
 ("Base","Cuint","Cuint
 
-   Equivalent to the native \"unsigned int\" c-type (Uint32)
+   Equivalent to the native \"unsigned int\" c-type (UInt32)
 
 "),
 
@@ -8306,7 +8299,7 @@ popdisplay(d::Display)
 
 ("Base","Culonglong","Culonglong
 
-   Equivalent to the native \"unsigned long long\" c-type (Uint64)
+   Equivalent to the native \"unsigned long long\" c-type (UInt64)
 
 "),
 
@@ -8318,13 +8311,13 @@ popdisplay(d::Display)
 
 ("Base","Cuintmax_t","Cuintmax_t
 
-   Equivalent to the native \"uintmax_t\" c-type (Uint64)
+   Equivalent to the native \"uintmax_t\" c-type (UInt64)
 
 "),
 
 ("Base","Csize_t","Csize_t
 
-   Equivalent to the native \"size_t\" c-type (Uint)
+   Equivalent to the native \"size_t\" c-type (UInt)
 
 "),
 
@@ -8364,7 +8357,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","error","error(message::String)
+("Base","error","error(message::AbstractString)
 
    Raise an error with the given message
 
@@ -9046,7 +9039,7 @@ popdisplay(d::Display)
 
 "),
 
-("Dates","DateTime","DateTime(dt::String, format::String; locale=\"english\") -> DateTime
+("Dates","DateTime","DateTime(dt::AbstractString, format::AbstractString; locale=\"english\") -> DateTime
 
    Construct a DateTime type by parsing the \"dt\" date string
    following the pattern given in the \"format\" string. The following
@@ -9123,7 +9116,7 @@ popdisplay(d::Display)
 
 "),
 
-("Dates","Date","Date(dt::String, format::String; locale=\"english\") -> Date
+("Dates","Date","Date(dt::AbstractString, format::AbstractString; locale=\"english\") -> Date
 
    Construct a Date type by parsing a \"dt\" date string following the
    pattern given in the \"format\" string. Follows the same
@@ -9192,14 +9185,14 @@ Millisecond(dt::TimeType) -> Millisecond
 
 "),
 
-("Dates","dayname","dayname(dt::TimeType; locale=\"english\") -> String
+("Dates","dayname","dayname(dt::TimeType; locale=\"english\") -> AbstractString
 
    Return the full day name corresponding to the day of the week of
    the Date or DateTime in the given \"locale\".
 
 "),
 
-("Dates","dayabbr","dayabbr(dt::TimeType; locale=\"english\") -> String
+("Dates","dayabbr","dayabbr(dt::TimeType; locale=\"english\") -> AbstractString
 
    Return the abbreviated name corresponding to the day of the week of
    the Date or DateTime in the given \"locale\".
@@ -9232,14 +9225,14 @@ Millisecond(dt::TimeType) -> Millisecond
 
 "),
 
-("Dates","monthname","monthname(dt::TimeType; locale=\"english\") -> String
+("Dates","monthname","monthname(dt::TimeType; locale=\"english\") -> AbstractString
 
    Return the full name of the month of the Date or DateTime in the
    given \"locale\".
 
 "),
 
-("Dates","monthabbr","monthabbr(dt::TimeType; locale=\"english\") -> String
+("Dates","monthabbr","monthabbr(dt::TimeType; locale=\"english\") -> AbstractString
 
    Return the abbreviated month name of the Date or DateTime in the
    given \"locale\".
@@ -9572,25 +9565,25 @@ Millisecond(v)
 
 "),
 
-("Base","homedir","homedir() -> String
+("Base","homedir","homedir() -> AbstractString
 
    Return the current user's home directory.
 
 "),
 
-("Base","dirname","dirname(path::String) -> String
+("Base","dirname","dirname(path::AbstractString) -> AbstractString
 
    Get the directory part of a path.
 
 "),
 
-("Base","basename","basename(path::String) -> String
+("Base","basename","basename(path::AbstractString) -> AbstractString
 
    Get the file name part of a path.
 
 "),
 
-("Base","@__FILE__","@__FILE__() -> String
+("Base","@__FILE__","@__FILE__() -> AbstractString
 
    \"@__FILE__\" expands to a string with the absolute path and file
    name of the script being run. Returns \"nothing\" if run from a
@@ -9598,61 +9591,61 @@ Millisecond(v)
 
 "),
 
-("Base","isabspath","isabspath(path::String) -> Bool
+("Base","isabspath","isabspath(path::AbstractString) -> Bool
 
    Determines whether a path is absolute (begins at the root
    directory).
 
 "),
 
-("Base","isdirpath","isdirpath(path::String) -> Bool
+("Base","isdirpath","isdirpath(path::AbstractString) -> Bool
 
    Determines whether a path refers to a directory (for example, ends
    with a path separator).
 
 "),
 
-("Base","joinpath","joinpath(parts...) -> String
+("Base","joinpath","joinpath(parts...) -> AbstractString
 
    Join path components into a full path. If some argument is an
    absolute path, then prior components are dropped.
 
 "),
 
-("Base","abspath","abspath(path::String) -> String
+("Base","abspath","abspath(path::AbstractString) -> AbstractString
 
    Convert a path to an absolute path by adding the current directory
    if necessary.
 
 "),
 
-("Base","normpath","normpath(path::String) -> String
+("Base","normpath","normpath(path::AbstractString) -> AbstractString
 
    Normalize a path, removing \".\" and \"..\" entries.
 
 "),
 
-("Base","realpath","realpath(path::String) -> String
+("Base","realpath","realpath(path::AbstractString) -> AbstractString
 
    Canonicalize a path by expanding symbolic links and removing \".\"
    and \"..\" entries.
 
 "),
 
-("Base","expanduser","expanduser(path::String) -> String
+("Base","expanduser","expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path
    with the current user's home directory.
 
 "),
 
-("Base","splitdir","splitdir(path::String) -> (String, String)
+("Base","splitdir","splitdir(path::AbstractString) -> (AbstractString, AbstractString)
 
    Split a path into a tuple of the directory name and file name.
 
 "),
 
-("Base","splitdrive","splitdrive(path::String) -> (String, String)
+("Base","splitdrive","splitdrive(path::AbstractString) -> (AbstractString, AbstractString)
 
    On Windows, split a path into the drive letter part and the path
    part. On Unix systems, the first component is always the empty
@@ -9660,7 +9653,7 @@ Millisecond(v)
 
 "),
 
-("Base","splitext","splitext(path::String) -> (String, String)
+("Base","splitext","splitext(path::AbstractString) -> (AbstractString, AbstractString)
 
    If the last component of a path contains a dot, split the path into
    everything before the dot and everything including and after the
@@ -11192,7 +11185,7 @@ Millisecond(v)
 
 "),
 
-("Base.Pkg","dir","dir() -> String
+("Base.Pkg","dir","dir() -> AbstractString
 
    Returns the absolute path of the package directory. This defaults
    to \"joinpath(homedir(),\".julia\")\" on all platforms (i.e.
@@ -11203,7 +11196,7 @@ Millisecond(v)
 
 "),
 
-("Base.Pkg","dir","dir(names...) -> String
+("Base.Pkg","dir","dir(names...) -> AbstractString
 
    Equivalent to \"normpath(Pkg.dir(),names...)\" – i.e. it appends
    path components to the package directory and normalizes the
@@ -11212,7 +11205,7 @@ Millisecond(v)
 
 "),
 
-("Base.Pkg","init","init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
+("Base.Pkg","init","init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
 
    Initialize \"Pkg.dir()\" as a package directory. This will be done
    automatically when the \"JULIA_PKGDIR\" is not set and
@@ -11489,6 +11482,16 @@ Millisecond(v)
 
 "),
 
+("Base.Profile","clear_malloc_data","clear_malloc_data()
+
+   Clears any stored memory allocation data when running julia with \"
+   --track-allocation\".  Execute the command(s) you want to test (to
+   force JIT-compilation), then call \"clear_malloc_data()\". Then
+   execute your command(s) again, quit julia, and examine the
+   resulting \"*.mem\" files.
+
+"),
+
 
 ("Base","sort!","sort!(v, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
 
@@ -11759,7 +11762,39 @@ Millisecond(v)
    \"A\". This includes zeros that are explicitly stored in the sparse
    matrix. The returned vector points directly to the internal nonzero
    storage of \"A\", and any modifications to the returned vector will
-   mutate \"A\" as well.
+   mutate \"A\" as well. See \"rowvals(A)\" and \"nzrange(A, col)\".
+
+"),
+
+("Base","rowvals","rowvals(A)
+
+   Return a vector of the row indices of \"A\", and any modifications
+   to the returned vector will mutate \"A\" as well. Given the
+   internal storage format of sparse matrices, providing access to how
+   the row indices are stored internally can be useful in conjuction
+   with iterating over structural nonzero values. See \"nonzeros(A)\"
+   and \"nzrange(A, col)\".
+
+"),
+
+("Base","nzrange","nzrange(A, col)
+
+   Return the range of indices to the structural nonzero values of a
+   sparse matrix column. In conjunction with \"nonzeros(A)\" and
+   \"rowvals(A)\", this allows for convenient iterating over a sparse
+   matrix
+
+      A = sparse(I,J,V)
+      rows = rowvals(A)
+      vals = nonzeros(A)
+      m, n = size(A)
+      for i = 1:n
+         for j in nzrange(A, i)
+            row = rows[j]
+            val = vals[j]
+            # perform sparse wizardry...
+         end
+      end
 
 "),
 

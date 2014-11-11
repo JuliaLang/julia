@@ -15,7 +15,7 @@ function get(G::Graph, name)
 end
 
 function centrality_mean(G::Graph, start_node)
-    dists = Dict{Node,Uint64}()
+    dists = Dict{Node,UInt64}()
     next = Set([G[start_node]])
 
     cdist = 0
@@ -40,7 +40,7 @@ function read_graph()
     actors = Set()
 
     open(joinpath(JULIA_HOME,"..","..","test","perf","kernel","imdb-1.tsv"), "r") do io
-        while !eof(io) 
+        while !eof(io)
             k = split(strip(readline(io)), "\t")
             actor, movie = k[1], join(k[2:3], "_")
             ac, mn = get(G, actor), get(G, movie)
@@ -62,7 +62,7 @@ function actor_centrality()
     end
 
     vals = sort!([(v,k) for (k,v) in d])
-    #for i=1:20 
+    #for i=1:20
     #    print("$i: ", vals[i], "\n")
     #end
 

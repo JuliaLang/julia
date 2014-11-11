@@ -72,7 +72,7 @@ static Type *FTnbits(size_t nb)
         return Type::getDoubleTy(jl_LLVMContext);
     else if (nb == 128)
         return Type::getFP128Ty(jl_LLVMContext);
-    else 
+    else
         jl_error("Unsupported Float Size");
 }
 // convert int type to same-size float type
@@ -744,7 +744,7 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
-    return typed_load(thePtr, im1, ety, ctx);
+    return typed_load(thePtr, im1, ety, ctx, tbaa_user);
 }
 
 static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
@@ -803,7 +803,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        typed_store(thePtr, im1, val, ety, ctx);
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_user);
     }
     return mark_julia_type(thePtr, aty);
 }
@@ -948,7 +948,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fpext,2) {
         Value *x = auto_unbox(args[2],ctx);
 #if JL_NEED_FLOATTEMP_VAR
-        // Target platform might carry extra precision.  
+        // Target platform might carry extra precision.
         // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's
         // understood that everything is implicitly rounded to 23 bits,

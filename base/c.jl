@@ -12,24 +12,24 @@ const RTLD_NOLOAD    = 0x00000010
 const RTLD_DEEPBIND  = 0x00000020
 const RTLD_FIRST     = 0x00000040
 
-function dlsym(hnd::Ptr, s::Union(Symbol,String))
+function dlsym(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
-    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+    ccall(:jl_dlsym, Ptr{Void}, (Ptr{Void}, Ptr{UInt8}), hnd, s)
 end
 
-function dlsym_e(hnd::Ptr, s::Union(Symbol,String))
+function dlsym_e(hnd::Ptr, s::Union(Symbol,AbstractString))
     hnd == C_NULL && error("NULL library handle")
-    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{Uint8}), hnd, s)
+    ccall(:jl_dlsym_e, Ptr{Void}, (Ptr{Void}, Ptr{UInt8}), hnd, s)
 end
 
 dlopen(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     dlopen(string(s), flags)
 
-dlopen(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+dlopen(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    ccall(:jl_load_dynamic_library, Ptr{Void}, (Ptr{UInt8},UInt32), s, flags)
 
-dlopen_e(s::String, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
-    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{Uint8},Uint32), s, flags)
+dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
+    ccall(:jl_load_dynamic_library_e, Ptr{Void}, (Ptr{UInt8},UInt32), s, flags)
 
 dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
     dlopen_e(string(s), flags)
@@ -42,29 +42,29 @@ cfunction(f::Function, r, a) =
 if ccall(:jl_is_char_signed, Any, ())
     typealias Cchar Int8
 else
-    typealias Cchar Uint8
+    typealias Cchar UInt8
 end
-typealias Cuchar Uint8
+typealias Cuchar UInt8
 typealias Cshort Int16
-typealias Cushort Uint16
+typealias Cushort UInt16
 typealias Cint Int32
-typealias Cuint Uint32
+typealias Cuint UInt32
 if OS_NAME === :Windows
     typealias Clong Int32
-    typealias Culong Uint32
-    typealias Cwchar_t Uint16
+    typealias Culong UInt32
+    typealias Cwchar_t UInt16
 else
     typealias Clong Int
-    typealias Culong Uint
+    typealias Culong UInt
     typealias Cwchar_t Int32
 end
 typealias Cptrdiff_t Int
-typealias Csize_t Uint
+typealias Csize_t UInt
 typealias Cssize_t Int
 typealias Cintmax_t Int64
-typealias Cuintmax_t Uint64
+typealias Cuintmax_t UInt64
 typealias Clonglong Int64
-typealias Culonglong Uint64
+typealias Culonglong UInt64
 typealias Cfloat Float32
 typealias Cdouble Float64
 
@@ -112,12 +112,12 @@ function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrap
     return ""
 end
 
-function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(String,Symbol)=string(f))
-    ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{Uint8}), f, rt, argt, name)
+function ccallable(f::Function, rt::Type, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
+    ccall(:jl_extern_c, Void, (Any, Any, Any, Ptr{UInt8}), f, rt, argt, name)
 end
 
-function ccallable(f::Function, argt::(Type...), name::Union(String,Symbol)=string(f))
-    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{Uint8}), f, C_NULL, argt, name)
+function ccallable(f::Function, argt::(Type...), name::Union(AbstractString,Symbol)=string(f))
+    ccall(:jl_extern_c, Void, (Any, Ptr{Void}, Any, Ptr{UInt8}), f, C_NULL, argt, name)
 end
 
 macro ccallable(def)

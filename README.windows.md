@@ -33,7 +33,7 @@ The 64-bit (x86_64) binary will only run on 64-bit Windows and will otherwise re
 
 # Line endings
 
-Julia uses binary-mode files exclusively. Unlike many other Window's programs, if you write '\n' to a file, you get a '\n' in the file, not some other bit pattern. This matches the behavior exhibited by other operating systems. If you have installed msysGit, it is suggested, but not required, that you configure your system msysGit to use the same convention:
+Julia uses binary-mode files exclusively. Unlike many other Windows programs, if you write '\n' to a file, you get a '\n' in the file, not some other bit pattern. This matches the behavior exhibited by other operating systems. If you have installed msysGit, it is suggested, but not required, that you configure your system msysGit to use the same convention:
 
     git config --global core.eol = lf
     git config --global core.autocrlf = input
@@ -62,7 +62,9 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
 2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
 
-3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
+3. Install [CMake](http://www.cmake.org/download/).
+
+4. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC, as follows. Do **not** use the regular MinGW distribution.
   1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe).
   2. Run the installer. When prompted, choose:
     - Version: the most recent version (these instructions were tested with 4.8.1)
@@ -74,7 +76,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     - `C:\mingw-builds\x64-4.8.1-win32-seh-rev5` for 64 bits
     - `C:\mingw-builds\x32-4.8.1-win32-sjlj-rev5` for 32 bits
 
-4. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
+5. Install and configure [MSYS2](http://sourceforge.net/projects/msys2), a minimal POSIX-like environment for Windows.
 
   1. Download the latest base [32-bit](http://sourceforge.net/projects/msys2/files/Base/i686/) or [64-bit](http://sourceforge.net/projects/msys2/files/Base/x86_64/) distribution, consistent with the architecture you chose for MinGW-builds. The archive will have a name like `msys2-base-x86_64-yyyymmdd.tar.xz` and these instructions were tested with `msys2-base-x86_64-20140216.tar.xz`.
 
@@ -114,7 +116,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
   6. Configuration of the toolchain is complete. Now `exit` the MSYS2 shell.
 
-5. Build Julia and its dependencies from source.
+6. Build Julia and its dependencies from source.
   1. Relaunch the MSYS2 shell and type
 
      ```
@@ -123,84 +125,80 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 
      Ignore any warnings you see from `mount` about `/mingw` and `/python` not existing.
 
-  2. Get the Julia sources and start the build:
+  2. Get the Julia sources
     ```
     git clone https://github.com/JuliaLang/julia.git
     cd julia
-    make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-  3. The Julia build can (as of 2014-02-28) fail after building OpenBLAS.
-  This appears (?) to be a result of the OpenBLAS build trying to run the Microsoft Visual C++ `lib.exe` tool  -- which we don't need to do -- without checking for its existence.
-    This uncaught error kills the Julia build. If this happens, follow the instructions in the helpful error message and continue the build, *viz.*
+  3. Specify the location where you installed CMake
 
      ```
-    cd deps/openblas-v0.2.9.rc1   # This path will depend on the version of OpenBLAS.
-    make install
-    cd ../..
-    make -j 4   # Adjust the number of cores (4) to match your build environment.
+    echo 'override CMAKE=/C/path/to/CMake/bin/cmake.exe' > Make.user
 ```
 
-  4. Some versions of PCRE (*e.g.* 8.31) will compile correctly but fail a test.
-  This will cause the Julia build to fail. To circumvent testing for PCRE and allow the rest
-  of the build to continue,
+  4. Start the build
     ```
-    touch deps/pcre-8.31/checked  # This path will depend on the version of PCRE.
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
-6. Setup Package Development Environment
+7. Setup Package Development Environment
   1. The `Pkg` module in Base provides many convenient tools for [developing and publishing packages](http://docs.julialang.org/en/latest/manual/packages/).
   One of the packages added through pacman above was `openssh`, which will allow secure access to GitHub APIs.
   Follow GitHub's [guide](https://help.github.com/articles/generating-ssh-keys) to setting up SSH keys to ensure your local machine can communicate with GitHub effectively.
 
   5. In case of the issues with building packages (i.e. ICU fails to build with the following error message ```error compiling xp_parse: error compiling xp_make_parser: could not load module libexpat-1: %```) run ```make win-extras``` and then copy everything from the ```dist-extras``` folder into ```usr/bin```.
 
-## Building on Windows with MinGW-builds/MSYS
+## Cygwin-to-MinGW cross compiling
 
-### The MSYS build of `make` is fragile and may not reliably support parallel builds. Use MSYS2 as described above, if you can. If you must use MSYS, take care to notice the special comments in this section.
+Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using versions of the MinGW-w64 compilers available through Cygwin's package manager.
 
-1. Install [7-Zip](http://www.7-zip.org/download.html).
+1. Download and run Cygwin setup for [32 bit](http://cygwin.com/setup-x86.exe) or [64 bit](http://cygwin.com/setup-x86_64.exe). Note that you can compile either 32 or 64 bit Julia from either 32 or 64 bit Cygwin. 64 bit Cygwin has a slightly smaller but often more up-to-date selection of packages.
 
-2. Install [Python 2.x](http://www.python.org/download/releases). Do **not** install Python 3.
+2. Select installation location and download mirror.
 
-3. Install [MinGW-builds](http://sourceforge.net/projects/mingwbuilds/), a Windows port of GCC. as follows. Do **not** use the regular MinGW distribution.
-  1. Download the [MinGW-builds installer](http://downloads.sourceforge.net/project/mingwbuilds/mingw-builds-install/mingw-builds-install.exe).
-  2. Run the installer. When prompted, choose:
-    - Version: the most recent version (these instructions were tested with 4.8.1)
-    - Architecture: x32 or x64 as appropriate and desired.
-    - Threads: win32 (not posix)
-    - Exception: sjlj (for x32) or seh (for x64). Do not choose dwarf2.
-    - Build revision: most recent available (tested with 5)
-  3. Do **not** install to a directory with spaces in the name. You will have to change the default installation path. The following instructions will assume `C:\mingw-builds\x64-4.8.1-win32-seh-rev5\mingw64`.
+3. At the "Select Packages" step, select the following:
+  1. `git` (under `Devel` category)
+  2. `make` (under `Devel` category)
+  3. `curl` (under `Net` category)
+  4. `patch` (under `Devel` category)
+  5. `python` (under `Interpreters` or `Python` category)
+  6. `gcc-g++` (under `Devel` category)
+  7. `m4` (under `Interpreters` category)
+  8. `cmake` (under `Devel` category)
+  9. `p7zip` (under `Archive` category)
+  10. `mingw64-i686-gcc-g++` and `mingw64-i686-gcc-fortran` (for 32 bit Julia, under `Devel` category)
+  11. `mingw64-x86_64-gcc-g++` and `mingw64-x86_64-gcc-fortran` (for 64 bit Julia, under `Devel` category)
 
-4. Download and extract the [MSYS distribution for MinGW-builds](http://sourceforge.net/projects/mingwbuilds/files/external-binary-packages/) (e.g. msys+7za+wget+svn+git+mercurial+cvs-rev13.7z) to a directory *without* spaces in the name, e.g. `C:/mingw-builds/msys`.
+4. At the "Resolving Dependencies" step, be sure to leave "Select required packages (RECOMMENDED)" enabled.
 
-5. Download the [MSYS distribution of make](http://sourceforge.net/projects/mingw/files/MSYS/Base/make) and use this  `make.exe` to replace the one in the `mingw64\bin` subdirectory of the MinGW-builds installation.
+5. Allow Cygwin installation to finish, then start a "Cygwin Terminal" (or "Cygwin64 Terminal") from the installed shortcut.
 
-6. Run the `msys.bat` installed in Step 4. Set up MSYS by running at the MSYS prompt:
-
-   ```
-    mount C:/mingw-builds/x64-4.8.1-win32-seh-rev5/mingw64 /mingw
-    mount C:/Python27 /python
-    export PATH=$PATH:/mingw/bin:/python
-   ```
-
-   Replace the directories as appropriate.
-
-7. Download the Julia source repository and build it
-   ```
-    git clone https://github.com/JuliaLang/julia.git
+6. Build Julia and its dependencies from source.
+  1. Get the Julia sources
+     ```
+    git clone --recursive https://github.com/JuliaLang/julia.git
     cd julia
-    make
-   ```
-   *Tips:*
-  - The MSYS build of `make` is fragile and will occasionally corrupt the build process. You can minimize the changes of this occurring by only running `make` in serial, i.e. avoid the `-j` argument.
-  - When the build process fails for no apparent reason, try running `make` again.
-  - Sometimes, `make` will appear to hang, consuming 100% cpu but without apparent progress. If this happens, kill `make` from the Task Manager and try again.
-  - Expect this to take a very long time (dozens of hours is not uncommon).
-  - If `make` fails complaining that `./flisp/flisp` is not found, force `make` to build FemtoLisp before Julia by running `make -C src/flisp && make`.
+```
+     *Tips:*
+     - If you get an `error: cannot fork() for fetch-pack: Resource temporarily unavailable` from git, add `alias git="env PATH=/usr/bin git"` to `~/.bashrc` and restart Cygwin.
 
-8. Run Julia with _either_ of:
+  2. Set the `XC_HOST` variable in `Make.user` to indicate MinGW-w64 cross compilation
+
+     For 32 bit Julia
+     ```
+    echo 'XC_HOST = i686-w64-mingw32' > Make.user
+```
+     For 64 bit Julia
+     ```
+    echo 'XC_HOST = x86_64-w64-mingw32' > Make.user
+```
+
+  3. Start the build
+    ```
+    make -j 4   # Adjust the number of cores (4) to match your build environment.
+```
+
+7. Run Julia with _either_ of:
   - Using `make`
     ```
     make run-julia
@@ -212,7 +210,7 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
     usr/bin/julia
 ```
 
-## Cross-compiling
+## Cross-compiling from Unix
 
 If you prefer to cross-compile, the following steps should get you started.
 
