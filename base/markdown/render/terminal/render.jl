@@ -74,7 +74,7 @@ function terminline(io::IO, content::Vector)
 end
 
 function terminline(io::IO, md::String)
-  print_with_format(:normal, io, md)
+  print(io, md)
 end
 
 function terminline(io::IO, md::Bold)
