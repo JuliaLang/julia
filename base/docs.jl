@@ -1,6 +1,6 @@
 module Docs
 
-import Base.Markdown: @doc_str, @doc_mstr
+import Base.Markdown: @doc_str, @doc_mstr, MD
 
 export doc, @doc
 
@@ -312,5 +312,9 @@ function catdoc(xs::Text...)
     end
   end
 end
+
+# MD support
+
+catdoc(md::MD...) = MD(md...)
 
 end
