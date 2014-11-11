@@ -28,7 +28,7 @@ linearindexing(::Range) = LinearFast()
 abstract Subscripts{N}           # the state for all multidimensional iterators
 abstract SizeIterator{N}         # Iterator that visits the index associated with each element
 
-function gen_iterators(N::Int, with_shared=true)
+function gen_iterators(N::Int, with_shared=Base.is_unix(OS_NAME))
     # Create the types
     namestate = symbol("Subscripts_$N")
     namesize  = symbol("SizeIterator_$N")
@@ -81,7 +81,7 @@ end
 done(R::StepRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
 done(R::UnitRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
 
-Base.start(A::AbstractArray) = start((A,linearindexing(A)))
+start(A::AbstractArray) = start((A,linearindexing(A)))
 start(::(AbstractArray,LinearFast)) = 1
 done{T,N}(A::AbstractArray{T,N}, I::Subscripts{N}) = getfield(I, N) > size(A, N)
 done{N}(iter::SizeIterator{N}, I::Subscripts{N}) = getfield(I, N) > getfield(iter.I, N)
@@ -89,25 +89,27 @@ done{N}(iter::SizeIterator{N}, I::Subscripts{N}) = getfield(I, N) > getfield(ite
 eachindex(A::AbstractArray) = eachindex(size(A))
 
 let implemented = IntSet()
-global eachindex
-global eachelement
-function eachindex{N}(t::NTuple{N,Int})
+global mditer_register
+function mditer_register(N::Int)
     if !in(N, implemented)
         eval(gen_iterators(N))
     end
+end
+end
+
+function eachindex{N}(t::NTuple{N,Int})
+    mditer_register(N)
     _eachindex(t)
 end
+
 function eachelement{T,N}(A::AbstractArray{T,N})
-    if !in(N, implemented)
-        eval(gen_iterators(N))
-    end
+    mditer_register(N)
     A
-end
 end
 
 # Pre-generate for low dimensions
 for N = 1:8
-    eval(gen_iterators(N, false))
+    eval(gen_iterators(N, false))  # SharedArray is not yet defined
     eval(:(eachindex(t::NTuple{$N,Int}) = _eachindex(t)))
     eval(:(eachelement{T}(A::AbstractArray{T,$N}) = A))
 end
