@@ -5,16 +5,35 @@ export Display, display, pushdisplay, popdisplay, displayable, redisplay,
    mimewritable, TextDisplay
 
 ###########################################################################
-# We define a singleton type MIME{mime symbol} for each MIME type, so
-# that Julia's dispatch and overloading mechanisms can be used to
-# dispatch writemime and to add conversions for new types.
+# We define a type MIME{mime symbol} for each MIME type, so that
+# Julia's dispatch and overloading mechanisms can be used to dispatch
+# writemime and to add conversions for new types.  Each MIME instance
+# contains a little dictionary of parameters used to pass information
+# to the writemime object.
 
-immutable MIME{mime} end
+immutable MIME{mime} <: Associative{Symbol,Any}
+    params::Vector{(Symbol,Any)} # use array, not dict, since will be small
+    MIME(p::Vector{(Symbol,Any)}) = new(p)
+    MIME(; kws...) = new(copy!(Array((Symbol,Any), length(kws)), kws))
+end
 
-import Base: show, print, string, convert
-MIME(s) = MIME{symbol(s)}()
-show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
-print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
+import Base: show, print, string, convert, similar, copy, get, start, done, next, length
+
+# implement read-only Associative methods for MIME parameters
+similar{mime}(::MIME{mime}) = MIME{mime}()
+copy{mime}(t::MIME{mime}) = MIME{mime}(copy(t.params))
+function get(t::MIME, key::Symbol, default::Any)
+    for x in t.params
+        x[1] == key && return x[2]
+    end
+    return default
+end
+start(t::MIME) = start(t.params)
+done(t::MIME, i) = done(t.params, i)
+next(t::MIME, i) = done(t.params, i)
+length(t::MIME) = length(t.params)
+
+MIME(s; kws...) = MIME{symbol(s)}(; kws...)
 
 # needs to be a macro so that we can use ::@mime(s) in type declarations
 macro MIME(s)
@@ -29,6 +48,15 @@ end
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, symbol(s)))})
 end
+
+function writemime{mime}(io::IO, ::MIME"text/plain", m::MIME{mime})
+    print(io, mime)
+    for (k,v) in m.params
+        print(io, "; ", k, "=")
+        show(io, v)
+    end
+end
+show(io::IO, m::MIME) = writemime(io, MIME("text/plain"), m)
 
 ###########################################################################
 # For any type T one can define writemime(io, ::MIME"type", x::T) = ...
