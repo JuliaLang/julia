@@ -653,6 +653,12 @@ function conj!{T<:Number}(A::AbstractArray{T})
     return A
 end
 
+# Necessary at least for sparse matrices
+function conj{T<:Number}(A::AbstractArray{T}) = 
+    conj!(copy(A))
+end
+
+
 for f in (:-, :~, :conj, :sign)
     @eval begin
         function ($f)(A::StridedArray)
