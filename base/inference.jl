@@ -611,6 +611,11 @@ function func_for_method(m::Method, tt, env)
     if !m.isstaged
         return m.func.code
     end
+    for t in tt
+        if !isleaftype(t)
+            throw(MethodError(m, tt))
+        end
+    end
     (ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)).code
 end
 

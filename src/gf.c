@@ -1023,6 +1023,13 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
         m = m->next;
     }
 
+    if (m->isstaged) {
+	// Only build stagedfunctions on leaf types (issue #8504)
+	for (i = 0; i < nargs; i++)
+	    if (!jl_is_leaf_type(jl_tupleref(tt,i)))
+		return jl_bottom_func;
+    }
+
     if (ti == (jl_value_t*)jl_bottom_type) {
         if (m != JL_NULL) {
             func = m->func;
