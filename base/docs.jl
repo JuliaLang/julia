@@ -167,6 +167,7 @@ function docm(meta, def)
   isexpr(def′, :macro) && return namedoc(meta, def,
                                          symbol(string("@", namify(def′))))
   isexpr(def′, :type) && return namedoc(meta, def, namify(def′.args[2]))
+  isexpr(def′, :abstract) && return namedoc(meta, def, namify(def′))
   fexpr(def′) && return funcdoc(meta, def)
   isexpr(def, :macrocall) && (def = namify(def))
   return objdoc(meta, def)
