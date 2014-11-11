@@ -103,7 +103,7 @@ function url(m::Method)
     end
 end
 
-function writemime(io::IO, ::MIME"text/html", m::Method)
+function write(io::IO, ::MIME"text/html", m::Method)
     print(io, m.func.code.name)
     tv, decls, file, line = arg_decl_parts(m)
     if !isempty(tv)
@@ -126,7 +126,7 @@ function writemime(io::IO, ::MIME"text/html", m::Method)
     end
 end
 
-function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
+function write(io::IO, mime::MIME"text/html", mt::MethodTable)
     name = mt.name
     n = length(mt)
     meths = n==1 ? "method" : "methods"
@@ -134,7 +134,7 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     d = mt.defs
     while !is(d,())
         print(io, "<li> ")
-        writemime(io, mime, d)
+        write(io, mime, d)
         d = d.next
     end
     print(io, "</ul>")
@@ -142,18 +142,18 @@ end
 
 # pretty-printing of Vector{Method} for output of methodswith:
 
-function writemime(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
+function write(io::IO, mime::MIME"text/html", mt::AbstractVector{Method})
     print(io, summary(mt))
     if !isempty(mt)
         print(io, ":<ul>")
         for d in mt
             print(io, "<li> ")
-            writemime(io, mime, d)
+            write(io, mime, d)
         end
         print(io, "</ul>")
     end
 end
 
 # override usual show method for Vector{Method}: don't abbreviate long lists
-writemime(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
+write(io::IO, mime::MIME"text/plain", mt::AbstractVector{Method}) =
     showarray(io, mt, limit=false)

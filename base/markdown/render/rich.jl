@@ -1,9 +1,9 @@
 function tohtml(io::IO, m::MIME"text/html", x)
-  writemime(io, m, x)
+  write(io, m, x)
 end
 
 function tohtml(io::IO, m::MIME"text/plain", x)
-  writemime(io, m, x)
+  write(io, m, x)
 end
 
 function tohtml(io::IO, m::MIME"image/png", img)
@@ -13,7 +13,7 @@ function tohtml(io::IO, m::MIME"image/png", img)
 end
 
 function tohtml(m::MIME"image/svg+xml", img)
-  writemime(io, m, img)
+  write(io, m, img)
 end
 
 # Display infrastructure

@@ -224,7 +224,7 @@ end
 
 # Text / HTML objects
 
-import Base: print, writemime
+import Base: print, write
 
 export HTML, @html_str, @html_mstr
 
@@ -248,13 +248,13 @@ end
 function HTML(xs...)
   HTML() do io
     for x in xs
-      writemime(io, MIME"text/html"(), x)
+      write(io, TEXTHTML, x)
     end
   end
 end
 
-writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
-writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
+write(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
+write(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
 @doc "Create an `HTML` object from a literal string." ->
 macro html_str (s)
@@ -269,7 +269,7 @@ end
 function catdoc(xs::HTML...)
   HTML() do io
     for x in xs
-      writemime(io, MIME"text/html"(), x)
+      write(io, TEXTHTML, x)
     end
   end
 end
@@ -293,7 +293,7 @@ end
 
 print(io::IO, t::Text) = print(io, t.content)
 print(io::IO, t::Text{Function}) = t.content(io)
-writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
+write(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 
 @doc "Create a `Text` object from a literal string." ->
 macro text_str (s)
@@ -308,7 +308,7 @@ end
 function catdoc(xs::Text...)
   Text() do io
     for x in xs
-      writemime(io, MIME"text/plain"(), x)
+      write(io, TEXTPLAIN, x)
     end
   end
 end

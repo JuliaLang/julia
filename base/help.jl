@@ -115,7 +115,7 @@ function help(io::IO, fname::AbstractString, obj=0)
     if !found
         if isa(obj, DataType)
             print(io, "DataType   : ")
-            writemime(io, "text/plain", obj)
+            write(io, TEXTPLAIN, obj)
             println(io)
             println(io, "  supertype: ", super(obj))
             if obj.abstract
@@ -130,7 +130,7 @@ function help(io::IO, fname::AbstractString, obj=0)
                 println(io, "  fields   : ", obj.names)
             end
         elseif isgeneric(obj)
-            writemime(io, "text/plain", obj); println()
+            write(io, TEXTPLAIN, obj); println()
         else
             println(io, "Symbol not found. Falling back on apropos search ...")
             apropos(io, fname)

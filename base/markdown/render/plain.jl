@@ -57,8 +57,8 @@ plaininline(io::IO, md::Italic) = print(io, "*", md.text, "*")
 
 plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
 
-plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+plaininline(io::IO, x) = write(io, TEXTPLAIN, x)
 
-# writemime
+# write
 
-Base.writemime(io::IO, ::MIME"text/plain", md::MD) = plain(io, md)
+Base.write(io::IO, ::MIME"text/plain", md::MD) = plain(io, md)

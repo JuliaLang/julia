@@ -553,7 +553,7 @@ end
 writedlm(io, a; opts...) = writedlm(io, a, '\t'; opts...)
 writecsv(io, a; opts...) = writedlm(io, a, ','; opts...)
 
-writemime(io::IO, ::MIME"text/csv", a::AbstractVecOrMat) = writedlm(io, a, ',')
-writemime(io::IO, ::MIME"text/tab-separated-values", a::AbstractVecOrMat) = writedlm(io, a, '\t')
+write(io::IO, ::MIME"text/csv", a::AbstractVecOrMat) = writedlm(io, a, ',')
+write(io::IO, ::MIME"text/tab-separated-values", a::AbstractVecOrMat) = writedlm(io, a, '\t')
 
 end # module DataFmt

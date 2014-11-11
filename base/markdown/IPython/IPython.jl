@@ -20,7 +20,7 @@ function blocktex(stream::IO, md::MD, config::Config)
   end
 end
 
-writemime(io::IO, ::MIME"text/plain", tex::LaTeX) =
+write(io::IO, ::MIME"text/plain", tex::LaTeX) =
   print(io, '$', tex.formula, '$')
 
 term(io::IO, tex::LaTeX, cols) = print_with_format(:magenta, io, tex.formula)
