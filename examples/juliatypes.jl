@@ -84,7 +84,7 @@ function union_issub(x, t::UnionT, env, invariant)
         if issub(x, tt, e′, false)
             merge!(env, e′)
             if invariant
-                return issub(t, x, env, false)
+                return issub(t, x, copy(env), false)
             end
             return true
         end
@@ -102,7 +102,7 @@ function issub(x::UnionT, t::Ty, env, invariant)
         end
     end
     if invariant
-        return issub(t, x, env, false)
+        return issub(t, x, copy(env), false)
     end
     return true
 end
@@ -118,7 +118,27 @@ function issub(a::TagT, b::TagT, env, invariant)
         return issub(super(a), b, env, false)
     end
     if a.name === TupleName
-        # TODO
+        va = a.vararg
+        vb = b.vararg
+        if va && !vb
+            return false
+        end
+        la = length(a.params)
+        lb = length(b.params)
+        ai = bi = 1
+        while true
+            ai > la && return bi > lb || (vb && !invariant)
+            bi > lb && return false
+            !issub(a.params[i], b.params[i], env, invariant) && return false
+            ai==la && bi==lb && va && vb && return true
+            if ai < la || (ai==la && !va)
+                ai += 1
+            end
+            if bi < lb || (bi==lb && !vb)
+                bi += 1
+            end
+        end
+        @assert false
     else
         for i = 1:length(a.params)
             if !issub(a.params[i], b.params[i], env, true)
@@ -127,4 +147,96 @@ function issub(a::TagT, b::TagT, env, invariant)
         end
     end
     return true
+end
+
+type EqConstraint    # T == rhs
+    rhs
+end
+
+type SubConstraint   # T <: rhs
+    rhs
+end
+
+type SupConstraint   # T >: rhs
+    rhs
+end
+
+function issub_var(a::Var, b, env, invariant)
+    c = get!(()->[], env, a)
+    push!(c, invariant ? EqConstraint(b) : SubConstraint(b))
+    return true
+end
+
+issub(a::Var, b::Var, env, invariant) = issub_var(a, b, env, invariant)
+issub(a::Var, b::Ty, env, invariant) = issub_var(a, b, env, invariant)
+
+function issub(a::Ty, b::Var, env, invariant)
+    c = get!(()->[], env, b)
+    push!(c, invariant ? EqConstraint(a) : SupConstraint(a))
+    return true
+end
+
+# body_for(t::Ty, env) = t
+# function body_for(a::ForAllT, env)
+#     fresh = Var(a.var.name, a.var.lb, a.var.ub)
+#     body = inst(a, fresh)
+#     c = Any[]
+#     if fresh.ub !== AnyT
+#         push!(c, SubConstraint(fresh.ub))
+#     end
+#     if fresh.lb !== BottomT
+#         push!(c, SupConstraint(fresh.lb))
+#     end
+#     env[fresh] = c
+#     body
+# end
+
+# function issub(a::Ty, b::Ty, env, invariant)
+#     @assert isa(a,ForAllT) || isa(b,ForAllT)
+#     a = body_for(a, env)
+#     b = body_for(b, env)
+#     return issub(a, b, env, invariant)
+# end
+
+# translating from existing julia types
+
+const tndict = ObjectIdDict()
+
+xlate(t) = xlate(t, ObjectIdDict())
+
+xlate(t::UnionType, env) = UnionT(map(x->xlate(x,env), t.types))
+
+function xlate(t::Tuple, env)
+    if length(t) == 0
+        return inst(TupleName)
+    end
+    va = Base.isvarargtype(t[end])
+    ts = map(x->(Base.isvarargtype(x) ? xlate(x.parameters[1],env) : xlate(x,env)), t)
+    tnew = inst(TupleName, ts...)
+    tnew.vararg = va
+    tnew
+end
+
+function xlate(t::TypeVar, env)
+    if haskey(env, t)
+        return env[t]
+    end
+    v = Var(t.name, xlate(t.lb,env), xlate(t.ub,env))
+    env[t] = v
+    v
+end
+
+function xlate(t::DataType, env)
+    if !haskey(tndict,t.name)
+        para = map(x->xlate(x,env), t.name.primary.parameters)  # adds tvars to env
+        sup = xlate(t.name.primary.super, env)
+        for i = length(para):-1:1
+            sup = ForAllT(para[i], sup)
+        end
+        tn = TypeName(t.name.name, sup)
+        tndict[t.name] = tn
+    else
+        tn = tndict[t.name]
+    end
+    inst(tn, map(x->xlate(x,env), t.parameters)...)
 end
