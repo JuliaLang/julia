@@ -28,17 +28,16 @@ function endof(s::Str)
     d = s.data
     i = length(d)
     i == 0 && return i
-    while !is_utf8_start(d[i])
+    @inbounds while !is_utf8_start(d[i])
         i -= 1
     end
     i
 end
 
 function length(s::Str)
-    d = s.data
     n = 0
-    for i = 1:length(s.data)
-        n += is_utf8_start(d[i])
+    @inbounds for b in s.data
+        n += is_utf8_start(b)
     end
     return n
 end
