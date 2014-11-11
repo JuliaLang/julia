@@ -123,7 +123,7 @@ end
 # Based on Direct Methods for Sparse Linear Systems, T. A. Davis, SIAM, Philadelphia, Sept. 2006.
 # Section 2.5: Transpose
 # http://www.cise.ufl.edu/research/sparse/CSparse/
-function transpose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+function transpose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
@@ -162,10 +162,10 @@ function transpose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     nzval_T = Array(Tv, nnzS)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-    return transpose!(S, T)
+    return transpose!(T, S)
 end
 
-function ctranspose!{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, T::SparseMatrixCSC{Tv,Ti})
+function ctranspose!{Tv,Ti}(T::SparseMatrixCSC{Tv,Ti}, S::SparseMatrixCSC{Tv,Ti})
     (mS, nS) = size(S)
     nnzS = nnz(S)
     colptr_S = S.colptr
@@ -204,7 +204,7 @@ function ctranspose{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     nzval_T = Array(Tv, nnzS)
 
     T = SparseMatrixCSC(mT, nT, colptr_T, rowval_T, nzval_T)
-    return ctranspose!(S, T)
+    return ctranspose!(T, S)
 end
 
 # Compute the elimination tree of A using triu(A) returning the parent vector.
