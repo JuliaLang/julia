@@ -283,6 +283,9 @@ import .Dates: Date, DateTime, now
 # nullable types
 include("nullable.jl")
 
+# Some basic documentation
+include("basedocs.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()
