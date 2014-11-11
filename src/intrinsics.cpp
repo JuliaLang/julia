@@ -1051,6 +1051,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *here_len = builder.CreateZExt(hi_byte, T_size);
         Value *is_here = builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0));
         builder.CreateCondBr(
+            !check_bounds ? is_here :
             builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
             here, check_bounds ? check : there
         );
