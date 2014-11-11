@@ -654,7 +654,7 @@ function conj!{T<:Number}(A::AbstractArray{T})
 end
 
 # Necessary at least for sparse matrices
-function conj{T<:Number}(A::AbstractArray{T}) = 
+function conj{T<:Number}(A::AbstractArray{T})
     conj!(copy(A))
 end
 
