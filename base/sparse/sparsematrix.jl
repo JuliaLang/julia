@@ -489,6 +489,16 @@ for op in (:-, :abs, :abs2, :log1p, :expm1)
     end
 end
 
+function conj!(A::SparseMatrixCSC)
+    nzvalA = A.nzval
+    @simd for i=1:length(nzvalA)
+        @inbounds nzvalA[i] = conj(nzvalA[i])
+    end
+    return A
+end
+
+conj(A::SparseMatrixCSC) = conj!(copy(A))
+
 # Operations that map nonzeros to nonzeros, and zeros to nonzeros
 # Result is dense
 for op in (:cos, :cosh, :acos, :sec, :csc, :cot, :acot, :sech,
