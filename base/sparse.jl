@@ -4,6 +4,7 @@ module SparseMatrix
 
 importall Base
 import Base.NonTupleType, Base.float, Base.Order, Base.Sort.Forward
+import Base.transpose!, Base.ctranspose!
 
 export SparseMatrixCSC,
        blkdiag, dense, diag, diagm, droptol!, dropzeros!, etree, full,
