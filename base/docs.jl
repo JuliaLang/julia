@@ -105,6 +105,13 @@ function doc(f::Function)
   return catdoc(docs...)
 end
 
+function doc(f::Function, m::Method)
+  for mod in modules
+    haskey(mod.META, f) && isa(mod.META[f], FuncDoc) && haskey(mod.META[f].meta, m) &&
+      return mod.META[f].meta[m]
+  end
+end
+
 catdoc() = nothing
 catdoc(xs...) = [xs...]
 
@@ -175,6 +182,7 @@ end
 
 function docm(ex)
   isexpr(ex, :->) && return docm(ex.args...)
+  isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
   isexpr(ex, :macrocall) && (ex = namify(ex))
   :(doc($(esc(ex))))
 end
