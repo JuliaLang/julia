@@ -78,13 +78,13 @@ end
 
 function htmlinline(io::IO, md::Bold)
   withtag(io, :strong) do
-    print(io, md.text)
+    htmlinline(io, md.text)
   end
 end
 
 function htmlinline(io::IO, md::Italic)
   withtag(io, :em) do
-    print(io, md.text)
+    htmlinline(io, md.text)
   end
 end
 

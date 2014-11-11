@@ -46,4 +46,4 @@ function deftoexpr(T)
 end
 
 map(deftoexpr, [MD, Paragraph, Header,
-                Link])
+                Link, Bold, Italic])

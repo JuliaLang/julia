@@ -78,11 +78,11 @@ function terminline(io::IO, md::String)
 end
 
 function terminline(io::IO, md::Bold)
-  print_with_format(:bold, io, md.text)
+  with_output_format(:bold, terminline, io, md.text)
 end
 
 function terminline(io::IO, md::Italic)
-  print_with_format(:underline, io, md.text)
+  with_output_format(:underline, terminline, io, md.text)
 end
 
 function terminline(io::IO, md::Image)

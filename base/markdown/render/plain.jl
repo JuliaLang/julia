@@ -41,19 +41,21 @@ plain(io::IO, x) = tohtml(io, x)
 
 # Inline elements
 
-function plaininline(io::IO, md::Vector)
+function plaininline(io::IO, md...)
   for el in md
     plaininline(io, el)
   end
 end
 
+plaininline(io::IO, md::Vector) = plaininline(io, md...)
+
 plaininline(io::IO, md::Image) = print(io, "![$(md.alt)]($(md.url))")
 
 plaininline(io::IO, s::String) = print(io, s)
 
-plaininline(io::IO, md::Bold) = print(io, "**", md.text, "**")
+plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
 
-plaininline(io::IO, md::Italic) = print(io, "*", md.text, "*")
+plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
 
 plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
 

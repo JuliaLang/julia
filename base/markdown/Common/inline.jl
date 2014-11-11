@@ -9,7 +9,7 @@ end
 @trigger '*' ->
 function asterisk_italic(stream::IO)
   result = parse_inline_wrapper(stream, "*")
-  return result == nothing ? nothing : Italic(result)
+  return result == nothing ? nothing : Italic(parseinline(result))
 end
 
 type Bold
@@ -19,7 +19,7 @@ end
 @trigger '*' ->
 function asterisk_bold(stream::IO)
   result = parse_inline_wrapper(stream, "**")
-  return result == nothing ? nothing : Bold(result)
+  return result == nothing ? nothing : Bold(parseinline(result))
 end
 
 # ––––
