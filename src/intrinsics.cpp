@@ -1029,36 +1029,54 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *b = JL_INT(x);
         Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
         BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
+        BasicBlock *check = BasicBlock::Create(getGlobalContext(), "check", ctx->f);
         BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *oob   = BasicBlock::Create(getGlobalContext(), "oob",   ctx->f);
         BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
 
         // branch: "here" or "there"
+        Value *words = builder.CreateBitCast(b, T_vec_2word_ints);
         Value *bytes = builder.CreateBitCast(b, T_vec_2word_bytes);
         Value *hi_byte = builder.CreateExtractElement(
             bytes, ConstantInt::get(T_int32, 2*sizeof(void*)-1)
         );
+        Value *here_len = builder.CreateZExt(hi_byte, T_size);
+        Value *is_here = builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0));
         builder.CreateCondBr(
-            builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0)),
-            here, there
+            builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
+            here, check
         );
 
-        // decode "here" byte
+        // decode here byte (known to be in-bounds)
         builder.SetInsertPoint(here);
-        Value *here_byte = builder.CreateExtractElement(
-            bytes, builder.CreateTrunc(i, T_int32)
-        );
+        Value *here_byte = builder.CreateExtractElement(bytes, builder.CreateTrunc(i, T_int32));
         builder.CreateBr(cont);
 
-        // decode "there" byte
-        builder.SetInsertPoint(there);
-        Value *words = builder.CreateBitCast(b, T_vec_2word_ints);
-        Value *lo_word = builder.CreateExtractElement(
-            words, ConstantInt::get(T_int32, 0)
+        // check bounds (here & there)
+        builder.SetInsertPoint(check);
+        Value *hi_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 1));
+        Value *there_len = builder.CreateSub(ConstantInt::get(T_size, 0), hi_word);
+        builder.CreateCondBr(
+            builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
+            there, oob
         );
+
+        // decode there byte (known to be in-bounds)
+        builder.SetInsertPoint(there);
+        Value *lo_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 0));
         Value *addr = builder.CreateAdd(lo_word, i);
         Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
         Value *there_byte = builder.CreateLoad(ptr, false);
         builder.CreateBr(cont);
+
+        // raise out-of-bounds error
+        builder.SetInsertPoint(oob);
+        builder.CreateCall2(
+            prepare_call(jlthrow_line_func),
+            tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
+            ConstantInt::get(T_int32, ctx->lineno)
+        );
+        builder.CreateUnreachable();
 
         // merge branches
         builder.SetInsertPoint(cont);

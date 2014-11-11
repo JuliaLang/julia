@@ -4,14 +4,10 @@ export ByteVec, Str
 ByteVec(a::Vector{UInt8}) = ccall(:jl_bytevec, ByteVec, (Ptr{UInt8}, Csize_t), a, length(a))
 ByteVec(s::AbstractString) = ByteVec(bytestring(s).data)
 
-length(b::ByteVec) = box(Int, bytevec_len(unbox(typeof(b.x), b.x)))
 size(b::ByteVec) = (length(b),)
-
-function getindex(b::ByteVec, i::Int)
-    1 <= i <= length(b) || throw(BoundsError())
-    box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, i)))
-end
-getindex(b::ByteVec, i::Real) = b[Int(i)]
+length(b::ByteVec) = box(Int, bytevec_len(unbox(typeof(b.x), b.x)))
+getindex(b::ByteVec, i::Real) =
+    box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
 
 # ==(x::ByteVec, y::ByteVec) = bytevec_eq(x, y)
 # cmp(x::ByteVec, y::ByteVec) = bytevec_cmp(x, y)
