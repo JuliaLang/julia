@@ -243,7 +243,7 @@ function getindex_tuple{T}(d::DArray{T}, I::(Int...))
 end
 
 getindex(d::DArray) = d[1]
-getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I)
+getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I...)
 
 copy(d::SubOrDArray) = d
 
