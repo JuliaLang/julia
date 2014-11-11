@@ -200,29 +200,7 @@ macro help_(ex)
 end
 
 macro help (ex)
-  if ex === :? || ex === :help
-    return esc(:(Base.Markdown.parse("""
-    Welcome to Julia. The full manual is available at
-
-        http://docs.julialang.org
-
-    as well many tutorials and learning resources here:
-
-        http://julialang.org/learning/
-
-    For help on a specific function or macro, type `?` followed
-    by its name, e.g. `?fft`, `?@time` or `?html""`, and press
-    enter.
-
-    You can also call `apropos("...")` to search the documentation.
-    """)))
-  else
-    quote
-      let doc = @doc $(esc(ex))
-        doc ≠ nothing ? doc : @help_ $(esc(ex))
-      end
-    end
-  end
+  Base.Docs.replhelp(ex)
 end
 
 end # module
