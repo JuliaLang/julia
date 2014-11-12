@@ -306,7 +306,7 @@ bits(x::Union(Char,Int32,UInt32,Float32)) = bin(reinterpret(UInt32,x),32)
 bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
 bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
 
-function digits{T<:Integer}(n::Integer, base::T=10, pad::Int=1)
+function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
     2 <= base || error("invalid base: $base")
     m = max(pad,ndigits0z(n,base))
     a = zeros(T,m)
