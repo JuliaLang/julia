@@ -171,18 +171,19 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::AbstractString) = isfile(path) && include(path)
 
-function init_bind_addr(args::Vector{UTF8String})
+function init_bind_addr()
     # Treat --bind-to in a position independent manner in ARGS since
     # --worker, -n and --machinefile options are affected by it
-    btoidx = findfirst(args, "--bind-to")
+    btoidx = findfirst(ARGS, "--bind-to")
     if btoidx > 0
-        bind_to = split(args[btoidx+1], ":")
+        bind_to = split(ARGS[btoidx+1], ":")
         bind_addr = parseip(bind_to[1])
         if length(bind_to) > 1
             bind_port = parseint(bind_to[2])
         else
             bind_port = 0
         end
+        deleteat!(ARGS, btoidx:btoidx+1)
     else
         bind_port = 0
         try
@@ -210,10 +211,16 @@ function process_options(args::Vector{UTF8String})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
-            # doesn't return
-        elseif args[i]=="--bind-to"
-            i+=1 # has already been processed
+            i+=1
+            local manager
+            try
+                manager = eval(symbol(args[i]))
+            catch
+                # not defined, default to in-built worker startup and transport
+                manager = ClusterManager
+            end
+            start_worker(manager) # Built in manager, doesn't return
+
         elseif args[i]=="-e" || args[i]=="--eval"
             i == length(args) && error("-e,--eval  no <expr> provided")
             repl = false
@@ -376,7 +383,7 @@ function _start()
 
     try
         init_parallel()
-        init_bind_addr(ARGS)
+        init_bind_addr()
         any(a->(a=="--worker"), ARGS) || init_head_sched()
         init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
