@@ -929,7 +929,7 @@ b718cbc = 5
 # Multidimensional iterators
 function mdsum(A)
     s = 0.0
-    for a in eachelement(A)
+    for a in A
         s += a
     end
     s
