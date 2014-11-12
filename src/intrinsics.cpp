@@ -1077,7 +1077,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *lo_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 0));
         Value *addr = builder.CreateAdd(lo_word, i);
         Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
-        Value *there_byte = builder.CreateLoad(ptr, false);
+        Value *there_byte = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
         builder.CreateBr(cont);
 
         // raise out-of-bounds error
