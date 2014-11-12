@@ -263,6 +263,7 @@ function shell_completions(string, pos)
         range += first(r) - 1
         return ret, range, true
     end
+    return UTF8String[], 0:-1, false
 end
 
 end # module

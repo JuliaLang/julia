@@ -99,6 +99,9 @@ c,r = test_latexcomplete(s)
 #    rm(Pkg.dir("CompletionFooPackage"))
 #end
 
+#This should not throw an error
+c,r = test_scomplete("\$a")
+
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
 
