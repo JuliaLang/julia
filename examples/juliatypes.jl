@@ -161,9 +161,29 @@ type SupConstraint   # T >: rhs
     rhs
 end
 
+function add_constraint!(env, var, c::EqConstraint)
+    if c.rhs !== var
+        cs = get!(()->[], env, var)
+        push!(cs, c)
+    end
+end
+
+function add_constraint!(env, var, c::SubConstraint)
+    if c.rhs !== AnyT && c.rhs !== var
+        cs = get!(()->[], env, var)
+        push!(cs, c)
+    end
+end
+
+function add_constraint!(env, var, c::SupConstraint)
+    if c.rhs !== BottomT && c.rhs !== var
+        cs = get!(()->[], env, var)
+        push!(cs, c)
+    end
+end
+
 function issub_var(a::Var, b, env, invariant)
-    c = get!(()->[], env, a)
-    push!(c, invariant ? EqConstraint(b) : SubConstraint(b))
+    add_constraint!(env, a, invariant ? EqConstraint(b) : SubConstraint(b))
     return true
 end
 
@@ -171,32 +191,33 @@ issub(a::Var, b::Var, env, invariant) = issub_var(a, b, env, invariant)
 issub(a::Var, b::Ty, env, invariant) = issub_var(a, b, env, invariant)
 
 function issub(a::Ty, b::Var, env, invariant)
-    c = get!(()->[], env, b)
-    push!(c, invariant ? EqConstraint(a) : SupConstraint(a))
+    add_constraint!(env, b, invariant ? EqConstraint(a) : SupConstraint(a))
     return true
 end
 
-# body_for(t::Ty, env) = t
-# function body_for(a::ForAllT, env)
-#     fresh = Var(a.var.name, a.var.lb, a.var.ub)
-#     body = inst(a, fresh)
-#     c = Any[]
-#     if fresh.ub !== AnyT
-#         push!(c, SubConstraint(fresh.ub))
-#     end
-#     if fresh.lb !== BottomT
-#         push!(c, SupConstraint(fresh.lb))
-#     end
-#     env[fresh] = c
-#     body
-# end
+function issub(a::ForAllT, b::ForAllT, env, invariant)
+    # 1. handle bounds
+    # this could be the crucial bit: we make the bounds covariant
+    if !(issub(a.var.ub, b.var.ub, env, false) &&
+         issub(b.var.lb, a.var.lb, env, false))
+        return false
+    end
+    # 2. handle expression
+    fresh = Var(symbol(string("_",a.var.name,"_",b.var.name)), a.var.lb, a.var.ub)
+    add_constraint!(env, fresh, SupConstraint(a.var.lb))
+    add_constraint!(env, fresh, SubConstraint(a.var.ub))
+    inner = issub(inst(a.T, fresh), inst(b.T, fresh), env, invariant)
 
-# function issub(a::Ty, b::Ty, env, invariant)
-#     @assert isa(a,ForAllT) || isa(b,ForAllT)
-#     a = body_for(a, env)
-#     b = body_for(b, env)
-#     return issub(a, b, env, invariant)
-# end
+end
+
+function issub(a::Ty, b::ForAllT, env, invariant)
+    fresh = Var(b.var.name, b.var.lb, b.var.ub)
+    body = inst(b, fresh)
+    add_constraint!(env, fresh, SupConstraint(b.var.lb))
+    add_constraint!(env, fresh, SubConstraint(b.var.ub))
+    return issub(a, body, env, invariant)
+end
+
 
 # translating from existing julia types
 
