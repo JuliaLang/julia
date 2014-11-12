@@ -574,7 +574,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
 
 
     
-Shared Arrays (Experimental, UNIX-only feature)
+Shared Arrays (Experimental)
 -----------------------------------------------
 
 Shared Arrays use system shared memory to map the same array across
