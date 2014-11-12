@@ -4,7 +4,7 @@ module IteratorsMD
 import Base: start, done, next, getindex, setindex!
 import Base: @nref, @ncall, @nif, @nexprs
 
-export eachelement, eachindex, linearindexing, LinearFast
+export eachindex, linearindexing, LinearFast
 
 # Traits for linear indexing
 abstract LinearIndexing
@@ -16,103 +16,96 @@ linearindexing(::Array) = LinearFast()
 linearindexing(::BitArray) = LinearFast()
 linearindexing(::Range) = LinearFast()
 
-# this generates types like this:
-#   immutable Subscripts_3 <: Subscripts{3}
-#     I_1::Int
-#     I_2::Int
-#     I_3::Int
-#   end
-# they are used as iterator states
-# TODO: when tuples get improved, replace with a tuple-based implementation. See #6437.
+abstract CartesianIndex{N}       # the state for all multidimensional iterators
+abstract IndexIterator{N}       # Iterator that visits the index associated with each element
 
-abstract Subscripts{N}           # the state for all multidimensional iterators
-abstract SizeIterator{N}         # Iterator that visits the index associated with each element
-
-function gen_iterators(N::Int, with_shared=Base.is_unix(OS_NAME))
-    # Create the types
-    namestate = symbol("Subscripts_$N")
-    namesize  = symbol("SizeIterator_$N")
-    fieldnames = [symbol("I_$i") for i = 1:N]
-    fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
-    exstate = Expr(:type, false, Expr(:(<:), namestate, Expr(:curly, :Subscripts, N)), Expr(:block, fields...))
-    dimsindexes = Expr[:(dims[$i]) for i = 1:N]
-    onesN   = ones(Int, N)
-    infsN   = fill(typemax(Int), N)
-    anyzero = Expr(:(||), [:(SZ.I.$(fieldnames[i]) == 0) for i = 1:N]...)
-    # Some necessary ambiguity resolution
-    exrange = N != 1 ? nothing : quote
-        next(R::StepRange, I::Subscripts_1) = R[I.I_1], Subscripts_1(I.I_1+1)
-        next{T}(R::UnitRange{T}, I::Subscripts_1) = R[I.I_1], Subscripts_1(I.I_1+1)
-    end
-    exshared = !with_shared ? nothing : quote
-         getindex{T}(S::SharedArray{T,$N}, state::$namestate) = S.s[state]
-        setindex!{T}(S::SharedArray{T,$N}, v, state::$namestate) = S.s[state] = v
-    end
-    quote
-        $exstate
-        immutable $namesize <: SizeIterator{$N}
-            I::$namestate
-        end
-        $namestate(dims::NTuple{$N,Int}) = $namestate($(dimsindexes...))
-        _eachindex(dims::NTuple{$N,Int}) = $namesize($namestate(dims))
-
-        start{T}(AT::(AbstractArray{T,$N},LinearSlow)) = isempty(AT[1]) ? $namestate($(infsN...)) : $namestate($(onesN...))
-        start(SZ::$namesize) = $anyzero ? $namestate($(infsN...)) : $namestate($(onesN...))
-
-        $exrange
-
-        @inline function next{T}(A::AbstractArray{T,$N}, state::$namestate)
-            @inbounds v = A[state]
-            newstate = @nif $N d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $namestate, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
-            v, newstate
-        end
-        @inline function next(iter::$namesize, state::$namestate)
-            newstate = @nif $N d->(getfield(state,d) < getfield(iter.I,d)) d->(@ncall($N, $namestate, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
-            state, newstate
-        end
-
-        $exshared
-         getindex{T}(A::AbstractArray{T,$N}, state::$namestate) = @nref $N A d->getfield(state,d)
-        setindex!{T}(A::AbstractArray{T,$N}, v, state::$namestate) = (@nref $N A d->getfield(state,d)) = v
-    end
+stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Int})
+    indextype,itertype=gen_cartesian(N)
+    return :($indextype(index))
 end
-
-# Ambiguity resolution
-done(R::StepRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
-done(R::UnitRange, I::Subscripts{1}) = getfield(I, 1) > length(R)
-
-start(A::AbstractArray) = start((A,linearindexing(A)))
-start(::(AbstractArray,LinearFast)) = 1
-done{T,N}(A::AbstractArray{T,N}, I::Subscripts{N}) = getfield(I, N) > size(A, N)
-done{N}(iter::SizeIterator{N}, I::Subscripts{N}) = getfield(I, N) > getfield(iter.I, N)
-
-eachindex(A::AbstractArray) = eachindex(size(A))
+stagedfunction Base.call{N}(::Type{IndexIterator},index::NTuple{N,Int})
+    indextype,itertype=gen_cartesian(N)
+    return :($itertype(index))
+end
 
 let implemented = IntSet()
-global mditer_register
-function mditer_register(N::Int)
-    if !in(N, implemented)
-        eval(gen_iterators(N))
+global gen_cartesian
+function gen_cartesian(N::Int, with_shared=Base.is_unix(OS_NAME))
+    # Create the types
+    indextype = symbol("CartesianIndex_$N")
+    itertype = symbol("IndexIterator_$N")
+    if !in(N,implemented)
+        fieldnames = [symbol("I_$i") for i = 1:N]
+        fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+        extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
+        exindices = Expr[:(index[$i]) for i = 1:N]
+
+        onesN   = ones(Int, N)
+        infsN   = fill(typemax(Int), N)
+        anyzero = Expr(:(||), [:(iter.dims.$(fieldnames[i]) == 0) for i = 1:N]...)
+
+        # Some necessary ambiguity resolution
+        exrange = N != 1 ? nothing : quote
+            next(R::StepRange, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
+            next{T}(R::UnitRange{T}, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
+        end
+        exshared = !with_shared ? nothing : quote
+            getindex{T}(S::SharedArray{T,$N}, I::$indextype) = S.s[I]
+            setindex!{T}(S::SharedArray{T,$N}, v, I::$indextype) = S.s[I] = v
+        end
+        totalex = quote
+            # type definition
+            $extype
+            # extra constructor from tuple
+            $indextype(index::NTuple{$N,Int}) = $indextype($(exindices...))
+
+            immutable $itertype <: IndexIterator{$N}
+                dims::$indextype
+            end
+            $itertype(dims::NTuple{$N,Int})=$itertype($indextype(dims))
+
+            # getindex and setindex!
+            $exshared
+            getindex{T}(A::AbstractArray{T,$N}, index::$indextype) = @nref $N A d->getfield(index,d)
+            setindex!{T}(A::AbstractArray{T,$N}, v, index::$indextype) = (@nref $N A d->getfield(index,d)) = v
+
+            # next iteration
+            $exrange
+            @inline function next{T}(A::AbstractArray{T,$N}, state::$indextype)
+                @inbounds v = A[state]
+                newstate = @nif $N d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+                v, newstate
+            end
+            @inline function next(iter::$itertype, state::$indextype)
+                newstate = @nif $N d->(getfield(state,d) < getfield(iter.dims,d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+                state, newstate
+            end
+
+            # start
+            start(iter::$itertype) = $anyzero ? $indextype($(infsN...)) : $indextype($(onesN...))
+        end
+        eval(totalex)
+        push!(implemented,N)
     end
+    return indextype, itertype
 end
 end
 
-function eachindex{N}(t::NTuple{N,Int})
-    mditer_register(N)
-    _eachindex(t)
-end
+# Iteration
+eachindex(A::AbstractArray) = IndexIterator(size(A))
 
-function eachelement{T,N}(A::AbstractArray{T,N})
-    mditer_register(N)
-    A
-end
+# start iteration
+start(A::AbstractArray) = start((A,linearindexing(A)))
+start(::(AbstractArray,LinearFast)) = 1
+start{T,N}(AT::(AbstractArray{T,N},LinearSlow)) = CartesianIndex(ntuple(N,n->(isempty(AT[1]) ? typemax(Int) : 1)))
 
-# Pre-generate for low dimensions
-for N = 1:8
-    eval(gen_iterators(N, false))  # SharedArray is not yet defined
-    eval(:(eachindex(t::NTuple{$N,Int}) = _eachindex(t)))
-    eval(:(eachelement{T}(A::AbstractArray{T,$N}) = A))
-end
+# Ambiguity resolution
+done(R::StepRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
+done(R::UnitRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
+done(R::FloatRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
+
+done{T,N}(A::AbstractArray{T,N}, I::CartesianIndex{N}) = getfield(I, N) > size(A, N)
+done{N}(iter::IndexIterator{N}, I::CartesianIndex{N}) = getfield(I, N) > getfield(iter.dims, N)
 
 end  # IteratorsMD
 
