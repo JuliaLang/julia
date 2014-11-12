@@ -132,7 +132,7 @@ typedef struct {
         } here;
         struct {
             uint8_t *data;
-            long neglen;
+            intptr_t neglen;
         } there;
     };
 } jl_bytevec_struct_t;
