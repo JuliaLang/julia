@@ -1,6 +1,5 @@
 @doc doc"""
-      @time ex
-  Executes the expression `ex`, printing the time it took to
+  Executes an expression, printing the time it took to
   execute and the total number of bytes its execution caused to be
   allocated. Returns the value of the expression. For example:
 
@@ -11,14 +10,31 @@
   """ @time
 
 @doc doc"""
-      r"..."
-  Construct a regex, such as `r"^[a-z]*$"`.
+  Construct a regex, such as `r"^[a-z]*$"`. The regex also accepts
+  one or more flags, listed after the ending quote, to change its
+  behaviour:
+
+    • `i` enables case-insensitive matching
+    • `m` treats the `^` and `$` tokens as matching the start and
+      and end of individual lines, as opposed to the whole string.
+    • `s` allows the `.` modifier to match newlines.
+    • `x` enables "comment mode": whitespace is enabled except when
+      escaped with `\`, and `#` is treated as starting a comment.
+
+  For example, this regex has all three flags enabled:
+
+      julia> match(r"a+.*b+.*?d$"ism, "Goodbye,\nOh, angry,\nBad world\n")
+      RegexMatch("angry,\nBad world")
   """ r""
+
+@doc (@doc r"") @r_mstr
 
 @doc doc"""
       push!(collection, items...) → collection
 
   Insert `items` at the end of `collection`.
+
+      push!([1,2,3], 4) == [1,2,3,4]
   """ push!
 
 @doc doc"""
