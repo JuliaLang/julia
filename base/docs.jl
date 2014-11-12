@@ -326,4 +326,35 @@ end
 
 catdoc(md::MD...) = MD(md...)
 
+# REPL help
+
+const intro = doc"""
+  **Welcome to Julia $(string(VERSION)).** The full manual is available at
+
+      http://docs.julialang.org/
+
+  as well many great tutorials and learning resources:
+
+      http://julialang.org/learning/
+
+  For help on a specific function or macro, type `?` followed
+  by its name, e.g. `?fft`, `?@time` or `?html""`, and press
+  enter.
+
+  You can also use `apropos("...")` to search the documentation.
+  """
+
+function replhelp(ex)
+  if ex === :? || ex === :help
+    return intro
+  else
+    quote
+      # Backwards-compatible with the previous help system, for now
+      let doc = @doc $(esc(ex))
+        doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+      end
+    end
+  end
+end
+
 end
