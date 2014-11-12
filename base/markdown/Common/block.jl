@@ -138,7 +138,7 @@ function list(stream::IO, block::MD, config::Config)
       if fresh_line
         skipwhitespace(stream)
         if startswith(stream, bullets)
-          push!(the_list.items, takebuf_string(buffer))
+          push!(the_list.items, parseinline(takebuf_string(buffer), config))
           buffer = IOBuffer()
         else
           write(buffer, ' ')
@@ -159,7 +159,7 @@ function list(stream::IO, block::MD, config::Config)
         end
       end
     end
-    push!(the_list.items, takebuf_string(buffer))
+    push!(the_list.items, parseinline(takebuf_string(buffer), config))
     push!(block, the_list)
     return true
   end
