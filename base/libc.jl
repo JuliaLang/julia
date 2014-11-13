@@ -73,6 +73,40 @@ time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{Void},), &tm))
 
 getpid() = ccall(:jl_getpid, Int32, ())
 
+## password directory functions ##
+
+type PasswdStruct
+    name::Ptr{UInt8}
+    passwd::Ptr{UInt8}
+    uid::Int32
+    gid::Int32
+    change::Int64
+    class::Ptr{UInt8}
+    gecos::Ptr{UInt8}
+    dir::Ptr{UInt8}
+    shell::Ptr{UInt8}
+    expire::Int64
+    field::Int32
+end
+
+function PasswdStruct(name::AbstractString)
+    pwd = PasswdStruct(
+        C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
+    )
+    # TODO: can I use normal copy()?
+    result = [deepcopy(pwd)]
+    # TODO: what if the buffer needs to be larger?
+    bufsize = 1024
+    buf = Array(UInt8, bufsize)
+    err = ccall(
+        :getpwnam_r,
+        Cint,
+        (Ptr{UInt8}, Ptr{Void}, Ptr{UInt8}, Int64, Ptr{Ptr{Void}}),
+        name, &pwd, buf, bufsize, &result
+    )
+    return pwd
+end
+
 ## network functions ##
 
 function gethostname()
