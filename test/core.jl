@@ -2123,3 +2123,10 @@ function f9947()
     end
 end
 @test f9947() == UInt128(1)
+
+# Type inference for tuple parameters
+immutable fooTuple{s}; end
+barTuple1() = fooTuple{(:y,)}()
+barTuple2() = fooTuple{tuple(:y)}()
+
+@test Base.return_types(barTuple1,())[1] == Base.return_types(barTuple2,())[1] == fooTuple{(:y,)}
