@@ -10,14 +10,7 @@
     function homedir(; user::AbstractString="")
         # if no user is supplied (current user) prefer value in ENV["HOME"],
         # this is occassionally useful for debugging
-        if isempty(user)
-            user = ENV["USER"]
-            home = get(ENV, "HOME", bytestring(PasswdStruct(user).dir))
-        else
-            home = bytestring(PasswdStruct(user).dir)
-        end
-
-        return home
+        return isempty(user) ? ENV["HOME"] : bytestring(PasswdStruct(user).dir)
     end
 end
 
