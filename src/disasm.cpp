@@ -31,6 +31,7 @@
 
 using namespace llvm;
 
+#ifndef LLVM36
 namespace {
 class FuncMCView : public MemoryObject {
 private:
@@ -166,15 +167,16 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     return 1;                        // Success
 }
 }
+#endif
 
 #ifndef USE_MCJIT
 extern "C"
-void jl_dump_function_asm(void *Fptr, size_t Fsize,
+void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
                           formatted_raw_ostream &stream) {
 #else
 extern "C"
-void jl_dump_function_asm(void *Fptr, size_t Fsize,
+void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                           object::ObjectFile *objectfile,
                           formatted_raw_ostream &stream) {
 #endif
@@ -288,7 +290,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 #ifndef USE_MCJIT // LLVM33 version
 
     // Make the MemoryObject wrapper
+#ifdef LLVM36
+    ArrayRef<uint8_t> memoryObject((uint8_t*)Fptr,Fsize);
+#else
     FuncMCView memoryObject(Fptr, Fsize);
+#endif
+
     SymbolTable DisInfo(Ctx, memoryObject);
 
     // Take two passes: In the first pass we record all branch labels,
@@ -396,7 +403,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
             DisInfo.createSymbols();
     }
 #else // MCJIT version
+#ifdef LLVM36
+    ArrayRef<uint8_t> memoryObject((uint8_t*)Fptr,Fsize);
+#else
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
+#endif
+
 
     if (!objectfile) return;
 #ifdef LLVM36
@@ -428,7 +440,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
-         Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
+         Index < Fsize; Index += insSize, absAddr += insSize) {
 
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
@@ -445,7 +457,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
                                   /*REMOVE*/ nulls(), nulls());
         switch (S) {
         case MCDisassembler::Fail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(Fptr + Index),
                             SourceMgr::DK_Warning,
                             "invalid instruction encoding");
         if (insSize == 0)
@@ -453,7 +465,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         break;
 
         case MCDisassembler::SoftFail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+        SrcMgr.PrintMessage(SMLoc::getFromPointer(Fptr + Index),
                             SourceMgr::DK_Warning,
                             "potentially undefined instruction encoding");
         // Fall through
