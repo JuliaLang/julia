@@ -388,7 +388,19 @@ end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
 
-valid_tparam(x::ANY) = isa(x,Int) || isa(x,Symbol) || isa(x,Bool)
+function valid_tparam(x::ANY)
+    if isa(x,Int) || isa(x,Symbol) || isa(x,Bool)
+        return true
+    elseif isa(x,Tuple)
+        for t in x
+            if !valid_tparam(t)
+                return false
+            end
+        end
+        return true
+    end
+    return false
+end
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 const apply_type_tfunc = function (A, args...)
