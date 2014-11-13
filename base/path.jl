@@ -147,15 +147,20 @@ end
 
 @windows_only expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 @unix_only function expanduser(path::AbstractString)
-    # TODO: expanduser("~=~") -> $HOME=~
-    m = match(r"^~([^:/ \n]*)", path)
+    # readline accepts everything up to '/', ' ' or '\n'
+    # bash accepts everything up to '/', ' ', '\n', ':' or '=~'
+    # readline's easier to implement
+    m = match(r"^~([^/ \n]*)", path)
     m == nothing && return path
     user = m.captures[1]
 
     try
         home = homedir(user=user)
+        # replace ~<username> with that user's home directory path
         return replace(path, "~"*user, home, 1)
     catch
+        # if the user can't be found return the path unchanged
+        # this is consistent with bash
         return path
     end
 end
