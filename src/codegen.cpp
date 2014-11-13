@@ -3771,7 +3771,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 SP,         // Scope (current function will be fill in later)
                 argname->name,    // Variable name
                 fil,                    // File
-                ctx.lineno,             // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
                 julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
@@ -3784,7 +3784,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 SP,         // Scope (current function will be fill in later)
                 ctx.vaName->name, // Variable name
                 fil,                    // File
-                ctx.lineno,             // Line (for now, use lineno of the function)
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
                 julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false),      // Variable type
                 false,                  // May be optimized out
                 0,                      // Flags (TODO: Do we need any)
