@@ -18,6 +18,8 @@
 
 #include "platform.h"
 
+#define FORCE_ELF
+
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
 #define __STDC_CONSTANT_MACROS
@@ -431,6 +433,8 @@ void jl_dump_objfile(char *fname, int jit_model)
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::COFF);
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+    TheTriple.setObjectFormat(Triple::MachO);
 #endif
 #ifdef LLVM35
     std::unique_ptr<TargetMachine>
@@ -619,7 +623,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         abort();
     }
 #endif
-    FPM->run(*f);
+    //FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
     //ios_printf(ios_stderr, "%s:%d\n",
@@ -4944,7 +4948,7 @@ extern "C" void jl_init_codegen(void)
 #endif
     ;
     Triple TheTriple(sys::getProcessTriple());
-#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
     jl_TargetMachine = eb.selectTarget(
@@ -4956,6 +4960,15 @@ extern "C" void jl_init_codegen(void)
             strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
 #endif
             MAttrs);
+    jl_TargetMachine = jl_TargetMachine->getTarget().createTargetMachine(
+            TheTriple.getTriple(),
+            jl_TargetMachine->getTargetCPU(),
+            jl_TargetMachine->getTargetFeatureString(),
+            jl_TargetMachine->Options,
+            Reloc::Default,
+            CodeModel::JITDefault,
+            CodeGenOpt::None // -O3
+            );
     assert(jl_TargetMachine);
     jl_ExecutionEngine = eb.create(jl_TargetMachine);
 #ifdef LLVM35
