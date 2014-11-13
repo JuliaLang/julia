@@ -72,6 +72,14 @@ tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
 @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
+@test cat([1,2],1,2,3.,4.,5.) == diagm([1,2,3.,4.,5.])
+blk = [1 2;3 4]
+tmp = cat([1,3],blk,blk)
+@test tmp[1:2,1:2,1] == blk
+@test tmp[1:2,1:2,2] == zero(blk)
+@test tmp[3:4,1:2,1] == zero(blk)
+@test tmp[3:4,1:2,2] == blk
+
 x = rand(2,2)
 b = x[1,:]
 @test isequal(size(b), (1, 2))
@@ -99,7 +107,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, Uint8, Vector{Int}, Float64, Range1{Int}))
+rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, Range1{Int}))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # sub
@@ -133,6 +141,8 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test Base.parentdims(sA) == [1:3]
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
+# issue #8807
+@test sub(sub([1:5], 1:5), 1:5) == [1:5]
 
 # sub logical indexing #4763
 A = sub([1:10], 5:8)
@@ -211,7 +221,7 @@ let
     @test x == 11
     x = get(A, (4,4), -12)
     @test x == -12
-    X = get(A, -5:5, nan(Float32))
+    X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
     @test isnan(X) == [trues(6),falses(5)]
     @test X[7:11] == [1:5]
@@ -380,7 +390,7 @@ D = cat(3, B, B)
 immutable HashCollision
     x::Float64
 end
-Base.hash(::HashCollision, h::Uint) = h
+Base.hash(::HashCollision, h::UInt) = h
 @test map(x->x.x, unique(map(HashCollision, B), 1)) == C
 
 ## large matrices transpose ##
@@ -767,7 +777,7 @@ fill!(S, 2)
 S = sub(A, 1:2, 3)
 fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
-rt = Base.return_types(fill!, (Array{Int32, 3}, Uint8))
+rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # splice!
@@ -910,3 +920,8 @@ function pr8622()
     return indexin(x,y)
 end
 @test pr8622() == [0,3,1,0]
+
+# commit b718cbc72e90, getindex(::Number, ::Real)
+b718cbc = 5
+@test b718cbc[1.0] == 5
+@test_throws InexactError b718cbc[1.1]

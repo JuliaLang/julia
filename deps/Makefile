@@ -14,12 +14,26 @@ endif
 endif
 CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 
+CMAKE_COMMON = -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_BUILD_TYPE=Release
+ifneq ($(VERBOSE), 0)
+CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
+endif
+CMAKE_COMMON += -DCMAKE_C_COMPILER="$(CC_BASE)"
+ifdef CC_ARG
+CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CC_ARG)"
+endif
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
+ifdef CXX_ARG
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CXX_ARG)"
+endif
+
 # If the top-level Makefile is called with environment variables,
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake
+#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
+#CMake libs: libgit2
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -77,6 +91,11 @@ endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 STAGE1_DEPS += openblas
+ifeq ($(USE_BLAS64), 1)
+ifeq ($(OS), Darwin)
+STAGE1_DEPS += objconv
+endif
+endif
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
@@ -85,6 +104,10 @@ endif
 
 ifeq ($(USE_SYSTEM_GMP), 0)
 STAGE1_DEPS += gmp
+endif
+
+ifeq ($(USE_SYSTEM_LIBGIT2), 0)
+STAGE1_DEPS += libgit2
 endif
 
 ifeq ($(USE_SYSTEM_MPFR), 0)
@@ -140,7 +163,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -353,12 +376,12 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)"  -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 libcxxabi-build:
 	mkdir -p libcxxabi-build
 libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
 	cd libcxxabi-build && \
-        cmake -G "Unix Makefiles" -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DLLVM_MAIN_SRC_DIR=../llvm-svn -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=$(build_prefix) ../llvm-$(LLVM_VER)/projects/libcxxabi -DCMAKE_C_COMPILER="$(CC)" -DCMAKE_CXX_COMPILER="$(CXX)" -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLLVM_MAIN_SRC_DIR=../llvm-svn ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
 	cd libcxxabi-build && $(MAKE)
@@ -788,6 +811,34 @@ check-Rmath: compile-Rmath
 install-Rmath: $(RMATH_OBJ_TARGET) 
 
 
+## objconv ##
+
+OBJCONV_SOURCE = objconv/objconv
+OBJCONV_TARGET = $(build_bindir)/objconv
+
+objconv.zip:
+	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
+objconv/config.status: objconv.zip
+	unzip -d objconv $<
+	cd objconv && unzip source.zip
+	echo 1 > $@
+$(OBJCONV_SOURCE): objconv/config.status
+	cd objconv && $(CXX) -o objconv -O2 *.cpp
+$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
+	cp -f $< $@
+
+clean-objconv:
+	-rm -f $(OBJCONV_TARGET)
+distclean-objconv:
+	-rm -rf objconv.zip objconv
+
+get-objconv: objconv.zip
+configure-objconv: objconv/config.status
+compile-objconv: $(OBJCONV_SOURCE)
+check-objconv: compile-objconv
+install-objconv: $(OBJCONV_TARGET)
+
+
 ## OpenBLAS ##
 # LAPACK is built into OpenBLAS by default
 
@@ -829,7 +880,11 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="64_"
+ifeq ($(OS), Darwin)
+OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
+$(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
+endif
 endif
 
 # Decide whether to build for 32-bit or 64-bit arch
@@ -864,6 +919,7 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
+	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-symbol-rename.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -1026,12 +1082,28 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
+ARPACK_CFLAGS =
 
 ifeq ($(USE_BLAS64), 1)
 ifeq ($(USEIFC),1)
 ARPACK_FFLAGS += -i8
 else
 ARPACK_FFLAGS += -fdefault-integer-8
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+ARPACK_FFLAGS += -cpp -ffixed-line-length-none
+ARPACK_OPENBLASFCNS1 = axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen
+ARPACK_OPENBLASFCNS2 = dot ger labad laev2 lamch lanst lanv2 lapy2 larf larfg lasr nrm2 orm2r rot steqr swap
+ARPACK_OPENBLASFCNS3 = dotc geru unm2r
+ARPACK_OPENBLASFCNS4 = COPY LABAD LAMCH LANHS LANV2 LARFG ROT
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS2), -Ds$(fcn)=s$(fcn)_64 -Dd$(fcn)=d$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS3), -Dc$(fcn)=c$(fcn)_64 -Dz$(fcn)=z$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS4), -DS$(fcn)=S$(fcn)_64 -DD$(fcn)=D$(fcn)_64)
+ARPACK_FFLAGS += -Dscnrm2=scnrm2_64 -Ddznrm2=dznrm2_64 -Dcsscal=csscal_64 -Dzdscal=zdscal_64
+# CFLAGS are for the configure checks
+ARPACK_CFLAGS += -Dsgemm_=sgemm_64_ -Dcheev_=cheev_64_
+endif
+endif
 endif
 endif
 
@@ -1044,7 +1116,7 @@ ARPACK_OBJ_TARGET = $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
+ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
@@ -1100,9 +1172,9 @@ clean-arpack:
 	-$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
 	-rm -f $(ARPACK_OBJ_SOURCE) $(ARPACK_OBJ_TARGET)
 distclean-arpack:
-	-rm -rf arpack-ng_$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
+	-rm -rf arpack-ng-$(ARPACK_VER).tar.gz arpack-ng-$(ARPACK_VER)
 
-get-arpack: arpack-ng_$(ARPACK_VER).tar.gz
+get-arpack: arpack-ng-$(ARPACK_VER).tar.gz
 configure-arpack: arpack-ng-$(ARPACK_VER)/config.status
 compile-arpack: $(ARPACK_OBJ_SOURCE)
 check-arpack: arpack-ng-$(ARPACK_VER)/checked
@@ -1287,8 +1359,16 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
 ifeq ($(USE_BLAS64), 1)
-UMFPACK_CONFIG = -DLONGBLAS='long long' 
-CHOLMOD_CONFIG = -DLONGBLAS='long long' 
+UMFPACK_CONFIG = -DLONGBLAS='long long'
+CHOLMOD_CONFIG = -DLONGBLAS='long long'
+SPQR_CONFIG = -DLONGBLAS='long long'
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+UMFPACK_CONFIG += -DSUN64
+CHOLMOD_CONFIG += -DSUN64
+SPQR_CONFIG += -DSUN64
+endif
+endif
 endif
 
 SUITE_SPARSE_LIB = -lm
@@ -1302,7 +1382,7 @@ SUITE_SPARSE_LIB += -Wl,-rpath,'$(build_libdir)'
 endif
 SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$@
@@ -1603,6 +1683,7 @@ check-patchelf: patchelf-$(PATCHELF_VER)/checked
 install-patchelf: $(PATCHELF_TARGET)
 
 ## Git
+# only used for the mac binaries in contrib/mac/app/Makefile
 
 GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(build_prefix)/git
@@ -1664,6 +1745,60 @@ configure-virtualenv: get-virtualenv
 compile-virtualenv: $(VIRTUALENV_SOURCE)
 check-virtualenv: compile-virtualenv
 install-virtualenv: $(VIRTUALENV_TARGET)
+
+## libgit2
+
+LIBGIT2_OBJ_SOURCE = libgit2-$(LIBGIT2_VER)/build/libgit2.$(SHLIB_EXT)
+LIBGIT2_OBJ_TARGET = $(build_shlibdir)/libgit2.$(SHLIB_EXT)
+
+LIBGIT2_OPTS = $(CMAKE_COMMON) -DTHREADSAFE=ON
+ifeq ($(OS),WINNT)
+LIBGIT2_OPTS += -DWIN32=ON -DMINGW=ON -DUSE_SSH=OFF -DCMAKE_SYSTEM_NAME=Windows
+ifeq ($(BUILD_OS),WINNT)
+LIBGIT2_OPTS += -G"MSYS Makefiles"
+else
+LIBGIT2_OPTS += -DBUILD_CLAR=OFF -DCMAKE_RC_COMPILER=`which $(CROSS_COMPILE)windres`
+LIBGIT2_OPTS += -DCMAKE_FIND_ROOT_PATH=/usr/$(XC_HOST) -DCMAKE_FIND_ROOT_PATH_MODE_INCLUDE=ONLY
+endif
+endif
+
+libgit2-$(LIBGIT2_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
+libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
+	$(JLCHECKSUM) $<
+ifeq ($(BUILD_OS),WINNT)
+	$(TAR) --exclude=libgit2-$(LIBGIT2_VER)/tests/resources/template/hooks/link.sample -zxf $<
+else
+	$(TAR) zxf $<
+endif
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
+	mkdir -p libgit2-$(LIBGIT2_VER)/build
+	cd libgit2-$(LIBGIT2_VER)/build/ && \
+	$(CMAKE) .. $(LIBGIT2_OPTS)
+	touch -c $@
+$(LIBGIT2_OBJ_SOURCE): libgit2-$(LIBGIT2_VER)/build/Makefile
+	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build
+	touch -c $@
+libgit2-$(LIBGIT2_VER)/build/checked: $(LIBGIT2_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C libgit2-$(LIBGIT2_VER)/build test
+endif
+	echo 1 > $@
+$(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
+	cp $< $@
+
+clean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER)/build/
+	-rm -f $(LIBGIT2_OBJ_TARGET)
+distclean-libgit2:
+	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
+
+get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
+configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
+compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
+check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
+install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 ## phony targets ##
 

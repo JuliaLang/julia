@@ -120,13 +120,13 @@ using the ``convert`` function:
 .. doctest:: foo-func
 
     julia> function foo()
-             x::Int8 = 1000
+             x::Int8 = 100
              x
            end
     foo (generic function with 1 method)
 
     julia> foo()
-    -24
+    100
 
     julia> typeof(ans)
     Int8
@@ -163,12 +163,12 @@ type system more than just a collection of object implementations.
 
 Recall that in :ref:`man-integers-and-floating-point-numbers`, we
 introduced a variety of concrete types of numeric values: ``Int8``,
-``Uint8``, ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``,
-``Uint64``, ``Int128``, ``Uint128``, ``Float16``, ``Float32``, and
+``UInt8``, ``Int16``, ``UInt16``, ``Int32``, ``UInt32``, ``Int64``,
+``UInt64``, ``Int128``, ``UInt128``, ``Float16``, ``Float32``, and
 ``Float64``.  Although they have different representation sizes, ``Int8``,
 ``Int16``, ``Int32``, ``Int64``  and ``Int128`` all have in common that
-they are signed integer types. Likewise ``Uint8``, ``Uint16``, ``Uint32``,
-``Uint64`` and ``Uint128`` are all unsigned integer types, while
+they are signed integer types. Likewise ``UInt8``, ``UInt16``, ``UInt32``,
+``UInt64`` and ``UInt128`` are all unsigned integer types, while
 ``Float16``, ``Float32`` and ``Float64`` are distinct in being
 floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer,
@@ -284,18 +284,18 @@ the standard bits types are all defined in the language itself::
     bitstype 64 Float64 <: FloatingPoint
 
     bitstype 8  Bool <: Integer
-    bitstype 32 Char <: Integer
+    bitstype 32 Char
 
     bitstype 8  Int8     <: Signed
-    bitstype 8  Uint8    <: Unsigned
+    bitstype 8  UInt8    <: Unsigned
     bitstype 16 Int16    <: Signed
-    bitstype 16 Uint16   <: Unsigned
+    bitstype 16 UInt16   <: Unsigned
     bitstype 32 Int32    <: Signed
-    bitstype 32 Uint32   <: Unsigned
+    bitstype 32 UInt32   <: Unsigned
     bitstype 64 Int64    <: Signed
-    bitstype 64 Uint64   <: Unsigned
+    bitstype 64 UInt64   <: Unsigned
     bitstype 128 Int128  <: Signed
-    bitstype 128 Uint128 <: Unsigned
+    bitstype 128 UInt128 <: Unsigned
 
 The general syntaxes for declaration of a ``bitstype`` are::
 
@@ -312,18 +312,18 @@ Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
+The types ``Bool``, ``Int8`` and ``UInt8`` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
 having identical structure. Another fundamental difference between them
 is that they have different supertypes: ``Bool``'s direct supertype is
-``Integer``, ``Int8``'s is ``Signed``, and ``Uint8``'s is ``Unsigned``.
-All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
+``Integer``, ``Int8``'s is ``Signed``, and ``UInt8``'s is ``Unsigned``.
+All other differences between ``Bool``, ``Int8``, and ``UInt8`` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
 dictates behavior, then it would be impossible to make ``Bool`` behave any
-differently than ``Int8`` or ``Uint8``.
+differently than ``Int8`` or ``UInt8``.
 
 .. _man-composite-types:
 
@@ -564,18 +564,18 @@ Accordingly, a tuple of types can be used anywhere a type is expected:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,Any)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Any)
     (1,"foo",2.5)
 
-    julia> (1,"foo",2.5) :: (Int64,String,Float32)
-    ERROR: type: typeassert: expected (Int64,String,Float32), got (Int64,ASCIIString,Float64)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,Float32)
+    ERROR: type: typeassert: expected (Int64,AbstractString,Float32), got (Int64,ASCIIString,Float64)
 
 If one of the components of the tuple is not a type, however, you will
 get an error:
 
 .. doctest::
 
-    julia> (1,"foo",2.5) :: (Int64,String,3)
+    julia> (1,"foo",2.5) :: (Int64,AbstractString,3)
     ERROR: type: typeassert: expected Type{T<:Top}, got (DataType,DataType,Int64)
 
 Note that the empty tuple ``()`` is its own type:
@@ -592,13 +592,13 @@ example:
 
 .. doctest::
 
-    julia> (Int,String) <: (Real,Any)
+    julia> (Int,AbstractString) <: (Real,Any)
     true
 
-    julia> (Int,String) <: (Real,Real)
+    julia> (Int,AbstractString) <: (Real,Real)
     false
 
-    julia> (Int,String) <: (Real,)
+    julia> (Int,AbstractString) <: (Real,)
     false
 
 Intuitively, this corresponds to the type of a function's arguments
@@ -611,8 +611,8 @@ A type union is a special abstract type which includes as objects all
 instances of any of its argument types, constructed using the special
 ``Union`` function::
 
-    julia> IntOrString = Union(Int,String)
-    Union(String,Int64)
+    julia> IntOrString = Union(Int,AbstractString)
+    Union(AbstractString,Int64)
 
     julia> 1 :: IntOrString
     1
@@ -621,7 +621,7 @@ instances of any of its argument types, constructed using the special
     "Hello!"
 
     julia> 1.0 :: IntOrString
-    ERROR: type: typeassert: expected Union(String,Int64), got Float64
+    ERROR: type: typeassert: expected Union(AbstractString,Int64), got Float64
 
 The compilers for many languages have an internal union construct for
 reasoning about types; Julia simply exposes it to the programmer. The
@@ -629,14 +629,13 @@ union of no types is the "bottom" type, ``None``:
 
 .. doctest::
 
-    julia> Union()
-    None
+    julia> None
+    Union()
 
 Recall from the `discussion above <#Any+and+None>`_ that ``None`` is the
 abstract type which is the subtype of all other types, and which no
-object is an instance of. Since a zero-argument ``Union`` call has no
-argument types for objects to be instances of, it should produce a
-type which no objects are instances of — i.e. ``None``.
+object is an instance of. ``None`` is therefore synonymous with a zero-argument
+``Union`` type, which has no argument types for objects to be instances of.
 
 .. _man-parametric-types:
 
@@ -695,7 +694,7 @@ all (or an integer, actually, although here it's clearly used as a
 type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
 ``Float64``. Thus, this single declaration actually declares an
-unlimited number of types: ``Point{Float64}``, ``Point{String}``,
+unlimited number of types: ``Point{Float64}``, ``Point{AbstractString}``,
 ``Point{Int64}``, etc. Each of these is now a usable concrete type:
 
 .. doctest::
@@ -703,11 +702,11 @@ unlimited number of types: ``Point{Float64}``, ``Point{String}``,
     julia> Point{Float64}
     Point{Float64} (constructor with 1 method)
 
-    julia> Point{String}
-    Point{String} (constructor with 1 method)
+    julia> Point{AbstractString}
+    Point{AbstractString} (constructor with 1 method)
 
 The type ``Point{Float64}`` is a point whose coordinates are 64-bit
-floating-point values, while the type ``Point{String}`` is a "point"
+floating-point values, while the type ``Point{AbstractString}`` is a "point"
 whose "coordinates" are string objects (see :ref:`man-strings`).
 However, ``Point`` itself is also a valid type object:
 
@@ -719,14 +718,14 @@ However, ``Point`` itself is also a valid type object:
 Here the ``T`` is the dummy type symbol used in the original declaration
 of ``Point``. What does ``Point`` by itself mean? It is an abstract type
 that contains all the specific instances ``Point{Float64}``,
-``Point{String}``, etc.:
+``Point{AbstractString}``, etc.:
 
 .. doctest::
 
     julia> Point{Float64} <: Point
     true
 
-    julia> Point{String} <: Point
+    julia> Point{AbstractString} <: Point
     true
 
 Other types, of course, are not subtypes of it:
@@ -736,7 +735,7 @@ Other types, of course, are not subtypes of it:
     julia> Float64 <: Point
     false
 
-    julia> String <: Point
+    julia> AbstractString <: Point
     false
 
 Concrete ``Point`` types with different values of ``T`` are never
@@ -900,7 +899,7 @@ as a subtype of ``Pointy{T}``:
     julia> Point{Real} <: Pointy{Real}
     true
 
-    julia> Point{String} <: Pointy{String}
+    julia> Point{AbstractString} <: Pointy{AbstractString}
     true
 
 This relationship is also invariant:
@@ -948,8 +947,8 @@ subtypes of ``Real``:
     julia> Pointy{Real}
     Pointy{Real}
 
-    julia> Pointy{String}
-    ERROR: type: Pointy: in T, expected T<:Real, got Type{String}
+    julia> Pointy{AbstractString}
+    ERROR: type: Pointy: in T, expected T<:Real, got Type{AbstractString}
 
     julia> Pointy{1}
     ERROR: type: Pointy: in T, expected T<:Real, got Int64
@@ -1078,23 +1077,23 @@ Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already
 expressible type. For such occasions, Julia provides the ``typealias``
-mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
-``Uint64`` as is appropriate for the size of pointers on the system::
+mechanism. For example, ``UInt`` is type aliased to either ``UInt32`` or
+``UInt64`` as is appropriate for the size of pointers on the system::
 
     # 32-bit system:
-    julia> Uint
-    Uint32
+    julia> UInt
+    UInt32
 
     # 64-bit system:
-    julia> Uint
-    Uint64
+    julia> UInt
+    UInt64
 
 This is accomplished via the following code in ``base/boot.jl``::
 
     if is(Int,Int64)
-        typealias Uint Uint64
+        typealias UInt UInt64
     else
-        typealias Uint Uint32
+        typealias UInt UInt32
     end
 
 Of course, this depends on what ``Int`` is aliased to — but that is
@@ -1213,7 +1212,7 @@ Only declared types (``DataType``) have unambiguous supertypes:
     julia> super(Number)
     Any
 
-    julia> super(String)
+    julia> super(AbstractString)
     Any
 
     julia> super(Any)
@@ -1230,3 +1229,103 @@ If you apply ``super`` to other type objects (or non-type objects), a
 
     julia> super((Float64,Int64))
     ERROR: `super` has no method matching super(::Type{(Float64,Int64)})
+
+Nullable Types: Representing Missing Values
+-------------------------------------------
+
+In many settings, you need to interact with a value of type ``T`` that may or
+may not exist. To handle these settings, Julia provides a parametric type
+called ``Nullable{T}``, which can be thought of as a specialized container
+type that can contain either zero or one values. ``Nullable{T}`` provides a
+minimal interface designed to ensure that interactions with missing values
+are safe. At present, the interface consists of four possible interactions:
+
+- Construct a ``Nullable`` object.
+- Check if an ``Nullable`` object has a missing value.
+- Access the value of a ``Nullable`` object with a guarantee that a
+  ``NullException`` will be thrown if the object's value is missing.
+- Access the value of a ``Nullable`` object with a guarantee that a default
+  value of type ``T`` will be returned if the object's value is missing.
+
+Constructing ``Nullable`` objects
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To construct an object representing a missing value of type ``T``, use the
+``Nullable{T}()`` function:
+
+.. doctest::
+
+    julia> x1 = Nullable{Int}()
+    julia> x2 = Nullable{Float64}()
+    julia> x3 = Nullable{Vector{Int}}()
+
+To construct an object representing a non-missing value of type ``T``, use the
+``Nullable(x::T)`` function:
+
+.. doctest::
+
+    julia> x1 = Nullable(1)
+    Nullable(1)
+
+    julia> x2 = Nullable(1.0)
+    Nullable(1.0)
+
+    julia> x3 = Nullable([1, 2, 3])
+    Nullable([1, 2, 3])
+
+Note the core distinction between these two ways of constructing a ``Nullable``
+object: in one style, you provide a type, ``T``, as a function parameter; in
+the other style, you provide a single value of type ``T`` as an argument.
+
+Checking if an ``Nullable`` object has a value
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can check if a ``Nullable`` object has any value using the ``isnull``
+function:
+
+.. doctest::
+
+    julia> isnull(Nullable{Float64}())
+    true
+
+    julia> isnull(Nullable(0.0))
+    false
+
+Safely accessing the value of an ``Nullable`` object
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+You can safely access the value of an ``Nullable`` object using the ``get``
+function:
+
+.. doctest::
+
+    julia> get(Nullable{Float64}())
+    ERROR: NullException()
+     in get at nullable.jl:26
+
+    julia> get(Nullable(1.0))
+    1.0
+
+If the value is not present, as it would be for ``Nullable{Float64}``, a
+``NullException`` error will be thrown. The error-throwing nature of the
+``get`` function ensures that any attempt to access a missing value immediately
+fails.
+
+In cases for which a reasonable default value exists that could be used
+when a ``Nullable`` object's value turns out to be missing, you can provide this
+default value as a second argument to ``get``:
+
+.. doctest::
+
+    julia> get(Nullable{Float64}(), 0)
+    0.0
+
+    julia> get(Nullable(1.0), 0)
+    1.0
+
+Note that this default value will automatically be converted to the type of
+the ``Nullable`` object that you attempt to access using the ``get`` function.
+For example, in the code shown above the value ``0`` would be automatically
+converted to a ``Float64`` value before being returned. The presence of default
+replacement values makes it easy to use the ``get`` function to write
+type-stable code that interacts with sources of potentially missing values.

@@ -93,7 +93,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Binary operations")
-        for isupper2 in (true, false) 
+        for isupper2 in (true, false)
             dv = convert(Vector{elty}, randn(n))
             ev = convert(Vector{elty}, randn(n-1))
             T2 = Bidiagonal(dv, ev, isupper2)
@@ -200,11 +200,6 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
     end
 end
-
-# Issue #7886
-x, r = LAPACK.gelsy!([0 1; 0 2; 0 3.], [2, 4, 6.])
-@test_approx_eq x [0,2]
-@test r == 1
 
 # Issue #7933
 A7933 = [1 2; 3 4]

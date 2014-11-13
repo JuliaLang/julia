@@ -1,6 +1,9 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
+@test sort(['z':-1:'a']) == ['a':'z']
+@test sort(['a':'z'], rev=true) == ['z':-1:'a']
 @test sortperm([2,3,1]) == [3,1,2]
+@test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
@@ -66,9 +69,19 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b)
     @test a[ix] == b
 
+    sortperm!(ix, a, alg=alg)
+    b = a[ix]
+    @test issorted(b)
+    @test a[ix] == b
+
     b = sort(a, alg=alg, rev=true)
     @test issorted(b, rev=true)
     ix = sortperm(a, alg=alg, rev=true)
+    b = a[ix]
+    @test issorted(b, rev=true)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, rev=true)
     b = a[ix]
     @test issorted(b, rev=true)
     @test a[ix] == b
@@ -77,6 +90,10 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     ix = sortperm(a, alg=alg, by=x->1/x)
     b = a[ix]
+    @test issorted(b, by=x->1/x)
+    @test a[ix] == b
+
+    sortperm!(ix, a, alg=alg, by=x->1/x)
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
@@ -106,7 +123,7 @@ b = sort(a, alg=QuickSort, by=x->1/x)
 
 ## more advanced sorting tests ##
 
-randnans(n) = reinterpret(Float64,[rand(Uint64)|0x7ff8000000000000 for i=1:n])
+randnans(n) = reinterpret(Float64,[rand(UInt64)|0x7ff8000000000000 for i=1:n])
 
 function randn_with_nans(n,p)
     v = randn(n)
@@ -169,14 +186,14 @@ for n in [0:10, 100, 101, 1000, 1001]
         # test float sorting with NaNs
         s = sort(v, alg=alg, rev=rev)
         @test issorted(s, rev=rev)
-        @test reinterpret(Uint64,v[isnan(v)]) == reinterpret(Uint64,s[isnan(s)])
+        @test reinterpret(UInt64,v[isnan(v)]) == reinterpret(UInt64,s[isnan(s)])
 
         # test float permutation with NaNs
         p = sortperm(v, alg=alg, rev=rev)
         @test isperm(p)
         vp = v[p]
         @test isequal(vp,s)
-        @test reinterpret(Uint64,vp) == reinterpret(Uint64,s)
+        @test reinterpret(UInt64,vp) == reinterpret(UInt64,s)
     end
 end
 
@@ -229,3 +246,13 @@ end
 @test sortperm([ 0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-0.0, 1.0, 1.0], rev=true) == [2, 3, 1]
 @test sortperm([-1.0, 1.0, 1.0], rev=true) == [2, 3, 1]
+
+# issue #8825 - stability of min/max
+type Twain
+    a :: Int
+    b :: Int
+end
+Base.isless(x :: Twain, y :: Twain) = x.a < y.a
+let x = Twain(2,3), y = Twain(2,4)
+    @test (min(x,y), max(x,y)) == (x,y) == minmax(x,y)
+end

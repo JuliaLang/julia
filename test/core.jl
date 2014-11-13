@@ -30,7 +30,7 @@ const Bottom = Union()
 @test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
     @test !is(Bottom, typeintersect(Array{Bottom},AbstractArray{T}))
-    @test  is(Bottom, typeintersect((Type{Ptr{Uint8}},Ptr{Bottom}),
+    @test  is(Bottom, typeintersect((Type{Ptr{UInt8}},Ptr{Bottom}),
                                   (Type{Ptr{T}},Ptr{T})))
     @test !(Type{T} <: TypeVar)
 
@@ -41,7 +41,7 @@ let T = TypeVar(:T,true)
                   (Int, Array{Int,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                  Bottom)
+                  (Int, Array{Number,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
@@ -68,6 +68,8 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === Bottom
     @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
+
+    @test typeintersect((Rational{T},T), (Rational{Integer},Int)) === (Rational{Integer},Int)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -126,6 +128,8 @@ end
 @test !isa((Int,), Type{(Int...,)})
 @test !isa((Int,), Type{(Any...,)})
 
+@test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
+
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{(Any...)}, Array{NTuple})
@@ -150,21 +154,21 @@ end
 
 # join
 @test typejoin(Int8,Int16) === Signed
-@test typejoin(Int,String) === Any
+@test typejoin(Int,AbstractString) === Any
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
 @test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
                             (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
-                   (Any,String,Int...))
+                   (Any,AbstractString,Int...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
                    (Int8,Signed...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
                    (Int8,Signed...))
-@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
+@test Base.typeseq(typejoin((Int8,UInt8,Int...),(Int8,Int8...)),
                    (Int8,Integer...))
-@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
-@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -228,7 +232,7 @@ end
 
 type FooFoo{A,B} y::FooFoo{A} end
 
-@test FooFoo{Int} <: FooFoo{Int,String}.types[1]
+@test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
 
 x = (2,3)
@@ -651,7 +655,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws MethodError my_func(a,c)
+    @test my_func(a,c)==1
 end
 
 begin
@@ -925,7 +929,7 @@ begin
     Y(::Type{X1474}) = 3
     @test Y(X1474) == 3
     @test Y(X1474{Int}) == 2
-    @test Y(X1474{Int,String}) == 1
+    @test Y(X1474{Int,AbstractString}) == 1
 end
 
 # issue #2562
@@ -1059,7 +1063,7 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Void), 3)
+x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
 x[1] = 1.0
 x[2] = 2.0
 x[3] = 3.0
@@ -1140,10 +1144,9 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws MethodError Foo4376{Float32}(Foo4376{Float32}(2.0f0))
 
 type _0_test_ctor_syntax_
-    _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
+    _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
 end
 
 # issue #4413
@@ -1184,7 +1187,7 @@ f4526(x) = isa(x.a, Void)
 # issue #4528
 function f4528(A, B)
     if A
-        reinterpret(Uint64, B)
+        reinterpret(UInt64, B)
     end
 end
 @test f4528(false, int32(12)) === nothing
@@ -1232,7 +1235,7 @@ type Z4681
     Z4681() = new(C_NULL)
 end
 Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
-@test_throws TypeError ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+@test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479
 f4479(::Real,c) = 1
@@ -1432,7 +1435,7 @@ end
 function read_file5374(fileobj)
     read(fileobj.io, Float32)
 end
-@test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)
+@test isa(read_file5374(FileObj5374(IOBuffer(UInt8[0,0,0,0]))), Float32)
 
 # issue #5457
 function f5457(obj_ptr::Ptr{Float64}, f)
@@ -1622,8 +1625,8 @@ end
 # issue #5577
 f5577(::Any) = false
 f5577(::Type) = true
-@test !f5577((Int,String,2))
-@test f5577(((Int,String),String))
+@test !f5577((Int,AbstractString,2))
+@test f5577(((Int,AbstractString),AbstractString))
 @test f5577(Int)
 @test !f5577(2)
 
@@ -1655,7 +1658,7 @@ end
 
 # issue #6634
 function crc6634(spec)
-    A = Uint
+    A = UInt
     remainder::A = 1
     function handler(append)
         remainder = append ? 1 : 2
@@ -1761,7 +1764,7 @@ f6980(::Union(Int, Float64), ::B6980) = true
 
 # issue #7049
 typealias Maybe7049{T} Union(T,Void)
-function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+function ttt7049(;init::Maybe7049{Union(AbstractString,(Int,Char))} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"
@@ -1780,7 +1783,7 @@ f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
 
 # issue #7302
 function test7302()
-    t = [Uint64][1]
+    t = [UInt64][1]
     convert(t, "5")
 end
 @test_throws MethodError test7302()
@@ -1815,11 +1818,12 @@ type A7652
     a :: Int
 end
 a7652 = A7652(0)
-f7652() = issubtype(fieldtype(a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
-g7652() = fieldtype(A7652, :types)
-@test g7652() == fieldtype(A7652, :types) == Tuple
-@test fieldtype(a7652, 1) == Int
+t_a7652 = A7652
+f7652() = issubtype(fieldtype(t_a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+g7652() = fieldtype(DataType, :types)
+@test g7652() == fieldtype(DataType, :types) == Tuple
+@test fieldtype(t_a7652, 1) == Int
 h7652() = a7652.(1) = 2
 h7652()
 @test a7652.a == 2
@@ -1839,11 +1843,11 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 # issue 7897
 function issue7897!(data, arr)
-    data = reinterpret(Uint32, data)
+    data = reinterpret(UInt32, data)
     a = arr[1]
 end
 
-a = ones(Uint8, 10)
+a = ones(UInt8, 10)
 sa = sub(a,4:6)
 # This can throw an error, but shouldn't segfault
 try
@@ -1882,3 +1886,45 @@ let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
 end
+
+# call overloading (#2403)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test x((3,)...) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    @test issue2403func(x) == 34
+end
+
+# a method specificity issue
+c99991{T}(::Type{T},x::T) = 0
+c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
+@test c99991(UnitRange{Float64}, 1.0:2.0) == 1
+@test c99991(UnitRange{Int}, 1:2) == 2
+
+# issue #8798
+let
+    const npy_typestrs = Dict("b1"=>Bool,
+                              "i1"=>Int8,      "u1"=>UInt8,
+                              "i2"=>Int16,     "u2"=>UInt16,
+                              "i4"=>Int32,     "u4"=>UInt32,
+                              "i8"=>Int64,     "u8"=>UInt64)
+    sizeof_lookup() = sizeof(npy_typestrs["i8"])
+    @test sizeof_lookup() == 8
+end
+
+# issue #8851
+abstract AbstractThing{T,N}
+type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+end
+
+@test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}

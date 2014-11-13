@@ -732,7 +732,7 @@
 	  `(function (call ,name ,@field-names)
 		     (block
 		      (call new ,@field-names)))))
-    (if gen-specific?
+    (if (and gen-specific? (any (lambda (t) (not (eq? t 'Any))) field-types))
 	(list
 	 ;; definition with field types for all arguments
 	 `(function (call ,name
@@ -751,18 +751,31 @@
 	       (block
 		(call (curly ,name ,@params) ,@field-names)))))
 
-(define (new-call Texpr args field-names field-types mutabl)
+(define (new-call Tname type-params params args field-names field-types mutabl)
   (if (any vararg? args)
       (error "... is not supported inside \"new\""))
   (if (any kwarg? args)
       (error "\"new\" does not accept keyword arguments"))
-  (cond ((length> args (length field-names))
-	 `(call (top error) "new: too many arguments"))
-	(else
-	 `(new ,Texpr
-	       ,@(map (lambda (fty val)
-			`(call (top convert) ,fty ,val))
-		      (list-head field-types (length args)) args)))))
+  (if (length> params (length type-params))
+      (error "too few type parameters specified in \"new{...}\""))
+  (let ((Texpr (if (null? type-params)
+		   `(|.| ,(current-julia-module) ',Tname)
+		   `(curly (|.| ,(current-julia-module) ',Tname)
+			   ,@type-params))))
+    (cond ((length> args (length field-names))
+	   `(call (top error) "new: too many arguments"))
+	  (else
+	   (if (equal? type-params params)
+	       `(new ,Texpr ,@(map (lambda (fty val)
+				     `(call (top convert) ,fty ,val))
+				   (list-head field-types (length args)) args))
+	       (let ((tn (gensy)))
+		 `(let (new ,tn ,@(map (lambda (fld val)
+					 `(call (top convert)
+						(call (top fieldtype) ,tn (quote ,fld))
+						,val))
+				       (list-head field-names (length args)) args))
+		    (= ,tn ,Texpr))))))))
 
 ;; insert a statement after line number node
 (define (prepend-stmt stmt body)
@@ -775,45 +788,85 @@
 	     `(block ,stmt ,@(cdr body))))
       body))
 
-(define (rewrite-ctor ctor Tname params field-names field-types mutabl iname)
-  (define (ctor-body body)
+;; insert item at start of arglist
+(define (arglist-unshift sig item)
+  (if (and (pair? sig) (pair? (car sig)) (eq? (caar sig) 'parameters))
+      `(,(car sig) ,item ,@(cdr sig))
+      `(,item ,@sig)))
+
+(define (ctor-signature name params bounds method-params sig)
+  (if (null? params)
+      (if (null? method-params)
+	  (cons `(call call ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+		params)
+	  (cons `(call (curly call ,@method-params)
+		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type ,name))))
+		params))
+      (if (null? method-params)
+	  (cons `(call (curly call ,@(map (lambda (p b) `(<: ,p ,b)) params bounds))
+		       ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@params)))))
+		params)
+	  ;; rename parameters that conflict with user-written method parameters
+	  (let ((new-params (map (lambda (p) (if (memq p method-params)
+						 (gensy)
+						 p))
+				 params)))
+	    (cons `(call (curly call ,@(map (lambda (p b) `(<: ,p ,b)) new-params bounds)
+				,@method-params)
+			 ,@(arglist-unshift sig `(|::| ,(gensy) (curly Type (curly ,name ,@new-params)))))
+		  new-params)))))
+
+(define (ctor-def keyword name Tname params bounds method-params sig ctor-body body)
+  (if (eq? name Tname)
+      (let* ((temp   (ctor-signature name params bounds method-params sig))
+	     (sig    (car temp))
+	     (params (cdr temp)))
+	`(,keyword ,sig ,(ctor-body body params)))
+      `(,keyword (call (curly ,name ,@method-params) ,@sig)
+		 ;; pass '() in order to require user-specified parameters with
+		 ;; new{...} inside a non-ctor inner definition.
+		 ,(ctor-body body '()))))
+
+(define (rewrite-ctor ctor Tname params bounds field-names field-types mutabl)
+  (define (ctor-body body type-params)
     (pattern-replace (pattern-set
 		      (pattern-lambda
 		       (call (-/ new) . args)
-		       (new-call (if (null? params)
-				     ;; be careful to avoid possible conflicts
-				     ;; with local & arg names
-				     `(|.| ,(current-julia-module) ',Tname)
-				     `(curly (|.| ,(current-julia-module) ',Tname)
-					     ,@params))
-				 args
-				 field-names
-				 field-types
-				 mutabl)))
+		       (new-call Tname type-params params
+				 args field-names field-types mutabl))
+		      (pattern-lambda
+		       (call (curly (-/ new) . p) . args)
+		       (new-call Tname p params
+				 args field-names field-types mutabl)))
 		     body))
-  (let ((ctor2
-	 (pattern-replace
-	  (pattern-set
-	   (pattern-lambda (function (call (curly name . p) . sig) body)
-			   `(function (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-				      ,(ctor-body body)))
-       (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
-               `(stagedfunction (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-                      ,(ctor-body body)))
-	   (pattern-lambda (function (call name . sig) body)
-			   `(function (call ,(if (eq? name Tname) iname name) ,@sig)
-				      ,(ctor-body body)))
-       (pattern-lambda (stagedfunction (call name . sig) body)
-               `(stagedfunction (call ,(if (eq? name Tname) iname name) ,@sig)
-                      ,(ctor-body body)))
-	   (pattern-lambda (= (call (curly name . p) . sig) body)
-			   `(= (call (curly ,(if (eq? name Tname) iname name) ,@p) ,@sig)
-			       ,(ctor-body body)))
-	   (pattern-lambda (= (call name . sig) body)
-			   `(= (call ,(if (eq? name Tname) iname name) ,@sig)
-			       ,(ctor-body body))))
-	  ctor)))
-    ctor2))
+  (pattern-replace
+   (pattern-set
+    (pattern-lambda (function (call (curly name . p) . sig) body)
+		    (ctor-def 'function name Tname params bounds p sig ctor-body body))
+    (pattern-lambda (stagedfunction (call (curly name . p) . sig) body)
+		    (ctor-def 'stagedfunction name Tname params bounds p sig ctor-body body))
+    (pattern-lambda (function (call name . sig) body)
+		    (ctor-def 'function name Tname params bounds '() sig ctor-body body))
+    (pattern-lambda (stagedfunction (call name . sig) body)
+		    (ctor-def 'stagedfunction name Tname params bounds '() sig ctor-body body))
+    (pattern-lambda (= (call (curly name . p) . sig) body)
+		    (ctor-def 'function name Tname params bounds p sig ctor-body body))
+    (pattern-lambda (= (call name . sig) body)
+		    (ctor-def 'function name Tname params bounds '() sig ctor-body body)))
+   ctor))
+
+;; check if there are any calls to new with fewer than n arguments
+(define (ctors-min-initialized expr)
+  (and (pair? expr)
+   (min
+    ((pattern-lambda
+      (call (-/ new) . args)
+      (length args)) (car expr))
+    ((pattern-lambda
+      (call (curly (-/ new) . p) . args)
+      (length args)) (car expr))
+    (ctors-min-initialized (car expr))
+    (ctors-min-initialized (cdr expr)))))
 
 ;; remove line numbers and nested blocks
 (define (flatten-blocks e)
@@ -836,67 +889,60 @@
 	  (field-types (map decl-type fields))
 	  (defs2 (if (null? defs)
 		     (default-inner-ctors name field-names field-types (null? params))
-		     defs)))
+		     defs))
+	  (min-initialized (min (ctors-min-initialized defs) (length fields))))
      (for-each (lambda (v)
 		 (if (not (symbol? v))
 		     (error (string "field name \"" (deparse v) "\" is not a symbol"))))
 	       field-names)
      (if (null? params)
 	 `(block
-	   (global ,name)
-	   (const ,name)
+	   (global ,name) (const ,name)
 	   (composite_type ,name (tuple ,@params)
 			   (tuple ,@(map (lambda (x) `',x) field-names))
-			   (null) ,super (tuple ,@field-types)
-			   ,mut)
+			   ,super (tuple ,@field-types) ,mut ,min-initialized)
 	   (call
 	    (lambda ()
 	      (scope-block
 	       (block
-		(global ,name)
+		(global ,name) (global call)
 		,@(map (lambda (c)
-			 (rewrite-ctor c name '() field-names field-types mut name))
+			 (rewrite-ctor c name '() '() field-names field-types mut))
 		       defs2)))))
 	   (null))
 	 ;; parametric case
 	 `(block
 	   (scope-block
 	    (block
-	     (global ,name)
-	     (const ,name)
+	     (global ,name) (const ,name)
 	     ,@(map (lambda (v) `(local ,v)) params)
 	     ,@(map make-assignment params (symbols->typevars params bounds #t))
 	     (composite_type ,name (tuple ,@params)
 			     (tuple ,@(map (lambda (x) `',x) field-names))
-			     ,(let ((instantiation-name (gensy)))
-				`(lambda (,instantiation-name)
-				   (scope-block
-				    ;; don't capture params; in here they are static
-				    ;; parameters
-				    (block
-				     (global ,@params)
-				     ,@(map
-					(lambda (c)
-					  (rewrite-ctor c name params field-names
-							field-types mut instantiation-name))
-					defs2)
-				     ,name))))
-			     ,super (tuple ,@field-types)
-			     ,mut)))
-	   (scope-block
-	    (block
-	     (global ,name)
-	     (global ,@params)
-	     ,@(if (and (null? defs)
-			;; don't generate an outer constructor if the type has
-			;; parameters not mentioned in the field types. such a
-			;; constructor would not be callable anyway.
-			(every (lambda (sp)
-				 (expr-contains-eq sp (cons 'list field-types)))
-			       params))
-		   `(,(default-outer-ctor name field-names field-types
-			params bounds))
-		   '())))
+			     ,super (tuple ,@field-types) ,mut ,min-initialized)))
+	   ;; "inner" constructors
+	   (call
+	    (lambda ()
+	      (scope-block
+	       (block
+		(global ,name) (global call)
+		,@(map (lambda (c)
+			 (rewrite-ctor c name params bounds field-names field-types mut))
+		       defs2)))))
+	   ;; "outer" constructors
+	   ,@(if (and (null? defs)
+		      ;; don't generate an outer constructor if the type has
+		      ;; parameters not mentioned in the field types. such a
+		      ;; constructor would not be callable anyway.
+		      (every (lambda (sp)
+			       (expr-contains-eq sp (cons 'list field-types)))
+			     params))
+		 `((scope-block
+		    (block
+		     (global ,name)
+		     ,(default-outer-ctor name field-names field-types
+			params bounds))))
+		 '())
 	   (null))))))
 
 (define (abstract-type-def-expr name params super)
@@ -1469,8 +1515,8 @@
 				`((quote ,(cadr a)) ,(caddr a)))
 			      keys))))
      (if (null? restkeys)
-	 `(call (top kwcall) ,f ,(length keys) ,@keyargs
-		(call (top Array) (top Any) ,(* 2 (length keys)))
+	 `(call (top kwcall) call ,(length keys) ,@keyargs
+		,f (call (top Array) (top Any) ,(* 2 (length keys)))
 		,@pa)
 	 (let ((container (gensy)))
 	   `(block
@@ -1489,10 +1535,13 @@
 			      `(block (= (tuple ,k ,v) ,rk)
 				      ,push-expr))))
 		      restkeys))
-	     (if (call (top isempty) ,container)
-		 (call ,f ,@pa)
-		 (call (top kwcall) ,f ,(length keys) ,@keyargs
-		       ,container ,@pa))))))))
+	     ,(let ((kw-call `(call (top kwcall) call ,(length keys) ,@keyargs
+				    ,f ,container ,@pa)))
+		(if (not (null? keys))
+		    kw-call
+		    `(if (call (top isempty) ,container)
+			 (call ,f ,@pa)
+			 ,kw-call)))))))))
 
 (define (expand-transposed-op e ops)
   (let ((a (caddr e))
@@ -1591,7 +1640,7 @@
 		  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
 		  (call (top setfield!) ,aa ,bb
 			(call (top convert)
-			      (call (top fieldtype) ,aa ,bb)
+			      (call (top fieldtype) (call (top typeof) ,aa) ,bb)
 			      ,(expand-forms rhs)))))))
 
 	   ((tuple)
@@ -1737,7 +1786,7 @@
 					   (tuple-wrap (cdr a) '())))
 				(tuple-wrap (cdr a) (cons x run))))))
 		    (expand-forms
-		     `(call (top apply) ,f ,@(tuple-wrap argl '())))))
+		     `(call (top _apply) call ,f ,@(tuple-wrap argl '())))))
 
 		 ((and (eq? (cadr e) '*) (length= e 4))
 		  (expand-transposed-op
@@ -2311,7 +2360,7 @@
 	    (dest (cons (if tail `(return ,e) e)
 			'()))
 	    (else (cons e '())))
-      
+
       (case (car e)
 	((call)  ;; ensure left-to-right evaluation of arguments
 	 (let ((assigned
@@ -2347,7 +2396,7 @@
 			 (each-arg (cdr ass) (cdr args)
 				   tmp
 				   (cons (car args) newa))))))))
-	
+
 	((=)
 	 (if (or (not (symbol? (cadr e)))
 		 (eq? (cadr e) 'true)
@@ -2377,7 +2426,7 @@
 				    (= ,LHS ,val)
 				    ,val))
 			  dest tail)))))
-	
+
 	((if)
 	 (cond ((or tail (eq? dest #f) (symbol? dest))
 		(let ((r (to-lff (cadr e) #t #f)))
@@ -2391,11 +2440,11 @@
 	       (else (let ((g (gensy)))
 		       (cons g
 			     (cons `(local! ,g) (to-lff e g #f)))))))
-	
+
 	((line)
 	 (set! *lff-line* (cadr e))
 	 (cons e '()))
-	
+
 	((trycatch)
 	 (cond ((and (eq? dest #t) (not tail))
 		(let ((g (gensy)))
@@ -2407,12 +2456,12 @@
 				   (to-blk (to-lff (cadr e) dest tail)))
 				 ,(to-blk (to-lff (caddr e) dest tail)))
 		      ()))))
-	
+
 	((&&)
 	 (to-lff (expand-and e) dest tail))
 	((|\|\||)
 	 (to-lff (expand-or e) dest tail))
-	
+
 	((block)
 	 (if (length= e 2)
 	     (to-lff (cadr e) dest tail)
@@ -2434,12 +2483,12 @@
 			     '())
 		       (cons (cons 'block stmts)
 			     '()))))))
-	
+
 	((return)
 	 (if (and dest (not tail))
 	     (error "misplaced return statement")
 	     (to-lff (cadr e) #t #t)))
-	
+
 	((_while) (cond ((eq? dest #t)
 			 (cons (if tail '(return (null)) '(null))
 			       (to-lff e #f #f)))
@@ -2453,7 +2502,7 @@
 			   (if (symbol? dest)
 			       (cons `(= ,dest (null)) w)
 			       w)))))
-	
+
 	((break-block)
 	 (let ((r (to-lff (caddr e) dest tail)))
 	   (if dest
@@ -2461,7 +2510,7 @@
 		     (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
 	       (cons `(break-block ,(cadr e) ,(car r))
 		     (cdr r)))))
-	
+
 	((scope-block)
 	 (if (and dest (not tail))
 	     (let* ((g (gensy))
@@ -2476,31 +2525,31 @@
 	     (let ((r (to-lff (cadr e) dest tail)))
 	       (cons `(scope-block ,(to-blk r))
 		     '()))))
-	
+
 	;; move the break to the list of preceding statements. value is
 	;; null but this will never be observed.
 	((break) (cons '(null) (list e)))
-	
+
 	((lambda)
 	 (let ((l `(lambda ,(cadr e)
 		     ,(to-blk (to-lff (caddr e) #t #t)))))
 	   (if (symbol? dest)
 	       (cons `(= ,dest ,l) '())
 	       (cons (if tail `(return ,l) l) '()))))
-	
+
 	((local global)
 	 (if dest
 	     (error (string "misplaced \"" (car e) "\" declaration")))
 	 (cons (to-blk (to-lff '(null) dest tail))
 	       (list e)))
-	
+
 	((|::|)
 	 (if dest
 	     ;; convert to typeassert or decl based on whether it's in
 	     ;; value or statement position.
 	     (to-lff `(typeassert ,@(cdr e)) dest tail)
 	     (to-lff `(decl ,@(cdr e)) dest tail)))
-	
+
 	((unnecessary-tuple)
 	 (if dest
 	     (to-lff (cadr e) dest tail)
@@ -2985,14 +3034,23 @@ So far only the second case can actually occur.
 	((memq e '(false #f)) 'true)
 	(else                 `(call (top !) ,e))))
 
-; remove if, _while, block, break-block, and break
-; replaced with goto and gotoifnot
-; TODO: remove type-assignment-affecting expressions from conditional branch.
-;       needed because there's no program location after the condition
-;       is evaluated but before the branch's successors.
-;       pulling a complex condition out to a temporary variable creates
-;       such a location (the assignment to the variable).
+;; remove if, _while, block, break-block, and break
+;; replaced with goto and gotoifnot
+;; TODO: remove type-assignment-affecting expressions from conditional branch.
+;;       needed because there's no program location after the condition
+;;       is evaluated but before the branch's successors.
+;;       pulling a complex condition out to a temporary variable creates
+;;       such a location (the assignment to the variable).
 (define (goto-form e)
+  (cond ((or (not (pair? e)) (quoted? e)) e)
+	((eq? (car e) 'lambda)
+	 `(lambda ,(cadr e) ,(caddr e)
+		  ,(compile-body (cadddr e) (append (cadr (caddr e))
+						    (caddr (caddr e))))))
+	(else (cons (car e)
+		    (map goto-form (cdr e))))))
+
+(define (compile-body e vi)
   (let ((code '())
 	(label-counter 0)
 	(label-map (table))
@@ -3013,7 +3071,7 @@ So far only the second case can actually occur.
 	  (let ((l (make-label)))
 	    (mark-label l)
 	    l)))
-    (define (compile e break-labels vi)
+    (define (compile e break-labels)
       (if (or (not (pair? e)) (equal? e '(null)))
 	  ;; atom has no effect, but keep symbols for undefined-var checking
 	  #f #;(if (symbol? e) (emit e) #f)
@@ -3033,15 +3091,15 @@ So far only the second case can actually occur.
 			(tail     (and (pair? (caddr e))
 				       (eq? (car (caddr e)) 'return))))
 		    (emit test)
-		    (compile (caddr e) break-labels vi)
+		    (compile (caddr e) break-labels)
 		    (if (and (not tail)
 			     (not (equal? (cadddr e) '(null))))
 			(emit end-jump))
 		    (set-car! (cddr test) (make&mark-label))
-		    (compile (cadddr e) break-labels vi)
+		    (compile (cadddr e) break-labels)
 		    (if (not tail)
 			(set-car! (cdr end-jump) (make&mark-label)))))
-	    ((block) (for-each (lambda (x) (compile x break-labels vi))
+	    ((block) (for-each (lambda (x) (compile x break-labels))
 			       (cdr e)))
 	    ((_while)
 	     (let ((test-blk (cadr e))
@@ -3050,26 +3108,25 @@ So far only the second case can actually occur.
 		   ;; if condition is simple, compile it twice in order
 		   ;; to generate a single branch per iteration.
 		   (let ((topl (make-label)))
-		     (compile test-blk break-labels vi)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(goto-form (caddr e)) ,endl))
 		     (mark-label topl)
-		     (compile (cadddr e) break-labels vi)
-		     (compile test-blk break-labels vi)
+		     (compile (cadddr e) break-labels)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(not-bool (goto-form (caddr e))) ,topl))
 		     (mark-label endl))
 
 		   (let ((topl (make&mark-label)))
-		     (compile test-blk break-labels vi)
+		     (compile test-blk break-labels)
 		     (emit `(gotoifnot ,(goto-form (caddr e)) ,endl))
-		     (compile (cadddr e) break-labels vi)
+		     (compile (cadddr e) break-labels)
 		     (emit `(goto ,topl))
 		     (mark-label endl)))))
 
 	    ((break-block) (let ((endl (make-label)))
 			     (compile (caddr e)
 				      (cons (list (cadr e) endl handler-level)
-					    break-labels)
-				      vi)
+					    break-labels))
 			     (mark-label endl)))
 	    ((break) (let ((labl (assq (cadr e) break-labels)))
 		       (if (not labl)
@@ -3126,7 +3183,7 @@ So far only the second case can actually occur.
 		   (endl  (make-label)))
 	       (emit `(enter ,catch))
 	       (set! handler-level (+ handler-level 1))
-	       (compile (cadr e) break-labels vi)
+	       (compile (cadr e) break-labels)
 	       (set! handler-level (- handler-level 1))
 	       (if (not (and (pair? (car code)) (eq? (caar code) 'return)))
 		   ;; try ends in return, no need to handle flow off end of it
@@ -3135,7 +3192,7 @@ So far only the second case can actually occur.
 		   (set! endl #f))
 	       (mark-label catch)
 	       (emit `(leave 1))
-	       (compile (caddr e) break-labels vi)
+	       (compile (caddr e) break-labels)
 	       (if endl
 		   (mark-label endl))
 	       ))
@@ -3161,17 +3218,10 @@ So far only the second case can actually occur.
 		 (emit e)
 		 #f))
 	    (else  (emit (goto-form e))))))
-    (cond ((or (not (pair? e)) (quoted? e)) e)
-	  ((eq? (car e) 'lambda)
-	   (compile (cadddr e) '() (append (cadr (caddr e))
-					   (caddr (caddr e))))
-	   `(lambda ,(cadr e) ,(caddr e)
-		    ,(cons 'body (reverse! code))))
-	  (else (cons (car e)
-		      (map goto-form (cdr e)))))))
+    (compile e '())
+    (cons 'body (reverse! code))))
 
-(define (to-goto-form e)
-  (goto-form e))
+(define to-goto-form goto-form)
 
 ;; macro expander
 
@@ -3192,7 +3242,7 @@ So far only the second case can actually occur.
 	((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) e))
 	 `(copyast (inert ,e)))
 	((not (any splice-expr? e))
-	 `(call (top Expr) ,.(map expand-backquote e)))
+	 `(call (top _expr) ,.(map expand-backquote e)))
 	(else
 	 (let loop ((p (cdr e)) (q '()))
 	   (if (null? p)

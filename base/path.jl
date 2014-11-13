@@ -6,10 +6,10 @@
     const path_dir_splitter = r"^(.*?)(/+)([^/]*)$"
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
-    splitdrive(path::String) = ("",path)
-    function homedir(; user::String="")
+    splitdrive(path::AbstractString) = ("",path)
+    function homedir(; user::AbstractString="")
         # TODO: this needs to be replaced with libc's getpwnam ASAP
-        function getpwnam(user::String)
+        function getpwnam(user::AbstractString)
             open("/etc/passwd") do f
                 for line in eachline(f)
                     beginswith(line, '#') && continue
@@ -39,17 +39,17 @@ end
     const path_dir_splitter = r"^(.*?)([/\\]+)([^/\\]*)$"
     const path_ext_splitter = r"^((?:.*[/\\])?(?:\.|[^/\\\.])[^/\\]*?)(\.[^/\\\.]*|)$"
 
-    function splitdrive(path::String)
+    function splitdrive(path::AbstractString)
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    homedir(; user::String="") = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    homedir(; user::AbstractString="") = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
 
-homedir(path::String...; user::String="") = joinpath(homedir(user=user), path...)
+homedir(path::AbstractString...; user::AbstractString="") = joinpath(homedir(user=user), path...)
 
-isabspath(path::String) = ismatch(path_absolute_re, path)
-isdirpath(path::String) = ismatch(path_directory_re, splitdrive(path)[2])
+isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
+isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2])
 
 function splitdir(path::ByteString)
     a, b = splitdrive(path)
@@ -58,19 +58,19 @@ function splitdir(path::ByteString)
     a = string(a, isempty(m.captures[1]) ? m.captures[2][1] : m.captures[1])
     a, bytestring(m.captures[3])
 end
-splitdir(path::String) = splitdir(bytestring(path))
+splitdir(path::AbstractString) = splitdir(bytestring(path))
 
- dirname(path::String) = splitdir(path)[1]
-basename(path::String) = splitdir(path)[2]
+ dirname(path::AbstractString) = splitdir(path)[1]
+basename(path::AbstractString) = splitdir(path)[2]
 
-function splitext(path::String)
+function splitext(path::AbstractString)
     a, b = splitdrive(path)
     m = match(path_ext_splitter, b)
     m == nothing && return (path,"")
     a*m.captures[1], bytestring(m.captures[2])
 end
 
-function pathsep(paths::String...)
+function pathsep(paths::AbstractString...)
     for path in paths
         m = match(path_separator_re, path)
         m != nothing && return m.match[1]
@@ -78,10 +78,10 @@ function pathsep(paths::String...)
     return path_separator
 end
 
-joinpath(a::String) = a
-joinpath(a::String, b::String, c::String...) = joinpath(joinpath(a,b), c...)
+joinpath(a::AbstractString) = a
+joinpath(a::AbstractString, b::AbstractString, c::AbstractString...) = joinpath(joinpath(a,b), c...)
 
-function joinpath(a::String, b::String)
+function joinpath(a::AbstractString, b::AbstractString)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
@@ -92,7 +92,7 @@ function joinpath(a::String, b::String)
                                              string(C,a,pathsep(a,b),b)
 end
 
-function normpath(path::String)
+function normpath(path::AbstractString)
     isabs = isabspath(path)
     isdir = isdirpath(path)
     drive, path = splitdrive(path)
@@ -125,19 +125,19 @@ function normpath(path::String)
     end
     string(drive,path)
 end
-normpath(a::String, b::String...) = normpath(joinpath(a,b...))
+normpath(a::AbstractString, b::AbstractString...) = normpath(joinpath(a,b...))
 
-abspath(a::String) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
-abspath(a::String, b::String...) = abspath(joinpath(a,b...))
+abspath(a::AbstractString) = normpath(isabspath(a) ? a : joinpath(pwd(),a))
+abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
-@windows_only realpath(path::String) = realpath(utf16(path))
+@windows_only realpath(path::AbstractString) = realpath(utf16(path))
 @windows_only function realpath(path::UTF16String)
     p = uint32((sizeof(path)>>2) + 1)
     while true
         buflength = p
-        buf = zeros(Uint16,buflength)
-        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall, 
-            Uint32, (Ptr{Uint16}, Uint32, Ptr{Uint16}, Ptr{Void}), 
+        buf = zeros(UInt16,buflength)
+        p = ccall((:GetFullPathNameW, "Kernel32"), stdcall,
+            UInt32, (Ptr{UInt16}, UInt32, Ptr{UInt16}, Ptr{Void}),
             path, buflength, buf, C_NULL)
         systemerror(:realpath, p == 0)
         if (p < buflength)
@@ -147,16 +147,16 @@ abspath(a::String, b::String...) = abspath(joinpath(a,b...))
     end
 end
 
-@unix_only function realpath(path::String)
-    p = ccall(:realpath, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}), path, C_NULL)
+@unix_only function realpath(path::AbstractString)
+    p = ccall(:realpath, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
     c_free(p)
     return s
 end
 
-@windows_only expanduser(path::String) = path # on windows, ~ means "temporary file"
-@unix_only function expanduser(path::String)
+@windows_only expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
+@unix_only function expanduser(path::AbstractString)
     # TODO: expanduser("~=~") -> $HOME=~
     m = match(r"^~([^:/ \n]*)", path)
     m == nothing && return path

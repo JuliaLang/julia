@@ -148,8 +148,10 @@ end
 # matrix multiplication and kron
 for i = 1:5
     a = sprand(10, 5, 0.7)
-    b = sprand(5, 10, 0.3)
+    b = sprand(5, 15, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
@@ -298,8 +300,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
 end
 
 # workaround issue #7197: comment out let-block
-#let S = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
-S1290 = SparseMatrixCSC(3, 3, Uint8[1,1,1,1], Uint8[], Int64[])
+#let S = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
+S1290 = SparseMatrixCSC(3, 3, UInt8[1,1,1,1], UInt8[], Int64[])
     S1290[1,1] = 1
     S1290[5] = 2
     S1290[end] = 3
@@ -340,7 +342,7 @@ let A = spzeros(Int, 10, 20)
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
-let ASZ = 1000, TSZ = 800 
+let ASZ = 1000, TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
     nA = countnz(A)
@@ -460,3 +462,6 @@ end
 # issue #8363
 @test_throws BoundsError sparsevec(Dict(-1=>1,1=>2))
 
+# issue #8976
+@test conj(sparse([1im])) == sparse(conj([1im]))
+@test conj!(sparse([1im])) == sparse(conj!([1im]))

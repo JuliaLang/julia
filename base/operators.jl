@@ -54,7 +54,8 @@ lexless(x,y) = lexcmp(x,y)<0
 cmp(x::Integer, y::Integer) = ifelse(isless(x,y), -1, ifelse(isless(y,x), 1, 0))
 
 max(x,y) = ifelse(y < x, x, y)
-min(x,y) = ifelse(x < y, x, y)
+min(x,y) = ifelse(y < x, y, x)
+minmax(x,y) = y < x ? (y, x) : (x, y)
 
 scalarmax(x,y) = max(x,y)
 scalarmax(x::AbstractArray, y::AbstractArray) = error("ordering is not well-defined for arrays")
@@ -163,15 +164,14 @@ A_ldiv_Bt (a,b) = a\transpose(b)
 At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 
 
-oftype{T}(::Type{T},c) = convert(T,c)
-oftype{T}(x::T,c) = convert(T,c)
+oftype(x,c) = convert(typeof(x),c)
 
 widen{T<:Number}(x::T) = convert(widen(T), x)
 
 sizeof(x) = Core.sizeof(x)
 
 # copying immutable things
-copy(x::Union(Symbol,Number,String,Function,Tuple,LambdaStaticData,
+copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
 
 # function pipelining
@@ -415,7 +415,7 @@ next(p::Pair, i) = (getfield(p,i), i+1)
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 
-hash(p::Pair, h::Uint) = hash(p.second, hash(p.first, h))
+hash(p::Pair, h::UInt) = hash(p.second, hash(p.first, h))
 
 ==(p::Pair, q::Pair) = (p.first==q.first) & (p.second==q.second)
 isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second)
@@ -498,12 +498,13 @@ export
     getindex,
     setindex!,
     transpose,
-    ctranspose
+    ctranspose,
+    call
 
 import Base: !, !=, $, %, .%, &, *, +, -, .!=, .+, .-, .*, ./, .<, .<=, .==, .>,
     .>=, .\, .^, /, //, <, <:, <<, <=, ==, >, >=, >>, .>>, .<<, >>>,
     <|, |>, \, ^, |, ~, !==, >:, colon, hcat, vcat, hvcat, getindex, setindex!,
-    transpose, ctranspose,
+    transpose, ctranspose, call,
     ≥, ≤, ≠, .≥, .≤, .≠, ÷, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
 
 end

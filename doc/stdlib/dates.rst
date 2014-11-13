@@ -1,5 +1,40 @@
 .. module:: Dates
 
+Dates Types
+-----------
+
+.. data:: Period
+.. data:: Year
+.. data:: Month
+.. data:: Week
+.. data:: Day
+.. data:: Hour
+.. data:: Minute
+.. data:: Second
+.. data:: Millisecond
+   
+   ``Period`` types represent discrete, human representations of time.
+
+.. data:: Instant
+
+   ``Instant`` types represent integer-based, machine representations of time as continuous timelines starting from an epoch.
+   
+.. data:: UTInstant{T}
+
+   The ``UTInstant`` represents a machine timeline based on `UT` time (1 day = one revolution of the earth). The ``{T}`` is a ``Period`` parameter that indicates the resolution or precision of the instant.
+
+.. data:: TimeType
+
+   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant.
+   
+.. data:: DateTime
+
+   ``DateTime`` wraps a ``UTInstant{Millisecond}`` and interprets it according to the proleptic Gregorian calendar.
+   
+.. data:: Date
+
+   ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
+
 Dates Functions
 ---------------
 
@@ -32,7 +67,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
     parts of the new ``DateTime`` are assumed to be zero.
 
-.. function:: DateTime(dt::String, format::String; locale="english") -> DateTime
+.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
@@ -82,7 +117,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
     parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
-.. function:: Date(dt::String, format::String; locale="english") -> Date
+.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
@@ -137,12 +172,12 @@ Accessor Functions
 Query Functions
 ~~~~~~~~~~~~~~~
 
-.. function:: dayname(dt::TimeType; locale="english") -> String
+.. function:: dayname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full day name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
 
-.. function:: dayabbr(dt::TimeType; locale="english") -> String
+.. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
@@ -164,11 +199,11 @@ Query Functions
     the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)``
     in the adjuster function.
 
-.. function:: monthname(dt::TimeType; locale="english") -> String
+.. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full name of the month of the Date or DateTime in the given ``locale``.
 
-.. function:: monthabbr(dt::TimeType; locale="english") -> String
+.. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated month name of the Date or DateTime in the given ``locale``.
 

@@ -116,7 +116,7 @@ such functions to also return the modified array for convenience.
 Avoid strange type Unions
 -------------------------
 
-Types such as ``Union(Function,String)`` are often a sign that some design
+Types such as ``Union(Function,AbstractString)`` are often a sign that some design
 could be cleaner.
 
 Try to avoid nullable fields
@@ -137,7 +137,7 @@ Avoid elaborate container types
 
 It is usually not much help to construct arrays like the following::
 
-    a = Array(Union(Int,String,Tuple,Array), n)
+    a = Array(Union(Int,AbstractString,Tuple,Array), n)
 
 In this case ``cell(n)`` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
@@ -244,7 +244,7 @@ Don't expose unsafe operations at the interface level
 If you have a type that uses a native pointer::
 
     type NativeType
-        p::Ptr{Uint8}
+        p::Ptr{UInt8}
         ...
     end
 

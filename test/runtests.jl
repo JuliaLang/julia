@@ -1,7 +1,8 @@
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings", "dates",
-    "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
+    "collections", "hashing", "remote", "iobuffer", "staged", "arrayops",
+    "reduce", "reducedim",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
@@ -9,10 +10,11 @@ testnames = [
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
-    "llvmcall", "grisu", "nullable", "meta", "staged", "profile"
+    "llvmcall", "grisu", "nullable", "meta", "profile",
+    "libgit2", "docs"
 ]
 
-if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
+if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
     push!(testnames, "examples")
 end
 @unix_only push!(testnames, "unicode")
@@ -25,7 +27,7 @@ tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/triangular", "linalg/tridiag"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/lapack", "linalg/triangular", "linalg/tridiag"])
 end
 
 net_required_for = ["socket", "parallel"]

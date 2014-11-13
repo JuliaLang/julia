@@ -10,7 +10,9 @@ following the instructions at
 `http://julialang.org/downloads/ <http://julialang.org/downloads/>`_.
 
 The easiest way to learn and experiment with Julia is by starting an
-interactive session (also known as a read-eval-print loop or "repl")::
+interactive session (also known as a read-eval-print loop or "repl")
+by double-clicking the Julia executable or running ``julia`` from the
+command line::
 
     $ julia
                    _
@@ -65,14 +67,15 @@ Or you could put that code into a script and run it::
     foo
     bar
 
-Julia can be started in parallel mode with either the ``-p`` or the 
-``--machinefile`` options. ``-p n`` will launch an additional ``n`` 
-worker processes, while ``--machinefile file`` will launch a worker 
-for each line in file ``file``. The machines defined in ``file`` must be 
-accessible via a passwordless ``ssh`` login, with Julia installed at the
-same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]`` 
+Julia can be started in parallel mode with either the ``-p`` or the
+``--machinefile`` options. ``-p n`` will launch an additional ``n`` worker
+processes, while ``--machinefile file`` will launch a worker for each line in
+file ``file``. The machines defined in ``file`` must be accessible via a
+passwordless ``ssh`` login, with Julia installed at the same location as the
+current host. Each machine definition takes the form
+``[count*][user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user,
+``port`` to the standard ssh port. ``count`` is the number of workers to spawn
+on the node, and defaults to 1. The optional ``bind-to bind_addr[:port]`` 
 specifies the ip-address and port that other workers should use to 
 connect to this worker.
     

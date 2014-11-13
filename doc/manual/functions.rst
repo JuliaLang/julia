@@ -468,6 +468,16 @@ signature::
         ###
     end
 
+When the function is called, the semicolon is optional: one can
+either call ``plot(x, y, width=2)`` or ``plot(x, y; width=2)``, but
+the former style is more common.  An explicit semicolon is required only
+for passing varargs or computed keywords as described below.
+
+Keyword argument default values are evaluated only when necessary
+(when a corresponding keyword argument is not passed), and in
+left-to-right order. Therefore default expressions may refer to
+prior keyword arguments.
+
 Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
@@ -478,12 +488,14 @@ functions::
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
 arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
-Dictionaries can be used for this purpose.
+Dictionaries can also be used for this purpose.
 
-Keyword argument default values are evaluated only when necessary
-(when a corresponding keyword argument is not passed), and in
-left-to-right order. Therefore default expressions may refer to
-prior keyword arguments.
+In addition, one can also pass ``(key,value)`` tuples, or any iterable
+expression (such as a ``=>`` pair) that can be assigned to such a
+tuple, explicitly after a semicolon.  For example, ``plot(x, y;
+(:width,2))`` and ``plot(x, y; :width => 2)`` are equivalent to
+``plot(x, y, width=2)``.  This is useful in situations where the
+keyword name is computed at runtime.
 
 
 Evaluation Scope of Default Values

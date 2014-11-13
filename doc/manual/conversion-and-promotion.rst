@@ -78,11 +78,11 @@ action:
     julia> typeof(x)
     Int64
 
-    julia> convert(Uint8, x)
+    julia> convert(UInt8, x)
     0x0c
 
     julia> typeof(ans)
-    Uint8
+    UInt8
 
     julia> convert(FloatingPoint, x)
     12.0
@@ -98,7 +98,7 @@ requested conversion:
 
     julia> convert(FloatingPoint, "foo")
     ERROR: `convert` has no method matching convert(::Type{FloatingPoint}, ::ASCIIString)
-     in convert at base.jl:13
+     in convert at base.jl:9
 
 Some languages consider parsing strings as numbers or formatting
 numbers as strings to be conversions (many dynamic languages will even
@@ -138,7 +138,7 @@ to zero:
 
     julia> convert(Bool, 1im)
     ERROR: InexactError()
-     in convert at complex.jl:18
+     in convert at complex.jl:16
 
     julia> convert(Bool, 0im)
     false
@@ -294,7 +294,7 @@ This allows calls like the following to work:
     -3//1
 
     julia> typeof(ans)
-    Rational{Int64} (constructor with 1 method)
+    Rational{Int32} (constructor with 1 method)
 
 For most user-defined types, it is better practice to require
 programmers to supply the expected types to constructor functions
@@ -320,16 +320,14 @@ promoted together, they should be promoted to 64-bit floating-point. The
 promotion type does not need to be one of the argument types, however;
 the following promotion rules both occur in Julia's standard library::
 
-    promote_rule(::Type{Uint8}, ::Type{Int8}) = Int
-    promote_rule(::Type{Char}, ::Type{Uint8}) = Int32
+    promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
+    promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 
 As a general rule, Julia promotes integers to `Int` during computation
 order to avoid overflow. In the latter case, the result type is
-``Int32`` since ``Int32`` is large enough to contain all possible
-Unicode code points, and numeric operations on characters always
-result in plain old integers unless explicitly cast back to characters
-(see :ref:`man-characters`). Also note that one does not need to
-define both ``promote_rule(::Type{A}, ::Type{B})`` and
+``BigInt`` since ``BigInt`` is the only type large enough to hold
+integers for arbitrary-precision integer arithmetic.  Also note that one
+does not need to define both ``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
 the way ``promote_rule`` is used in the promotion process.
 
@@ -342,7 +340,7 @@ would promote to, one can use ``promote_type``:
 
 .. doctest::
 
-    julia> promote_type(Int8, Uint16)
+    julia> promote_type(Int8, UInt16)
     Int64
 
 Internally, ``promote_type`` is used inside of ``promote`` to determine

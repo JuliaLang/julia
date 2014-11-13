@@ -19,25 +19,25 @@ for f in (:erfcx, :erfi, :Dawson)
     end
 end
 
-# Compute the inverse of the error function: erf(erfinv(x)) == x, 
+# Compute the inverse of the error function: erf(erfinv(x)) == x,
 # using the rational approximants tabulated in:
-#     J. M. Blair, C. A. Edwards, and J. H. Johnson, "Rational Chebyshev 
+#     J. M. Blair, C. A. Edwards, and J. H. Johnson, "Rational Chebyshev
 #     approximations for the inverse of the error function," Math. Comp. 30,
 #     pp. 827--830 (1976).
-#         http://dx.doi.org/10.1090/S0025-5718-1976-0421040-7 
+#         http://dx.doi.org/10.1090/S0025-5718-1976-0421040-7
 #         http://www.jstor.org/stable/2005402
 function erfinv(x::Float64)
     a = abs(x)
     if a >= 1.0
         if x == 1.0
-            return inf(Float64)
+            return Inf
         elseif x == -1.0
-            return -inf(Float64)
+            return -Inf
         end
         throw(DomainError())
     elseif a <= 0.75 # Table 17 in Blair et al.
         t = x*x - 0.5625
-        return x * @horner(t, 0.16030_49558_44066_229311e2, 
+        return x * @horner(t, 0.16030_49558_44066_229311e2,
                              -0.90784_95926_29603_26650e2,
                               0.18644_91486_16209_87391e3,
                              -0.16900_14273_46423_82420e3,
@@ -79,7 +79,7 @@ function erfinv(x::Float64)
                           0.85475_61182_21678_27825_185e1,
                           0.68738_08807_35438_39802_913e1,
                           0.36270_02483_09587_08930_02e1,
-                          0.88606_27392_96515_46814_9) / 
+                          0.88606_27392_96515_46814_9) /
               (copysign(t, x) *
                @horner(t, 0.10501_26668_70303_37690e-3,
                           0.10532_86230_09333_27531_11e-1,
@@ -98,9 +98,9 @@ function erfinv(x::Float32)
     a = abs(x)
     if a >= 1.0f0
         if x == 1.0f0
-            return inf(Float32)
+            return Inf32
         elseif x == -1.0f0
-            return -inf(Float32)
+            return -Inf32
         end
         throw(DomainError())
     elseif a <= 0.75f0 # Table 10 in Blair et al.
@@ -140,14 +140,14 @@ end
 erfinv(x::Integer) = erfinv(float(x))
 @vectorize_1arg Real erfinv
 
-# Inverse complementary error function: use Blair tables for y = 1-x, 
+# Inverse complementary error function: use Blair tables for y = 1-x,
 # exploiting the greater accuracy of y (vs. x) when y is small.
 function erfcinv(y::Float64)
     if y > 0.0625
         return erfinv(1.0 - y)
     elseif y <= 0.0
         if y == 0.0
-            return inf(Float64)
+            return Inf
         end
         throw(DomainError())
     elseif y >= 1e-100 # Table 57 in Blair et al.
@@ -160,7 +160,7 @@ function erfcinv(y::Float64)
                           0.85475_61182_21678_27825_185e1,
                           0.68738_08807_35438_39802_913e1,
                           0.36270_02483_09587_08930_02e1,
-                          0.88606_27392_96515_46814_9) / 
+                          0.88606_27392_96515_46814_9) /
               (t *
                @horner(t, 0.10501_26668_70303_37690e-3,
                           0.10532_86230_09333_27531_11e-1,
@@ -199,7 +199,7 @@ function erfcinv(y::Float32)
         return erfinv(1.0f0 - y)
     elseif y <= 0.0f0
         if y == 0.0f0
-            return inf(Float32)
+            return Inf32
         end
         throw(DomainError())
     else # Table 50 in Blair et al.

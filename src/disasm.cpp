@@ -17,8 +17,17 @@
 //
 //===----------------------------------------------------------------------===//
 
-#include <string>
+#include <cstdio>
+#include <cstring>
 #include <iostream>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
+
+#include "llvm/MC/MCExpr.h"
+#include "llvm/MC/MCInstrAnalysis.h"
+#include "llvm/MC/MCSymbol.h"
 
 using namespace llvm;
 
@@ -34,7 +43,7 @@ public:
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
-    
+
     int readByte(uint64_t Addr, uint8_t *Byte) const {
         if (Addr >= getExtent())
             return -1;
@@ -42,6 +51,120 @@ public:
         return 0;
     }
 };
+
+// Look up a symbol, and return a const char* to its name when the
+// address matches. We currently just use "L<address>" as name for the
+// symbol. We could easily get more fancy, e.g. numbering symbols
+// sequentially or encoding the line number, but that doesn't seem
+// necessary.
+class SymbolTable {
+    typedef std::map<uint64_t, MCSymbol*> TableType;
+    TableType Table;
+    std::string TempName;
+    MCContext& Ctx;
+    const FuncMCView &MemObj;
+    int Pass;
+public:
+    SymbolTable(MCContext &Ctx, const FuncMCView &MemObj):
+        Ctx(Ctx), MemObj(MemObj) {}
+    const FuncMCView &getMemoryObject() const { return MemObj; }
+    void setPass(int Pass) { this->Pass = Pass; }
+    int getPass() const { return Pass; }
+    void insertAddress(uint64_t addr);
+    // void createSymbol(const char *name, uint64_t addr);
+    void createSymbols();
+    const char *lookupSymbol(uint64_t addr);
+};
+// Insert an address
+void SymbolTable::insertAddress(uint64_t addr)
+{
+    Table[addr] = NULL;
+}
+// Create a symbol
+// void SymbolTable::createSymbol(const char *name, uint64_t addr)
+// {
+//     MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name));
+//     symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+// }
+// Create symbols for all addresses
+void SymbolTable::createSymbols()
+{
+    for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
+         isymb != esymb; ++isymb) {
+        uint64_t addr = isymb->first;
+        std::ostringstream name;
+        name << "L" << addr;
+        MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
+        symb->setVariableValue(MCConstantExpr::Create(addr, Ctx));
+        isymb->second = symb;
+    }
+}
+const char *SymbolTable::lookupSymbol(uint64_t addr)
+{
+    if (!Table.count(addr)) return NULL;
+    MCSymbol *symb = Table[addr];
+    TempName = symb->getName().str();
+    return TempName.c_str();
+}
+
+const char *SymbolLookup(void *DisInfo,
+                         uint64_t ReferenceValue,
+                         uint64_t *ReferenceType,
+                         uint64_t ReferencePC,
+                         const char **ReferenceName)
+{
+    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    if (SymTab->getPass() != 0) {
+        if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
+            uint64_t addr = ReferenceValue;
+            const char *symbolName = SymTab->lookupSymbol(addr);
+            *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
+            *ReferenceName = NULL;
+            return symbolName;
+        }
+    }
+    *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
+    *ReferenceName = NULL;
+    return NULL;
+}
+
+extern "C" void jl_getFunctionInfo
+  (const char **name, size_t *line, const char **filename, uintptr_t pointer,
+   int *fromC, int skipC);
+int OpInfoLookup(void *DisInfo, uint64_t PC,
+                 uint64_t Offset, uint64_t Size,
+                 int TagType, void *TagBuf)
+{
+    SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    if (TagType != 1)
+        return 0;               // Unknown data format
+    LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
+    uint8_t bytes[Size];
+    for (uint64_t i=0; i<Size; ++i)
+        SymTab->getMemoryObject().readByte(PC+Offset+i, &bytes[i]);
+    size_t pointer;
+    switch (Size) {
+    case 1: { uint8_t  val; std::memcpy(&val, bytes, 1); pointer = val; break; }
+    case 2: { uint16_t val; std::memcpy(&val, bytes, 2); pointer = val; break; }
+    case 4: { uint32_t val; std::memcpy(&val, bytes, 4); pointer = val; break; }
+    case 8: { uint64_t val; std::memcpy(&val, bytes, 8); pointer = val; break; }
+    default: return 0;          // Cannot handle input address size
+    }
+    int skipC = 0;
+    const char *name;
+    size_t line;
+    const char *filename;
+    int fromC;
+    jl_getFunctionInfo(&name, &line, &filename, pointer, &fromC, skipC);
+    if (!name)
+        return 0;               // Did not find symbolic information
+    // Describe the symbol
+    info->AddSymbol.Present = 1;
+    info->AddSymbol.Name = name;
+    info->AddSymbol.Value = pointer; // unused by LLVM
+    info->Value = 0;                 // offset
+    return 1;                        // Success
+}
 }
 
 #ifndef USE_MCJIT
@@ -60,7 +183,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     // Avoids hard-coded targets - will generally be only host CPU anyway.
     llvm::InitializeNativeTargetAsmParser();
     llvm::InitializeNativeTargetDisassembler();
-  
+
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())
@@ -74,7 +197,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     std::string err;
     const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-    // Set up required helpers and streamer 
+    // Set up required helpers and streamer
 #ifdef LLVM35
     std::unique_ptr<MCStreamer> Streamer;
 #else
@@ -118,7 +241,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 #else
     OwningPtr<MCSubtargetInfo>
         STI(TheTarget->createMCSubtargetInfo(TripleName, MCPU, Features.getString()));
-    OwningPtr<const MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
+    OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
         JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
@@ -133,6 +256,8 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     std::unique_ptr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
 #else
     OwningPtr<MCInstrInfo> MCII(TheTarget->createMCInstrInfo());
+    OwningPtr<MCInstrAnalysis>
+        MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
 #endif
     MCInstPrinter* IP =
         TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
@@ -154,70 +279,121 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 #endif
                                            /*useDwarfDirectory*/ true,
                                            IP, CE, MAB, ShowInst));
+#ifdef LLVM36
+    Streamer->InitSections(true);
+#else
     Streamer->InitSections();
+#endif
 
 #ifndef USE_MCJIT // LLVM33 version
 
     // Make the MemoryObject wrapper
     FuncMCView memoryObject(Fptr, Fsize);
+    SymbolTable DisInfo(Ctx, memoryObject);
 
-    uint64_t Size = 0;
-    uint64_t Index = 0;
-    uint64_t absAddr = 0;
+    // Take two passes: In the first pass we record all branch labels,
+    // in the second we actually perform the output
+    for (int pass = 0; pass < 2; ++ pass) {
 
-    // Set up the line info
-    typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
-    LInfoVec::iterator lineIter = lineinfo.begin();
-    LInfoVec::iterator lineEnd  = lineinfo.end();
-
-    uint64_t nextLineAddr = -1;
-    DISubprogram debugscope;
-
-    if (lineIter != lineEnd) {
-        nextLineAddr = (*lineIter).Address;
-        debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
-
-        stream << "Filename: " << debugscope.getFilename() << "\n";
-        stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
-    }
-    
-    // Do the disassembly
-    for (Index = 0, absAddr = (uint64_t)Fptr;
-         Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
-        
-        if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
-            stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
-            nextLineAddr = (*++lineIter).Address;
+        DisInfo.setPass(pass);
+        if (pass != 0) {
+            // Switch to symbolic disassembly. We cannot do this
+            // before the first pass, because this changes branch
+            // targets from immediate values (constants) to
+            // expressions, which are not handled correctly by
+            // MCIA->evaluateBranch. (It should be possible to rewrite
+            // this routine to handle this case correctly as well.)
+            // Could add OpInfoLookup here
+            DisAsm->setupForSymbolicDisassembly
+                (OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
         }
 
-        MCInst Inst;
+        uint64_t Size = 0;
+        uint64_t Index = 0;
+        uint64_t absAddr = 0;
 
-        MCDisassembler::DecodeStatus S;
-        S = DisAsm->getInstruction(Inst, Size, memoryObject, Index,
-                                  /*REMOVE*/ nulls(), nulls());
-        switch (S) {
-        case MCDisassembler::Fail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
-                            SourceMgr::DK_Warning,
-                            "invalid instruction encoding");
-        if (Size == 0)
-            Size = 1; // skip illegible bytes
-        break;
+        // Set up the line info
+        typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart>
+            LInfoVec;
+        LInfoVec::iterator lineIter = lineinfo.begin();
+        LInfoVec::iterator lineEnd  = lineinfo.end();
 
-        case MCDisassembler::SoftFail:
-        SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
-                            SourceMgr::DK_Warning,
-                            "potentially undefined instruction encoding");
-        // Fall through
+        uint64_t nextLineAddr = -1;
+        DISubprogram debugscope;
 
-        case MCDisassembler::Success:
-        #ifdef LLVM35
-            Streamer->EmitInstruction(Inst, *STI);
-        #else
-            Streamer->EmitInstruction(Inst);
-        #endif
-        break;
+        if (lineIter != lineEnd) {
+            nextLineAddr = (*lineIter).Address;
+            debugscope = DISubprogram((*lineIter).Loc.getScope(jl_LLVMContext));
+
+            if (pass != 0) {
+                stream << "Filename: " << debugscope.getFilename() << "\n";
+                stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
+            }
         }
+
+        // Do the disassembly
+        for (Index = 0, absAddr = (uint64_t)Fptr;
+             Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
+
+            if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
+                if (pass != 0)
+                    stream << "Source line: "
+                           << (*lineIter).Loc.getLine() << "\n";
+                nextLineAddr = (*++lineIter).Address;
+            }
+            if (pass != 0) {
+                // Uncomment this to output addresses for all instructions
+                // stream << Index << ": ";
+                const char *symbolName = DisInfo.lookupSymbol(Index);
+                if (symbolName)
+                    stream << symbolName << ":";
+            }
+
+            MCInst Inst;
+
+            MCDisassembler::DecodeStatus S;
+            S = DisAsm->getInstruction(Inst, Size, memoryObject, Index,
+                                      /*REMOVE*/ nulls(), nulls());
+            switch (S) {
+            case MCDisassembler::Fail:
+            if (pass != 0)
+                SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                                    SourceMgr::DK_Warning,
+                                    "invalid instruction encoding");
+            if (Size == 0)
+                Size = 1; // skip illegible bytes
+            break;
+
+            case MCDisassembler::SoftFail:
+            if (pass != 0)
+                SrcMgr.PrintMessage(SMLoc::getFromPointer(memoryObject[Index]),
+                                    SourceMgr::DK_Warning,
+                                    "potentially undefined instruction encoding");
+            // Fall through
+
+            case MCDisassembler::Success:
+            #ifdef LLVM35
+                if (pass != 0)
+                    Streamer->EmitInstruction(Inst, *STI);
+            #else
+                if (pass == 0) {
+                    // Pass 0: Record all branch targets
+                    if (MCIA->isBranch(Inst)) {
+                        uint64_t addr = MCIA->evaluateBranch(Inst, Index, Size);
+                        if (addr != uint64_t(-1))
+                            DisInfo.insertAddress(addr);
+                    }
+                } else {
+                    // Pass 1: Output instruction
+                    Streamer->EmitInstruction(Inst);
+                }
+            #endif
+            break;
+            }
+        }
+
+        if (pass == 0)
+            DisInfo.createSymbols();
     }
 #else // MCJIT version
     FuncMCView memoryObject(Fptr, Fsize); // MemoryObject wrapper
@@ -248,12 +424,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 
     uint64_t Index = 0;
     uint64_t absAddr = 0;
-    uint64_t insSize = 0; 
+    uint64_t insSize = 0;
 
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
-        
+
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
             stream << "Source line: " << lineIter->second.Line << "\n";

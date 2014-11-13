@@ -8,7 +8,7 @@ function completes_global(x, name)
     return beginswith(x, name) && !('#' in x)
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::String, all::Bool=false, imported::Bool=false)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = UTF8String[string(s) for s in ssyms]
@@ -107,7 +107,7 @@ function complete_keyword(s::ByteString)
     sorted_keywords[r]
 end
 
-function complete_path(path::String, pos)
+function complete_path(path::AbstractString, pos)
     dir, prefix = splitdir(path)
     local files
     try
@@ -126,13 +126,14 @@ function complete_path(path::String, pos)
     for file in files
         if beginswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
-            push!(matches, id ? joinpath(file,"") : file)
+            # joinpath is not used because windows needs to complete with double-backslash
+            push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
     matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
 end
 
-function complete_methods(input::String)
+function complete_methods(input::AbstractString)
     tokens = split(input, '.')
     fn = Main
     for token in tokens
@@ -147,7 +148,7 @@ end
 include("latex_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
-const non_filename_chars = [" \t\n\r\"\\'`@\$><=;|&{("...]
+const non_filename_chars = [(" \t\n\r\"'`@\$><=;|&{(" * (@unix?"\\" : "")) ...]
 const whitespace_chars = [" \t\n\r"...]
 
 # Aux function to detect whether we're right after a
@@ -223,7 +224,7 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            append!(suggestions, filter(readdir(Pkg.dir())) do pname
+            append!(suggestions, filter(isdir(Pkg.dir()) ? readdir(Pkg.dir()) : Union(ASCIIString,UTF8String)[]) do pname
                 pname[1] != '.' &&
                 pname != "METADATA" &&
                 pname != "REQUIRE" &&
@@ -253,9 +254,9 @@ function shell_completions(string, pos)
     # Now look at the last thing we parsed
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
-    if isa(arg,String)
+    if all(map(s -> isa(s, AbstractString), args.args[end].args))
         # Treat this as a path (perhaps give a list of comands in the future as well?)
-        return complete_path(arg, pos)
+        return complete_path(join(args.args[end].args), pos)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]

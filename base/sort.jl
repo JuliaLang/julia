@@ -20,6 +20,7 @@ export # also exported by Base
     sort,
     sort!,
     sortperm,
+    sortperm!,
     sortrows,
     sortcols,
     # algorithms:
@@ -263,10 +264,11 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
             v[mi], v[lo] = v[lo], v[mi]
         end
         if lt(o, v[hi], v[mi])
-            v[hi], v[mi] = v[mi], v[hi]
-        end
-        if lt(o, v[mi], v[lo])
-            v[mi], v[lo] = v[lo], v[mi]
+            if lt(o, v[hi], v[lo])
+                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+            else
+                v[hi], v[mi] = v[mi], v[hi]
+            end
         end
         v[mi], v[lo] = v[lo], v[mi]
         i, j = lo, hi
@@ -340,6 +342,14 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!([1:length(v)], alg, Perm(ord(lt,by,rev,order),v))
+
+function sortperm!{I<:Integer}(x::Vector{I}, v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
+                               lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward,
+                               initialized::Bool=false)
+    length(x) != length(v) && throw(ArgumentError("Index vector must be the same length as the source vector."))
+    !initialized && @inbounds for i = 1:length(v); x[i] = i; end
+    sort!(x, alg, Perm(ord(lt,by,rev,order),v))
+end
 
 ## sorting multi-dimensional arrays ##
 

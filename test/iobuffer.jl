@@ -2,16 +2,16 @@ ioslength(io::IOBuffer) = (io.seekable ? io.size : nb_available(io))
 
 let io = IOBuffer()
 @test eof(io)
-@test_throws EOFError read(io,Uint8)
+@test_throws EOFError read(io,UInt8)
 @test write(io,"abc") == 3
 @test ioslength(io) == 3
 @test position(io) == 3
 @test eof(io)
 seek(io, 0)
-@test read(io,Uint8) == 'a'
-a = Array(Uint8, 2)
+@test read(io,UInt8) == convert(UInt8, 'a')
+a = Array(UInt8, 2)
 @test read!(io, a) == a
-@test a == ['b','c']
+@test a == UInt8['b','c']
 @test bytestring(io) == "abc"
 seek(io, 1)
 truncate(io, 2)
@@ -29,13 +29,13 @@ seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test_throws ErrorException read!(io,Uint8[0])
+@test_throws ErrorException read!(io,UInt8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
 close(io)
-@test_throws ErrorException write(io,Uint8[0])
+@test_throws ErrorException write(io,UInt8[0])
 @test_throws ErrorException seek(io,0)
 @test eof(io)
 end
@@ -44,19 +44,19 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test position(io) == 0
 @test readline(io) == "hamster\n"
 @test readall(io) == "guinea pig\nturtle"
-@test_throws EOFError read(io,Uint8)
+@test_throws EOFError read(io,UInt8)
 seek(io,0)
-@test read(io,Uint8) == 'h'
+@test read(io,UInt8) == convert(UInt8, 'h')
 @test_throws ErrorException truncate(io,0)
 @test_throws ErrorException write(io,uint8(0))
-@test_throws ErrorException write(io,Uint8[0])
+@test_throws ErrorException write(io,UInt8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
 end
 
 let io = PipeBuffer()
-@test_throws EOFError read(io,Uint8)
+@test_throws EOFError read(io,UInt8)
 @test write(io,"pancakes\nwaffles\nblueberries\n") > 0
 @test position(io) == 0
 @test readline(io) == "pancakes\n"
@@ -84,7 +84,7 @@ Base.ensureroom(io,100)
 seekend(io)
 @test ioslength(io) == 0
 @test position(io) == 0
-write(io,zeros(Uint8,200))
+write(io,zeros(UInt8,200))
 @test ioslength(io) == 75
 @test length(io.data) == 75
 write(io,1)
@@ -101,7 +101,7 @@ skip(io,71)
 @test write(io,'y') == 1
 @test readall(io) == "happy"
 @test eof(io)
-write(io,zeros(Uint8,73))
+write(io,zeros(UInt8,73))
 write(io,'a')
 write(io,'b')
 write(io,'c')
@@ -121,7 +121,7 @@ end
 
 # issue 5453
 let io=IOBuffer("abcdef")
-a = Array(Uint8,1024)
+a = Array(UInt8,1024)
 @test_throws EOFError read!(io,a)
 @test eof(io)
 end

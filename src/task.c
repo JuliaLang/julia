@@ -561,7 +561,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
-#if defined(_CPU_X86_64_) 
+#if defined(_CPU_X86_64_)
     DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
     stk.AddrPC.Offset = Context->Rip;
     stk.AddrStack.Offset = Context->Rsp;
@@ -577,7 +577,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrPC.Mode = AddrModeFlat;
     stk.AddrStack.Mode = AddrModeFlat;
     stk.AddrFrame.Mode = AddrModeFlat;
-    
+
     size_t n = 0;
     intptr_t lastsp = stk.AddrStack.Offset;
     while (n < maxsize) {
@@ -587,7 +587,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         jl_in_stackwalk = 0;
         data[n++] = (intptr_t)stk.AddrPC.Offset;
         intptr_t sp = (intptr_t)stk.AddrStack.Offset;
-        if (!result || sp == 0 || 
+        if (!result || sp == 0 ||
             (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
             stk.AddrReturn.Offset == 0)
             break;
@@ -609,7 +609,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
-    
+
     unw_init_local(&cursor, uc);
     do {
         if (n >= maxsize)
@@ -630,7 +630,7 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
-    
+
     unw_init_local_dwarf(&cursor, uc);
     do {
         if (n >= maxsize)
@@ -714,7 +714,8 @@ DLLEXPORT void gdblookup(ptrint_t ip)
 
 DLLEXPORT void jlbacktrace()
 {
-    for(size_t i=0; i < bt_size; i++)
+    size_t n = bt_size; //bt_size > 40 ? 40 : bt_size;
+    for(size_t i=0; i < n; i++)
         gdblookup(bt_data[i]);
 }
 
@@ -770,7 +771,7 @@ DLLEXPORT void jl_throw_with_superfluous_argument(jl_value_t *e, int line)
     jl_throw(e);
 }
 
-jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
+DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
@@ -827,27 +828,6 @@ JL_CALLABLE(jl_unprotect_stack)
     return (jl_value_t*)jl_null;
 }
 
-#define JL_MIN_STACK     (4096*sizeof(void*))
-#define JL_DEFAULT_STACK (2*12288*sizeof(void*))
-
-JL_CALLABLE(jl_f_task)
-{
-    JL_NARGS(Task, 1, 2);
-    JL_TYPECHK(Task, function, args[0]);
-    /*
-      we need a somewhat large stack, because execution can trigger
-      compilation, which uses perhaps too much stack space.
-    */
-    size_t ssize = JL_DEFAULT_STACK;
-    if (nargs == 2) {
-        JL_TYPECHK(Task, long, args[1]);
-        ssize = jl_unbox_long(args[1]);
-        if (ssize < JL_MIN_STACK)
-            jl_error("Task: stack size too small");
-    }
-    return (jl_value_t*)jl_new_task((jl_function_t*)args[0], ssize);
-}
-
 JL_CALLABLE(jl_f_yieldto)
 {
     JL_NARGSV(yieldto, 1);
@@ -892,9 +872,8 @@ void jl_init_tasks(void *stack, size_t ssize)
                                             jl_any_type, jl_sym_type,
                                             jl_any_type, jl_any_type,
                                             jl_any_type, jl_any_type, jl_function_type),
-                                   0, 1);
+                                   0, 1, 0);
     jl_tupleset(jl_task_type->types, 0, (jl_value_t*)jl_task_type);
-    jl_task_type->fptr = jl_f_task;
 
     done_sym = jl_symbol("done");
     failed_sym = jl_symbol("failed");

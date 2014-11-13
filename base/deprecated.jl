@@ -78,13 +78,15 @@ const Stat = StatStruct
 export CharString
 const CharString = UTF32String
 @deprecate UTF32String(c::Integer...) utf32(c...)
-@deprecate UTF32String(s::String) utf32(s)
+@deprecate UTF32String(s::AbstractString) utf32(s)
 
 export Ranges
 const Ranges = Range
 
 export Range1
 const Range1 = UnitRange
+
+@deprecate clear_malloc_data() Profile.clear_malloc_data()
 
 @deprecate set_rounding(r::RoundingMode) set_rounding(Float64,r)
 @deprecate get_rounding() get_rounding(Float64)
@@ -133,10 +135,10 @@ Set{T<:Number}(xs::T...) = Set{T}(xs)
 @deprecate infs(dims...)                 fill(Inf, dims)
 @deprecate infs{T}(x::AbstractArray{T})  fill(convert(T,Inf), size(x))
 
-@deprecate bitmix(x, y::Uint)                 hash(x, y)
+@deprecate bitmix(x, y::UInt)                 hash(x, y)
 @deprecate bitmix(x, y::Int)                  hash(x, uint(y))
-@deprecate bitmix(x, y::Union(Uint32, Int32)) convert(Uint32, hash(x, uint(y)))
-@deprecate bitmix(x, y::Union(Uint64, Int64)) convert(Uint64, hash(x, hash(y)))
+@deprecate bitmix(x, y::Union(UInt32, Int32)) convert(UInt32, hash(x, uint(y)))
+@deprecate bitmix(x, y::Union(UInt64, Int64)) convert(UInt64, hash(x, hash(y)))
 
 @deprecate readsfrom(cmd, args...)      open(cmd, "r", args...)
 @deprecate writesto(cmd, args...)      open(cmd, "w", args...)
@@ -150,14 +152,14 @@ function tty_cols()
     tty_size()[2]
 end
 
-@deprecate pointer{T}(::Type{T}, x::Uint) convert(Ptr{T}, x)
+@deprecate pointer{T}(::Type{T}, x::UInt) convert(Ptr{T}, x)
 @deprecate pointer{T}(::Type{T}, x::Ptr) convert(Ptr{T}, x)
 
 # 0.3 discontinued functions
 
 scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot scale a real array by a complex value in-place.  Use scale(X::Array{Real}, s::Complex) instead.")
 
-@deprecate which(f::Callable, args...) @which f(args...)
+@deprecate which(f, args...) @which f(args...)
 @deprecate rmdir rm
 
 # 0.4 deprecations
@@ -176,7 +178,7 @@ const UdpSocket = UDPSocket
 const IpAddr = IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
-@deprecate isblank(s::String) all(c -> c == ' ' || c == '\t', s)
+@deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
 @deprecate randbool! rand!
 
@@ -185,6 +187,12 @@ const Nothing = Void
 
 export None
 const None = Union()
+
+export apply
+function apply(f, args...)
+    depwarn("apply(f, x) is deprecated, use `f(x...)` instead", :apply)
+    return Core._apply(call, f, args...)
+end
 
 @deprecate median(v::AbstractArray; checknan::Bool=true)  median(v)
 @deprecate median(v::AbstractArray, region; checknan::Bool=true)  median(v, region)
@@ -195,3 +203,28 @@ const None = Union()
 @deprecate Dict{K}(ks::(K...), vs::Tuple)                        Dict{K,Any}(zip(ks, vs))
 @deprecate Dict{V}(ks::Tuple, vs::(V...))                        Dict{Any,V}(zip(ks, vs))
 @deprecate Dict(ks, vs)                                          Dict{Any,Any}(zip(ks, vs))
+
+@deprecate itrunc{T<:Integer}(::Type{T}, n::Integer) (n % T)
+
+@deprecate oftype{T}(::Type{T},c)  convert(T,c)
+
+@deprecate inf(x::FloatingPoint)  oftype(x,Inf)
+@deprecate nan(x::FloatingPoint)  oftype(x,NaN)
+@deprecate inf{T<:FloatingPoint}(::Type{T})  convert(T,Inf)
+@deprecate nan{T<:FloatingPoint}(::Type{T})  convert(T,NaN)
+
+export String
+const String = AbstractString
+
+export Uint, Uint8, Uint16, Uint32, Uint64, Uint128
+const Uint = UInt
+const Uint8 = UInt8
+const Uint16 = UInt16
+const Uint32 = UInt32
+const Uint64 = UInt64
+const Uint128 = UInt128
+
+@deprecate zero{T}(::Type{Ptr{T}}) Ptr{T}(0)
+@deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
+@deprecate one{T}(::Type{Ptr{T}})  Ptr{T}(1)
+@deprecate one{T}(x::Ptr{T})       Ptr{T}(1)

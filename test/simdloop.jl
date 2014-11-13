@@ -60,10 +60,33 @@ let j=4
     # Index that is local to loop
     @simd for simd_loop_local=1:0 end
     simd_loop_local_present = true
-    try 
+    try
         simd_loop_local += 1
     catch
         simd_loop_local_present = false
     end
     @test !simd_loop_local_present
 end
+
+import Base.SimdLoop.SimdError
+
+# Test that @simd rejects inner loop body with invalid control flow statements
+# issue #8613
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 && break
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x < 5 && continue
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 || @goto exit_loop
+    end
+    @label exit_loop
+end))

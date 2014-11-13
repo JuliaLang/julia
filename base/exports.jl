@@ -12,6 +12,8 @@ export
     Test,
     BLAS,
     LAPACK,
+    Docs,
+    Markdown,
 
 # Types
     AbstractMatrix,
@@ -269,6 +271,7 @@ export
     At_mul_Bt!,
     At_rdiv_B,
     At_rdiv_Bt,
+    call,
 
 # scalar math
     @evalpoly,
@@ -360,7 +363,6 @@ export
     iceil,
     ifloor,
     imag,
-    inf,
     int,
     int128,
     int16,
@@ -401,7 +403,6 @@ export
     mod1,
     modf,
     mod2pi,
-    nan,
     nextfloat,
     nextpow,
     nextpow2,
@@ -601,6 +602,7 @@ export
     sort,
     sortcols,
     sortperm,
+    sortperm!,
     sortrows,
     squeeze,
     step,
@@ -630,6 +632,7 @@ export
     cond,
     condskeel,
     cross,
+    ctranspose!,
     ctranspose,
     det,
     diag,
@@ -690,6 +693,7 @@ export
     svdvals,
     sylvester,
     trace,
+    transpose!,
     transpose,
     tril!,
     tril,
@@ -713,6 +717,8 @@ export
     sprandn,
     spzeros,
     symperm,
+    rowvals,
+    nzrange,
 
 # bitarrays
     bitpack,
@@ -1088,7 +1094,6 @@ export
     gc_disable,
     gc_enable,
     precompile,
-    clear_malloc_data,
 
 # misc
     atexit,
@@ -1220,6 +1225,8 @@ export
     popdisplay,
     pushdisplay,
     redisplay,
+    HTML,
+    Text,
 
 # distributed arrays
     dfill,
@@ -1338,6 +1345,10 @@ export
     @r_str,
     @r_mstr,
     @v_str,
+    @text_str,
+    @text_mstr,
+    @html_str,
+    @html_mstr,
     @int128_str,
     @uint128_str,
     @bigint_str,
@@ -1391,4 +1402,7 @@ export
     @simd,
     @label,
     @goto,
-    @inline
+    @inline,
+    @doc,
+    @doc_str,
+    @doc_mstr

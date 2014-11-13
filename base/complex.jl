@@ -154,7 +154,7 @@ inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
 # the first step is to scale variables if appropriate ,then do calculations
 # in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
-# based on arxiv.1210.4539 
+# based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
@@ -286,7 +286,7 @@ angle(z::Complex) = atan2(imag(z), real(z))
 function log{T<:FloatingPoint}(z::Complex{T})
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = log(oftype(T,2))  #0.6931471805599453
+    const ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -338,12 +338,12 @@ function exp(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-zero(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
         er = exp(zr)
@@ -360,18 +360,18 @@ function expm1(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-one(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
-        erm1 = expm1(zr)        
+        erm1 = expm1(zr)
         if zi == 0
             Complex(erm1, zi)
-        else            
+        else
             er = erm1+one(erm1)
             wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
             Complex(wr, er*sin(zi))
@@ -391,9 +391,9 @@ function log1p{T}(z::Complex{T})
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
-        Complex(inf(T), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
+        Complex(T(Inf), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
     else
-        Complex(inf(T), nan(T))
+        Complex(T(Inf), T(NaN))
     end
 end
 
@@ -636,7 +636,7 @@ function acosh(z::Complex)
             return Complex(oftype(zr, NaN), oftype(zi, NaN))
         end
     elseif zr==-Inf && zi===-0.0 #Edge case is wrong - WHY?
-        return Complex(inf(zr), oftype(zi, -pi))
+        return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))

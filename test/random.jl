@@ -4,7 +4,7 @@ srand(0); rand(); x = rand(384);
 
 @test rand() != rand()
 @test 0.0 <= rand() < 1.0
-@test rand(Uint32) >= 0
+@test rand(UInt32) >= 0
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
 @test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
@@ -19,12 +19,17 @@ srand(0); rand(); x = rand(384);
 # Try a seed larger than 2^32
 @test rand(MersenneTwister(5294967296)) == 0.3498809918210497
 
-# Test array filling, Issue #7643
+# Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
 A = zeros(2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
             0.9103565379264364  0.17732884646626457]
+@test rand(MersenneTwister(0), Int64, 1) == [172014471070449746]
+A = zeros(Int64, 2, 2)
+rand!(MersenneTwister(0), A)
+@test A == [858542123778948672  5715075217119798169;
+            8690327730555225005 8435109092665372532]
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
@@ -33,8 +38,8 @@ randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
 
-for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint128,
-          Char, Float16, Float32, Float64, Rational{Int})
+for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
+          Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
     @test 97 <= r <= 122
@@ -43,7 +48,7 @@ for T in (Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Int128, Uint
     @test 97 <= r <= 122
     @test mod(r,2)==1
 
-    if T<:Integer && T!==Char
+    if T<:Integer
         x = rand(typemin(T):typemax(T))
         @test isa(x,T)
         @test typemin(T) <= x <= typemax(T)
@@ -73,11 +78,11 @@ emantissa           = int64(2)^52
 ziggurat_exp_r      = BigFloat("7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
-const ki = Array(Uint64, ziggurat_table_size)
+const ki = Array(UInt64, ziggurat_table_size)
 const wi = Array(Float64, ziggurat_table_size)
 const fi = Array(Float64, ziggurat_table_size)
 # Tables for exponential variates
-const ke = Array(Uint64, ziggurat_table_size)
+const ke = Array(UInt64, ziggurat_table_size)
 const we = Array(Float64, ziggurat_table_size)
 const fe = Array(Float64, ziggurat_table_size)
 function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
@@ -131,7 +136,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
         feb[i] = exp(-x)
         x1 = x
     end
-    ke[2] = zero(Uint64)
+    ke[2] = zero(UInt64)
 
     wi[:] = float64(wib)
     fi[:] = float64(fib)
@@ -149,7 +154,7 @@ randmtzig_fill_ziggurat_tables()
 
 #same random numbers on for small ranges on all systems
 
-seed = rand(Uint) #leave state nondeterministic as above
+seed = rand(UInt) #leave state nondeterministic as above
 srand(seed)
 r = int64(rand(int32(97:122)))
 srand(seed)
@@ -176,4 +181,44 @@ a = uuid4()
 i8257 = 1:1/3:100
 for i = 1:100
     @test rand(i8257) in i8257
+end
+
+# test code paths of rand!
+
+let mt = MersenneTwister(0)
+    A128 = Array(UInt128, 0)
+    @test length(rand!(mt, A128)) == 0
+    for (i,n) in enumerate([1, 3, 5, 6, 10, 11, 30])
+        resize!(A128, n)
+        rand!(mt, A128)
+        @test length(A128) == n
+        @test A128[end] == UInt128[0x15de6b23025813ad129841f537a04e40,
+                                   0xcfa4db38a2c65bc4f18c07dc91125edf,
+                                   0x33bec08136f19b54290982449b3900d5,
+                                   0xde41af3463e74cb830dad4add353ca20,
+                                   0x066d8695ebf85f833427c93416193e1f,
+                                   0x48fab49cc9fcee1c920d6dae629af446,
+                                   0x4b54632b4619f4eca22675166784d229][i]
+
+    end
+
+    srand(mt,0)
+    for (i,T) in enumerate([Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, Float16, Float32])
+        A = Array(T, 16)
+        B = Array(T, 31)
+        rand!(mt, A)
+        rand!(mt, B)
+        @test A[end] == Any[21,0x7b,17385,0x3086,-1574090021,0xadcb4460,6797283068698303107,0x4e91c9c4d4f5f759,
+                            -3482609696641744459568613291754091152,float16(0.03125),0.68733835f0][i]
+
+        @test B[end] == Any[49,0x65,-3725,0x719d,814246081,0xdf61843a,-1603010949539670188,0x5e4ca1658810985d,
+                            -33032345278809823492812856023466859769,float16(0.9346),0.5929704f0][i]
+    end
+
+    srand(mt,0)
+    AF64 = Array(Float64, Base.Random.dsfmt_get_min_array_size()-1)
+    @test rand!(mt, AF64)[end] == 0.957735065345398
+    @test rand!(mt, AF64)[end] == 0.6492481059865669
+    resize!(AF64, 2*length(mt.vals))
+    @test Base.Random.rand_AbstractArray_Float64!(mt, AF64)[end]  == 0.432757268470779
 end

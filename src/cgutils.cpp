@@ -629,7 +629,11 @@ static jl_value_t *julia_type_of(Value *v)
     MDNode *mdn;
     assert(v != NULL);
     if (dyn_cast<Instruction>(v) == NULL ||
+#ifdef LLVM36
+        (mdn = ((Instruction*)v)->getMDNode("julia_type")) == NULL) {
+#else
         (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
+#endif
         return julia_type_of_without_metadata(v, true);
     }
     MDString *md = (MDString*)mdn->getOperand(0);
@@ -825,29 +829,6 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
     return im1;
 }
 
-static void emit_func_check(Value *x, jl_codectx_t *ctx)
-{
-    Value *xty = emit_typeof(x);
-    Value *isfunc =
-        builder.
-        CreateOr(builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_function_type)),
-                 builder.
-                 CreateICmpEQ(xty,
-                              literal_pointer_val((jl_value_t*)jl_datatype_type)));
-    BasicBlock *elseBB1 = BasicBlock::Create(getGlobalContext(),"notf", ctx->f);
-    BasicBlock *mergeBB1 = BasicBlock::Create(getGlobalContext(),"isf");
-    builder.CreateCondBr(isfunc, mergeBB1, elseBB1);
-
-    builder.SetInsertPoint(elseBB1);
-    emit_type_error(x, (jl_value_t*)jl_function_type, "apply", ctx);
-
-    builder.CreateBr(mergeBB1);
-    ctx->f->getBasicBlockList().push_back(mergeBB1);
-    builder.SetInsertPoint(mergeBB1);
-}
-
 // --- loading and storing ---
 
 static Value *emit_nthptr_addr(Value *v, size_t n)
@@ -882,9 +863,9 @@ static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) 
 }
 
 static Value *ghostValue(jl_value_t *ty);
- 
+
 static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
-                         jl_codectx_t *ctx)
+                         jl_codectx_t *ctx, MDNode* tbaa)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -897,7 +878,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    Value *elt = tbaa_decorate(tbaa_user, builder.CreateLoad(builder.CreateGEP(data, idx_0based), false));
+    Value *elt = tbaa_decorate(tbaa, builder.CreateLoad(builder.CreateGEP(data, idx_0based), false));
     if (elty == jl_pvalue_llvmt) {
         null_pointer_check(elt, ctx);
     }
@@ -909,7 +890,7 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
 static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx)
+                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode* tbaa)
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -925,7 +906,7 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
     else
         data = ptr;
-    tbaa_decorate(tbaa_user, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
+    tbaa_decorate(tbaa, builder.CreateStore(rhs, builder.CreateGEP(data, idx_0based)));
 }
 
 // --- convert boolean value to julia ---
@@ -1464,7 +1445,7 @@ static jl_value_t *static_void_instance(jl_value_t *jt)
     if (jl_tuple_len(jt) == 0)
         return (jl_value_t*)jl_null;
     size_t nargs = jl_tuple_len(jt);
-    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple(nargs);
     JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_void_instance(jl_tupleref(jt,i)));
@@ -1521,7 +1502,7 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     else
         assert(false && "Cannot process this type of constant");
 
-    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple_uninit(nargs);
+    jl_value_t *tpl = (jl_value_t*)jl_alloc_tuple(nargs);
     JL_GC_PUSH1(&tpl);
     for(size_t i=0; i < nargs; i++) {
         jl_tupleset(tpl, i, static_constant_instance(

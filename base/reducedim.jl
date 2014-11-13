@@ -7,7 +7,7 @@ reduced_dims(a::AbstractArray, region) = reduced_dims(size(a), region)
 reduced_dims0(a::AbstractArray, region) = reduced_dims0(size(a), region)
 reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = (d == 1 ? tuple(rd, siz[d+1:N]...) :
                                                         d == N ? tuple(siz[1:N-1]..., rd) :
-                                                        1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) : 
+                                                        1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) :
                                                         siz)::typeof(siz)
 reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
 reduced_dims0{N}(siz::NTuple{N,Int}, d::Int) = 1 <= d <= N ? reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1)) : siz
@@ -68,7 +68,7 @@ promote_union(T) = T
 function reducedim_init{S}(f, op::AddFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = zero(x) + zero(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -81,7 +81,7 @@ end
 function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     T = promote_union(S)
     if method_exists(zero, (Type{T},))
-        x = evaluate(f, zero(T))
+        x = f(zero(T))
         z = one(x) * one(x)
         Tr = typeof(z) == typeof(x) && !isbits(T) ? T : typeof(z)
     else
@@ -91,17 +91,17 @@ function reducedim_init{S}(f, op::MulFun, A::AbstractArray{S}, region)
     return reducedim_initarray(A, region, z, Tr)
 end
 
-reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(evaluate(f, zero(T))))
-reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(evaluate(f, zero(T))))
-reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) = 
-    reducedim_initarray(A, region, zero(evaluate(f, zero(T))))
+reducedim_init{T}(f, op::MaxFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemin(f(zero(T))))
+reducedim_init{T}(f, op::MinFun, A::AbstractArray{T}, region) = reducedim_initarray0(A, region, typemax(f(zero(T))))
+reducedim_init{T}(f::Union(AbsFun,Abs2Fun), op::MaxFun, A::AbstractArray{T}, region) =
+    reducedim_initarray(A, region, zero(f(zero(T))))
 
 reducedim_init(f, op::AndFun, A::AbstractArray, region) = reducedim_initarray(A, region, true)
 reducedim_init(f, op::OrFun, A::AbstractArray, region) = reducedim_initarray(A, region, false)
 
 # specialize to make initialization more efficient for common cases
 
-for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :Uint))
+for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (SmallUnsigned, :UInt))
     T = Union([AbstractArray{t} for t in IT.types]..., [AbstractArray{Complex{t}} for t in IT.types]...)
     @eval begin
         reducedim_init(f::IdFun, op::AddFun, A::$T, region) =
@@ -112,7 +112,7 @@ for (IT, RT) in ((CommonReduceResult, :(eltype(A))), (SmallSigned, :Int), (Small
             reducedim_initarray(A, region, real(zero($RT)))
         reducedim_init(f::Union(AbsFun,Abs2Fun), op::MulFun, A::$T, region) =
             reducedim_initarray(A, region, real(one($RT)))
-    end    
+    end
 end
 reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool}, region) =
     reducedim_initarray(A, region, 0)
@@ -128,7 +128,7 @@ function check_reducdims(R, A)
     #
     # It returns an integer value value (useful for choosing implementation)
     # - If it reduces only along leading dimensions, e.g. sum(A, 1) or sum(A, (1, 2)),
-    #   it returns the length of the leading slice. For the two examples above, 
+    #   it returns the length of the leading slice. For the two examples above,
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
     # - Otherwise, e.g. sum(A, 2) or sum(A, (1, 3)), it returns 0.
     #
@@ -138,7 +138,7 @@ function check_reducdims(R, A)
         sRi = size(R, i)
         sAi = size(A, i)
         if sRi == 1
-            if sAi > 1 
+            if sAi > 1
                 if had_nonreduc
                     lsiz = 0  # to reduce along i, but some previous dimensions were non-reducing
                 else
@@ -146,7 +146,7 @@ function check_reducdims(R, A)
                 end
             end
         else
-            sRi == sAi || 
+            sRi == sAi ||
                 throw(DimensionMismatch("Reduction on array of size $(size(A)) with output of size $(size(R))"))
             had_nonreduc = true
         end
@@ -173,19 +173,19 @@ end
         @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
             @inbounds r = (@nref N R j)
             for i_1 = 1:sizA1
-                @inbounds v = evaluate(f, (@nref N A i))
-                r = evaluate(op, r, v)
+                @inbounds v = f(@nref N A i)
+                r = op(r, v)
             end
             @inbounds (@nref N R j) = r
-        end 
+        end
     else
         # general implementation
         @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds v = evaluate(f, (@nref N A i))
-            @inbounds (@nref N R j) = evaluate(op, (@nref N R j), v)
+            @inbounds v = f(@nref N A i)
+            @inbounds (@nref N R j) = op((@nref N R j), v)
         end
     end
-    return R    
+    return R
 end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
@@ -215,30 +215,30 @@ reducedim(op, A::AbstractArray, region) = mapreducedim(IdFun(), op, A, region)
 
 ##### Specific reduction functions #####
 
-for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun), 
-                    (:maximum, :MaxFun), (:minimum, :MinFun), 
+for (fname, Op) in [(:sum, :AddFun), (:prod, :MulFun),
+                    (:maximum, :MaxFun), (:minimum, :MinFun),
                     (:all, :AndFun), (:any, :OrFun)]
 
     fname! = symbol(string(fname, '!'))
-    @eval begin 
-        $(fname!)(f::Union(Function,Func{1}), r::AbstractArray, A::AbstractArray; init::Bool=true) = 
+    @eval begin
+        $(fname!)(f::Union(Function,Func{1}), r::AbstractArray, A::AbstractArray; init::Bool=true) =
             mapreducedim!(f, $(Op)(), initarray!(r, $(Op)(), init), A)
         $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = $(fname!)(IdFun(), r, A; init=init)
 
-        $(fname)(f::Union(Function,Func{1}), A::AbstractArray, region) = 
+        $(fname)(f::Union(Function,Func{1}), A::AbstractArray, region) =
             mapreducedim(f, $(Op)(), A, region)
         $(fname)(A::AbstractArray, region) = $(fname)(IdFun(), A, region)
     end
 end
 
-for (fname, fbase, Fun) in [(:sumabs, :sum, :AbsFun), 
-                            (:sumabs2, :sum, :Abs2Fun), 
-                            (:maxabs, :maximum, :AbsFun), 
+for (fname, fbase, Fun) in [(:sumabs, :sum, :AbsFun),
+                            (:sumabs2, :sum, :Abs2Fun),
+                            (:maxabs, :maximum, :AbsFun),
                             (:minabs, :minimum, :AbsFun)]
     fname! = symbol(string(fname, '!'))
     fbase! = symbol(string(fbase, '!'))
-    @eval begin 
-        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) = 
+    @eval begin
+        $(fname!)(r::AbstractArray, A::AbstractArray; init::Bool=true) =
             $(fbase!)($(Fun)(), r, A; init=init)
         $(fname)(A::AbstractArray, region) = $(fbase)($(Fun)(), A, region)
     end
@@ -292,13 +292,13 @@ end
 
 eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmin!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, <)))
 findmin!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmin!(initarray!(rval, typemax(R), init), rind, A)
-findmin{T}(A::AbstractArray{T}, region) = 
+findmin{T}(A::AbstractArray{T}, region) =
     isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
                   _findmin!(reducedim_initarray0(A, region, typemax(T)), zeros(Int,reduced_dims0(A,region)), A)
 
 eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmax!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, >)))
 findmax!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmax!(initarray!(rval, typemin(R), init), rind, A)
-findmax{T}(A::AbstractArray{T}, region) = 
+findmax{T}(A::AbstractArray{T}, region) =
     isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
                   _findmax!(reducedim_initarray0(A, region, typemin(T)), zeros(Int,reduced_dims0(A,region)), A)
 

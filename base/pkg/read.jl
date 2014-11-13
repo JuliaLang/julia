@@ -5,8 +5,8 @@ using ..Types
 
 readstrip(path...) = strip(readall(joinpath(path...)))
 
-url(pkg::String) = readstrip("METADATA", pkg, "url")
-sha1(pkg::String, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")
+url(pkg::AbstractString) = readstrip("METADATA", pkg, "url")
+sha1(pkg::AbstractString, ver::VersionNumber) = readstrip("METADATA", pkg, "versions", string(ver), "sha1")
 
 function available(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Dict{VersionNumber,Available}}()
@@ -26,7 +26,7 @@ function available(names=readdir("METADATA"))
     end
     return pkgs
 end
-available(pkg::String) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
+available(pkg::AbstractString) = get(available([pkg]),pkg,Dict{VersionNumber,Available}())
 
 function latest(names=readdir("METADATA"))
     pkgs = Dict{ByteString,Available}()
@@ -50,10 +50,10 @@ function latest(names=readdir("METADATA"))
     return pkgs
 end
 
-isinstalled(pkg::String) =
+isinstalled(pkg::AbstractString) =
     pkg != "METADATA" && pkg != "REQUIRE" && pkg[1] != '.' && isdir(pkg)
 
-function isfixed(pkg::String, avail::Dict=available(pkg))
+function isfixed(pkg::AbstractString, avail::Dict=available(pkg))
     isinstalled(pkg) || error("$pkg is not an installed package.")
     isfile("METADATA", pkg, "url") || return true
     ispath(pkg, ".git") || return true
@@ -78,7 +78,7 @@ function isfixed(pkg::String, avail::Dict=available(pkg))
     return true
 end
 
-function installed_version(pkg::String, avail::Dict=available(pkg))
+function installed_version(pkg::AbstractString, avail::Dict=available(pkg))
     ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
     vers = [keys(filter((ver,info)->info.sha1==head, avail))...]
@@ -113,7 +113,7 @@ function installed_version(pkg::String, avail::Dict=available(pkg))
     end
 end
 
-function requires_path(pkg::String, avail::Dict=available(pkg))
+function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     pkgreq = joinpath(pkg,"REQUIRE")
     ispath(pkg,".git") || return pkgreq
     Git.dirty("REQUIRE", dir=pkg) && return pkgreq
@@ -127,13 +127,13 @@ function requires_path(pkg::String, avail::Dict=available(pkg))
     return pkgreq
 end
 
-function requires_list(pkg::String, avail::Dict=available(pkg))
+function requires_list(pkg::AbstractString, avail::Dict=available(pkg))
     reqs = filter!(Reqs.read(requires_path(pkg,avail))) do line
         isa(line,Reqs.Requirement)
     end
     map(req->req.package, reqs)
 end
-requires_dict(pkg::String, avail::Dict=available(pkg)) =
+requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
@@ -165,6 +165,13 @@ function free(inst::Dict=installed())
         pkgs[pkg] = ver
     end
     return pkgs
+end
+
+function issue_url(pkg::AbstractString)
+    ispath(pkg,".git") || return ""
+    m = match(Git.GITHUB_REGEX, url(pkg))
+    m == nothing && return ""
+    return "https://github.com/" * m.captures[1] * "/issues"
 end
 
 end # module
