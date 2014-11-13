@@ -104,7 +104,15 @@ function PasswdStruct(name::AbstractString)
         (Ptr{UInt8}, Ptr{Void}, Ptr{UInt8}, Int64, Ptr{Ptr{Void}}),
         name, &pwd, buf, bufsize, &result
     )
-    return pwd
+    # user not in password database
+    if err == 0 && pwd.name == C_NULL
+        # TODO: should this be an error or warning?
+        error("unable to find user $(name) in password database")
+    elseif err == 0
+        return pwd
+    else
+        error("getpwnam_r returned error code: $(err)")
+    end
 end
 
 ## network functions ##
