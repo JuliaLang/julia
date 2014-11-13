@@ -89,10 +89,16 @@ type PasswdStruct
     field::Int32
 end
 
+# TODO: this only really works when comparing to nullpwd
+==(a::PasswdStruct, b::PasswdStruct) = all(map(f -> a.(f) == b.(f), names(PasswdStruct)))
+
+PasswdStruct() = PasswdStruct(
+    C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
+)
+const nullpwd = PasswdStruct()
+
 function PasswdStruct(name::AbstractString)
-    pwd = PasswdStruct(
-        C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
-    )
+    pwd = PasswdStruct()
     result = [deepcopy(pwd)]
     # TODO: what if the buffer needs to be larger?
     bufsize = 1024
@@ -104,7 +110,7 @@ function PasswdStruct(name::AbstractString)
         name, &pwd, buf, bufsize, &result
     )
     # user not in password database
-    if err == 0 && pwd.name == C_NULL
+    if err == 0 && pwd == nullpwd
         # TODO: should this be an error or warning?
         error("unable to find user $(name) in password database")
     elseif err == 0
