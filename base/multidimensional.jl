@@ -97,7 +97,7 @@ eachindex(A::AbstractArray) = IndexIterator(size(A))
 # start iteration
 start(A::AbstractArray) = start((A,linearindexing(A)))
 start(::(AbstractArray,LinearFast)) = 1
-start{T,N}(AT::(AbstractArray{T,N},LinearSlow)) = CartesianIndex(ntuple(N,n->(isempty(AT[1]) ? typemax(Int) : 1)))
+start{T,N}(AT::(AbstractArray{T,N},LinearSlow)) = CartesianIndex(ntuple(N,n->ifelse(isempty(AT[1]),typemax(Int),1))::NTuple{N,Int})
 
 # Ambiguity resolution
 done(R::StepRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
