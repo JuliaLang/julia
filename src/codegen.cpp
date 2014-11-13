@@ -814,7 +814,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             return jl_cstr_to_string(const_cast<char*>(""));
         }
 
-        jl_dump_function_asm((void*)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
+        jl_dump_function_asm((char *)fptr, fit->second.lengthAdr, fit->second.lines, fstream);
 #else // MCJIT version
         std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
         std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
@@ -835,7 +835,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
                 continue;
             sym_iter.getSize(symsize);
-            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+            jl_dump_function_asm((char *)fptr, symsize, fit->second.object, fstream);
         }
         #else
         error_code itererr;
@@ -847,7 +847,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
             if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
                 continue;
             sym_iter->getSize(symsize);
-            jl_dump_function_asm((void*)fptr, symsize, fit->second.object, fstream);
+            jl_dump_function_asm((char *)fptr, symsize, fit->second.object, fstream);
         }
         #endif // LLVM35
 #endif
