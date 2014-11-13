@@ -8,26 +8,16 @@
 
     splitdrive(path::AbstractString) = ("",path)
     function homedir(; user::AbstractString="")
-        # TODO: this needs to be replaced with libc's getpwnam ASAP
-        function getpwnam(user::AbstractString)
-            open("/etc/passwd") do f
-                for line in eachline(f)
-                    beginswith(line, '#') && continue
-                    fields = split(chomp(line), ':')
-                    fields[1] == user && return fields
-                end
-                return split("::::::", ':')
-            end
-        end
-
+        # if no user is supplied (current user) prefer value in ENV["HOME"],
+        # this is occassionally useful for debugging
         if isempty(user)
             user = ENV["USER"]
-            home = get(ENV, "HOME", getpwnam(user)[6])
+            home = get(ENV, "HOME", bytestring(PasswdStruct(user).dir))
         else
-            home = getpwnam(user)[6]
+            home = bytestring(PasswdStruct(user).dir)
         end
 
-        isempty(home) ? error("unable to find home directory for $(user)") : home
+        return home
     end
 end
 
