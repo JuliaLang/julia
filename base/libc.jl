@@ -93,7 +93,6 @@ function PasswdStruct(name::AbstractString)
     pwd = PasswdStruct(
         C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
     )
-    # TODO: can I use normal copy()?
     result = [deepcopy(pwd)]
     # TODO: what if the buffer needs to be larger?
     bufsize = 1024
