@@ -1,23 +1,17 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: start, done, next, getindex, setindex!
-import Base: @nref, @ncall, @nif, @nexprs
+import Base: start, done, next, getindex, setindex!, linearindexing
+import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow
 
-export eachindex, linearindexing, LinearFast
+export eachindex
 
 # Traits for linear indexing
-abstract LinearIndexing
-immutable LinearFast <: LinearIndexing end
-immutable LinearSlow <: LinearIndexing end
-
-linearindexing(::AbstractArray) = LinearSlow()
-linearindexing(::Array) = LinearFast()
 linearindexing(::BitArray) = LinearFast()
-linearindexing(::Range) = LinearFast()
 
+# Iterator/state
 abstract CartesianIndex{N}       # the state for all multidimensional iterators
-abstract IndexIterator{N}       # Iterator that visits the index associated with each element
+abstract IndexIterator{N}        # Iterator that visits the index associated with each element
 
 stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Int})
     indextype,itertype=gen_cartesian(N)
@@ -95,8 +89,6 @@ end
 eachindex(A::AbstractArray) = IndexIterator(size(A))
 
 # start iteration
-start(A::AbstractArray) = start((A,linearindexing(A)))
-start(::(AbstractArray,LinearFast)) = 1
 start{T,N}(AT::(AbstractArray{T,N},LinearSlow)) = CartesianIndex(ntuple(N,n->ifelse(isempty(AT[1]),typemax(Int),1))::NTuple{N,Int})
 
 # Ambiguity resolution
