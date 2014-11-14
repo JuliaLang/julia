@@ -64,7 +64,7 @@ Suppose you call a function like this::
 	julia> x # x is unchanged!
 	10
 
-In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString. 
+In Julia, any function (including ``change_value!()``) can't change the binding of a local variable. If ``x`` (in the calling scope) is bound to a immutable object (like a real number), you can't modify the object; likewise, if x is bound in the calling scope to a Dict, you can't change it to be bound to an ASCIIString.
 
 But here is a thing you should pay attention to: suppose ``x`` is bound to an Array (or any other mutable type). You cannot "unbind" ``x`` from this Array. But, since an Array is a *mutable* type, you can change its content. For example::
 
@@ -193,7 +193,7 @@ Julia uses machine arithmetic for integer computations. This means that the rang
 
     julia> typemax(Int)
     9223372036854775807
-    
+
     julia> ans+1
     -9223372036854775808
 
@@ -255,13 +255,13 @@ At first blush, this seems reasonable enough since 9223372036854775807 is much c
 
     >> n = int64(2)^62
     4611686018427387904
-    
+
     >> n + (n - 1)
     9223372036854775807
-    
+
     >> (n + n) - 1
     9223372036854775806
-    
+
 This makes it hard to write many basic integer algorithms since a lot of
 common techniques depend on the fact that machine addition with overflow *is*
 associative. Consider finding the midpoint between integer values ``lo`` and
@@ -269,7 +269,7 @@ associative. Consider finding the midpoint between integer values ``lo`` and
 
     julia> n = 2^62
     4611686018427387904
-    
+
     julia> (n + 2n) >>> 1
     6917529027641081856
 
@@ -277,9 +277,9 @@ See? No problem. That's the correct midpoint between 2^62 and 2^63, despite
 the fact that ``n + 2n`` is -4611686018427387904. Now try it in Matlab::
 
     >> (n + 2*n)/2
-    
+
     ans =
-    
+
       4611686018427387904
 
 Oops. Adding a ``>>>`` operator to Matlab wouldn't help, because saturation
@@ -471,7 +471,7 @@ to change the type of field ``a``:
 
     julia> t.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(t.a)
     Float32
 
@@ -482,10 +482,10 @@ change:
 
     julia> m.a = 4.5f0
     4.5
-    
+
     julia> typeof(m.a)
     Float64
-    
+
 The fact that the type of ``m.a`` is known from ``m``'s type---coupled
 with the fact that its type cannot change mid-function---allows the
 compiler to generate highly-optimized code for objects like ``m`` but
@@ -502,10 +502,10 @@ an abstract type:
 
     julia> typeof(m.a)
     Float64
-    
+
     julia> m.a = 4.5f0
     4.5f0
-    
+
     julia> typeof(m.a)
     Float32
 
@@ -645,7 +645,7 @@ With this approach, one can write functions such as::
 
     julia> myfunc(MyContainer(1:3))
     2
-    
+
     julia> myfunc(MyContainer(1.0:3))
     3.0
 
@@ -737,75 +737,3 @@ When are deprecated functions removed?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.
-
-Developing Julia
-----------------
-
-How do I debug julia's C code? (running the julia REPL from within a debugger like gdb)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-First, you should build the debug version of julia with ``make
-debug``.  Below, lines starting with ``(gdb)`` mean things you should
-type at the gdb prompt.
-
-From the shell
-^^^^^^^^^^^^^^
-
-The main challenge is that Julia and gdb each need to have their own
-terminal, to allow you to interact with them both.  One approach is to
-use gdb's ``attach`` functionality to debug an already-running julia
-session.  However, on many systems you'll need root access to get this
-to work. What follows is a method that can be implemented with just
-user-level permissions.
-
-The first time you do this, you'll need to define a script, here
-called ``oterm``, containing the following lines::
-
-    ps
-    sleep 600000
-
-Make it executable with ``chmod +x oterm``.
-
-Now:
-
-- From a shell (called shell 1), type ``xterm -e oterm &``. You'll see
-  a new window pop up; this will be called terminal 2.
-
-- From within shell 1, ``gdb julia-debug``. You can find this
-  executable within ``julia/usr/bin``.
-
-- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
-  number shown after ``pts/`` in terminal 2.
-
-- From within shell 1, ``(gdb) run``
-
-- From within terminal 2, issue any preparatory commands in Julia that
-  you need to get to the step you want to debug
-
-- From within shell 1, hit Ctrl-C
-
-- From within shell 1, insert your breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-- From within shell 1, ``(gdb) c`` to resume execution of julia
-
-- From within terminal 2, issue the command that you want to
-  debug. Shell 1 will stop at your breakpoint.
-
-
-Within emacs
-^^^^^^^^^^^^
-
-- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
-  within julia/usr/bin, or you can specify the full path)
-
-- ``(gdb) run``
-
-- Now you'll see the Julia prompt. Run any commands in Julia you need
-  to get to the step you want to debug.
-
-- Under emacs' "Signals" menu choose BREAK---this will return you to the ``(gdb)`` prompt
-
-- Set a breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-
-- Go back to the Julia prompt via ``(gdb) c``
-
-- Execute the Julia command you want to see running.

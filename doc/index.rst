@@ -78,7 +78,7 @@ Developer Documentation
 #######################
 
 .. toctree::
-   :maxdepth: 1
+   :maxdepth: 2
 
-   devdocs/cartesian
-   devdocs/meta
+   devdocs/julia
+   devdocs/C
