@@ -92,8 +92,8 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return ["bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>int(100. - 100.*bad/n),
-            "unknown"=>unknown, "secs"=>toc() ]
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>int(100. - 100.*bad/n),
+            "unknown"=>unknown, "secs"=>toc())
 end
 
 const tests1 = [ "access"=> "acess", "accessing"=> "accesing", "accommodation"=>
