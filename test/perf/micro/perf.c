@@ -238,9 +238,10 @@ int main() {
     assert(fib(20) == 6765);
     int f = 0;
     tmin = INFINITY;
+    volatile int fibarg = 20; // prevent constant propagation
     for (int i=0; i<NITER; ++i) {
         t = clock_now();
-        f += fib(20);
+        f += fib(fibarg);
         t = clock_now()-t;
         if (t < tmin) tmin = t;
     }
