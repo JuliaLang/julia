@@ -164,7 +164,7 @@ function write(f::File, buf::Ptr{Uint8}, len::Integer, offset::Integer=-1)
     if !f.open
         error("file is not open")
     end
-    err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Csize_t),
+    err = ccall(:jl_fs_write, Int32, (Int32, Ptr{Uint8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
     uv_error("write",err)
     len

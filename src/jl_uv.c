@@ -442,7 +442,7 @@ DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
     return ret;
 }
 
-DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, size_t offset)
+DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, int64_t offset)
 {
     uv_fs_t req;
     uv_buf_t buf[1];
