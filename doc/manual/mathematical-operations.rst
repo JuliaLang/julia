@@ -119,7 +119,7 @@ equivalent to writing ``x = x + 3``::
 The updating versions of all the binary arithmetic and bitwise operators
 are::
 
-    +=  -=  *=  /=  \=  %=  ^=  &=  |=  $=  >>>=  >>=  <<=
+    +=  -=  *=  /=  \=  ÷=  %=  ^=  &=  |=  $=  >>>=  >>=  <<=
 
 
 .. note::
@@ -336,7 +336,7 @@ Addition          ``+ - | $`` and ``.+ .-``
 Syntax            ``: ..`` followed by ``|>``
 Comparisons       ``> < >= <= == === != !== <:`` and ``.> .< .>= .<= .== .!=``
 Control flow      ``&&`` followed by ``||`` followed by ``?``
-Assignments       ``= += -= *= /= //= \= ^= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .%=``
+Assignments       ``= += -= *= /= //= \= ^= ÷= %= |= &= $= <<= >>= >>>=`` and ``.+= .-= .*= ./= .//= .\= .^= .÷= .%=``
 ================= =============================================================================================
 
 .. _man-elementary-functions:
