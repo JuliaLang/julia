@@ -197,6 +197,7 @@ end function
 
 integer function mandelperf() result(mandel_sum)
 integer :: re, im
+volatile :: mandel_sum
 mandel_sum = 0
 re = -20
 do while (re <= 5)
