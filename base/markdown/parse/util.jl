@@ -157,7 +157,7 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
     buffer = IOBuffer()
     while !eof(stream)
       char = read(stream, Char)
-      if !(char in whitespace) && startswith(stream, delimiter^n)
+      if !(char in whitespace || char == '\n') && startswith(stream, delimiter^n)
         write(buffer, char)
         return takebuf_string(buffer)
       end
