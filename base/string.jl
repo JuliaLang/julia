@@ -654,6 +654,14 @@ end
 
 isascii(s::SubString{ASCIIString}) = true
 
+function cmp{T<:ByteString,S<:ByteString}(a::SubString{T}, b::SubString{S})
+    na = sizeof(a)
+    nb = sizeof(b)
+    c = ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt),
+              pointer(a), pointer(b), min(na,nb))
+    c < 0 ? -1 : c > 0 ? +1 : cmp(na,nb)
+end
+
 ## hashing strings ##
 
 const memhash = UInt === UInt64 ? :memhash_seed : :memhash32_seed
