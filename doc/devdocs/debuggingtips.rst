@@ -29,11 +29,19 @@ In your ``gdb`` session, set a breakpoint in ``jl_breakpoint`` like so::
 
    (gdb) break jl_breakpoint
 
-Then within your Julia code, insert a call to ``jl_breakpoint`` by adding::
+Then within your Julia code, insert a call to ``jl_breakpoint`` by adding
+::
 
    ccall(:jl_breakpoint, Void, ())
 
-If you back up to the ``jl_apply`` frame, then you can display the arguments to the function using, e.g.,
+or alternatively
+::
+
+   ccall(:jl_breakpoint, Void, (Any,), obj)
+
+if you want to inspect ``obj`` from within ``jl_breakpoint``.
+
+It's particularly helpful to back up to the ``jl_apply`` frame, from which you can display the arguments to a function using, e.g.,
 ::
 
    (gdb) call jl_(args[0])
