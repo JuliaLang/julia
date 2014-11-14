@@ -56,10 +56,10 @@ function newmethod(funcs, f)
 end
 
 function trackmethod(def)
-  name = namify(unblock(def))
+  name = uncurly(unblock(def).args[1].args[1])
   f = esc(name)
   quote
-    if isdefined($(Expr(:quote, name))) && isgeneric($f)
+    if $(isexpr(name, Symbol)) && isdefined($(Expr(:quote, name))) && isgeneric($f)
       funcs = [def => def.func for def in methods($f)]
       $(esc(def))
       $f, newmethod(funcs, $f)
@@ -126,6 +126,8 @@ function unblock(ex)
   length(exs) == 1 || return ex
   return exs[1]
 end
+
+uncurly(ex) = isexpr(ex, :curly) ? ex.args[1] : ex
 
 namify(ex::Expr) = namify(ex.args[1])
 namify(sy::Symbol) = sy
