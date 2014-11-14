@@ -1062,7 +1062,24 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: merge(collection, others...)
 
-   Construct a merged collection from the given collections.
+   Construct a merged collection from the given collections. If necessary, the types of the resulting collection will be promoted to accommodate the types of the merged collections::
+
+     julia> a = Dict("foo" => 0.0, "bar" => 42.0)
+     Dict{ASCIIString,Float64} with 2 entries:
+       "bar" => 42.0
+       "foo" => 0.0
+
+     julia> b = Dict("フー" => 17, "バー" => 4711)
+     Dict{UTF8String,Int64} with 2 entries:
+       "バ… => 4711
+       "フ… => 17
+
+     julia> merge(a, b)
+     Dict{UTF8String,Float64} with 4 entries:
+       "bar" => 42.0
+       "バー… => 4711.0
+       "フー… => 17.0
+       "foo" => 0.0
 
 .. function:: merge!(collection, others...)
 
