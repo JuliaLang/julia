@@ -218,6 +218,7 @@ function lufact!{T}(A::Tridiagonal{T}; pivot = true)
     end
     LU{T,Tridiagonal{T}}(A, ipiv, convert(BlasInt, info))
 end
+
 factorize(A::Tridiagonal) = lufact(A)
 
 # See dgtts2.f
