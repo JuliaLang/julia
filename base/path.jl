@@ -10,6 +10,11 @@
     function homedir(; user::AbstractString="")
         # if no user is supplied (current user) prefer value in ENV["HOME"],
         # this is occassionally useful for debugging
+        # TODO:
+         # ideally this would use PasswdStruct as a fallback for when
+         # ENV["HOME"] isn't set, i.e.
+         #     get(ENV, "HOME", bytestring(PasswdStruct(ENV["USER"]).dir))
+         # but this seems to break on Linux builds
         return isempty(user) ? ENV["HOME"] : bytestring(PasswdStruct(user).dir)
     end
 end
@@ -149,11 +154,8 @@ end
 
     try
         home = homedir(user=user)
-        # replace ~<username> with that user's home directory path
         return replace(path, "~"*user, home, 1)
     catch
-        # if the user can't be found return the path unchanged
-        # this is consistent with bash
         return path
     end
 end

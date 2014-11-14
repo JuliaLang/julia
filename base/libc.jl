@@ -89,18 +89,23 @@ type PasswdStruct
     field::Int32
 end
 
-# TODO: this only really works when comparing to nullpwd
-==(a::PasswdStruct, b::PasswdStruct) = all(map(f -> a.(f) == b.(f), names(PasswdStruct)))
+function isnullpwd(a::PasswdStruct)
+    b = PasswdStruct()
+    fields = names(PasswdStruct)
+    all(map(f -> a.(f) == b.(f), fields))
+end
 
 PasswdStruct() = PasswdStruct(
     C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
 )
-const nullpwd = PasswdStruct()
 
 function PasswdStruct(name::AbstractString)
     pwd = PasswdStruct()
-    result = [deepcopy(pwd)]
-    # TODO: what if the buffer needs to be larger?
+    result = [PasswdStruct()]
+    # TODO:
+     # what if the buffer needs to be larger?
+     # obviously you can wrap it in a while loop and check whether ERANGE is
+     # returned but is ERANGE the same on all platforms?
     bufsize = 1024
     buf = Array(UInt8, bufsize)
     err = ccall(
@@ -110,7 +115,7 @@ function PasswdStruct(name::AbstractString)
         name, &pwd, buf, bufsize, &result
     )
     # user not in password database
-    if err == 0 && pwd == nullpwd
+    if err == 0 && isnullpwd(pwd)
         # TODO: should this be an error or warning?
         error("unable to find user $(name) in password database")
     elseif err == 0
