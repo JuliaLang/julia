@@ -267,6 +267,14 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
+m = ""
+@test expanduser(m) == m
+m = "no/tilde/in/here"
+@test expanduser(m) == m
+m = "~hopefullythisisntausername"
+@test expanduser(m) == m
+@test expanduser("~") == homedir()
+
 # my_tempdir = tempdir()
 # @test isdir(my_tempdir) == true
 
