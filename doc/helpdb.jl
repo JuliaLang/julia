@@ -369,11 +369,35 @@ Any[
 
 "),
 
-("Base","convert","convert(type, x)
+("Base","convert","convert(T, x)
 
-   Try to convert \"x\" to the given type. Conversion to a different
-   numeric type will raise an \"InexactError\" if \"x\" cannot be
-   represented exactly in the new type.
+   Convert \"x\" to a value of type \"T\".
+
+   If \"T\" is an \"Integer\" type, an \"InexactError\" will be raised
+   if \"x\" is not representable by \"T\", for example if \"x\" is not
+   integer-valued, or is outside the range supported by \"T\".
+
+      julia> convert(Int, 3.0)
+      3
+
+      julia> convert(Int, 3.5)
+      ERROR: InexactError()
+       in convert at int.jl:185
+
+   If \"T\" is a \"FloatingPoint\" or \"Rational\" type, then it will
+   return the closest value to \"x\" representable by \"T\".
+
+      julia> x = 1/3
+      0.3333333333333333
+
+      julia> convert(Float32, x)
+      0.33333334f0
+
+      julia> convert(Rational{Int32}, x)
+      1//3
+
+      julia> convert(Rational{Int64}, x)
+      6004799503160661//18014398509481984
 
 "),
 
@@ -5501,6 +5525,36 @@ popdisplay(d::Display)
 
 "),
 
+("Base","Float32","Float32(x[, mode::RoundingMode])
+
+   Create a Float32 from \"x\". If \"x\" is not exactly representable
+   then \"mode\" determines how \"x\" is rounded.
+
+      julia> Float32(1/3, RoundDown)
+      0.3333333f0
+
+      julia> Float32(1/3, RoundUp)
+      0.33333334f0
+
+   See \"get_rounding\" for available rounding modes.
+
+"),
+
+("Base","Float64","Float64(x[, mode::RoundingMode])
+
+   Create a Float64 from \"x\". If \"x\" is not exactly representable
+   then \"mode\" determines how \"x\" is rounded.
+
+      julia> Float64(pi, RoundDown)
+      3.141592653589793
+
+      julia> Float64(pi, RoundUp)
+      3.1415926535897936
+
+   See \"get_rounding\" for available rounding modes.
+
+"),
+
 ("Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
@@ -6205,6 +6259,17 @@ popdisplay(d::Display)
 
 "),
 
+("Base","permutedims!","permutedims!(dest, src, perm)
+
+   Permute the dimensions of array \"src\" and store the result in the
+   array \"dest\". \"perm\" is a vector specifying a permutation of
+   length \"ndims(src)\". The preallocated array \"dest\" should have
+   \"size(dest)=size(src)[perm]\" and is completely overwritten. No
+   in-place permutation is supported and unexpected results will
+   happen if *src* and *dest* have overlapping memory regions.
+
+"),
+
 ("Base","squeeze","squeeze(A, dims)
 
    Remove the dimensions specified by \"dims\" from array \"A\"
@@ -6603,6 +6668,36 @@ popdisplay(d::Display)
    Compute the sample variance of a vector \"v\" with known mean
    \"m\". Note: Julia does not ignore \"NaN\" values in the
    computation.
+
+"),
+
+("Base","middle","middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to \"x\"
+   itself. Note: the value is converted to \"float\".
+
+"),
+
+("Base","middle","middle(x, y)
+
+   Compute the middle of two reals \"x\" and \"y\", which is
+   equivalent to computing their mean (\"(x + y) / 2\"). Note: As with
+   \"middle(x)\", the returned value is of type \"float\".
+
+"),
+
+("Base","middle","middle(range)
+
+   Compute the middle of a range, that is, compute the mean of its
+   extrema. Since a range is sorted, the mean is performed with the
+   first and last element.
+
+"),
+
+("Base","middle","middle(array)
+
+   Compute the middle of an array, which consists in finding its
+   extrema and then computing their mean.
 
 "),
 
@@ -7556,7 +7651,10 @@ popdisplay(d::Display)
    be on the same host.
 
    If \"pids\" is left unspecified, the shared array will be mapped
-   across all workers on the current host.
+   across all processes on the current host, including the master.
+   But, \"localindexes\" and \"indexpids\" will only refer to worker
+   processes. This facilitates work distribution code to use workers
+   for actual computation with the master process acting as a driver.
 
    If an \"init\" function of the type \"initfn(S::SharedArray)\" is
    specified, it is called on all the participating workers.
@@ -9565,9 +9663,14 @@ Millisecond(v)
 
 "),
 
-("Base","homedir","homedir() -> AbstractString
+("Base","homedir","homedir([path...]; user=\"\") -> AbstractString
 
-   Return the current user's home directory.
+   On Unix systems, return the specified user's home directory, a
+   blank string denotes the current user. On Windows, return the
+   current user's home directory.
+
+   Specifying \"path\" is a convenience function for
+   \"joinpath(homedir(user=user), path...)\".
 
 "),
 
@@ -9635,7 +9738,12 @@ Millisecond(v)
 ("Base","expanduser","expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path
-   with the current user's home directory.
+   with the current user's home directory. If there is no tilde the
+   path is returned unchanged.
+
+   If there is a username directly after the tilde then that user's
+   home directory is used if it can be found. If it can't be found the
+   path is returned unchanged.
 
 "),
 
@@ -9664,13 +9772,14 @@ Millisecond(v)
 
 ("Base","tempname","tempname()
 
-   Generate a unique temporary filename.
+   Generate a unique temporary file path.
 
 "),
 
 ("Base","tempdir","tempdir()
 
-   Obtain the path of a temporary directory.
+   Obtain the path of a temporary directory (possibly shared with
+   other processes).
 
 "),
 
@@ -10771,9 +10880,29 @@ Millisecond(v)
 
 "),
 
+("Base","transpose!","transpose!(dest, src)
+
+   Transpose array \"src\" and store the result in the preallocated
+   array \"dest\", which should have a size corresponding to
+   \"(size(src,2),size(src,1))\". No in-place transposition is
+   supported and unexpected results will happen if *src* and *dest*
+   have overlapping memory regions.
+
+"),
+
 ("Base","ctranspose","ctranspose(A)
 
    The conjugate transposition operator (\"'\").
+
+"),
+
+("Base","ctranspose!","ctranspose!(dest, src)
+
+   Conjugate transpose array \"src\" and store the result in the
+   preallocated array \"dest\", which should have a size corresponding
+   to \"(size(src,2),size(src,1))\". No in-place transposition is
+   supported and unexpected results will happen if *src* and *dest*
+   have overlapping memory regions.
 
 "),
 
