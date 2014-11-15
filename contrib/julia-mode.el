@@ -46,6 +46,11 @@
   "Face for Julia macro invocations."
   :group 'julia-mode)
 
+(defface julia-quoted-symbol-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for quoted Julia symbols, e.g. :foo."
+  :group 'julia-mode)
+
 
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
@@ -197,8 +202,19 @@ This function provides equivalent functionality, but makes no efforts to optimis
      "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")
    'symbols))
 
+(defconst julia-quoted-symbol-regex
+  ;; :foo and :foo2 are valid, but :123 is not.
+  (rx (or whitespace "(" "[" ",")
+      (group ":" (or letter (syntax symbol)) (0+ (or word (syntax symbol))))))
+
 (defconst julia-font-lock-keywords
   (list
+   ;; Ensure :: and <: aren't highlighted, so we don't confuse ::Foo with :foo.
+   ;; (in Emacs, keywords don't overlap).
+   (cons (rx (or "::" "<:")) ''default)
+   ;; Highlight quoted symbols before keywords, so :function is not
+   ;; highlighted as a keyword.
+   (list julia-quoted-symbol-regex 1 ''julia-quoted-symbol-face)
    (cons julia-builtin-types-regex 'font-lock-type-face)
    (cons julia-keyword-regex 'font-lock-keyword-face)
    (cons julia-macro-regex ''julia-macro-face)
