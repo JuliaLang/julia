@@ -58,6 +58,16 @@ function trailingsize(A, n)
     return s
 end
 
+## Traits for array types ##
+
+abstract LinearIndexing
+immutable LinearFast <: LinearIndexing end
+immutable LinearSlow <: LinearIndexing end
+
+linearindexing(::AbstractArray) = LinearSlow()
+linearindexing(::Array) = LinearFast()
+linearindexing(::Range) = LinearFast()
+
 ## Bounds checking ##
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
 checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
@@ -241,7 +251,8 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## iteration support for arrays as ranges ##
 
-start(a::AbstractArray) = 1
+start(A::AbstractArray) = _start(A,linearindexing(A))
+_start(::AbstractArray,::LinearFast) = 1
 next(a::AbstractArray,i) = (a[i],i+1)
 done(a::AbstractArray,i) = (i > length(a))
 isempty(a::AbstractArray) = (length(a) == 0)
