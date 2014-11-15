@@ -1,7 +1,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: start, done, next, getindex, setindex!, linearindexing
+import Base: start, _start, done, next, getindex, setindex!, linearindexing
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow
 
 export eachindex
@@ -89,7 +89,7 @@ end
 eachindex(A::AbstractArray) = IndexIterator(size(A))
 
 # start iteration
-start{T,N}(AT::(AbstractArray{T,N},LinearSlow)) = CartesianIndex(ntuple(N,n->ifelse(isempty(AT[1]),typemax(Int),1))::NTuple{N,Int})
+_start{T,N}(A::AbstractArray{T,N},::LinearSlow) = CartesianIndex(ntuple(N,n->ifelse(isempty(A),typemax(Int),1))::NTuple{N,Int})
 
 # Ambiguity resolution
 done(R::StepRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
