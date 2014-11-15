@@ -192,12 +192,12 @@
       <item> Tridiagonal </item>
       <item> Tuple </item>
       <item> Type </item>
-      <item> Uint </item>
-      <item> Uint8 </item>
-      <item> Uint16 </item>
-      <item> Uint32 </item>
-      <item> Uint64 </item>
-      <item> Uint128 </item>
+      <item> UInt </item>
+      <item> UInt8 </item>
+      <item> UInt16 </item>
+      <item> UInt32 </item>
+      <item> UInt64 </item>
+      <item> UInt128 </item>
       <item> Union </item>
       <item> Unsigned </item>
       <item> UTF8String </item>

@@ -129,11 +129,11 @@
             <word name="AbstractArray"/>
             <word name="Unsigned"/>
             <word name="Signed"/>
-            <word name="Uint"/>
-            <word name="Uint8"/>
-            <word name="Uint16"/>
-            <word name="Uint32"/>
-            <word name="Uint64"/>
+            <word name="UInt"/>
+            <word name="UInt8"/>
+            <word name="UInt16"/>
+            <word name="UInt32"/>
+            <word name="UInt64"/>
             <word name="Vector"/>
             <word name="AbstractVector"/>
             <word name="Matrix"/>
