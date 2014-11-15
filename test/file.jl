@@ -280,6 +280,25 @@ close(f)
 @test readall(p) == "Here is some text"
 rm(p)
 
+let
+    tmp_path = mktemp() do p, io
+        @test isfile(p)
+        print(io, "鴨かも？")
+        p
+    end
+    @test tmp_path != ""
+    @test !isfile(tmp_path)
+end
+
+let
+    tmpdir = mktempdir() do d
+        @test isdir(d)
+        d
+    end
+    @test tmpdir != ""
+    @test !isdir(tmpdir)
+end
+
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
 emptyf = open(emptyfile)
