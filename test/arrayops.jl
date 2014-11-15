@@ -925,3 +925,54 @@ end
 b718cbc = 5
 @test b718cbc[1.0] == 5
 @test_throws InexactError b718cbc[1.1]
+
+# Multidimensional iterators
+function mdsum(A)
+    s = 0.0
+    for a in A
+        s += a
+    end
+    s
+end
+
+function mdsum2(A)
+    s = 0.0
+    @inbounds for I in eachindex(A)
+        s += A[I]
+    end
+    s
+end
+
+a = [1:5]
+@test isa(Base.linearindexing(a), Base.LinearFast)
+b = sub(a, :)
+@test isa(Base.linearindexing(b), Base.IteratorsMD.LinearSlow)
+shp = [5]
+for i = 1:10
+    A = reshape(a, tuple(shp...))
+    @test mdsum(A) == 15
+    @test mdsum2(A) == 15
+    B = sub(A, ntuple(i, i->Colon())...)
+    @test mdsum(B) == 15
+    @test mdsum2(B) == 15
+    unshift!(shp, 1)
+end
+
+a = [1:10]
+shp = [2,5]
+for i = 2:10
+    A = reshape(a, tuple(shp...))
+    @test mdsum(A) == 55
+    @test mdsum2(A) == 55
+    B = sub(A, ntuple(i, i->Colon())...)
+    @test mdsum(B) == 55
+    @test mdsum2(B) == 55
+    insert!(shp, 2, 1)
+end
+
+a = ones(0,5)
+b = sub(a, :, :)
+@test mdsum(b) == 0
+a = ones(5,0)
+b = sub(a, :, :)
+@test mdsum(b) == 0

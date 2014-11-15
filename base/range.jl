@@ -235,8 +235,8 @@ copy(r::Range) = r
 ## iteration
 
 start(r::FloatRange) = 0
-next{T}(r::FloatRange{T}, i) = (convert(T, (r.start + i*r.step)/r.divisor), i+1)
-done(r::FloatRange, i) = (length(r) <= i)
+next{T}(r::FloatRange{T}, i::Int) = (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+done(r::FloatRange, i::Int) = (length(r) <= i)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
