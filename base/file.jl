@@ -157,6 +157,25 @@ function mktempdir()
 end
 end
 
+function mktemp(fn::Function)
+    (tmp_path, tmp_io) = mktemp()
+    try
+        fn(tmp_path, tmp_io)
+    finally
+        close(tmp_io)
+        rm(tmp_path)
+    end
+end
+
+function mktempdir(fn::Function)
+    tmpdir = mktempdir()
+    try
+        fn(tmpdir)
+    finally
+        rm(tmpdir, recursive=true)
+    end
+end
+
 function readdir(path::AbstractString)
     # Allocate space for uv_fs_t struct
     uv_readdir_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
