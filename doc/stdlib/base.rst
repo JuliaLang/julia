@@ -907,18 +907,22 @@ Iterable Collections
    new collection. ``destination`` must be at least as large as the first
    collection.
 
-.. function:: mapreduce(f, op, itr)
+.. function:: mapreduce(f, op, v0, itr)
 
    Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
 
    .. doctest::
 
-      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      julia> mapreduce(x->x^2, +, 0, [1:3]) # == 1 + 4 + 9
       14
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
    your own loop. See documentation for ``reduce``.
+
+.. function:: mapreduce(f, op, itr)
+
+   Like ``mapreduce`` but using the first element as v0.
 
 .. function:: first(coll)
 
