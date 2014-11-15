@@ -38,6 +38,11 @@ the current process. This form can be used to call C library functions,
 functions in the Julia runtime, or functions in an application linked to
 Julia.
 
+By default, modern Fortran compilers
+`generate mangled names <http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+combining the function name with the enclosing module name, separated by underscores.
+When calling a Fortran function, all inputs must be passed by reference.
+
 Finally, you can use ``ccall`` to actually generate a call to the
 library function. Arguments to ``ccall`` are as follows:
 
@@ -136,10 +141,9 @@ memory to be passed to the callee and filled in. Allocation of memory
 from Julia like this is generally accomplished by creating an
 uninitialized array and passing a pointer to its data to the C function.
 
-When calling a Fortran function, all inputs must be passed by reference.
-
 A prefix ``&`` is used to indicate that a pointer to a scalar argument
-should be passed instead of the scalar value itself. The following
+should be passed instead of the scalar value itself (required for all
+Fortran function arguments, as noted above). The following
 example computes a dot product using a BLAS function.
 
 ::
