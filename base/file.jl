@@ -84,8 +84,9 @@ function touch(path::AbstractString)
     end
 end
 
+@unix_only begin
 # Obtain a temporary filename.
-@unix_only function tempname()
+function tempname()
     d = get(ENV, "TMPDIR", C_NULL) # tempnam ignores TMPDIR on darwin
     p = ccall(:tempnam, Ptr{UInt8}, (Ptr{UInt8},Ptr{UInt8}), d, "julia")
     systemerror(:tempnam, p == C_NULL)
@@ -95,13 +96,21 @@ end
 end
 
 # Obtain a temporary directory's path.
-@unix_only tempdir() = dirname(tempname())
+tempdir() = dirname(tempname())
 
 # Create and return the name of a temporary file along with an IOStream
-@unix_only function mktemp()
+function mktemp()
     b = joinpath(tempdir(), "tmpXXXXXX")
     p = ccall(:mkstemp, Int32, (Ptr{UInt8}, ), b) # modifies b
     return (b, fdio(p, true))
+end
+
+# Create and return the name of a temporary directory
+function mktempdir()
+    b = joinpath(tempdir(), "tmpXXXXXX")
+    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8}, ), b)
+    return bytestring(p)
+end
 end
 
 @windows_only begin
@@ -130,16 +139,7 @@ function mktemp()
     filename = tempname()
     return (filename, open(filename,"r+"))
 end
-end
-
-# Create and return the name of a temporary directory
-@unix_only function mktempdir()
-    b = joinpath(tempdir(), "tmpXXXXXX")
-    p = ccall(:mkdtemp, Ptr{UInt8}, (Ptr{UInt8}, ), b)
-    return bytestring(p)
-end
-
-@windows_only function mktempdir()
+function mktempdir()
     seed::UInt32 = rand(UInt32)
     dir = tempdir()
     while true
@@ -154,6 +154,7 @@ end
         systemerror(:mktempdir, errno()!=EEXIST)
         seed += 1
     end
+end
 end
 
 function readdir(path::AbstractString)
