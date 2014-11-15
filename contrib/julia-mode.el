@@ -41,6 +41,12 @@
 
 (defvar julia-basic-offset)
 
+(defface julia-macro-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for Julia macro invocations."
+  :group 'julia-mode)
+
+
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
@@ -195,7 +201,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
   (list
    (cons julia-builtin-types-regex 'font-lock-type-face)
    (cons julia-keyword-regex 'font-lock-keyword-face)
-   (cons julia-macro-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex ''julia-macro-face)
    (cons
     (julia--regexp-opt
      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
