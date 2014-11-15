@@ -251,8 +251,8 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 ## iteration support for arrays as ranges ##
 
-start(A::AbstractArray) = start((A,linearindexing(A)))
-start(::(AbstractArray,LinearFast)) = 1
+start(A::AbstractArray) = _start(A,linearindexing(A))
+_start(::AbstractArray,::LinearFast) = 1
 next(a::AbstractArray,i) = (a[i],i+1)
 done(a::AbstractArray,i) = (i > length(a))
 isempty(a::AbstractArray) = (length(a) == 0)
