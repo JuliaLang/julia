@@ -188,20 +188,20 @@ for Ti in (Int64,UInt64)
 
             function <(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                ($(Tf(typemax(Ti))) <= y) | (fx < y) | ((fx == y) & (x < itrunc($Ti,fx)))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < itrunc($Ti,fx)) ))
             end
             function <=(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                ($(Tf(typemax(Ti))) <= y) | (fx < y) | ((fx == y) & (x <= itrunc($Ti,fx)))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= itrunc($Ti,fx)) ))
             end
 
             function <(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x < $(Float64(typemax(Ti)))) & (x == fy) & (itrunc($Ti,fy) < y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) < y))
             end
             function <=(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x < $(Float64(typemax(Ti)))) & (x == fy) & (itrunc($Ti,fy) <= y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) <= y))
             end
         end
     end
