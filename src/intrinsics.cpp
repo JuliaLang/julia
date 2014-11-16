@@ -13,12 +13,6 @@ namespace JL_I {
         eq_float, ne_float,
         lt_float, le_float,
         fpiseq, fpislt,
-        // mixed-type comparisons
-        eqfsi64, eqfui64,
-        ltfsi64, ltfui64,
-        lefsi64, lefui64,
-        ltsif64, ltuif64,
-        lesif64, leuif64,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
         bswap_int, ctpop_int, ctlz_int, cttz_int,
@@ -1114,133 +1108,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(lt_float,2) return builder.CreateFCmpOLT(FP(x), FP(y));
     HANDLE(le_float,2) return builder.CreateFCmpOLE(FP(x), FP(y));
 
-    HANDLE(eqfsi64,2) return emit_eqfsi(x, y);
-    HANDLE(eqfui64,2) return emit_eqfui(x, y);
-    HANDLE(ltfsi64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        Value *ffy = builder.CreateSIToFP(fy, T_float64);
-        Value *siffy = builder.CreateFPToSI(ffy, T_int64);
-        return builder.CreateOr(
-            builder.CreateFCmpOLT(x, ffy),
-            builder.CreateAnd(
-                              // ensure x < 2.0^63
-                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
-                                                         9.223372036854776e18)),
-                builder.CreateAnd(builder.CreateFCmpOEQ(x, ffy),
-                                  builder.CreateICmpSGT(fy, siffy))
-            )
-        );
-    }
-    HANDLE(ltfui64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        Value *ffy = builder.CreateUIToFP(fy, T_float64);
-        Value *uiffy = builder.CreateFPToUI(ffy, T_int64);
-        return builder.CreateOr(
-            builder.CreateFCmpOLT(x, ffy),
-            builder.CreateAnd(
-                              // ensure x < 2.0^64
-                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
-                                                         1.8446744073709552e19)),
-                builder.CreateAnd(builder.CreateFCmpOEQ(x, ffy),
-                                  builder.CreateICmpUGT(fy, uiffy))
-            )
-        );
-    }
-    HANDLE(lefsi64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        Value *ffy = builder.CreateSIToFP(fy, T_float64);
-        return builder.CreateOr(
-            builder.CreateFCmpOLT(x, ffy),
-            builder.CreateAnd(
-                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
-                                                         9.223372036854776e18)),
-                builder.CreateAnd(
-                    builder.CreateFCmpOEQ(x, ffy),
-                    builder.CreateICmpSGE(fy, builder.CreateFPToSI(ffy,T_int64))
-                )
-            )
-        );
-    }
-    HANDLE(lefui64,2) {
-        x = FP(x);
-        fy = JL_INT(y);
-        Value *ffy = builder.CreateUIToFP(fy, T_float64);
-        return builder.CreateOr(
-            builder.CreateFCmpOLT(x, ffy),
-            builder.CreateAnd(
-                builder.CreateFCmpOLT(x, ConstantFP::get(T_float64,
-                                                         1.8446744073709552e19)),
-                builder.CreateAnd(
-                    builder.CreateFCmpOEQ(x, ffy),
-                    builder.CreateICmpUGE(fy, builder.CreateFPToUI(ffy, T_int64))
-                )
-            )
-        );
-    }
-    HANDLE(ltsif64,2) {
-        x = JL_INT(x);
-        fy = FP(y);
-        Value *fx = builder.CreateSIToFP(x, T_float64);
-        return builder.CreateOr(
-                   builder.CreateOr(
-                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
-                                                                 9.223372036854776e18)),
-                       builder.CreateFCmpOLT(fx, fy)),
-                   builder.CreateAnd(
-                       builder.CreateFCmpOEQ(fx, fy),
-                       builder.CreateICmpSLT(x, builder.CreateFPToSI(fx, T_int64))
-                   )
-               );
-    }
-    HANDLE(ltuif64,2) {
-        x = JL_INT(x);
-        fy = FP(y);
-        Value *fx = builder.CreateUIToFP(x, T_float64);
-        return builder.CreateOr(
-                   builder.CreateOr(
-                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
-                                                                 1.8446744073709552e19)),
-                       builder.CreateFCmpOLT(fx, fy)),
-                   builder.CreateAnd(
-                       builder.CreateFCmpOEQ(fx, fy),
-                       builder.CreateICmpULT(x, builder.CreateFPToUI(fx, T_int64))
-                   )
-               );
-    }
-    HANDLE(lesif64,2) {
-        x = JL_INT(x);
-        fy = FP(y);
-        Value *fx = builder.CreateSIToFP(x, T_float64);
-        return builder.CreateOr(
-                   builder.CreateOr(
-                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
-                                                                 9.223372036854776e18)),
-                       builder.CreateFCmpOLT(fx, fy)),
-                   builder.CreateAnd(
-                       builder.CreateFCmpOEQ(fx, fy),
-                       builder.CreateICmpSLE(x, builder.CreateFPToSI(fx, T_int64))
-                   )
-               );
-    }
-    HANDLE(leuif64,2) {
-        x = JL_INT(x);
-        fy = FP(y);
-        Value *fx = builder.CreateUIToFP(x, T_float64);
-        return builder.CreateOr(
-                   builder.CreateOr(
-                       builder.CreateFCmpOGE(fy, ConstantFP::get(T_float64,
-                                                                 1.8446744073709552e19)),
-                       builder.CreateFCmpOLT(fx, fy)),
-                   builder.CreateAnd(
-                       builder.CreateFCmpOEQ(fx, fy),
-                       builder.CreateICmpULE(x, builder.CreateFPToUI(fx, T_int64))
-                   )
-               );
-    }
-
     HANDLE(fpiseq,2) {
         Value *xi = JL_INT(x);
         Value *yi = JL_INT(y);
@@ -1492,11 +1359,6 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sle_int); ADD_I(ule_int);
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
-    ADD_I(eqfsi64); ADD_I(eqfui64);
-    ADD_I(ltfsi64); ADD_I(ltfui64);
-    ADD_I(lefsi64); ADD_I(lefui64);
-    ADD_I(ltsif64); ADD_I(ltuif64);
-    ADD_I(lesif64); ADD_I(leuif64);
     ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
