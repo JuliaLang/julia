@@ -114,7 +114,7 @@ rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64,
 A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, :)
 @test parent(sA) == A
-@test parentindexes(sA) == (2:2, 1:5, 1:8)
+@test parentindexes(sA) == (2:2, 1:5, :)
 @test Base.parentdims(sA) == [1:3]
 @test size(sA) == (1, 5, 8)
 @test sA[1, 2, 1:8][:] == [5:15:120]
@@ -154,7 +154,7 @@ sB = sub(B, 2:3, 2:3)
 A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, :, 1:8)
 @test parent(sA) == A
-@test parentindexes(sA) == (2, 1:5, 1:8)
+@test parentindexes(sA) == (2, :, 1:8)
 @test Base.parentdims(sA) == [2:3]
 @test size(sA) == (5, 8)
 @test strides(sA) == (3,15)

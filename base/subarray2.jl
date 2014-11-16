@@ -68,7 +68,7 @@ end
 # Indexing with non-scalars. For now, this returns a copy, but changing that
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
-getindex{T,N}(V::SubArray{T,N}, I::AbstractArray{Bool,N}) = copy(sub(V, find(I)))   # this could be much better optimized
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::AbstractArray{Bool,N}) = copy(sub(V, find(I)))   # this could be much better optimized
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractVector)...) = getindex(V, Base.to_index(I)...)
 
 function setindex!{T,P,IV}(V::SubArray{T,1,P,IV}, v, I::AbstractArray{Bool,1})
@@ -154,4 +154,5 @@ end
 unsafe_getindex(v::Real, ind::Int) = v
 unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
+unsafe_getindex(v::Colon, ind::Int) = ind
 unsafe_getindex(v, ind::Real) = unsafe_getindex(v, Base.to_index(ind))
