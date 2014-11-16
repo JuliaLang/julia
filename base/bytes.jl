@@ -8,6 +8,8 @@ size(b::ByteVec) = (length(b),)
 length(b::ByteVec) = box(Int, bytevec_len(unbox(typeof(b.x), b.x)))
 getindex(b::ByteVec, i::Real) =
     box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
+getu32(b::ByteVec, i::Int) =
+    box(Uint32, bytevec_ref32(unbox(typeof(b.x), b.x), unbox(Int, i)))
 
 # ==(x::ByteVec, y::ByteVec) = bytevec_eq(x, y)
 # cmp(x::ByteVec, y::ByteVec) = bytevec_cmp(x, y)
@@ -42,16 +44,17 @@ function length(s::Str)
     return n
 end
 
-function next(s::Str, i::Int)
-    d = s.data
-    a::UInt32 = d[i]
+@inline function next(s::Str, i::Int)
+    u = getu32(s.data, i)
+    a::UInt32 = u & 0xff
     a < 0x80 && return Char(a), i+1
-    # is_utf8_start(a) || error("invalid UTF-8 character index")
-    b::UInt32 = a << 6 + d[i+1]
+    is_utf8_start(a) || error("invalid UTF-8 character index")
+    b::UInt32 = a << 6 + (u >> 8) & 0xff
     a < 0xe0 && return Char(b - 0x00003080), i+2
-    c::UInt32 = b << 6 + d[i+2]
+    c::UInt32 = b << 6 + (u >> 16) & 0xff
     a < 0xf0 && return Char(c - 0x000e2080), i+3
-    return Char(c << 6 + d[i+3] - 0x03c82080), i+4
+    d::Uint32 = c << 6 + (u >> 24) & 0xff
+                return Char(d - 0x03c82080), i+4
 end
 
 ## overload methods for efficiency ##
