@@ -649,7 +649,7 @@ install-pcre: $(PCRE_OBJ_TARGET)
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
-OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
@@ -680,7 +680,7 @@ get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
-install-openlibm: $(OPENLIBM_OBJ_TARGET) 
+install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
