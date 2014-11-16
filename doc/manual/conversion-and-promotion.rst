@@ -223,7 +223,7 @@ everything to do with converting between alternate representations. For
 instance, although every ``Int32`` value can also be represented as a
 ``Float64`` value, ``Int32`` is not a subtype of ``Float64``.
 
-Promotion to a common supertype is performed in Julia by the ``promote``
+Promotion to a common "greater" type is performed in Julia by the ``promote``
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
