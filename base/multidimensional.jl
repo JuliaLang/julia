@@ -8,6 +8,7 @@ export eachindex
 
 # Traits for linear indexing
 linearindexing(::BitArray) = LinearFast()
+linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 
 # Iterator/state
 abstract CartesianIndex{N}       # the state for all multidimensional iterators
