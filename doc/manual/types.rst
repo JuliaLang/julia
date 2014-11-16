@@ -1128,6 +1128,17 @@ especially helpful, but in Julia, this allows one to write just
 ``Matrix`` for the abstract type including all two-dimensional dense
 arrays of any element type.
 
+This declaration of ``Vector`` creates a subtype relation
+``Vector{Int} <: Vector``.  However, it is not always the case that a parametric
+``typealias`` statement creates such a relation; for example, the statement::
+
+    typealias AA{T} Array{Array{T,1},1}
+ 
+does not create the relation ``AA{Int} <: AA``.  The reason is that ``Array{Array{T,1},1}`` is not
+an abstract type at all; in fact, it is a concrete type describing a
+1-dimensional array in which each entry
+is an object of type ``Array{T,1}`` for some value of ``T``.
+
 Operations on Types
 -------------------
 
