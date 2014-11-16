@@ -38,6 +38,7 @@ namespace JL_I {
         sqrt_llvm, powi_llvm,
         // byte vectors
         bytevec_len, bytevec_ref, bytevec_ref32,
+        bytevec_eq,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1182,6 +1183,51 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.Insert(ret);
         return ret;
     }
+    HANDLE(bytevec_eq,2) {
+        Value *a = JL_INT(x);
+        Value *b = JL_INT(y);
+        BasicBlock *here  = BasicBlock::Create(getGlobalContext(), "here",  ctx->f);
+        BasicBlock *there = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
+
+        Value *a_words = builder.CreateBitCast(a, T_vec_2word_ints);
+        Value *b_words = builder.CreateBitCast(b, T_vec_2word_ints);
+        Value *a_hi_word = builder.CreateExtractElement(a_words, ConstantInt::get(T_int32, 1));
+        Value *b_hi_word = builder.CreateExtractElement(b_words, ConstantInt::get(T_int32, 1));
+
+        builder.CreateCondBr(
+            builder.CreateOr(
+                builder.CreateICmpNE(a_hi_word, b_hi_word),
+                builder.CreateOr(
+                    builder.CreateICmpSGE(a_hi_word, ConstantInt::get(T_size, 0)),
+                    builder.CreateICmpSGE(a_hi_word, ConstantInt::get(T_size, 0))
+                )
+            ), here, there
+        );
+
+        builder.SetInsertPoint(here);
+        Value *here_eq = builder.CreateICmpEQ(a, b);
+        builder.CreateBr(cont);
+
+        builder.SetInsertPoint(there);
+        Value *a_lo_word = builder.CreateExtractElement(a_words, ConstantInt::get(T_int32, 0));
+        Value *b_lo_word = builder.CreateExtractElement(b_words, ConstantInt::get(T_int32, 0));
+        Value *cmp = builder.CreateCall3(
+            jl_Module->getOrInsertFunction("memcmp", T_int32, T_pint8, T_pint8, T_size, NULL),
+            builder.CreateIntToPtr(a_lo_word, T_pint8),
+            builder.CreateIntToPtr(b_lo_word, T_pint8),
+            builder.CreateNeg(a_hi_word)
+        );
+        Value *there_eq = builder.CreateICmpEQ(cmp, ConstantInt::get(T_int32, 0));
+        builder.CreateBr(cont);
+
+        builder.SetInsertPoint(cont);
+        PHINode *ret = PHINode::Create(T_int1, 2);
+        ret->addIncoming(here_eq, here);
+        ret->addIncoming(there_eq, there);
+        builder.Insert(ret);
+        return ret;
+    }
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -1685,6 +1731,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
     ADD_I(powi_llvm);
     ADD_I(bytevec_len); ADD_I(bytevec_ref); ADD_I(bytevec_ref32);
+    ADD_I(bytevec_eq);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);

@@ -10,8 +10,8 @@ getindex(b::ByteVec, i::Real) =
     box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
 getu32(b::ByteVec, i::Int) =
     box(Uint32, bytevec_ref32(unbox(typeof(b.x), b.x), unbox(Int, i)))
-
-# ==(x::ByteVec, y::ByteVec) = bytevec_eq(x, y)
+==(a::ByteVec, b::ByteVec) =
+    box(Bool, bytevec_eq(unbox(typeof(a.x), a.x), unbox(typeof(b.x), b.x)))
 # cmp(x::ByteVec, y::ByteVec) = bytevec_cmp(x, y)
 # isless(x::ByteVec, y::ByteVec) = cmp(x, y) < 0
 
@@ -61,6 +61,7 @@ end
 
 sizeof(s::Str) = length(s.data)
 
-isless(x::Str, y::Str) = isless(x.data, y.data)
-   cmp(x::Str, y::Str) =    cmp(x.data, y.data)
+    ==(s::Str, t::Str) =     ==(s.data, t.data)
+isless(s::Str, t::Str) = isless(s.data, t.data)
+   cmp(s::Str, t::Str) =    cmp(s.data, t.data)
 
