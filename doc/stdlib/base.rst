@@ -4640,18 +4640,18 @@ Statistics
 
 .. function:: middle(x)
 
-   Compute the middle of a scalar value, which is equivalent to ``x`` itself.
-   Note: the value is converted to ``float``.
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself,
+   but of the type of ``middle(x, x)`` for consistency.
 
 .. function:: middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``, which is equivalent
-   to computing their mean (``(x + y) / 2``).
-   Note: As with ``middle(x)``, the returned value is of type ``float``.
+   with regard the value and the type of the result to computing their mean
+   (``(x + y) / 2``).
 
 .. function:: middle(range)
 
-   Compute the middle of a range, that is, compute the mean of its extrema.
+   Compute the middle of a range, which consists in computing the mean of its extrema.
    Since a range is sorted, the mean is performed with the first and last element.
 
 .. function:: middle(array)
