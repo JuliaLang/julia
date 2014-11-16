@@ -67,6 +67,9 @@ immutable LinearSlow <: LinearIndexing end
 linearindexing(::AbstractArray) = LinearSlow()
 linearindexing(::Array) = LinearFast()
 linearindexing(::Range) = LinearFast()
+linearindexing{A<:AbstractArray}(::Type{A}) = LinearSlow()
+linearindexing{A<:Array}(::Type{A}) = LinearFast()
+linearindexing{A<:Range}(::Type{A}) = LinearFast()
 
 ## Bounds checking ##
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())

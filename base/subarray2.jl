@@ -10,25 +10,31 @@ for i = 1:4
     push!(vars, Expr(:quote, sym))
     push!(varsInt, :($sym::Int))
     push!(varsOther, :($sym::Union(Real, AbstractVector)))
-    push!(vars_toindex, :(Base.to_index($sym)))
+    push!(vars_toindex, :(to_index($sym)))
     ex = i == 1 ? quote
-         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::Real) = getindex(V, Base.to_index($sym))
-        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::Real) = setindex!(V, v, Base.to_index($sym))
-         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::AbstractVector{Bool}) = getindex(V, Base.to_index($sym))
-        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::AbstractVector{Bool}) = setindex!(V, v, Base.to_index($sym))
+         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::Real) = getindex(V, to_index($sym))
+        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::Real) = setindex!(V, v, to_index($sym))
+         getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $sym::AbstractVector{Bool}) = getindex(V, to_index($sym))
+        setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $sym::AbstractVector{Bool}) = setindex!(V, v, to_index($sym))
     end : quote
          getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $(varsOther...)) = getindex(V, $(vars_toindex...))
         setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, $(varsOther...)) = setindex!(V, v, $(vars_toindex...))
     end
     @eval begin
-        stagedfunction getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, $(varsInt...))
+        stagedfunction getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
+            if $i == 1 && length(IV) == LD  # linear indexing
+                return :(V.parent[V.first_index + V.stride1*(i_1-1)])
+            end
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
             quote
                 $exhead
                 $ex
             end
         end
-        stagedfunction setindex!{T,N,P<:AbstractArray,IV}(V::SubArray{T,N,P,IV}, v, $(varsInt...))
+        stagedfunction setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
+            if $i == 1 && length(IV) == LD  # linear indexing
+                return :(V.parent[V.first_index + V.stride1*(i_1-1)] = v)
+            end
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
             quote
                 $exhead
@@ -69,21 +75,21 @@ end
 # is just a matter of deleting the explicit call to copy.
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::ViewIndex...) = copy(sub(V, I...))
 getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::AbstractArray{Bool,N}) = copy(sub(V, find(I)))   # this could be much better optimized
-getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractVector)...) = getindex(V, Base.to_index(I)...)
+getindex{T,N,P,IV}(V::SubArray{T,N,P,IV}, I::Union(Real, AbstractVector)...) = getindex(V, to_index(I)...)
 
 function setindex!{T,P,IV}(V::SubArray{T,1,P,IV}, v, I::AbstractArray{Bool,1})
     length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
-    setindex!(V, v, Base.to_index(I))
+    setindex!(V, v, to_index(I))
 end
 function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,1})
     length(I) == length(V) || throw(DimensionMismatch("logical vector must match array length"))
-    setindex!(V, v, Base.to_index(I))
+    setindex!(V, v, to_index(I))
 end
 function setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::AbstractArray{Bool,N})
     size(I) == size(V) || throw(DimensionMismatch("size of Boolean mask must match array size"))
     _setindex!(V, v, find(I))  # this could be better optimized
 end
-setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Union(Real,AbstractVector)...) = setindex!(V, v, Base.to_index(I)...)
+setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, v, I::Union(Real,AbstractVector)...) = setindex!(V, v, to_index(I)...)
 setindex!{T,N,P,IV}(V::SubArray{T,N,P,IV}, x, J::Union(Int,AbstractVector)...) = _setindex!(V, x, J...)
 stagedfunction _setindex!(V::SubArray, x, J::Union(Real,AbstractVector)...)
     gen_setindex_body(length(J))
@@ -136,7 +142,7 @@ function index_generate(NP, Itypes, Vsym, Isyms)
             indexexprs[i] = :($Vsym.indexes[$i])
         else
             j += 1
-            indexexprs[i] = :(Base.unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))  # TODO: make Range bounds-checking respect @inbounds
+            indexexprs[i] = :(unsafe_getindex($Vsym.indexes[$i], $(Isyms[j])))  # TODO: make Range bounds-checking respect @inbounds
         end
     end
     # Append any extra indexes. Must be trailing 1s or it will cause a BoundsError.
@@ -155,4 +161,4 @@ unsafe_getindex(v::Real, ind::Int) = v
 unsafe_getindex(v::Range, ind::Int) = first(v) + (ind-1)*step(v)
 unsafe_getindex(v::AbstractArray, ind::Int) = v[ind]
 unsafe_getindex(v::Colon, ind::Int) = ind
-unsafe_getindex(v, ind::Real) = unsafe_getindex(v, Base.to_index(ind))
+unsafe_getindex(v, ind::Real) = unsafe_getindex(v, to_index(ind))
