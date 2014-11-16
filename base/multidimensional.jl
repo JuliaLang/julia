@@ -250,8 +250,8 @@ end
 # In such cases we have to collapse the 2d space spanned by the ranges.
 #
 # API:
-#    merge_indexes(indexes::NTuple, dims::Dims, linindex)
-# where dims encodes the trailing dimensions of the parent array,
+#    merge_indexes(V, indexes::NTuple, dims::Dims, linindex)
+# where dims encodes the trailing sizes of the parent array,
 # indexes encodes the view's trailing indexes into the parent array,
 # and linindex encodes the subset of these elements that we'll select.
 #
@@ -266,26 +266,27 @@ end
 # then test whether the corresponding linear index is in linindex.
 # One exception occurs when only a small subset of the total
 # is desired, in which case we fall back to the div-based algorithm.
-stagedfunction merge_indexes(indexes::NTuple, dims::Dims, linindex::UnitRange{Int})
+stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange{Int})
     N = length(indexes)
     N > 0 || error("Cannot merge empty indexes")
     quote
         n = length(linindex)
         Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
         L = 1
-        Base.Cartesian.@nexprs $N d->(L *= length(I_d))
+        dimoffset = ndims(V.parent) - length(dims)
+        Base.Cartesian.@nexprs $N d->(L *= dimsize(V.parent, d+dimoffset, I_d))
         if n < 0.1L   # this has not been carefully tuned
-            return merge_indexes_div(indexes, dims, linindex)
+            return merge_indexes_div(V, indexes, dims, linindex)
         end
         Pstride_1 = 1   # parent strides
         Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
         Istride_1 = 1   # indexes strides
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*length(I_d))
+        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V, d+dimoffset, I_d))
         Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into indexes
         Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
         k = 0
         index = Array(Int, n)
-        Base.Cartesian.@nloops $N i d->(1:length(I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
+        Base.Cartesian.@nloops $N i d->(1:dimsize(V, d+dimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
             if in(counter_0, linindex)
                 index[k+=1] = offset_0
             end
@@ -293,12 +294,12 @@ stagedfunction merge_indexes(indexes::NTuple, dims::Dims, linindex::UnitRange{In
         index
     end
 end
-merge_indexes(indexes::NTuple, dims::Dims, linindex) = merge_indexes_div(indexes, dims, linindex)
+merge_indexes(V, indexes::NTuple, dims::Dims, linindex) = merge_indexes_div(V, indexes, dims, linindex)
 
 # This could be written as a regular function, but performance
 # will be better using Cartesian macros to avoid the heap and
 # an extra loop.
-stagedfunction merge_indexes_div(indexes::NTuple, dims::Dims, linindex)
+stagedfunction merge_indexes_div(V, indexes::NTuple, dims::Dims, linindex)
     N = length(indexes)
     N > 0 || error("Cannot merge empty indexes")
     Istride_N = symbol("Istride_$N")
@@ -307,9 +308,10 @@ stagedfunction merge_indexes_div(indexes::NTuple, dims::Dims, linindex)
         Pstride_1 = 1   # parent strides
         Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
         Istride_1 = 1   # indexes strides
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*length(I_d))
+        dimoffset = ndims(V.parent) - length(dims)
+        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+dimoffset, I_d))
         n = length(linindex)
-        L = $(Istride_N) * length(indexes[end])
+        L = $(Istride_N) * dimsize(V.parent, $N+dimoffset, indexes[end])
         index = Array(Int, n)
         for i = 1:n
             k = linindex[i] # k is the indexes-centered linear index
