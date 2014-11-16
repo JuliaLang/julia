@@ -325,11 +325,10 @@ the following promotion rules both occur in Julia's standard library::
     promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
     promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 
-As a general rule, Julia promotes integers to `Int` during computation
-order to avoid overflow. In the latter case, the result type is
-``BigInt`` since ``BigInt`` is the only type large enough to hold
-integers for arbitrary-precision integer arithmetic.  Also note that one
-does not need to define both ``promote_rule(::Type{A}, ::Type{B})`` and
+In the latter case, the result type is ``BigInt`` since ``BigInt`` is
+the only type large enough to hold integers for arbitrary-precision
+integer arithmetic.  Also note that one does not need to define both
+``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
 the way ``promote_rule`` is used in the promotion process.
 
