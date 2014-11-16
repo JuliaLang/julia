@@ -182,7 +182,7 @@ You can do comparisons and a limited amount of arithmetic with
     'B'
 
 AbstractString Basics
--------------
+---------------------
 
 AbstractString literals are delimited by double quotes or triple double quotes:
 
@@ -517,7 +517,7 @@ Some other useful functions include:
 .. _man-non-standard-string-literals:
 
 Non-Standard AbstractString Literals
-----------------------------
+------------------------------------
 
 There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not
