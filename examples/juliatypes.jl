@@ -27,30 +27,42 @@ end
 
 type Var
     name::Symbol
-    lb::Ty
-    ub::Ty
+    lb
+    ub
     Var(n, lb=BottomT, ub=AnyT) = new(n, lb, ub)
 end
 
-function show(io::IO, v::Var)
+function show_var_bounds(io::IO, v::Var)
     if v.lb !== BottomT
         show(io, v.lb)
         print(io, "<:")
     end
-    print(io, v.name, "<:")
-    show(io, v.ub)
+    print(io, v.name)
+    if v.ub !== AnyT
+        print(io, "<:")
+        show(io, v.ub)
+    end
 end
+
+show(io::IO, v::Var) = print(io, v.name)
 
 type ForAllT <: Ty
     var::Var
-    T::Ty
+    T
+    ForAllT(v::Var, t) = new(v, t)
+    ForAllT(v::Var, t::Type) = new(v, convert(Ty, t))
 end
 
 function show(io::IO, x::ForAllT)
-    print(io, "@UnionAll ")
-    show(io, x.var)
-    print(io, " ")
+    if x.T === x.var && x.var.ub !== AnyT
+        print(io, "¬", x.var.ub)
+        return
+    end
+    print(io, "(∀ ")
+    show_var_bounds(io, x.var)
+    print(io, ". ")
     show(io, x.T)
+    print(io, ")")
 end
 
 AnyT = TagT(TypeName(:Any), ())
@@ -62,7 +74,7 @@ inst(typename::TypeName, params...) = TagT(typename, params)
 
 inst(t::TagT) = t
 
-inst(t::ForAllT, param) = subst(t.T, Dict(t.var => param))
+inst(t::ForAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
 inst(t::ForAllT, param, rest...) = inst(inst(t,param), rest...)
 
 super(t::TagT) = inst(t.name.super, t.params...)
@@ -84,6 +96,8 @@ tupletype(xs...) = inst(TupleName, xs...)
 # subtype
 
 isequal_type(x::Ty, y::Ty) = issub(x, y, true)
+
+issub(x, y, env, inv) = (x === y)
 
 function issub(x::Ty, y::Ty, inv::Bool = false)
     env = Dict()
@@ -200,7 +214,22 @@ function add_constraint!(env, var, c::SupConstraint)
     end
 end
 
+ctr = 1
+rename(x) = x
+function rename(x::ForAllT)
+    global ctr
+    v = Var(symbol(string("a",ctr)), x.var.lb, rename(x.var.ub))
+    ctr += 1
+    ForAllT(v, rename(inst(x, v)))
+end
+
 function issub_var(a::Var, b, env, invariant)
+    if b === AnyT
+        return true
+    end
+    if haskey(env, a) && !invariant
+        return issub(rename(env[a][1].rhs), b, env, invariant)
+    end
     add_constraint!(env, a, invariant ? EqConstraint(b) : SubConstraint(b))
     return true
 end
@@ -220,17 +249,30 @@ function issub(a::Ty, b::Var, env, invariant)
 end
 
 function issub(a::ForAllT, b::ForAllT, env, invariant)
+    println(a, " <: ", b); sleep(.5)
+
     # 1. handle bounds
-    # this could be the crucial bit: we make the bounds covariant
-    if !(issub(a.var.ub, b.var.ub, env, false) &&
-         issub(b.var.lb, a.var.lb, env, false))
+    if !(issub(b.var.ub, a.var.ub, copy(env), false) &&
+         issub(a.var.lb, b.var.lb, copy(env), false))
         return false
     end
+
     # 2. handle expression
-    fresh = Var(symbol(string("_",a.var.name,"_",b.var.name)), a.var.lb, a.var.ub)
-    add_constraint!(env, fresh, SupConstraint(a.var.lb))
-    add_constraint!(env, fresh, SubConstraint(a.var.ub))
-    inner = issub(inst(a, fresh), inst(b, fresh), env, invariant)
+    # for contravariance, fresh<:b.var.ub, for covariance fresh<:a.var.ub
+    lb = b.var.lb
+    ub = b.var.ub
+    #var = Var(symbol(string("a",ctr)), lb, ub)
+    #global ctr += 1
+    var = b.var
+
+    env = copy(env)
+    #add_constraint!(env, var, SupConstraint(lb))
+    add_constraint!(env, var, SubConstraint(ub))
+
+    a = inst(a, var)
+    b = b.T
+
+    inner = issub(a, b, env, invariant)
     return inner
 end
 
@@ -302,6 +344,8 @@ const tndict = ObjectIdDict()
 
 xlate(t) = xlate(t, ObjectIdDict())
 
+xlate(t, env) = t
+
 function xlate(t::UnionType, env)
     if t === Union()
         return BottomT
@@ -365,3 +409,54 @@ ArrayT =
     let ArrayName = TypeName(:Array, @UnionAll T @UnionAll N inst(AbstractArrayT, T, N))
         @UnionAll T @UnionAll N inst(ArrayName, T, N)
     end
+
+function non_terminating()
+    # undecidable F_<: instance
+    ¬T = @UnionAll α<:T α
+
+    θ = @UnionAll α ¬(@UnionAll β<:α ¬β)
+
+    a0 = Var(:a0)
+    env = Dict{Any,Any}(a0 => Any[SubConstraint(θ)])
+
+    issub(a0, (@UnionAll a1<:a0 ¬a1), env, false)
+end
+
+using Base.Test
+
+issub_strict(x,y) = issub(x,y) && !issub(y,x)
+
+# level 1: no varags, union, UnionAll
+function test_1()
+    @test issub_strict(Int, Integer)
+    @test issub_strict(Array{Int,1}, AbstractArray{Int,1})
+
+    @test isequal_type(Int, Int)
+    @test isequal_type(Integer, Integer)
+    @test isequal_type(Array{Int,1}, Array{Int,1})
+    @test isequal_type(AbstractArray{Int,1}, AbstractArray{Int,1})
+
+    @test issub_strict((Int,Int), (Integer,Integer))
+    @test issub_strict((Array{Int,1},), (AbstractArray{Int,1},))
+
+    @test isequal_type((Integer,Integer), (Integer,Integer))
+
+    @test !issub((Int,Int), (Int,))
+    @test !issub((Int,), (Integer,Integer))
+end
+
+# level 2: varargs
+function test_2()
+    @test issub_strict((Int,Int), (Int...,))
+    @test issub_strict((Int,Int), (Int,Int...,))
+    @test issub_strict((Int,Int), (Int,Integer...,))
+    @test issub_strict((Int,Int), (Int,Int,Integer...,))
+    @test issub_strict((Int,Int...), (Int...,))
+    @test issub_strict((Int,Int,Int...), (Int...,))
+    @test issub_strict((Int,Int,Int...), (Integer,Int...,))
+    @test issub_strict((Int...,), (Any...,))
+    @test issub_strict((), (Any...,))
+
+    @test isequal_type((Int...,), (Int...,))
+    @test isequal_type((Integer...,), (Integer...,))
+end
