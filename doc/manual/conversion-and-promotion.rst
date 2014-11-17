@@ -105,6 +105,8 @@ numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
+Therefore in Julia the dedicated ``parseint`` function must be used
+to perform this operation, making it more explicit.
 
 Defining New Conversions
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -221,7 +223,7 @@ everything to do with converting between alternate representations. For
 instance, although every ``Int32`` value can also be represented as a
 ``Float64`` value, ``Int32`` is not a subtype of ``Float64``.
 
-Promotion to a common supertype is performed in Julia by the ``promote``
+Promotion to a common "greater" type is performed in Julia by the ``promote``
 function, which takes any number of arguments, and returns a tuple of
 the same number of values, converted to a common type, or throws an
 exception if promotion is not possible. The most common use case for
@@ -323,11 +325,10 @@ the following promotion rules both occur in Julia's standard library::
     promote_rule(::Type{UInt8}, ::Type{Int8}) = Int
     promote_rule(::Type{BigInt}, ::Type{Int8}) = BigInt
 
-As a general rule, Julia promotes integers to `Int` during computation
-order to avoid overflow. In the latter case, the result type is
-``BigInt`` since ``BigInt`` is the only type large enough to hold
-integers for arbitrary-precision integer arithmetic.  Also note that one
-does not need to define both ``promote_rule(::Type{A}, ::Type{B})`` and
+In the latter case, the result type is ``BigInt`` since ``BigInt`` is
+the only type large enough to hold integers for arbitrary-precision
+integer arithmetic.  Also note that one does not need to define both
+``promote_rule(::Type{A}, ::Type{B})`` and
 ``promote_rule(::Type{B}, ::Type{A})`` — the symmetry is implied by
 the way ``promote_rule`` is used in the promotion process.
 
