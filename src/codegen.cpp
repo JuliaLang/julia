@@ -188,7 +188,6 @@ DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
 static Module *shadow_module;
-static RTDyldMemoryManager *jl_mcjmm;
 #define jl_Module (builder.GetInsertBlock()->getParent()->getParent())
 #else
 static Module *jl_Module;
@@ -4765,7 +4764,6 @@ extern "C" void jl_init_codegen(void)
     options.JITExceptionHandling = 1;
 #endif
 #ifdef USE_MCJIT
-    jl_mcjmm = new SectionMemoryManager();
     SmallVector<std::string, 4> MAttrs;
 #else
     // Temporarily disable Haswell BMI2 features due to LLVM bug.
