@@ -892,10 +892,28 @@ JL_CALLABLE(jl_f_applicable)
 JL_CALLABLE(jl_f_invoke)
 {
     JL_NARGSV(invoke, 2);
-    JL_TYPECHK(invoke, function, args[0]);
-    if (!jl_is_gf(args[0]))
-        jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
+    if (!jl_is_gf(args[0])) {
+         if (jl_is_function(args[0]))
+              jl_error("invoke: not a generic function");
+         jl_tuple_t *tup = jl_alloc_tuple_uninit(1 + jl_tuple_len(args[1]));
+         jl_tupleset(tup, 0, (jl_is_datatype(args[0])
+                              ? (jl_value_t*) jl_wrap_Type(args[0])
+                              : jl_typeof(args[0])));
+         for(size_t i=0; i < jl_tuple_len(args[1]); i++) {
+              jl_tupleset(tup, i+1, jl_tupleref(args[1],i));
+         }
+         jl_value_t **newargs = (jl_value_t**) alloca(sizeof(jl_value_t*)
+                                                      * (nargs + 1));
+         newargs[0] = (jl_value_t*) jl_module_call_func(jl_current_module);
+         newargs[1] = (jl_value_t*) tup;
+         newargs[2] = args[0];
+         for(uint32_t j=2; j < nargs; ++j) {
+              newargs[j+1] = args[j];
+         }
+         args = newargs;
+         nargs++;
+    }
     jl_check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]), "invoke");
     if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
                           jl_tuple_len(args[1]), 1))

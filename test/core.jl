@@ -1928,3 +1928,7 @@ type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
 end
 
 @test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
+
+# issue #8712
+type Issue8712; end
+@test isa(invoke(Issue8712, ()), Issue8712)
