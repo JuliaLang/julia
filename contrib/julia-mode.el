@@ -483,6 +483,7 @@ before point. Returns nil if we're not within nested parens."
 ;        println("(puthash \"$ks\" \"$vs\" julia-latexsubs)")
 ;    end
 ;end
+; (See Julia issue #8947 for why we don't use the Emacs tex input mode.)
 (puthash "\\textexclamdown" "¡" julia-latexsubs)
 (puthash "\\sterling" "£" julia-latexsubs)
 (puthash "\\yen" "¥" julia-latexsubs)
