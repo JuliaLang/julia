@@ -971,6 +971,7 @@ function reset_state(s::PrefixSearchState)
 end
 
 function transition(s::PrefixSearchState, mode)
+    s.parent = mode
     s.histprompt.parent_prompt = mode
 end
 
