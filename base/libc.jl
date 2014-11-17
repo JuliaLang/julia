@@ -73,6 +73,58 @@ time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{Void},), &tm))
 
 getpid() = ccall(:jl_getpid, Int32, ())
 
+## password directory functions ##
+
+type PasswdStruct
+    name::Ptr{UInt8}
+    passwd::Ptr{UInt8}
+    uid::Int32
+    gid::Int32
+    change::Int64
+    class::Ptr{UInt8}
+    gecos::Ptr{UInt8}
+    dir::Ptr{UInt8}
+    shell::Ptr{UInt8}
+    expire::Int64
+    field::Int32
+end
+
+function isnullpwd(a::PasswdStruct)
+    b = PasswdStruct()
+    fields = names(PasswdStruct)
+    all(map(f -> a.(f) == b.(f), fields))
+end
+
+PasswdStruct() = PasswdStruct(
+    C_NULL, C_NULL, 0, 0, 0, C_NULL, C_NULL, C_NULL, C_NULL, 0, 0
+)
+
+function PasswdStruct(name::AbstractString)
+    pwd = PasswdStruct()
+    result = [PasswdStruct()]
+    # TODO:
+     # what if the buffer needs to be larger?
+     # obviously you can wrap it in a while loop and check whether ERANGE is
+     # returned but is ERANGE the same on all platforms?
+    bufsize = 1024
+    buf = Array(UInt8, bufsize)
+    err = ccall(
+        :getpwnam_r,
+        Cint,
+        (Ptr{UInt8}, Ptr{Void}, Ptr{UInt8}, Int64, Ptr{Ptr{Void}}),
+        name, &pwd, buf, bufsize, &result
+    )
+    # user not in password database
+    if err == 0 && isnullpwd(pwd)
+        # TODO: should this be an error or warning?
+        error("unable to find user $(name) in password database")
+    elseif err == 0
+        return pwd
+    else
+        error("getpwnam_r returned error code: $(err)")
+    end
+end
+
 ## network functions ##
 
 function gethostname()

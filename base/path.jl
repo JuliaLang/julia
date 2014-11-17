@@ -7,8 +7,18 @@
     const path_ext_splitter = r"^((?:.*/)?(?:\.|[^/\.])[^/]*?)(\.[^/\.]*|)$"
 
     splitdrive(path::AbstractString) = ("",path)
-    homedir() = ENV["HOME"]
+    function homedir(; user::AbstractString="")
+        # if no user is supplied (current user) prefer value in ENV["HOME"],
+        # this is occassionally useful for debugging
+        # TODO:
+         # ideally this would use PasswdStruct as a fallback for when
+         # ENV["HOME"] isn't set, i.e.
+         #     get(ENV, "HOME", bytestring(PasswdStruct(ENV["USER"]).dir))
+         # but this seems to break on Linux builds
+        return isempty(user) ? ENV["HOME"] : bytestring(PasswdStruct(user).dir)
+    end
 end
+
 @windows_only begin
     const path_separator    = "\\"
     const path_separator_re = r"[/\\]+"
@@ -21,8 +31,10 @@ end
         m = match(r"^(\w+:|\\\\\w+\\\w+|\\\\\?\\UNC\\\w+\\\w+|\\\\\?\\\w+:|)(.*)$", path)
         bytestring(m.captures[1]), bytestring(m.captures[2])
     end
-    homedir() = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
+    homedir(; user::AbstractString="") = get(ENV,"HOME",string(ENV["HOMEDRIVE"],ENV["HOMEPATH"]))
 end
+
+homedir(path::AbstractString...; user::AbstractString="") = joinpath(homedir(user=user), path...)
 
 isabspath(path::AbstractString) = ismatch(path_absolute_re, path)
 isdirpath(path::AbstractString) = ismatch(path_directory_re, splitdrive(path)[2])
@@ -133,11 +145,17 @@ end
 
 @windows_only expanduser(path::AbstractString) = path # on windows, ~ means "temporary file"
 @unix_only function expanduser(path::AbstractString)
-    i = start(path)
-    c, i = next(path,i)
-    if c != '~' return path end
-    if done(path,i) return homedir() end
-    c, j = next(path,i)
-    if c == '/' return homedir()*path[i:end] end
-    error("~user tilde expansion not yet implemented")
+    # readline accepts everything up to '/', ' ' or '\n'
+    # bash accepts everything up to '/', ' ', '\n', ':' or '=~'
+    # readline's easier to implement
+    m = match(r"^~([^/ \n]*)", path)
+    m == nothing && return path
+    user = m.captures[1]
+
+    try
+        home = homedir(user=user)
+        return replace(path, "~"*user, home, 1)
+    catch
+        return path
+    end
 end

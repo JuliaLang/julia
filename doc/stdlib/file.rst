@@ -63,9 +63,14 @@ Filesystem
    Returns ``true`` if the current user has permission to write to ``path``,
    ``false`` otherwise.
 
-.. function:: homedir() -> AbstractString
+.. function:: homedir([path...]; user="") -> AbstractString
 
-   Return the current user's home directory.
+   On Unix systems, return the specified user's home directory, a blank string
+   denotes the current user. On Windows, return the current user's home
+   directory.
+
+   Specifying ``path`` is a convenience function for
+   ``joinpath(homedir(user=user), path...)``.
 
 .. function:: dirname(path::AbstractString) -> AbstractString
 
@@ -109,7 +114,12 @@ Filesystem
 .. function:: expanduser(path::AbstractString) -> AbstractString
 
    On Unix systems, replace a tilde character at the start of a path with the
-   current user's home directory.
+   current user's home directory. If there is no tilde the path is returned
+   unchanged.
+
+   If there is a username directly after the tilde then that user's home
+   directory is used if it can be found. If it can't be found the path is
+   returned unchanged.
 
 .. function:: splitdir(path::AbstractString) -> (AbstractString,AbstractString)
 
