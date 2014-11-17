@@ -281,8 +281,16 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
             v[i], v[j] = v[j], v[i]
         end
         v[j], v[lo] = v[lo], v[j]
-        lo < (j-1) && sort!(v, lo, j-1, a, o)
-        lo = j+1
+        if j-lo < hi-j
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
+            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo = j+1
+        else
+            j+1 < hi && sort!(v, j+1, hi, a, o)
+            hi = j-1
+        end
     end
     return v
 end
