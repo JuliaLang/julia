@@ -422,10 +422,10 @@ before point. Returns nil if we're not within nested parens."
   (set (make-local-variable 'comment-start) "# ")
   (set (make-local-variable 'comment-start-skip) "#+\\s-*")
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
+  (set (make-local-variable 'syntax-propertize-function)
        (list
 	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
+  (set (make-local-variable 'syntax-propertize-function)
         (list
  	(list julia-char-regex 2
  	      julia-mode-char-syntax-table)
