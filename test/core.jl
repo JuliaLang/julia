@@ -1928,3 +1928,28 @@ type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
 end
 
 @test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
+
+# issue #8978
+module I8978
+y = 1
+g() = f(y)
+f(x) = 2
+f(x::Int) = 3.0
+module II8978
+function callf(f)
+    try
+        f()
+    finally
+    end
+end
+end
+h(f) = II8978.callf() do
+    local x
+    for i = 1:1
+        x = g()+f
+    end
+    x
+end
+end
+
+@test I8978.h(4) === 7.0
