@@ -280,7 +280,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
     // in A.B, look for A in Main first.
     jl_sym_t *var = (jl_sym_t*)jl_cellref(args,0);
     size_t i=1;
-    assert(jl_is_symbol(var));
+    if (!jl_is_symbol(var)) jl_type_error("import or using", (jl_value_t*)jl_sym_type, (jl_value_t*)var);
     jl_module_t *m;
 
     if (var != dot_sym) {
@@ -290,7 +290,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
         m = jl_current_module;
         while (1) {
             var = (jl_sym_t*)jl_cellref(args,i);
-            assert(jl_is_symbol(var));
+            if (!jl_is_symbol(var)) jl_type_error("import or using", (jl_value_t*)jl_sym_type, (jl_value_t*)var);
             i++;
             if (var != dot_sym) {
                 if (i == jl_array_len(args))
