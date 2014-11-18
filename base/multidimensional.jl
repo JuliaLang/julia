@@ -29,14 +29,18 @@ function gen_cartesian(N::Int)
     indextype = symbol("CartesianIndex_$N")
     itertype = symbol("IndexIterator_$N")
     if !in(N,implemented)
-        fieldnames = [symbol("I_$i") for i = 1:N]
-        fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+        M = max(N,1)  # 0-dimensional arrays require special handling
+        fieldnames = [symbol("I_$i") for i = 1:M]
+        fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:M]
         extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
         exindices = Expr[:(index[$i]) for i = 1:N]
+        index_tuple_constr = N > 0 ?
+            (:($indextype(index::NTuple{$N,Int}) = $indextype($(exindices...)))) :
+            (:($indextype(index::NTuple{0,Int}) = $indextype(1)))
 
-        onesN   = ones(Int, N)
-        infsN   = fill(typemax(Int), N)
-        anyzero = Expr(:(||), [:(iter.dims.$(fieldnames[i]) == 0) for i = 1:N]...)
+        onesN   = ones(Int, M)
+        infsN   = fill(typemax(Int), M)
+        anyzero = Expr(:(||), [:(iter.dims.$(fieldnames[i]) == 0) for i = 1:M]...)
 
         # Some necessary ambiguity resolution
         exrange = N != 1 ? nothing : quote
@@ -46,13 +50,14 @@ function gen_cartesian(N::Int)
         totalex = quote
             # type definition of state
             $extype
-            # extra constructor from tuple
-            $indextype(index::NTuple{$N,Int}) = $indextype($(exindices...))
+            # constructor from tuple
+            $index_tuple_constr
 
             # type definition of iterator
             immutable $itertype <: IndexIterator{$N}
                 dims::$indextype
             end
+            # constructor from tuple
             $itertype(dims::NTuple{$N,Int})=$itertype($indextype(dims))
 
             # getindex and setindex!
@@ -63,11 +68,11 @@ function gen_cartesian(N::Int)
             $exrange
             @inline function next{T}(A::AbstractArray{T,$N}, state::$indextype)
                 @inbounds v = A[state]
-                newstate = @nif $N d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+                newstate = @nif $M d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
                 v, newstate
             end
             @inline function next(iter::$itertype, state::$indextype)
-                newstate = @nif $N d->(getfield(state,d) < getfield(iter.dims,d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
+                newstate = @nif $M d->(getfield(state,d) < getfield(iter.dims,d)) d->(@ncall($M, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
                 state, newstate
             end
 
@@ -86,7 +91,7 @@ eachindex(A::AbstractArray) = IndexIterator(size(A))
 
 # start iteration
 stagedfunction _start{T,N}(A::AbstractArray{T,N},::LinearSlow)
-    args = fill(:s, N)
+    args = fill(:s, max(N,1))
     indextype, _ = gen_cartesian(N)
     quote
         s = ifelse(isempty(A), typemax(Int), 1)
@@ -100,6 +105,7 @@ done(R::UnitRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
 done(R::FloatRange, I::CartesianIndex{1}) = getfield(I, 1) > length(R)
 
 done{T,N}(A::AbstractArray{T,N}, I::CartesianIndex{N}) = getfield(I, N) > size(A, N)
+done(iter::IndexIterator{0}, I::CartesianIndex{0}) = getfield(I, 1) > getfield(iter.dims, 1)
 done{N}(iter::IndexIterator{N}, I::CartesianIndex{N}) = getfield(I, N) > getfield(iter.dims, N)
 
 end  # IteratorsMD
