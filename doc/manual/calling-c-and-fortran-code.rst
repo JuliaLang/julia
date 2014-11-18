@@ -38,10 +38,13 @@ the current process. This form can be used to call C library functions,
 functions in the Julia runtime, or functions in an application linked to
 Julia.
 
-By default, modern Fortran compilers
-`generate mangled names <http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
-combining the function name with the enclosing module name, separated by underscores.
-When calling a Fortran function, all inputs must be passed by reference.
+By default, Fortran compilers `generate mangled names
+<http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+(for example, converting function names to lowercase or uppercase,
+often appending an underscore), and so to call a Fortran function via
+``ccall`` you must pass the mangled identifier corresponding to the rule
+followed by your Fortran compiler.  Also, when calling a Fortran
+function, all inputs must be passed by reference.
 
 Finally, you can use ``ccall`` to actually generate a call to the
 library function. Arguments to ``ccall`` are as follows:
