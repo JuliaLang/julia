@@ -665,7 +665,7 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
 	touch -c $@
 
 clean-openlibm:
@@ -1542,7 +1542,7 @@ $(OSXUNWIND_OBJ_TARGET): $(OSXUNWIND_OBJ_SOURCE) | $(build_shlibdir)
 
 clean-osxunwind:
 	-$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) distclean $(OSXUNWIND_FLAGS)
-	-rm $(OPENLIBM_OBJ_TARGET)
+	-rm $(OSXUNWIND_OBJ_TARGET)
 distclean-osxunwind: clean-osxunwind
 
 get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
