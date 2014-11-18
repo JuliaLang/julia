@@ -102,6 +102,7 @@ isequal_type(x::Ty, y::Ty) = issub(x, y) && issub(y, x)
 
 function issub(x, y)
     env = Env()
+    env[:depth] = 1
     ans = issub(x, y, env)
     #if ans && !isempty(env)
     #    println("subject to")
@@ -176,6 +177,8 @@ function issub(a::TagT, b::TagT, env, invariant=false)
         end
         @assert false
     else
+        env = copy(env)
+        env[:depth] = env[:depth]+1
         for i = 1:length(a.params)
             if !issub(a.params[i], b.params[i], env, true)
                 return false
@@ -203,7 +206,9 @@ function issub(a::Var, b::Var, env, invariant=false)
     if a === b
         return true
     end
-    if invariant && haskey(env, b)
+    da = env[a]
+    db = env[b]
+    if invariant && da != -db #haskey(env, b)
         return false
     end
     return issub(a.ub, b.ub, env)
@@ -212,16 +217,18 @@ end
 issub(a::Ty, b::Var, env, invariant=false) = issub(a, b.ub, env)
 
 function issub(a::UnionAllT, b::UnionAllT, env)
-    if !issub(a.var.ub, b.var.ub, env)
-        return false
-    end
     env = copy(env)
     var = Var(a.var.name, a.var.lb, a.var.ub)
-    env[var] = true
+    env[var] = env[:depth]
     return issub(inst(a,var), inst(b,var), env)
 end
 
-issub_unionall(a::Ty, b::UnionAllT, env) = issub(a, b.T, env)
+function issub_unionall(a::Ty, b::UnionAllT, env)
+    var = Var(b.var.name, b.var.lb, b.var.ub)
+    env = copy(env)
+    env[var] = -env[:depth]
+    return issub(a, inst(b,var), env)
+end
 
 issub(a::UnionT, b::UnionAllT, env) = issub_unionall(a, b, env)
 issub(a::Ty, b::UnionAllT, env) = issub_unionall(a, b, env)
@@ -229,7 +236,7 @@ issub(a::Ty, b::UnionAllT, env) = issub_unionall(a, b, env)
 function unionall_issub(a::UnionAllT, b::Ty, env)
     var = Var(a.var.name, a.var.lb, a.var.ub)
     env = copy(env)
-    env[var] = true
+    env[var] = env[:depth]
     return issub(inst(a,var), b, env)
 end
 
@@ -401,6 +408,7 @@ function test_2()
     @test isequal_type((Integer...,), (Integer...,))
 end
 
+# level 3: UnionAll
 function test_3()
     @test issub_strict(xlate(Array{Int,1}), @UnionAll T inst(ArrayT, T, 1))
     @test issub_strict((@UnionAll T inst(ArrayT,T,T)), (@UnionAll T @UnionAll S inst(ArrayT,T,S)))
@@ -410,4 +418,19 @@ function test_3()
 
     @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
     @test isequal_type((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
+
+    @test !issub((@UnionAll T<:Integer @UnionAll S<:Number (T,S)),
+                 (@UnionAll T<:Integer @UnionAll S<:Number (S,T)))
+
+    AUA = inst(ArrayT, (@UnionAll T inst(ArrayT,T,1)), 1)
+    UAA = (@UnionAll T inst(ArrayT, inst(ArrayT,T,1), 1))
+
+    @test !issub(AUA, UAA)
+    @test !issub(UAA, AUA)
+    @test !isequal_type(AUA, UAA)
+
+    @test issub_strict((@UnionAll T Int), (@UnionAll T<:Integer Integer))
+
+    @test isequal_type((@UnionAll T @UnionAll S tupletype(T, tupletype(S))),
+                       (@UnionAll T tupletype(T, @UnionAll S tupletype(S))))
 end
