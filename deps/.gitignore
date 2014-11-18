@@ -15,6 +15,7 @@
 /lighttpd-*
 /libcxx-*
 /llvm-*
+/lldb-*
 /mpfr-*
 /openblas-*
 /patchelf-*
