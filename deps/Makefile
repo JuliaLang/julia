@@ -357,10 +357,8 @@ llvm-$(LLVM_VER)/python2_path:
 	mkdir -p llvm-$(LLVM_VER)/python2_path
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
+	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python" && \
 	ln -sf /usr/bin/python2-config "llvm-$(LLVM_VER)/python2_path/python-config"
-	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
-	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 ifeq ($(LLVM_VER), 3.2)
 ## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
@@ -421,7 +419,7 @@ LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -462,8 +460,6 @@ endif
 ifneq ($(LLVM_LLDB_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/tools/lldb && \
 	$(TAR) -C llvm-$(LLVM_VER)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
-	# LLDB 3.5: with python, rename python-config to python2-config in 2 Makefiles
-	#           without python, remove scripts/Python subdir of tools/lldb
 endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
