@@ -119,8 +119,10 @@ function blas_vendor()
 end
 
 if blas_vendor() == :openblas64
+    blasfunc(x) = string(x)*"64_"
     openblas_get_config() = strip(bytestring( ccall((:openblas_get_config64_, Base.libblas_name), Ptr{Uint8}, () )))
 else
+    blasfunc(x) = string(x)
     openblas_get_config() = strip(bytestring( ccall((:openblas_get_config, Base.libblas_name), Ptr{Uint8}, () )))
 end
 
