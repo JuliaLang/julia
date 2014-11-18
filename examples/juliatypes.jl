@@ -46,14 +46,14 @@ end
 
 show(io::IO, v::Var) = print(io, v.name)
 
-type ForAllT <: Ty
+type UnionAllT <: Ty
     var::Var
     T
-    ForAllT(v::Var, t) = new(v, t)
-    ForAllT(v::Var, t::Type) = new(v, convert(Ty, t))
+    UnionAllT(v::Var, t) = new(v, t)
+    UnionAllT(v::Var, t::Type) = new(v, convert(Ty, t))
 end
 
-function show(io::IO, x::ForAllT)
+function show(io::IO, x::UnionAllT)
     if x.T === x.var && x.var.ub !== AnyT
         print(io, "¬", x.var.ub)
         return
@@ -74,8 +74,8 @@ inst(typename::TypeName, params...) = TagT(typename, params)
 
 inst(t::TagT) = t
 
-inst(t::ForAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
-inst(t::ForAllT, param, rest...) = inst(inst(t,param), rest...)
+inst(t::UnionAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
+inst(t::UnionAllT, param, rest...) = inst(inst(t,param), rest...)
 
 super(t::TagT) = inst(t.name.super, t.params...)
 
@@ -84,9 +84,10 @@ extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 subst(t::TagT,    env) = t===AnyT ? t : TagT(t.name, map(x->subst(x,env), t.params), t.vararg)
 subst(t::UnionT,  env) = t===BottomT ? t : UnionT(map(x->subst(x,env), t.types))
 subst(t::Var,     env) = get(env, t, t)
-subst(t::ForAllT, env) = (assert(!haskey(env, t.var));
-                          newVar = Var(t.var.name, subst(t.var.lb, env), subst(t.var.ub, env));
-                          ForAllT(newVar, subst(t.T, extend(env, t.var, newVar))))
+subst(t::UnionAllT, env) = (assert(!haskey(env, t.var));
+                            newVar = Var(t.var.name, subst(t.var.lb, env), subst(t.var.ub, env));
+                            UnionAllT(newVar, subst(t.T, extend(env, t.var, newVar))))
+subst(t, env) = t
 
 TupleName = TypeName(:Tuple, AnyT)
 TupleT = TagT(TupleName, (AnyT,), true)
@@ -95,51 +96,54 @@ tupletype(xs...) = inst(TupleName, xs...)
 
 # subtype
 
-isequal_type(x::Ty, y::Ty) = issub(x, y, true)
+const Env = Dict{Any,Any}
 
-issub(x, y, env, inv) = (x === y)
+isequal_type(x::Ty, y::Ty) = issub(x, y) && issub(y, x)
 
-function issub(x::Ty, y::Ty, inv::Bool = false)
-    env = Dict()
-    ans = issub(x, y, env, inv)
-    if ans && !isempty(env)
-        println("subject to")
-        Base.showdict(env, limit=false); println()
-    end
+function issub(x, y)
+    env = Env()
+    ans = issub(x, y, env)
+    #if ans && !isempty(env)
+    #    println("subject to")
+    #    Base.showdict(env, limit=false); println()
+    #end
     ans
 end
 
-function union_issub(x::UnionT, t::Ty, env, invariant)
+issub(x, y, env) = (x === y)
+
+function union_issub(x::UnionT, t::Ty, env)
     for tt in x.types
-        if !issub(tt, t, env, false)
+        if !issub(tt, t, env)
             return false
         end
-    end
-    if invariant
-        return issub(t, x, copy(env), false)
     end
     return true
 end
 
-issub(x::UnionT, t::UnionT, env, invariant) = union_issub(x, t, env, invariant)
-issub(x::UnionT, t::Ty, env, invariant)     = union_issub(x, t, env, invariant)
+issub(x::UnionT, t::UnionT, env) = union_issub(x, t, env)
+issub(x::UnionT, t::Ty, env)     = union_issub(x, t, env)
 
-function issub(x::Ty, t::UnionT, env, invariant)
+function issub(x::Ty, t::UnionT, env)
     # TODO: distribute Union over tuple
     for tt in t.types
         e′ = copy(env)
-        if issub(x, tt, e′, false)
+        if issub(x, tt, e′)
             merge!(env, e′)
-            if invariant
-                return issub(t, x, copy(env), false)
-            end
             return true
         end
     end
     return false
 end
 
-function issub(a::TagT, b::TagT, env, invariant)
+function issub(a, b, env, invariant)
+    if invariant && !issub(b, a, env)
+        return false
+    end
+    return issub(a, b, env)
+end
+
+function issub(a::TagT, b::TagT, env, invariant=false)
     a === b && return true
     if !invariant
         b === AnyT && return true
@@ -147,7 +151,7 @@ function issub(a::TagT, b::TagT, env, invariant)
     end
     if a.name !== b.name
         invariant && return false
-        return issub(super(a), b, env, false)
+        return issub(super(a), b, env)
     end
     if a.name === TupleName
         va = a.vararg
@@ -181,122 +185,56 @@ function issub(a::TagT, b::TagT, env, invariant)
     return true
 end
 
-type EqConstraint    # T == rhs
-    rhs
-end
+#rename(x) = x
+#function rename(x::UnionAllT)
+#    v = Var(x.var.name, rename(x.var.lb), rename(x.var.ub))
+#    UnionAllT(v, rename(inst(x, v)))
+#end
 
-type SubConstraint   # T <: rhs
-    rhs
-end
-
-type SupConstraint   # T >: rhs
-    rhs
-end
-
-function add_constraint!(env, var, c::EqConstraint)
-    if c.rhs !== var
-        cs = get!(()->[], env, var)
-        push!(cs, c)
-    end
-end
-
-function add_constraint!(env, var, c::SubConstraint)
-    if c.rhs !== AnyT && c.rhs !== var
-        cs = get!(()->[], env, var)
-        push!(cs, c)
-    end
-end
-
-function add_constraint!(env, var, c::SupConstraint)
-    if c.rhs !== BottomT && c.rhs !== var
-        cs = get!(()->[], env, var)
-        push!(cs, c)
-    end
-end
-
-ctr = 1
-rename(x) = x
-function rename(x::ForAllT)
-    global ctr
-    v = Var(symbol(string("a",ctr)), x.var.lb, rename(x.var.ub))
-    ctr += 1
-    ForAllT(v, rename(inst(x, v)))
-end
-
-function issub_var(a::Var, b, env, invariant)
-    if b === AnyT
+function issub(a::Var, b::Ty, env, invariant=false)
+    invariant && return false
+    if b === AnyT || a === b
         return true
     end
-    if haskey(env, a) && !invariant
-        return issub(rename(env[a][1].rhs), b, env, invariant)
-    end
-    add_constraint!(env, a, invariant ? EqConstraint(b) : SubConstraint(b))
-    return true
+    return issub(a.ub, b, env)
 end
 
-issub(a::Var, b::Var, env, invariant) = issub_var(a, b, env, invariant)
-
-function issub(a::Var, b::Ty, env, invariant)
-    if invariant
+function issub(a::Var, b::Var, env, invariant=false)
+    if a === b
+        return true
+    end
+    if invariant && haskey(env, b)
         return false
     end
-    issub_var(a, b, env, invariant)
+    return issub(a.ub, b.ub, env)
 end
 
-function issub(a::Ty, b::Var, env, invariant)
-    add_constraint!(env, b, invariant ? EqConstraint(a) : SupConstraint(a))
-    return true
-end
+issub(a::Ty, b::Var, env, invariant=false) = issub(a, b.ub, env)
 
-function issub(a::ForAllT, b::ForAllT, env, invariant)
-    println(a, " <: ", b); sleep(.5)
-
-    # 1. handle bounds
-    if !(issub(b.var.ub, a.var.ub, copy(env), false) &&
-         issub(a.var.lb, b.var.lb, copy(env), false))
+function issub(a::UnionAllT, b::UnionAllT, env)
+    if !issub(a.var.ub, b.var.ub, env)
         return false
     end
-
-    # 2. handle expression
-    # for contravariance, fresh<:b.var.ub, for covariance fresh<:a.var.ub
-    lb = b.var.lb
-    ub = b.var.ub
-    #var = Var(symbol(string("a",ctr)), lb, ub)
-    #global ctr += 1
-    var = b.var
-
     env = copy(env)
-    #add_constraint!(env, var, SupConstraint(lb))
-    add_constraint!(env, var, SubConstraint(ub))
-
-    a = inst(a, var)
-    b = b.T
-
-    inner = issub(a, b, env, invariant)
-    return inner
+    var = Var(a.var.name, a.var.lb, a.var.ub)
+    env[var] = true
+    return issub(inst(a,var), inst(b,var), env)
 end
 
-function issub_forall(a::Ty, b::ForAllT, env, invariant)
-    fresh = Var(b.var.name, b.var.lb, b.var.ub)
-    body = inst(b, fresh)
-    add_constraint!(env, fresh, SupConstraint(b.var.lb))
-    add_constraint!(env, fresh, SubConstraint(b.var.ub))
-    return issub(a, body, env, invariant)
+issub_unionall(a::Ty, b::UnionAllT, env) = issub(a, b.T, env)
+
+issub(a::UnionT, b::UnionAllT, env) = issub_unionall(a, b, env)
+issub(a::Ty, b::UnionAllT, env) = issub_unionall(a, b, env)
+
+function unionall_issub(a::UnionAllT, b::Ty, env)
+    var = Var(a.var.name, a.var.lb, a.var.ub)
+    env = copy(env)
+    env[var] = true
+    return issub(inst(a,var), b, env)
 end
 
-issub(a::UnionT, b::ForAllT, env, invariant) = issub_forall(a, b, env, invariant)
-issub(a::Ty, b::ForAllT, env, invariant) = issub_forall(a, b, env, invariant)
-
-function forall_issub(a::ForAllT, b::Ty, env, invariant)
-    fresh = Var(a.var.name, a.var.lb, a.var.ub)
-    body = inst(a, fresh)
-    add_constraint!(env, fresh, SupConstraint(a.var.lb))
-    add_constraint!(env, fresh, SubConstraint(a.var.ub))
-    return issub(body, b, env, invariant)
-end
-
-issub(a::ForAllT, b::UnionT, env, invariant) = forall_issub(a, b, env, invariant)
-issub(a::ForAllT, b::Ty, env, invariant) = forall_issub(a, b, env, invariant)
+issub(a::UnionAllT, b::UnionT, env) = unionall_issub(a, b, env)
+issub(a::UnionAllT, b::Ty, env) = unionall_issub(a, b, env)
 
 
 # convenient syntax
@@ -332,7 +270,7 @@ macro UnionAll(var, expr)
     end
     quote
         let $(esc(v)) = Var($(Expr(:quote,v)), $lb, $ub)
-            ForAllT($(esc(v)), $(esc(expr)))
+            UnionAllT($(esc(v)), $(esc(expr)))
         end
     end
 end
@@ -381,7 +319,7 @@ function xlate(t::DataType, env)
         para = map(x->xlate(x,env), t.name.primary.parameters)  # adds tvars to env
         sup = xlate(t.name.primary.super, env)
         for i = length(para):-1:1
-            sup = ForAllT(para[i], sup)
+            sup = UnionAllT(para[i], sup)
         end
         tn = TypeName(t.name.name, sup)
         tndict[t.name] = tn
@@ -410,16 +348,18 @@ ArrayT =
         @UnionAll T @UnionAll N inst(ArrayName, T, N)
     end
 
+tndict[AbstractArray.name] = AbstractArrayT.T.T.name
+tndict[Array.name] = ArrayT.T.T.name
+
 function non_terminating()
     # undecidable F_<: instance
     ¬T = @UnionAll α<:T α
 
     θ = @UnionAll α ¬(@UnionAll β<:α ¬β)
 
-    a0 = Var(:a0)
-    env = Dict{Any,Any}(a0 => Any[SubConstraint(θ)])
+    a0 = Var(:a0, BottomT, θ)
 
-    issub(a0, (@UnionAll a1<:a0 ¬a1), env, false)
+    issub(a0, (@UnionAll a1<:a0 ¬a1))
 end
 
 using Base.Test
@@ -459,4 +399,15 @@ function test_2()
 
     @test isequal_type((Int...,), (Int...,))
     @test isequal_type((Integer...,), (Integer...,))
+end
+
+function test_3()
+    @test issub_strict(xlate(Array{Int,1}), @UnionAll T inst(ArrayT, T, 1))
+    @test issub_strict((@UnionAll T inst(ArrayT,T,T)), (@UnionAll T @UnionAll S inst(ArrayT,T,S)))
+
+    @test issub((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+    @test issub((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
+
+    @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+    @test isequal_type((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
 end
