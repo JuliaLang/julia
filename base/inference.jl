@@ -2279,8 +2279,15 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     # annotate variables in the body expression with their module
     if need_mod_annotate
         mfrom = linfo.module; mto = (inference_stack::CallStack).mod
+        enc_capt = enclosing_ast.args[2][3]
+        if !isempty(enc_capt)
+            # add captured var names to list of locals
+            enc_vars = vcat(enc_locllist, map(vi->vi[1], enc_capt))
+        else
+            enc_vars = enc_locllist
+        end
         try
-            body = resolve_globals(body, enc_locllist, enclosing_ast.args[1], mfrom, mto, args, spnames)
+            body = resolve_globals(body, enc_vars, enclosing_ast.args[1], mfrom, mto, args, spnames)
         catch ex
             if isa(ex,GetfieldNode)
                 return NF
