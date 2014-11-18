@@ -155,6 +155,7 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
+    preexprs = Array(Any, 0)
     k = 0
     LD, die_next_vector, Ilast, isLDdone = 0, false, Void, false  # for linear indexing inference
     for j = 1:length(IV)
@@ -171,8 +172,10 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
             end
             if k < N && I[k] <: Real
                 # convert scalar to a range
-                push!(indexexprs, :(V.indexes[$j][int(I[$k]):int(I[$k])]))
-                push!(Itypes, rangetype(IV[j], UnitRange{Int}))
+                sym = gensym()
+                push!(preexprs, :($sym = V.indexes[$j][int(I[$k])]))
+                push!(indexexprs, :($sym:$sym))
+                push!(Itypes, UnitRange{Int})
             elseif k < length(I) || k == NV || j == length(IV)
                 # simple indexing
                 push!(indexexprs, :(V.indexes[$j][I[$k]]))
@@ -212,6 +215,7 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
     strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD)
     preex = isempty(preexprs) ? nothing : Expr(:block, preexprs...)
     quote
+        $preex
         Inew = $Inew
         SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, first_index(V.parent, Inew), $strideexpr)
     end
