@@ -4,6 +4,8 @@ import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
 import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub
 using ..Types
 
+const URLNAME_REGEX = r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$"
+
 macro recover(ex)
     quote
         try $(esc(ex))
@@ -170,7 +172,7 @@ function clone(url_or_pkg::AbstractString)
         # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
+        m = match(URLNAME_REGEX, url)
         m != nothing || error("can't determine package name from URL: $url")
         pkg = m.captures[1]
     end
