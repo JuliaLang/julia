@@ -156,15 +156,15 @@ All Objects
 
    Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
    and treats ``-0.0`` as unequal to ``0.0``.
-   For values that are not floating-point, ``isequal`` is the same as ``==``.
+   For values that are not floating-point, ``isequal`` calls ``==`` (so that if you define a ``==`` method for a new type you automatically get ``isequal``).
 
    ``isequal`` is the comparison function used by hash tables (``Dict``).
    ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
 
-   Collections typically implement ``isequal`` by calling ``isequal`` recursively on
+   This typically means that if you define your own ``==`` function then you must define a corresponding ``hash`` (and vice versa).  Collections typically implement ``isequal`` by calling ``isequal`` recursively on
    all contents.
 
-   Scalar types generally do not need to implement ``isequal``, unless they
+   Scalar types generally do not need to implement ``isequal`` separate from ``==``, unless they
    represent floating-point numbers amenable to a more efficient implementation
    than that provided as a generic fallback (based on ``isnan``, ``signbit``, and ``==``).
 
@@ -207,7 +207,8 @@ All Objects
 
    Compute an integer hash code such that ``isequal(x,y)`` implies ``hash(x)==hash(y)``.
    The optional second argument ``h`` is a hash code to be mixed with the result.
-   New types should implement the 2-argument form.
+
+   New types should implement the 2-argument form, typically  by calling the 2-argument ``hash`` method recursively in order to mix hashes of the contents with each other (and with ``h``).   Typically, any type that implements ``hash`` should also implement its own ``==`` (hence ``isequal``) to guarantee the property mentioned above.
 
 .. function:: finalizer(x, function)
 
