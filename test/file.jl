@@ -271,7 +271,9 @@ my_tempdir = tempdir()
 @test isdir(my_tempdir) == true
 
 path = tempname()
-@test ispath(path) == false
+# Issue #9053.
+@unix_only @test ispath(path) == false
+@windows_only @test ispath(path) == true
 
 (p, f) = mktemp()
 print(f, "Here is some text")
