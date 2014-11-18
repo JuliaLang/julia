@@ -4132,17 +4132,17 @@ Constructors
 
 .. function:: fill(x, dims)
 
-   Create an array filled with copies of the value ``x``.
-   For e.g., ``fill(1.0, (10,10))`` returns a  10x10 array of floats, with each
-   element initialized to 1.0
+   Create an array filled with the value ``x``.
+   For example, ``fill(1.0, (10,10))`` returns a  10x10 array of floats, with each
+   element initialized to 1.0.
 
    If ``x`` is an object reference, all elements will refer to the same object.
-   For e.g., ``fill(Foo(), dims)``, will return an array filled with the result of evaluating Foo() once.
+   ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
 .. function:: fill!(A, x)
 
-   Fill the array ``A`` with copies of the value ``x``. If ``x`` is an object reference, all elements will refer to the same object.
-   For e.g., ``fill!(A, Foo())``, will return ``A`` filled with the result of evaluating Foo() once.
+   Fill array ``A`` with the value ``x``. If ``x`` is an object reference, all elements will refer to the same object.
+   ``fill!(A, Foo())`` will return ``A`` filled with the result of evaluating ``Foo()`` once.
 
 .. function:: reshape(A, dims)
 
