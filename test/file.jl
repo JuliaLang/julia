@@ -267,17 +267,37 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
-# my_tempdir = tempdir()
-# @test isdir(my_tempdir) == true
+my_tempdir = tempdir()
+@test isdir(my_tempdir) == true
 
-# path = tempname()
-# @test ispath(path) == false
+path = tempname()
+@test ispath(path) == false
 
-# (file, f) = mktemp()
-# print(f, "Here is some text")
-# close(f)
-# @test isfile(file) == true
-# @test readall(file) == "Here is some text"
+(p, f) = mktemp()
+print(f, "Here is some text")
+close(f)
+@test isfile(p) == true
+@test readall(p) == "Here is some text"
+rm(p)
+
+let
+    tmp_path = mktemp() do p, io
+        @test isfile(p)
+        print(io, "鴨かも？")
+        p
+    end
+    @test tmp_path != ""
+    @test !isfile(tmp_path)
+end
+
+let
+    tmpdir = mktempdir() do d
+        @test isdir(d)
+        d
+    end
+    @test tmpdir != ""
+    @test !isdir(tmpdir)
+end
 
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
