@@ -238,8 +238,8 @@ const indent_width = 4
 const quoted_syms = Set{Symbol}([:(:),:(::),:(:=),:(=),:(==),:(===),:(=>)])
 const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√), :(∛), :(∜)])
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
-    :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
-const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
+    :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>)])
+const expr_infix = Set([:(:), :(->), symbol("::")])
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","]"),
                          :hcat =>('[',']'), :row =>('[',']'))
@@ -322,19 +322,23 @@ function show_block(io::IO, head, arg, block, i::Int)
 end
 
 # show an indented list
-function show_list(io::IO, items, sep, indent::Int, prec::Int=0)
+function show_list(io::IO, items, sep, indent::Int, prec::Int=0, enclose_operators::Bool=false)
     n = length(items)
     if n == 0; return end
     indent += indent_width
-    show_unquoted(io, items[1], indent, prec)
-    for item in items[2:end]
-        print(io, sep)
+    first = true
+    for item in items
+        !first && print(io, sep)
+        parens = enclose_operators && isa(item,Symbol) && isoperator(item)
+        parens && print(io, '(')
         show_unquoted(io, item, indent, prec)
+        parens && print(io, ')')
+        first = false
     end
 end
 # show an indented list inside the parens (op, cl)
-function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0)
-    print(io, op); show_list(io, items, sep, indent, prec); print(io, cl)
+function show_enclosed_list(io::IO, op, items, sep, cl, indent, prec=0, encl_ops=false)
+    print(io, op); show_list(io, items, sep, indent, prec, encl_ops); print(io, cl)
 end
 
 # show a normal (non-operator) function call, e.g. f(x,y) or A[z]
@@ -413,14 +417,14 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # infix (i.e. "x<:y" or "x = y")
     elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
-        show_list(io, args, head, indent)
+        show_list(io, args, head, indent, 0, true)
 
     elseif head in expr_infix_wide && nargs == 2
         func_prec = operator_precedence(head)
         if func_prec < prec
-            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
+            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec, true)
         else
-            show_list(io, args, " $head ", indent, func_prec)
+            show_list(io, args, " $head ", indent, func_prec, true)
         end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
@@ -470,11 +474,11 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         # binary operator (i.e. "x + y")
         elseif func_prec > 0 # is a binary operator
             if length(func_args) > 1
-                sep = func_prec >= prec_power ? "$func" : " $func "
+                sep = " $func "
                 if func_prec <= prec
-                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec)
+                    show_enclosed_list(io, '(', func_args, sep, ')', indent, func_prec, true)
                 else
-                    show_list(io, func_args, sep, indent, func_prec)
+                    show_list(io, func_args, sep, indent, func_prec, true)
                 end
             else
                 # 1-argument call to normally-binary operator
