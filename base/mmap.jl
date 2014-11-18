@@ -119,7 +119,7 @@ end
 ### Windows implementation ###
 
 @windows_only type SharedMemSpec
-    name :: String
+    name :: AbstractString
     readonly :: Bool
     create :: Bool
 end
