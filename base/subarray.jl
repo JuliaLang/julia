@@ -173,7 +173,7 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
                 # convert scalar to a range
                 push!(indexexprs, :(V.indexes[$j][int(I[$k]):int(I[$k])]))
                 push!(Itypes, rangetype(IV[j], UnitRange{Int}))
-            elseif k < length(I) || j == length(IV)
+            elseif k < length(I) || k == NV || j == length(IV)
                 # simple indexing
                 push!(indexexprs, :(V.indexes[$j][I[$k]]))
                 push!(Itypes, rangetype(IV[j], I[k]))
