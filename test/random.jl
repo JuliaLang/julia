@@ -3,7 +3,7 @@
 isdefined(Main, :TestHelpers) || @eval Main include(joinpath(dirname(@__FILE__), "TestHelpers.jl"))
 using Main.TestHelpers.OAs
 
-using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT
+using Base.Random: Sampler, SamplerRangeFast, SamplerRangeInt, dSFMT, MT_CACHE_F, MT_CACHE_I
 
 @testset "Issue #6573" begin
     srand(0)
@@ -38,7 +38,7 @@ let A = zeros(2, 2)
 end
 let A = zeros(2, 2)
     @test_throws ArgumentError rand!(MersenneTwister(0), A, 5)
-    @test rand(MersenneTwister(0), Int64, 1) == [4439861565447045202]
+    @test rand(MersenneTwister(0), Int64, 1) == [5986602421100169002]
 end
 let A = zeros(Int64, 2, 2)
     rand!(MersenneTwister(0), A)
@@ -278,11 +278,10 @@ let mt = MersenneTwister(0)
         B = Vector{T}(uninitialized, 31)
         rand!(mt, A)
         rand!(mt, B)
-        @test A[end] == Any[21,0x7b,17385,0x3086,-1574090021,0xadcb4460,6797283068698303107,0x4e91c9c4d4f5f759,
-                            -3482609696641744459568613291754091152,Float16(0.03125),0.68733835f0][i]
-
-        @test B[end] == Any[49,0x65,-3725,0x719d,814246081,0xdf61843a,-3010919637398300844,0x61b367cf8810985d,
-                            -33032345278809823492812856023466859769,Float16(0.95),0.51829386f0][i]
+        @test A[end] == Any[21, 0x4e, -3158, 0x0ded, 2132370312, 0x5e76d222, 1701112237820550475, 0xde7c8e58fb113739,
+                            -17260403799139981754163727590537874047, Float16(0.90234), 0.0909704f0][i]
+        @test B[end] == Any[94, 0xb8, 3111, 0xefa4, 411531475, 0xd8089c1d, -7344871485543005232, 0xedb4b5c61c037a43,
+                            -118178167582054157562031602894265066400, Float16(0.91211), 0.2516626f0][i]
     end
 
     srand(mt, 0)
@@ -561,10 +560,18 @@ end
 
 # MersenneTwister initialization with invalid values
 @test_throws DomainError Base.dSFMT.DSFMT_state(zeros(Int32, rand(0:Base.dSFMT.JN32-1)))
+
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, 10), 0)
+                                         zeros(Float64, 10), zeros(UInt128, MT_CACHE_I>>4), 0, 0)
+
 @test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
-                                         zeros(Float64, Base.Random.MTCacheLength), -1)
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), -1, 0)
+
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>3), 0, 0)
+
+@test_throws DomainError MersenneTwister(zeros(UInt32, 1), Base.dSFMT.DSFMT_state(),
+                                         zeros(Float64, MT_CACHE_F), zeros(UInt128, MT_CACHE_I>>4), 0, -1)
 
 # seed is private to MersenneTwister
 let seed = rand(UInt32, 10)
