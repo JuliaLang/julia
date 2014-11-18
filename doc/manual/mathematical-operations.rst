@@ -266,6 +266,12 @@ Mixed-type comparisons between signed integers, unsigned integers, and
 floats can be tricky. A great deal of care has been taken to ensure
 that Julia does them correctly.
 
+For other types, `isequal` defaults to calling `==`, so if you want to
+define equality for your own types then you only need to add a `==`
+method.  If you define your own equality function, you should probably
+define a corresponding `hash` function to ensure that `isequal(x,y)`
+implies `hash(x) == hash(y)`.
+
 Chaining comparisons
 ~~~~~~~~~~~~~~~~~~~~
 
