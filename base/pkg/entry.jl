@@ -162,6 +162,12 @@ function clone(url::AbstractString, pkg::AbstractString)
     end
 end
 
+function url2name(url, default)
+    m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
+    m != nothing || return default
+    m.captures[1]
+end
+
 function clone(url_or_pkg::AbstractString)
     urlpath = joinpath("METADATA",url_or_pkg,"url")
     if isfile(urlpath)
@@ -170,9 +176,8 @@ function clone(url_or_pkg::AbstractString)
         # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
-        m != nothing || error("can't determine package name from URL: $url")
-        pkg = m.captures[1]
+        pkg = url2name(url, "")
+        pkg != "" || error("can't determine package name from URL: $url")
     end
     clone(url,pkg)
 end
