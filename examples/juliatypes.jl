@@ -410,8 +410,10 @@ end
 
 # level 3: UnionAll
 function test_3()
-    @test issub_strict(xlate(Array{Int,1}), @UnionAll T inst(ArrayT, T, 1))
+    @test issub_strict(Ty(Array{Int,1}), @UnionAll T inst(ArrayT, T, 1))
     @test issub_strict((@UnionAll T inst(ArrayT,T,T)), (@UnionAll T @UnionAll S inst(ArrayT,T,S)))
+    @test issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll T @UnionAll S inst(ArrayT,T,S)))
+    @test issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll S inst(ArrayT,Ty(Int),S)))
 
     @test issub((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
     @test issub((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
@@ -419,8 +421,8 @@ function test_3()
     @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
     @test isequal_type((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
 
-    @test !issub((@UnionAll T<:Integer @UnionAll S<:Number (T,S)),
-                 (@UnionAll T<:Integer @UnionAll S<:Number (S,T)))
+    @test !issub((@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (T,S)),
+                 (@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (S,T)))
 
     AUA = inst(ArrayT, (@UnionAll T inst(ArrayT,T,1)), 1)
     UAA = (@UnionAll T inst(ArrayT, inst(ArrayT,T,1), 1))
@@ -429,8 +431,24 @@ function test_3()
     @test !issub(UAA, AUA)
     @test !isequal_type(AUA, UAA)
 
-    @test issub_strict((@UnionAll T Int), (@UnionAll T<:Integer Integer))
+    @test issub_strict((@UnionAll T Int), (@UnionAll T<:Ty(Integer) Integer))
 
     @test isequal_type((@UnionAll T @UnionAll S tupletype(T, tupletype(S))),
                        (@UnionAll T tupletype(T, @UnionAll S tupletype(S))))
+
+    @test !issub((@UnionAll T inst(ArrayT,T,T)), inst(ArrayT,Ty(Int),Ty(Int8)))
+    @test !issub((@UnionAll T inst(ArrayT,T,T)), inst(ArrayT,Ty(Int),Ty(Int)))
+
+    @test isequal_type((@UnionAll T tupletype(T)), tupletype(AnyT))
+    @test isequal_type((@UnionAll T<:Ty(Real) tupletype(T)), tupletype(Ty(Real)))
+
+    @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+    @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+end
+
+# tests that don't pass yet
+function test_failing()
+    @test !issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll T inst(ArrayT,T,T)))
+
+    @test !issub(tupletype(inst(ArrayT,Ty(Int),1), Ty(Integer)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 end
