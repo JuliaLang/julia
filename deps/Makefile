@@ -372,11 +372,6 @@ endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
-LIBCXX_OPTIONS = OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) $(CFLAGS)" CXX="$(CXX)"
-ifeq ($(USEICC),1)
-LIBCXX_OPTIONS += EXTRA_LIBS="-Bstatic -lirc"
-endif
-
 llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR) | llvm-svn/configure
 	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
