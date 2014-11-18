@@ -447,6 +447,7 @@ end
 
 ##### median & quantiles #####
 
+# Specialized functions for real types allow for improved performance
 middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = float64(x)
 middle(x::FloatingPoint) = x
 middle(x::Float16) = float32(x)
