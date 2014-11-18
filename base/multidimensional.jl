@@ -24,7 +24,7 @@ end
 
 let implemented = IntSet()
 global gen_cartesian
-function gen_cartesian(N::Int, with_shared=Base.is_unix(OS_NAME))
+function gen_cartesian(N::Int)
     # Create the types
     indextype = symbol("CartesianIndex_$N")
     itertype = symbol("IndexIterator_$N")
@@ -43,23 +43,19 @@ function gen_cartesian(N::Int, with_shared=Base.is_unix(OS_NAME))
             next(R::StepRange, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
             next{T}(R::UnitRange{T}, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
         end
-        exshared = !with_shared ? nothing : quote
-            getindex{T}(S::SharedArray{T,$N}, I::$indextype) = S.s[I]
-            setindex!{T}(S::SharedArray{T,$N}, v, I::$indextype) = S.s[I] = v
-        end
         totalex = quote
-            # type definition
+            # type definition of state
             $extype
             # extra constructor from tuple
             $indextype(index::NTuple{$N,Int}) = $indextype($(exindices...))
 
+            # type definition of iterator
             immutable $itertype <: IndexIterator{$N}
                 dims::$indextype
             end
             $itertype(dims::NTuple{$N,Int})=$itertype($indextype(dims))
 
             # getindex and setindex!
-            $exshared
             getindex{T}(A::AbstractArray{T,$N}, index::$indextype) = @nref $N A d->getfield(index,d)
             setindex!{T}(A::AbstractArray{T,$N}, v, index::$indextype) = (@nref $N A d->getfield(index,d)) = v
 
