@@ -657,41 +657,55 @@ Iterable Collections
 
 .. function:: reduce(op, v0, itr)
 
-   Reduce the given collection ``ìtr`` with the given binary operator. Reductions
-   for certain commonly-used operators have special implementations which should be
-   used instead: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
-   ``prod(itr)``, ``any(itr)``, ``all(itr)``.
+   Reduce the given collection ``ìtr`` with the given binary operator
+   ``op``. ``v0`` must be a neutral element for ``op`` that will be
+   returned for empty collections. It is unspecified whether ``v0`` is
+   used for non-empty collections.
 
-   The associativity of the reduction is implementation-dependent. This means
-   that you can't use non-associative operations like ``-`` because it is
-   undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3``
-   or ``1-(2-3)``. Use ``foldl`` or ``foldr`` instead for guaranteed left or
-   right associativity.
+   Reductions for certain commonly-used operators have special
+   implementations which should be used instead: ``maximum(itr)``,
+   ``minimum(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``,
+   ``all(itr)``.
 
-   Some operations accumulate error, and parallelism will also be easier if the
-   reduction can be executed in groups. Future versions of Julia might change
-   the algorithm. Note that the elements are not reordered if you use an ordered
-   collection.
+   The associativity of the reduction is implementation-dependent.
+   This means that you can't use non-associative operations like ``-``
+   because it is undefined whether ``reduce(-,[1,2,3])`` should be
+   evaluated as ``(1-2)-3`` or ``1-(2-3)``. Use ``foldl`` or ``foldr``
+   instead for guaranteed left or right associativity.
+
+   Some operations accumulate error, and parallelism will also be
+   easier if the reduction can be executed in groups. Future versions
+   of Julia might change the algorithm. Note that the elements are not
+   reordered if you use an ordered collection.
 
 .. function:: reduce(op, itr)
 
-   Like ``reduce`` but using the first element as v0.
+   Like ``reduce(op, v0, itr)``. This cannot be used with empty
+   collections, except for some special cases (e.g. when ``op`` is one
+   of ``+``, ``*``, ``max``, ``min``, ``&``, ``|``) when Julia can
+   determine the neutral element of ``op``.
 
 .. function:: foldl(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed left associativity.
+   Like ``reduce``, but with guaranteed left associativity. ``v0``
+   will be used exactly once.
 
 .. function:: foldl(op, itr)
 
-   Like ``foldl``, but using the first element as v0.
+   Like ``foldl(op, v0, itr)``, but using the first element of ``itr``
+   as ``v0``. In general, this cannot be used with empty collections
+   (see ``reduce(op, itr)``).
 
 .. function:: foldr(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed right associativity.
+   Like ``reduce``, but with guaranteed right associativity. ``v0``
+   will be used exactly once.
 
 .. function:: foldr(op, itr)
 
-   Like ``foldr``, but using the last element as v0.
+   Like ``foldr(op, v0, itr)``, but using the last element of ``itr``
+   as ``v0``. In general, this cannot be used with empty collections
+   (see ``reduce(op, itr)``).
 
 .. function:: maximum(itr)
 
@@ -908,18 +922,54 @@ Iterable Collections
    new collection. ``destination`` must be at least as large as the first
    collection.
 
-.. function:: mapreduce(f, op, itr)
+.. function:: mapreduce(f, op, v0, itr)
 
-   Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
+   Apply function ``f`` to each element in ``itr``, and then reduce
+   the result using the binary function ``op``. ``v0`` must be a
+   neutral element for ``op`` that will be returned for empty
+   collections. It is unspecified whether ``v0`` is used for non-empty
+   collections.
+
+   ``mapreduce`` is functionally equivalent to calling ``reduce(op,
+   v0, map(f, itr))``, but will in general execute faster since no
+   intermediate collection needs to be created. See documentation for
+   ``reduce`` and ``map``.
 
    .. doctest::
 
       julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
       14
 
-   The associativity of the reduction is implementation-dependent; if you
-   need a particular associativity, e.g. left-to-right, you should write
-   your own loop. See documentation for ``reduce``.
+   The associativity of the reduction is implementation-dependent. Use
+   ``mapfoldl`` or ``mapfoldr`` instead for guaranteed left or right
+   associativity.
+
+.. function:: mapreduce(f, op, itr)
+
+   Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
+   with empty collections (see ``reduce(op, itr)``).
+
+.. function:: mapfoldl(f, op, v0, itr)
+
+   Like ``mapreduce``, but with guaranteed left associativity. ``v0``
+   will be used exactly once.
+
+.. function:: mapfoldl(f, op, itr)
+
+   Like ``mapfoldl(f, op, v0, itr)``, but using the first element of
+   ``itr`` as ``v0``. In general, this cannot be used with empty
+   collections (see ``reduce(op, itr)``).
+
+.. function:: mapfoldr(f, op, v0, itr)
+
+   Like ``mapreduce``, but with guaranteed right associativity. ``v0``
+   will be used exactly once.
+
+.. function:: mapfoldr(f, op, itr)
+
+   Like ``mapfoldr(f, op, v0, itr)``, but using the first element of
+   ``itr`` as ``v0``. In general, this cannot be used with empty
+   collections (see ``reduce(op, itr)``).
 
 .. function:: first(coll)
 

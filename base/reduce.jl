@@ -68,6 +68,8 @@ r_promote(::MulFun, x) = x
 ## foldl && mapfoldl
 
 function mapfoldl_impl(f, op, v0, itr, i)
+    # Unroll the while loop once; if v0 is known, the call to op may
+    # be evaluated at compile time
     if done(itr, i)
         return v0
     else
@@ -107,6 +109,8 @@ foldl(op, itr) = mapfoldl(IdFun(), op, itr)
 ## foldr & mapfoldr
 
 function mapfoldr_impl(f, op, v0, itr, i::Integer)
+    # Unroll the while loop once; if v0 is known, the call to op may
+    # be evaluated at compile time
     if i == 0
         return v0
     else
