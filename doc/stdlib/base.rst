@@ -4028,9 +4028,13 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    Populate the array A with random values.
 
-.. function:: rand(r, [dims...])
+.. function:: rand(coll, [dims...])
 
-   Pick a random element or array of random elements from range ``r`` (for example, ``1:n`` or ``0:2:10``).
+   Pick a random element or array of random elements from the indexable collection ``coll`` (for example, ``1:n`` or ``['x','y','z']``).
+
+.. function:: rand!(r, A)
+
+   Populate the array A with random values drawn uniformly from the range ``r``.
 
 .. function:: randbool([rng], [dims...])
 

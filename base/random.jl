@@ -369,7 +369,10 @@ function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
 end
 
 rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
-rand{T}(r::Range{T}) = r[rand(1:(length(r)))]
+
+# Randomly draw a sample from an AbstractArray r
+# (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
+rand(r::AbstractArray) = @inbounds return r[rand(1:length(r))]
 
 function rand!(g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
@@ -380,7 +383,10 @@ end
 
 rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
 
-function rand!(r::Range, A::AbstractArray)
+rand!(r::Range, A::AbstractArray) = _rand!(r, A)
+
+# TODO: this more general version is "disabled" until #8246 is resolved
+function _rand!(r::AbstractArray, A::AbstractArray)
     g = RandIntGen(1:(length(r)))
     for i = 1 : length(A)
         @inbounds A[i] = r[rand(g)]
@@ -388,8 +394,8 @@ function rand!(r::Range, A::AbstractArray)
     return A
 end
 
-rand{T}(r::Range{T}, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::Range, dims::Int...) = rand(r, dims)
+rand{T}(r::AbstractArray{T}, dims::Dims) = _rand!(r, Array(T, dims))
+rand(r::AbstractArray, dims::Int...) = rand(r, dims)
 
 ## random BitArrays (AbstractRNG)
 
