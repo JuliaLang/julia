@@ -587,7 +587,8 @@ write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
 print(io::IOBuffer, s::SubString) = write(io, s)
 
-sizeof{T<:ByteString}(s::SubString{T}) = s.endof==0 ? 0 : next(s,s.endof)[2]-1
+sizeof(s::SubString{ASCIIString}) = s.endof
+sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : next(s,s.endof)[2]-1
 
 # TODO: length(s::SubString) = ??
 # default implementation will work but it's slow

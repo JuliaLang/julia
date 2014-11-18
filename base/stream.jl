@@ -771,12 +771,13 @@ function write(s::AsyncStream, b::UInt8)
     return 1
 end
 function write(s::AsyncStream, c::Char)
-    @uv_write utf8sizeof(c) ccall(:jl_pututf8_copy, Int32, (Ptr{Void},UInt32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
+    nb = utf8sizeof(c)
+    @uv_write nb ccall(:jl_pututf8_copy, Int32, (Ptr{Void}, UInt32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
     ct = current_task()
     uv_req_set_data(uvw,ct)
     ct.state = :waiting
     stream_wait(ct)
-    return utf8sizeof(c)
+    return nb
 end
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
