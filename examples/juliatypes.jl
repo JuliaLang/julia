@@ -54,11 +54,7 @@ type UnionAllT <: Ty
 end
 
 function show(io::IO, x::UnionAllT)
-    if x.T === x.var && x.var.ub !== AnyT
-        print(io, "¬", x.var.ub)
-        return
-    end
-    print(io, "(∀ ")
+    print(io, "(⋃ ")
     show_var_bounds(io, x.var)
     print(io, ". ")
     show(io, x.T)
@@ -96,6 +92,17 @@ tupletype(xs...) = inst(TupleName, xs...)
 
 # subtype
 
+type Bounds
+    # record current lower and upper bounds of a Var
+    # depth: invariant position nesting depth of a Var's UnionAll
+    # right: whether this Var is on the right-hand side of A <: B
+    lb
+    ub
+    depth::Int
+    right::Bool
+end
+
+# maps Var to Bounds, and `:depth` to current depth
 const Env = Dict{Any,Any}
 
 isequal_type(x::Ty, y::Ty) = issub(x, y) && issub(y, x)
@@ -137,21 +144,11 @@ function issub(x::Ty, t::UnionT, env)
     return false
 end
 
-function issub(a, b, env, invariant)
-    if invariant && !issub(b, a, env)
-        return false
-    end
-    return issub(a, b, env)
-end
-
-function issub(a::TagT, b::TagT, env, invariant=false)
+function issub(a::TagT, b::TagT, env)
     a === b && return true
-    if !invariant
-        b === AnyT && return true
-        a === AnyT && return false
-    end
+    b === AnyT && return true
+    a === AnyT && return false
     if a.name !== b.name
-        invariant && return false
         return issub(super(a), b, env)
     end
     if a.name === TupleName
@@ -164,9 +161,9 @@ function issub(a::TagT, b::TagT, env, invariant=false)
         end
         ai = bi = 1
         while true
-            ai > la && return bi > lb || (vb && !invariant)
+            ai > la && return bi > lb || vb
             bi > lb && return false
-            !issub(a.params[ai], b.params[bi], env, invariant) && return false
+            !issub(a.params[ai], b.params[bi], env) && return false
             ai==la && bi==lb && va && vb && return true
             if ai < la || !va
                 ai += 1
@@ -178,9 +175,11 @@ function issub(a::TagT, b::TagT, env, invariant=false)
         @assert false
     else
         env = copy(env)
-        env[:depth] = env[:depth]+1
+        env[:depth] = env[:depth]+1  # crossing invariant constructor, increment depth
         for i = 1:length(a.params)
-            if !issub(a.params[i], b.params[i], env, true)
+            ai, bi = a.params[i], b.params[i]
+            # use issub in both directions to test equality
+            if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
                 return false
             end
         end
@@ -188,57 +187,94 @@ function issub(a::TagT, b::TagT, env, invariant=false)
     return true
 end
 
-#rename(x) = x
-#function rename(x::UnionAllT)
-#    v = Var(x.var.name, rename(x.var.lb), rename(x.var.ub))
-#    UnionAllT(v, rename(inst(x, v)))
-#end
-
-function issub(a::Var, b::Ty, env, invariant=false)
-    invariant && return false
-    if b === AnyT || a === b
-        return true
-    end
-    return issub(a.ub, b, env)
-end
-
-function issub(a::Var, b::Var, env, invariant=false)
-    if a === b
-        return true
-    end
-    da = env[a]
-    db = env[b]
-    if invariant && da != -db #haskey(env, b)
+function issub(a::Var, b::Ty, env)
+    aa = env[a]
+    # Vars are fully checked by the "forward" direction of A<:B in
+    # invariant position. So just return true when checking the "flipped"
+    # direction B<:A.
+    aa.right && return true
+    d = env[:depth]
+    if d != aa.depth  # && d > 1  ???
+        # Var <: non-Var can only be true when there are no invariant
+        # constructors between the UnionAll and this occurrence of Var.
         return false
     end
-    return issub(a.ub, b.ub, env)
+    return issub(aa.ub, b, env)
 end
 
-issub(a::Ty, b::Var, env, invariant=false) = issub(a, b.ub, env)
+function issub(a::Var, b::Var, env)
+    a === b && return true
+    aa = env[a]
+    aa.right && return true
+    bb = env[b]
+    d = env[:depth]
+    if aa.depth != bb.depth  # && d > 1  ???
+        # Vars must occur at same depth
+        return false
+    end
+    if d > bb.depth
+        # if there are invariant constructors between a UnionAll and
+        # this occurrence of Var, then we have an equality constraint on Var.
+        if isa(bb.ub,Var) && bb.ub !== a
+            # right-side Var cannot equal more than one left-side Var, e.g.
+            # (L,L) <: (T,S) but not (T,S) <: (R,R)
+            return false
+        end
+        if !(issub(bb.lb, aa.ub, env) && issub(aa.ub, bb.ub, env))
+            # make sure equality constraint is within the current bounds of Var
+            return false
+        end
+        bb.lb = bb.ub = a
+    else
+        !issub(aa.ub, bb.ub, env) && return false
+        # track greatest lower bound from covariant position. e.g.
+        # (Int, Real, Integer, Array{?}) <: (T, T, T, Array{T})
+        # is only true if ? >: Real.
+        if issub(bb.lb, aa.ub, env)
+            bb.lb = aa.ub
+        end
+    end
+    return true
+end
 
-function issub(a::UnionAllT, b::UnionAllT, env)
-    env = copy(env)
-    var = Var(a.var.name, a.var.lb, a.var.ub)
-    env[var] = env[:depth]
-    return issub(inst(a,var), inst(b,var), env)
+function issub(a::Ty, b::Var, env)
+    bb = env[b]
+    !bb.right && return true
+    if env[:depth] > bb.depth
+        if isa(bb.ub,Var)
+            return false
+        end
+        if !(issub(bb.lb, a, env) && issub(a, bb.ub, env))
+            return false
+        end
+        bb.lb = bb.ub = a
+    else
+        !issub(a, bb.ub, env) && return false
+        if issub(bb.lb, a, env)
+            bb.lb = a
+        end
+    end
+    return true
 end
 
 function issub_unionall(a::Ty, b::UnionAllT, env)
-    var = Var(b.var.name, b.var.lb, b.var.ub)
-    env = copy(env)
-    env[var] = -env[:depth]
-    return issub(a, inst(b,var), env)
+    env[b.var] = Bounds(b.var.lb, b.var.ub, env[:depth], true)
+    ans = issub(a, b.T, env)
+    delete!(env, b.var)
+    return ans
 end
+
+function unionall_issub(a::UnionAllT, b::Ty, env)
+    env[a.var] = Bounds(a.var.lb, a.var.ub, env[:depth], false)
+    ans = issub(a.T, b, env)
+    delete!(env, a.var)
+    return ans
+end
+
+issub(a::UnionAllT, b::UnionAllT, env) = a===b || issub_unionall(a, b, env)
 
 issub(a::UnionT, b::UnionAllT, env) = issub_unionall(a, b, env)
 issub(a::Ty, b::UnionAllT, env) = issub_unionall(a, b, env)
-
-function unionall_issub(a::UnionAllT, b::Ty, env)
-    var = Var(a.var.name, a.var.lb, a.var.ub)
-    env = copy(env)
-    env[var] = env[:depth]
-    return issub(inst(a,var), b, env)
-end
 
 issub(a::UnionAllT, b::UnionT, env) = unionall_issub(a, b, env)
 issub(a::UnionAllT, b::Ty, env) = unionall_issub(a, b, env)
@@ -415,6 +451,8 @@ function test_3()
     @test issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll T @UnionAll S inst(ArrayT,T,S)))
     @test issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll S inst(ArrayT,Ty(Int),S)))
 
+    @test !issub((@UnionAll T<:Ty(Real) T), (@UnionAll T<:Ty(Integer) T))
+
     @test issub((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
     @test issub((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
 
@@ -442,13 +480,36 @@ function test_3()
     @test isequal_type((@UnionAll T tupletype(T)), tupletype(AnyT))
     @test isequal_type((@UnionAll T<:Ty(Real) tupletype(T)), tupletype(Ty(Real)))
 
-    @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
-    @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+    @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
+                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+
+    @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)),
+                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+
+    @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
+    @test isequal_type(Ty(Array{(Any,),1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
+
+    @test isequal_type(Ty(Array{(Integer,Integer),1}),
+                       inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
+    @test !issub(Ty(Array{(Int,Integer),1}),
+                 inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
+
+
+    @test !issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll T inst(ArrayT,T,T)))
+
+    @test !issub(tupletype(inst(ArrayT,Ty(Int),1), Ty(Integer)),
+                 (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+
+    @test !issub(tupletype(Ty(Integer), inst(ArrayT,Ty(Int),1)),
+                 (@UnionAll T<:Ty(Integer) tupletype(T, inst(ArrayT,T,1))))
+
+    @test !issub(Ty(Array{Array{Int,1},Integer}),
+                 (@UnionAll T inst(ArrayT,inst(ArrayT,T,1),T)))
+
+    @test issub(Ty(Array{Array{Int,1},Int}),
+                (@UnionAll T inst(ArrayT,inst(ArrayT,T,1),T)))
 end
 
 # tests that don't pass yet
 function test_failing()
-    @test !issub(inst(ArrayT,Ty(Int),Ty(Int8)), (@UnionAll T inst(ArrayT,T,T)))
-
-    @test !issub(tupletype(inst(ArrayT,Ty(Int),1), Ty(Integer)), (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
 end
