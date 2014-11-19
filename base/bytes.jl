@@ -13,15 +13,22 @@ function length(b::ByteVec)
 end
 
 getindex(b::ByteVec, i::Real) =
-    box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
+    box(UInt8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
 getu32(b::ByteVec, i::Int) =
-    box(Uint32, bytevec_ref32(unbox(typeof(b.x), b.x), unbox(Int, i)))
-==(a::ByteVec, b::ByteVec) =
-    box(Bool, bytevec_eq(unbox(typeof(a.x), a.x), unbox(typeof(b.x), b.x)))
+    box(UInt32, bytevec_ref32(unbox(typeof(b.x), b.x), unbox(Int, i)))
+
+function ==(a::ByteVec, b::ByteVec)
+    a_hi = (a.x >> 8*sizeof(Int)) % Int
+    b_hi = (b.x >> 8*sizeof(Int)) % Int
+    (a_hi != b_hi) | (a_hi >= 0) | (b_hi >= 0) && return a.x == b.x
+    pa = reinterpret(Ptr{Uint8}, a.x % UInt)
+    pb = reinterpret(Ptr{Uint8}, b.x % UInt)
+    ccall(:memcmp, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t), pa, pb, -a_hi % Uint) == 0
+end
 
 function cmp(a::ByteVec, b::ByteVec)
-    a_here, b_here = a.x >= 0, b.x >= 0
     a_x, b_x = a.x, b.x
+    a_here, b_here = a_x >= 0, b_x >= 0
     if !(a_here & b_here)
         if b_here
             a_x = unsafe_load(reinterpret(Ptr{typeof(a_x)}, a_x % UInt))
