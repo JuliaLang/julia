@@ -156,7 +156,7 @@ All Objects
 
    Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
    and treats ``-0.0`` as unequal to ``0.0``.
-   For values that are not floating-point, ``isequal`` calls ``==`` (so that if you define a ``==`` method for a new type you automatically get ``isequal``).
+   The default implementation of ``isequal`` calls ``==``, so if you have a type that doesn't have these floating-point subtleties then you probably only need to define ``==``.
 
    ``isequal`` is the comparison function used by hash tables (``Dict``).
    ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
@@ -4071,19 +4071,21 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
 
-.. function:: rand([rng], [t::Type], [dims...])
+.. function:: rand([rng], [S], [dims...])
 
-   Generate a random value or an array of random values of the given type, ``t``, which defaults to ``Float64``.
+   Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be
+
+   * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
+
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers, and to [0,1) for floating point numbers;
+
+   ``S`` defaults to ``Float64``.
 
 .. function:: rand!([rng], A)
 
    Populate the array A with random values.
 
-.. function:: rand(coll, [dims...])
-
-   Pick a random element or array of random elements from the indexable collection ``coll`` (for example, ``1:n`` or ``['x','y','z']``).
-
-.. function:: rand!(r, A)
+.. function:: rand!([rng], r, A)
 
    Populate the array A with random values drawn uniformly from the range ``r``.
 
