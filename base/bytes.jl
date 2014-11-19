@@ -5,6 +5,7 @@ ByteVec(a::Vector{UInt8}) = ccall(:jl_bytevec, ByteVec, (Ptr{UInt8}, Csize_t), a
 ByteVec(s::AbstractString) = ByteVec(bytestring(s).data)
 
 size(b::ByteVec) = (length(b),)
+
 length(b::ByteVec) = box(Int, bytevec_len(unbox(typeof(b.x), b.x)))
 getindex(b::ByteVec, i::Real) =
     box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
@@ -12,8 +13,27 @@ getu32(b::ByteVec, i::Int) =
     box(Uint32, bytevec_ref32(unbox(typeof(b.x), b.x), unbox(Int, i)))
 ==(a::ByteVec, b::ByteVec) =
     box(Bool, bytevec_eq(unbox(typeof(a.x), a.x), unbox(typeof(b.x), b.x)))
-# cmp(x::ByteVec, y::ByteVec) = bytevec_cmp(x, y)
-# isless(x::ByteVec, y::ByteVec) = cmp(x, y) < 0
+
+function cmp(a::ByteVec, b::ByteVec)
+    a_here, b_here = a.x >= 0, b.x >= 0
+    a_x, b_x = a.x, b.x
+    if !(a_here & b_here)
+        if b_here
+            a_x = unsafe_load(reinterpret(Ptr{typeof(a_x)}, a_x % UInt))
+        elseif a_here
+            b_x = unsafe_load(reinterpret(Ptr{typeof(b_x)}, b_x % UInt))
+        else
+            pa = reinterpret(Ptr{Uint8}, a_x % UInt)
+            pb = reinterpret(Ptr{Uint8}, b_x % UInt)
+            la = -(a_x >>> 8*sizeof(Int)) % UInt
+            lb = -(b_x >>> 8*sizeof(Int)) % UInt
+            c = Int(ccall(:memcmp, Cint, (Ptr{Uint8}, Ptr{Uint8}, Csize_t), pa, pb, min(la,lb)))
+            return ifelse(c == 0, cmp(la,lb), sign(c))
+        end
+    end
+    cmp(bswap(a_x), bswap(b_x))
+end
+isless(x::ByteVec, y::ByteVec) = cmp(x, y) < 0
 
 start(b::ByteVec) = 1
 next(b::ByteVec, i::Int) = (b[i], i+1)
