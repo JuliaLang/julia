@@ -37,7 +37,7 @@ namespace JL_I {
         abs_float, copysign_float, flipsign_int, select_value,
         sqrt_llvm, powi_llvm,
         // byte vectors
-        bytevec_len, bytevec_ref, bytevec_ref32,
+        bytevec_ref, bytevec_ref32,
         bytevec_eq,
         // pointer access
         pointerref, pointerset, pointertoref,
@@ -1010,22 +1010,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     Value *den;
     Value *typemin;
     switch (f) {
-    HANDLE(bytevec_len,1) {
-        Value *b = JL_INT(x);
-        Value *hi_byte = builder.CreateExtractElement(
-            builder.CreateBitCast(b, T_vec_2word_bytes),
-            ConstantInt::get(T_int32, 2*sizeof(void*)-1)
-        );
-        Value *hi_word = builder.CreateExtractElement(
-            builder.CreateBitCast(b, T_vec_2word_ints),
-            ConstantInt::get(T_int32, 1)
-        );
-        return builder.CreateSelect(
-            builder.CreateICmpSLT(hi_byte, ConstantInt::get(T_uint8, 0)),
-            builder.CreateSub(ConstantInt::get(T_size, 0), hi_word),
-            builder.CreateZExt(hi_byte, T_size)
-        );
-    }
     HANDLE(bytevec_ref,2) {
         Value *b = JL_INT(x);
         Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
@@ -1730,7 +1714,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
     ADD_I(powi_llvm);
-    ADD_I(bytevec_len); ADD_I(bytevec_ref); ADD_I(bytevec_ref32);
+    ADD_I(bytevec_ref); ADD_I(bytevec_ref32);
     ADD_I(bytevec_eq);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);

@@ -6,7 +6,12 @@ ByteVec(s::AbstractString) = ByteVec(bytestring(s).data)
 
 size(b::ByteVec) = (length(b),)
 
-length(b::ByteVec) = box(Int, bytevec_len(unbox(typeof(b.x), b.x)))
+function length(b::ByteVec)
+    here = ((b.x >>> 8*(sizeof(b.x)-1)) % Int) & 255
+    there = -(b.x >> 8*sizeof(Int)) % Int
+    ifelse(b.x < 0, there, here)
+end
+
 getindex(b::ByteVec, i::Real) =
     box(Uint8, bytevec_ref(unbox(typeof(b.x), b.x), unbox(Int, Int(i))))
 getu32(b::ByteVec, i::Int) =
