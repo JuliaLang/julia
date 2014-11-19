@@ -29,8 +29,6 @@ map!(x->1, d)
 @test reduce(+, d) == 100
 
 
-@unix_only begin
-
 dims = (20,20,20)
 
 @linux_only begin
@@ -122,9 +120,6 @@ map!(x->1, d)
 # Boundary cases where length(S) <= length(pids)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(id_other, D->D[1], Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
-
-
-end # @unix_only(SharedArray tests)
 
 
 # Test @parallel load balancing - all processors should get either M or M+1
