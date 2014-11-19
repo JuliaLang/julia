@@ -156,7 +156,7 @@ All Objects
 
    Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
    and treats ``-0.0`` as unequal to ``0.0``.
-   For values that are not floating-point, ``isequal`` calls ``==`` (so that if you define a ``==`` method for a new type you automatically get ``isequal``).
+   The default implementation of ``isequal`` calls ``==``, so if you have a type that doesn't have these floating-point subtleties then you probably only need to define ``==``.
 
    ``isequal`` is the comparison function used by hash tables (``Dict``).
    ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
