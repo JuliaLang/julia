@@ -131,15 +131,29 @@ static inline void *malloc_a16(size_t sz)
     return ptr;
 }
 #define free_a16(p) free(p)
-
 #endif
+
+#ifndef MEMNOFREE
+#    define malloc_ua(sz) malloc(sz)
+#    define realloc_ua(p,oldsz,sz) realloc(p,sz)
+#    define free_ua(p) free(p)
+#else
+#    define malloc_ua(sz) malloc(sz)
+#    define realloc_ua(p,oldsz,sz) \
+         memcpy(malloc_ua(sz), p, (oldsz)<(sz)?(oldsz):(sz))
+#    define free_ua(p) (void)(p)
+#    undef free_a16
+#    define free_a16(p) (void)(p)
+#endif
+
+
 
 DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 {
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += sz;
-    void *b = malloc(sz);
+    void *b = malloc_ua(sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     return b;
@@ -147,7 +161,7 @@ DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
 
 DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
 {
-    free(p);
+    free_ua(p);
     freed_bytes += sz;
 }
 
@@ -168,7 +182,7 @@ DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t 
         jl_gc_collect();
     if (sz > old)
         allocd_bytes += (sz-old);
-    void *b = realloc(p, sz);
+    void *b = realloc_ua(p, old, sz);
     if (b == NULL)
         jl_throw(jl_memory_exception);
     return b;
@@ -193,20 +207,20 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
-    b = realloc(d, sz);
+    b = realloc_ua(d, oldsz, sz);
 #elif defined(_OS_WINDOWS_)
     if (isaligned)
         b = _aligned_realloc(d, sz, 16);
     else
-        b = realloc(d, sz);
+        b = realloc_ua(d, oldsz, sz);
 #elif defined(__APPLE__)
-    b = realloc(d, sz);
+    b = realloc_ua(d, oldsz, sz);
 #else
     // TODO better aligned realloc here
     b = malloc_a16(sz);
     if (b != NULL) {
         memcpy(b, d, oldsz);
-        if (isaligned) free_a16(d); else free(d);
+        if (isaligned) free_a16(d); else free_ua(d);
     }
 #endif
     if (b == NULL)
@@ -409,7 +423,7 @@ void jl_gc_track_malloced_array(jl_array_t *a)
 {
     mallocarray_t *ma;
     if (mafreelist == NULL) {
-        ma = (mallocarray_t*)malloc(sizeof(mallocarray_t));
+        ma = (mallocarray_t*)malloc_ua(sizeof(mallocarray_t));
     }
     else {
         ma = mafreelist;
@@ -435,7 +449,7 @@ void jl_gc_free_array(jl_array_t *a)
         if (a->isaligned)
             free_a16(d);
         else
-            free(d);
+            free_ua(d);
         freed_bytes += array_nbytes(a);
     }
 }

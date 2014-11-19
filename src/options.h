@@ -33,6 +33,11 @@
 // catch invalid accesses.
 //#define MEMDEBUG
 
+// with MEMNOFREE, freed objects are not actually freed so that their
+// memory region is not reused. this helps track down memory bugs
+// since these objects then stay inaccessible.
+//#define MEMNOFREE
+
 // profiling options
 
 // GC_FINAL_STATS prints total GC stats at exit
