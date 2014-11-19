@@ -136,7 +136,7 @@ endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
-# This is useful where one wants to use the vendor BLAS, but 
+# This is useful where one wants to use the vendor BLAS, but
 # build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(USE_SYSTEM_LAPACK), 0)
@@ -456,7 +456,7 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
 		git clone $(LLVM_GIT_URL_COMPILER_RT) llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
 		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
-		git pull --ff-only)		
+		git pull --ff-only)
 ifneq ($(LLVM_CLANG_VER),)
 	(cd llvm-$(LLVM_VER) && \
 		git checkout $(LLVM_GIT_VER))
@@ -490,7 +490,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configu
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS) 
+	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
@@ -503,7 +503,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_py
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) $(LLVM_MFLAGS) check 
+	$(MAKE) $(LLVM_MFLAGS) check
 endif
 	echo 1 > $@
 
@@ -542,7 +542,7 @@ install-llvm: $(LLVM_OBJ_TARGET)
 UV_SRC_TARGET = libuv/.libs/libuv.a
 UV_OBJ_TARGET = $(build_libdir)/libuv.a
 
-UV_CFLAGS = 
+UV_CFLAGS =
 ifeq ($(USEMSVC), 1)
 UV_CFLAGS += -DBUILDING_UV_SHARED
 endif
@@ -608,10 +608,9 @@ PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre.$(SHLIB_EXT)
 
 pcre-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
-pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2 pcre-gcc49-compile.patch
+pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
-	cd pcre-$(PCRE_VER) && patch -p1 < ../pcre-gcc49-compile.patch
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -722,7 +721,7 @@ get-openspecfun: openspecfun/Makefile
 configure-openspecfun: get-openspecfun
 compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
-install-openspecfun: $(OPENSPECFUN_OBJ_TARGET) 
+install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 
 ## DSFMT ##
 
@@ -741,7 +740,7 @@ DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 dsfmt-$(DSFMT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
 	touch -c $@
 dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -808,7 +807,7 @@ get-Rmath: Rmath/Make.inc
 configure-Rmath: get-Rmath
 compile-Rmath: $(RMATH_OBJ_SOURCE)
 check-Rmath: compile-Rmath
-install-Rmath: $(RMATH_OBJ_TARGET) 
+install-Rmath: $(RMATH_OBJ_TARGET)
 
 
 ## objconv ##
@@ -911,7 +910,7 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
+	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 ifneq ($(OPENBLAS_VER),develop)
 	$(JLCHECKSUM) $<
@@ -955,7 +954,7 @@ ATLAS_OBJ_TARGET = $(build_shlibdir)/libsatlas.$(SHLIB_EXT)
 ATLAS_FLAGS = --shared --prefix=$(build_prefix) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
 ifeq ($(OS), WINNT)
-ATLAS_FLAGS += -b 32 
+ATLAS_FLAGS += -b 32
 endif
 
 #force backwards compatibility (pick any 1)
@@ -1478,7 +1477,7 @@ LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 LIBUNWIND_CPPFLAGS = $(CPPFLAGS)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
+	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) xfz $<
@@ -1523,7 +1522,7 @@ OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USE
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
 
-libosxunwind-$(OSXUNWIND_VER).tar.gz: 
+libosxunwind-$(OSXUNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
 
 libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
@@ -1549,7 +1548,7 @@ get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
 configure-osxunwind: get-osxunwind
 compile-osxunwind: $(OSXUNWIND_OBJ_SOURCE)
 check-osxunwind: compile-osxunwind
-install-osxunwind: $(OSXUNWIND_OBJ_TARGET) 
+install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
 
 ## GMP ##
 
