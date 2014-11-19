@@ -44,8 +44,8 @@ function gen_cartesian(N::Int)
 
         # Some necessary ambiguity resolution
         exrange = N != 1 ? nothing : quote
-            next(R::StepRange, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
-            next{T}(R::UnitRange{T}, I::CartesianIndex_1) = R[I.I_1], CartesianIndex_1(I.I_1+1)
+            next(R::StepRange, I::CartesianIndex{1}) = R[I.I_1], CartesianIndex_1(I.I_1+1)
+            next{T}(R::UnitRange{T}, I::CartesianIndex{1}) = R[I.I_1], CartesianIndex_1(I.I_1+1)
         end
         totalex = quote
             # type definition of state
@@ -61,17 +61,17 @@ function gen_cartesian(N::Int)
             $itertype(dims::NTuple{$N,Int})=$itertype($indextype(dims))
 
             # getindex and setindex!
-            getindex{T}(A::AbstractArray{T,$N}, index::$indextype) = @nref $N A d->getfield(index,d)
-            setindex!{T}(A::AbstractArray{T,$N}, v, index::$indextype) = (@nref $N A d->getfield(index,d)) = v
+            getindex{T}(A::AbstractArray{T,$N}, index::CartesianIndex{$N}) = @nref $N A d->getfield(index,d)
+            setindex!{T}(A::AbstractArray{T,$N}, v, index::CartesianIndex{$N}) = (@nref $N A d->getfield(index,d)) = v
 
             # next iteration
             $exrange
-            @inline function next{T}(A::AbstractArray{T,$N}, state::$indextype)
+            @inline function next{T}(A::AbstractArray{T,$N}, state::CartesianIndex{$N})
                 @inbounds v = A[state]
                 newstate = @nif $M d->(getfield(state,d) < size(A, d)) d->(@ncall($N, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
                 v, newstate
             end
-            @inline function next(iter::$itertype, state::$indextype)
+            @inline function next(iter::$itertype, state::CartesianIndex{$N})
                 newstate = @nif $M d->(getfield(state,d) < getfield(iter.dims,d)) d->(@ncall($M, $indextype, k->(k>d ? getfield(state,k) : k==d ? getfield(state,k)+1 : 1)))
                 state, newstate
             end
