@@ -45,7 +45,11 @@ stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     dims = :(tuple($(sizeexprs...)))
     LD = subarray_linearindexing_dim(A, I)
     strideexpr = stride1expr(A, I, :A, :I, LD)
-    :(SubArray{$T,$N,$A,$I,$LD}(A, I, $dims, first_index(A, I), $strideexpr))
+    exfirst = first_index_expr(:A, :I, length(I))
+    quote
+        $exfirst
+        SubArray{$T,$N,$A,$I,$LD}(A, I, $dims, f, $strideexpr)
+    end
 end
 
 # Conventional style (drop trailing singleton dimensions, keep any other singletons)
@@ -74,7 +78,11 @@ stagedfunction sub{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     It = tuple(Itypes...)
     LD = subarray_linearindexing_dim(A, I)
     strideexpr = stride1expr(A, I, :A, :I, LD)
-    :(SubArray{$T,$N,$A,$It,$LD}(A, $Iext, $dims, first_index(A, I), $strideexpr))
+    exfirst = first_index_expr(:A, :I, length(It))
+    quote
+        $exfirst
+        SubArray{$T,$N,$A,$It,$LD}(A, $Iext, $dims, f, $strideexpr)
+    end
 end
 
 # Constructing from another SubArray
@@ -141,9 +149,11 @@ stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex..
     It = tuple(Itypes...)
     LD = max(LD, subarray_linearindexing_dim(PV, It))
     strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD)
+    exfirst = first_index_expr(:(V.parent), :Inew, length(It))
     quote
         Inew = $Inew
-        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, first_index(V.parent, Inew), $strideexpr)
+        $exfirst
+        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
     end
 end
 
@@ -214,10 +224,12 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
     LD = max(LD, subarray_linearindexing_dim(PV, It))
     strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD)
     preex = isempty(preexprs) ? nothing : Expr(:block, preexprs...)
+    exfirst = first_index_expr(:(V.parent), :Inew, length(It))
     quote
         $preex
         Inew = $Inew
-        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, first_index(V.parent, Inew), $strideexpr)
+        $exfirst
+        SubArray{$T,$N,$PV,$It,$LD}(V.parent, Inew, $dims, f, $strideexpr)
     end
 end
 
@@ -299,6 +311,18 @@ function first_index(P::AbstractArray, indexes::Tuple)
         s *= size(P, i)
     end
     f
+end
+
+function first_index_expr(Asym, Isym::Symbol, n::Int)
+    ex = :(f = s = 1)
+    for i = 1:n
+        ex = quote
+            $ex
+            f += (first($Isym[$i])-1)*s
+            s *= size($Asym, $i)
+        end
+    end
+    ex
 end
 
 # Detecting whether one can support fast linear indexing
