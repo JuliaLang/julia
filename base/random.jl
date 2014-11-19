@@ -149,6 +149,12 @@ rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
 rand(T::Type, d1::Int, dims::Int...) = rand(T, tuple(d1, dims...))
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
+rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
+rand!(r::Range, A::AbstractArray) = rand!(GLOBAL_RNG, r, A)
+
+rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
+rand(r::AbstractArray, dims::Int...) = rand(GLOBAL_RNG, r, dims)
+
 ## random floating point values
 
 @inline rand(r::AbstractRNG) = rand(r, CloseOpen)
@@ -344,58 +350,58 @@ end
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
 # RandIntGen is responsible for providing the right value of k
-function rand{T<:Union(UInt64, Int64)}(g::RandIntGen{T,UInt64})
+function rand{T<:Union(UInt64, Int64)}(mt::MersenneTwister, g::RandIntGen{T,UInt64})
     local x::UInt64
     if (g.k - 1) >> 32 == 0
-        x = rand(UInt32)
+        x = rand(mt, UInt32)
         while x > g.u
-            x = rand(UInt32)
+            x = rand(mt, UInt32)
         end
     else
-        x = rand(UInt64)
+        x = rand(mt, UInt64)
         while x > g.u
-            x = rand(UInt64)
+            x = rand(mt, UInt64)
         end
     end
     return reinterpret(T, reinterpret(UInt64, g.a) + rem_knuth(x, g.k))
 end
 
-function rand{T<:Integer, U<:Unsigned}(g::RandIntGen{T,U})
-    x = rand(U)
+function rand{T<:Integer, U<:Unsigned}(mt::MersenneTwister, g::RandIntGen{T,U})
+    x = rand(mt, U)
     while x > g.u
-        x = rand(U)
+        x = rand(mt, U)
     end
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-rand{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}) = rand(RandIntGen(r))
+rand{T<:Union(Signed,Unsigned,Bool,Char)}(mt::MersenneTwister, r::UnitRange{T}) = rand(mt, RandIntGen(r))
 
 # Randomly draw a sample from an AbstractArray r
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
-rand(r::AbstractArray) = @inbounds return r[rand(1:length(r))]
+rand(mt::MersenneTwister, r::AbstractArray) = @inbounds return r[rand(mt, 1:length(r))]
 
-function rand!(g::RandIntGen, A::AbstractArray)
+function rand!(mt::MersenneTwister, g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
-        @inbounds A[i] = rand(g)
+        @inbounds A[i] = rand(mt, g)
     end
     return A
 end
 
-rand!{T<:Union(Signed,Unsigned,Bool,Char)}(r::UnitRange{T}, A::AbstractArray) = rand!(RandIntGen(r), A)
+rand!{T<:Union(Signed,Unsigned,Bool,Char)}(mt::MersenneTwister, r::UnitRange{T}, A::AbstractArray) = rand!(mt, RandIntGen(r), A)
 
-rand!(r::Range, A::AbstractArray) = _rand!(r, A)
+rand!(mt::MersenneTwister, r::Range, A::AbstractArray) = _rand!(mt, r, A)
 
 # TODO: this more general version is "disabled" until #8246 is resolved
-function _rand!(r::AbstractArray, A::AbstractArray)
+function _rand!(mt::MersenneTwister, r::AbstractArray, A::AbstractArray)
     g = RandIntGen(1:(length(r)))
     for i = 1 : length(A)
-        @inbounds A[i] = r[rand(g)]
+        @inbounds A[i] = r[rand(mt, g)]
     end
     return A
 end
 
-rand{T}(r::AbstractArray{T}, dims::Dims) = _rand!(r, Array(T, dims))
-rand(r::AbstractArray, dims::Int...) = rand(r, dims)
+rand{T}(mt::MersenneTwister, r::AbstractArray{T}, dims::Dims) = _rand!(mt, r, Array(T, dims))
+rand(mt::MersenneTwister, r::AbstractArray, dims::Int...) = rand(mt, r, dims)
 
 ## random BitArrays (AbstractRNG)
 
