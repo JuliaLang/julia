@@ -4701,8 +4701,7 @@ Statistics
 .. function:: middle(x, y)
 
    Compute the middle of two reals ``x`` and ``y``, which is equivalent
-   with regard the value and the type of the result to computing their mean
-   (``(x + y) / 2``).
+   in both value and type to computing their mean (``(x + y) / 2``).
 
 .. function:: middle(range)
 
