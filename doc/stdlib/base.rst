@@ -4066,6 +4066,32 @@ Basic functions
 
    Returns the number of elements in A
 
+.. function:: eachindex(A)
+
+   Creates an iterable object for visiting each multi-dimensional index of the AbstractArray ``A``.  Example for a 2-d array::
+
+    julia> A = rand(2,3)
+    2x3 Array{Float64,2}:
+     0.960084  0.629326  0.625155
+     0.432588  0.955903  0.991614
+
+    julia> for iter in eachindex(A)
+	       @show iter.I_1, iter.I_2
+	       @show A[iter]
+	   end
+    (iter.I_1,iter.I_2) = (1,1)
+    A[iter] = 0.9600836263003063
+    (iter.I_1,iter.I_2) = (2,1)
+    A[iter] = 0.4325878255452178
+    (iter.I_1,iter.I_2) = (1,2)
+    A[iter] = 0.6293256402775211
+    (iter.I_1,iter.I_2) = (2,2)
+    A[iter] = 0.9559027084099654
+    (iter.I_1,iter.I_2) = (1,3)
+    A[iter] = 0.6251548453735303
+    (iter.I_1,iter.I_2) = (2,3)
+    A[iter] = 0.9916142534546522
+
 .. function:: countnz(A)
 
    Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``, which returns the number of stored values.
