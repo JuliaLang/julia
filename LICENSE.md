@@ -74,6 +74,7 @@ Julia builds the following libraries by default, but does not use them itself:
 Julia's build process uses the following external tools:
 
 - [PATCHELF](http://hydra.nixos.org/build/1524660/download/1/README)
+- [OBJCONV](http://www.agner.org/optimize/#objconv)
 
 
 Julia bundles the following external programs and libraries on some platforms:
