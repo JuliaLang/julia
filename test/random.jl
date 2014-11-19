@@ -32,10 +32,20 @@ rand!(MersenneTwister(0), A)
             8690327730555225005 8435109092665372532]
 
 # rand from AbstractArray
-@test rand(0:3:1000) in 0:3:1000
-coll = Any[2, UInt128(128), big(619), "string", 'c']
-@test rand(coll) in coll
-@test issubset(rand(coll, 2, 3), coll)
+let mt = MersenneTwister()
+    srand(mt)
+    @test rand(mt, 0:3:1000) in 0:3:1000
+    @test issubset(rand!(mt, 0:3:1000, Array(Int, 100)), 0:3:1000)
+    coll = Any[2, UInt128(128), big(619), "string", 'c']
+    @test rand(mt, coll) in coll
+    @test issubset(rand(mt, coll, 2, 3), coll)
+
+    # check API with default RNG:
+    rand(0:3:1000)
+    rand!(0:3:1000, Array(Int, 100))
+    rand(coll)
+    rand(coll, 2, 3)
+end
 
 # randn
 @test randn(MersenneTwister(42)) == -0.5560268761463861
