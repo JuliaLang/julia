@@ -196,11 +196,14 @@ function completions(string, pos)
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
-        return sort(paths), r, success
+        #Latex symbols can be completed for strings
+        (success || inc_tag==:cmd) && return sort(paths), r, success
     end
 
     ok, ret = latex_completions(string, pos)
     ok && return ret
+    # Make sure that only latex_completions is working on strings
+    inc_tag==:string && return UTF8String[], 0:-1, false
 
     if inc_tag == :other && string[pos] == '('
         endpos = prevind(string, pos)
