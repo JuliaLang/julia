@@ -117,15 +117,31 @@ end
 end
 
 ### Windows implementation ###
+
+@windows_only type SharedMemSpec
+    name :: AbstractString
+    readonly :: Bool
+    create :: Bool
+end
+
 @windows_only begin
 # Mmapped-array constructor
-function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::FileOffset)
-    shandle = _get_osfhandle(RawFD(fd(s)))
-    if int(shandle.handle) == -1
-        error("could not get handle for file to map: $(FormatMessage())")
+function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
+    if isa(s,IO)
+        hdl = _get_osfhandle(RawFD(fd(s))).handle
+        if int(hdl) == -1
+            error("could not get handle for file to map: $(FormatMessage())")
+        end
+        name = C_NULL
+        ro = isreadonly(s)
+        create = true
+    else
+        # shared memory
+        hdl = -1
+        name = utf16(s.name)
+        ro = s.readonly
+        create = s.create
     end
-    ro = isreadonly(s)
-    flprotect = ro ? 0x02 : 0x04
     len = prod(dims)*sizeof(T)
     const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
     if len < 0
@@ -138,12 +154,18 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     offset_page::FileOffset = div(offset, granularity)*granularity
     szfile = convert(Csize_t, len + offset)
     szarray = szfile - convert(Csize_t, offset_page)
-    mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Cint, Cint, Cint, Ptr{UInt16}),
-        shandle.handle, C_NULL, flprotect, szfile>>32, szfile&typemax(UInt32), C_NULL)
+    access = ro ? 4 : 2
+    if create
+        flprotect = ro ? 0x02 : 0x04
+        mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, Cint, Cint, Cint, Ptr{UInt16}),
+            hdl, C_NULL, flprotect, szfile>>32, szfile&typemax(UInt32), name)
+    else
+        mmaphandle = ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (Cint, Cint, Ptr{Uint16}),
+            access, true, name)
+    end
     if mmaphandle == C_NULL
         error("could not create file mapping: $(FormatMessage())")
     end
-    access = ro ? 4 : 2
     viewhandle = ccall(:MapViewOfFile, stdcall, Ptr{Void}, (Ptr{Void}, Cint, Cint, Cint, Csize_t),
         mmaphandle, access, offset_page>>32, offset_page&typemax(UInt32), szarray)
     if viewhandle == C_NULL
