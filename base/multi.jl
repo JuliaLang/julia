@@ -317,6 +317,10 @@ function worker_id_from_socket(s)
     return -1
 end
 
+function reset_node()
+    LPROC.id = 0
+    empty!(map_pid_wrkr)
+end
 
 register_worker(w) = register_worker(PGRP, w)
 function register_worker(pg, w)
@@ -838,13 +842,9 @@ function create_message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStrea
                     otherid = deserialize(r_stream)
                     register_worker(Worker(cluster_manager, otherid, r_stream, w_stream))
                 elseif is(msg, :join_pgrp)
-                    # first connection; get process group info from client
                     self_pid = LPROC.id = deserialize(r_stream)
                     locs = deserialize(r_stream)
                     self_is_local = deserialize(r_stream)
-                    #print("\nLocation: ",locs,"\nId:",myid(),"\n")
-                    # joining existing process group
-
                     controller = Worker(cluster_manager, 1, r_stream, w_stream)
                     register_worker(controller)
                     register_worker(LPROC)

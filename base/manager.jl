@@ -320,6 +320,7 @@ end
 
 cluster_manager = LocalManager # The default.
 function init_worker{T<:ClusterManager}(::Type{T})
+    reset_node()
     global cluster_manager
     cluster_manager = T
     disable_threaded_libs()
