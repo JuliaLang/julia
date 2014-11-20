@@ -40,7 +40,25 @@ static arraylist_t methtable_list;
 static htable_t fptr_to_id;
 // array of definitions for the predefined function pointers
 // (reverse of fptr_to_id)
-static htable_t id_to_fptr;
+static jl_fptr_t id_to_fptrs[] = {
+  NULL, NULL,
+  jl_f_throw, jl_f_is,
+  jl_f_no_function, jl_f_typeof,
+  jl_f_subtype, jl_f_isa,
+  jl_f_typeassert, jl_f_apply,
+  jl_f_top_eval, jl_f_isdefined,
+  jl_f_tuple, jl_f_tupleref,
+  jl_f_tuplelen, jl_f_get_field,
+  jl_f_set_field, jl_f_field_type,
+  jl_f_arraylen, jl_f_arrayref,
+  jl_f_arrayset, jl_f_arraysize,
+  jl_f_instantiate_type, jl_f_kwcall,
+  jl_trampoline, jl_f_union,
+  jl_f_methodexists, jl_f_applicable,
+  jl_f_invoke, jl_apply_generic,
+  jl_unprotect_stack,
+  jl_f_yieldto, jl_f_sizeof, jl_f_new_expr,
+  NULL };
 
 // pointers to non-AST-ish objects in a compressed tree
 static jl_array_t *tree_literal_values=NULL; // (only used in MODE_AST)
@@ -789,12 +807,12 @@ void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
 {
     int fptr = read_uint16(s);
-    if (fptr == 0)
+    if (fptr < 2)
         return NULL;
-    void **pbp = ptrhash_bp(&id_to_fptr, (void*)(ptrint_t)fptr);
-    if (*pbp == HT_NOTFOUND)
+
+    if (fptr >= sizeof(id_to_fptrs)/sizeof(*id_to_fptrs))
         jl_error("unknown function pointer ID");
-    return *(jl_fptr_t*)pbp;
+    return id_to_fptrs[fptr];
 }
 
 static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
@@ -1669,8 +1687,7 @@ jl_module_t *jl_restore_new_module(char *fname)
 void jl_init_serializer(void)
 {
     htable_new(&ser_tag, 0);
-    htable_new(&fptr_to_id, 0);
-    htable_new(&id_to_fptr, 0);
+    htable_new(&fptr_to_id, sizeof(id_to_fptrs)/sizeof(*id_to_fptrs));
     htable_new(&backref_table, 50000);
 
     void *tags[] = { jl_symbol_type, jl_datatype_type,
@@ -1794,27 +1811,9 @@ void jl_init_serializer(void)
     assert(i <= Null_tag);
     VALUE_TAGS = (ptrint_t)ptrhash_get(&ser_tag, jl_null);
 
-    jl_fptr_t fptrs[] = { jl_f_throw, jl_f_is,
-                          jl_f_no_function, jl_f_typeof,
-                          jl_f_subtype, jl_f_isa,
-                          jl_f_typeassert, jl_f_apply,
-                          jl_f_top_eval, jl_f_isdefined,
-                          jl_f_tuple, jl_f_tupleref,
-                          jl_f_tuplelen, jl_f_get_field,
-                          jl_f_set_field, jl_f_field_type,
-                          jl_f_arraylen, jl_f_arrayref,
-                          jl_f_arrayset, jl_f_arraysize,
-                          jl_f_instantiate_type, jl_f_kwcall,
-                          jl_trampoline, jl_f_union,
-                          jl_f_methodexists, jl_f_applicable,
-                          jl_f_invoke, jl_apply_generic,
-                          jl_unprotect_stack,
-                          jl_f_yieldto, jl_f_sizeof, jl_f_new_expr,
-                          NULL };
     i=2;
-    while (fptrs[i-2] != NULL) {
-        ptrhash_put(&fptr_to_id, (void*)fptrs[i-2], (void*)i);
-        ptrhash_put(&id_to_fptr, (void*)i, (void*)fptrs[i-2]);
+    while (id_to_fptrs[i] != NULL) {
+        ptrhash_put(&fptr_to_id, (void*)id_to_fptrs[i], (void*)i);
         i += 1;
     }
 }
