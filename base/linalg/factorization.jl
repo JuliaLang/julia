@@ -273,9 +273,9 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
     mA, nA = size(A.factors)
     nr = min(mA,nA)
     nrhs = size(B, 2)
-    if nr == 0 return zeros(0, nrhs), 0 end
+    if nr == 0 return zeros(T, 0, nrhs), 0 end
     ar = abs(A.factors[1])
-    if ar == 0 return zeros(nr, nrhs), 0 end
+    if ar == 0 return zeros(T, nr, nrhs), 0 end
     rnk = 1
     xmin = ones(T, 1)
     xmax = ones(T, 1)
