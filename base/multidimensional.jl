@@ -18,7 +18,7 @@ stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Int})
     return :($indextype(index))
 end
 stagedfunction Base.call{N}(::Type{IndexIterator},index::NTuple{N,Int})
-    indextype,itertype=gen_cartesian(N)
+    indextype, itertype = gen_cartesian(N)
     return :($itertype(index))
 end
 
@@ -71,22 +71,20 @@ eachindex(A::AbstractArray) = IndexIterator(size(A))
 
 stagedfunction start{N}(iter::IndexIterator{N})
     indextype, _ = gen_cartesian(N)
-    args = fill(:s, N)
+    args = fill(1, N)
     fieldnames = [symbol("I_$i") for i = 1:N]
     anyzero = Expr(:(||), [:(iter.dims.$(fieldnames[i]) == 0) for i = 1:N]...)
     quote
         z = $anyzero
-        s = ifelse(z, typemax(Int), 1)
         return z, $indextype($(args...))
     end
 end
 
-stagedfunction _start{T,N}(A::AbstractArray{T,N},::LinearSlow)
+stagedfunction _start{T,N}(A::AbstractArray{T,N}, ::LinearSlow)
     indextype, _ = gen_cartesian(N)
-    args = fill(:s, N)
+    args = fill(1, N)
     quote
         z = isempty(A)
-        s = ifelse(z, typemax(Int), 1)
         return z, $indextype($(args...))
     end
 end
