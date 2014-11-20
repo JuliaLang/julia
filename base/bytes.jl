@@ -77,16 +77,8 @@ function length(s::Str)
 end
 
 @inline function next(s::Str, i::Int)
-    u = getu32(s.data, i)
-    a::UInt32 = u & 0xff
-    a < 0x80 && return Char(a), i+1
-    is_utf8_start(a) || error("invalid UTF-8 character index")
-    b::UInt32 = a << 6 + (u >> 8) & 0xff
-    a < 0xe0 && return Char(b - 0x00003080), i+2
-    c::UInt32 = b << 6 + (u >> 16) & 0xff
-    a < 0xf0 && return Char(c - 0x000e2080), i+3
-    d::Uint32 = c << 6 + (u >> 24) & 0xff
-                return Char(d - 0x03c82080), i+4
+    x = s.data.x
+    box(Char, bytevec_utf8_ref(unbox(typeof(x), x), unbox(Int, i))), i + 1
 end
 
 ## overload methods for efficiency ##

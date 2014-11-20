@@ -37,7 +37,7 @@ namespace JL_I {
         abs_float, copysign_float, flipsign_int, select_value,
         sqrt_llvm, powi_llvm,
         // byte vectors
-        bytevec_ref, bytevec_ref32,
+        bytevec_ref, bytevec_ref32, bytevec_utf8_ref,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1166,6 +1166,108 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.Insert(ret);
         return ret;
     }
+    HANDLE(bytevec_utf8_ref,2) {
+        Value *b = JL_INT(x);
+        Value *i = builder.CreateSub(JL_INT(y), ConstantInt::get(T_size, 1));
+        bool check_bounds =
+#if CHECK_BOUNDS==1
+            ((ctx->boundsCheck.empty() || ctx->boundsCheck.back() == true) &&
+             jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
+              jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON;
+#else
+            0;
+#endif
+        BasicBlock *here_ascii    = BasicBlock::Create(getGlobalContext(), "here_ascii", ctx->f);
+        BasicBlock *there_or_utf8 = BasicBlock::Create(getGlobalContext(), "there_or_utf8", ctx->f);
+        BasicBlock *here_utf8     = BasicBlock::Create(getGlobalContext(), "here_utf8", ctx->f);
+        BasicBlock *there_or_oob  = BasicBlock::Create(getGlobalContext(), "there_or_oob", ctx->f);
+        BasicBlock *there         = BasicBlock::Create(getGlobalContext(), "there", ctx->f);
+        BasicBlock *there_ascii   = BasicBlock::Create(getGlobalContext(), "there_ascii", ctx->f);
+        BasicBlock *decode_utf8   = BasicBlock::Create(getGlobalContext(), "decode_utf8", ctx->f);
+        BasicBlock *oob           = BasicBlock::Create(getGlobalContext(), "out_of_bounds", ctx->f);
+        BasicBlock *done          = BasicBlock::Create(getGlobalContext(), "done", ctx->f);
+
+        Value *is_here = builder.CreateICmpSGE(b, ConstantInt::get(b->getType(), 0));
+        Value *here_shifted = builder.CreateLShr(
+            b, builder.CreateZExt(builder.CreateShl(i, ConstantInt::get(T_size, 3)), b->getType())
+        );
+        Value *here_byte = builder.CreateTrunc(here_shifted, T_uint8);
+        Value *cond = builder.CreateAnd(
+            is_here, builder.CreateICmpSGE(here_byte, ConstantInt::get(T_uint8, 0))
+        );
+        Value *here_len = builder.CreateTrunc(
+            builder.CreateLShr(b, ConstantInt::get(b->getType(), 8*(2*sizeof(void*)-1))), T_size
+        );
+        Value *here_inbounds = builder.CreateICmpULT(i, here_len);
+        if (check_bounds) cond = builder.CreateAnd(cond, here_inbounds);
+        builder.CreateCondBr(cond, here_ascii, there_or_utf8);
+
+        builder.SetInsertPoint(here_ascii);
+        Value *here_ascii_val = builder.CreateZExt(here_byte, T_uint32);
+        builder.CreateBr(done);
+
+        builder.SetInsertPoint(there_or_utf8);
+        cond = check_bounds ? is_here : builder.CreateAnd(is_here, here_inbounds);
+        builder.CreateCondBr(cond, here_utf8, check_bounds ? there_or_oob : there);
+
+        builder.SetInsertPoint(here_utf8);
+        Value *here_uint32 = builder.CreateTrunc(here_shifted, T_uint32);
+        builder.CreateBr(decode_utf8);
+
+        if (check_bounds) {
+            builder.SetInsertPoint(there_or_oob);
+            Value *there_len = builder.CreateSub(
+                ConstantInt::get(T_size, 0),
+                builder.CreateTrunc(
+                    builder.CreateAShr(b, ConstantInt::get(b->getType(), 8*sizeof(void*))), T_size
+                )
+            );
+            builder.CreateCondBr(
+                builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
+                there, oob
+            );
+
+            // raise out-of-bounds error
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
+        }
+
+        builder.SetInsertPoint(there);
+        Value *lo_word = builder.CreateTrunc(b, T_size);
+        Value *addr = builder.CreateAdd(lo_word, i);
+        Value *ptr = builder.CreateIntToPtr(addr, T_pint32);
+        Value *there_uint32 = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
+        Value *there_byte = builder.CreateTrunc(there_uint32, T_uint8);
+        builder.CreateCondBr(
+            builder.CreateICmpSGE(there_byte, ConstantInt::get(T_uint8, 0)),
+            there_ascii, decode_utf8
+        );
+
+        builder.SetInsertPoint(there_ascii);
+        Value *there_ascii_val = builder.CreateZExt(there_byte, T_uint32);
+        builder.CreateBr(done);
+
+        builder.SetInsertPoint(decode_utf8);
+        PHINode *uint32 = PHINode::Create(T_uint32, 2);
+        uint32->addIncoming(here_uint32, here_utf8);
+        uint32->addIncoming(there_uint32, there);
+        // TODO: decode UTF-8 byte
+        Value *decode_utf8_val = builder.Insert(uint32);
+        builder.CreateBr(done);
+
+        builder.SetInsertPoint(done);
+        PHINode *ret = PHINode::Create(T_uint32, 3);
+        ret->addIncoming(here_ascii_val, here_ascii);
+        ret->addIncoming(there_ascii_val, there_ascii);
+        ret->addIncoming(decode_utf8_val, decode_utf8);
+        builder.Insert(ret);
+        return ret;
+    }
     HANDLE(neg_int,1) return builder.CreateSub(ConstantInt::get(t, 0), JL_INT(x));
     HANDLE(add_int,2) return builder.CreateAdd(JL_INT(x), JL_INT(y));
     HANDLE(sub_int,2) return builder.CreateSub(JL_INT(x), JL_INT(y));
@@ -1668,7 +1770,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(abs_float); ADD_I(copysign_float);
     ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
     ADD_I(powi_llvm);
-    ADD_I(bytevec_ref); ADD_I(bytevec_ref32);
+    ADD_I(bytevec_ref); ADD_I(bytevec_ref32); ADD_I(bytevec_utf8_ref);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
