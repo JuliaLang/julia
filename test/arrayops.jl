@@ -927,6 +927,19 @@ b718cbc = 5
 @test_throws InexactError b718cbc[1.1]
 
 # Multidimensional iterators
+for a in ([1:5], reshape([2]))
+    counter = 0
+    for I in eachindex(a)
+        counter += 1
+    end
+    @test counter == length(a)
+    counter = 0
+    for aa in a
+        counter += 1
+    end
+    @test counter == length(a)
+end
+
 function mdsum(A)
     s = 0.0
     for a in A
@@ -970,9 +983,14 @@ for i = 2:10
     insert!(shp, 2, 1)
 end
 
+a = reshape([2])
+@test mdsum(a) == 2
+@test mdsum2(a) == 2
+
 a = ones(0,5)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
+
