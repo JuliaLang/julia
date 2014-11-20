@@ -39,19 +39,18 @@ function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
           s.val, seed, length(seed))
 end
 
-
-# precondition for dsfmt_fill_array_*:
-# the underlying C array must be 16-byte aligned, which is the case for "Array"
-function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Array{Float64}, n::Int)
-    @assert dsfmt_min_array_size <= n <= length(A)  && iseven(n)
+function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
+    @assert Int(A) % 16 == 0 # the underlying C array must be 16-byte aligned
+    @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close1_open2,:libdSFMT),
           Void,
           (Ptr{Void}, Ptr{Float64}, Int),
           s.val, A, n)
 end
 
-function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Array{Float64}, n::Int)
-    @assert dsfmt_min_array_size <= n <= length(A)  && iseven(n)
+function dsfmt_fill_array_close_open!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
+    @assert Int(A) % 16 == 0 # the underlying C array must be 16-byte aligned
+    @assert dsfmt_min_array_size <= n && iseven(n)
     ccall((:dsfmt_fill_array_close_open,:libdSFMT),
           Void,
           (Ptr{Void}, Ptr{Float64}, Int),
