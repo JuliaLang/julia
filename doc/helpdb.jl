@@ -231,20 +231,23 @@ Any[
 
    Similar to \"==\", except treats all floating-point \"NaN\" values
    as equal to each other, and treats \"-0.0\" as unequal to \"0.0\".
-   For values that are not floating-point, \"isequal\" is the same as
-   \"==\".
+   The default implementation of \"isequal\" calls \"==\", so if you
+   have a type that doesn't have these floating-point subtleties then
+   you probably only need to define \"==\".
 
    \"isequal\" is the comparison function used by hash tables
    (\"Dict\"). \"isequal(x,y)\" must imply that \"hash(x) ==
    hash(y)\".
 
+   This typically means that if you define your own \"==\" function
+   then you must define a corresponding \"hash\" (and vice versa).
    Collections typically implement \"isequal\" by calling \"isequal\"
    recursively on all contents.
 
-   Scalar types generally do not need to implement \"isequal\", unless
-   they represent floating-point numbers amenable to a more efficient
-   implementation than that provided as a generic fallback (based on
-   \"isnan\", \"signbit\", and \"==\").
+   Scalar types generally do not need to implement \"isequal\"
+   separate from \"==\", unless they represent floating-point numbers
+   amenable to a more efficient implementation than that provided as a
+   generic fallback (based on \"isnan\", \"signbit\", and \"==\").
 
 "),
 
@@ -314,8 +317,14 @@ Any[
 
    Compute an integer hash code such that \"isequal(x,y)\" implies
    \"hash(x)==hash(y)\". The optional second argument \"h\" is a hash
-   code to be mixed with the result. New types should implement the
-   2-argument form.
+   code to be mixed with the result.
+
+   New types should implement the 2-argument form, typically  by
+   calling the 2-argument \"hash\" method recursively in order to mix
+   hashes of the contents with each other (and with \"h\").
+   Typically, any type that implements \"hash\" should also implement
+   its own \"==\" (hence \"isequal\") to guarantee the property
+   mentioned above.
 
 "),
 
@@ -5829,10 +5838,19 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand([rng][, t::Type][, dims...])
+("Base","rand","rand([rng][, S][, dims...])
 
-   Generate a random value or an array of random values of the given
-   type, \"t\", which defaults to \"Float64\".
+   Pick a random element or array of random elements from the set of
+   values specified by \"S\"; \"S\" can be
+
+   * an indexable collection (for example \"1:n\" or
+     \"['x','y','z']\"), or
+
+   * a type: the set of values to pick from is then equivalent to
+     \"typemin(S):typemax(S)\" for integers, and to [0,1) for floating
+     point numbers;
+
+   \"S\" defaults to \"Float64\".
 
 "),
 
@@ -5842,10 +5860,10 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand","rand(r[, dims...])
+("Base","rand!","rand!([rng], r, A)
 
-   Pick a random element or array of random elements from range \"r\"
-   (for example, \"1:n\" or \"0:2:10\").
+   Populate the array A with random values drawn uniformly from the
+   range \"r\".
 
 "),
 
@@ -6004,13 +6022,22 @@ popdisplay(d::Display)
 
 ("Base","fill","fill(x, dims)
 
-   Create an array filled with the value \"x\"
+   Create an array filled with the value \"x\". For example,
+   \"fill(1.0, (10,10))\" returns a  10x10 array of floats, with each
+   element initialized to 1.0.
+
+   If \"x\" is an object reference, all elements will refer to the
+   same object. \"fill(Foo(), dims)\" will return an array filled with
+   the result of evaluating \"Foo()\" once.
 
 "),
 
 ("Base","fill!","fill!(A, x)
 
-   Fill the array \"A\" with the value \"x\"
+   Fill array \"A\" with the value \"x\". If \"x\" is an object
+   reference, all elements will refer to the same object. \"fill!(A,
+   Foo())\" will return \"A\" filled with the result of evaluating
+   \"Foo()\" once.
 
 "),
 
@@ -6751,23 +6778,23 @@ popdisplay(d::Display)
 ("Base","middle","middle(x)
 
    Compute the middle of a scalar value, which is equivalent to \"x\"
-   itself. Note: the value is converted to \"float\".
+   itself, but of the type of \"middle(x, x)\" for consistency.
 
 "),
 
 ("Base","middle","middle(x, y)
 
    Compute the middle of two reals \"x\" and \"y\", which is
-   equivalent to computing their mean (\"(x + y) / 2\"). Note: As with
-   \"middle(x)\", the returned value is of type \"float\".
+   equivalent in both value and type to computing their mean (\"(x +
+   y) / 2\").
 
 "),
 
 ("Base","middle","middle(range)
 
-   Compute the middle of a range, that is, compute the mean of its
-   extrema. Since a range is sorted, the mean is performed with the
-   first and last element.
+   Compute the middle of a range, which consists in computing the mean
+   of its extrema. Since a range is sorted, the mean is performed with
+   the first and last element.
 
 "),
 
