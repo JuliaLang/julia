@@ -37,7 +37,10 @@ function gen_rand(r::MersenneTwister)
     mt_setfull!(r)
 end
 
-@inline gen_rand_maybe(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
+@inline reserve_1(r::MersenneTwister) = mt_empty(r) && gen_rand(r)
+# `reserve` allows to call `rand_inbounds` n times
+# precondition: n <= MTCacheLength
+@inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
 
 abstract FloatInterval
 type CloseOpen <: FloatInterval end
@@ -49,9 +52,10 @@ type Close1Open2 <: FloatInterval end
 @inline rand_inbounds(r::MersenneTwister) = rand_inbounds(r, CloseOpen)
 
 # produce Float64 values
-@inline rand{I<:FloatInterval}(r::MersenneTwister, ::Type{I}) = (gen_rand_maybe(r); rand_inbounds(r, I))
+@inline rand{I<:FloatInterval}(r::MersenneTwister, ::Type{I}) = (reserve_1(r); rand_inbounds(r, I))
 
-@inline rand_ui52_raw(r::MersenneTwister) = reinterpret(UInt64, rand(r, Close1Open2))
+@inline rand_ui52_raw_inbounds(r::MersenneTwister) = reinterpret(UInt64, rand_inbounds(r, Close1Open2))
+@inline rand_ui52_raw(r::MersenneTwister) = (reserve_1(r); rand_ui52_raw_inbounds(r))
 @inline rand_ui2x52_raw(r::MersenneTwister) = rand_ui52_raw(r) % UInt128 << 64 | rand_ui52_raw(r)
 
 function srand(r::MersenneTwister, seed::Vector{UInt32})
@@ -164,8 +168,17 @@ rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, ran
 
 rand{T<:Union(Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
-rand(r::MersenneTwister, ::Type{UInt64})  = rand_ui52_raw(r) << 32 $ rand_ui52_raw(r)
-rand(r::MersenneTwister, ::Type{UInt128}) = rand_ui52_raw(r) % UInt128 << 96 $ rand_ui52_raw(r) % UInt128 << 48 $ rand_ui52_raw(r)
+function rand(r::MersenneTwister, ::Type{UInt64})
+    reserve(r, 2)
+    rand_ui52_raw_inbounds(r) << 32 $ rand_ui52_raw_inbounds(r)
+end
+
+function rand(r::MersenneTwister, ::Type{UInt128})
+    reserve(r, 3)
+    rand_ui52_raw_inbounds(r) % UInt128 << 96 $
+    rand_ui52_raw_inbounds(r) % UInt128 << 48 $
+    rand_ui52_raw_inbounds(r)
+end
 
 rand(r::MersenneTwister, ::Type{Int64})   = reinterpret(Int64,  rand(r, UInt64))
 rand(r::MersenneTwister, ::Type{Int128})  = reinterpret(Int128, rand(r, UInt128))
