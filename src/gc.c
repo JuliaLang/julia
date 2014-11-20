@@ -151,17 +151,6 @@ DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
     freed_bytes += sz;
 }
 
-DLLEXPORT void *jl_gc_counted_realloc(void *p, size_t sz)
-{
-    if (allocd_bytes > collect_interval)
-        jl_gc_collect();
-    allocd_bytes += ((sz+1)/2);  // NOTE: wild guess at growth amount
-    void *b = realloc(p, sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
-}
-
 DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
 {
     if (allocd_bytes > collect_interval)
