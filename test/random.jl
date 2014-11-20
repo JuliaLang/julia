@@ -237,3 +237,19 @@ let mt = MersenneTwister(0)
     resize!(AF64, 2*length(mt.vals))
     @test Base.Random.rand_AbstractArray_Float64!(mt, AF64)[end]  == 0.432757268470779
 end
+
+# Issue #9037
+let mt = MersenneTwister()
+    a = Array(Float64, 0)
+    resize!(a, 1000) # could be 8-byte aligned
+    b = Array(Float64, 1000) # should be 16-byte aligned
+    c8 = Array(UInt8, 8001)
+    c = pointer_to_array(Ptr{Float64}(pointer(c8, 2)), 1000) # Int(pointer(c)) % 16 == 1
+
+    for A in (a, b, c)
+        srand(mt, 0)
+        rand(mt) # this is to fill mt.vals, cf. #9040
+        rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
+        @test A[end-4:end] == [0.49508297796349776,0.3408340446375888,0.3211229457075784,0.9103565379264364,0.16456579813368521]
+    end
+end
