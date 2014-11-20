@@ -197,28 +197,36 @@ end
 @inline unsafe_setindex!{T}(v::AbstractArray{T}, x::T, ind::Real) = unsafe_setindex!(v, x, to_index(ind))
 
 # Version that uses cartesian indexing for src
-@ngenerate N typeof(dest) function _getindex!(dest::Array, src::AbstractArray, I::NTuple{N,Union(Int,AbstractVector)}...)
-    checksize(dest, I...)
-    k = 1
-    @nloops N i dest d->(@inbounds j_d = unsafe_getindex(I_d, i_d)) begin
-        @inbounds dest[k] = (@nref N src j)
-        k += 1
+stagedfunction _getindex!(dest::Array, src::AbstractArray, I::Union(Int,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        checksize(dest, $(Isplat...))
+        k = 1
+        @nloops $N i dest d->(@inbounds j_d = unsafe_getindex(I[d], i_d)) begin
+            @inbounds dest[k] = (@nref $N src j)
+            k += 1
+        end
+        dest
     end
-    dest
 end
 
 # Version that uses linear indexing for src
-@ngenerate N typeof(dest) function _getindex!(dest::Array, src::Array, I::NTuple{N,Union(Int,AbstractVector)}...)
-    checksize(dest, I...)
-    stride_1 = 1
-    @nexprs N d->(stride_{d+1} = stride_d*size(src,d))
-    @nexprs N d->(offset_d = 1)  # only really need offset_$N = 1
-    k = 1
-    @nloops N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-        @inbounds dest[k] = src[offset_0]
-        k += 1
+stagedfunction _getindex!(dest::Array, src::Array, I::Union(Int,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        checksize(dest, $(Isplat...))
+        stride_1 = 1
+        @nexprs $N d->(stride_{d+1} = stride_d*size(src,d))
+        @nexprs $N d->(offset_d = 1)  # only really need offset_$N = 1
+        k = 1
+        @nloops $N i dest d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I[d], i_d)-1)*stride_d) begin
+            @inbounds dest[k] = src[offset_0]
+            k += 1
+        end
+        dest
     end
-    dest
 end
 
 # It's most efficient to call checkbounds first, then to_index, and finally
@@ -226,39 +234,54 @@ end
 _getindex(A, I::(Union(Int,AbstractVector)...)) =
     _getindex!(similar(A, index_shape(I...)), A, I...)
 
-@nsplat N function getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
-    checkbounds(A, I...)
-    _getindex(A, to_index(I...))
+# The stagedfunction here is just to work around the performance hit
+# of splatting
+stagedfunction getindex(A::Array, I::Union(Real,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        checkbounds(A, $(Isplat...))
+        _getindex(A, to_index($(Isplat...)))
+    end
 end
 
 # Also a safe version of getindex!
-@nsplat N function getindex!(dest, src, I::NTuple{N,Union(Real,AbstractVector)}...)
-    checkbounds(src, I...)
-    _getindex!(dest, src, to_index(I...)...)
+stagedfunction getindex!(dest, src, I::Union(Real,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    Jsplat = Expr[:(to_index(I[$d])) for d = 1:N]
+    quote
+        checkbounds(src, $(Isplat...))
+        _getindex!(dest, src, $(Jsplat...))
+    end
 end
 
 
-@ngenerate N typeof(A) function setindex!(A::Array, x, J::NTuple{N,Union(Real,AbstractArray)}...)
-    @ncall N checkbounds A J
-    @nexprs N d->(I_d = to_index(J_d))
-    stride_1 = 1
-    @nexprs N d->(stride_{d+1} = stride_d*size(A,d))
-    @nexprs N d->(offset_d = 1)  # really only need offset_$N = 1
-    if !isa(x, AbstractArray)
-        @nloops N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-            @inbounds A[offset_0] = x
-        end
-    else
-        X = x
-        @ncall N setindex_shape_check X I
-        # TODO? A variant that can use cartesian indexing for RHS
-        k = 1
-        @nloops N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-            @inbounds A[offset_0] = X[k]
+stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
+    N = length(J)
+    quote
+        @nexprs $N d->(J_d = J[d])
+        @ncall $N checkbounds A J
+        @nexprs $N d->(I_d = to_index(J_d))
+        stride_1 = 1
+        @nexprs $N d->(stride_{d+1} = stride_d*size(A,d))
+        @nexprs $N d->(offset_d = 1)  # really only need offset_$N = 1
+        if !isa(x, AbstractArray)
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                @inbounds A[offset_0] = x
+            end
+        else
+            X = x
+            @ncall $N setindex_shape_check X I
+            # TODO? A variant that can use cartesian indexing for RHS
+            k = 1
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                @inbounds A[offset_0] = X[k]
             k += 1
+            end
         end
+        A
     end
-    A
 end
 
 
