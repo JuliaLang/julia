@@ -215,12 +215,14 @@ function process_options(args::Vector{UTF8String})
         elseif args[i]=="--bind-to"
             i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"
+            i == length(args) && error("-e,--eval  no <expr> provided")
             repl = false
             i+=1
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
             eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E" || args[i]=="--print"
+            i == length(args) && error("-E,--print  no <expr> provided")
             repl = false
             i+=1
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
@@ -228,21 +230,26 @@ function process_options(args::Vector{UTF8String})
             println()
             break
         elseif args[i]=="-P" || args[i]=="--post-boot"
+            i == length(args) && error("-P,--post-boot  no <expr> provided")
             i+=1
             eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L" || args[i]=="--load"
+            i == length(args) && error("-L, --load  no <file> provided")
             i+=1
             require(args[i])
         elseif args[i]=="-p"
+            i == length(args) && error("-p  <n> processes not provided")
             i+=1
             if i > length(args) || !isdigit(args[i][1])
                 np = Sys.CPU_CORES
                 i -= 1
             else
                 np = int(args[i])
+                np < 1 && error("-p  <n> must be ≥ 1")
             end
             addprocs(np)
         elseif args[i]=="--machinefile"
+            i == length(args) && error("--machinefile  no <file> provided")
             i+=1
             machines = load_machine_file(args[i])
             addprocs(machines)
