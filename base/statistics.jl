@@ -102,39 +102,41 @@ call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
-@ngenerate N typeof(R) function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
-    # following the implementation of _mapreducedim! at base/reducedim.jl
-    lsiz = check_reducdims(R, A)
-    isempty(R) || fill!(R, zero(S))
-    isempty(A) && return R
-    @nextract N sizeR d->size(R,d)
-    sizA1 = size(A, 1)
+stagedfunction centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+    quote
+        # following the implementation of _mapreducedim! at base/reducedim.jl
+        lsiz = check_reducdims(R, A)
+        isempty(R) || fill!(R, zero(S))
+        isempty(A) && return R
+        @nextract $N sizeR d->size(R,d)
+        sizA1 = size(A, 1)
 
-    if has_fast_linear_indexing(A) && lsiz > 16
-        # use centralize_sumabs2, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
-        ibase = 0
-        for i = 1:nslices
-            @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
-            ibase += lsiz
-        end
-    elseif size(R, 1) == 1 && sizA1 > 1
-        # keep the accumulator as a local variable when reducing along the first dimension
-        @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds r = (@nref N R j)
-            @inbounds m = (@nref N means j)
-            for i_1 = 1:sizA1
-                @inbounds r += abs2((@nref N A i) - m)
+        if has_fast_linear_indexing(A) && lsiz > 16
+            # use centralize_sumabs2, which is probably better tuned to achieve higher performance
+            nslices = div(length(A), lsiz)
+            ibase = 0
+            for i = 1:nslices
+                @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
+                ibase += lsiz
             end
-            @inbounds (@nref N R j) = r
+        elseif size(R, 1) == 1 && sizA1 > 1
+            # keep the accumulator as a local variable when reducing along the first dimension
+            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds r = (@nref $N R j)
+                @inbounds m = (@nref $N means j)
+                for i_1 = 1:sizA1
+                    @inbounds r += abs2((@nref $N A i) - m)
+                end
+                @inbounds (@nref $N R j) = r
+            end
+        else
+            # general implementation
+            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds (@nref $N R j) += abs2((@nref $N A i) - (@nref $N means j))
+            end
         end
-    else
-        # general implementation
-        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds (@nref N R j) += abs2((@nref N A i) - (@nref N means j))
-        end
+        return R
     end
-    return R
 end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
