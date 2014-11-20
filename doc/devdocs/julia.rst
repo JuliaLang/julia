@@ -11,3 +11,4 @@
 
    cartesian
    meta
+   subarrays
