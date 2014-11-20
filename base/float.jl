@@ -177,35 +177,35 @@ function cmp(x::FloatingPoint, y::Real)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
-==(x::Float64, y::Int64  ) = eqfsi64(unbox(Float64,x),unbox(Int64,y))
-==(x::Float64, y::UInt64 ) = eqfui64(unbox(Float64,x),unbox(UInt64,y))
-==(x::Int64  , y::Float64) = eqfsi64(unbox(Float64,y),unbox(Int64,x))
-==(x::UInt64 , y::Float64) = eqfui64(unbox(Float64,y),unbox(UInt64,x))
+for Ti in (Int64,UInt64)
+    for Tf in (Float32,Float64)
+        @eval begin
+            function ==(x::$Tf, y::$Ti)
+                fy = ($Tf)(y)
+                (x == fy) & (y == itrunc($Ti,fy))
+            end
+            ==(y::$Ti, x::$Tf) = x==y
 
-==(x::Float32, y::Int64  ) = eqfsi64(unbox(Float32,x),unbox(Int64,y))
-==(x::Float32, y::UInt64 ) = eqfui64(unbox(Float32,x),unbox(UInt64,y))
-==(x::Int64  , y::Float32) = eqfsi64(unbox(Float32,y),unbox(Int64,x))
-==(x::UInt64 , y::Float32) = eqfui64(unbox(Float32,y),unbox(UInt64,x))
+            function <(x::$Ti, y::$Tf)
+                fx = ($Tf)(x)
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < itrunc($Ti,fx)) ))
+            end
+            function <=(x::$Ti, y::$Tf)
+                fx = ($Tf)(x)
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= itrunc($Ti,fx)) ))
+            end
 
-< (x::Float64, y::Int64  ) = ltfsi64(unbox(Float64,x),unbox(Int64,y))
-< (x::Float64, y::UInt64 ) = ltfui64(unbox(Float64,x),unbox(UInt64,y))
-< (x::Int64  , y::Float64) = ltsif64(unbox(Int64,x),unbox(Float64,y))
-< (x::UInt64 , y::Float64) = ltuif64(unbox(UInt64,x),unbox(Float64,y))
-
-< (x::Float32, y::Int64  ) = ltfsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-< (x::Float32, y::UInt64 ) = ltfui64(unbox(Float64,float64(x)),unbox(UInt64,y))
-< (x::Int64  , y::Float32) = ltsif64(unbox(Int64,x),unbox(Float64,float64(y)))
-< (x::UInt64 , y::Float32) = ltuif64(unbox(UInt64,x),unbox(Float64,float64(y)))
-
-<=(x::Float64, y::Int64  ) = lefsi64(unbox(Float64,x),unbox(Int64,y))
-<=(x::Float64, y::UInt64 ) = lefui64(unbox(Float64,x),unbox(UInt64,y))
-<=(x::Int64  , y::Float64) = lesif64(unbox(Int64,x),unbox(Float64,y))
-<=(x::UInt64 , y::Float64) = leuif64(unbox(UInt64,x),unbox(Float64,y))
-
-<=(x::Float32, y::Int64  ) = lefsi64(unbox(Float64,float64(x)),unbox(Int64,y))
-<=(x::Float32, y::UInt64 ) = lefui64(unbox(Float64,float64(x)),unbox(UInt64,y))
-<=(x::Int64  , y::Float32) = lesif64(unbox(Int64,x),unbox(Float64,float64(y)))
-<=(x::UInt64 , y::Float32) = leuif64(unbox(UInt64,x),unbox(Float64,float64(y)))
+            function <(x::$Tf, y::$Ti)
+                fy = ($Tf)(y)
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) < y))
+            end
+            function <=(x::$Tf, y::$Ti)
+                fy = ($Tf)(y)
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) <= y))
+            end
+        end
+    end
+end
 
 ==(x::Float32, y::Union(Int32,UInt32)) = float64(x)==float64(y)
 ==(x::Union(Int32,UInt32), y::Float32) = float64(x)==float64(y)
