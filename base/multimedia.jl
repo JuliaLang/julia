@@ -1,44 +1,76 @@
 module Multimedia
 
 export Display, display, pushdisplay, popdisplay, displayable, redisplay,
-   MIME, @MIME, @MIME_str, writemime, reprmime, stringmime, istext,
-   mimewritable, TextDisplay
+   MIME, @MIME_str, reprmime, stringmime, istext,
+   mimewritable, TextDisplay, TEXTPLAIN, TEXTHTML
 
 ###########################################################################
-# We define a singleton type MIME{mime symbol} for each MIME type, so
-# that Julia's dispatch and overloading mechanisms can be used to
-# dispatch writemime and to add conversions for new types.
+# We define a type MIME{mime symbol} for each MIME type, so that
+# Julia's dispatch and overloading mechanisms can be used to dispatch
+# write and to add conversions for new types.  Each MIME instance
+# contains a little dictionary of parameters used to pass information
+# to the write function.
 
-immutable MIME{mime} end
-
-import Base: show, print, string, convert
-MIME(s) = MIME{symbol(s)}()
-show{mime}(io::IO, ::MIME{mime}) = print(io, "MIME type ", string(mime))
-print{mime}(io::IO, ::MIME{mime}) = print(io, mime)
-
-# needs to be a macro so that we can use ::@mime(s) in type declarations
-macro MIME(s)
-    Base.warn_once("@MIME(\"\") is deprecated, use MIME\"\" instead.")
-    if isa(s,AbstractString)
-        :(MIME{$(Expr(:quote, symbol(s)))})
-    else
-        :(MIME{symbol($s)})
-    end
+immutable MIME{mime} <: Associative{Symbol,Any}
+    params::Vector{(Symbol,Any)} # use array, not dict, since will be small
+    MIME(p::Vector{(Symbol,Any)}) = new(p)
+    MIME(; kws...) = new(copy!(Array((Symbol,Any), length(kws)), kws))
 end
+
+import Base: show, print, string, convert, similar, copy, get, start, done, next, length, write
+
+# implement read-only Associative methods for MIME parameters
+similar{mime}(::MIME{mime}) = MIME{mime}()
+copy{mime}(t::MIME{mime}) = MIME{mime}(copy(t.params))
+function get(t::MIME, key::Symbol, default::Any)
+    for x in t.params
+        x[1] == key && return x[2]
+    end
+    return default
+end
+start(t::MIME) = start(t.params)
+done(t::MIME, i) = done(t.params, i)
+next(t::MIME, i) = done(t.params, i)
+length(t::MIME) = length(t.params)
+
+MIME(s; kws...) = MIME{symbol(s)}(; kws...)
 
 macro MIME_str(s)
     :(MIME{$(Expr(:quote, symbol(s)))})
 end
 
+function write{mime}(io::IO, ::MIME"text/plain", m::MIME{mime})
+    print(io, mime)
+    for (k,v) in m.params
+        print(io, "; ", k, "=")
+        show(io, v)
+    end
+end
+
+# we so commonly need these that it makes sense to declare constants
+const TEXTPLAIN = MIME("text/plain")
+const TEXTHTML = MIME("text/html")
+
+show(io::IO, m::MIME) = write(io, TEXTPLAIN, m)
+
 ###########################################################################
-# For any type T one can define writemime(io, ::MIME"type", x::T) = ...
+# For any type T one can define write(io, ::MIME"type", x::T) = ...
 # in order to provide a way to export T as a given mime type.
+# We provide an explicit function to check whether MIME output is
+# available; this can be overloaded if outputability needs to be
+# determined at runtime (see e.g. PyCall).
 
-mimewritable{mime}(::MIME{mime}, x) =
-  method_exists(writemime, (IO, MIME{mime}, typeof(x)))
+function mimewritable{mime}(::MIME{mime}, x)
+    # a method always exists, e.g. the generic write(io, ...) function
+    # in io.jl.  We only consider mimewritable to be true if
+    # the second argument of the method is specifically a MIME type
+    # (or a union of MIME types etcetera).
+    sig = which(write, (IO, MIME{mime}, typeof(x))).sig
+    return length(sig) > 2 && !(Dict{Symbol,Any} <: sig[2])
+end
 
-# it is convenient to accept strings instead of ::MIME
-writemime(io::IO, m::AbstractString, x) = writemime(io, MIME(m), x)
+# it is convenient to accept strings instead of ::MIME, but
+# only where it is unambiguous (i.e. not for write)
 mimewritable(m::AbstractString, x) = mimewritable(MIME(m), x)
 
 ###########################################################################
@@ -60,14 +92,14 @@ macro textmime(mime)
         mimeT = MIME{symbol($mime)}
         # avoid method ambiguities with the general definitions below:
         # (Q: should we treat Vector{UInt8} as a bytestring?)
-        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x::Vector{UInt8}) = sprint(write, m, x)
         Base.Multimedia.stringmime(m::mimeT, x::Vector{UInt8}) = reprmime(m, x)
 
         Base.Multimedia.istext(::mimeT) = true
         if $(mime != "text/plain") # strings are shown escaped for text/plain
             Base.Multimedia.reprmime(m::mimeT, x::AbstractString) = x
         end
-        Base.Multimedia.reprmime(m::mimeT, x) = sprint(writemime, m, x)
+        Base.Multimedia.reprmime(m::mimeT, x) = sprint(write, m, x)
         Base.Multimedia.stringmime(m::mimeT, x) = reprmime(m, x)
     end
 end
@@ -75,11 +107,11 @@ end
 istext(::MIME) = false
 function reprmime(m::MIME, x)
     s = IOBuffer()
-    writemime(s, m, x)
+    write(s, m, x)
     takebuf_array(s)
 end
 reprmime(m::MIME, x::Vector{UInt8}) = x
-stringmime(m::MIME, x) = base64(writemime, m, x)
+stringmime(m::MIME, x) = base64(write, m, x)
 stringmime(m::MIME, x::Vector{UInt8}) = base64(write, x)
 
 # it is convenient to accept strings instead of ::MIME
@@ -114,8 +146,8 @@ displayable(mime::AbstractString) = displayable(MIME(mime))
 immutable TextDisplay <: Display
     io::IO
 end
-display(d::TextDisplay, M::MIME"text/plain", x) = writemime(d.io, M, x)
-display(d::TextDisplay, x) = display(d, MIME"text/plain"(), x)
+display(d::TextDisplay, M::MIME"text/plain", x) = write(d.io, M, x)
+display(d::TextDisplay, x) = display(d, TEXTPLAIN, x)
 
 import Base: close, flush
 flush(d::TextDisplay) = flush(d.io)
@@ -148,7 +180,7 @@ macro try_display(expr)
   quote
     try $(esc(expr))
     catch e
-      isa(e, MethodError) && e.f in (display, redisplay, writemime) ||
+      isa(e, MethodError) && e.f in (display, redisplay, write) ||
         rethrow()
     end
   end

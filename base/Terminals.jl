@@ -31,7 +31,6 @@ import Base:
     start_reading,
     stop_reading,
     write,
-    writemime,
     reseteof
 
 ## TextTerminal ##

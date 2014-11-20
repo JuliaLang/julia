@@ -1,6 +1,6 @@
 module Markdown
 
-import Base: writemime
+import Base: write
 
 typealias String AbstractString
 

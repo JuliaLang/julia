@@ -311,7 +311,7 @@ precompile(Base.work_result, (Base.RemoteValue,))
 precompile(Base.write, (Base.Terminals.TTYTerminal, ASCIIString))
 precompile(Base.write, (Base.Terminals.TerminalBuffer, ASCIIString))
 precompile(Base.write, (IOBuffer, Vector{UInt8}))
-precompile(Base.writemime, (Base.Terminals.TTYTerminal, Base.Multimedia.MIME{symbol("text/plain")}, Int))
+precompile(Base.write, (Base.Terminals.TTYTerminal, Base.Multimedia.MIME{symbol("text/plain")}, Int))
 precompile(push!, (Array{Base.Multimedia.Display, 1}, Base.Multimedia.TextDisplay))
 
 precompile(Base.Terminals.TTYTerminal, (ASCIIString, Base.TTY, Base.TTY, Base.TTY))

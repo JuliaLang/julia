@@ -1,7 +1,7 @@
 # fallback text/plain representation of any type:
-writemime(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
+write(io::IO, ::MIME"text/plain", x) = showlimited(io, x)
 
-function writemime(io::IO, ::MIME"text/plain", f::Function)
+function write(io::IO, ::MIME"text/plain", f::Function)
     if isgeneric(f)
         n = length(f.env)
         m = n==1 ? "method" : "methods"
@@ -11,7 +11,7 @@ function writemime(io::IO, ::MIME"text/plain", f::Function)
     end
 end
 
-function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
+function write(io::IO, ::MIME"text/plain", v::AbstractVector)
     if isa(v, Range)
         show(io, v)
     else
@@ -23,17 +23,17 @@ function writemime(io::IO, ::MIME"text/plain", v::AbstractVector)
     end
 end
 
-writemime(io::IO, ::MIME"text/plain", v::AbstractArray) =
+write(io::IO, ::MIME"text/plain", v::AbstractArray) =
     with_output_limit(()->showarray(io, v, header=true, repr=false))
 
-function writemime(io::IO, ::MIME"text/plain", v::DataType)
+function write(io::IO, ::MIME"text/plain", v::DataType)
     show(io, v)
     # TODO: maybe show constructor info?
 end
 
-writemime(io::IO, ::MIME"text/plain", t::Associative) =
+write(io::IO, ::MIME"text/plain", t::Associative) =
     showdict(io, t, limit=true)
-writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
+write(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
     showkv(io, t, limit=true)
 
 
