@@ -338,7 +338,7 @@ static void jl_serialize_fptr(ios_t *s, void *fptr)
     void **pbp = ptrhash_bp(&fptr_to_id, fptr);
     if (*pbp == HT_NOTFOUND)
         jl_error("unknown function pointer");
-    write_uint16(s, *(ptrint_t*)pbp);
+    write_uint8(s, *(ptrint_t*)pbp);
 }
 
 static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
@@ -721,7 +721,21 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 }
                 else {
                     for(size_t i=0; i < nf; i++) {
-                        jl_serialize_value(s, jl_get_nth_field(v, i));
+                        if (t->fields[i].isptr) {
+                            jl_serialize_value(s, jl_get_nth_field(v, i));
+                        } else {
+                            jl_value_t *ft = jl_tupleref(t->types, i);
+                            if (jl_is_datatype(ft) && ((jl_datatype_t*)ft)->name == jl_pointer_type->name) {
+                                write_int32(s, 0);
+#ifdef _P64
+                                write_int32(s, 0);
+#endif
+                            } else {
+                                char *field = ((char*)data)+jl_field_offset(t, i);
+                                int nby = jl_field_size(t, i);
+                                ios_write(s, field, nby);
+                            }
+                        }
                     }
                 }
             }
@@ -806,7 +820,7 @@ void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
 
 static jl_fptr_t jl_deserialize_fptr(ios_t *s)
 {
-    int fptr = read_uint16(s);
+    int fptr = read_uint8(s);
     if (fptr < 2)
         return NULL;
 
@@ -1212,8 +1226,14 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, int pos, jl_value_t *vtag, jl
             else {
                 char *data = (char*)jl_data_ptr(v);
                 for(i=0; i < nf; i++) {
-                    jl_set_nth_field(v, i, jl_deserialize_value(s,
-                        (dt->fields[i].isptr) ? (jl_value_t**)(data+jl_field_offset(dt, i)) : NULL));
+                    if (dt->fields[i].isptr) {
+                        jl_value_t **field = (jl_value_t**)(data+jl_field_offset(dt, i));
+                        *field = jl_deserialize_value(s, field);
+                    } else {
+                        char *field = data+jl_field_offset(dt, i);
+                        int nby = jl_field_size(dt, i);
+                        ios_read(s, field, nby);
+                    }
                 }
                 if ((mode == MODE_MODULE || mode == MODE_MODULE_LAMBDAS) && jl_is_mtable(v))
                     arraylist_push(&methtable_list, v);
