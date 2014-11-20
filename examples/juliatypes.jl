@@ -149,6 +149,7 @@ function issub(a::TagT, b::TagT, env)
     b === AnyT && return true
     a === AnyT && return false
     if a.name !== b.name
+        a.name === TupleName && return false
         return issub(super(a), b, env)
     end
     if a.name === TupleName
@@ -161,7 +162,7 @@ function issub(a::TagT, b::TagT, env)
         end
         ai = bi = 1
         while true
-            ai > la && return bi > lb || vb
+            ai > la && return bi > lb || (bi==lb && vb)
             bi > lb && return false
             !issub(a.params[ai], b.params[bi], env) && return false
             ai==la && bi==lb && va && vb && return true
@@ -442,6 +443,11 @@ function test_2()
 
     @test isequal_type((Int...,), (Int...,))
     @test isequal_type((Integer...,), (Integer...,))
+
+    @test !issub((), (Int, Int...))
+    @test !issub((Int,), (Int, Int, Int...))
+
+    @test !issub((Int, (Real, Integer)), (Int...))
 end
 
 # level 3: UnionAll
