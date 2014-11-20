@@ -24,6 +24,9 @@ New language features
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
 
+  * New multidimensional iterators and index types for efficient
+    iteration over general AbstractArrays
+
 Language changes
 ----------------
 
