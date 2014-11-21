@@ -83,7 +83,7 @@ of the type::
         stride1::Int       # used only for linear indexing
     end
 
-``SubArrays`` have 5 template parameters.  The first two are the
+``SubArrays`` have 5 type parameters.  The first two are the
 standard element type and dimensionality.  The next is the type of the
 parent ``AbstractArray``.  The most heavily-used is the fourth
 parameter, a ``tuple`` of the types of the indexes for each dimension.
