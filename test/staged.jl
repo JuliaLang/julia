@@ -106,3 +106,9 @@ stagedfunction foo2{T,N}(a::Array{T,N})
 end
 @test foo1(randn(3,3)) == "N = 2, T = Float64"
 @test foo2(randn(3,3)) == "N = 2, T = Float64"
+
+# issue #9088
+stagedfunction f9088(x, a=5)
+    :(x+a)
+end
+@test f9088(7) == 12

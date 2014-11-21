@@ -551,7 +551,8 @@
 			  ,@(if (null? restkw) '() '((cell1d)))
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
-				(list `(... ,(arg-name (car vararg)))))))) isstaged)
+				(list `(... ,(arg-name (car vararg))))))))
+	  #f)
 
 	;; call with unsorted keyword args. this sorts and re-dispatches.
 	,(method-def-expr-
@@ -629,7 +630,7 @@
 			  ,@(map arg-name pargl)
 			  ,@(if (null? vararg) '()
 				(list `(... ,(arg-name (car vararg))))))))
-        isstaged)
+	  #f)
 	;; return primary function
 	,name))))
 
@@ -669,7 +670,7 @@
 			 `(block
 			   ,@lno
 			   (call ,name ,@kw ,@(map arg-name passed) ,@vals)))))
-	       (method-def-expr name sp (append kw passed) body isstaged)))
+	       (method-def-expr name sp (append kw passed) body #f)))
 	   (iota (length opt)))
     ,(method-def-expr name sparams overall-argl body isstaged))))
 
