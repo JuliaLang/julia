@@ -1228,7 +1228,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         builder.CreateBr(done);
 
         builder.SetInsertPoint(there_or_utf8);
-        cond = check_bounds ? is_here : builder.CreateAnd(is_here, here_inbounds);
+        cond = check_bounds ? builder.CreateAnd(is_here, here_inbounds) : is_here;
         builder.CreateCondBr(cond, here_utf8, check_bounds ? there_or_oob : there);
 
         builder.SetInsertPoint(here_utf8);
