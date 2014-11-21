@@ -42,6 +42,12 @@ before_install:
 script:
     - if git --no-pager grep --color -n --full-name ' $' -- \*.jl \*.scm \*.c \*.cpp \*.h; then
         echo "Error trailing whitespace found in source file(s)";
+        echo "";
+        echo "This can often be fixed with:";
+        echo "    git rebase --whitespace=fix HEAD~1";
+        echo "or";
+        echo "    git rebase --whitespace=fix master";
+        echo "and then a forced push of the correct branch";
         exit 1;
       fi
     - make $BUILDOPTS prefix=/tmp/julia install
