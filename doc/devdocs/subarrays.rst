@@ -93,7 +93,7 @@ it.
 
 If in our example above ``A`` is a ``Array{Float64, 3}``, our ``S1``
 case above would be a
-``SubArray{Float64,2,Array{Float64,3},(Colon,Int64,UnitRange{Int64}),1}``.
+``SubArray{Float64,2,Array{Float64,3},(Colon,Int64,UnitRange{Int64}),2}``.
 Note in particular the tuple parameter, which stores the types of
 the indexes used to create ``S1``.  Likewise,
 ::
@@ -200,7 +200,7 @@ array: if the first dimension instead were odd, ::
   2
 
 then ``A[2:2:4,:]`` does not have uniform stride, so we cannot
-guaranteee efficient linear indexing.  Since we have to base this
+guarantee efficient linear indexing.  Since we have to base this
 decision based purely on types encoded in the parameters of the
 ``SubArray``, ``S = sub(A, 2:2:4, :)`` cannot implement efficient
 linear indexing.
@@ -238,7 +238,7 @@ ability to re-slice is the main motivation to use an integer ``LD``
 rather than a boolean flag to encode the applicability of linear
 indexing.
 
-The main reason ``LD`` cannot be inferred from the ``indexes`` tuple
+The main reason ``LD`` cannot always be inferred from the ``indexes`` tuple
 is because ``sub`` converts internal ``Int`` indexes into
 ``UnitRanges``.  Consequently it is important to encode "safe"
 dimensions of size 1 prior to conversion.  Up to the ``LDth`` entry,
