@@ -1027,13 +1027,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         BasicBlock *cont  = BasicBlock::Create(getGlobalContext(), "cont",  ctx->f);
 
         // branch: "here" or "there"
-        Value *words = builder.CreateBitCast(b, T_vec_2word_ints);
-        Value *bytes = builder.CreateBitCast(b, T_vec_2word_bytes);
-        Value *hi_byte = builder.CreateExtractElement(
-            bytes, ConstantInt::get(T_int32, 2*sizeof(void*)-1)
+        Value *is_here = builder.CreateICmpSGE(b, ConstantInt::get(b->getType(), 0));
+        Value *here_len = builder.CreateZExt(
+            builder.CreateTrunc(
+                builder.CreateLShr(
+                    b, ConstantInt::get(b->getType(), 8*(2*sizeof(void*)-1))
+                ), T_uint8
+            ), T_size
         );
-        Value *here_len = builder.CreateZExt(hi_byte, T_size);
-        Value *is_here = builder.CreateICmpSGE(hi_byte, ConstantInt::get(T_uint8, 0));
         builder.CreateCondBr(
             !check_bounds ? is_here :
             builder.CreateAnd(is_here, builder.CreateICmpULT(i, here_len)),
@@ -1042,14 +1043,28 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
         // decode here byte (known to be in-bounds)
         builder.SetInsertPoint(here);
-        Value *here_byte = builder.CreateExtractElement(bytes, builder.CreateTrunc(i, T_int32));
+        Value *here_byte = builder.CreateTrunc(
+            builder.CreateLShr(
+                b,
+                builder.CreateZExt(
+                    builder.CreateShl(i, ConstantInt::get(T_size, 3)),
+                    b->getType()
+                )
+            ),
+            T_uint8
+        );
         builder.CreateBr(cont);
 
         // check bounds (here & there)
         if (check_bounds) {
             builder.SetInsertPoint(check);
-            Value *hi_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 1));
-            Value *there_len = builder.CreateSub(ConstantInt::get(T_size, 0), hi_word);
+            Value *there_len = builder.CreateSub(
+                ConstantInt::get(T_size, 0),
+                builder.CreateTrunc(
+                   builder.CreateAShr(b, ConstantInt::get(b->getType(), 8*sizeof(void*))),
+                   T_size
+                )
+            );
             builder.CreateCondBr(
                 builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
                 there, oob
@@ -1058,7 +1073,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 
         // decode there byte (known to be in-bounds)
         builder.SetInsertPoint(there);
-        Value *lo_word = builder.CreateExtractElement(words, ConstantInt::get(T_int32, 0));
+        Value *lo_word = builder.CreateTrunc(b, T_size);
         Value *addr = builder.CreateAdd(lo_word, i);
         Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
         Value *there_byte = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
@@ -1125,7 +1140,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                     b->getType()
                 )
             ),
-            T_int32
+            T_uint32
         );
         builder.CreateBr(cont);
 
