@@ -8,7 +8,7 @@ SubArrays
 
 Julia's ``SubArray`` type is a container encoding a "view" of a parent
 ``AbstractArray``.  This page documents some of the design principles
-and implementation of ``SubArrays``.
+and implementation of ``SubArray``\s.
 
 Indexing: cartesian vs. linear indexing
 ---------------------------------------
@@ -25,14 +25,14 @@ example, a 3d array ``A3`` can be indexed as ``A3[i,j]``, in which
 case ``i`` is interpreted as a cartesian index for the first
 dimension, and ``j`` is a linear index over dimensions 2 and 3.
 
-For ``Arrays``, linear indexing appeals to the underlying storage
+For ``Array``\s, linear indexing appeals to the underlying storage
 format: an array is laid out as a contiguous block of memory, and
 hence the linear index is just the offset (+1) of the corresponding
 entry relative to the beginning of the array.  However, this is not
-true for many other ``AbstractArrays``: examples include
+true for many other ``AbstractArray`` types: examples include
 ``SparseMatrixCSC``, arrays that require some kind of computation
 (such as interpolation), and the type under discussion here,
-``SubArrays``.  For these types, the underlying information is more
+``SubArray``.  For these types, the underlying information is more
 naturally described in terms of cartesian indexes.
 
 You can manually convert from a cartesian index to a linear index with
@@ -45,7 +45,7 @@ While converting from a cartesian index to a linear index is fast
 index to a cartesian index is very slow: it relies on the ``div``
 operation, which is one of the slowest low-level operations you can
 perform with a CPU.  For this reason, any code that deals with
-``AbstractArrays`` is best designed in terms of cartesian, rather than
+``AbstractArray`` types is best designed in terms of cartesian, rather than
 linear, indexing.
 
 Index replacement
@@ -57,7 +57,7 @@ Consider making 2d slices of a 3d array::
   S2 = slice(A, 5, :, 2:6)
 
 ``slice`` drops "singleton" dimensions (ones that are specified by an
-``Int``), so both ``S1`` and ``S2`` are two-dimensional ``SubArrays``.
+``Int``), so both ``S1`` and ``S2`` are two-dimensional ``SubArray``\s.
 Consequently, the natural way to index these is with ``S1[i,j]``.  To
 extract the value from the parent array ``A``, the natural approach is
 to replace ``S1[i,j]`` with ``A[i,5,(2:6)[j]]`` and ``S2[i,j]`` with
@@ -83,7 +83,7 @@ of the type::
         stride1::Int       # used only for linear indexing
     end
 
-``SubArrays`` have 5 type parameters.  The first two are the
+``SubArray`` has 5 type parameters.  The first two are the
 standard element type and dimensionality.  The next is the type of the
 parent ``AbstractArray``.  The most heavily-used is the fourth
 parameter, a ``tuple`` of the types of the indexes for each dimension.
@@ -120,7 +120,7 @@ Because of this conversion, ``S3`` is three-dimensional.
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Performing index translation requires that you do different things for
-different types of ``SubArrays``.  For example, for ``S1``, one needs
+different concrete ``SubArray`` types.  For example, for ``S1``, one needs
 to apply the ``i,j`` indexes to the first and third dimensions of the
 parent array, whereas for ``S2`` one needs to apply them to the
 second and third.  The simplest approach to indexing would be to do
@@ -148,7 +148,7 @@ The better approach is to dispatch to specific methods to handle each
 type of input.  Note, however, that the number of distinct methods
 needed grows exponentially in the number of dimensions, and since
 Julia supports arrays of any dimension the number of methods required
-is in fact infinite.  Fortunately, ``stagedfunctions`` allow one to
+is in fact infinite.  Fortunately, ``stagedfunction``\s allow one to
 generate the necessary methods quite straightforwardly.  The resulting
 code looks quite a lot like the runtime approach above, but all of the
 type analysis is performed at the time of method instantiation.  For a
@@ -162,7 +162,7 @@ Linear indexing
 
 Linear indexing can be implemented efficiently when the entire array
 has a single stride that separates successive elements.  For
-``SubArrays``, the availability of efficient linear indexing is based
+``SubArray`` types, the availability of efficient linear indexing is based
 purely on the types of the indexes, and does not depend on values like
 the size of the array.  It therefore can miss some cases in which the
 stride happens to be uniform::
@@ -205,7 +205,7 @@ decision based purely on types encoded in the parameters of the
 ``SubArray``, ``S = sub(A, 2:2:4, :)`` cannot implement efficient
 linear indexing.
 
-The last parameter of ``SubArrays``, ``LD``, encodes the highest
+The last parameter of ``SubArray``, ``LD``, encodes the highest
 dimension up to which elements are guaranteed to have uniform stride.
 When ``LD == length(I)``, the length of the ``indexes`` tuple,
 efficient linear indexing becomes possible.
@@ -240,7 +240,7 @@ indexing.
 
 The main reason ``LD`` cannot always be inferred from the ``indexes`` tuple
 is because ``sub`` converts internal ``Int`` indexes into
-``UnitRanges``.  Consequently it is important to encode "safe"
+``UnitRange``\s.  Consequently it is important to encode "safe"
 dimensions of size 1 prior to conversion.  Up to the ``LDth`` entry,
 we can be sure that any ``UnitRange`` was, in fact, an ``Integer``
 prior to conversion.
