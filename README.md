@@ -253,7 +253,7 @@ Building Julia requires that the following software be installed:
 - **[GNU make]**                — building dependencies.
 - **[gcc & g++][gcc]** (>= 4.4) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
 - **[gfortran][gcc]**           — compiling and linking fortran libraries
-- **[git]**                     — version control and package management.
+- **[git]**                     — version control and package management (version 1.7.3+ required)
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
