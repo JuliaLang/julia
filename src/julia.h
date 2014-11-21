@@ -803,7 +803,6 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 {
     return  (jl_function_t*) jl_get_global(m, jl_symbol(name));
 }
-DLLEXPORT int jl_module_has_initializer(jl_module_t *m);
 DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
 jl_function_t *jl_module_call_func(jl_module_t *m);
 

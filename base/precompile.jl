@@ -1,11 +1,5 @@
 # prime method cache with some things we know we'll need right after startup
-precompile(Base.Profile.__init__,())
-precompile(Base.LinAlg.__init__,())
-precompile(Base.GMP.__init__, ())
-precompile(Base.PCRE.__init__, ())
-
 precompile(Base.Random.srand, ())
-precompile(Base.Random.__init__, ())
 precompile(Base.srand, (Array{UInt32,1},))
 precompile(Base.Random.srand, (ASCIIString, Int))
 precompile(Base.Random.srand, (UInt,))
