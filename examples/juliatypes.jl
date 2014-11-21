@@ -21,6 +21,22 @@ type TagT <: Ty
     TagT(n, p, v=false) = new(n, p, v)
 end
 
+function show(io::IO, t::TagT)
+    print(io, t.name.name)
+    isempty(t.params) && return
+    print(io, '{')
+    l = length(t.params)
+    for i=1:l
+        show(io, t.params[i])
+        if i == l && t.vararg
+            print(io, "...")
+        elseif i < l
+            print(io, ",")
+        end
+    end
+    print(io, '}')
+end
+
 type UnionT <: Ty
     types
 end
@@ -102,6 +118,8 @@ type Bounds
     right::Bool
 end
 
+Base.copy(b::Bounds) = Bounds(b.lb, b.ub, b.depth, b.right)
+
 # maps Var to Bounds, and `:depth` to current depth
 const Env = Dict{Any,Any}
 
@@ -135,7 +153,7 @@ issub(x::UnionT, t::Ty, env)     = union_issub(x, t, env)
 function issub(x::Ty, t::UnionT, env)
     # TODO: distribute Union over tuple
     for tt in t.types
-        e′ = copy(env)
+        e′ = Env([ k => copy(v) for (k,v) in env])
         if issub(x, tt, e′)
             merge!(env, e′)
             return true
@@ -516,6 +534,27 @@ function test_3()
                 (@UnionAll T inst(ArrayT,inst(ArrayT,T,1),T)))
 end
 
+# level 4: Union
+function test_4()
+    @test issub_strict(Int, Union(Int,String))
+    @test issub_strict(Union(Int,Int8), Integer)
+
+    @test isequal_type(Union(Int,Int8), Union(Int,Int8))
+
+    @test isequal_type(UnionT((Ty(Int),Ty(Integer))), Ty(Integer))
+
+    @test issub_strict((Int,Int8,Int), (Union(Int,Int8)...,))
+    @test issub_strict((Int,Int8,Int), (Union(Int,Int8,Int16)...,))
+end
+
+# level 5: union and UnionAll
+function test_5()
+    @test issub(Ty((String,Array{Int,1})),
+                (@UnionAll T UnionT((tupletype(T,inst(ArrayT,T,1)),
+                                     tupletype(T,inst(ArrayT,Ty(Int),1))))))
+end
+
 # tests that don't pass yet
 function test_failing()
+    @test issub((Union(Int,Int8),Int16), Union((Int,Int16),(Int8,Int16)))
 end
