@@ -80,7 +80,7 @@ function show(io::IO, x::DataType)
     if isvarargtype(x)
         print(io, x.parameters[1], "...")
     else
-        print(io, x.name.name)
+        show(io, x.name)
         if length(x.parameters) > 0
             show_comma_array(io, x.parameters, '{', '}')
         end
@@ -103,7 +103,14 @@ macro show(exs...)
     return blk
 end
 
-show(io::IO, tn::TypeName) = print(io, tn.name)
+function show(io::IO, tn::TypeName)
+    if tn.module == Core || tn.module == Base || tn.module == Main
+        print(io, tn.name)
+    else
+        print(io, tn.module, '.', tn.name)
+    end
+end
+
 show(io::IO, ::Void) = print(io, "nothing")
 show(io::IO, b::Bool) = print(io, b ? "true" : "false")
 show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
