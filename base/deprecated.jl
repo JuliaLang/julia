@@ -228,3 +228,6 @@ const Uint128 = UInt128
 @deprecate zero{T}(x::Ptr{T})      Ptr{T}(0)
 @deprecate one{T}(::Type{Ptr{T}})  Ptr{T}(1)
 @deprecate one{T}(x::Ptr{T})       Ptr{T}(1)
+
+@deprecate rand!(r::Range, A::AbstractArray) rand!(A, r)
+@deprecate rand!(mt::MersenneTwister, r::Range, A::AbstractArray) rand!(mt, A, r)
