@@ -112,7 +112,7 @@ Library improvements
 
   * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
-  * The `machinefile` now supports an host count ([#7616]).
+  * The `machinefile` now supports a host count ([#7616]).
 
   * Added optional rounding argument to floating-point constructors ([#8845]).
 
