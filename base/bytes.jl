@@ -59,13 +59,10 @@ end
 Str(s::AbstractString) = Str(ByteVec(s))
 
 function endof(s::Str)
-    d = s.data
-    i = length(d)
-    i == 0 && return i
-    @inbounds while !is_utf8_start(d[i])
-        i -= 1
-    end
-    i
+    n = length(s.data)
+    @inbounds u = getu32(s.data, n-3)
+    x = (u & 0xc0c0c0c0) $ 0x80808080
+    n - leading_zeros(x) >>> 3
 end
 
 function length(s::Str)
