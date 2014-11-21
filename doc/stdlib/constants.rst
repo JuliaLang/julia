@@ -32,3 +32,31 @@ Constants
 .. data:: LOAD_PATH
 
    An array of paths (as strings) where the ``require`` function looks for code.
+
+.. data:: JULIA_HOME
+
+   A string containing the full path to the directory containing the ``julia`` executable.
+
+.. data:: ANY
+
+   Equivalent to ``Any`` for dispatch purposes, but signals the compiler to skip code generation specialization for that field
+
+See also:
+
+:data:`STDIN`
+:data:`STDOUT`
+:data:`STDERR`
+:data:`ENV`
+:data:`ENDIAN_BOM`
+:data:`MS_ASYNC`
+:data:`MS_INVALIDATE`
+:data:`MS_SYNC`
+:data:`DL_LOAD_PATH`
+:data:`RTLD_DEEPBIND`
+:data:`RTLD_LOCAL`
+:data:`RTLD_NOLOAD`
+:data:`RTLD_LAZY`
+:data:`RTLD_NOW`
+:data:`RTLD_GLOBAL`
+:data:`RTLD_NODELETE`
+:data:`RTLD_FIRST`
