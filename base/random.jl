@@ -151,7 +151,7 @@ rand(T::Type, d1::Int, dims::Int...) = rand(T, tuple(d1, dims...))
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
-rand!(r::Range, A::AbstractArray) = rand!(GLOBAL_RNG, r, A)
+rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
 rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
 rand(r::AbstractArray, dims::Int...) = rand(GLOBAL_RNG, r, dims)
@@ -233,7 +233,7 @@ rand!(r::MersenneTwister, A::AbstractArray{Float64}) = rand_AbstractArray_Float6
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{CloseOpen}) = dsfmt_fill_array_close_open!(s, A, n)
 fill_array!(s::DSFMT_state, A::Ptr{Float64}, n::Int, ::Type{Close1Open2}) = dsfmt_fill_array_close1_open2!(s, A, n)
 
-function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n=length(A), ::Type{I}=CloseOpen)
+function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n::Int=length(A), ::Type{I}=CloseOpen)
     # depending on the alignment of A, the data written by fill_array! may have
     # to be left-shifted by up to 15 bytes (cf. unsafe_copy! below) for
     # reproducibility purposes;
@@ -299,7 +299,7 @@ end
 rand!{T<:Union(Float16, Float32)}(r::MersenneTwister, A::Array{T}) = rand!(r, A, CloseOpen)
 
 
-function rand!(r::MersenneTwister, A::Array{UInt128}, n=length(A))
+function rand!(r::MersenneTwister, A::Array{UInt128}, n::Int=length(A))
     Af = pointer_to_array(convert(Ptr{Float64}, pointer(A)), 2n)
     i = n
     while true
@@ -403,19 +403,16 @@ rand{T<:Union(Signed,Unsigned,Bool,Char)}(mt::MersenneTwister, r::UnitRange{T}) 
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
 rand(mt::MersenneTwister, r::AbstractArray) = @inbounds return r[rand(mt, 1:length(r))]
 
-function rand!(mt::MersenneTwister, g::RandIntGen, A::AbstractArray)
+function rand!(mt::MersenneTwister, A::AbstractArray, g::RandIntGen)
     for i = 1 : length(A)
         @inbounds A[i] = rand(mt, g)
     end
     return A
 end
 
-rand!{T<:Union(Signed,Unsigned,Bool,Char)}(mt::MersenneTwister, r::UnitRange{T}, A::AbstractArray) = rand!(mt, RandIntGen(r), A)
+rand!{T<:Union(Signed,Unsigned,Bool,Char)}(mt::MersenneTwister, A::AbstractArray, r::UnitRange{T}) = rand!(mt, A, RandIntGen(r))
 
-rand!(mt::MersenneTwister, r::Range, A::AbstractArray) = _rand!(mt, r, A)
-
-# TODO: this more general version is "disabled" until #8246 is resolved
-function _rand!(mt::MersenneTwister, r::AbstractArray, A::AbstractArray)
+function rand!(mt::MersenneTwister, A::AbstractArray, r::AbstractArray)
     g = RandIntGen(1:(length(r)))
     for i = 1 : length(A)
         @inbounds A[i] = r[rand(mt, g)]
@@ -423,7 +420,7 @@ function _rand!(mt::MersenneTwister, r::AbstractArray, A::AbstractArray)
     return A
 end
 
-rand{T}(mt::MersenneTwister, r::AbstractArray{T}, dims::Dims) = _rand!(mt, r, Array(T, dims))
+rand{T}(mt::MersenneTwister, r::AbstractArray{T}, dims::Dims) = rand!(mt, Array(T, dims), r)
 rand(mt::MersenneTwister, r::AbstractArray, dims::Int...) = rand(mt, r, dims)
 
 ## random BitArrays (AbstractRNG)

@@ -8,7 +8,7 @@ include("../perfutil.jl")
 sorts = [InsertionSort, QuickSort, MergeSort, HeapSort, RadixSort, TimSort]
 
 randstr_fn!(str_len::Int) = d -> (for i = 1:length(d); d[i] = randstring(str_len); end; d)
-randint_fn!(m::Int) = d -> rand!(1:m,d)
+randint_fn!(m::Int) = d -> rand!(d, 1:m)
 
 # If we're reporting to codespeed, only do a few tests.
 if codespeed

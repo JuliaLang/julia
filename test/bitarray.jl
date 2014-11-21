@@ -46,7 +46,7 @@ for (sz,T) in allsizes
     @test isequal(convert(AbstractArray{Float64,ndims(b1)}, b1),
                   convert(AbstractArray{Float64,ndims(b1)}, bitunpack(b1)))
 
-    i1 = rand!(false:true, zeros(Bool, sz...))
+    i1 = rand!(zeros(Bool, sz...), false:true)
     @test isequal(bitunpack(bitpack(i1)), i1)
 end
 
