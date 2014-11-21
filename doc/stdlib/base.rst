@@ -4081,13 +4081,9 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    ``S`` defaults to ``Float64``.
 
-.. function:: rand!([rng], A)
+.. function:: rand!([rng], A ,[coll])
 
-   Populate the array A with random values.
-
-.. function:: rand!([rng], r, A)
-
-   Populate the array A with random values drawn uniformly from the range ``r``.
+   Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``. This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
 
 .. function:: randbool([rng], [dims...])
 

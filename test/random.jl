@@ -35,14 +35,14 @@ rand!(MersenneTwister(0), A)
 let mt = MersenneTwister()
     srand(mt)
     @test rand(mt, 0:3:1000) in 0:3:1000
-    @test issubset(rand!(mt, 0:3:1000, Array(Int, 100)), 0:3:1000)
+    @test issubset(rand!(mt, Array(Int, 100), 0:3:1000), 0:3:1000)
     coll = Any[2, UInt128(128), big(619), "string", 'c']
     @test rand(mt, coll) in coll
     @test issubset(rand(mt, coll, 2, 3), coll)
 
     # check API with default RNG:
     rand(0:3:1000)
-    rand!(0:3:1000, Array(Int, 100))
+    rand!(Array(Int, 100), 0:3:1000)
     rand(coll)
     rand(coll, 2, 3)
 end
@@ -251,5 +251,17 @@ let mt = MersenneTwister()
         rand(mt) # this is to fill mt.vals, cf. #9040
         rand!(mt, A) # must not segfault even if Int(pointer(A)) % 16 != 0
         @test A[end-4:end] == [0.49508297796349776,0.3408340446375888,0.3211229457075784,0.9103565379264364,0.16456579813368521]
+    end
+end
+
+# test rand! API: rand!([rng], A, [coll])
+let mt = MersenneTwister(0)
+    for T in [Base.IntTypes..., Float16, Float32, Float64]
+        for A in (Array(T, 5), Array(T, 2, 2))
+            rand!(A)
+            rand!(mt, A)
+            rand!(A, T[1,2,3])
+            rand!(mt, A, T[1,2,3])
+        end
     end
 end
