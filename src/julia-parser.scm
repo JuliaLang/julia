@@ -58,6 +58,10 @@
 
 (define unary-ops '(+ - ! ¬ ~ |<:| |>:| √ ∛ ∜))
 
+; We have to use tuples to disambiguate compound brackets from normal symbol operators
+(define closing-brackets '(#\) #\] #\} #\❯ #\❱ #\⟫ #\⟧ #\⦄ (close-bracket |\|]|) (close-bracket |\|\}|)))
+(define closing-brackets? (Set closing-brackets))
+
 ; operators that are both unary and binary
 (define unary-and-binary-ops '(+ - $ & ~))
 
@@ -155,7 +159,7 @@
 ;; --- lexer ---
 
 (define special-char?
-  (let ((chrs (string->list "()[]{},;\"`@")))
+  (let ((chrs (string->list "()[]{}❮❯❰❱⟪⟫⟦⟧⦃⦄,;\"`@")))
     (lambda (c) (memv c chrs))))
 (define (newline? c) (eqv? c #\newline))
 
@@ -431,6 +435,45 @@
   (let ((c (peek-char port)))
     (cond ((or (eof-object? c) (newline? c))  (read-char port))
 
+      ;; it could be a normal curly brace or a compound brace {|
+      ((eqv? c #\{)
+       (let ((c (read-char port))
+             (nextc (peek-char port)))
+         (if (eqv? nextc #\|)
+           ( begin ( read-char port )
+               (string->symbol "{|") )
+           #\{ )))
+
+      ;; it could be a normal square bracket or a compound [|
+      ((eqv? c #\[)
+       (let ((c (read-char port))
+             (nextc (peek-char port)))
+         (if (eqv? nextc #\|)
+           ( begin ( read-char port )
+               (string->symbol "[|") )
+           #\[ )))
+
+      ;; it could be a closer |], |}, or operators |>, |=, ||, or just |
+      ((eqv? c #\|)
+       (let ((c (read-char port))
+             (nextc (peek-char port)))
+         (cond ((eqv? nextc #\>)
+                (begin ( read-char port )
+                  (string->symbol "|>" )))
+               ((eqv? nextc #\=)
+                (begin ( read-char port )
+                  (string->symbol "|=" )))
+               ((eqv? nextc #\|)
+                (begin ( read-char port )
+                  (string->symbol "||" )))
+               ((eqv? nextc #\] )
+                (begin ( read-char port )
+                 '(close-bracket |\|\]| ) ))
+               ((eqv? nextc #\} )
+                (begin ( read-char port )
+                 '(close-bracket |\|\}| ) ))
+               (else '|\|| ))))
+
 	  ((special-char? c)    (read-char port))
 
 	  ((char-numeric? c)    (read-number port #f #f))
@@ -572,7 +615,8 @@
 
 (define (invalid-initial-token? tok)
   (or (eof-object? tok)
-      (memv tok '(#\) #\] #\} else elseif catch finally =))))
+      (closing-brackets? tok)
+      (memv tok '(else elseif catch finally =))))
 
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s))))
@@ -780,7 +824,8 @@
 (define (closing-token? tok)
   (or (eof-object? tok)
       (and (eq? tok 'end) (not end-symbol))
-      (memv tok '(#\, #\) #\] #\} #\; else elseif catch finally))))
+      (closing-brackets? tok)
+      (memv tok '(#\, #\; else elseif catch finally))))
 
 (define (maybe-negate op num)
   (if (eq? op '-)
@@ -804,7 +849,7 @@
        (not (and (pair? expr) (eq? (car expr) '...)))
        (or (number? expr)
 	   (large-number? expr)
-	   (not (memv t '(#\( #\[ #\{))))))
+	   (not (memv t '(#\( #\[ #\{ #\❮ #\❰ #\⟪ #\⟦ #\⦃))))))
 
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
@@ -985,6 +1030,20 @@
 	    ((#\{ )   (take-token s)
 	     (loop (list* 'curly ex
 			  (map subtype-syntax (parse-arglist s #\} )))))
+	    ((#\❮ )   (take-token s)
+	     (loop (list* 'macrocall '@call_Angle ex (parse-special-bracket s #\❯ ))))
+	    ((#\❰ )   (take-token s)
+	     (loop (list* 'macrocall '@call_Angle ex (parse-special-bracket s #\❱ ))))
+	    ((#\⟪ )   (take-token s)
+	     (loop (list* 'macrocall '@call_Angle ex (parse-special-bracket s #\⟫ ))))
+	    ((#\⟦ )   (take-token s)
+	     (loop (list* 'macrocall '@call_Brack ex (parse-special-bracket s #\⟧ ))))
+	    (( |\[\|| )   (take-token s)
+	     (loop (list* 'macrocall '@call_Brack ex (parse-special-bracket s '(close-bracket |\|\]|) ))))
+	    ((#\⦃ )   (take-token s)
+	     (loop (list* 'macrocall '@call_Brace ex (parse-special-bracket s #\⦄ ))))
+	    (( |\{\|| )   (take-token s)
+	     (loop (list* 'macrocall '@call_Brace ex (parse-special-bracket s '(close-bracket |\|\}| )))))
 	    ((#\")
 	     (if (and (symbol? ex) (not (operator? ex))
 		      (not (ts:space? s)))
@@ -1400,7 +1459,7 @@
 		      ;; newline character isn't detectable here
 		      #;((eqv? c #\newline)
 		       (error "unexpected line break in argument list"))
-		      ((memv c '(#\] #\}))
+		      ((closing-brackets? c )
 		       (error (string "unexpected \"" c "\" in argument list")))
 		      (else
 		       (error (string "missing comma or " closer
@@ -1520,6 +1579,25 @@
                  (parse-comprehension s first closer))
                 (else
                  (parse-matrix s first closer)))))))))
+
+(define ( parse-special-bracket s closer )
+  (with-normal-ops
+    (with-whitespace-newline
+      (parse-special-bracket- s closer ))))
+(define (parse-special-bracket- s closer)
+  (let loop ((lst `()))
+    (let ((t (require-token s)))
+      (if (equal? t closer)
+        (begin (take-token s) (reverse lst ))
+        (let* ((nxt (parse-eq* s))
+               (c   (require-token s)))
+          (cond ((eqv? c #\,)
+                 (begin (take-token s) (loop (cons nxt lst))))
+                ((equal? c closer) (loop (cons nxt lst)))
+                ((closing-brackets? c)
+                 (error (string "unexpected " c " in bracket. Close with " closer )))
+                (else
+                 (error (string "unexpected " c ". Expect separator , or " closer )))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
@@ -1724,6 +1802,46 @@
 
 	  ;; misplaced =
 	  ((eq? t '=) (error "unexpected \"=\""))
+
+	  ;; \lBrack \rBrack expression
+	  ((equal? t '|\[\|| )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s '(close-bracket |\|\]| ) )))
+	     (list* 'macrocall '@enclose_Brack vex )))
+
+	  ;; \lBrace \rBrace expression
+	  ((equal? t '|\{\|| )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s '(close-bracket |\|\}| ) )))
+	     (list* 'macrocall '@enclose_Brace vex )))
+
+	  ;; \lBrack \rBrack expression
+	  ((eqv? t #\⟦ )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s #\⟧ )))
+	     (list* 'macrocall '@enclose_Brack vex )))
+
+	  ;; \lBrace \rBrace expression
+	  ((eqv? t #\⦃ )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s #\⦄ )))
+	     (list* 'macrocall '@enclose_Brace vex )))
+
+	  ;; \ldAngle \rdAngle expression
+	  ((eqv? t #\❰ )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s #\❱ )))
+	     (list* 'macrocall '@enclose_Angle vex )))
+
+	  ((eqv? t #\❮ )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s #\❯ )))
+	     (list* 'macrocall '@enclose_Angle vex )))
+
+	  ((eqv? t #\⟪ )
+	   (take-token s)
+	   (let ((vex (parse-special-bracket s #\⟫ )))
+	     (list* 'macrocall '@enclose_Angle vex )))
 
 	  ;; identifier
 	  ((symbol? t) (take-token s))

@@ -296,6 +296,9 @@ end
 
 include("precompile.jl")
 
+# handling special brackets, ⟨⟩⟦⟧⦃⦄
+include( "brackets.jl")
+
 include = include_from_node1
 
 end # baremodule Base
