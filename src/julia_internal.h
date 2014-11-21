@@ -41,7 +41,6 @@ JL_CALLABLE(jl_f_tuple);
 extern jl_function_t *jl_unprotect_stack_func;
 extern jl_function_t *jl_bottom_func;
 
-
 extern jl_datatype_t *jl_box_type;
 extern jl_value_t *jl_box_any_type;
 extern jl_typename_t *jl_box_typename;
@@ -98,7 +97,8 @@ DLLEXPORT void jl_read_sonames(void);
 #endif
 
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
-
+jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
+jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 

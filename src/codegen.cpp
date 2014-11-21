@@ -623,8 +623,6 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     return f;
 }
 
-extern "C" jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
-
 static void jl_setup_module(Module *m, bool add)
 {
     m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",3);
