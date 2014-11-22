@@ -535,6 +535,7 @@ static void sweep_pool(pool_t *p)
 
     pg = p->newpages;
     ppg = &p->newpages;
+newpage_loop_continue:
     while (pg != NULL) {
         unsigned int n;
         for (n = pg->first; n <= lim; n += osize) {
@@ -556,25 +557,26 @@ static void sweep_pool(pool_t *p)
                         v->marked = 0;
                     }
                 }
-                break;
+                ppg = &pg->next;
+                pg = pg->next;
+                goto newpage_loop_continue;
             }
         }
-        gcpage_t *nextpg = pg->next;
-        if (pg->first > lim && nextpg) {
-            // free completely empty pages
-            // unless it is the last one in the pool
-            *ppg = nextpg;
+        pg->first = n;
+        {
+            gcpage_t *nextpg = pg->next;
+            if (nextpg) {
+                // free a completely empty pages
+                // unless it is the last one in the pool
+                *ppg = nextpg;
 #ifdef USE_MMAP
-            munmap(pg, sizeof(gcpage_t));
+                munmap(pg, sizeof(gcpage_t));
 #else
-            free_a16(pg);
+                free_a16(pg);
 #endif
-            //freed_bytes += GC_PAGE_SZ - oldfirst;
+            }
+            pg = nextpg;
         }
-        else {
-            ppg = &pg->next;
-        }
-        pg = nextpg;
     }
 
     pg = p->fullpages;
@@ -601,31 +603,37 @@ static void sweep_pool(pool_t *p)
                         v->marked = 0;
                     }
                 }
-                break;
+                goto fullpage_loop_continue;
             }
         }
-        gcpage_t *nextpg = pg->next;
 #ifdef FREE_PAGES_EAGER
-        if (pg->first > lim && p->newpages) {
+        if (p->newpages) {
+            gcpage_t *nextpg = pg->next;
             *ppg = nextpg;
 #ifdef USE_MMAP
             munmap(pg, sizeof(gcpage_t));
 #else
             free_a16(pg);
 #endif
+            pg = nextpg;
+            continue;
         }
-        else
 #endif
-        if (pg->first) {
-            // move page to newpages pool
-            *ppg = nextpg;
-            pg->next = p->newpages;
-            p->newpages = pg;
+        pg->first = n;
+fullpage_loop_continue:
+        {
+            gcpage_t *nextpg = pg->next;
+            if (pg->first) {
+                // move page to newpages pool
+                *ppg = nextpg;
+                pg->next = p->newpages;
+                p->newpages = pg;
+            }
+            else {
+                ppg = &pg->next;
+            }
+            pg = nextpg;
         }
-        else {
-            ppg = &pg->next;
-        }
-        pg = nextpg;
     }
     *pfl = NULL;
     freed_bytes += (nfreed - old_nfree)*osize;
