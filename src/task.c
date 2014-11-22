@@ -30,6 +30,8 @@ volatile int jl_in_stackwalk = 0;
 #include <dlfcn.h>   // for dladdr
 #endif
 
+jl_jmp_buf jl_base_ctx;
+
 /* This probing code is derived from Douglas Jones' user thread library */
 
 /* true if stack grows up, false if down */
@@ -211,11 +213,6 @@ static void switch_stack(jl_task_t *t, jl_jmp_buf *where)
         restore_stack(t, where, NULL);
     }
 }
-
-void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where)
-{
-    switch_stack(t, where);
-}
 #endif
 
 static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
@@ -262,7 +259,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
 
 #ifdef COPY_STACKS
         jl_jmp_target = where;
-        jl_longjmp(lastt->base_ctx, 1);
+        jl_longjmp(jl_base_ctx, 1);
 #else
         jl_longjmp(*where, 1);
 #endif
@@ -418,10 +415,6 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (jl_setjmp(t->base_ctx, 0)) {
-        // we get here to remove our data from the process stack
-        switch_stack(jl_current_task, jl_jmp_target);
-    }
 #endif
     res = jl_apply(t->start, NULL, 0);
     JL_GC_POP();
@@ -431,7 +424,7 @@ static void start_task(jl_task_t *t)
 
 DLLEXPORT void jl_handle_stack_switch()
 {
-    jl_switch_stack(jl_current_task, jl_jmp_target);
+    switch_stack(jl_current_task, jl_jmp_target);
 }
 
 #ifndef COPY_STACKS

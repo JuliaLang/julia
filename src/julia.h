@@ -992,11 +992,12 @@ DLLEXPORT void jl_handle_stack_switch();
 
 #ifdef COPY_STACKS
 // initialize base context of root task
+extern jl_jmp_buf jl_base_ctx;
 #define JL_SET_STACK_BASE                               \
     {                                                   \
         int __stk;                                      \
         jl_root_task->stackbase = (char*)&__stk;        \
-        if (jl_setjmp(jl_root_task->base_ctx, 1)) {     \
+        if (jl_setjmp(jl_base_ctx, 1)) {                \
             jl_handle_stack_switch();                   \
         }                                               \
     }
@@ -1145,7 +1146,6 @@ typedef struct _jl_task_t {
         void *stackbase;
         void *stack;
     };
-    jl_jmp_buf base_ctx;
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
