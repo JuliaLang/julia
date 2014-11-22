@@ -1040,7 +1040,7 @@ function triplequoted(args...)
         for s in sx
             if isa(s,ByteString)
                 lines = split(s,'\n')
-                for line in lines[2:end]
+                for line in [lines[i] for i = 2:length(lines)]
                     n,blank = indentation(line)
                     if !blank
                         indent = min(indent, n)

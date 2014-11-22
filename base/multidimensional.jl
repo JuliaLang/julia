@@ -171,6 +171,8 @@ end
 _getindex(A, I::(Union(Int,AbstractVector)...)) =
     _getindex!(similar(A, index_shape(I...)), A, I...)
 
+@nsplat N getindex(A::Array, I::NTuple{N,UnitRange{Int}}...) = slice(A, I...)
+
 @nsplat N function getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
     checkbounds(A, I...)
     _getindex(A, to_index(I...))

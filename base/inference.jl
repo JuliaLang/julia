@@ -885,7 +885,7 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
 end
 
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
-    fargs = e.args[2:end]
+    fargs = [e.args[i] for i = 2:length(e.args)]
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
     if any(x->is(x,Bottom), argtypes)
         return Bottom
@@ -1673,7 +1673,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo)
     end
     if (head === :call || head === :call1) && isa(e.args[1],LambdaStaticData)
         called = e.args[1]
-        fargs = e.args[2:end]
+        fargs = [e.args[i] for i = 2:length(e.args)]
         argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
         # recur inside inner functions once we have all types
         tr,ty = typeinf(called, argtypes, called.sparams, called, false)
@@ -2029,7 +2029,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     if !(isa(f,Function) || isa(f,IntrinsicFunction))
         return NF
     end
-    argexprs = e.args[2:end]
+    argexprs = [e.args[i] for i = 2:length(e.args)]
 
     if is(f, typeassert) && length(atypes)==2
         # typeassert(x::S, T) => x, when S<:T
@@ -2214,7 +2214,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 needcopy = false
             end
             replace_tupleref!(ast, body, vaname, newnames, sv, 1)
-            args = vcat(args[1:na-1], newnames)
+            args = vcat([args[i] for i = 1:na-1], newnames)
             na = length(args)
 
             islocal = false # if the argument name is also used as a local variable,
@@ -2233,8 +2233,8 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             end
         else
             # construct tuple-forming expression for argument tail
-            vararg = mk_tuplecall(argexprs[na:end])
-            argexprs = Any[argexprs[1:(na-1)]..., vararg]
+            vararg = mk_tuplecall([argexprs[i] for i = na:length(argexprs)])
+            argexprs = Any[[argexprs[i] for i = 1:(na-1)]..., vararg]
             isva = true
         end
     elseif na != length(argexprs)
@@ -2663,7 +2663,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
 
             for ninline = 1:100
-                atypes = tuple(Any[exprtype(x) for x in e.args[2:end]]...)
+                atypes = tuple(Any[exprtype(x) for x in [e.args[ea] for ea = 2:length(e.args)]]...)
                 if length(atypes) > MAX_TUPLETYPE_LEN
                     atypes = limit_tuple_type(atypes)
                 end
@@ -2694,7 +2694,7 @@ function inlining_pass(e::Expr, sv, ast)
                         t = to_tuple_of_Types(exprtype(aarg))
                         if isa(aarg,Expr) && is_known_call(aarg, tuple, sv)
                             # apply(f,tuple(x,y,...)) => f(x,y,...)
-                            newargs[i-3] = aarg.args[2:end]
+                            newargs[i-3] = [aarg.args[j] for j = 2:length(aarg.args)]
                         elseif isa(aarg, Tuple)
                             newargs[i-3] = Any[ QuoteNode(x) for x in aarg ]
                         elseif isa(t,Tuple) && !isvatuple(t) && effect_free(aarg,sv,true)

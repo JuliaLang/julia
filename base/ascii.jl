@@ -14,9 +14,9 @@ getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
 
 sizeof(s::ASCIIString) = sizeof(s.data)
 
-getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
-getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString(getindex(s.data,r))
-getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
+getindex(s::ASCIIString, r::Vector) = ASCIIString([s.data[i] for i = r])
+getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString([s.data[i] for i = r])
+getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString([s.data[i] for i = indx])
 search(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? search(s.data,uint8(c),i) : 0
 rsearch(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? rsearch(s.data,uint8(c),i) : 0
 
