@@ -99,7 +99,7 @@ function help(io::IO, fname::String, obj=0)
         for mod in allmods
             mfname = isempty(mod) ? fname : mod * "." * fname
             if isgeneric(obj)
-                mf = eval(func_expr_from_symbols(map(symbol, split(mfname, "."))))
+                mf = eval(func_expr_from_symbols(map(symbol, split(mfname, r"(?<!\.)\."))))
                 if mf === obj
                     append!(alldesc, FUNCTION_DICT[mfname])
                     found = true
