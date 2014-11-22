@@ -48,7 +48,7 @@ function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
             run(`touch REQUIRE`)
         end
     catch e
-        rm(dir, recursive=true)
+        ispath(dir) && rm(dir, recursive=true)
         rethrow(e)
     end
 end
