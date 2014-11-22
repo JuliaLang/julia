@@ -607,6 +607,7 @@ static void sweep_pool(pool_t *p)
         gcpage_t *nextpg = pg->next;
 #ifdef FREE_PAGES_EAGER
         if (pg->first > lim && p->newpages) {
+            *ppg = nextpg;
 #ifdef USE_MMAP
             munmap(pg, sizeof(gcpage_t));
 #else
@@ -1155,21 +1156,21 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
 {
     gcval_t *v;
     gcpage_t *pg = p->pages;
-    size_t osize = p->osize;
     size_t nused=0, nfree=0, npgs=0;
+    const size_t osize = p->osize;
+    const unsigned int lim = GC_PAGE_SZ - osize;
 
     while (pg != NULL) {
+        unsigned int n;
         npgs++;
-        v = (gcval_t*)&pg->data[pg->first];
-        char *lim = (char*)v + GC_PAGE_SZ - osize;
-        while ((char*)v <= lim) {
+        for (n = pg->first; n <= lim; n += osize) {
+            gcval_t *v = (gcval_t*)&pg->data[n];
             if (!v->marked) {
                 nfree++;
             }
             else {
                 nused++;
             }
-            v = (gcval_t*)((char*)v + osize);
         }
         gcpage_t *nextpg = pg->next;
         pg = nextpg;
