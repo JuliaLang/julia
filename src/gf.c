@@ -949,7 +949,7 @@ DLLEXPORT jl_function_t *jl_instantiate_staged(jl_methlist_t *m, jl_tuple_t *tt,
     jl_expr_t *ex = NULL;
     jl_expr_t *oldast = NULL;
     jl_function_t *func = NULL;
-    JL_GC_PUSH2(&ex, &oldast);
+    JL_GC_PUSH3(&ex, &oldast, &func);
     if (jl_is_expr(m->func->linfo->ast))
         oldast = (jl_expr_t*)m->func->linfo->ast;
     else
