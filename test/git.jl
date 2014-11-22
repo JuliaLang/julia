@@ -21,7 +21,7 @@ try cd(dir) do
     # for a total of 64^2 = 4096 files needed to test all transitions
     # between before and after superpositions of git repo states.
 
-    contents = [nothing, "foo", "bar", Dict{Any,Any}("baz"=>"qux")]
+    contents = [nothing, "foo", "bar", {"baz"=>"qux"}]
     b = length(contents)
     states = [ [ base(b,k,6) => contents[rem(div(k,b^p),b)+1] for k=0:(b^3)^2-1 ] for p=0:5 ]
 
