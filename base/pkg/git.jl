@@ -34,9 +34,9 @@ function version()
     vs = split(readchomp(`version`), ' ')[3]
     ns = split(vs, '.')
     if length(ns) > 3
-        VersionNumber(join(ns[1:3], '.'))
+        convert(VersionNumber, join(ns[1:3], '.'))
     else
-        VersionNumber(join(ns, '.'))
+        convert(VersionNumber, join(ns, '.'))
     end
 end
 
