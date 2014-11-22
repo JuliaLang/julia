@@ -6,6 +6,11 @@
 // use mmap instead of malloc to allocate pages. default = off.
 //#define USE_MMAP
 
+// free pages as soon as they are empty. if not defined, then we
+// will wait for the next GC, to allow the space to be reused more
+// efficiently. default = on.
+#define FREE_PAGES_EAGER
+
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
@@ -49,8 +54,8 @@ typedef struct _gcval_t {
 
 typedef struct _pool_t {
     size_t osize;
-    gcpage_t *pages;
-    gcpage_t *newpage;
+    gcpage_t *fullpages;
+    gcpage_t *newpages;
     gcval_t *freelist;
 } pool_t;
 
@@ -465,9 +470,8 @@ static void add_page(pool_t *p)
     // these statements are ordered so that interrupting after any of them
     // leaves the system in a valid state
     pg->first = (GC_PAGE_SZ / p->osize) * p->osize;
-    pg->next = p->pages;
-    p->pages = pg;
-    p->newpage = pg;
+    pg->next = p->newpages;
+    p->newpages = pg;
 }
 
 static inline void *pool_alloc(pool_t *p)
@@ -480,17 +484,19 @@ static inline void *pool_alloc(pool_t *p)
         p->freelist = p->freelist->next;
         return v;
     }
-    volatile void *old = p->newpage;
-    if (p->newpage == NULL) {
+    if (p->newpages == NULL) {
         add_page(p);
     }
-    assert(p->newpage != NULL);
-    gcpage_t *pg = p->newpage;
+    assert(p->newpages != NULL);
+    gcpage_t *pg = p->newpages;
     assert(pg->first > 0 && pg->first <= GC_PAGE_SZ);
     pg->first -= p->osize;
     gcval_t *v = (gcval_t*)&pg->data[pg->first];
     if (!pg->first) {
-        p->newpage = NULL;
+        // move page to fullpages list
+        p->newpages = pg->next;
+        pg->next = p->fullpages;
+        p->fullpages = pg;
     }
     return v;
 }
@@ -513,12 +519,12 @@ static int szclass(size_t sz)
 
 static void sweep_pool(pool_t *p)
 {
-    gcval_t **prev_pfl;
-    gcpage_t *pg = p->pages;
-    gcpage_t **ppg = &p->pages;
+    gcpage_t *pg;
+    gcpage_t **ppg;
     gcval_t **pfl = &p->freelist;
-    size_t osize = p->osize;
     size_t nfreed = 0;
+    const size_t osize = p->osize;
+    const unsigned int lim = GC_PAGE_SZ - osize;
 
     size_t old_nfree = 0;
     gcval_t *ofl = p->freelist;
@@ -527,10 +533,10 @@ static void sweep_pool(pool_t *p)
         ofl = ofl->next;
     }
 
+    pg = p->newpages;
+    ppg = &p->newpages;
     while (pg != NULL) {
-        unsigned int lim = GC_PAGE_SZ - osize;
         unsigned int n;
-        prev_pfl = pfl;
         for (n = pg->first; n <= lim; n += osize) {
             gcval_t *v = (gcval_t*)&pg->data[n];
             if (!v->marked) {
@@ -554,23 +560,66 @@ static void sweep_pool(pool_t *p)
             }
         }
         gcpage_t *nextpg = pg->next;
-        if (pg->first > lim) {
-            pfl = prev_pfl;
-            if (pg == p->newpage) {
-            }
-            else if (!p->newpage) {
-                p->newpage = pg;
+        if (pg->first > lim && nextpg) {
+            // free completely empty pages
+            // unless it is the last one in the pool
+            *ppg = nextpg;
+#ifdef USE_MMAP
+            munmap(pg, sizeof(gcpage_t));
+#else
+            free_a16(pg);
+#endif
+            //freed_bytes += GC_PAGE_SZ - oldfirst;
+        }
+        else {
+            ppg = &pg->next;
+        }
+        pg = nextpg;
+    }
+
+    pg = p->fullpages;
+    ppg = &p->fullpages;
+    while (pg != NULL) {
+        unsigned int n;
+        assert(!pg->first);
+        for (n = pg->first; n <= lim; n += osize) {
+            gcval_t *v = (gcval_t*)&pg->data[n];
+            if (!v->marked) {
+                nfreed++;
             }
             else {
-                *ppg = nextpg;
-
+                v->marked = 0;
+                pg->first = n;
+                for (n += osize; n <= lim; n += osize) {
+                    gcval_t *v = (gcval_t*)&pg->data[n];
+                    if (!v->marked) {
+                        *pfl = v;
+                        pfl = &v->next;
+                        nfreed++;
+                    }
+                    else {
+                        v->marked = 0;
+                    }
+                }
+                break;
+            }
+        }
+        gcpage_t *nextpg = pg->next;
+#ifdef FREE_PAGES_EAGER
+        if (pg->first > lim && p->newpages) {
 #ifdef USE_MMAP
-                munmap(pg, sizeof(gcpage_t));
+            munmap(pg, sizeof(gcpage_t));
 #else
-                free_a16(pg);
+            free_a16(pg);
 #endif
-           }
-            //freed_bytes += GC_PAGE_SZ - oldfirst;
+        }
+        else
+#endif
+        if (pg->first) {
+            // move page to newpages pool
+            *ppg = nextpg;
+            pg->next = p->newpages;
+            p->newpages = pg;
         }
         else {
             ppg = &pg->next;
@@ -1076,13 +1125,7 @@ void jl_gc_init(void)
     int i;
     for(i=0; i < N_POOLS; i++) {
         norm_pools[i].osize = szc[i];
-        norm_pools[i].pages = NULL;
-        norm_pools[i].freelist = NULL;
-        norm_pools[i].newpage = NULL;
-
         ephe_pools[i].osize = szc[i];
-        ephe_pools[i].pages = NULL;
-        ephe_pools[i].newpage = NULL;
     }
 
     htable_new(&finalizer_table, 0);
