@@ -2,7 +2,7 @@
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings", "dates",
     "collections", "hashing", "remote", "iobuffer", "staged", "arrayops",
-    "subarray", "reduce", "reducedim",
+    "subarray", "reduce", "reducedim", "random", "intfuncs",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
