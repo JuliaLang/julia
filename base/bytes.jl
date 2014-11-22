@@ -7,7 +7,7 @@ ByteVec(s::AbstractString) = ByteVec(bytestring(s).data)
 size(b::ByteVec) = (length(b),)
 
 function length(b::ByteVec)
-    here = ((b.x >>> 8*(sizeof(b.x)-1)) % Int) & 255
+    here = (b.x >>> 8*(sizeof(b.x)-1)) % Int
     there = -(b.x >> 8*sizeof(Int)) % Int
     ifelse(b.x < 0, there, here)
 end
@@ -65,17 +65,30 @@ function endof(s::Str)
     n - leading_zeros(x) >>> 3
 end
 
-function length(s::Str)
-    n = 0
-    @inbounds for b in s.data
-        n += is_utf8_start(b)
-    end
-    return n
-end
-
 @inline function next(s::Str, i::Int)
     x = s.data.x
     box(Char, bytevec_utf8_ref(unbox(typeof(x), x), unbox(Int, i))), i + 1
+end
+
+const mask = Int == Int64 ? 0x0101010101010101 : 0x01010101
+
+function length(s::Str)
+    x = s.data.x
+    if 0 <= x
+        lo, hi = x % UInt, (x >>> 8*sizeof(Uint)) % Uint
+        n = (hi >>> 8*(sizeof(Uint)-1)) % Int
+        n -= count_ones((mask & (lo >>> 7)) & ~(mask & (lo >>> 6)))
+        n -= count_ones((mask & (hi >>> 7)) & ~(mask & (hi >>> 6)))
+        return n
+    else
+        p = reinterpret(Ptr{Uint8}, x % UInt)
+        n = -(x >> 8*sizeof(Int)) % Int
+        for i = 1:n
+            b = unsafe_load(p, i)
+            n -= (b & 0xc0) == 0x80
+        end
+        return n
+    end
 end
 
 ## overload methods for efficiency ##
