@@ -138,7 +138,6 @@ end
 # geqrf - unpivoted QR decomposition
 # gegp3 - pivoted QR decomposition
 # geqrt - unpivoted QR by WY representation
-# geqrt3! - recursive algorithm producing compact WY representation of Q
 # gerqf - unpivoted RQ decomposition
 # getrf - LU decomposition
 #
@@ -147,11 +146,11 @@ end
 # (e.g. the tau argument).  This is so that a factorization can be
 # updated in place.  The condensed mutating functions, usually a
 # function of A only, are defined after this block.
-for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty) in
-    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqp3_,:dgeqrt_,:dgeqrt3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
-     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqp3_,:sgeqrt_,:sgeqrt3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
-     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqp3_,:zgeqrt_,:zgeqrt3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
-     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqp3_,:cgeqrt_,:cgeqrt3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
+for (gebrd, gelqf, geqlf, geqrf, geqrt, geqp3, gerqf, getrf, elty, relty) in
+    ((:dgebrd_,:dgelqf_,:dgeqlf_,:dgeqrf_,:dgeqrt_,:dgeqp3_,:dgerqf_,:dgetrf_,:Float64,:Float64),
+     (:sgebrd_,:sgelqf_,:sgeqlf_,:sgeqrf_,:sgeqrt_,:sgeqp3_,:sgerqf_,:sgetrf_,:Float32,:Float32),
+     (:zgebrd_,:zgelqf_,:zgeqlf_,:zgeqrf_,:zgeqrt_,:zgeqp3_,:zgerqf_,:zgetrf_,:Complex128,:Float64),
+     (:cgebrd_,:cgelqf_,:cgeqlf_,:cgeqrf_,:cgeqrt_,:cgeqp3_,:cgerqf_,:cgetrf_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DGEBRD( M, N, A, LDA, D, E, TAUQ, TAUP, WORK, LWORK,
         #                    INFO )
@@ -239,6 +238,61 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             A, tau
         end
+        # SUBROUTINE DGEQRF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
+        # *     .. Scalar Arguments ..
+        #       INTEGER            INFO, LDA, LWORK, M, N
+        # *     .. Array Arguments ..
+        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
+        function geqrf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
+            chkstride1(A)
+            info  = Array(BlasInt, 1)
+            m     = blas_int(size(A, 1))
+            n     = blas_int(size(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
+            if length(tau) != min(m,n) throw(DimensionMismatch("geqrf!")) end
+            lwork = blas_int(-1)
+            work  = Array($elty, 1)
+            for i in 1:2                # first call returns lwork as work[1]
+                ccall(($(blasfunc(geqrf)), liblapack), Void,
+                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                      &m, &n, A, &lda, tau, work, &lwork, info)
+                @lapackerror
+                if lwork < 0
+                    lwork = blas_int(real(work[1]))
+                    work = Array($elty, lwork)
+                end
+            end
+            A, tau
+        end
+        # SUBROUTINE DGEQRT( M, N, NB, A, LDA, T, LDT, WORK, INFO )
+        # *       .. Scalar Arguments ..
+        #         INTEGER INFO, LDA, LDT, M, N, NB
+        # *       .. Array Arguments ..
+        #         DOUBLE PRECISION A( LDA, * ), T( LDT, * ), WORK( * )
+        function geqrt!(A::StridedMatrix{$elty}, T::Matrix{$elty})
+            chkstride1(A); chkstride1(T)
+            info  = Array(BlasInt, 1)
+            m     = blas_int(size(A, 1))
+            n     = blas_int(size(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
+            nb    = blas_int(size(T, 1))
+            ldt   = blas_int(max(1,stride(T,2)))
+            minmn = min(m, n)
+            nb <= minmn || throw(ArgumentError("Block size $nb > $minmn too large"))
+            work = Array($elty, nb*n)
+            if n > 0
+                ccall(($(blasfunc(geqrt)), liblapack), Void,
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                     Ptr{BlasInt}),
+                     &m, &n, &nb, A,
+                     &lda, T, &ldt, work,
+                     info)
+                @lapackerror
+            end
+            A, T
+        end
         # SUBROUTINE DGEQP3( M, N, A, LDA, JPVT, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -282,69 +336,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             end
             return A, tau, jpvt
         end
-        function geqrt!(A::StridedMatrix{$elty}, T::Matrix{$elty})
-            chkstride1(A)
-            m, n = size(A)
-            minmn = min(m, n)
-            nb = size(T, 1)
-            nb <= minmn || throw(ArgumentError("Block size $nb > $minmn too large"))
-            lda = max(1, stride(A,2))
-            work = Array($elty, nb*n)
-            if n > 0
-                info = Array(BlasInt, 1)
-                ccall(($(blasfunc(geqrt)), liblapack), Void,
-                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                     Ptr{BlasInt}),
-                     &m, &n, &nb, A,
-                     &lda, T, &max(1,stride(T,2)), work,
-                     info)
-                @lapackerror
-            end
-            A, T
-        end
-        function geqrt3!(A::StridedMatrix{$elty}, T::Matrix{$elty})
-            chkstride1(A); chkstride1(T)
-            m, n = size(A); p, q = size(T)
-            if m < n throw(DimensionMismatch("input matrix cannot have fewer rows than columns")) end
-            if p < n || q < n throw(DimensionMismatch("block reflector")) end
-            if n > 0
-                info = Array(BlasInt, 1)
-                ccall(($(blasfunc(geqrt3)), liblapack), Void,
-                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                     &m, &n, A, &max(1, stride(A, 2)),
-                     T, &max(1,stride(T,2)), info)
-                @lapackerror
-            end
-            A, T
-        end
         ## geqrfp! - positive elements on diagonal of R - not defined yet
-        # SUBROUTINE DGEQRF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
-        # *     .. Scalar Arguments ..
-        #       INTEGER            INFO, LDA, LWORK, M, N
-        # *     .. Array Arguments ..
-        #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
-        function geqrf!(A::StridedMatrix{$elty}, tau::Vector{$elty})
-            chkstride1(A)
-            m, n  = size(A)
-            if length(tau) != min(m,n) throw(DimensionMismatch("geqrf!")) end
-            work  = Array($elty, 1)
-            lwork = blas_int(-1)
-            info  = Array(BlasInt, 1)
-            for i in 1:2                # first call returns lwork as work[1]
-                ccall(($(blasfunc(geqrf)), liblapack), Void,
-                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
-                @lapackerror
-                if lwork < 0
-                    lwork = blas_int(real(work[1]))
-                    work = Array($elty, lwork)
-                end
-            end
-            A, tau
-        end
         # SUBROUTINE DGERQF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
         #       INTEGER            INFO, LDA, LWORK, M, N
@@ -353,7 +345,9 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         function gerqf!(A::StridedMatrix{$elty},tau::Vector{$elty})
             chkstride1(A)
             info  = Array(BlasInt, 1)
-            m, n  = size(A)
+            m     = blas_int(size(A, 1))
+            n     = blas_int(size(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
             if length(tau) != min(m,n) throw(DimensionMismatch("gerqf!")) end
             lwork = blas_int(-1)
             work  = Array($elty, 1)
@@ -361,7 +355,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                 ccall(($(blasfunc(gerqf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
+                      &m, &n, A, &lda, tau, work, &lwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -378,10 +372,11 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
         #       DOUBLE PRECISION   A( LDA, * )
         function getrf!(A::StridedMatrix{$elty})
             chkstride1(A)
-            info = Array(BlasInt, 1)
-            m, n = size(A)
-            lda  = max(1,stride(A, 2))
-            ipiv = similar(A, BlasInt, min(m,n))
+            info  = Array(BlasInt, 1)
+            m     = blas_int(size(A, 1))
+            n     = blas_int(size(A, 2))
+            lda   = blas_int(max(1,stride(A, 2)))
+            ipiv  = similar(A, BlasInt, min(m,n))
             ccall(($(blasfunc(getrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -394,9 +389,8 @@ end
 
 gelqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gelqf!(A,similar(A,T,min(m,n))))
 geqlf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqlf!(A,similar(A,T,min(m,n))))
-geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
-geqrt3!{T<:BlasFloat}(A::StridedMatrix{T}) = (n=size(A,2); geqrt3!(A,similar(A,T,n,n)))
 geqrf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); geqrf!(A,similar(A,T,min(m,n))))
+geqrt!{T<:BlasFloat}(A::StridedMatrix{T}, nb::Integer) = geqrt!(A,similar(A,T,nb,minimum(size(A))))
 gerqf!{T<:BlasFloat}(A::StridedMatrix{T}) = ((m,n)=size(A); gerqf!(A,similar(A,T,min(m,n))))
 
 function geqp3!{T<:BlasFloat}(A::StridedMatrix{T},jpvt::Vector{BlasInt})
@@ -1601,6 +1595,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             nA    = size(A, 2)
             k     = length(tau)
             if side == 'L' && m != nA throw(DimensionMismatch("")) end
+            if side == 'R' && n != nA throw(DimensionMismatch("")) end
             if side == 'R' && n != nA throw(DimensionMismatch("")) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
