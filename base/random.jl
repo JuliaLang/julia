@@ -940,7 +940,7 @@ function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
             r = randi(rng)
             rabs = int64(r>>1) # One bit for the sign
             idx = rabs & 0xFF
-            x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
+            x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
             if rabs < ki[idx+1]
                 return x # 99.3% of the time we return here 1st try
             elseif idx == 0
