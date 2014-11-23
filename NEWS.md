@@ -118,6 +118,15 @@ Library improvements
 
   * `code_native` now outputs branch labels ([#8897]).
 
+  * Streamlined random number generation APIs [#8246]. The default
+    `rand` no longer uses global state in the underlying C library,
+    dSFMT, making it closer to being thread-safe ([#8399],
+    [#8380]). All APIs can now take an `AbstractRNG` argument. There
+    are speed improvements across the board ([#8808], [#8941],
+    [#8958], [#9083]).
+
+  * Significantly faster `randn` ([#9126]).
+
 Deprecated or removed
 ---------------------
 
