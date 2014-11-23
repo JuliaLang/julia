@@ -807,7 +807,7 @@ encodings.
 If this is all extremely confusing, try reading `"The Absolute Minimum
 Every Software Developer Absolutely, Positively Must Know About Unicode
 and Character
-Sets" <http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
+Sets" <https://web.archive.org/web/20141112182623/http://www.joelonsoftware.com/articles/Unicode.html>`_. It's an
 excellent introduction to Unicode and UTF-8, and may help alleviate some
 confusion regarding the matter.
 
