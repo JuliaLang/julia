@@ -226,20 +226,23 @@
 
    Similar to \"==\", except treats all floating-point \"NaN\" values
    as equal to each other, and treats \"-0.0\" as unequal to \"0.0\".
-   For values that are not floating-point, \"isequal\" is the same as
-   \"==\".
+   For values that are not floating-point, \"isequal\" calls \"==\"
+   (so that if you define a \"==\" method for a new type you
+   automatically get \"isequal\").
 
    \"isequal\" is the comparison function used by hash tables
    (\"Dict\"). \"isequal(x,y)\" must imply that \"hash(x) ==
    hash(y)\".
 
+   This typically means that if you define your own \"==\" function
+   then you must define a corresponding \"hash\" (and vice versa).
    Collections typically implement \"isequal\" by calling \"isequal\"
    recursively on all contents.
 
-   Scalar types generally do not need to implement \"isequal\", unless
-   they represent floating-point numbers amenable to a more efficient
-   implementation than that provided as a generic fallback (based on
-   \"isnan\", \"signbit\", and \"==\").
+   Scalar types generally do not need to implement \"isequal\"
+   separate from \"==\", unless they represent floating-point numbers
+   amenable to a more efficient implementation than that provided as a
+   generic fallback (based on \"isnan\", \"signbit\", and \"==\").
 
 "),
 
@@ -309,8 +312,14 @@
 
    Compute an integer hash code such that \"isequal(x,y)\" implies
    \"hash(x)==hash(y)\". The optional second argument \"h\" is a hash
-   code to be mixed with the result. New types should implement the
-   2-argument form.
+   code to be mixed with the result.
+
+   New types should implement the 2-argument form, typically  by
+   calling the 2-argument \"hash\" method recursively in order to mix
+   hashes of the contents with each other (and with \"h\").
+   Typically, any type that implements \"hash\" should also implement
+   its own \"==\" (hence \"isequal\") to guarantee the property
+   mentioned above.
 
 "),
 
@@ -873,7 +882,11 @@
 
 ("Base","reduce","reduce(op, v0, itr)
 
-   Reduce the given collection \"ìtr\" with the given binary operator.
+   Reduce the given collection \"ìtr\" with the given binary operator
+   \"op\". \"v0\" must be a neutral element for \"op\" that will be
+   returned for empty collections. It is unspecified whether \"v0\" is
+   used for non-empty collections.
+
    Reductions for certain commonly-used operators have special
    implementations which should be used instead: \"maximum(itr)\",
    \"minimum(itr)\", \"sum(itr)\", \"prod(itr)\", \"any(itr)\",
@@ -894,31 +907,40 @@
 
 ("Base","reduce","reduce(op, itr)
 
-   Like \"reduce\" but using the first element as v0.
+   Like \"reduce(op, v0, itr)\". This cannot be used with empty
+   collections, except for some special cases (e.g. when \"op\" is one
+   of \"+\", \"*\", \"max\", \"min\", \"&\", \"|\") when Julia can
+   determine the neutral element of \"op\".
 
 "),
 
 ("Base","foldl","foldl(op, v0, itr)
 
-   Like \"reduce\", but with guaranteed left associativity.
+   Like \"reduce\", but with guaranteed left associativity. \"v0\"
+   will be used exactly once.
 
 "),
 
 ("Base","foldl","foldl(op, itr)
 
-   Like \"foldl\", but using the first element as v0.
+   Like \"foldl(op, v0, itr)\", but using the first element of \"itr\"
+   as \"v0\". In general, this cannot be used with empty collections
+   (see \"reduce(op, itr)\").
 
 "),
 
 ("Base","foldr","foldr(op, v0, itr)
 
-   Like \"reduce\", but with guaranteed right associativity.
+   Like \"reduce\", but with guaranteed right associativity. \"v0\"
+   will be used exactly once.
 
 "),
 
 ("Base","foldr","foldr(op, itr)
 
-   Like \"foldr\", but using the last element as v0.
+   Like \"foldr(op, v0, itr)\", but using the last element of \"itr\"
+   as \"v0\". In general, this cannot be used with empty collections
+   (see \"reduce(op, itr)\").
 
 "),
 
@@ -1224,16 +1246,61 @@
 
 "),
 
-("Base","mapreduce","mapreduce(f, op, itr)
+("Base","mapreduce","mapreduce(f, op, v0, itr)
 
-   Applies function \"f\" to each element in \"itr\" and then reduces
-   the result using the binary function \"op\".
+   Apply function \"f\" to each element in \"itr\", and then reduce
+   the result using the binary function \"op\". \"v0\" must be a
+   neutral element for \"op\" that will be returned for empty
+   collections. It is unspecified whether \"v0\" is used for non-empty
+   collections.
+
+   \"mapreduce\" is functionally equivalent to calling \"reduce(op,
+   v0, map(f, itr))\", but will in general execute faster since no
+   intermediate collection needs to be created. See documentation for
+   \"reduce\" and \"map\".
 
    **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
 
-   The associativity of the reduction is implementation-dependent; if
-   you need a particular associativity, e.g. left-to-right, you should
-   write your own loop. See documentation for \"reduce\".
+   The associativity of the reduction is implementation-dependent. Use
+   \"mapfoldl\" or \"mapfoldr\" instead for guaranteed left or right
+   associativity.
+
+"),
+
+("Base","mapreduce","mapreduce(f, op, itr)
+
+   Like \"mapreduce(f, op, v0, itr)\". In general, this cannot be used
+   with empty collections (see \"reduce(op, itr)\").
+
+"),
+
+("Base","mapfoldl","mapfoldl(f, op, v0, itr)
+
+   Like \"mapreduce\", but with guaranteed left associativity. \"v0\"
+   will be used exactly once.
+
+"),
+
+("Base","mapfoldl","mapfoldl(f, op, itr)
+
+   Like \"mapfoldl(f, op, v0, itr)\", but using the first element of
+   \"itr\" as \"v0\". In general, this cannot be used with empty
+   collections (see \"reduce(op, itr)\").
+
+"),
+
+("Base","mapfoldr","mapfoldr(f, op, v0, itr)
+
+   Like \"mapreduce\", but with guaranteed right associativity. \"v0\"
+   will be used exactly once.
+
+"),
+
+("Base","mapfoldr","mapfoldr(f, op, itr)
+
+   Like \"mapfoldr(f, op, v0, itr)\", but using the first element of
+   \"itr\" as \"v0\". In general, this cannot be used with empty
+   collections (see \"reduce(op, itr)\").
 
 "),
 
@@ -5777,13 +5844,22 @@ popdisplay(d::Display)
 
 ("Base","fill","fill(x, dims)
 
-   Create an array filled with the value \"x\"
+   Create an array filled with the value \"x\". For example,
+   \"fill(1.0, (10,10))\" returns a  10x10 array of floats, with each
+   element initialized to 1.0.
+
+   If \"x\" is an object reference, all elements will refer to the
+   same object. \"fill(Foo(), dims)\" will return an array filled with
+   the result of evaluating \"Foo()\" once.
 
 "),
 
 ("Base","fill!","fill!(A, x)
 
-   Fill the array \"A\" with the value \"x\"
+   Fill array \"A\" with the value \"x\". If \"x\" is an object
+   reference, all elements will refer to the same object. \"fill!(A,
+   Foo())\" will return \"A\" filled with the result of evaluating
+   \"Foo()\" once.
 
 "),
 
@@ -6497,13 +6573,44 @@ popdisplay(d::Display)
 
 "),
 
+("Base","middle","middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to \"x\"
+   itself, but of the type of \"middle(x, x)\" for consistency.
+
+"),
+
+("Base","middle","middle(x, y)
+
+   Compute the middle of two reals \"x\" and \"y\", which is
+   equivalent in both value and type to computing their mean (\"(x +
+   y) / 2\").
+
+"),
+
+("Base","middle","middle(range)
+
+   Compute the middle of a range, which consists in computing the mean
+   of its extrema. Since a range is sorted, the mean is performed with
+   the first and last element.
+
+"),
+
+("Base","middle","middle(array)
+
+   Compute the middle of an array, which consists in finding its
+   extrema and then computing their mean.
+
+"),
+
 ("Base","median","median(v; checknan::Bool=true)
 
-   Compute the median of a vector \"v\". If keyword argument
-   \"checknan\" is true (the default), an error is raised for data
-   containing NaN values. Note: Julia does not ignore \"NaN\" values
-   in the computation. For applications requiring the handling of
-   missing data, the \"DataArray\" package is recommended.
+   Compute the median of a vector \"v\". If the keyword argument
+   \"checknan\" is true (the default), \"NaN\" is returned for data
+   containing \"NaN\" values. Otherwise the median is computed with
+   \"NaN\" values sorted to the last position. For applications
+   requiring the handling of missing data, the \"DataArrays\" package
+   is recommended.
 
 "),
 
@@ -6662,6 +6769,10 @@ popdisplay(d::Display)
 
    A multidimensional FFT simply performs this operation along each
    transformed dimension of \"A\".
+
+   Higher performance is usually possible with multi-threading. Use
+   *FFTW.set_num_threads(np)* to use *np* threads, if you have *np*
+   processors.
 
 "),
 
@@ -8984,13 +9095,14 @@ popdisplay(d::Display)
 
 ("Base","tempname","tempname()
 
-   Generate a unique temporary filename.
+   Generate a unique temporary file path.
 
 "),
 
 ("Base","tempdir","tempdir()
 
-   Obtain the path of a temporary directory.
+   Obtain the path of a temporary directory (possibly shared with
+   other processes).
 
 "),
 
@@ -9163,10 +9275,10 @@ popdisplay(d::Display)
    \"A\".  For Hermitian \"A\" (equivalent to symmetric \"A\" for non-
    complex \"A\") the \"BunchKaufman\" factorization is used.
    Otherwise an LU factorization is used. For rectangular \"A\" the
-   result is the minimum-norm least squares solution computed by
-   reducing \"A\" to bidiagonal form and solving the bidiagonal least
-   squares problem.  For sparse, square \"A\" the LU factorization
-   (from UMFPACK) is used.
+   result is the minimum-norm least squares solution computed by a
+   pivoted QR factorization of \"A\" and a rank estimate of A based on
+   the R factor. For sparse, square \"A\" the LU factorization (from
+   UMFPACK) is used.
 
 "),
 
@@ -9303,14 +9415,17 @@ popdisplay(d::Display)
    If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
    is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
    fill-reducing permutation is used.  Methods for \"size\",
-   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\".
-   One of the solve methods includes an integer argument that can be
-   used to solve systems involving parts of the factorization only.
-   The optional boolean argument, \"ll\" determines whether the
-   factorization returned is of the \"A[p,p] = L*L'\" form, where
-   \"L\" is lower triangular or \"A[p,p] = L*Diagonal(D)*L'\" form
-   where \"L\" is unit lower triangular and \"D\" is a non-negative
-   vector.  The default is LDL.
+   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
+   are available for \"CholmodFactor\" objects.  One of the solve
+   methods includes an integer argument that can be used to solve
+   systems involving parts of the factorization only.  The optional
+   boolean argument, \"ll\" determines whether the factorization
+   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
+   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
+   unit lower triangular and \"D\" is a non-negative vector.  The
+   default is LDL. The symbolic factorization can also be reused for
+   other matrices with the same structure as \"A\" by calling
+   \"cholfact!\".
 
 "),
 
@@ -9318,6 +9433,9 @@ popdisplay(d::Display)
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
+   \"cholfact!\" can also reuse the symbolic factorization from a
+   different matrix \"F\" with the same structure when used as:
+   \"cholfact!(F::CholmodFactor, A)\".
 
 "),
 
@@ -10299,8 +10417,8 @@ popdisplay(d::Display)
 
 ("Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
 
-   Update the vector \"y\" as \"alpha*A*x + beta*x\" or \"alpha*A'x +
-   beta*x\" according to \"tA\" (transpose \"A\"). Returns the updated
+   Update the vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'x +
+   beta*y\" according to \"tA\" (transpose \"A\"). Returns the updated
    \"y\".
 
 "),
@@ -10350,7 +10468,7 @@ popdisplay(d::Display)
 
 ("Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
 
-   Update the vector \"y\" as \"alpha*A*y + beta*y\". \"A\" is assumed
+   Update the vector \"y\" as \"alpha*A*x + beta*y\". \"A\" is assumed
    to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
    Returns the updated \"y\".
 
@@ -10473,11 +10591,15 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Pkg","init","init()
+("Base.Pkg","init","init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
 
    Initialize \"Pkg.dir()\" as a package directory. This will be done
    automatically when the \"JULIA_PKGDIR\" is not set and
-   \"Pkg.dir()\" uses its default value.
+   \"Pkg.dir()\" uses its default value. As part of this process,
+   clones a local METADATA git repository from the site and branch
+   specified by its arguments, which are typically not provided.
+   Explicit (non-default) arguments can be used to support a custom
+   METADATA setup.
 
 "),
 
