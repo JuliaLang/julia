@@ -368,7 +368,7 @@ end
 
 # testing
 
-function runtests(tests = ["all"], numcores = iceil(CPU_CORES/2))
+function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
     if isa(tests,AbstractString)
         tests = split(tests)
     end

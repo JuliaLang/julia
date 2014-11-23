@@ -790,10 +790,7 @@ function empty!(B::BitVector)
 end
 
 ## Misc functions
-
-for f in (:iround, :itrunc, :ifloor, :iceil, :abs)
-    @eval ($f)(B::BitArray) = copy(B)
-end
+abs(B::BitArray) = copy(B)
 
 ## Unary operators ##
 

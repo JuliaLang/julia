@@ -140,7 +140,7 @@ ispow2(x::Integer) = count_ones(x)==1
 function nextpow(a::Real, x::Real)
     (a <= 1 || x <= 0) && throw(DomainError())
     x <= 1 && return one(a)
-    n = iceil(log(a, x))
+    n = ceil(Integer,log(a, x))
     p = a^(n-1)
     # guard against roundoff error, e.g., with a=5 and x=125
     p >= x ? p : a^n
@@ -148,7 +148,7 @@ end
 # largest a^n <= x, with integer n
 function prevpow(a::Real, x::Real)
     (a <= 1 || x < 1) && throw(DomainError())
-    n = ifloor(log(a, x))
+    n = floor(Integer,log(a, x))
     p = a^(n+1)
     p <= x ? p : a^n
 end

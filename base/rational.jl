@@ -220,26 +220,26 @@ for op in (:div, :fld, :cld)
     end
 end
 
-itrunc(x::Rational) = div(x.num,x.den)
-ifloor(x::Rational) = fld(x.num,x.den)
-iceil (x::Rational) = cld(x.num,x.den)
-function iround(x::Rational)
-    t = itrunc(x)
+trunc{T<:Integer}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
+floor{T<:Integer}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
+ceil {T<:Integer}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
+function round{T<:Integer}(::Type{T}, x::Rational)
+    t = trunc(T,x)
     r = x-t
     abs(r.num) > (r.den-one(r.den))>>1 ? t + copysign(one(t),x) : t
 end
 
-trunc(x::Rational) = Rational(itrunc(x))
-floor(x::Rational) = Rational(ifloor(x))
-ceil (x::Rational) = Rational(iceil(x))
-round(x::Rational) = Rational(iround(x))
+trunc{T}(x::Rational{T}) = Rational(trunc(T,x))
+floor{T}(x::Rational{T}) = Rational(floor(T,x))
+ceil {T}(x::Rational{T}) = Rational(ceil(T,x))
+round{T}(x::Rational{T}) = Rational(round(T,x))
 
 ## rational to int coercion ##
 
 for f in (:int8, :int16, :int32, :int64, :int128,
           :uint8, :uint16, :uint32, :uint64, :uint128,
           :signed, :integer, :unsigned, :int, :uint)
-    @eval ($f)(x::Rational) = ($f)(iround(x))
+    @eval ($f)(x::Rational) = ($f)(round(Integer,x))
 end
 
 function ^(x::Rational, n::Integer)

@@ -345,21 +345,21 @@ y = BigFloat(42)
 @test convert(UInt32, y) == 42
 @test convert(UInt32, y) == 42
 
-# iround
+# round
 x = BigFloat(42.42)
 y = with_bigfloat_precision(256) do
     BigFloat("9223372036854775809.2324")
 end
 z = BigInt("9223372036854775809")
-@test iround(x) == 42
-@test iround(y) == z
-@test typeof(iround(UInt8, x)) == UInt8 && iround(UInt8, x) == 0x2a
-@test typeof(iround(UInt16, x)) == UInt16 && iround(UInt16, x) == 0x2a
-@test typeof(iround(UInt32, x)) == UInt32 && iround(UInt32, x) == 0x2a
-@test typeof(iround(UInt64, x)) == UInt64 && iround(UInt64, x) == 0x2a
-@test typeof(iround(Int64, x)) == Int64 && iround(Int64, x) == 42
-@test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
-@test typeof(iround(UInt, x)) == UInt && iround(UInt, x) == 0x2a
+@test round(Integer,x) == 42
+@test round(Integer,y) == z
+@test typeof(round(UInt8, x)) == UInt8 && round(UInt8, x) == 0x2a
+@test typeof(round(UInt16, x)) == UInt16 && round(UInt16, x) == 0x2a
+@test typeof(round(UInt32, x)) == UInt32 && round(UInt32, x) == 0x2a
+@test typeof(round(UInt64, x)) == UInt64 && round(UInt64, x) == 0x2a
+@test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
+@test typeof(round(Int, x)) == Int && round(Int, x) == 42
+@test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
 
 # string representation
 str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
@@ -445,7 +445,7 @@ with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 
-# ceil / iceil / floor / ifloor / trunc / itrunc
+# ceil / floor / trunc
 x = BigFloat("28273.7312487489135135135")
 y = BigInt(28273)
 z = BigInt(28274)
@@ -459,75 +459,90 @@ c = BigInt("123456789012345678901234567891")
 @test trunc(x) == y
 @test typeof(trunc(x)) == BigFloat
 
-@test iceil(x) == z
-@test typeof(iceil(x)) == BigInt
-@test ifloor(x) == y
-@test typeof(ifloor(x)) == BigInt
-@test itrunc(x) == y
-@test typeof(itrunc(x)) == BigInt
+@test ceil(Integer,x) == z
+@test typeof(ceil(Integer,x)) == BigInt
+@test floor(Integer,x) == y
+@test typeof(floor(Integer,x)) == BigInt
+@test trunc(Integer,x) == y
+@test typeof(trunc(Integer,x)) == BigInt
 
-@test iceil(Int64, x) == int64(z)
-@test typeof(iceil(Int64, x)) == Int64
-@test ifloor(Int64, x) == int64(y)
-@test typeof(ifloor(Int64, x)) == Int64
-@test itrunc(Int64, x) == int64(y)
-@test typeof(itrunc(Int64, x)) == Int64
+@test ceil(Int64, x) == int64(z)
+@test typeof(ceil(Int64, x)) == Int64
+@test floor(Int64, x) == int64(y)
+@test typeof(floor(Int64, x)) == Int64
+@test trunc(Int64, x) == int64(y)
+@test typeof(trunc(Int64, x)) == Int64
 
-@test iceil(Int32, x) == int32(z)
-@test typeof(iceil(Int32, x)) == Int32
-@test ifloor(Int32, x) == int32(y)
-@test typeof(ifloor(Int32, x)) == Int32
-@test itrunc(Int32, x) == int32(y)
-@test typeof(itrunc(Int32, x)) == Int32
+@test ceil(Int32, x) == int32(z)
+@test typeof(ceil(Int32, x)) == Int32
+@test floor(Int32, x) == int32(y)
+@test typeof(floor(Int32, x)) == Int32
+@test trunc(Int32, x) == int32(y)
+@test typeof(trunc(Int32, x)) == Int32
 
-@test iceil(Int16, x) == int16(z)
-@test typeof(iceil(Int16, x)) == Int16
-@test ifloor(Int16, x) == int16(y)
-@test typeof(ifloor(Int16, x)) == Int16
-@test itrunc(Int16, x) == int16(y)
-@test typeof(itrunc(Int16, x)) == Int16
+@test ceil(Int16, x) == int16(z)
+@test typeof(ceil(Int16, x)) == Int16
+@test floor(Int16, x) == int16(y)
+@test typeof(floor(Int16, x)) == Int16
+@test trunc(Int16, x) == int16(y)
+@test typeof(trunc(Int16, x)) == Int16
 
-#@test iceil(Int8, x) == int8(z)
-#@test typeof(iceil(Int8, x)) == Int8
-#@test ifloor(Int8, x) == int8(y)
-#@test typeof(ifloor(Int8, x)) == Int8
-#@test itrunc(Int8, x) == int8(y)
-#@test typeof(itrunc(Int8, x)) == Int8
+#@test ceil(Int8, x) == int8(z)
+#@test typeof(ceil(Int8, x)) == Int8
+#@test floor(Int8, x) == int8(y)
+#@test typeof(floor(Int8, x)) == Int8
+#@test trunc(Int8, x) == int8(y)
+#@test typeof(trunc(Int8, x)) == Int8
 
-@test iceil(UInt64, x) == uint64(z)
-@test typeof(iceil(UInt64, x)) == UInt64
-@test ifloor(UInt64, x) == uint64(y)
-@test typeof(ifloor(UInt64, x)) == UInt64
-@test itrunc(UInt64, x) == uint64(y)
-@test typeof(itrunc(UInt64, x)) == UInt64
+@test ceil(UInt64, x) == uint64(z)
+@test typeof(ceil(UInt64, x)) == UInt64
+@test floor(UInt64, x) == uint64(y)
+@test typeof(floor(UInt64, x)) == UInt64
+@test trunc(UInt64, x) == uint64(y)
+@test typeof(trunc(UInt64, x)) == UInt64
 
-@test iceil(UInt32, x) == uint32(z)
-@test typeof(iceil(UInt32, x)) == UInt32
-@test ifloor(UInt32, x) == uint32(y)
-@test typeof(ifloor(UInt32, x)) == UInt32
-@test itrunc(UInt32, x) == uint32(y)
-@test typeof(itrunc(UInt32, x)) == UInt32
+@test ceil(UInt32, x) == uint32(z)
+@test typeof(ceil(UInt32, x)) == UInt32
+@test floor(UInt32, x) == uint32(y)
+@test typeof(floor(UInt32, x)) == UInt32
+@test trunc(UInt32, x) == uint32(y)
+@test typeof(trunc(UInt32, x)) == UInt32
 
-@test iceil(UInt16, x) == uint16(z)
-@test typeof(iceil(UInt16, x)) == UInt16
-@test ifloor(UInt16, x) == uint16(y)
-@test typeof(ifloor(UInt16, x)) == UInt16
-@test itrunc(UInt16, x) == uint16(y)
-@test typeof(itrunc(UInt16, x)) == UInt16
+@test ceil(UInt16, x) == uint16(z)
+@test typeof(ceil(UInt16, x)) == UInt16
+@test floor(UInt16, x) == uint16(y)
+@test typeof(floor(UInt16, x)) == UInt16
+@test trunc(UInt16, x) == uint16(y)
+@test typeof(trunc(UInt16, x)) == UInt16
 
-#@test iceil(UInt8, x) == uint8(z)
-#@test typeof(iceil(UInt8, x)) == UInt8
-#@test ifloor(UInt8, x) == uint8(y)
-#@test typeof(ifloor(UInt8, x)) == UInt8
-#@test itrunc(UInt8, x) == uint8(y)
-#@test typeof(itrunc(UInt8, x)) == UInt8
+#@test ceil(UInt8, x) == uint8(z)
+#@test typeof(ceil(UInt8, x)) == UInt8
+#@test floor(UInt8, x) == uint8(y)
+#@test typeof(floor(UInt8, x)) == UInt8
+#@test trunc(UInt8, x) == uint8(y)
+#@test typeof(trunc(UInt8, x)) == UInt8
 
-@test iceil(a) == c
-@test typeof(iceil(a)) == BigInt
-@test ifloor(a) == b
-@test typeof(ifloor(a)) == BigInt
-@test itrunc(a) == b
-@test typeof(itrunc(a)) == BigInt
+@test ceil(Integer,a) == c
+@test typeof(ceil(Integer,a)) == BigInt
+@test floor(Integer,a) == b
+@test typeof(floor(Integer,a)) == BigInt
+@test trunc(Integer,a) == b
+@test typeof(trunc(Integer,a)) == BigInt
+
+@test ceil(Int128,a) == c
+@test typeof(ceil(Int128,a)) == Int128
+@test floor(Int128,a) == b
+@test typeof(floor(Int128,a)) == Int128
+@test trunc(Int128,a) == b
+@test typeof(trunc(Int128,a)) == Int128
+
+@test ceil(UInt128,a) == c
+@test typeof(ceil(UInt128,a)) == UInt128
+@test floor(UInt128,a) == b
+@test typeof(floor(UInt128,a)) == UInt128
+@test trunc(UInt128,a) == b
+@test typeof(trunc(UInt128,a)) == UInt128
+
 
 # basic arithmetic
 # Signed addition
@@ -789,7 +804,7 @@ f = BigFloat(10)^int32(1000)
 @test f > i1
 @test f > i2
 
-i3 = itrunc(f)
+i3 = trunc(Integer,f)
 @test i3 == f
 @test i3+1 > f
 @test i3+1 >= f

@@ -1,5 +1,5 @@
 char(x) = convert(Char, x)
-char(x::FloatingPoint) = char(iround(x))
+char(x::FloatingPoint) = char(round(UInt32,x))
 
 integer(x::Char) = int(x)
 

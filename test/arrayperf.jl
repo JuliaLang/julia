@@ -11,7 +11,7 @@ if run_ref
         sz = ntuple(n_dims,i->lensmall)
         A = randn(sz)
         n_el = prod(sz)
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         print(n_dims, " dimensions (", n_r, " repeats): ")
         @time for i = 1:n_r
@@ -24,7 +24,7 @@ if run_ref
         sz = ntuple(n_dims,i->lenbig[n_dims])
         A = randn(sz)
         n_el = prod(sz)
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         print(n_dims, " dimensions (", n_r, " repeats): ")
         @time for i = 1:n_r
@@ -40,7 +40,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i -> ((i <= ceil(n_dims/2)) ? (1:sz[i]) : (rand(1:sz[i]))))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -53,7 +53,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i -> ((i <= ceil(n_dims/2)) ? (1:sz[i]) : (rand(1:sz[i]))))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -69,7 +69,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i -> ((i > n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -82,7 +82,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i -> ((i > n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -96,7 +96,7 @@ if run_ref
     println("Small arrays:")
     function randind(len)
         i = rand(1:6)
-        indchoices = {1:len,1:iceil(len/2),1:iceil(3*len/4),2:2:len,1:iceil(len/2):len,len:-1:1}
+        indchoices = {1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1}
         return indchoices[i]
     end
     #indsmall = {1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1}
@@ -105,7 +105,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i->randind(sz[i]))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i->randind(sz[i]))
@@ -118,7 +118,7 @@ if run_ref
         A = randn(sz)
         ind = ntuple(n_dims,i->randind(sz[i]))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i->randind(sz[i]))
@@ -135,7 +135,7 @@ if run_assign
         sz = ntuple(n_dims,i->lensmall)
         B = zeros(sz)
         A = randn(sz)
-        n_r = iceil(n_evals/prod(sz))
+        n_r = ceil(Int,n_evals/prod(sz))
         print(n_dims, " dimensions (", n_r, " repeats): ")
         @time for i = 1:n_r
             B[:] = A
@@ -146,7 +146,7 @@ if run_assign
         sz = ntuple(n_dims,i->lenbig[n_dims])
         B = zeros(sz)
         A = randn(sz)
-        n_r = iceil(n_evals/prod(sz))
+        n_r = ceil(Int,n_evals/prod(sz))
         print(n_dims, " dimensions (", n_r, " repeats): ")
         @time for i = 1:n_r
             B[:] = A
@@ -162,7 +162,7 @@ if run_assign
         ind = ntuple(n_dims,i -> ((i <= ceil(n_dims/2)) ? (1:sz[i]) : (rand(1:sz[i]))))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
     #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -177,7 +177,7 @@ if run_assign
         ind = ntuple(n_dims,i -> ((i <= ceil(n_dims/2)) ? (1:sz[i]) : (rand(1:sz[i]))))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
 #            ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -195,7 +195,7 @@ if run_assign
         ind = ntuple(n_dims,i -> ((i > n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -210,7 +210,7 @@ if run_assign
         ind = ntuple(n_dims,i -> ((i > n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i -> ((i <= n_dims/2) ? (1:sz[i]) : (rand(1:sz[i]))))
@@ -225,7 +225,7 @@ if run_assign
     println("Small arrays:")
     function randind(len)
         i = rand(1:6)
-        indchoices = {1:len,1:iceil(len/2),1:iceil(3*len/4),2:2:len,1:iceil(len/2):len,len:-1:1}
+        indchoices = {1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1}
         return indchoices[i]
     end
     #indsmall = {1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1}
@@ -235,7 +235,7 @@ if run_assign
         ind = ntuple(n_dims,i->randind(sz[i]))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i->randind(sz[i]))
@@ -250,7 +250,7 @@ if run_assign
         ind = ntuple(n_dims,i->randind(sz[i]))
         A = randn(map(length,ind))
         n_el = prod(map(length,ind))
-        n_r = iceil(n_evals/n_el)
+        n_r = ceil(Int,n_evals/n_el)
         print(n_dims, " dimensions (", n_r, " repeats, ", n_r*n_el, " operations): ")
         @time for i = 1:n_r
             #        ind = ntuple(n_dims,i->randind(sz[i]))

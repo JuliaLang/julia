@@ -490,8 +490,8 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     lq = length(q)
 
     index = 1 .+ (lv-1)*q
-    lo = ifloor(index)
-    hi = iceil(index)
+    lo = floor(Int,index)
+    hi = ceil(Int,index)
     sort!(v)
     isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
     i = find(index .> lo)
@@ -537,7 +537,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    nm1 = ceil(Int,(hi - start)/step)
     start:step:(start + nm1*step)
 end
 
@@ -550,7 +550,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
         step = 1
     else
         bw = (hi - lo) / n
-        e = 10^max(0,ifloor(log10(bw)))
+        e = 10^max(0,floor(Int,log10(bw)))
         r = bw / e
         if r <= 1
             step = e
@@ -563,7 +563,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    nm1 = ceil(Int,(hi - start)/step)
     start:step:(start + nm1*step)
 end
 
@@ -574,7 +574,7 @@ midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 ## hist ##
 function sturges(n)  # Sturges' formula
     n==0 && return one(n)
-    iceil(log2(n))+1
+    ceil(Int,log2(n))+1
 end
 
 function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
