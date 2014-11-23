@@ -78,6 +78,8 @@ Library improvements
 
   * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
 
+  * New implementation of SubArrays with substantial performance and functionality improvements ([#8501]).
+
   * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
 
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
@@ -1075,6 +1077,7 @@ Too numerous to mention.
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8501]: https://github.com/JuliaLang/julia/issues/8501
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#8578]: https://github.com/JuliaLang/julia/issues/8578
 [#8605]: https://github.com/JuliaLang/julia/issues/8605
