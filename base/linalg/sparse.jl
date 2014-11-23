@@ -625,3 +625,7 @@ scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
 
 scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
     scale!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), b, A)
+
+chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
+lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
+eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")
