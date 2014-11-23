@@ -79,19 +79,19 @@ convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
 function getindex(A::QR, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
+    d == :R && return triu(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     throw(KeyError(d))
 end
 function getindex(A::QRCompactWY, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
+    d == :R && return triu(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRCompactWYQ(A.factors,A.T)
     throw(KeyError(d))
 end
 function getindex{T}(A::QRPivoted{T}, d::Symbol)
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
+    d == :R && return triu(A.factors[1:min(m,n), 1:n])
     d == :Q && return QRPackedQ(A.factors,A.τ)
     d == :p && return A.jpvt
     if d == :P

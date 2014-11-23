@@ -609,7 +609,7 @@ function splice!(a::Vector, i::Integer, ins=_default_splice)
 end
 
 function splice!{T<:Integer}(a::Vector, r::UnitRange{T}, ins=_default_splice)
-    v = a[r]
+    v = copy(a[r])
     m = length(ins)
     if m == 0
         deleteat!(a, r)

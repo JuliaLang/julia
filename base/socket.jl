@@ -477,7 +477,7 @@ function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_siz
         notify_error(sock.recvnotify,"Partial message received")
     end
     buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),int(buf_size),true)
-    notify(sock.recvnotify,buf[1:nread])
+    notify(sock.recvnotify, copy(buf[1:nread]))
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv4,port::UInt16,buf)

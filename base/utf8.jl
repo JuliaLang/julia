@@ -182,6 +182,7 @@ function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractStr
     end
     UTF8String(a)
 end
+convert(::Type{UTF8String}, s::AbstractVector{UInt8}) = convert(UTF8String, convert(Array, s))
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
 # The last case is the replacement character 0xfffd (3 bytes)

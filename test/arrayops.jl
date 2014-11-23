@@ -774,7 +774,7 @@ Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (Range1, Range1, Range1)
     args = ntuple(N, d->Range1{Int})
-    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
+    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [SubArray{Float32,N,Array{Float32,N},ntuple(N, d->UnitRange{Int64}),1}]
     @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
     @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
     # Indexing with (Range1, Range1, Float64)

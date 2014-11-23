@@ -32,6 +32,7 @@ string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
 bytestring(s::Array{UInt8,1}) = bytestring(pointer(s),length(s))
+bytestring{N}(s::SubArray{UInt8,1,Array{UInt8,N},(UnitRange{Int64},),1}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))

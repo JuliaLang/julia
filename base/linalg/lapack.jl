@@ -425,7 +425,7 @@ for (tzrzf, ormrz, elty) in
         function tzrzf!(A::StridedMatrix{$elty})
             m, n = size(A)
             if n < m throw(DimensionMismatch("matrix cannot have fewer columns than rows")) end
-            lda = max(1, m)
+            lda = stride(A, 2)
             tau = similar(A, $elty, m)
             work = Array($elty, 1)
             lwork = -1
@@ -434,7 +434,7 @@ for (tzrzf, ormrz, elty) in
                 ccall(($(blasfunc(tzrzf)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &m, &n, A, &lda,
+                    &m, &n, A, &max(1, lda),
                     tau, work, &lwork, info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -2025,19 +2025,19 @@ for (trcon, trevc, trrfs, elty) in
             #Decide what exactly to return
             if howmny=='S' #compute selected eigenvectors
                 if side=='L' #left eigenvectors only
-                    return select, VL[:,1:m[1]]
+                    return select, copy(VL[:,1:m[1]])
                 elseif side=='R' #right eigenvectors only
-                    return select, VR[:,1:m[1]]
+                    return select, copy(VR[:,1:m[1]])
                 else #side=='B' #both eigenvectors
-                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                    return select, copy(VL[:,1:m[1]]), copy(VR[:,1:m[1]])
                 end
             else #compute all eigenvectors
                 if side=='L' #left eigenvectors only
-                    return VL[:,1:m[1]]
+                    return copy(VL[:,1:m[1]])
                 elseif side=='R' #right eigenvectors only
-                    return VR[:,1:m[1]]
+                    return copy(VR[:,1:m[1]])
                 else #side=='B' #both eigenvectors
-                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                    return copy(VL[:,1:m[1]]), copy(VR[:,1:m[1]])
                 end
             end
         end
@@ -2144,19 +2144,19 @@ for (trcon, trevc, trrfs, elty, relty) in
             #Decide what exactly to return
             if howmny=='S' #compute selected eigenvectors
                 if side=='L' #left eigenvectors only
-                    return select, VL[:,1:m[1]]
+                    return select, copy(VL[:,1:m[1]])
                 elseif side=='R' #right eigenvectors only
-                    return select, VR[:,1:m[1]]
+                    return select, copy(VR[:,1:m[1]])
                 else #side=='B' #both eigenvectors
-                    return select, VL[:,1:m[1]], VR[:,1:m[1]]
+                    return select, copy(VL[:,1:m[1]]), copy(VR[:,1:m[1]])
                 end
             else #compute all eigenvectors
                 if side=='L' #left eigenvectors only
-                    return VL[:,1:m[1]]
+                    return copy(VL[:,1:m[1]])
                 elseif side=='R' #right eigenvectors only
-                    return VR[:,1:m[1]]
+                    return copy(VR[:,1:m[1]])
                 else #side=='B' #both eigenvectors
-                    return VL[:,1:m[1]], VR[:,1:m[1]]
+                    return copy(VL[:,1:m[1]]), copy(VR[:,1:m[1]])
                 end
             end
         end
@@ -2243,7 +2243,7 @@ for (stev, stebz, stegr, stein, elty) in
                 w, iblock, isplit, work,
                 iwork, info)
                 @lapackerror
-            w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
+            copy(w[1:m[1]]), copy(iblock[1:m[1]]), copy(isplit[1:nsplit[1]])
         end
         #*  DSTEGR computes selected eigenvalues and, optionally, eigenvectors
         #*  of a real symmetric tridiagonal matrix T. Any such unreduced matrix has
@@ -2288,7 +2288,7 @@ for (stev, stebz, stegr, stein, elty) in
                 end
             end
             @lapackerror
-            w[1:m[1]], Z[:,1:m[1]]
+            copy(w[1:m[1]]), copy(Z[:,1:m[1]])
         end
         #*  DSTEIN computes the eigenvectors of a real symmetric tridiagonal
         #*  matrix T corresponding to specified eigenvalues, using inverse
@@ -2297,7 +2297,8 @@ for (stev, stebz, stegr, stein, elty) in
         #     $                   IWORK, IFAIL, INFO )
         # We allow the user to specify exactly which eigenvectors to get by
         # specifying the eigenvalues (which may be approximate) via w_in
-        function stein!(dv::Vector{$elty}, ev_in::Vector{$elty}, w_in::Vector{$elty}, iblock_in::Vector{BlasInt}, isplit_in::Vector{BlasInt})
+        function stein!(dv::StridedVector{$elty}, ev_in::StridedVector{$elty}, w_in::StridedVector{$elty}, iblock_in::StridedVector{BlasInt}, isplit_in::StridedVector{BlasInt})
+            chkstride1(dv, ev_in, w_in, iblock_in, isplit_in)
             n = length(dv)
             if length(ev_in) != (n-1) throw(DimensionMismatch("stein!")) end
             ev = [ev_in; zeros($elty,1)]
@@ -2341,12 +2342,12 @@ for (stev, stebz, stegr, stein, elty) in
         end
     end
 end
-stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
+stegr!(jobz::BlasChar, dv::StridedVector, ev::StridedVector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
 
 # Allow user to skip specification of iblock and isplit
-stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, w_in::StridedVector) = stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
 # Allow user to specify just one eigenvector to get in stein!
-stein!(dv::Vector, ev::Vector, eval::Real)=stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
+stein!(dv::StridedVector, ev::StridedVector, eval::Real) = stein!(dv, ev, [eval], zeros(BlasInt,0), zeros(BlasInt,0))
 
 ## (SY) symmetric real matrices - Bunch-Kaufman decomposition,
 ## solvers (direct and factored) and inverse.
@@ -2900,7 +2901,7 @@ for (syev, syevr, sygvd, elty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+            copy(w[1:m[1]]), copy(Z[:,1:(jobz == 'V' ? m[1] : 0)])
         end
         syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
         # Generalized eigenproblem
@@ -3045,7 +3046,7 @@ for (syev, syevr, sygvd, elty, relty) in
                     iwork = Array(BlasInt, liwork)
                 end
             end
-            w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
+            copy(w[1:m[1]]), copy(Z[:,1:(jobz == 'V' ? m[1] : 0)])
         end
         syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
 #       SUBROUTINE ZHEGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
@@ -3125,6 +3126,8 @@ for (bdsqr, relty, elty) in
             # Do checks
             @chkuplo
             length(e_) == n - 1 || throw(DimensionMismatch("off-diagonal has length $(length(e_)) but should have length $(n - 1)"))
+            size(Vt, 1) == n || throw(DimensionMismatch("first dimension of matrix Vt has length $(size(Vt, 1)), but should be $n"))
+            size(C, 1) == n || throw(DimensionMismatch("first dimension of matrix C has length $(size(C, 1)), but should be $n"))
             if ncvt > 0
                 ldvt >= n || throw(DimensionMismatch("leading dimension of Vt must be at least $n"))
             end
@@ -3228,7 +3231,7 @@ for (gecon, elty) in
 #       DOUBLE PRECISION   A( LDA, * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
-            lda = max(1, stride(A, 2))
+            lda = stride(A, 2)
             rcond = Array($elty, 1)
             work = Array($elty, 4n)
             iwork = Array(BlasInt, n)
@@ -3237,7 +3240,7 @@ for (gecon, elty) in
                   (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
-                  &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
+                  &normtype, &n, A, &max(1, lda), &anorm, rcond, work, iwork,
                   info)
             @lapackerror
             rcond[1]
@@ -3262,7 +3265,7 @@ for (gecon, elty, relty) in
 #       COMPLEX*16         A( LDA, * ), WORK( * )
             chkstride1(A)
             n = size(A, 2)
-            lda = max(1, size(A, 1))
+            lda = stride(A, 2)
             rcond = Array($relty, 1)
             work = Array($elty, 2n)
             rwork = Array($relty, 2n)
@@ -3271,7 +3274,7 @@ for (gecon, elty, relty) in
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
                    Ptr{BlasInt}),
-                  &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
+                  &normtype, &n, A, &max(1, lda), &anorm, rcond, work, rwork,
                   info)
             @lapackerror
             rcond[1]
@@ -3441,7 +3444,7 @@ for (gees, gges, elty) in
                 end
             end
             @lapackerror
-            A, B, complex(alphar, alphai), beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+            A, B, complex(alphar, alphai), beta, copy(vsl[1:(jobvsl == 'V' ? n : 0),:]), copy(vsr[1:(jobvsr == 'V' ? n : 0),:])
         end
     end
 end
@@ -3532,7 +3535,7 @@ for (gees, gges, elty, relty) in
                 end
             end
             @lapackerror
-            A, B, alpha, beta, vsl[1:(jobvsl == 'V' ? n : 0),:], vsr[1:(jobvsr == 'V' ? n : 0),:]
+            A, B, alpha, beta, copy(vsl[1:(jobvsl == 'V' ? n : 0),:]), copy(vsr[1:(jobvsr == 'V' ? n : 0),:])
         end
     end
 end
