@@ -80,7 +80,7 @@ function digamma(z::Union(Float64,Complex{Float64}))
     end
     if x < 7
         # shift using recurrence formula
-        n = 7 - ifloor(x)
+        n = 7 - floor(Int,x)
         for ν = 1:n-1
             ψ -= inv(z + ν)
         end
@@ -103,7 +103,7 @@ function trigamma(z::Union(Float64,Complex{Float64}))
     ψ = zero(z)
     if x < 8
         # shift using recurrence formula
-        n = 8 - ifloor(x)
+        n = 8 - floor(Int,x)
         ψ += inv(z)^2
         for ν = 1:n-1
             ψ += inv(z + ν)^2
@@ -285,7 +285,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
             throw(DomainError()) # or return NaN?
         end
         nx = int(xf)
-        n = iceil(cutoff - nx)
+        n = ceil(Int,cutoff - nx)
         ζ += inv_oftype(ζ, z)^s
         for ν = -nx:-1:1
             ζₒ= ζ
@@ -437,7 +437,7 @@ function zeta(s::Union(Float64,Complex{Float64}))
     # shift using recurrence formula:
     #   n is a semi-empirical cutoff for the Stirling series, based
     #   on the error term ~ (|m|/n)^18 / n^real(m)
-    n = iceil(6 + 0.7*abs(imag(s-1))^inv(1 + real(m)*0.05))
+    n = ceil(Int,6 + 0.7*abs(imag(s-1))^inv(1 + real(m)*0.05))
     ζ = one(s)
     for ν = 2:n
         ζₒ= ζ

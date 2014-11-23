@@ -477,7 +477,7 @@ function ^{T<:Complex}(z::T, p::T)
 
     # apply some corrections to force known zeros
     if pim == 0
-        ip = itrunc(pr)
+        ip = trunc(pr)
         if ip == pr
             if zi == 0
                 im = copysign(zero(im), im)
@@ -490,7 +490,7 @@ function ^{T<:Complex}(z::T, p::T)
             end
         else
             dr = pr*2
-            ip = itrunc(dr)
+            ip = trunc(dr)
             if ip == dr && zi == 0
                 if zr < 0
                     re = copysign(zero(re), re)

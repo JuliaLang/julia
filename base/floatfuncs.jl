@@ -35,11 +35,6 @@ function hex2num(s::AbstractString)
     return box(Float64,unbox(Int64,parseint(Int64,s,16)))
 end
 
-@vectorize_1arg Real iround
-@vectorize_1arg Real itrunc
-@vectorize_1arg Real ifloor
-@vectorize_1arg Real iceil
-
 @vectorize_1arg Number abs
 @vectorize_1arg Number abs2
 @vectorize_1arg Number angle
@@ -48,9 +43,20 @@ end
 @vectorize_1arg Number isinf
 @vectorize_1arg Number isfinite
 
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,1}) = [ iround(T, x[i]) for i = 1:length(x) ]
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,2}) = [ iround(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T, x[i]) for i = 1:length(x) ], size(x))
+for f in (:trunc,:floor,:ceil,:round)
+    @eval begin
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R,1})
+            [ ($f)(T, x[i]) for i = 1:length(x) ]
+        end
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R,2})
+            [ ($f)(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
+        end
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R})
+            reshape([ ($f)(T, x[i]) for i = 1:length(x) ], size(x))
+        end
+    end
+end
+
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point

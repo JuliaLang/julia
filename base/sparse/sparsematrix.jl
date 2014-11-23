@@ -433,24 +433,46 @@ end
 
 # Operations that may map nonzeros to zero, and zero to zero
 # Result is sparse
-for (op, restype) in ((:iceil, Int), (:ceil, Void),
-                      (:ifloor, Int), (:floor, Void),
-                      (:itrunc, Int), (:trunc, Void),
-                      (:iround, Int), (:round, Void),
-                      (:sin, Void), (:tan, Void),
-                      (:sinh, Void), (:tanh, Void),
-                      (:asin, Void), (:atan, Void),
-                      (:asinh, Void), (:atanh, Void),
-                      (:sinpi, Void), (:cosc, Void),
-                      (:sind, Void), (:tand, Void),
-                      (:asind, Void), (:atand, Void) )
+for op in (:ceil, :floor, :trunc, :round,
+           :sin, :tan, :asin, :atan,
+           :sinh, :tanh, :asinh, :atanh,
+           :sinpi, :cosc,
+           :sind, :tand, :asind, :atand)
     @eval begin
-
         function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
             nfilledA = nnz(A)
             colptrB = Array(Ti, A.n+1)
             rowvalB = Array(Ti, nfilledA)
-            nzvalB = Array($(restype==Void ? (:Tv) : restype), nfilledA)
+            nzvalB = Array(Tv, nfilledA)
+
+            k = 0 # number of additional zeros introduced by op(A)
+            @inbounds for i = 1 : A.n
+                colptrB[i] = A.colptr[i] - k
+                for j = A.colptr[i] : A.colptr[i+1]-1
+                    opAj = $(op)(A.nzval[j])
+                    if opAj == 0
+                        k += 1
+                    else
+                        rowvalB[j - k] = A.rowval[j]
+                        nzvalB[j - k] = opAj
+                    end
+                end
+            end
+            colptrB[end] = A.colptr[end] - k
+            deleteat!(rowvalB, colptrB[end]:nfilledA)
+            deleteat!(nzvalB, colptrB[end]:nfilledA)
+            return SparseMatrixCSC(A.m, A.n, colptrB, rowvalB, nzvalB)
+        end
+    end # quote
+end # macro
+
+for op in (:ceil, :floor, :trunc, :round)
+    @eval begin
+        function ($op){T,Tv,Ti}(::Type{T},A::SparseMatrixCSC{Tv,Ti})
+            nfilledA = nnz(A)
+            colptrB = Array(Ti, A.n+1)
+            rowvalB = Array(Ti, nfilledA)
+            nzvalB = Array(T, nfilledA)
 
             k = 0 # number of additional zeros introduced by op(A)
             @inbounds for i = 1 : A.n
@@ -473,6 +495,8 @@ for (op, restype) in ((:iceil, Int), (:ceil, Void),
 
     end # quote
 end # macro
+
+
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros
 # Result is sparse

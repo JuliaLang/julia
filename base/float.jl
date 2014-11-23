@@ -1,28 +1,17 @@
 ## conversions to floating-point ##
-
-convert(::Type{Float32}, x::Int128)  = float32(reinterpret(UInt128,abs(x)))*(1-2(x<0))
-convert(::Type{Float32}, x::UInt128) = float32(uint64(x&0xffffffffffffffff)) + ldexp(float32(uint64(x>>>64)),64)
-promote_rule(::Type{Float32}, ::Type{Int128} ) = Float32
-promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
-
-convert(::Type{Float64}, x::Int128)  = float64(reinterpret(UInt128,abs(x)))*(1-2(x<0))
-convert(::Type{Float64}, x::UInt128) = float64(uint64(x&0xffffffffffffffff)) + ldexp(float64(uint64(x>>>64)),64)
-promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
-promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
-
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
 for t in (Bool,Char,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
 
 for t1 in (Float32,Float64)
-    for st in (Int8,Int16,Int32,Int64)
+    for st in (Int8,Int16,Int32,Int64,Int128)
         @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64)
+    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64,UInt128)
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
@@ -55,55 +44,39 @@ float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 float(x)   = convert(FloatingPoint, x)
 
-## conversions from floating-point ##
-
-# fallbacks using only convert, trunc, ceil, floor, round
-itrunc(x::FloatingPoint) = convert(Integer,trunc(x))
-iceil (x::FloatingPoint) = convert(Integer,ceil(x))  # TODO: fast primitive for iceil
-ifloor(x::FloatingPoint) = convert(Integer,floor(x)) # TOOD: fast primitive for ifloor
-iround(x::FloatingPoint) = convert(Integer,round(x))
-
-itrunc{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,trunc(x))
-iceil {T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,ceil(x))
-ifloor{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,floor(x))
-iround{T<:Integer}(::Type{T}, x::FloatingPoint) = convert(T,round(x))
-
-## fast specific type conversions ##
-
-iround(x::Float32) = iround(Int, x)
-iround(x::Float64) = iround(Int, x)
-itrunc(x::Float32) = itrunc(Int, x)
-itrunc(x::Float64) = itrunc(Int, x)
-
-for to in (Int8, Int16, Int32, Int64)
+for Ti in (Int8, Int16, Int32, Int64, Int128)
     @eval begin
-        iround(::Type{$to}, x::Float32) = box($to,fpsiround($to,unbox(Float32,x)))
-        iround(::Type{$to}, x::Float64) = box($to,fpsiround($to,unbox(Float64,x)))
-        itrunc(::Type{$to}, x::Float32) = box($to,fptosi($to,unbox(Float32,x)))
-        itrunc(::Type{$to}, x::Float64) = box($to,fptosi($to,unbox(Float64,x)))
+        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptosi($Ti,unbox(Float32,x)))
+        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptosi($Ti,unbox(Float64,x)))
+    end
+end
+for Ti in (UInt8, UInt16, UInt32, UInt64, UInt128)
+    @eval begin
+        unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptoui($Ti,unbox(Float32,x)))
+        unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptoui($Ti,unbox(Float64,x)))
     end
 end
 
-for to in (UInt8, UInt16, UInt32, UInt64)
-    @eval begin
-        iround(::Type{$to}, x::Float32) = box($to,fpuiround($to,unbox(Float32,x)))
-        iround(::Type{$to}, x::Float64) = box($to,fpuiround($to,unbox(Float64,x)))
-        itrunc(::Type{$to}, x::Float32) = box($to,fptoui($to,unbox(Float32,x)))
-        itrunc(::Type{$to}, x::Float64) = box($to,fptoui($to,unbox(Float64,x)))
-    end
-end
+# matches convert methods
+# also determines floor, ceil, round
+trunc(::Type{Signed}, x::Float32) = trunc(Int,x)
+trunc(::Type{Signed}, x::Float64) = trunc(Int,x)
+trunc(::Type{Unsigned}, x::Float32) = trunc(UInt,x)
+trunc(::Type{Unsigned}, x::Float64) = trunc(UInt,x)
+trunc(::Type{Integer}, x::Float32) = trunc(Int,x)
+trunc(::Type{Integer}, x::Float64) = trunc(Int,x)
 
-iround(::Type{Int128}, x::Float32) = convert(Int128,round(x))
-iround(::Type{Int128}, x::Float64) = convert(Int128,round(x))
-iround(::Type{UInt128}, x::Float32) = convert(UInt128,round(x))
-iround(::Type{UInt128}, x::Float64) = convert(UInt128,round(x))
+# fallbacks
+floor{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,floor(x))
+ceil {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
+round {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
+
 
 # this is needed very early because it is used by Range and colon
 round(x::Float64) = ccall((:round, Base.libm_name), Float64, (Float64,), x)
 floor(x::Float64) = ccall((:floor, Base.libm_name), Float64, (Float64,), x)
 
 ## floating point promotions ##
-
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
 promote_rule(::Type{Float64}, ::Type{Float16}) = Float64
 promote_rule(::Type{Float64}, ::Type{Float32}) = Float64
@@ -112,7 +85,6 @@ widen(::Type{Float16}) = Float32
 widen(::Type{Float32}) = Float64
 
 ## floating point arithmetic ##
-
 -(x::Float32) = box(Float32,neg_float(unbox(Float32,x)))
 -(x::Float64) = box(Float64,neg_float(unbox(Float64,x)))
 
@@ -128,7 +100,6 @@ widen(::Type{Float32}) = Float64
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
-
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
@@ -147,7 +118,6 @@ end
 
 
 ## floating point comparisons ##
-
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
 ==(x::Float64, y::Float64) = eq_float(unbox(Float64,x),unbox(Float64,y))
 !=(x::Float32, y::Float32) = ne_float(unbox(Float32,x),unbox(Float32,y))
@@ -177,31 +147,31 @@ function cmp(x::FloatingPoint, y::Real)
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
 
-for Ti in (Int64,UInt64)
+for Ti in (Int64,UInt64,Int128,UInt128)
     for Tf in (Float32,Float64)
         @eval begin
             function ==(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x == fy) & (y == itrunc($Ti,fy))
+                (x == fy) & (y == unsafe_trunc($Ti,fy))
             end
             ==(y::$Ti, x::$Tf) = x==y
 
             function <(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < itrunc($Ti,fx)) ))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x < unsafe_trunc($Ti,fx)) ))
             end
             function <=(x::$Ti, y::$Tf)
                 fx = ($Tf)(x)
-                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= itrunc($Ti,fx)) ))
+                (fx < y) | ((fx == y) & ((fx == $(Tf(typemax(Ti)))) | (x <= unsafe_trunc($Ti,fx)) ))
             end
 
             function <(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) < y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (unsafe_trunc($Ti,fy) < y))
             end
             function <=(x::$Tf, y::$Ti)
                 fy = ($Tf)(y)
-                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (itrunc($Ti,fy) <= y))
+                (x < fy) | ((x == fy) & (fy < $(Tf(typemax(Ti)))) & (unsafe_trunc($Ti,fy) <= y))
             end
         end
     end
@@ -262,6 +232,31 @@ nextfloat(x::Float64, i::Integer) =
     (isinf(x)&&sign(x)==sign(i)) ? x : reinterpret(Float64,float_lex_order(reinterpret(Int64,x), i))
 nextfloat(x::FloatingPoint) = nextfloat(x,1)
 prevfloat(x::FloatingPoint) = nextfloat(x,-1)
+
+for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UInt128)
+    for Tf in (Float32, Float64)
+        if sizeof(Ti) < sizeof(Tf) || Ti <: Unsigned # Tf(typemin(Ti))-1 is exact
+            @eval function trunc(::Type{$Ti},x::$Tf)
+                $(Tf(typemin(Ti))-one(Tf)) < x < $(Tf(typemax(Ti))+one(Tf)) || throw(InexactError())
+                unsafe_trunc($Ti,x)
+            end
+        else
+            @eval function trunc(::Type{$Ti},x::$Tf)
+                $(Tf(typemin(Ti))) <= x < $(Tf(typemax(Ti))) || throw(InexactError())
+                unsafe_trunc($Ti,x)
+            end
+        end
+    end
+end
+
+# adding prevfloat(0.5) will prevent prevfloat(0.5) and odd x with eps(x)=1.0
+# from rounding in the wrong direction in RoundToNearest
+for Tf in (Float32,Float64)
+    @eval function round{T<:Integer}(::Type{T}, x::$Tf)
+        trunc(T,x+copysign($(prevfloat(Tf(0.5))),x))
+    end
+end
+
 
 @eval begin
     issubnormal(x::Float32) = (abs(x) < $(box(Float32,unbox(UInt32,0x00800000)))) & (x!=0)
