@@ -172,11 +172,11 @@ fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 cell(dims::Integer...)   = Array(Any, dims...)
 cell(dims::(Integer...)) = Array(Any, convert((Int...), dims))
 
-for (fname, felt) in ((:zeros,:zero), (:ones,:one))
+for (fname, felt) in ((:zeros,0), (:ones,1))
     @eval begin
-        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), ($felt)(T))
-        ($fname)(dims...)                = fill!(Array(Float64, dims...), ($felt)(Float64))
-        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), ($felt)(T))
+        ($fname)(T::Type, dims...)       = fill!(Array(T, dims...), (T)($felt))
+        ($fname)(dims...)                = fill!(Array(Float64, dims...), (Float64)($felt))
+        ($fname){T}(A::AbstractArray{T}) = fill!(similar(A), (T)($felt))
     end
 end
 
