@@ -446,7 +446,7 @@ with_bigfloat_precision(53) do
 end
 
 # ceil / iceil / floor / ifloor / trunc / itrunc
-x = BigFloat("28273.2312487489135135135")
+x = BigFloat("28273.7312487489135135135")
 y = BigInt(28273)
 z = BigInt(28274)
 a = BigFloat("123456789012345678901234567890.2414")

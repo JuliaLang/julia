@@ -655,7 +655,7 @@ end
 
 function itrunc(x::BigFloat)
     z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, 0)
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, to_mpfr(RoundToZero))
     return z
 end
 
