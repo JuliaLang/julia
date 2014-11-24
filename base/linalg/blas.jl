@@ -79,7 +79,7 @@ for (fname, elty) in ((:dscal_,:Float64),
                       (:cscal_,:Complex64))
     @eval begin
         # SUBROUTINE DSCAL(N,DA,DX,INCX)
-        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},StridedArray{$elty}), incx::Integer)
+        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer)
             ccall(($(blasfunc(fname)), libblas), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, &DA, DX, &incx)
@@ -89,17 +89,17 @@ for (fname, elty) in ((:dscal_,:Float64),
 end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
 # In case DX is complex, and DA is real, use dscal/sscal to save flops
-for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
-                             (:dscal_, :Float64, :Complex128))
-    @eval begin
-        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$celty},StridedArray{$celty}), incx::Integer)
-            ccall(($(blasfunc(fname)), libblas), Void,
-                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
-                  &(2*n), &DA, DX, &incx)
-            DX
-        end
-    end
-end
+#for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
+#                             (:dscal_, :Float64, :Complex128))
+#    @eval begin
+#        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$celty},StridedArray{$celty}), incx::Integer)
+#            ccall(($(blasfunc(fname)), libblas), Void,
+#                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
+#                  &(2*n), &DA, DX, &incx)
+#            DX
+#        end
+#    end
+#end
 
 ## dot
 for (fname, elty) in ((:ddot_,:Float64),
