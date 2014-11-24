@@ -859,13 +859,17 @@ end
 a = [1:5]
 @test isa(Base.linearindexing(a), Base.LinearFast)
 b = sub(a, :)
-@test isa(Base.linearindexing(b), Base.IteratorsMD.LinearSlow)
+@test isa(Base.linearindexing(b), Base.IteratorsMD.LinearFast)
+aa = fill(99, 10)
+aa[1:2:9] = a
 shp = [5]
 for i = 1:10
     A = reshape(a, tuple(shp...))
     @test mdsum(A) == 15
     @test mdsum2(A) == 15
-    B = sub(A, ntuple(i, i->Colon())...)
+    AA = reshape(aa, tuple(2, shp...))
+    B = sub(AA, 1:1, ntuple(i, i->Colon())...)
+    @test isa(Base.linearindexing(B), Base.IteratorsMD.LinearSlow)
     @test mdsum(B) == 15
     @test mdsum2(B) == 15
     unshift!(shp, 1)
