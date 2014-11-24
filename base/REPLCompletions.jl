@@ -166,7 +166,7 @@ end
 
 function latex_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if rsearch(string, whitespace_chars, pos) < slashpos
+    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[slashpos-1]=='\\'))
         # latex symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
