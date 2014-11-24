@@ -10,7 +10,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     # Unless the Periods are the same type
     @eval $p(x::$p) = x
     # Convenience method for show()
-    @eval _units(x::$p) = " " * lowercase(string($p)) * (abs(value(x)) == 1 ? "" : "s")
+    @eval _units(x::$p) = $(" " * lowercase(string(p))) * (abs(value(x)) == 1 ? "" : "s")
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
