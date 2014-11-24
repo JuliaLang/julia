@@ -20,6 +20,7 @@ scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
 function scale!{T<:BlasComplex}(X::Array{T}, s::Real)
     R = typeof(real(zero(T)))
     BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
+    X
 end
 
 #Test whether a matrix is positive-definite
