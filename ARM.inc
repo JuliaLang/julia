@@ -7,8 +7,6 @@ override OPENBLAS_TARGET_ARCH=ARMV7
 
 override LLVM_VER=3.5.0
 
-override USE_SYSTEM_BLAS=1
-override USE_SYSTEM_LAPACK=1
 override USE_SYSTEM_LIBM=1
 override USE_SYSTEM_FFTW=1
 override USE_SYSTEM_GMP=1
