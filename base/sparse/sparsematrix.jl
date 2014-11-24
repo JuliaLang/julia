@@ -839,6 +839,8 @@ sum{T}(A::SparseMatrixCSC{T}, region)  = reducedim(+,A,region,zero(T))
 prod{T}(A::SparseMatrixCSC{T})         = nnz(A)!=length(A) ? zero(T) : prod(A.nzval)
 prod{T}(A::SparseMatrixCSC{T}, region) = reducedim(*,A,region,one(T))
 
+mean(A::SparseMatrixCSC, region::Integer) = sum(A, region) / size(A, region)
+
 #all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
 #any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
 #sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)

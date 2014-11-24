@@ -65,18 +65,11 @@ function srand(r::MersenneTwister, seed::Vector{UInt32})
     return r
 end
 
+
 ## initialization
 
-function __init__()
-    srand()
+__init__() = srand()
 
-    # Temporary fix for #8874
-    ccall((:dsfmt_gv_init_by_array,:libdSFMT),
-          Void,
-          (Ptr{UInt32}, Int32),
-          1+GLOBAL_RNG.seed, length(GLOBAL_RNG.seed))
-
-end
 
 ## make_seed()
 # make_seed methods produce values of type Array{UInt32}, suitable for MersenneTwister seeding
@@ -130,9 +123,27 @@ srand(r::MersenneTwister) = srand(r, make_seed())
 srand(r::MersenneTwister, n::Integer) = srand(r, make_seed(n))
 srand(r::MersenneTwister, filename::AbstractString, n::Integer=4) = srand(r, make_seed(filename, n))
 
-srand() = srand(GLOBAL_RNG)
-srand(seed::Union(Integer, Vector{UInt32})) = srand(GLOBAL_RNG, seed)
-srand(filename::AbstractString, n::Integer=4) = srand(GLOBAL_RNG, filename, n)
+
+function dsfmt_gv_srand()
+    # Temporary fix for #8874 and #9124: update global RNG for Rmath
+    dsfmt_gv_init_by_array(GLOBAL_RNG.seed+1)
+    return GLOBAL_RNG
+end
+
+function srand()
+    srand(GLOBAL_RNG)
+    dsfmt_gv_srand()
+end
+
+function srand(seed::Union(Integer, Vector{UInt32}))
+    srand(GLOBAL_RNG, seed)
+    dsfmt_gv_srand()
+end
+
+function srand(filename::AbstractString, n::Integer=4)
+    srand(GLOBAL_RNG, filename, n)
+    dsfmt_gv_srand()
+end
 
 ## Global RNG
 
@@ -940,7 +951,7 @@ function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
             r = randi(rng)
             rabs = int64(r>>1) # One bit for the sign
             idx = rabs & 0xFF
-            x = (r&1 != 0x000000000 ? -rabs : rabs)*wi[idx+1]
+            x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
             if rabs < ki[idx+1]
                 return x # 99.3% of the time we return here 1st try
             elseif idx == 0

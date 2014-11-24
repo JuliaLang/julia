@@ -158,6 +158,7 @@ static void start_task(jl_task_t *t);
 
 #ifdef COPY_STACKS
 jl_jmp_buf * volatile jl_jmp_target;
+DLLEXPORT jl_jmp_buf jl_base_ctx;
 
 static void save_stack(jl_task_t *t)
 {
@@ -198,23 +199,6 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, ch
         memcpy(_x, t->stkbuf, t->ssize);
     }
     jl_longjmp(*jl_jmp_target, 1);
-}
-
-static void switch_stack(jl_task_t *t, jl_jmp_buf *where)
-{
-    assert(t == jl_current_task);
-    if (t->stkbuf == NULL) {
-        start_task(t);
-        // doesn't return
-    }
-    else {
-        restore_stack(t, where, NULL);
-    }
-}
-
-void jl_switch_stack(jl_task_t *t, jl_jmp_buf *where)
-{
-    switch_stack(t, where);
 }
 #endif
 
@@ -261,8 +245,11 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         jl_current_task = t;
 
 #ifdef COPY_STACKS
-        jl_jmp_target = where;
-        jl_longjmp(lastt->base_ctx, 1);
+        if (t->stkbuf) {
+            restore_stack(t, where, NULL);
+        } else {
+            jl_longjmp(jl_base_ctx, 1);
+        }
 #else
         jl_longjmp(*where, 1);
 #endif
@@ -418,10 +405,6 @@ static void start_task(jl_task_t *t)
     local_sp += sizeof(jl_gcframe_t);
     local_sp += 12*sizeof(void*);
     t->stackbase = (void*)(local_sp + _frame_offset);
-    if (jl_setjmp(t->base_ctx, 0)) {
-        // we get here to remove our data from the process stack
-        switch_stack(jl_current_task, jl_jmp_target);
-    }
 #endif
     res = jl_apply(t->start, NULL, 0);
     JL_GC_POP();
@@ -429,9 +412,9 @@ static void start_task(jl_task_t *t)
     assert(0);
 }
 
-DLLEXPORT void jl_handle_stack_switch()
+DLLEXPORT void jl_handle_stack_start()
 {
-    jl_switch_stack(jl_current_task, jl_jmp_target);
+    start_task(jl_current_task);
 }
 
 #ifndef COPY_STACKS

@@ -164,6 +164,28 @@ c,r = test_scomplete("\$a")
     @test s[r] == "Pk"
 end
 
+let #test that it can auto complete with spaces in file/path
+    path = tempdir()
+    space_folder = randstring() * " r"
+    dir = joinpath(path, space_folder)
+    dir_space = replace(space_folder, " ", "\\ ")
+    mkdir(dir)
+    cd(path) do
+        open(joinpath(space_folder, "space .file"),"w") do f
+            s = @windows? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            c,r = test_scomplete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file" in c
+
+            s = @windows? "cd(\"$dir_space\\\\space" : "cd(\"$dir_space/space"
+            c,r = test_complete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file\"" in c
+        end
+    end
+    rm(dir, recursive=true)
+end
+
 @windows_only begin
     tmp = tempname()
     path = dirname(tmp)
