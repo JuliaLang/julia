@@ -140,7 +140,7 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     if (TagType != 1)
         return 0;               // Unknown data format
     LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
-    uint8_t bytes[Size];
+    uint8_t *bytes = (uint8_t*) alloca(Size*sizeof(uint8_t));
     for (uint64_t i=0; i<Size; ++i)
         SymTab->getMemoryObject().readByte(PC+Offset+i, &bytes[i]);
     size_t pointer;
