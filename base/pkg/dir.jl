@@ -29,6 +29,9 @@ function cd(f::Function, args...; kws...)
 end
 
 function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
+    if Git.version() < v"1.7.3"
+        warn("Pkg only works with git versions greater than v1.7.3")
+    end
     dir = path()
     info("Initializing package repository $dir")
     if isdir(joinpath(dir,"METADATA"))
@@ -45,7 +48,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
             run(`touch REQUIRE`)
         end
     catch e
-        rm(dir, recursive=true)
+        ispath(dir) && rm(dir, recursive=true)
         rethrow(e)
     end
 end

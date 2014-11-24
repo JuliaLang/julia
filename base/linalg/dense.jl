@@ -419,20 +419,24 @@ end
 
 ## Moore-Penrose inverse
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
-    if( abs(tol) == 0 ) return pinv_adaptive(A); end
+## for __dense__ ill-conditioned matrices, please use
+## the threshold tol = sqrt(eps(real(float(one(T)))))
     m, n        = size(A)
+    (m == 0 || n == 0) && return Array(T, n, m)
     if istril(A)
        if( istriu(A) )
+          maxabsA = maximum(abs(diag(A)))
           B = zeros(T,n,m);
           for i = 1:min(m,n)
-             if( isfinite(one(T)/A[i,i]) ) B[i,i] = one(T)/A[i,i]; end
+             if( abs(A[i,i]) > tol*maxabsA && isfinite(one(T)/A[i,i]) )
+                 B[i,i] = one(T)/A[i,i]
+             end
           end
 	  return B;
        end
     end
     SVD         = svdfact(A, thin=true)
     S           = eltype(SVD[:S])
-    (m == 0 || n == 0) && return Array(S, n, m)
     Sinv        = zeros(S, length(SVD[:S]))
     index       = SVD[:S] .> tol*maximum(SVD[:S])
     Sinv[index] = one(S) ./ SVD[:S][index]
@@ -440,50 +444,11 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
     return SVD[:Vt]'scale(Sinv, SVD[:U]')
 end
 function pinv{T}(A::StridedMatrix{T})
-    tol = eps(real(float(one(T))))*maximum(size(A));
+    tol = eps(real(float(one(T))))*maximum(size(A))
     return pinv(A, tol)
 end
 pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 pinv(x::Number) = isfinite(one(x)/x) ? one(x)/x : zero(x)
-## Moore-Penrose inverse with adaptive tolerance thresholding
-function pinv_adaptive{T}(A::StridedMatrix{T})
-    m, n        = size(A)
-    if istril(A)
-       if( istriu(A) )
-          B = zeros(T,n,m);
-          for i = 1:min(m,n)
-             if( isfinite(one(T)/A[i,i]) ) B[i,i] = one(T)/A[i,i]; end
-          end
-	  return B;
-       end
-    end
-    SVD         = svdfact(A, thin=true)
-    S           = eltype(SVD[:S])
-    (m == 0 || n == 0) && return Array(S, n, m)
-
-    Sinv        = zeros(S, length(SVD[:S]))
-    tol1 = eps(real(float(one(T))))*maximum(size(A))
-    index       = SVD[:S] .> tol1*maximum(SVD[:S])
-    Sinv[index] = one(S) ./ SVD[:S][index]
-    Sinv[find(!isfinite(Sinv))] = zero(S)
-    Apinv1 = SVD[:Vt]'scale(Sinv, SVD[:U]')
-
-    Sinv        = zeros(S, length(SVD[:S]))
-    tol2 = sqrt(eps(real(float(one(T)))))
-    index       = SVD[:S] .> tol2*maximum(SVD[:S])
-    Sinv[index] = one(S) ./ SVD[:S][index]
-    Sinv[find(!isfinite(Sinv))] = zero(S)
-    Apinv2 = SVD[:Vt]'scale(Sinv, SVD[:U]')
-
-    if ( m > n )
-    err1 = vecnorm(A*(Apinv1*A)-A)
-    err2 = vecnorm(A*(Apinv2*A)-A)
-    else
-    err1 = vecnorm((A*Apinv1)*A-A)
-    err2 = vecnorm((A*Apinv2)*A-A)
-    end
-    return ((err1 < err2) ? Apinv1 : Apinv2)
-end
 
 ## Basis for null space
 function null{T}(A::StridedMatrix{T})

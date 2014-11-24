@@ -109,16 +109,6 @@ x0 = randn(n); b = a*x0; x = apinv*b;
 debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
 debug && println(vecnorm(a*x-b)/vecnorm(b))
 
-
-debug && println("=== julia pinv, adaptive threshold ===")
-apinv = pinv(a,0);
-
-@test_approx_eq_eps vecnorm(a*apinv*a - a)/vecnorm(a) 0 tol3
-x0 = randn(n); b = a*x0; x = apinv*b;
-@test_approx_eq_eps vecnorm(a*x-b)/vecnorm(b) 0 tol3
-debug && println(vecnorm(a*apinv*a - a)/vecnorm(a))
-debug && println(vecnorm(a*x-b)/vecnorm(b))
-
 end
 
 

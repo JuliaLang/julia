@@ -258,9 +258,20 @@ function tailsize(P, d)
     s
 end
 
+stagedfunction linearindexing{T,N,P,I,LD}(A::SubArray{T,N,P,I,LD})
+    length(I) == LD ? (:(LinearFast())) : (:(LinearSlow()))
+end
+stagedfunction linearindexing{A<:SubArray}(::Type{A})
+    T,N,P,I,LD = A.parameters
+    length(I) == LD ? (:(LinearFast())) : (:(LinearSlow()))
+end
+
 getindex(::Colon, ::Colon) = Colon()
 getindex{T}(v::AbstractArray{T,1}, ::Colon) = v
 getindex(::Colon, i) = i
+
+step(::Colon) = 1
+first(::Colon) = 1
 
 ## Strides
 stagedfunction strides{T,N,P,I}(V::SubArray{T,N,P,I})
@@ -298,9 +309,6 @@ function stride1expr(Atype::Type, Itypes::Tuple, Aexpr, Inewsym, LD)
     end
     ex
 end
-
-step(::Colon) = 1
-first(::Colon) = 1
 
 first_index(V::SubArray) = first_index(V.parent, V.indexes)
 function first_index(P::AbstractArray, indexes::Tuple)

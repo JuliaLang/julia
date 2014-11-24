@@ -129,7 +129,18 @@ function pinv{T}(D::Diagonal{T})
     end
     Diagonal(Di)
 end
-pinv{T}(D::Diagonal{T}, tol::Real) = pinv(D)
+function pinv{T}(D::Diagonal{T}, tol::Real)
+    Di = similar(D.diag)
+    if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
+    for i = 1:length(D.diag)
+        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
+            Di[i]=inv(D.diag[i])
+        else
+            Di[i]=zero(T)
+        end
+    end
+    Diagonal(Di)
+end
 
 #Eigensystem
 eigvals{T<:Number}(D::Diagonal{T}) = D.diag
