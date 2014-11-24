@@ -1,7 +1,7 @@
 module dSFMT
 
 export DSFMT_state, dsfmt_get_min_array_size, dsfmt_get_idstring,
-       dsfmt_init_gen_rand, dsfmt_init_by_array,
+       dsfmt_init_gen_rand, dsfmt_init_by_array, dsfmt_gv_init_by_array,
        dsfmt_fill_array_close_open!, dsfmt_fill_array_close1_open2!,
        win32_SystemFunction036!
 
@@ -37,6 +37,13 @@ function dsfmt_init_by_array(s::DSFMT_state, seed::Vector{UInt32})
           Void,
           (Ptr{Void}, Ptr{UInt32}, Int32),
           s.val, seed, length(seed))
+end
+
+function dsfmt_gv_init_by_array(seed::Vector{UInt32})
+    ccall((:dsfmt_gv_init_by_array,:libdSFMT),
+          Void,
+          (Ptr{UInt32}, Int32),
+          seed, length(seed))
 end
 
 function dsfmt_fill_array_close1_open2!(s::DSFMT_state, A::Ptr{Float64}, n::Int)
