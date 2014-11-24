@@ -179,17 +179,26 @@ rem{T<:Integer}(x::T, ::Type{T}) = x
 rem(x::Integer, ::Type{Bool}) = ((x&1)!=0)
 mod{T<:Integer}(x::Integer, ::Type{T}) = rem(x, T)
 
-for to in (Int8, Int16, Int32, Int64, Int128)
+for to in (Int8, Int16, Int32, Int64)
     @eval begin
         convert(::Type{$to}, x::Float32) = box($to,checked_fptosi($to,unbox(Float32,x)))
         convert(::Type{$to}, x::Float64) = box($to,checked_fptosi($to,unbox(Float64,x)))
     end
 end
 
-for to in (UInt8, UInt16, UInt32, UInt64, UInt128)
+for to in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
         convert(::Type{$to}, x::Float32) = box($to,checked_fptoui($to,unbox(Float32,x)))
         convert(::Type{$to}, x::Float64) = box($to,checked_fptoui($to,unbox(Float64,x)))
+    end
+end
+
+for Ti in (Int128,UInt128)
+    for Tf in (Float32,Float64)
+        @eval function convert(::Type{$Ti},x::$Tf)
+            isinteger(x) || throw(InexactError())
+            trunc($Ti,x)
+        end
     end
 end
 

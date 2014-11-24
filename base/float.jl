@@ -5,19 +5,81 @@ for t in (Bool,Char,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
 end
 
 for t1 in (Float32,Float64)
-    for st in (Int8,Int16,Int32,Int64,Int128)
+    for st in (Int8,Int16,Int32,Int64)
         @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64,UInt128)
+    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64)
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
         end
     end
 end
+
+promote_rule(::Type{Float64}, ::Type{UInt128}) = Float64
+promote_rule(::Type{Float64}, ::Type{Int128}) = Float64
+promote_rule(::Type{Float32}, ::Type{UInt128}) = Float32
+promote_rule(::Type{Float32}, ::Type{Int128}) = Float32
+
+function convert(::Type{Float64}, x::UInt128)
+    x == 0 && return 0.0
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 53
+        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
+    else
+        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
+        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    end
+    reinterpret(Float64,((n+1022)<<52) % UInt64 + y)
+end
+
+function convert(::Type{Float64}, x::Int128)
+    x == 0 && return 0.0
+    s = ((x >>> 64) % UInt64) & 0x8000_0000_0000_0000 # sign bit
+    x = abs(x) % UInt128
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 53
+        y = ((x % UInt64) << (53-n)) & 0x000f_ffff_ffff_ffff
+    else
+        y = ((x >> (n-54)) % UInt64) & 0x001f_ffff_ffff_ffff # keep 1 extra bit
+        y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
+    end
+    reinterpret(Float64, (s | ((n+1022)<<52) % UInt64) + y)
+end
+
+function convert(::Type{Float32}, x::UInt128)
+    x == 0 && return 0f0
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 24
+        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+    else
+        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    end
+    reinterpret(Float32,((n+126)<<23) % UInt32 + y)
+end
+
+function convert(::Type{Float32}, x::Int128)
+    x == 0 && return 0f0
+    s = ((x >>> 96) % UInt32) & 0x8000_0000 # sign bit
+    x = abs(x) % UInt128
+    n = 128-leading_zeros(x) # ndigits0z(x,2)
+    if n <= 24
+        y = ((x % UInt32) << (24-n)) & 0x007f_ffff
+    else
+        y = ((x >> (n-25)) % UInt32) & 0x00ff_ffff # keep 1 extra bit
+        y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
+        y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
+    end
+    reinterpret(Float32, (s | ((n+126)<<23) % UInt32) + y)
+end
+
 #convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
 convert(::Type{Float16}, x::Float64) = convert(Float16, convert(Float32,x))
 convert(::Type{Float32}, x::Float64) = box(Float32,fptrunc(Float32,x))
@@ -44,18 +106,47 @@ float32(x) = convert(Float32, x)
 float64(x) = convert(Float64, x)
 float(x)   = convert(FloatingPoint, x)
 
-for Ti in (Int8, Int16, Int32, Int64, Int128)
+for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptosi($Ti,unbox(Float32,x)))
         unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptosi($Ti,unbox(Float64,x)))
     end
 end
-for Ti in (UInt8, UInt16, UInt32, UInt64, UInt128)
+for Ti in (UInt8, UInt16, UInt32, UInt64)
     @eval begin
         unsafe_trunc(::Type{$Ti}, x::Float32) = box($Ti,fptoui($Ti,unbox(Float32,x)))
         unsafe_trunc(::Type{$Ti}, x::Float64) = box($Ti,fptoui($Ti,unbox(Float64,x)))
     end
 end
+
+function unsafe_trunc(::Type{UInt128}, x::Float64)
+    xu = reinterpret(UInt64,x)
+    k = int(xu >> 52) & 0x07ff - 1075
+    xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
+    if k <= 0
+        UInt128(xu >> -k)
+    else
+        UInt128(xu) << k
+    end
+end
+function unsafe_trunc(::Type{Int128}, x::Float64)
+    copysign(unsafe_trunc(UInt128,x) % Int128, x)
+end
+
+function unsafe_trunc(::Type{UInt128}, x::Float32)
+    xu = reinterpret(UInt32,x)
+    k = int(xu >> 23) & 0x00ff - 150
+    xu = (xu & 0x007f_ffff) | 0x0080_0000
+    if k <= 0
+        UInt128(xu >> -k)
+    else
+        UInt128(xu) << k
+    end
+end
+function unsafe_trunc(::Type{Int128}, x::Float32)
+    copysign(unsafe_trunc(UInt128,x) % Int128, x)
+end
+
 
 # matches convert methods
 # also determines floor, ceil, round
