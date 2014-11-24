@@ -654,7 +654,10 @@ endif
 
 ifeq ($(OS), Linux)
 OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
-JLDFLAGS = -Wl,-Bdynamic -Wl,-Bsymbolic-functions
+JLDFLAGS = -Wl,-Bdynamic
+JLIBLDFLAGS = -Wl,-Bsymbolic-functions
+else
+JLIBLDFLAGS =
 endif
 
 ifeq ($(OS), FreeBSD)
