@@ -117,7 +117,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
                     (syntax whitespace)
                     bol))
       (submatch "'"
-                (or (repeat 0 7 (not (any "'"))) (not (any "\\"))
+                (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
                     "\\\\")
                 "'")))
 
