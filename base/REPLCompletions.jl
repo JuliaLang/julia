@@ -187,13 +187,13 @@ function completions(string, pos)
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
-        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)",reverse(partial))
-        startpos = length(partial)-(m == nothing ? 1 : m.offset) + 2
+        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        startpos = length(partial) - (m == nothing ? 1 : m.offset) + 2
         r = startpos:pos
-        paths, r, success = complete_path(unescape_string(string[r]), pos)
+        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(unescape_string(string[startpos:start(r)-1] * paths[1])) &&  # except if it's a directory
+           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
