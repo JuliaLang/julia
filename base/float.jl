@@ -34,7 +34,8 @@ function convert(::Type{Float64}, x::UInt128)
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
-    reinterpret(Float64,((n+1022)<<52) % UInt64 + y)
+    d = ((n+1022) % UInt64) << 52
+    reinterpret(Float64, d + y)
 end
 
 function convert(::Type{Float64}, x::Int128)
@@ -49,7 +50,8 @@ function convert(::Type{Float64}, x::Int128)
         y = (y+1)>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt64(trailing_zeros(x) == (n-54)) # fix last bit to round to even
     end
-    reinterpret(Float64, (s | ((n+1022)<<52) % UInt64) + y)
+    d = ((n+1022) % UInt64) << 52
+    reinterpret(Float64, s | d + y)
 end
 
 function convert(::Type{Float32}, x::UInt128)
@@ -62,7 +64,8 @@ function convert(::Type{Float32}, x::UInt128)
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
     end
-    reinterpret(Float32,((n+126)<<23) % UInt32 + y)
+    d = ((n+126) % UInt32) << 23
+    reinterpret(Float32, d + y)
 end
 
 function convert(::Type{Float32}, x::Int128)
@@ -77,7 +80,8 @@ function convert(::Type{Float32}, x::Int128)
         y = (y+one(UInt32))>>1 # round, ties up (extra leading bit in case of next exponent)
         y &= ~UInt32(trailing_zeros(x) == (n-25)) # fix last bit to round to even
     end
-    reinterpret(Float32, (s | ((n+126)<<23) % UInt32) + y)
+    d = ((n+126) % UInt32) << 23
+    reinterpret(Float32, s | d + y)
 end
 
 #convert(::Type{Float16}, x::Float32) = box(Float16,fptrunc(Float16,x))
