@@ -8,7 +8,7 @@ function primesmask(s::AbstractVector{Bool})
     n = length(s)
     n < 2 && return s; s[2] = true
     n < 3 && return s; s[3] = true
-    r = ifloor(sqrt(n))
+    r = floor(Int,sqrt(n))
     for x = 1:r
         xx = x*x
         for y = 1:r

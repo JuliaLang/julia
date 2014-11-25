@@ -888,7 +888,7 @@ function ini_dec(x::BigInt, n::Int)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
-    return (n, d, decode_dec(iround(x/big(10)^(d-n)))[3])
+    return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
 end
 
 

@@ -28,12 +28,12 @@ size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
 size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
 
 #Elementary operations
-for func in (:copy, :round, :iround, :conj)
-    @eval begin
-        ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
-    end
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
+    @eval ($func)(M::SymTridiagonal) = SymTridiagonal(($func)(M.dv), ($func)(M.ev))
 end
-
+for func in (:round, :trunc, :floor, :ceil)
+    @eval ($func){T<:Integer}(::Type{T},M::SymTridiagonal) = SymTridiagonal(($func)(T,M.dv), (T,$func)(M.ev))
+end
 transpose(M::SymTridiagonal) = M #Identity operation
 ctranspose(M::SymTridiagonal) = conj(M)
 
@@ -203,9 +203,14 @@ end
 copy!(dest::Tridiagonal, src::Tridiagonal) = Tridiagonal(copy!(dest.dl, src.dl), copy!(dest.d, src.d), copy!(dest.du, src.du), copy!(dest.du2, src.du2))
 
 #Elementary operations
-for func in (:copy, :round, :iround, :conj)
-    @eval begin
-        ($func)(M::Tridiagonal) = Tridiagonal(map(($func), (M.dl, M.d, M.du, M.du2))...)
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
+    @eval function ($func)(M::Tridiagonal)
+        Tridiagonal(($func)(M.dl), ($func)(M.d), ($func)(M.du), ($func)(M.du2))
+    end
+end
+for func in (:round, :trunc, :floor, :ceil)
+    @eval function ($func){T<:Integer}(::Type{T},M::Tridiagonal)
+        Tridiagonal(($func)(T,M.dl), ($func)(T,M.d), ($func)(T,M.du), ($func)(T,M.du2))
     end
 end
 

@@ -12,7 +12,7 @@ typealias AbstractRotation Union(Givens, Rotation)
 
 realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
-realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^itrunc(log(realmin(T)/eps(T))/log(twopar)/twopar))
+realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
 function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
     zeropar = zero(T)

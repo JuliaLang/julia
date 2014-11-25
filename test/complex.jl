@@ -704,7 +704,7 @@ function logacc(x::Float64,expected::Float64)
   (x == Inf || x == -Inf) && (return 0)
   isnan(x) && (return 0)
   ra = relacc(BigFloat(x),BigFloat(expected))
-  max(ifloor(-log2(ra)),0)
+  max(floor(Int,-log2(ra)),0)
 end
 # the robust division algorithm should have 53 or 52
 # bits accuracy for each of the hard divisions

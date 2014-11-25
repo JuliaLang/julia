@@ -219,7 +219,7 @@ const MinDecimalExponent = -348
 const MaxDecimalExponent = 340
 
 function binexp_cache(min_exponent,max_exponent)
-    k = iceil((min_exponent+63)*D_1_LOG2_10)
+    k = ceil(Integer,(min_exponent+63)*D_1_LOG2_10)
     index = div(CachedPowersOffset+k-1,DecimalExponentDistance) + 1
     cp = CachedPowers[index+1]
     return cp

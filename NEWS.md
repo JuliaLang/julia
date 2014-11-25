@@ -140,6 +140,12 @@ Deprecated or removed
 
   * `{...}` syntax is deprecated in favor of `Any[...]` ([#8578]).
 
+  * `itrunc`, `ifloor`, `iceil` and `iround` are deprecated in favour of
+  `trunc{T<:Integer}(T,x)`, `floor{T<:Integer}(T,x)`, etc.. `trunc` is now
+  always bound-checked;`Base.unsafe_trunc` provides the old unchecked `itrunc`
+  behaviour ([#9133]).
+  
+
 Julia v0.3.0 Release Notes
 ==========================
 

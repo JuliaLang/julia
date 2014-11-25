@@ -96,7 +96,7 @@ rm(c_tmpdir, recursive=true)
 # This section tests file watchers.                                   #
 #######################################################################
 function test_file_poll(channel,timeout_s)
-    rc = poll_file(file, iround(timeout_s/10), timeout_s)
+    rc = poll_file(file, round(Int,timeout_s/10), timeout_s)
     put!(channel,rc)
 end
 
