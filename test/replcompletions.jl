@@ -80,6 +80,10 @@ c,r,res = test_complete(s)
 @test r == 7:12
 @test length(c) == 1
 
+# `cd("C:\U should not make the repl crash due to escaping see comment #9137
+s = "cd(\"C:\\U"
+c,r,res = test_complete(s)
+
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))
 #temp_pkg_dir() do
