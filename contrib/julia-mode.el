@@ -76,11 +76,13 @@ This function provides equivalent functionality, but makes no efforts to optimis
     (modify-syntax-entry ?\] ")[ " table)
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
-    ;(modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
-    (modify-syntax-entry ?'  "." table)  ; character quote or transpose
+    ;; Here, we treat ' as punctuation (when it's used for transpose),
+    ;; see our use of `julia-char-regex' for handling ' as a character
+    ;; delimeter
+    (modify-syntax-entry ?'  "." table)
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?` "\"" table)
-    ;; (modify-syntax-entry ?\" "." table)
+
     (modify-syntax-entry ?. "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
@@ -95,31 +97,16 @@ This function provides equivalent functionality, but makes no efforts to optimis
     table)
   "Syntax table for `julia-mode'.")
 
-;; syntax table that holds within strings
-(defvar julia-mode-string-syntax-table
-  (let ((table (make-syntax-table)))
-    table)
-  "Syntax table for `julia-mode'.")
-
-;; disable " inside char quote
-(defvar julia-mode-char-syntax-table
-  (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?\" "." table)
-    table)
-  "Syntax table for `julia-mode'.")
-
-(defconst julia-string-regex
-  "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
-
 (defconst julia-char-regex
-  (rx (submatch (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
-                    (syntax open-parenthesis)
-                    (syntax whitespace)
-                    bol))
-      (submatch "'"
-                (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
-                    "\\\\")
-                "'")))
+  (rx (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+          (syntax open-parenthesis)
+          (syntax whitespace)
+          bol)
+      (group "'")
+      (group
+       (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
+           "\\\\"))
+      (group "'")))
 
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
@@ -202,7 +189,6 @@ This function provides equivalent functionality, but makes no efforts to optimis
      'symbols)
     'font-lock-constant-face)
    (list julia-unquote-regex 2 'font-lock-constant-face)
-   (list julia-char-regex 2 'font-lock-string-face)
    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
    (list julia-function-regex 1 'font-lock-function-name-face)
    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
@@ -399,13 +385,10 @@ before point. Returns nil if we're not within nested parens."
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
-	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-        (list
- 	(list julia-char-regex 2
- 	      julia-mode-char-syntax-table)
-        (list julia-string-regex 0
-              julia-mode-string-syntax-table)
+ 	`(,julia-char-regex
+          (1 "\"") ; Treat ' as a string delimiter.
+          (2 ".") ; Don't highlight anything between the open and close '.
+          (3 "\"")) ; Treat the close ' as a string delimiter.
 	))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
