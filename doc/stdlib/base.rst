@@ -3174,38 +3174,52 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round(x, [digits, [base]])
+.. function:: round([T,] x, [digits, [base]])
 
-   ``round(x)`` returns the nearest integral value of the same type as ``x`` to ``x``. ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 1, 8)`` is ``3.125``.
+   ``round(x)`` returns the nearest integral value of the same type as ``x``
+   to ``x``, breaking ties by rounding away from zero.
 
-.. function:: ceil(x, [digits, [base]])
+   ``round(T, x)`` converts the result to type ``T``, throwing an
+   ``InexactError`` if the value is not representable.
 
-   Returns the nearest integral value of the same type as ``x`` not less than ``x``. ``digits`` and ``base`` work as above.
+   ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 1, 8)`` is ``3.125``.
 
-.. function:: floor(x, [digits, [base]])
+.. function:: ceil([T,] x, [digits, [base]])
 
-   Returns the nearest integral value of the same type as ``x`` not greater than ``x``. ``digits`` and ``base`` work as above.
+   ``ceil(x)`` returns the nearest integral value of the same type as ``x``
+   that is greater than or equal to ``x``.
 
-.. function:: trunc(x, [digits, [base]])
+   ``ceil(T, x)`` converts the result to type ``T``, throwing an
+   ``InexactError`` if the value is not representable.
 
-   Returns the nearest integral value of the same type as ``x`` not greater in magnitude than ``x``. ``digits`` and ``base`` work as above.
+   ``digits`` and ``base`` work as for ``round``.
 
-.. function:: iround([T,]x) -> Integer
+.. function:: floor([T,] x, [digits, [base]])
 
-   Returns the nearest integer to ``x``, converted to an integer type, optionally passed as the first argument.
+   ``floor(x)`` returns the nearest integral value of the same type as ``x``
+   that is less than or equal to ``x``.
 
-.. function:: iceil(x) -> Integer
+   ``floor(T, x)`` converts the result to type ``T``, throwing an
+   ``InexactError`` if the value is not representable.
 
-   Returns the nearest integer not less than ``x``.
+   ``digits`` and ``base`` work as above.
 
-.. function:: ifloor(x) -> Integer
+.. function:: trunc([T,] x, [digits, [base]])
 
-   Returns the nearest integer not greater than ``x``.
+   ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
+   value is less than or equal to ``x``. 
 
-.. function:: itrunc([T,]x) -> Integer
+   ``trunc(T, x)`` converts the result to type ``T``, throwing an
+   ``InexactError`` if the value is not representable.
 
-   Returns the nearest integer not greater in magnitude than ``x``, converted to an integer type, optionally passed as the first argument.
+   ``digits`` and ``base`` work as above.
 
+.. function:: unsafe_trunc(T, x)
+
+   ``unsafe_trunc(T, x)`` returns the nearest integral value of type ``T`` whose absolute
+   value is less than or equal to ``x``. If the value is not representable by
+   ``T``, an arbitrary value will be returned.
+   
 .. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.

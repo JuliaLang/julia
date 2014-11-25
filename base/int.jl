@@ -193,23 +193,14 @@ for to in (UInt8, UInt16, UInt32, UInt64)
     end
 end
 
-function convert(::Type{Int128}, x::FloatingPoint)
-    ax = abs(x)
-    top = trunc(ldexp(ax,-64))
-    bot = ax - ldexp(top,64)
-    n = int128(convert(UInt64,top))<<64 + int128(convert(UInt64,bot))
-    return x<0 ? -n : n
+for Ti in (Int128,UInt128)
+    for Tf in (Float32,Float64)
+        @eval function convert(::Type{$Ti},x::$Tf)
+            isinteger(x) || throw(InexactError())
+            trunc($Ti,x)
+        end
+    end
 end
-convert(::Type{Int128}, x::Float32) = convert(Int128, float64(x))
-
-function convert(::Type{UInt128}, x::FloatingPoint)
-    ax = abs(x)
-    top = trunc(ldexp(ax,-64))
-    bot = ax - ldexp(top,64)
-    n = uint128(convert(UInt64,top))<<64 + uint128(convert(UInt64,bot))
-    return x<0 ? -n : n
-end
-convert(::Type{UInt128}, x::Float32) = convert(UInt128, float64(x))
 
 convert(::Type{Signed}, x::UInt8  ) = convert(Int8,x)
 convert(::Type{Signed}, x::UInt16 ) = convert(Int16,x)
@@ -257,11 +248,10 @@ trunc(x::Integer) = x
 floor(x::Integer) = x
  ceil(x::Integer) = x
 
-iround(x::Integer) = x
-iround{T<:Integer}(::Type{T}, x::Integer) = convert(T, x)
-itrunc(x::Integer) = x
-ifloor(x::Integer) = x
- iceil(x::Integer) = x
+round{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
+trunc{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
+floor{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
+ ceil{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
 
 ## integer construction ##
 
@@ -382,7 +372,7 @@ for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:U
               (:int128,:Int128), (:uint128,:UInt128),
               (:signed,:Int), (:unsigned,:UInt), (:integer,:Int),
               (:int,:Int), (:uint,:UInt))
-    @eval ($f)(x::FloatingPoint) = iround($t,x)
+    @eval ($f)(x::FloatingPoint) = round($t,x)
 end
 
 ## wide multiplication, Int128 multiply and divide ##

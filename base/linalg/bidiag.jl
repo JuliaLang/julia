@@ -64,9 +64,13 @@ size(M::Bidiagonal) = (length(M.dv), length(M.dv))
 size(M::Bidiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.dv) : 1)
 
 #Elementary operations
-for func in (conj, copy, round, iround)
-    func(M::Bidiagonal) = Bidiagonal(func(M.dv), func(M.ev), M.isupper)
+for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
+    @eval ($func)(M::Bidiagonal) = Bidiagonal(($func)(M.dv), ($func)(M.ev), M.isupper)
 end
+for func in (:round, :trunc, :floor, :ceil)
+    @eval ($func){T<:Integer}(::Type{T}, M::Bidiagonal) = Bidiagonal(($func)(T,M.dv), ($func)(T,M.ev), M.isupper)
+end
+
 
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)

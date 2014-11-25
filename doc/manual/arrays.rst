@@ -352,7 +352,6 @@ elementwise::
     exponent eta zeta gamma
     hankelh1 hankelh2
      ceil  floor  round  trunc
-    iceil ifloor iround itrunc
     isfinite isinf isnan
     lbeta lfact lgamma
     log log10 log1p log2

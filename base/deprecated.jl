@@ -231,3 +231,12 @@ const Uint128 = UInt128
 
 @deprecate rand!(r::Range, A::AbstractArray) rand!(A, r)
 @deprecate rand!(mt::MersenneTwister, r::Range, A::AbstractArray) rand!(mt, A, r)
+
+@deprecate itrunc(x)              trunc(Integer,x)
+@deprecate itrunc{T<:Integer}(::Type{T},x::Real) trunc(T,x)
+@deprecate iceil(x)               ceil(Integer,x)
+@deprecate iceil{T}(::Type{T},x)  ceil(T,x)
+@deprecate ifloor(x)              floor(Integer,x)
+@deprecate ifloor{T}(::Type{T},x) floor(T,x)
+@deprecate iround(x)              round(Integer,x)
+@deprecate iround{T}(::Type{T},x) round(T,x)

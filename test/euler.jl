@@ -46,7 +46,7 @@ end
 @test sum(1:100)^2 - sum((1:100).^2) == 25164150
 
 #7: 104743
-euler7(n) = primes(ifloor(n*log(n*log(n))))[n]
+euler7(n) = primes(floor(Int,n*log(n*log(n))))[n]
 @test euler7(10001) == 104743
 
 #8: 40824

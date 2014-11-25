@@ -243,11 +243,18 @@ end
 # Unary functions
 a = sprand(5,15, 0.5)
 afull = full(a)
-for op in (:sin, :cos, :tan, :iceil, :ifloor, :ceil, :floor, :abs, :abs2)
+for op in (:sin, :cos, :tan, :ceil, :floor, :abs, :abs2)
     @eval begin
         @test ($op)(afull) == full($(op)(a))
     end
 end
+
+for op in (:ceil, :floor)
+    @eval begin
+        @test ($op)(Int,afull) == full($(op)(Int,a))
+    end
+end
+
 
 # getindex tests
 ni = 23

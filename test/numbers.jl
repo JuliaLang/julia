@@ -563,11 +563,7 @@ end
 for x=int64(2)^53-2:int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
     u = uint64(x)
-    if WORD_SIZE == 64
-        @test y == float64(itrunc(y))
-    else
-        @test y == float64(int64(trunc(y)))
-    end
+    @test y == float64(trunc(Int64,y))
 
     @test (x==y)==(y==x)
     @test (x!=y)==!(x==y)
@@ -706,6 +702,16 @@ end
 @test float32(typemin(UInt128)) == 0.0f0
 @test float64(typemax(UInt128)) == 2.0^128
 @test float32(typemax(UInt128)) == 2.0f0^128
+
+# check for double rounding in conversion
+@test float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
+@test float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
+@test float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
+@test float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+
+# check Float vs Int128 comparisons
+@test int128(1e30) == 1e30
+@test int128(1e30)+1 > 1e30
 
 @test int128(-2.0^127) == typemin(Int128)
 @test float64(uint128(3.7e19)) == 3.7e19
@@ -1301,46 +1307,45 @@ end
 
 for x = 2^53-10:2^53+10
     y = float64(x)
-    i = WORD_SIZE == 64 ? itrunc(y) : int64(trunc(y))
+    i = trunc(Int64,y)
     @test int64(trunc(y)) == i
     @test int64(round(y)) == i
     @test int64(floor(y)) == i
     @test int64(ceil(y))  == i
-    if WORD_SIZE == 64
-        @test iround(y)       == i
-        @test ifloor(y)       == i
-        @test iceil(y)        == i
-    end
+
+    @test round(Int64,y)       == i
+    @test floor(Int64,y)       == i
+    @test ceil(Int64,y)        == i
 end
 
 for x = 2^24-10:2^24+10
     y = float32(x)
-    i = itrunc(y)
+    i = trunc(Int,y)
     @test int(trunc(y)) == i
     @test int(round(y)) == i
     @test int(floor(y)) == i
     @test int(ceil(y))  == i
-    @test iround(y)     == i
-    @test ifloor(y)     == i
-    @test iceil(y)      == i
+    @test round(Int,y)     == i
+    @test floor(Int,y)     == i
+    @test ceil(Int,y)      == i
 end
 
-@test_throws InexactError iround(Inf)
-@test_throws InexactError iround(NaN)
-@test iround(2.5) == 3
-@test iround(-1.9) == -2
-@test_throws InexactError iround(Int64, 9.223372036854776e18)
-@test       iround(Int64, 9.223372036854775e18) == 9223372036854774784
-@test_throws InexactError iround(Int64, -9.223372036854778e18)
-@test       iround(Int64, -9.223372036854776e18) == typemin(Int64)
-@test_throws InexactError iround(UInt64, 1.8446744073709552e19)
-@test       iround(UInt64, 1.844674407370955e19) == 0xfffffffffffff800
-@test_throws InexactError iround(Int32, 2.1474836f9)
-@test       iround(Int32, 2.1474835f9) == 2147483520
-@test_throws InexactError iround(Int32, -2.147484f9)
-@test       iround(Int32, -2.1474836f9) == typemin(Int32)
-@test_throws InexactError iround(UInt32, 4.2949673f9)
-@test       iround(UInt32, 4.294967f9) == 0xffffff00
+@test_throws InexactError round(Int,Inf)
+@test_throws InexactError round(Int,NaN)
+@test round(Int,2.5) == 3
+@test round(Int,-1.9) == -2
+@test_throws InexactError round(Int64, 9.223372036854776e18)
+@test       round(Int64, 9.223372036854775e18) == 9223372036854774784
+@test_throws InexactError round(Int64, -9.223372036854778e18)
+@test       round(Int64, -9.223372036854776e18) == typemin(Int64)
+@test_throws InexactError round(UInt64, 1.8446744073709552e19)
+@test       round(UInt64, 1.844674407370955e19) == 0xfffffffffffff800
+@test_throws InexactError round(Int32, 2.1474836f9)
+@test       round(Int32, 2.1474835f9) == 2147483520
+@test_throws InexactError round(Int32, -2.147484f9)
+@test       round(Int32, -2.1474836f9) == typemin(Int32)
+@test_throws InexactError round(UInt32, 4.2949673f9)
+@test       round(UInt32, 4.294967f9) == 0xffffff00
 
 for n = 1:100
     m = 1
@@ -1350,32 +1355,32 @@ for n = 1:100
     @test n == m
 end
 
-@test iround(UInt,-0.0) == 0
-@test iround(Int,-0.0) == 0
+@test round(UInt,-0.0) == 0
+@test round(Int,-0.0) == 0
 
-@test iround(Int, 0.5) == 1
-@test iround(Int, prevfloat(0.5)) == 0
-@test iround(Int, -0.5) == -1
-@test iround(Int, nextfloat(-0.5)) == 0
+@test round(Int, 0.5) == 1
+@test round(Int, prevfloat(0.5)) == 0
+@test round(Int, -0.5) == -1
+@test round(Int, nextfloat(-0.5)) == 0
 
-@test iround(UInt, 0.5) == 1
-@test iround(UInt, prevfloat(0.5)) == 0
-@test_throws InexactError iround(UInt, -0.5)
-@test iround(UInt, nextfloat(-0.5)) == 0
+@test round(UInt, 0.5) == 1
+@test round(UInt, prevfloat(0.5)) == 0
+@test_throws InexactError round(UInt, -0.5)
+@test round(UInt, nextfloat(-0.5)) == 0
 
-@test iround(Int, 0.5f0) == 1
-@test iround(Int, prevfloat(0.5f0)) == 0
-@test iround(Int, -0.5f0) == -1
-@test iround(Int, nextfloat(-0.5f0)) == 0
+@test round(Int, 0.5f0) == 1
+@test round(Int, prevfloat(0.5f0)) == 0
+@test round(Int, -0.5f0) == -1
+@test round(Int, nextfloat(-0.5f0)) == 0
 
-@test iround(UInt, 0.5f0) == 1
-@test iround(UInt, prevfloat(0.5f0)) == 0
-@test_throws InexactError iround(UInt, -0.5f0)
-@test iround(UInt, nextfloat(-0.5f0)) == 0
+@test round(UInt, 0.5f0) == 1
+@test round(UInt, prevfloat(0.5f0)) == 0
+@test_throws InexactError round(UInt, -0.5f0)
+@test round(UInt, nextfloat(-0.5f0)) == 0
 
 # numbers that can't be rounded by trunc(x+0.5)
-@test iround(Int64, 2.0^52 + 1) == 4503599627370497
-@test iround(Int32, 2.0f0^23 + 1) == 8388609
+@test round(Int64, 2.0^52 + 1) == 4503599627370497
+@test round(Int32, 2.0f0^23 + 1) == 8388609
 
 # binary literals
 
@@ -1982,11 +1987,11 @@ end
 # issue #7441
 @test_throws InexactError int32(2.0^50)
 
-@test_throws InexactError iround(UInt8, 255.5)
-@test iround(UInt8, 255.4) === 0xff
+@test_throws InexactError round(UInt8, 255.5)
+@test round(UInt8, 255.4) === 0xff
 
-@test_throws InexactError iround(Int16, -32768.7)
-@test iround(Int16, -32768.1) === int16(-32768)
+@test_throws InexactError round(Int16, -32768.7)
+@test round(Int16, -32768.1) === int16(-32768)
 
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)

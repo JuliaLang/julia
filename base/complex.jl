@@ -477,21 +477,19 @@ function ^{T<:Complex}(z::T, p::T)
 
     # apply some corrections to force known zeros
     if pim == 0
-        ip = itrunc(pr)
-        if ip == pr
+        if isinteger(pr)
             if zi == 0
                 im = copysign(zero(im), im)
             elseif zr == 0
-                if isodd(ip)
-                    re = copysign(zero(re), re)
-                else
+                if isinteger(0.5*pr) # pr is even
                     im = copysign(zero(im), im)
+                else
+                    re = copysign(zero(re), re)
                 end
             end
         else
             dr = pr*2
-            ip = itrunc(dr)
-            if ip == dr && zi == 0
+            if isinteger(dr) && zi == 0
                 if zr < 0
                     re = copysign(zero(re), re)
                 else
