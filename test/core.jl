@@ -1953,3 +1953,12 @@ end
 end
 
 @test I8978.h(4) === 7.0
+
+# issue #9134
+function f9134()
+    ii = zeros(Int32, 1)
+    let i
+        ii[1] = i
+    end
+end
+@test_throws UndefVarError f9134()
