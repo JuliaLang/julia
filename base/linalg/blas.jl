@@ -237,14 +237,15 @@ for (fname, elty) in ((:idamax_,:Float64),
                       (:izamax_,:Complex128),
                       (:icamax_,:Complex64))
     @eval begin
-        function iamax(n::BlasInt, dx::Union(StridedVector{$elty}, Ptr{$elty}), incx::BlasInt)
+        function iamax(n::Integer, dx::Union(Ptr{$elty}, DenseArray{$elty}), incx::Integer)
             ccall(($(blasfunc(fname)), libblas),BlasInt,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &n, dx, &incx)
         end
     end
 end
-iamax(dx::StridedVector) = iamax(length(dx), dx, 1)
+iamax(dx::StridedVector) = iamax(length(dx), pointer(dx), stride(dx,1))
+iamax(dx::Array) = iamax(length(dx), pointer(dx), 1)
 
 # Level 2
 ## mv
