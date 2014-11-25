@@ -226,35 +226,10 @@ Handles both single-line and multi-line comments."
   (nth 4 (syntax-ppss)))
 
 (defun julia-in-string ()
-  "Return non-nil if point is inside a string."
+  "Return non-nil if point is inside a string.
+Note this is Emacs' notion of what is highlighted as a string.
+As a result, it is true inside \"foo\", `foo` and 'f'."
   (nth 3 (syntax-ppss)))
-
-(defun julia-in-char ()
-  "Return non-nil if point is inside a character."
-  (cond
-   ((julia-in-comment) nil)
-   ((julia-in-string) nil)
-   ((<= (point) (1+ (point-min))) nil)
-   (:else
-    (save-excursion
-      ;; See if point is inside a character, e.g. '|x'
-      ;;
-      ;; Move back past the single quote.
-      (backward-char 1)
-      ;; Move back one more character, as julia-char-regex checks
-      ;; for whitespace/paren/etc before the single quote.
-      (ignore-errors (backward-char 1)) ; ignore error from being at (point-min)
-
-      (if (looking-at julia-char-regex)
-          t
-        ;; If point was in a \ character (i.e. we started at '\|\'),
-        ;; we need to move back once more.
-        (ignore-errors
-          (if (looking-at (rx "'\\"))
-              (progn
-                (backward-char 1)
-                (looking-at julia-char-regex))
-            nil)))))))
 
 (defun julia-in-brackets ()
   "Return non-nil if point is inside square brackets."
@@ -266,7 +241,7 @@ Handles both single-line and multi-line comments."
 
       (while (< (point) start-pos)
         ;; Don't count [ or ] inside strings, characters or comments.
-        (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+        (unless (or (julia-in-string) (julia-in-comment))
 
           (when (looking-at (rx "["))
             (incf open-count))
@@ -341,7 +316,7 @@ before point. Returns nil if we're not within nested parens."
                   (not (plusp open-count)))
 
         (when (looking-at (rx (any "[" "]" "(" ")")))
-          (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+          (unless (or (julia-in-string) (julia-in-comment))
             (cond ((looking-at (rx (any "[" "(")))
                    (incf open-count))
                   ((looking-at (rx (any "]" ")")))
