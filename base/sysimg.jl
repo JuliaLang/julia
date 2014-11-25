@@ -140,7 +140,6 @@ include("primes.jl")
 
 # concurrency and parallelism
 include("serialize.jl")
-include("manager.jl")
 include("multi.jl")
 
 # Polling (requires multi.jl)

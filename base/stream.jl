@@ -997,7 +997,7 @@ function wait_readbyte(s::BufferStream, c::UInt8)
     end
 end
 
-wait_close(s) = if isopen(s) wait(s.close_c); end
+wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
 start_reading(s::BufferStream) = nothing
 
 write(s::BufferStream, b::UInt8) = (rv=write(s.buffer, b); notify(s.r_c; all=true);rv)
