@@ -108,6 +108,18 @@ This function provides equivalent functionality, but makes no efforts to optimis
            "\\\\"))
       (group "'")))
 
+(defconst julia-triple-quoted-string-regex
+  ;; We deliberately put a group on the first and last delimiter, so
+  ;; we can mark these as string delimiters for font-lock.
+  (rx (group "\"")
+      (group "\"\""
+             ;; After the delimiter, we're a sequence of
+             ;; non-backslashes or blackslashes paired with something.
+             (*? (or (not (any "\\"))
+                     (seq "\\" anything)))
+             "\"\"")
+      (group "\"")))
+
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
 
@@ -385,10 +397,14 @@ before point. Returns nil if we're not within nested parens."
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
- 	`(,julia-char-regex
+        `(,julia-char-regex
           (1 "\"") ; Treat ' as a string delimiter.
           (2 ".") ; Don't highlight anything between the open and close '.
-          (3 "\"")) ; Treat the close ' as a string delimiter.
+          (3 "\"")); Treat the close ' as a string delimiter.
+        `(,julia-triple-quoted-string-regex
+          (1 "\"") ; Treat the first " in """ as a string delimiter.
+          (2 ".") ; Don't highlight anything between.
+          (3 "\"")) ; Treat the last " in """ as a string delimiter.
 	))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
