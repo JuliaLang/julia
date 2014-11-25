@@ -17,7 +17,11 @@ function scale!{T<:BlasFloat}(X::Array{T}, s::T)
 end
 
 scale!{T<:BlasFloat}(X::Array{T}, s::Number) = scale!(X, convert(T, s))
-scale!{T<:BlasComplex}(X::Array{T}, s::Real) = BLAS.scal!(length(X), oftype(real(zero(T)),s), X, 1)
+function scale!{T<:BlasComplex}(X::Array{T}, s::Real)
+    R = typeof(real(zero(T)))
+    BLAS.scal!(2*length(X), convert(R,s), convert(Ptr{R},pointer(X)), 1)
+    X
+end
 
 #Test whether a matrix is positive-definite
 isposdef!{T<:BlasFloat}(A::StridedMatrix{T}, UL::Symbol) = LAPACK.potrf!(char_uplo(UL), A)[2] == 0
