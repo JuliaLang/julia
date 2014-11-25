@@ -971,7 +971,13 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng);end;A)
+function randn!(rng::MersenneTwister, A::Array{Float64})
+    for i = 1:length(A)
+        @inbounds A[i] = randn(rng)
+    end
+    A
+end
+
 randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Int...) = randn!(Array(Float64, dims...))
