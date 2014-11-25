@@ -7,7 +7,7 @@ export srand,
        randn, randn!,
        randbool,
        AbstractRNG, RNG, MersenneTwister,
-       randmtzig_randn, randmtzig_exprnd
+       randmtzig_exprnd
 
 abstract AbstractRNG
 
@@ -945,19 +945,19 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 
-function randmtzig_randn(rng::MersenneTwister=GLOBAL_RNG)
+@inline function randn(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
         r = rand_ui52(rng)
         rabs = int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
         rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
-        return randmtzig_randn_unlikely(rng, idx, rabs, x)
+        return randn_unlikely(rng, idx, rabs, x)
     end
 end
 
 # this unlikely branch is put in a separate function for better efficiency
-function randmtzig_randn_unlikely(rng, idx, rabs, x)
+function randn_unlikely(rng, idx, rabs, x)
     @inbounds if idx == 0
         while true
             xx = -ziggurat_nor_inv_r*log(rand(rng))
@@ -967,9 +967,22 @@ function randmtzig_randn_unlikely(rng, idx, rabs, x)
     elseif (fi[idx] - fi[idx+1])*rand(rng) + fi[idx+1] < exp(-0.5*x*x)
         return x # return from the triangular area
     else
-        return randmtzig_randn(rng)
+        return randn(rng)
     end
 end
+
+function randn!(rng::MersenneTwister, A::Array{Float64})
+    for i = 1:length(A)
+        @inbounds A[i] = randn(rng)
+    end
+    A
+end
+
+randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
+randn(dims::Dims) = randn!(Array(Float64, dims))
+randn(dims::Int...) = randn!(Array(Float64, dims...))
+randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
+randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
 
 function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
@@ -987,16 +1000,6 @@ function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
         end
     end
 end
-
-
-
-randn(rng::MersenneTwister=GLOBAL_RNG) = randmtzig_randn(rng)
-randn!(rng::MersenneTwister, A::Array{Float64}) = (for i = 1:length(A);A[i] = randmtzig_randn(rng);end;A)
-randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
-randn(dims::Dims) = randn!(Array(Float64, dims))
-randn(dims::Int...) = randn!(Array(Float64, dims...))
-randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
-randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
 
 ## random UUID generation
 
