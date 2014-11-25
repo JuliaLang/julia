@@ -1,7 +1,5 @@
 :orphan:
 
-.. _devdocs-index:
-
 ####################################
  Documentation of Julia's Internals
 ####################################

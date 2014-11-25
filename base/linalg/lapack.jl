@@ -3,6 +3,8 @@ module LAPACK
 
 const liblapack = Base.liblapack_name
 
+import Base.blasfunc
+
 import ..LinAlg: BlasFloat, BlasChar, BlasInt, blas_int, LAPACKException,
     DimensionMismatch, SingularException, PosDefException, chkstride1, chksquare
 
@@ -47,7 +49,7 @@ for (gbtrf, gbtrs, elty) in
             n    = size(AB, 2)
             mnmn = min(m, n)
             ipiv = similar(AB, BlasInt, mnmn)
-            ccall(($(string(gbtrf)),liblapack), Void,
+            ccall(($(blasfunc(gbtrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, &kl, &ku, AB, &max(1,stride(AB,2)), ipiv, info)
@@ -68,7 +70,7 @@ for (gbtrf, gbtrs, elty) in
             info = Array(BlasInt, 1)
             n    = size(AB,2)
             if m != n || m != size(B,1) throw(DimensionMismatch("gbtrs!")) end
-            ccall(($(string(gbtrs)),liblapack), Void,
+            ccall(($(blasfunc(gbtrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},   Ptr{BlasInt},
                    Ptr{BlasInt}),
@@ -100,7 +102,7 @@ for (gebal, gebak, elty, relty) in
             ihi     = Array(BlasInt, 1)
             ilo     = Array(BlasInt, 1)
             scale   = similar(A, $relty, n)
-            ccall(($(string(gebal)),liblapack), Void,
+            ccall(($(blasfunc(gebal)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                   &job, &n, A, &max(1,stride(A,2)), ilo, ihi, scale, info)
@@ -119,7 +121,7 @@ for (gebal, gebak, elty, relty) in
             chkstride1(V)
             chksquare(V)
             info    = Array(BlasInt, 1)
-            ccall(($(string(gebak)),liblapack), Void,
+            ccall(($(blasfunc(gebak)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &job, &side, &size(V,1), &ilo, &ihi, scale, &n, V, &max(1,stride(V,2)), info)
@@ -170,7 +172,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(gebrd)),liblapack), Void,
+                ccall(($(blasfunc(gebrd)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -198,7 +200,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(($(string(gelqf)),liblapack), Void,
+                ccall(($(blasfunc(gelqf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
@@ -225,7 +227,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = blas_int(-1)
             work  = Array($elty, (1,))
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(($(string(geqlf)),liblapack), Void,
+                ccall(($(blasfunc(geqlf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &lda, tau, work, &lwork, info)
@@ -256,7 +258,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             if cmplx; rwork = Array($relty, 2n); end
             for i in 1:2
                 if cmplx
-                    ccall(($(string(geqp3)),liblapack), Void,
+                    ccall(($(blasfunc(geqp3)), liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
@@ -264,7 +266,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                           jpvt, tau, work, &lwork, 
                           rwork, info)
                 else
-                    ccall(($(string(geqp3)),liblapack), Void,
+                    ccall(($(blasfunc(geqp3)), liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}),
@@ -290,7 +292,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             work = Array($elty, nb*n)
             if n > 0
                 info = Array(BlasInt, 1)
-                ccall(($(string(geqrt)), liblapack), Void, 
+                ccall(($(blasfunc(geqrt)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}),
@@ -308,7 +310,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             if p < n || q < n throw(DimensionMismatch("block reflector")) end
             if n > 0
                 info = Array(BlasInt, 1)
-                ccall(($(string(geqrt3)), liblapack), Void, 
+                ccall(($(blasfunc(geqrt3)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                      &m, &n, A, &max(1, stride(A, 2)),
@@ -331,7 +333,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(($(string(geqrf)),liblapack), Void,
+                ccall(($(blasfunc(geqrf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
@@ -356,7 +358,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             lwork = blas_int(-1)
             work  = Array($elty, 1)
             for i in 1:2                # first call returns lwork as work[1]
-                ccall(($(string(gerqf)),liblapack), Void,
+                ccall(($(blasfunc(gerqf)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, A, &max(1,stride(A,2)), tau, work, &lwork, info)
@@ -380,7 +382,7 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             m, n = size(A)
             lda  = max(1,stride(A, 2))
             ipiv = similar(A, BlasInt, min(m,n))
-            ccall(($(string(getrf)),liblapack), Void,
+            ccall(($(blasfunc(getrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &m, &n, A, &lda, ipiv, info)
@@ -429,7 +431,7 @@ for (tzrzf, ormrz, elty) in
             lwork = -1
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(tzrzf)), liblapack), Void,
+                ccall(($(blasfunc(tzrzf)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                     &m, &n, A, &lda, 
@@ -461,7 +463,7 @@ for (tzrzf, ormrz, elty) in
             lwork = -1
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(ormrz)), liblapack), Void,
+                ccall(($(blasfunc(ormrz)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -502,7 +504,7 @@ for (gels, gesv, getrs, getri, elty) in
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             for i in 1:2
-                ccall(($(string(gels)),liblapack), Void,
+                ccall(($(blasfunc(gels)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -538,7 +540,7 @@ for (gels, gesv, getrs, getri, elty) in
             if size(B,1) != n throw(DimensionMismatch("gesv!")) end
             ipiv    = similar(A, BlasInt, n)
             info    = Array(BlasInt, 1)
-            ccall(($(string(gesv)),liblapack), Void,
+            ccall(($(blasfunc(gesv)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
@@ -558,7 +560,7 @@ for (gels, gesv, getrs, getri, elty) in
             n==size(B, 1) || throw(DimensionMismatch("left and right hand sides do not fit"))
             nrhs = size(B, 2)
             info = Array(BlasInt, 1)
-            ccall(($(string(getrs)),liblapack), Void,
+            ccall(($(blasfunc(getrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &trans, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
@@ -580,7 +582,7 @@ for (gels, gesv, getrs, getri, elty) in
             lwork   = -1
             work    = Array($elty, 1)
             for i in 1:2
-                ccall(($(string(getri)),liblapack), Void,
+                ccall(($(blasfunc(getri)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &n, A, &lda, ipiv, work, &lwork, info)
@@ -626,7 +628,7 @@ for (gesvx, elty) in
             iwork     = Array($elty, n)
             info      = Array(BlasInt, 1)
             X = similar(A, $elty, n, nrhs)
-            ccall(($(string(gesvx)),liblapack), Void,
+            ccall(($(blasfunc(gesvx)), liblapack), Void,
               (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{BlasChar}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -681,7 +683,7 @@ for (gesvx, elty, relty) in
             rwork     = Array($relty, 2n)
             info      = Array(BlasInt, 1)
             x = similar(A, $elty, n, nrhs)
-            ccall(($(string(gesvx)),liblapack), Void,
+            ccall(($(blasfunc(gesvx)), liblapack), Void,
               (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                Ptr{BlasChar}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
@@ -730,7 +732,7 @@ for (gelsd, gelsy, elty) in
             lwork = blas_int(-1)
             iwork = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(gelsd)),liblapack), Void,
+                ccall(($(blasfunc(gelsd)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -772,7 +774,7 @@ for (gelsd, gelsy, elty) in
             lwork = -1
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gelsy)), liblapack), Void, 
+                ccall(($(blasfunc(gelsy)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -819,7 +821,7 @@ for (gelsd, gelsy, elty, relty) in
             rwork = Array($relty, 1)
             iwork = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(gelsd)),liblapack), Void,
+                ccall(($(blasfunc(gelsd)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                        Ptr{$relty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -863,7 +865,7 @@ for (gelsd, gelsy, elty, relty) in
             rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gelsy)), liblapack), Void, 
+                ccall(($(blasfunc(gelsy)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -909,7 +911,7 @@ for (gglse, elty) in ((:dgglse_, :Float64),
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             for i in 1:2
-                ccall(($(string(gglse)),liblapack), Void,
+                ccall(($(blasfunc(gglse)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -962,7 +964,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info  = Array(BlasInt, 1)
             for i = 1:2
                 if cmplx
-                    ccall(($(string(geev)),liblapack), Void,
+                    ccall(($(blasfunc(geev)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -970,7 +972,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobvl, &jobvr, &n, A, &max(1,stride(A,2)), W, VL, &n, VR, &n,
                           work, &lwork, rwork, info)
                 else
-                    ccall(($(string(geev)),liblapack), Void,
+                    ccall(($(blasfunc(geev)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -1025,7 +1027,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info   = Array(BlasInt, 1)
             for i = 1:2
                 if cmplx
-                    ccall(($(string(gesdd)),liblapack), Void,
+                    ccall(($(blasfunc(gesdd)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1033,7 +1035,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &job, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, iwork, info)
                 else
-                    ccall(($(string(gesdd)),liblapack), Void,
+                    ccall(($(blasfunc(gesdd)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1070,7 +1072,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             info   = Array(BlasInt, 1)
             for i in 1:2
                 if cmplx
-                    ccall(($(string(gesvd)),liblapack), Void,
+                    ccall(($(blasfunc(gesvd)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -1078,7 +1080,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                           &jobu, &jobvt, &m, &n, A, &max(1,stride(A,2)), S, U, &max(1,stride(U,2)), VT, &max(1,stride(VT,2)),
                           work, &lwork, rwork, info)
                 else
-                    ccall(($(string(gesvd)),liblapack), Void,
+                    ccall(($(blasfunc(gesvd)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -1129,7 +1131,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             if cmplx
-                ccall(($(string(ggsvd)),liblapack), Void,
+                ccall(($(blasfunc(ggsvd)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1143,7 +1145,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     V, &ldv, Q, &ldq, 
                     work, rwork, iwork, info)
             else
-                ccall(($(string(ggsvd)),liblapack), Void,
+                ccall(($(blasfunc(ggsvd)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1206,7 +1208,7 @@ for (geevx, ggev, elty) in
         iwork = Array(BlasInt, sense == 'N' || sense == 'E' ? 0 : (sense == 'V' || sense == 'B' ? 2n-2 : throw(ArgumentError("argument sense must be 'N', 'E', 'V' or 'B'"))))
         info = Array(BlasInt, 1)
         for i = 1:2
-            ccall(($(string(geevx)),Base.liblapack_name), Void,
+            ccall(($(blasfunc(geevx)), liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -1253,7 +1255,7 @@ for (geevx, ggev, elty) in
             lwork = -one(BlasInt)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(ggev)), liblapack), Void,
+                ccall(($(blasfunc(ggev)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
@@ -1311,7 +1313,7 @@ for (geevx, ggev, elty, relty) in
         rwork = Array($relty, 2n)
         info = Array(BlasInt, 1)
         for i = 1:2
-            ccall(($(string(geevx)),Base.liblapack_name), Void,
+            ccall(($(blasfunc(geevx)), liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
@@ -1358,7 +1360,7 @@ for (geevx, ggev, elty, relty) in
             rwork = Array($relty, 8n)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(ggev)), liblapack), Void,
+                ccall(($(blasfunc(ggev)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
@@ -1399,7 +1401,7 @@ for (laic1, elty) in
             sestpr = Array($elty, 1)
             s = Array($elty, 1)
             c = Array($elty, 1)
-            ccall(($(string(laic1)), liblapack), Void,
+            ccall(($(blasfunc(laic1)), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}),
@@ -1429,7 +1431,7 @@ for (laic1, elty, relty) in
             sestpr = Array($relty, 1)
             s = Array($elty, 1)
             c = Array($elty, 1)
-            ccall(($(string(laic1)), liblapack), Void,
+            ccall(($(blasfunc(laic1)), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$relty}, Ptr{$elty},
                  Ptr{$elty}),
@@ -1447,7 +1449,7 @@ for (gtsv, gttrf, gttrs, elty) in
     ((:dgtsv_,:dgttrf_,:dgttrs_,:Float64),
      (:sgtsv_,:sgttrf_,:sgttrs_,:Float32),
      (:zgtsv_,:zgttrf_,:zgttrs_,:Complex128),
-     (:cgtsv_,:cgttrf_,:cgttrs_,:Complex64))     
+     (:cgtsv_,:cgttrf_,:cgttrs_,:Complex64))
     @eval begin
         #       SUBROUTINE DGTSV( N, NRHS, DL, D, DU, B, LDB, INFO )
         #       .. Scalar Arguments ..
@@ -1463,7 +1465,7 @@ for (gtsv, gttrf, gttrs, elty) in
             end
             if n != size(B,1) throw(DimensionMismatch("gtsv!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(gtsv)),liblapack), Void,
+            ccall(($(blasfunc(gtsv)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), dl, d, du, B, &max(1,stride(B,2)), info)
@@ -1484,7 +1486,7 @@ for (gtsv, gttrf, gttrs, elty) in
             du2  = similar(d, $elty, n-2)
             ipiv = similar(d, BlasInt, n)
             info = Array(BlasInt, 1)
-            ccall(($(string(gttrf)),liblapack), Void,
+            ccall(($(blasfunc(gttrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, dl, d, du, du2, ipiv, info)
@@ -1506,7 +1508,7 @@ for (gtsv, gttrf, gttrs, elty) in
             if length(dl) != n - 1 || length(du) != n - 1 throw(DimensionMismatch("gttrs!")) end
             if n != size(B,1) throw(DimensionMismatch("gttrs!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(gttrs)),liblapack), Void,
+            ccall(($(blasfunc(gttrs)), liblapack), Void,
                    (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -1538,7 +1540,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(orglq)),liblapack), Void,
+                ccall(($(blasfunc(orglq)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
@@ -1568,7 +1570,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(orgqr)),liblapack), Void,
+                ccall(($(blasfunc(orgqr)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A, 
@@ -1606,7 +1608,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(ormlq)),liblapack), Void,
+                ccall(($(blasfunc(ormlq)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -1640,7 +1642,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(ormqr)),liblapack), Void,
+                ccall(($(blasfunc(ormqr)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, 
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
@@ -1679,7 +1681,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             ldc = max(1, stride(C,2))
             work = Array($elty, wss)
             info = Array(BlasInt, 1)
-            ccall(($(string(gemqrt)), liblapack), Void,
+            ccall(($(blasfunc(gemqrt)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -1714,7 +1716,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             @chkuplo
             if size(B,1) != n throw(DimensionMismatch("posv!")) end
             info    = Array(BlasInt, 1)
-            ccall(($(string(posv)),liblapack), Void,
+            ccall(($(blasfunc(posv)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), info)
@@ -1735,7 +1737,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             lda = max(1,stride(A,2))
             lda==0 && return A, 0
             info = Array(BlasInt, 1)
-            ccall(($(string(potrf)),liblapack), Void,
+            ccall(($(blasfunc(potrf)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &lda, info)
             @assertargsok
@@ -1754,7 +1756,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             chkstride1(A)
             @chkuplo
             info = Array(BlasInt, 1)
-            ccall(($(string(potri)),liblapack), Void,
+            ccall(($(blasfunc(potri)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &size(A,1), A, &max(1,stride(A,2)), info)
             @assertargsok
@@ -1777,7 +1779,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             if lda == 0 || nrhs == 0 return B end
             ldb = max(1,stride(B,2))
             info = Array(BlasInt, 1)
-            ccall(($(string(potrs)),liblapack), Void,
+            ccall(($(blasfunc(potrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                    &uplo, &n, &nrhs, A, 
@@ -1801,7 +1803,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             rank = Array(BlasInt, 1)
             work = Array($rtyp, 2n)
             info = Array(BlasInt, 1)
-            ccall(($(string(pstrf)),liblapack), Void,
+            ccall(($(blasfunc(pstrf)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$rtyp}, Ptr{$rtyp}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), piv, rank, &tol, work, info)
@@ -1815,8 +1817,8 @@ end
 ## Direct solvers for general tridiagonal and symmetric positive-definite tridiagonal
 for (ptsv, pttrf, pttrs, elty, relty) in
     ((:dptsv_,:dpttrf_,:dpttrs_,:Float64,:Float64),
-     (:sptsv_,:spttrf_,:spttrs_,:Float32,:Float32), 
-     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128,:Float64), 
+     (:sptsv_,:spttrf_,:spttrs_,:Float32,:Float32),
+     (:zptsv_,:zpttrf_,:zpttrs_,:Complex128,:Float64),
      (:cptsv_,:cpttrf_,:cpttrs_,:Complex64,:Float32))
     @eval begin
         #       SUBROUTINE DPTSV( N, NRHS, D, E, B, LDB, INFO )
@@ -1829,7 +1831,7 @@ for (ptsv, pttrf, pttrs, elty, relty) in
             n = length(D)
             if length(E) != n - 1 || n != size(B,1) throw(DimensionMismatch("ptsv!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(ptsv)),liblapack), Void,
+            ccall(($(blasfunc(ptsv)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
@@ -1845,7 +1847,7 @@ for (ptsv, pttrf, pttrs, elty, relty) in
             n = length(D)
             if length(E) != (n-1) throw(DimensionMismatch("pttrf!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(pttrf)),liblapack), Void,
+            ccall(($(blasfunc(pttrf)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}),
                   &n, D, E, info)
             @lapackerror
@@ -1867,7 +1869,7 @@ for (pttrs, elty, relty) in
             n = length(D)
             if length(E) != (n-1) || size(B,1) != n throw(DimensionMismatch("pttrs!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(pttrs)),liblapack), Void,
+            ccall(($(blasfunc(pttrs)), liblapack), Void,
                   (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
@@ -1894,7 +1896,7 @@ for (pttrs, elty, relty) in
             n = length(D)
             if length(E) != (n-1) || size(B,1) != n throw(DimensionMismatch("pttrs!")) end
             info = Array(BlasInt, 1)
-            ccall(($(string(pttrs)),liblapack), Void,
+            ccall(($(blasfunc(pttrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), D, E, B, &max(1,stride(B,2)), info)
@@ -1923,7 +1925,7 @@ for (trtri, trtrs, elty) in
             @chkuplo
             lda     = max(1,stride(A, 2))
             info    = Array(BlasInt, 1)
-            ccall(($(string(trtri)),liblapack), Void,
+            ccall(($(blasfunc(trtri)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &uplo, &diag, &n, A, &lda, info)
@@ -1943,7 +1945,7 @@ for (trtri, trtrs, elty) in
             @chkuplo
             size(B,1)==n || throw(DimensionMismatch(""))
             info = Array(BlasInt, 1)
-            ccall(($(string(trtrs)),liblapack), Void,
+            ccall(($(blasfunc(trtrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &trans, &diag, &n, &size(B,2), A, &max(1,stride(A,2)),
@@ -1977,7 +1979,7 @@ for (trcon, trevc, trrfs, elty) in
             work  = Array($elty, 3n)
             iwork = Array(BlasInt, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(trcon)),liblapack), Void,
+            ccall(($(blasfunc(trcon)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
@@ -2007,7 +2009,7 @@ for (trcon, trevc, trrfs, elty) in
             m = Array(BlasInt, 1)
             work = Array($elty, 3n)
             info = Array(BlasInt, 1)
-            ccall(($(string(trevc)),liblapack), Void,
+            ccall(($(blasfunc(trevc)), liblapack), Void,
             (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
             Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
             Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
@@ -2053,7 +2055,7 @@ for (trcon, trevc, trrfs, elty) in
             work=Array($elty, 3n)
             iwork=Array(BlasInt, n)
             info=Array(BlasInt, 1)
-            ccall(($(string(trrfs)),liblapack), Void,
+            ccall(($(blasfunc(trrfs)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -2087,7 +2089,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             work  = Array($elty, 2n)
             rwork = Array($relty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(trcon)),liblapack), Void,
+            ccall(($(blasfunc(trcon)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
                   &norm, &uplo, &diag, &n,
@@ -2120,7 +2122,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             work = Array($elty, 2n)
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
-            ccall(($(string(trevc)),liblapack), Void,
+            ccall(($(blasfunc(trevc)), liblapack), Void,
             (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Bool}, Ptr{BlasInt}, Ptr{$elty},
             Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
             Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
@@ -2167,7 +2169,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             work=Array($elty, 2n)
             rwork=Array($relty, n)
             info=Array(BlasInt, 1)
-            ccall(($(string(trrfs)),liblapack), Void,
+            ccall(($(blasfunc(trrfs)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                  Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
@@ -2196,7 +2198,7 @@ for (stev, stebz, stegr, stein, elty) in
             Zmat = similar(dv, $elty, (n, job != 'N' ? n : 0))
             work = Array($elty, max(1, 2n-2))
             info = Array(BlasInt, 1)
-            ccall(($(string(stev)),liblapack), Void,
+            ccall(($(blasfunc(stev)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
@@ -2219,7 +2221,7 @@ for (stev, stebz, stegr, stein, elty) in
             work = Array($elty, 4*n)
             iwork = Array(BlasInt,3*n)
             info = Array(BlasInt, 1)
-            ccall(($(string(stebz)),liblapack), Void,
+            ccall(($(blasfunc(stebz)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2257,7 +2259,7 @@ for (stev, stebz, stegr, stein, elty) in
             liwork = -one(BlasInt)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(stegr)), liblapack), Void, 
+                ccall(($(blasfunc(stegr)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -2316,7 +2318,7 @@ for (stev, stebz, stegr, stein, elty) in
             ifail = Array(BlasInt,m)
             info = Array(BlasInt,1)
 
-            ccall(($(string(stein)),liblapack), Void,
+            ccall(($(blasfunc(stein)), liblapack), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2355,7 +2357,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             @chkuplo
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(syconv)),liblapack), Void,
+            ccall(($(blasfunc(syconv)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
@@ -2380,7 +2382,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(sysv)),liblapack), Void,
+                ccall(($(blasfunc(sysv)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
@@ -2411,7 +2413,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(sytrf)),liblapack), Void,
+                ccall(($(blasfunc(sytrf)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &stride(A,2), ipiv, work, &lwork, info)
@@ -2439,7 +2441,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
 #             lwork = blas_int(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
-#                 ccall(($(string(sytri)),liblapack), Void,
+#                 ccall(($(blasfunc(sytri)), liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
@@ -2465,7 +2467,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             @chkuplo
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(sytri)),liblapack), Void,
+            ccall(($(blasfunc(sytri)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
@@ -2488,7 +2490,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             @chkuplo
             if n != size(B,1) throw(DimensionMismatch("sytrs!")) end
             info  = Array(BlasInt, 1)
-            ccall(($(string(sytrs)),liblapack), Void,
+            ccall(($(blasfunc(sytrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
@@ -2518,7 +2520,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             @chkuplo
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(syconv)),liblapack), Void,
+            ccall(($(blasfunc(syconv)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &'C', &n, A, &max(1,stride(A,2)), ipiv, work, info)
@@ -2543,7 +2545,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(hesv)),liblapack), Void,
+                ccall(($(blasfunc(hesv)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
@@ -2573,7 +2575,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(hetrf)),liblapack), Void,
+                ccall(($(blasfunc(hetrf)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
@@ -2602,7 +2604,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
 #             lwork = blas_int(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
-#                 ccall(($(string(hetri)),liblapack), Void,
+#                 ccall(($(blasfunc(hetri)), liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
@@ -2628,7 +2630,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             @chkuplo
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(hetri)),liblapack), Void,
+            ccall(($(blasfunc(hetri)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
@@ -2649,7 +2651,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
             n = chksquare(A)
             if n != size(B,1) throw(DimensionMismatch("hetrs!")) end
             info  = Array(BlasInt, 1)
-            ccall(($(string(hetrs)),liblapack), Void,
+            ccall(($(blasfunc(hetrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
@@ -2681,7 +2683,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(sysv)),liblapack), Void,
+                ccall(($(blasfunc(sysv)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)),
@@ -2712,7 +2714,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(sytrf)),liblapack), Void,
+                ccall(($(blasfunc(sytrf)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
@@ -2741,7 +2743,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
 #             lwork = blas_int(-1)
 #             info  = Array(BlasInt, 1)
 #             for i in 1:2
-#                 ccall(($(string(sytri)),liblapack), Void,
+#                 ccall(($(blasfunc(sytri)), liblapack), Void,
 #                       (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
 #                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
 #                       &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, &lwork, info)
@@ -2767,7 +2769,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             @chkuplo
             work  = Array($elty, n)
             info  = Array(BlasInt, 1)
-            ccall(($(string(sytri)),liblapack), Void,
+            ccall(($(blasfunc(sytri)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &uplo, &n, A, &max(1,stride(A,2)), ipiv, work, info)
@@ -2789,7 +2791,7 @@ for (sysv, sytrf, sytri, sytrs, elty, relty) in
             @chkuplo
             if n != size(B,1) throw(DimensionMismatch("sytrs!")) end
             info  = Array(BlasInt, 1)
-            ccall(($(string(sytrs)),liblapack), Void,
+            ccall(($(blasfunc(sytrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
@@ -2818,7 +2820,7 @@ for (syev, syevr, sygvd, elty) in
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(syev)),liblapack), Void,
+                ccall(($(blasfunc(syev)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &max(1,stride(A,2)), W, work, &lwork, info)
@@ -2867,7 +2869,7 @@ for (syev, syevr, sygvd, elty) in
             liwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(syevr)),liblapack), Void,
+                ccall(($(blasfunc(syevr)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -2913,7 +2915,7 @@ for (syev, syevr, sygvd, elty) in
             liwork = -one(BlasInt)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(sygvd)),liblapack), Void,
+                ccall(($(blasfunc(sygvd)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2957,7 +2959,7 @@ for (syev, syevr, sygvd, elty, relty) in
             rwork = Array($relty, max(1, 3n-2))
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(syev)),liblapack), Void,
+                ccall(($(blasfunc(syev)), liblapack), Void,
                       (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                       Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                       &jobz, &uplo, &n, A, &stride(A,2), W, work, &lwork, rwork, info)
@@ -3010,7 +3012,7 @@ for (syev, syevr, sygvd, elty, relty) in
             liwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
-                ccall(($(string(syevr)),liblapack), Void,
+                ccall(($(blasfunc(syevr)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -3066,7 +3068,7 @@ for (syev, syevr, sygvd, elty, relty) in
             lrwork = -one(BlasInt)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(sygvd)),liblapack), Void,
+                ccall(($(blasfunc(sygvd)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
@@ -3112,7 +3114,7 @@ for (bdsqr, relty, elty) in
             work = Array($elty, 4n)
             info = Array(BlasInt,1)
 
-            ccall(($(string(bdsqr)),liblapack), Void,
+            ccall(($(blasfunc(bdsqr)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
@@ -3168,7 +3170,7 @@ for (bdsdc, elty) in
             work =Array($elty, lwork)
             iwork=Array(BlasInt, 8n)
             info =Array(BlasInt, 1)
-            ccall(($(string(bdsdc)),liblapack), Void,
+            ccall(($(blasfunc(bdsdc)), liblapack), Void,
            (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
             Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
             Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
@@ -3205,7 +3207,7 @@ for (gecon, elty) in
             work = Array($elty, 4n)
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
-            ccall(($(string(gecon)),liblapack), Void,
+            ccall(($(blasfunc(gecon)), liblapack), Void,
                   (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
@@ -3239,7 +3241,7 @@ for (gecon, elty, relty) in
             work = Array($elty, 2n)
             rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
-            ccall(($(string(gecon)),liblapack), Void,
+            ccall(($(blasfunc(gecon)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
                    Ptr{BlasInt}),
@@ -3271,7 +3273,7 @@ for (gehrd, elty) in
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gehrd)),liblapack), Void,
+                ccall(($(blasfunc(gehrd)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
@@ -3310,7 +3312,7 @@ for (orghr, elty) in
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(orghr)),liblapack), Void,
+                ccall(($(blasfunc(orghr)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
@@ -3352,7 +3354,7 @@ for (gees, gges, elty) in
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gees)),liblapack), Void,
+                ccall(($(blasfunc(gees)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -3394,7 +3396,7 @@ for (gees, gges, elty) in
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gges)), liblapack), Void,
+                ccall(($(blasfunc(gges)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -3442,7 +3444,7 @@ for (gees, gges, elty, relty) in
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gees)),liblapack), Void,
+                ccall(($(blasfunc(gees)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
@@ -3485,7 +3487,7 @@ for (gees, gges, elty, relty) in
             rwork = Array($relty, 8n)
             info = Array(BlasInt, 1)
             for i = 1:2
-                ccall(($(string(gges)), liblapack), Void,
+                ccall(($(blasfunc(gges)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
@@ -3525,7 +3527,7 @@ for (fn, elty, relty) in ((:dsfrk_, :Float64, :Float64),
                 k, n = size(A)
             end
             lda = max(1, stride(A, 2))
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$relty}, Ptr{$elty}),
@@ -3546,7 +3548,7 @@ for (fn, elty) in ((:dpftrf_, :Float64),
         function pftrf!(transr::Char, uplo::Char, A::StridedVector{$elty})
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
@@ -3567,7 +3569,7 @@ for (fn, elty) in ((:dpftri_, :Float64),
         function pftri!(transr::Char, uplo::Char, A::StridedVector{$elty})
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
                 &transr, &uplo, &n, A, 
@@ -3592,7 +3594,7 @@ for (fn, elty) in ((:dpftrs_, :Float64),
             nhrs = size(B, 2)
             ldb = max(1, stride(B, 2))
             info = Array(BlasInt, 1)
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, &nhrs,
@@ -3615,7 +3617,7 @@ for (fn, elty) in ((:dtfsm_, :Float64),
             m, n = size(B)
             if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
             ldb = max(1, stride(B, 2))
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar},
                  Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}),
@@ -3636,7 +3638,7 @@ for (fn, elty) in ((:dtftri_, :Float64),
         function tftri!(transr::Char, uplo::Char, diag::Char, A::StridedVector{$elty})
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
                  Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &diag, &n, 
@@ -3658,7 +3660,7 @@ for (fn, elty) in ((:dtfttr_, :Float64),
             n = int(div(sqrt(8length(Arf)), 2))
             info = Array(BlasInt, 1)
             A = similar(Arf, $elty, n, n)
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &transr, &uplo, &n, Arf,
@@ -3681,7 +3683,7 @@ for (fn, elty) in ((:dtrttf_, :Float64),
             lda = max(1, stride(A, 2))
             info = Array(BlasInt, 1)
             Arf = similar(A, $elty, div(n*(n+1), 2))
-            ccall(($(string(fn)), liblapack), Void,
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &transr, &uplo, &n, A,
@@ -3710,7 +3712,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
             scale = Array($relty, 1)
             info = Array(BlasInt, 1)
             
-            ccall(($(string(fn)), liblapack), Void, 
+            ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$relty}, Ptr{BlasInt}),

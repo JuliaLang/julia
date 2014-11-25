@@ -1,6 +1,8 @@
 import Base.Git
 include("gitutils.jl")
 
+@test Git.version() >= v"1.7.3"
+
 dir = string("tmp.",randstring())
 @test !ispath(dir)
 mkdir(dir)

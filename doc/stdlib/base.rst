@@ -151,15 +151,15 @@ All Objects
 
    Similar to ``==``, except treats all floating-point ``NaN`` values as equal to each other,
    and treats ``-0.0`` as unequal to ``0.0``.
-   For values that are not floating-point, ``isequal`` is the same as ``==``.
+   For values that are not floating-point, ``isequal`` calls ``==`` (so that if you define a ``==`` method for a new type you automatically get ``isequal``).
 
    ``isequal`` is the comparison function used by hash tables (``Dict``).
    ``isequal(x,y)`` must imply that ``hash(x) == hash(y)``.
 
-   Collections typically implement ``isequal`` by calling ``isequal`` recursively on
+   This typically means that if you define your own ``==`` function then you must define a corresponding ``hash`` (and vice versa).  Collections typically implement ``isequal`` by calling ``isequal`` recursively on
    all contents.
 
-   Scalar types generally do not need to implement ``isequal``, unless they
+   Scalar types generally do not need to implement ``isequal`` separate from ``==``, unless they
    represent floating-point numbers amenable to a more efficient implementation
    than that provided as a generic fallback (based on ``isnan``, ``signbit``, and ``==``).
 
@@ -202,7 +202,8 @@ All Objects
 
    Compute an integer hash code such that ``isequal(x,y)`` implies ``hash(x)==hash(y)``.
    The optional second argument ``h`` is a hash code to be mixed with the result.
-   New types should implement the 2-argument form.
+
+   New types should implement the 2-argument form, typically  by calling the 2-argument ``hash`` method recursively in order to mix hashes of the contents with each other (and with ``h``).   Typically, any type that implements ``hash`` should also implement its own ``==`` (hence ``isequal``) to guarantee the property mentioned above.
 
 .. function:: finalizer(x, function)
 
@@ -594,41 +595,55 @@ Iterable Collections
 
 .. function:: reduce(op, v0, itr)
 
-   Reduce the given collection ``ìtr`` with the given binary operator. Reductions
-   for certain commonly-used operators have special implementations which should be
-   used instead: ``maximum(itr)``, ``minimum(itr)``, ``sum(itr)``,
-   ``prod(itr)``, ``any(itr)``, ``all(itr)``.
+   Reduce the given collection ``ìtr`` with the given binary operator
+   ``op``. ``v0`` must be a neutral element for ``op`` that will be
+   returned for empty collections. It is unspecified whether ``v0`` is
+   used for non-empty collections.
 
-   The associativity of the reduction is implementation-dependent. This means
-   that you can't use non-associative operations like ``-`` because it is
-   undefined whether ``reduce(-,[1,2,3])`` should be evaluated as ``(1-2)-3``
-   or ``1-(2-3)``. Use ``foldl`` or ``foldr`` instead for guaranteed left or
-   right associativity.
+   Reductions for certain commonly-used operators have special
+   implementations which should be used instead: ``maximum(itr)``,
+   ``minimum(itr)``, ``sum(itr)``, ``prod(itr)``, ``any(itr)``,
+   ``all(itr)``.
 
-   Some operations accumulate error, and parallelism will also be easier if the
-   reduction can be executed in groups. Future versions of Julia might change
-   the algorithm. Note that the elements are not reordered if you use an ordered
-   collection.
+   The associativity of the reduction is implementation-dependent.
+   This means that you can't use non-associative operations like ``-``
+   because it is undefined whether ``reduce(-,[1,2,3])`` should be
+   evaluated as ``(1-2)-3`` or ``1-(2-3)``. Use ``foldl`` or ``foldr``
+   instead for guaranteed left or right associativity.
+
+   Some operations accumulate error, and parallelism will also be
+   easier if the reduction can be executed in groups. Future versions
+   of Julia might change the algorithm. Note that the elements are not
+   reordered if you use an ordered collection.
 
 .. function:: reduce(op, itr)
 
-   Like ``reduce`` but using the first element as v0.
+   Like ``reduce(op, v0, itr)``. This cannot be used with empty
+   collections, except for some special cases (e.g. when ``op`` is one
+   of ``+``, ``*``, ``max``, ``min``, ``&``, ``|``) when Julia can
+   determine the neutral element of ``op``.
 
 .. function:: foldl(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed left associativity.
+   Like ``reduce``, but with guaranteed left associativity. ``v0``
+   will be used exactly once.
 
 .. function:: foldl(op, itr)
 
-   Like ``foldl``, but using the first element as v0.
+   Like ``foldl(op, v0, itr)``, but using the first element of ``itr``
+   as ``v0``. In general, this cannot be used with empty collections
+   (see ``reduce(op, itr)``).
 
 .. function:: foldr(op, v0, itr)
 
-   Like ``reduce``, but with guaranteed right associativity.
+   Like ``reduce``, but with guaranteed right associativity. ``v0``
+   will be used exactly once.
 
 .. function:: foldr(op, itr)
 
-   Like ``foldr``, but using the last element as v0.
+   Like ``foldr(op, v0, itr)``, but using the last element of ``itr``
+   as ``v0``. In general, this cannot be used with empty collections
+   (see ``reduce(op, itr)``).
 
 .. function:: maximum(itr)
 
@@ -838,15 +853,51 @@ Iterable Collections
    new collection. ``destination`` must be at least as large as the first
    collection.
 
-.. function:: mapreduce(f, op, itr)
+.. function:: mapreduce(f, op, v0, itr)
 
-   Applies function ``f`` to each element in ``itr`` and then reduces the result using the binary function ``op``.
+   Apply function ``f`` to each element in ``itr``, and then reduce
+   the result using the binary function ``op``. ``v0`` must be a
+   neutral element for ``op`` that will be returned for empty
+   collections. It is unspecified whether ``v0`` is used for non-empty
+   collections.
+
+   ``mapreduce`` is functionally equivalent to calling ``reduce(op,
+   v0, map(f, itr))``, but will in general execute faster since no
+   intermediate collection needs to be created. See documentation for
+   ``reduce`` and ``map``.
 
    **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
 
-   The associativity of the reduction is implementation-dependent; if you
-   need a particular associativity, e.g. left-to-right, you should write
-   your own loop. See documentation for ``reduce``.
+   The associativity of the reduction is implementation-dependent. Use
+   ``mapfoldl`` or ``mapfoldr`` instead for guaranteed left or right
+   associativity.
+
+.. function:: mapreduce(f, op, itr)
+
+   Like ``mapreduce(f, op, v0, itr)``. In general, this cannot be used
+   with empty collections (see ``reduce(op, itr)``).
+
+.. function:: mapfoldl(f, op, v0, itr)
+
+   Like ``mapreduce``, but with guaranteed left associativity. ``v0``
+   will be used exactly once.
+
+.. function:: mapfoldl(f, op, itr)
+
+   Like ``mapfoldl(f, op, v0, itr)``, but using the first element of
+   ``itr`` as ``v0``. In general, this cannot be used with empty
+   collections (see ``reduce(op, itr)``).
+
+.. function:: mapfoldr(f, op, v0, itr)
+
+   Like ``mapreduce``, but with guaranteed right associativity. ``v0``
+   will be used exactly once.
+
+.. function:: mapfoldr(f, op, itr)
+
+   Like ``mapfoldr(f, op, v0, itr)``, but using the first element of
+   ``itr`` as ``v0``. In general, this cannot be used with empty
+   collections (see ``reduce(op, itr)``).
 
 .. function:: first(coll)
 
@@ -3922,11 +3973,17 @@ Constructors
 
 .. function:: fill(x, dims)
 
-   Create an array filled with the value ``x``
+   Create an array filled with the value ``x``.
+   For example, ``fill(1.0, (10,10))`` returns a  10x10 array of floats, with each
+   element initialized to 1.0.
+
+   If ``x`` is an object reference, all elements will refer to the same object.
+   ``fill(Foo(), dims)`` will return an array filled with the result of evaluating ``Foo()`` once.
 
 .. function:: fill!(A, x)
 
-   Fill the array ``A`` with the value ``x``
+   Fill array ``A`` with the value ``x``. If ``x`` is an object reference, all elements will refer to the same object.
+   ``fill!(A, Foo())`` will return ``A`` filled with the result of evaluating ``Foo()`` once.
 
 .. function:: reshape(A, dims)
 
@@ -4409,6 +4466,26 @@ Statistics
 
    Compute the sample variance of a vector ``v`` with known mean ``m``.
    Note: Julia does not ignore ``NaN`` values in the computation.
+
+.. function:: middle(x)
+
+   Compute the middle of a scalar value, which is equivalent to ``x`` itself,
+   but of the type of ``middle(x, x)`` for consistency.
+
+.. function:: middle(x, y)
+
+   Compute the middle of two reals ``x`` and ``y``, which is equivalent
+   in both value and type to computing their mean (``(x + y) / 2``).
+
+.. function:: middle(range)
+
+   Compute the middle of a range, which consists in computing the mean of its extrema.
+   Since a range is sorted, the mean is performed with the first and last element.
+
+.. function:: middle(array)
+
+   Compute the middle of an array, which consists in finding its extrema and
+   then computing their mean.
 
 .. function:: median(v; checknan::Bool=true)
 
@@ -5305,6 +5382,11 @@ System
    
       This function raises an error under operating systems that do not support
       soft symbolic links, such as Windows XP.
+
+.. function:: chmod(path, mode)
+
+   Change the permissions mode of ``path`` to ``mode``. Only integer modes
+   (e.g. 0o777) are currently supported.
 
 .. function:: getpid() -> Int32
 

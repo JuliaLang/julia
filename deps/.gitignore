@@ -19,6 +19,7 @@
 /libcxx-*
 /llvm-*
 /mpfr-*
+/objconv*
 /openblas-*
 /patchelf-*
 /pcre-*

@@ -128,11 +128,11 @@ Filesystem
 
 .. function:: tempname()
 
-   Generate a unique temporary filename.
+   Generate a unique temporary file path.
 
 .. function:: tempdir()
 
-   Obtain the path of a temporary directory.
+   Obtain the path of a temporary directory (possibly shared with other processes).
 
 .. function:: mktemp()
 

@@ -19,7 +19,7 @@ CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc
+#custom Makefile rules: openlibm Rmath double-conversion dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -77,6 +77,11 @@ endif
 
 ifeq ($(USE_SYSTEM_BLAS), 0)
 STAGE1_DEPS += openblas
+ifeq ($(USE_BLAS64), 1)
+ifeq ($(OS), Darwin)
+STAGE1_DEPS += objconv
+endif
+endif
 endif
 
 ifeq ($(USE_SYSTEM_FFTW), 0)
@@ -144,7 +149,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc get-objconv
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -750,6 +755,34 @@ check-Rmath: compile-Rmath
 install-Rmath: $(RMATH_OBJ_TARGET) 
 
 
+## objconv ##
+
+OBJCONV_SOURCE = objconv/objconv
+OBJCONV_TARGET = $(build_bindir)/objconv
+
+objconv.zip:
+	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
+objconv/config.status: objconv.zip
+	unzip -d objconv $<
+	cd objconv && unzip source.zip
+	echo 1 > $@
+$(OBJCONV_SOURCE): objconv/config.status
+	cd objconv && $(CXX) -o objconv -O2 *.cpp
+$(OBJCONV_TARGET): $(OBJCONV_SOURCE) | $(build_bindir)
+	cp -f $< $@
+
+clean-objconv:
+	-rm -f $(OBJCONV_TARGET)
+distclean-objconv:
+	-rm -rf objconv.zip objconv
+
+get-objconv: objconv.zip
+configure-objconv: objconv/config.status
+compile-objconv: $(OBJCONV_SOURCE)
+check-objconv: compile-objconv
+install-objconv: $(OBJCONV_TARGET)
+
+
 ## OpenBLAS ##
 # LAPACK is built into OpenBLAS by default
 
@@ -791,7 +824,11 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="64_"
+ifeq ($(OS), Darwin)
+OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
+$(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
+endif
 endif
 
 # Decide whether to build for 32-bit or 64-bit arch
@@ -827,6 +864,7 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
+	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-symbol-rename.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -989,12 +1027,28 @@ install-lapack: $(LAPACK_OBJ_TARGET)
 
 ## ARPACK ##
 ARPACK_FFLAGS = $(GFORTBLAS_FFLAGS)
+ARPACK_CFLAGS =
 
 ifeq ($(USE_BLAS64), 1)
 ifeq ($(USEIFC),1)
 ARPACK_FFLAGS += -i8
 else
 ARPACK_FFLAGS += -fdefault-integer-8
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+ARPACK_FFLAGS += -cpp -ffixed-line-length-none
+ARPACK_OPENBLASFCNS1 = axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen
+ARPACK_OPENBLASFCNS2 = dot ger labad laev2 lamch lanst lanv2 lapy2 larf larfg lasr nrm2 orm2r rot steqr swap
+ARPACK_OPENBLASFCNS3 = dotc geru unm2r
+ARPACK_OPENBLASFCNS4 = COPY LABAD LAMCH LANHS LANV2 LARFG ROT
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS2), -Ds$(fcn)=s$(fcn)_64 -Dd$(fcn)=d$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS1) $(ARPACK_OPENBLASFCNS3), -Dc$(fcn)=c$(fcn)_64 -Dz$(fcn)=z$(fcn)_64)
+ARPACK_FFLAGS += $(foreach fcn, $(ARPACK_OPENBLASFCNS4), -DS$(fcn)=S$(fcn)_64 -DD$(fcn)=D$(fcn)_64)
+ARPACK_FFLAGS += -Dscnrm2=scnrm2_64 -Ddznrm2=dznrm2_64 -Dcsscal=csscal_64 -Dzdscal=zdscal_64
+# CFLAGS are for the configure checks
+ARPACK_CFLAGS += -Dsgemm_=sgemm_64_ -Dcheev_=cheev_64_
+endif
+endif
 endif
 endif
 
@@ -1007,7 +1061,7 @@ ARPACK_OBJ_TARGET = $(build_shlibdir)/libarpack.$(SHLIB_EXT)
 
 ARPACK_MFLAGS = F77="$(FC)" MPIF77="$(FC)"
 ARPACK_FFLAGS += $(FFLAGS) $(JFFLAGS)
-ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)"
+ARPACK_FLAGS = --with-blas="$(LIBBLAS)" --with-lapack="$(LIBLAPACK)" --disable-mpi --enable-shared FFLAGS="$(ARPACK_FFLAGS)" CFLAGS="$(ARPACK_CFLAGS)"
 ifneq ($(OS),WINNT)
 ARPACK_FLAGS += LDFLAGS="$(LDFLAGS) -Wl,-rpath,'$(build_libdir)'"
 endif
@@ -1249,8 +1303,16 @@ SUITESPARSE_OBJ_SOURCE = SuiteSparse-$(SUITESPARSE_VER)/UMFPACK/Lib/libumfpack.a
 SUITESPARSE_OBJ_TARGET = $(build_shlibdir)/libspqr.$(SHLIB_EXT)
 
 ifeq ($(USE_BLAS64), 1)
-UMFPACK_CONFIG = -DLONGBLAS='long long' 
-CHOLMOD_CONFIG = -DLONGBLAS='long long' 
+UMFPACK_CONFIG = -DLONGBLAS='long long'
+CHOLMOD_CONFIG = -DLONGBLAS='long long'
+SPQR_CONFIG = -DLONGBLAS='long long'
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifneq ($(USE_INTEL_MKL), 1)
+UMFPACK_CONFIG += -DSUN64
+CHOLMOD_CONFIG += -DSUN64
+SPQR_CONFIG += -DSUN64
+endif
+endif
 endif
 
 SUITE_SPARSE_LIB = -lm
@@ -1264,7 +1326,7 @@ SUITE_SPARSE_LIB += -Wl,-rpath,'$(build_libdir)'
 endif
 SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RANLIB)" BLAS="$(LIBBLAS)" LAPACK="$(LIBLAPACK)" \
 	  INSTALL_LIB="$(build_libdir)" INSTALL_INCLUDE="$(build_includedir)" LIB="$(SUITE_SPARSE_LIB)" \
-	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)"
+	  UMFPACK_CONFIG="$(UMFPACK_CONFIG)" CHOLMOD_CONFIG="$(CHOLMOD_CONFIG)" SPQR_CONFIG="$(SPQR_CONFIG)"
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$@

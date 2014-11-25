@@ -325,6 +325,9 @@ ifeq ($(JULIA_CPU_TARGET), native)
 endif
 
 ifeq ($(OS), WINNT)
+	# If we are running on WINNT, also delete sys.dll until it stops causing issues (#8895, among others)
+	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
 	    mkdir $(DESTDIR)$(prefix)/Git && \
@@ -360,7 +363,7 @@ source-dist: git-submodules
 	# Create file source-dist.tmp to hold all the filenames that go into the tarball
 	echo "base/version_git.jl" > source-dist.tmp
 	git ls-files >> source-dist.tmp
-	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tgz >> source-dist.tmp
+	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tar.xz deps/*.tgz deps/*.zip >> source-dist.tmp
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> source-dist.tmp
 
 	# Remove unwanted files

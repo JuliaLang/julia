@@ -5,9 +5,15 @@
 ##   your local machine, in a file named `Make.user` in this directory
 
 # OPENBLAS build options
-OPENBLAS_DYNAMIC_ARCH=1
-OPENBLAS_USE_THREAD=1
 OPENBLAS_TARGET_ARCH=
+
+# If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
+ifneq ($(OPENBLAS_TARGET_ARCH),)
+OPENBLAS_DYNAMIC_ARCH=0
+else
+OPENBLAS_DYNAMIC_ARCH=1
+endif
+OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
@@ -133,6 +139,10 @@ BUILD_LLDB = 0
 
 # Figure out OS and architecture
 BUILD_OS := $(shell uname)
+
+ifneq (,$(findstring CYGWIN,$(BUILD_OS)))
+XC_HOST ?= $(shell uname -m)-w64-mingw32
+endif
 
 ifeq ($(XC_HOST),)
 CROSS_COMPILE=
@@ -367,6 +377,10 @@ ifeq ($(ARCH),)
 override ARCH := $(shell $(CC) -dumpmachine | sed "s/\([^-]*\).*$$/\1/")
 ifeq ($(ARCH),mingw32)
 $(error "the mingw32 compiler you are using fails the openblas testsuite. please see the README.windows document for a replacement")
+else ifeq (cygwin, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with cygwin-target compilers. set XC_HOST to i686-w64-mingw32 or x86_64-w64-mingw32 for mingw cross-compile")
+else ifeq (msys, $(shell $(CC) -dumpmachine | cut -d\- -f3))
+$(error "cannot build julia with msys-target compilers. please see the README.windows document for instructions on setting up mingw-w64 compilers")
 endif
 ifeq ($(BUILD_OS),Darwin)
 ## Mac is a rather amazing 64-bit user-space on 32-bit kernel architecture, so to determine arch we detect

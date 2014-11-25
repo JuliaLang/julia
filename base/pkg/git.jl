@@ -30,6 +30,16 @@ function success(args::Cmd; dir="")
     Base.success(`$g $args`)
 end
 
+function version()
+    vs = split(readchomp(`version`), ' ')[3]
+    ns = split(vs, '.')
+    if length(ns) > 3
+        convert(VersionNumber, join(ns[1:3], '.'))
+    else
+        convert(VersionNumber, join(ns, '.'))
+    end
+end
+
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
 different(verA::String, verB::String, path::String; dir="") =
     !success(`diff-tree --quiet $verA $verB -- $path`, dir=dir)
