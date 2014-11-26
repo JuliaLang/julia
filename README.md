@@ -5,7 +5,7 @@
 </a>
 </div>
 
-[![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=master)](https://travis-ci.org/JuliaLang/julia)
+Linux, OSX: [![Build Status](https://api.travis-ci.org/JuliaLang/julia.svg?branch=release-0.3)](https://travis-ci.org/JuliaLang/julia) Windows: [![Build status](https://ci.appveyor.com/api/projects/status/4vr88cmgo7u02644/branch/release-0.3?svg=true)](https://ci.appveyor.com/project/StefanKarpinski/julia/branch/release-0.3)
 
 <a name="The-Julia-Language"/>
 ## The Julia Language
