@@ -151,13 +151,6 @@ $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
-run-julia-debug run-julia-release: run-julia-%:
-	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
-run-julia:
-	@$(call spawn,$(JULIA_EXECUTABLE))
-run:
-	@$(call spawn,$(cmd))
-
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
