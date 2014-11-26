@@ -374,8 +374,8 @@ function deregister_worker(pg, pid)
     push!(map_del_wrkr, pid)
 
     # delete this worker from our RemoteChannel client sets
-    ids = {}
-    tonotify = {}
+    ids = []
+    tonotify = []
     for (id,rv) in pg.refs
         if in(pid,rv.clientset)
             push!(ids, id)
