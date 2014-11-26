@@ -1506,9 +1506,13 @@ Strings
 
    Returns ``string`` with the first character converted to lowercase.
 
-.. function:: join(strings, delim)
+.. function:: join(strings, delim, [last])
 
-   Join an array of strings into a single string, inserting the given delimiter between adjacent strings.
+   Join an array of ``strings`` into a single string, inserting the given delimiter between adjacent strings.
+   If ``last`` is given, it will be used instead of ``delim`` between the last two strings.
+   For example, ``join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"``.
+
+   ``strings`` can be any iterable over elements ``x`` which are convertible to strings via ``print(io::IOBuffer, x)``.
 
 .. function:: chop(string)
 
