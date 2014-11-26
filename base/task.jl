@@ -345,14 +345,14 @@ abstract AbstractChannel
 
 type Channel{T} <: AbstractChannel
     q::Vector{T}
-    szp1::Int       # current channel size plus one    
-    sz_max::Int     # maximum size of channel    
+    szp1::Int       # current channel size plus one
+    sz_max::Int     # maximum size of channel
     rc::Condition   # waiting for data to become available
     wc::Condition   # waiting for a writeable slot
-    rp::Int         # read position   
+    rp::Int         # read position
     wp::Int         # write position
 
-    Channel(T::Type, szp1::Int, sz_max::Int) = new(Array(T, szp1), szp1, sz_max, Condition(), Condition(), 1, 1)
+    Channel(Ty::Type, szp1::Int, sz_max::Int) = new(Array(Ty, szp1), szp1, sz_max, Condition(), Condition(), 1, 1)
 end
 
 Channel() = Channel(1)
@@ -365,13 +365,13 @@ function Channel(T::Type, sz::Int)
 end
 
 function put!(c::Channel, v)
-    d = c.rp - c.wp 
+    d = c.rp - c.wp
     if (d == 1) || (d == -(c.szp1-1))
         # grow the channel if possible
         if (c.szp1 - 1) < c.sz_max
-            if ((c.szp1-1) * 2) > c.sz_max 
-                c.szp1 = c.sz_max + 1 
-            else 
+            if ((c.szp1-1) * 2) > c.sz_max
+                c.szp1 = c.sz_max + 1
+            else
                 c.szp1 = ((c.szp1-1) * 2) + 1
             end
             newq = Array(eltype(c), c.szp1)
@@ -390,7 +390,7 @@ function put!(c::Channel, v)
             wait(c.wc)
         end
     end
-    
+
     c.q[c.wp] = v
     c.wp = (c.wp == c.szp1 ? 1 : c.wp + 1)
     notify(c.rc)  # notify all, since some of the waiters may be on a "fetch" call.
@@ -425,7 +425,7 @@ end
 
 function notify_error(c::Channel, err)
     notify_error(c.rc, err)
-    notify_error(c.wc, err)    
+    notify_error(c.wc, err)
 end
 
 eltype(c::Channel) = eltype(c.q)

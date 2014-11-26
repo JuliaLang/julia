@@ -165,8 +165,8 @@ function test_channel(c)
     @test isready(c) == true
     @test fetch(c) == 1
     @test fetch(c) == 1   # Should not have been popped previously
-    @test take!(c) == 1   
-    @test take!(c) == "Hello"   
+    @test take!(c) == 1
+    @test take!(c) == "Hello"
     @test fetch(c) == 5.0
     @test take!(c) == 5.0
     @test isready(c) == false
@@ -183,7 +183,7 @@ put!(c, 5.0)
 @test isready(c) == true
 @test remotecall_fetch(id_other, ch -> fetch(ch), c) == 1
 @test fetch(c) == 1   # Should not have been popped previously
-@test take!(c) == 1   
+@test take!(c) == 1
 @test remotecall_fetch(id_other, ch -> take!(ch), c) == "Hello"
 @test fetch(c) == 5.0
 @test remotecall_fetch(id_other, ch -> take!(ch), c) == 5.0

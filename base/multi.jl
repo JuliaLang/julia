@@ -427,14 +427,14 @@ type RemoteChannel <: AbstractChannel
             # is responsible for freeing them.
             gc()
         end
-        
+
         if (T != Any) || (sz > 1)
             # For any and size 1, the Channel is created only at the time of first access
-            # this saves a round trip. However for other types/sizes, we will need to create it 
+            # this saves a round trip. However for other types/sizes, we will need to create it
             # at RemoteChannel creation time itself.
             call_on_owner(setup_ref, rr, T, sz)
         end
-        
+
         rr
     end
 
