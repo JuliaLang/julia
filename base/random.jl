@@ -257,7 +257,7 @@ function rand!{I<:FloatInterval}(r::MersenneTwister, A::Array{Float64}, n::Int=l
         rand_AbstractArray_Float64!(r, A, n, I)
     else
         pA = pointer(A)
-        align = Int(pA) % 16
+        align = Csize_t(pA) % 16
         if align > 0
             pA2 = pA + 16 - align
             fill_array!(r.state, pA2, n2, I)
