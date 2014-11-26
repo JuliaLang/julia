@@ -274,6 +274,12 @@ LLVM_FLAGS += --disable-threads
 endif
 
 ifeq ($(BUILD_LLDB),1)
+ifeq ($(LLVM_VER), 3.5.0)
+LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.xz
+else
+LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.gz
+endif
+
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
@@ -338,29 +344,33 @@ $(LLVM_TAR):
 	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
 endif
 
+ifneq ($(LLVM_LLDB_TAR),)
+$(LLVM_LLDB_TAR):
+	$(JLDOWNLOAD) $@ http://llvm.org/releases/$(LLVM_VER)/$@
+endif
 ifeq ($(BUILD_LLDB),1)
 llvm-$(LLVM_VER)/tools/lldb:
 llvm-$(LLVM_VER)/configure: llvm-$(LLVM_VER)/tools/lldb
 endif
 
-ifeq ($(LLVM_VER), 3.2)
-## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
 llvm-$(LLVM_VER)/python2_path:
 	mkdir -p llvm-$(LLVM_VER)/python2_path
 	-python -c 'import sys; sys.exit(not sys.version_info > (3, 0))' && \
 	/usr/bin/python2 -c 'import sys; sys.exit(not sys.version_info < (3, 0))' && \
-	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
+	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python" && \
+	ln -sf /usr/bin/python2-config "llvm-$(LLVM_VER)/python2_path/python-config"
+ifeq ($(LLVM_VER), 3.2)
+## LLVM needs python 2.x, but doesn't check for it, so we have to use an ugly workaround to make it compile
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 else
   LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 endif
+# LLDB still relies on plenty of python 2.x infrastructure, without checking
+ifeq ($(BUILD_LLDB),1)
+llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
+endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-
-LIBCXX_OPTIONS = OPTIONS="-I../../libcxx/include $(CXXFLAGS) $(LDFLAGS)" CC="$(CC) $(CFLAGS)" CXX="$(CXX)"
-ifeq ($(USEICC),1)
-LIBCXX_OPTIONS += EXTRA_LIBS="-Bstatic -lirc"
-endif
 
 llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR) | llvm-svn/configure
 	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
@@ -404,7 +414,7 @@ LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -416,6 +426,9 @@ ifneq ($(LLVM_LIBCXX_TAR),)
 endif
 ifneq ($(LLVM_VER),svn)
 	$(JLCHECKSUM) $(LLVM_TAR)
+endif
+ifneq ($(LLVM_LLDB_TAR),)
+	$(JLCHECKSUM) $(LLVM_LLDB_TAR)
 endif
 ifneq ($(LLVM_VER),svn)
 	mkdir -p llvm-$(LLVM_VER) && \
@@ -439,11 +452,21 @@ ifneq ($(LLVM_COMPILER_RT_TAR),)
 	mkdir -p llvm-$(LLVM_VER)/projects/compiler-rt && \
 	$(TAR) -C llvm-$(LLVM_VER)/projects/compiler-rt --strip-components 1 -xf $(LLVM_COMPILER_RT_TAR)
 endif
+ifneq ($(LLVM_LLDB_TAR),)
+	mkdir -p llvm-$(LLVM_VER)/tools/lldb && \
+	$(TAR) -C llvm-$(LLVM_VER)/tools/lldb --strip-components 1 -xf $(LLVM_LLDB_TAR)
+endif
 else
 ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
+		git pull --ff-only)
+endif
+ifeq ($(BUILD_LLDB),1)
+	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
+		git clone $(LLVM_GIT_URL_LLDB) llvm-$(LLVM_VER)/tools/lldb  ) || \
+		(cd llvm-$(LLVM_VER)/tools/lldb  && \
 		git pull --ff-only)
 endif
 endif
@@ -464,15 +487,6 @@ endif
 endif
 endif
 
-ifeq ($(BUILD_LLDB),1)
-	([ ! -d llvm-$(LLVM_VER)/tools/lldb ] && \
-		(cd llvm-$(LLVM_VER)/tools && \
-		git clone $(LLVM_GIT_URL_LLDB))) || \
-	([ -d llvm-$(LLVM_VER)/tools/lldb ] && \
-		(cd llvm-$(LLVM_VER)/tools/lldb && \
-		git fetch))
-	cd llvm-$(LLVM_VER)/tools/lldb && git checkout $(LLDB_VER)
-endif
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
@@ -526,7 +540,7 @@ distclean-llvm:
 	-rm -rf llvm-$(LLVM_VER).tar.gz llvm-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).src.tar.gz clang-$(LLVM_VER).tar.gz libcxx-$(LLVM_VER).src.tar.gz compiler-rt-$(LLVM_VER).src.tar.gz llvm-$(LLVM_VER)
 
 ifneq ($(LLVM_VER),svn)
-get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
+get-llvm: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 else
 get-llvm: llvm-$(LLVM_VER)/configure $(LIBCXX_GET_DEPENDENCY)
 endif
