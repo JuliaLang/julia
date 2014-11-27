@@ -60,15 +60,17 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
     }
 #else
     uint8_t *UnwindData = Section;
+    mod_size = Size;
 #endif
 #if defined(_CPU_X86_64_) and !defined(USE_MCJIT)
     PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)(UnwindData+12);
 #else
     PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
 #endif
-    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {(DWORD)(Code-Section), (DWORD)Size, (DWORD)(intptr_t)(UnwindData-Section)};
-    tbl[0] = fn;
-    if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+    tbl->BeginAddress = (DWORD)(Code - Section);
+    tbl->EndAddress = (DWORD)(intptr_t)(Code + Size - Section);
+    tbl->UnwindInfoAddress = (DWORD)(intptr_t)(UnwindData - Section);
+    if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
         catchjmp[0] = 0;
         static int warned = 0;
         if (!warned) {
@@ -83,8 +85,8 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
         char *name = (char*)alloca(len);
         memcpy(name, fnname.data(), len-1);
         name[len-1] = 0;
-        if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, name,
-                    (DWORD64)Code, fn.EndAddress-fn.BeginAddress, 0)) {
+        if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
+                    (DWORD64)Code, (DWORD)Size, 0)) {
             JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
         }
     }
