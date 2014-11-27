@@ -945,9 +945,8 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 
-@inline function randn(rng::MersenneTwister=GLOBAL_RNG)
+@inline function randn(rng::MersenneTwister=GLOBAL_RNG, r::UInt64=rand_ui52(rng))
     @inbounds begin
-        r = rand_ui52(rng)
         rabs = int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
