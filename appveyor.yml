@@ -1,5 +1,4 @@
 environment:
-#  USEMSVC: "1"
   matrix:
   - ARCH: "i686"
   - ARCH: "x86_64"
@@ -9,7 +8,7 @@ environment:
 branches:
   only:
     - master
-# TODO: - release-0.3
+    - release-0.3
 
 clone_depth: 50
 
@@ -18,12 +17,9 @@ init:
   - git config --global core.autocrlf input
 
 build_script:
-# temporarily disable backtrace test, failing right now for win64 on master
-  - sed -i 's/"backtrace",//' test/runtests.jl
 # Remove C:\MinGW\bin from the path, the version of MinGW installed on
 # AppVeyor is not compatible with the cross-compiled Julia Windows binaries
   - set PATH=%PATH:C:\MinGW\bin;=%
-#  - '"%VS120COMNTOOLS%\..\..\VC\vcvarsall.bat" x86_amd64'
 # Since the AppVeyor VMs have Git installed, they have MSYS1
   - sh --login /c/projects/julia/contrib/windows/msys_build.sh
 

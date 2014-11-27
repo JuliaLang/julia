@@ -56,9 +56,9 @@ esac
 
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
-  f=julia-nightly-win$bits.exe
+  f=julia-release-win$bits.exe
   echo "Downloading $f"
-  curl -kLsSo $f http://status.julialang.org/download/win$bits
+  curl -kLsSo $f http://status.julialang.org/stable/win$bits
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
@@ -151,11 +151,11 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
-# mojibake since its headers are not in the binary download
+# utf8proc since its headers are not in the binary download
 echo 'override STAGE1_DEPS = uv' >> Make.user
-echo 'override STAGE2_DEPS = mojibake' >> Make.user
+echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
-make -C deps get-uv
+make -C deps get-uv get-utf8proc
 
 if [ -n "$USEMSVC" ]; then
   # Create a modified version of compile for wrapping link
