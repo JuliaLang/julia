@@ -982,8 +982,10 @@ function randn_unlikely(rng, idx, rabs, x)
 end
 
 function randn!(rng::MersenneTwister, A::Array{Float64})
-    for i = 1:length(A)
-        @inbounds A[i] = randn(rng)
+    n = length(A)
+    rand!(rng, A, n, Close1Open2)
+    for i = 1:n
+        @inbounds A[i] = randn(rng, reinterpret(UInt64, A[i]) & 0x000fffffffffffff)
     end
     A
 end
