@@ -20,15 +20,75 @@ struct ObjectInfo {
     object::ObjectFile* object;
     object::SymbolRef symref;
     size_t size;
+#if defined(_OS_WINDOWS_)
+    PIMAGE_RUNTIME_FUNCTION_ENTRY fnentry; // assumed equivalent to PIMAGE_FUNCTION_ENTRY
+#endif
 };
 #endif
 
 #if defined(_OS_WINDOWS_)
-#include <dbghelp.h>
-extern "C" volatile int jl_in_stackwalk;
 #if defined(_CPU_X86_64_)
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
 #endif
+#include <dbghelp.h>
+extern "C" volatile int jl_in_stackwalk;
+static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(void *Code, size_t Size, StringRef fnname) {
+    assert(!jl_in_stackwalk);
+    jl_in_stackwalk = 1;
+#if defined(_CPU_X86_64_)
+    uintptr_t catchjmp = (uintptr_t)Code+Size;
+    *(uint8_t*)(catchjmp+0) = 0x48;
+    *(uint8_t*)(catchjmp+1) = 0xb8; // mov RAX, QWORD PTR [...]
+    *(uint64_t*)(catchjmp+2) = (uint64_t)&_seh_exception_handler;
+    *(uint8_t*)(catchjmp+10) = 0xff;
+    *(uint8_t*)(catchjmp+11) = 0xe0; // jmp RAX
+    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((catchjmp+12+3)&~(uintptr_t)3);
+    uint8_t *UnwindData = (uint8_t*)((((uintptr_t)&tbl[1])+3)&~(uintptr_t)3);
+    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size+12,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
+    tbl[0] = fn;
+    UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
+    UnwindData[1] = 4;    // size of prolog (bytes)
+    UnwindData[2] = 2;    // count of unwind codes (slots)
+    UnwindData[3] = 0x05; // frame register (rbp) = rsp
+    UnwindData[4] = 4;    // second instruction
+    UnwindData[5] = 0x03; // mov RBP, RSP
+    UnwindData[6] = 1;    // first instruction
+    UnwindData[7] = 0x50; // push RBP
+    *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
+    DWORD mod_size = (DWORD)(size_t)(&UnwindData[9]-(uint8_t*)Code);
+#else
+    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
+    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size,0};
+    tbl[0] = fn;
+    DWORD mod_size = (DWORD)Size;
+#endif
+    if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+        static int warned = 0;
+        if (!warned) {
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
+            warned = 1;
+        }
+    }
+    else {
+        size_t len = fnname.size()+1;
+        if (len > MAX_SYM_NAME)
+            len = MAX_SYM_NAME;
+        char *name = (char*)alloca(len);
+        memcpy(name, fnname.data(), len-1);
+        name[len-1] = 0;
+        if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, name,
+                    (DWORD64)Code, fn.EndAddress-fn.BeginAddress, 0)) {
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
+        }
+#if defined(_CPU_X86_64_)
+        if (!RtlAddFunctionTable(tbl,1,(DWORD64)Code)) {
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
+        }
+#endif
+    }
+    jl_in_stackwalk = 0;
+    return &tbl[0];
+}
 #endif
 
 struct revcomp {
@@ -53,58 +113,10 @@ public:
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
 #if defined(_OS_WINDOWS_)
-        assert(!jl_in_stackwalk);
-        jl_in_stackwalk = 1;
-#if defined(_CPU_X86_64_)
-        uintptr_t catchjmp = (uintptr_t)Code+Size;
-        *(uint8_t*)(catchjmp+0) = 0x48;
-        *(uint8_t*)(catchjmp+1) = 0xb8; // mov RAX, QWORD PTR [...]
-        *(uint64_t*)(catchjmp+2) = (uint64_t)&_seh_exception_handler;
-        *(uint8_t*)(catchjmp+10) = 0xff;
-        *(uint8_t*)(catchjmp+11) = 0xe0; // jmp RAX
-        PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((catchjmp+12+3)&~(uintptr_t)3);
-        uint8_t *UnwindData = (uint8_t*)((((uintptr_t)&tbl[1])+3)&~(uintptr_t)3);
-        IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size+12,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
-        tbl[0] = fn;
-        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-        UnwindData[1] = 4;    // size of prolog (bytes)
-        UnwindData[2] = 2;    // count of unwind codes (slots)
-        UnwindData[3] = 0x05; // frame register (rbp) = rsp
-        UnwindData[4] = 4;    // second instruction
-        UnwindData[5] = 0x03; // mov RBP, RSP
-        UnwindData[6] = 1;    // first instruction
-        UnwindData[7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
-        DWORD mod_size = (DWORD)(size_t)(&UnwindData[9]-(uint8_t*)Code);
-#else
-        PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
-        IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size,0};
-        tbl[0] = fn;
-        DWORD mod_size = (DWORD)Size;
-#endif
-        if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
-            static int warned = 0;
-            if (!warned) {
-                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
-                warned = 1;
-            }
-        }
-        else {
-            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, F.getName().data(),
-                        (DWORD64)Code, fn.EndAddress-fn.BeginAddress, 0)) {
-                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
-            }
-#if defined(_CPU_X86_64_)
-            if (!RtlAddFunctionTable(tbl,1,(DWORD64)Code)) {
-                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
-            }
-#endif
-        }
-        jl_in_stackwalk = 0;
 
-        FuncInfo tmp = {&F, Size, std::string(), std::string(), tbl, Details.LineStarts};
+        FuncInfo tmp = {&F, Size, std::string(), std::string(), get_IMAGE_RUNTIME_FUNCTION_ENTRY(Code, Size, F.getName()), Details.LineStarts};
 #else
-        FuncInfo tmp = {&F, Size, std::string(F.getName().data()), std::string(), Details.LineStarts};
+        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
 #endif
         info[(size_t)(Code)] = tmp;
     }
@@ -120,13 +132,24 @@ public:
     {
         uint64_t Addr;
         object::SymbolRef::Type SymbolType;
+#ifdef _OS_WINDOWS_
+       StringRef Name;
+#endif
 
         #ifdef LLVM35
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter.getAddress(Addr);
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, obj.getData().size()};
+            size_t Size = obj.getData().size();
+#ifdef _OS_WINDOWS_
+            sym_iter.getName(Name);
+#endif
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, Size,
+#ifdef _OS_WINDOWS_
+               get_IMAGE_RUNTIME_FUNCTION_ENTRY((void*)(size_t)Addr, Size, Name),
+#endif
+            };
             objectmap[Addr] = tmp;
         }
         #else
@@ -523,18 +546,28 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 
 
 #if defined(_OS_WINDOWS_)
-#ifndef USE_MCJIT
+#ifdef USE_MCJIT
+extern "C"
+void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
+{
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
+    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
+        return (void*)(*it).second.fnentry;
+    }
+    return NULL;
+}
+#else
 extern "C"
 void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
-    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr >= AddrBase) {
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
         return (void*)(*it).second.fnentry;
     }
     return NULL;
 }
-
 #if defined(_CPU_X86_64_)
 // Custom memory manager for exception handling on Windows
 // we overallocate 48 bytes at the end of each function
