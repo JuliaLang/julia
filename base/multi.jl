@@ -134,6 +134,10 @@ function send_msg(w::Worker, kind, args...)
     send_msg_(w, kind, args, false)
 end
 
+function send_msg(w::Worker, arr::Array)
+    send_msg_(w, arr, false)
+end
+
 function flush_gc_msgs(w::Worker)
     w.gcflag = false
     msgs = copy(w.add_msgs)
@@ -151,11 +155,9 @@ function flush_gc_msgs(w::Worker)
 end
 
 #TODO: Move to different Thread
-function enq_send_req(sock::TCPSocket, buf, now::Bool)
-    arr=takebuf_array(buf)
-    write(sock,arr)
-    #TODO implement "now"
-end
+#TODO implement "now"
+enq_send_req(sock::TCPSocket, buf::IOBuffer, now::Bool) = enq_send_req(sock, takebuf_array(buf))
+enq_send_req(sock::TCPSocket, arr::Array) = write(sock,arr)
 
 function send_msg_(w::Worker, kind, args, now::Bool)
     #println("Sending msg $kind")
@@ -164,7 +166,10 @@ function send_msg_(w::Worker, kind, args, now::Bool)
     for arg in args
         serialize(buf, arg)
     end
+    send_msg_(w::Worker, buf, now)
+end
 
+function send_msg_(w::Worker, buf, now)
     if !now && w.gcflag
         flush_gc_msgs(w)
     else
@@ -655,8 +660,33 @@ end
 function remotecall(w::Worker, f, args...)
     rr = RemoteRef(w)
     #println("$(myid()) asking for $rr")
-    send_msg(w, :call, rr2id(rr), f, args)
+    send_msg(w, :call, (f, args), rr2id(rr))
     rr
+end
+
+function remotecall(ws::Array, f, args...)
+    iob=IOBuffer()
+    serialize(iob, :call)
+    serialize(iob, (f, args))
+    common_data = takebuf_array(iob)
+
+    rrs = cell(length(ws))
+    for (i, w) in enumerate(ws)
+        rr = RemoteRef(w)
+        rriob=IOBuffer()
+        serialize(rriob, rr2id(rr))
+        worker_specific_data = takebuf_array(rriob)
+
+        let worker_specific_data=worker_specific_data, w=w, rr=rr
+            @async begin
+                flush_gc_msgs(w)
+                enq_send_req(w.socket, common_data)
+                enq_send_req(w.socket, worker_specific_data)
+            end
+        end
+        rrs[i] = rr
+    end
+    rrs
 end
 
 remotecall(id::Integer, f, args...) = remotecall(worker_from_id(id), f, args...)
@@ -807,15 +837,14 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
         try
             while true
                 msg = deserialize(sock)
-                # println("got msg: ",msg)
+                #println("got msg: ",msg)
                 # handle message
                 if is(msg, :call)
+                    f_args = deserialize(sock)
+                    (f0, args0) = f_args
+                    #print("$(myid()) got call $f0, args $args0\n")
                     id = deserialize(sock)
                     #print("$(myid()) got id $id\n")
-                    f0 = deserialize(sock)
-                    #print("$(myid()) got call $f0\n")
-                    args0 = deserialize(sock)
-                    #print("$(myid()) got args $args0\n")
                     let f=f0, args=args0
                         schedule_call(id, ()->f(args...))
                     end
@@ -1360,6 +1389,16 @@ spawnat(p, thunk) = sync_add(remotecall(p, thunk))
 
 spawn_somewhere(thunk) = spawnat(chooseproc(thunk),thunk)
 
+function spawnall(thunk)
+    remotes = filter(x->isa(x, Worker), PGRP.workers)
+    all_rr=remotecall(remotes, thunk)
+    push!(all_rr, remotecall(myid(), thunk))
+
+    for rr in all_rr
+        sync_add(rr)
+    end
+end
+
 macro spawn(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(spawn_somewhere($(esc(expr))))
@@ -1368,6 +1407,11 @@ end
 macro spawnat(p, expr)
     expr = localize_vars(:(()->($expr)), false)
     :(spawnat($(esc(p)), $(esc(expr))))
+end
+
+macro spawnall(expr)
+    expr = localize_vars(:(()->($expr)), false)
+    :(spawnall($(esc(expr))))
 end
 
 macro fetch(expr)

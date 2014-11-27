@@ -1382,6 +1382,7 @@ export
     @async,
     @spawn,
     @spawnat,
+    @spawnall,
     @fetch,
     @fetchfrom,
     @everywhere,
