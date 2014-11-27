@@ -10,8 +10,8 @@ struct FuncInfo{
     size_t lengthAdr;
     std::string name;
     std::string filename;
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-    PRUNTIME_FUNCTION fnentry;
+#if defined(_OS_WINDOWS_)
+    PIMAGE_RUNTIME_FUNCTION_ENTRY fnentry; // assumed equivalent to PIMAGE_FUNCTION_ENTRY
 #endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
@@ -25,9 +25,9 @@ struct ObjectInfo {
 
 #if defined(_OS_WINDOWS_)
 #include <dbghelp.h>
+extern "C" volatile int jl_in_stackwalk;
 #if defined(_CPU_X86_64_)
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
-extern "C" volatile int jl_in_stackwalk;
 #endif
 #endif
 
@@ -52,18 +52,19 @@ public:
     virtual void NotifyFunctionEmitted(const Function &F, void *Code,
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(_OS_WINDOWS_)
         assert(!jl_in_stackwalk);
         jl_in_stackwalk = 1;
+#if defined(_CPU_X86_64_)
         uintptr_t catchjmp = (uintptr_t)Code+Size;
         *(uint8_t*)(catchjmp+0) = 0x48;
         *(uint8_t*)(catchjmp+1) = 0xb8; // mov RAX, QWORD PTR [...]
         *(uint64_t*)(catchjmp+2) = (uint64_t)&_seh_exception_handler;
         *(uint8_t*)(catchjmp+10) = 0xff;
         *(uint8_t*)(catchjmp+11) = 0xe0; // jmp RAX
-        PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)((catchjmp+12+3)&~(uintptr_t)3);
+        PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((catchjmp+12+3)&~(uintptr_t)3);
         uint8_t *UnwindData = (uint8_t*)((((uintptr_t)&tbl[1])+3)&~(uintptr_t)3);
-        RUNTIME_FUNCTION fn = {0,(DWORD)Size+13,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
+        IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size+12,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
         tbl[0] = fn;
         UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
         UnwindData[1] = 4;    // size of prolog (bytes)
@@ -74,7 +75,13 @@ public:
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
         *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
-        DWORD mod_size = (DWORD)(size_t)(&UnwindData[8]-(uint8_t*)Code);
+        DWORD mod_size = (DWORD)(size_t)(&UnwindData[9]-(uint8_t*)Code);
+#else
+        PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
+        IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size,0};
+        tbl[0] = fn;
+        DWORD mod_size = (DWORD)Size;
+#endif
         if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
             static int warned = 0;
             if (!warned) {
@@ -83,12 +90,15 @@ public:
             }
         }
         else {
-            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, F.getName().data(), (DWORD64)Code, mod_size, 0)) {
+            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Code, F.getName().data(),
+                        (DWORD64)Code, fn.EndAddress-fn.BeginAddress, 0)) {
                 JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
             }
+#if defined(_CPU_X86_64_)
             if (!RtlAddFunctionTable(tbl,1,(DWORD64)Code)) {
                 JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
             }
+#endif
         }
         jl_in_stackwalk = 0;
 
@@ -103,7 +113,7 @@ public:
     {
         return info;
     }
-#endif // ndef USE_MCJIT
+#endif // ifndef USE_MCJIT
 
 #if USE_MCJIT
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
@@ -512,10 +522,9 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 }
 
 
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-extern "C" void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
+#if defined(_OS_WINDOWS_)
 #ifndef USE_MCJIT
-
+extern "C"
 void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
 {
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
@@ -526,6 +535,7 @@ void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserC
     return NULL;
 }
 
+#if defined(_CPU_X86_64_)
 // Custom memory manager for exception handling on Windows
 // we overallocate 48 bytes at the end of each function
 // for unwind information (see NotifyFunctionEmitted)
@@ -579,12 +589,7 @@ public:
   virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
-
-#else
-void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
-{
-    return NULL;
-}
+#endif
 #endif
 #endif
 
