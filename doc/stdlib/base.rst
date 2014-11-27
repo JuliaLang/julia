@@ -1126,7 +1126,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
      julia> b = Dict(utf8("baz") => 17, utf8("qux") => 4711)
      Dict{UTF8String,Int64} with 2 entries:
        "baz" => 17
-       "foo" => 0.0
+       "qux" => 4711
 
      julia> merge(a, b)
      Dict{UTF8String,Float64} with 4 entries:
