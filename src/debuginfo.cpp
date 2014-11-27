@@ -32,37 +32,44 @@ extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD Except
 #endif
 #include <dbghelp.h>
 extern "C" volatile int jl_in_stackwalk;
-static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(void *Code, size_t Size, StringRef fnname) {
+static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *Code, size_t Size, StringRef fnname,
+        uint8_t *Section, size_t Allocated)
+{
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
+    DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
-    uintptr_t catchjmp = (uintptr_t)Code+Size;
-    *(uint8_t*)(catchjmp+0) = 0x48;
-    *(uint8_t*)(catchjmp+1) = 0xb8; // mov RAX, QWORD PTR [...]
-    *(uint64_t*)(catchjmp+2) = (uint64_t)&_seh_exception_handler;
-    *(uint8_t*)(catchjmp+10) = 0xff;
-    *(uint8_t*)(catchjmp+11) = 0xe0; // jmp RAX
-    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)((catchjmp+12+3)&~(uintptr_t)3);
-    uint8_t *UnwindData = (uint8_t*)((((uintptr_t)&tbl[1])+3)&~(uintptr_t)3);
-    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size+12,(DWORD)(intptr_t)(UnwindData-(uint8_t*)Code)};
-    tbl[0] = fn;
-    UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
-    UnwindData[1] = 4;    // size of prolog (bytes)
-    UnwindData[2] = 2;    // count of unwind codes (slots)
-    UnwindData[3] = 0x05; // frame register (rbp) = rsp
-    UnwindData[4] = 4;    // second instruction
-    UnwindData[5] = 0x03; // mov RBP, RSP
-    UnwindData[6] = 1;    // first instruction
-    UnwindData[7] = 0x50; // push RBP
-    *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp-(intptr_t)Code);
-    DWORD mod_size = (DWORD)(size_t)(&UnwindData[9]-(uint8_t*)Code);
+    uint8_t *catchjmp = Section+Allocated;
+    uint8_t *UnwindData = (uint8_t*)(((uintptr_t)catchjmp+12+3)&~(uintptr_t)3);
+    if (!catchjmp[0]) {
+        catchjmp[0] = 0x48;
+        catchjmp[1] = 0xb8; // mov RAX, QWORD PTR [...]
+        *(uint64_t*)(&catchjmp[2]) = (uint64_t)&_seh_exception_handler;
+        catchjmp[10] = 0xff;
+        catchjmp[11] = 0xe0; // jmp RAX
+        UnwindData[0] = 0x09; // version info, UNW_FLAG_EHANDLER
+        UnwindData[1] = 4;    // size of prolog (bytes)
+        UnwindData[2] = 2;    // count of unwind codes (slots)
+        UnwindData[3] = 0x05; // frame register (rbp) = rsp
+        UnwindData[4] = 4;    // second instruction
+        UnwindData[5] = 0x03; // mov RBP, RSP
+        UnwindData[6] = 1;    // first instruction
+        UnwindData[7] = 0x50; // push RBP
+        *(DWORD*)&UnwindData[8] = (DWORD)Allocated; // relative location of catchjmp
+        mod_size = (DWORD)Allocated+48;
+    }
+#else
+    uint8_t *UnwindData = Section;
+#endif
+#if defined(_CPU_X86_64_) and !defined(USE_MCJIT)
+    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)(UnwindData+12);
 #else
     PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
-    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {0,(DWORD)Size,0};
-    tbl[0] = fn;
-    DWORD mod_size = (DWORD)Size;
 #endif
-    if (!SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+    IMAGE_RUNTIME_FUNCTION_ENTRY fn = {(DWORD)(Code-Section), (DWORD)Size, (DWORD)(intptr_t)(UnwindData-Section)};
+    tbl[0] = fn;
+    if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Code, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+        catchjmp[0] = 0;
         static int warned = 0;
         if (!warned) {
             JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
@@ -80,14 +87,18 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(void *Code
                     (DWORD64)Code, fn.EndAddress-fn.BeginAddress, 0)) {
             JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
         }
-#if defined(_CPU_X86_64_)
-        if (!RtlAddFunctionTable(tbl,1,(DWORD64)Code)) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
-        }
-#endif
     }
+#if defined(_CPU_X86_64_)
+    if (!RtlAddFunctionTable((PRUNTIME_FUNCTION)tbl,1,(DWORD64)Code)) {
+        static int warned = 0;
+        if (!warned) {
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
+            warned = 1;
+        }
+    }
+#endif
     jl_in_stackwalk = 0;
-    return &tbl[0];
+    return tbl;
 }
 #endif
 
@@ -114,7 +125,8 @@ public:
     {
 #if defined(_OS_WINDOWS_)
 
-        FuncInfo tmp = {&F, Size, std::string(), std::string(), get_IMAGE_RUNTIME_FUNCTION_ENTRY(Code, Size, F.getName()), Details.LineStarts};
+        FuncInfo tmp = {&F, Size, std::string(), std::string(),
+            get_IMAGE_RUNTIME_FUNCTION_ENTRY((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size), Details.LineStarts};
 #else
         FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
 #endif
@@ -131,9 +143,13 @@ public:
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
     {
         uint64_t Addr;
+        uint64_t Size;
         object::SymbolRef::Type SymbolType;
 #ifdef _OS_WINDOWS_
-       StringRef Name;
+        StringRef Name;
+        object::section_iterator Section = obj.begin_sections();
+        uint64_t SectionAddr;
+        uint64_t SectionSize;
 #endif
 
         #ifdef LLVM35
@@ -141,13 +157,17 @@ public:
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter.getAddress(Addr);
-            size_t Size = obj.getData().size();
+            sym_iter.getSize(Size);
 #ifdef _OS_WINDOWS_
             sym_iter.getName(Name);
+            sym_iter.getSection(Section);
+            Section->getAddress(SectionAddr);
+            Section->getSize(SectionSize);
 #endif
             ObjectInfo tmp = {obj.getObjectFile(), sym_iter, Size,
 #ifdef _OS_WINDOWS_
-               get_IMAGE_RUNTIME_FUNCTION_ENTRY((void*)(size_t)Addr, Size, Name),
+               get_IMAGE_RUNTIME_FUNCTION_ENTRY((uint8_t*)(size_t)Addr, Size, Name,
+                       (uint8_t*)(size_t)SectionAddr, SectionSize),
 #endif
             };
             objectmap[Addr] = tmp;
@@ -339,10 +359,10 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
            // correct debug symbol file).
            uint8_t uuid[16], uuid2[16];
 #ifdef LLVM36
-	   std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
-	   auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
-	        membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
+           std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
+                    StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+           auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
+                membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
 #elif LLVM35
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
                 StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
@@ -351,7 +371,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 buf, sys::fs::file_magic::unknown);
 #else
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-	        StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
@@ -557,6 +577,69 @@ void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserC
     }
     return NULL;
 }
+#if defined(_CPU_X86_64_)
+class RTDyldMemoryManagerWin : public RTDyldMemoryManager {
+public:
+  RTDyldMemoryManagerWin(RTDyldMemoryManager *MM)
+    : ClientMM(MM) {}
+
+  // Functions deferred to client memory manager
+  uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
+                               unsigned SectionID,
+                               StringRef SectionName) override {
+    uint8_t *mem = ClientMM->allocateCodeSection(Size+48, Alignment, SectionID, SectionName);
+    mem[Size] = 0;
+    return mem;
+  }
+
+  uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
+                               unsigned SectionID, StringRef SectionName,
+                               bool IsReadOnly) override {
+    return ClientMM->allocateDataSection(Size, Alignment,
+                                         SectionID, SectionName, IsReadOnly);
+  }
+
+  void reserveAllocationSpace(uintptr_t CodeSize, uintptr_t DataSizeRO,
+                              uintptr_t DataSizeRW) override {
+    return ClientMM->reserveAllocationSpace(CodeSize+48, DataSizeRO, DataSizeRW);
+  }
+
+  bool needsToReserveAllocationSpace() override {
+    return ClientMM->needsToReserveAllocationSpace();
+  }
+
+  void registerEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                        size_t Size) override {
+    ClientMM->registerEHFrames(Addr, LoadAddr, Size);
+  }
+
+  void deregisterEHFrames(uint8_t *Addr, uint64_t LoadAddr,
+                          size_t Size) override {
+    ClientMM->deregisterEHFrames(Addr, LoadAddr, Size);
+  }
+
+  uint64_t getSymbolAddress(const std::string &Name) override {
+    return ClientMM->getSymbolAddress(Name);
+  }
+
+  void notifyObjectLoaded(ExecutionEngine *EE,
+                          const ObjectImage *Obj) override {
+    ClientMM->notifyObjectLoaded(EE, Obj);
+  }
+
+  void *getPointerToNamedFunction(const std::string &Name,
+                                  bool AbortOnFailure = true) override {
+      return ClientMM->getPointerToNamedFunction(Name,AbortOnFailure);
+  }
+
+  bool finalizeMemory(std::string *ErrMsg = nullptr) override {
+    return ClientMM->finalizeMemory(ErrMsg);
+  }
+
+private:
+  std::unique_ptr<RTDyldMemoryManager> ClientMM;
+};
+#endif
 #else
 extern "C"
 void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
@@ -585,7 +668,13 @@ public:
   virtual void AllocateGOT() { JMM->AllocateGOT(); HasGOT = true; }
   virtual uint8_t *getGOTBase() const { return JMM->getGOTBase(); }
   virtual uint8_t *startFunctionBody(const Function *F,
-                                     uintptr_t &ActualSize) { ActualSize += 48; uint8_t *ret = JMM->startFunctionBody(F,ActualSize); ActualSize -= 48; return ret; }
+                                     uintptr_t &ActualSize) {
+      ActualSize += 48;
+      uint8_t *mem = JMM->startFunctionBody(F,ActualSize);
+      ActualSize -= 48;
+      mem[ActualSize] = 0;
+      return ret;
+  }
   virtual uint8_t *allocateStub(const GlobalValue* F, unsigned StubSize,
                                 unsigned Alignment)  { return JMM->allocateStub(F,StubSize,Alignment); }
   virtual void endFunctionBody(const Function *F, uint8_t *FunctionStart,
@@ -608,12 +697,22 @@ public:
 
 #ifdef LLVM35
   virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID, llvm::StringRef SectionName) { return JMM->allocateCodeSection(Size,Alignment,SectionID,SectionName); }
+                                       unsigned SectionID, llvm::StringRef SectionName) {
+    uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID, SectionName);
+    mem[Size] = 0;
+    return mem;
+  }
   virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly); }
+                                       unsigned SectionID, llvm::StringRef SectionName, bool IsReadOnly) {
+    return JMM->allocateDataSection(Size,Alignment,SectionID,SectionName,IsReadOnly);
+  }
 #else
   virtual uint8_t *allocateCodeSection(uintptr_t Size, unsigned Alignment,
-                                       unsigned SectionID) { return JMM->allocateCodeSection(Size,Alignment,SectionID); }
+                                       unsigned SectionID) {
+    uint8_t *mem = JMM->allocateCodeSection(Size+48, Alignment, SectionID);
+    mem[Size] = 0;
+    return mem;
+  }
   virtual uint8_t *allocateDataSection(uintptr_t Size, unsigned Alignment,
                                        unsigned SectionID, bool IsReadOnly) { return JMM->allocateDataSection(Size,Alignment,SectionID,IsReadOnly); }
 #endif
@@ -660,21 +759,21 @@ void write_log_data(logdata_t logData, const char *extension)
         std::string filename = (*it).first;
         std::vector<GlobalVariable*> &values = (*it).second;
         if (values.size() > 1) {
-	    if (filename[0] != '/')
-		filename = base + filename;
+            if (filename[0] != '/')
+            filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
-		std::string outfile = filename + extension;
+                std::string outfile = filename + extension;
                 std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
                 char line[1024];
                 int l = 1;
                 while (!inf.eof()) {
                     inf.getline(line, sizeof(line));
-		    if (inf.fail() && !inf.bad()) {
-			// Read through lines longer than sizeof(line)
-			inf.clear();
-			inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-		    }
+                    if (inf.fail() && !inf.bad()) {
+                        // Read through lines longer than sizeof(line)
+                        inf.clear();
+                        inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
+                    }
                     int value = -1;
                     if ((size_t)l < values.size()) {
                         GlobalVariable *gv = values[l];
@@ -711,7 +810,7 @@ static logdata_t mallocData;
 static void mallocVisitLine(std::string filename, int line)
 {
     if (filename == "" || filename == "none" || filename == "no file") {
-	sync_gc_total_bytes();
+        sync_gc_total_bytes();
         return;
     }
     logdata_t::iterator it = mallocData.find(filename);
@@ -723,7 +822,7 @@ static void mallocVisitLine(std::string filename, int line)
         vec.resize(line+1, NULL);
     if (vec[line] == NULL)
         vec[line] = new GlobalVariable(*jl_Module, T_int64, false,
-				       GlobalVariable::InternalLinkage,
+                                       GlobalVariable::InternalLinkage,
                                        ConstantInt::get(T_int64,0), "bytecnt");
     GlobalVariable *v = vec[line];
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
@@ -738,13 +837,13 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
     logdata_t::iterator it = mallocData.begin();
     for (; it != mallocData.end(); it++) {
         std::vector<GlobalVariable*> &bytes = (*it).second;
-	std::vector<GlobalVariable*>::iterator itb;
-	for (itb = bytes.begin(); itb != bytes.end(); itb++) {
-	    if (*itb) {
-		int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
-		*p = 0;
-	    }
-	}
+        std::vector<GlobalVariable*>::iterator itb;
+        for (itb = bytes.begin(); itb != bytes.end(); itb++) {
+            if (*itb) {
+            int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+            *p = 0;
+            }
+        }
     }
     sync_gc_total_bytes();
 }
