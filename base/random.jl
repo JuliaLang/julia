@@ -945,7 +945,18 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 
-@inline function randn(rng::MersenneTwister=GLOBAL_RNG, r::UInt64=rand_ui52(rng))
+@inline function randn(rng::MersenneTwister=GLOBAL_RNG)
+    @inbounds begin
+        r = rand_ui52(rng)
+        rabs = int64(r>>1) # One bit for the sign
+        idx = rabs & 0xFF
+        x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
+        rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+        return randn_unlikely(rng, idx, rabs, x)
+    end
+end
+
+@inline function randn(rng::MersenneTwister, r::UInt64)
     @inbounds begin
         rabs = int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
