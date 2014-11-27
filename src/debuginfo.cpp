@@ -37,8 +37,8 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
 {
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
-    DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
+    DWORD mod_size = 0;
     uint8_t *catchjmp = Section+Allocated;
     uint8_t *UnwindData = (uint8_t*)(((uintptr_t)catchjmp+12+3)&~(uintptr_t)3);
     if (!catchjmp[0]) {
@@ -60,7 +60,6 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
     }
 #else
     uint8_t *UnwindData = Section;
-    mod_size = Size;
 #endif
 #if defined(_CPU_X86_64_) and !defined(USE_MCJIT)
     PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)(UnwindData+12);
@@ -70,6 +69,7 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(intptr_t)(Code + Size - Section);
     tbl->UnwindInfoAddress = (DWORD)(intptr_t)(UnwindData - Section);
+#if defined(_CPU_X86_64_)
     if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
         catchjmp[0] = 0;
         static int warned = 0;
@@ -90,7 +90,6 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
             JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
         }
     }
-#if defined(_CPU_X86_64_)
     if (!RtlAddFunctionTable((PRUNTIME_FUNCTION)tbl,1,(DWORD64)Code)) {
         static int warned = 0;
         if (!warned) {
@@ -168,8 +167,9 @@ public:
 #endif
             ObjectInfo tmp = {obj.getObjectFile(), sym_iter, Size,
 #ifdef _OS_WINDOWS_
-               get_IMAGE_RUNTIME_FUNCTION_ENTRY((uint8_t*)(size_t)Addr, Size, Name,
-                       (uint8_t*)(size_t)SectionAddr, SectionSize),
+               get_IMAGE_RUNTIME_FUNCTION_ENTRY(
+                       (uint8_t*)(size_t)Addr, (size_t)Size, Name,
+                       (uint8_t*)(size_t)SectionAddr, (size_t)SectionSize),
 #endif
             };
             objectmap[Addr] = tmp;
