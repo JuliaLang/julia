@@ -519,6 +519,21 @@ static int frame_info_from_ip(
 }
 
 #if defined(_OS_WINDOWS_)
+//static PVOID CALLBACK JuliaFunctionTableAccess64(
+//        _In_  HANDLE hProcess,
+//        _In_  DWORD64 AddrBase)
+//{
+//    printf("lookup %d\n", AddrBase);
+//    return SymFunctionTableAccess64(hProcess, AddrBase);
+//}
+//static DWORD64 WINAPI JuliaGetModuleBase64(
+//        _In_  HANDLE hProcess,
+//        _In_  DWORD64 dwAddr)
+//{
+//    printf("lookup base %d\n", dwAddr);
+//    return SymGetModuleBase64(hProcess, dwAddr);
+//}
+
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
@@ -562,20 +577,15 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrFrame.Mode = AddrModeFlat;
 
     size_t n = 0;
-    intptr_t lastsp = stk.AddrStack.Offset;
+    jl_in_stackwalk = 1;
     while (n < maxsize) {
-        jl_in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
-        jl_in_stackwalk = 0;
         data[n++] = (intptr_t)stk.AddrPC.Offset;
-        intptr_t sp = (intptr_t)stk.AddrStack.Offset;
-        if (!result || sp == 0 ||
-            (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
-            stk.AddrReturn.Offset == 0)
+        if (!result)
             break;
-        lastsp = sp;
     }
+    jl_in_stackwalk = 0;
     return n;
 }
 #else
