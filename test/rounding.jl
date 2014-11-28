@@ -105,24 +105,22 @@ for v = [sqrt(2),-1/3,nextfloat(1.0),prevfloat(1.0),nextfloat(-1.0),
     @test pu - pd == eps(pz)
 end
 
-# TODO: add Uint128 check
-# Float vs Uint128 comparisons are currently broken, e.g. Inf32 == typemax(Uint128)
 for T in [Float32,Float64]
     for v in [sqrt(big(2.0)),-big(1.0)/big(3.0),nextfloat(big(1.0)),
               prevfloat(big(1.0)),nextfloat(big(0.0)),prevfloat(big(0.0)),
               pi,e,eulergamma,catalan,golden,
-              typemax(Int64),typemax(Uint64),typemax(Int128),0xa2f30f6001bb2ec6]
+              typemax(Int64),typemax(UInt64),typemax(Int128),typemax(UInt128),0xa2f30f6001bb2ec6]
         pn = T(v,RoundNearest)
-        @test pn == convert(T,v)
+        @test pn == convert(T,BigFloat(v))
         pz = T(v,RoundToZero)
-        @test pz == with_rounding(()->convert(T,v), BigFloat, RoundToZero)
+        @test pz == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundToZero)
         pd = T(v,RoundDown)
-        @test pd == with_rounding(()->convert(T,v), BigFloat, RoundDown)
+        @test pd == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundDown)
         pu = T(v,RoundUp)
-        @test pu == with_rounding(()->convert(T,v), BigFloat, RoundUp)
+        @test pu == with_rounding(()->convert(T,BigFloat(v)), BigFloat, RoundUp)
 
         @test pn == pd || pn == pu
         @test v > 0 ? pz == pd : pz == pu
-        @test pu - pd == eps(pz)
+        @test isinf(pu) || pu - pd == eps(pz)
     end
 end

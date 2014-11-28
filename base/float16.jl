@@ -102,8 +102,10 @@ convert(::Type{UInt128}, x::Float16) = convert(UInt128, float32(x))
 
 convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, float32(x))
 
-iround{T<:Integer}(::Type{T}, x::Float16) = iround(T, float32(x))
-itrunc{T<:Integer}(::Type{T}, x::Float16) = itrunc(T, float32(x))
+round{T<:Integer}(::Type{T}, x::Float16) = round(T, float32(x))
+trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, float32(x))
+floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, float32(x))
+ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, float32(x))
 
 round(x::Float16) = float16(round(float32(x)))
 trunc(x::Float16) = float16(trunc(float32(x)))

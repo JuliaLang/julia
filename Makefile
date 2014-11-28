@@ -151,13 +151,6 @@ $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
-run-julia-debug run-julia-release: run-julia-%:
-	$(MAKE) $(QUIET_MAKE) run-julia JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)"
-run-julia:
-	@$(call spawn,$(JULIA_EXECUTABLE))
-run:
-	@$(call spawn,$(cmd))
-
 $(build_bindir)/stringreplace: contrib/stringreplace.c | $(build_bindir)
 	@$(call PRINT_CC, $(CC) -o $(build_bindir)/stringreplace contrib/stringreplace.c)
 
@@ -350,8 +343,10 @@ ifeq ($(JULIA_CPU_TARGET), native)
 endif
 
 ifeq ($(OS), WINNT)
-	# If we are running on WINNT, also delete sys.dll until it stops causing issues (#8895, among others)
+ifeq ($(ARCH),x86_64)
+	# If we are running on WIN64, also delete sys.dll until we switch to llvm3.5+
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+endif
 
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \

@@ -33,7 +33,7 @@ function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = n
 end
 
 function init(n::Integer, delay::Float64)
-    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, iround(10^9*delay))
+    status = ccall(:jl_profile_init, Cint, (Csize_t, UInt64), n, round(UInt64,10^9*delay))
     if status == -1
         error("could not allocate space for ", n, " instruction pointers")
     end
@@ -245,8 +245,8 @@ function print_flat(io::IO, lilist::Vector{LineInfo}, n::Vector{Int}, combine::B
         wfile = maxfile
         wfunc = maxfunc
     else
-        wfile = ifloor(2*ntext/5)
-        wfunc = ifloor(3*ntext/5)
+        wfile = floor(Integer,2*ntext/5)
+        wfunc = floor(Integer,3*ntext/5)
     end
     println(io, lpad("Count", wcounts, " "), " ", rpad("File", wfile, " "), " ", rpad("Function", wfunc, " "), " ", lpad("Line", wline, " "))
     for i = 1:length(n)
@@ -280,12 +280,12 @@ end
 tree_format_linewidth(x::LineInfo) = ndigits(x.line)+6
 
 function tree_format(lilist::Vector{LineInfo}, counts::Vector{Int}, level::Int, cols::Integer)
-    nindent = min(ifloor(cols/2), level)
+    nindent = min(cols>>1, level)
     ndigcounts = ndigits(maximum(counts))
     ndigline = maximum([tree_format_linewidth(x) for x in lilist])
     ntext = cols-nindent-ndigcounts-ndigline-5
-    widthfile = ifloor(0.4ntext)
-    widthfunc = ifloor(0.6ntext)
+    widthfile = floor(Integer,0.4ntext)
+    widthfunc = floor(Integer,0.6ntext)
     strs = Array(ByteString, length(lilist))
     showextra = false
     if level > nindent

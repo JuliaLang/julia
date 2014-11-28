@@ -362,14 +362,14 @@ Rounding functions
 ============= ==================================  =================
 Function      Description                         Return type
 ============= ==================================  =================
-``round(x)``  round ``x`` to the nearest integer  ``FloatingPoint``
-``iround(x)`` round ``x`` to the nearest integer  ``Integer``
-``floor(x)``  round ``x`` towards ``-Inf``        ``FloatingPoint``
-``ifloor(x)`` round ``x`` towards ``-Inf``        ``Integer``
-``ceil(x)``   round ``x`` towards ``+Inf``        ``FloatingPoint``
-``iceil(x)``  round ``x`` towards ``+Inf``        ``Integer``
-``trunc(x)``  round ``x`` towards zero            ``FloatingPoint``
-``itrunc(x)`` round ``x`` towards zero            ``Integer``
+``round(x)``  round ``x`` to the nearest integer  ``typeof(x)``
+``round(T, x)`` round ``x`` to the nearest integer  ``T``
+``floor(x)``  round ``x`` towards ``-Inf``        ``typeof(x)``
+``floor(T, x)`` round ``x`` towards ``-Inf``        ``T``
+``ceil(x)``   round ``x`` towards ``+Inf``        ``typeof(x)``
+``ceil(T, x)``  round ``x`` towards ``+Inf``        ``T``
+``trunc(x)``  round ``x`` towards zero            ``typeof(x)``
+``trunc(T, x)`` round ``x`` towards zero            ``T``
 ============= ==================================  =================
 
 Division functions

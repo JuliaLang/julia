@@ -232,13 +232,13 @@ Then run ```port install wine wget``` or ```brew install wine wget```, as approp
 
 On Both:
 
-Unfortunately, the version of gcc installed by Ubuntu is currently 4.6, which does not compile OpenBLAS correctly.
-On Mac, the situation is the same: the version in MacPorts is very old and Homebrew does not have it.
+Unfortunately, the version of gcc installed by Ubuntu targets pthreads.
+On Mac, the situation is similar: the version in MacPorts is very old and Homebrew does not have it.
 So first we need to get a cross-compile version of gcc.
 Most binary packages appear to not include gfortran, so we will need to compile it from source (or ask @vtjnash to send you a tgz of his build).
-This is typically quite a bit of work, so we will use [this script](https://code.google.com/p/mingw-w64-dgn/) to make it easy.
+This is typically quite a bit of work, so we will use [this script](http://sourceforge.net/projects/mingw-w64-dgn/) to make it easy.
 
-1. `svn checkout http://mingw-w64-dgn.googlecode.com/svn/trunk/ mingw-w64-dgn`
+1. `svn checkout svn checkout svn://svn.code.sf.net/p/mingw-w64-dgn/code/trunk mingw-w64-dgn-code`
 2. `cd mingw-w64-dgn`
 3. edit `rebuild_cross.sh` and make the following two changes:
   a. uncomment `export MAKE_OPT="-j 2"`, if appropriate for your machine

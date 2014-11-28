@@ -85,3 +85,10 @@ end
 
 log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
 log(::MathConst{:e}, x) = log(x)
+
+#Align along = for nice Array printing
+function alignment(x::MathConst)
+    m = match(r"^(.*?)(=.*)$", sprint(showcompact_lim, x))
+    m == nothing ? (length(sprint(showcompact_lim, x)), 0) :
+    (length(m.captures[1]), length(m.captures[2]))
+end

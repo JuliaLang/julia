@@ -250,7 +250,7 @@ function start_watching(t::PollingFileWatcher, interval)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
              ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{UInt8},UInt32),
-                   t.handle, t.file, iround(interval*1000)))
+                   t.handle, t.file, round(UInt32,interval*1000)))
 end
 start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
 

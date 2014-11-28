@@ -4508,63 +4508,63 @@ popdisplay(d::Display)
 
 "),
 
-("Base","round","round(x[, digits[, base]])
+("Base","round","round([T], x[, digits[, base]])
 
    \"round(x)\" returns the nearest integral value of the same type as
-   \"x\" to \"x\". \"round(x, digits)\" rounds to the specified number
-   of digits after the decimal place, or before if negative, e.g.,
-   \"round(pi,2)\" is \"3.14\". \"round(x, digits, base)\" rounds
-   using a different base, defaulting to 10, e.g., \"round(pi, 1, 8)\"
-   is \"3.125\".
+   \"x\" to \"x\", breaking ties by rounding away from zero.
+
+   \"round(T, x)\" converts the result to type \"T\", throwing an
+   \"InexactError\" if the value is not representable.
+
+   \"round(x, digits)\" rounds to the specified number of digits after
+   the decimal place, or before if negative, e.g., \"round(pi,2)\" is
+   \"3.14\". \"round(x, digits, base)\" rounds using a different base,
+   defaulting to 10, e.g., \"round(pi, 1, 8)\" is \"3.125\".
 
 "),
 
-("Base","ceil","ceil(x[, digits[, base]])
+("Base","ceil","ceil([T], x[, digits[, base]])
 
-   Returns the nearest integral value of the same type as \"x\" not
-   less than \"x\". \"digits\" and \"base\" work as above.
+   \"ceil(x)\" returns the nearest integral value of the same type as
+   \"x\" that is greater than or equal to \"x\".
 
-"),
+   \"ceil(T, x)\" converts the result to type \"T\", throwing an
+   \"InexactError\" if the value is not representable.
 
-("Base","floor","floor(x[, digits[, base]])
-
-   Returns the nearest integral value of the same type as \"x\" not
-   greater than \"x\". \"digits\" and \"base\" work as above.
+   \"digits\" and \"base\" work as for \"round\".
 
 "),
 
-("Base","trunc","trunc(x[, digits[, base]])
+("Base","floor","floor([T], x[, digits[, base]])
 
-   Returns the nearest integral value of the same type as \"x\" not
-   greater in magnitude than \"x\". \"digits\" and \"base\" work as
-   above.
+   \"floor(x)\" returns the nearest integral value of the same type as
+   \"x\" that is less than or equal to \"x\".
 
-"),
+   \"floor(T, x)\" converts the result to type \"T\", throwing an
+   \"InexactError\" if the value is not representable.
 
-("Base","iround","iround([T], x) -> Integer
-
-   Returns the nearest integer to \"x\", converted to an integer type,
-   optionally passed as the first argument.
+   \"digits\" and \"base\" work as above.
 
 "),
 
-("Base","iceil","iceil(x) -> Integer
+("Base","trunc","trunc([T], x[, digits[, base]])
 
-   Returns the nearest integer not less than \"x\".
+   \"trunc(x)\" returns the nearest integral value of the same type as
+   \"x\" whose absolute value is less than or equal to \"x\".
+
+   \"trunc(T, x)\" converts the result to type \"T\", throwing an
+   \"InexactError\" if the value is not representable.
+
+   \"digits\" and \"base\" work as above.
 
 "),
 
-("Base","ifloor","ifloor(x) -> Integer
+("Base","unsafe_trunc","unsafe_trunc(T, x)
 
-   Returns the nearest integer not greater than \"x\".
-
-"),
-
-("Base","itrunc","itrunc([T], x) -> Integer
-
-   Returns the nearest integer not greater in magnitude than \"x\",
-   converted to an integer type, optionally passed as the first
-   argument.
+   \"unsafe_trunc(T, x)\" returns the nearest integral value of type
+   \"T\" whose absolute value is less than or equal to \"x\". If the
+   value is not representable by \"T\", an arbitrary value will be
+   returned.
 
 "),
 
@@ -5854,16 +5854,13 @@ popdisplay(d::Display)
 
 "),
 
-("Base","rand!","rand!([rng], A)
+("Base","rand!","rand!([rng], A[, coll])
 
-   Populate the array A with random values.
-
-"),
-
-("Base","rand!","rand!([rng], r, A)
-
-   Populate the array A with random values drawn uniformly from the
-   range \"r\".
+   Populate the array A with random values. If the indexable
+   collection \"coll\" is specified, the values are picked randomly
+   from \"coll\". This is equivalent to \"copy!(A, rand(rng, coll,
+   size(A)))\" or \"copy!(A, rand(rng, eltype(A), size(A)))\" but
+   without allocating a new array.
 
 "),
 
@@ -5910,6 +5907,35 @@ popdisplay(d::Display)
 ("Base","length","length(A) -> Integer
 
    Returns the number of elements in A
+
+"),
+
+("Base","eachindex","eachindex(A)
+
+   Creates an iterable object for visiting each multi-dimensional
+   index of the AbstractArray \"A\".  Example for a 2-d array:
+
+      julia> A = rand(2,3)
+      2x3 Array{Float64,2}:
+       0.960084  0.629326  0.625155
+       0.432588  0.955903  0.991614
+
+      julia> for iter in eachindex(A)
+                 @show iter.I_1, iter.I_2
+                 @show A[iter]
+             end
+      (iter.I_1,iter.I_2) = (1,1)
+      A[iter] = 0.9600836263003063
+      (iter.I_1,iter.I_2) = (2,1)
+      A[iter] = 0.4325878255452178
+      (iter.I_1,iter.I_2) = (1,2)
+      A[iter] = 0.6293256402775211
+      (iter.I_1,iter.I_2) = (2,2)
+      A[iter] = 0.9559027084099654
+      (iter.I_1,iter.I_2) = (1,3)
+      A[iter] = 0.6251548453735303
+      (iter.I_1,iter.I_2) = (2,3)
+      A[iter] = 0.9916142534546522
 
 "),
 

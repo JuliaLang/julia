@@ -88,18 +88,6 @@ for (fname, elty) in ((:dscal_,:Float64),
     end
 end
 scal(n, DA, DX, incx) = scal!(n, DA, copy(DX), incx)
-# In case DX is complex, and DA is real, use dscal/sscal to save flops
-#for (fname, elty, celty) in ((:sscal_, :Float32, :Complex64),
-#                             (:dscal_, :Float64, :Complex128))
-#    @eval begin
-#        function scal!(n::Integer, DA::$elty, DX::Union(Ptr{$celty},StridedArray{$celty}), incx::Integer)
-#            ccall(($(blasfunc(fname)), libblas), Void,
-#                  (Ptr{BlasInt}, Ptr{$elty}, Ptr{$celty}, Ptr{BlasInt}),
-#                  &(2*n), &DA, DX, &incx)
-#            DX
-#        end
-#    end
-#end
 
 ## dot
 for (fname, elty) in ((:ddot_,:Float64),
@@ -111,7 +99,7 @@ for (fname, elty) in ((:ddot_,:Float64),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dot(n::Integer, DX::Union(Ptr{$elty},StridedArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},StridedArray{$elty}), incy::Integer)
+        function dot(n::Integer, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},DenseArray{$elty}), incy::Integer)
             ccall(($(blasfunc(fname)), libblas), $elty,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, DX, &incx, DY, &incy)
@@ -127,7 +115,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dotc(n::Integer, DX::Union(Ptr{$elty},StridedArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},StridedArray{$elty}), incy::Integer)
+        function dotc(n::Integer, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},DenseArray{$elty}), incy::Integer)
             result = Array($elty, 1)
             ccall(($(blasfunc(fname)), libblas), $elty,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
@@ -145,7 +133,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 # *     ..
                 # *     .. Array Arguments ..
                 #       DOUBLE PRECISION DX(*),DY(*)
-        function dotu(n::Integer, DX::Union(Ptr{$elty},StridedArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},StridedArray{$elty}), incy::Integer)
+        function dotu(n::Integer, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},DenseArray{$elty}), incy::Integer)
             result = Array($elty, 1)
             ccall(($(blasfunc(fname)), libblas), $elty,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
@@ -154,20 +142,20 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
         end
     end
 end
-function dot{T<:BlasReal}(DX::StridedArray{T}, DY::StridedArray{T})
+function dot{T<:BlasReal}(DX::Union(DenseArray{T},StridedVector{T}), DY::Union(DenseArray{T},StridedVector{T}))
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    dot(n, DX, stride(DX, 1), DY, stride(DY, 1))
+    dot(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotc{T<:BlasComplex}(DX::StridedArray{T}, DY::StridedArray{T})
+function dotc{T<:BlasComplex}(DX::Union(DenseArray{T},StridedVector{T}), DY::Union(DenseArray{T},StridedVector{T}))
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    dotc(n, DX, stride(DX, 1), DY, stride(DY, 1))
+    dotc(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
-function dotu{T<:BlasComplex}(DX::StridedArray{T}, DY::StridedArray{T})
+function dotu{T<:BlasComplex}(DX::Union(DenseArray{T},StridedVector{T}), DY::Union(DenseArray{T},StridedVector{T}))
     n = length(DX)
     n == length(DY) || throw(DimensionMismatch("dot product arguments have lengths $(length(DX)) and $(length(DY))"))
-    dotu(n, DX, stride(DX, 1), DY, stride(DY, 1))
+    dotu(n, pointer(DX), stride(DX, 1), pointer(DY), stride(DY, 1))
 end
 
 ## nrm2
@@ -177,14 +165,14 @@ for (fname, elty, ret_type) in ((:dnrm2_,:Float64,:Float64),
                                 (:scnrm2_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE DNRM2(N,X,INCX)
-        function nrm2(n::Integer, X::Union(Ptr{$elty},StridedVector{$elty}), incx::Integer)
+        function nrm2(n::Integer, X::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer)
             ccall(($(blasfunc(fname)), libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
     end
 end
-nrm2(x::StridedVector) = nrm2(length(x), x, stride(x,1))
+nrm2(x::StridedVector) = nrm2(length(x), pointer(x), stride(x,1))
 nrm2(x::Array) = nrm2(length(x), pointer(x), 1)
 
 ## asum
@@ -194,14 +182,14 @@ for (fname, elty, ret_type) in ((:dasum_,:Float64,:Float64),
                                 (:scasum_,:Complex64,:Float32))
     @eval begin
         # SUBROUTINE ASUM(N, X, INCX)
-        function asum(n::Integer, X::Union(Ptr{$elty},StridedVector{$elty}), incx::Integer)
+        function asum(n::Integer, X::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer)
             ccall(($(blasfunc(fname)), libblas), $ret_type,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, X, &incx)
         end
     end
 end
-asum(x::StridedVector) = asum(length(x), x, stride(x,1))
+asum(x::StridedVector) = asum(length(x), pointer(x), stride(x,1))
 asum(x::Array) = asum(length(x), pointer(x), 1)
 
 ## axpy
@@ -217,7 +205,7 @@ for (fname, elty) in ((:daxpy_,:Float64),
                 #      INTEGER INCX,INCY,N
                 #*     .. Array Arguments ..
                 #      DOUBLE PRECISION DX(*),DY(*)
-        function axpy!(n::Integer, alpha::($elty), dx::Union(Ptr{$elty}, StridedArray{$elty}), incx::Integer, dy::Union(Ptr{$elty}, StridedArray{$elty}), incy::Integer)
+        function axpy!(n::Integer, alpha::($elty), dx::Union(Ptr{$elty}, DenseArray{$elty}), incx::Integer, dy::Union(Ptr{$elty}, DenseArray{$elty}), incy::Integer)
             ccall(($(blasfunc(fname)), libblas), Void,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                  &n, &alpha, dx, &incx, dy, &incy)
@@ -225,9 +213,10 @@ for (fname, elty) in ((:daxpy_,:Float64),
         end
     end
 end
-function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::StridedArray{T}, y::StridedArray{T})
+function axpy!{T<:BlasFloat,Ta<:Number}(alpha::Ta, x::Union(DenseArray{T},StridedVector{T}), y::Union(DenseArray{T},StridedVector{T}))
     length(x) == length(y) || throw(DimensionMismatch("x has length $length(x), but y has length $length(y)"))
-    axpy!(length(x), convert(T,alpha), x, stride(x, 1), y, stride(y, 1))
+    axpy!(length(x), convert(T,alpha), pointer(x), stride(x, 1), pointer(y), stride(y, 1))
+    y
 end
 
 function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(UnitRange{Ti},Range{Ti}),
@@ -248,14 +237,15 @@ for (fname, elty) in ((:idamax_,:Float64),
                       (:izamax_,:Complex128),
                       (:icamax_,:Complex64))
     @eval begin
-        function iamax(n::BlasInt, dx::Union(StridedVector{$elty}, Ptr{$elty}), incx::BlasInt)
+        function iamax(n::Integer, dx::Union(Ptr{$elty}, DenseArray{$elty}), incx::Integer)
             ccall(($(blasfunc(fname)), libblas),BlasInt,
                 (Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &n, dx, &incx)
         end
     end
 end
-iamax(dx::StridedVector) = iamax(length(dx), dx, 1)
+iamax(dx::StridedVector) = iamax(length(dx), pointer(dx), stride(dx,1))
+iamax(dx::Array) = iamax(length(dx), pointer(dx), 1)
 
 # Level 2
 ## mv

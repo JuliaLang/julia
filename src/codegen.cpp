@@ -3598,6 +3598,11 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             AttributeSet::FunctionIndex,*attr));
 #endif
 #endif
+
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && LLVM35
+    f->setHasUWTable(); // force NeedsWinEH
+#endif
+
 #ifdef JL_DEBUG_BUILD
 #if LLVM32 && !LLVM33
     f->addFnAttr(Attributes::StackProtectReq);
@@ -4779,8 +4784,12 @@ extern "C" void jl_init_codegen(void)
     EngineBuilder eb = EngineBuilder(engine_module);
 #endif
     eb  .setEngineKind(EngineKind::JIT)
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+#if defined(USE_MCJIT)
+        .setMCJITMemoryManager(new RTDyldMemoryManagerWin(new SectionMemoryManager()))
+#else
         .setJITMemoryManager(new JITMemoryManagerWin())
+#endif
 #endif
         .setTargetOptions(options)
 #if defined(USE_MCJIT) && !defined(LLVM36)
