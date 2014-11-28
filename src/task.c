@@ -525,7 +525,6 @@ static UNWIND_HISTORY_TABLE HistoryTable;
 static struct {
     DWORD64 dwAddr;
     DWORD64 ImageBase;
-    PFPO_DATA fn;
 } HistoryTable;
 #endif
 static PVOID CALLBACK JuliaFunctionTableAccess64(
@@ -537,16 +536,6 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn) return fn;
-#else
-    if (AddrBase == HistoryTable.dwAddr) return HistoryTable.fn;
-    PFPO_DATA fn = jl_getUnwindInfo(AddrBase, &ImageBase);
-    if (fn) {
-        HistoryTable.dwAddr = AddrBase;
-        HistoryTable.ImageBase = ImageBase;
-        HistoryTable.fn = fn;
-        //return fn;
-        return 0;
-    }
 #endif
     return SymFunctionTableAccess64(hProcess, AddrBase);
 }
@@ -555,17 +544,16 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  DWORD64 dwAddr)
 {
     //printf("lookup base %d\n", dwAddr);
-    DWORD64 ImageBase;
 #ifdef _CPU_X86_64_
+    DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn) return ImageBase;
 #else
     if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
-    PFPO_DATA fn = jl_getUnwindInfo(dwAddr, &ImageBase);
-    if (fn) {
+    DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
+    if (ImageBase) {
         HistoryTable.dwAddr = dwAddr;
         HistoryTable.ImageBase = ImageBase;
-        HistoryTable.fn = fn;
         return ImageBase;
     }
 #endif
