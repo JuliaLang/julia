@@ -108,6 +108,7 @@ const char *SymbolTable::lookupSymbol(uint64_t addr)
     return TempName.c_str();
 }
 
+#ifndef USE_MCJIT // otherwise unused
 const char *SymbolLookup(void *DisInfo,
                          uint64_t ReferenceValue,
                          uint64_t *ReferenceType,
@@ -128,6 +129,7 @@ const char *SymbolLookup(void *DisInfo,
     *ReferenceName = NULL;
     return NULL;
 }
+#endif
 
 extern "C" void jl_getFunctionInfo
   (const char **name, size_t *line, const char **filename, uintptr_t pointer,
