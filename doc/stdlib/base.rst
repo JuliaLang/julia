@@ -406,6 +406,7 @@ Types
 .. function:: isimmutable(v)
 
    True if value ``v`` is immutable.  See :ref:`man-immutable-composite-types` for a discussion of immutability.
+   Note that this function works on values, so if you give it a type, it will tell you that a value of ``DataType`` is mutable.
 
 .. function:: isbits(T)
 
