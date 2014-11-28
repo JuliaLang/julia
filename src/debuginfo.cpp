@@ -12,7 +12,7 @@ struct FuncInfo {
     std::string filename;
 #if defined(_OS_WINDOWS_)
 #ifndef _CPU_X86_64_
-    PRUNTIME_FUNCTION fnentry; // assumed equivalent to PIMAGE_RUNTIME_FUNCTION_ENTRY
+    PFPO_DATA fnentry;
     void *modulebase;
 #endif
 #endif
@@ -25,7 +25,7 @@ struct ObjectInfo {
     size_t size;
 #if defined(_OS_WINDOWS_)
 #ifndef _CPU_X86_64_
-    PRUNTIME_FUNCTION fnentry; // assumed equivalent to PIMAGE_RUNTIME_FUNCTION_ENTRY
+    PFPO_DATA fnentry;
     void *modulebase;
 #endif
 #endif
@@ -38,13 +38,13 @@ extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD Except
 #endif
 #include <dbghelp.h>
 extern "C" volatile int jl_in_stackwalk;
-static PRUNTIME_FUNCTION create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
+static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated)
 {
     assert(!jl_in_stackwalk);
     jl_in_stackwalk = 1;
-#if defined(_CPU_X86_64_)
     DWORD mod_size = 0;
+#if defined(_CPU_X86_64_)
     uint8_t *catchjmp = Section+Allocated;
     uint8_t *UnwindData = (uint8_t*)(((uintptr_t)catchjmp+12+3)&~(uintptr_t)3);
     if (!catchjmp[0]) {
@@ -64,10 +64,7 @@ static PRUNTIME_FUNCTION create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, St
         *(DWORD*)&UnwindData[8] = (DWORD)Allocated; // relative location of catchjmp
         mod_size = (DWORD)Allocated+48;
     }
-#else
-    uint8_t *UnwindData = Section;
-#endif
-#if defined(_CPU_X86_64_) and !defined(USE_MCJIT)
+#if !defined(USE_MCJIT)
     PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)(UnwindData+12);
 #else
     PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
@@ -75,9 +72,26 @@ static PRUNTIME_FUNCTION create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, St
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(intptr_t)(Code + Size - Section);
     tbl->UnwindData = (DWORD)(intptr_t)(UnwindData - Section);
+#else // defined(_CPU_X86_64_)
+    Section = Code;
+    mod_size = Size;
+    PFPO_DATA tbl = (PFPO_DATA)malloc(sizeof(FPO_DATA));
+    tbl->ulOffStart = 0;
+    tbl->cbProcSize = Size;
+    tbl->cdwLocals = 0;
+    tbl->cdwParams = 0;
+    tbl->cbProlog = 3;
+    tbl->cbRegs = 0;
+    tbl->fHasSEH = 0;
+    tbl->fUseBP = 1;
+    tbl->reserved = 0;
+    tbl->cbFrame = FRAME_FPO;
+#endif
     if (0) {
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+#if defined(_CPU_X86_64_)
             catchjmp[0] = 0;
+#endif
             static int warned = 0;
             if (!warned) {
                 JL_PRINTF(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
@@ -134,7 +148,7 @@ public:
     {
 #if defined(_OS_WINDOWS_)
 #if not defined(_CPU_X86_64_)
-        PRUNTIME_FUNCTION fninfo =
+        PFPO_DATA fninfo = (PFPO_DATA)
 #endif
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size);
 #endif
@@ -177,13 +191,13 @@ public:
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
 #if not defined(_CPU_X86_64_)
-            PRUNTIME_FUNCTION fninfo =
+            PFPO_DATA fninfo = (PFPO_DATA)
 #endif
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, Name,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize);
 #endif
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, Size,
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, (size_t)Size,
 #if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
                 fninfo, (uint8_t*)(intptr_t)SectionAddr,
 #endif
@@ -649,21 +663,12 @@ private:
 };
 #else
 extern "C"
-PRUNTIME_FUNCTION jl_getUnwindInfo(ULONG64 AddrBase)
+PFPO_DATA jl_getUnwindInfo(ULONG64 AddrBase)
 { // SymRegisterFunctionEntryCallbackProc64
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
     if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
-        return (void*)(*it).second.fnentry;
-    }
-    return NULL;
-}
-void *jl_getUnwindInfoBase(ULONG64 AddrBase)
-{
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
-    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
-        return (void*)(*it).second.modulebase;
+        return (*it).second.fnentry;
     }
     return NULL;
 }
@@ -743,22 +748,12 @@ public:
 };
 #else
 extern "C"
-PRUNTIME_FUNCTION jl_getUnwindInfo(ULONG64 AddrBase)
+PFPO_DATA jl_getUnwindInfo(ULONG64 AddrBase)
 { // SymRegisterFunctionEntryCallbackProc64
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
     if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
-        return (void*)(*it).second.fnentry;
-    }
-    return NULL;
-}
-extern "C"
-void *jl_getUnwindInfoBase(ULONG64 AddrBase)
-{
-    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
-    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
-    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
-        return (void*)(*it).second.modulebase;
+        return (*it).second.fnentry;
     }
     return NULL;
 }
