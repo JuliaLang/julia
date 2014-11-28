@@ -519,20 +519,38 @@ static int frame_info_from_ip(
 }
 
 #if defined(_OS_WINDOWS_)
-//static PVOID CALLBACK JuliaFunctionTableAccess64(
-//        _In_  HANDLE hProcess,
-//        _In_  DWORD64 AddrBase)
-//{
-//    printf("lookup %d\n", AddrBase);
-//    return SymFunctionTableAccess64(hProcess, AddrBase);
-//}
-//static DWORD64 WINAPI JuliaGetModuleBase64(
-//        _In_  HANDLE hProcess,
-//        _In_  DWORD64 dwAddr)
-//{
-//    printf("lookup base %d\n", dwAddr);
-//    return SymGetModuleBase64(hProcess, dwAddr);
-//}
+#ifdef _CPU_X86_64_
+static UNWIND_HISTORY_TABLE HistoryTable;
+#endif
+static PVOID CALLBACK JuliaFunctionTableAccess64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 AddrBase)
+{
+    //printf("lookup %d\n", AddrBase);
+#ifdef _CPU_X86_64_
+    DWORD64 ImageBase;
+    PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
+    if (fn) return fn;
+#else
+    //PRUNTIME_FUNCTION fn = jl_getUnwindInfo(dwAddr);
+#endif
+    return SymFunctionTableAccess64(hProcess, AddrBase);
+}
+static DWORD64 WINAPI JuliaGetModuleBase64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 dwAddr)
+{
+    //printf("lookup base %d\n", dwAddr);
+#ifdef _CPU_X86_64_
+    DWORD64 ImageBase;
+    PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
+    if (fn) return ImageBase;
+#else
+    void *base = jl_getUnwindInfoBase(dwAddr);
+    if (base) return (DWORD64)(intptr_t)base;
+#endif
+    return SymGetModuleBase64(hProcess, dwAddr);
+}
 
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
@@ -580,7 +598,7 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     jl_in_stackwalk = 1;
     while (n < maxsize) {
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
-            &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
+            &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
         data[n++] = (intptr_t)stk.AddrPC.Offset;
         if (!result)
             break;

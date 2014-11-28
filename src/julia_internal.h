@@ -106,6 +106,8 @@ void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 #ifdef _OS_WINDOWS_
 extern volatile HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
+PRUNTIME_FUNCTION jl_getUnwindInfo(ULONG64 AddrBase);
+void* jl_getUnwindInfoBase(ULONG64 AddrBase);
 #else
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>
