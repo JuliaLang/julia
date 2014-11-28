@@ -74,7 +74,7 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
         catchjmp[0] = 0;
         static int warned = 0;
         if (!warned) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function info for backtrace\n");
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
             warned = 1;
         }
     }
@@ -87,13 +87,13 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
         name[len-1] = 0;
         if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
                     (DWORD64)Code, (DWORD)Size, 0)) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name into debug info\n");
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
         }
     }
-    if (!RtlAddFunctionTable((PRUNTIME_FUNCTION)tbl,1,(DWORD64)Code)) {
+    if (!RtlAddFunctionTable((PRUNTIME_FUNCTION)tbl,1,(DWORD64)Section)) {
         static int warned = 0;
         if (!warned) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info\n");
+            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info: %d\n", GetLastError());
             warned = 1;
         }
     }
@@ -674,13 +674,15 @@ public:
       ActualSize += 48;
       uint8_t *mem = JMM->startFunctionBody(F,ActualSize);
       ActualSize -= 48;
-      mem[ActualSize] = 0;
-      return ret;
+      return mem;
   }
   virtual uint8_t *allocateStub(const GlobalValue* F, unsigned StubSize,
                                 unsigned Alignment)  { return JMM->allocateStub(F,StubSize,Alignment); }
   virtual void endFunctionBody(const Function *F, uint8_t *FunctionStart,
-                               uint8_t *FunctionEnd) { return JMM->endFunctionBody(F,FunctionStart,FunctionEnd+48); }
+                               uint8_t *FunctionEnd) {
+      FunctionEnd[0] = 0;
+      JMM->endFunctionBody(F,FunctionStart,FunctionEnd+48);
+  }
   virtual uint8_t *allocateSpace(intptr_t Size, unsigned Alignment) { return JMM->allocateSpace(Size,Alignment); }
   virtual uint8_t *allocateGlobal(uintptr_t Size, unsigned Alignment) { return JMM->allocateGlobal(Size,Alignment); }
   virtual void deallocateFunctionBody(void *Body) { return JMM->deallocateFunctionBody(Body); }
