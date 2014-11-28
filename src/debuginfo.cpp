@@ -152,7 +152,7 @@ public:
 #endif
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size);
 #endif
-        FuncInfo tmp = {&F, Size, F.getName.str(), std::string(),
+        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(),
 #if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
             fninfo, Code,
 #endif
