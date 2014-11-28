@@ -532,7 +532,8 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn) return fn;
 #else
-    //PRUNTIME_FUNCTION fn = jl_getUnwindInfo(dwAddr);
+    PFPO_DATA fn = jl_getUnwindInfo(AddrBase);
+    if (fn) return fn;
 #endif
     return SymFunctionTableAccess64(hProcess, AddrBase);
 }
@@ -543,11 +544,11 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     //printf("lookup base %d\n", dwAddr);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
-    PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
+    PFPO_DATA fn = jl_getUnwindInfo(dwAddr, &ImageBase);
     if (fn) return ImageBase;
 #else
-    void *base = jl_getUnwindInfoBase(dwAddr);
-    if (base) return (DWORD64)(intptr_t)base;
+    //void *base = jl_getUnwindInfo(AddrBase);
+    //if (base) return base;
 #endif
     return SymGetModuleBase64(hProcess, dwAddr);
 }
