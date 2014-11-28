@@ -231,3 +231,7 @@ const Uint128 = UInt128
 
 @deprecate rand!(r::Range, A::AbstractArray) rand!(A, r)
 @deprecate rand!(mt::MersenneTwister, r::Range, A::AbstractArray) rand!(mt, A, r)
+
+export Base64Pipe, base64
+const Base64Pipe = Base64EncodePipe
+const base64 = base64encode

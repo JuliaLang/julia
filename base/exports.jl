@@ -804,10 +804,8 @@ export
 # strings and text output
     ascii,
     base,
-    base64,
     base64encode,
     base64decode,
-    Base64Pipe,
     Base64EncodePipe,
     Base64DecodePipe,
     beginswith,
