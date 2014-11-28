@@ -5,13 +5,16 @@ typedef object::SymbolRef SymRef;
 // --- storing and accessing source location metadata ---
 
 #ifndef USE_MCJIT
-struct FuncInfo{
+struct FuncInfo {
     const Function* func;
     size_t lengthAdr;
     std::string name;
     std::string filename;
 #if defined(_OS_WINDOWS_)
-    PIMAGE_RUNTIME_FUNCTION_ENTRY fnentry; // assumed equivalent to PIMAGE_FUNCTION_ENTRY
+#ifndef _CPU_X86_64_
+    PRUNTIME_FUNCTION fnentry; // assumed equivalent to PIMAGE_RUNTIME_FUNCTION_ENTRY
+    void *modulebase;
+#endif
 #endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
@@ -21,7 +24,10 @@ struct ObjectInfo {
     object::SymbolRef symref;
     size_t size;
 #if defined(_OS_WINDOWS_)
-    PIMAGE_RUNTIME_FUNCTION_ENTRY fnentry; // assumed equivalent to PIMAGE_FUNCTION_ENTRY
+#ifndef _CPU_X86_64_
+    PRUNTIME_FUNCTION fnentry; // assumed equivalent to PIMAGE_RUNTIME_FUNCTION_ENTRY
+    void *modulebase;
+#endif
 #endif
 };
 #endif
@@ -32,7 +38,7 @@ extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD Except
 #endif
 #include <dbghelp.h>
 extern "C" volatile int jl_in_stackwalk;
-static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *Code, size_t Size, StringRef fnname,
+static PRUNTIME_FUNCTION create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated)
 {
     assert(!jl_in_stackwalk);
@@ -62,35 +68,37 @@ static PIMAGE_RUNTIME_FUNCTION_ENTRY get_IMAGE_RUNTIME_FUNCTION_ENTRY(uint8_t *C
     uint8_t *UnwindData = Section;
 #endif
 #if defined(_CPU_X86_64_) and !defined(USE_MCJIT)
-    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)(UnwindData+12);
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)(UnwindData+12);
 #else
-    PIMAGE_RUNTIME_FUNCTION_ENTRY tbl = (PIMAGE_RUNTIME_FUNCTION_ENTRY)malloc(sizeof(IMAGE_RUNTIME_FUNCTION_ENTRY));
+    PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
 #endif
     tbl->BeginAddress = (DWORD)(Code - Section);
     tbl->EndAddress = (DWORD)(intptr_t)(Code + Size - Section);
-    tbl->UnwindInfoAddress = (DWORD)(intptr_t)(UnwindData - Section);
+    tbl->UnwindData = (DWORD)(intptr_t)(UnwindData - Section);
+    if (0) {
+        if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
+            catchjmp[0] = 0;
+            static int warned = 0;
+            if (!warned) {
+                JL_PRINTF(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
+                warned = 1;
+            }
+        }
+        else {
+            size_t len = fnname.size()+1;
+            if (len > MAX_SYM_NAME)
+                len = MAX_SYM_NAME;
+            char *name = (char*)alloca(len);
+            memcpy(name, fnname.data(), len-1);
+            name[len-1] = 0;
+            if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
+                        (DWORD64)Code, (DWORD)Size, 0)) {
+                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
+            }
+        }
+    }
 #if defined(_CPU_X86_64_)
-    if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
-        catchjmp[0] = 0;
-        static int warned = 0;
-        if (!warned) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
-            warned = 1;
-        }
-    }
-    else {
-        size_t len = fnname.size()+1;
-        if (len > MAX_SYM_NAME)
-            len = MAX_SYM_NAME;
-        char *name = (char*)alloca(len);
-        memcpy(name, fnname.data(), len-1);
-        name[len-1] = 0;
-        if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
-                    (DWORD64)Code, (DWORD)Size, 0)) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
-        }
-    }
-    if (!RtlAddFunctionTable((PRUNTIME_FUNCTION)tbl,1,(DWORD64)Section)) {
+    if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
         static int warned = 0;
         if (!warned) {
             JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info: %d\n", GetLastError());
@@ -125,12 +133,16 @@ public:
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
 #if defined(_OS_WINDOWS_)
-
-        FuncInfo tmp = {&F, Size, std::string(), std::string(),
-            get_IMAGE_RUNTIME_FUNCTION_ENTRY((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size), Details.LineStarts};
-#else
-        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
+#if not defined(_CPU_X86_64_)
+        PRUNTIME_FUNCTION fninfo =
 #endif
+        create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size);
+#endif
+        FuncInfo tmp = {&F, Size, F.getName.str(), std::string(),
+#if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
+            fninfo, Code,
+#endif
+            Details.LineStarts};
         info[(size_t)(Code)] = tmp;
     }
 
@@ -164,12 +176,16 @@ public:
             sym_iter.getSection(Section);
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
+#if not defined(_CPU_X86_64_)
+            PRUNTIME_FUNCTION fninfo =
+#endif
+            create_PRUNTIME_FUNCTION(
+                   (uint8_t*)(intptr_t)Addr, (size_t)Size, Name,
+                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize);
 #endif
             ObjectInfo tmp = {obj.getObjectFile(), sym_iter, Size,
-#ifdef _OS_WINDOWS_
-               get_IMAGE_RUNTIME_FUNCTION_ENTRY(
-                       (uint8_t*)(size_t)Addr, (size_t)Size, Name,
-                       (uint8_t*)(size_t)SectionAddr, (size_t)SectionSize),
+#if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
+                fninfo, (uint8_t*)(intptr_t)SectionAddr,
 #endif
             };
             objectmap[Addr] = tmp;
@@ -569,16 +585,6 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 
 #if defined(_OS_WINDOWS_)
 #ifdef USE_MCJIT
-extern "C"
-void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
-{
-    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
-    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
-        return (void*)(*it).second.fnentry;
-    }
-    return NULL;
-}
 #if defined(_CPU_X86_64_)
 class RTDyldMemoryManagerWin : public RTDyldMemoryManager {
 public:
@@ -641,18 +647,28 @@ public:
 private:
   std::unique_ptr<RTDyldMemoryManager> ClientMM;
 };
-#endif
 #else
 extern "C"
-void *CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext)
-{
-    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
-    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
-    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
+PRUNTIME_FUNCTION jl_getUnwindInfo(ULONG64 AddrBase)
+{ // SymRegisterFunctionEntryCallbackProc64
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
+    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
         return (void*)(*it).second.fnentry;
     }
     return NULL;
 }
+void *jl_getUnwindInfoBase(ULONG64 AddrBase)
+{
+    std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
+    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
+        return (void*)(*it).second.modulebase;
+    }
+    return NULL;
+}
+#endif
+#else //ifdef USE_MCJIT
 #if defined(_CPU_X86_64_)
 // Custom memory manager for exception handling on Windows
 // we overallocate 48 bytes at the end of each function
@@ -725,6 +741,27 @@ public:
   virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
+#else
+extern "C"
+PRUNTIME_FUNCTION jl_getUnwindInfo(ULONG64 AddrBase)
+{ // SymRegisterFunctionEntryCallbackProc64
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
+        return (void*)(*it).second.fnentry;
+    }
+    return NULL;
+}
+extern "C"
+void *jl_getUnwindInfoBase(ULONG64 AddrBase)
+{
+    std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
+        return (void*)(*it).second.modulebase;
+    }
+    return NULL;
+}
 #endif
 #endif
 #endif
