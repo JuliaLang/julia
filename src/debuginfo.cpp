@@ -13,7 +13,6 @@ struct FuncInfo {
 #if defined(_OS_WINDOWS_)
 #ifndef _CPU_X86_64_
     PFPO_DATA fnentry;
-    void *modulebase;
 #endif
 #endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
@@ -26,7 +25,6 @@ struct ObjectInfo {
 #if defined(_OS_WINDOWS_)
 #ifndef _CPU_X86_64_
     PFPO_DATA fnentry;
-    void *modulebase;
 #endif
 #endif
 };
@@ -85,7 +83,7 @@ static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnna
     tbl->fHasSEH = 0;
     tbl->fUseBP = 1;
     tbl->reserved = 0;
-    tbl->cbFrame = FRAME_FPO;
+    tbl->cbFrame = FRAME_NONFPO;
 #endif
     if (0) {
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
@@ -154,7 +152,7 @@ public:
 #endif
         FuncInfo tmp = {&F, Size, F.getName().str(), std::string(),
 #if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
-            fninfo, Code,
+            fninfo,
 #endif
             Details.LineStarts};
         info[(size_t)(Code)] = tmp;
@@ -199,7 +197,7 @@ public:
 #endif
             ObjectInfo tmp = {obj.getObjectFile(), sym_iter, (size_t)Size,
 #if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
-                fninfo, (uint8_t*)(intptr_t)SectionAddr,
+                fninfo,
 #endif
             };
             objectmap[Addr] = tmp;
@@ -663,11 +661,12 @@ private:
 };
 #else
 extern "C"
-PFPO_DATA jl_getUnwindInfo(ULONG64 AddrBase)
+PFPO_DATA jl_getUnwindInfo(ULONG64 dwAddr, PDWORD64 AddrBase)
 { // SymRegisterFunctionEntryCallbackProc64
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
-    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(AddrBase);
-    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > AddrBase) {
+    std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
+    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > dwAddr) {
+        *AddrBase = (*it).first;
         return (*it).second.fnentry;
     }
     return NULL;
@@ -748,11 +747,12 @@ public:
 };
 #else
 extern "C"
-PFPO_DATA jl_getUnwindInfo(ULONG64 AddrBase)
+PFPO_DATA jl_getUnwindInfo(ULONG64 dwAddr, PDWORD64 AddrBase)
 { // SymRegisterFunctionEntryCallbackProc64
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
-    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(AddrBase);
-    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > AddrBase) {
+    std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
+    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
+        *AddrBase = (*it).first;
         return (*it).second.fnentry;
     }
     return NULL;
