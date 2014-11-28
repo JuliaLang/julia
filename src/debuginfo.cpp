@@ -10,11 +10,6 @@ struct FuncInfo {
     size_t lengthAdr;
     std::string name;
     std::string filename;
-#if defined(_OS_WINDOWS_)
-#ifndef _CPU_X86_64_
-    PFPO_DATA fnentry;
-#endif
-#endif
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> lines;
 };
 #else
@@ -22,11 +17,6 @@ struct ObjectInfo {
     object::ObjectFile* object;
     object::SymbolRef symref;
     size_t size;
-#if defined(_OS_WINDOWS_)
-#ifndef _CPU_X86_64_
-    PFPO_DATA fnentry;
-#endif
-#endif
 };
 #endif
 
@@ -36,11 +26,9 @@ extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD Except
 #endif
 #include <dbghelp.h>
 extern "C" volatile int jl_in_stackwalk;
-static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
+static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated)
 {
-    assert(!jl_in_stackwalk);
-    jl_in_stackwalk = 1;
     DWORD mod_size = 0;
 #if defined(_CPU_X86_64_)
     uint8_t *catchjmp = Section+Allocated;
@@ -73,19 +61,10 @@ static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnna
 #else // defined(_CPU_X86_64_)
     Section = Code;
     mod_size = Size;
-    PFPO_DATA tbl = (PFPO_DATA)malloc(sizeof(FPO_DATA));
-    tbl->ulOffStart = 0;
-    tbl->cbProcSize = Size;
-    tbl->cdwLocals = 0;
-    tbl->cdwParams = 0;
-    tbl->cbProlog = 3;
-    tbl->cbRegs = 0;
-    tbl->fHasSEH = 0;
-    tbl->fUseBP = 1;
-    tbl->reserved = 0;
-    tbl->cbFrame = FRAME_NONFPO;
 #endif
     if (0) {
+        assert(!jl_in_stackwalk);
+        jl_in_stackwalk = 1;
         if (mod_size && !SymLoadModuleEx(GetCurrentProcess(), NULL, NULL, NULL, (DWORD64)Section, mod_size, NULL, SLMFLAG_VIRTUAL)) {
 #if defined(_CPU_X86_64_)
             catchjmp[0] = 0;
@@ -108,6 +87,7 @@ static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnna
                 JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
             }
         }
+        jl_in_stackwalk = 0;
     }
 #if defined(_CPU_X86_64_)
     if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
@@ -118,8 +98,6 @@ static void *create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnna
         }
     }
 #endif
-    jl_in_stackwalk = 0;
-    return tbl;
 }
 #endif
 
@@ -145,16 +123,9 @@ public:
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
 #if defined(_OS_WINDOWS_)
-#if not defined(_CPU_X86_64_)
-        PFPO_DATA fninfo = (PFPO_DATA)
-#endif
         create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size);
 #endif
-        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(),
-#if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
-            fninfo,
-#endif
-            Details.LineStarts};
+        FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
         info[(size_t)(Code)] = tmp;
     }
 
@@ -188,18 +159,11 @@ public:
             sym_iter.getSection(Section);
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
-#if not defined(_CPU_X86_64_)
-            PFPO_DATA fninfo = (PFPO_DATA)
-#endif
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, Name,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize);
 #endif
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, (size_t)Size,
-#if defined(_OS_WINDOWS_) and not defined(_CPU_X86_64_)
-                fninfo,
-#endif
-            };
+            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, (size_t)Size};
             objectmap[Addr] = tmp;
         }
         #else
@@ -661,15 +625,14 @@ private:
 };
 #else
 extern "C"
-PFPO_DATA jl_getUnwindInfo(ULONG64 dwAddr, PDWORD64 AddrBase)
-{ // SymRegisterFunctionEntryCallbackProc64
+DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
+{
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(dwAddr);
-    if (it != objmap.end() && (size_t)(*it).first + (*it).second.size > dwAddr) {
-        *AddrBase = (*it).first;
-        return (*it).second.fnentry;
+    if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.size > dwAddr) {
+        return (DWORD4)(intptr_t)(*it).first;
     }
-    return NULL;
+    return 0;
 }
 #endif
 #else //ifdef USE_MCJIT
@@ -747,15 +710,14 @@ public:
 };
 #else
 extern "C"
-PFPO_DATA jl_getUnwindInfo(ULONG64 dwAddr, PDWORD64 AddrBase)
-{ // SymRegisterFunctionEntryCallbackProc64
+DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
+{
     std::map<size_t, FuncInfo, revcomp> &info = jl_jit_events->getMap();
     std::map<size_t, FuncInfo, revcomp>::iterator it = info.lower_bound(dwAddr);
-    if (it != info.end() && (size_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
-        *AddrBase = (*it).first;
-        return (*it).second.fnentry;
+    if (it != info.end() && (intptr_t)(*it).first + (*it).second.lengthAdr > dwAddr) {
+        return (DWORD64)(intptr_t)(*it).first;
     }
-    return NULL;
+    return 0;
 }
 #endif
 #endif
