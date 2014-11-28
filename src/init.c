@@ -341,6 +341,11 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
         jlbacktrace();
+        static int recursion = 0;
+        if (recursion++)
+            exit(1);
+        else
+            jl_exit(1);
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
@@ -371,9 +376,7 @@ EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord, 
 
     return rval;
 }
-void* CALLBACK jl_getUnwindInfo(HANDLE hProcess, ULONG64 AddrBase, ULONG64 UserContext);
 #endif
-
 #else // #ifdef _OS_WINDOWS_
 
 void restore_signals(void)
@@ -757,9 +760,6 @@ void julia_init(char *imageFile)
     if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
         JL_PRINTF(JL_STDERR, "WARNING: failed to initalize stack walk info\n");
     }
-#if defined(_CPU_X86_64_)
-    if (!SymRegisterFunctionEntryCallback64(GetCurrentProcess(), jl_getUnwindInfo, 0)) JL_PRINTF(JL_STDERR, "WARNING: failed to install backtrace info callback\n");
-#endif
     needsSymRefreshModuleList = 0;
     uv_lib_t jl_dbghelp;
     uv_dlopen("dbghelp.dll",&jl_dbghelp);

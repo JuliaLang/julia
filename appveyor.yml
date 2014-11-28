@@ -20,8 +20,6 @@ init:
   - git config --global core.autocrlf input
 
 build_script:
-# temporarily disable backtrace test, failing right now for win64 on master
-  - sed -i 's/"backtrace",//' test/runtests.jl
 # Remove C:\MinGW\bin from the path, the version of MinGW installed on
 # AppVeyor is not compatible with the cross-compiled Julia Windows binaries
   - set PATH=%PATH:C:\MinGW\bin;=%
