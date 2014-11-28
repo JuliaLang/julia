@@ -73,12 +73,22 @@ c,r = test_latexcomplete(s)
 @test r == 1:length(s)
 @test length(c) == 1
 
+# test latex symbol completions in strings should not work when there
+# is a backslash in front of `\alpha` because it interferes with path completion on windows
+s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
+c,r,res = test_complete(s)
+@test length(c) == 0
+
 # test latex symbol completions in strings
 s = "\"C:\\\\ \\alpha"
 c,r,res = test_complete(s)
 @test c[1] == "α"
 @test r == 7:12
 @test length(c) == 1
+
+# `cd("C:\U should not make the repl crash due to escaping see comment #9137
+s = "cd(\"C:\\U"
+c,r,res = test_complete(s)
 
 ## Test completion of packages
 #mkp(p) = ((@assert !isdir(p)); mkdir(p))

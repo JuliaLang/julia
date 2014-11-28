@@ -888,7 +888,7 @@ function ini_dec(x::BigInt, n::Int)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), p, '0', n - info[2])
         return info
     end
-    return (n, d, decode_dec(iround(x/big(10)^(d-n)))[3])
+    return (n, d, decode_dec(round(BigInt,x/big(10)^(d-n)))[3])
 end
 
 
@@ -911,7 +911,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
         sigbits = 4*min(n-1,13)
         s = 0.25*Base.Math.rint(ldexp(s,1+sigbits))
         # ensure last 2 exponent bits either 01 or 10
-        u = (reinterpret(Uint64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
+        u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
             ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         end
@@ -934,7 +934,7 @@ function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
     else
         s, p = frexp(x)
         s *= 2.0
-        u = (reinterpret(Uint64,s) & 0x001f_ffff_ffff_ffff)
+        u = (reinterpret(UInt64,s) & 0x001f_ffff_ffff_ffff)
         t = (trailing_zeros(u) >> 2)
         u >>= (t<<2)
         n = 14-t

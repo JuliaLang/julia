@@ -106,6 +106,7 @@ void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 #ifdef _OS_WINDOWS_
 extern volatile HANDLE hMainThread;
 typedef CONTEXT *bt_context_t;
+DWORD64 jl_getUnwindInfo(ULONG64 dwBase);
 #else
 #define UNW_LOCAL_ONLY
 #include <libunwind.h>

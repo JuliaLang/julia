@@ -373,7 +373,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
 
     @inbounds begin
     if isbits(R)
-        tile_size = int(ifloor(sqrt(tilebufsize/sizeof(R))))
+        tile_size = floor(Int,sqrt(tilebufsize/sizeof(R)))
         sz = (tile_size, tile_size)
         Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
         Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)

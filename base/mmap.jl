@@ -28,7 +28,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
         error("requested size is too large")
     end
     # Set the offset to a page boundary
-    offset_page::FileOffset = ifloor(offset/pagesize)*pagesize
+    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
     len_page::Int = (offset-offset_page) + len
     # Mmap the file
     p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
@@ -160,7 +160,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedM
         mmaphandle = ccall(:CreateFileMappingW, stdcall, Ptr{Void}, (Cptrdiff_t, Ptr{Void}, Cint, Cint, Cint, Ptr{UInt16}),
             hdl, C_NULL, flprotect, szfile>>32, szfile&typemax(UInt32), name)
     else
-        mmaphandle = ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (Cint, Cint, Ptr{Uint16}),
+        mmaphandle = ccall(:OpenFileMappingW, stdcall, Ptr{Void}, (Cint, Cint, Ptr{UInt16}),
             access, true, name)
     end
     if mmaphandle == C_NULL

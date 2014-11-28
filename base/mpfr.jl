@@ -9,14 +9,14 @@ export
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
         bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
-        exp, exp2, exponent, factorial, floor, hypot, isinteger, iround,
+        exp, exp2, exponent, factorial, floor, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
-        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai, iceil, ifloor,
-        itrunc, eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
+        gamma, lgamma, digamma, erf, erfc, zeta, eta, log1p, airyai,
+        eps, signbit, sin, cos, tan, sec, csc, cot, acos, asin, atan,
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
-        serialize, deserialize, cbrt, typemax, typemin,
+        serialize, deserialize, cbrt, typemax, typemin, unsafe_trunc,
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
         significand, frexp
 
@@ -54,6 +54,7 @@ widen(::Type{BigFloat}) = BigFloat
 
 BigFloat(x::BigFloat) = x
 
+# convert to BigFloat
 for (fJ, fC) in ((:si,:Clong), (:ui,:Culong), (:d,:Float64))
     @eval begin
         function BigFloat(x::($fC))
@@ -91,30 +92,75 @@ convert{S}(::Type{BigFloat}, x::Rational{S}) = BigFloat(x) # to resolve ambiguit
 convert(::Type{BigFloat}, x::Real) = BigFloat(x)
 convert(::Type{FloatingPoint}, x::BigInt) = BigFloat(x)
 
-for to in (Int8, Int16, Int32, Int64)
+## BigFloat -> Integer
+function unsafe_cast(::Type{Int64}, x::BigFloat, r::RoundingMode)
+    ccall((:__gmpfr_mpfr_get_sj,:libmpfr), Cintmax_t,
+          (Ptr{BigFloat}, Int32), &x, to_mpfr(r))
+end
+function unsafe_cast(::Type{UInt64}, x::BigFloat, r::RoundingMode)
+    ccall((:__gmpfr_mpfr_get_uj,:libmpfr), Cuintmax_t,
+          (Ptr{BigFloat}, Int32), &x, to_mpfr(r))
+end
+
+function unsafe_cast{T<:Signed}(::Type{T}, x::BigFloat, r::RoundingMode)
+    unsafe_cast(Int64, x, r) % T
+end
+function unsafe_cast{T<:Unsigned}(::Type{T}, x::BigFloat, r::RoundingMode)
+    unsafe_cast(UInt64, x, r) % T
+end
+
+function unsafe_cast(::Type{BigInt}, x::BigFloat, r::RoundingMode)
+    # actually safe, just keep naming consistent
+    z = BigInt()
+    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32),
+          &z, &x, to_mpfr(r))
+    z
+end
+
+unsafe_trunc{T<:Integer}(::Type{T}, x::BigFloat) = unsafe_cast(T,x,RoundToZero)
+
+function trunc{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    unsafe_cast(T,x,RoundToZero)
+end
+function floor{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    unsafe_cast(T,x,RoundDown)
+end
+function ceil{T<:Union(Signed,Unsigned)}(::Type{T}, x::BigFloat)
+    (typemin(T) <= x <= typemax(T)) || throw(InexactError())
+    unsafe_cast(T,x,RoundUp)
+end
+
+trunc(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundToZero)
+floor(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundDown)
+ceil(::Type{BigInt}, x::BigFloat) = unsafe_cast(BigInt, x, RoundUp)
+# convert/round/trunc/floor/ceil(Integer, x) should return a BigInt
+trunc(::Type{Integer}, x::BigFloat) = trunc(BigInt, x)
+floor(::Type{Integer}, x::BigFloat) = floor(BigInt, x)
+ceil(::Type{Integer}, x::BigFloat) = ceil(BigInt, x)
+
+for Ti in (Int128,UInt128)
     @eval begin
-        function convert(::Type{$to}, x::BigFloat)
-            (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
-            convert($to, ccall((:__gmpfr_mpfr_get_sj,:libmpfr),
-                               Cintmax_t, (Ptr{BigFloat}, Int32), &x, 0))
-        end
+        trunc(::Type{$Ti}, x::BigFloat) = ($Ti)(trunc(BigInt, x))
+        floor(::Type{$Ti}, x::BigFloat) = ($Ti)(floor(BigInt, x))
+        ceil(::Type{$Ti}, x::BigFloat) = ($Ti)(ceil(BigInt, x))
     end
 end
 
-for to in (UInt8, UInt16, UInt32, UInt64)
-    @eval begin
-        function convert(::Type{$to}, x::BigFloat)
-            (isinteger(x) && (typemin($to) <= x <= typemax($to))) || throw(InexactError())
-            convert($to, ccall((:__gmpfr_mpfr_get_uj,:libmpfr),
-                               Cuintmax_t, (Ptr{BigFloat}, Int32), &x, 0))
-        end
-    end
+convert(::Type{Bool}, x::BigFloat) = (x != 0)
+function convert(::Type{BigInt},x::BigFloat)
+    isinteger(x) || throw(InexactError())
+    trunc(BigInt,x)
+end
+Base.BigInt(x::BigFloat) = convert(BigInt,x)
+
+function convert{T<:Integer}(::Type{T},x::BigFloat)
+    isinteger(x) || throw(InexactError())
+    trunc(T,x)
 end
 
-function Base.BigInt(x::BigFloat)
-    !isinteger(x) && throw(InexactError())
-    return itrunc(x)
-end
+## BigFloat -> FloatingPoint
 convert(::Type{Float64}, x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
 convert(::Type{Float32}, x::BigFloat) =
@@ -124,8 +170,6 @@ call(::Type{Float64}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
 call(::Type{Float32}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
-
-convert(::Type{Integer}, x::BigFloat) = convert(BigInt, x)
 
 promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
@@ -652,14 +696,6 @@ for f in (:ceil, :floor, :trunc, :round)
         end
     end
 end
-
-function itrunc(x::BigFloat)
-    z = BigInt()
-    ccall((:mpfr_get_z, :libmpfr), Int32, (Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &x, to_mpfr(RoundToZero))
-    return z
-end
-
-iround(x::BigFloat) = itrunc(round(x))
 
 function isinf(x::BigFloat)
     return ccall((:mpfr_inf_p, :libmpfr), Int32, (Ptr{BigFloat},), &x) != 0

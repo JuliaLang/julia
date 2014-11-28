@@ -114,7 +114,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     # defines this as
     # k_0 = 2^31 * r * f(r) / v, w_0 = 0.5^31 * v / f(r), f_0 = 1,
     # where v is the area of each strip of the ziggurat.
-    ki[1] = uint64(itrunc(x1*fib[256]/nor_section_area*nmantissa))
+    ki[1] = trunc(UInt64,x1*fib[256]/nor_section_area*nmantissa)
     wib[1] = nor_section_area/fib[256]/nmantissa
     fib[1] = one(BigFloat)
 
@@ -122,7 +122,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
         # New x is given by x = f^{-1}(v/x_{i+1} + f(x_{i+1})), thus
         # need inverse operator of y = exp(-0.5*x*x) -> x = sqrt(-2*ln(y))
         x = sqrt(-2.0*log(nor_section_area/x1 + fib[i+1]))
-        ki[i+1] = uint64(itrunc(x/x1*nmantissa))
+        ki[i+1] = trunc(UInt64,x/x1*nmantissa)
         wib[i] = x/nmantissa
         fib[i] = exp(-0.5*x*x)
         x1 = x
@@ -139,7 +139,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     # defines this as
     # k_0 = 2^32 * r * f(r) / v, w_0 = 0.5^32 * v / f(r), f_0 = 1,
     # where v is the area of each strip of the ziggurat.
-    ke[1] = uint64(itrunc(x1*feb[256]/exp_section_area*emantissa))
+    ke[1] = trunc(UInt64,x1*feb[256]/exp_section_area*emantissa)
     web[1] = exp_section_area/feb[256]/emantissa
     feb[1] = one(BigFloat)
 
@@ -147,7 +147,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
         # New x is given by x = f^{-1}(v/x_{i+1} + f(x_{i+1})), thus
         # need inverse operator of y = exp(-x) -> x = -ln(y)
         x = -log(exp_section_area/x1 + feb[i+1])
-        ke[i+1] = uint64(itrunc(x/x1*emantissa))
+        ke[i+1] = trunc(UInt64,x/x1*emantissa)
         web[i] = x/emantissa
         feb[i] = exp(-x)
         x1 = x

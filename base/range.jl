@@ -105,7 +105,7 @@ function rat(x)
     b = c = 0
     m = maxintfloat(Float32)
     while abs(y) <= m
-        f = itrunc(y)
+        f = trunc(Int,y)
         y -= f
         a, c = f*a + c, a
         b, d = f*b + d, b
@@ -415,11 +415,11 @@ function _findin{T1<:Integer, T2<:Integer}(r::Range{T1}, span::UnitRange{T2})
     lr = last(r)
     sr = step(r)
     if sr > 0
-        ifirst = fr >= fspan ? 1 : iceil((fspan-fr)/sr)+1
-        ilast = lr <= lspan ? length(r) : length(r) - iceil((lr-lspan)/sr)
+        ifirst = fr >= fspan ? 1 : ceil(Integer,(fspan-fr)/sr)+1
+        ilast = lr <= lspan ? length(r) : length(r) - ceil(Integer,(lr-lspan)/sr)
     elseif sr < 0
-        ifirst = fr <= lspan ? 1 : iceil((lspan-fr)/sr)+1
-        ilast = lr >= fspan ? length(r) : length(r) - iceil((lr-fspan)/sr)
+        ifirst = fr <= lspan ? 1 : ceil(Integer,(lspan-fr)/sr)+1
+        ilast = lr >= fspan ? length(r) : length(r) - ceil(Integer,(lr-fspan)/sr)
     else
         ifirst = fr >= fspan ? 1 : length(r)+1
         ilast = fr <= lspan ? length(r) : 0
@@ -557,7 +557,7 @@ function map!(f::Callable, dest, r::Range)
 end
 
 function in(x, r::Range)
-    n = step(r) == 0 ? 1 : iround((x-first(r))/step(r))+1
+    n = step(r) == 0 ? 1 : round(Integer,(x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x
 end
 

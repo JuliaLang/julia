@@ -54,11 +54,13 @@ case $(uname) in
     ;;
 esac
 
+curlflags="curl --retry 10 -k -L -y 5"
+
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
   f=julia-nightly-win$bits.exe
   echo "Downloading $f"
-  curl -kLsSo $f http://status.julialang.org/download/win$bits
+  $curlflags -o $f https://status.julialang.org/download/win$bits
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
@@ -79,7 +81,7 @@ if [ -z "$USEMSVC" ]; then
     f=mingw-w$bits-bin-$ARCH-20140102.7z
     if ! [ -e $f ]; then
       echo "Downloading $f"
-      curl -kLOsS $mingw-w64-dgn/files/mingw-w64/$f
+      $curlflags -O $mingw-w64-dgn/files/mingw-w64/$f
     fi
     echo "Extracting $f"
     $SEVENZIP x -y $f >> get-deps.log
@@ -116,7 +118,7 @@ fi
 
 if ! [ -e $f ]; then
   echo "Downloading $f"
-  curl -kLOsS http://sourceforge.net/projects/juliadeps-win/files/$f
+  $curlflags -O http://sourceforge.net/projects/juliadeps-win/files/$f
 fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
@@ -130,7 +132,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   f="/make/make-3.81-2/make-3.81-2-msys-1.0.11-bin.tar"
   if ! [ -e `basename $f.lzma` ]; then
     echo "Downloading `basename $f`"
-    curl -kLOsS $mingw/files/MSYS/Base$f.lzma
+    $curlflags -O $mingw/files/MSYS/Base$f.lzma
   fi
   $SEVENZIP x -y `basename $f.lzma` >> get-deps.log
   tar -xf `basename $f`
@@ -176,5 +178,5 @@ else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
 fi
 
-make
+make -j2
 #make debug

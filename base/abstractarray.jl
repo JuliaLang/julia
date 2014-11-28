@@ -1385,7 +1385,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
     empty!(S)
     p == 0 && return S
     nexpected = p * length(A)
-    sizehint(S, iround(nexpected + 5*sqrt(nexpected)))
+    sizehint(S, round(Int,nexpected + 5*sqrt(nexpected)))
     if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
         for i = 1:n
             rand() <= p && push!(S, A[i])
@@ -1396,14 +1396,14 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
         # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
         # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
         # from this probability distribution via the discrete inverse-transform
-        # method: s = iceil(F^{-1}(u)) where u = rand(), which is simply
-        # s = iceil(log(rand()) / log1p(-p)).
+        # method: s = ceil(F^{-1}(u)) where u = rand(), which is simply
+        # s = ceil(log(rand()) / log1p(-p)).
         L = 1 / log1p(-p)
         i = 0
         while true
             s = log(rand()) * L # note that rand() < 1, so s > 0
-            s >= n - i && return S # compare before iceil to avoid overflow
-            push!(S, A[i += iceil(s)])
+            s >= n - i && return S # compare before ceil to avoid overflow
+            push!(S, A[i += ceil(Int,s)])
         end
         # [This algorithm is similar in spirit to, but much simpler than,
         #  the one by Vitter for a related problem in "Faster methods for
