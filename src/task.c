@@ -536,6 +536,47 @@ static int frame_info_from_ip(
 }
 
 #if defined(_OS_WINDOWS_)
+#ifdef _CPU_X86_64_
+static UNWIND_HISTORY_TABLE HistoryTable;
+#else
+static struct {
+    DWORD64 dwAddr;
+    DWORD64 ImageBase;
+} HistoryTable;
+#endif
+static PVOID CALLBACK JuliaFunctionTableAccess64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 AddrBase)
+{
+    //printf("lookup %d\n", AddrBase);
+#ifdef _CPU_X86_64_
+    DWORD64 ImageBase;
+    PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
+    if (fn) return fn;
+#endif
+    return SymFunctionTableAccess64(hProcess, AddrBase);
+}
+static DWORD64 WINAPI JuliaGetModuleBase64(
+        _In_  HANDLE hProcess,
+        _In_  DWORD64 dwAddr)
+{
+    //printf("lookup base %d\n", dwAddr);
+#ifdef _CPU_X86_64_
+    DWORD64 ImageBase;
+    PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
+    if (fn) return ImageBase;
+#else
+    if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
+    DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
+    if (ImageBase) {
+        HistoryTable.dwAddr = dwAddr;
+        HistoryTable.ImageBase = ImageBase;
+        return ImageBase;
+    }
+#endif
+    return SymGetModuleBase64(hProcess, dwAddr);
+}
+
 int needsSymRefreshModuleList;
 BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
@@ -579,20 +620,15 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     stk.AddrFrame.Mode = AddrModeFlat;
     
     size_t n = 0;
-    intptr_t lastsp = stk.AddrStack.Offset;
+    jl_in_stackwalk = 1;
     while (n < maxsize) {
-        jl_in_stackwalk = 1;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
-            &stk, Context, NULL, SymFunctionTableAccess64, SymGetModuleBase64, NULL);
-        jl_in_stackwalk = 0;
+            &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
         data[n++] = (intptr_t)stk.AddrPC.Offset;
-        intptr_t sp = (intptr_t)stk.AddrStack.Offset;
-        if (!result || sp == 0 || 
-            (_stack_grows_up ? sp < lastsp : sp > lastsp) ||
-            stk.AddrReturn.Offset == 0)
+        if (!result)
             break;
-        lastsp = sp;
     }
+    jl_in_stackwalk = 0;
     return n;
 }
 #else
