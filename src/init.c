@@ -341,6 +341,11 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
         gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
         jlbacktrace();
+        static int recursion = 0;
+        if (recursion++)
+            exit(1);
+        else
+            jl_exit(1);
     }
     return EXCEPTION_CONTINUE_SEARCH;
 }
