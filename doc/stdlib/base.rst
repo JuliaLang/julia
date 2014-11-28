@@ -5314,14 +5314,14 @@ Parallel Computing
 
 .. function:: remotecall(id, func, args...)
 
-   Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteRef``.
+   Call a function asynchronously on the given arguments on the specified process. Returns a ``RemoteChannel``.
 
 .. function:: wait([x])
 
    Block the current task until some event occurs, depending on the type
    of the argument:
 
-   * ``RemoteRef``: Wait for a value to become available for the specified remote reference.
+   * ``RemoteChannel``: Wait for a value to become available on the specified remote channel.
 
    * ``Condition``: Wait for ``notify`` on a condition.
 
@@ -5339,9 +5339,9 @@ Parallel Computing
    Often ``wait`` is called within a ``while`` loop to ensure a waited-for condition
    is met before proceeding.
 
-.. function:: fetch(RemoteRef)
+.. function:: fetch(RemoteChannel)
 
-   Wait for and get the value of a remote reference.
+   Wait for and get the first element of a remote channel.
 
 .. function:: remotecall_wait(id, func, args...)
 
@@ -5351,36 +5351,37 @@ Parallel Computing
 
    Perform ``fetch(remotecall(...))`` in one message.
 
-.. function:: put!(RemoteRef, value)
+.. function:: put!(RemoteChannel, value)
 
-   Store a value to a remote reference. Implements "shared queue of length 1" semantics: if a value is already present, blocks until the value is removed with ``take!``. Returns its first argument.
+   Store a value to a remote channel. If the channel is full, blocks until a value is removed with ``take!``. Returns its first argument.
 
-.. function:: take!(RemoteRef)
+.. function:: take!(RemoteChannel)
 
-   Fetch the value of a remote reference, removing it so that the reference is empty again.
+   Fetch and remove the first element of a remote channel.
 
-.. function:: isready(r::RemoteRef)
+.. function:: isready(r::RemoteChannel)
 
-   Determine whether a ``RemoteRef`` has a value stored to it. Note that this function
+   Determine whether a ``RemoteChannel`` has any values stored to it. Note that this function
    can cause race conditions, since by the time you receive its result it may
    no longer be true. It is recommended that this function only be used on a
-   ``RemoteRef`` that is assigned once.
+   ``RemoteChannel`` that is assigned once.
 
-   If the argument ``RemoteRef`` is owned by a different node, this call will block to
+   If the argument ``RemoteChannel`` is owned by a different node, this call will block to
    wait for the answer. It is recommended to wait for ``r`` in a separate task instead,
-   or to use a local ``RemoteRef`` as a proxy::
+   or to use a local ``RemoteChannel`` as a proxy::
 
-       rr = RemoteRef()
+       rr = RemoteChannel()
        @async put!(rr, remotecall_fetch(p, long_computation))
        isready(rr)  # will not block
 
-.. function:: RemoteRef()
+.. function:: RemoteChannel(; T::Type=Any, sz=1)
 
-   Make an uninitialized remote reference on the local machine.
+   Make a ``RemoteChannel`` on the local process. Default arguments wrap a ``Channel{Any}`` of size 1 returning a ``RemoteChannel``, 
+   which can be safely passed around processes. 
 
-.. function:: RemoteRef(n)
+.. function:: RemoteChannel(n; T::Type=Any, sz=1)
 
-   Make an uninitialized remote reference on process ``n``.
+   Make an remote channel on process ``n``.
 
 .. function:: timedwait(testcb::Function, secs::Float64; pollint::Float64=0.1)
 
@@ -5390,12 +5391,12 @@ Parallel Computing
 .. function:: @spawn
 
    Execute an expression on an automatically-chosen process, returning a
-   ``RemoteRef`` to the result.
+   ``RemoteChannel`` to the result.
 
 .. function:: @spawnat
 
    Accepts two arguments, ``p`` and an expression, and runs the expression
-   asynchronously on process ``p``, returning a ``RemoteRef`` to the result.
+   asynchronously on process ``p``, returning a ``RemoteChannel`` to the result.
 
 .. function:: @fetch
 
@@ -6159,7 +6160,7 @@ Tasks
    Edge triggering means that only tasks waiting at the time ``notify`` is
    called can be woken up. For level-triggered notifications, you must
    keep extra state to keep track of whether a notification has happened.
-   The ``RemoteRef`` type does this, and so can be used for level-triggered
+   The ``RemoteChannel`` type does this, and so can be used for level-triggered
    events.
 
 .. function:: notify(condition, val=nothing; all=true, error=false)
@@ -6192,6 +6193,43 @@ Tasks
 
    Block the current task for a specified number of seconds. The minimum sleep
    time is 1 millisecond or input of ``0.001``.
+
+.. function:: Channel()
+
+   Creates a ``Channel{Any}`` capable of holding a single element.
+
+.. function:: Channel(T::Type)
+
+   Creates a ``Channel{T}`` capable of holding a single element of type ``T``.
+
+.. function:: Channel(sz::Int)
+   
+   Creates a ``Channel{Any}`` capable of holding ``sz`` elements of any type.
+   
+.. function:: Channel(T::Type, sz::Int)
+   
+   Creates a ``Channel{T}`` capable of holding ``sz`` elements of type ``T``.
+   
+.. function:: wait(c::Channel)
+   
+   Waits for a value to become available on the channel.
+   
+.. function:: fetch(c::Channel)
+   
+   Fetches the first value from the channel. Does not remove it. Blocks if no value is available.
+   
+.. function:: take!(c::Channel)
+   
+   Fetches and removes the first element from the channel. Blocks if no value is available. 
+   
+.. function:: put!(c::Channel, v)
+   
+   Adds an element to the end of the channel. Blocks if the channel is full. 
+   
+.. function:: isready(c::Channel)
+   
+   Returns ``true`` if the channel is holding any data, ``false`` otherwise.
+   
 
 Events
 ------

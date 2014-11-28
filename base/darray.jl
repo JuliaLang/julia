@@ -1,7 +1,7 @@
 type DArray{T,N,A} <: AbstractArray{T,N}
     dims::NTuple{N,Int}
 
-    chunks::Array{RemoteRef,N}
+    chunks::Array{RemoteChannel,N}
 
     # pmap[i]==p ⇒ processor p has piece i
     pmap::Vector{Int}
@@ -30,7 +30,7 @@ function DArray(init, dims, procs, dist)
     np = prod(dist)
     procs = procs[1:np]
     idxs, cuts = chunk_idxs([dims...], dist)
-    chunks = Array(RemoteRef, dist...)
+    chunks = Array(RemoteChannel, dist...)
     for i = 1:np
         chunks[i] = remotecall(procs[i], init, idxs[i])
     end
@@ -164,7 +164,7 @@ drandn(d::Int...) = drandn(d)
 
 function distribute(a::AbstractArray)
     owner = myid()
-    rr = RemoteRef()
+    rr = RemoteChannel()
     put!(rr, a)
     DArray(size(a)) do I
         remotecall_fetch(owner, ()->fetch(rr)[I...])
@@ -223,7 +223,7 @@ end
 
 ## indexing ##
 
-function getindex(r::RemoteRef, args...)
+function getindex(r::RemoteChannel, args...)
     if r.where==myid()
         getindex(fetch(r), args...)
     else

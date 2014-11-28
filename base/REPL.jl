@@ -34,8 +34,8 @@ abstract AbstractREPL
 answer_color(::AbstractREPL) = ""
 
 type REPLBackend
-    repl_channel::RemoteRef
-    response_channel::RemoteRef
+    repl_channel::RemoteChannel
+    response_channel::RemoteChannel
     ans
 end
 
@@ -80,7 +80,7 @@ function parse_input_line(s::AbstractString)
     ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
-function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
+function start_repl_backend(repl_channel::RemoteChannel, response_channel::RemoteChannel)
     backend = REPLBackend(repl_channel, response_channel, nothing)
     @async begin
         # include looks at this to determine the relative include path
@@ -159,13 +159,13 @@ end
 
 # A reference to a backend
 immutable REPLBackendRef
-    repl_channel::RemoteRef
-    response_channel::RemoteRef
+    repl_channel::RemoteChannel
+    response_channel::RemoteChannel
 end
 
 function run_repl(repl::AbstractREPL)
-    repl_channel = RemoteRef()
-    response_channel = RemoteRef()
+    repl_channel = RemoteChannel()
+    response_channel = RemoteChannel()
     start_repl_backend(repl_channel, response_channel)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
 end
@@ -614,7 +614,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     #
     # Usage:
     #
-    # repl_channel,response_channel = RemoteRef(),RemoteRef()
+    # repl_channel,response_channel = RemoteChannel(),RemoteChannel()
     # start_repl_backend(repl_channel, response_channel)
     # setup_interface(REPLDisplay(t),repl_channel,response_channel)
     #
@@ -856,8 +856,8 @@ input_color(r::StreamREPL) = r.input_color
 function run_repl(stream::AsyncStream)
     repl =
     @async begin
-        repl_channel = RemoteRef()
-        response_channel = RemoteRef()
+        repl_channel = RemoteChannel()
+        response_channel = RemoteChannel()
         start_repl_backend(repl_channel, response_channel)
         StreamREPL_frontend(repl, repl_channel, response_channel)
     end

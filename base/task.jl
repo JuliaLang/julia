@@ -340,3 +340,102 @@ macro async(expr)
     expr = localize_vars(:(()->($expr)), false)
     :(async_run_thunk($(esc(expr))))
 end
+
+abstract AbstractChannel
+
+type Channel{T} <: AbstractChannel
+    q::Vector{T}
+    szp1::Int       # current channel size plus one
+    sz_max::Int     # maximum size of channel
+    rc::Condition   # waiting for data to become available
+    wc::Condition   # waiting for a writeable slot
+    rp::Int         # read position
+    wp::Int         # write position
+
+    Channel(Ty::Type, szp1::Int, sz_max::Int) = new(Array(Ty, szp1), szp1, sz_max, Condition(), Condition(), 1, 1)
+end
+
+Channel() = Channel(1)
+Channel(sz::Int) = Channel(Any, sz)
+Channel(T::Type) = Channel(T, 1)
+function Channel(T::Type, sz::Int)
+    sz_max = sz == typemax(Int) ? typemax(Int) - 1 : sz
+    csz = sz > 32 ? 32 : sz
+    Channel{T}(T, csz+1, sz_max)
+end
+
+function put!(c::Channel, v)
+    d = c.rp - c.wp
+    if (d == 1) || (d == -(c.szp1-1))
+        # grow the channel if possible
+        if (c.szp1 - 1) < c.sz_max
+            if ((c.szp1-1) * 2) > c.sz_max
+                c.szp1 = c.sz_max + 1
+            else
+                c.szp1 = ((c.szp1-1) * 2) + 1
+            end
+            newq = Array(eltype(c), c.szp1)
+            if c.wp > c.rp
+                copy!(newq, 1, c.q, c.rp, (c.wp - c.rp))
+                c.wp = c.wp - c.rp + 1
+            else
+                len_first_part = length(c.q) - c.rp + 1
+                copy!(newq, 1, c.q, c.rp, len_first_part)
+                copy!(newq, len_first_part+1, c.q, 1, c.wp-1)
+                c.wp = len_first_part + c.wp
+            end
+            c.rp = 1
+            c.q = newq
+        else
+            wait(c.wc)
+        end
+    end
+
+    c.q[c.wp] = v
+    c.wp = (c.wp == c.szp1 ? 1 : c.wp + 1)
+    notify(c.rc)  # notify all, since some of the waiters may be on a "fetch" call.
+    v
+end
+
+function fetch(c::Channel)
+    while !isready(c)
+        wait(c.rc)
+    end
+    c.q[c.rp]
+end
+
+function take!(c::Channel)
+    while !isready(c)
+        wait(c.rc)
+    end
+    v = c.q[c.rp]
+    c.rp = (c.rp == c.szp1 ? 1 : c.rp + 1)
+    notify(c.wc; all=false) # notify only one, since only one slot has become available for a put!.
+    v
+end
+
+isready(c::Channel) = (c.rp == c.wp ? false : true)
+
+function wait(c::Channel)
+    while !isready(c)
+        wait(c.rc)
+    end
+    nothing
+end
+
+function notify_error(c::Channel, err)
+    notify_error(c.rc, err)
+    notify_error(c.wc, err)
+end
+
+eltype(c::Channel) = eltype(c.q)
+
+function length(c::Channel)
+    if c.wp >= c.rp
+        return c.wp - c.rp
+    else
+        return c.szp1 - c.rp + c.wp
+    end
+end
+
+show(io::IO, c::Channel) = print(io, "Channel (type: $(eltype(c)), size: $(c.sz_max), num_elements: $(length(c)), szp1: $(c.szp1), rp: $(c.rp), wp: $(c.wp))")

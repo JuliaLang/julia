@@ -133,10 +133,10 @@ workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
 # @parallel reduction should work even with very short ranges
 @test @parallel(+, for i=1:2; i; end) == 3
 
-# Testing timedwait on multiple RemoteRefs
-rr1 = RemoteRef()
-rr2 = RemoteRef()
-rr3 = RemoteRef()
+# Testing timedwait on multiple RemoteChannels
+rr1 = RemoteChannel()
+rr2 = RemoteChannel()
+rr3 = RemoteChannel()
 
 @async begin sleep(0.5); put!(rr1, :ok) end
 @async begin sleep(1.0); put!(rr2, :ok) end
@@ -156,6 +156,81 @@ catch
     warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
 end
 @test isready(rr1)
+
+function test_channel(c)
+    put!(c, 1)
+    put!(c, "Hello")
+    put!(c, 5.0)
+
+    @test isready(c) == true
+    @test fetch(c) == 1
+    @test fetch(c) == 1   # Should not have been popped previously
+    @test take!(c) == 1
+    @test take!(c) == "Hello"
+    @test fetch(c) == 5.0
+    @test take!(c) == 5.0
+    @test isready(c) == false
+end
+
+test_channel(RemoteChannel(; sz=10))
+
+# same test mixed with another worker...
+c = RemoteChannel(id_other; sz=10)
+put!(c, 1)
+remotecall_fetch(id_other, ch -> put!(ch, "Hello"), c)
+put!(c, 5.0)
+
+@test isready(c) == true
+@test remotecall_fetch(id_other, ch -> fetch(ch), c) == 1
+@test fetch(c) == 1   # Should not have been popped previously
+@test take!(c) == 1
+@test remotecall_fetch(id_other, ch -> take!(ch), c) == "Hello"
+@test fetch(c) == 5.0
+@test remotecall_fetch(id_other, ch -> take!(ch), c) == 5.0
+@test remotecall_fetch(id_other, ch -> isready(ch), c) == false
+@test isready(c) == false
+
+
+test_channel(Channel(10))
+
+c=Channel(Int)
+@test_throws MethodError put!(c, "Hello")
+
+c=Channel(256)
+@test c.szp1 <= 33
+for x in 1:40
+  put!(c, x)
+end
+@test c.szp1 <= 65
+for x in 1:39
+  take!(c)
+end
+for x in 1:64
+  put!(c, x)
+end
+@test (c.szp1 > 65) && (c.szp1 <= 129)
+for x in 1:39
+  take!(c)
+end
+@test fetch(c) == 39
+for x in 1:26
+  take!(c)
+end
+@test isready(c) == false
+
+n=4
+c=Channel(n)
+for i in 1:n
+    @test isready(c) == false
+    for j in 1:i
+        put!(c, j)
+    end
+    @test isready(c) == true
+    for j in 1:i
+        @test take!(c) == j
+    end
+    @test isready(c) == false
+end
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
