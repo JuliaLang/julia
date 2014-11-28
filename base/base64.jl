@@ -1,8 +1,8 @@
 module Base64
 import Base: read, write, close, eof
-export Base64Pipe, Base64EncodePipe, Base64DecodePipe, base64, base64encode, base64decode
+export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
 
-# Base64EncodePipe is a pipe-like IO object, which converts into base64 data sent 
+# Base64EncodePipe is a pipe-like IO object, which converts into base64 data sent
 # to a stream. (You must close the pipe to complete the encode, separate from
 # closing the target stream).  We also have a function base64encode(f,
 # args...) which works like sprint except that it produces
@@ -26,22 +26,14 @@ type Base64EncodePipe <: IO
     end
 end
 
-Base64Pipe = Base64EncodePipe
-
 #############################################################################
 
 # Based on code by Stefan Karpinski from https://github.com/hackerschool/WebSockets.jl (distributed under the same MIT license as Julia)
 
 const b64chars = ['A':'Z','a':'z','0':'9','+','/']
 
-const revb64chars = Dict('A'=> 0, 'B'=> 1, 'C'=> 2, 'D'=> 3, 'E'=> 4, 'F'=> 5, 'G'=> 6, 'H'=> 7, 'I'=> 8, 'J'=> 9, 
-                         'K'=> 10, 'L'=> 11, 'M'=> 12, 'N'=> 13, 'O'=> 14, 'P'=> 15, 'Q'=> 16, 'R'=> 17, 'S'=> 18, 'T'=> 19, 
-                         'U'=> 20, 'V'=> 21, 'W'=> 22, 'X'=> 23, 'Y'=> 24, 'Z'=> 25, 'a'=> 26, 'b'=> 27, 'c'=> 28, 'd'=> 29, 
-                         'e'=> 30, 'f'=> 31, 'g'=> 32, 'h'=> 33, 'i'=> 34, 'j'=> 35, 'k'=> 36, 'l'=> 37, 'm'=> 38, 'n'=> 39, 
-                         'o'=> 40, 'p'=> 41, 'q'=> 42, 'r'=> 43, 's'=> 44, 't'=> 45, 'u'=> 46, 'v'=> 47, 'w'=> 48, 'x'=> 49, 
-                         'y'=> 50, 'z'=> 51, '0'=> 52, '1'=> 53, '2'=> 54, '3'=> 55, '4'=> 56, '5'=> 57, '6'=> 58, '7'=> 59,
-                         '8'=> 60, '9'=> 61, '+'=> 62, '/'=> 63)
-                         
+const base64_pad = uint8('=')
+
 function b64(x::UInt8, y::UInt8, z::UInt8)
     n = int(x)<<16 | int(y)<<8 | int(z)
     b64chars[(n >> 18) + 1],
@@ -52,34 +44,40 @@ end
 
 function b64(x::UInt8, y::UInt8)
     a, b, c = b64(x, y, 0x0)
-    a, b, c, '='
+    a, b, c, base64_pad
 end
 
 function b64(x::UInt8)
     a, b = b64(x, 0x0, 0x0)
-    a, b, '=', '='
+    a, b, base64_pad, base64_pad
 end
 
+const sentinel = typemax(UInt8)
+const revb64chars = fill(sentinel, 256)
+# Fill revb64chars
+for (val, ch) in enumerate(b64chars)
+    revb64chars[uint8(ch)] = uint8(val - 1)
+end
+
+#Decode a block of at least 2 and at most 4 bytes
 function b64decode(encvec::Vector{UInt8})
-    if length(encvec) < 2 
+    if length(encvec) < 2
         error("Incorrect base64 format")
     end
-    n = revb64chars[encvec[1]] << 18 | revb64chars[encvec[2]] << 12
+    @inbounds u = revb64chars[encvec[1]]
+    @inbounds v = revb64chars[encvec[2]]
+    decvec = [(u << 2) | (v >> 4)]
     if length(encvec) > 2
-        n =  n | revb64chars[encvec[3]] << 6
+        @inbounds w = revb64chars[encvec[3]]
+        push!(decvec, (v << 4) | (w >> 2))
     end
     if length(encvec) > 3
-        n = n | revb64chars[encvec[4]]
-    end
-    decvec = [uint8(n >> 16)]
-    if length(encvec) > 2
-        push!(decvec, uint8(n >> 8 & 0b11111111))
-    end
-    if length(encvec) > 3
-        push!(decvec, uint8(n & 0b11111111))
+        @inbounds z = revb64chars[encvec[4]]
+        push!(decvec, (w << 6) | z)
     end
     decvec
 end
+
 
 #############################################################################
 
@@ -159,8 +157,6 @@ function base64encode(f::Function, args...)
 end
 base64encode(x...) = base64encode(write, x...)
 
-base64 = base64encode
-
 #############################################################################
 
 # read(b::Base64Pipe, ::Type{UInt8}) = # TODO: decode base64
@@ -185,8 +181,8 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
     else
         encvec = Array(UInt8, 0)
         while !eof(b.io) && length(encvec) < 4
-            c = read(b.io, t)
-            if haskey(revb64chars, c)
+            c::UInt8 = read(b.io, t)
+            @inbounds if revb64chars[c] != sentinel
                 push!(encvec, c)
             end
         end
