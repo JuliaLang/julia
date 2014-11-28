@@ -50,14 +50,23 @@ function repl_cmd(cmd)
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
+        new_oldpwd = pwd()
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
-            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            if dir == "-"
+                if !haskey(ENV, "OLDPWD")
+                    error("cd: OLDPWD not set")
+                end
+                cd(ENV["OLDPWD"])
+            else
+                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            end
         else
             cd()
         end
+        ENV["OLDPWD"] = new_oldpwd
         println(pwd())
     else
         run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
