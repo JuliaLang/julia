@@ -218,17 +218,17 @@ void lookup_pointer(DIContext *context, const char **name, size_t *line, const c
     DILineInfo info;
     if (demangle && *name != NULL)
         *name = jl_demangle(*name);
-    #ifdef LLVM35
+#ifdef LLVM35
     DILineInfoSpecifier infoSpec(DILineInfoSpecifier::FileLineInfoKind::AbsoluteFilePath,
                                  DILineInfoSpecifier::FunctionNameKind::ShortName);
-    #else
+#else
     int infoSpec = DILineInfoSpecifier::FileLineInfo |
                    DILineInfoSpecifier::AbsoluteFilePath |
                    DILineInfoSpecifier::FunctionName;
-    #endif
+#endif
     if (context == NULL) goto done;
     info = context->getLineInfoForAddress(pointer, infoSpec);
-    #ifndef LLVM35 // LLVM <= 3.4
+#ifndef LLVM35 // LLVM <= 3.4
     if (strcmp(info.getFunctionName(), "<invalid>") == 0) goto done;
     if (demangle)
         *name = jl_demangle(info.getFunctionName());
@@ -236,13 +236,13 @@ void lookup_pointer(DIContext *context, const char **name, size_t *line, const c
         *name = strdup(info.getFunctionName());
     *line = info.getLine();
     *filename = strdup(info.getFileName());
-    #else
+#else
     if (strcmp(info.FunctionName.c_str(), "<invalid>") == 0) goto done;
     *name = strdup(info.FunctionName.c_str());
     *line = info.Line;
     *filename = strdup(info.FileName.c_str());
-    #endif
-    done:
+#endif
+done:
     // If this is a jlcall wrapper, set fromC to match JIT behavior
     if (*name == NULL || memcmp(*name,"jlcall_",7) == 0)
         *fromC = true;
@@ -307,19 +307,63 @@ bool jl_is_sysimg(const char *path)
     return strncmp(filename,sysimgname,strrchr(path,'.')-filename) == 0;
 }
 
-#if defined(_OS_WINDOWS_) && !defined(USE_MCJIT)
-void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
-{
-    return;
-}
-#else
 void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
 {
 #ifdef _OS_WINDOWS_
-    DWORD fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
     char *fname = 0;
+    DWORD64 fbase;
+    printf("pointer: %llx\n", (long long)pointer);
+    if (!jl_in_stackwalk) {
+        jl_in_stackwalk = 1;
+        fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+        jl_in_stackwalk = 0;
+        printf("fbase: %llx\n", fbase);
+    }
     if (fbase != 0) {
-#else
+        IMAGEHLP_MODULE64 ModuleInfo;
+        ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+        jl_in_stackwalk = 1;
+        SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+        jl_in_stackwalk = 0;
+        fname = ModuleInfo.LoadedImageName;
+        if (ModuleInfo.LoadedImageName)
+printf("LoadedImageName: %s\n", ModuleInfo.LoadedImageName);
+        if (ModuleInfo.ImageName)
+        printf("Imagename: %s\n", ModuleInfo.ImageName);
+        *fromC = !jl_is_sysimg(fname);
+        if (skipC && *fromC) {
+            return;
+        }
+        static char frame_info_func[
+            sizeof(SYMBOL_INFO) +
+            MAX_SYM_NAME * sizeof(TCHAR)];
+        static IMAGEHLP_LINE64 frame_info_line;
+        DWORD dwDisplacement = 0;
+        DWORD64 dwDisplacement64 = 0;
+        DWORD64 dwAddress = pointer;
+        PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
+        pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+        pSymbol->MaxNameLen = MAX_SYM_NAME;
+        jl_in_stackwalk = 1;
+        if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
+            // SymFromAddr returned success
+            *name = strdup(pSymbol->Name);
+printf("name: %s\n",*name);
+        }
+
+        frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
+        if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
+            // SymGetLineFromAddr64 returned success
+            *filename = strdup(frame_info_line.FileName);
+            *line = frame_info_line.LineNumber;
+printf("filename: %s\n",*filename);
+printf("line: %d\n",(int)*line);
+        }
+        else {
+            *filename = fname;
+        }
+        jl_in_stackwalk = 0;
+#else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
     const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
@@ -330,28 +374,19 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         // have the function name, even if we don't have line numbers
         *name = dlinfo.dli_sname;
         *filename = dlinfo.dli_fname;
+        fname = dlinfo.dli_fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
-#endif
-        obfiletype::iterator it = objfilemap.find(fbase);
-        llvm::object::ObjectFile *obj = NULL;
+#endif // ifdef _OS_WINDOWS_
         DIContext *context = NULL;
         int64_t slide = 0;
-#ifndef _OS_WINDOWS_
-        fname = dlinfo.dli_fname;
-#else
-        IMAGEHLP_MODULE64 ModuleInfo;
-        ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-        SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-        fname = ModuleInfo.LoadedImageName;
-        *fromC = !jl_is_sysimg(fname);
-        if (skipC && *fromC)
-            return;
-#endif
+#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+        obfiletype::iterator it = objfilemap.find(fbase);
+        llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
-#ifdef _OS_DARWIN_
-           // First find the uuid of the object file (we'll use this to make sure we find the
-           // correct debug symbol file).
-           uint8_t uuid[16], uuid2[16];
+#if defined(_OS_DARWIN_) || defined(_OS_WINDOWS_)
+#if defined(_OS_WINDOWS_)
+#define origerrorobj errorobj
+#endif
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                     StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
@@ -374,6 +409,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 objfilemap[fbase] = entry;
                 goto lookup;
             }
+#if defined(_OS_DARWIN_)
 #ifdef LLVM36
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
 #elif LLVM35
@@ -381,6 +417,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #else
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj;
 #endif
+            // First find the uuid of the object file (we'll use this to make sure we find the
+            // correct debug symbol file).
+            uint8_t uuid[16], uuid2[16];
             if (!getObjUUID(morigobj,uuid)) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
@@ -400,25 +439,23 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
-#else
-            // On non OS X systems we need to mmap another copy because of the permissions on the mmaped
-            // shared library.
+#endif // ifdef _OS_DARWIN_
+#else // ifdef  _OS_DARWIN_ || _OS_WINDOWS_
+            // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(fname);
 #endif
-#endif
-#ifdef LLVM36
+#endif // ifdef _OS_DARWIN_
             if (errorobj) {
+#ifdef LLVM36
                 auto binary = errorobj.get().takeBinary();
                 obj = binary.first.release();
                 binary.second.release();
 #elif LLVM35
-            if (errorobj) {
                 obj = errorobj.get();
 #else
-            if (errorobj != NULL) {
                 obj = errorobj;
 #endif
 #ifdef _OS_DARWIN_
@@ -434,12 +471,13 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 }
 #endif
 #ifdef _OS_WINDOWS_
+#ifdef LLVM35
                 assert(obj->isCOFF());
                 llvm::object::COFFObjectFile *coffobj = (llvm::object::COFFObjectFile *)obj;
                 const llvm::object::pe32plus_header *pe32plus;
                 coffobj->getPE32PlusHeader(pe32plus);
                 if (pe32plus != NULL) {
-                    slide = pe32plus->ImageBase-fbase;
+                    slide = pe32plus->ImageBase - fbase;
                 }
                 else {
                     const llvm::object::pe32_header *pe32;
@@ -449,9 +487,10 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                         context = NULL;
                     }
                     else {
-                        slide = pe32->ImageBase-fbase;
+                        slide = pe32->ImageBase - fbase;
                     }
                 }
+#endif
 #endif
 
             }
@@ -463,16 +502,14 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             context = it->second.ctx;
             slide = it->second.slide;
         }
-#ifdef _OS_DARWIN_
-    lookup:
-#endif
+#endif // ifdef _OS_WINDOWS && !LLVM35
+lookup:
         lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(fname), fromC);
-        return;
     }
-    *fromC = 1;
-    return;
+    else {
+        *fromC = 1;
+    }
 }
-#endif
 
 void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
 {
@@ -486,9 +523,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
 
-    if (it == objmap.end())
-        return jl_getDylibFunctionInfo(name,line,filename,pointer,fromC,skipC);
-    if ((pointer - it->first) > it->second.size)
+    if (it == objmap.end() || (pointer - it->first) > it->second.size)
         return jl_getDylibFunctionInfo(name,line,filename,pointer,fromC,skipC);
 
 #ifdef LLVM36
