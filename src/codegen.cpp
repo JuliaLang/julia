@@ -20,88 +20,88 @@
 #endif
 
 #include "llvm-version.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JITEventListener.h"
-#include "llvm/PassManager.h"
-#include "llvm/Target/TargetLibraryInfo.h"
-#include "llvm/Support/TargetRegistry.h"
-#include "llvm/Analysis/Passes.h"
-#include "llvm/Bitcode/ReaderWriter.h"
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/PassManager.h>
+#include <llvm/Target/TargetLibraryInfo.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Analysis/Passes.h>
+#include <llvm/Bitcode/ReaderWriter.h>
 #ifdef _OS_DARWIN_
-#include "llvm/Object/MachO.h"
+#include <llvm/Object/MachO.h>
 #endif
 #ifdef _OS_WINDOWS_
-#include "llvm/Object/COFF.h"
+#include <llvm/Object/COFF.h>
 #endif
 #ifndef LLVM36
-#include "llvm/ExecutionEngine/JITMemoryManager.h"
+#include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif
 #ifdef LLVM35
-#include "llvm/IR/Verifier.h"
-#include "llvm/Object/ObjectFile.h"
-#include "llvm/IR/DIBuilder.h"
-#include "llvm/Target/TargetMachine.h"
+#include <llvm/IR/Verifier.h>
+#include <llvm/Object/ObjectFile.h>
+#include <llvm/IR/DIBuilder.h>
+#include <llvm/Target/TargetMachine.h>
 #include <llvm/AsmParser/Parser.h>
 #else
 #include <llvm/Assembly/Parser.h>
-#include "llvm/Analysis/Verifier.h"
+#include <llvm/Analysis/Verifier.h>
 #endif
-#include "llvm/DebugInfo/DIContext.h"
+#include <llvm/DebugInfo/DIContext.h>
 #ifdef USE_MCJIT
-#include "llvm/ExecutionEngine/MCJIT.h"
-#include "llvm/ExecutionEngine/SectionMemoryManager.h"
-#include "llvm/ExecutionEngine/ObjectImage.h"
-#include "llvm/ADT/DenseMapInfo.h"
-#include "llvm/Object/ObjectFile.h"
+#include <llvm/ExecutionEngine/MCJIT.h>
+#include <llvm/ExecutionEngine/SectionMemoryManager.h>
+#include <llvm/ExecutionEngine/ObjectImage.h>
+#include <llvm/ADT/DenseMapInfo.h>
+#include <llvm/Object/ObjectFile.h>
 #else
-#include "llvm/ExecutionEngine/JIT.h"
+#include <llvm/ExecutionEngine/JIT.h>
 #endif
 #ifdef LLVM33
-#include "llvm/IR/DerivedTypes.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Module.h"
-#include "llvm/IR/Intrinsics.h"
-#include "llvm/IR/Attributes.h"
-#include "llvm/IR/IRBuilder.h"
-#include "llvm/IR/MDBuilder.h"
+#include <llvm/IR/DerivedTypes.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Module.h>
+#include <llvm/IR/Intrinsics.h>
+#include <llvm/IR/Attributes.h>
+#include <llvm/IR/IRBuilder.h>
+#include <llvm/IR/MDBuilder.h>
 #else
-#include "llvm/DerivedTypes.h"
-#include "llvm/LLVMContext.h"
-#include "llvm/Module.h"
-#include "llvm/Intrinsics.h"
-#include "llvm/Attributes.h"
+#include <llvm/DerivedTypes.h>
+#include <llvm/LLVMContext.h>
+#include <llvm/Module.h>
+#include <llvm/Intrinsics.h>
+#include <llvm/Attributes.h>
 #endif
 #ifdef LLVM32
 #ifndef LLVM35
-#include "llvm/DebugInfo.h"
-#include "llvm/DIBuilder.h"
+#include <llvm/DebugInfo.h>
+#include <llvm/DIBuilder.h>
 #endif
 #ifndef LLVM33
-#include "llvm/IRBuilder.h"
+#include <llvm/IRBuilder.h>
 #endif
 #else // LLVM31 and before
-#include "llvm/Analysis/DebugInfo.h"
-#include "llvm/Analysis/DIBuilder.h"
-#include "llvm/Target/TargetData.h"
-#include "llvm/Support/IRBuilder.h"
+#include <llvm/Analysis/DebugInfo.h>
+#include <llvm/Analysis/DIBuilder.h>
+#include <llvm/Target/TargetData.h>
+#include <llvm/Support/IRBuilder.h>
 #endif
-#include "llvm/Target/TargetOptions.h"
-#include "llvm/Transforms/Scalar.h"
-#include "llvm/Transforms/Utils/BasicBlockUtils.h"
-#include "llvm/Transforms/Instrumentation.h"
+#include <llvm/Target/TargetOptions.h>
+#include <llvm/Transforms/Scalar.h>
+#include <llvm/Transforms/Utils/BasicBlockUtils.h>
+#include <llvm/Transforms/Instrumentation.h>
 #ifdef LLVM31
-#include "llvm/Transforms/Vectorize.h"
+#include <llvm/Transforms/Vectorize.h>
 #endif
-#include "llvm/Support/TargetSelect.h"
-#include "llvm/Support/raw_ostream.h"
-#include "llvm/Support/FormattedStream.h"
-#include "llvm/Support/DynamicLibrary.h"
+#include <llvm/Support/TargetSelect.h>
+#include <llvm/Support/raw_ostream.h>
+#include <llvm/Support/FormattedStream.h>
+#include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/SourceMgr.h>
 #ifdef JL_DEBUG_BUILD
-#include "llvm/Support/CommandLine.h"
+#include <llvm/Support/CommandLine.h>
 #endif
-#include "llvm/Transforms/Utils/Cloning.h"
+#include <llvm/Transforms/Utils/Cloning.h>
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
 #define NOMINMAX

@@ -1,4 +1,4 @@
-#include "llvm/Config/llvm-config.h"
+#include <llvm/Config/llvm-config.h>
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
 #define LLVM36 1
