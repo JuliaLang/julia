@@ -455,65 +455,13 @@ static int frame_info_from_ip(
     int skipC)
 {
     static const char *name_unknown = "???";
-#if defined(_OS_WINDOWS_)
-    static char frame_info_func[
-        sizeof(SYMBOL_INFO) +
-        MAX_SYM_NAME * sizeof(TCHAR)];
-    static IMAGEHLP_LINE64 frame_info_line;
-#endif
     int fromC = 0;
 
     jl_getFunctionInfo(func_name, line_num, file_name, ip, &fromC, skipC);
-    if (*func_name == NULL) {
-#if defined(_OS_WINDOWS_)
-        fromC = 1;
-        if (jl_in_stackwalk) {
-            *func_name = name_unknown;
-            *file_name = name_unknown;
-            *line_num = ip;
-        }
-        else {
-            jl_in_stackwalk = 1;
-            DWORD64 dwDisplacement64 = 0;
-            DWORD64 dwAddress = ip;
-
-            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
-            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-            pSymbol->MaxNameLen = MAX_SYM_NAME;
-
-            if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
-                // SymFromAddr returned success
-                *func_name = pSymbol->Name;
-            }
-            else {
-                *func_name = name_unknown;
-                // SymFromAddr failed
-                //DWORD error = GetLastError();
-                //printf("SymFromAddr returned error : %d\n", error);
-            }
-
-            DWORD dwDisplacement = 0;
-            frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-
-            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
-                // SymGetLineFromAddr64 returned success
-                *file_name = frame_info_line.FileName;
-                *line_num = frame_info_line.LineNumber;
-            }
-            else {
-                *file_name = name_unknown;
-                *line_num = ip;
-                // SymGetLineFromAddr64 failed
-                //DWORD error = GetLastError();
-                //printf("SymGetLineFromAddr64 returned error : %d\n", error);
-            }
-            jl_in_stackwalk = 0;
-        }
-#else
+    if (!*func_name) {
         *func_name = name_unknown;
         *file_name = name_unknown;
         *line_num = ip;
-#endif
     }
     return fromC;
 }
