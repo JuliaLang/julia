@@ -10,7 +10,7 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
 # Encode and decode
 fname = tempname()
 f = open(fname, "w")
-opipe = Base64Pipe(f)
+opipe = Base64EncodePipe(f)
 write(opipe,inputText)
 close(opipe)
 close(f)
