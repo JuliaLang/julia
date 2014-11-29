@@ -4,6 +4,7 @@ LLVM_FLAGS+="--with-cpu=cortex-a9 --with-float=hard --with-abi=aapcs-vfp --with-
 
 override OPENBLAS_DYNAMIC_ARCH=0
 override OPENBLAS_TARGET_ARCH=ARMV7
+override USE_BLAS64=0
 
 override LLVM_VER=3.5.0
 
