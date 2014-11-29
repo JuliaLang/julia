@@ -63,16 +63,16 @@
 #endif
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #ifdef LLVM33
-#include "llvm/IR/LLVMContext.h"
+#include <llvm/IR/LLVMContext.h>
 #else
-#include "llvm/LLVMContext.h"
+#include <llvm/LLVMContext.h>
 #endif
 #ifdef LLVM35 
-#include "llvm/IR/DebugInfo.h"
+#include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
-#include "llvm/DebugInfo.h"
+#include <llvm/DebugInfo.h>
 #else
-#include "llvm/Analysis/DebugInfo.h"
+#include <llvm/Analysis/DebugInfo.h>
 #endif
 
 

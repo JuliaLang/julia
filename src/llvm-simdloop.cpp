@@ -5,11 +5,12 @@
 //     global function annotateSimdLoop: mark a loop as a SIMD loop.
 //     createLowerSimdLoopPass: construct LLVM for lowering a marked loop later.
 
-#include "llvm/Analysis/LoopPass.h"
-#include "llvm/IR/Instructions.h"
-#include "llvm/IR/LLVMContext.h"
-#include "llvm/IR/Metadata.h"
-#include "llvm/Support/Debug.h"
+#include "llvm-version.h"
+#include <llvm/Analysis/LoopPass.h>
+#include <llvm/IR/Instructions.h>
+#include <llvm/IR/LLVMContext.h>
+#include <llvm/IR/Metadata.h>
+#include <llvm/Support/Debug.h>
 #include <cstdio>
 
 namespace llvm {

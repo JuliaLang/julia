@@ -1,25 +1,26 @@
 #include "platform.h"
 
 #include "llvm-version.h"
-#include "llvm/ExecutionEngine/ExecutionEngine.h"
-#include "llvm/ExecutionEngine/JITEventListener.h"
-#include "llvm/DebugInfo/DIContext.h"
+#include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/DebugInfo/DIContext.h>
 #include <llvm/Support/MemoryBuffer.h>
 #ifdef LLVM33
-#include "llvm/IR/Function.h"
-#include "llvm/ADT/StringRef.h"
+#include <llvm/IR/Function.h>
+#include <llvm/ADT/StringRef.h>
 #else
-#include "llvm/Function.h"
+#include <llvm/Function.h>
 #endif
 #ifdef LLVM35
-#include "llvm/IR/DebugInfo.h"
+#include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
-#include "llvm/DebugInfo.h"
+#include <llvm/DebugInfo.h>
 #else
-#include "llvm/Analysis/DebugInfo.h"
+#include <llvm/Analysis/DebugInfo.h>
 #endif
 
 #include "julia.h"
+#include "julia_internal.h"
 
 #include <string>
 #include <sstream>
@@ -60,7 +61,6 @@ struct ObjectInfo {
 extern "C" EXCEPTION_DISPOSITION _seh_exception_handler(PEXCEPTION_RECORD ExceptionRecord,void *EstablisherFrame, PCONTEXT ContextRecord, void *DispatcherContext);
 #endif
 #include <dbghelp.h>
-extern "C" volatile int jl_in_stackwalk;
 static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnname,
         uint8_t *Section, size_t Allocated)
 {
@@ -331,48 +331,29 @@ bool getObjUUID(llvm::object::MachOObjectFile *obj, uint8_t uuid[16])
 }
 #endif
 
-extern "C" char *jl_sysimage_name;
-
-bool jl_is_sysimg(const char *path)
-{
-    if (!jl_sysimage_name)
-        return 0;
-    const char *filename = strrchr(path,'/');
-    if (filename == NULL)
-        filename = path;
-    const char *sysimgname = strrchr(jl_sysimage_name,'/');
-    if (sysimgname == NULL)
-        sysimgname = jl_sysimage_name;
-    return strncmp(filename,sysimgname,strrchr(path,'.')-filename) == 0;
-}
+extern "C" uint64_t jl_sysimage_base;
 
 void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
 {
 #ifdef _OS_WINDOWS_
     char *fname = 0;
-    DWORD64 fbase;
-    printf("pointer: %llx\n", (long long)pointer);
+    DWORD64 fbase = 0;
     if (!jl_in_stackwalk) {
         jl_in_stackwalk = 1;
-        fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD)pointer);
+        fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD64)pointer);
         jl_in_stackwalk = 0;
-        printf("fbase: %llx\n", fbase);
     }
     if (fbase != 0) {
+        *fromC = (fbase != jl_sysimage_base);
+        if (skipC && *fromC) {
+            return;
+        }
         IMAGEHLP_MODULE64 ModuleInfo;
         ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
         jl_in_stackwalk = 1;
         SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
         jl_in_stackwalk = 0;
         fname = ModuleInfo.LoadedImageName;
-        if (ModuleInfo.LoadedImageName)
-printf("LoadedImageName: %s\n", ModuleInfo.LoadedImageName);
-        if (ModuleInfo.ImageName)
-        printf("Imagename: %s\n", ModuleInfo.ImageName);
-        *fromC = !jl_is_sysimg(fname);
-        if (skipC && *fromC) {
-            return;
-        }
         static char frame_info_func[
             sizeof(SYMBOL_INFO) +
             MAX_SYM_NAME * sizeof(TCHAR)];
@@ -387,26 +368,32 @@ printf("LoadedImageName: %s\n", ModuleInfo.LoadedImageName);
         if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
             // SymFromAddr returned success
             *name = strdup(pSymbol->Name);
-printf("name: %s\n",*name);
+        }
+        else {
+            // SymFromAddr failed
+            //fprintf(stderr,"SymFromAddr returned error : %lu\n", GetLastError());
         }
 
         frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
         if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
             // SymGetLineFromAddr64 returned success
-            *filename = strdup(frame_info_line.FileName);
+            // record source file name and line number
+            if (frame_info_line.FileName)
+                *filename = strdup(frame_info_line.FileName);
             *line = frame_info_line.LineNumber;
-printf("filename: %s\n",*filename);
-printf("line: %d\n",(int)*line);
-        }
-        else {
+        } else if (*fromC) {
+            // No debug info, use dll name instead
             *filename = fname;
+        } else {
+            *filename = "";
         }
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
     const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
-        *fromC = !jl_is_sysimg(dlinfo.dli_fname);
+        uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+        *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
             return;
         // In case we fail with the debug info lookup, we at least still
@@ -414,11 +401,10 @@ printf("line: %d\n",(int)*line);
         *name = dlinfo.dli_sname;
         *filename = dlinfo.dli_fname;
         fname = dlinfo.dli_fname;
-        uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
 #endif // ifdef _OS_WINDOWS_
         DIContext *context = NULL;
         int64_t slide = 0;
-#if defined(_OS_WINDOWS_) && !defined(LLVM35)
+#if defined(_OS_WINDOWS_) && defined(LLVM35)
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
@@ -542,8 +528,10 @@ printf("line: %d\n",(int)*line);
             slide = it->second.slide;
         }
 #endif // ifdef _OS_WINDOWS && !LLVM35
+#ifdef _OS_DARWIN_
 lookup:
-        lookup_pointer(context, name, line, filename, pointer+slide, jl_is_sysimg(fname), fromC);
+#endif
+        lookup_pointer(context, name, line, filename, pointer+slide, fbase == jl_sysimage_base, fromC);
     }
     else {
         *fromC = 1;
