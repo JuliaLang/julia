@@ -37,7 +37,7 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_cmd(cmd)
+function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
@@ -67,7 +67,7 @@ function repl_cmd(cmd)
             cd()
         end
         ENV["OLDPWD"] = new_oldpwd
-        println(pwd())
+        println(out, pwd())
     else
         run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
