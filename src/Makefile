@@ -9,7 +9,7 @@ override CPPFLAGS += $(JCPPFLAGS)
 BUILDDIR ?= .
 
 SRCS = \
-	jltypes gf ast builtins module codegen interpreter \
+	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
 
 HEADERS = julia.h julia_internal.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
@@ -72,7 +72,7 @@ $(julia_flisp.boot): julia-parser.scm julia-syntax.scm \
 	@$(call PRINT_FLISP, $(call spawn,$(BUILDDIR)/flisp/flisp) ./mk_julia_flisp_boot.scm)
 
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp debuginfo.cpp cgutils.cpp ccall.cpp disasm.cpp
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp 
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: table.c
 
 $(BUILDDIR)/support/libsupport.a: support/*.h support/*.c

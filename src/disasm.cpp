@@ -25,11 +25,62 @@
 #include <sstream>
 #include <string>
 
-#include "llvm/MC/MCExpr.h"
-#include "llvm/MC/MCInstrAnalysis.h"
-#include "llvm/MC/MCSymbol.h"
+#include "llvm-version.h"
+#include <llvm/Support/MachO.h>
+#include <llvm/Support/COFF.h>
+#include <llvm/MC/MCDisassembler.h>
+#include <llvm/MC/MCInst.h>
+#include <llvm/MC/MCStreamer.h>
+#include <llvm/MC/MCSubtargetInfo.h>
+#include <llvm/MC/MCObjectFileInfo.h>
+#include <llvm/MC/MCRegisterInfo.h>
+#include <llvm/MC/MCAsmInfo.h>
+#include <llvm/MC/MCAsmBackend.h>
+#include <llvm/MC/MCCodeEmitter.h>
+#include <llvm/MC/MCInstPrinter.h>
+#include <llvm/MC/MCInstrInfo.h>
+#include <llvm/MC/MCContext.h>
+#include <llvm/MC/MCExpr.h>
+#include <llvm/MC/MCInstrAnalysis.h>
+#include <llvm/MC/MCSymbol.h>
+#ifdef LLVM35
+#include <llvm/AsmParser/Parser.h>
+#else
+#include <llvm/Assembly/Parser.h>
+#include <llvm/ADT/OwningPtr.h>
+#endif
+#include <llvm/ADT/Triple.h>
+#include <llvm/Support/MemoryBuffer.h>
+#include <llvm/Support/MemoryObject.h>
+#include <llvm/Support/SourceMgr.h>
+#include <llvm/Support/TargetRegistry.h>
+#include <llvm/Support/Host.h>
+#include "llvm/Support/TargetSelect.h"
+#include <llvm/Support/raw_ostream.h>
+#include "llvm/Support/FormattedStream.h"
+#ifndef LLVM35
+#include <llvm/Support/system_error.h>
+#endif
+#include <llvm/ExecutionEngine/JITEventListener.h>
+#ifdef LLVM33
+#include "llvm/IR/LLVMContext.h"
+#else
+#include "llvm/LLVMContext.h"
+#endif
+#ifdef LLVM35 
+#include "llvm/IR/DebugInfo.h"
+#elif defined(LLVM32)
+#include "llvm/DebugInfo.h"
+#else
+#include "llvm/Analysis/DebugInfo.h"
+#endif
+
+
+#include "julia.h"
 
 using namespace llvm;
+
+extern DLLEXPORT LLVMContext &jl_LLVMContext;
 
 #ifndef LLVM36
 namespace {
@@ -171,18 +222,15 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
 }
 #endif
 
+extern "C"
+void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 #ifndef USE_MCJIT
-extern "C"
-void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-                          formatted_raw_ostream &stream) {
 #else
-extern "C"
-void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                           object::ObjectFile *objectfile,
-                          formatted_raw_ostream &stream) {
 #endif
-
+                          formatted_raw_ostream &stream)
+{
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
     llvm::InitializeNativeTargetAsmParser();
