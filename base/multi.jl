@@ -958,10 +958,9 @@ function start_worker(out::IO)
         sock = listen(LPROC.bind_port)
     end
     sock.ccb = accept_handler
-    print(out, "julia_worker:")  # print header
-    print(out, "$(dec(LPROC.bind_port))#") # print port
-    print(out, LPROC.bind_addr)
-    print(out, '\n')
+
+    self_address = "julia_worker:$(dec(LPROC.bind_port))#$(LPROC.bind_addr)\n"
+    print(out, self_address)
     flush(out)
     # close STDIN; workers will not use it
     #close(STDIN)
@@ -990,6 +989,11 @@ function read_cb_response(io::IO, host::AbstractString, config::Dict)
     return (io, bind_addr, port, host, config)
 end
 
+function read_cb_response(conninfo::AbstractString, config::Dict)
+        (host, port) = parse_connection_info(conninfo)
+        (nothing, host, port, host, config)
+end
+
 read_cb_response(io::IO, host::AbstractString, port::Integer, config::Dict) = (io, host, port, host, config)
 
 read_cb_response(host::AbstractString, port::Integer, config::Dict) = (nothing, host, port, host, config)
@@ -1013,7 +1017,12 @@ function start_cluster_workers(np::Integer, config::Dict, manager::ClusterManage
             instances = shift!(instance_sets)
             for inst in instances
                 (io, bind_addr, port, pubhost, wconfig) = read_cb_response(inst...)
-                push!(resp_arr, create_worker(bind_addr, port, pubhost, io, wconfig, manager))
+                wconfig[:bind_addr] = bind_addr
+                wconfig[:port] = port
+                wconfig[:pubhost] = pubhost
+                wconfig[:manager] = manager
+                wconfig[:io] = io
+                push!(resp_arr, create_worker(wconfig))
                 notify(launched_ntfy)
             end
         end
@@ -1033,8 +1042,11 @@ function read_worker_host_port(io::IO)
     end
 end
 
-function create_worker(bind_addr, port, pubhost, stream, config, manager)
+function create_worker(config)
     tunnel = config[:tunnel]
+    bind_addr = config[:bind_addr]
+    port = config[:port]
+    pubhost = config[:pubhost]
 
     s = split(pubhost,'@')
     user = ""
@@ -1057,17 +1069,12 @@ function create_worker(bind_addr, port, pubhost, stream, config, manager)
     end
 
     w.config = config
-    w.manager = manager
+    w.manager = config[:manager]
 
-    if isa(stream, AsyncStream)
-        let wrker = w
+    if isa(config[:io], AsyncStream)
+        let w = w
             # redirect console output from workers to the client's stdout:
-            @async begin
-                while !eof(stream)
-                    line = readline(stream)
-                    print("\tFrom worker $(wrker.id):\t$line")
-                end
-            end
+            @async redirect_worker_output(w, w.config[:io])
         end
     end
 
@@ -1075,6 +1082,21 @@ function create_worker(bind_addr, port, pubhost, stream, config, manager)
     finalizer(w, (w)->if myid() == 1 manage(w.manager, w.id, w.config, :finalize) end)
 
     w
+end
+
+function redirect_worker_output(ident, stream)
+    while !eof(stream)
+        line = readline(stream)
+        if beginswith(line, "\tFrom worker ")
+            print(line)
+        else
+            if isa(ident, Worker)
+                print("\tFrom worker $(ident.id):\t$line")
+            else
+                print("\tFrom worker $(ident):\t$line")
+            end
+        end
+    end
 end
 
 
@@ -1131,6 +1153,36 @@ function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Arra
     notify(c)
 end
 
+function clone_locally(clone_worker::AbstractString)
+    if clone_worker == "auto"
+        return clone_locally(Base.CPU_CORES - 1)
+    end
+    error("Invalid number clones per worker specification")
+end
+
+function clone_locally(np::Integer)
+    io_objs = cell(np)
+    addresses = cell(np)
+
+    for i in 1:np
+        io, pobj = open(detach(`$(JULIA_HOME)/$(get_exename()) --worker --bind-to $(LPROC.bind_addr)`), "r")
+        io_objs[i] = io
+    end
+
+    for (i,io) in enumerate(io_objs)
+        (host, port) = read_worker_host_port(io)
+        addresses[i] = (host, port)
+
+        let io=io
+            @async redirect_worker_output("$(myid()).clone", io)
+        end
+    end
+
+    addresses
+end
+
+get_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "./julia" : "./julia-debug"
+
 function manage(manager::LocalManager, id::Integer, config::Dict, op::Symbol)
     if op == :interrupt
         kill(config[:process], 2)
@@ -1139,6 +1191,7 @@ end
 
 immutable SSHManager <: ClusterManager
     machines::Dict
+    workers::Dict
 
     function SSHManager(; machines=[])
         mhist = Dict()
@@ -1146,7 +1199,7 @@ immutable SSHManager <: ClusterManager
             cnt = get(mhist, m, 0)
             mhist[m] = cnt + 1
         end
-        new(mhist)
+        new(mhist, AnyDict())
     end
 end
 
@@ -1272,6 +1325,9 @@ function manage(manager::SSHManager, id::Integer, config::Dict, op::Symbol)
         end
     elseif op == :register
         config[:ospid] = remotecall_fetch(id, getpid)
+        manager.workers[id] = config
+    elseif op == :deregister
+        delete!(manager.workers, id)
     end
 end
 
@@ -1280,16 +1336,23 @@ end
 # the tunnel is only used from the head (process 1); the nodes are assumed
 # to be mutually reachable without a tunnel, as is often the case in a cluster.
 # Default value of kw arg max_parallel is the default value of MaxStartups in sshd_config
-function addprocs_internal(np::Integer;
-                           tunnel=false, dir=JULIA_HOME,
-                           exename=(ccall(:jl_is_debugbuild,Cint,())==0?"./julia":"./julia-debug"),
-                           sshflags::Cmd=``, manager=LocalManager(), exeflags=``, max_parallel=10)
+function addprocs_internal(np::Integer; tunnel=false, dir=JULIA_HOME, exename=get_exename(),
+                                    sshflags::Cmd=``, manager=LocalManager(), exeflags=``,
+                                    max_parallel=10, clone_worker=0)
 
-    config = AnyDict(:dir=>dir, :exename=>exename, :exeflags=>`$exeflags --worker`, :tunnel=>tunnel, :sshflags=>sshflags, :max_parallel=>max_parallel)
+    config = AnyDict(
+            :dir=>dir,
+            :exename=>exename,
+            :exeflags=>`$exeflags --worker`,
+            :tunnel=>tunnel,
+            :sshflags=>sshflags,
+            :max_parallel=>max_parallel,
+            :clone_worker=>clone_worker)
+
     disable_threaded_libs()
 
-    ret = Array(Int, 0)
-    rr_join = Array(RemoteRef, 0)
+    pids = Array(Int, 0)
+    rr_workers = Array(RemoteRef, 0)
 
     resp_arr = []
     c = Condition()
@@ -1306,17 +1369,55 @@ function addprocs_internal(np::Integer;
         if length(resp_arr) > 0
             w = shift!(resp_arr)
             id, rr = add_worker(PGRP, w)
-            push!(ret, id)
-            push!(rr_join, rr)
+            push!(pids, id)
+            push!(rr_workers, rr)
         end
     end
 
-    for rr in rr_join
+    for rr in rr_workers
         wait(rr)
     end
 
-    assert(length(ret) == np)
-    ret
+    # Check if we need to clone workers on the host
+    if clone_worker != 0
+        new_workers=AnyDict()
+        for pid in pids
+            # Launch clones on each worker
+            new_workers[pid] = remotecall(pid, clone_locally, clone_worker)
+        end
+
+        empty!(rr_workers)
+        @sync begin
+            for (pid, rr) in new_workers
+                let pid=pid, rr=rr
+                    @async begin
+                        clone_addresses = fetch(rr)
+                        w_launcher=map_pid_wrkr[pid]
+
+                        wconfig = copy(w_launcher.config)
+
+                        for address in clone_addresses
+                            (bind_addr, port) = address
+                            wconfig[:bind_addr] = bind_addr
+                            wconfig[:port] = port
+
+                            id, rr = add_worker(PGRP, create_worker(wconfig))
+                            push!(pids, id)
+                            push!(rr_workers, rr)
+                        end
+                    end
+                end
+            end
+        end
+
+        for rr in rr_workers
+            wait(rr)
+        end
+    else
+        assert(length(pids) == np)
+    end
+
+    pids
 end
 
 addprocs(np::Integer; kwargs...) = addprocs_internal(np; kwargs...)
@@ -1325,9 +1426,9 @@ function addprocs(machines::AbstractVector; kwargs...)
     manager_defined = any(x -> begin k,v = x; k==:manager end, kwargs)
     if manager_defined
         error("custom cluster managers unsupported on the ssh interface")
-    else
-        addprocs_internal(length(machines); manager=SSHManager(machines=machines), kwargs...)
     end
+
+    addprocs_internal(length(machines); manager=SSHManager(machines=machines), kwargs...)
 end
 
 
