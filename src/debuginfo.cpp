@@ -747,7 +747,7 @@ void write_log_data(logdata_t logData, const char *extension)
         std::vector<GlobalVariable*> &values = (*it).second;
         if (values.size() > 1) {
             if (filename[0] != '/')
-            filename = base + filename;
+                filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
                 std::string outfile = filename + extension;
@@ -827,8 +827,8 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
         std::vector<GlobalVariable*>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
-            int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
-            *p = 0;
+                int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+                *p = 0;
             }
         }
     }
