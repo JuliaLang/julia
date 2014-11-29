@@ -797,6 +797,23 @@ end
 @test nextfloat(0.0) == 1//(BigInt(2)^1074)
 @test nextfloat(0.0) != 1//(BigInt(2)^1074-1)
 
+@test 1/3 < 1//3
+@test !(1//3 < 1/3)
+@test -1/3 < 1//3
+@test -1/3 > -1//3
+@test 1/3 > -1//3
+@test 1/5 > 1//5
+@test 1//3 < Inf
+@test 0//1 < Inf
+@test 1//0 == Inf
+@test -1//0 == -Inf
+@test -1//0 != Inf
+@test 1//0 != -Inf
+@test !(1//0 < Inf)
+@test !(1//3 < NaN)
+@test !(1//3 == NaN)
+@test !(1//3 > NaN)
+
 @test sqrt(2) == 1.4142135623730951
 
 @test 1+1.5 == 2.5
@@ -1977,6 +1994,10 @@ end
 @test widen(BigInt) === BigInt
 
 @test widemul(typemax(Int64),typemax(Int64)) == 85070591730234615847396907784232501249
+@test typeof(widemul(Int64(1),UInt64(1))) == Int128
+@test typeof(widemul(UInt64(1),Int64(1))) == Int128
+@test typeof(widemul(Int128(1),UInt128(1))) == BigInt
+@test typeof(widemul(UInt128(1),Int128(1))) == BigInt
 
 # .//
 @test [1,2,3] // 4 == [1//4, 2//4, 3//4]
