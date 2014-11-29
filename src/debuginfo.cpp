@@ -1,3 +1,38 @@
+#include "platform.h"
+
+#include "llvm-version.h"
+#include "llvm/ExecutionEngine/ExecutionEngine.h"
+#include "llvm/ExecutionEngine/JITEventListener.h"
+#include "llvm/DebugInfo/DIContext.h"
+#include <llvm/Support/MemoryBuffer.h>
+#ifdef LLVM33
+#include "llvm/IR/Function.h"
+#include "llvm/ADT/StringRef.h"
+#else
+#include "llvm/Function.h"
+#endif
+#ifdef LLVM35
+#include "llvm/IR/DebugInfo.h"
+#elif defined(LLVM32)
+#include "llvm/DebugInfo.h"
+#else
+#include "llvm/Analysis/DebugInfo.h"
+#endif
+
+#include "julia.h"
+
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <map>
+#include <vector>
+#include <set>
+#include <cstdio>
+#include <cassert>
+using namespace llvm;
+
+extern DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
+
 #if USE_MCJIT
 typedef object::SymbolRef SymRef;
 #endif
@@ -210,6 +245,10 @@ const char *jl_demangle(const char *name)
 }
 
 JuliaJITEventListener *jl_jit_events;
+void RegisterJuliaJITEventListener() {
+    jl_jit_events = new JuliaJITEventListener();
+    jl_ExecutionEngine->RegisterJITEventListener(jl_jit_events);
+}
 
 extern "C" void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, uintptr_t pointer, int *fromC, int skipC);
 
@@ -593,6 +632,54 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #endif // USE_MCJIT
 }
 
+int jl_get_llvmf_info(size_t fptr, uint64_t *symsize, 
+#ifdef USE_MCJIT
+    object::ObjectFile **object)
+#else
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines)
+#endif
+{
+#ifndef USE_MCJIT
+    std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
+    std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
+
+    if (fit == fmap.end()) {
+        return 0; 
+    }
+    *symsize = fit->second.lengthAdr;
+    *lines = fit->second.lines;
+    return 1;
+#else // MCJIT version
+    std::map<size_t, ObjectInfo, revcomp> objmap = jl_jit_events->getObjectMap();
+    std::map<size_t, ObjectInfo, revcomp>::iterator fit = objmap.find(fptr);
+
+    if (fit == objmap.end()) {
+        return 0;
+    }
+
+    object::SymbolRef::Type symtype;
+    uint64_t symaddr;
+
+#ifdef LLVM35
+    for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
+#else
+    error_code itererr;
+    object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
+    object::symbol_iterator sym_end = fit->second.object->end_symbols();
+    for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
+#endif // LLVM35
+        sym_iter->getType(symtype);
+        sym_iter->getAddress(symaddr);
+        if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+            continue;
+        sym_iter->getSize(*symsize);
+        *object = fit->second.object;
+        return 1;
+    }
+    return 0;
+#endif
+}
+
 
 #if defined(_OS_WINDOWS_)
 #ifdef USE_MCJIT
@@ -758,133 +845,6 @@ DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 #endif
 #endif
 
-// Code coverage
-
-typedef std::map<std::string,std::vector<GlobalVariable*> > logdata_t;
-static logdata_t coverageData;
-
-static void coverageVisitLine(std::string filename, int line)
-{
-    if (filename == "" || filename == "none" || filename == "no file")
-        return;
-    logdata_t::iterator it = coverageData.find(filename);
-    if (it == coverageData.end()) {
-        coverageData[filename] = std::vector<GlobalVariable*>(0);
-    }
-    std::vector<GlobalVariable*> &vec = coverageData[filename];
-    if (vec.size() <= (size_t)line)
-        vec.resize(line+1, NULL);
-    if (vec[line] == NULL)
-        vec[line] = new GlobalVariable(*jl_Module, T_int64, false, GlobalVariable::InternalLinkage,
-                                       ConstantInt::get(T_int64,0), "lcnt");
-    GlobalVariable *v = vec[line];
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
-                                          ConstantInt::get(T_int64,1)),
-                        v);
-}
-
-void write_log_data(logdata_t logData, const char *extension)
-{
-    std::string base = std::string(julia_home);
-    base = base + "/../share/julia/base/";
-    logdata_t::iterator it = logData.begin();
-    for (; it != logData.end(); it++) {
-        std::string filename = (*it).first;
-        std::vector<GlobalVariable*> &values = (*it).second;
-        if (values.size() > 1) {
-            if (filename[0] != '/')
-                filename = base + filename;
-            std::ifstream inf(filename.c_str());
-            if (inf.is_open()) {
-                std::string outfile = filename + extension;
-                std::ofstream outf(outfile.c_str(), std::ofstream::trunc | std::ofstream::out);
-                char line[1024];
-                int l = 1;
-                while (!inf.eof()) {
-                    inf.getline(line, sizeof(line));
-                    if (inf.fail() && !inf.bad()) {
-                        // Read through lines longer than sizeof(line)
-                        inf.clear();
-                        inf.ignore(std::numeric_limits<std::streamsize>::max(), '\n');
-                    }
-                    int value = -1;
-                    if ((size_t)l < values.size()) {
-                        GlobalVariable *gv = values[l];
-                        if (gv) {
-                            int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
-                            value = *p;
-                        }
-                    }
-                    outf.width(9);
-                    if (value == -1)
-                        outf<<'-';
-                    else
-                        outf<<value;
-                    outf.width(0);
-                    outf<<" "<<line<<std::endl;
-                    l++;
-                }
-                outf.close();
-                inf.close();
-            }
-        }
-    }
-}
-
-extern "C" void jl_write_coverage_data(void)
-{
-    write_log_data(coverageData, ".cov");
-}
-
-// Memory allocation log (malloc_log)
-
-static logdata_t mallocData;
-
-static void mallocVisitLine(std::string filename, int line)
-{
-    if (filename == "" || filename == "none" || filename == "no file") {
-        sync_gc_total_bytes();
-        return;
-    }
-    logdata_t::iterator it = mallocData.find(filename);
-    if (it == mallocData.end()) {
-        mallocData[filename] = std::vector<GlobalVariable*>(0);
-    }
-    std::vector<GlobalVariable*> &vec = mallocData[filename];
-    if (vec.size() <= (size_t)line)
-        vec.resize(line+1, NULL);
-    if (vec[line] == NULL)
-        vec[line] = new GlobalVariable(*jl_Module, T_int64, false,
-                                       GlobalVariable::InternalLinkage,
-                                       ConstantInt::get(T_int64,0), "bytecnt");
-    GlobalVariable *v = vec[line];
-    builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
-                                          builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
-                        v, true);
-}
-
-// Resets the malloc counts. Needed to avoid including memory usage
-// from JITting.
-extern "C" DLLEXPORT void jl_clear_malloc_data(void)
-{
-    logdata_t::iterator it = mallocData.begin();
-    for (; it != mallocData.end(); it++) {
-        std::vector<GlobalVariable*> &bytes = (*it).second;
-        std::vector<GlobalVariable*>::iterator itb;
-        for (itb = bytes.begin(); itb != bytes.end(); itb++) {
-            if (*itb) {
-                int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
-                *p = 0;
-            }
-        }
-    }
-    sync_gc_total_bytes();
-}
-
-extern "C" void jl_write_malloc_log(void)
-{
-    write_log_data(mallocData, ".mem");
-}
 
 void show_execution_point(char *filename, int lno)
 {
