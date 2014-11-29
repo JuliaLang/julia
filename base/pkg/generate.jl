@@ -175,7 +175,7 @@ function genfile(f::Function, pkg::AbstractString, file::AbstractString, force::
         info("Generating $file")
         mkpath(dirname(path))
         open(f, path, "w")
-        Git.run(`add $file`, dir=pkg)
+        Git.run(`add -f $file`, dir=pkg)
         return true
     end
     return false
