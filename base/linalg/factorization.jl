@@ -64,9 +64,9 @@ qrfact(x::Number) = qrfact(fill(x,1,1))
 function qr(A::Union(Number, AbstractMatrix); pivot::Bool=false, thin::Bool=true)
     F = qrfact(A, pivot=pivot)
     if pivot
-        full(F[:Q], thin=thin), F[:R], F[:p]
+        full(F[€{:Q}], thin=thin), F[€{:R}], F[€{:p}]
     else
-        full(F[:Q], thin=thin), F[:R]
+        full(F[€{:Q}], thin=thin), F[€{:R}]
     end
 end
 
@@ -77,33 +77,31 @@ convert{T}(::Type{Factorization{T}}, A::QRCompactWY) = convert(QRCompactWY{T}, A
 convert{T}(::Type{QRPivoted{T}},A::QRPivoted) = QRPivoted(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ), A.jpvt)
 convert{T}(::Type{Factorization{T}}, A::QRPivoted) = convert(QRPivoted{T}, A)
 
-function getindex(A::QR, d::Symbol)
+function getindex(A::QR, ::Type{€{:R}})
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return QRPackedQ(A.factors,A.τ)
-    throw(KeyError(d))
+    triu!(A.factors[1:min(m,n), 1:n])
 end
-function getindex(A::QRCompactWY, d::Symbol)
+getindex(A::QR, ::Type{€{:Q}}) = QRPackedQ(A.factors, A.τ)
+function getindex(A::QRCompactWY, ::Type{€{:R}})
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return QRCompactWYQ(A.factors,A.T)
-    throw(KeyError(d))
+    return triu!(A.factors[1:min(m,n), 1:n])
 end
-function getindex{T}(A::QRPivoted{T}, d::Symbol)
+getindex(A::QRCompactWY, ::Type{€{:Q}}) = QRCompactWYQ(A.factors, A.T)
+function getindex{T}(A::QRPivoted{T}, ::Type{€{:R}})
     m, n = size(A)
-    d == :R && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :Q && return QRPackedQ(A.factors,A.τ)
-    d == :p && return A.jpvt
-    if d == :P
-        p = A[:p]
-        n = length(p)
-        P = zeros(T, n, n)
-        for i in 1:n
-            P[p[i],i] = one(T)
-        end
-        return P
+    return triu!(A.factors[1:min(m,n), 1:n])
+end
+getindex{T}(A::QRPivoted{T}, ::Type{€{:Q}}) = QRPackedQ(A.factors, A.τ)
+getindex{T}(A::QRPivoted{T}, ::Type{€{:p}}) = A.jpvt
+function getindex{T}(A::QRPivoted{T}, ::Type{€{:P}})
+    m, n = size(A)
+    p = A[€{:p}]
+    n = length(p)
+    P = zeros(T, n, n)
+    for i in 1:n
+        P[p[i],i] = one(T)
     end
-    throw(KeyError(d))
+    return P
 end
 # Type-stable interface to get Q
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
@@ -265,8 +263,8 @@ function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPacke
               convert(AbstractMatrix{TAB}, B))
 end
 
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(Triangular(A[:R], :U), sub(Ac_mul_B!(A[:Q], b), 1:size(A, 2))); b)
-A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(Triangular(A[:R], :U), sub(Ac_mul_B!(A[:Q], B), 1:size(A, 2), 1:size(B, 2))); B)
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, b::StridedVector{T}) = (A_ldiv_B!(Triangular(A[€{:R}], €{:U}), sub(Ac_mul_B!(A[€{:Q}], b), 1:size(A, 2))); b)
+A_ldiv_B!{T<:BlasFloat}(A::QRCompactWY{T}, B::StridedMatrix{T}) = (A_ldiv_B!(Triangular(A[€{:R}], €{:U}), sub(Ac_mul_B!(A[€{:Q}], B), 1:size(A, 2), 1:size(B, 2))); B)
 
 # Julia implementation similarly to xgelsy
 function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Real)
@@ -294,10 +292,10 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
         # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
-    A_ldiv_B!(Triangular(C[1:rnk,1:rnk],:U),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
+    A_ldiv_B!(Triangular(C[1:rnk,1:rnk], €{:U}),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
     B[rnk+1:end,:] = zero(T)
     LAPACK.ormrz!('L', iseltype(B, Complex) ? 'C' : 'T', C, τ, sub(B,1:nA,1:nrhs))
-    B[1:nA,:] = sub(B, 1:nA, :)[invperm(A[:p]::Vector{BlasInt}),:]
+    B[1:nA,:] = sub(B, 1:nA, :)[invperm(A[€{:p}]::Vector{BlasInt}),:]
     return B, rnk
 end
 A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedVector{T}) = vec(A_ldiv_B!(A,reshape(B,length(B),1)))
@@ -306,8 +304,8 @@ function A_ldiv_B!{T}(A::QR{T},B::StridedMatrix{T})
     m, n = size(A)
     minmn = min(m,n)
     mB, nB = size(B)
-    Ac_mul_B!(A[:Q],sub(B,1:m,1:nB)) # Reconsider when arrayviews are merged.
-    R = A[:R]
+    Ac_mul_B!(A[€{:Q}],sub(B,1:m,1:nB)) # Reconsider when arrayviews are merged.
+    R = A[€{:R}]
     @inbounds begin
         if n > m # minimum norm solution
             τ = zeros(T,m)
@@ -401,11 +399,8 @@ end
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, args...) = size(A.factors, args...)
 
-function getindex(A::Hessenberg, d::Symbol)
-    d == :Q && return HessenbergQ(A)
-    d == :H && return triu(A.factors, -1)
-    throw(KeyError(d))
-end
+getindex(A::Hessenberg, ::Type{€{:Q}}) = HessenbergQ(A)
+getindex(A::Hessenberg, ::Type{€{:H}}) = triu(A.factors, -1)
 
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 
@@ -429,11 +424,8 @@ immutable GeneralizedEigen{T,V} <: Factorization{T}
     vectors::Matrix{T}
 end
 
-function getindex(A::Union(Eigen,GeneralizedEigen), d::Symbol)
-    d == :values && return A.values
-    d == :vectors && return A.vectors
-    throw(KeyError(d))
-end
+getindex(A::Union(Eigen,GeneralizedEigen), ::Type{€{:values}}) = A.values
+getindex(A::Union(Eigen,GeneralizedEigen), ::Type{€{:vectors}}) = A.vectors
 
 isposdef(A::Union(Eigen,GeneralizedEigen)) = all(A.values .> 0)
 
@@ -473,10 +465,10 @@ eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 # end
 function eig(A::Union(Number, AbstractMatrix), args...; kwargs...)
     F = eigfact(A, args..., kwargs...)
-    F[:values], F[:vectors]
+    F[€{:values}], F[€{:vectors}]
 end
 #Calculates eigenvectors
-eigvecs(A::Union(Number, AbstractMatrix), args...; kwargs...) = eigfact(A, args...; kwargs...)[:vectors]
+eigvecs(A::Union(Number, AbstractMatrix), args...; kwargs...) = eigfact(A, args...; kwargs...)[€{:vectors}]
 
 function eigvals!{T<:BlasReal}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true)
     issym(A) && return eigvals!(Symmetric(A))
@@ -569,13 +561,10 @@ function svd(A::Union(Number, AbstractArray); thin::Bool=true)
     F.U, F.S, F.Vt'
 end
 
-function getindex(F::SVD, d::Symbol)
-    d == :U && return F.U
-    d == :S && return F.S
-    d == :Vt && return F.Vt
-    d == :V && return F.Vt'
-    throw(KeyError(d))
-end
+getindex(F::SVD, d::Type{€{:U}}) = F.U
+getindex(F::SVD, d::Type{€{:S}}) = F.S
+getindex(F::SVD, d::Type{€{:Vt}}) = F.Vt
+getindex(F::SVD, d::Type{€{:V}}) = F.Vt'
 
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
 svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
@@ -612,39 +601,39 @@ svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(F
 
 function svd(A::AbstractMatrix, B::AbstractMatrix)
     F = svdfact(A, B)
-    F[:U], F[:V], F[:Q], F[:D1], F[:D2], F[:R0]
+    F[€{:U}], F[€{:V}], F[€{:Q}], F[€{:D1}], F[€{:D2}], F[€{:R0}]
 end
 
-function getindex{T}(obj::GeneralizedSVD{T}, d::Symbol)
-    d == :U && return obj.U
-    d == :V && return obj.V
-    d == :Q && return obj.Q
-    (d == :alpha || d == :a) && return obj.a
-    (d == :beta || d == :b) && return obj.b
-    (d == :vals || d == :S) && return obj.a[1:obj.k + obj.l] ./ obj.b[1:obj.k + obj.l]
-    if d == :D1
-        m = size(obj.U, 1)
-        if m - obj.k - obj.l >= 0
-            return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) diagm(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
-        else
-            return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
-        end
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:U}}) = obj.U
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:V}}) = obj.V
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:Q}}) = obj.Q
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:α}}) = obj.a
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:a}}) = obj.a
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:β}}) = obj.b
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:b}}) = obj.b
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:vals}}) = obj.a[1:obj.k + obj.l] ./ obj.b[1:obj.k + obj.l]
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:S}}) = obj.a[1:obj.k + obj.l] ./ obj.b[1:obj.k + obj.l]
+function getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:D1}})
+    m = size(obj.U, 1)
+    if m - obj.k - obj.l >= 0
+        return [eye(T, obj.k) zeros(T, obj.k, obj.l); zeros(T, obj.l, obj.k) diagm(obj.a[obj.k + 1:obj.k + obj.l]); zeros(T, m - obj.k - obj.l, obj.k + obj.l)]
+    else
+        return [eye(T, m, obj.k) [zeros(T, obj.k, m - obj.k); diagm(obj.a[obj.k + 1:m])] zeros(T, m, obj.k + obj.l - m)]
     end
-    if d == :D2
-        m = size(obj.U, 1)
-        p = size(obj.V, 1)
-        if m - obj.k - obj.l >= 0
-            return [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
-        else
-            return [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
-        end
+end
+function getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:D2}})
+    m = size(obj.U, 1)
+    p = size(obj.V, 1)
+    if m - obj.k - obj.l >= 0
+        return [zeros(T, obj.l, obj.k) diagm(obj.b[obj.k + 1:obj.k + obj.l]); zeros(T, p - obj.l, obj.k + obj.l)]
+    else
+        return [zeros(T, p, obj.k) [diagm(obj.b[obj.k + 1:m]); zeros(T, obj.k + p - m, m - obj.k)] [zeros(T, m - obj.k, obj.k + obj.l - m); eye(T, obj.k + p - m, obj.k + obj.l - m)]]
     end
-    d == :R && return obj.R
-    if d == :R0
-        n = size(obj.Q, 1)
-        return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
-    end
-    throw(KeyError(d))
+end
+getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:R}}) = obj.R
+function getindex{T}(obj::GeneralizedSVD{T}, ::Type{€{:R0}})
+    n = size(obj.Q, 1)
+    return [zeros(T, obj.k + obj.l, n - obj.k - obj.l) obj.R]
 end
 
 function svdvals!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
@@ -664,21 +653,20 @@ schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A
 schurfact{T<:BlasFloat}(A::StridedMatrix{T}) = schurfact!(copy(A))
 schurfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? schurfact!(convert(AbstractMatrix{S},A)) : schurfact!(copy(A)))
 
-function getindex(F::Schur, d::Symbol)
-    (d == :T || d == :Schur) && return F.T
-    (d == :Z || d == :vectors) && return F.Z
-    d == :values && return F.values
-    throw(KeyError(d))
-end
+getindex(F::Schur, ::Type{€{:T}}) = F.T
+getindex(F::Schur, ::Type{€{:Schur}}) = F.T
+getindex(F::Schur, ::Type{€{:Z}}) = F.Z
+getindex(F::Schur, ::Type{€{:vectors}}) = F.Z
+getindex(F::Schur, ::Type{€{:values}}) = F.values
 
 function schur(A::AbstractMatrix)
     SchurF = schurfact(A)
-    SchurF[:T], SchurF[:Z], SchurF[:values]
+    SchurF[€{:T}], SchurF[€{:Z}], SchurF[€{:values}]
 end
 
 ordschur!{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Array{Int}) = Schur(LinAlg.LAPACK.trsen!(select, T , Q)...)
 ordschur{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Array{Int}) = ordschur!(copy(Q), copy(T), select)
-ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = (res=ordschur!(schur.Z, schur.T, select); schur[:values][:]=res[:values]; res)
+ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = (res=ordschur!(schur.Z, schur.T, select); schur[€{:values}][:]=res[€{:values}]; res)
 ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = ordschur(schur.Z, schur.T, select)
 
 immutable GeneralizedSchur{Ty<:BlasFloat} <: Factorization{Ty}
@@ -694,20 +682,20 @@ schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = Generalized
 schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
 schurfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); schurfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))
 
-function getindex(F::GeneralizedSchur, d::Symbol)
-    d == :S && return F.S
-    d == :T && return F.T
-    d == :alpha && return F.alpha
-    d == :beta && return F.beta
-    d == :values && return F.alpha./F.beta
-    (d == :Q || d == :left) && return F.Q
-    (d == :Z || d == :right) && return F.Z
-    throw(KeyError(d))
-end
+getindex(F::GeneralizedSchur, ::Type{€{:S}}) = F.S
+getindex(F::GeneralizedSchur, ::Type{€{:T}}) = F.T
+getindex(F::GeneralizedSchur, ::Type{€{:α}}) = F.alpha
+getindex(F::GeneralizedSchur, ::Type{€{:β}}) = F.beta
+getindex(F::GeneralizedSchur, ::Type{€{:values}}) = F.alpha./F.beta
+getindex(F::GeneralizedSchur, ::Type{€{:Q}}) = F.Q
+getindex(F::GeneralizedSchur, ::Type{€{:L}}) = F.Q
+getindex(F::GeneralizedSchur, ::Type{€{:Z}}) = F.Z
+getindex(F::GeneralizedSchur, ::Type{€{:R}}) = F.Z
+
 
 function schur(A::AbstractMatrix, B::AbstractMatrix)
     SchurF = schurfact(A, B)
-    SchurF[:S], SchurF[:T], SchurF[:Q], SchurF[:Z]
+    SchurF[€{:S}], SchurF[€{:T}], SchurF[€{:Q}], SchurF[€{:Z}]
 end
 
 ### General promotion rules
