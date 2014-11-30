@@ -945,7 +945,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                 if in(iderr, rmprocset)
                     delete!(rmprocset, iderr)
                 else
-                    println("Worker $iderr terminated.") 
+                    println(STDERR, "Worker $iderr terminated.") 
                     rethrow(e)
                 end
             end
@@ -1121,7 +1121,7 @@ immutable LocalManager <: ClusterManager
     LocalManager() = new(launch_local_workers, manage_local_worker)
 end
 
-show(io::IO, cman::LocalManager) = println("LocalManager()")
+show(io::IO, cman::LocalManager) = println(io,"LocalManager()")
 
 function launch_local_workers(cman::LocalManager, np::Integer, config::Dict)
     dir = config[:dir]
@@ -1156,7 +1156,7 @@ immutable SSHManager <: ClusterManager
     SSHManager(; machines=[]) = new(launch_ssh_workers, manage_ssh_worker, machines)
 end
 
-show(io::IO, cman::SSHManager) = println("SSHManager(machines=", cman.machines, ")")
+show(io::IO, cman::SSHManager) = println(io,"SSHManager(machines=", cman.machines, ")")
 
 function launch_ssh_workers(cman::SSHManager, np::Integer, config::Dict)
     dir = config[:dir]
