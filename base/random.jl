@@ -5,9 +5,10 @@ using Base.dSFMT
 export srand,
        rand, rand!,
        randn, randn!,
+       randexp, randexp!,
        randbool,
-       AbstractRNG, RNG, MersenneTwister,
-       randmtzig_exprnd
+       AbstractRNG, RNG, MersenneTwister
+
 
 abstract AbstractRNG
 
@@ -984,22 +985,39 @@ randn(dims::Int...) = randn!(Array(Float64, dims...))
 randn(rng::MersenneTwister, dims::Dims) = randn!(rng, Array(Float64, dims))
 randn(rng::MersenneTwister, dims::Int...) = randn!(rng, Array(Float64, dims...))
 
-function randmtzig_exprnd(rng::MersenneTwister=GLOBAL_RNG)
+@inline function randexp(rng::MersenneTwister=GLOBAL_RNG)
     @inbounds begin
-        while true
-            ri = rand_ui52(rng)
-            idx = ri & 0xFF
-            x = ri*we[idx+1]
-            if ri < ke[idx+1]
-                return x # 98.9% of the time we return here 1st try
-            elseif idx == 0
-                return ziggurat_exp_r - log(rand(rng))
-            elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
-                return x # return from the triangular area
-            end
-        end
+        ri = rand_ui52(rng)
+        idx = ri & 0xFF
+        x = ri*we[idx+1]
+        ri < ke[idx+1] && return x # 98.9% of the time we return here 1st try
+        return randexp_unlikely(rng, idx, x)
     end
 end
+
+function randexp_unlikely(rng, idx, x)
+    @inbounds if idx == 0
+        return ziggurat_exp_r - log(rand(rng))
+    elseif (fe[idx] - fe[idx+1])*rand(rng) + fe[idx+1] < exp(-x)
+        return x # return from the triangular area
+    else
+        return randexp(rng)
+    end
+end
+
+function randexp!(rng::MersenneTwister, A::Array{Float64})
+    for i = 1:length(A)
+        @inbounds A[i] = randexp(rng)
+    end
+    A
+end
+
+randexp!(A::Array{Float64}) = randexp!(GLOBAL_RNG, A)
+randexp(dims::Dims) = randexp!(Array(Float64, dims))
+randexp(dims::Int...) = randexp!(Array(Float64, dims))
+randexp(rng::MersenneTwister, dims::Dims) = randexp!(rng, Array(Float64, dims))
+randexp(rng::MersenneTwister, dims::Int...) = randexp!(rng, Array(Float64, dims))
+
 
 ## random UUID generation
 

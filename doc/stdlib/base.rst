@@ -4119,6 +4119,14 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
+.. function:: randexp([rng], [dims...])
+
+   Generate a random number according to the exponential distribution with scale 1. Optionally generate an array of such random numbers.
+
+.. function:: randexp!([rng], A::Array{Float64,N})
+
+   Fill the array A with random numbers following the exponential distribution (with scale 1).
+
 Arrays
 ------
 
