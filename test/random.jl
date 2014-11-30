@@ -80,10 +80,19 @@ if sizeof(Int32) < sizeof(Int)
 
 end
 
+randn()
 randn(100000)
 randn!(Array(Float64, 100000))
+randn(MersenneTwister(10))
 randn(MersenneTwister(10), 100000)
 randn!(MersenneTwister(10), Array(Float64, 100000))
+
+randexp()
+randexp(100000)
+randexp!(Array(Float64, 100000))
+randexp(MersenneTwister(10))
+randexp(MersenneTwister(10), 100000)
+randexp!(MersenneTwister(10), Array(Float64, 100000))
 
 # Test ziggurat tables
 ziggurat_table_size = 256

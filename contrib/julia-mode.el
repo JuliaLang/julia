@@ -41,6 +41,17 @@
 
 (defvar julia-basic-offset)
 
+(defface julia-macro-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for Julia macro invocations."
+  :group 'julia-mode)
+
+(defface julia-quoted-symbol-face
+  '((t :inherit font-lock-preprocessor-face))
+  "Face for quoted Julia symbols, e.g. :foo."
+  :group 'julia-mode)
+
+
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.jl\\'" . julia-mode))
 
@@ -76,11 +87,13 @@ This function provides equivalent functionality, but makes no efforts to optimis
     (modify-syntax-entry ?\] ")[ " table)
     (modify-syntax-entry ?\( "() " table)
     (modify-syntax-entry ?\) ")( " table)
-    ;(modify-syntax-entry ?\\ "." table)  ; \ is an operator outside quotes
-    (modify-syntax-entry ?'  "." table)  ; character quote or transpose
+    ;; Here, we treat ' as punctuation (when it's used for transpose),
+    ;; see our use of `julia-char-regex' for handling ' as a character
+    ;; delimeter
+    (modify-syntax-entry ?'  "." table)
     (modify-syntax-entry ?\" "\"" table)
     (modify-syntax-entry ?` "\"" table)
-    ;; (modify-syntax-entry ?\" "." table)
+
     (modify-syntax-entry ?. "." table)
     (modify-syntax-entry ?? "." table)
     (modify-syntax-entry ?$ "." table)
@@ -95,31 +108,28 @@ This function provides equivalent functionality, but makes no efforts to optimis
     table)
   "Syntax table for `julia-mode'.")
 
-;; syntax table that holds within strings
-(defvar julia-mode-string-syntax-table
-  (let ((table (make-syntax-table)))
-    table)
-  "Syntax table for `julia-mode'.")
-
-;; disable " inside char quote
-(defvar julia-mode-char-syntax-table
-  (let ((table (make-syntax-table)))
-    (modify-syntax-entry ?\" "." table)
-    table)
-  "Syntax table for `julia-mode'.")
-
-(defconst julia-string-regex
-  "\"[^\"]*?\\(\\(\\\\\\\\\\)*\\\\\"[^\"]*?\\)*\"")
-
 (defconst julia-char-regex
-  (rx (submatch (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
-                    (syntax open-parenthesis)
-                    (syntax whitespace)
-                    bol))
-      (submatch "'"
-                (or (repeat 0 7 (not (any "'"))) (not (any "\\"))
-                    "\\\\")
-                "'")))
+  (rx (or (any "-" ";" "\\" "^" "!" "|" "?" "*" "<" "%" "," "=" ">" "+" "/" "&" "$" "~" ":")
+          (syntax open-parenthesis)
+          (syntax whitespace)
+          bol)
+      (group "'")
+      (group
+       (or (repeat 0 8 (not (any "'"))) (not (any "\\"))
+           "\\\\"))
+      (group "'")))
+
+(defconst julia-triple-quoted-string-regex
+  ;; We deliberately put a group on the first and last delimiter, so
+  ;; we can mark these as string delimiters for font-lock.
+  (rx (group "\"")
+      (group "\"\""
+             ;; After the delimiter, we're a sequence of
+             ;; non-backslashes or blackslashes paired with something.
+             (*? (or (not (any "\\"))
+                     (seq "\\" anything)))
+             "\"\"")
+      (group "\"")))
 
 (defconst julia-unquote-regex
   "\\(\\s(\\|\\s-\\|-\\|[,%=<>\\+*/?&|!\\^~\\\\;:]\\|^\\)\\($[a-zA-Z0-9_]+\\)")
@@ -191,18 +201,28 @@ This function provides equivalent functionality, but makes no efforts to optimis
      "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")
    'symbols))
 
+(defconst julia-quoted-symbol-regex
+  ;; :foo and :foo2 are valid, but :123 is not.
+  (rx (or whitespace "(" "[" ",")
+      (group ":" (or letter (syntax symbol)) (0+ (or word (syntax symbol))))))
+
 (defconst julia-font-lock-keywords
   (list
+   ;; Ensure :: and <: aren't highlighted, so we don't confuse ::Foo with :foo.
+   ;; (in Emacs, keywords don't overlap).
+   (cons (rx (or "::" "<:")) ''default)
+   ;; Highlight quoted symbols before keywords, so :function is not
+   ;; highlighted as a keyword.
+   (list julia-quoted-symbol-regex 1 ''julia-quoted-symbol-face)
    (cons julia-builtin-types-regex 'font-lock-type-face)
    (cons julia-keyword-regex 'font-lock-keyword-face)
-   (cons julia-macro-regex 'font-lock-keyword-face)
+   (cons julia-macro-regex ''julia-macro-face)
    (cons
     (julia--regexp-opt
      '("true" "false" "C_NULL" "Inf" "NaN" "Inf32" "NaN32" "nothing")
      'symbols)
     'font-lock-constant-face)
    (list julia-unquote-regex 2 'font-lock-constant-face)
-   (list julia-char-regex 2 'font-lock-string-face)
    (list julia-forloop-in-regex 1 'font-lock-keyword-face)
    (list julia-function-regex 1 'font-lock-function-name-face)
    (list julia-function-assignment-regex 1 'font-lock-function-name-face)
@@ -226,35 +246,10 @@ Handles both single-line and multi-line comments."
   (nth 4 (syntax-ppss)))
 
 (defun julia-in-string ()
-  "Return non-nil if point is inside a string."
+  "Return non-nil if point is inside a string.
+Note this is Emacs' notion of what is highlighted as a string.
+As a result, it is true inside \"foo\", `foo` and 'f'."
   (nth 3 (syntax-ppss)))
-
-(defun julia-in-char ()
-  "Return non-nil if point is inside a character."
-  (cond
-   ((julia-in-comment) nil)
-   ((julia-in-string) nil)
-   ((<= (point) (1+ (point-min))) nil)
-   (:else
-    (save-excursion
-      ;; See if point is inside a character, e.g. '|x'
-      ;;
-      ;; Move back past the single quote.
-      (backward-char 1)
-      ;; Move back one more character, as julia-char-regex checks
-      ;; for whitespace/paren/etc before the single quote.
-      (ignore-errors (backward-char 1)) ; ignore error from being at (point-min)
-
-      (if (looking-at julia-char-regex)
-          t
-        ;; If point was in a \ character (i.e. we started at '\|\'),
-        ;; we need to move back once more.
-        (ignore-errors
-          (if (looking-at (rx "'\\"))
-              (progn
-                (backward-char 1)
-                (looking-at julia-char-regex))
-            nil)))))))
 
 (defun julia-in-brackets ()
   "Return non-nil if point is inside square brackets."
@@ -266,7 +261,7 @@ Handles both single-line and multi-line comments."
 
       (while (< (point) start-pos)
         ;; Don't count [ or ] inside strings, characters or comments.
-        (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+        (unless (or (julia-in-string) (julia-in-comment))
 
           (when (looking-at (rx "["))
             (incf open-count))
@@ -341,7 +336,7 @@ before point. Returns nil if we're not within nested parens."
                   (not (plusp open-count)))
 
         (when (looking-at (rx (any "[" "]" "(" ")")))
-          (unless (or (julia-in-string) (julia-in-char) (julia-in-comment))
+          (unless (or (julia-in-string) (julia-in-comment))
             (cond ((looking-at (rx (any "[" "(")))
                    (incf open-count))
                   ((looking-at (rx (any "]" ")")))
@@ -424,13 +419,14 @@ before point. Returns nil if we're not within nested parens."
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords))
   (set (make-local-variable 'font-lock-syntactic-keywords)
        (list
-	(list "\\(\\\\\\)\\s-*\".*?\"" 1 julia-mode-char-syntax-table)))
-  (set (make-local-variable 'font-lock-syntactic-keywords)
-        (list
- 	(list julia-char-regex 2
- 	      julia-mode-char-syntax-table)
-        (list julia-string-regex 0
-              julia-mode-string-syntax-table)
+        `(,julia-char-regex
+          (1 "\"") ; Treat ' as a string delimiter.
+          (2 ".") ; Don't highlight anything between the open and close '.
+          (3 "\"")); Treat the close ' as a string delimiter.
+        `(,julia-triple-quoted-string-regex
+          (1 "\"") ; Treat the first " in """ as a string delimiter.
+          (2 ".") ; Don't highlight anything between.
+          (3 "\"")) ; Treat the last " in """ as a string delimiter.
 	))
   (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set (make-local-variable 'julia-basic-offset) 4)
@@ -2946,5 +2942,6 @@ before point. Returns nil if we're not within nested parens."
 
 ;; Local Variables:
 ;; coding: utf-8
+;; byte-compile-warnings: (not obsolete)
 ;; End:
 ;;; julia-mode.el ends here
