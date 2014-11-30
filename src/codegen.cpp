@@ -27,15 +27,6 @@
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
-#ifdef _OS_DARWIN_
-#include <llvm/Object/MachO.h>
-#endif
-#ifdef _OS_WINDOWS_
-#include <llvm/Object/COFF.h>
-#endif
-#ifndef LLVM36
-#include <llvm/ExecutionEngine/JITMemoryManager.h>
-#endif
 #ifdef LLVM35
 #include <llvm/IR/Verifier.h>
 #include <llvm/Object/ObjectFile.h>
@@ -55,6 +46,7 @@
 #include <llvm/Object/ObjectFile.h>
 #else
 #include <llvm/ExecutionEngine/JIT.h>
+#include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif
 #ifdef LLVM33
 #include <llvm/IR/DerivedTypes.h>
@@ -64,6 +56,7 @@
 #include <llvm/IR/Attributes.h>
 #include <llvm/IR/IRBuilder.h>
 #include <llvm/IR/MDBuilder.h>
+#include <llvm/IR/Value.h>
 #else
 #include <llvm/DerivedTypes.h>
 #include <llvm/LLVMContext.h>
@@ -92,6 +85,7 @@
 #ifdef LLVM31
 #include <llvm/Transforms/Vectorize.h>
 #endif
+#include <llvm/Support/Host.h>
 #include <llvm/Support/TargetSelect.h>
 #include <llvm/Support/raw_ostream.h>
 #include <llvm/Support/FormattedStream.h>
@@ -246,6 +240,13 @@ static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
 static GlobalVariable *jldll_var;
+#if defined(_CPU_X86_64_)
+#ifdef USE_MCJIT
+extern RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
+#else
+extern JITMemoryManager* createJITMemoryManagerWin();
+#endif
+#endif
 #endif
 
 // important functions
@@ -4852,9 +4853,9 @@ extern "C" void jl_init_codegen(void)
     eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #if defined(USE_MCJIT)
-        .setMCJITMemoryManager(new RTDyldMemoryManagerWin(new SectionMemoryManager()))
+        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
 #else
-        .setJITMemoryManager(new JITMemoryManagerWin())
+        .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
 #endif
         .setTargetOptions(options)

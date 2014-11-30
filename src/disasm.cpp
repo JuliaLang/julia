@@ -26,6 +26,7 @@
 #include <string>
 
 #include "llvm-version.h"
+#include <llvm/Object/ObjectFile.h>
 #include <llvm/Support/MachO.h>
 #include <llvm/Support/COFF.h>
 #include <llvm/MC/MCDisassembler.h>
@@ -67,6 +68,7 @@
 #else
 #include <llvm/LLVMContext.h>
 #endif
+#include <llvm/DebugInfo/DIContext.h>
 #ifdef LLVM35 
 #include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
@@ -180,7 +182,6 @@ const char *SymbolLookup(void *DisInfo,
     *ReferenceName = NULL;
     return NULL;
 }
-#endif
 
 extern "C" void jl_getFunctionInfo
   (const char **name, size_t *line, const char **filename, uintptr_t pointer,
@@ -219,7 +220,8 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
     info->Value = 0;                 // offset
     return 1;                        // Success
 }
-}
+#endif
+} // namespace
 #endif
 
 extern "C"
