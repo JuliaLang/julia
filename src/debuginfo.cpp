@@ -633,7 +633,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #endif // USE_MCJIT
 }
 
-int jl_get_llvmf_info(size_t fptr, uint64_t *symsize, 
+int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 #ifdef USE_MCJIT
     object::ObjectFile **object)
 #else
@@ -645,7 +645,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
 
     if (fit == fmap.end()) {
-        return 0; 
+        return 0;
     }
     *symsize = fit->second.lengthAdr;
     *lines = fit->second.lines;
