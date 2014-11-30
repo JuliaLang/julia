@@ -405,7 +405,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
-        size_t msize = (size_t)(((uint64_t)-1)-fbase));
+        size_t msize = (size_t)(((uint64_t)-1)-fbase);
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
             return;
@@ -432,13 +432,13 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
 #elif defined(LLVM35)
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, msize), "", false);
+                StringRef((const char *)fbase, msize)), "", false);
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 buf, sys::fs::file_magic::unknown);
 #else
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, msize, "", false);
+                StringRef((const char *)fbase, msize), "", false);
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
@@ -633,7 +633,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #endif // USE_MCJIT
 }
 
-int jl_get_llvmf_info(size_t fptr, uint64_t *symsize, 
+int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 #ifdef USE_MCJIT
     object::ObjectFile **object)
 #else
@@ -645,7 +645,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     std::map<size_t, FuncInfo, revcomp>::iterator fit = fmap.find(fptr);
 
     if (fit == fmap.end()) {
-        return 0; 
+        return 0;
     }
     *symsize = fit->second.lengthAdr;
     *lines = fit->second.lines;
