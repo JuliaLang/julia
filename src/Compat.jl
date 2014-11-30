@@ -33,6 +33,16 @@ else
     end
 end
 
+import Base: round, ceil, floor, trunc
+if VERSION < v"0.4.0-dev+1827"
+    for (fnew,fold) in ((:round, :iround), (:ceil, :iceil), (:floor, :ifloor), (:trunc, :itrunc))
+        @eval begin
+            ($fnew){T<:Integer}(::Type{T}, x::Integer) = ($fold)(T, x)  # ambiguity resolution with digits/base version
+            ($fnew){T<:Integer}(::Type{T}, x) = ($fold)(T, x)
+        end
+    end
+end
+
 function rewrite_dict(ex)
     length(ex.args) == 1 && return ex
 
