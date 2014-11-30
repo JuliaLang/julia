@@ -152,7 +152,7 @@ function travis(pkg::AbstractString; force::Bool=false)
           - sudo apt-get install libpcre3-dev julia -y
           - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         script:
-          - julia --check-bounds=yes -e 'versioninfo(); Pkg.init(); Pkg.clone(pwd()); Pkg.test("$pkg")'
+          - julia --check-bounds=yes -e 'versioninfo(); Pkg.init(); Pkg.clone(pwd()); Pkg.build("$pkg"); Pkg.test("$pkg")'
         """)
     end
 end
