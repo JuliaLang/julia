@@ -348,24 +348,24 @@ extern "C" uint64_t jl_sysimage_base;
 void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filename, size_t pointer, int *fromC, int skipC)
 {
 #ifdef _OS_WINDOWS_
-    char *fname = 0;
-    DWORD64 fbase = 0;
-    if (!jl_in_stackwalk) {
-        jl_in_stackwalk = 1;
-        fbase = SymGetModuleBase64(GetCurrentProcess(),(DWORD64)pointer);
-        jl_in_stackwalk = 0;
+    IMAGEHLP_MODULE64 ModuleInfo;
+    BOOL isvalid;
+    if (jl_in_stackwalk) {
+        *fromC = 1;
+        return;
     }
-    if (fbase != 0) {
+    ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
+    jl_in_stackwalk = 1;
+    isvalid = SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
+    jl_in_stackwalk = 0;
+    if (isvalid) {
+        char *fname = ModuleInfo.LoadedImageName;
+        DWORD64 fbase = ModuleInfo.BaseOfImage;
+        size_t msize = ModuleInfo.ImageSize;
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC) {
             return;
         }
-        IMAGEHLP_MODULE64 ModuleInfo;
-        ModuleInfo.SizeOfStruct = sizeof(IMAGEHLP_MODULE64);
-        jl_in_stackwalk = 1;
-        SymGetModuleInfo64(GetCurrentProcess(), (DWORD64)pointer, &ModuleInfo);
-        jl_in_stackwalk = 0;
-        fname = ModuleInfo.LoadedImageName;
         static char frame_info_func[
             sizeof(SYMBOL_INFO) +
             MAX_SYM_NAME * sizeof(TCHAR)];
@@ -405,6 +405,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+        size_t msize = (size_t)(((uint64_t)-1)-fbase));
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
             return;
@@ -426,18 +427,18 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
-                    StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+                    StringRef((const char *)fbase, msize)), "", false);
            auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
-#elif LLVM35
+#elif defined(LLVM35)
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+                StringRef((const char *)fbase, msize), "", false);
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 buf, sys::fs::file_magic::unknown);
 #else
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, (size_t)(((uint64_t)-1)-fbase)),"",false);
+                StringRef((const char *)fbase, msize, "", false);
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
@@ -757,6 +758,9 @@ RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM) {
     return new RTDyldMemoryManagerWin(MM);
 }
 #else
+RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM) {
+    return NULL;
+}
 extern "C"
 DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
 {
