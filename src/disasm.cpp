@@ -69,7 +69,7 @@
 #include <llvm/LLVMContext.h>
 #endif
 #include <llvm/DebugInfo/DIContext.h>
-#ifdef LLVM35 
+#ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
 #include <llvm/DebugInfo.h>
