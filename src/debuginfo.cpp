@@ -18,6 +18,18 @@
 #else
 #include <llvm/Analysis/DebugInfo.h>
 #endif
+#ifdef USE_MCJIT
+#include <llvm/ExecutionEngine/ObjectImage.h>
+#include <llvm/ExecutionEngine/RuntimeDyld.h>
+#else
+#include <llvm/ExecutionEngine/JITMemoryManager.h>
+#endif
+#ifdef _OS_DARWIN_
+#include <llvm/Object/MachO.h>
+#endif
+#ifdef _OS_WINDOWS_
+#include <llvm/Object/COFF.h>
+#endif
 
 #include "julia.h"
 #include "julia_internal.h"
@@ -34,7 +46,7 @@ using namespace llvm;
 
 extern DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 
-#if USE_MCJIT
+#ifdef USE_MCJIT
 typedef object::SymbolRef SymRef;
 #endif
 
@@ -170,7 +182,7 @@ public:
     }
 #endif // ifndef USE_MCJIT
 
-#if USE_MCJIT
+#ifdef USE_MCJIT
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
     {
         uint64_t Addr;
@@ -390,8 +402,8 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
-    const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
+        const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
@@ -404,7 +416,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif // ifdef _OS_WINDOWS_
         DIContext *context = NULL;
         int64_t slide = 0;
-#if defined(_OS_WINDOWS_) && defined(LLVM35)
+#if !defined(_OS_WINDOWS_) || defined(LLVM35)
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
@@ -429,12 +441,12 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
+#if defined(_OS_DARWIN_)
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
                 goto lookup;
             }
-#if defined(_OS_DARWIN_)
 #ifdef LLVM36
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
 #elif LLVM35
@@ -456,9 +468,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             // as the shared library. In the future we may use DBGCopyFullDSYMURLForUUID from CoreFoundation to make
             // use of spotlight to find the .dSYM file.
             char dsympath[PATH_MAX];
-            strlcpy(dsympath, dlinfo.dli_fname, sizeof(dsympath));
+            strlcpy(dsympath, fname, sizeof(dsympath));
             strlcat(dsympath, ".dSYM/Contents/Resources/DWARF/", sizeof(dsympath));
-            strlcat(dsympath, strrchr(dlinfo.dli_fname,'/')+1, sizeof(dsympath));
+            strlcat(dsympath, strrchr(fname,'/')+1, sizeof(dsympath));
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #else
@@ -545,7 +557,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     *filename = "no file";
     *fromC = 0;
 
-#if USE_MCJIT
+#ifdef USE_MCJIT
 // With MCJIT we can get function information directly from the ObjectFile
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
@@ -650,12 +662,19 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 
 #ifdef LLVM35
     for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
+        sym_iter.getType(symtype);
+        sym_iter.getAddress(symaddr);
+        if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
+            continue;
+        sym_iter.getSize(*symsize);
+        *object = fit->second.object;
+        return 1;
+    }
 #else
     error_code itererr;
     object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
     object::symbol_iterator sym_end = fit->second.object->end_symbols();
     for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
-#endif // LLVM35
         sym_iter->getType(symtype);
         sym_iter->getAddress(symaddr);
         if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
@@ -664,6 +683,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
         *object = fit->second.object;
         return 1;
     }
+#endif // LLVM35
     return 0;
 #endif
 }
@@ -733,6 +753,9 @@ public:
 private:
   std::unique_ptr<RTDyldMemoryManager> ClientMM;
 };
+RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM) {
+    return new RTDyldMemoryManagerWin(MM);
+}
 #else
 extern "C"
 DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
@@ -818,6 +841,9 @@ public:
   virtual bool applyPermissions(std::string *ErrMsg = 0) { return JMM->applyPermissions(ErrMsg); }
   virtual void registerEHFrames(StringRef SectionData) { return JMM->registerEHFrames(SectionData); }
 };
+JITMemoryManager* createJITMemoryManagerWin() {
+    return new JITMemoryManagerWin();
+}
 #else
 extern "C"
 DWORD64 jl_getUnwindInfo(ULONG64 dwAddr)
