@@ -101,7 +101,9 @@ function write(io::IO, s::Symbol)
 end
 
 # all subtypes should implement this
-read(s::IO, x::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+read(s::IO, ::Type{UInt8}) = error(typeof(s)," does not support byte I/O")
+
+read(s::IO, ::Type{Int8}) = reinterpret(Int8, read(s,UInt8))
 
 function read{T <: Integer}(s::IO, ::Type{T})
     x = zero(T)
