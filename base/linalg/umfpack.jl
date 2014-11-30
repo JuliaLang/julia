@@ -15,7 +15,7 @@ type MatrixIllConditionedException <: Exception
     message :: AbstractString
 end
 
-function umferror(status::Int)
+function umferror(status::Integer)
      if status==UMFPACK_OK
          return
      elseif status==UMFPACK_WARNING_singular_matrix
