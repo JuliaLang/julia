@@ -1,4 +1,4 @@
-#if USE_MCJIT
+#ifdef USE_MCJIT
 typedef object::SymbolRef SymRef;
 #endif
 
@@ -134,7 +134,7 @@ public:
     }
 #endif // ifndef USE_MCJIT
 
-#if USE_MCJIT
+#ifdef USE_MCJIT
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
     {
         uint64_t Addr;
@@ -350,8 +350,8 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
     Dl_info dlinfo;
-    const char *fname = 0;
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
+        const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
@@ -364,7 +364,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif // ifdef _OS_WINDOWS_
         DIContext *context = NULL;
         int64_t slide = 0;
-#if defined(_OS_WINDOWS_) && defined(LLVM35)
+#if !defined(_OS_WINDOWS_) || defined(LLVM35)
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
@@ -389,12 +389,12 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
+#if defined(_OS_DARWIN_)
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
                 goto lookup;
             }
-#if defined(_OS_DARWIN_)
 #ifdef LLVM36
             llvm::object::MachOObjectFile *morigobj = (llvm::object::MachOObjectFile *)origerrorobj.get().release();
 #elif LLVM35
@@ -416,9 +416,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             // as the shared library. In the future we may use DBGCopyFullDSYMURLForUUID from CoreFoundation to make
             // use of spotlight to find the .dSYM file.
             char dsympath[PATH_MAX];
-            strlcpy(dsympath, dlinfo.dli_fname, sizeof(dsympath));
+            strlcpy(dsympath, fname, sizeof(dsympath));
             strlcat(dsympath, ".dSYM/Contents/Resources/DWARF/", sizeof(dsympath));
-            strlcat(dsympath, strrchr(dlinfo.dli_fname,'/')+1, sizeof(dsympath));
+            strlcat(dsympath, strrchr(fname,'/')+1, sizeof(dsympath));
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #else
@@ -503,7 +503,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     *filename = "no file";
     *fromC = 0;
 
-#if USE_MCJIT
+#ifdef USE_MCJIT
 // With MCJIT we can get function information directly from the ObjectFile
     std::map<size_t, ObjectInfo, revcomp> &objmap = jl_jit_events->getObjectMap();
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
@@ -573,7 +573,6 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     }
 #endif // USE_MCJIT
 }
-
 
 #if defined(_OS_WINDOWS_)
 #ifdef USE_MCJIT

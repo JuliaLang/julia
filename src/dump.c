@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef _OS_WINDOWS_
-#include <malloc.h>
-#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -137,10 +139,10 @@ static void jl_load_sysimg_so(char *fname)
                          "Please delete or regenerate sys.{so,dll,dylib}.");
         }
 #ifdef _OS_WINDOWS_
-        jl_sysimage_base = (DWORD64)jl_sysimg_handle->handle;
+        jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
 #else
         if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
-            jl_sysimage_base = dlinfo.dli_fbase;
+            jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
         } else {
             jl_sysimage_base = 0;
         }
