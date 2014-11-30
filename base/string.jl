@@ -1394,19 +1394,23 @@ function print_joined(io, strings, delim, last)
     end
     str, i = next(strings,i)
     print(io, str)
-    while !done(strings,i)
+    is_done = done(strings,i)
+    while !is_done
         str, i = next(strings,i)
-        print(io, done(strings,i) ? last : delim)
+        is_done = done(strings,i)
+        print(io, is_done ? last : delim)
         print(io, str)
     end
 end
 
 function print_joined(io, strings, delim)
     i = start(strings)
-    while !done(strings,i)
+    is_done = done(strings,i)
+    while !is_done
         str, i = next(strings,i)
+        is_done = done(strings,i)
         print(io, str)
-        if !done(strings,i)
+        if !is_done
             print(io, delim)
         end
     end

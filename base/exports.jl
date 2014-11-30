@@ -905,6 +905,8 @@ export
     randbool,
     randn!,
     randn,
+    randexp!,
+    randexp,
     srand,
 
 # bigfloat & precision
