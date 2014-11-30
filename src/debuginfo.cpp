@@ -432,7 +432,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
 #elif defined(LLVM35)
             MemoryBuffer *membuf = MemoryBuffer::getMemBuffer(
-                StringRef((const char *)fbase, msize)), "", false);
+                StringRef((const char *)fbase, msize), "", false);
             std::unique_ptr<MemoryBuffer> buf(membuf);
             auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 buf, sys::fs::file_magic::unknown);
