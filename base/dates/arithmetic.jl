@@ -1,14 +1,8 @@
 # Instant arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::Instant,y::Instant) = throw(ArgumentError("Operation not defined for Instants"))
-end
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods
 
 # TimeType arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::TimeType,y::TimeType) = throw(ArgumentError("Operation not defined for TimeTypes"))
-end
 (+)(x::TimeType) = x
 (-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
 
