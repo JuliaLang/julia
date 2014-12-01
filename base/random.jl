@@ -3,7 +3,7 @@
 module Random
 
 using Base.dSFMT
-using Base.GMP: GMP_VERSION, Limb, MPZ
+using Base.GMP: Limb, MPZ
 import Base: copymutable, copy, copy!, ==
 
 export srand,
@@ -592,23 +592,11 @@ for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
     end
 end
 
-if GMP_VERSION.major >= 6
-    struct RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        nlimbs::Int           # number of limbs in generated BigInt's
-        mask::Limb            # applied to the highest limb
-    end
-
-else
-    struct RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
-        m::BigInt             # range length - 1
-        limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
-        mask::Limb            # applied to the highest limb
-
-        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Vector{Limb}(nlimbs), mask)
-    end
+struct RangeGeneratorBigInt <: RangeGenerator
+    a::BigInt             # first
+    m::BigInt             # range length - 1
+    nlimbs::Int           # number of limbs in generated BigInt's
+    mask::Limb            # applied to the highest limb
 end
 
 
@@ -649,30 +637,21 @@ function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,
     (unsigned(g.a) + rem_knuth(x, g.k)) % T
 end
 
-if GMP_VERSION.major >= 6
-    # mpz_limbs_write and mpz_limbs_finish are available only in GMP version 6
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
-            xd = MPZ.limbs_write!(x, g.nlimbs)
-            limbs = unsafe_wrap(Array, xd, g.nlimbs)
-            rand!(rng, limbs)
-            limbs[end] &= g.mask
-            MPZ.limbs_finish!(x, g.nlimbs)
-            x <= g.m && return MPZ.add!(x, g.a)
-        end
+function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+    x = MPZ.realloc2(g.nlimbs*8*sizeof(Limb))
+    limbs = unsafe_wrap(Array, x.d, g.nlimbs)
+    while true
+        rand!(rng, limbs)
+        @inbounds limbs[end] &= g.mask
+        MPZ.mpn_cmp(x, g.m, g.nlimbs) <= 0 && break
     end
-else
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
-        x = BigInt()
-        while true
-            rand!(rng, g.limbs)
-            g.limbs[end] &= g.mask
-            MPZ.import!(x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
-            x <= g.m && return MPZ.add!(x, g.a)
-        end
+    # adjust x.size (normally done by mpz_limbs_finish, in GMP version >= 6)
+    x.size = g.nlimbs
+    while x.size > 0
+        @inbounds limbs[x.size] != 0 && break
+        x.size -= 1
     end
+    MPZ.add!(x, g.a)
 end
 
 rand(rng::AbstractRNG, r::UnitRange{<:Union{Signed,Unsigned,BigInt,Bool}}) = rand(rng, RangeGenerator(r))
