@@ -2,16 +2,14 @@ environment:
 #  USEMSVC: "1"
   matrix:
   - ARCH:  "i686"
-    MARCH: "pentium4"
   - ARCH:  "x86_64"
-    MARCH: "x86-64"
 
 # Only build on master and PR's for now, not personal branches
 # Whether or not PR's get built is determined in the webhook settings
 branches:
   only:
     - master
-# TODO: - release-0.3
+    - release-0.3
 
 clone_depth: 50
 
