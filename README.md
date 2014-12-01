@@ -41,3 +41,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
+
+## Renamed functions
+
+* `itrunc`, `iround`, `iceil`, `ifloor` are now accessed via `trunc(T, x)`, etc. [#9133](https://github.com/JuliaLang/julia/pull/9133)
+
+* `Base.Random.randmtzig_exprnd` is now `randexp` [#9144](https://github.com/JuliaLang/julia/pull/9144)
