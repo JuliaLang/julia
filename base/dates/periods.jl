@@ -1,5 +1,5 @@
 #Period types
-value{P<:Period}(x::P) = x.value
+value(x::Period) = x.value
 
 # The default constructors for Periods work well in almost all cases
 # P(x) = new((convert(Int64,x))
@@ -47,7 +47,7 @@ Base.isless(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x
 ==(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x)) and $(typeof(y))"))
 
 #Period Arithmetic:
-import Base.div, Base.mod, Base.gcd, Base.lcm
+import Base: div, mod, gcd, lcm, +, -, *, %, ==
 let vec_ops = [:.+,:.-,:.*,:.%,:div]
     for op in [:+,:-,:*,:%,:mod,:gcd,:lcm,vec_ops]
         @eval begin
@@ -92,27 +92,68 @@ periodisless(::Period,::Second)      = false
 periodisless(::Millisecond,::Second) = true
 periodisless(::Period,::Millisecond) = false
 
-# Stores multiple periods in greatest to least order by type, not values
-type CompoundPeriod
+# Stores multiple periods in greatest to least order by type, not values,
+# canonicalized to eliminate zero periods and merge equal period types.
+type CompoundPeriod <: AbstractTime
     periods::Array{Period,1}
+    function CompoundPeriod(p::Vector{Period})
+        n = length(p)
+        if n < 2
+            if n == 0 || p[1] != zero(p[1])
+                return new(p)
+            end
+            return new(Period[]) # n == 1 and p[1]==0
+        end
+        sort!(p, rev=true, lt=periodisless)
+        # canonicalize p by merging equal period types and eliminating zeros
+        i = j = 1
+        while j <= n
+            k = j+1
+            while k <= n
+                if typeof(p[j]) == typeof(p[k])
+                    p[j] += p[k]
+                    k += 1
+                else
+                    break
+                end
+            end
+            if p[j] != zero(p[j])
+                p[i] = p[j]
+                i += 1
+            end
+            j = k
+        end
+        return new(resize!(p, i-1))
+    end
 end
 function Base.string(x::CompoundPeriod)
-    s = ""
-    for p in x.periods
-        s *= ", " * string(p)
+    if isempty(x.periods)
+        return "empty period"
+    else
+        s = ""
+        for p in x.periods
+            s *= ", " * string(p)
+        end
+        return s[3:end]
     end
-    return s[3:end]
 end
 Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 # E.g. Year(1) + Day(1)
-(+)(x::Period,y::Period) = CompoundPeriod(sort!(Period[x,y],rev=true,lt=periodisless))
-(+)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,y) ,rev=true,lt=periodisless); return x)
+(+)(x::Period,y::Period) = CompoundPeriod(Period[x,y])
+(+)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,y))
 (+)(y::Period,x::CompoundPeriod) = x + y
+(+)(x::CompoundPeriod,y::CompoundPeriod) = CompoundPeriod(vcat(x.periods,y.periods))
 # E.g. Year(1) - Month(1)
-(-)(x::Period,y::Period) = CompoundPeriod(sort!(Period[x,-y],rev=true,lt=periodisless))
-(-)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,-y),rev=true,lt=periodisless); return x)
+(-)(x::Period,y::Period) = CompoundPeriod(Period[x,-y])
+(-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
-(-)(y::Period,x::CompoundPeriod) = (-x) + y
+(-)(y::Union(Period,CompoundPeriod),x::CompoundPeriod) = (-x) + y
+(==)(x::CompoundPeriod, y::Period) = (length(x.periods) == 1 && x.periods[1] == y) || (isempty(x.periods) && y == zero(y))
+(==)(y::Period, x::CompoundPeriod) = x == y
+
+# FIXME: this needs changing once #9171 is addressed to allow comparisons
+#        of different Period types, e.g. Millisecond(1000) == Second(1)
+(==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
