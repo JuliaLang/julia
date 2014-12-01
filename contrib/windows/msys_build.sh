@@ -54,6 +54,14 @@ case $(uname) in
     ;;
 esac
 
+# set MARCH for consistency with how binaries get built
+if [ "$ARCH" = x86_64 ]; then
+  echo "override MARCH = x86-64" >> Make.user
+else
+  echo "override MARCH = i686" >> Make.user
+  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+fi
+
 curlflags="curl --retry 10 -k -L -y 5"
 
 # Download most recent Julia binary for dependencies
@@ -99,11 +107,6 @@ if [ -z "$USEMSVC" ]; then
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
-  if [ $ARCH = x86_64 ]; then
-    echo "override MARCH = x86-64" >> Make.user
-  else
-    echo "override MARCH = $ARCH" >> Make.user
-  fi
   echo "override XC_HOST = " >> Make.user
   export CC="$PWD/deps/libuv/compile cl -nologo -MD -Z7"
   export AR="$PWD/deps/libuv/ar-lib lib"

@@ -1,9 +1,7 @@
 environment:
   matrix:
   - ARCH:  "i686"
-    MARCH: "pentium4"
   - ARCH:  "x86_64"
-    MARCH: "x86-64"
 
 # Only build on master and PR's for now, not personal branches
 # Whether or not PR's get built is determined in the webhook settings
