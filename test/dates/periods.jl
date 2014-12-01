@@ -311,3 +311,11 @@ dt = Dates.DateTime(2014)
 @test Dates.days(Dates.Hour(24)) == 1
 @test Dates.days(d) == 1
 @test Dates.days(w) == 7
+
+# issue #9214
+@test 2s + (7ms + 1ms) == (2s + 7ms) + 1ms == 1ms + (2s + 7ms) == 1ms + (1s + 7ms) + 1s == 1ms + (2s + 3d + 7ms) + (-3d) == (1ms + (2s + 3d)) + (7ms - 3d) == (1ms + (2s + 3d)) - (3d - 7ms)
+@test 1ms - (2s + 7ms) == -((2s + 7ms) - 1ms) == (-6ms) - 2s
+emptyperiod = ((y + d) - d) - y
+@test emptyperiod == ((d + y) - y) - d == ((d + y) - d) - y
+@test emptyperiod == 0ms
+@test string(emptyperiod) == "empty period"
