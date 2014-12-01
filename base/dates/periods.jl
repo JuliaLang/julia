@@ -111,7 +111,8 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 # E.g. Year(1) - Month(1)
 (-)(x::Period,y::Period) = CompoundPeriod(sort!(Period[x,-y],rev=true,lt=periodisless))
 (-)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,-y),rev=true,lt=periodisless); return x)
-(-)(y::Period,x::CompoundPeriod) = x - y
+(-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
+(-)(y::Period,x::CompoundPeriod) = (-x) + y
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
