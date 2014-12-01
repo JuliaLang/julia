@@ -680,6 +680,10 @@ function remotecall(ws::Array, f, args...)
         let worker_specific_data=worker_specific_data, w=w, rr=rr
             @async begin
                 flush_gc_msgs(w)
+
+                # TODO - The socket must be "locked" as in PR# 6876 around
+                # the following two socket writes. Needs PR# 6876 to be merged
+                # first
                 enq_send_req(w.socket, common_data)
                 enq_send_req(w.socket, worker_specific_data)
             end
