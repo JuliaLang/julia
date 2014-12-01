@@ -43,6 +43,12 @@ if VERSION < v"0.4.0-dev+1827"
     end
 end
 
+if VERSION < v"0.4.0-dev+1884"
+    randexp(rng::MersenneTwister) = Base.Random.randmtzig_exprnd(rng)
+    randexp() = Base.Random.randmtzig_exprnd()
+    export randexp
+end
+
 function rewrite_dict(ex)
     length(ex.args) == 1 && return ex
 
