@@ -70,7 +70,7 @@ end
     box(Char, bytevec_utf8_ref(unbox(typeof(x), x), unbox(Int, i))), i + 1
 end
 
-const mask = Int == Int64 ? 0x0101010101010101 : 0x01010101
+const mask = div(typemax(UInt),typemax(UInt8))
 
 function length(s::Str)
     x = s.data.x
