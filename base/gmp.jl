@@ -46,6 +46,7 @@ mutable struct BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
+
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         MPZ.init!(b)
@@ -77,9 +78,10 @@ BigInt(x)
 function __init__()
     try
         if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
-            error(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
-                         "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
-                         "Please rebuild Julia."))
+            msg = gmp_bits_per_limb() != GMP_BITS_PER_LIMB ? error : warn
+            msg(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
+                       "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
+                       "Please rebuild Julia."))
         end
 
         ccall((:__gmp_set_memory_functions, :libgmp), Void,
@@ -113,6 +115,9 @@ gmpz(op::Symbol) = (Symbol(:__gmpz_, op), :libgmp)
 
 init!(x::BigInt) = (ccall((:__gmpz_init, :libgmp), Void, (mpz_t,), &x); x)
 init2!(x::BigInt, a) = (ccall((:__gmpz_init2, :libgmp), Void, (mpz_t, bitcnt_t), &x, a); x)
+
+realloc2!(x, a) = (ccall((:__gmpz_realloc2, :libgmp), Void, (mpz_t, bitcnt_t), &x, a); x)
+realloc2(a) = realloc2!(BigInt(), a)
 
 sizeinbase(a::BigInt, b) = Int(ccall((:__gmpz_sizeinbase, :libgmp), Csize_t, (mpz_t, Cint), &a, b))
 
@@ -195,6 +200,9 @@ cmp(a::BigInt, b::BigInt) = ccall((:__gmpz_cmp, :libgmp), Cint, (mpz_t, mpz_t), 
 cmp_si(a::BigInt, b) = ccall((:__gmpz_cmp_si, :libgmp), Cint, (mpz_t, Clong), &a, b) % Int
 cmp_ui(a::BigInt, b) = ccall((:__gmpz_cmp_ui, :libgmp), Cint, (mpz_t, Culong), &a, b) % Int
 cmp_d(a::BigInt, b) = ccall((:__gmpz_cmp_d, :libgmp), Cint, (mpz_t, Cdouble), &a, b) % Int
+
+mpn_cmp(a::Ptr{Limb}, b::Ptr{Limb}, c) = ccall((:__gmpn_cmp, :libgmp), Cint, (Ptr{Limb}, Ptr{Limb}, Clong), a, b, c)
+mpn_cmp(a::BigInt, b::BigInt, c) = mpn_cmp(a.d, b.d, c)
 
 get_str!(x, a, b::BigInt) = (ccall((:__gmpz_get_str,:libgmp), Ptr{Cchar}, (Ptr{Cchar}, Cint, mpz_t), x, a, &b); x)
 set_str!(x::BigInt, a, b) = ccall((:__gmpz_set_str, :libgmp), Cint, (mpz_t, Ptr{UInt8}, Cint), &x, a, b) % Int
