@@ -137,7 +137,7 @@ A_mul_B!{T<:BlasFloat}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr!('
 function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
-    mA == mB || throw(DimensionMismatch(""))
+    mA == mB || throw(DimensionMismatch())
     Afactors = A.factors
     @inbounds begin
         for k = min(mA,nA):-1:1
@@ -159,13 +159,13 @@ end
 function *{TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{Tb})
     TAb = promote_type(TA,Tb)
     Anew = convert(AbstractMatrix{TAb},A)
-    bnew = size(A.factors,1) == length(b) ? (Tb == TAb ? copy(b) : convert(Vector{TAb}, b)) : (size(A.factors,2) == length(b) ? [b,zeros(TAb, size(A.factors,1)-length(b))] : throw(DimensionMismatch("")))
+    bnew = size(A.factors,1) == length(b) ? (Tb == TAb ? copy(b) : convert(Vector{TAb}, b)) : (size(A.factors,2) == length(b) ? [b,zeros(TAb, size(A.factors,1)-length(b))] : throw(DimensionMismatch()))
     A_mul_B!(Anew,bnew)
 end
 function *{TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB})
     TAB = promote_type(TA,TB)
     Anew = convert(AbstractMatrix{TAB},A)
-    Bnew = size(A.factors,1) == size(B,1) ? (TB == TAB ? copy(B) : convert(AbstractMatrix{TAB}, B)) : (size(A.factors,2) == size(B,1) ? [B;zeros(TAB, size(A.factors,1)-size(B,1),size(B,2))] : throw(DimensionMismatch("")))
+    Bnew = size(A.factors,1) == size(B,1) ? (TB == TAB ? copy(B) : convert(AbstractMatrix{TAB}, B)) : (size(A.factors,2) == size(B,1) ? [B;zeros(TAB, size(A.factors,1)-size(B,1),size(B,2))] : throw(DimensionMismatch()))
     A_mul_B!(Anew,Bnew)
 end
 ### QcB
@@ -176,7 +176,7 @@ Ac_mul_B!{T<:BlasComplex}(A::QRPackedQ{T}, B::StridedVecOrMat{T}) = LAPACK.ormqr
 function Ac_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     mA, nA = size(A.factors)
     mB, nB = size(B,1), size(B,2)
-    mA == mB || throw(DimensionMismatch(""))
+    mA == mB || throw(DimensionMismatch())
     Afactors = A.factors
     @inbounds begin
         for k = 1:min(mA,nA)
@@ -205,7 +205,7 @@ A_mul_B!(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.ormqr!('R', 'N', B.factors, 
 function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
-    nA == mQ || throw(DimensionMismatch(""))
+    nA == mQ || throw(DimensionMismatch())
     Qfactors = Q.factors
     @inbounds begin
         for k = 1:min(mQ,nQ)
@@ -236,7 +236,7 @@ A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRPackedQ{T}) = LAPACK.ormqr
 function A_mul_Bc!{T}(A::AbstractMatrix{T},Q::QRPackedQ{T})
     mQ, nQ = size(Q.factors)
     mA, nA = size(A,1), size(A,2)
-    nA == mQ || throw(DimensionMismatch(""))
+    nA == mQ || throw(DimensionMismatch())
     Qfactors = Q.factors
     @inbounds begin
         for k = min(mQ,nQ):-1:1
@@ -260,7 +260,7 @@ function A_mul_Bc{TA,TB}(A::AbstractArray{TA}, B::Union(QRCompactWYQ{TB},QRPacke
     TAB = promote_type(TA,TB)
     A_mul_Bc!(size(A,2)==size(B.factors,1) ? (TA == TAB ? copy(A) : convert(AbstractMatrix{TAB}, A)) :
               size(A,2)==size(B.factors,2) ? [A zeros(TAB, size(A, 1), size(B.factors, 1) - size(B.factors, 2))] :
-              throw(DimensionMismatch("")),
+              throw(DimensionMismatch()),
 
               convert(AbstractMatrix{TAB}, B))
 end

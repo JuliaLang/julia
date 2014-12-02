@@ -4,7 +4,7 @@ type Bidiagonal{T} <: AbstractMatrix{T}
     ev::Vector{T} # sub/super diagonal
     isupper::Bool # is upper bidiagonal (true) or lower (false)
     function Bidiagonal{T}(dv::Vector{T}, ev::Vector{T}, isupper::Bool)
-        length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch(""))
+        length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch())
     end
 end
 
@@ -159,7 +159,7 @@ end end
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
     N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch(""))
+    N == length(b) == length(x) || throw(DimensionMismatch())
 
     if !A.isupper #do forward substitution
         for j = 1:N

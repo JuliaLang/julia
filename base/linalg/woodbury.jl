@@ -15,11 +15,11 @@ type Woodbury{T} <: AbstractMatrix{T}
         N = size(A, 1)
         k = size(U, 2)
         if size(A, 2) != N || size(U, 1) != N || size(V, 1) != k || size(V, 2) != N
-            throw(DimensionMismatch(""))
+            throw(DimensionMismatch())
         end
         if k > 1
             if size(C, 1) != k || size(C, 2) != k
-                throw(DimensionMismatch(""))
+                throw(DimensionMismatch())
             end
         end
         Cp = inv(inv(C) + V*(A\U))
@@ -57,7 +57,7 @@ full{T}(W::Woodbury{T}) = convert(Matrix{T}, W)
 convert{T}(::Type{Matrix{T}}, W::Woodbury{T}) = full(W.A) + W.U*W.C*W.V
 
 function similar(W::Woodbury, T, dims::Dims)
-    (length(dims) == 2 && dims[1] == dims[2] ) || throw(DimensionMismatch(""))
+    (length(dims) == 2 && dims[1] == dims[2] ) || throw(DimensionMismatch())
     n = size(W, 1)
     k = size(W.U, 2)
     Woodbury{T}(similar(W.A), Array(T, n, k), Array(T, k, k), Array(T, k, n))

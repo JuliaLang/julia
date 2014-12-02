@@ -1,6 +1,6 @@
 function dot(x::BitVector, y::BitVector)
     # simplest way to mimic Array dot behavior
-    length(x) == length(y) || throw(DimensionMismatch(""))
+    length(x) == length(y) || throw(DimensionMismatch())
     s = 0
     xc = x.chunks
     yc = y.chunks
@@ -17,7 +17,7 @@ end
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
     #C = falses(nA, nB)
-    #if mA != mB; throw(DimensionMismatch("")) end
+    #if mA != mB; throw(DimensionMismatch()) end
     #if mA == 0; return C; end
     #col_ch = num_bit_chunks(mA)
     ## TODO: avoid using aux chunks and copy (?)
@@ -85,7 +85,7 @@ function diag(B::BitMatrix)
 end
 
 function diagm(v::Union(BitVector,BitMatrix))
-    isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch(""))
+    isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
     n = length(v)
     a = falses(n, n)
     for i=1:n
