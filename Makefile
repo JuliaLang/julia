@@ -248,6 +248,15 @@ endif
 	done
 endif
 
+ifeq ($(USE_SYSTEM_LIBUV),0)
+ifeq ($(OS),WINNT)
+	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
+	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
+else
+	$(INSTALL_M) $(build_libdir)/libuv.a $(DESTDIR)$(private_libdir)
+endif	
+	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
+endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
