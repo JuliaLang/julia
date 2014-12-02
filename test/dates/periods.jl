@@ -77,14 +77,6 @@ ms = Dates.Millisecond(1)
 @test mi == mi
 @test s == s
 @test ms == ms
-@test_throws ArgumentError y != m
-@test_throws ArgumentError m != w
-@test_throws ArgumentError w != d
-@test_throws ArgumentError d != h
-@test_throws ArgumentError h != mi
-@test_throws ArgumentError mi != s
-@test_throws ArgumentError s != ms
-@test_throws ArgumentError ms != y
 y2 = Dates.Year(2)
 @test y < y2
 @test y2 > y
@@ -116,13 +108,13 @@ y2 = Dates.Year(2)
 @test Dates.Year(false) != y
 @test_throws MethodError Dates.Year(:hey) == y
 @test Dates.Year(real(1)) == y
-@test_throws ArgumentError Dates.Year(m) == y
-@test_throws ArgumentError Dates.Year(w) == y
-@test_throws ArgumentError Dates.Year(d) == y
-@test_throws ArgumentError Dates.Year(h) == y
-@test_throws ArgumentError Dates.Year(mi) == y
-@test_throws ArgumentError Dates.Year(s) == y
-@test_throws ArgumentError Dates.Year(ms) == y
+@test_throws MethodError Dates.Year(m) == y
+@test_throws MethodError Dates.Year(w) == y
+@test_throws MethodError Dates.Year(d) == y
+@test_throws MethodError Dates.Year(h) == y
+@test_throws MethodError Dates.Year(mi) == y
+@test_throws MethodError Dates.Year(s) == y
+@test_throws MethodError Dates.Year(ms) == y
 @test Dates.Year(Dates.Date(2013,1,1)) == Dates.Year(2013)
 @test Dates.Year(Dates.DateTime(2013,1,1)) == Dates.Year(2013)
 @test typeof(y+m) <: Dates.CompoundPeriod
@@ -133,8 +125,8 @@ y2 = Dates.Year(2)
 @test typeof(y+mi) <: Dates.CompoundPeriod
 @test typeof(y+s) <: Dates.CompoundPeriod
 @test typeof(y+ms) <: Dates.CompoundPeriod
-@test_throws ArgumentError y > m
-@test_throws ArgumentError d < w
+@test_throws MethodError y > m
+@test_throws MethodError d < w
 @test typemax(Dates.Year) == Dates.Year(typemax(Int64))
 @test typemax(Dates.Year) + y == Dates.Year(-9223372036854775808)
 @test typemin(Dates.Year) == Dates.Year(-9223372036854775808)
@@ -262,8 +254,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test 1 == Dates.Millisecond(1)
 @test (Dates.Millisecond(1) < 1) == false
 @test (1 < Dates.Millisecond(1)) == false
-@test_throws ArgumentError Dates.Year(1) < Dates.Millisecond(1)
-@test_throws ArgumentError Dates.Year(1) == Dates.Millisecond(1)
+@test_throws MethodError Dates.Year(1) < Dates.Millisecond(1)
 
 @test Dates.Year("1") == y
 @test Dates.Month("1") == m
