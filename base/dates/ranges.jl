@@ -31,3 +31,10 @@ end
 Base.start{T<:TimeType}(r::StepRange{T}) = 0
 Base.next{T<:TimeType}(r::StepRange{T}, i::Int) = (r.start+r.step*i,i+1)
 Base.done{T<:TimeType,S<:Period}(r::StepRange{T,S}, i::Integer) = length(r) <= i
+
+.+{T<:TimeType}(x::Period, r::Range{T}) = (x+first(r)):step(r):(x+last(r))
+.+{T<:TimeType}(r::Range{T},x::Period) = x .+ r
++{T<:TimeType}(r::Range{T},x::Period) = x .+ r
++{T<:TimeType}(x::Period,r::Range{T}) = x .+ r
+.-{T<:TimeType}(r::Range{T},x::Period) = (first(r)-x):step(r):(last(r)-x)
+-{T<:TimeType}(r::Range{T},x::Period) = r .- x
