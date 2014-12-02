@@ -23,6 +23,8 @@
 #include <llvm/ExecutionEngine/ObjectImage.h>
 #endif
 #include <llvm/ExecutionEngine/RuntimeDyld.h>
+#elif defined(USE_INTERP)
+#include <llvm/ExecutionEngine/Interpreter.h>
 #else
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
 #endif

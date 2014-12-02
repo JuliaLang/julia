@@ -1,5 +1,7 @@
 #include <llvm/Config/llvm-config.h>
 
+//#define USE_INTERP
+
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 6
 #define LLVM36 1
 #endif
@@ -10,7 +12,9 @@
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 4
 #define LLVM34 1
+#ifndef USE_INTERP
 #define USE_MCJIT
+#endif
 #endif
 
 #if defined(LLVM_VERSION_MAJOR) && LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
