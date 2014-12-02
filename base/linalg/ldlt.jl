@@ -32,7 +32,7 @@ factorize(S::SymTridiagonal) = ldltfact(S)
 
 function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     n, nrhs = size(B, 1), size(B, 2)
-    size(S,1) == n || throw(DimensionMismatch(""))
+    size(S,1) == n || throw(DimensionMismatch())
     d = S.data.dv
     l = S.data.ev
     @inbounds begin

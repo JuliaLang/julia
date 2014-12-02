@@ -113,8 +113,9 @@ end
 type EOFError <: Exception end
 
 type DimensionMismatch <: Exception
-    name::ASCIIString
+    msg::AbstractString
 end
+DimensionMismatch() = DimensionMismatch("")
 
 type WeakRef
     value
