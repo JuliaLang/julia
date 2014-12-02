@@ -8,7 +8,6 @@ override USE_BLAS64=0
 
 override LLVM_VER=3.5.0
 
-override USE_SYSTEM_LIBM=1
 override USE_SYSTEM_FFTW=1
 override USE_SYSTEM_GMP=1
 override USE_SYSTEM_MPFR=1
