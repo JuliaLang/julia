@@ -814,6 +814,29 @@ end
 @test !(1//3 == NaN)
 @test !(1//3 > NaN)
 
+@test Float64(pi,RoundDown) < pi
+@test Float64(pi,RoundUp) > pi
+@test !(Float64(pi,RoundDown) > pi)
+@test !(Float64(pi,RoundUp) < pi)
+@test Float64(pi,RoundDown) <= pi
+@test Float64(pi,RoundUp) >= pi
+@test Float64(pi,RoundDown) != pi
+@test Float64(pi,RoundUp) != pi
+
+@test Float32(pi,RoundDown) < pi
+@test Float32(pi,RoundUp) > pi
+@test !(Float32(pi,RoundDown) > pi)
+@test !(Float32(pi,RoundUp) < pi)
+
+@test prevfloat(big(pi)) < pi
+@test nextfloat(big(pi)) > pi
+@test !(prevfloat(big(pi)) > pi)
+@test !(nextfloat(big(pi)) < pi)
+
+@test 2646693125139304345//842468587426513207 < pi
+@test !(2646693125139304345//842468587426513207 > pi)
+@test 2646693125139304345//842468587426513207 != pi
+
 @test sqrt(2) == 1.4142135623730951
 
 @test 1+1.5 == 2.5
