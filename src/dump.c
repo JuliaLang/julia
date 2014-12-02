@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef _OS_WINDOWS_
-#include <malloc.h>
-#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -102,10 +104,16 @@ extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
-char *jl_sysimage_name = NULL;
+uint64_t jl_sysimage_base = NULL;
+#ifdef _OS_WINDOWS_
+#include <dbghelp.h>
+#endif
 
 static void jl_load_sysimg_so(char *fname)
 {
+#ifndef _OS_WINDOWS_
+    Dl_info dlinfo;
+#endif
     // attempt to load the pre-compiled sysimg at fname
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
@@ -130,7 +138,15 @@ static void jl_load_sysimg_so(char *fname)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.");
         }
-        jl_sysimage_name = strdup(fname);
+#ifdef _OS_WINDOWS_
+        jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
+#else
+        if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
+            jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
+        } else {
+            jl_sysimage_base = 0;
+        }
+#endif
     }
     else {
         sysimg_gvars = 0;

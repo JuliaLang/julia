@@ -130,7 +130,8 @@ function complete_path(path::String, pos)
             push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
-    matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
+    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
+    return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
 function complete_methods(input::String)
@@ -148,7 +149,6 @@ end
 include("latex_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
-const non_filename_chars = [(" \t\n\r\"'`@\$><=;|&{(" * (@unix?"\\" : "")) ...]
 const whitespace_chars = [" \t\n\r"...]
 
 # Aux function to detect whether we're right after a
@@ -166,7 +166,7 @@ end
 
 function latex_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if rsearch(string, whitespace_chars, pos) < slashpos
+    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[slashpos-1]=='\\'))
         # latex symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
@@ -187,20 +187,24 @@ function completions(string, pos)
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
-        startpos = nextind(partial, rsearch(partial, non_filename_chars, pos))
+        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        startpos = length(partial) - (m == nothing ? 1 : m.offset) + 2
         r = startpos:pos
-        paths, r, success = complete_path(string[r], pos)
+        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(string[startpos:start(r)-1] * paths[1]) &&  # except if it's a directory
+           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
-        return sort(paths), r, success
+        #Latex symbols can be completed for strings
+        (success || inc_tag==:cmd) && return sort(paths), r, success
     end
 
     ok, ret = latex_completions(string, pos)
     ok && return ret
+    # Make sure that only latex_completions is working on strings
+    inc_tag==:string && return UTF8String[], 0:-1, false
 
     if inc_tag == :other && string[pos] == '('
         endpos = prevind(string, pos)

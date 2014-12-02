@@ -26,7 +26,6 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
     isbits(T) || error("Type of Shared Array elements must be bits types")
-    @windows_only error(" SharedArray is not supported on Windows yet.")
 
     if isempty(pids)
         # only use workers on the current host
@@ -71,10 +70,11 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         # All good, immediately unlink the segment.
         if prod(dims) > 0
             if onlocalhost
-                shm_unlink(shm_seg_name)
+                rc = shm_unlink(shm_seg_name)
             else
-                remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
+                rc = remotecall_fetch(shmmem_create_pid, shm_unlink, shm_seg_name)
             end
+            systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
         end
         S = SharedArray{T,N}(dims, pids, refs, shm_seg_name)
         shm_seg_name = ""
@@ -341,19 +341,7 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     end
     
     try
-        fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
-        systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
-
-        s = fdio(fd_mem, true)
-
-        # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
-        # and only at creation time
-        if (mode & JL_O_CREAT) == JL_O_CREAT
-            rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
-            systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
-        end
-
-        A = mmap_array(T, dims, s, zero(FileOffset), grow=false)
+        A = _shm_mmap_array(T, dims, shm_seg_name, mode)
     catch e
         print_shmem_limits(prod(dims)*sizeof(T))
         rethrow(e)
@@ -366,14 +354,43 @@ function shm_mmap_array(T, dims, shm_seg_name, mode)
     A
 end
 
+
+# platform-specific code
+
 @unix_only begin
-function shm_unlink(shm_seg_name)
-    rc = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
-    systemerror("Error unlinking shmem segment " * shm_seg_name, rc != 0)
-    rc
-end
+
+function _shm_mmap_array(T, dims, shm_seg_name, mode)
+    fd_mem = shm_open(shm_seg_name, mode, S_IRUSR | S_IWUSR)
+    systemerror("shm_open() failed for " * shm_seg_name, fd_mem <= 0)
+
+    s = fdio(fd_mem, true)
+
+    # On OSX, ftruncate must to used to set size of segment, just lseek does not work.
+    # and only at creation time
+    if (mode & JL_O_CREAT) == JL_O_CREAT
+        rc = ccall(:ftruncate, Int, (Int, Int), fd_mem, prod(dims)*sizeof(T))
+        systemerror("ftruncate() failed for shm segment " * shm_seg_name, rc != 0)
+    end
+
+    mmap_array(T, dims, s, zero(FileOffset), grow=false)
 end
 
-@unix_only shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
+shm_unlink(shm_seg_name) = ccall(:shm_unlink, Cint, (Ptr{Uint8},), shm_seg_name)
+shm_open(shm_seg_name, oflags, permissions) = ccall(:shm_open, Int, (Ptr{Uint8}, Int, Int), shm_seg_name, oflags, permissions)
 
+end # @unix_only
+
+@windows_only begin
+
+function _shm_mmap_array(T, dims, shm_seg_name, mode)
+    readonly = !((mode & JL_O_RDWR) == JL_O_RDWR)
+    create = (mode & JL_O_CREAT) == JL_O_CREAT
+    s = SharedMemSpec(shm_seg_name, readonly, create)
+    mmap_array(T, dims, s, zero(FileOffset))
+end
+
+# no-op in windows
+shm_unlink(shm_seg_name) = 0
+
+end # @windows_only
 

@@ -1,0 +1,27 @@
+environment:
+  matrix:
+  - ARCH:  "i686"
+  - ARCH:  "x86_64"
+
+# Only build on master and PR's for now, not personal branches
+# Whether or not PR's get built is determined in the webhook settings
+branches:
+  only:
+    - master
+    - release-0.3
+
+clone_depth: 50
+
+init:
+# Carriage returns are bad
+  - git config --global core.autocrlf input
+
+build_script:
+# Remove C:\MinGW\bin from the path, the version of MinGW installed on
+# AppVeyor is not compatible with the cross-compiled Julia Windows binaries
+  - set PATH=%PATH:C:\MinGW\bin;=%
+# Since the AppVeyor VMs have Git installed, they have MSYS1
+  - sh --login /c/projects/julia/contrib/windows/msys_build.sh
+
+test_script:
+  - cd test && ..\usr\bin\julia runtests.jl all

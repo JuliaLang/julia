@@ -71,10 +71,11 @@ release-candidate: release test
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
-	@echo 4. Replace github release tarball with tarball created from make source-dist
-	@echo 5. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
-	@echo 6. Upload to AWS, update http://julialang.org/downloads links
-	@echo 7. Announce on mailing lists
+	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work
+	@echo 5. Replace github release tarball with tarball created from make source-dist
+	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
+	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
+	@echo 8. Announce on mailing lists
 	@echo
 
 julia-debug-symlink:
@@ -325,8 +326,10 @@ ifeq ($(JULIA_CPU_TARGET), native)
 endif
 
 ifeq ($(OS), WINNT)
-	# If we are running on WINNT, also delete sys.dll until it stops causing issues (#8895, among others)
+ifeq ($(ARCH),x86_64)
+	# If we are running on WIN64, also delete sys.dll until we switch to llvm3.5+
 	-rm -f $(DESTDIR)$(private_libdir)/sys.$(SHLIB_EXT)
+endif
 
 	[ ! -d dist-extras ] || ( cd dist-extras && \
 		cp 7z.exe 7z.dll libexpat-1.dll zlib1.dll $(bindir) && \
