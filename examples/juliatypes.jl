@@ -128,7 +128,7 @@ subst(t, env) = t
 
 # subtype
 
-isequal_type(x::Ty, y::Ty) = issub(x, y) && issub(y, x)
+isequal_type(x, y) = issub(x, y) && issub(y, x)
 
 type Bounds
     # record current lower and upper bounds of a Var
@@ -235,19 +235,20 @@ function discover_Runion(b::UnionT, env)
 end
 
 function issub(a::UnionT, b::UnionT, env)
-    a === BottomT && return true
+    (a === BottomT || a === b) && return true
     if discover_Lunion(a, env) | discover_Runion(b, env)
         return true
     end
     env.Ldepth += 1
     last_Lunion = env.Lunion
+    Lthisidx = env.Lunion_idxs.(last_Lunion)
     env.Lunion = env.Lper_depth[env.Ldepth]
     env.Rdepth += 1
     last_Runion = env.Runion
+    Rthisidx = env.Runion_idxs.(last_Runion)
     env.Runion = env.Rper_depth[env.Rdepth]
 
-    ans = issub(a.types[env.Lunion_idxs.(last_Lunion)],
-                b.types[env.Runion_idxs.(last_Runion)], env)
+    ans = issub(a.types[Lthisidx], b.types[Rthisidx], env)
 
     env.Runion = last_Runion
     env.Rdepth -= 1
@@ -263,8 +264,9 @@ function issub(a::UnionT, t::Ty, env)
     end
     env.Ldepth += 1
     last_Lunion = env.Lunion
+    Lthisidx = env.Lunion_idxs.(last_Lunion)
     env.Lunion = env.Lper_depth[env.Ldepth]
-    ans = issub(a.types[env.Lunion_idxs.(last_Lunion)], t, env)
+    ans = issub(a.types[Lthisidx], t, env)
     env.Lunion = last_Lunion
     env.Ldepth -= 1
     return ans
@@ -277,8 +279,9 @@ function issub(a::Ty, b::UnionT, env)
     end
     env.Rdepth += 1
     last_Runion = env.Runion
+    Rthisidx = env.Runion_idxs.(last_Runion)
     env.Runion = env.Rper_depth[env.Rdepth]
-    ans = issub(a, b.types[env.Runion_idxs.(last_Runion)], env)
+    ans = issub(a, b.types[Rthisidx], env)
     env.Runion = last_Runion
     env.Rdepth -= 1
     return ans
@@ -517,8 +520,9 @@ end
 convert(::Type{Ty}, t::Type)    = xlate(t)
 convert(::Type{Ty}, t::TypeVar) = xlate(t)
 
-issub(a::Type, b::Type)        = issub(xlate(a), xlate(b))
-isequal_type(a::Type, b::Type) = isequal_type(xlate(a), xlate(b))
+issub(a::Type, b::Type) = issub(xlate(a), xlate(b))
+issub(a::Ty  , b::Type) = issub(a       , xlate(b))
+issub(a::Type, b::Ty  ) = issub(xlate(a), b)
 
 
 # tests
@@ -708,6 +712,13 @@ function test_4()
     # nested unions
     @test !issub(UnionT(Ty(Int),inst(RefT,UnionT(Ty(Int),Ty(Int8)))),
                  UnionT(Ty(Int),inst(RefT,UnionT(Ty(Int8),Ty(Int16)))))
+
+    A = Ty(Int);   B = Ty(Int8)
+    C = Ty(Int16); D = Ty(Int32)
+    @test  issub(UnionT(UnionT(A,UnionT(A,UnionT(B,C))), UnionT(D,BottomT)),
+                 UnionT(UnionT(A,B),UnionT(C,UnionT(B,D))))
+    @test !issub(UnionT(UnionT(A,UnionT(A,UnionT(B,C))), UnionT(D,BottomT)),
+                 UnionT(UnionT(A,B),UnionT(C,UnionT(B,A))))
 end
 
 # level 5: union and UnionAll
@@ -748,4 +759,27 @@ end
 
 # tests that don't pass yet
 function test_failing()
+    A = Ty(Int);   B = Ty(Int8)
+    C = Ty(Int16); D = Ty(Int32)
+    @test isequal_type(UnionT(UnionT(A,B,C), UnionT(D)),  UnionT(A,B,C,D))
+    @test isequal_type(UnionT(UnionT(A,B,C), UnionT(D)),  UnionT(A,UnionT(B,C),D))
+    @test isequal_type(UnionT(UnionT(UnionT(UnionT(A)),B,C), UnionT(D)),
+                       UnionT(A,UnionT(B,C),D))
+
+    @test issub_strict(UnionT(UnionT(A,C), UnionT(D)),  UnionT(A,B,C,D))
+
+    @test !issub(UnionT(UnionT(A,B,C), UnionT(D)),  UnionT(A,C,D))
+end
+
+# examples that take a very long time
+function test_slow()
+    A = Ty(Int);   B = Ty(Int8)
+    C = Ty(Int16); D = Ty(Int32)
+    # obviously these unions can be simplified, but when they aren't there's trouble
+    X = UnionT(UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),
+               UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C))
+    Y = UnionT(UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),
+               UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(A,B,C))
+    @test issub(X,Y)
+
 end
