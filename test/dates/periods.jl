@@ -116,7 +116,7 @@ y2 = Dates.Year(2)
 @test Dates.Year(false) != y
 @test_throws MethodError Dates.Year(:hey) == y
 @test Dates.Year(real(1)) == y
-@test_throws MethodError Dates.Year(m) == y
+@test_throws InexactError Dates.Year(m) == y
 @test_throws MethodError Dates.Year(w) == y
 @test_throws MethodError Dates.Year(d) == y
 @test_throws MethodError Dates.Year(h) == y
@@ -133,8 +133,8 @@ y2 = Dates.Year(2)
 @test typeof(y+mi) <: Dates.CompoundPeriod
 @test typeof(y+s) <: Dates.CompoundPeriod
 @test typeof(y+ms) <: Dates.CompoundPeriod
-@test_throws MethodError y > m
-@test_throws MethodError d < w
+@test y > m
+@test d < w
 @test typemax(Dates.Year) == Dates.Year(typemax(Int64))
 @test typemax(Dates.Year) + y == Dates.Year(-9223372036854775808)
 @test typemin(Dates.Year) == Dates.Year(-9223372036854775808)
@@ -283,3 +283,6 @@ emptyperiod = ((y + d) - d) - y
 @test emptyperiod == ((d + y) - y) - d == ((d + y) - d) - y
 @test emptyperiod == 0ms
 @test string(emptyperiod) == "empty period"
+@test 8d - s == 1w + 23h + 59mi + 59s
+@test h + 3mi == 63mi
+@test y - m == 11m
