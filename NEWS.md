@@ -129,6 +129,11 @@ Library improvements
 
   * Significantly faster `randn` ([#9126]).
 
+  * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
+  across all numeric types ([#9133], [#9198]).
+
+  * Rational arithmetic throws errors on overflow ([#8672]).
+
 Deprecated or removed
 ---------------------
 
