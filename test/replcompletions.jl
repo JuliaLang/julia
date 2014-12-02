@@ -176,7 +176,7 @@ end
 
 let #test that it can auto complete with spaces in file/path
     path = tempdir()
-    space_folder = randstring() * " r"
+    space_folder = randstring() * " α"
     dir = joinpath(path, space_folder)
     dir_space = replace(space_folder, " ", "\\ ")
     mkdir(dir)
@@ -187,7 +187,7 @@ let #test that it can auto complete with spaces in file/path
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file" in c
 
-            s = @windows? "cd(\"$dir_space\\\\space" : "cd(\"$dir_space/space"
+            s = @windows? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
             c,r = test_complete(s)
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
