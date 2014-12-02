@@ -54,7 +54,7 @@ randn!(MersenneTwister(42), A)
 @test A == [-0.5560268761463861  0.027155338009193845;
             -0.444383357109696  -0.29948409035891055]
 
-for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128,
+for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128, BigInt,
           Float16, Float32, Float64, Rational{Int})
     r = rand(convert(T, 97):convert(T, 122))
     @test typeof(r) == T
@@ -64,7 +64,7 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt
     @test 97 <= r <= 122
     @test mod(r,2)==1
 
-    if T<:Integer
+    if T<:Integer && !(T===BigInt)
         x = rand(typemin(T):typemax(T))
         @test isa(x,T)
         @test typemin(T) <= x <= typemax(T)
@@ -75,9 +75,24 @@ if sizeof(Int32) < sizeof(Int)
     r = rand(int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(32:62)])
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(uint64(1:k)).u for k in 13 .+ int64(2).^(32:62)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
 
+end
+
+# BigInt specific
+for T in [UInt32, UInt64, UInt128, Int128]
+    s = big(typemax(T)-1000) : big(typemax(T)) + 10000
+    @test rand(s) != rand(s)
+    @test big(typemax(T)-1000) <= rand(s) <= big(typemax(T)) + 10000
+    r = rand(s, 1, 2)
+    @test size(r) == (1, 2)
+    @test typeof(r) == Matrix{BigInt}
+
+    srand(0)
+    r = rand(s)
+    srand(0)
+    @test rand(s) == r
 end
 
 randn()
@@ -190,8 +205,8 @@ r = uint64(rand(uint32(97:122)))
 srand(seed)
 @test r == rand(uint64(97:122))
 
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RandIntGen(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
 
 import Base.Random: uuid4, UUID
 
