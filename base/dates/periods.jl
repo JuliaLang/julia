@@ -5,10 +5,6 @@ value{P<:Period}(x::P) = x.value
 # P(x) = new((convert(Int64,x))
 # The following definitions are for Period-specific safety
 for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
-    # This ensures that we can't convert between Periods
-    @eval $p(x::Period) = throw(ArgumentError("Can't convert $(typeof(x)) to $($p)"))
-    # Unless the Periods are the same type
-    @eval $p(x::$p) = x
     # Convenience method for show()
     @eval _units(x::$p) = $(" " * lowercase(string(p))) * (abs(value(x)) == 1 ? "" : "s")
     # periodisless
@@ -42,9 +38,6 @@ Base.isless{R<:Real}(y::R,x::Period) = isless(int64(y),value(x))
 =={P<:Period}(x::P,y::P) = ===(value(x),value(y))
 =={R<:Real}(x::Period,y::R) = ==(int64(y),value(x))
 =={R<:Real}(y::R,x::Period) = ==(int64(y),value(x))
-
-Base.isless(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x)) and $(typeof(y))"))
-==(x::Period,y::Period) = throw(ArgumentError("Can't compare $(typeof(x)) and $(typeof(y))"))
 
 #Period Arithmetic:
 import Base.div, Base.mod, Base.gcd, Base.lcm
@@ -107,9 +100,12 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 # E.g. Year(1) + Day(1)
 (+)(x::Period,y::Period) = CompoundPeriod(sort!(Period[x,y],rev=true,lt=periodisless))
 (+)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,y) ,rev=true,lt=periodisless); return x)
+(+)(y::Period,x::CompoundPeriod) = x + y
 # E.g. Year(1) - Month(1)
 (-)(x::Period,y::Period) = CompoundPeriod(sort!(Period[x,-y],rev=true,lt=periodisless))
 (-)(x::CompoundPeriod,y::Period) = (sort!(push!(x.periods,-y),rev=true,lt=periodisless); return x)
+(-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
+(-)(y::Period,x::CompoundPeriod) = (-x) + y
 
 # Capture TimeType+-Period methods
 (+)(a::TimeType,b::Period,c::Period) = (+)(a,b+c)
