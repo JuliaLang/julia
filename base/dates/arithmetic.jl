@@ -57,8 +57,8 @@ function (-)(dt::Date,z::Month)
 end
 (+)(x::Date,y::Week) = return Date(UTD(value(x) + 7*value(y)))
 (-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
-(+)(x::Date,y::Day)  = return Date(UTD(value(x) + y))
-(-)(x::Date,y::Day)  = return Date(UTD(value(x) - y))
+(+)(x::Date,y::Day)  = return Date(UTD(value(x) + value(y)))
+(-)(x::Date,y::Day)  = return Date(UTD(value(x) - value(y)))
 (+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
 (-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
 (+)(y::Period,x::TimeType) = x + y
