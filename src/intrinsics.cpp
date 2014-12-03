@@ -1069,6 +1069,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
                 there, oob
             );
+
+            // raise out-of-bounds error
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
         }
 
         // decode there byte (known to be in-bounds)
@@ -1078,17 +1087,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *ptr = builder.CreateIntToPtr(addr, T_pint8);
         Value *there_byte = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
         builder.CreateBr(cont);
-
-        // raise out-of-bounds error
-        if (check_bounds) {
-            builder.SetInsertPoint(oob);
-            builder.CreateCall2(
-                prepare_call(jlthrow_line_func),
-                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
-                ConstantInt::get(T_int32, ctx->lineno)
-            );
-            builder.CreateUnreachable();
-        }
 
         // merge branches
         builder.SetInsertPoint(cont);
@@ -1158,6 +1156,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                 builder.CreateAnd(builder.CreateNot(is_here), builder.CreateICmpULT(i, there_len)),
                 there, oob
             );
+
+            // raise out-of-bounds error
+            builder.SetInsertPoint(oob);
+            builder.CreateCall2(
+                prepare_call(jlthrow_line_func),
+                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
+                ConstantInt::get(T_int32, ctx->lineno)
+            );
+            builder.CreateUnreachable();
         }
 
         // decode there byte (known to be in-bounds)
@@ -1167,17 +1174,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
         Value *ptr = builder.CreateIntToPtr(addr, T_pint32);
         Value *there_uint32 = tbaa_decorate(tbaa_const, builder.CreateLoad(ptr, false));
         builder.CreateBr(cont);
-
-        // raise out-of-bounds error
-        if (check_bounds) {
-            builder.SetInsertPoint(oob);
-            builder.CreateCall2(
-                prepare_call(jlthrow_line_func),
-                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlboundserr_var))),
-                ConstantInt::get(T_int32, ctx->lineno)
-            );
-            builder.CreateUnreachable();
-        }
 
         // merge branches
         builder.SetInsertPoint(cont);
