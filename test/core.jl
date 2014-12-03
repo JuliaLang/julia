@@ -88,6 +88,7 @@ let N = TypeVar(:N,true)
 
     @test isequal(typeintersect((Type{Void},Type{Void}), Type{NTuple{N,Void}}),
                   Type{(Void,Void)})
+    @test isequal(typeintersect(NTuple{Float64,Int},(Int,Int)), None)
 end
 @test is(Bottom, typeintersect(Type{Any},Type{Complex}))
 @test is(Bottom, typeintersect(Type{Any},Type{TypeVar(:T,Real)}))
