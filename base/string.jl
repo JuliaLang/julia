@@ -32,6 +32,7 @@ string(xs...) = print_to_string(xs...)
 
 bytestring() = ""
 bytestring(s::Array{UInt8,1}) = bytestring(pointer(s),length(s))
+bytestring{N}(s::SubArray{UInt8,1,Array{UInt8,N},(UnitRange{Int64},),1}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
@@ -1040,7 +1041,7 @@ function triplequoted(args...)
         for s in sx
             if isa(s,ByteString)
                 lines = split(s,'\n')
-                for line in lines[2:end]
+                for line in [lines[i] for i = 2:length(lines)]
                     n,blank = indentation(line)
                     if !blank
                         indent = min(indent, n)

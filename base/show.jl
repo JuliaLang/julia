@@ -360,7 +360,7 @@ function show_call(io::IO, head, func, func_args, indent)
     end
     if !isempty(func_args) && isa(func_args[1], Expr) && func_args[1].head === :parameters
         print(io, op)
-        show_list(io, func_args[2:end], ',', indent, 0)
+        show_list(io, [func_args[i] for i = 2:length(func_args)], ',', indent, 0)
         print(io, "; ")
         show_list(io, func_args[1].args, ',', indent, 0)
         print(io, cl)
@@ -452,13 +452,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     # function declaration (like :call but always printed with parens)
     # (:calldecl is a "fake" expr node created when we find a :function expr)
     elseif head == :calldecl && nargs >= 1
-        show_call(io, head, args[1], args[2:end], indent)
+        show_call(io, head, args[1], [args[i] for i = 2:length(args)], indent)
 
     # function call
     elseif haskey(expr_calls, head) && nargs >= 1  # :call/:ref/:curly
         func = args[1]
         func_prec = operator_precedence(func)
-        func_args = args[2:end]
+        func_args = [args[i] for i = 2:length(args)]
 
         # scalar multiplication (i.e. "100x")
         if (func == :(*) && length(func_args)==2 &&
@@ -587,7 +587,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "end")
 
     elseif is(head, :let) && nargs >= 1
-        show_block(io, "let", args[2:end], args[1], indent); print(io, "end")
+        show_block(io, "let", [args[i] for i = 2:length(args)], args[1], indent); print(io, "end")
 
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")

@@ -38,13 +38,13 @@ const chm_l_com  = fill(0xff, chm_com_sz)
 ## chm_com and chm_l_com must be initialized at runtime because they contain pointers
 ## to functions in libc.so, whose addresses can change
 function cmn(::Type{Int32})
-    if isnan(reinterpret(Float64,chm_com[1:8])[1])
+    if isnan(reinterpret(Float64, copy(chm_com[1:8]))[1])
         @isok ccall((:cholmod_start, :libcholmod), Cint, (Ptr{UInt8},), chm_com)
     end
     chm_com
 end
 function cmn(::Type{Int64})
-    if isnan(reinterpret(Float64,chm_l_com[1:8])[1])
+    if isnan(reinterpret(Float64, copy(chm_l_com[1:8]))[1])
         @isok ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{UInt8},), chm_l_com)
     end
     chm_l_com
@@ -839,7 +839,7 @@ end
 
 A_ldiv_B!(L::CholmodFactor, B) = L\B # Revisit this to see if allocation can be avoided. It should be possible at least for the right hand side.
 (\){T<:CHMVTypes}(L::CholmodFactor{T}, B::CholmodDense{T}) = solve(L, B, CHOLMOD_A)
-(\){T<:CHMVTypes}(L::CholmodFactor{T}, b::Vector{T}) = reshape(solve(L, CholmodDense!(b), CHOLMOD_A).mat, length(b))
+(\){T<:CHMVTypes}(L::CholmodFactor{T}, b::StridedVector{T}) = reshape(solve(L, CholmodDense!(convert(Vector{T}, b)), CHOLMOD_A).mat, length(b))
 (\){T<:CHMVTypes}(L::CholmodFactor{T}, B::Matrix{T}) = solve(L, CholmodDense!(B),CHOLMOD_A).mat
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSparse{Tv,Ti})
     solve(L,B,CHOLMOD_A)

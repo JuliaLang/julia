@@ -1,5 +1,6 @@
 tc{N}(r1::NTuple{N}, r2::NTuple{N}) = all(map(x->tc(x...), [zip(r1,r2)...]))
 tc{N}(r1::BitArray{N}, r2::Union(BitArray{N},Array{Bool,N})) = true
+tc{N,M}(r1::BitArray{N}, r2::SubArray{Bool,N,Array{Bool,M},NTuple{N,UnitRange{Int64}},1}) = true
 tc{T}(r1::T, r2::T) = true
 tc(r1,r2) = false
 

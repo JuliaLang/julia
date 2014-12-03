@@ -94,11 +94,11 @@ end
 function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
     m, n = size(A)
     if d == :L
-        L = tril!(A.factors[1:m, 1:min(m,n)])
+        L = tril(A.factors[1:m, 1:min(m,n)])
         for i = 1:min(m,n); L[i,i] = one(T); end
         return L
     end
-    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
+    d == :U && return triu(A.factors[1:min(m,n), 1:n])
     d == :p && return ipiv2perm(A.ipiv, m)
     if d == :P
         p = A[:p]

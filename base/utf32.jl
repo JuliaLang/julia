@@ -45,8 +45,10 @@ function convert(::Type{UTF32String}, data::AbstractVector{Char})
     UTF32String(copy!(d,1, data,1, len))
 end
 
-convert{T<:Union(Int32,UInt32)}(::Type{UTF32String}, data::AbstractVector{T}) =
+convert{T<:Union(Int32,UInt32)}(::Type{UTF32String}, data::Vector{T}) =
     convert(UTF32String, reinterpret(Char, data))
+convert{T<:Union(Int32,UInt32)}(::Type{UTF32String}, data::AbstractVector{T}) =
+    convert(UTF32String, reinterpret(Char, convert(Array, data)))
 
 convert{T<:AbstractString}(::Type{T}, v::AbstractVector{Char}) = convert(T, utf32(v))
 

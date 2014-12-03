@@ -432,10 +432,10 @@ function edit_move_up(s)
 end
 
 function edit_move_down(buf::IOBuffer)
-    npos = rsearch(buf.data[1:buf.size], '\n', position(buf))
+    npos = rsearch(copy(buf.data[1:buf.size]), '\n', position(buf))
     # We're interested in character count, not byte count
     offset = length(bytestring(buf.data[(npos+1):(position(buf))]))
-    npos2 = search(buf.data[1:buf.size], '\n', position(buf)+1)
+    npos2 = search(copy(buf.data[1:buf.size]), '\n', position(buf)+1)
     if npos2 == 0 #we're in the last line
         return false
     end

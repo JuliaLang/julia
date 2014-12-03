@@ -171,7 +171,12 @@ end
 _getindex(A, I::(Union(Int,AbstractVector)...)) =
     _getindex!(similar(A, index_shape(I...)), A, I...)
 
-@nsplat N function getindex(A::Array, I::NTuple{N,Union(Real,AbstractVector)}...)
+@nsplat N function getindex(A::Array, I::NTuple{N,Union(Real,UnitRange{Int},Colon)}...)
+    checkbounds(A, I...)
+    slice(A, I...)
+end
+
+@nsplat N function getindex(A::Array, I::NTuple{N,AbstractVector}...)
     checkbounds(A, I...)
     _getindex(A, to_index(I...))
 end
@@ -183,7 +188,7 @@ end
 end
 
 
-@ngenerate N typeof(A) function setindex!(A::Array, x, J::NTuple{N,Union(Real,AbstractArray)}...)
+@ngenerate N typeof(A) function setindex!(A::Array, x, J::NTuple{N,Union(Real,AbstractArray,Colon)}...)
     @ncall N checkbounds A J
     @nexprs N d->(I_d = to_index(J_d))
     stride_1 = 1

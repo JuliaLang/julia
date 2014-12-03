@@ -111,7 +111,7 @@ function chunk_idxs(dims, chunks)
     idxs, cuts
 end
 
-function localpartindex(pmap::Vector{Int})
+function localpartindex(pmap::StridedVector{Int})
     mi = myid()
     for i = 1:length(pmap)
         if pmap[i] == mi

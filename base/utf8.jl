@@ -107,7 +107,7 @@ function getindex(s::UTF8String, r::UnitRange{Int})
         throw(BoundsError())
     end
     j = nextind(s,j)-1
-    UTF8String(d[i:j])
+    UTF8String([d[k] for k = i:j])
 end
 
 function search(s::UTF8String, c::Char, i::Integer)
@@ -182,6 +182,7 @@ function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractStr
     end
     UTF8String(a)
 end
+convert(::Type{UTF8String}, s::AbstractVector{UInt8}) = convert(UTF8String, convert(Array, s))
 convert(::Type{UTF8String}, s::AbstractString) = utf8(bytestring(s))
 
 # The last case is the replacement character 0xfffd (3 bytes)
