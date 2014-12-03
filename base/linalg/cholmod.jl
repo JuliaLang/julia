@@ -50,7 +50,16 @@ function cmn(::Type{Int64})
     chm_l_com
 end
 
-typealias CHMITypes Union(Int32,Int64)
+# check the size of SuiteSparse_long
+if int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
+    const CholmodIndexTypes = (:Int32, )
+    typealias CHMITypes Union(Int32)
+else
+    const CholmodIndexTypes = (:Int32, :Int64)
+    typealias CHMITypes Union(Int32, Int64)
+end
+
+
 typealias CHMVTypes Union(Complex128, Float64)
 typealias CHMVRealTypes Union(Float64)
 
@@ -424,6 +433,7 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                xtyp(Tv),dtyp(Tv),
                                                CHOLMOD_FALSE,CHOLMOD_TRUE),
                         colpt,rowval,nzval)
+
     @isok isvalid(cs)
 
     cs = sort!(cs)
@@ -479,7 +489,7 @@ function chm_rdsp(fnm::AbstractString)
     CholmodSparse(res)
 end
 
-for Ti in (:Int32,:Int64)
+for Ti in CholmodIndexTypes
     @eval begin
         function (*){Tv<:CHMVRealTypes}(A::CholmodSparse{Tv,$Ti},
                                     B::CholmodSparse{Tv,$Ti})
