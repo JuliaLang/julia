@@ -38,6 +38,8 @@ copy(s::Set) = union!(similar(s), s)
 sizehint(s::Set, newsz) = (sizehint(s.dict, newsz); s)
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 
+rehash(s::Set) = (rehash(s.dict); s)
+
 start(s::Set)       = start(s.dict)
 done(s::Set, state) = done(s.dict, state)
 # NOTE: manually optimized to take advantage of Dict representation
