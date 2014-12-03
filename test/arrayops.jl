@@ -107,7 +107,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, Range1{Int}))
+rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # get
@@ -772,13 +772,13 @@ A = [NaN]; B = [NaN]
 # Inferred types
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
-    #indexing with (Range1, Range1, Range1)
-    args = ntuple(N, d->Range1{Int})
+    #indexing with (UnitRange, UnitRange, UnitRange)
+    args = ntuple(N, d->UnitRange{Int})
     @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
     @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
     @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
-    # Indexing with (Range1, Range1, Float64)
-    args = ntuple(N, d->d<N ? Range1{Int} : Float64)
+    # Indexing with (UnitRange, UnitRange, Float64)
+    args = ntuple(N, d->d<N ? UnitRange{Int} : Float64)
     N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N-1}]
     N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == [BitArray{N-1}]
     N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
