@@ -824,7 +824,7 @@ let
 
     # issue #1886
     X = [1:4]
-    r = Array(Range1{Int},1)
+    r = Array(UnitRange{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1541,8 +1541,8 @@ macro m6031(x); x; end
 
 # issue #6050
 @test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
-                          Dict{Int64,(Range1{Int64},Range1{Int64})},
-                          :vals) == Array{(Range1{Int64},Range1{Int64}),1}
+                          Dict{Int64,(UnitRange{Int64},UnitRange{Int64})},
+                          :vals) == Array{(UnitRange{Int64},UnitRange{Int64}),1}
 
 # issue #6068
 x6068 = 1
