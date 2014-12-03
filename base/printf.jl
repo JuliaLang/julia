@@ -1044,6 +1044,7 @@ end
 
 macro printf(args...)
     !isempty(args) || error("@printf: called with zero arguments")
+    args = map(macroexpand, args)
     if isa(args[1], AbstractString) || is_str_expr(args[1])
         _printf("@printf", :STDOUT, args[1], args[2:end])
     else
@@ -1055,6 +1056,7 @@ end
 
 macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
+    args = map(macroexpand, args)
     isa(args[1], AbstractString) || is_str_expr(args[1]) ||
         error("@sprintf: first argument must be a format string")
     blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
