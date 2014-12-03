@@ -148,11 +148,15 @@ This function provides equivalent functionality, but makes no efforts to optimis
 
 (defconst julia-function-assignment-regex
   (rx line-start symbol-start
+      (* (seq (1+ (or word (syntax symbol))) ".")) ; module name
       (group (1+ (or word (syntax symbol))))
       (* space)
       (? "{" (* (not (any "}"))) "}")
       (* space)
-      "(" (* (not (any ")"))) ")"
+      "(" (* (or
+              (seq "(" (* (not (any "(" ")"))) ")")
+              (not (any "(" ")"))))
+      ")"
       (* space)
       "="))
 
