@@ -67,12 +67,13 @@ end
 
 function next(s::Str, i::Int)
     x = bswap(getu32(s.data, i))
-    n = max(1, leading_ones(x))
+    l = leading_ones(x)
+    n = max(1, l)
     y = ((0x808080 $ x) << n) >>> (32 - 7n)
     z = (((y >>> 24) & 0xff) << 18) |
         (((y >>> 16) & 0xff) << 12) |
         (((y >>>  8) & 0xff) <<  6) | (y & 0xff)
-    return Char(z), i + n
+    ifelse(l == 1, '\ufffd', Char(z)), i + n
 end
 
 const mask = div(typemax(UInt),typemax(UInt8))
