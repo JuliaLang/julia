@@ -299,7 +299,17 @@ depends on ``foo_data_ptr`` would also have to be initialized in ``__init__``.
 Constants involving most Julia objects that are not produced by
 ``ccall`` do not need to be placed in ``__init__``: their definitions
 can be precompiled and loaded from the cached module image.  (This
-includes complicated heap-allocated objects like arrays and
-dictionaries.)  However, any routine that returns a raw pointer value
-must be called at runtime for precompilation to work.  This includes
-the Julia functions ``cfunction`` and ``pointer``.
+includes complicated heap-allocated objects like arrays.)  However,
+any routine that returns a raw pointer value must be called at runtime
+for precompilation to work.  This includes the Julia functions
+``cfunction`` and ``pointer``.
+
+Dictionary and set types, and in general anything that depends on the
+output of a ``hash`` method, are a tricky case.  The problem is that
+the ``hash`` method for generic objects can depend on the memory
+address of the object, and hence may change from run to run.  To be
+safe, therefore, it is best to initialize dictionary and set globals from
+within your ``__init__`` function.  It is only safe to initialize them
+outside of ``__init__`` if you know that the keys have a ``hash`` method
+that depends only on the value of the object and not the address; this
+is the case for hashes of numeric types, for example.
