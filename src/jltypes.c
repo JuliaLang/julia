@@ -829,6 +829,10 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
             has_ntuple_intersect_tuple = 1;
             jl_value_t *lenvar = jl_tparam0(b);
             jl_value_t *elty = jl_tparam1(b);
+            if (!jl_is_typevar(lenvar)) {
+                JL_GC_POP();
+                return (jl_value_t*)jl_bottom_type;
+            }
             int i;
             for(i=0; i < eqc->n; i+=2) {
                 if (eqc->data[i] == lenvar) {
@@ -2122,6 +2126,7 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
         if ((jl_tuple_t*)b == jl_tuple_type && !invariant) return 1;
         if (jl_is_datatype(b)) {
             if (((jl_datatype_t*)b)->name == jl_ntuple_typename) {
+                if (!jl_is_typevar(jl_tparam0(b))) return 0;
                 jl_value_t *tp = jl_tupleref(((jl_datatype_t*)b)->parameters, 1);
                 if (tuple_all_subtype((jl_tuple_t*)a, tp, ta, invariant)) {
                     if (invariant) {
