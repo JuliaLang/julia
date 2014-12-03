@@ -312,4 +312,6 @@ safe, therefore, it is best to initialize dictionary and set globals from
 within your ``__init__`` function.  It is only safe to initialize them
 outside of ``__init__`` if you know that the keys have a ``hash`` method
 that depends only on the value of the object and not the address; this
-is the case for hashes of numeric types, for example.
+is the case for hashes of numeric types, for example.  Another exception
+is the `ObjectIdDict` dictionary type, which is specially handled by
+precompilation so that it is safe to initialize at compile-time.
