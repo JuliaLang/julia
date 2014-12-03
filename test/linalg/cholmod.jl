@@ -3,8 +3,8 @@ using Base.Test
 let # Issue 9160
     const CHOLMOD = Base.LinAlg.CHOLMOD
 
-    for Ti in (Int32, Int64)
-        for elty in (Float64, )
+    for Ti in CHOLMOD.CHMITypes.types
+        for elty in CHOLMOD.CHMVRealTypes.types
 
             A = sprand(10,10,0.1)
             A = convert(SparseMatrixCSC{elty,Ti},A)
