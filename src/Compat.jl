@@ -24,6 +24,10 @@ if VERSION < v"0.4.0-dev+980"
     macro AnyDict(pairs...)
         esc(Expr(:typed_dict, :(Any=>Any), pairs...))
     end
+
+    Base.Dict(kv) = dict_with_eltype(kv, eltype(kv))
+    dict_with_eltype{K,V}(kv, ::Type{(K,V)}) = Dict{K,V}(kv)
+    dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
 else
     macro Dict(pairs...)
         esc(Expr(:call, :Dict, pairs...))
