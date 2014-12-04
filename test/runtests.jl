@@ -39,6 +39,9 @@ d2[:a] = Dict{Symbol,Int}()
 d2[:a][:b] = 1
 @test @compat(Dict(:a => Dict(:b => 1))) == d2
 
+d = Dict(zip([1, 2], [3, 4]))
+@test d == @compat Dict(1=>3, 2=>4)
+
 @compat function f()
 	a = :a
 	b = Dict(:b => 1)
