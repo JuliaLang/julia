@@ -3606,6 +3606,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
+    // clear the list of llvmcall declarations as we'll be using a clean module
+    llvmcallDecls.clear();
 #ifndef LLVM35
     funcName << ";";
 #endif
