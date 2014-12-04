@@ -256,9 +256,13 @@ type ObjectIdDict <: Associative{Any,Any}
 
     function ObjectIdDict(itr)
         d = ObjectIdDict()
-        for (k,v) in itr
-            d[k] = v
-        end
+        for (k,v) in itr; d[k] = v; end
+        d
+    end
+
+    function ObjectIdDict(pairs::Pair...)
+        d = ObjectIdDict()
+        for (k,v) in pairs; d[k] = v; end
         d
     end
 
