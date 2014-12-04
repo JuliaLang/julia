@@ -4083,7 +4083,7 @@ Random number generation in Julia uses the `Mersenne Twister library <http://www
 
 Most functions related to random generation accept an optional ``AbstractRNG`` as the first argument, ``rng`` , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications ``dims...`` (which can be given as a tuple) to generate arrays of random values.
 
-A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16, Float32, Float64, Bool, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128`` (or complex numbers or arrays of those types). Random floating point numbers are generated uniformly in [0,1).
+A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16``, ``Float32``, ``Float64``, ``Bool``, ``Int8``, ``UInt8``, ``Int16``, ``UInt16``, ``Int32``, ``UInt32``, ``Int64``, ``UInt64``, ``Int128``, ``UInt128``, ``BigInt`` (or complex numbers of those types). Random floating point numbers are generated uniformly in [0,1). As ``BigInt`` represents unbounded integers, the interval must be specified (e.g. ``rand(big(1:6))``).
 
 .. function:: srand([rng], [seed])
 
@@ -4099,7 +4099,7 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
 
-   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers, and to [0,1) for floating point numbers;
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to [0,1) for floating point numbers;
 
    ``S`` defaults to ``Float64``.
 
