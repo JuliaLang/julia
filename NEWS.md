@@ -102,6 +102,9 @@ Library improvements
     to provide uniform cross-platform behavior and up-to-date, locale-independent support
     for Unicode standards ([#5939]).
 
+  * `reverseind` function to convert indices in reversed strings (e.g. from
+    reversed regex searches) to indices in the original string ([#9249]).
+
   * New `Nullable` type for missing data ([#8152]).
 
   * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
@@ -1126,4 +1129,5 @@ Too numerous to mention.
 [#9132]: https://github.com/JuliaLang/julia/issues/9132
 [#9133]: https://github.com/JuliaLang/julia/issues/9133
 [#9144]: https://github.com/JuliaLang/julia/issues/9144
+[#9249]: https://github.com/JuliaLang/julia/issues/9249
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
