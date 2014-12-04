@@ -399,7 +399,7 @@ else
     immutable RangeGeneratorBigInt <: RangeGenerator
         a::BigInt             # first
         m::BigInt             # range length - 1
-        limbs::Array{Limb}    # buffer to be copied into generated BigInt's
+        limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
         mask::Limb            # applied to the highest limb
 
         RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Array(Limb, nlimbs), mask)
