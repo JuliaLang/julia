@@ -85,12 +85,13 @@ static const char *opts =
     " --track-allocation={none|user|all}\n"
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
+    " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:T:hJ:";
+    static char* shortopts = "+H:T:hJ:O";
     static struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
         { "tab",           required_argument, 0, 'T' },
@@ -101,6 +102,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "code-coverage", optional_argument, 0, 'c' },
         { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
+        { "optimize",      no_argument,       0, 'O' },
         { "int-literals",  required_argument, 0, 301 },
         { "dump-bitcode",  required_argument, 0, 302 },
         { "compile",       required_argument, 0, 303 },
@@ -135,6 +137,9 @@ void parse_opts(int *argcp, char ***argvp)
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
+        case 'O':
+            jl_compileropts.opt_level = 1;
+            break;
         case 'c':
             if (optarg != NULL) {
                 if (!strcmp(optarg,"user"))
