@@ -51,10 +51,10 @@ $(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
 else
 $(BUILDDIR)/%.o: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(SHIPFLAGS) $<)
-	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo$@ -c $*.i)
+	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(SHIPFLAGS) -Fo $@ -c $*.i)
 $(BUILDDIR)/%.dbg.obj: %.S | $(BUILDDIR)
 	@$(call PRINT_CC, $(CPP) -P $(CPPFLAGS) $(DEBUGFLAGS) $<)
-	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo$@ -c $*.i)
+	@$(call PRINT_CC, $(AS) $(CPPFLAGS) $(DEBUGFLAGS) -Fo $@ -c $*.i)
 endif
 
 release: $(BUILDDIR)/libsupport.a
