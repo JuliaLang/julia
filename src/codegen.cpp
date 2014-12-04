@@ -4695,6 +4695,8 @@ static void init_julia_llvm_env(Module *m)
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
     FPM->add(createTypeBasedAliasAnalysisPass());
+    if (jl_compileropts.opt_level>=1)
+        FPM->add(createBasicAliasAnalysisPass());
     // list of passes from vmkit
     FPM->add(createCFGSimplificationPass()); // Clean up disgusting code
     FPM->add(createPromoteMemoryToRegisterPass());// Kill useless allocas
@@ -4740,11 +4742,11 @@ static void init_julia_llvm_env(Module *m)
 #else
     FPM->add(createLoopUnrollPass());           // Unroll small loops
 #endif
-    //FPM->add(createLoopStrengthReducePass());   // (jwb added)
-
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && !defined(INSTCOMBINE_BUG)
+#if LLVM33 && !LLVM35 && !defined(INSTCOMBINE_BUG)
     FPM->add(createLoopVectorizePass());        // Vectorize loops
 #endif
+    //FPM->add(createLoopStrengthReducePass());   // (jwb added)
+
 #ifndef INSTCOMBINE_BUG
     FPM->add(createInstructionCombiningPass()); // Clean up after the unroller
 #endif
@@ -4761,8 +4763,20 @@ static void init_julia_llvm_env(Module *m)
 #endif
     FPM->add(createJumpThreadingPass());         // Thread jumps
     FPM->add(createDeadStoreEliminationPass());  // Delete dead stores
+#if LLVM33 && !defined(INSTCOMBINE_BUG)
+    if (jl_compileropts.opt_level>=1)
+        FPM->add(createSLPVectorizerPass());     // Vectorize straight-line code
+#endif
 
     FPM->add(createAggressiveDCEPass());         // Delete dead instructions
+#if LLVM33 && !defined(INSTCOMBINE_BUG)
+    if (jl_compileropts.opt_level>=1)
+        FPM->add(createInstructionCombiningPass());   // Clean up after SLP loop vectorizer
+#endif
+#if LLVM35
+    FPM->add(createLoopVectorizePass());         // Vectorize loops
+    FPM->add(createInstructionCombiningPass());  // Clean up after loop vectorizer
+#endif
     //FPM->add(createCFGSimplificationPass());     // Merge & remove BBs
 
     FPM->doInitialization();
