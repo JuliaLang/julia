@@ -161,3 +161,5 @@ Base.isless(x::Date,y::Date) = isless(value(x),value(y))
 Base.isless(x::DateTime,y::DateTime) = isless(value(x),value(y))
 Base.isless(x::TimeType,y::TimeType) = isless(promote(x,y)...)
 ==(x::TimeType,y::TimeType) = ===(promote(x,y)...)
+# All defined AbstractTime types are immutable
+Base.copy(x::AbstractTime) = x
