@@ -262,7 +262,7 @@ automated.  In order to make your module work with precompilation,
 however, you may need to change your module to explicitly separate any
 initialization steps that must occur at *runtime* from steps that can
 occur at *compile time*.  For this purpose, Julia allows you to define
-an ``__init__()` function in your module that executes any
+an ``__init__()`` function in your module that executes any
 initialization steps that must occur at runtime.
 
 In particular, if you define a ``function __init__()`` in a module,
@@ -284,7 +284,7 @@ holds the return value of a ``void *foo_data()`` function defined by
 ``libfoo`` — this constant must be initialized at runtime (not at compile
 time) because the pointer address will change from run to run.  You
 could accomplish this by defining the following ``__init__`` function
-in your module:
+in your module::
 
     function __init__()
         ccall((:foo_init,:libfoo), Void, ())
