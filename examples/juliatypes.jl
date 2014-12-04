@@ -37,18 +37,30 @@ function show(io::IO, t::TagT)
     print(io, '}')
 end
 
+type BottomTy <: Ty
+end
+
+show(io::IO, ::BottomTy) = print(io, "BottomT")
+
 type UnionT <: Ty
-    types
-    UnionT(ts...) = new(ts)
+    a
+    b
+    UnionT() = BottomT
+    UnionT(a) = a
+    UnionT(a, b) = new(a, b)
+    UnionT(a, ts...) = new(a, UnionT(ts...))
 end
 
 function show(io::IO, t::UnionT)
     print(io, "UnionT(")
-    l = length(t.types)
-    for i=1:l
-        show(io, t.types[i])
-        if i < l
-            print(io, ",")
+    while true
+        show(io, t.a)
+        print(io, ",")
+        if isa(t.b, UnionT)
+            t = t.b
+        else
+            show(io, t.b)
+            break
         end
     end
     print(io, ')')
@@ -93,13 +105,13 @@ end
 
 # Any, Bottom, and Tuple
 
-AnyT = TagT(TypeName(:Any), ())
+const AnyT = TagT(TypeName(:Any), ())
 AnyT.name.super = AnyT
 
-BottomT = UnionT()
+const BottomT = BottomTy()
 
-TupleName = TypeName(:Tuple, AnyT)
-TupleT = TagT(TupleName, (AnyT,), true)
+const TupleName = TypeName(:Tuple, AnyT)
+const TupleT = TagT(TupleName, (AnyT,), true)
 tupletype(xs...) = inst(TupleName, xs...)
 vatype(xs...) = (t = inst(TupleName, xs...); t.vararg = true; t)
 
@@ -118,7 +130,7 @@ super(t::TagT) = inst(t.name.super, t.params...)
 extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 
 subst(t::TagT,    env) = t===AnyT ? t : TagT(t.name, map(x->subst(x,env), t.params), t.vararg)
-subst(t::UnionT,  env) = t===BottomT ? t : UnionT(map(x->subst(x,env), t.types)...)
+subst(t::UnionT,  env) = UnionT(subst(t.a,env), subst(t.b,env))
 subst(t::Var,     env) = get(env, t, t)
 subst(t::UnionAllT, env) = (assert(!haskey(env, t.var));
                             newVar = Var(t.var.name, subst(t.var.lb, env), subst(t.var.ub, env));
@@ -141,9 +153,9 @@ type Bounds
 end
 
 type UnionSearchState
-    i::Int    # traversal-order index of current union (1 <= i <= length(idxs))
-    idxs      # indexes representing current combination being tested
-    UnionSearchState() = new(0)
+    i::Int       # traversal-order index of current union (0 <= i < nbits(idxs))
+    idxs::Int64  # bit vector representing current combination being tested
+    UnionSearchState() = new(0,0)
 end
 
 type Env
@@ -151,38 +163,37 @@ type Env
     depth::Int
 
     Ldepth::Int        # number of union decision points we're inside (depth)
-    Lnew::Vector{Int}  # unions found at next nesting depth
+    Lnew::Int          # # unions found at next nesting depth
     Lunions::Vector{UnionSearchState}  # stack of decisions for each depth
 
     Rdepth::Int        # same on right-hand side
-    Rnew::Vector{Int}
+    Rnew::Int
     Runions::Vector{UnionSearchState}
 
-    Env() = new(Dict{Var,Bounds}(), 1,
-                1, Int[], UnionSearchState[],
-                1, Int[], UnionSearchState[])
+    Env() = new(Dict{Var,Bounds}(), 1,  1,0,UnionSearchState[], 1,0,UnionSearchState[])
 end
 
-issub(x, y) = forall_exists_issub(x, y, Env(), Int[], Int[])
+issub(x, y) = forall_exists_issub(x, y, Env(), 0)
 
-function forall_exists_issub(x, y, env, Lsizes, Rsizes)
+function forall_exists_issub(x, y, env, nL)
+    assert(nL < 63)
     # for all combinations of elements from Unions on the left, there must
     # exist a combination of elements from Unions on the right that makes
     # issub() true. Unions in invariant position are on both the left and
     # the right in this formula.
 
-    for forall in Base.IteratorsMD.IndexIterator(tuple(Lsizes...))
+    for forall in 1:(1<<nL)
         if !isempty(env.Lunions)
             env.Lunions[end].idxs = forall
         end
 
-        if !exists_issub(x, y, env, Rsizes)
+        if !exists_issub(x, y, env, 0)
             return false
         end
 
-        if !isempty(env.Lnew)
+        if env.Lnew > 0
             push!(env.Lunions, UnionSearchState())
-            sub = forall_exists_issub(x, y, env, env.Lnew, Rsizes)
+            sub = forall_exists_issub(x, y, env, env.Lnew)
             pop!(env.Lunions)
             if !sub
                 return false
@@ -192,19 +203,20 @@ function forall_exists_issub(x, y, env, Lsizes, Rsizes)
     return true
 end
 
-function exists_issub(x, y, env, sizes)
-    for exists in Base.IteratorsMD.IndexIterator(tuple(sizes...))
+function exists_issub(x, y, env, nR)
+    assert(nR < 63)
+    for exists in 1:(1<<nR)
         if !isempty(env.Runions)
             env.Runions[end].idxs = exists
         end
-        for ru in env.Runions; ru.i = 0; end
-        for lu in env.Lunions; lu.i = 0; end
+        for ru in env.Runions; ru.i = -1; end
+        for lu in env.Lunions; lu.i = -1; end
         env.Ldepth = env.Rdepth = 1
-        empty!(env.Lnew); empty!(env.Rnew)
+        env.Lnew = env.Rnew = 0
 
         sub = issub(x, y, env)
 
-        if !isempty(env.Lnew)
+        if env.Lnew > 0
             # return up to forall_exists_issub. the recursion must have this shape:
             # ∀₁         ∀₁
             #   ∃₁  =>     ∀₂
@@ -213,11 +225,11 @@ function exists_issub(x, y, env, sizes)
             #                  ∃₂
             return true
         end
-        if !isempty(env.Rnew)
+        if env.Rnew > 0
             push!(env.Runions, UnionSearchState())
             found = exists_issub(x, y, env, env.Rnew)
             pop!(env.Runions)
-            if !isempty(env.Lnew)
+            if env.Lnew > 0
                 # return up to forall_exists_issub
                 return true
             end
@@ -230,11 +242,12 @@ function exists_issub(x, y, env, sizes)
 end
 
 issub(x, y, env) = (x === y)
+issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
 function discover_Lunion(a::UnionT, env)
     if env.Ldepth > length(env.Lunions)
-        # at a new nesting depth, begin by just recording union sizes
-        push!(env.Lnew, length(a.types))
+        # at a new nesting depth, begin by just counting unions
+        env.Lnew += 1
         return true
     end
     return false
@@ -242,14 +255,14 @@ end
 
 function discover_Runion(b::UnionT, env)
     if env.Rdepth > length(env.Runions)
-        push!(env.Rnew, length(b.types))
+        env.Rnew += 1
         return true
     end
     return false
 end
 
 function issub(a::UnionT, b::UnionT, env)
-    (a === BottomT || a === b) && return true
+    a === b && return true
     if discover_Lunion(a, env) | discover_Runion(b, env)
         return true
     end
@@ -257,34 +270,31 @@ function issub(a::UnionT, b::UnionT, env)
     R = env.Runions[env.Rdepth]; R.i += 1
     env.Ldepth += 1
     env.Rdepth += 1
-    ans = issub(a.types[L.idxs.(L.i)], b.types[R.idxs.(R.i)], env)
+    ans = issub(a.((L.idxs&(1<<L.i)!=0) + 1), b.((R.idxs&(1<<R.i)!=0) + 1), env)
     env.Rdepth -= 1
     env.Ldepth -= 1
     return ans
 end
 
 function issub(a::UnionT, t::Ty, env)
-    a === BottomT && return true
     if discover_Lunion(a, env)
         return true
     end
-    this = env.Lunions[env.Ldepth]
-    this.i += 1
+    L = env.Lunions[env.Ldepth]; L.i += 1
     env.Ldepth += 1
-    ans = issub(a.types[this.idxs.(this.i)], t, env)
+    ans = issub(a.((L.idxs&(1<<L.i)!=0) + 1), t, env)
     env.Ldepth -= 1
     return ans
 end
 
 function issub(a::Ty, b::UnionT, env)
-    b === BottomT && return false
+    a === BottomT && return true
     if discover_Runion(b, env)
         return true
     end
-    this = env.Runions[env.Rdepth]
-    this.i += 1
+    R = env.Runions[env.Rdepth]; R.i += 1
     env.Rdepth += 1
-    ans = issub(a, b.types[this.idxs.(this.i)], env)
+    ans = issub(a, b.((R.idxs&(1<<R.i)!=0) + 1), env)
     env.Rdepth -= 1
     return ans
 end
@@ -405,6 +415,7 @@ function issub(a::Ty, b::Var, env)
 end
 
 function issub_unionall(a::Ty, b::UnionAllT, env)
+    a === BottomT && return true
     env.vars[b.var] = Bounds(b.var.lb, b.var.ub, env.depth, true)
     ans = issub(a, b.T, env)
     delete!(env.vars, b.var)
@@ -699,6 +710,8 @@ end
 
 # level 4: Union
 function test_4()
+    @test isequal_type(UnionT(BottomT,BottomT), BottomT)
+
     @test issub_strict(Int, Union(Int,String))
     @test issub_strict(Union(Int,Int8), Integer)
 
@@ -768,10 +781,6 @@ function test_5()
                 @UnionAll S vatype(UnionT(inst(ArrayT,S),inst(ArrayT,inst(ArrayT,S,1)))))
 end
 
-# tests that don't pass yet
-function test_failing()
-end
-
 # examples that might take a long time
 function test_slow()
     A = Ty(Int);   B = Ty(Int8)
@@ -781,5 +790,19 @@ function test_slow()
                UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C))
     Y = UnionT(UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),
                UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(A,B,C))
-    @test issub(X,Y)
+    @test issub_strict(X,Y)
+end
+
+# tests that don't pass yet
+function test_failing()
+end
+
+function test_all()
+    test_1()
+    test_2()
+    test_3()
+    test_4()
+    test_5()
+    test_slow()
+    test_failing()
 end
