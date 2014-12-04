@@ -870,6 +870,7 @@ export
     repeat,
     replace,
     repr,
+    reverseind,
     rpad,
     rsearch,
     rsearchindex,

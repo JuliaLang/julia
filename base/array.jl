@@ -981,6 +981,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
     end
     B
 end
+reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)
