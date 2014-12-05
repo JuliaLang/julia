@@ -405,7 +405,9 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
     if ((dladdr((void*)pointer, &dlinfo) != 0) && dlinfo.dli_fname) {
         const char *fname;
         uint64_t fbase = (uint64_t)dlinfo.dli_fbase;
+#if defined(_OS_DARWIN_)
         size_t msize = (size_t)(((uint64_t)-1)-fbase);
+#endif
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC)
             return;
