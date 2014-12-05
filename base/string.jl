@@ -106,9 +106,9 @@ function isvalid(s::AbstractString, i::Integer)
 end
 
 prevind(s::DirectIndexString, i::Integer) = i-1
-prevind(s                   , i::Integer) = i-1
+prevind(s::AbstractArray   , i::Integer) = i-1
 nextind(s::DirectIndexString, i::Integer) = i+1
-nextind(s                   , i::Integer) = i+1
+nextind(s::AbstractArray   , i::Integer) = i+1
 
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
