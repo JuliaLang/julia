@@ -24,6 +24,7 @@
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/PassManager.h>
 #include <llvm/Target/TargetLibraryInfo.h>
+#include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
@@ -41,12 +42,12 @@
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
-#include <llvm/ExecutionEngine/ObjectImage.h>
 #include <llvm/ADT/DenseMapInfo.h>
 #include <llvm/Object/ObjectFile.h>
 #else
 #include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
+#include <llvm/ExecutionEngine/Interpreter.h>
 #endif
 #ifdef LLVM33
 #include <llvm/IR/DerivedTypes.h>
@@ -751,7 +752,7 @@ extern void RegisterJuliaJITEventListener();
 
 extern int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 #ifdef USE_MCJIT
-    object::ObjectFile **object);
+    const object::ObjectFile **object);
 #else
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines);
 #endif
@@ -759,7 +760,7 @@ extern int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 extern "C"
 void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 #ifdef USE_MCJIT
-                          object::ObjectFile *objectfile,
+                          const object::ObjectFile *objectfile,
 #else
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #endif
@@ -778,7 +779,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         uint64_t symsize;
 #ifdef USE_MCJIT
         size_t fptr = (size_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
-        object::ObjectFile *object;
+        const object::ObjectFile *object;
 #else
         size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
@@ -4860,16 +4861,17 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
 #ifdef LLVM36
-    EngineBuilder eb = EngineBuilder(std::unique_ptr<Module>(engine_module));
+    EngineBuilder *eb = new EngineBuilder(std::unique_ptr<Module>(engine_module));
 #else
-    EngineBuilder eb = EngineBuilder(engine_module);
+    EngineBuilder *eb = new EngineBuilder(engine_module);
 #endif
-    eb  .setEngineKind(EngineKind::JIT)
+    std::string ErrorStr;
+    eb  ->setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #if defined(USE_MCJIT)
-        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
+        ->setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
 #else
-        .setJITMemoryManager(createJITMemoryManagerWin())
+        ->setJITMemoryManager(createJITMemoryManagerWin())
 #endif
 #endif
         .setTargetOptions(options)
@@ -4881,7 +4883,7 @@ extern "C" void jl_init_codegen(void)
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    jl_TargetMachine = eb.selectTarget(
+    jl_TargetMachine = eb->selectTarget(
             TheTriple,
             "",
 #if LLVM35
@@ -4891,7 +4893,19 @@ extern "C" void jl_init_codegen(void)
 #endif
             MAttrs);
     assert(jl_TargetMachine);
-    jl_ExecutionEngine = eb.create(jl_TargetMachine);
+#ifdef LLVM36
+    engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
+#elif defined(LLVM35)
+    engine_module->setDataLayout(jl_TargetMachine->getDataLayout());
+#else
+    engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
+#endif
+    jl_ExecutionEngine = eb->create(jl_TargetMachine);
+    //ios_printf(ios_stderr,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
+    if (!jl_ExecutionEngine) {
+        JL_PRINTF(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
+        exit(1);
+    }
 #ifdef LLVM35
     jl_ExecutionEngine->setProcessAllSections(true);
 #endif
