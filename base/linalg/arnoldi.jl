@@ -51,7 +51,7 @@ function eigs(A, B;
     sigma = isshift ? convert(T,sigma) : zero(T)
 
     if !isempty(v0)
-        length(v0)==n || throw(DimensionMismatch(""))
+        length(v0)==n || throw(DimensionMismatch())
         eltype(v0)==T || error("Starting vector must have eltype $T")
     end
 

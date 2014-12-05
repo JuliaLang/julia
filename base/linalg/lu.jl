@@ -224,7 +224,7 @@ factorize(A::Tridiagonal) = lufact(A)
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch(""))
+    n == size(B,1) || throw(DimensionMismatch())
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d
