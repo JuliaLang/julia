@@ -105,40 +105,79 @@ periodisless(::Period,::Second)      = false
 periodisless(::Millisecond,::Second) = true
 periodisless(::Period,::Millisecond) = false
 
+# return (next coarser period, conversion factor):
+coarserperiod{P<:Period}(::Type{P}) = (P,1)
+coarserperiod(::Type{Millisecond}) = (Second,1000)
+coarserperiod(::Type{Second}) = (Minute,60)
+coarserperiod(::Type{Minute}) = (Hour,60)
+coarserperiod(::Type{Hour}) = (Day,24)
+coarserperiod(::Type{Day}) = (Week,7)
+coarserperiod(::Type{Month}) = (Year,12)
+
 # Stores multiple periods in greatest to least order by type, not values,
-# canonicalized to eliminate zero periods and merge equal period types.
+# canonicalized to eliminate zero periods, merge equal period types,
+# and convert more-precise periods to less-precise periods when possible
 type CompoundPeriod <: AbstractTime
     periods::Array{Period,1}
     function CompoundPeriod(p::Vector{Period})
         n = length(p)
-        if n < 2
-            if n == 0 || p[1] != zero(p[1])
-                return new(p)
+        if n > 1
+            sort!(p, rev=true, lt=periodisless)
+            # canonicalize p by merging equal period types and removing zeros
+            i = j = 1
+            while j <= n
+                k = j+1
+                while k <= n
+                    if typeof(p[j]) == typeof(p[k])
+                        p[j] += p[k]
+                        k += 1
+                    else
+                        break
+                    end
+                end
+                if p[j] != zero(p[j])
+                    p[i] = p[j]
+                    i += 1
+                end
+                j = k
             end
-            return new(Period[]) # n == 1 and p[1]==0
+            n = i - 1 # new length
+        elseif n == 1 && value(p[1]) == 0
+            p = Period[]
+            n = 0
         end
-        sort!(p, rev=true, lt=periodisless)
-        # canonicalize p by merging equal period types and eliminating zeros
-        i = j = 1
-        while j <= n
-            k = j+1
-            while k <= n
-                if typeof(p[j]) == typeof(p[k])
-                    p[j] += p[k]
-                    k += 1
+        # canonicalize Period values so that 0 < ms < 1000 etcetera.
+        if n > 0
+            pc = sizehint(Period[], n)
+            P = typeof(p[n])
+            v = value(p[n])
+            i = n - 1
+            while true
+                Pc, f = coarserperiod(P)
+                if i > 0 && typeof(p[i]) == P
+                    v += value(p[i])
+                    i -= 1
+                end
+                v0 = f == 1 ? v : mod(v, f)
+                v0 != 0 && push!(pc, P(v0))
+                if v != v0
+                    P = Pc
+                    v = div(v - v0, f)
+                elseif i > 0
+                    P = typeof(p[i])
+                    v = value(p[i])
+                    i -= 1
                 else
                     break
                 end
             end
-            if p[j] != zero(p[j])
-                p[i] = p[j]
-                i += 1
-            end
-            j = k
+            return new(reverse!(pc))
+        else
+            return new(resize!(p, n))
         end
-        return new(resize!(p, i-1))
     end
 end
+Base.convert(::Type{CompoundPeriod}, x::Period) = CompoundPeriod(Period[x])
 function Base.string(x::CompoundPeriod)
     if isempty(x.periods)
         return "empty period"
@@ -161,11 +200,8 @@ Base.show(io::IO,x::CompoundPeriod) = print(io,string(x))
 (-)(x::CompoundPeriod,y::Period) = CompoundPeriod(vcat(x.periods,-y))
 (-)(x::CompoundPeriod) = CompoundPeriod(-x.periods)
 (-)(y::Union(Period,CompoundPeriod),x::CompoundPeriod) = (-x) + y
-(==)(x::CompoundPeriod, y::Period) = (length(x.periods) == 1 && x.periods[1] == y) || (isempty(x.periods) && y == zero(y))
+(==)(x::CompoundPeriod, y::Period) = x == CompoundPeriod(y)
 (==)(y::Period, x::CompoundPeriod) = x == y
-
-# FIXME: this needs changing once #9171 is addressed to allow comparisons
-#        of different Period types, e.g. Millisecond(1000) == Second(1)
 (==)(x::CompoundPeriod, y::CompoundPeriod) = x.periods == y.periods
 
 # Capture TimeType+-Period methods
@@ -182,9 +218,58 @@ function (+)(x::TimeType,y::CompoundPeriod)
 end
 (+)(x::CompoundPeriod,y::TimeType) = y + x
 
-# Convert fixed value Periods to # of milliseconds
+# Fixed-value Periods (periods corresponding to a well-defined time interval,
+# as opposed to variable calendar intervals like Year).
 typealias FixedPeriod Union(Week,Day,Hour,Minute,Second,Millisecond)
 
+# like div but throw an error if remainder is nonzero
+function divexact(x,y)
+    q,r = divrem(x, y)
+    r == 0 || throw(InexactError())
+    return q
+end
+
+# FixedPeriod conversions and promotion rules
+const fixedperiod_conversions = [(Week,7),(Day,24),(Hour,60),(Minute,60),(Second,1000),(Millisecond,1)]
+for i = 1:length(fixedperiod_conversions)
+    (T,n) = fixedperiod_conversions[i]
+    N = 1
+    for j = i-1:-1:1 # less-precise periods
+        (Tc,nc) = fixedperiod_conversions[j]
+        N *= nc
+        vmax = typemax(Int64) ÷ N
+        vmin = typemin(Int64) ÷ N
+        @eval function Base.convert(::Type{$T}, x::$Tc)
+            $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+            return $T(value(x)*$N)
+        end
+    end
+    N = n
+    for j = i+1:length(fixedperiod_conversions) # more-precise periods
+        (Tc,nc) = fixedperiod_conversions[j]
+        @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
+        @eval Base.promote_rule(::Type{$T},::Type{$Tc}) = $Tc
+        N *= nc
+    end
+end
+# have to declare thusly so that diagonal dispatch above takes precedence:
+(==){T<:FixedPeriod,S<:FixedPeriod}(x::T,y::S) = (==)(promote(x,y)...)
+Base.isless{T<:FixedPeriod,S<:FixedPeriod}(x::T,y::S) = isless(promote(x,y)...)
+
+# other periods with fixed conversions but which aren't fixed time periods
+typealias OtherPeriod Union(Month,Year)
+let vmax = typemax(Int64) ÷ 12, vmin = typemin(Int64) ÷ 12
+    @eval function Base.convert(::Type{Month}, x::Year)
+        $vmin ≤ value(x) ≤ $vmax || throw(InexactError())
+        Month(value(x)*12)
+    end
+end
+Base.convert(::Type{Year}, x::Month) = Year(divexact(value(x),12))
+Base.promote_rule(::Type{Year}, ::Type{Month}) = Month
+(==){T<:OtherPeriod,S<:OtherPeriod}(x::T,y::S) = (==)(promote(x,y)...)
+Base.isless{T<:OtherPeriod,S<:OtherPeriod}(x::T,y::S) = isless(promote(x,y)...)
+
+# truncating conversions to milliseconds and days:
 toms(c::Millisecond) = value(c)
 toms(c::Second)      = 1000*value(c)
 toms(c::Minute)      = 60000*value(c)
@@ -193,9 +278,7 @@ toms(c::Day)         = 86400000*value(c)
 toms(c::Week)        = 604800000*value(c)
 toms(c::Month)       = 86400000.0*30.436875*value(c)
 toms(c::Year)        = 86400000.0*365.2425*value(c)
-
-Millisecond{T<:FixedPeriod}(c::T) = Millisecond(toms(c))
-
+toms(c::CompoundPeriod) = isempty(c.periods)?0.0 : Float64(sum(toms,c.periods))
 days(c::Millisecond) = div(value(c),86400000)
 days(c::Second)      = div(value(c),86400)
 days(c::Minute)      = div(value(c),1440)
@@ -204,5 +287,5 @@ days(c::Day)         = value(c)
 days(c::Week)        = 7*value(c)
 days(c::Year)        = 365.2425*value(c)
 days(c::Month)       = 30.436875*value(c)
+days(c::CompoundPeriod) = isempty(c.periods)?0.0 : Float64(sum(days,c.periods))
 
-Day{T<:FixedPeriod}(c::T) = Day(days(c))
