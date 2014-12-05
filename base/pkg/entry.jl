@@ -170,7 +170,7 @@ function clone(url_or_pkg::AbstractString)
         # TODO: Cache.prefetch(pkg,url)
     else
         url = url_or_pkg
-        m = match(r"(?:^|[/\\])(\w+?)(?:\.jl)?(?:\.git)?$", url)
+        m = match(r"(?:^|[/\\])([^/\\]+?)(?:\.jl)?(?:\.git)?$", url)
         m != nothing || error("can't determine package name from URL: $url")
         pkg = m.captures[1]
     end
