@@ -147,6 +147,8 @@ function finalizer(o::ANY, f::Union(Function,Ptr))
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 end
 
+finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
+
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
