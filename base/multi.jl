@@ -1504,10 +1504,7 @@ function preduce(reducer, f, N::Int)
 end
 
 function pfor(f, N::Int)
-    for c in splitrange(N, nworkers())
-        @spawn f(first(c), last(c))
-    end
-    nothing
+    [@spawn f(first(c), last(c)) for c in splitrange(N, nworkers())]
 end
 
 function make_preduce_body(reducer, var, body, ran)
