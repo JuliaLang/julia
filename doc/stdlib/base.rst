@@ -4197,6 +4197,10 @@ Basic functions
 
    **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
 
+.. function:: ind2sub(a, index) -> subscripts
+
+   Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
+
 .. function:: sub2ind(dims, i, j, k...) -> index
 
    The inverse of ``ind2sub``, returns the linear index corresponding to the provided subscripts

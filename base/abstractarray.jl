@@ -1031,6 +1031,7 @@ ind2sub(dims::(Integer,Integer), ind::Int) =
 ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
      div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
+ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), Int(ind))
 
 function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     n = length(dims)
