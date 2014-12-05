@@ -1073,6 +1073,7 @@ void jl_gc_preserve(jl_value_t *v);
 void jl_gc_unpreserve(void);
 int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+DLLEXPORT void jl_finalize(jl_value_t *o);
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 void *jl_gc_managed_malloc(size_t sz);
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);

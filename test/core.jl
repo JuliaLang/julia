@@ -549,6 +549,18 @@ begin
     @test glo == 18
 end
 
+# finalizers
+let
+    A = [1]
+    x = 0
+    finalizer(A, a->(x+=1))
+    finalize(A)
+    @test x == 1
+    A = 0
+    gc(); gc()
+    @test x == 1
+end
+
 # issue #7307
 function test7307(a, ret)
     try
