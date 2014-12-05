@@ -91,13 +91,13 @@ type UnionAllT <: Ty
     var::Var
     T
     UnionAllT(v::Var, t) = new(v, t)
-    UnionAllT(v::Var, t::Type) = new(v, convert(Ty, t))
+    UnionAllT(v::Var, t::Union(Type,Tuple)) = new(v, convert(Ty, t))
 end
 
 function show(io::IO, x::UnionAllT)
-    print(io, "(⋃ ")
+    print(io, "(@UnionAll ")
     show_var_bounds(io, x.var)
-    print(io, ". ")
+    print(io, " ")
     show(io, x.T)
     print(io, ")")
 end
@@ -414,8 +414,14 @@ function issub(a::Ty, b::Var, env)
     return true
 end
 
+function rename(t::UnionAllT)
+    v = Var(t.var.name, t.var.lb, t.var.ub)
+    UnionAllT(v, inst(t,v))
+end
+
 function issub_unionall(a::Ty, b::UnionAllT, env)
     a === BottomT && return true
+    haskey(env.vars, b.var) && (b = rename(b))
     env.vars[b.var] = Bounds(b.var.lb, b.var.ub, env.depth, true)
     ans = issub(a, b.T, env)
     delete!(env.vars, b.var)
@@ -423,6 +429,7 @@ function issub_unionall(a::Ty, b::UnionAllT, env)
 end
 
 function unionall_issub(a::UnionAllT, b::Ty, env)
+    haskey(env.vars, a.var) && (a = rename(a))
     env.vars[a.var] = Bounds(a.var.lb, a.var.ub, env.depth, false)
     ans = issub(a.T, b, env)
     delete!(env.vars, a.var)
@@ -530,7 +537,7 @@ function xlate(t::DataType, env)
     inst(tn, map(x->xlate(x,env), t.parameters)...)
 end
 
-convert(::Type{Ty}, t::Type)    = xlate(t)
+convert(::Type{Ty}, t::Union(Type,Tuple)) = xlate(t)
 convert(::Type{Ty}, t::TypeVar) = xlate(t)
 
 issub(a::Type, b::Type) = issub(xlate(a), xlate(b))
@@ -805,4 +812,70 @@ function test_all()
     test_5()
     test_slow()
     test_failing()
+end
+
+const menagerie =
+    Any[BottomT, AnyT, Ty(Int), Ty(Int8), Ty(Integer), Ty(Real),
+        Ty(Array{Int,1}), Ty(AbstractArray{Int,1}),
+        Ty((Int,Integer...,)), Ty((Integer,Int...,)), Ty(()),
+        Ty(Union(Int,Int8)),
+        (@UnionAll T inst(ArrayT, T, 1)),
+        (@UnionAll T inst(PairT,T,T)),
+        (@UnionAll T @UnionAll S inst(PairT,T,S)),
+        inst(PairT,Ty(Int),Ty(Int8)),
+        (@UnionAll S inst(PairT,Ty(Int),S)),
+        (@UnionAll T tupletype(T,T)),
+        (@UnionAll T<:Ty(Integer) tupletype(T,T)),
+        (@UnionAll T @UnionAll S tupletype(T,S)),
+        (@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (T,S)),
+        (@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (S,T)),
+        inst(ArrayT, (@UnionAll T inst(ArrayT,T,1)), 1),
+        (@UnionAll T inst(ArrayT, inst(ArrayT,T,1), 1)),
+        inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1),
+        (@UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S)),
+        UnionT(Ty(Int),inst(RefT,UnionT(Ty(Int),Ty(Int8)))),
+        (@UnionAll T UnionT(tupletype(T,inst(ArrayT,T,1)),
+                            tupletype(T,inst(ArrayT,Ty(Int),1)))),
+        ]
+
+let new = Any[]
+    # add variants of each type
+    for T in menagerie
+        push!(new, inst(RefT, T))
+        push!(new, tupletype(T))
+        push!(new, tupletype(T,T))
+        push!(new, vatype(T))
+        push!(new, @UnionAll S<:T S)
+    end
+    append!(menagerie, new)
+end
+
+function test_properties()
+    x→y = !x || y
+
+    # transitivity
+    for T in menagerie
+        for S in menagerie
+            if issub(T, S)
+                for R in menagerie
+                    @test issub(S, R) → issub(T, R)
+                end
+            end
+        end
+    end
+
+    for T in menagerie
+        for S in menagerie
+            # union subsumption
+            @test isequal_type(T, UnionT(T,S)) → issub(S, T)
+
+            # invariance
+            @test isequal_type(T, S) == isequal_type(inst(RefT,T), inst(RefT,S))
+
+            # covariance
+            @test issub(T, S) == issub(tupletype(T), tupletype(S))
+            @test issub(T, S) == issub(vatype(T), vatype(S))
+            @test issub(T, S) == issub(tupletype(T), vatype(S))
+        end
+    end
 end
