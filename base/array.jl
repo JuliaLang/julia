@@ -808,7 +808,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); throw(DimensionMismatch("")); end
+    if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         @inbounds F[i] = complex(A[i], B[i])

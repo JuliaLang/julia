@@ -60,7 +60,7 @@ Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
-    length(v)==length(D.diag) || throw(DimensionMismatch(""))
+    length(v)==length(D.diag) || throw(DimensionMismatch())
     for i=1:length(D.diag)
         d = D.diag[i]
         d==zero(T) && throw(SingularException(i))
@@ -69,7 +69,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     v
 end
 function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
-    size(V,1)==length(D.diag) || throw(DimensionMismatch(""))
+    size(V,1)==length(D.diag) || throw(DimensionMismatch())
     for i=1:length(D.diag)
         d = D.diag[i]
         d==zero(T) && throw(SingularException(i))
@@ -99,7 +99,7 @@ sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 #Linear solver
 function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::AbstractArray{TA,1})
     m, n = size(A,2)==1 ? (size(A,1),1) : size(A)
-    m==length(D.diag) || throw(DimensionMismatch(""))
+    m==length(D.diag) || throw(DimensionMismatch())
     (m == 0 || n == 0) && return A
     C = Array(typeof(one(TD)/one(TA)),size(A))
     for j = 1:n
