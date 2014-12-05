@@ -194,7 +194,7 @@ end
 convert{T}(::Type{Matrix}, M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function similar(M::Tridiagonal, T, dims::Dims)
     if length(dims) != 2 || dims[1] != dims[2]
-        throw(DimensionMismatch())
+        throw(DimensionMismatch("Tridiagonal matrices must be square"))
     end
     Tridiagonal{T}(similar(M.dl), similar(M.d), similar(M.du), similar(M.du2))
 end
