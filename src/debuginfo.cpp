@@ -19,7 +19,9 @@
 #include <llvm/Analysis/DebugInfo.h>
 #endif
 #ifdef USE_MCJIT
+#ifndef LLVM36
 #include <llvm/ExecutionEngine/ObjectImage.h>
+#endif
 #include <llvm/ExecutionEngine/RuntimeDyld.h>
 #else
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
@@ -62,8 +64,7 @@ struct FuncInfo {
 };
 #else
 struct ObjectInfo {
-    object::ObjectFile* object;
-    object::SymbolRef symref;
+    const object::ObjectFile* object;
     size_t size;
 };
 #endif
@@ -183,37 +184,71 @@ public:
 #endif // ifndef USE_MCJIT
 
 #ifdef USE_MCJIT
+#ifdef LLVM36
+    virtual void NotifyObjectEmitted(const object::ObjectFile &obj,
+                                     const RuntimeDyld::LoadedObjectInfo &L)
+#else
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
+#endif
     {
-        uint64_t Addr;
+        uint64_t SectAddr, Addr;
         uint64_t Size;
         object::SymbolRef::Type SymbolType;
+#ifndef _OS_LINUX_
+#ifdef LLVM36
+        object::section_iterator Section = obj.section_begin();
+        object::section_iterator EndSection = obj.section_end();
+        StringRef sName;
+#else
+        object::section_iterator Section = obj.begin_sections();
+        object::section_iterator EndSection = obj.end_sections();
+#endif
+#endif
 #ifdef _OS_WINDOWS_
         StringRef Name;
-        object::section_iterator Section = obj.begin_sections();
         uint64_t SectionAddr;
         uint64_t SectionSize;
 #endif
 
-        #ifdef LLVM35
+#ifdef LLVM35
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
-            sym_iter.getAddress(Addr);
             sym_iter.getSize(Size);
+            sym_iter.getAddress(SectAddr);
+#ifndef _OS_LINUX_
+            sym_iter.getSection(Section);
+            if (Section == EndSection) continue;
+            Section = Section->getRelocatedSection();
+            if (Section == EndSection) continue;
+#ifdef LLVM36
+            if (!Section->isText()) continue;
+            Section->getName(sName);
+            Addr = SectAddr + L.getSectionLoadAddress(sName);
+#else
+            Addr = SectAddr;
+#endif
+#else
+            Addr = SectAddr;
+#endif
 #ifdef _OS_WINDOWS_
             sym_iter.getName(Name);
-            sym_iter.getSection(Section);
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, Name,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize);
 #endif
-            ObjectInfo tmp = {obj.getObjectFile(), sym_iter, (size_t)Size};
+            const object::ObjectFile *objfile =
+#ifdef LLVM36
+                &obj;
+#else
+                obj.getObjectFile();
+#endif
+            ObjectInfo tmp = {objfile, (size_t)Size};
             objectmap[Addr] = tmp;
         }
-        #else
+#else //LLVM34
         error_code itererr;
         object::symbol_iterator sym_iter = obj.begin_symbols();
         object::symbol_iterator sym_end = obj.end_symbols();
@@ -221,15 +256,17 @@ public:
             sym_iter->getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter->getAddress(Addr);
+            sym_iter->getSize(Size);
 
-            ObjectInfo tmp = {obj.getObjectFile(), *sym_iter};
+            ObjectInfo tmp = {obj.getObjectFile(), (size_t)Size};
             objectmap[Addr] = tmp;
         }
-        #endif
+#endif
     }
 
     // must implement if we ever start freeing code
     // virtual void NotifyFreeingObject(const ObjectImage &obj) {}
+    // virtual void NotifyFreeingObject(const object::ObjectFile &Obj) {}
 
     std::map<size_t, ObjectInfo, revcomp>& getObjectMap()
     {
@@ -429,7 +466,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
-                    StringRef((const char *)fbase, msize)), "", false);
+                    StringRef((const char *)fbase, msize), "", false);
            auto origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf->getMemBufferRef(), sys::fs::file_magic::unknown);
 #elif defined(LLVM35)
@@ -571,7 +608,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #ifdef LLVM36
     DIContext *context = DIContext::getDWARFContext(*it->second.object);
 #else
-    DIContext *context = DIContext::getDWARFContext(it->second.object);
+    DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
 #endif
     lookup_pointer(context, name, line, filename, pointer, 1, fromC);
 
@@ -637,7 +674,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 
 int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
 #ifdef USE_MCJIT
-    object::ObjectFile **object)
+    const object::ObjectFile **object)
 #else
     std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines)
 #endif
@@ -659,35 +696,9 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     if (fit == objmap.end()) {
         return 0;
     }
-
-    object::SymbolRef::Type symtype;
-    uint64_t symaddr;
-
-#ifdef LLVM35
-    for (const object::SymbolRef &sym_iter : fit->second.object->symbols()) {
-        sym_iter.getType(symtype);
-        sym_iter.getAddress(symaddr);
-        if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
-            continue;
-        sym_iter.getSize(*symsize);
-        *object = fit->second.object;
-        return 1;
-    }
-#else
-    error_code itererr;
-    object::symbol_iterator sym_iter = fit->second.object->begin_symbols();
-    object::symbol_iterator sym_end = fit->second.object->end_symbols();
-    for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
-        sym_iter->getType(symtype);
-        sym_iter->getAddress(symaddr);
-        if (symtype != object::SymbolRef::ST_Function || symaddr != fptr)
-            continue;
-        sym_iter->getSize(*symsize);
-        *object = fit->second.object;
-        return 1;
-    }
-#endif // LLVM35
-    return 0;
+    *symsize = fit->second.size;
+    *object = fit->second.object;
+    return 1;
 #endif
 }
 
