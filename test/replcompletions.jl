@@ -73,6 +73,13 @@ c,r = test_latexcomplete(s)
 @test r == 1:length(s)
 @test length(c) == 1
 
+# test latex symbol completions after unicode #9209
+s = "α\\alpha"
+c,r = test_latexcomplete(s)
+@test c[1] == "α"
+@test r == 3:sizeof(s)
+@test length(c) == 1
+
 # test latex symbol completions in strings should not work when there
 # is a backslash in front of `\alpha` because it interferes with path completion on windows
 s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
