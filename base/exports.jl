@@ -1089,6 +1089,7 @@ export
 
 # RTS internals
     finalizer,
+    finalize,
     gc,
     gc_disable,
     gc_enable,

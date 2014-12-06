@@ -217,6 +217,10 @@ All Objects
 
    Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 
+.. function:: finalize(x)
+
+   Immediately run finalizers registered for object ``x``.
+
 .. function:: copy(x)
 
    Create a shallow copy of ``x``: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
