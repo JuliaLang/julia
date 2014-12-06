@@ -384,20 +384,14 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
         if (!internal && dt->name->primary == (jl_value_t*)dt) {
             tag = 6; // external primary type
         }
-        else if (internal && dt->uid != 0) {
-            tag = 5; // internal type (needs uid assigned later)
-        }
         else if (dt->uid == 0) {
             tag = 0; // normal struct
         }
-        else if (jl_svec_len(dt->parameters) == 0) {
+        else if (!internal && jl_svec_len(dt->parameters) == 0) {
             tag = 7; // external type that can be immediately recreated (with apply_type)
         }
-        else { // anything else (external)
-            if (jl_is_gf(dt))
-                tag = 8; // external type function (needs uid assigned later, and env)
-            else
-                tag = 5; // external type (needs uid assigned later)
+        else {
+            tag = 5; // anything else (needs uid assigned later)
             // also flag this in the backref table as special
             uptrint_t *bp = (uptrint_t*)ptrhash_bp(&backref_table, dt);
             assert(*bp != (uptrint_t)HT_NOTFOUND);
@@ -914,7 +908,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     }
     assert(tree_literal_values==NULL && mode != MODE_AST);
     backref_list.items[pos] = dt;
-    if (tag == 5 || tag == 8) {
+    if (tag == 5) {
         arraylist_push(&flagref_list, dt);
         arraylist_push(&flagref_list, loc);
         arraylist_push(&flagref_list, (void*)(uptrint_t)pos);
@@ -1714,14 +1708,14 @@ jl_module_t *jl_restore_new_module(const char *fname)
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         int offs = (int)(intptr_t)flagref_list.items[i++];
         if (t != dt) {
-            jl_set_typeof(dt, (void*)(ptrint_t)2); // invalidate the old value to help catch errors
+            jl_set_typeof(dt, (jl_value_t*)(ptrint_t)6); // invalidate the old value to help catch errors
             if ((jl_value_t*)dt == o) {
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs > 0) backref_list.items[offs] = t;
             }
         }
         if (t->instance != v) {
-            jl_set_typeof(v, (void*)(ptrint_t)1); // invalidate the old value to help catch errors
+            jl_set_typeof(v, (jl_value_t*)(ptrint_t)4); // invalidate the old value to help catch errors
             if (v == o) {
                 if (loc) *loc = v;
                 if (offs > 0) backref_list.items[offs] = v;
