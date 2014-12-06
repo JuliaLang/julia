@@ -39,7 +39,6 @@
 
 #include "julia.h"
 #include "julia_internal.h"
-#include <stdio.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -1206,43 +1205,6 @@ DLLEXPORT void jl_install_sigint_handler()
 
 extern int asprintf(char **str, const char *fmt, ...);
 extern void *__stack_chk_guard;
-
-void jl_compile_all(void);
-
-DLLEXPORT void julia_save()
-{
-    const char *build_path = jl_options.build_path;
-    if (build_path) {
-        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
-            jl_compile_all();
-        char *build_ji;
-        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
-            jl_save_system_image(build_ji);
-            free(build_ji);
-            if (jl_options.dumpbitcode == JL_OPTIONS_DUMPBITCODE_ON) {
-                char *build_bc;
-                if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
-                    jl_dump_bitcode(build_bc);
-                    free(build_bc);
-                }
-                else {
-                    jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
-                }
-            }
-            char *build_o;
-            if (asprintf(&build_o, "%s.o",build_path) > 0) {
-                jl_dump_objfile(build_o,0);
-                free(build_o);
-            }
-            else {
-                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
-            }
-        }
-        else {
-            jl_printf(JL_STDERR,"\nFATAL: failed to create string for .ji build path\n");
-        }
-    }
-}
 
 jl_function_t *jl_typeinf_func=NULL;
 

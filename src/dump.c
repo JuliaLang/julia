@@ -909,8 +909,8 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         if (tag == 7) {
             jl_svec_t *parameters = (jl_svec_t*)jl_deserialize_value(s, NULL);
             dtv = jl_apply_type(dtv, parameters);
-            backref_list.items[pos] = dtv;
         }
+        backref_list.items[pos] = dtv;
         return dtv;
     }
     uint16_t nf = read_uint16(s);
@@ -1405,6 +1405,10 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 
 int jl_deserialize_verify_mod_list(ios_t *s)
 {
+    if (!jl_main_module->uuid) {
+        jl_printf(JL_STDERR, "error: Main module uuid state is invalid for module deserialization.\n");
+        return 0;
+    }
     while (1) {
         size_t len = read_int32(s);
         if (len == 0)
@@ -1415,7 +1419,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
         uint64_t uuid = read_uint64(s);
         jl_module_t *m = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol(name));
         if (!m) {
-            jl_printf(JL_STDERR, "Module %s must be loaded first\n", name);
+            jl_printf(JL_STDERR, "error: Module %s must be loaded first\n", name);
             return 0;
         }
         if (!jl_is_module(m)) {
@@ -1423,7 +1427,7 @@ int jl_deserialize_verify_mod_list(ios_t *s)
             jl_errorf("typeassert: expected %s::Module", name);
         }
         if (m->uuid != uuid) {
-            jl_printf(JL_STDERR, "Module %s uuid did not match cache file\n", name);
+            jl_printf(JL_STDERR, "error: Module %s uuid did not match cache file\n", name);
             return 0;
         }
     }
@@ -1440,6 +1444,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     int en = jl_gc_is_enabled();
     jl_gc_disable();
     htable_reset(&backref_table, 250000);
+    backref_table_numel = 0;
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
         jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
@@ -1701,6 +1706,7 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
     jl_serialize_mod_list(&f);
     htable_new(&backref_table, 5000);
     ptrhash_put(&backref_table, jl_main_module, (void*)(uintptr_t)0);
+    backref_table_numel = 1;
 
     int en = jl_gc_is_enabled();
     jl_gc_disable();

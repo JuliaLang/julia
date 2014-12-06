@@ -29,7 +29,7 @@ int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
 // First argument is the usr/lib directory where libjulia is, or NULL to guess.
 // if that doesn't work, try the full path to the "lib" directory that
-// contains lib/julia/sys.ji
+// contains lib/julia/Base.ji
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir. The default
 // is something like ../lib/julia/sys.ji

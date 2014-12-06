@@ -77,6 +77,7 @@ static const char opts[]  =
 
     " --track-allocation={none|user|all}, --track-allocation\n"
     "                           Count bytes allocated by each source line\n\n"
+
     " -O, --optimize\n"
     "                           Run time-intensive code optimizations\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
@@ -478,8 +479,6 @@ static int true_main(int argc, char *argv[])
     return 0;
 }
 
-DLLEXPORT extern void julia_save();
-
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
@@ -506,7 +505,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
     jl_atexit_hook();
-    julia_save();
     return ret;
 }
 
