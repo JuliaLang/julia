@@ -4869,9 +4869,9 @@ extern "C" void jl_init_codegen(void)
     eb  ->setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #if defined(USE_MCJIT)
-        ->setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
+        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
 #else
-        ->setJITMemoryManager(createJITMemoryManagerWin())
+        .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
 #endif
         .setTargetOptions(options)
