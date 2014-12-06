@@ -115,6 +115,7 @@ export
     WeakKeyDict,
     WeakRef,
     Woodbury,
+    WorkerConfig,
     WString,
     Zip,
 

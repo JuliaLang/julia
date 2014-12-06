@@ -5319,37 +5319,57 @@ some built-in integration support in Julia.
 Parallel Computing
 ------------------
 
-.. function:: addprocs(n; manager::ClusterManager=LocalManager()) -> List of process identifiers
+.. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
 
-   ``addprocs(4)`` will add 4 processes on the local machine. This can be used to take
-   advantage of multiple cores.
+   Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
+   This can be used to take advantage of multiple cores. `addprocs(4)`` will add 4 processes on the local machine.
 
-   Keyword argument ``manager`` can be used to provide a custom cluster manager to start workers.
+.. function:: addprocs() -> List of process identifiers
+
+    Equivalent to ``addprocs(CPU_CORES)``
+
+.. function:: addprocs(machines; tunnel=false, sshflags=``, max_parallel=10, exeflags=``) -> List of process identifiers
+
+   Add processes on remote machines via SSH.
+   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
+
+   ``machines`` is a vector of machine specifications.  Worker are started for each specification.
+
+   A machine specification is either a string ``machine_spec`` or a tuple - ``(machine_spec, count)``
+
+   ``machine_spec`` is a string of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
+   to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
+   workers will connect to this worker at the specified ``bind_addr`` and ``port``.
+
+   ``count`` is the number of workers to be launched on the specified host. If specified as ``"auto"``
+   or ``:auto`` it will launch as many workers as the number of cores on the specific host.
+
+
+   Keyword arguments:
+
+   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker from the master process.
+
+   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
+
+   ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
+
+   ``dir`` :  specifies the location of the julia binaries on the worker nodes. Defaults to JULIA_HOME.
+
+   ``exename`` :  name of the julia executable. Defaults to "./julia" or "./julia-debug" as the case may be.
+
+   ``exeflags`` :  additional flags passed to the worker processes.
+
+
+.. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
+
+   Launches worker processes via the specified cluster manager.
+
    For example Beowulf clusters are  supported via a custom cluster manager implemented
    in  package ``ClusterManagers``.
 
    See the documentation for package ``ClusterManagers`` for more information on how to
    write a custom cluster manager.
 
-.. function:: addprocs(machines; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``) -> List of process identifiers
-
-   Add processes on remote machines via SSH.
-   Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-
-   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr[:port]]``. ``user`` defaults
-   to current user, ``port`` to the standard ssh port. A worker is started at each host definition.
-   If the optional ``[bind_addr[:port]]`` is specified, other workers will connect to this worker at the
-   specified ``bind_addr`` and ``port``.
-
-   Keyword arguments:
-
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker.
-
-   ``dir`` :  specifies the location of the julia binaries on the worker nodes.
-
-   ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
-
-   ``max_parallel`` : specifies the maximum number of workers being launched in parallel at a host. Defaults to 10.
 
 .. function:: nprocs()
 
