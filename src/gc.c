@@ -316,7 +316,7 @@ static void run_finalizers(void)
     JL_GC_PUSH1(&o);
     while (to_finalize.len > 0) {
         o = arraylist_pop(&to_finalize);
-        int ok = finalize_object(o);
+        int ok = finalize_object((jl_value_t*)o);
         assert(ok); (void)ok;
     }
     JL_GC_POP();
