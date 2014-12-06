@@ -372,10 +372,15 @@ function issub(a::Var, b::Var, env)
     if d > bb.depth
         # if there are invariant constructors between a UnionAll and
         # this occurrence of Var, then we have an equality constraint on Var.
-        if isa(bb.ub,Var) && bb.ub !== a
+        if isa(bb.ub,Var)
             # right-side Var cannot equal more than one left-side Var, e.g.
             # (L,L) <: (T,S) but not (T,S) <: (R,R)
-            return false
+            bb.lb = a
+            return bb.ub === a
+        end
+        if isa(bb.lb,Var)
+            bb.ub = a
+            return bb.lb === a
         end
         if !(issub(bb.lb, aa.lb, env) && issub(aa.ub, bb.ub, env))
             # make sure equality constraint is within the current bounds of Var
@@ -388,7 +393,7 @@ function issub(a::Var, b::Var, env)
         # (Int, Real, Integer, Array{?}) <: (T, T, T, Array{T})
         # is only true if ? >: Real.
         if issub(bb.lb, aa.ub, env)
-            bb.lb = aa.ub
+            bb.lb = a
         end
     end
     return true
@@ -713,6 +718,12 @@ function test_3()
                 (@UnionAll Ty(Integer)<:T<:Ty(Real) T))
     @test !issub((@UnionAll Ty(Int)<:T<:Ty(Integer) inst(ArrayT,T,1)),
                  (@UnionAll Ty(Integer)<:T<:Ty(Real) inst(ArrayT,T,1)))
+
+    X = (@UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
+    Y = (@UnionAll A<:Ty(Real) @UnionAll B<:inst(AbstractArrayT,A,1) tupletype(A,B))
+    @test isequal_type(X,Y)
+    Z = (@UnionAll A<:Ty(Real) @UnionAll B<:inst(AbstractArrayT,A,1) tupletype(Ty(Real),B))
+    @test issub_strict(X,Z)
 end
 
 # level 4: Union
@@ -846,6 +857,7 @@ let new = Any[]
         push!(new, tupletype(T,T))
         push!(new, vatype(T))
         push!(new, @UnionAll S<:T S)
+        push!(new, @UnionAll S<:T inst(RefT,S))
     end
     append!(menagerie, new)
 end
@@ -877,5 +889,8 @@ function test_properties()
             @test issub(T, S) == issub(vatype(T), vatype(S))
             @test issub(T, S) == issub(tupletype(T), vatype(S))
         end
+
+        # unionall identity
+        @test isequal_type(T, @UnionAll S<:T S)
     end
 end
