@@ -189,7 +189,7 @@ function init_bind_addr(args::Vector{UTF8String})
     btoidx = findfirst(args, "--bind-to")
     if btoidx > 0
         bind_to = split(args[btoidx+1], ":")
-        bind_addr = parseip(bind_to[1])
+        bind_addr = string(parseip(bind_to[1]))
         if length(bind_to) > 1
             bind_port = parseint(bind_to[2])
         else
@@ -198,11 +198,11 @@ function init_bind_addr(args::Vector{UTF8String})
     else
         bind_port = 0
         try
-            bind_addr = getipaddr()
+            bind_addr = string(getipaddr())
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
             # Will cause an exception to be raised only when used.
-            bind_addr = ip"127.0.0.1"
+            bind_addr = "127.0.0.1"
         end
     end
     global LPROC
@@ -355,11 +355,12 @@ function load_juliarc()
 end
 
 function load_machine_file(path::AbstractString)
-    machines = AbstractString[]
+    machines = []
     for line in split(readall(path),'\n'; keep=false)
-        s = split(line,'*'; keep=false)
+        s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
-            append!(machines,fill(s[2],int(s[1])))
+            cnt = isnumber(s[1]) ? int(s[1]) : symbol(s[1])
+            push!(machines,(s[2], cnt))
         else
             push!(machines,line)
         end

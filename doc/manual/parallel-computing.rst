@@ -1,7 +1,7 @@
 .. _man-parallel-computing:
 
 ********************
- Parallel Computing  
+ Parallel Computing
 ********************
 
 Most modern computers possess more than one CPU, and several computers
@@ -137,7 +137,7 @@ type the following into the julia prompt::
     julia> @spawn rand2(2,2)
     RemoteRef(2,1,2)
 
-    julia> exception on 2: in anonymous: rand2 not defined 
+    julia> exception on 2: in anonymous: rand2 not defined
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
@@ -186,7 +186,7 @@ Consequently, an easy way to load *and* use a package on all processes is::
 A file can also be preloaded on multiple processes at startup, and a driver script can be used to drive the computation::
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
-    
+
 Each process has an associated identifier. The process providing the interactive julia prompt
 always has an id equal to 1, as would the julia process running the driver script in the
 example above.
@@ -194,15 +194,15 @@ The processes used by default for parallel operations are referred to as ``worke
 When there is only one process, process 1 is considered a worker. Otherwise, workers are
 considered to be all processes other than process 1.
 
-The base Julia installation has in-built support for two types of clusters: 
+The base Julia installation has in-built support for two types of clusters:
 
-    - A local cluster specified with the ``-p`` option as shown above.  
-    
-    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+    - A local cluster specified with the ``-p`` option as shown above.
+
+    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
-    
-Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of 
+
+Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
 
 Other types of clusters can be supported by writing your own custom
@@ -410,7 +410,7 @@ it completes its current task. This can be seen in the implementation of
         nextidx() = (idx=i; i+=1; idx)
         @sync begin
             for p=1:np
-                if p != myid() || np == 1 
+                if p != myid() || np == 1
                     @async begin
                         while true
                             idx = nextidx()
@@ -580,7 +580,7 @@ is ``DArray``\ -specific, but we list it here for completeness::
     end
 
 
-    
+
 Shared Arrays (Experimental)
 -----------------------------------------------
 
@@ -611,7 +611,7 @@ across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating
 workers specified by the ``pids`` named argument (and the creating
 process too, if it is on the same host).
-  
+
 If an ``init`` function, of signature ``initfn(S::SharedArray)``, is
 specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a
@@ -675,7 +675,7 @@ ClusterManagers
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
 in a cluster environment. The ``ClusterManager`` interface provides a
-way to specify a means to launch and manage worker processes. 
+way to specify a means to launch and manage worker processes.
 
 Thus, a custom cluster manager would need to:
 
@@ -683,63 +683,101 @@ Thus, a custom cluster manager would need to:
 - implement ``launch``, a method responsible for launching new workers
 - implement ``manage``, which is called at various events during a worker's lifetime
 
-As an example let us see how the ``LocalManager``, the manager responsible for 
-starting workers on the same host, is implemented::
+Julia provides two in-built cluster managers:
 
-    immutable LocalManager <: ClusterManager
-    end
+- ``LocalManager`` used when ``addprocs()`` or ``addprocs(::Integer)`` are called
+- ``SSHManager`` used when ``addprocs(::Array)`` is called with a list of hostnames
 
-    function launch(manager::LocalManager, np::Integer, config::Dict, 
-                                                resp_arr::Array, c::Condition)
+``addprocs(manager::FooManager)`` requires ``FooManager`` to implement::
+
+    function launch(manager::FooManager, params::Dict, launched::Array, c::Condition)
         ...
     end
 
-    function manage(manager::LocalManager, id::Integer, config::Dict, op::Symbol)
+    function manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)
+        ...
+    end
+
+
+As an example let us see how the ``LocalManager``, the manager responsible for
+starting workers on the same host, is implemented::
+
+    immutable LocalManager <: ClusterManager
+        np::Integer
+    end
+
+    function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
+        ...
+    end
+
+    function manage(manager::LocalManager, id::Integer, config::WorkerConfig, op::Symbol)
         ...
     end
 
 The ``launch`` method takes the following arguments:
 
-    - ``manager::LocalManager`` - used to dispatch the call to the appropriate implementation 
-    - ``np::Integer`` - number of workers to be launched 
-    - ``config::Dict`` - all the keyword arguments provided as part of the ``addprocs`` call 
-    - ``resp_arr::Array`` - the array to append one or more worker information tuples too 
-    - ``c::Condition`` - the condition variable to be notified as and when workers are launched.
-                       
-The ``launch`` method is called asynchronously in a separate task. The termination of this task 
-signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon 
+    - ``manager::ClusterManager`` - the cluster manager ``addprocs`` is called with
+    - ``params::Dict`` - all the keyword arguments passed to ``addprocs``
+    - ``launched::Array`` - the array to append one or more ``WorkerConfig`` objects to
+    - ``c::Condition`` - the condition variable to be notified as and when workers are launched
+
+The ``launch`` method is called asynchronously in a separate task. The termination of this task
+signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon
 as all the requested workers have been launched. The julia worker MUST be launched with a ``--worker``
-argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers 
-to connect to it only at the specified ``bind_addr`` and ``port``.
+argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers
+to connect to it at the specified ``bind_addr`` and ``port``. Useful for multi-homed hosts.
 
 
-Arrays of worker information tuples that are appended to ``resp_arr`` can take any one of 
-the following forms::
+For every worker launched, the ``launch`` method must add a ``WorkerConfig``object with appropriate
+fields initialized to ``launched``::
 
-    (io::IO, config::Dict)
-    
-    (io::IO, host::AbstractString, config::Dict)
-    
-    (io::IO, host::AbstractString, port::Integer, config::Dict)
-    
-    (host::AbstractString, port::Integer, config::Dict)
+type WorkerConfig
+    # Common fields relevant to all cluster managers
+    io::Nullable{IO}
+    host::Nullable{AbstractString}
+    port::Nullable{Integer}
 
-where:
+    # Used when launching additional workers at a host
+    count::Nullable{Union(Int, Symbol)}
+    exeflags::Nullable{Cmd}
 
-    - ``io::IO`` is the output stream of the worker.
-    - ``host::AbstractString`` and ``port::Integer`` are the host:port to connect to. If not provided
-      they are read from the ``io`` stream provided.
-    - ``config::Dict`` is the configuration dictionary for the worker. The ``launch``
-      function can add/modify any data that may be required for managing 
-      the worker.
+    # External cluster managers can use this to store information at a per-worker level
+    # Can be a dict if multiple fields need to be stored.
+    userdata::Nullable{Any}
 
-The ``manage`` method takes the following arguments:
+    # SSHManager / SSH tunnel connections to workers
+    tunnel::Nullable{Bool}
+    bind_addr::Nullable{AbstractString}
+    sshflags::Nullable{Cmd}
+    max_parallel::Nullable{Integer}
 
-    - ``manager::ClusterManager`` - used to dispatch the call to the appropriate implementation 
-    - ``id::Integer`` - The Julia process id
-    - ``config::Dict`` - configuration dictionary for the worker. The data may have been modified by the ``launch`` method
-    - ``op::Symbol`` - one of ``:register``, ``:deregister``, ``:interrupt`` or ``:finalize``.
-      The ``manage`` method is called at different times during the worker's lifetime:
+    .....
+end
+
+Most of the fields in ``WorkerConfig`` are used by the inbuilt managers.
+Custom cluster managers would typically specify only ``io`` or ``host`` / ``port``:
+
+If ``io`` is specified, it is used to read host/port information. A julia worker prints out
+its bind address and port at startup. This allows julia workers to listen on any free port
+available instead of requiring worker ports to be configured manually.
+
+If ``io`` is not specfied, ``host`` and ``port`` are used to connect.
+
+``count`` and ``exeflags`` are relevant for launching additional workers from a worker.
+For example, a cluster manager may launch a single worker per node, and use that to launch
+additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
+while a value of ``:auto`` will launch as many workers as cores on that machine. ``exeflags``
+should be set to the required command line arguments for new workers.
+
+``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
+required to connect to the workers from the master process.
+
+``userdata`` is provided for custom cluster managers to store their own worker specific information.
+
+
+
+``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
+times during the worker's lifetime with different ``op`` values:
 
       - with ``:register``/``:deregister`` when a worker is added / removed
         from the Julia worker pool.
