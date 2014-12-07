@@ -1,11 +1,11 @@
 ## efficient value-based hashing of integers ##
 
 function hash_integer(n::Integer, h::UInt)
-    h = hash_uint(uint(n & typemax(UInt)) $ h) $ h
-    n = ifelse(n < 0, oftype(n,-n), n)
+    h = hash_uint((n % UInt) $ h) $ h
+    n = abs(n)
     n >>>= sizeof(UInt) << 3
     while n != 0
-        h = hash_uint(uint(n & typemax(UInt)) $ h) $ h
+        h = hash_uint((n % UInt) $ h) $ h
         n >>>= sizeof(UInt) << 3
     end
     return h
@@ -59,7 +59,7 @@ function hash(x::Real, h::UInt)
                 left <= 63                     && return hash(int64(num) << int(pow), h)
                 signbit(num) == signbit(den)   && return hash(uint64(num) << int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(float64(num) * 2.0^pow, h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(float64(num),pow), h)
         end
     end
 
@@ -141,7 +141,7 @@ function hash{T<:Integer64}(x::Rational{T}, h::UInt)
         den >>= pow
         pow = -pow
         if den == 1 && abs(num) < 9007199254740992
-            return hash(float64(num) * 2.0^pow)
+            return hash(ldexp(float64(num),pow))
         end
     end
     h = hash_integer(den, h)
