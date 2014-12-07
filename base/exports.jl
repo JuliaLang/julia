@@ -822,6 +822,7 @@ export
     escape_string,
     float32_isvalid,
     float64_isvalid,
+    graphemes,
     hex,
     hex2bytes,
     ind2chr,

@@ -1267,6 +1267,11 @@ Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
 Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
 @test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
 
+# make sure substrings handle last code unit even if not start of codepoint
+let s = "x\u0302"
+    @test s[1:3] == s
+end
+
 # reverseind
 for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
     for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")

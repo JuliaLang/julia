@@ -1729,4 +1729,3 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
-
