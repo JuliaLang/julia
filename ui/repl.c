@@ -4,7 +4,6 @@
 */
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
@@ -20,7 +19,6 @@
 
 #ifndef _MSC_VER
 #include <unistd.h>
-#include <libgen.h>
 #include <getopt.h>
 #else
 #include "getopt.h"
@@ -34,27 +32,14 @@
 #error "JL_SYSTEM_IMAGE_PATH not defined!"
 #endif
 
-#ifdef _MSC_VER
-#define PATH_MAX MAX_PATH
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifdef _MSC_VER
-DLLEXPORT char * dirname(char *);
-#endif
-
-extern DLLEXPORT char *julia_home;
-
-char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
-char *image_file = NULL;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -111,7 +96,6 @@ void parse_opts(int *argcp, char ***argvp)
     int c;
     opterr = 0;
     int imagepathspecified=0;
-    image_file = system_image;
     int skip = 0;
     int lastind = optind;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
@@ -123,19 +107,19 @@ void parse_opts(int *argcp, char ***argvp)
             lastind = optind;
             break;
         case 'H':
-            julia_home = strdup(optarg);
+            jl_compileropts.julia_home = strdup(optarg);
             break;
         case 'b':
             jl_compileropts.build_path = strdup(optarg);
             if (!imagepathspecified)
-                image_file = NULL;
+                jl_compileropts.image_file = NULL;
             break;
         case 'J':
-            image_file = strdup(optarg);
+            jl_compileropts.image_file = strdup(optarg);
             imagepathspecified = 1;
             break;
         case 'h':
-            printf("%s%s", usage, opts);
+            ios_printf(ios_stdout, "%s%s", usage, opts);
             exit(0);
         case 'O':
             jl_compileropts.opt_level = 1;
@@ -206,45 +190,12 @@ void parse_opts(int *argcp, char ***argvp)
     }
     jl_compileropts.code_coverage = codecov;
     jl_compileropts.malloc_log    = malloclog;
-    if (!julia_home) {
-        julia_home = getenv("JULIA_HOME");
-        if (julia_home) {
-            julia_home = strdup(julia_home);
-        }
-        else {
-            char *julia_path = (char*)malloc(PATH_MAX);
-            size_t path_size = PATH_MAX;
-            uv_exepath(julia_path, &path_size);
-            julia_home = strdup(dirname(julia_path));
-            free(julia_path);
-        }
-    }
     optind -= skip;
     *argvp += optind;
     *argcp -= optind;
-    if (image_file==NULL && *argcp > 0) {
+    if (jl_compileropts.image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
-        }
-    }
-    if (image_file) {
-        if (image_file[0] != PATHSEP) {
-            uv_stat_t stbuf;
-            char path[512];
-            if (!imagepathspecified) {
-                // build time path relative to JULIA_HOME
-                snprintf(path, sizeof(path), "%s%s%s",
-                         julia_home, PATHSEPSTRING, system_image);
-                image_file = strdup(path);
-            }
-            else if (jl_stat(image_file, (char*)&stbuf) != 0) {
-                // otherwise try julia_home/../lib/julia/%s
-                snprintf(path, sizeof(path), "%s%s%s",
-                         julia_home,
-                         PATHSEPSTRING ".." PATHSEPSTRING "lib" PATHSEPSTRING "julia" PATHSEPSTRING,
-                         image_file);
-                image_file = strdup(path);
-            }
         }
     }
 }
@@ -384,7 +335,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         jl_lisp_prompt();
         return 0;
     }
-    julia_init(lisp_prompt ? NULL : image_file);
+    julia_init();
     return julia_trampoline(argc, (char**)argv, true_main);
 }
 

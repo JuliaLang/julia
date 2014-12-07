@@ -856,17 +856,16 @@ DLLEXPORT void jl_exception_clear(void);
     }
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT void julia_init();
 DLLEXPORT void jl_init(char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
-DLLEXPORT extern char *julia_home;
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
 
-DLLEXPORT void jl_save_system_image(char *fname);
-DLLEXPORT void jl_restore_system_image(char *fname);
-DLLEXPORT int jl_save_new_module(char *fname, jl_module_t *mod);
-DLLEXPORT jl_module_t *jl_restore_new_module(char *fname);
+DLLEXPORT void jl_save_system_image(const char *fname);
+DLLEXPORT void jl_restore_system_image(const char *fname);
+DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
+DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
 void jl_init_restored_modules();
 
 // front end interface
@@ -1328,7 +1327,9 @@ void show_execution_point(char *filename, int lno);
 // compiler options -----------------------------------------------------------
 
 typedef struct {
-    char *build_path;
+    const char *julia_home;
+    const char *build_path;
+    const char *image_file;
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;

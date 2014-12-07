@@ -869,7 +869,7 @@ static void coverageVisitLine(std::string filename, int line)
 
 void write_log_data(logdata_t logData, const char *extension)
 {
-    std::string base = std::string(julia_home);
+    std::string base = std::string(jl_compileropts.julia_home);
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {

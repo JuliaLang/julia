@@ -836,7 +836,7 @@ static void _ios_init(ios_t *s)
 
 /* stream object initializers. we do no allocation. */
 
-ios_t *ios_file(ios_t *s, char *fname, int rd, int wr, int create, int trunc)
+ios_t *ios_file(ios_t *s, const char *fname, int rd, int wr, int create, int trunc)
 {
     int flags;
     int fd;

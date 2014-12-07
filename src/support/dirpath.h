@@ -2,18 +2,15 @@
 #define DIRPATH_H
 
 #ifdef _OS_WINDOWS_
-#define PATHSEP '\\'
 #define PATHSEPSTRING "\\"
-#define PATHLISTSEP ';'
 #define PATHLISTSEPSTRING ";"
-#define ISPATHSEP(c) ((c)=='/' || (c)=='\\')
-#define MAXPATHLEN 1024
+#ifdef _MSC_VER
+#define PATH_MAX MAX_PATH
+#endif
 #else
-#define PATHSEP '/'
 #define PATHSEPSTRING "/"
-#define PATHLISTSEP ':'
 #define PATHLISTSEPSTRING ":"
-#define ISPATHSEP(c) ((c)=='/')
+#define PATH_MAX 1024
 #endif
 
 #endif
