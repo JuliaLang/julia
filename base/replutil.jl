@@ -155,7 +155,7 @@ function showerror(io::IO, e::MethodError)
         print(buf, "  $(e.f.env.name)(")
         first = true
         right_matches = 0
-        for (arg, sigtype) in zip(e.args, method.sig)
+        for (arg, sigtype) in Zip2{Any,Any}(e.args, method.sig)
             if first
                 first = false
             else
