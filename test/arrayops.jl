@@ -813,6 +813,13 @@ function i7197()
 end
 @test i7197() == (2,2)
 
+# PR #9256
+function pr9256()
+    m = [1 2 3; 4 5 6; 7 8 9]
+    ind2sub(m, 6)
+end
+@test pr9256() == (3,2)
+
 # PR #8622 and general indexin test
 function pr8622()
     x=[1,3,5,7]
