@@ -134,21 +134,22 @@ function in(n::Integer, s::IntSet)
 end
 
 start(s::IntSet) = int64(0)
-done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
-function next(s::IntSet, i)
+done(s::IntSet, i) = (!s.fill1s && nextval(s,i) >= s.limit) || i == typemax(Int)
+function nextval(s::IntSet, i)
     if i >= s.limit
         n = int64(i)
     else
         n = int64(ccall(:bitvector_next, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, i, s.limit))
     end
-    (n, n+1)
+    n
 end
+nextstate(s::IntSet, i) = nextval(s,i)+1
 
 isempty(s::IntSet) =
     !s.fill1s && ccall(:bitvector_any1, UInt32, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)==0
 
 function first(s::IntSet)
-    n = next(s,0)[1]
+    n = nextval(s,0)
     if n >= s.limit
         error("set must be non-empty")
     end

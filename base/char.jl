@@ -26,7 +26,8 @@ last(c::Char) = c
 eltype(c::Char) = Char
 
 start(c::Char) = false
-next(c::Char, state) = (c, true)
+nextval(c::Char, state) = c
+nextstate(c::Char, state) = true
 done(c::Char, state) = state
 isempty(c::Char) = false
 in(x::Char, y::Char) = x == y

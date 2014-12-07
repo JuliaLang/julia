@@ -149,15 +149,11 @@ eltype(v::ValueIterator) = eltype(v.dict)[2]
 start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
 done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
 
-function next(v::KeyIterator, state)
-    n = next(v.dict, state)
-    n[1][1], n[2]
-end
+nextval(v::KeyIterator, state) = nextval(v.dict, state)[1]
+nextstate(v::KeyIterator, state) = nextstate(v.dict, state)
 
-function next(v::ValueIterator, state)
-    n = next(v.dict, state)
-    n[1][2], n[2]
-end
+nextval(v::ValueIterator, state) = nextval(v.dict, state)[2]
+nextstate(v::ValueIterator, state) = nextstate(v.dict, state)
 
 in(k, v::KeyIterator) = !is(get(v.dict, k, secret_table_token),
                             secret_table_token)
@@ -304,7 +300,8 @@ _oidd_nextind(a, i) = reinterpret(Int,ccall(:jl_eqtable_nextind, Csize_t, (Any, 
 
 start(t::ObjectIdDict) = _oidd_nextind(t.ht, 0)
 done(t::ObjectIdDict, i) = (i == -1)
-next(t::ObjectIdDict, i) = ((t.ht[i+1],t.ht[i+2]), _oidd_nextind(t.ht, i+2))
+nextval(t::ObjectIdDict, i) = (t.ht[i+1],t.ht[i+2])
+nextstate(t::ObjectIdDict, i) = _oidd_nextind(t.ht, i+2)
 
 function length(d::ObjectIdDict)
     n = 0
@@ -703,13 +700,17 @@ end
 
 start(t::Dict) = skip_deleted(t, 1)
 done(t::Dict, i) = done(t.vals, i)
-next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
+nextval(t::Dict, i) = (t.keys[i],t.vals[i])
+nextstate(t::Dict, i) = skip_deleted(t,i+1)
 
 isempty(t::Dict) = (t.count == 0)
 length(t::Dict) = t.count
 
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+nextval{T<:Dict}(v::KeyIterator{T}, i) = v.dict.keys[i]
+nextstate{T<:Dict}(v::KeyIterator{T}, i) = skip_deleted(v.dict,i+1)
+
+nextval{T<:Dict}(v::ValueIterator{T}, i) = v.dict.vals[i]
+nextstate{T<:Dict}(v::ValueIterator{T}, i) = skip_deleted(v.dict,i+1)
 
 # weak key dictionaries
 
@@ -778,8 +779,6 @@ isempty(wkh::WeakKeyDict) = isempty(wkh.ht)
 
 start(t::WeakKeyDict) = start(t.ht)
 done(t::WeakKeyDict, i) = done(t.ht, i)
-function next{K}(t::WeakKeyDict{K}, i)
-    kv, i = next(t.ht, i)
-    ((kv[1].value::K,kv[2]), i)
-end
+nextval{K}(t::WeakKeyDict{K}, i) = (kv = nextval(t.ht,i); (kv[1].value::K,kv[2]))
+nextstate(t::WeakKeyDict, i) = nextstate(t.ht, i)
 length(t::WeakKeyDict) = length(t.ht)

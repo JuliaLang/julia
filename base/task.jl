@@ -167,12 +167,10 @@ function consume(P::Task, values...)
     schedule_and_wait(P)
 end
 
-start(t::Task) = nothing
-function done(t::Task, val)
-    t.result = consume(t)
-    istaskdone(t)
-end
-next(t::Task, val) = (t.result, nothing)
+start(t::Task) = consume(t)
+done(t::Task, val) = istaskdone(t)
+nextval(t::Task, val) = val
+nextstate(t::Task, val) = consume(t)
 
 isempty(::Task) = error("isempty not defined for Tasks")
 

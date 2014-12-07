@@ -411,7 +411,8 @@ const => = Pair
 
 start(p::Pair) = 1
 done(p::Pair, i) = i>2
-next(p::Pair, i) = (getfield(p,i), i+1)
+nextval(p::Pair, i) = getfield(p,i)
+nextstate(p::Pair, i) = i+1
 
 indexed_next(p::Pair, i::Int, state) = (getfield(p,i), i+1)
 

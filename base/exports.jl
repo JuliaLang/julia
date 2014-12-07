@@ -983,6 +983,8 @@ export
     done,
     enumerate,
     next,
+    nextstate,
+    nextval,
     start,
     zip,
 

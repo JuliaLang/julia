@@ -9,10 +9,8 @@ enumerate(itr) = Enumerate(itr)
 
 length(e::Enumerate) = length(e.itr)
 start(e::Enumerate) = (1, start(e.itr))
-function next(e::Enumerate, state)
-    n = next(e.itr,state[2])
-    (state[1],n[1]), (state[1]+1,n[2])
-end
+nextval(e::Enumerate, state) = (state[1], nextval(e.itr,state[2]))
+nextstate(e::Enumerate, state) = (state[1]+1, nextstate(e.itr,state[2]))
 done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype(e::Enumerate) = (Int, eltype(e.itr))
@@ -29,10 +27,8 @@ zip(itrs...) = _mkZip(itrs)
 
 length(z::Zip) = minimum(length, z.itrs)
 start(z::Zip) = map(start, z.itrs)
-function next(z::Zip, state)
-    n = map(next, z.itrs, state)
-    map(x->x[1], n), map(x->x[2], n)
-end
+nextval(z::Zip, state) = map(nextval, z.itrs, state)
+nextstate(z::Zip, state) = map(nextstate, z.itrs, state)
 done(z::Zip, state::()) = true
 function done(z::Zip, state)
     for i = 1:length(z.itrs)
@@ -53,11 +49,8 @@ zip(a, b) = Zip2(a, b)
 
 length(z::Zip2) = min(length(z.a), length(z.b))
 start(z::Zip2) = (start(z.a), start(z.b))
-function next(z::Zip2, st)
-    n1 = next(z.a,st[1])
-    n2 = next(z.b,st[2])
-    return ((n1[1], n2[1]), (n1[2], n2[2]))
-end
+nextval(z::Zip2, st) = (nextval(z.a,st[1]), nextval(z.b,st[2]))
+nextstate(z::Zip2, st) = (nextstate(z.a,st[1]), nextstate(z.b,st[2]))
 done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
 eltype(z::Zip2) = (eltype(z.a), eltype(z.b))
@@ -70,11 +63,10 @@ immutable Filter{I}
 end
 filter(flt::Function, itr) = Filter(flt, itr)
 
-start(f::Filter) = start_filter(f.flt, f.itr)
-function start_filter(pred, itr)
-    s = start(itr)
+function filter_state(pred, itr, s)
     while !done(itr,s)
-        v,t = next(itr,s)
+        v = nextval(itr,s)
+        t = nextstate(itr,s)
         if pred(v)
             return (false, v, t)
         end
@@ -83,20 +75,10 @@ function start_filter(pred, itr)
     (true,)
 end
 
-next(f::Filter, s) = advance_filter(f.flt, f.itr, s)
-function advance_filter(pred, itr, st)
-    _, v, s = st
-    while !done(itr,s)
-        w,t = next(itr,s)
-        if pred(w)
-            return v, (false, w, t)
-        end
-        s=t
-    end
-    v, (true,)
-end
-
-done(f::Filter, s) = s[1]
+start(f::Filter) = filter_state(f.flt, f.itr, start(f.itr))
+done(f::Filter, s) = s[1]::Bool
+nextval(f::Filter, s) = s[2]
+nextstate(f::Filter, s) = filter_state(f.flt, f.itr, s[3])
 
 eltype(f::Filter) = eltype(f.itr)
 
@@ -108,7 +90,8 @@ end
 rest(itr,state) = Rest(itr,state)
 
 start(i::Rest) = i.st
-next(i::Rest, st) = next(i.itr, st)
+nextval(i::Rest, st) = nextval(i.itr, st)
+nextstate(i::Rest, st) = nextstate(i.itr, st)
 done(i::Rest, st) = done(i.itr, st)
 
 eltype(r::Rest) = eltype(r.itr)

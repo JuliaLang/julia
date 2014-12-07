@@ -1585,14 +1585,13 @@
 	     (= ,state (call (top start) ,coll))
 	     ,(expand-forms
 	       `(,while
-		 (call (top !) (call (top done) ,coll ,state))
-		 (scope-block
+                  (call (top !) (call (top done) ,coll ,state))
 		  (block
 		   ;; NOTE: enable this to force loop-local var
 		   #;,@(map (lambda (v) `(local ,v)) (lhs-vars lhs))
-		   ,(lower-tuple-assignment (list lhs state)
-					    `(call (top next) ,coll ,state))
-		   ,body))))))))
+		   (= ,lhs (call (top nextval) ,coll ,state))
+		   ,body)
+                   (= ,state (call (top nextstate) ,coll ,state))))))))
 
 (define (map-expand-forms e) (map expand-forms e))
 
@@ -1897,12 +1896,24 @@
 			    (break-block loop-cont
 					 ,(expand-forms (caddr e)))))))
 
-   'inner-while
+   'for3
+   (lambda (e)
+     `(scope-block
+       (break-block loop-exit
+		    (_while ,(expand-forms (cadr e))
+                            (scope-block
+                              (block
+                                (break-block loop-cont ,(expand-forms (caddr e)))
+                                ,(expand-forms (cadddr e))))))))
+
+   'inner-for3
    (lambda (e)
      `(scope-block
         (_while ,(expand-forms (cadr e))
-                (break-block loop-cont
-                             ,(expand-forms (caddr e))))))
+                (scope-block
+                  (block
+                    (break-block loop-cont ,(expand-forms (caddr e)))
+                    ,(expand-forms (cadddr e)))))))
 
    'break
    (lambda (e)
@@ -1918,7 +1929,7 @@
 			    (cdr (cadr e))
 			    (list (cadr e))))
 		(first  #t))
-       (expand-for (if first 'while 'inner-while)
+       (expand-for (if first 'for3 'inner-for3)
 		   (cadr (car ranges))
 		   (caddr (car ranges))
 		   (if (null? (cdr ranges))
@@ -2140,11 +2151,13 @@
 		   (scope-block
 		   (block
 		    (= ,(car is) (call (top +) ,(car is) 1))
-		    (= (tuple ,(cadr (car ranges)) ,(car states))
-		       (call (top next) ,(car rv) ,(car states)))
+		    (= ,(cadr (car ranges))
+                       (call (top nextval) ,(car rv) ,(car states)))
 		    ;; *** either this or force all for loop vars local
 		    ,.(map (lambda (r) `(local ,r))
 			   (lhs-vars (cadr (car ranges))))
+		    (= ,(car states)
+                       (call (top nextstate) ,(car rv) ,(car states)))
 		    ,(construct-loops (cdr ranges) (cdr rv) (cdr is) (cdr states) (cdr lengths))))))))
 
     ;; Evaluate the comprehension

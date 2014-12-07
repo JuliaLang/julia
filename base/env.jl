@@ -117,7 +117,7 @@ push!(::EnvHash, k::AbstractString, v) = setindex!(ENV, v, k)
 start(::EnvHash) = 0
 done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
 
-function next(::EnvHash, i)
+function nextval(::EnvHash, i)
     env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
         error(BoundsError)
@@ -127,23 +127,26 @@ function next(::EnvHash, i)
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (ByteString[convert(typeof(env),x) for x in m.captures], i+1)
+    ByteString[convert(typeof(env),x) for x in m.captures]
 end
+nextstate(::EnvHash, i) = i+1
 end
 
 @windows_only begin
-start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
-function done(hash::EnvHash, block::(Ptr{UInt16},Ptr{UInt16}))
-    if unsafe_load(block[1])==0
-        ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{UInt16},),block[2])
+function start(hash::EnvHash)
+    pos = ccall(:GetEnvironmentStringsW, stdcall, Ptr{UInt16}, ())
+    nextstate(hash, (0,pos,pos))
+end
+function done(hash::EnvHash, state::(UInt,Ptr{UInt16},Ptr{UInt16}))
+    if unsafe_load(state[2]) == 0
+        ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{UInt16},),state[3])
         return true
     end
     false
 end
-function next(hash::EnvHash, block::(Ptr{UInt16},Ptr{UInt16}))
-    pos = block[1]
-    blk = block[2]
-    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)+1
+function nextval(hash::EnvHash, state::(UInt,Ptr{UInt16},Ptr{UInt16}))
+    len = state[1]
+    pos = state[2]
     buf = Array(UInt16, len)
     unsafe_copy!(pointer(buf), pos, len)
     env = utf8(UTF16String(buf))
@@ -151,7 +154,13 @@ function next(hash::EnvHash, block::(Ptr{UInt16},Ptr{UInt16}))
     if m == nothing
         error("malformed environment entry: $env")
     end
-    (ByteString[convert(typeof(env),x) for x in m.captures], (pos+len*2, blk))
+    ByteString[convert(typeof(env),x) for x in m.captures]
+end
+function nextstate(hash::EnvHash, state::(UInt,Ptr{UInt16},Ptr{UInt16}))
+    len,pos,blk = state
+    pos += 2len
+    len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos) + 1
+    (len, pos, blk)
 end
 end
 

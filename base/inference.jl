@@ -2160,7 +2160,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     if incompletematch
         cost *= 4
     end
-    if is(f, next) || is(f, done)
+    if is(f, next) || is(f, nextstate) || is(f, nextval) || is(f, done)
         cost /= 4
     end
     if !inline_worthy(body, cost)

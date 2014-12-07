@@ -140,7 +140,8 @@ function length(mt::MethodTable)
 end
 
 start(mt::MethodTable) = mt.defs
-next(mt::MethodTable, m::Method) = (m,m.next)
+nextval(mt::MethodTable, m::Method) = m
+nextstate(mt::MethodTable, m::Method) = m.next
 done(mt::MethodTable, m::Method) = false
 done(mt::MethodTable, i::()) = true
 

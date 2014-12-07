@@ -2020,14 +2020,15 @@ length(d::SpDiagIterator) = d.n
 start(d::SpDiagIterator) = 1
 done(d::SpDiagIterator, j) = j > d.n
 
-function next{Tv}(d::SpDiagIterator{Tv}, j)
+function nextval{Tv}(d::SpDiagIterator{Tv}, j)
     A = d.A
     r1 = int(A.colptr[j])
     r2 = int(A.colptr[j+1]-1)
-    (r1 > r2) && (return (zero(Tv), j+1))
+    (r1 > r2) && (return zero(Tv))
     r1 = searchsortedfirst(A.rowval, j, r1, r2, Forward)
-    (((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1], j+1)
+    ((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1]
 end
+nextstate(d::SpDiagIterator, j) = j+1
 
 function trace{Tv}(A::SparseMatrixCSC{Tv})
     if size(A,1) != size(A,2)
