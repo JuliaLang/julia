@@ -65,15 +65,18 @@ Str(s::AbstractString) = Str(ByteVec(s))
     n - leading_zeros(x) >>> 3
 end
 
-function next(s::Str, i::Int)
-    x = bswap(getu32(s.data, i))
-    l = leading_ones(x)
-    n = max(1, l)
-    y = ((0x808080 $ x) << n) >>> (32 - 7n)
-    z = (((y >>> 24) & 0xff) << 18) |
-        (((y >>> 16) & 0xff) << 12) |
-        (((y >>>  8) & 0xff) <<  6) | (y & 0xff)
-    ifelse(l == 1, '\ufffd', Char(z)), i + n
+function next(s::Str, k::Int)
+    a = bswap(getu32(s.data, k))
+    l = leading_ones(a)
+    n = l + (~a >> 31)
+    b = (a << n >> n) $ 0x808080
+    r = 32 - 8n
+    c = b >> r
+    t = (l != 1) & (l <= 4) & ((b & 0xc0c0c0) >> r == 0)
+    d = ( (c >> 24)         << 18) |
+        (((c >> 16) & 0xff) << 12) |
+        (((c >>  8) & 0xff) <<  6) | (c & 0xff)
+    ifelse(t, Char(d), '\ufffd'), k + ifelse(t, n, 1)
 end
 
 const mask = div(typemax(UInt),typemax(UInt8))
