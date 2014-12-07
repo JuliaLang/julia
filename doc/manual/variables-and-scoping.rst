@@ -36,12 +36,10 @@ scope. When a variable is introduced into a scope, it is also inherited
 by all inner scopes unless one of those inner scopes explicitly
 overrides it.
 
-Though, regarding the special case of functions, please note that Julia
-uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
+Julia uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
 meaning that a function's scope does not inherit from its caller's
-scope, but from the scope in which the function was defined. Thus,
-functions do not have access to variables introduced in their caller
-function's scope. For example, in the following code ``x`` is found
+scope, but from the scope in which the function was defined.
+For example, in the following code the ``x`` inside ``foo`` is found
 in the global scope (and if no global variable ``x`` existed, an
 undefined variable error would be raised)::
 
@@ -56,14 +54,16 @@ undefined variable error would be raised)::
 
     x = 2
 
-    julia> foo()
+    julia> bar()
     2
 
-On the other hand, in the following example, the closure ``foo`` is
-defined inside ``bar``, therefore it inherits from its scope::
+If ``foo`` is instead defined inside ``bar``, then it accesses
+the local ``x`` present in that function::
 
     function bar()
-      foo = () -> x
+      function foo()
+        x
+      end
       x = 1
       foo()
     end
@@ -73,7 +73,7 @@ defined inside ``bar``, therefore it inherits from its scope::
     julia> bar()
     1
 
-These constructs which introduce new variables into the current scope
+The constructs that introduce new variables into the current scope
 are as follows:
 
 -  A declaration ``local x`` or ``const x`` introduces a new local variable.
