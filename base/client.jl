@@ -372,13 +372,10 @@ import .Terminals
 import .REPL
 
 function _start()
-    early_init()
-
     try
         init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
-        init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
