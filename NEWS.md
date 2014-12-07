@@ -100,6 +100,8 @@ Library improvements
 
   * Efficient `mean` and `median` for ranges ([#8089]).
 
+  * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
+
   * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
     to provide uniform cross-platform behavior and up-to-date, locale-independent support
     for Unicode standards ([#5939]).
@@ -1132,4 +1134,6 @@ Too numerous to mention.
 [#9133]: https://github.com/JuliaLang/julia/issues/9133
 [#9144]: https://github.com/JuliaLang/julia/issues/9144
 [#9249]: https://github.com/JuliaLang/julia/issues/9249
+[#9261]: https://github.com/JuliaLang/julia/issues/9261
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
+[#9294]: https://github.com/JuliaLang/julia/issues/9294

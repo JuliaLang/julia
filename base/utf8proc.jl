@@ -1,10 +1,12 @@
 # Various Unicode functionality from the utf8proc library
 module UTF8proc
 
-import Base: show, showcompact, ==, string, symbol, isless
+import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype, start, next, done, convert
+
+export isgraphemebreak
 
 # also exported by Base:
-export normalize_string, is_valid_char, is_assigned_char,
+export normalize_string, graphemes, is_valid_char, is_assigned_char,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
@@ -60,6 +62,8 @@ const UTF8PROC_CHARBOUND = (1<<11)
 const UTF8PROC_LUMP      = (1<<12)
 const UTF8PROC_STRIPMARK = (1<<13)
 
+############################################################################
+
 let
     const p = Array(Ptr{UInt8}, 1)
     global utf8proc_map
@@ -110,6 +114,8 @@ function normalize_string(s::AbstractString, nf::Symbol)
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
 
+############################################################################
+
 # returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
     uint32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
@@ -117,8 +123,6 @@ function category_code(c)
 end
 
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
-
-# TODO: use UTF8PROC_CHARBOUND to extract graphemes from a string, e.g. to iterate over graphemes?
 
 ## libc character class predicates ##
 
@@ -167,5 +171,55 @@ for name = ("alnum", "alpha", "cntrl", "digit", "number", "graph",
         end
     end
 end
+
+############################################################################
+# iterators for grapheme segmentation
+
+isgraphemebreak(c1::Char, c2::Char) =
+    ccall(:utf8proc_grapheme_break, Bool, (Char, Char), c1, c2)
+
+immutable GraphemeIterator{S<:AbstractString}
+    s::S # original string (for generation of SubStrings)
+end
+graphemes(s::AbstractString) = GraphemeIterator{typeof(s)}(s)
+
+eltype{S}(::GraphemeIterator{S}) = SubString{S}
+
+function length(g::GraphemeIterator)
+    c0 = Char(0x00ad) # soft hyphen (grapheme break always allowed after this)
+    n = 0
+    for c in g.s
+        n += isgraphemebreak(c0, c)
+        c0 = c
+    end
+    return n
+end
+
+start(g::GraphemeIterator) = start(g.s)
+done(g::GraphemeIterator, i) = done(g.s, i)
+
+function next(g::GraphemeIterator, i)
+    s = g.s
+    j = i
+    c0, k = next(s, i)
+    while !done(s, k) # loop until next grapheme is s[i:j]
+        c, ℓ = next(s, k)
+        isgraphemebreak(c0, c) && break
+        j = k
+        k = ℓ
+        c0 = c
+    end
+    return (s[i:j], k)
+end
+
+==(g1::GraphemeIterator, g2::GraphemeIterator) = g1.s == g2.s
+hash(g::GraphemeIterator, h::UInt) = hash(g.s, h)
+isless(g1::GraphemeIterator, g2::GraphemeIterator) = isless(g1.s, g2.s)
+
+convert{S<:AbstractString}(::Type{S}, g::GraphemeIterator) = convert(S, g.s)
+
+show{S}(io::IO, g::GraphemeIterator{S}) = print(io, "length-$(length(g)) GraphemeIterator{$S} for \"$(g.s)\"")
+
+############################################################################
 
 end # module

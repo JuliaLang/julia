@@ -114,7 +114,7 @@ function getindex(s::UTF8String, r::UnitRange{Int})
     if !is_utf8_start(d[i])
         i = nextind(s,i)
     end
-    if j > endof(s)
+    if j > length(d)
         throw(BoundsError())
     end
     j = nextind(s,j)-1
