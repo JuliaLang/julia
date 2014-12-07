@@ -39,44 +39,19 @@ function endof(s::UTF8String)
 end
 length(s::UTF8String) = int(ccall(:u8_strlen, Csize_t, (Ptr{UInt8},), s.data))
 
-function next(s::UTF8String, i::Int)
-    # potentially faster version
-    # d = s.data
-    # a::UInt32 = d[i]
-    # if a < 0x80; return char(a); end
-    # #if a&0xc0==0x80; return '\ufffd'; end
-    # b::UInt32 = a<<6 + d[i+1]
-    # if a < 0xe0; return char(b - 0x00003080); end
-    # c::UInt32 = b<<6 + d[i+2]
-    # if a < 0xf0; return char(c - 0x000e2080); end
-    # return char(c<<6 + d[i+3] - 0x03c82080)
-
-    d = s.data
-    b = d[i]
-    if !is_utf8_start(b)
-        j = i-1
-        while 0 < j && !is_utf8_start(d[j])
-            j -= 1
-        end
-        if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
-            # b is a continuation byte of a valid UTF-8 character
-            error("invalid UTF-8 character index")
-        end
-        # move past 1 byte in case the data is actually Latin-1
-        return '\ufffd', i+1
-    end
-    trailing = utf8_trailing[b+1]
-    if length(d) < i + trailing
-        return '\ufffd', i+1
-    end
-    c::UInt32 = 0
-    for j = 1:trailing+1
-        c <<= 6
-        c += d[i]
-        i += 1
-    end
-    c -= utf8_offset[trailing+1]
-    char(c), i
+function next(s::UTF8String, k::Int)
+    p = convert(Ptr{UInt32}, pointer(s.data) + k - 1)
+    a = bswap(unsafe_load(p))
+    l = leading_ones(a)
+    n = l + (~a >> 31)
+    b = (a << n >> n) $ 0x808080
+    r = 32 - 8n
+    c = b >> r
+    t = (l != 1) & (l <= 4) & ((b & 0xc0c0c0) >> r == 0)
+    d = ( (c >> 24)         << 18) |
+        (((c >> 16) & 0xff) << 12) |
+        (((c >>  8) & 0xff) <<  6) | (c & 0xff)
+    ifelse(t, Char(d), '\ufffd'), k + ifelse(t, n, 1)
 end
 
 function first_utf8_byte(ch::Char)
