@@ -1463,6 +1463,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
 
     // save module initialization order
     if (jl_module_init_order != NULL) {
+        size_t i;
         for(i=0; i < jl_array_len(jl_module_init_order); i++) {
             // verify that all these modules were saved
             assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
@@ -1600,7 +1601,6 @@ void jl_init_restored_modules()
             jl_value_t *mod = jl_cellref(temp, i);
             jl_module_run_initializer((jl_module_t*)mod);
         }
-        jl_module_init_order = NULL;
         JL_GC_POP();
     }
 }
@@ -1714,6 +1714,16 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
     jl_serialize_lambdas_from_mod(&f, jl_main_module);
     jl_serialize_value(&f, NULL);
 
+    // save module initialization order
+    if (jl_module_init_order != NULL) {
+        size_t i;
+        for(i=0; i < jl_array_len(jl_module_init_order); i++) {
+            // verify that all these modules were saved
+            assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
+        }
+    }
+    jl_serialize_value(&f, jl_module_init_order);
+
     jl_current_module = lastmod;
     mode = last_mode;
     if (en) jl_gc_enable();
@@ -1824,6 +1834,8 @@ jl_module_t *jl_restore_new_module(const char *fname)
     mode = MODE_MODULE_LAMBDAS;
     jl_deserialize_lambdas_from_mod(&f);
 
+    jl_module_init_order = (jl_array_t*)jl_deserialize_value(&f, NULL);
+
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
         jl_array_t *cache_targ = mt->cache_targ;
@@ -1854,13 +1866,14 @@ jl_module_t *jl_restore_new_module(const char *fname)
         }
     }
 
-
     mode = last_mode;
     if (en) jl_gc_enable();
     arraylist_free(&flagref_list);
     arraylist_free(&methtable_list);
     arraylist_free(&backref_list);
     ios_close(&f);
+
+    jl_init_restored_modules();
 
     return (jl_module_t*)b->value;
 }
