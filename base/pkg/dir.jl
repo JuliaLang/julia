@@ -45,11 +45,26 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
             info("Cloning METADATA from $meta")
             run(`git clone -q -b $branch $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
-            run(`touch REQUIRE`)
+            touch("REQUIRE")
+            touch("META_BRANCH")
+            open("META_BRANCH", "w") do io
+                write(io, branch)
+                close(io)
+            end
         end
     catch e
         ispath(dir) && rm(dir, recursive=true)
         rethrow(e)
+    end
+end
+
+function getmetabranch()
+    try
+        open(joinpath(path(),"META_BRANCH")) do io
+          chomp(readuntil(io, "/n"))
+        end
+    catch
+        META_BRANCH
     end
 end
 
