@@ -39,12 +39,12 @@ convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
 
 argtail(x, rest...) = rest
-tupletail(x::Tuple) = argtail(x...)
+tail(x::Tuple) = argtail(x...)
 
 convert(T::(Type, Type...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
+    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
 convert(T::(Any, Any...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
+    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
 
 convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
