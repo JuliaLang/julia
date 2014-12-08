@@ -900,6 +900,7 @@ export
 # random numbers
     AbstractRNG,
     MersenneTwister,
+    globalRNG,
     rand!,
     rand,
     randbool,
