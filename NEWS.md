@@ -509,7 +509,7 @@ Deprecated or removed
 ---------------------
 
   * `convert(Ptr{T1}, x::Array{T2})` is now deprecated unless `T1 == T2`
-    or `T1 == None` ([#6073]).  (You can still explicitly `convert`
+    or `T1 == Void` ([#6073]).  (You can still explicitly `convert`
     one pointer type into another if needed.)
 
   * `Sys.shlib_ext` has been renamed to `Sys.dlext`
