@@ -120,14 +120,19 @@ Library improvements
 
   * `code_native` now outputs branch labels ([#8897]).
 
-  * Streamlined random number generation APIs [#8246]. The default
-    `rand` no longer uses global state in the underlying C library,
-    dSFMT, making it closer to being thread-safe ([#8399],
-    [#8380]). All APIs can now take an `AbstractRNG` argument. There
-    are speed improvements across the board ([#8808], [#8941],
-    [#8958], [#9083]).
+  * Streamlined random number generation APIs [#8246].
+    The default `rand` no longer uses global state in the underlying C library,
+    dSFMT, making it closer to being thread-safe ([#8399], [#8832]).
+    All APIs can now take an `AbstractRNG` argument ([#8854], [#9065]).
+    The APIs accepting a range argument are extended to accept an arbitrary
+    `AbstractArray` ([#9049]).
+    Passing a range of `BigInt` to `rand` or `rand!` is now supported ([#9122]).
+    There are speed improvements across the board ([#8808], [#8941], [#8958], [#9083]).
 
-  * Significantly faster `randn` ([#9126]).
+  * Significantly faster `randn` ([#9126], [#9132]).
+
+  * The `randexp` and `randexp!` functions are exported ([#9144])
+
 
 Deprecated or removed
 ---------------------
@@ -1083,7 +1088,6 @@ Too numerous to mention.
 [#8152]: https://github.com/JuliaLang/julia/issues/8152
 [#8246]: https://github.com/JuliaLang/julia/issues/8246
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
-[#8380]: https://github.com/JuliaLang/julia/issues/8380
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
 [#8501]: https://github.com/JuliaLang/julia/issues/8501
@@ -1100,12 +1104,20 @@ Too numerous to mention.
 [#8808]: https://github.com/JuliaLang/julia/issues/8808
 [#8816]: https://github.com/JuliaLang/julia/issues/8816
 [#8827]: https://github.com/JuliaLang/julia/issues/8827
+[#8832]: https://github.com/JuliaLang/julia/issues/8832
 [#8845]: https://github.com/JuliaLang/julia/issues/8845
+[#8854]: https://github.com/JuliaLang/julia/issues/8854
 [#8867]: https://github.com/JuliaLang/julia/issues/8867
 [#8872]: https://github.com/JuliaLang/julia/issues/8872
 [#8897]: https://github.com/JuliaLang/julia/issues/8897
 [#8905]: https://github.com/JuliaLang/julia/issues/8905
 [#8941]: https://github.com/JuliaLang/julia/issues/8941
 [#8958]: https://github.com/JuliaLang/julia/issues/8958
+[#9049]: https://github.com/JuliaLang/julia/issues/9049
+[#9065]: https://github.com/JuliaLang/julia/issues/9065
 [#9083]: https://github.com/JuliaLang/julia/issues/9083
+[#9122]: https://github.com/JuliaLang/julia/issues/9122
 [#9126]: https://github.com/JuliaLang/julia/issues/9126
+[#9132]: https://github.com/JuliaLang/julia/issues/9132
+[#9133]: https://github.com/JuliaLang/julia/issues/9133
+[#9144]: https://github.com/JuliaLang/julia/issues/9144
