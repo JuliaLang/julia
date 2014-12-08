@@ -79,6 +79,7 @@ DLLEXPORT void gdbbacktrace();
 DLLEXPORT void gdblookup(ptrint_t ip);
 
 char *julia_home = NULL;
+char *julia_image_file = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
                                       0,    // code_coverage
                                       0,    // malloc_log
@@ -806,6 +807,8 @@ void julia_init(char *imageFile)
     jl_init_serializer();
 
     if (!imageFile) {
+        julia_image_file = NULL;
+
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -828,6 +831,8 @@ void julia_init(char *imageFile)
     }
 
     if (imageFile) {
+        julia_image_file = strdup(imageFile);
+
         JL_TRY {
             jl_restore_system_image(imageFile);
         }
@@ -837,6 +842,9 @@ void julia_init(char *imageFile)
             JL_PRINTF(JL_STDERR, "\n");
             jl_exit(1);
         }
+        jl_set_const(jl_core_module, jl_symbol("JULIA_IMAGE_FILE"),
+                     jl_cstr_to_string(julia_image_file));
+        jl_module_export(jl_core_module, jl_symbol("JULIA_IMAGE_FILE"));
     }
 
     // set module field of primitive types
