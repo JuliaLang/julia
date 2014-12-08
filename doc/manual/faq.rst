@@ -873,3 +873,4 @@ Within emacs
 - Go back to the Julia prompt via ``(gdb) c``
 
 - Execute the Julia command you want to see running.
+
