@@ -136,6 +136,7 @@ end
 
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
+    k < 0 && return error("permutation must be a positive number")
     n = length(a)
     n == 0 && return a
     f = factorial(oftype(k, n-1))
