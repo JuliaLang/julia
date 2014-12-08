@@ -142,19 +142,37 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
 
-function squeeze(A::AbstractArray, dims)
-    d = ()
-    for i in 1:ndims(A)
-        if in(i,dims)
-            if size(A,i) != 1
-                error("squeezed dims must all be size 1")
+function nextunsqueezeddim(dims, i)
+    while true
+        squeeze = false
+        for dim in dims
+            if dim == i
+                squeeze && error("squeezed dims must be unique")
+                squeeze = true
             end
-        else
-            d = tuple(d..., size(A,i))
         end
+        !squeeze && return i
+        i += 1
     end
-    reshape(A, d)
 end
+
+stagedfunction squeeze(A::AbstractArray, dims::Dims)
+    n = ndims(A)
+    quote
+        if !($(Expr(:&&, [:(1 <= dims[$i] <= $n) for i = 1:length(dims)]...)))
+            error("squeezed dims must be in range [1, ndims(A)]")
+        elseif !($(Expr(:&&, [:(size(A, dims[$i]) == 1) for i = 1:length(dims)]...)))
+            error("squeezed dims must all be size 1")
+        end
+
+        dim_1 = nextunsqueezeddim(dims, 1)
+        $([:($(symbol("dim_$i")) = nextunsqueezeddim(dims, $(symbol("dim_$(i-1)"))+1)) for i = 2:n-length(dims)]...)
+
+        reshape(A, tuple($([:(size(A, $(symbol("dim_$i")))) for i = 1:n-length(dims)]...)))
+    end
+end
+
+squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (int(dim),))
 
 function copy!(dest::AbstractArray, src)
     i = 1
