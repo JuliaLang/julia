@@ -59,6 +59,18 @@ a = reshape(b, (2, 2, 2, 2, 2))
 @test a[2,1,2,2,1] == b[14]
 @test a[2,2,2,2,2] == b[end]
 
+a = rand(1, 1, 8, 8, 1)
+@test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
+@test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
+@test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
+@test_throws ErrorException squeeze(a, 0)
+@test_throws ErrorException squeeze(a, (1, 1))
+@test_throws ErrorException squeeze(a, (1, 2, 1))
+@test_throws ErrorException squeeze(a, (1, 1, 2))
+@test_throws ErrorException squeeze(a, 3)
+@test_throws ErrorException squeeze(a, 4)
+@test_throws ErrorException squeeze(a, 6)
+
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 @test A[2:6] == [2:6]

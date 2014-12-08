@@ -143,19 +143,31 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
 
-function squeeze(A::AbstractArray, dims)
-    d = ()
-    for i in 1:ndims(A)
-        if in(i,dims)
-            if size(A,i) != 1
-                error("squeezed dims must all be size 1")
-            end
-        else
-            d = tuple(d..., size(A,i))
+argtail(x, rest...) = rest
+tail(x::Tuple) = argtail(x...)
+
+_sub(::(), ::()) = ()
+_sub(t::Tuple, ::()) = t
+_sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
+
+function squeeze(A::AbstractArray, dims::Dims)
+    for i in 1:length(dims)
+        1 <= dims[i] <= ndims(A) || error("squeezed dims must be in range [1, ndims(A)]")
+        size(A, dims[i]) == 1 || error("squeezed dims must all be size 1")
+        for j = 1:i-1
+            dims[j] == dims[i] && error("squeezed dims must be unique")
         end
     end
-    reshape(A, d)
+    d = ()
+    for i = 1:ndims(A)
+        if !in(i, dims)
+            d = tuple(d..., size(A, i))
+        end
+    end
+    reshape(A, d::typeof(_sub(size(A), dims)))
 end
+
+squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (int(dim),))
 
 function copy!(dest::AbstractArray, src)
     i = 1
