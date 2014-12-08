@@ -6,7 +6,8 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
-size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
+size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
+size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
 eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
