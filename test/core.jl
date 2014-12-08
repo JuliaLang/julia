@@ -1648,7 +1648,7 @@ f6426(x,t::(Type...)) = string(t)
 @test f6426(1, (1.,2.)) == "((Float64,Float64),)"
 
 # issue #6502
-f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
+f6502() = convert(Base.tail((Bool,Int...)), (10,))
 @test f6502() === (10,)
 @test convert((Bool,Int...,), (true,10)) === (true,10)
 @test convert((Int,Bool...), (true,1,0)) === (1,true,false)
