@@ -1,7 +1,7 @@
 module Entry
 
 import Base: thispatch, nextpatch, nextminor, nextmajor, check_new_version
-import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub
+import ..Git, ..Reqs, ..Read, ..Query, ..Resolve, ..Cache, ..Write, ..GitHub, ..Dir
 using ..Types
 
 macro recover(ex)
@@ -47,7 +47,7 @@ function add(pkg::AbstractString, vers::VersionSet)
             ispath(pkg) || error("unknown package $pkg")
             info("Nothing to be done")
         end
-        branch = Pkg.META_BRANCH
+        branch = Dir.getmetabranch()
         if Git.branch(dir="METADATA") == branch
             if !Git.success(`diff --quiet origin/$branch`, dir="METADATA")
                 outdated = :yes
