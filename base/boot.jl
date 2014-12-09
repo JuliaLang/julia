@@ -128,7 +128,7 @@ export
     Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
     UInt64, UInt128, Unsigned,
     # string types
-    Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
+    Char, ByteVec, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
     InexactError, InterruptException, MemoryError, OverflowError,
@@ -195,9 +195,19 @@ bitstype 128 UInt128 <: Unsigned
 
 if is(Int,Int64)
     typealias UInt UInt64
+    immutable ByteVec <: DenseArray{UInt8,1}
+        x::Int128
+    end
 else
     typealias UInt UInt32
+    immutable ByteVec <: DenseArray{UInt8,1}
+        x::Int64
+    end
 end
+
+## kind of want this but doesn't work:
+#
+# bitstype 128 ByteVec <: DenseArray{UInt8,1}
 
 abstract Exception
 

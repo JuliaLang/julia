@@ -173,27 +173,32 @@ static Type *jl_ppvalue_llvmt;
 static Type* jl_parray_llvmt;
 static FunctionType *jl_func_sig;
 static Type *jl_pfptr_llvmt;
-static Type *T_int1;
-static Type *T_int8;
+
+static IntegerType *T_int1;
+static IntegerType *T_int8;
+static IntegerType *T_uint8;
+static IntegerType *T_int16;
+static IntegerType *T_uint16;
+static IntegerType *T_int32;
+static IntegerType *T_uint32;
+static IntegerType *T_int64;
+static IntegerType *T_uint64;
+static IntegerType *T_char;
+static IntegerType *T_size;
+
 static Type *T_pint8;
-static Type *T_uint8;
-static Type *T_int16;
 static Type *T_pint16;
-static Type *T_uint16;
-static Type *T_int32;
 static Type *T_pint32;
-static Type *T_uint32;
-static Type *T_int64;
 static Type *T_pint64;
-static Type *T_uint64;
-static Type *T_char;
-static Type *T_size;
 static Type *T_psize;
+
 static Type *T_float32;
 static Type *T_pfloat32;
 static Type *T_float64;
 static Type *T_pfloat64;
 static Type *T_void;
+static Type *T_vec_2word_ints;
+static Type *T_vec_2word_bytes;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
 static MDNode* tbaa_user;           // User data
@@ -4302,6 +4307,9 @@ static void init_julia_llvm_env(Module *m)
     T_float64 = Type::getDoubleTy(getGlobalContext());
     T_pfloat64 = PointerType::get(T_float64, 0);
     T_void = Type::getVoidTy(jl_LLVMContext);
+    // vector types for byte vector code generation
+    T_vec_2word_ints = VectorType::get(T_size, 2);
+    T_vec_2word_bytes = VectorType::get(T_int8, 2*sizeof(void*));
 
     // This type is used to create undef Values which carry
     // metadata.
@@ -4731,6 +4739,7 @@ static void init_julia_llvm_env(Module *m)
     // LoopRotate strips metadata from terminator, so run LowerSIMD afterwards
     FPM->add(createLowerSimdLoopPass());        // Annotate loop marked with "simdloop" as LLVM parallel loop
     FPM->add(createLICMPass());                 // Hoist loop invariants
+    FPM->add(createEarlyCSEPass());             // Common subexpression elimination
     FPM->add(createLoopUnswitchPass());         // Unswitch loops.
     // Subsequent passes not stripping metadata from terminator
 #ifndef INSTCOMBINE_BUG
