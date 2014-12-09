@@ -15,13 +15,20 @@ if [ -z "$ARCH" -a -z "$XC_HOST" ]; then
 elif [ -z "$ARCH" ]; then
   ARCH=`echo $XC_HOST | sed 's/-w64-mingw32//'`
 fi
-if [ "$ARCH" = x86_64 ]; then
-  bits=64
-else
-  bits=32
-fi
+
 echo "" > Make.user
 echo "" > get-deps.log
+# set MARCH for consistency with how binaries get built
+if [ "$ARCH" = x86_64 ]; then
+  bits=64
+  archsuffix=64
+  echo "override MARCH = x86-64" >> Make.user
+else
+  bits=32
+  archsuffix=86
+  echo "override MARCH = i686" >> Make.user
+  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+fi
 
 # Set XC_HOST if in Cygwin or Linux
 case $(uname) in
@@ -54,21 +61,13 @@ case $(uname) in
     ;;
 esac
 
-# set MARCH for consistency with how binaries get built
-if [ "$ARCH" = x86_64 ]; then
-  echo "override MARCH = x86-64" >> Make.user
-else
-  echo "override MARCH = i686" >> Make.user
-  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
-fi
-
 curlflags="curl --retry 10 -k -L -y 5"
 
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
-  f=julia-nightly-win$bits.exe
+  f=julia-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -o $f https://status.julialang.org/download/win$bits
+  $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
