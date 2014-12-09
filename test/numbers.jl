@@ -1330,6 +1330,21 @@ for x = 2^24-10:2^24+10
     @test ceil(Int,y)      == i
 end
 
+# rounding vectors
+let ≈(x,y) = x==y && typeof(x)==typeof(y)
+    for t in [Float32,Float64]
+        # try different vector lengths
+        for n in [0,3,255,256]
+            r = (1:n)-div(n,2)
+            y = t[x/4 for x in r]
+            @test trunc(y) ≈ t[div(i,4) for i in r]
+            @test round(y) ≈ t[(i+1+(i>=0))>>2 for i in r]
+            @test floor(y) ≈ t[i>>2 for i in r]
+            @test ceil(y)  ≈ t[(i+3)>>2 for i in r]
+        end
+    end
+end
+
 @test_throws InexactError round(Int,Inf)
 @test_throws InexactError round(Int,NaN)
 @test round(Int,2.5) == 3

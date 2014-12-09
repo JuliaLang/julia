@@ -1306,6 +1306,22 @@ Dequeues
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
+Nullables
+---------
+
+.. function:: get(x)
+
+   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
+   value if it is present; otherwise, throws a ``NullException``.
+
+.. function:: get(x, y)
+
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
+   the value if it is present; otherwise, returns ``convert(T, y)``.
+
+.. function:: isnull(x)
+
+   Does the ``Nullable`` object ``x`` have a value or not?
 
 Strings
 -------
@@ -3216,7 +3232,7 @@ Mathematical Functions
 .. function:: trunc([T,] x, [digits, [base]])
 
    ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
-   value is less than or equal to ``x``. 
+   value is less than or equal to ``x``.
 
    ``trunc(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
@@ -3228,7 +3244,7 @@ Mathematical Functions
    ``unsafe_trunc(T, x)`` returns the nearest integral value of type ``T`` whose absolute
    value is less than or equal to ``x``. If the value is not representable by
    ``T``, an arbitrary value will be returned.
-   
+
 .. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
@@ -4453,21 +4469,22 @@ Indexing, Assignment, and Concatenation
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
    or ``0`` if not found.
 
-.. function:: permutedims(A,perm)
+.. function:: permutedims(A, perm)
 
-   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A,[2,1])``.
+   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A, [2,1])``.
 
-.. function:: ipermutedims(A,perm)
+.. function:: ipermutedims(A, perm)
 
    Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
-.. function:: permutedims!(dest,src,perm)
+.. function:: permutedims!(dest, src, perm)
 
-   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest)=size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
 
 .. function:: squeeze(A, dims)
 
-   Remove the dimensions specified by ``dims`` from array ``A``
+   Remove the dimensions specified by ``dims`` from array ``A``. Elements of
+   ``dims`` must be unique and within the range ``1:ndims(A)``.
 
 .. function:: vec(Array) -> Vector
 

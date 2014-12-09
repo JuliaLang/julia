@@ -148,5 +148,5 @@ adopt the following conventions:
   underscores.
 - Functions that write to their arguments have names that end in ``!``. 
   These are sometimes called "mutating" or "in-place" functions because
-  their results include changes in their arguments after the
-  function is called, not just the return value.
+  they are intended to produce changes in their arguments after the
+  function is called, not just return a value.
