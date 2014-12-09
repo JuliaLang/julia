@@ -247,3 +247,5 @@ const Uint128 = UInt128
 @deprecate givens{T}(f::T, g::T, i1::Integer, i2::Integer, cols::Integer)   givens(f, g, i1, i2)
 
 @deprecate squeeze(X, dims) squeeze(X, tuple(dims...))
+
+@deprecate sizehint(A, n) sizehint!(A, n)

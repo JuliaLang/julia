@@ -14,7 +14,7 @@ copy(s::IntSet) = union!(IntSet(), s)
 
 eltype(s::IntSet) = Int64
 
-function sizehint(s::IntSet, top::Integer)
+function sizehint!(s::IntSet, top::Integer)
     if top >= s.limit
         lim = ((top+31) & -32)>>>5
         olsz = length(s.bits)
@@ -34,7 +34,7 @@ function push!(s::IntSet, n::Integer)
             return s
         else
             lim = int(n + div(n,2))
-            sizehint(s, lim)
+            sizehint!(s, lim)
         end
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
@@ -54,7 +54,7 @@ function pop!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
             lim = int(n + div(n,2))
-            sizehint(s, lim)
+            sizehint!(s, lim)
         else
             return deflt
         end
@@ -101,7 +101,7 @@ end
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
         lim = int(n + dim(n,2))
-        sizehint(s, lim)
+        sizehint!(s, lim)
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
     end
@@ -196,7 +196,7 @@ end
 # Math functions
 function union!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        sizehint(s, s2.limit)
+        sizehint!(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -217,7 +217,7 @@ union(s1::IntSet, ss::IntSet...) = union(s1, union(ss...))
 
 function intersect!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        sizehint(s, s2.limit)
+        sizehint!(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim
@@ -249,7 +249,7 @@ complement(s::IntSet) = complement!(copy(s))
 
 function symdiff!(s::IntSet, s2::IntSet)
     if s2.limit > s.limit
-        sizehint(s, s2.limit)
+        sizehint!(s, s2.limit)
     end
     lim = length(s2.bits)
     for n = 1:lim

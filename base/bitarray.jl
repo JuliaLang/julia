@@ -510,7 +510,7 @@ end
 prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, bitpack(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, bitunpack(items))
 
-function sizehint(B::BitVector, sz::Integer)
+function sizehint!(B::BitVector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(sz))
     return B
 end
