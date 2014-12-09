@@ -196,9 +196,9 @@ static Type *T_pfloat64;
 static Type *T_void;
 
 // type-based alias analysis nodes.  Indentation of comments indicates hierarchy.
-static MDNode* tbaa_user;           // User data
+static MDNode* tbaa_user;           // User data that is mutable
+static MDNode* tbaa_immut;          // User data inside a heap-allocated immutable
 static MDNode* tbaa_value;          // Julia value
-static MDNode* tbaa_immut;          // Data inside a heap-allocated immutable
 static MDNode* tbaa_array;              // Julia array
 static MDNode* tbaa_arrayptr;               // The pointer inside a jl_array_t
 static MDNode* tbaa_arraysize;              // A size in a jl_array_t
