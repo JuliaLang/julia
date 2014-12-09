@@ -147,6 +147,6 @@ adopt the following conventions:
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.
 - Functions that write to their arguments have names that end in ``!``. 
-  These are sometimes called "mutating" or "in-place" functions, because
+  These are sometimes called "mutating" or "in-place" functions because
   their results include changes in their arguments after the
   function is called, not just the return value.
