@@ -917,3 +917,16 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
+#6828 - size of specific dimensions
+a = Array(Float64, 10)
+@test size(a) == (10,)
+@test size(a, 1) == 10
+@test size(a,2,1) == (1,10)
+a = Array(Float64, 2,3)
+@test size(a) == (2,3)
+@test size(a,4,3,2,1) == (1,1,3,2)
+@test size(a,1,2) == (2,3)
+a = Array(Float64, 9,8,7,6,5,4,3,2,1)
+@test size(a,1,1) == (9,9)
+@test size(a,4) == 6
+@test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)

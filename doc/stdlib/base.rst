@@ -4141,9 +4141,17 @@ Basic functions
 
    Returns the number of dimensions of A
 
-.. function:: size(A)
+.. function:: size(A, [dim...])
 
-   Returns a tuple containing the dimensions of A
+   Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.::
+
+    julia> A = rand(2,3,4);
+
+    julia> size(A, 2)
+    3
+
+    julia> size(A,3,2)
+    (4,3)
 
 .. function:: iseltype(A,T)
 
