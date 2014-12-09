@@ -8,10 +8,53 @@ export srand,
        randn, randn!,
        randexp, randexp!,
        randbool,
-       AbstractRNG, RNG, MersenneTwister
+       AbstractRNG, RNG, MersenneTwister, RandomDevice
 
 
 abstract AbstractRNG
+
+abstract FloatInterval
+type CloseOpen <: FloatInterval end
+type Close1Open2 <: FloatInterval end
+
+
+## RandomDevice
+
+@unix_only begin
+
+    immutable RandomDevice <: AbstractRNG
+        file::IOStream
+
+        RandomDevice(unlimited::Bool=true) = new(open(unlimited ? "/dev/urandom" : "/dev/random"))
+    end
+
+    rand {T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice,  ::Type{T})  = read( rd.file, T)
+    rand!{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, A::Array{T}) = read!(rd.file, A)
+end
+
+@windows_only begin
+
+    immutable RandomDevice <: AbstractRNG
+        buffer::Vector{UInt128}
+
+        RandomDevice() = new(Array(UInt128, 1))
+    end
+
+    function rand{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, ::Type{T})
+        win32_SystemFunction036!(rd.buffer)
+        @inbounds return rd.buffer[1] % T
+    end
+
+    rand!{T<:Union(Bool, Base.IntTypes...)}(rd::RandomDevice, A::Array{T}) = (win32_SystemFunction036!(A); A)
+end
+
+rand(rng::RandomDevice, ::Type{Close1Open2}) =
+    reinterpret(Float64, 0x3ff0000000000000 | rand(rng, UInt64) & 0x000fffffffffffff)
+
+rand(rng::RandomDevice, ::Type{CloseOpen}) = rand(rng, Close1Open2) - 1.0
+
+
+## MersenneTwister
 
 const MTCacheLength = dsfmt_get_min_array_size()
 
@@ -44,10 +87,6 @@ end
 # precondition: n <= MTCacheLength
 @inline reserve(r::MersenneTwister, n::Int) = mt_avail(r) < n && gen_rand(r)
 
-abstract FloatInterval
-type CloseOpen <: FloatInterval end
-type Close1Open2 <: FloatInterval end
-
 # precondition: !mt_empty(r)
 @inline rand_inbounds(r::MersenneTwister, ::Type{Close1Open2}) = mt_pop!(r)
 @inline rand_inbounds(r::MersenneTwister, ::Type{CloseOpen}) = rand_inbounds(r, Close1Open2) - 1.0
@@ -78,10 +117,8 @@ __init__() = srand()
 # make_seed methods produce values of type Array{UInt32}, suitable for MersenneTwister seeding
 
 function make_seed()
-
-@unix_only begin
     try
-        return make_seed("/dev/urandom", 4)
+        return rand(RandomDevice(), UInt32, 4)
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
@@ -91,13 +128,6 @@ function make_seed()
         end
         return make_seed(seed)
     end
-end
-
-@windows_only begin
-    a = zeros(UInt32, 2)
-    win32_SystemFunction036!(a)
-    return a
-end
 end
 
 function make_seed(n::Integer)
@@ -174,9 +204,9 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert((Int...),
 
 @inline rand(r::AbstractRNG) = rand(r, CloseOpen)
 
-# MersenneTwister
-rand(r::MersenneTwister, ::Type{Float64}) = rand(r, CloseOpen)
-rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, Float64))
+# MersenneTwister & RandomDevice
+@inline rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float64}) = rand(r, CloseOpen)
+rand{T<:Union(Float16, Float32)}(r::Union(RandomDevice,MersenneTwister), ::Type{T}) = convert(T, rand(r, Float64))
 
 ## random integers
 
