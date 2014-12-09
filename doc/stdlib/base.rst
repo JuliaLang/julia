@@ -1144,7 +1144,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Update collection with pairs from the other collections
 
-.. function:: sizehint(s, n)
+.. function:: sizehint!(s, n)
 
    Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
 

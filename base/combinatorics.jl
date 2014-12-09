@@ -331,7 +331,7 @@ function nextpartition(n, as)
     if isempty(as);  return Int[n];  end
 
     xs = similar(as,0)
-    sizehint(xs,length(as)+1)
+    sizehint!(xs,length(as)+1)
 
     for i = 1:length(as)-1
         if as[i+1] == 1

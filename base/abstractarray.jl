@@ -1401,7 +1401,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
     empty!(S)
     p == 0 && return S
     nexpected = p * length(A)
-    sizehint(S, round(Int,nexpected + 5*sqrt(nexpected)))
+    sizehint!(S, round(Int,nexpected + 5*sqrt(nexpected)))
     if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
         for i = 1:n
             rand() <= p && push!(S, A[i])

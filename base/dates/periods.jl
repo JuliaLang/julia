@@ -148,7 +148,7 @@ type CompoundPeriod <: AbstractTime
         end
         # canonicalize Period values so that 0 < ms < 1000 etcetera.
         if n > 0
-            pc = sizehint(Period[], n)
+            pc = sizehint!(Period[], n)
             P = typeof(p[n])
             v = value(p[n])
             i = n - 1
