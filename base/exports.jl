@@ -779,7 +779,7 @@ export
     setdiff,
     setindex!,
     similar,
-    sizehint,
+    sizehint!,
     splice!,
     symdiff!,
     symdiff,

@@ -364,8 +364,8 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
     N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
 
     I, J = Array(Int, 0), Array(Int, 0) # indices of nonzero elements
-    sizehint(I, int(N*density))
-    sizehint(J, int(N*density))
+    sizehint!(I, int(N*density))
+    sizehint!(J, int(N*density))
 
     # density of nonzero columns:
     L = log1p(-density)

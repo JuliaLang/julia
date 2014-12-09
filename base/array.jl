@@ -506,7 +506,7 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
-function sizehint(a::Vector, sz::Integer)
+function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
 end

@@ -173,7 +173,7 @@ d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
 d4[1001] = randstring(3)
 @test !isequal(d1, d4)
 
-@test isequal(Dict(), sizehint(Dict(),96))
+@test isequal(Dict(), sizehint!(Dict(),96))
 
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are
@@ -512,7 +512,7 @@ s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 @test_throws ErrorException first(IntSet())
 @test_throws ErrorException last(IntSet())
 t = copy(s)
-sizehint(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
+sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
 @test hash(s) == hash(t)
 @test hash(complement(s)) == hash(complement(t))
 
