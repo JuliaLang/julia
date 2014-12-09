@@ -208,17 +208,17 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 
 static arraylist_t preserved_values;
 
-int jl_gc_n_preserved_values(void)
+DLLEXPORT int jl_gc_n_preserved_values(void)
 {
     return preserved_values.len;
 }
 
-void jl_gc_preserve(jl_value_t *v)
+DLLEXPORT void jl_gc_preserve(jl_value_t *v)
 {
     arraylist_push(&preserved_values, (void*)v);
 }
 
-void jl_gc_unpreserve(void)
+DLLEXPORT void jl_gc_unpreserve(void)
 {
     (void)arraylist_pop(&preserved_values);
 }
