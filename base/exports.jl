@@ -901,6 +901,7 @@ export
 # random numbers
     AbstractRNG,
     MersenneTwister,
+    RandomDevice,
     rand!,
     rand,
     randbool,
