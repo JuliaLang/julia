@@ -149,6 +149,11 @@ Deprecated or removed
   `trunc{T<:Integer}(T,x)`, `floor{T<:Integer}(T,x)`, etc.. `trunc` is now
   always bound-checked;`Base.unsafe_trunc` provides the old unchecked `itrunc`
   behaviour ([#9133]).
+ 
+  * `squeeze` now requires that passed dimension(s) are an `Int` or tuple of `Int`s;
+    calling `squeeze` with an arbitrary iterator is deprecated ([#9271]).
+    Additionally, passed dimensions must be unique and correspond to extant
+    dimensions of the input array.
   
 
 Julia v0.3.0 Release Notes
@@ -1121,3 +1126,4 @@ Too numerous to mention.
 [#9132]: https://github.com/JuliaLang/julia/issues/9132
 [#9133]: https://github.com/JuliaLang/julia/issues/9133
 [#9144]: https://github.com/JuliaLang/julia/issues/9144
+[#9271]: https://github.com/JuliaLang/julia/issues/9271
