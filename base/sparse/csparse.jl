@@ -235,7 +235,7 @@ function etree{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, postorder::Bool)
         head[parent[j]] = j
     end
     stack = Ti[]
-    sizehint(stack, n)
+    sizehint!(stack, n)
     post = zeros(Ti,n)
     k = 1
     for j in 1:n
@@ -263,7 +263,7 @@ etree(A::SparseMatrixCSC) = etree(A, false)
 # based on cs_ereach p. 43, "Direct Methods for Sparse Linear Systems"
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval
-    s = Ti[]; sizehint(s, n)            # to be used as a stack
+    s = Ti[]; sizehint!(s, n)            # to be used as a stack
     visited = falses(n)
     visited[k] = true
     for p in Ap[k]:(Ap[k+1] - 1)
