@@ -71,7 +71,6 @@ show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 
-eltype(::AbstractString) = Char
 eltype{T<:AbstractString}(::Type{T}) = Char
 
 (*)(s::AbstractString...) = string(s...)

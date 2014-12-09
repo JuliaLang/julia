@@ -315,10 +315,10 @@ type CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
     x::Vector{Tv}
 end
 
-eltype{T<:CHMVTypes}(A::CholmodDense{T}) = T
-eltype{T<:CHMVTypes}(A::CholmodFactor{T}) = T
-eltype{T<:CHMVTypes}(A::CholmodSparse{T}) = T
-eltype{T<:CHMVTypes}(A::CholmodTriplet{T}) = T
+eltype{T<:CHMVTypes}(::Type{CholmodDense{T}}) = T
+eltype{T<:CHMVTypes}(::Type{CholmodFactor{T}}) = T
+eltype{T<:CHMVTypes}(::Type{CholmodSparse{T}}) = T
+eltype{T<:CHMVTypes}(::Type{CholmodTriplet{T}}) = T
 
 ## The CholmodDense! constructor does not copy the contents, which is generally what you
 ## want as most uses of CholmodDense objects are read-only.

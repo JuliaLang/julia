@@ -2,7 +2,7 @@
 
 abstract Factorization{T}
 
-eltype{T}(F::Factorization{T}) = T
+eltype{T}(::Type{Factorization{T}}) = T
 transpose(F::Factorization) = error("transpose not implemented for $(typeof(F))")
 ctranspose(F::Factorization) = error("ctranspose not implemented for $(typeof(F))")
 
