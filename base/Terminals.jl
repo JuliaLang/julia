@@ -32,7 +32,8 @@ import Base:
     stop_reading,
     write,
     writemime,
-    reseteof
+    reseteof,
+    eof
 
 ## TextTerminal ##
 
@@ -193,6 +194,7 @@ readuntil(t::UnixTerminal, s) = readuntil(t.in_stream, s)
 read(t::UnixTerminal, ::Type{UInt8}) = read(t.in_stream, UInt8)
 start_reading(t::UnixTerminal) = start_reading(t.in_stream)
 stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
+eof(t::UnixTerminal) = eof(t.in_stream)
 
 @unix_only hascolor(t::TTYTerminal) = (beginswith(t.term_type, "xterm") || success(`tput setaf 0`))
 @windows_only hascolor(t::TTYTerminal) = true

@@ -737,6 +737,9 @@ end
 match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
 match_input(k::Void, s, term, cs) = (s,p) -> return :ok
 function match_input(keymap::Dict, s, term=terminal(s), cs=Char[])
+    # if we run out of characters to match before resolving an action,
+    # return an empty keymap function
+    eof(term) && return keymap_fcn(nothing, s, "")
     c = read(term, Char)
     push!(cs, c)
     k = haskey(keymap, c) ? c : '\0'
