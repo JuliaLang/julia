@@ -1562,7 +1562,7 @@ Any[
 
 "),
 
-("Base","sizehint","sizehint(s, n)
+("Base","sizehint!","sizehint!(s, n)
 
    Suggest that collection \"s\" reserve capacity for at least \"n\"
    elements. This can improve performance.
@@ -5922,9 +5922,20 @@ popdisplay(d::Display)
 
 "),
 
-("Base","size","size(A)
+("Base","size","size(A[, dim...])
 
-   Returns a tuple containing the dimensions of A
+   Returns a tuple containing the dimensions of A. Optionally you can
+   specify the dimension(s) you want the length of, and get the length
+   of that dimension, or a tuple of the lengths of dimensions you
+   asked for.:
+
+      julia> A = rand(2,3,4);
+
+      julia> size(A, 2)
+      3
+
+      julia> size(A,3,2)
+      (4,3)
 
 "),
 
