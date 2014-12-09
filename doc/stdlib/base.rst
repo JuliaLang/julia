@@ -4469,21 +4469,22 @@ Indexing, Assignment, and Concatenation
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
    or ``0`` if not found.
 
-.. function:: permutedims(A,perm)
+.. function:: permutedims(A, perm)
 
-   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A,[2,1])``.
+   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A, [2,1])``.
 
-.. function:: ipermutedims(A,perm)
+.. function:: ipermutedims(A, perm)
 
    Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
-.. function:: permutedims!(dest,src,perm)
+.. function:: permutedims!(dest, src, perm)
 
-   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest)=size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
 
 .. function:: squeeze(A, dims)
 
-   Remove the dimensions specified by ``dims`` from array ``A``
+   Remove the dimensions specified by ``dims`` from array ``A``. Elements of
+   ``dims`` must be unique and be within the interval ``[1, ndims(A)]``.
 
 .. function:: vec(Array) -> Vector
 
