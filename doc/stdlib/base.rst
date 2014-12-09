@@ -4484,7 +4484,7 @@ Indexing, Assignment, and Concatenation
 .. function:: squeeze(A, dims)
 
    Remove the dimensions specified by ``dims`` from array ``A``. Elements of
-   ``dims`` must be unique and be within the interval ``[1, ndims(A)]``.
+   ``dims`` must be unique and within the range ``1:ndims(A)``.
 
 .. function:: vec(Array) -> Vector
 
