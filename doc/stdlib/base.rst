@@ -1306,6 +1306,22 @@ Dequeues
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
+Nullables
+---------
+
+.. function:: get(x)
+
+   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
+   value if it is present; otherwise, throws a ``NullException``.
+
+.. function:: get(x, y)
+
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
+   the value if it is present; otherwise, returns ``convert(T, y)``.
+
+.. function:: isnull(x)
+
+   Does the ``Nullable`` object ``x`` have a value or not?
 
 Strings
 -------
@@ -3216,7 +3232,7 @@ Mathematical Functions
 .. function:: trunc([T,] x, [digits, [base]])
 
    ``trunc(x)`` returns the nearest integral value of the same type as ``x`` whose absolute
-   value is less than or equal to ``x``. 
+   value is less than or equal to ``x``.
 
    ``trunc(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
@@ -3228,7 +3244,7 @@ Mathematical Functions
    ``unsafe_trunc(T, x)`` returns the nearest integral value of type ``T`` whose absolute
    value is less than or equal to ``x``. If the value is not representable by
    ``T``, an arbitrary value will be returned.
-   
+
 .. function:: signif(x, digits, [base])
 
    Rounds (in the sense of ``round``) ``x`` so that there are ``digits`` significant digits, under a base ``base`` representation, default 10. E.g., ``signif(123.456, 2)`` is ``120.0``, and ``signif(357.913, 4, 2)`` is ``352.0``.
