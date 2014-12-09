@@ -104,7 +104,7 @@ extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
-uint64_t jl_sysimage_base = NULL;
+uint64_t jl_sysimage_base = 0;
 #ifdef _OS_WINDOWS_
 #include <dbghelp.h>
 #endif

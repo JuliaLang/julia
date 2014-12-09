@@ -166,7 +166,7 @@ end
 
 function latex_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[slashpos-1]=='\\'))
+    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[prevind(string, slashpos)]=='\\'))
         # latex symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
@@ -188,7 +188,7 @@ function completions(string, pos)
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
-        startpos = length(partial) - (m == nothing ? 1 : m.offset) + 2
+        startpos = nextind(partial, endof(partial)) - m.offset + 1
         r = startpos:pos
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
