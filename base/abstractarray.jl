@@ -143,9 +143,6 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
 
-argtail(x, rest...) = rest
-tail(x::Tuple) = argtail(x...)
-
 _sub(::(), ::()) = ()
 _sub(t::Tuple, ::()) = t
 _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
