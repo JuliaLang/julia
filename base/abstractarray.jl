@@ -149,7 +149,7 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
-        1 <= dims[i] <= ndims(A) || error("squeezed dims must be in range [1, ndims(A)]")
+        1 <= dims[i] <= ndims(A) || error("squeezed dims must be in range 1:ndims(A)")
         size(A, dims[i]) == 1 || error("squeezed dims must all be size 1")
         for j = 1:i-1
             dims[j] == dims[i] && error("squeezed dims must be unique")
