@@ -7,7 +7,7 @@ end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 
-eltype{T}(s::Set{T}) = T
+eltype{T}(::Type{Set{T}}) = T
 similar{T}(s::Set{T}) = Set{T}()
 
 function show(io::IO, s::Set)

@@ -170,6 +170,11 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 
 sizeof(x) = Core.sizeof(x)
 
+eltype(::Type) = Any
+eltype(::Type{Any}) = Any
+eltype(t::DataType) = eltype(super(t))
+eltype(x) = eltype(typeof(x))
+
 # copying immutable things
 copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x

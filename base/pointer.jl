@@ -58,7 +58,7 @@ pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 integer(x::Ptr) = convert(UInt, x)
 unsigned(x::Ptr) = convert(UInt, x)
 
-eltype{T}(::Ptr{T}) = T
+eltype{T}(::Type{Ptr{T}}) = T
 
 ## limited pointer arithmetic & comparison ##
 

@@ -16,6 +16,7 @@ end
 done(e::Enumerate, state) = done(e.itr, state[2])
 
 eltype(e::Enumerate) = (Int, eltype(e.itr))
+eltype{I}(::Type{Enumerate{I}}) = (Int, eltype(I))
 
 # zip
 
