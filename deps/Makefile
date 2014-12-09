@@ -1139,7 +1139,6 @@ arpack-ng-$(ARPACK_VER).tar.gz:
 arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
-	( cd arpack-ng-$(ARPACK_VER) && patch -p1 < ../arpack.xlahqr2.patch )
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
