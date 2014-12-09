@@ -864,7 +864,6 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
-	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-symbol-rename.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
