@@ -292,12 +292,12 @@ permutations(a) = Permutations(a)
 
 start(p::Permutations) = [1:length(p.a)]
 function next(p::Permutations, s)
+    perm = p.a[s]
     if length(p.a) == 0
         # special case to generate 1 result for len==0
-        return (p.a,[1])
+        return (perm,[1])
     end
     s = copy(s)
-    perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
     if k == 0
