@@ -11,6 +11,10 @@ end
 
 Nullable{T}(value::T) = Nullable{T}(value)
 
+eltype{T}(::Type{Nullable{T}}) = T
+
+eltype{T}(x::Nullable{T}) = T
+
 function convert{S, T}(::Type{Nullable{T}}, x::Nullable{S})
     return isnull(x) ? Nullable{T}() : Nullable(convert(T, get(x)))
 end

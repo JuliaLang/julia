@@ -19,6 +19,8 @@ for T in types
     x = Nullable{T}()
     @test x.isnull === true
     @test isa(x.value, T)
+    @test eltype(Nullable{T}) === T
+    @test eltype(x) === T
 end
 
 # Nullable{T}(value::T) = new(false, value)
@@ -27,11 +29,13 @@ for T in types
     @test x.isnull === false
     @test isa(x.value, T)
     @test x.value === zero(T)
+    @test eltype(x) === T
 
     x = Nullable{T}(one(T))
     @test x.isnull === false
     @test isa(x.value, T)
     @test x.value === one(T)
+    @test eltype(x) === T
 end
 
 # immutable NullException <: Exception
