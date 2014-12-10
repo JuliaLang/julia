@@ -2514,6 +2514,9 @@ function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
     if popmeta!(body, :inline)[1]
         return true
     end
+    if popmeta!(body, :noinline)[1]
+        return false
+    end
     symlim = 1+5/cost
     if length(body.args) < symlim
         symlim *= 16
