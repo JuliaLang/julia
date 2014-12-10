@@ -322,6 +322,8 @@ Do not move back beyond position MIN."
 (defun julia-last-open-block (min)
   "Move back and return indentation level for last open block.
 Do not move back beyond MIN."
+  ;; Ensure MIN is not before the start of the buffer.
+  (setq min (max min (point-min)))
   (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
@@ -334,12 +336,26 @@ beginning of the buffer."
   (unless (eq (point) (point-min))
     (backward-char)))
 
+(defvar julia-max-paren-lookback 400
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed parens.
+
+This variable has a major effect on indent performance if set too
+high.")
+
+(defvar julia-max-block-lookback 5000
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed blocks.
+
+This variable has a moderate effect on indent performance if set too
+high.")
+
 (defun julia-paren-indent ()
   "Return the column position of the innermost containing paren
 before point. Returns nil if we're not within nested parens."
   (save-excursion
-    (let ((min-pos (or (julia-last-open-block-pos (point-min))
-                       (point-min)))
+    (let ((min-pos (max (- (point) julia-max-paren-lookback)
+                        (point-min)))
           (open-count 0))
       (while (and (> (point) min-pos)
                   (not (plusp open-count)))
@@ -383,7 +399,7 @@ before point. Returns nil if we're not within nested parens."
         (beginning-of-line)
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords)))
-          (ignore-errors (+ (julia-last-open-block (point-min))
+          (ignore-errors (+ (julia-last-open-block (- (point) julia-max-block-lookback))
                             (if endtok (- julia-basic-offset) 0)))))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
