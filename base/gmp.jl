@@ -52,7 +52,7 @@ _gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
 
 function __init__()
-    if gmp_version() != GMP_VERSION || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
+    if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
         error(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
                      "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
                      "Please rebuild Julia."))
