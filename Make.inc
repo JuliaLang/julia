@@ -6,6 +6,7 @@
 
 # OPENBLAS build options
 OPENBLAS_TARGET_ARCH=
+OPENBLAS_SYMBOLSUFFIX=
 
 # If OPENBLAS_TARGET_ARCH is set, we default to disabling OPENBLAS_DYNAMIC_ARCH
 ifneq ($(OPENBLAS_TARGET_ARCH),)
@@ -750,6 +751,13 @@ LIBBLAS = -L$(ATLAS_LIBDIR) -lsatlas
 LIBLAPACK = $(LIBBLAS)
 LIBBLASNAME = libsatlas
 LIBLAPACKNAME = $(LIBBLASNAME)
+endif
+
+# Renaming OpenBLAS symbols, see #4923 and #8734
+ifeq ($(USE_SYSTEM_BLAS), 0)
+ifeq ($(USE_BLAS64), 1)
+OPENBLAS_SYMBOLSUFFIX = 64_
+endif
 endif
 
 # Custom libcxx
