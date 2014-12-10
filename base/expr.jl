@@ -70,6 +70,13 @@ end
 _inline(ex::Expr) = pushmeta!(ex, :inline)
 _inline(arg) = arg
 
+macro noinline(ex)
+    esc(_noinline(ex))
+end
+
+_noinline(ex::Expr) = pushmeta!(ex, :noinline)
+_noinline(arg) = arg
+
 ## some macro utilities ##
 
 find_vars(e) = find_vars(e, [])

@@ -1,10 +1,12 @@
 macro deprecate(old,new)
+    meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
+                  $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
                           $oldname)
                   $(esc(new))(args...)
@@ -23,6 +25,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(oldsym)),
             :($(esc(old)) = begin
+                  $meta
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
                           $oldname)
                   $(esc(new))
