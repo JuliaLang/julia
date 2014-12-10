@@ -39,7 +39,7 @@ size(p::CTPlan) = (p.n,)
 
 # unscaled inverse:
 invCT{T,forward,Tt,Tn}(p::CTPlan{T,forward,Tt,Tn}) =
-    CTPlan{T,!forward,Tt,Tn}(p.n, map(inv, p.tsteps), inv(p.nstep))
+    CTPlan{T,!forward,Tuple{map(inv,Tt.parameters)...},inv(Tn)}(p.n, map(inv, p.tsteps), inv(p.nstep))
 
 plan_inv{T}(p::CTPlan{T}) =
     ScaledPlan(invCT(p), normalization(real(T), p.n, 1))
@@ -62,6 +62,8 @@ applystep{T}(ts::TwiddleKernelStep{T}, y::AbstractArray{T}, y0, ys) =
     applystep(ts, ts.m, y, y0, ts.m * ys, ys, ts.W)
 inv{T,r,forward}(ts::TwiddleKernelStep{T,r,forward}) =
     TwiddleKernelStep{T,r,!forward}(ts.m, ts.W)
+inv{T,r,forward}(::Type{TwiddleKernelStep{T,r,forward}}) =
+    TwiddleKernelStep{T,r,!forward}
 show{T,r}(io::IO, ts::TwiddleKernelStep{T,r}) = print(io, "radix ", r)
 
 immutable NontwiddleKernelStep{T,n,forward} <: NontwiddleStep{T} end
@@ -72,6 +74,8 @@ applystep{T,n}(ns::NontwiddleKernelStep{T,n}, r::Integer,
     applystep(ns, r, x,x0,xs*r,xs, y,y0,ys,ys*n)
 inv{T,n,forward}(ns::NontwiddleKernelStep{T,n,forward}) =
     NontwiddleKernelStep{T,n,!forward}()
+inv{T,n,forward}(::Type{NontwiddleKernelStep{T,n,forward}}) =
+    NontwiddleKernelStep{T,n,!forward}
 show{T,n}(io::IO, ns::NontwiddleKernelStep{T,n}) =
     print(io, "size ", n, " kernel")
 
@@ -80,6 +84,7 @@ immutable NullNontwiddleStep{T} <: NontwiddleStep{T} end
 applystep(::NullNontwiddleStep, r, x, x0, xs, y, y0, ys) = nothing
 show(io::IO, ::NullNontwiddleStep) = print(io, "null transform")
 inv(s::NullNontwiddleStep) = s
+inv(::Type{NullNontwiddleStep}) = NullNontwiddleStep
 CTPlan(T,forward) =
     CTPlan{T,forward,(),NullNontwiddleStep{T}}(0, (), NullNontwiddleStep{T}())
 
@@ -96,7 +101,7 @@ function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
     @assert m == factors[end]
     tsteps_ = tuple(tsteps...)
     nt = Nontwiddle(T, m, forward)
-    CTPlan{T,forward,map(typeof,tsteps_),typeof(nt)}(n, tsteps_, nt)
+    CTPlan{T,forward,Tuple{map(typeof,tsteps_)...},typeof(nt)}(n, tsteps_, nt)
 end
 
 plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
@@ -359,7 +364,7 @@ end
 function bluestein_b(T, forward, n, n2)
     b = zeros(T, n2)
     Tr = promote_type(Float64, real(T))
-    pi_n = forward ? π/convert(Tr,n) : -π/convert(Tr,n)
+    pi_n = forward ? π/convert(Tr,n) : -(π/convert(Tr,n))
     # embed inverse-DFT scaling factor 1/n2 in b array:
     scale = inv(cbrt(convert(Tr,n2)))
     b[1] = scale
@@ -397,6 +402,7 @@ length(s::NontwiddleBluesteinStep) = s.n
 
 inv{T}(s::NontwiddleBluesteinStep{T}) =
     NontwiddleBluesteinStep{T}(s.n, !s.forward)
+inv{T}(S::Type{NontwiddleBluesteinStep{T}}) = S
 
 show(io::IO, s::NontwiddleBluesteinStep) =
     print(io, "size ", s.n, " Bluestein-", s.n2)
@@ -475,6 +481,7 @@ show(io::IO, s::TwiddleBluesteinStep) =
 
 inv{T}(s::TwiddleBluesteinStep{T}) =
     TwiddleBluesteinStep{T}(s.r*s.m, s.r, !s.forward)
+inv{T}(S::Type{TwiddleBluesteinStep{T}}) = S
 
 function applystep{T}(ts::TwiddleBluesteinStep{T}, y::AbstractArray{T}, y0,ys)
     W = ts.W
