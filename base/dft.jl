@@ -7,6 +7,7 @@ import Base: show, summary, size, ndims, length, eltype,
              *, A_mul_B!, inv, \, A_ldiv_B!
 
 eltype{T}(::Plan{T}) = T
+eltype{P<:Plan}(T::Type{P}) = T.parameters[1]
 
 # size(p) should return the size of the input array for p
 size(p::Plan, d) = size(p)[d]
@@ -110,7 +111,10 @@ plan_ifft(x::AbstractArray, region; kws...) =
 plan_ifft!(x::AbstractArray, region; kws...) =
     ScaledPlan(plan_bfft!(x, region; kws...), normalization(x, region))
 
-plan_inv(p::ScaledPlan) = ScaledPlan(plan_inv(p), inv(p.scale))
+plan_inv(p::ScaledPlan) = ScaledPlan(plan_inv(p.p), inv(p.scale))
+
+A_mul_B!(y::AbstractArray, p::ScaledPlan, x::AbstractArray) =
+    scale!(p.scale, A_mul_B!(y, p.p, x))
 
 ##############################################################################
 # Real-input DFTs are annoying because the output has a different size

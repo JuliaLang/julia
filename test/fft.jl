@@ -288,3 +288,23 @@ for n in [1:32]
     x = zeros(Complex{BigFloat}, n)
     fft_test(plan_fft(x))
 end
+
+# test inversion, scaling, and pre-allocated variants
+for T in (Complex128, Complex{BigFloat})
+    for x in (T[1:100], reshape(T[1:200], 20,10))
+        y = similar(x)
+        for planner in (plan_fft, plan_fft_, plan_ifft, plan_ifft_)
+            p = planner(x)
+            pi = inv(p)
+            p3 = big(3.)*p
+            p3i = inv(p3)
+            @test eltype(p) == eltype(pi) == eltype(p3) == eltype(p3i) == T
+            @test vecnorm(x - p3i * (p * 3x)) < eps(real(T)) * 10000
+            @test vecnorm(3x - pi * (p3 * x)) < eps(real(T)) * 10000
+            A_mul_B!(y, p, x)
+            @test y == p * x
+            A_ldiv_B!(y, p, x)
+            @test y == p \ x
+        end
+    end
+end
