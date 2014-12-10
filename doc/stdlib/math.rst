@@ -1356,6 +1356,9 @@ implemented by calling functions from `FFTW
 <http://www.fftw.org>`_. By default, Julia does not use multi-threaded
 FFTW. Higher performance may be obtained by experimenting with
 multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
+Julia also includes a slower (but still reasonably fast) pure-Julia
+FFT implementation that is used for array and number types not supported
+by FFTW, including arbitrary-precision FFTs.
 
 .. function:: fft(A [, dims])
 
@@ -1426,8 +1429,20 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    Pre-plan an optimized FFT along given dimensions (``dims``) of arrays
    matching the shape and type of ``A``.  (The first two arguments have
-   the same meaning as for :func:`fft`.)  Returns a function ``plan(A)``
-   that computes ``fft(A, dims)`` quickly.
+   the same meaning as for :func:`fft`.)  Returns an object ``P`` which
+   represents the linear operator computed by the FFT, and which contains
+   all of the information needed to compute ``fft(A, dims)`` quickly.
+
+   To apply ``P`` to an array ``A``, use ``P * A``; in general, the
+   syntax for applying plans is much like that of matrices.  (A plan
+   can only be applied to arrays of the same size as the ``A`` for
+   which the plan was created.)  You can also apply a plan with a
+   preallocated output array ``Â`` by calling ``A_mul_B!(Â, plan,
+   A)``.  You can compute the inverse-transform plan by ``inv(P)`` and
+   apply the inverse plan with ``P \ Â`` (the inverse plan is cached
+   and reused for subsequent calls to ``inv`` or ``\``), and apply the
+   inverse plan to a pre-allocated output array ``A`` with
+   ``A_ldiv_B!(A, P, Â)``.
 
    The ``flags`` argument is a bitwise-or of FFTW planner flags, defaulting
    to ``FFTW.ESTIMATE``.  e.g. passing ``FFTW.MEASURE`` or ``FFTW.PATIENT``
