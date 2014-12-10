@@ -129,6 +129,9 @@ end
 
 _repl_start = Condition()
 
+syntax_deprecation_warnings(warn::Bool) =
+    bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
+
 function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
