@@ -57,3 +57,6 @@ function A_ldiv_B!{T}(S::LDLt{T,SymTridiagonal{T}}, B::AbstractVecOrMat{T})
     end
     return B
 end
+
+## reconstruct the original matrix, but in full rather than tridiagonal
+full(F::LDLt) = (L=Triangular(F.data, :L, true); L * Diagonal(diag(F.data)) * L')
