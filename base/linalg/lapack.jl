@@ -30,6 +30,9 @@ macro chkuplo()
 Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
 
+subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
+subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
+
 # (GB) general banded matrices, LU decomposition and solver
 for (gbtrf, gbtrs, elty) in
     ((:dgbtrf_,:dgbtrs_,:Float64),
@@ -525,7 +528,7 @@ for (gels, gesv, getrs, getri, elty) in
                 end
                 x
             end for i=1:size(B,2)]
-            F, isa(B, Vector) ? B[1:k] : B[1:k,:], ssr
+            F, subsetrows(B, B, k), ssr
         end
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..
@@ -746,7 +749,7 @@ for (gelsd, gelsy, elty) in
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
 
 #       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -789,7 +792,7 @@ for (gelsd, gelsy, elty) in
                 end
             end
             @lapackerror
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
     end
 end
@@ -836,7 +839,7 @@ for (gelsd, gelsy, elty, relty) in
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
 
 #       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -880,7 +883,7 @@ for (gelsd, gelsy, elty, relty) in
                 end
             end
             @lapackerror
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
     end
 end
