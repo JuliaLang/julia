@@ -87,9 +87,20 @@ function first_utf8_byte(ch::Char)
                   uint8((c>>18) | 0xf0)
 end
 
+function reverseind(s::UTF8String, i::Integer)
+    j = lastidx(s) + 1 - i
+    d = s.data
+    while !is_utf8_start(d[j])
+        j -= 1
+    end
+    return j
+end
+
 ## overload methods for efficiency ##
 
 sizeof(s::UTF8String) = sizeof(s.data)
+
+lastidx(s::UTF8String) = length(s.data)
 
 isvalid(s::UTF8String, i::Integer) =
     (1 <= i <= endof(s.data)) && is_utf8_start(s.data[i])

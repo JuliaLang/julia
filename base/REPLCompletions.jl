@@ -160,7 +160,7 @@ function afterusing(string::ByteString, startpos::Int)
     rstr = reverse(str)
     r = search(rstr, r"\s(gnisu|tropmi)\b")
     isempty(r) && return false
-    fr = chr2ind(str, length(str)-ind2chr(rstr, last(r))+1)
+    fr = reverseind(str, last(r))
     return ismatch(r"^\b(using|import)\s*(\w+\s*,\s*)*\w*$", str[fr:end])
 end
 
@@ -188,7 +188,7 @@ function completions(string, pos)
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
-        startpos = nextind(partial, endof(partial)) - m.offset + 1
+        startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
         paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
