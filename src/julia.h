@@ -878,6 +878,7 @@ void jl_init_restored_modules();
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
+DLLEXPORT int jl_parse_depwarn(int warn);
 int jl_start_parsing_file(const char *fname);
 void jl_stop_parsing(void);
 jl_value_t *jl_parse_next(void);
@@ -1329,6 +1330,7 @@ typedef struct {
     int int_literals;
     int8_t compile_enabled;
     int8_t opt_level;
+    int8_t depwarn;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;

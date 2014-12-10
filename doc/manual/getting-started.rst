@@ -110,22 +110,30 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -e, --eval <expr>        Evaluate <expr>
      -E, --print <expr>       Evaluate and show <expr>
-     -P, --post-boot <expr>   Evaluate <expr> right after boot
-     -L, --load <file>        Load <file> right after boot on all processors
+     -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode
+     -L, --load <file>        Load <file> immediately on all processors
      -J, --sysimage <file>    Start up with the given system image file
 
      -p <n>                   Run n local processes
      --machinefile <file>     Run processes on hosts listed in <file>
-
+               
      -i                       Force isinteractive() to be true
      --no-history-file        Don't load or save history
      -f, --no-startup         Don't load ~/.juliarc.jl
      -F                       Load ~/.juliarc.jl, then handle remaining inputs
      --color={yes|no}         Enable or disable color text
 
-     --code-coverage          Count executions of source lines
+     --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation
+                     
+     --code-coverage={none|user|all}, --code-coverage
+                              Count executions of source lines (omitting setting is equivalent to 'user')
+     --track-allocation={none|user|all}
+                              Count bytes allocated by each source line
      --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)
+     -O, --optimize           Run time-intensive code optimizations
      --int-literals={32|64}   Select integer literal size independent of platform
+     --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)
+     --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings
 
 
 Resources
