@@ -4689,6 +4689,12 @@ Combinatorics
 
    Return a copy of ``v`` reversed from start to stop.
 
+.. function:: reverseind(v, i)
+
+   Given an index ``i`` in ``reverse(v)``, return the corresponding
+   index in ``v`` so that ``v[reverseind(v,i)] == reverse(v)[i]``.
+   (This can be nontrivial in the case where ``v`` is a Unicode string.)
+
 .. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 
    In-place version of :func:`reverse`.

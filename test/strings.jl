@@ -1266,3 +1266,26 @@ Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
 Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
 Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
 @test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
+
+# reverseind
+for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
+    for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
+        for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
+            for c in ('X', 'δ', '\U0001d6a5')
+                T != ASCIIString || (isascii(prefix) && isascii(suffix) && isascii(c)) || continue
+                s = convert(T, string(prefix, c, suffix))
+                ri = search(reverse(s), c)
+                @test reverse(s) == RevString(s)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = RevString(s)
+                ri = search(reverse(s), c)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = convert(T, string(prefix, prefix, c, suffix, suffix))
+                pre = convert(T, prefix)
+                sb = SubString(s, nextind(pre, endof(pre)), endof(convert(T, string(prefix, prefix, c, suffix))))
+                ri = search(reverse(sb), c)
+                @test c == sb[reverseind(sb, ri)] == reverse(sb)[ri]
+            end
+        end
+    end
+end

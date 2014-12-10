@@ -28,6 +28,26 @@ function next(s::UTF16String, i::Int)
     error("invalid UTF-16 character index")
 end
 
+function reverseind(s::UTF16String, i::Integer)
+    j = length(s.data) - i
+    return Base.utf16_is_trail(s.data[j]) ? j-1 : j
+end
+lastidx(s::UTF16String) = length(s.data) - 1 # s.data includes NULL terminator
+
+function reverse(s::UTF16String)
+    d =s.data
+    out = similar(d)
+    out[end] = 0 # NULL termination
+    n = length(d)
+    for i = 1:n-1
+        out[i] = d[n-i]
+        if Base.utf16_is_lead(out[i])
+            out[i],out[i-1] = out[i-1],out[i]
+        end
+    end
+    return UTF16String(out)
+end
+
 # TODO: optmize this
 function encode16(s::AbstractString)
     buf = UInt16[]
