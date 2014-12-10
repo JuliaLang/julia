@@ -1403,6 +1403,7 @@ export
     @label,
     @goto,
     @inline,
+    @noinline,
     @doc,
     @doc_str,
     @doc_mstr
