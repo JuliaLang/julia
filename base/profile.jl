@@ -138,6 +138,7 @@ function lookup(ip::UInt)
         return UNKNOWN
     end
 end
+lookup(ip::Ptr{Void}) = lookup(UInt(ip))
 
 error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
