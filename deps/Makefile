@@ -891,7 +891,7 @@ endif
 
 # 64-bit BLAS interface
 ifeq ($(USE_BLAS64), 1)
-OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="64_"
+OPENBLAS_BUILD_OPTS += INTERFACE64=1 SYMBOLSUFFIX="$(OPENBLAS_SYMBOLSUFFIX)"
 ifeq ($(OS), Darwin)
 OPENBLAS_BUILD_OPTS += OBJCONV=$(JULIAHOME)/deps/objconv/objconv
 $(OPENBLAS_OBJ_SOURCE): $(OBJCONV_SOURCE)
@@ -930,7 +930,6 @@ endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
 	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
-	cd openblas-$(OPENBLAS_VER) && patch -p1 < ../openblas-symbol-rename.patch
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
 	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
@@ -1101,7 +1100,7 @@ ARPACK_FFLAGS += -i8
 else
 ARPACK_FFLAGS += -fdefault-integer-8
 ifeq ($(USE_SYSTEM_BLAS), 0)
-ifneq ($(USE_INTEL_MKL), 1)
+ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 ARPACK_FFLAGS += -cpp -ffixed-line-length-none
 ARPACK_OPENBLASFCNS1 = axpy copy gemv geqr2 lacpy lahqr lanhs larnv lartg lascl laset scal trevc trmm trsen
 ARPACK_OPENBLASFCNS2 = dot ger labad laev2 lamch lanst lanv2 lapy2 larf larfg lasr nrm2 orm2r rot steqr swap
@@ -1373,7 +1372,7 @@ UMFPACK_CONFIG = -DLONGBLAS='long long'
 CHOLMOD_CONFIG = -DLONGBLAS='long long'
 SPQR_CONFIG = -DLONGBLAS='long long'
 ifeq ($(USE_SYSTEM_BLAS), 0)
-ifneq ($(USE_INTEL_MKL), 1)
+ifeq ($(OPENBLAS_SYMBOLSUFFIX), 64_)
 UMFPACK_CONFIG += -DSUN64
 CHOLMOD_CONFIG += -DSUN64
 SPQR_CONFIG += -DSUN64
