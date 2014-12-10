@@ -174,8 +174,6 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert((Int...),
 
 @inline rand(r::AbstractRNG) = rand(r, CloseOpen)
 
-@inline rand(r::AbstractRNG, ::Type{Close1Open2}) = rand(r) + 1.0
-
 # MersenneTwister
 rand(r::MersenneTwister, ::Type{Float64}) = rand(r, CloseOpen)
 rand{T<:Union(Float16, Float32)}(r::MersenneTwister, ::Type{T}) = convert(T, rand(r, Float64))
