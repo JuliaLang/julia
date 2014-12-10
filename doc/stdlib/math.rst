@@ -1885,6 +1885,9 @@ implemented by calling functions from `FFTW
 <http://www.fftw.org>`_. By default, Julia does not use multi-threaded
 FFTW. Higher performance may be obtained by experimenting with
 multi-threading. Use ``FFTW.set_num_threads(np)`` to use ``np`` threads.
+Julia also includes a slower (but still reasonably fast) pure-Julia
+FFT implementation that is used for array and number types not supported
+by FFTW, including arbitrary-precision FFTs.
 
 .. function:: fft(A [, dims])
 
