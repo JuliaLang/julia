@@ -1,8 +1,10 @@
 environment:
 #  USEMSVC: "1"
   matrix:
-  - ARCH:  "i686"
-  - ARCH:  "x86_64"
+  - ARCH: "i686"
+  - ARCH: "x86_64"
+    JULIA_CPU_CORES: 1
+# Run win64 tests in serial for now to avoid #7942 causing timeouts
 
 # Only build on master and PR's for now, not personal branches
 # Whether or not PR's get built is determined in the webhook settings
