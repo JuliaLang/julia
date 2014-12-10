@@ -244,52 +244,23 @@ end
 issub(x, y, env) = (x === y)
 issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
-function discover_Lunion(a::UnionT, env)
+function union_issub(a::UnionT, b::Ty, env)
     if env.Ldepth > length(env.Lunions)
         # at a new nesting depth, begin by just counting unions
         env.Lnew += 1
         return true
     end
-    return false
+    L = env.Lunions[env.Ldepth]; L.i += 1
+    env.Ldepth += 1
+    ans = issub(a.((L.idxs&(1<<L.i)!=0) + 1), b, env)
+    env.Ldepth -= 1
+    return ans
 end
 
-function discover_Runion(b::UnionT, env)
+function issub_union(a::Ty, b::UnionT, env)
+    a === BottomT && return true
     if env.Rdepth > length(env.Runions)
         env.Rnew += 1
-        return true
-    end
-    return false
-end
-
-function issub(a::UnionT, b::UnionT, env)
-    a === b && return true
-    if discover_Lunion(a, env) | discover_Runion(b, env)
-        return true
-    end
-    L = env.Lunions[env.Ldepth]; L.i += 1
-    R = env.Runions[env.Rdepth]; R.i += 1
-    env.Ldepth += 1
-    env.Rdepth += 1
-    ans = issub(a.((L.idxs&(1<<L.i)!=0) + 1), b.((R.idxs&(1<<R.i)!=0) + 1), env)
-    env.Rdepth -= 1
-    env.Ldepth -= 1
-    return ans
-end
-
-function issub(a::UnionT, t::Ty, env)
-    if discover_Lunion(a, env)
-        return true
-    end
-    L = env.Lunions[env.Ldepth]; L.i += 1
-    env.Ldepth += 1
-    ans = issub(a.((L.idxs&(1<<L.i)!=0) + 1), t, env)
-    env.Ldepth -= 1
-    return ans
-end
-
-function issub(a::Ty, b::UnionT, env)
-    a === BottomT && return true
-    if discover_Runion(b, env)
         return true
     end
     R = env.Runions[env.Rdepth]; R.i += 1
@@ -298,6 +269,10 @@ function issub(a::Ty, b::UnionT, env)
     env.Rdepth -= 1
     return ans
 end
+
+issub(a::UnionT, b::UnionT, env) = a === b || union_issub(a, b, env)
+issub(a::UnionT, b::Ty, env) = union_issub(a, b, env)
+issub(a::Ty, b::UnionT, env) = issub_union(a, b, env)
 
 function issub(a::TagT, b::TagT, env)
     a === b && return true
@@ -308,10 +283,8 @@ function issub(a::TagT, b::TagT, env)
         return issub(super(a), b, env)
     end
     if a.name === TupleName
-        va = a.vararg
-        vb = b.vararg
-        la = length(a.params)
-        lb = length(b.params)
+        va, vb = a.vararg, b.vararg
+        la, lb = length(a.params), length(b.params)
         if va && (!vb || la < lb)
             return false
         end
@@ -350,8 +323,7 @@ function issub(a::Var, b::Ty, env)
     # invariant position. So just return true when checking the "flipped"
     # direction B<:A.
     aa.right && return true
-    d = env.depth
-    if d != aa.depth  # && d > 1  ???
+    if env.depth != aa.depth  # && env.depth > 1  ???
         # Var <: non-Var can only be true when there are no invariant
         # constructors between the UnionAll and this occurrence of Var.
         return false
@@ -364,12 +336,11 @@ function issub(a::Var, b::Var, env)
     aa = env.vars[a]
     aa.right && return true
     bb = env.vars[b]
-    d = env.depth
-    if aa.depth != bb.depth  # && d > 1  ???
+    if aa.depth != bb.depth  # && env.depth > 1  ???
         # Vars must occur at same depth
         return false
     end
-    if d > bb.depth
+    if env.depth > bb.depth
         # if there are invariant constructors between a UnionAll and
         # this occurrence of Var, then we have an equality constraint on Var.
         if isa(bb.ub,Var)
