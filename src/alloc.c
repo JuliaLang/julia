@@ -418,6 +418,9 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->line = 0;
     if (ast != NULL && jl_is_expr(ast)) {
         jl_expr_t *body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)ast),0);
+        if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == meta_sym
+            && jl_array_len(((jl_expr_t*)ast)->args) > 1)
+            body1 = (jl_expr_t*)jl_exprarg(jl_lam_body((jl_expr_t*)ast),1);
         if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == line_sym) {
             li->file = (jl_sym_t*)jl_exprarg(body1, 1);
             li->line = jl_unbox_long(jl_exprarg(body1, 0));
