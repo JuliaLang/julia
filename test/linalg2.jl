@@ -82,6 +82,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         Tldlt = ldltfact(Ts)
         x = Tldlt\v
         @test_approx_eq x invFsv
+        @test_approx_eq full(Tldlt) Fs
     end
 
     # eigenvalues/eigenvectors of symmetric tridiagonal
