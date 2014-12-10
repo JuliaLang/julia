@@ -198,11 +198,16 @@ This function provides equivalent functionality, but makes no efforts to optimis
      "BigFloat" "FloatingPoint" "Float16" "Float32" "Float64"
      "Complex128" "Complex64" "ComplexPair"
      "Bool"
+     "Cuchar" "Cshort" "Cushort" "Cint" "Cuint" "Clonglong" "Culonglong" "Cintmax_t" "Cuintmax_t"
+     "Cfloat" "Cdouble" "Cptrdiff_t" "Cssize_t" "Csize_t"
+     "Cchar" "Clong" "Culong" "Cwchar_t"
      "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
-     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC"
+     "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC" "BitArray"
      "Range" "Range1" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
      "Tuple" "NTuple"
-     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict")
+     "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "None" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Ranges" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "Nothing" "ObjectIdDict"
+     "AbstractRNG" "MersenneTwister"
+     )
    'symbols))
 
 (defconst julia-quoted-symbol-regex
@@ -271,7 +276,7 @@ As a result, it is true inside \"foo\", `foo` and 'f'."
             (incf open-count))
           (when (looking-at (rx "]"))
             (decf open-count)))
-        
+
         (forward-char 1)))
 
     ;; If we've opened more than we've closed, we're inside brackets.
