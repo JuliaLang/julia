@@ -276,3 +276,6 @@ const base64 = base64encode
 
 @deprecate map!(f::Callable, dest::StridedArray, A::StridedArray, B::Number) broadcast!(f, dest, A, B)
 @deprecate map!(f::Callable, dest::StridedArray, A::Number, B::StridedArray) broadcast!(f, dest, A, B)
+
+#9295
+@deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
