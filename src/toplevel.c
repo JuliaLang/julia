@@ -348,10 +348,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                 if (require_func == NULL && jl_base_module != NULL)
                     require_func = jl_get_global(jl_base_module, jl_symbol("require"));
                 if (require_func != NULL) {
-                    jl_value_t *str = jl_cstr_to_string(var->name);
-                    JL_GC_PUSH1(&str);
-                    jl_apply((jl_function_t*)require_func, &str, 1);
-                    JL_GC_POP();
+                    jl_apply((jl_function_t*)require_func, (jl_value_t**)&var, 1);
                     return eval_import_path_(args, 1);
                 }
             }

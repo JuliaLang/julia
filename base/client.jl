@@ -322,6 +322,7 @@ is_interactive = false
 isinteractive() = (is_interactive::Bool)
 
 const LOAD_PATH = ByteString[]
+const LOAD_CACHE_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
@@ -329,6 +330,8 @@ function init_load_path()
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
+    push!(LOAD_CACHE_PATH,abspath(homedir(),".julia",".libs"))
+    push!(LOAD_CACHE_PATH,abspath(JULIA_HOME,"..","usr","lib","julia")) #TODO: fixme
 end
 
 function load_juliarc()

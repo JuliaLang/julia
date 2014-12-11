@@ -43,6 +43,35 @@ require(f::AbstractString, fs::AbstractString...) = (require(f); for x in fs req
 # only broadcast top-level (not nested) requires and reloads
 toplevel_load = true
 
+function _require_from_serialized(content)
+    m = ccall(:jl_restore_new_module_from_buf, UInt, (Ptr{Uint8},Int), content, sizeof(content))
+    #package_list[path] = time()
+    return m
+end
+
+function require(sname::Symbol)
+    name = string(sname)
+    for prefix in LOAD_CACHE_PATH
+        path = joinpath(prefix, name*".ji")
+        if isfile(path)
+            if nprocs() == 1
+                if ccall(:jl_restore_new_module, UInt, (Ptr{Uint8},), path) != 0
+                    #package_list[path] = time()
+                    return
+                end
+            else
+                content = open(readbytes, path)
+                if _require_from_serialized(content) != 0
+                    refs = Any[ @spawnat p _require_from_serialized(content) for p in filter(x->x!=1, procs()) ]
+                    for r in refs; wait(r); end
+                    return
+                end
+            end
+        end
+    end
+    require(name)
+end
+
 function require(name::AbstractString)
     path = find_in_node1_path(name)
     path == nothing && throw(ArgumentError("$name not found in path"))
