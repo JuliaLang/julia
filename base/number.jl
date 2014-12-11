@@ -21,6 +21,7 @@ last(x::Number) = x
 divrem(x,y) = (div(x,y),rem(x,y))
 signbit(x::Real) = x < 0
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
+sign(x::Unsigned) = ifelse(x > 0, one(x), x)
 abs(x::Real) = ifelse(signbit(x), -x, x)
 abs2(x::Real) = x*x
 copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)

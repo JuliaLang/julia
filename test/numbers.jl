@@ -310,6 +310,8 @@ end
 @test sign(-0//1) == 0
 @test sign(1//0) == 1
 @test sign(-1//0) == -1
+@test sign(one(UInt)) == 1
+@test sign(zero(UInt)) == 0
 
 @test signbit(1) == 0
 @test signbit(0) == 0
