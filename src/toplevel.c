@@ -196,13 +196,15 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
                         jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
                     }
                 }
-                char *build_o;
-                if (asprintf(&build_o, "%s" PATHSEPSTRING "%s.o",build_path,newm->name->name) > 0) {
-                    jl_dump_objfile(build_o,0);
-                    free(build_o);
-                }
-                else {
-                    jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
+                if (isbase) {
+                    char *build_o;
+                    if (asprintf(&build_o, "%s" PATHSEPSTRING "%s.o",build_path,newm->name->name) > 0) {
+                        jl_dump_objfile(build_o,0);
+                        free(build_o);
+                    }
+                    else {
+                        jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
+                    }
                 }
             }
             else {
@@ -378,10 +380,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
                 if (require_func == NULL && jl_base_module != NULL)
                     require_func = jl_get_global(jl_base_module, jl_symbol("require"));
                 if (require_func != NULL) {
-                    jl_value_t *str = jl_cstr_to_string(var->name);
-                    JL_GC_PUSH1(&str);
-                    jl_apply((jl_function_t*)require_func, &str, 1);
-                    JL_GC_POP();
+                    jl_apply((jl_function_t*)require_func, (jl_value_t**)&var, 1);
                     return eval_import_path_(args, 1);
                 }
             }
