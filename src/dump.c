@@ -1417,17 +1417,31 @@ int jl_deserialize_verify_mod_list(ios_t *s)
         ios_read(s, name, len);
         name[len] = '\0';
         uint64_t uuid = read_uint64(s);
-        jl_module_t *m = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol(name));
+        jl_sym_t *sym = jl_symbol(name);
+        jl_module_t *m = (jl_module_t*)jl_get_global(jl_main_module, sym);
         if (!m) {
-            jl_printf(JL_STDERR, "error: Module %s must be loaded first\n", name);
+            static jl_value_t *require_func = NULL;
+            if (!require_func)
+                require_func = jl_get_global(jl_base_module, jl_symbol("require"));
+            JL_TRY {
+                jl_apply((jl_function_t*)require_func, (jl_value_t**)&sym, 1);
+            }
+            JL_CATCH {
+                ios_close(s);
+                jl_rethrow();
+            }
+            m = (jl_module_t*)jl_get_global(jl_main_module, sym);
+        }
+        if (!m) {
+            jl_printf(JL_STDERR, "error: requiring \"%s\" did not define a corresponding module\n", name);
             return 0;
         }
         if (!jl_is_module(m)) {
             ios_close(s);
-            jl_errorf("typeassert: expected %s::Module", name);
+            jl_errorf("invalid module path (%s does not name a module)", name);
         }
         if (m->uuid != uuid) {
-            jl_printf(JL_STDERR, "error: Module %s uuid did not match cache file\n", name);
+            jl_printf(JL_STDERR, "warning: Module %s uuid did not match cache file\n", name);
             return 0;
         }
     }
@@ -1790,19 +1804,14 @@ DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod)
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tupletype_t *type,
                                       jl_function_t *method);
 
-DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
+static jl_module_t *_jl_restore_new_module(ios_t *f)
 {
-    ios_t f;
-    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        jl_printf(JL_STDERR, "Cache file \"%s\" not found\n", fname);
+    if (ios_eof(f)) {
+        ios_close(f);
         return NULL;
     }
-    if (ios_eof(&f)) {
-        ios_close(&f);
-        return NULL;
-    }
-    if (!jl_deserialize_verify_mod_list(&f)) {
-        ios_close(&f);
+    if (!jl_deserialize_verify_mod_list(f)) {
+        ios_close(f);
         return NULL;
     }
     arraylist_new(&backref_list, 4000);
@@ -1813,14 +1822,14 @@ DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
     int en = jl_gc_enable(0);
     DUMP_MODES last_mode = mode;
     mode = MODE_MODULE;
-    jl_module_t *parent = (jl_module_t*)jl_deserialize_value(&f, NULL);
-    jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(&f, NULL);
+    jl_module_t *parent = (jl_module_t*)jl_deserialize_value(f, NULL);
+    jl_sym_t *name = (jl_sym_t*)jl_deserialize_value(f, NULL);
     jl_binding_t *b = jl_get_binding_wr(parent, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
         jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
-    b->value = jl_deserialize_value(&f, &b->value);
+    b->value = jl_deserialize_value(f, &b->value);
 
     size_t i = 0;
     while (i < flagref_list.len) {
@@ -1882,9 +1891,9 @@ DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
     }
 
     mode = MODE_MODULE_LAMBDAS;
-    jl_deserialize_lambdas_from_mod(&f);
+    jl_deserialize_lambdas_from_mod(f);
 
-    jl_module_init_order = (jl_array_t*)jl_deserialize_value(&f, NULL);
+    jl_module_init_order = (jl_array_t*)jl_deserialize_value(f, NULL);
 
     for (i = 0; i < methtable_list.len; i++) {
         jl_methtable_t *mt = (jl_methtable_t*)methtable_list.items[i];
@@ -1921,11 +1930,28 @@ DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
     arraylist_free(&flagref_list);
     arraylist_free(&methtable_list);
     arraylist_free(&backref_list);
-    ios_close(&f);
+    ios_close(f);
 
     jl_init_restored_modules();
 
     return (jl_module_t*)b->value;
+}
+
+DLLEXPORT jl_module_t *jl_restore_new_module_from_buf(const char *buf, size_t sz)
+{
+    ios_t f;
+    ios_static_buffer(&f, (char*)buf, sz);
+    return _jl_restore_new_module(&f);
+}
+
+DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname)
+{
+    ios_t f;
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
+        jl_printf(JL_STDERR, "Cache file \"%s\" not found\n", fname);
+        return NULL;
+    }
+    return _jl_restore_new_module(&f);
 }
 
 // --- init ---
