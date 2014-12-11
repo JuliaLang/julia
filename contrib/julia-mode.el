@@ -322,6 +322,8 @@ Do not move back beyond position MIN."
 (defun julia-last-open-block (min)
   "Move back and return indentation level for last open block.
 Do not move back beyond MIN."
+  ;; Ensure MIN is not before the start of the buffer.
+  (setq min (max min (point-min)))
   (let ((pos (julia-last-open-block-pos min)))
     (and pos
 	 (progn
@@ -334,12 +336,26 @@ beginning of the buffer."
   (unless (eq (point) (point-min))
     (backward-char)))
 
+(defvar julia-max-paren-lookback 400
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed parens.
+
+This variable has a major effect on indent performance if set too
+high.")
+
+(defvar julia-max-block-lookback 5000
+  "When indenting, don't look back more than this
+many characters to see if there are unclosed blocks.
+
+This variable has a moderate effect on indent performance if set too
+high.")
+
 (defun julia-paren-indent ()
   "Return the column position of the innermost containing paren
 before point. Returns nil if we're not within nested parens."
   (save-excursion
-    (let ((min-pos (or (julia-last-open-block-pos (point-min))
-                       (point-min)))
+    (let ((min-pos (max (- (point) julia-max-paren-lookback)
+                        (point-min)))
           (open-count 0))
       (while (and (> (point) min-pos)
                   (not (plusp open-count)))
@@ -383,7 +399,7 @@ before point. Returns nil if we're not within nested parens."
         (beginning-of-line)
         (forward-to-indentation 0)
         (let ((endtok (julia-at-keyword julia-block-end-keywords)))
-          (ignore-errors (+ (julia-last-open-block (point-min))
+          (ignore-errors (+ (julia-last-open-block (- (point) julia-max-block-lookback))
                             (if endtok (- julia-basic-offset) 0)))))
       ;; Otherwise, use the same indentation as previous line.
       (save-excursion (forward-line -1)
@@ -393,6 +409,136 @@ before point. Returns nil if we're not within nested parens."
     ;; to its original position (relative to indentation).
     (when (>= point-offset 0)
       (move-to-column (+ (current-indentation) point-offset)))))
+
+;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
+;; when we define tests.
+(ignore-errors
+  (require 'ert)
+
+  (defmacro julia--should-indent (from to)
+    "Assert that we indent text FROM producing text TO in `julia-mode'."
+    `(with-temp-buffer
+       (julia-mode)
+       (insert ,from)
+       (indent-region (point-min) (point-max))
+       (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                      ,to))))
+
+  (ert-deftest julia--test-indent-if ()
+    "We should indent inside if bodies."
+    (julia--should-indent
+     "
+if foo
+bar
+end"
+     "
+if foo
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-else ()
+    "We should indent inside else bodies."
+    (julia--should-indent
+     "
+if foo
+    bar
+else
+baz
+end"
+     "
+if foo
+    bar
+else
+    baz
+end"))
+
+  (ert-deftest julia--test-indent-toplevel ()
+    "We should not indent toplevel expressions. "
+    (julia--should-indent
+     "
+foo()
+bar()"
+     "
+foo()
+bar()"))
+
+  (ert-deftest julia--test-indent-nested-if ()
+    "We should indent for each level of indentation."
+    (julia--should-indent
+     "
+if foo
+    if bar
+bar
+    end
+end"
+     "
+if foo
+    if bar
+        bar
+    end
+end"))
+
+  (ert-deftest julia--test-indent-function ()
+    "We should indent function bodies."
+    (julia--should-indent
+     "
+function foo()
+bar
+end"
+     "
+function foo()
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-begin ()
+    "We should indent after a begin keyword."
+    (julia--should-indent
+     "
+@async begin
+bar
+end"
+     "
+@async begin
+    bar
+end"))
+
+  (ert-deftest julia--test-indent-paren ()
+    "We should indent to line up with open parens."
+    (julia--should-indent
+     "
+foobar(bar,
+baz)"
+     "
+foobar(bar,
+       baz)"))
+
+  (ert-deftest julia--test-indent-equals ()
+    "We should increase indent on a trailing =."
+    (julia--should-indent
+     "
+foo() =
+bar"
+     "
+foo() =
+    bar"))
+
+  (ert-deftest julia--test-indent-ignores-blank-lines ()
+    "Blank lines should not affect indentation of non-blank lines."
+    (julia--should-indent
+     "
+if foo
+        
+bar
+end"
+     "
+if foo
+    
+    bar
+end"))
+
+  (defun julia--run-tests ()
+    (interactive)
+    (ert-run-tests-interactively "julia--test")))
 
 (defalias 'julia-mode-prog-mode
   (if (fboundp 'prog-mode)
