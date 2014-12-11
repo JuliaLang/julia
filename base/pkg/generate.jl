@@ -145,7 +145,9 @@ function travis(pkg::AbstractString; force::Bool=false)
           - nightly
         notifications:
           email: false
+        # uncomment the following lines to override the default test script
         #script:
+        #  - if [[ -a .git/shallow ]]; then git fetch --unshallow; fi
         #  - julia --check-bounds=yes -e 'Pkg.clone(pwd()); Pkg.build("$pkg"); Pkg.test("$pkg")'
         """)
     end
