@@ -69,8 +69,4 @@ test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractStri
 
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
 
-@deprecate release free
-@deprecate fixup build
-@deprecate fix pin
-
 end # module
