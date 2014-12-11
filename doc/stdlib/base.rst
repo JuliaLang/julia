@@ -4113,6 +4113,10 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
 
+.. function:: globalRNG()
+
+   Return the global RNG object.
+
 .. function:: rand([rng], [S], [dims...])
 
    Pick a random element or array of random elements from the set of values specified by ``S``; ``S`` can be

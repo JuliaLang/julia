@@ -8,7 +8,8 @@ export srand,
        randn, randn!,
        randexp, randexp!,
        randbool,
-       AbstractRNG, RNG, MersenneTwister
+       AbstractRNG, MersenneTwister,
+       globalRNG
 
 
 abstract AbstractRNG
