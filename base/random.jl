@@ -216,9 +216,14 @@ rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
 
-function rand!{T}(r::AbstractRNG, A::AbstractArray{T})
+abstract Distribution
+type TypeDistribution{T} <: Distribution end
+
+@inline rand{T}(r::AbstractRNG, ::TypeDistribution{T}) = rand(r, T)
+
+function rand!{T}(r::AbstractRNG, A::AbstractArray{T}, d::Distribution=TypeDistribution{T}())
     for i = 1:length(A)
-        @inbounds A[i] = rand(r, T)
+        @inbounds A[i] = rand(r, d)
     end
     A
 end
@@ -479,7 +484,7 @@ end
 
 # rand on AbstractArray
 
-immutable Sampler{A<:AbstractArray,G<:RangeGenerator}
+immutable Sampler{A<:AbstractArray,G<:RangeGenerator} <: Distribution
     r::A
     g::G
 end
@@ -487,13 +492,6 @@ end
 
 @inline rand(rng::AbstractRNG, s::Sampler) = @inbounds return s.r[rand(rng, s.g)]
 @inline rand{T<:Union(IntTypes..., BigInt)}(rng::AbstractRNG, s::Sampler{UnitRange{T}}) = rand(rng, s.g, first(s.r))
-
-function rand!(rng::AbstractRNG, A::AbstractArray, s::Sampler)
-    for i = 1 : length(A)
-        @inbounds A[i] = rand(rng, s)
-    end
-    return A
-end
 
 
 # Randomly draw a sample from an AbstractArray r
@@ -1012,6 +1010,12 @@ const ziggurat_nor_inv_r  = inv(ziggurat_nor_r)
 const ziggurat_exp_r      = 7.6971174701310497140446280481
 
 
+type Normal <: Distribution end
+type Exponential <: Distribution end
+
+@inline rand(rng::AbstractRNG, ::Normal) = randn(rng)
+@inline rand(rng::AbstractRNG, ::Exponential) = randexp(rng)
+
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         r = rand_ui52(rng)
@@ -1038,18 +1042,13 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-function randn!(rng::AbstractRNG, A::Array{Float64})
-    for i = 1:length(A)
-        @inbounds A[i] = randn(rng)
-    end
-    A
-end
-
+randn!(rng::AbstractRNG, A::Array{Float64}) = rand!(rng, A, Normal())
 randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Integer...) = randn!(Array(Float64, dims...))
 randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array(Float64, dims))
 randn(rng::AbstractRNG, dims::Integer...) = randn!(rng, Array(Float64, dims...))
+
 
 @inline function randexp(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
@@ -1071,13 +1070,8 @@ function randexp_unlikely(rng, idx, x)
     end
 end
 
-function randexp!(rng::AbstractRNG, A::Array{Float64})
-    for i = 1:length(A)
-        @inbounds A[i] = randexp(rng)
-    end
-    A
-end
 
+randexp!(rng::AbstractRNG, A::Array{Float64}) = rand!(rng, A, Exponential())
 randexp!(A::Array{Float64}) = randexp!(GLOBAL_RNG, A)
 randexp(dims::Dims) = randexp!(Array(Float64, dims))
 randexp(dims::Int...) = randexp!(Array(Float64, dims))
