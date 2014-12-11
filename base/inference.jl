@@ -2646,7 +2646,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
             if f1===false || !(isa(f,Function) || isa(f,IntrinsicFunction))
                 f = _ieval(:call)
-                e.args = Any[f, e.args...]
+                e.args = Any[is_global(sv,:call) ? (:call) : GetfieldNode((inference_stack::CallStack).mod, :call, Function), e.args...]
             end
 
             if is(f, ^) || is(f, .^)
