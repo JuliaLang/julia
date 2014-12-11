@@ -137,7 +137,6 @@ type DLMStore{T,S<:AbstractString} <: DLMHandler
     sbuff::S
     auto::Bool
     eol::Char
-    tmp64::Array{Float64,1}
 end
 
 function DLMStore{T,S<:AbstractString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
@@ -145,7 +144,7 @@ function DLMStore{T,S<:AbstractString}(::Type{T}, dims::NTuple{2,Integer}, has_h
     ((nrows == 0) || (ncols == 0)) && error("Empty input")
     ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
 function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
@@ -156,7 +155,6 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
     lastrow = dlmstore.lastrow
     cells::Array{T,2} = dlmstore.data
     sbuff::S = dlmstore.sbuff
-    tmp64 = dlmstore.tmp64
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
     (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
@@ -183,9 +181,9 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
 
         # fill data
         if quoted && ('"' in sval)
-            fail = colval(replace(sval, r"\"\"", "\""), cells, drow, col, tmp64)
+            fail = colval(replace(sval, r"\"\"", "\""), cells, drow, col)
         else
-            fail = colval(sval, cells, drow, col, tmp64)
+            fail = colval(sval, cells, drow, col)
         end
         if fail
             ((T <: Number) && dlmstore.auto) ? throw(TypeError(:store_cell, "", Any, T)) : error("file entry \"$(sval)\" cannot be converted to $T")
@@ -195,7 +193,7 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
         dlmstore.lastcol = col
     else
         # fill header
-        colval((quoted && ('"' in sval)) ? replace(sval, r"\"\"", "\"") : sval, dlmstore.hdr, 1, col, tmp64)
+        colval((quoted && ('"' in sval)) ? replace(sval, r"\"\"", "\"") : sval, dlmstore.hdr, 1, col)
     end
 
     nothing
@@ -292,6 +290,8 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
     idx = 1
     offidx = 1
     offsets = offarr[1]
+    row = 0
+    col = 0
     try
         dh = DLMStore(T, dims, has_header, sbuff, auto, eol)
         while idx <= length(offsets)
@@ -308,17 +308,41 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         return result(dh)
     catch ex
         isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
-        rethrow(ex)
+        error("at row $row, column $col : $ex")
     end
 end
 
+colval{T<:Bool, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int) = ((sval=="true") && (cells[row,col]=true; return false); (sval=="false") && (cells[row,col]=false; return false); true)
+colval{T<:Integer, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int) = (cells[row,col] = parseint(T, sval); false)
 
-colval{T<:Bool, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((sval=="true") && (cells[row,col]=true; return false); (sval=="false") && (cells[row,col]=false; return false); true)
-colval{T<:Number, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = (float64_isvalid(sval, tmp64) ? ((cells[row,col] = tmp64[1]); false) : true)
-colval{T<:AbstractString, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = sval); false)
-colval{S<:AbstractString}(sval::S, cells::Array{Any,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = float64_isvalid(sval, tmp64) ? tmp64[1] : sval); false)
-colval{T<:Char, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((length(sval) == 1) ? ((cells[row,col] = next(sval,1)[1]); false) : true)
-colval{S<:AbstractString}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
+begin
+    local tmp64::Array{Float64,1} = Array(Float64,1)
+    local tmp32::Array{Float32,1} = Array(Float32,1)
+    global colval
+
+    colval{T<:Float64, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int) = (float64_isvalid(sval, tmp64) ? (cells[row,col] = tmp64[1]; false) : true)
+    colval{T<:Float32, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int) = (float32_isvalid(sval, tmp32) ? (cells[row,col] = tmp32[1]; false) : true)
+
+    function colval{S<:AbstractString}(sval::S, cells::Array{Any,2}, row::Int, col::Int)
+        if !isempty(sval)
+            # check Integer
+            try
+                cells[row,col] = parseint(sval)
+                return false
+            catch
+                (sval == "true") && (cells[row,col] = true; return false)
+                (sval == "false") && (cells[row,col] = false; return false)
+            end
+            # check FloatingPoint
+            float64_isvalid(sval, tmp64) && (cells[row,col] = tmp64[1]; return false)
+        end
+        cells[row,col] = sval
+        false
+    end
+end
+
+colval{T<:AbstractString, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int) = ((cells[row,col] = sval); false)
+colval{S<:AbstractString}(sval::S, cells::Array, row::Int, col::Int) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
     dlm_parse(s.data, uint8(uint32(eol)), uint8(uint32(dlm)), uint8(uint32(qchar)), uint8(uint32(cchar)),
