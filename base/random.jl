@@ -1,6 +1,6 @@
 module Random
 
-using Base.dSFMT
+using Base: dSFMT, IntTypes
 using Base.GMP: GMP_VERSION, Limb
 
 export srand,
@@ -361,39 +361,28 @@ rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 # maximum multiple of k <= 2^bits(T) decremented by one,
 # that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
 maxmultiple(k::UInt32) = (div(0x0000000100000000,k + (k == 0))*k - 1) % UInt32
-maxmultiple(k::UInt64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % UInt64
+
+maxmultiple64(k::UInt64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % UInt64
+
+# maximum multiple of k within 1:2^32 or 1:2^64, depending on size
+maxmultiple(k::UInt64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % UInt64
+
 # maximum multiple of k within 1:typemax(UInt128)
 maxmultiple(k::UInt128) = div(typemax(UInt128), k + (k == 0))*k - 1
-# maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::UInt64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % UInt64
 
+# utility to generate random numbers in a range
 abstract RangeGenerator
 
-immutable RangeGeneratorInt{T<:Integer, U<:Unsigned} <: RangeGenerator
-    a::T   # first element of the range
+immutable RangeGeneratorInt{T<:Integer, U<:Union(UInt32, UInt64, UInt128)} <: RangeGenerator
+           # T is the output type
     k::U   # range length or zero for full range
     u::U   # rejection threshold
 end
-# generators with 32, 128 bits entropy
-RangeGeneratorInt{T, U<:Union(UInt32, UInt128)}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
-# mixed 32/64 bits entropy generator
-RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
 
-
-# generator for ranges
-RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
-
-# specialized versions
-for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
-               (Int8, UInt32), (Int16, UInt32), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128),
-               (Bool, UInt32)]
-
-    @eval RangeGenerator(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
-end
+@inline RangeGeneratorInt{T, U}(::Type{T}, m::U) = (k=m+one(U); RangeGeneratorInt{T, U}(k, maxmultiple(k)))
 
 if GMP_VERSION.major >= 6
     immutable RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
         m::BigInt             # range length - 1
         nlimbs::Int           # number of limbs in generated BigInt's
         mask::Limb            # applied to the highest limb
@@ -401,31 +390,38 @@ if GMP_VERSION.major >= 6
 
 else
     immutable RangeGeneratorBigInt <: RangeGenerator
-        a::BigInt             # first
         m::BigInt             # range length - 1
         limbs::Vector{Limb}   # buffer to be copied into generated BigInt's
         mask::Limb            # applied to the highest limb
 
-        RangeGeneratorBigInt(a, m, nlimbs, mask) = new(a, m, Array(Limb, nlimbs), mask)
+        RangeGeneratorBigInt(m, nlimbs, mask) = new(m, Array(Limb, nlimbs), mask)
     end
 end
 
-
-
-function RangeGenerator(r::UnitRange{BigInt})
-    m = last(r) - first(r)
-    m < 0 && error("range must be non-empty")
+function RangeGeneratorBigInt(m::BigInt)
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
     mask = highbits == 0 ? ~zero(Limb) : one(Limb)<<highbits - one(Limb)
-    return RangeGeneratorBigInt(first(r), m, nlimbs, mask)
+    return RangeGeneratorBigInt(m, nlimbs, mask)
 end
 
+# RangeGenerator dispatch
+@inline checknonempty(r) = isempty(r) && error("collection must be non-empty")
+@inline RangeGenerator(r::AbstractArray) = (checknonempty(r); n = length(r); RangeGenerator(n-one(n)))
+@inline RangeGenerator{T<:Union(IntTypes..., BigInt)}(r::UnitRange{T}) = (checknonempty(r); RangeGenerator(last(r)-first(r)))
+
+@inline RangeGenerator(m::BigInt) = RangeGeneratorBigInt(m)
+@inline RangeGenerator{T<:Union(Int32,UInt32,Int64,UInt64,Int128,UInt128)}(m::T) = RangeGeneratorInt(T, unsigned(m))
+@inline RangeGenerator{T<:Union(Int8,UInt8,Int16,UInt16)}(m::T) = RangeGeneratorInt(T, m % UInt32)
+
+# rand on RangeGenerator
+
+@inline rand{T}(rng::AbstractRNG, g::RangeGeneratorInt{T}) = rand(rng, g, one(T))
 
 # this function uses 32 bit entropy for small ranges of length <= typemax(UInt32) + 1
 # RangeGeneratorInt is responsible for providing the right value of k
-function rand{T<:Union(UInt64, Int64)}(rng::AbstractRNG, g::RangeGeneratorInt{T,UInt64})
+function rand{T<:Union(UInt64, Int64)}(rng::AbstractRNG, g::RangeGeneratorInt{T,UInt64}, start::T)
     local x::UInt64
     if (g.k - 1) >> 32 == 0
         x = rand(rng, UInt32)
@@ -438,20 +434,20 @@ function rand{T<:Union(UInt64, Int64)}(rng::AbstractRNG, g::RangeGeneratorInt{T,
             x = rand(rng, UInt64)
         end
     end
-    return reinterpret(T, reinterpret(UInt64, g.a) + rem_knuth(x, g.k))
+    return start + rem_knuth(x, g.k) % T
 end
 
-function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,U})
+function rand{T<:Integer, U<:Unsigned}(rng::AbstractRNG, g::RangeGeneratorInt{T,U}, start::T)
     x = rand(rng, U)
     while x > g.u
         x = rand(rng, U)
     end
-    (unsigned(g.a) + rem_knuth(x, g.k)) % T
+    start + rem_knuth(x, g.k) % T
 end
 
 if GMP_VERSION.major >= 6
     # mpz_limbs_write and mpz_limbs_finish are available only in GMP version 6
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt, start::BigInt=big(1))
         x = BigInt()
         while true
             # note: on CRAY computers, the second argument may be of type Cint (48 bits) and not Clong
@@ -462,11 +458,11 @@ if GMP_VERSION.major >= 6
             ccall((:__gmpz_limbs_finish, :libgmp), Void, (Ptr{BigInt}, Clong), &x, g.nlimbs)
             x <= g.m && break
         end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
+        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &start)
         return x
     end
 else
-    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt)
+    function rand(rng::AbstractRNG, g::RangeGeneratorBigInt, start::BigInt=big(1))
         x = BigInt()
         while true
             rand!(rng, g.limbs)
@@ -476,34 +472,34 @@ else
                   &x, length(g.limbs), -1, sizeof(Limb), 0, 0, &g.limbs)
             x <= g.m && break
         end
-        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
+        ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &start)
         return x
     end
 end
 
-rand{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(rng::AbstractRNG, r::UnitRange{T}) = rand(rng, RangeGenerator(r))
+# rand on AbstractArray
+
+immutable Sampler{A<:AbstractArray,G<:RangeGenerator}
+    r::A
+    g::G
+end
+@inline Sampler(r::AbstractArray) = Sampler(r, RangeGenerator(r))
+
+@inline rand(rng::AbstractRNG, s::Sampler) = @inbounds return s.r[rand(rng, s.g)]
+@inline rand{T<:Union(IntTypes..., BigInt)}(rng::AbstractRNG, s::Sampler{UnitRange{T}}) = rand(rng, s.g, first(s.r))
+
+function rand!(rng::AbstractRNG, A::AbstractArray, s::Sampler)
+    for i = 1 : length(A)
+        @inbounds A[i] = rand(rng, s)
+    end
+    return A
+end
 
 
 # Randomly draw a sample from an AbstractArray r
 # (e.g. r is a range 0:2:8 or a vector [2, 3, 5, 7])
-rand(rng::AbstractRNG, r::AbstractArray) = @inbounds return r[rand(rng, 1:length(r))]
-
-function rand!(rng::AbstractRNG, A::AbstractArray, g::RangeGenerator)
-    for i = 1 : length(A)
-        @inbounds A[i] = rand(rng, g)
-    end
-    return A
-end
-
-rand!{T<:Union(Signed,Unsigned,BigInt,Bool,Char)}(rng::AbstractRNG, A::AbstractArray, r::UnitRange{T}) = rand!(rng, A, RangeGenerator(r))
-
-function rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray)
-    g = RangeGenerator(1:(length(r)))
-    for i = 1 : length(A)
-        @inbounds A[i] = r[rand(rng, g)]
-    end
-    return A
-end
+@inline rand(rng::AbstractRNG, r::AbstractArray) = rand(rng, Sampler(r))
+rand!(rng::AbstractRNG, A::AbstractArray, r::AbstractArray) = rand!(rng, A, Sampler(r))
 
 rand{T}(rng::AbstractRNG, r::AbstractArray{T}, dims::Dims) = rand!(rng, Array(T, dims), r)
 rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
