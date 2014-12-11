@@ -151,7 +151,7 @@ When packages are installed in your ``.julia/v0.3`` directory, however, the exte
 If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
 Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
 
-.. [1] The official set of packages is at https://github.com/JuliaLang/METADATA.jl, but individuals and organizations can easily use a different metadata repository. This allows control which packages are available for automatic installation. One can allow only audited and approved package versions, and make private packages or forks available.
+.. [1] The official set of packages is at https://github.com/JuliaLang/METADATA.jl, but individuals and organizations can easily use a different metadata repository. This allows control which packages are available for automatic installation. One can allow only audited and approved package versions, and make private packages or forks available. See :ref:`Custom METADATA <man-custom-metadata>` for details.
 
 Updating Packages
 -----------------
@@ -276,9 +276,25 @@ When you decide to "unpin" a package and let the package manager update it again
 
 After this, the ``Stats`` package is managed by the package manager again, and future calls to ``Pkg.update()`` will upgrade it to newer versions when they are published.
 The throw-away ``pinned.1fd0983b.tmp`` branch remains in your local ``Stats`` repo, but since git branches are extremely lightweight, this doesn't really matter;
-if you feel like cleaning them up, you can go into the repo and delete those branches.
+if you feel like cleaning them up, you can go into the repo and delete those branches [2]_.
 
 .. [2] Packages that aren't on branches will also be marked as dirty if you make changes in the repo, but that's a less common thing to do.
+
+.. _man-custom-metadata:
+
+Custom METADATA Repository
+--------------------------
+By default, Julia assumes you will be using the `official METADATA.jl <https://github.com/JuliaLang/METADATA.jl>`_ repository for downloading and installing packages.
+You can also provide a different metadata repository location.
+A common approach is to keep your ``metadata-v2`` branch up to date with the Julia official branch and add another branch with your custom packages.
+You can initialize your local metadata repository using that custom location and branch and then periodically rebase your custom branch with the official ``metadata-v2`` branch.
+In order to use a custom repository and branch, issue the following command::
+
+    julia> Pkg.init("https://me.example.com/METADATA.jl.git", "branch")
+
+The branch argument is optional and defaults to ``metadata-v2``.
+Once initialized, a file named ``META_BRANCH`` in your ``~/.julia/vX.Y/`` path will track the branch that your METADATA repository was initialized with.
+If you want to change branches, you will need to either modify the ``META_BRANCH`` file directly (be careful!) or remove the ``vX.Y`` directory and re-initialize your METADATA repository using the ``Pkg.init`` command.
 
 *******************
 Package Development
@@ -415,7 +431,7 @@ GitHub, push your changes to your fork, and open a pull request::
 
       https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/ef45f54b
 
-For various reasons ``Pkg.publish()`` sometimes does not succeed.  
+For various reasons ``Pkg.publish()`` sometimes does not succeed.
 In those cases, you may make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
