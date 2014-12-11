@@ -164,13 +164,13 @@ This function provides equivalent functionality, but makes no efforts to optimis
   (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-type-annotation-regex
-  (rx "::" (group (1+ (or word (syntax symbol))))))
+  (rx "::" (0+ space) (group (1+ (or word (syntax symbol))))))
 
 ;;(defconst julia-type-parameter-regex
 ;;  (rx symbol-start (1+ (or (or word (syntax symbol)) ?_)) "{" (group (1+ (or (or word (syntax symbol)) ?_))) "}"))
 
 (defconst julia-subtype-regex
-  (rx "<:" (1+ space) (group (1+ (or word (syntax symbol)))) (0+ space) (or "\n" "{" "end")))
+  (rx "<:" (0+ space) (group (1+ (or word (syntax symbol)))) (0+ space) (or "\n" "{" "}" "end")))
 
 (defconst julia-macro-regex
   (rx symbol-start (group "@" (1+ (or word (syntax symbol))))))
