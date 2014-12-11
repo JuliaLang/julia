@@ -485,7 +485,13 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     for idx in idxs
         if (idx == max_idx) || (beginswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
             history_move(s, hist, idx)
-            LineEdit.move_input_end(s)
+            if length(prefix) == 0
+                # on empty prefix search, move cursor to the end
+                LineEdit.move_input_end(s)
+            else
+                # otherwise, keep cursor at the prefix position as a visual cue
+                seek(LineEdit.buffer(s), length(prefix))
+            end
             LineEdit.refresh_line(s)
             return :ok
         end
