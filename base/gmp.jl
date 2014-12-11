@@ -76,10 +76,9 @@ signed(x::BigInt) = x
 BigInt(x::BigInt) = x
 BigInt(s::AbstractString) = parse(BigInt,s)
 
-function tryparse_internal(::Type{BigInt}, s::AbstractString, base::Int, raise::Bool)
+function tryparse_internal(::Type{BigInt}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
-    s = bytestring(s)
-    sgn, base, i = Base.parseint_preamble(true,s,base)
+    sgn, base, i = Base.parseint_preamble(true,base,s,startpos,endpos)
     if i == 0
         raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
         return _n
@@ -87,7 +86,7 @@ function tryparse_internal(::Type{BigInt}, s::AbstractString, base::Int, raise::
     z = BigInt()
     err = ccall((:__gmpz_set_str, :libgmp),
                Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
-               &z, SubString(s,i), base)
+               &z, SubString(s,i,endpos), base)
     if err != 0
         raise && throw(ArgumentError("invalid BigInt: $(repr(s))"))
         return _n
