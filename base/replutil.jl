@@ -134,7 +134,7 @@ function showerror(io::IO, e::MethodError)
     vec_args = []
     hasrows = false
     for arg in e.args
-        isrow = isa(arg,AbstractArray) && ndims(arg)==2 && size(arg,1)==1
+        isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
         hasrows |= isrow
         push!(vec_args, isrow ? vec(arg) : arg)
     end
