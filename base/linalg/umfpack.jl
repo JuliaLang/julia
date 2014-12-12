@@ -369,33 +369,43 @@ function getindex(lu::UmfpackLU, d::Symbol)
          throw(KeyError(d)))))))
 end
 
-## The C functions called by these Julia functions do not depend on
-## the numeric and index types, even though the umfpack names indicate
-## they do.  The umfpack_free_* functions can be called on C_NULL without harm.
-function umfpack_free_symbolic(symb::Ptr{Void})
-    tmp = [symb]
-    ccall((:umfpack_dl_free_symbolic, :libumfpack), Void, (Ptr{Void},), tmp)
+for (f, Tv, Ti) in ((:umfpack_di_free_symbolic, :Float64, :Int32),
+                    (:umfpack_dl_free_symbolic, :Float64, :Int64),
+                    (:umfpack_zi_free_symbolic, :Complex128, :Int32),
+                    (:umfpack_zl_free_symbolic, :Complex128, :Int64))
+    @eval begin
+        function ($f)(symb::Ptr{Void})
+            tmp = [symb]
+            ccall(($(string(f)), :libumfpack), Void, (Ptr{Void},), tmp)
+        end
+
+        function umfpack_free_symbolic(lu::UmfpackLU{$Tv,$Ti})
+            if lu.symbolic == C_NULL return lu end
+            umfpack_free_numeric(lu)
+            ($f)(lu.symbolic)
+            lu.symbolic = C_NULL
+            return lu
+        end
+    end
 end
 show_umf_info() = show_umf_info(2.)
 
-function umfpack_free_symbolic(lu::UmfpackLU)
-    if lu.symbolic == C_NULL return lu end
-    umfpack_free_numeric(lu)
-    umfpack_free_symbolic(lu.symbolic)
-    lu.symbolic = C_NULL
-    return lu
-end
-
-function umfpack_free_numeric(num::Ptr{Void})
-    tmp = [num]
-    ccall((:umfpack_dl_free_numeric, :libumfpack), Void, (Ptr{Void},), tmp)
-end
-
-function umfpack_free_numeric(lu::UmfpackLU)
-    if lu.numeric == C_NULL return lu end
-    umfpack_free_numeric(lu.numeric)
-    lu.numeric = C_NULL
-    return lu
+for (f, Tv, Ti) in ((:umfpack_di_free_numeric, :Float64, :Int32),
+                    (:umfpack_dl_free_numeric, :Float64, :Int64),
+                    (:umfpack_zi_free_numeric, :Complex128, :Int32),
+                    (:umfpack_zl_free_numeric, :Complex128, :Int64))
+    @eval begin
+        function ($f)(num::Ptr{Void})
+            tmp = [num]
+            ccall(($(string(f)), :libumfpack), Void, (Ptr{Void},), tmp)
+        end
+        function umfpack_free_numeric(lu::UmfpackLU{$Tv,$Ti})
+            if lu.numeric == C_NULL return lu end
+            ($f)(lu.numeric)
+            lu.numeric = C_NULL
+            return lu
+        end
+    end
 end
 
 function umfpack_report_symbolic(symb::Ptr{Void}, level::Real)
