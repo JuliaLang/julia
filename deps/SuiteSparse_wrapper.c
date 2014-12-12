@@ -5,6 +5,10 @@ extern size_t jl_cholmod_common_size(void) {
     return sizeof(cholmod_common);
 }
 
+extern size_t jl_cholmod_sizeof_long(void) {
+    return sizeof(SuiteSparse_long);
+}
+
 extern int jl_cholmod_version(int *ver) {
     if (ver != (int*) NULL) {
 	ver[0] = CHOLMOD_MAIN_VERSION;
