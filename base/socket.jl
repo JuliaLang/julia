@@ -26,6 +26,17 @@ function IPv4(host::Integer)
     end
 end
 
+# constructor: ("1.2.3.4")
+function IPv4(ipstr::String)
+    iparr = Uint32[parseint(octet) for octet in split(ipstr, ".")]
+    return IPv4(iparr...)
+end
+
+#constructor: ([1,2,3,4])
+function IPv4{T<:Integer}(iparr::Vector{T})
+    return IPv4(iparr...)
+end
+
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
