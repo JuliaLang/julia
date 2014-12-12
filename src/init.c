@@ -67,6 +67,7 @@ void __cdecl fpreset (void);
 #define _FPE_EXPLICITGEN    0x8c    /* raise( SIGFPE ); */
 #include <windows.h>
 #include <dbghelp.h>
+#include <io.h>
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #endif
