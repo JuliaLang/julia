@@ -3,15 +3,20 @@
 ##########################
 immutable Cholesky{T,S<:AbstractMatrix,UpLo} <: Factorization{T}
     UL::S
+    Cholesky(UL::AbstractMatrix{T}) = new(UL)
 end
-immutable CholeskyPivoted{T} <: Factorization{T}
-    UL::Matrix{T}
+Cholesky{T}(UL::AbstractMatrix{T},UpLo::Symbol) = Cholesky{T,typeof(UL),UpLo}(UL)
+
+immutable CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+    UL::S
     uplo::Char
     piv::Vector{BlasInt}
     rank::BlasInt
     tol::Real
     info::BlasInt
+    CholeskyPivoted(UL::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasInt}, rank::BlasInt, tol::Real, info::BlasInt) = new(UL, uplo, piv, rank, tol, info)
 end
+CholeskyPivoted{T}(UL::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasInt}, rank::BlasInt, tol::Real, info::BlasInt) = CholeskyPivoted{T,typeof(UL)}(UL, uplo, piv, rank, tol, info)
 
 function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
     C, info = LAPACK.potrf!(char_uplo(uplo), A)
@@ -60,11 +65,11 @@ function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=fal
     uplochar = char_uplo(uplo)
     if pivot
         A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
-        return CholeskyPivoted{T}(A, uplochar, piv, rank, tol, info)
+        return CholeskyPivoted{T,typeof(A)}(A, uplochar, piv, rank, tol, info)
     end
-    return Cholesky{T,typeof(A),uplo}(chol!(A, uplo).data)
+    return Cholesky(chol!(A, uplo).data, uplo)
 end
-cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky{eltype(A),typeof(A),uplo}(chol!(A, uplo).data)
+cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
 
 function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     _, info = LAPACK.potrf!(char_uplo(UpLo), C.UL)
@@ -81,8 +86,8 @@ function cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
     return cholfact!(copy(A), uplo)
 end
 function cholfact(x::Number, uplo::Symbol=:U)
-    xf = fill(chol!(x), 1, 1)
-    Cholesky{:U, eltype(xf), typeof(xf)}(xf)
+    xf = fill(chol!(x, uplo), 1, 1)
+    Cholesky(xf, uplo)
 end
 
 chol(A::AbstractMatrix, uplo::Symbol=:U) = chol!(copy(A), uplo)
