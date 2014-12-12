@@ -5,7 +5,7 @@ typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int}, Colon)
 # LD is the last dimension up through which this object has efficient
 # linear indexing. If LD==N, then the object itself has efficient
 # linear indexing.
-type SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
+immutable SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
     parent::P
     indexes::I
     dims::NTuple{N,Int}
