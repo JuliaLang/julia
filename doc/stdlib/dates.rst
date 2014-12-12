@@ -241,35 +241,35 @@ Adjuster Functions
 
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the Monday of it's week.
+    Adjusts ``dt`` to the Monday of its week.
 
 .. function:: lastdayofweek(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the Sunday of it's week.
+    Adjusts ``dt`` to the Sunday of its week.
 
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's month.
+    Adjusts ``dt`` to the first day of its month.
 
 .. function:: lastdayofmonth(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's month.
+    Adjusts ``dt`` to the last day of its month.
 
 .. function:: firstdayofyear(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's year.
+    Adjusts ``dt`` to the first day of its year.
 
 .. function:: lastdayofyear(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's year.
+    Adjusts ``dt`` to the last day of its year.
 
 .. function:: firstdayofquarter(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's quarter.
+    Adjusts ``dt`` to the first day of its quarter.
 
 .. function:: lastdayofquarter(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's quarter.
+    Adjusts ``dt`` to the last day of its quarter.
 
 .. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
@@ -285,12 +285,12 @@ Adjuster Functions
 
 .. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
-    Adjusts ``dt`` to the first ``dow`` of it's month. Alternatively, ``of=Year``
+    Adjusts ``dt`` to the first ``dow`` of its month. Alternatively, ``of=Year``
     will adjust to the first ``dow`` of the year.
 
 .. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
 
-    Adjusts ``dt`` to the last ``dow`` of it's month. Alternatively, ``of=Year``
+    Adjusts ``dt`` to the last ``dow`` of its month. Alternatively, ``of=Year``
     will adjust to the last ``dow`` of the year.
 
 .. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
