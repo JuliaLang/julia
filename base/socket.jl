@@ -27,7 +27,7 @@ function IPv4(host::Integer)
 end
 
 # constructor: ("1.2.3.4")
-function IPv4(ipstr::String)
+function IPv4(ipstr::AbstractString)
     iparr = Uint32[parseint(octet) for octet in split(ipstr, ".")]
     return IPv4(iparr...)
 end
