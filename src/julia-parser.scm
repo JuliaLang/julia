@@ -1150,9 +1150,10 @@
 	 (take-token s)
 	 (cond
 	  ((eq? nxt 'end)
-	   (list* 'try try-block catchv catchb (if finalb
-						   (list finalb)
-						   '())))
+	   (list* 'try try-block catchv
+		  ;; default to empty catch block in `try ... end`
+		  (or catchb (if finalb #f '(block)))
+		  (if finalb (list finalb) '())))
 	  ((and (eq? nxt 'catch)
 		(not catchb))
 	   (let ((nl (memv (peek-token s) '(#\newline #\;))))

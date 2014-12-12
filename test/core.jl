@@ -547,6 +547,8 @@ begin
     end
     @test retfinally() == 5
     @test glo == 18
+
+    @test try error() end === nothing
 end
 
 # finalizers
