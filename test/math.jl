@@ -198,7 +198,11 @@ end
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
-@test gamma(1:25) == gamma(Float64[1:25])
+if Base.Math.libm == "libopenlibm"
+    @test gamma(Float64[1:25]) == gamma(1:25)
+else
+    @test_approx_eq gamma(Float64[1:25]) gamma(1:25)
+end
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
