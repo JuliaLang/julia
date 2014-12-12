@@ -24,6 +24,14 @@ init:
 # Carriage returns are bad
   - git config --global core.autocrlf input
 
+cache:
+# Cache any downloads from sourceforge because it's really unreliable
+  - mingw-w32-bin-i686-20140102.7z
+  - mingw-w64-bin-x86_64-20140102.7z
+  - llvm-3.3-i686-w64-mingw32-juliadeps.7z
+  - llvm-3.3-x86_64-w64-mingw32-juliadeps.7z
+  - make-3.81-2-msys-1.0.11-bin.tar.lzma
+
 build_script:
 # Remove C:\MinGW\bin from the path, the version of MinGW installed on
 # AppVeyor is not compatible with the cross-compiled Julia Windows binaries
