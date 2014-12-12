@@ -314,7 +314,7 @@ function findn{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if S.nzval[k] != zero(Tv)
             I[count] = S.rowval[k]
             J[count] = col
             count += 1
@@ -338,7 +338,7 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
 
     count = 1
     @inbounds for col = 1 : S.n, k = S.colptr[col] : (S.colptr[col+1]-1)
-        if S.nzval[k] != 0
+        if S.nzval[k] != zero(Tv)
             I[count] = S.rowval[k]
             J[count] = col
             V[count] = S.nzval[k]
@@ -1224,7 +1224,7 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     v = convert(T, v)
     r1 = int(A.colptr[i1])
     r2 = int(A.colptr[i1+1]-1)
-    if v == 0 #either do nothing or delete entry if it exists
+    if v == zero(T) #either do nothing or delete entry if it exists
         if r1 <= r2
             r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
             if (r1 <= r2) && (A.rowval[r1] == i0)

@@ -472,3 +472,20 @@ end
 # issue #8976
 @test conj(sparse([1im])) == sparse(conj([1im]))
 @test conj!(sparse([1im])) == sparse(conj!([1im]))
+
+# Test proper handling of zeros for user types
+immutable SpTestVal
+    value::Float64
+end
+(==)(x::SpTestVal,y::SpTestVal) = (x.value == y.value)
+Base.zero(x::SpTestVal) = SpTestVal(0)
+Base.zero(::Type{SpTestVal}) = SpTestVal(0)
+A = sparse([1,2,3],[1,2,3],[SpTestVal(1),SpTestVal(0),SpTestVal(3)])
+@test nnz(A) == 2  # zeros should be stripped by sparse
+A[2,2] = SpTestVal(0)
+@test nnz(A) == 2  # zeros should be stripped by setindex
+A = SparseMatrixCSC(3,3,[1,2,3,4],[1,2,3],
+        [SpTestVal(1.0),SpTestVal(0.0),SpTestVal(3.0)])
+@test countnz(A) == 2
+r,c,v = findnz(A)
+@test length(r) == length(c) == length(v) == 2

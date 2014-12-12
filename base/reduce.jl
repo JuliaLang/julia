@@ -428,6 +428,6 @@ function count(pred::Union(Function,Func{1}), a::AbstractArray)
 end
 
 immutable NotEqZero <: Func{1} end
-call(::NotEqZero, x) = x != 0
+call(::NotEqZero, x) = x != zero(x)
 
 countnz(a) = count(NotEqZero(), a)
