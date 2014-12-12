@@ -27,10 +27,8 @@ function IPv4(host::Integer)
 end
 
 # constructor: ("1.2.3.4")
-function IPv4(ipstr::AbstractString)
-    iparr = Uint32[parseint(octet) for octet in split(ipstr, ".")]
-    return IPv4(iparr...)
-end
+IPv4(ipstr::AbstractString) = parseipv4(ipstr)
+
 
 #constructor: ([1,2,3,4])
 function IPv4{T<:Integer}(iparr::Vector{T})
@@ -77,6 +75,8 @@ function IPv6(host::Integer)
         return IPv6(uint128(host))
     end
 end
+
+IPv6(ipstr::AbstractString) = parseipv6(ipstr)
 
 # Suppress leading '0's and "0x"
 print_ipv6_field(io,field::UInt16) = print(io,hex(field))
