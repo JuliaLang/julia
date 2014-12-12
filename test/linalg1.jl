@@ -63,6 +63,9 @@ debug && println("(Automatic) upper Cholesky factor")
     @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
     @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
+    apos = asym[1,1]            # test chol(x::Number), needs x>0
+    @test_approx_eq cholfact(apos).UL √apos
+
 debug && println("lower Cholesky factor")
     lapd = cholfact(apd, :L)
     @test_approx_eq full(lapd) apd
