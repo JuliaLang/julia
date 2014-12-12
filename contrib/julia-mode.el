@@ -139,7 +139,8 @@ This function provides equivalent functionality, but makes no efforts to optimis
 ].* \\(in\\)\\(\\s-\\|$\\)+")
 
 (defconst julia-function-regex
-  (rx line-start symbol-start "function"
+  (rx line-start (* (or space "@inline" "@noinline")) symbol-start
+      (or "function" "stagedfunction")
       (1+ space)
       ;; Don't highlight module names in function declarations:
       (* (seq (1+ (or word (syntax symbol))) "."))
@@ -147,7 +148,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
       (group (1+ (or word (syntax symbol))))))
 
 (defconst julia-function-assignment-regex
-  (rx line-start symbol-start
+  (rx line-start (* (or space "@inline" "@noinline")) symbol-start
       (* (seq (1+ (or word (syntax symbol))) ".")) ; module name
       (group (1+ (or word (syntax symbol))))
       (* space)
@@ -178,7 +179,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
 (defconst julia-keyword-regex
   (julia--regexp-opt
    '("if" "else" "elseif" "while" "for" "begin" "end" "quote"
-     "try" "catch" "return" "local" "abstract" "function" "macro" "ccall"
+     "try" "catch" "return" "local" "abstract" "function" "stagedfunction" "macro" "ccall"
      "finally" "typealias" "break" "continue" "type" "global"
      "module" "using" "import" "export" "const" "let" "bitstype" "do" "in"
      "baremodule" "importall" "immutable")
@@ -212,7 +213,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
 
 (defconst julia-quoted-symbol-regex
   ;; :foo and :foo2 are valid, but :123 is not.
-  (rx (or whitespace "(" "[" ",")
+  (rx (or whitespace "(" "[" "," "=")
       (group ":" (or letter (syntax symbol)) (0+ (or word (syntax symbol))))))
 
 (defconst julia-font-lock-keywords
@@ -243,7 +244,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
    ))
 
 (defconst julia-block-start-keywords
-  (list "if" "while" "for" "begin" "try" "function" "type" "let" "macro"
+  (list "if" "while" "for" "begin" "try" "function" "stagedfunction" "type" "let" "macro"
 	"quote" "do" "immutable"))
 
 (defconst julia-block-end-keywords
