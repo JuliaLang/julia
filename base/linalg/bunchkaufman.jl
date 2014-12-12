@@ -2,12 +2,14 @@
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
-immutable BunchKaufman{T} <: Factorization{T}
-    LD::Matrix{T}
+immutable BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+    LD::S
     ipiv::Vector{BlasInt}
     uplo::Char
     symmetric::Bool
+    BunchKaufman(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = new(LD, ipiv, uplo, symmetric)
 end
+BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric)
 
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
     symmetric || error("The Bunch-Kaufman decomposition is only valid for symmetric matrices")
