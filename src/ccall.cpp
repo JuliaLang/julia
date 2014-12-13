@@ -4,6 +4,10 @@
 
 // map from "libX" to full soname "libX.so.ver"
 #if defined(__linux__) || defined(__FreeBSD__)
+
+#include <sys/types.h>
+#include <dirent.h>
+
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
@@ -69,6 +73,40 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
 
     free(line);
     pclose(ldc);
+
+    char *env_ld_library_path = getenv("LD_LIBRARY_PATH");
+    if (env_ld_library_path != NULL) {
+        char *ld_library_path = strdup(env_ld_library_path);
+        char *lib_dir, *lib_dir_left = ld_library_path;
+
+        while ((lib_dir = strsep(&lib_dir_left, ":"))) {
+            DIR *dir = opendir(lib_dir);
+            if (dir == NULL) continue;
+
+            struct dirent entry, *result = NULL;
+
+            do {
+                int ret = (readdir_r(dir, &entry, &result));
+                if (ret < 0 ) {
+                    continue;
+                } else if (ret == 0) {
+                    break;
+                }
+                if (entry.d_type != DT_REG && entry.d_type != DT_LNK)
+                    continue;
+
+                char *dot = strstr(entry.d_name,".so");
+                if (dot == NULL) continue;
+                std::string pfx(entry.d_name, dot - entry.d_name);
+                std::string soname = std::string(lib_dir) + "/" +  entry.d_name;
+                sonameMap[pfx] = soname;
+            } while(result != NULL);
+
+            closedir(dir);
+        }
+
+        free(ld_library_path);
+    }
 }
 
 extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
