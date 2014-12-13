@@ -30,10 +30,7 @@ end
 IPv4(ipstr::AbstractString) = parseipv4(ipstr)
 
 
-#constructor: ([1,2,3,4])
-function IPv4{T<:Integer}(iparr::Vector{T})
-    return IPv4(iparr...)
-end
+IPv4(iparr::Array) = [IPv4(x) for x in iparr]
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
