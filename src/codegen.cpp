@@ -4172,10 +4172,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 static MDNode *tbaa_make_child( const char *name, MDNode *parent, bool isConstant=false )
 {
     MDNode *n = mbuilder->createTBAANode(name,parent,isConstant);
+#ifndef LLVM36
 #ifdef LLVM35
     n->setValueName( ValueName::Create(name));
 #else
     n->setValueName( ValueName::Create(name, name+strlen(name)));
+#endif
 #endif
     return n;
 }
