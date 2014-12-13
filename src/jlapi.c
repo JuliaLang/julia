@@ -56,12 +56,6 @@ DLLEXPORT void jl_init(char *julia_home_dir)
 
 DLLEXPORT void *jl_eval_string(char *str)
 {
-#ifdef COPY_STACKS
-    int outside_task = (jl_root_task->stackbase == NULL);
-    if (outside_task) {
-        JL_SET_STACK_BASE;
-    }
-#endif
     jl_value_t *r;
     JL_TRY {
         jl_value_t *ast = jl_parse_input_line(str);
@@ -74,11 +68,6 @@ DLLEXPORT void *jl_eval_string(char *str)
         //jl_show(jl_stderr_obj(), jl_exception_in_transit);
         r = NULL;
     }
-#ifdef COPY_STACKS
-    if (outside_task) {
-        jl_root_task->stackbase = NULL;
-    }
-#endif
     return r;
 }
 
@@ -253,6 +242,21 @@ DLLEXPORT int jl_is_debugbuild(void)
 #else
     return 0;
 #endif
+}
+
+DLLEXPORT jl_value_t *jl_get_julia_home(void)
+{
+    return jl_cstr_to_string(jl_compileropts.julia_home);
+}
+
+DLLEXPORT jl_value_t *jl_get_julia_bin(void)
+{
+    return jl_cstr_to_string(jl_compileropts.julia_bin);
+}
+
+DLLEXPORT jl_value_t *jl_get_image_file(void)
+{
+    return jl_cstr_to_string(jl_compileropts.image_file);
 }
 
 #ifdef __cplusplus

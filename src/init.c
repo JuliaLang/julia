@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <setjmp.h>
 #include <assert.h>
 
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
@@ -88,6 +87,7 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 static const char system_image_path[256] = JL_SYSTEM_IMAGE_PATH;
 
 jl_compileropts_t jl_compileropts = { NULL, // julia_home
+                                      NULL, // julia_bin
                                       NULL, // build_path
                                       system_image_path, // image_file
                                       0,    // code_coverage
@@ -436,7 +436,7 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 void jl_write_coverage_data(void);
 void jl_write_malloc_log(void);
 
-DLLEXPORT void uv_atexit_hook()
+DLLEXPORT void jl_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
@@ -784,57 +784,53 @@ static void jl_resolve_sysimg_location()
 { // note: if you care about lost memory, you should compare the
   // pointers in jl_compileropts before and after calling julia_init()
   // and call the appropriate free function on the originals for any that changed
-    char *free_path = NULL;
+    char *free_path = (char*)malloc(PATH_MAX);
+    size_t path_size = PATH_MAX;
+    if (uv_exepath(free_path, &path_size)) {
+        ios_printf(ios_stderr, "fatal error: unexpected error while retrieving exepath\n");
+        exit(1);
+    }
+    if (path_size >= PATH_MAX) {
+        ios_printf(ios_stderr, "fatal error: jl_compileropts.julia_bin path too long\n");
+        exit(1);
+    }
+    jl_compileropts.julia_bin = strdup(free_path);
     if (!jl_compileropts.julia_home) {
         jl_compileropts.julia_home = getenv("JULIA_HOME");
         if (!jl_compileropts.julia_home) {
-            size_t path_size = PATH_MAX;
-            char *path = (char*)malloc(PATH_MAX);
-            if (uv_exepath(path, &path_size)) {
-                ios_printf(ios_stderr, "fatal error: unexpected error while retrieving exepath\n");
-                exit(1);
-            }
-            if (path_size >= PATH_MAX) {
-                ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long\n");
-                exit(1);
-            }
-            free_path = path;
-            jl_compileropts.julia_home = dirname(path);
+            jl_compileropts.julia_home = dirname(free_path);
         }
     }
     if (jl_compileropts.julia_home)
         jl_compileropts.julia_home = abspath(jl_compileropts.julia_home);
-    if (free_path) {
-        free(free_path);
-        free_path = NULL;
-    }
+    free(free_path);
+    free_path = NULL;
     if (jl_compileropts.image_file) {
         if (jl_compileropts.image_file[0] != PATHSEPSTRING[0]) {
             if (jl_compileropts.image_file == system_image_path) {
                 // build time path, relative to JULIA_HOME
-                char *path = (char*)malloc(PATH_MAX);
-                int n = snprintf(path, PATH_MAX, "%s" PATHSEPSTRING "%s",
+                free_path = (char*)malloc(PATH_MAX);
+                int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                          jl_compileropts.julia_home, jl_compileropts.image_file);
                 if (n >= PATH_MAX || n < 0) {
                     ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long\n");
                     exit(1);
                 }
-                free_path = path;
-                jl_compileropts.image_file = path;
+                jl_compileropts.image_file = free_path;
             }
         }
-    }
-    if (jl_compileropts.image_file)
-        jl_compileropts.image_file = abspath(jl_compileropts.image_file);
-    if (free_path) {
-        free(free_path);
-        free_path = NULL;
+        if (jl_compileropts.image_file)
+            jl_compileropts.image_file = abspath(jl_compileropts.image_file);
+        if (free_path) {
+            free(free_path);
+            free_path = NULL;
+        }
     }
     if (jl_compileropts.build_path)
         jl_compileropts.build_path = abspath(jl_compileropts.build_path);
 }
 
-void julia_init()
+void _julia_init()
 {
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
@@ -926,11 +922,6 @@ void julia_init()
         jl_get_builtin_hooks();
         jl_boot_file_loaded = 1;
         jl_init_box_caches();
-        // Core.JULIA_HOME is a "magic" constant, we set it at runtime here
-        // since its value gets excluded from the system image
-        jl_set_const(jl_core_module, jl_symbol("JULIA_HOME"),
-                     jl_cstr_to_string(jl_compileropts.julia_home));
-        jl_module_export(jl_core_module, jl_symbol("JULIA_HOME"));
     }
 
     if (jl_compileropts.image_file) {
@@ -1105,18 +1096,8 @@ extern void *__stack_chk_guard;
 
 void jl_compile_all(void);
 
-DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *av[]))
+DLLEXPORT int julia_save()
 {
-    unsigned char *p = (unsigned char *)&__stack_chk_guard;
-    char a = p[sizeof(__stack_chk_guard)-1];
-    char b = p[sizeof(__stack_chk_guard)-2];
-    char c = p[0];
-    /* If you have the ability to generate random numbers in your kernel then they should be used here */
-    p[sizeof(__stack_chk_guard)-1] = 255;
-    p[sizeof(__stack_chk_guard)-2] = '\n';
-    p[0] = 0;
-    JL_SET_STACK_BASE;
-    int ret = pmain(argc, argv);
     const char *build_path = jl_compileropts.build_path;
     if (build_path) {
         if (jl_compileropts.compile_enabled == JL_COMPILEROPT_COMPILE_ALL)
@@ -1148,10 +1129,6 @@ DLLEXPORT int julia_trampoline(int argc, char **argv, int (*pmain)(int ac,char *
             ios_printf(ios_stderr,"\nFATAL: failed to create string for .ji build path\n");
         }
     }
-    p[sizeof(__stack_chk_guard)-1] = a;
-    p[sizeof(__stack_chk_guard)-2] = b;
-    p[0] = c;
-    return ret;
 }
 
 jl_function_t *jl_typeinf_func=NULL;
