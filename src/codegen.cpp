@@ -4859,6 +4859,9 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         ,"-avx"
 #endif
+#if defined(LLVM35) && defined(_OS_WINDOWS_)
+        ,"-disable-copyprop" // llvm bug 21743
+#endif
     };
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
