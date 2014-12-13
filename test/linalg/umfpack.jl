@@ -11,7 +11,7 @@ A0 = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
            [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
 
 for Tv in (Float64, Complex128)
-    for Ti in (Int32, Int64)
+    for Ti in Base.LinAlg.UMFPACK.UMFITypes.types
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
         L,U,p,q,Rs = lua[:(:)]
@@ -34,7 +34,7 @@ for Tv in (Float64, Complex128)
 end
 
 Ac0 = complex(A0,A0)
-for Ti in (Int32, Int64)
+for Ti in Base.LinAlg.UMFPACK.UMFITypes.types
     Ac = convert(SparseMatrixCSC{Complex128,Ti}, Ac0)
     lua = lufact(Ac)
     L,U,p,q,Rs = lua[:(:)]
