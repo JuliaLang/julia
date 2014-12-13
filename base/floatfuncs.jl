@@ -43,6 +43,27 @@ end
 @vectorize_1arg Number isinf
 @vectorize_1arg Number isfinite
 
+
+round(x::Real, ::RoundingMode{:TowardZero}) = trunc(x)
+round(x::Real, ::RoundingMode{:TowardPositive}) = ceil(x)
+round(x::Real, ::RoundingMode{:TowardNegative}) = floor(x)
+# C-style round
+function round(x::FloatingPoint, ::RoundingMode{:TiesToAway})
+    y = trunc(x)
+    ifelse(x==y,y,trunc(2*x-y))
+end
+# Java-style round
+function round(x::FloatingPoint, ::RoundingMode{:TiesToPositive})
+    y = floor(x)
+    ifelse(x==y,y,copysign(floor(2*x-y),x))
+end
+round{T<:Integer}(::Type{T}, x::FloatingPoint, r::RoundingMode) = trunc(T,round(x,r))
+
+@vectorize_1arg Real trunc
+@vectorize_1arg Real floor
+@vectorize_1arg Real ceil
+@vectorize_1arg Real round
+
 for f in (:trunc,:floor,:ceil,:round)
     @eval begin
         function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R,1})
@@ -57,6 +78,25 @@ for f in (:trunc,:floor,:ceil,:round)
     end
 end
 
+function round{R<:Real}(x::AbstractArray{R,1}, r::RoundingMode)
+    [ round(x[i], r) for i = 1:length(x) ]
+end
+function round{R<:Real}(x::AbstractArray{R,2}, r::RoundingMode)
+    [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
+end
+function round{R<:Real}(x::AbstractArray{R}, r::RoundingMode)
+    reshape([ round(x[i], r) for i = 1:length(x) ], size(x))
+end
+
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
+    [ round(T, x[i], r) for i = 1:length(x) ]
+end
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
+    [ round(T, x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
+end
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R}, r::RoundingMode)
+    reshape([ round(T, x[i], r) for i = 1:length(x) ], size(x))
+end
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point

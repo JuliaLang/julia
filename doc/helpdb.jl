@@ -1779,6 +1779,28 @@ Any[
 
 "),
 
+("Base","get","get(x)
+
+   Attempt to access the value of the \"Nullable\" object, \"x\".
+   Returns the value if it is present; otherwise, throws a
+   \"NullException\".
+
+"),
+
+("Base","get","get(x, y)
+
+   Attempt to access the value of the \"Nullable{T}\" object, \"x\".
+   Returns the value if it is present; otherwise, returns \"convert(T,
+   y)\".
+
+"),
+
+("Base","isnull","isnull(x)
+
+   Does the \"Nullable\" object \"x\" have a value or not?
+
+"),
+
 ("Base","length","length(s)
 
    The number of characters in string \"s\".
@@ -4524,13 +4546,41 @@ popdisplay(d::Display)
 
 "),
 
-("Base","round","round([T], x[, digits[, base]])
+("Base","round","round([T], x[, digits[, base]][, r::RoundingMode])
 
-   \"round(x)\" returns the nearest integral value of the same type as
-   \"x\" to \"x\", breaking ties by rounding away from zero.
+   \"round(x)\" returns an integral value of the same type as \"x\" to
+   \"x\", according to the default rounding mode (see
+   \"get_rounding\"). By default, this will round to the nearest
+   integer, with ties (fractional values of 0.5) being rounded to the
+   even integer.
 
-   \"round(T, x)\" converts the result to type \"T\", throwing an
-   \"InexactError\" if the value is not representable.
+      julia> round(1.7)
+      2.0
+
+      julia> round(1.5)
+      2.0
+
+      julia> round(2.5)
+      2.0
+
+   The optional \"roundingmode\" argument will change this behaviour.
+   Currently supported are
+
+   * *RoundNearestTiesAway*: this emulates C-style \"round\"
+     behaviour, by rounding ties away from zero.
+
+   * *RoundNearestTiesUp*: this emulates Java-style \"round\"
+     behaviour, by rounding ties toward positive infinity.
+
+   * *RoundToZero*: an alias for *trunc*
+
+   * *RoundUp*: an alias for *ceil*
+
+   * *RoundDown*: an alias for *floor*
+
+   \"round(T, x, [r::RoundingMode])\" converts the result to type
+   \"T\", throwing an \"InexactError\" if the value is not
+   representable.
 
    \"round(x, digits)\" rounds to the specified number of digits after
    the decimal place, or before if negative, e.g., \"round(pi,2)\" is
@@ -6426,7 +6476,7 @@ popdisplay(d::Display)
    Permute the dimensions of array \"A\". \"perm\" is a vector
    specifying a permutation of length \"ndims(A)\". This is a
    generalization of transpose for multi-dimensional arrays. Transpose
-   is equivalent to \"permutedims(A,[2,1])\".
+   is equivalent to \"permutedims(A, [2,1])\".
 
 "),
 
@@ -6442,7 +6492,7 @@ popdisplay(d::Display)
    Permute the dimensions of array \"src\" and store the result in the
    array \"dest\". \"perm\" is a vector specifying a permutation of
    length \"ndims(src)\". The preallocated array \"dest\" should have
-   \"size(dest)=size(src)[perm]\" and is completely overwritten. No
+   \"size(dest) == size(src)[perm]\" and is completely overwritten. No
    in-place permutation is supported and unexpected results will
    happen if *src* and *dest* have overlapping memory regions.
 
@@ -6450,7 +6500,9 @@ popdisplay(d::Display)
 
 ("Base","squeeze","squeeze(A, dims)
 
-   Remove the dimensions specified by \"dims\" from array \"A\"
+   Remove the dimensions specified by \"dims\" from array \"A\".
+   Elements of \"dims\" must be unique and within the range
+   \"1:ndims(A)\".
 
 "),
 
@@ -6718,6 +6770,15 @@ popdisplay(d::Display)
 ("Base","reverse","reverse(v[, start=1[, stop=length(v)]])
 
    Return a copy of \"v\" reversed from start to stop.
+
+"),
+
+("Base","reverseind","reverseind(v, i)
+
+   Given an index \"i\" in \"reverse(v)\", return the corresponding
+   index in \"v\" so that \"v[reverseind(v,i)] == reverse(v)[i]\".
+   (This can be nontrivial in the case where \"v\" is a Unicode
+   string.)
 
 "),
 
