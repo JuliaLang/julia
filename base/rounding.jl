@@ -3,17 +3,21 @@ include("fenv_constants.jl")
 
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
+    RoundNearestTiesAway, RoundNearestTiesUp,
     get_rounding, set_rounding, with_rounding
 
 ## rounding modes ##
 immutable RoundingMode{T} end
 
 const RoundNearest = RoundingMode{:TiesToEven}()
-# const RoundNearestTiesAway = RoundingMode{:TiesToAway}() # currently unsupported
 const RoundToZero = RoundingMode{:TowardZero}()
 const RoundUp = RoundingMode{:TowardPositive}()
 const RoundDown = RoundingMode{:TowardNegative}()
 const RoundFromZero = RoundingMode{:AwayFromZero}() # mpfr only
+# C-style round behaviour
+const RoundNearestTiesAway = RoundingMode{:TiesToAway}()
+# Java-style round behaviour
+const RoundNearestTiesUp = RoundingMode{:TiesToPositive}()
 
 to_fenv(::RoundingMode{:TiesToEven}) = JL_FE_TONEAREST
 to_fenv(::RoundingMode{:TowardZero}) = JL_FE_TOWARDZERO

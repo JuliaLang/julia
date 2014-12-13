@@ -46,6 +46,10 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
+
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
@@ -171,10 +175,6 @@ include("collections.jl")
 include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
-
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
 
 # version
 include("version.jl")

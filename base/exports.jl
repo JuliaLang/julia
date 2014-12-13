@@ -83,6 +83,8 @@ export
     RoundDown,
     RoundingMode,
     RoundNearest,
+    RoundNearestTiesAway,
+    RoundNearestTiesUp,
     RoundToZero,
     RoundUp,
     Set,
