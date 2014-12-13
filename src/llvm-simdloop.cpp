@@ -27,7 +27,11 @@ bool annotateSimdLoop(BasicBlock* incr)
     // Lazy initialization
     if (!simd_loop_mdkind) {
         simd_loop_mdkind = getGlobalContext().getMDKindID("simd_loop");
+#ifdef LLVM36
+        simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>());
+#else
         simd_loop_md = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
+#endif
     }
     // Ideally, the decoration would go on the block itself, but LLVM 3.3 does not
     // support putting metadata on blocks.  So instead, put the decoration on the last
@@ -146,7 +150,11 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     MDNode* n = L->getLoopID();
     if (!n) {
         // Loop does not have a LoopID yet, so give it one.
+#ifdef LLVM36
+        n = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(NULL));
+#else
         n = MDNode::get(getGlobalContext(), ArrayRef<Value*>(NULL));
+#endif
         n->replaceOperandWith(0,n);
         L->setLoopID(n);
     }
@@ -154,7 +162,11 @@ bool LowerSIMDLoop::runOnLoop(Loop *L, LPPassManager &LPM)
     MDNode* n = MDNode::get(getGlobalContext(), ArrayRef<Value*>());
     L->getLoopLatch()->getTerminator()->setMetadata("llvm.loop.parallel", n);
 #endif
+#ifdef LLVM36
+    MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Metadata*>(n));
+#else
     MDNode* m = MDNode::get(getGlobalContext(), ArrayRef<Value*>(n));
+#endif
 
     // Mark memory references so that Loop::isAnnotatedParallel will return true for this loop.
     for(Loop::block_iterator BBI = L->block_begin(), E=L->block_end(); BBI!=E; ++BBI)
