@@ -632,7 +632,12 @@ static jl_value_t *julia_type_of(Value *v)
         (mdn = ((Instruction*)v)->getMetadata("julia_type")) == NULL) {
         return julia_type_of_without_metadata(v, true);
     }
+#ifdef LLVM36
+    MDString *md = dyn_cast<MDString>(mdn->getOperand(0).get());
+#else
     MDString *md = (MDString*)mdn->getOperand(0);
+#endif
+    assert(md != NULL);
     const unsigned char *vts = (const unsigned char*)md->getString().data();
     int id = (vts[0]-1) + (vts[1]-1)*255;
     return jl_typeid_to_type(id);
@@ -666,7 +671,11 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     name[1] = (id/255)+1;
     name[2] = '\0';
     MDString *md = MDString::get(jl_LLVMContext, name);
+#ifdef LLVM36
+    MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Metadata*>(md));
+#else
     MDNode *mdn = MDNode::get(jl_LLVMContext, ArrayRef<Value*>(md));
+#endif
     ((Instruction*)v)->setMetadata("julia_type", mdn);
     return v;
 }
