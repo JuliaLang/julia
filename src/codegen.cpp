@@ -338,7 +338,7 @@ struct jl_varinfo_t {
 };
 
 // --- helpers for reloading IR image
-static void jl_gen_llvm_gv_array(llvm::Module *mod);
+static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars);
 
 extern "C"
 void jl_dump_bitcode(char *fname)
@@ -354,13 +354,17 @@ void jl_dump_bitcode(char *fname)
     std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
+    SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
-    jl_gen_llvm_gv_array(shadow_module);
+    jl_gen_llvm_gv_array(shadow_module, globalvars);
     WriteBitcodeToFile(shadow_module, OS);
 #else
-    jl_gen_llvm_gv_array(jl_Module);
+    jl_gen_llvm_gv_array(jl_Module, globalvars);
     WriteBitcodeToFile(jl_Module, OS);
 #endif
+    for (SmallVectorImpl<GlobalVariable>::iterator *I = globalvars.begin(), *E = globalvars.end(); I != E; ++I) {
+        (*I)->eraseFromParent();
+    }
 }
 
 extern "C"
@@ -418,13 +422,17 @@ void jl_dump_objfile(char *fname, int jit_model)
         jl_error("Could not generate obj file for this target");
     }
 
+    SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
-    jl_gen_llvm_gv_array(shadow_module);
+    jl_gen_llvm_gv_array(shadow_module, globalvars);
     PM.run(*shadow_module);
 #else
-    jl_gen_llvm_gv_array(jl_Module);
+    jl_gen_llvm_gv_array(jl_Module, globalvars);
     PM.run(*jl_Module);
 #endif
+    for (SmallVectorImpl<GlobalVariable>::iterator *I = globalvars.begin(), *E = globalvars.end(); I != E; ++I) {
+        (*I)->eraseFromParent();
+    }
 }
 
 // aggregate of array metadata

@@ -226,45 +226,45 @@ extern "C" {
     extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
 
-static void jl_gen_llvm_gv_array(llvm::Module *mod)
+static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars)
 {
-    // emit the variable table into the code image (can only call this once)
-    // used just before dumping bitcode
+    // emit the variable table into the code image. used just before dumping bitcode.
+    // afterwards, call eraseFromParent on everything in globalvars to reset code generator.
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
-    new GlobalVariable(
+    globalvars.push_back(new GlobalVariable(
             *mod,
             atype,
             true,
             GlobalVariable::ExternalLinkage,
             ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
-            "jl_sysimg_gvars");
-    new GlobalVariable(
+            "jl_sysimg_gvars"));
+    globalvars.push_back(new GlobalVariable(
             *mod,
             T_size,
             true,
             GlobalVariable::ExternalLinkage,
             ConstantInt::get(T_size,globalUnique+1),
-            "jl_globalUnique");
+            "jl_globalUnique"));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_cpu_string);
-    new GlobalVariable(*mod,
+    globalvars.push_back(new GlobalVariable(*mod,
                        feature_string->getType(),
                        true,
                        GlobalVariable::ExternalLinkage,
                        feature_string,
-                       "jl_sysimg_cpu_target");
+                       "jl_sysimg_cpu_target"));
 
     // For native also store the cpuid
     if (strcmp(jl_cpu_string,"native") == 0) {
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        new GlobalVariable(*mod,
+        globalvars.push_back(new GlobalVariable(*mod,
                            T_int64,
                            true,
                            GlobalVariable::ExternalLinkage,
                            ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                           "jl_sysimg_cpu_cpuid");
+                           "jl_sysimg_cpu_cpuid"));
     }
 }
 
