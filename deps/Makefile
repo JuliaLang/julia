@@ -279,6 +279,7 @@ else
 LLVM_FLAGS += --disable-threads
 endif # USE_INTEL_JITEVENTS
 
+ifeq ($(BUILD_LLDB),1)
 ifeq ($(USECLANG),1)
 LLVM_FLAGS += --enable-cxx11
 else
@@ -287,6 +288,7 @@ endif # USECLANG
 ifeq ($(LLDB_DISABLE_PYTHON),1)
 LLVM_CXXFLAGS += -DLLDB_DISABLE_PYTHON
 endif # LLDB_DISABLE_PYTHON
+endif # BUILD_LLDB
 
 ifeq ($(ARCH), ppc64)
 LLVM_CXXFLAGS += -mminimal-toc
