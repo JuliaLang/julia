@@ -251,8 +251,14 @@ function process_options(args::Vector{UTF8String})
         elseif args[i]=="--machinefile"
             i == length(args) && error("--machinefile  no <file> provided")
             i+=1
-            machines = load_machine_file(args[i])
-            addprocs(machines)
+            machines, dirs = load_machine_file(args[i])
+            for machine in machines
+                if haskey(dirs, machine)
+                    addprocs([machine], dir=dirs[machine])
+                else
+                    addprocs([machine])
+                end
+            end
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
             exit(0)
@@ -344,15 +350,31 @@ end
 
 function load_machine_file(path::AbstractString)
     machines = AbstractString[]
+    dirs = Dict()
     for line in split(readall(path),'\n'; keep=false)
+        dirfound=false
+        dir=""
+        machine=""
+        dircheck = split(line,r"\s+dir="; keep=false)
+        if length(dircheck) > 1
+            line = dircheck[1]
+            dir = dircheck[2]
+            dirfound = true
+        end
+
         s = split(line,'*'; keep=false)
         if length(s) > 1
             append!(machines,fill(s[2],int(s[1])))
+            machine = s[2]
         else
             push!(machines,line)
+            machine = line
+        end
+        if dirfound
+            dirs[machine] = dir
         end
     end
-    return machines
+    return machines, dirs
 end
 
 function early_init()
