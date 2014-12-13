@@ -1,12 +1,13 @@
 // --- the ccall intrinsic ---
 
-#include <sys/types.h>
-#include <dirent.h>
-
 // --- library symbol lookup ---
 
 // map from "libX" to full soname "libX.so.ver"
 #if defined(__linux__) || defined(__FreeBSD__)
+
+#include <sys/types.h>
+#include <dirent.h>
+
 static std::map<std::string, std::string> sonameMap;
 static bool got_sonames = false;
 
