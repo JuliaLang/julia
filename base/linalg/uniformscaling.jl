@@ -1,4 +1,4 @@
-import Base: copy, ctranspose, getindex, showarray, transpose, one, zero
+import Base: copy, ctranspose, getindex, showarray, transpose, one, zero, inv
 import Base.LinAlg: SingularException
 
 immutable UniformScaling{T<:Number}
@@ -63,6 +63,8 @@ function -{TA,TJ<:Number}(J::UniformScaling{TJ}, A::AbstractMatrix{TA})
     end
     B
 end
+
+inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(bitunpack(B), J::UniformScaling)
