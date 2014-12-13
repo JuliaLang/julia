@@ -16,3 +16,5 @@
 *.obj
 *.dylib
 *.dSYM
+
+.DS_Store
