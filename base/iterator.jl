@@ -68,7 +68,7 @@ immutable Filter{I}
     flt::Function
     itr::I
 end
-filter(flt::Function, itr) = Filter(flt, itr)
+filter(flt::Predicate, itr) = Filter(flt, itr)
 
 start(f::Filter) = start_filter(f.flt, f.itr)
 function start_filter(pred, itr)

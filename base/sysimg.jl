@@ -50,6 +50,9 @@ include("float.jl")
 include("complex.jl")
 include("rational.jl")
 
+# used by array.jl, reduce.jl, etc.
+include("functors.jl")
+
 # core data structures (used by type inference)
 include("abstractarray.jl")
 include("subarray.jl")

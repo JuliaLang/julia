@@ -1049,7 +1049,7 @@ end
 findfirst(A,v) = findnext(A,v,1)
 
 # returns the index of the next element for which the function returns true
-function findnext(testf::Function, A, start::Integer)
+function findnext(testf::Predicate, A, start::Integer)
     for i = start:length(A)
         if testf(A[i])
             return i
@@ -1059,7 +1059,7 @@ function findnext(testf::Function, A, start::Integer)
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
 
-function find(testf::Function, A::AbstractArray)
+function find(testf::Predicate, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded
     # array for the return
     tmpI = Array(Int, 0)
@@ -1072,6 +1072,8 @@ function find(testf::Function, A::AbstractArray)
     copy!(I, tmpI)
     I
 end
+
+find(A::AbstractArray, v) = find(EqX(v), A)
 
 function find(A::StridedArray)
     nnzA = countnz(A)
@@ -1087,7 +1089,7 @@ function find(A::StridedArray)
 end
 
 find(x::Number) = x == 0 ? Array(Int,0) : [1]
-find(testf::Function, x::Number) = !testf(x) ? Array(Int,0) : [1]
+find(testf::Predicate, x::Number) = !testf(x) ? Array(Int,0) : [1]
 
 findn(A::AbstractVector) = find(A)
 
@@ -1219,9 +1221,9 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-filter(f::Function, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+filter(f::Predicate, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f::Function, a::Vector)
+function filter!(f::Predicate, a::Vector)
     insrt = 1
     for curr = 1:length(a)
         if f(a[curr])
@@ -1233,7 +1235,7 @@ function filter!(f::Function, a::Vector)
     return a
 end
 
-function filter(f::Function, a::Vector)
+function filter(f::Predicate, a::Vector)
     r = Array(eltype(a), 0)
     for i = 1:length(a)
         if f(a[i])
@@ -1242,6 +1244,7 @@ function filter(f::Function, a::Vector)
     end
     return r
 end
+
 
 ## Transpose ##
 const transposebaselength=64

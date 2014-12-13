@@ -1463,7 +1463,7 @@ end
 
 ## Filter ##
 
-function filter(f::Function, Bs::BitArray)
+function filter(f::Predicate, Bs::BitArray)
     boolmap::Array{Bool} = map(f, Bs)
     Bs[boolmap]
 end

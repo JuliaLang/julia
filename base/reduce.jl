@@ -1,46 +1,5 @@
 ## reductions ##
 
-###### Functors ######
-
-# Note that functors are merely used as internal machinery to enhance code reuse.
-# They are not exported.
-# When function arguments can be inlined, the use of functors can be removed.
-
-abstract Func{N}
-
-immutable IdFun <: Func{1} end
-call(::IdFun, x)  = x
-
-immutable AbsFun <: Func{1} end
-call(::AbsFun, x) = abs(x)
-
-immutable Abs2Fun <: Func{1} end
-call(::Abs2Fun, x) = abs2(x)
-
-immutable ExpFun <: Func{1} end
-call(::ExpFun, x) = exp(x)
-
-immutable LogFun <: Func{1} end
-call(::LogFun, x) = log(x)
-
-immutable AddFun <: Func{2} end
-call(::AddFun, x, y) = x + y
-
-immutable MulFun <: Func{2} end
-call(::MulFun, x, y) = x * y
-
-immutable AndFun <: Func{2} end
-call(::AndFun, x, y) = x & y
-
-immutable OrFun <: Func{2} end
-call(::OrFun, x, y) =  x | y
-
-immutable MaxFun <: Func{2} end
-call(::MaxFun, x, y) = scalarmax(x,y)
-
-immutable MinFun <: Func{2} end
-call(::MinFun, x, y) = scalarmin(x, y)
-
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
@@ -233,7 +192,7 @@ sum_pairwise_blocksize(::Abs2Fun) = 4096
 mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
-sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)
+sum(f::UnaryCallable, a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
 sum(a::AbstractArray{Bool}) = countnz(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
@@ -264,7 +223,7 @@ end
 
 ## prod
 
-prod(f::Union(Callable,Func{1}), a) = mapreduce(f, MulFun(), a)
+prod(f::UnaryCallable, a) = mapreduce(f, MulFun(), a)
 prod(a) = mapreduce(IdFun(), MulFun(), a)
 
 prod(A::AbstractArray{Bool}) =
@@ -308,8 +267,8 @@ function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-maximum(f::Union(Callable,Func{1}), a) = mapreduce(f, MaxFun(), a)
-minimum(f::Union(Callable,Func{1}), a) = mapreduce(f, MinFun(), a)
+maximum(f::UnaryCallable, a) = mapreduce(f, MaxFun(), a)
+minimum(f::UnaryCallable, a) = mapreduce(f, MinFun(), a)
 
 maximum(a) = mapreduce(IdFun(), MaxFun(), a)
 minimum(a) = mapreduce(IdFun(), MinFun(), a)
@@ -380,18 +339,11 @@ end
 all(a) = mapreduce(IdFun(), AndFun(), a)
 any(a) = mapreduce(IdFun(), OrFun(), a)
 
-all(pred::Union(Callable,Func{1}), a) = mapreduce(pred, AndFun(), a)
-any(pred::Union(Callable,Func{1}), a) = mapreduce(pred, OrFun(), a)
+all(pred::Predicate, a) = mapreduce(pred, AndFun(), a)
+any(pred::Predicate, a) = mapreduce(pred, OrFun(), a)
 
 
 ## in & contains
-
-immutable EqX{T} <: Func{1}
-    x::T
-end
-EqX{T}(x::T) = EqX{T}(x)
-
-call(f::EqX, y) = f.x == y
 in(x, itr) = any(EqX(x), itr)
 
 const ∈ = in
@@ -409,7 +361,7 @@ end
 
 ## countnz & count
 
-function count(pred::Union(Function,Func{1}), itr)
+function count(pred::Predicate, itr)
     n = 0
     for x in itr
         pred(x) && (n += 1)
@@ -417,7 +369,7 @@ function count(pred::Union(Function,Func{1}), itr)
     return n
 end
 
-function count(pred::Union(Function,Func{1}), a::AbstractArray)
+function count(pred::Predicate, a::AbstractArray)
     n = 0
     for i = 1:length(a)
         @inbounds if pred(a[i])
@@ -427,7 +379,7 @@ function count(pred::Union(Function,Func{1}), a::AbstractArray)
     return n
 end
 
-immutable NotEqZero <: Func{1} end
-call(::NotEqZero, x) = x != 0
+count(itr, v) = count(EqX(v), itr)
 
-countnz(a) = count(NotEqZero(), a)
+count(itr) = count(NotEqZero(), itr)
+countnz(itr) = count(itr)

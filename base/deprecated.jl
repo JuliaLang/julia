@@ -69,7 +69,7 @@ function nfilled(X)
 end
 export nfilled
 
-@deprecate nonzeros(A::StridedArray) A[find(A)]
+@deprecate nonzeros(A::StridedArray) filter(A)
 @deprecate nonzeros(B::BitArray) trues(countnz(B))
 @deprecate nnz(A::StridedArray) countnz(A)
 

@@ -118,7 +118,7 @@ function unique(C)
     out
 end
 
-function filter!(f::Function, s::Set)
+function filter!(f::Predicate, s::Set)
     for x in s
         if !f(x)
             delete!(s, x)
@@ -126,7 +126,7 @@ function filter!(f::Function, s::Set)
     end
     return s
 end
-function filter(f::Function, s::Set)
+function filter(f::Predicate, s::Set)
     u = similar(s)
     for x in s
         if f(x)

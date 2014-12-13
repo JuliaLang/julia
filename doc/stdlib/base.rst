@@ -884,9 +884,12 @@ Iterable Collections
    Test whether all values in ``A`` along the singleton dimensions of ``r`` are true,
    and write results to ``r``.
 
-.. function:: count(p, itr) -> Integer
+.. function:: count([predicate,] itr [, value]) -> Integer
 
-   Count the number of elements in ``itr`` for which predicate ``p`` returns true.
+   Count the number of elements in ``itr`` for which ``predicate``
+   returns true, or which are equal to ``value``, or which are not
+   equal to zero (``value`` and ``predicate`` are mutually exclusive
+   parameters)
 
 .. function:: any(p, itr) -> Bool
 
@@ -1010,15 +1013,22 @@ Iterable Collections
    Determine whether every element of ``a`` is also in ``b``, using the
    ``in`` function.
 
-.. function:: filter(function, collection)
+.. function:: filter([predicate,] collection [, value])
 
-   Return a copy of ``collection``, removing elements for which ``function`` is false.
-   For associative collections, the function is passed two arguments (key and value).
+   Return a copy of ``collection``, removing elements for which
+   ``predicate`` evaluates to false, or not equal to ``value``, or
+   equal to ``0`` if neither ``predicate`` nor ``value`` is provided
+   (``value`` and ``predicate`` are mutally exclusive parameters). For
+   associative collections, ``predicate`` is passed two arguments (key
+   and value).
 
-.. function:: filter!(function, collection)
+.. function:: filter!([predicate,] collection [, value])
 
-   Update ``collection``, removing elements for which ``function`` is false.
-   For associative collections, the function is passed two arguments (key and value).
+   Update ``collection``, removing elements for which ``predicate``
+   evaluates to false, or not equal to ``value``, or equal to ``0`` if
+   neither ``predicate`` nor ``value`` is provided (``value`` and
+   ``predicate`` are mutally exclusive parameters). For associative
+   collections, ``predicate`` is passed two arguments (key and value).
 
 
 Indexable Collections
@@ -4429,6 +4439,10 @@ Indexing, Assignment, and Concatenation
    (determined by ``A[i]!=0``).  A common use of this is to convert a
    boolean array to an array of indexes of the ``true``
    elements.
+
+.. function:: find(A,v)
+
+   Return a vector of the linear indexes of ``A`` elements equal to ``v``.
 
 .. function:: find(f,A)
 

@@ -837,7 +837,7 @@ function map(f::Function, s::AbstractString)
     map_result(s, takebuf_array(out))
 end
 
-function filter(f::Function, s::AbstractString)
+function filter(f::Predicate, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s

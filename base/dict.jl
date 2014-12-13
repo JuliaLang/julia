@@ -191,7 +191,7 @@ function merge(d::Associative, others::Associative...)
     merge!(Dict{K,V}(), d, others...)
 end
 
-function filter!(f::Function, d::Associative)
+function filter!(f::Predicate, d::Associative)
     for (k,v) in d
         if !f(k,v)
             delete!(d,k)
@@ -199,7 +199,15 @@ function filter!(f::Function, d::Associative)
     end
     return d
 end
-filter(f::Function, d::Associative) = filter!(f,copy(d))
+filter(f::Predicate, d::Associative) = filter!(f,copy(d))
+
+filter( d::Associative, value) = filter( Apply2nd(EqX(value)), d)
+filter!(d::Associative, value) = filter!(Apply2nd(EqX(value)), d)
+
+filter( d::Associative) = filter( Apply2nd(NotEqZero()), d)
+filter!(d::Associative) = filter!(Apply2nd(NotEqZero()), d)
+
+
 
 eltype{K,V}(a::Associative{K,V}) = (K,V)
 
