@@ -395,6 +395,8 @@ end
 J = UniformScaling(λ)
 @test J*eye(2) == conj(J'eye(2)) # ctranpose (and A(c)_mul_B)
 @test I + I === UniformScaling(2) # +
+@test inv(I) == I
+@test inv(J) == UniformScaling(inv(λ))
 B = randbool(2,2)
 @test B + I == B + eye(B)
 @test I + B == B + eye(B)
