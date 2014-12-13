@@ -1342,7 +1342,7 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
-extern void *__stack_chk_guard;
+DLLEXPORT extern void *__stack_chk_guard;
 #define SET_STACK_CHK_GUARD(a,b,c) do {                         \
         unsigned char *p = (unsigned char *)&__stack_chk_guard; \
         a = p[sizeof(__stack_chk_guard)-1];                     \

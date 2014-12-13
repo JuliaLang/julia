@@ -121,7 +121,7 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-void *__stack_chk_guard = NULL;
+DLLEXPORT void *__stack_chk_guard = NULL;
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
