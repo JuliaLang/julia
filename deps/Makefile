@@ -551,10 +551,11 @@ install-llvm: $(LLVM_OBJ_TARGET)
 #todo: LLVM make check target is broken on julia.mit.edu (and really slow elsewhere)
 
 update-llvm:
-	(cd llvm-$(LLVM_VER); git fetch origin; git rebase origin/master)
+	(cd llvm-$(LLVM_VER); git pull --ff-only)
 	([ -d llvm-$(LLVM_VER)/tools/clang ] && (cd llvm-$(LLVM_VER)/tools/clang; git pull --ff-only))
 	([ -d llvm-$(LLVM_VER)/projects/compiler-rt ] && (cd llvm-$(LLVM_VER)/projects/compiler-rt; git pull --ff-only))
 	([ -d llvm-$(LLVM_VER)/tools/lldb ] && (cd llvm-$(LLVM_VER)/tools/lldb; git pull --ff-only))
+
 ## LIBUV ##
 
 UV_SRC_TARGET = libuv/.libs/libuv.a
@@ -1820,4 +1821,4 @@ install-libgit2: $(LIBGIT2_OBJ_TARGET)
 
 .PHONY: default compile install cleanall distcleanall \
 	get-* configure-* compile-* check-* install-* \
-	clean-* distclean-* reinstall-*
+	clean-* distclean-* reinstall-* update-llvm
