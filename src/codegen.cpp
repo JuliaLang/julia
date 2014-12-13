@@ -130,9 +130,8 @@ void __attribute__(()) __stack_chk_fail()
 #endif
 {
     /* put your panic function or similar in here */
-    fprintf(stderr, "warning: stack corruption detected\n");
-    //assert(0 && "stack corruption detected");
-    //abort();
+    fprintf(stderr, "fatal error: stack corruption detected\n");
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function
 }
 }
 

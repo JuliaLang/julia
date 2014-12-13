@@ -712,7 +712,7 @@ static void gc_mark_task(jl_task_t *ta, int d)
             gc_mark_stack(jl_pgcstack, offset, d);
         }
         else {
-            offset = (char *)ta->stkbuf - ((char *)ta->stackbase - ta->ssize);
+            offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
             gc_mark_stack(ta->gcstack, offset, d);
         }
 #else

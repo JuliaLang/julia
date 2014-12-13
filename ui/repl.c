@@ -256,7 +256,7 @@ static void print_profile(void)
 }
 #endif
 
-int true_main(int argc, char *argv[])
+static int true_main(int argc, char *argv[])
 {
     if (jl_base_module != NULL) {
         jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
@@ -308,9 +308,10 @@ int true_main(int argc, char *argv[])
         JL_PUTS("\n",JL_STDOUT);
         goto again;
     }
-    uv_tty_reset_mode();
     return iserr;
 }
+
+DLLEXPORT extern int julia_save();
 
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
@@ -329,6 +330,8 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         argv[i] = (wchar_t*)arg;
     }
 #endif
+    char a,b,c;
+    SET_STACK_CHK_GUARD(a,b,c);
     libsupport_init();
     parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
@@ -336,7 +339,11 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         return 0;
     }
     julia_init();
-    return julia_trampoline(argc, (char**)argv, true_main);
+    int ret = true_main(argc, (char**)argv);
+    jl_atexit_hook();
+    julia_save();
+    CLR_STACK_CHK_GUARD(a,b,c);
+    return ret;
 }
 
 #ifdef __cplusplus

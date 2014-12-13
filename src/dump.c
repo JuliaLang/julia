@@ -452,8 +452,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     if (ref_only)
         return;
-    // set on every startup; don't save value
-    jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
@@ -461,12 +459,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m || m != jl_main_module) {
                 jl_serialize_value(s, b->name);
-                if (table[i-1] == jhsym && m == jl_core_module) {
-                    jl_serialize_value(s, NULL);
-                }
-                else {
-                    jl_serialize_value(s, b->value);
-                }
+                jl_serialize_value(s, b->value);
                 jl_serialize_value(s, b->type);
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
@@ -1435,9 +1428,6 @@ void jl_restore_system_image(const char *fname)
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    // restore the value of our "magic" JULIA_HOME variable/constant
-    jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
-        jl_cstr_to_string(jl_compileropts.julia_home);
     mode = last_mode;
     jl_update_all_fptrs();
 }
