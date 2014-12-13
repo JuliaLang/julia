@@ -30,7 +30,7 @@ end
 IPv4(ipstr::AbstractString) = parseipv4(ipstr)
 
 
-IPv4(iparr::Array) = [IPv4(x) for x in iparr]
+IPv4(iparr::AbstractArray) = map((x)->IPv4(x), iparr)
 
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
@@ -74,6 +74,7 @@ function IPv6(host::Integer)
 end
 
 IPv6(ipstr::AbstractString) = parseipv6(ipstr)
+IPv6(iparr::AbstractArray) = map((x)->IPv6(x), iparr)
 
 # Suppress leading '0's and "0x"
 print_ipv6_field(io,field::UInt16) = print(io,hex(field))
