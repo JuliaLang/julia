@@ -153,7 +153,7 @@ function vecnorm(itr, p::Real=2)
     p == 1 && return vecnorm1(itr)
     p == Inf && return vecnormInf(itr)
     p == 0 && return convert(typeof(float(real(zero(eltype(itr))))),
-                             countnz(itr))
+                             count(itr))
     p == -Inf && return vecnormMinusInf(itr)
     vecnormp(itr,p)
 end

@@ -194,7 +194,7 @@ mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
 
 sum(f::UnaryCallable, a) = mapreduce(f, AddFun(), a)
 sum(a) = mapreduce(IdFun(), AddFun(), a)
-sum(a::AbstractArray{Bool}) = countnz(a)
+sum(a::AbstractArray{Bool}) = count(a)
 sumabs(a) = mapreduce(AbsFun(), AddFun(), a)
 sumabs2(a) = mapreduce(Abs2Fun(), AddFun(), a)
 
@@ -359,7 +359,7 @@ function contains(eq::Function, itr, x)
 end
 
 
-## countnz & count
+## count
 
 function count(pred::Predicate, itr)
     n = 0
@@ -382,4 +382,3 @@ end
 count(itr, v) = count(EqX(v), itr)
 
 count(itr) = count(NotEqZero(), itr)
-countnz(itr) = count(itr)

@@ -16,7 +16,7 @@ SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vecto
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
 nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
-countnz(S::SparseMatrixCSC) = countnz(S.nzval)
+count(S::SparseMatrixCSC) = count(S.nzval)
 
 nonzeros(S::SparseMatrixCSC) = S.nzval
 rowvals(S::SparseMatrixCSC) = S.rowval
@@ -868,7 +868,7 @@ mean(A::SparseMatrixCSC, region::Integer) = sum(A, region) / size(A, region)
 #all(A::SparseMatrixCSC{Bool}, region) = reducedim(all,A,region,true)
 #any(A::SparseMatrixCSC{Bool}, region) = reducedim(any,A,region,false)
 #sum(A::SparseMatrixCSC{Bool}, region) = reducedim(+,A,region,0,Int)
-#sum(A::SparseMatrixCSC{Bool}) = countnz(A)
+#sum(A::SparseMatrixCSC{Bool}) = count(A)
 
 ## getindex
 function rangesearch(haystack::Range, needle)
@@ -1899,13 +1899,13 @@ end
 function issym(A::SparseMatrixCSC)
     m, n = size(A)
     if m != n; return false; end
-    return countnz(A - A.') == 0
+    return count(A - A.') == 0
 end
 
 function ishermitian(A::SparseMatrixCSC)
     m, n = size(A)
     if m != n; return false; end
-    return countnz(A - A') == 0
+    return count(A - A') == 0
 end
 
 function istriu{Tv}(A::SparseMatrixCSC{Tv})

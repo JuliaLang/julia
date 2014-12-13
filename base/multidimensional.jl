@@ -208,7 +208,7 @@ end
 
 
 @ngenerate N NTuple{N,Vector{Int}} function findn{T,N}(A::AbstractArray{T,N})
-    nnzA = countnz(A)
+    nnzA = count(A)
     @nexprs N d->(I_d = Array(Int, nnzA))
     k = 1
     @nloops N i A begin
@@ -644,7 +644,7 @@ end
 ## findn
 
 @ngenerate N NTuple{N,Vector{Int}} function findn{N}(B::BitArray{N})
-    nnzB = countnz(B)
+    nnzB = count(B)
     I = ntuple(N, x->Array(Int, nnzB))
     if nnzB > 0
         count = 1

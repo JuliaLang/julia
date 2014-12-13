@@ -1076,7 +1076,7 @@ end
 find(A::AbstractArray, v) = find(EqX(v), A)
 
 function find(A::StridedArray)
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = similar(A, Int, nnzA)
     count = 1
     for i=1:length(A)
@@ -1094,7 +1094,7 @@ find(testf::Predicate, x::Number) = !testf(x) ? Array(Int,0) : [1]
 findn(A::AbstractVector) = find(A)
 
 function findn(A::StridedMatrix)
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = similar(A, Int, nnzA)
     J = similar(A, Int, nnzA)
     count = 1
@@ -1109,7 +1109,7 @@ function findn(A::StridedMatrix)
 end
 
 function findnz{T}(A::StridedMatrix{T})
-    nnzA = countnz(A)
+    nnzA = count(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
     NZs = zeros(T, nnzA)

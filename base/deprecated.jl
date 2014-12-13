@@ -70,8 +70,8 @@ end
 export nfilled
 
 @deprecate nonzeros(A::StridedArray) filter(A)
-@deprecate nonzeros(B::BitArray) trues(countnz(B))
-@deprecate nnz(A::StridedArray) countnz(A)
+@deprecate nonzeros(B::BitArray) trues(count(B))
+@deprecate nnz(A::StridedArray) count(A)
 
 @deprecate dense  full
 
@@ -252,3 +252,5 @@ const Uint128 = UInt128
 @deprecate squeeze(X, dims) squeeze(X, tuple(dims...))
 
 @deprecate sizehint(A, n) sizehint!(A, n)
+
+@deprecate countnz(A) count(A)

@@ -4213,10 +4213,6 @@ Basic functions
     (iter.I_1,iter.I_2) = (2,3)
     A[iter] = 0.9916142534546522
 
-.. function:: countnz(A)
-
-   Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``, which returns the number of stored values.
-
 .. function:: conj!(A)
 
    Convert an array to its complex conjugate in-place

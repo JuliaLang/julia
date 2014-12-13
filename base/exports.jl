@@ -560,7 +560,6 @@ export
     nonzeros,
     nthperm!,
     nthperm,
-    countnz,
     ones,
     parent,
     parentindexes,
