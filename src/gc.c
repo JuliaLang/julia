@@ -16,7 +16,6 @@
 #include <assert.h>
 #ifdef USE_MMAP
 # include <sys/mman.h>
-# include <malloc.h>
 #endif
 #include "julia.h"
 #include "julia_internal.h"
@@ -37,6 +36,7 @@ extern "C" {
 
 typedef struct _gcpage_t {
     char data[GC_PAGE_SZ];
+    unsigned int first; // offset (bytes) of the first free item
     union {
         struct _gcpage_t *next;
         char _pad[8];
@@ -54,7 +54,8 @@ typedef struct _gcval_t {
 
 typedef struct _pool_t {
     size_t osize;
-    gcpage_t *pages;
+    gcpage_t *fullpages;
+    gcpage_t *newpages;
     gcval_t *freelist;
 } pool_t;
 
@@ -473,27 +474,17 @@ static void add_page(pool_t *p)
 {
 #ifdef USE_MMAP
     gcpage_t *pg = (gcpage_t*)mmap(NULL, sizeof(gcpage_t), PROT_READ|PROT_WRITE,
-                                   MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+                                   MAP_ANON|MAP_PRIVATE, -1, 0);
 #else
     gcpage_t *pg = (gcpage_t*)malloc_a16(sizeof(gcpage_t));
 #endif
     if (pg == NULL)
         jl_throw(jl_memory_exception);
-    gcval_t *v = (gcval_t*)&pg->data[0];
-    char *lim = (char*)v + GC_PAGE_SZ - p->osize;
-    gcval_t *fl;
-    gcval_t **pfl = &fl;
-    while ((char*)v <= lim) {
-        *pfl = v;
-        pfl = &v->next;
-        v = (gcval_t*)((char*)v + p->osize);
-    }
     // these statements are ordered so that interrupting after any of them
     // leaves the system in a valid state
-    *pfl = p->freelist;
-    pg->next = p->pages;
-    p->pages = pg;
-    p->freelist = fl;
+    pg->first = (GC_PAGE_SZ / p->osize) * p->osize;
+    pg->next = p->newpages;
+    p->newpages = pg;
 }
 
 static inline void *pool_alloc(pool_t *p)
@@ -501,13 +492,25 @@ static inline void *pool_alloc(pool_t *p)
     if (allocd_bytes > collect_interval)
         jl_gc_collect();
     allocd_bytes += p->osize;
-    if (p->freelist == NULL) {
+    if (p->freelist != NULL) {
+        gcval_t *v = p->freelist;
+        p->freelist = p->freelist->next;
+        return v;
+    }
+    if (p->newpages == NULL) {
         add_page(p);
     }
-    assert(p->freelist != NULL);
-    gcval_t *v = p->freelist;
-    p->freelist = p->freelist->next;
-    v->flags = 0;
+    assert(p->newpages != NULL);
+    gcpage_t *pg = p->newpages;
+    assert(pg->first > 0 && pg->first <= GC_PAGE_SZ);
+    pg->first -= p->osize;
+    gcval_t *v = (gcval_t*)&pg->data[pg->first];
+    if (!pg->first) {
+        // move page to fullpages list
+        p->newpages = pg->next;
+        pg->next = p->fullpages;
+        p->fullpages = pg;
+    }
     return v;
 }
 
@@ -529,18 +532,12 @@ static int szclass(size_t sz)
 
 static void sweep_pool(pool_t *p)
 {
-#ifdef FREE_PAGES_EAGER
-    int freedall;
-#else
-    int empty;
-#endif
-    gcval_t **prev_pfl;
-    gcval_t *v;
-    gcpage_t *pg = p->pages;
-    gcpage_t **ppg = &p->pages;
+    gcpage_t *pg;
+    gcpage_t **ppg;
     gcval_t **pfl = &p->freelist;
-    size_t osize = p->osize;
     size_t nfreed = 0;
+    const size_t osize = p->osize;
+    const unsigned int lim = GC_PAGE_SZ - osize;
 
     size_t old_nfree = 0;
     gcval_t *ofl = p->freelist;
@@ -549,65 +546,107 @@ static void sweep_pool(pool_t *p)
         ofl = ofl->next;
     }
 
+    pg = p->newpages;
+    ppg = &p->newpages;
+newpage_loop_continue:
     while (pg != NULL) {
-        v = (gcval_t*)&pg->data[0];
-        char *lim = (char*)v + GC_PAGE_SZ - osize;
-#ifdef FREE_PAGES_EAGER
-        freedall = 1;
-#else
-        empty = 1;
-#endif
-        prev_pfl = pfl;
-        while ((char*)v <= lim) {
+        unsigned int n;
+        for (n = pg->first; n <= lim; n += osize) {
+            gcval_t *v = (gcval_t*)&pg->data[n];
             if (!v->marked) {
-#ifndef FREE_PAGES_EAGER
-                // check that all but last object points to its next object,
-                // which is a heuristic check for being on the freelist.
-                if ((char*)v->next != (char*)v + osize && v->next != NULL &&
-                    (char*)v+osize <= lim)
-                    empty = 0;
-#endif
-                *pfl = v;
-                pfl = &v->next;
                 nfreed++;
             }
             else {
                 v->marked = 0;
-#ifdef FREE_PAGES_EAGER
-                freedall = 0;
+                pg->first = n;
+                for (n += osize; n <= lim; n += osize) {
+                    gcval_t *v = (gcval_t*)&pg->data[n];
+                    if (!v->marked) {
+                        *pfl = v;
+                        pfl = &v->next;
+                        nfreed++;
+                    }
+                    else {
+                        v->marked = 0;
+                    }
+                }
+                ppg = &pg->next;
+                pg = pg->next;
+                goto newpage_loop_continue;
+            }
+        }
+        pg->first = n;
+        {
+            gcpage_t *nextpg = pg->next;
+            if (nextpg) {
+                // free a completely empty pages
+                // unless it is the last one in the pool
+                *ppg = nextpg;
+#ifdef USE_MMAP
+                munmap(pg, sizeof(gcpage_t));
 #else
-                empty = 0;
+                free_a16(pg);
 #endif
             }
-            v = (gcval_t*)((char*)v + osize);
+            pg = nextpg;
         }
-        gcpage_t *nextpg = pg->next;
-        // lazy version: (empty) if the whole page was already unused, free it
-        // eager version: (freedall) free page as soon as possible
-        // the eager one uses less memory.
-        if (
+    }
+
+    pg = p->fullpages;
+    ppg = &p->fullpages;
+    while (pg != NULL) {
+        unsigned int n;
+        assert(!pg->first);
+        for (n = pg->first; n <= lim; n += osize) {
+            gcval_t *v = (gcval_t*)&pg->data[n];
+            if (!v->marked) {
+                nfreed++;
+            }
+            else {
+                v->marked = 0;
+                pg->first = n;
+                for (n += osize; n <= lim; n += osize) {
+                    gcval_t *v = (gcval_t*)&pg->data[n];
+                    if (!v->marked) {
+                        *pfl = v;
+                        pfl = &v->next;
+                        nfreed++;
+                    }
+                    else {
+                        v->marked = 0;
+                    }
+                }
+                goto fullpage_loop_continue;
+            }
+        }
 #ifdef FREE_PAGES_EAGER
-            freedall
-#else
-            empty
-#endif
-            ) {
-            pfl = prev_pfl;
+        if (p->newpages) {
+            gcpage_t *nextpg = pg->next;
             *ppg = nextpg;
-#ifdef MEMDEBUG
-            memset(pg, 0xbb, sizeof(gcpage_t));
-#endif
 #ifdef USE_MMAP
             munmap(pg, sizeof(gcpage_t));
 #else
             free_a16(pg);
 #endif
-            //freed_bytes += GC_PAGE_SZ;
+            pg = nextpg;
+            continue;
         }
-        else {
-            ppg = &pg->next;
+#endif
+        pg->first = n;
+fullpage_loop_continue:
+        {
+            gcpage_t *nextpg = pg->next;
+            if (pg->first) {
+                // move page to newpages pool
+                *ppg = nextpg;
+                pg->next = p->newpages;
+                p->newpages = pg;
+            }
+            else {
+                ppg = &pg->next;
+            }
+            pg = nextpg;
         }
-        pg = nextpg;
     }
     *pfl = NULL;
     freed_bytes += (nfreed - old_nfree)*osize;
@@ -1108,12 +1147,7 @@ void jl_gc_init(void)
     int i;
     for(i=0; i < N_POOLS; i++) {
         norm_pools[i].osize = szc[i];
-        norm_pools[i].pages = NULL;
-        norm_pools[i].freelist = NULL;
-
         ephe_pools[i].osize = szc[i];
-        ephe_pools[i].pages = NULL;
-        ephe_pools[i].freelist = NULL;
     }
 
     htable_new(&finalizer_table, 0);
@@ -1143,21 +1177,21 @@ static size_t pool_stats(pool_t *p, size_t *pwaste)
 {
     gcval_t *v;
     gcpage_t *pg = p->pages;
-    size_t osize = p->osize;
     size_t nused=0, nfree=0, npgs=0;
+    const size_t osize = p->osize;
+    const unsigned int lim = GC_PAGE_SZ - osize;
 
     while (pg != NULL) {
+        unsigned int n;
         npgs++;
-        v = (gcval_t*)&pg->data[0];
-        char *lim = (char*)v + GC_PAGE_SZ - osize;
-        while ((char*)v <= lim) {
+        for (n = pg->first; n <= lim; n += osize) {
+            gcval_t *v = (gcval_t*)&pg->data[n];
             if (!v->marked) {
                 nfree++;
             }
             else {
                 nused++;
             }
-            v = (gcval_t*)((char*)v + osize);
         }
         gcpage_t *nextpg = pg->next;
         pg = nextpg;
