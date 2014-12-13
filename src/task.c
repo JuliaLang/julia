@@ -233,9 +233,9 @@ static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
 }
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-void __declspec(noinline)
+static void __declspec(noinline)
 #else
-void __attribute__((noinline))
+static void __attribute__((noinline))
 #endif
 NORETURN start_task()
 {
@@ -348,16 +348,18 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
                 " push %%rbp;\n" // instead of RSP
-                " jmp _start_task" // call stack_task with fake stack frame
-                : : "r"(jl_stackbase-0x10) : );
+                " jmp %P1;\n" // call stack_task with fake stack frame
+                " ud2"
+                : : "r"(jl_stackbase-0x10), "i"(start_task) : "memory" );
 #elif defined(_CPU_X86_)
             asm(" movl %0, %%esp;\n"
                 " xorl %%ebp, %%ebp;\n"
                 " push %%ebp;\n" // instead of ESP
-                " jmp _start_task" // call stack_task with fake stack frame
-                : : "r"(jl_stackbase-0x10) : );
+                " jmp %P1;\n" // call stack_task with fake stack frame
+                " ud2"
+                : : "r"(jl_stackbase-0x10), "i"(start_task) : "memory" );
 #else
-#error ASM_COPY_STACKS not supported on this platform
+#error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
 #else // ASM_COPY_STACKS
             jl_longjmp(jl_base_ctx, 1);

@@ -1330,10 +1330,8 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     // save module initialization order
     if (jl_module_init_order != NULL) {
         for(i=0; i < jl_array_len(jl_module_init_order); i++) {
-            // NULL out any modules that weren't saved
-            jl_value_t *mod = jl_cellref(jl_module_init_order, i);
-            (void)mod;
-            assert(ptrhash_get(&backref_table, mod) != HT_NOTFOUND);
+            // verify that all these modules were saved
+            assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
     jl_serialize_value(&f, jl_module_init_order);

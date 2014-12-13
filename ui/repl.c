@@ -311,7 +311,7 @@ static int true_main(int argc, char *argv[])
     return iserr;
 }
 
-DLLEXPORT extern int julia_save();
+DLLEXPORT extern void julia_save();
 
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])

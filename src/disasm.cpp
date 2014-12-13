@@ -482,7 +482,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 #ifdef LLVM35
                         if (MCIA->evaluateBranch(Inst, Index, insSize, addr))
 #else
-                        if ((addr = MCIA->evaluateBranch(Inst, Index, insSize)) != -1)
+                        if ((addr = MCIA->evaluateBranch(Inst, Index, insSize)) != (uint64_t)-1)
 #endif
                             DisInfo.insertAddress(addr);
                     }

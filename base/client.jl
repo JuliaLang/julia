@@ -426,11 +426,8 @@ function _start()
         println()
         exit(1)
     end
-    if is_interactive
-        if have_color
-            print(color_normal)
-        end
-        println()
+    if is_interactive && have_color
+        print(color_normal)
     end
 end
 

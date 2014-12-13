@@ -10,7 +10,9 @@
 #else
 #define PATHSEPSTRING "/"
 #define PATHLISTSEPSTRING ":"
+#ifndef PATH_MAX // many platforms don't have a max path, we define one anyways
 #define PATH_MAX 1024
+#endif
 #endif
 
 #endif

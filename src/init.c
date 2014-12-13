@@ -765,13 +765,13 @@ static char *abspath(const char *in)
         }
     }
 #else
-    DWORD n = GetFullPathName(in, 0, NULL, C_NULL);
+    DWORD n = GetFullPathName(in, 0, NULL, NULL);
     if (n <= 0) {
         ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
         exit(1);
     }
     char *out = (char*)malloc(n);
-    DWORD m = GetFullPathName(in, n, out, C_NULL);
+    DWORD m = GetFullPathName(in, n, out, NULL);
     if (n != m + 1) {
         ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
         exit(1);
@@ -1096,7 +1096,7 @@ extern void *__stack_chk_guard;
 
 void jl_compile_all(void);
 
-DLLEXPORT int julia_save()
+DLLEXPORT void julia_save()
 {
     const char *build_path = jl_compileropts.build_path;
     if (build_path) {
