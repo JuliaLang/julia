@@ -725,8 +725,8 @@ full(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
 ## Can we determine the source/result is Real?  This is not stored in the type Eigen
 full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
 
-full(F::Hessenberg) = (fq = full(F[:Q]); fq * F[:H] * fq')
+full(F::Hessenberg) = (fq = full(F[:Q]); (fq * F[:H]) * fq')
 
-full(F::Schur) = F.Z * F.T * F.Z'
+full(F::Schur) = (F.Z * F.T) * F.Z'
 
-full(F::SVD) = F.U * Diagonal(F.S) * F.Vt
+full(F::SVD) = (F.U * Diagonal(F.S)) * F.Vt
