@@ -83,8 +83,8 @@ show(io::IO, ip::IPv6) = print(io,"ip\"",ip,"\"")
 
 
 # Suppress leading '0's and "0x"
-repr_ipv6_field(field::UInt16) = return(hex(field))
-repr_ipv6_field(ip,i) = repr_ipv6_field(ipv6_field(ip,i))
+string_ipv6_field(field::UInt16) = return(hex(field))
+string_ipv6_field(ip,i) = string_ipv6_field(ipv6_field(ip,i))
 
 function ipv6_field(ip::IPv6,i)
     if i < 0 || i > 7
@@ -93,7 +93,7 @@ function ipv6_field(ip::IPv6,i)
     uint16(ip.host&(uint128(0xFFFF)<<(i*16))>>(i*16))
 end
 
-function repr(ip::IPv6)
+function string(ip::IPv6)
     i = 8
     m = 0
     str = ""
@@ -134,14 +134,13 @@ function repr(ip::IPv6)
             if i != 7
                 str = string(str,":")
             end
-            str = string(str, repr_ipv6_field(field))
+            str = string(str, string_ipv6_field(field))
         end
     end
     return str
 end
-string(ip::IPv6) = repr(ip::IPv6)
 
-print(io::IO,ip::IPv6) = print(io,repr(ip))
+print(io::IO,ip::IPv6) = print(io,string(ip))
 
 # Parsing
 
