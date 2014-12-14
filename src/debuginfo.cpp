@@ -193,16 +193,19 @@ public:
 extern "C"
 const char *jl_demangle(const char *name)
 {
-    const char *start = name;
-    const char *end = start;
+    const char *start = name + 6;
+    const char *end = name + strlen(name);
     char *ret;
-    while ((*start++ != '_') && (*start != '\0'));
-    if (*name == '\0') goto done;
-    while ((*end++ != ';') && (*end != '\0'));
-    if (*name == '\0') goto done;
-    ret = (char*)malloc(end-start);
-    memcpy(ret,start,end-start-1);
-    ret[end-start-1] = '\0';
+    if (strncmp(name, "julia_", 6)) goto done;
+    if (*start == '\0') goto done;
+    while (*(--end) != '_') {
+        char c = *end;
+        if (c < '0' || c > '9') goto done;
+    }
+    if (end <= start) goto done;
+    ret = (char*)malloc(end-start+1);
+    memcpy(ret,start,end-start);
+    ret[end-start] = '\0';
     return ret;
  done:
     return strdup(name);
