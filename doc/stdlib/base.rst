@@ -1321,7 +1321,7 @@ Nullables
 
 .. function:: isnull(x)
 
-   Does the ``Nullable`` object ``x`` have a value or not?
+   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
 
 Strings
 -------
