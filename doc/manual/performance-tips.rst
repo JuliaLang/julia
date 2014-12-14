@@ -113,14 +113,12 @@ diagnose problems and improve the performance of your code:
   ``*.mem`` files to see information about where those allocations
   occur.  See :ref:`stdlib-track-allocation`.
 
-- The `TypeCheck <https://github.com/astrieanna/TypeCheck.jl>`_
-  package can help identify certain kinds of type problems. A more
-  laborious but comprehensive tool is :func:`code_typed`.  Look
-  particularly for variables that have type :class:`Any` (in the header) or
-  statements declared as :class:`Union` types.  Such problems can usually
-  be fixed using the tips below.
+- ``@code_warntype`` generates a representation of your code that can
+  be helpful in finding expressions that result in type uncertainty.
+  See :ref:`man-code-warntype` below.
 
-- The `Lint <https://github.com/tonyhffong/Lint.jl>`_ package can also
+- The `Lint <https://github.com/tonyhffong/Lint.jl>`_ and `TypeCheck
+  <https://github.com/astrieanna/TypeCheck.jl>`_ packages can also
   warn you of certain types of programming errors.
 
 
@@ -474,7 +472,7 @@ with
         end
         y
     end
-    
+
 Timing results::
 
     julia> @time loopinc()
@@ -549,8 +547,8 @@ properties.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
 -  Write :obj:`@simd` in front of ``for`` loops that are amenable to vectorization.
-   **This feature is experimental** and could change or disappear in future 
-   versions of Julia.  
+   **This feature is experimental** and could change or disappear in future
+   versions of Julia.
 
 Here is an example with both forms of markup::
 
@@ -569,7 +567,7 @@ Here is an example with both forms of markup::
         end
         s
     end
- 
+
     function timeit( n, reps )
         x = rand(Float32,n)
         y = rand(Float32,n)
@@ -602,24 +600,130 @@ properties of the loop:
    possibly causing different results than without :obj:`@simd`.
 -  No iteration ever waits on another iteration to make forward progress.
 
-A loop containing ``break``, ``continue``, or :obj:`@goto` will cause a 
+A loop containing ``break``, ``continue``, or :obj:`@goto` will cause a
 compile-time error.
 
-Using :obj:`@simd` merely gives the compiler license to vectorize. Whether 
-it actually does so depends on the compiler. To actually benefit from the 
-current implementation, your loop should have the following additional 
+Using :obj:`@simd` merely gives the compiler license to vectorize. Whether
+it actually does so depends on the compiler. To actually benefit from the
+current implementation, your loop should have the following additional
 properties:
 
 -  The loop must be an innermost loop.
--  The loop body must be straight-line code. This is why :obj:`@inbounds` is 
+-  The loop body must be straight-line code. This is why :obj:`@inbounds` is
    currently needed for all array accesses. The compiler can sometimes turn
-   short ``&&``, ``||``, and ``?:`` expressions into straight-line code, 
-   if it is safe to evaluate all operands unconditionally. Consider using 
+   short ``&&``, ``||``, and ``?:`` expressions into straight-line code,
+   if it is safe to evaluate all operands unconditionally. Consider using
    :func:`ifelse` instead of ``?:`` in the loop if it is safe to do so.
--  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) 
+-  Accesses must have a stride pattern and cannot be "gathers" (random-index reads)
    or "scatters" (random-index writes).
 -  The stride should be unit stride.
--  In some simple cases, for example with 2-3 arrays accessed in a loop, the 
-   LLVM auto-vectorization may kick in automatically, leading to no further 
-   speedup with :obj:`@simd`. 
+-  In some simple cases, for example with 2-3 arrays accessed in a loop, the
+   LLVM auto-vectorization may kick in automatically, leading to no further
+   speedup with :obj:`@simd`.
+   speedup with ``@simd``.
 
+.. raw:: html
+    <style> .red {color:red} </style>
+
+.. _man-code-warntype:
+
+``@code_warntype``
+------------------
+
+The macro ``@code_warntype`` (or its function variant) can sometimes be helpful in diagnosing type-related problems.  Here's an example::
+
+    pos(x) = x < 0 ? 0 : x
+
+    function f(x)
+        y = pos(x)
+        sin(y*x+1)
+    end
+
+    julia> @code_warntype f(3.2)
+    1-element Array{Union(Expr,Array{T,N}),1}:
+     :($(Expr(:lambda, Any[:x], Any[Any[:y,:_var0,:_var3,:_var4,:_var1,:_var2],Any[Any[:x,Float64,0],Any[:y,UNION(FLOAT64,INT64),18],Any[:_var0,Float64,18],Any[:_var3,(Int64,),0],Any[:_var4,UNION(FLOAT64,INT64),2],Any[:_var1,Float64,18],Any[:_var2,Float64,18]],Any[]], :(begin  # none, line 2:
+            _var0 = (top(box))(Float64,(top(sitofp))(Float64,0))::Float64
+            unless (top(box))(Bool,(top(or_int))((top(lt_float))(x::Float64,_var0::Float64)::Bool,(top(box))(Bool,(top(and_int))((top(box))(Bool,(top(and_int))((top(eq_float))(x::Float64,_var0::Float64)::Bool,(top(lt_float))(_var0::Float64,9.223372036854776e18)::Bool))::Bool,(top(slt_int))((top(box))(Int64,(top(fptosi))(Int64,_var0::Float64))::Int64,0)::Bool))::Bool))::Bool goto 1
+            _var4 = 0
+            goto 2
+            1:
+            _var4 = x::Float64
+            2:
+            y = _var4::UNION(FLOAT64,INT64) # line 3:
+            _var1 = y::UNION(FLOAT64,INT64) * x::Float64::Float64
+            _var2 = (top(box))(Float64,(top(add_float))(_var1::Float64,(top(box))(Float64,(top(sitofp))(Float64,1))::Float64))::Float64
+            return (GetfieldNode(Base.Math,:nan_dom_err,Any))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GetfieldNode(Base.Math,:libm,Any)))::(ASCIIString,ASCIIString),Float64,$(Expr(:call1, :(top(tuple)), :Float64))::(Type{Float64},),_var2::Float64,0)::Float64,_var2::Float64)::Float64
+        end::Float64))))
+
+Interpreting the output of ``@code_warntype``, like that of its cousins
+``@code_lowered``, ``@code_typed``, ``@code_llvm``, and
+``@code_native``, takes a little practice. Your
+code is being presented in form that has been partially-digested on
+its way to generating compiled machine code.  Most of the expressions
+are annotated by a type, indicated by the ``::T`` (where ``T`` might
+be ``Float64``, for example). The particular characteristic of
+``@code_warntype`` is that non-concrete types are displayed in red; in
+the above example, such output is shown in all-caps.
+
+The first line of the output, beginning with ``1-element Array``,
+simply means that there is only one method that matches the function
+and input types you provided. The next line of the output summarizes
+information about the different variables. You can see that ``y``, one
+of the variables you created, is a ``Union(Float64,Int64)``, due to
+the type-instability of ``pos``.  There is another variable,
+``_var1``, which you can see also has the same type.
+
+The next lines represent the body of ``f``. The lines starting with a
+number followed by a colon (``1:``, ``2:``) are labels, and represent
+targets for jumps (via ``goto``) in your code.  Looking at the body,
+you can see that ``pos`` has been *inlined* into ``f``---everything
+before ``2:`` comes from code defined in ``pos``.
+
+Starting at ``2:``, the variable ``y`` is defined, and again annotated
+as a ``Union`` type.  Next, we see that the compiler created the
+temporary variable ``_var1`` to hold the result of ``y*x``; it too is
+type-unstable.  However, at the next line, all type-instability ends:
+because ``sin`` converts integer inputs into ``Float64``, the final
+return value of ``f`` is a ``Float64``.  So calls of the form
+``f(x::Float64)`` will not be type-unstable in their output, even if
+some of the intermediate computations are type-unstable.
+
+How you use this information is up to you.  Obviously, it would be far
+and away best to fix ``pos`` to be type-stable: if you did so, all of
+the variables in ``f`` would be concrete, and its performance would be
+optimal.  However, there are circumstances where this kind of
+*ephemeral* type instability might not matter too much: for example,
+if ``pos`` is never used in isolation, the fact that ``f``\'s output
+is type-stable (for ``Float64`` inputs) will shield later code from
+the propagating effects of type instability.  This is particularly
+relevant in cases where fixing the type instability is difficult or
+impossible: for example, currently it's not possible to infer the
+return type of an anonymous function.  In such cases, the tips above
+(e.g., adding type annotations and/or breaking up functions) are your
+best tools to contain the "damage" from type instability.
+
+Here is a table which can help you interpret expressions marked as
+containing non-leaf types:
+
+.. |I0| replace:: Interpretation
+.. |F0| replace:: Possible fix
+.. |I1| replace:: Function with unstable return type
+.. |F1| replace:: Make the return value type-stable, even if you have to annotate it
+.. |I2| replace:: Call to a type-unstable function
+.. |F2| replace:: Fix the function, or annotate the return value
+.. |I3| replace:: Accessing elements of poorly-typed arrays
+.. |F3| replace:: Use arrays with better-defined types, or annotate the type of individual element accesses
+.. |I4| replace:: Getting a field that is of non-leaf type. In this case, ``ArrayContainer`` had a field ``data::Array{T}``. But ``Array`` needs the dimension ``N``, too.
+.. |F4| replace:: Use concrete types like ``Array{T,3}`` or ``Array{T,N}``, where ``N`` is now a parameter of ``ArrayContainer``
+
++-------------------------------------------------------------------------+------+------+
+|  Marked expression                                                      | |I0| | |F0| |
++=========================================================================+======+======+
+| Function ending in ``end::Union(T1,T2)))``                              | |I1| | |F1| |
++-------------------------------------------------------------------------+------+------+
+| ``f(x::T)::Union(T1,T2)``                                               | |I2| | |F2| |
++-------------------------------------------------------------------------+------+------+
+| ``(top(arrayref))(A::Array{Any,1},1)::Any``                             | |I3| | |F3| |
++-------------------------------------------------------------------------+------+------+
+| ``(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}`` | |I4| | |F4| |
++-------------------------------------------------------------------------+------+------+
