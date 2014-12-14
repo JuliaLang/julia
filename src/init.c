@@ -848,6 +848,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
+    libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_resolve_sysimg_location(rel);

@@ -9,8 +9,9 @@ double my_c_sqrt(double x)
 
 int main()
 {
+    char a, b, c;
+    SET_STACK_CHK_GUARD(a,b,c);
     jl_init(NULL);
-    JL_SET_STACK_BASE;
 
     {
         // Simple running Julia code
@@ -94,5 +95,7 @@ int main()
         }
     }
 
+    jl_atexit_hook();
+    CLR_STACK_CHK_GUARD(a,b,c);
     return 0;
 }
