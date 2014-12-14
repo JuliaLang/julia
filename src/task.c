@@ -241,11 +241,8 @@ NORETURN start_task()
 {
     // this runs the first time we switch to a task
     jl_task_t *t = jl_current_task;
-    jl_value_t *arg = jl_task_arg_in_transit;
     jl_value_t *res;
-    JL_GC_PUSH1(&arg);
     res = jl_apply(t->start, NULL, 0);
-    JL_GC_POP();
     finish_task(t, res);
     abort();
 }
