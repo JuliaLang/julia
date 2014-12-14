@@ -33,7 +33,7 @@
 #include <llvm/Object/COFF.h>
 #endif
 
-#if defined(USE_MCJIT) && !defined(LLVM36) && !defined(_OS_LINUX_)
+#if defined(USE_MCJIT) && !defined(LLVM36) && defined(_OS_DARWIN_)
 #include "../deps/llvm-3.5.0/lib/ExecutionEngine/MCJIT/MCJIT.h"
 #endif
 
@@ -198,11 +198,9 @@ public:
     virtual void NotifyObjectEmitted(const ObjectImage &obj)
 #endif
     {
-        uint64_t SectAddr, Addr, SectionAddr;
+        uint64_t Addr;
         uint64_t Size;
         object::SymbolRef::Type SymbolType;
-#ifndef _OS_LINUX_
-        StringRef sName;
 #ifdef LLVM36
         object::section_iterator Section = obj.section_begin();
         object::section_iterator EndSection = obj.section_end();
@@ -211,8 +209,11 @@ public:
         object::section_iterator EndSection = obj.end_sections();
         bool isText;
 #endif
+#ifndef _OS_LINUX_
+        StringRef sName;
 #endif
 #ifdef _OS_WINDOWS_
+        uint64_t SectionAddr;
         uint64_t SectionSize;
 #endif
 
@@ -221,37 +222,34 @@ public:
             sym_iter.getType(SymbolType);
             if (SymbolType != object::SymbolRef::ST_Function) continue;
             sym_iter.getSize(Size);
-            sym_iter.getAddress(SectAddr);
-#ifdef _OS_LINUX_
-            SectionAddr = 0;
-#else
+            sym_iter.getAddress(Addr);
             sym_iter.getSection(Section);
-            if (Section == EndSection) continue;
-            Section = Section->getRelocatedSection();
             if (Section == EndSection) continue;
 #if defined(LLVM36)
             if (!Section->isText()) continue;
-            Section->getName(sName);
-            SectionAddr = L.getSectionLoadAddress(sName);
 #else
             if (Section->isText(isText) || !isText) continue;
-            sym_iter.getName(sName);
-            SectionAddr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
-            if (!SectionAddr && sName[0] == '_') {
-                sName = sName.substr(1);
-                SectionAddr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
-            }
-            if (!SectionAddr) continue;
-            SectionAddr -= SectAddr;
 #endif
-#endif // _OS_LINUX_
-            Addr = SectAddr + SectionAddr;
-#ifdef _OS_WINDOWS_
-#ifdef LLVM36
+#ifdef _OS_DARWIN_
+#if defined(LLVM36)
+            Section->getName(sName);
+            Addr += L.getSectionLoadAddress(sName);
+#else
             sym_iter.getName(sName);
+            Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
+            if (!Addr && sName[0] == '_') {
+                sName = sName.substr(1);
+                Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
+            }
+            if (!Addr) continue;
+#endif
+#elif defined(_OS_WINDOWS_)
+            Section->getAddress(SectionAddr);
+            Section->getSize(SectionSize);
+            sym_iter.getName(sName);
+#ifndef _CPU_X86_
             if (sName[0] == '_') sName = sName.substr(1);
 #endif
-            Section->getSize(SectionSize);
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
                    (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize);
@@ -457,8 +455,6 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         } else if (*fromC) {
             // No debug info, use dll name instead
             *filename = fname;
-        } else {
-            *filename = "";
         }
         jl_in_stackwalk = 0;
 #else // ifdef _OS_WINDOWS_
