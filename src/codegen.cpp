@@ -121,7 +121,11 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-extern void *__stack_chk_guard;
+#ifdef HAVE_SSP
+extern uintptr_t __stack_chk_guard;
+extern void __stack_chk_fail();
+#else
+uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
 #else
@@ -132,6 +136,7 @@ void __attribute__(()) __stack_chk_fail()
     fprintf(stderr, "fatal error: stack corruption detected\n");
     abort(); // end with abort, since the compiler destroyed the stack upon entry to this function
 }
+#endif
 
 #ifdef _OS_WINDOWS_
 #if defined(_CPU_X86_64_)

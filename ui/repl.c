@@ -330,8 +330,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         argv[i] = (wchar_t*)arg;
     }
 #endif
-    char a=255,b='\n',c=0;
-    SWAP_STACK_CHK_GUARD(a,b,c);
     libsupport_init();
     parse_opts(&argc, (char***)&argv);
     if (lisp_prompt) {
@@ -342,7 +340,6 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     int ret = true_main(argc, (char**)argv);
     jl_atexit_hook();
     julia_save();
-    SWAP_STACK_CHK_GUARD(a,b,c);
     return ret;
 }
 

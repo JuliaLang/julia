@@ -62,6 +62,9 @@ endif
 # libc++ is standard on OS X 10.9, but not for earlier releases
 USE_LIBCPP = 0
 
+# assume we don't have LIBSSP support in our compiler, will enable later if likely true
+HAVE_SSP = 0
+
 # Prevent picking up $ARCH from the environment variables
 ARCH=
 
@@ -355,16 +358,16 @@ CPP = $(CC) -E
 AR := $(CROSS_COMPILE)ar
 AS := $(CROSS_COMPILE)as
 LD := $(CROSS_COMPILE)ld
-else
+else #USEMSVC
 CPP = $(CC) -EP
 AR := lib
 ifeq ($(ARCH),x86_64)
 AS := ml64
 else
 AS := ml
-endif
+endif #ARCH
 LD := link
-endif
+endif #USEMSVC
 RANLIB := $(CROSS_COMPILE)ranlib
 
 
@@ -674,17 +677,19 @@ OSLIBS += -ldl -Wl,-w -framework CoreFoundation -framework CoreServices $(LIBUNW
 WHOLE_ARCHIVE = -Xlinker -all_load
 NO_WHOLE_ARCHIVE =
 JLDFLAGS =
+HAVE_SSP = 1
 endif
 
 ifeq ($(OS), WINNT)
 ifneq ($(USEMSVC), 1)
+HAVE_SSP = 1
 OSLIBS += -Wl,--export-all-symbols -Wl,--version-script=$(JULIAHOME)/src/julia.expmap \
 	$(NO_WHOLE_ARCHIVE) -lpsapi -lkernel32 -lws2_32 -liphlpapi -lwinmm -ldbghelp
 JLDFLAGS = -Wl,--stack,8388608
 ifeq ($(ARCH),i686)
 JLDFLAGS += -Wl,--large-address-aware
 endif
-else
+else #USEMSVC
 OSLIBS += kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib shell32.lib winmm.lib
 JLDFLAGS = -stack:8388608
 endif
@@ -732,6 +737,13 @@ ifeq ($(USE_INTEL_MKL_FFT), 1)
 USE_SYSTEM_FFTW = 1
 LIBFFTWNAME = libmkl_rt
 LIBFFTWFNAME = libmkl_rt
+endif
+
+ifeq ($(HAVE_SSP),1)
+JCPPFLAGS += -DHAVE_SSP=1
+ifeq ($(USEGCC),1)
+OSLIBS += -lssp
+endif
 endif
 
 # ATLAS
