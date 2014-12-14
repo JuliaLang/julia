@@ -739,6 +739,27 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
+static int isabspath(const char *in)
+{
+#ifdef _OS_WINDOWS_
+    char c0 = in[0];
+    if (c0 == '/' || c0 == '\\') {
+        return 1; // absolute path relative to %CD% (current drive), or UNC
+    }
+    else {
+        int s = strlen(in);
+        if (s > 2) {
+            char c1 = in[1];
+            char c2 = in[2];
+            if (c1 == ':' && (c2 == '/' || c2 == '\\')) return 1; // absolute path
+        }
+    }
+#else
+    if (jl_compileropts.image_file[0] == '/') return 1; // absolute path
+#endif
+    return 0; // relative path
+}
+
 static char *abspath(const char *in)
 { // compute an absolute path location, so that chdir doesn't change the file reference
 #ifndef _OS_WINDOWS_
@@ -781,9 +802,13 @@ static char *abspath(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{ // note: if you care about lost memory, you should compare the
-  // pointers in jl_compileropts before and after calling julia_init()
-  // and call the appropriate free function on the originals for any that changed
+{ // this function resolves the paths in jl_compileropts to absolute file locations as needed
+  // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and `build_path`
+  // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
+  //
+  // note: if you care about lost memory, you should call the appropriate `free()` function
+  // on the original pointer for each `char*` you've inserted into `jl_compileropts`, after
+  // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
     if (uv_exepath(free_path, &path_size)) {
@@ -806,25 +831,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     free(free_path);
     free_path = NULL;
     if (jl_compileropts.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME) {
-#ifdef _OS_WINDOWS_
-            char c0 = jl_compileropts.image_file[0];
-            if (c0 == '/' || c0 == '\\') {
-                rel = 0; // absolute path relative to %CD% (current drive)
-            }
-            else {
-                int s = strlen(jl_compileropts.image_file);
-                if (s > 2) {
-                    char c1 = jl_compileropts.image_file[1];
-                    char c2 = jl_compileropts.image_file[2];
-                    if (c1 == ':' && (c2 == '/' || c2 == '\\')) rel = 0; // absolute path
-                }
-            }
-#else
-            if (jl_compileropts.image_file[0] == '/') rel = 0; // absolute path
-#endif
-        }
-        if (rel == JL_IMAGE_JULIA_HOME) {
+        if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_compileropts.image_file)) {
             // build time path, relative to JULIA_HOME
             free_path = (char*)malloc(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
