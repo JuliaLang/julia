@@ -6,7 +6,7 @@ testnames = [
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "copy", "math",
     "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
-    "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
+    "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket", "ipnetwork",
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
