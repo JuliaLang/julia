@@ -9,8 +9,8 @@ double my_c_sqrt(double x)
 
 int main()
 {
-    char a, b, c;
-    SET_STACK_CHK_GUARD(a,b,c);
+    char a=255, b='\n', c=0;
+    SWAP_STACK_CHK_GUARD(a,b,c);
     jl_init(NULL);
 
     {
@@ -52,14 +52,15 @@ int main()
 
         double* xData = jl_array_data(x);
 
-        for(size_t i=0; i<jl_array_len(x); i++)
+        size_t i;
+        for(i=0; i<jl_array_len(x); i++)
             xData[i] = i;
 
         jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");
         jl_call1(func, (jl_value_t*) x);
 
         printf("x = [");
-        for(size_t i=0; i<jl_array_len(x); i++)
+        for(i=0; i<jl_array_len(x); i++)
             printf("%e ", xData[i]);
         printf("]\n");
 
@@ -96,6 +97,6 @@ int main()
     }
 
     jl_atexit_hook();
-    CLR_STACK_CHK_GUARD(a,b,c);
+    SWAP_STACK_CHK_GUARD(a,b,c);
     return 0;
 }

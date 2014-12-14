@@ -121,8 +121,7 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-DLLEXPORT void *__stack_chk_guard = NULL;
-
+extern void *__stack_chk_guard;
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
 #else
@@ -4359,7 +4358,7 @@ static void init_julia_llvm_env(Module *m)
         Function::Create(FunctionType::get(T_void, false),
                          Function::ExternalLinkage,
                          "__stack_chk_fail", m);
-    //jl__stack_chk_fail->setDoesNotReturn();
+    jl__stack_chk_fail->setDoesNotReturn();
     add_named_global(jl__stack_chk_fail, (void*)&__stack_chk_fail);
 
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true, m);
