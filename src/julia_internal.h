@@ -87,7 +87,7 @@ void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
-void _julia_init(void);
+void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
 extern void *jl_stackbase;
 #endif
