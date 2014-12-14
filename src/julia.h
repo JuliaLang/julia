@@ -1347,24 +1347,21 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
-DLLEXPORT extern void *__stack_chk_guard;
-#define SET_STACK_CHK_GUARD(a,b,c) do {                         \
-        unsigned char *p = (unsigned char *)&__stack_chk_guard; \
-        a = p[sizeof(__stack_chk_guard)-1];                     \
-        b = p[sizeof(__stack_chk_guard)-2];                     \
-        c = p[0];                                               \
-        /* If you have the ability to generate random numbers
-         * in your kernel then they should be used here */      \
-        p[sizeof(__stack_chk_guard)-1] = 255;                   \
-        p[sizeof(__stack_chk_guard)-2] = '\n';                  \
-        p[0] = 0;                                               \
-    } while (0)
-
-#define CLR_STACK_CHK_GUARD(a,b,c) do {                         \
-        unsigned char *p = (unsigned char *)&__stack_chk_guard; \
-        p[sizeof(__stack_chk_guard)-1] = a;                     \
-        p[sizeof(__stack_chk_guard)-2] = b;                     \
-        p[0] = c;                                               \
+/* If you have the ability to generate random numbers
+* in your kernel then they should be used here */
+DLLEXPORT extern unsigned char *jl_stack_chk_guard;
+#define SWAP_STACK_CHK_GUARD(a,b,c) do {                        \
+        a ^= jl_stack_chk_guard[sizeof(void*)-1];               \
+        jl_stack_chk_guard[sizeof(void*)-1] ^= a;               \
+        a ^= jl_stack_chk_guard[sizeof(void*)-1];               \
+                                                                \
+        b ^= jl_stack_chk_guard[sizeof(void*)-2];               \
+        jl_stack_chk_guard[sizeof(void*)-2] ^= b;               \
+        b ^= jl_stack_chk_guard[sizeof(void*)-2];               \
+                                                                \
+        c ^= jl_stack_chk_guard[0];                             \
+        jl_stack_chk_guard[0] ^= c;                             \
+        c ^= jl_stack_chk_guard[0];                             \
     } while (0)
 
 #ifdef __cplusplus

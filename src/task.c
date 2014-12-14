@@ -341,20 +341,24 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             restore_stack(t, where, NULL);
         } else {
 #ifdef ASM_COPY_STACKS
+            void *stackbase = jl_stackbase - 0x10;
 #ifdef _CPU_X86_64_
+#ifdef _OS_WINDOWS_
+            stackbase -= 0x20;
+#endif
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
                 " push %%rbp;\n" // instead of RSP
                 " jmp %P1;\n" // call stack_task with fake stack frame
                 " ud2"
-                : : "r"(jl_stackbase-0x10), "i"(start_task) : "memory" );
+                : : "r"(stackbase), "i"(start_task) : "memory" );
 #elif defined(_CPU_X86_)
             asm(" movl %0, %%esp;\n"
                 " xorl %%ebp, %%ebp;\n"
                 " push %%ebp;\n" // instead of ESP
                 " jmp %P1;\n" // call stack_task with fake stack frame
                 " ud2"
-                : : "r"(jl_stackbase-0x10), "i"(start_task) : "memory" );
+                : : "r"(stackbase), "i"(start_task) : "memory" );
 #else
 #error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
