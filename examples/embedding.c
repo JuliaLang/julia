@@ -9,8 +9,6 @@ double my_c_sqrt(double x)
 
 int main()
 {
-    char a=255, b='\n', c=0;
-    SWAP_STACK_CHK_GUARD(a,b,c);
     jl_init(NULL);
 
     {
@@ -97,6 +95,5 @@ int main()
     }
 
     jl_atexit_hook();
-    SWAP_STACK_CHK_GUARD(a,b,c);
     return 0;
 }

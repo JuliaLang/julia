@@ -1347,23 +1347,6 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
-/* If you have the ability to generate random numbers
-* in your kernel then they should be used here */
-DLLEXPORT extern unsigned char *jl_stack_chk_guard;
-#define SWAP_STACK_CHK_GUARD(a,b,c) do {                        \
-        a ^= jl_stack_chk_guard[sizeof(void*)-1];               \
-        jl_stack_chk_guard[sizeof(void*)-1] ^= a;               \
-        a ^= jl_stack_chk_guard[sizeof(void*)-1];               \
-                                                                \
-        b ^= jl_stack_chk_guard[sizeof(void*)-2];               \
-        jl_stack_chk_guard[sizeof(void*)-2] ^= b;               \
-        b ^= jl_stack_chk_guard[sizeof(void*)-2];               \
-                                                                \
-        c ^= jl_stack_chk_guard[0];                             \
-        jl_stack_chk_guard[0] ^= c;                             \
-        c ^= jl_stack_chk_guard[0];                             \
-    } while (0)
-
 #ifdef __cplusplus
 }
 #endif

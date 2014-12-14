@@ -18,10 +18,6 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
   int main(int argc, char *argv[])
   {
-      /* optional: randomize the stack guard */
-      char a=255, b='\n', c=0;
-      SWAP_STACK_CHK_GUARD(a,b,c);
-
       /* required: setup the julia context */
       jl_init(NULL);
 
@@ -34,9 +30,6 @@ We start with a simple C program that initializes Julia and calls some Julia cod
            and run all finalizers
       */
       jl_atexit_hook();
-
-      /* if the stack guard is set: reset the stack guard */
-      SWAP_STACK_CHK_GUARD(a,b,c);
       return 0;
   }
 
