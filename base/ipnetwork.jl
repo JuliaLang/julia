@@ -350,7 +350,7 @@ function string(net::IPv4Net)
 end
 
 function string(net::IPv6Net)
-    netmaskint = int(log(2,~net.netmask.host+1))
+    netmaskint = 128-int(log(2,~net.netmask.host+1))
     return string("IPv6Net(\"", string(net.netaddr), "/", netmaskint, "\")")
 end
 
