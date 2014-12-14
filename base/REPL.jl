@@ -544,12 +544,12 @@ function history_search(hist::REPLHistoryProvider, query_buffer::IOBuffer, respo
         return true
     end
 
-    searchfunc,delta = backwards ? (rsearch,0) : (search,1)
+    searchfunc, searchstart = backwards ? (rsearch, b-1) : (search, a+1)
 
     # Start searching
     # First the current response buffer
-    if 1 <= a+delta <= length(response_str)
-        match = searchfunc(response_str, searchdata, a+delta)
+    if 1 <= searchstart <= length(response_str)
+        match = searchfunc(response_str, searchdata, searchstart)
         if match != 0:-1
             seek(response_buffer, first(match)-1)
             return true
