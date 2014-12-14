@@ -40,6 +40,7 @@ static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
+static int imagepathspecified = 0;
 
 static const char *usage = "julia [options] [program] [args...]\n";
 static const char *opts =
@@ -95,7 +96,6 @@ void parse_opts(int *argcp, char ***argvp)
     };
     int c;
     opterr = 0;
-    int imagepathspecified=0;
     int skip = 0;
     int lastind = optind;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
@@ -338,7 +338,7 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         jl_lisp_prompt();
         return 0;
     }
-    julia_init();
+    julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
     int ret = true_main(argc, (char**)argv);
     jl_atexit_hook();
     julia_save();

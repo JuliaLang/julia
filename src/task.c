@@ -264,10 +264,10 @@ void set_base_ctx(char *__stk) { }
 #endif
 
 
-DLLEXPORT void julia_init()
+DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
 { // keep this function small, since we want to keep the stack frame
   // leading up to this also quite small
-    _julia_init();
+    _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
     jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned

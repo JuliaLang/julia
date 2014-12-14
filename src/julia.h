@@ -855,7 +855,12 @@ DLLEXPORT void jl_exception_clear(void);
     }
 
 // initialization functions
-DLLEXPORT void julia_init(void);
+typedef enum {
+    JL_IMAGE_CWD = 0,
+    JL_IMAGE_JULIA_HOME = 1,
+    //JL_IMAGE_LIBJULIA = 2,
+} JL_IMAGE_SEARCH;
+DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 DLLEXPORT void jl_init(char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);

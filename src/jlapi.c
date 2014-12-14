@@ -39,7 +39,7 @@ DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_pat
     jl_compileropts.julia_home = julia_home_dir;
     if (image_relative_path != NULL)
         jl_compileropts.image_file = image_relative_path;
-    julia_init();
+    julia_init(JL_IMAGE_JULIA_HOME);
     //TODO: these should be part of Multi.__init__()
     //currently, we have them here since we may not want them
     //getting unconditionally set from Base.__init__()

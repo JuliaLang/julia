@@ -780,7 +780,7 @@ static char *abspath(const char *in)
     return out;
 }
 
-static void jl_resolve_sysimg_location()
+static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
 { // note: if you care about lost memory, you should compare the
   // pointers in jl_compileropts before and after calling julia_init()
   // and call the appropriate free function on the originals for any that changed
@@ -806,18 +806,34 @@ static void jl_resolve_sysimg_location()
     free(free_path);
     free_path = NULL;
     if (jl_compileropts.image_file) {
-        if (jl_compileropts.image_file[0] != PATHSEPSTRING[0]) {
-            if (jl_compileropts.image_file == system_image_path) {
-                // build time path, relative to JULIA_HOME
-                free_path = (char*)malloc(PATH_MAX);
-                int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                         jl_compileropts.julia_home, jl_compileropts.image_file);
-                if (n >= PATH_MAX || n < 0) {
-                    ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long\n");
-                    exit(1);
-                }
-                jl_compileropts.image_file = free_path;
+        if (rel == JL_IMAGE_JULIA_HOME) {
+#ifdef _OS_WINDOWS_
+            char c0 = jl_compileropts.image_file[0];
+            if (c0 == '/' || c0 == '\\') {
+                rel = 0; // absolute path relative to %CD% (current drive)
             }
+            else {
+                int s = strlen(jl_compileropts.image_file);
+                if (s > 2) {
+                    char c1 = jl_compileropts.image_file[1];
+                    char c2 = jl_compileropts.image_file[2];
+                    if (c1 == ':' && (c2 == '/' || c2 == '\\')) rel = 0; // absolute path
+                }
+            }
+#else
+            if (jl_compileropts.image_file[0] == '/') rel = 0; // absolute path
+#endif
+        }
+        if (rel == JL_IMAGE_JULIA_HOME) {
+            // build time path, relative to JULIA_HOME
+            free_path = (char*)malloc(PATH_MAX);
+            int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
+                     jl_compileropts.julia_home, jl_compileropts.image_file);
+            if (n >= PATH_MAX || n < 0) {
+                ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long\n");
+                exit(1);
+            }
+            jl_compileropts.image_file = free_path;
         }
         if (jl_compileropts.image_file)
             jl_compileropts.image_file = abspath(jl_compileropts.image_file);
@@ -830,11 +846,11 @@ static void jl_resolve_sysimg_location()
         jl_compileropts.build_path = abspath(jl_compileropts.build_path);
 }
 
-void _julia_init()
+void _julia_init(JL_IMAGE_SEARCH rel)
 {
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
-    jl_resolve_sysimg_location();
+    jl_resolve_sysimg_location(rel);
     jl_page_size = jl_getpagesize();
     jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
