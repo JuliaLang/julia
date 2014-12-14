@@ -52,6 +52,10 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Base.Random.randmtzig_exprnd` is now `randexp` [#9144](https://github.com/JuliaLang/julia/pull/9144)
 
+## New macros
+
+* `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
+
 ## Other syntax changes
 
 * `Dict(ks, vs)` is now `Dict(zip(ks, vs))` [#8521](https://github.com/JuliaLang/julia/pull/8521)
