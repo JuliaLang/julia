@@ -70,6 +70,9 @@ struct FuncInfo {
 struct ObjectInfo {
     const object::ObjectFile* object;
     size_t size;
+#ifdef _OS_DARWIN_
+    const char *name;
+#endif
 };
 #endif
 
@@ -234,16 +237,19 @@ public:
             if (Section->isText(isText) || !isText) continue;
             sym_iter.getName(sName);
             SectionAddr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
-            if (!SectionAddr && sName[0] == '_')
-                SectionAddr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName.substr(1), true);
+            if (!SectionAddr && sName[0] == '_') {
+                sName = sName.substr(1);
+                SectionAddr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
+            }
             if (!SectionAddr) continue;
             SectionAddr -= SectAddr;
 #endif
 #endif // _OS_LINUX_
             Addr = SectAddr + SectionAddr;
 #ifdef _OS_WINDOWS_
-#ifndef LLVM36
+#ifdef LLVM36
             sym_iter.getName(sName);
+            if (sName[0] == '_') sName = sName.substr(1);
 #endif
             Section->getSize(SectionSize);
             create_PRUNTIME_FUNCTION(
@@ -256,7 +262,11 @@ public:
 #else
                 obj.getObjectFile();
 #endif
-            ObjectInfo tmp = {objfile, (size_t)Size};
+            ObjectInfo tmp = {objfile, (size_t)Size
+#ifdef _OS_DARWIN_
+                ,strdup(sName.data())
+#endif
+            };
             objectmap[Addr] = tmp;
         }
 #else //LLVM34
@@ -289,16 +299,19 @@ public:
 extern "C"
 const char *jl_demangle(const char *name)
 {
-    const char *start = name;
-    const char *end = start;
+    const char *start = name + 6;
+    const char *end = name + strlen(name);
     char *ret;
-    while ((*start++ != '_') && (*start != '\0'));
-    if (*name == '\0') goto done;
-    while ((*end++ != ';') && (*end != '\0'));
-    if (*name == '\0') goto done;
-    ret = (char*)malloc(end-start);
-    memcpy(ret,start,end-start-1);
-    ret[end-start-1] = '\0';
+    if (strncmp(name, "julia_", 6)) goto done;
+    if (*start == '\0') goto done;
+    while (*(--end) != '_') {
+        char c = *end;
+        if (c < '0' || c > '9') goto done;
+    }
+    if (end <= start) goto done;
+    ret = (char*)malloc(end-start+1);
+    memcpy(ret,start,end-start);
+    ret[end-start] = '\0';
     return ret;
  done:
     return strdup(name);
@@ -614,10 +627,15 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     std::map<size_t, ObjectInfo, revcomp>::iterator it = objmap.lower_bound(pointer);
 
     if (it != objmap.end() && (intptr_t)(*it).first + (*it).second.size > pointer) {
+#if defined(_OS_DARWIN_)
+        *name = jl_demangle((*it).second.name);
+        DIContext *context = NULL; // current versions of MCJIT can't handle MachO relocations
+#else
 #ifdef LLVM36
         DIContext *context = DIContext::getDWARFContext(*it->second.object);
 #else
         DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
+#endif
 #endif
         lookup_pointer(context, name, line, filename, pointer, 1, fromC);
         return;

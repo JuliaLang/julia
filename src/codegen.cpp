@@ -3615,14 +3615,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         m = shadow_module;
     }
-#ifndef LLVM35
-    funcName << ";";
-#endif
 #else
     m = jl_Module;
-    funcName << ";";
 #endif
-    funcName << globalUnique++;
+    funcName << "_" << globalUnique++;
 
     if (specsig) {
         std::vector<Type*> fsig(0);
