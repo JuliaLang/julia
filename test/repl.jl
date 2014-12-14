@@ -281,6 +281,17 @@ begin
     @test LineEdit.mode(s) == shell_mode
     @test buffercontents(LineEdit.buffer(s)) == "ll"
 
+    # Test that searching backwards with a one-letter query doesn't
+    # return indefinitely the same match.
+    LineEdit.enter_search(s, histp, true)
+    write(ss.query_buffer, "l")
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.history_next_result(s, ss)
+    LineEdit.update_display_buffer(ss, ss)
+    LineEdit.accept_result(s, histp)
+    @test LineEdit.mode(s) == repl_mode
+    @test buffercontents(LineEdit.buffer(s)) == "shell"
+
     # Issue #7551
     # Enter search mode and try accepting an empty result
     REPL.history_reset_state(hp)
