@@ -59,3 +59,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 ## Other syntax changes
 
 * `Dict(ks, vs)` is now `Dict(zip(ks, vs))` [#8521](https://github.com/JuliaLang/julia/pull/8521)
+
+## Developer tips
+
+If you're adding additional compatibility code to this package, the following shell script is a useful for extracting the version number from a git commit SHA:
+
+```sh
+#! /bin/bash
+last_tag=$(git describe --tags --abbrev=0)
+git rev-list $1 ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g'
+```
