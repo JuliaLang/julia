@@ -32,9 +32,6 @@ end
 # constructor: ("1.2.3.4")
 IPv4(ipstr::AbstractString) = parseipv4(ipstr)
 
-# pending decision
-# IPv4(iparr::AbstractArray) = map((x)->IPv4(x), iparr)
-
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
@@ -356,6 +353,7 @@ function string(net::IPv6Net)
     netmaskint = int(log(2,~net.netmask.host+1))
     return string("IPv6Net(\"", string(net.netaddr), "/", netmaskint, "\")")
 end
+
 # Add method for in -> 1.2.3.4 IN 1.2.3.0/24
 function in(ipaddr::IPAddr, net::IPNet)
     maskedaddr = ipaddr.host & net.netmask.host
