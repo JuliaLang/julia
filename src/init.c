@@ -104,10 +104,6 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
 int jl_boot_file_loaded = 0;
 int exit_on_sigint = 0;
 
-void *__stack_chk_guard = NULL;
-DLLEXPORT unsigned char *jl_stack_chk_guard =
-    (unsigned char *)&__stack_chk_guard;
-
 char *jl_stack_lo;
 char *jl_stack_hi;
 size_t jl_page_size;
