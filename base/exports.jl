@@ -1107,6 +1107,8 @@ export
     @ip_str,
     IPv4,
     IPv6,
+    IPv4Net,
+    IPv6Net,
     parseip,
 
 # I/O and events
