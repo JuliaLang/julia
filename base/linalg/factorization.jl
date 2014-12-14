@@ -19,7 +19,7 @@ end
 immutable QR{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    QR(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors,τ)
+    QR(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 QR{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QR{T,typeof(factors)}(factors, τ)
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
@@ -114,14 +114,26 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::QRPivoted) = QRPackedQ(A.factors,A.τ)
 
-immutable QRPackedQ{T} <: AbstractMatrix{T}
-    factors::Matrix{T}
+immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
+    QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
-immutable QRCompactWYQ{S} <: AbstractMatrix{S}
-    factors::Matrix{S}
+QRPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QRPackedQ{T,typeof(factors)}(factors, τ)
+
+immutable QRPackedWYQ{S,M<:AbstractMatrix} <: AbstractMatrix{S}
+    factors::M
     T::Matrix{S}
+    QRPackedWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)
 end
+QRPackedWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRPackedWYQ{S,typeof(factors)}(factors, T)
+
+immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
+    factors::M
+    T::Matrix{S}
+    QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)
+end
+QRCompactWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
@@ -381,7 +393,7 @@ end
 immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     τ::Vector{T}
-    Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors,τ)
+    Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
 Hessenberg{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = Hessenberg{T,typeof(factors)}(factors, τ)
 
@@ -391,10 +403,12 @@ hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
 hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
 hessfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? hessfact!(convert(AbstractMatrix{S},A)) : hessfact!(copy(A)))
 
-immutable HessenbergQ{T} <: AbstractMatrix{T}
-    factors::Matrix{T}
+immutable HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
+    HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
+HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, args...) = size(A.factors, args...)
 
@@ -418,7 +432,7 @@ print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer,
 immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values,vectors)
+    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
 end
 Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
@@ -426,7 +440,7 @@ Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,ty
 immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
     values::U
     vectors::S
-    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values,vectors)
+    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
 end
 GeneralizedEigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
@@ -551,7 +565,7 @@ immutable SVD{T<:BlasFloat,Tr,M<:AbstractArray} <: Factorization{T}
     U::M
     S::Vector{Tr}
     Vt::M
-    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U,S,Vt)
+    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U, S, Vt)
 end
 SVD{T<:BlasFloat,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
 
