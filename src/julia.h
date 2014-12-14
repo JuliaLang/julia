@@ -814,7 +814,6 @@ DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt
 DLLEXPORT int jl_errno(void);
 DLLEXPORT void jl_set_errno(int e);
 DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-DLLEXPORT void NORETURN jl_exit(int status);
 DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 DLLEXPORT long jl_getallocationgranularity(void);
@@ -856,17 +855,23 @@ DLLEXPORT void jl_exception_clear(void);
     }
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+typedef enum {
+    JL_IMAGE_CWD = 0,
+    JL_IMAGE_JULIA_HOME = 1,
+    //JL_IMAGE_LIBJULIA = 2,
+} JL_IMAGE_SEARCH;
+DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 DLLEXPORT void jl_init(char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
-DLLEXPORT extern char *julia_home;
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT void jl_atexit_hook(void);
+DLLEXPORT void NORETURN jl_exit(int status);
 
-DLLEXPORT void jl_save_system_image(char *fname);
-DLLEXPORT void jl_restore_system_image(char *fname);
-DLLEXPORT int jl_save_new_module(char *fname, jl_module_t *mod);
-DLLEXPORT jl_module_t *jl_restore_new_module(char *fname);
+DLLEXPORT void jl_save_system_image(const char *fname);
+DLLEXPORT void jl_restore_system_image(const char *fname);
+DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
+DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
 void jl_init_restored_modules();
 
 // front end interface
@@ -990,22 +995,6 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
 
 // interfacing with Task runtime
 DLLEXPORT void jl_yield();
-DLLEXPORT void jl_handle_stack_start();
-
-#ifdef COPY_STACKS
-// initialize base context of root task
-extern DLLEXPORT jl_jmp_buf jl_base_ctx;
-#define JL_SET_STACK_BASE                               \
-    do {                                                \
-        int __stk;                                      \
-        jl_root_task->stackbase = (char*)&__stk;        \
-        if (jl_setjmp(jl_base_ctx, 1)) {                \
-            jl_handle_stack_start();                    \
-        }                                               \
-    } while (0)
-#else
-#define JL_SET_STACK_BASE
-#endif
 
 // gc -------------------------------------------------------------------------
 
@@ -1149,10 +1138,9 @@ typedef struct _jl_task_t {
     jl_value_t *exception;
     jl_function_t *start;
     jl_jmp_buf ctx;
-    union {
-        void *stackbase;
-        void *stack;
-    };
+#ifndef COPY_STACKS
+    void *stack;
+#endif
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
@@ -1328,7 +1316,10 @@ void show_execution_point(char *filename, int lno);
 // compiler options -----------------------------------------------------------
 
 typedef struct {
-    char *build_path;
+    const char *julia_home;
+    const char *julia_bin;
+    const char *build_path;
+    const char *image_file;
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;
@@ -1355,6 +1346,26 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
+
+DLLEXPORT extern void *__stack_chk_guard;
+#define SET_STACK_CHK_GUARD(a,b,c) do {                         \
+        unsigned char *p = (unsigned char *)&__stack_chk_guard; \
+        a = p[sizeof(__stack_chk_guard)-1];                     \
+        b = p[sizeof(__stack_chk_guard)-2];                     \
+        c = p[0];                                               \
+        /* If you have the ability to generate random numbers
+         * in your kernel then they should be used here */      \
+        p[sizeof(__stack_chk_guard)-1] = 255;                   \
+        p[sizeof(__stack_chk_guard)-2] = '\n';                  \
+        p[0] = 0;                                               \
+    } while (0)
+
+#define CLR_STACK_CHK_GUARD(a,b,c) do {                         \
+        unsigned char *p = (unsigned char *)&__stack_chk_guard; \
+        p[sizeof(__stack_chk_guard)-1] = a;                     \
+        p[sizeof(__stack_chk_guard)-2] = b;                     \
+        p[0] = c;                                               \
+    } while (0)
 
 #ifdef __cplusplus
 }

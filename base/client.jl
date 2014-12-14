@@ -356,6 +356,7 @@ function load_machine_file(path::AbstractString)
 end
 
 function early_init()
+    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
     Sys.init_sysinfo()
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from stating to many threads, unless/until specifically requested
@@ -372,13 +373,10 @@ import .Terminals
 import .REPL
 
 function _start()
-    early_init()
-
     try
         init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
-        init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
@@ -412,32 +410,25 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readall(STDIN)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)
                         eval_user_input(parse_input_line(STDIN), true)
                     end
                 end
-                if have_color
-                    print(color_normal)
-                end
-                quit()
+            else
+                REPL.run_repl(active_repl)
             end
-            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())
         println()
         exit(1)
     end
-    if is_interactive
-        if have_color
-            print(color_normal)
-        end
-        println()
+    if is_interactive && have_color
+        print(color_normal)
     end
-    ccall(:uv_atexit_hook, Void, ())
 end
 
 const atexit_hooks = []

@@ -306,8 +306,8 @@ else ifeq ($(OS), Linux)
 	done
 endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries
-	for julia in $(DESTDIR)$(bindir)/julia* ; do \
+	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
+	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
 		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
 	done
 endif

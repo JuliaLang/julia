@@ -686,14 +686,10 @@ char *jl_bufptr(ios_t *s)
     return s->buf;
 }
 
-DLLEXPORT void uv_atexit_hook();
 DLLEXPORT void jl_exit(int exitcode)
 {
-    /*if (jl_io_loop) {
-        jl_process_events(&jl_io_loop);
-    }*/
     uv_tty_reset_mode();
-    uv_atexit_hook();
+    jl_atexit_hook();
     exit(exitcode);
 }
 

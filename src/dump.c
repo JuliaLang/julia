@@ -452,8 +452,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     if (ref_only)
         return;
-    // set on every startup; don't save value
-    jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
@@ -461,12 +459,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m || m != jl_main_module) {
                 jl_serialize_value(s, b->name);
-                if (table[i-1] == jhsym && m == jl_core_module) {
-                    jl_serialize_value(s, NULL);
-                }
-                else {
-                    jl_serialize_value(s, b->value);
-                }
+                jl_serialize_value(s, b->value);
                 jl_serialize_value(s, b->type);
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
@@ -1305,7 +1298,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT void jl_save_system_image(char *fname)
+DLLEXPORT void jl_save_system_image(const char *fname)
 {
     jl_gc_collect();
     jl_gc_collect();
@@ -1337,10 +1330,8 @@ DLLEXPORT void jl_save_system_image(char *fname)
     // save module initialization order
     if (jl_module_init_order != NULL) {
         for(i=0; i < jl_array_len(jl_module_init_order); i++) {
-            // NULL out any modules that weren't saved
-            jl_value_t *mod = jl_cellref(jl_module_init_order, i);
-            if (ptrhash_get(&backref_table, mod) == HT_NOTFOUND)
-                jl_cellset(jl_module_init_order, i, NULL);
+            // verify that all these modules were saved
+            assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
     jl_serialize_value(&f, jl_module_init_order);
@@ -1360,11 +1351,10 @@ extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks();
 
 DLLEXPORT
-void jl_restore_system_image(char *fname)
+void jl_restore_system_image(const char *fname)
 {
     ios_t f;
-    char *fpath = fname;
-    if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
@@ -1432,14 +1422,10 @@ void jl_restore_system_image(char *fname)
     //ios_printf(ios_stderr, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
     ios_close(&f);
-    if (fpath != fname) free(fpath);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    // restore the value of our "magic" JULIA_HOME variable/constant
-    jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
-        jl_cstr_to_string(julia_home);
     mode = last_mode;
     jl_update_all_fptrs();
 }
@@ -1543,7 +1529,7 @@ jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 }
 
 DLLEXPORT
-int jl_save_new_module(char *fname, jl_module_t *mod)
+int jl_save_new_module(const char *fname, jl_module_t *mod)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
@@ -1583,7 +1569,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method);
 
 DLLEXPORT
-jl_module_t *jl_restore_new_module(char *fname)
+jl_module_t *jl_restore_new_module(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {

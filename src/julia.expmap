@@ -1,6 +1,7 @@
 {
   global:
     __asan*;
+    __stack_chk_guard;
     alloc_*w;
     allocobj;
     asprintf;
