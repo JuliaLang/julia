@@ -81,12 +81,16 @@ extern size_t jl_arr_xtralloc_limit;
 
 void jl_init_types(void);
 void jl_init_box_caches(void);
-DLLEXPORT void jl_init_frontend(void);
+void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
 void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
+void _julia_init(JL_IMAGE_SEARCH rel);
+#ifdef COPY_STACKS
+extern void *jl_stackbase;
+#endif
 
 void jl_dump_bitcode(char *fname);
 void jl_dump_objfile(char *fname, int jit_model);
@@ -140,6 +144,8 @@ extern uv_lib_t *jl_kernel32_handle;
 extern uv_lib_t *jl_crtdll_handle;
 extern uv_lib_t *jl_winsock_handle;
 #endif
+
+DLLEXPORT void jl_atexit_hook();
 
 #ifdef __cplusplus
 }

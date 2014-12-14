@@ -121,7 +121,7 @@ extern "C" {
 
 #include "builtin_proto.h"
 
-void *__stack_chk_guard = NULL;
+DLLEXPORT void *__stack_chk_guard = NULL;
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 void __stack_chk_fail()
@@ -130,9 +130,8 @@ void __attribute__(()) __stack_chk_fail()
 #endif
 {
     /* put your panic function or similar in here */
-    fprintf(stderr, "warning: stack corruption detected\n");
-    //assert(0 && "stack corruption detected");
-    //abort();
+    fprintf(stderr, "fatal error: stack corruption detected\n");
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function
 }
 }
 
@@ -877,7 +876,7 @@ static void coverageVisitLine(std::string filename, int line)
 
 void write_log_data(logdata_t logData, const char *extension)
 {
-    std::string base = std::string(julia_home);
+    std::string base = std::string(jl_compileropts.julia_home);
     base = base + "/../share/julia/base/";
     logdata_t::iterator it = logData.begin();
     for (; it != logData.end(); it++) {

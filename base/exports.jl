@@ -163,6 +163,7 @@ export
     Inf,
     Inf16,
     Inf32,
+    JULIA_HOME,
     LOAD_PATH,
     MS_ASYNC,
     MS_INVALIDATE,
