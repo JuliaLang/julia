@@ -95,20 +95,6 @@ for T in [UInt32, UInt64, UInt128, Int128]
     @test rand(s) == r
 end
 
-randn()
-randn(100000)
-randn!(Array(Float64, 100000))
-randn(MersenneTwister(10))
-randn(MersenneTwister(10), 100000)
-randn!(MersenneTwister(10), Array(Float64, 100000))
-
-randexp()
-randexp(100000)
-randexp!(Array(Float64, 100000))
-randexp(MersenneTwister(10))
-randexp(MersenneTwister(10), 100000)
-randexp!(MersenneTwister(10), Array(Float64, 100000))
-
 # Test ziggurat tables
 ziggurat_table_size = 256
 nmantissa           = int64(2)^51 # one bit for the sign
@@ -278,14 +264,38 @@ let mt = MersenneTwister()
     end
 end
 
-# test rand! API: rand!([rng], A, [coll])
-let mt = MersenneTwister(0)
-    for T in [Base.IntTypes..., Float16, Float32, Float64]
-        for A in (Array(T, 5), Array(T, 2, 2))
-            rand!(A)
-            rand!(mt, A)
-            rand!(A, T[1,2,3])
-            rand!(mt, A, T[1,2,3])
+# test all rand APIs
+for rng in ([], [MersenneTwister()], [RandomDevice()])
+    for f in [rand, randn, randexp]
+        f(rng...)        ::Float64
+        f(rng..., 5)     ::Vector{Float64}
+        f(rng..., 2, 3)  ::Array{Float64, 2}
+    end
+    for f! in [randn!, randexp!]
+        f!(rng..., Array(Float64, 5))    ::Vector{Float64}
+        f!(rng..., Array(Float64, 2, 3)) ::Array{Float64, 2}
+    end
+
+    randbool(rng...)               ::Bool
+    randbool(rng..., 5)            ::BitArray{1}
+    randbool(rng..., 2, 3)         ::BitArray{2}
+    rand!(rng..., BitArray(5))     ::BitArray{1}
+    rand!(rng..., BitArray(2, 3))  ::BitArray{2}
+
+    for T in [Base.IntTypes..., Bool, Float16, Float32, Float64]
+        a0 = rand(rng..., T)       ::T
+        a1 = rand(rng..., T, 5)    ::Vector{T}
+        a2 = rand(rng..., T, 2, 3) ::Array{T, 2}
+        if T <: FloatingPoint
+            for a in [a0, a1..., a2...]
+                @test 0.0 <= a < 1.0
+            end
+        end
+        for A in (Array(T, 5), Array(T, 2, 3))
+            rand!(rng..., A)            ::typeof(A)
+            rand!(rng..., A, T[0,1,2])  ::typeof(A)
+            rand!(rng..., sparse(A))            ::typeof(sparse(A))
+            rand!(rng..., sparse(A), T[0,1,2])  ::typeof(sparse(A))
         end
     end
 end
