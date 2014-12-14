@@ -231,3 +231,15 @@ for T in types
     @test hash(x2) != hash(x4)
     @test hash(x3) != hash(x4)
 end
+
+type TestNType{T}
+    v::Nullable{T}
+end
+
+for T in types
+    x1 = TestNType{T}(Nullable{T}())
+    @test isnull(x1.v)
+    x1.v = one(T)
+    @test !isnull(x1.v)
+    @test get(x1.v, one(T)) === one(T)
+end
