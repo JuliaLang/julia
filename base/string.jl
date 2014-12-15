@@ -441,10 +441,11 @@ function rsearchindex(s::ByteString, t::ByteString)
 end
 
 function rsearchindex(s::ByteString, t::ByteString, i::Integer)
-    if length(t) == 1
+    l = length(t)
+    if l == 1
         rsearch(s, t[1], i)
     else
-        rsearchindex(s.data, t.data, i)
+        rsearchindex(s.data, t.data, l==0 ? i : nextind(s, i)-1)
     end
 end
 
@@ -1729,4 +1730,3 @@ pointer{T<:ByteString}(x::SubString{T}, i::Integer) = pointer(x.string.data) + x
 pointer(x::Union(UTF16String,UTF32String), i::Integer) = pointer(x)+(i-1)*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}) = pointer(x.string.data) + x.offset*sizeof(eltype(x.data))
 pointer{T<:Union(UTF16String,UTF32String)}(x::SubString{T}, i::Integer) = pointer(x.string.data) + (x.offset + (i-1))*sizeof(eltype(x.data))
-
