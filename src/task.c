@@ -161,7 +161,12 @@ static void start_task(jl_task_t *t);
 #ifdef COPY_STACKS
 jl_jmp_buf * volatile jl_jmp_target;
 
-static void save_stack(jl_task_t *t)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline)
+#else
+static void __attribute__((noinline))
+#endif
+save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
