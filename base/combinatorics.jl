@@ -136,6 +136,7 @@ end
 
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
+    k < 0 && error("permutation must be a positive number")
     n = length(a)
     n == 0 && return a
     f = factorial(oftype(k, n-1))
@@ -291,12 +292,12 @@ permutations(a) = Permutations(a)
 
 start(p::Permutations) = [1:length(p.a)]
 function next(p::Permutations, s)
+    perm = p.a[s]
     if length(p.a) == 0
         # special case to generate 1 result for len==0
-        return (p.a,[1])
+        return (perm,[1])
     end
     s = copy(s)
-    perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
     if k == 0
@@ -330,7 +331,7 @@ function nextpartition(n, as)
     if isempty(as);  return Int[n];  end
 
     xs = similar(as,0)
-    sizehint(xs,length(as)+1)
+    sizehint!(xs,length(as)+1)
 
     for i = 1:length(as)-1
         if as[i+1] == 1

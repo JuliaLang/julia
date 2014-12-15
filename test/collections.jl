@@ -173,7 +173,7 @@ d3[data_in[rand(1:length(data_in))][1]] = randstring(3)
 d4[1001] = randstring(3)
 @test !isequal(d1, d4)
 
-@test isequal(Dict(), sizehint(Dict(),96))
+@test isequal(Dict(), sizehint!(Dict(),96))
 
 # Here is what currently happens when dictionaries of different types
 # are compared. This is not necessarily desirable. These tests are
@@ -340,36 +340,36 @@ pop!(s)
 @test length(s) == 1
 
 # union
-s = union(Set(1,2), Set(3,4))
-@test isequal(s, Set(1,2,3,4))
-s = union(Set(5,6,7,8), Set(7,8,9))
-@test isequal(s, Set(5,6,7,8,9))
+s = union(Set([1,2]), Set([3,4]))
+@test isequal(s, Set([1,2,3,4]))
+s = union(Set([5,6,7,8]), Set([7,8,9]))
+@test isequal(s, Set([5,6,7,8,9]))
 
 # intersect
-s = intersect(Set(1,2), Set(3,4))
+s = intersect(Set([1,2]), Set([3,4]))
 @test isequal(s, Set())
-s = intersect(Set(5,6,7,8), Set(7,8,9))
-@test isequal(s, Set(7,8))
-@test isequal(intersect(Set(2,3,1), Set(4,2,3), Set(5,4,3,2)), Set(2,3))
+s = intersect(Set([5,6,7,8]), Set([7,8,9]))
+@test isequal(s, Set([7,8]))
+@test isequal(intersect(Set([2,3,1]), Set([4,2,3]), Set([5,4,3,2])), Set([2,3]))
 
 # setdiff
-@test isequal(setdiff(Set(1,2,3), Set()), Set(1,2,3))
-@test isequal(setdiff(Set(1,2,3), Set(1)),  Set(2,3))
-@test isequal(setdiff(Set(1,2,3), Set(1,2)),  Set(3))
-@test isequal(setdiff(Set(1,2,3), Set(1,2,3)), Set())
-@test isequal(setdiff(Set(1,2,3), Set(4)),  Set(1,2,3))
-@test isequal(setdiff(Set(1,2,3), Set(4,1)),  Set(2,3))
+@test isequal(setdiff(Set([1,2,3]), Set()), Set([1,2,3]))
+@test isequal(setdiff(Set([1,2,3]), Set([1])),  Set([2,3]))
+@test isequal(setdiff(Set([1,2,3]), Set([1,2])),  Set([3]))
+@test isequal(setdiff(Set([1,2,3]), Set([1,2,3])), Set())
+@test isequal(setdiff(Set([1,2,3]), Set([4])),  Set([1,2,3]))
+@test isequal(setdiff(Set([1,2,3]), Set([4,1])),  Set([2,3]))
 
-for (l,r) in ((Set(1,2),     Set(3,4)),
-              (Set(5,6,7,8), Set(7,8,9)),
-              (Set(1,2),     Set(3,4)),
-              (Set(5,6,7,8), Set(7,8,9)),
-              (Set(1,2,3),   Set()),
-              (Set(1,2,3),   Set(1)),
-              (Set(1,2,3),   Set(1,2)),
-              (Set(1,2,3),   Set(1,2,3)),
-              (Set(1,2,3),   Set(4)),
-              (Set(1,2,3),   Set(4,1)))
+for (l,r) in ((Set([1,2]),     Set([3,4])),
+              (Set([5,6,7,8]), Set([7,8,9])),
+              (Set([1,2]),     Set([3,4])),
+              (Set([5,6,7,8]), Set([7,8,9])),
+              (Set([1,2,3]),   Set()),
+              (Set([1,2,3]),   Set([1])),
+              (Set([1,2,3]),   Set([1,2])),
+              (Set([1,2,3]),   Set([1,2,3])),
+              (Set([1,2,3]),   Set([4])),
+              (Set([1,2,3]),   Set([4,1])))
     @test issubset(intersect(l,r), l)
     @test issubset(intersect(l,r), r)
     @test issubset(l, union(l,r))
@@ -377,35 +377,35 @@ for (l,r) in ((Set(1,2),     Set(3,4)),
     @test isequal(union(intersect(l,r),symdiff(l,r)), union(l,r))
 end
 
-@test setdiff(IntSet(1, 2, 3, 4), IntSet(2, 4, 5, 6)) == IntSet(1, 3)
-@test setdiff(Set(1, 2, 3, 4), Set(2, 4, 5, 6)) == Set(1, 3)
+@test setdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3])
+@test setdiff(Set([1, 2, 3, 4]), Set([2, 4, 5, 6])) == Set([1, 3])
 
-@test symdiff(IntSet(1, 2, 3, 4), IntSet(2, 4, 5, 6)) == IntSet(1, 3, 5, 6)
-@test symdiff(Set(1, 2, 3, 4), Set(2, 4, 5, 6)) == Set(1, 3, 5, 6)
+@test symdiff(IntSet([1, 2, 3, 4]), IntSet([2, 4, 5, 6])) == IntSet([1, 3, 5, 6])
+@test symdiff(Set([1, 2, 3, 4]), Set([2, 4, 5, 6])) == Set([1, 3, 5, 6])
 
-s1 = Set(1, 2, 3, 4)
-setdiff!(s1, Set(2, 4, 5, 6))
+s1 = Set([1, 2, 3, 4])
+setdiff!(s1, Set([2, 4, 5, 6]))
 
-@test s1 == Set(1, 3)
+@test s1 == Set([1, 3])
 
-s2 = IntSet(1, 2, 3, 4)
-setdiff!(s2, IntSet(2, 4, 5, 6))
+s2 = IntSet([1, 2, 3, 4])
+setdiff!(s2, IntSet([2, 4, 5, 6]))
 
-@test s2 == IntSet(1, 3)
+@test s2 == IntSet([1, 3])
 
 # issue #7851
 @test_throws ArgumentError IntSet(-1)
 @test !(-1 in IntSet(0:10))
 
 # union!
-s = Set(1,3,5,7)
+s = Set([1,3,5,7])
 union!(s,(2,3,4,5))
-@test isequal(s,Set(1,2,3,4,5,7))
+@test isequal(s,Set([1,2,3,4,5,7]))
 
 # setdiff!
-s = Set(1,3,5,7)
+s = Set([1,3,5,7])
 setdiff!(s,(3,5))
-@test isequal(s,Set(1,7))
+@test isequal(s,Set([1,7]))
 
 # similar
 s = similar(Set([1,"Banana"]))
@@ -474,7 +474,7 @@ s3 = Set{ASCIIString}(["baz"])
 
 # isequal
 @test  isequal(Set(), Set())
-@test !isequal(Set(), Set(1))
+@test !isequal(Set(), Set([1]))
 @test  isequal(Set{Any}(Any[1,2]), Set{Int}([1,2]))
 @test !isequal(Set{Any}(Any[1,2]), Set{Int}([1,2,3]))
 
@@ -498,7 +498,7 @@ s3 = Set{ASCIIString}(["baz"])
 
 ## IntSet
 
-s = IntSet(0,1,10,20,200,300,1000,10000,10002)
+s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 @test last(s) == 10002
 @test first(s) == 0
 @test length(s) == 9
@@ -512,7 +512,7 @@ s = IntSet(0,1,10,20,200,300,1000,10000,10002)
 @test_throws ErrorException first(IntSet())
 @test_throws ErrorException last(IntSet())
 t = copy(s)
-sizehint(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
+sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
 @test hash(s) == hash(t)
 @test hash(complement(s)) == hash(complement(t))
 

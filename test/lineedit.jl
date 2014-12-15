@@ -21,28 +21,28 @@ const bar_keymap = Dict(
     'b' => (o...)->(global b_bar; b_bar += 1)
 )
 
-test1_func = LineEdit.keymap([foo_keymap])
+test1_dict = LineEdit.keymap([foo_keymap])
 
-function run_test(f,buf)
+function run_test(d,buf)
     global a_foo, a_bar, b_bar
     a_foo = a_bar = b_bar = 0
     while !eof(buf)
-        f(buf,nothing)
+        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
     end
 end
 
-run_test(test1_func,IOBuffer("aa"))
+run_test(test1_dict,IOBuffer("aa"))
 @test a_foo == 2
 
-test2_func = LineEdit.keymap([foo2_keymap, foo_keymap])
+test2_dict = LineEdit.keymap([foo2_keymap, foo_keymap])
 
-run_test(test2_func,IOBuffer("aaabb"))
+run_test(test2_dict,IOBuffer("aaabb"))
 @test a_foo == 3
 @test b_foo == 2
 
-test3_func = LineEdit.keymap([bar_keymap, foo_keymap])
+test3_dict = LineEdit.keymap([bar_keymap, foo_keymap])
 
-run_test(test3_func,IOBuffer("aab"))
+run_test(test3_dict,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
 

@@ -238,16 +238,15 @@ function one(x::BitMatrix)
 end
 
 function copy!(dest::BitArray, src::BitArray)
+    length(src) > length(dest) && throw(BoundsError())
     destc = dest.chunks; srcc = src.chunks
-    nc_d = length(destc)
-    nc_s = length(srcc)
-    nc = min(nc_s, nc_d)
+    nc = min(length(destc), length(srcc))
     nc == 0 && return dest
     @inbounds begin
         for i = 1 : nc - 1
             destc[i] = srcc[i]
         end
-        if length(src) >= length(dest)
+        if length(src) == length(dest)
             destc[nc] = srcc[nc]
         else
             msk_s = @_msk_end length(src)
@@ -258,11 +257,12 @@ function copy!(dest::BitArray, src::BitArray)
     return dest
 end
 
-function copy!(dest::BitArray, pos_d::Integer, src::BitArray, pos_s::Integer, numbits::Integer)
-    if pos_s+numbits-1 > length(src) || pos_d+numbits-1 > length(dest) || pos_d < 1 || pos_s < 1
+function copy!(dest::BitArray, doffs::Integer, src::BitArray, soffs::Integer, n::Integer)
+    n == 0 && return dest
+    if soffs+n-1 > length(src) || doffs+n-1 > length(dest) || doffs < 1 || soffs < 1
         throw(BoundsError())
     end
-    copy_chunks!(dest.chunks, pos_d, src.chunks, pos_s, numbits)
+    copy_chunks!(dest.chunks, doffs, src.chunks, soffs, n)
     return dest
 end
 
@@ -510,7 +510,7 @@ end
 prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, bitpack(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, bitunpack(items))
 
-function sizehint(B::BitVector, sz::Integer)
+function sizehint!(B::BitVector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(sz))
     return B
 end

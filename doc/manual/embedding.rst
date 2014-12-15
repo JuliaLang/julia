@@ -18,11 +18,18 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
   int main(int argc, char *argv[])
   {
+      /* required: setup the julia context */
       jl_init(NULL);
-      JL_SET_STACK_BASE;
 
+      /* run julia commands */
       jl_eval_string("print(sqrt(2.0))");
 
+      /* strongly recommended: notify julia that the
+           program is about to terminate. this allows
+           julia time to cleanup pending write requests
+           and run all finalizers
+      */
+      jl_atexit_hook();
       return 0;
   }
 
@@ -30,7 +37,7 @@ In order to build this program you have to put the path to the Julia header into
 
     gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
 
-Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder.
+Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_compileropts`` options while linking against libjulia.
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 

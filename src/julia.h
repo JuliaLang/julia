@@ -814,7 +814,6 @@ DLLEXPORT jl_value_t *jl_eqtable_get(jl_array_t *h, void *key, jl_value_t *deflt
 DLLEXPORT int jl_errno(void);
 DLLEXPORT void jl_set_errno(int e);
 DLLEXPORT int32_t jl_stat(const char *path, char *statbuf);
-DLLEXPORT void NORETURN jl_exit(int status);
 DLLEXPORT int jl_cpu_cores(void);
 DLLEXPORT long jl_getpagesize(void);
 DLLEXPORT long jl_getallocationgranularity(void);
@@ -856,22 +855,30 @@ DLLEXPORT void jl_exception_clear(void);
     }
 
 // initialization functions
-DLLEXPORT void julia_init(char *imageFile);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+typedef enum {
+    JL_IMAGE_CWD = 0,
+    JL_IMAGE_JULIA_HOME = 1,
+    //JL_IMAGE_LIBJULIA = 2,
+} JL_IMAGE_SEARCH;
+DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
 DLLEXPORT void jl_init(char *julia_home_dir);
 DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
-DLLEXPORT extern char *julia_home;
+DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT void jl_atexit_hook(void);
+DLLEXPORT void NORETURN jl_exit(int status);
 
-DLLEXPORT void jl_save_system_image(char *fname);
-DLLEXPORT void jl_restore_system_image(char *fname);
-DLLEXPORT int jl_save_new_module(char *fname, jl_module_t *mod);
-DLLEXPORT jl_module_t *jl_restore_new_module(char *fname);
+DLLEXPORT const char * jl_get_system_image_cpu_target(const char *fname);
+DLLEXPORT void jl_save_system_image(const char *fname);
+DLLEXPORT void jl_restore_system_image(const char *fname);
+DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
+DLLEXPORT jl_module_t *jl_restore_new_module(const char *fname);
 void jl_init_restored_modules();
 
 // front end interface
 DLLEXPORT jl_value_t *jl_parse_input_line(const char *str);
 DLLEXPORT jl_value_t *jl_parse_string(const char *str, int pos0, int greedy);
+DLLEXPORT int jl_parse_depwarn(int warn);
 int jl_start_parsing_file(const char *fname);
 void jl_stop_parsing(void);
 jl_value_t *jl_parse_next(void);
@@ -990,22 +997,6 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
 
 // interfacing with Task runtime
 DLLEXPORT void jl_yield();
-DLLEXPORT void jl_handle_stack_start();
-
-#ifdef COPY_STACKS
-// initialize base context of root task
-extern DLLEXPORT jl_jmp_buf jl_base_ctx;
-#define JL_SET_STACK_BASE                               \
-    do {                                                \
-        int __stk;                                      \
-        jl_root_task->stackbase = (char*)&__stk;        \
-        if (jl_setjmp(jl_base_ctx, 1)) {                \
-            jl_handle_stack_start();                    \
-        }                                               \
-    } while (0)
-#else
-#define JL_SET_STACK_BASE
-#endif
 
 // gc -------------------------------------------------------------------------
 
@@ -1069,10 +1060,11 @@ void sync_gc_total_bytes(void);
 void jl_gc_ephemeral_on(void);
 void jl_gc_ephemeral_off(void);
 DLLEXPORT void jl_gc_collect(void);
-void jl_gc_preserve(jl_value_t *v);
-void jl_gc_unpreserve(void);
-int jl_gc_n_preserved_values(void);
+DLLEXPORT void jl_gc_preserve(jl_value_t *v);
+DLLEXPORT void jl_gc_unpreserve(void);
+DLLEXPORT int jl_gc_n_preserved_values(void);
 DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+DLLEXPORT void jl_finalize(jl_value_t *o);
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
 void *jl_gc_managed_malloc(size_t sz);
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned);
@@ -1148,10 +1140,9 @@ typedef struct _jl_task_t {
     jl_value_t *exception;
     jl_function_t *start;
     jl_jmp_buf ctx;
-    union {
-        void *stackbase;
-        void *stack;
-    };
+#ifndef COPY_STACKS
+    void *stack;
+#endif
     size_t bufsz;
     void *stkbuf;
     size_t ssize;
@@ -1327,13 +1318,19 @@ void show_execution_point(char *filename, int lno);
 // compiler options -----------------------------------------------------------
 
 typedef struct {
-    char *build_path;
+    const char *julia_home;
+    const char *julia_bin;
+    const char *build_path;
+    const char *image_file;
+    const char *cpu_target;
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;
     int8_t dumpbitcode;
     int int_literals;
     int8_t compile_enabled;
+    int8_t opt_level;
+    int8_t depwarn;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;

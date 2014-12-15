@@ -8,6 +8,7 @@ import ..Terminals: raw!, width, height, cmove, getX,
 import Base: ensureroom, peek, show, AnyDict
 
 abstract TextInterface
+abstract ModeState
 
 export run_interface, Prompt, ModalInterface, transition, reset_state, edit_insert, keymap
 
@@ -26,9 +27,6 @@ type MIState
 end
 MIState(i, c, a, m) = MIState(i, c, a, m, "", Char[], 0)
 
-type Mode <: TextInterface
-end
-
 type Prompt <: TextInterface
     prompt
     first_prompt
@@ -37,7 +35,7 @@ type Prompt <: TextInterface
     prompt_prefix
     # Same as prefix except after the prompt
     prompt_suffix
-    keymap_func
+    keymap_dict
     keymap_func_data
     complete
     on_enter
@@ -53,7 +51,7 @@ immutable InputAreaState
     curs_row::Int64
 end
 
-type PromptState
+type PromptState <: ModeState
     terminal::TextTerminal
     p::Prompt
     input_buffer::IOBuffer
@@ -61,7 +59,7 @@ type PromptState
     indent::Int
 end
 
-input_string(s::PromptState) = bytestring(pointer(s.input_buffer.data), s.input_buffer.size)
+input_string(s::PromptState) = bytestring(s.input_buffer)
 
 input_string_newlines(s::PromptState) = count(c->(c == '\n'), input_string(s))
 function input_string_newlines_aftercursor(s::PromptState)
@@ -185,9 +183,10 @@ end
 prompt_string(s::PromptState) = s.p.prompt
 prompt_string(s::AbstractString) = s
 
-refresh_multi_line(termbuf::TerminalBuffer, s::PromptState) = s.ias =
+refresh_multi_line(s::ModeState) = refresh_multi_line(terminal(s), s)
+refresh_multi_line(termbuf::TerminalBuffer, s::ModeState) = s.ias =
     refresh_multi_line(termbuf, terminal(s), buffer(s), s.ias, s, indent = s.indent)
-
+refresh_multi_line(termbuf::TerminalBuffer, term, s::ModeState) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
 function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf, state::InputAreaState, prompt = ""; indent = 0)
     cols = width(terminal)
 
@@ -297,6 +296,16 @@ function refresh_multi_line(termbuf::TerminalBuffer, terminal::UnixTerminal, buf
 
     # Updated cur_row,curs_row
     return InputAreaState(cur_row, curs_row)
+end
+
+function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
+    outbuf = IOBuffer()
+    termbuf = TerminalBuffer(outbuf)
+    ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
+    # Output the entire refresh at once
+    write(terminal, takebuf_array(outbuf))
+    flush(terminal)
+    return ret
 end
 
 
@@ -609,8 +618,8 @@ history_next(::EmptyHistoryProvider) = ("", false)
 history_search(::EmptyHistoryProvider, args...) = false
 add_history(::EmptyHistoryProvider, s) = nothing
 add_history(s::PromptState) = add_history(mode(s).hist, s)
-history_next_prefix(s, hist) = false
-history_prev_prefix(s, hist) = false
+history_next_prefix(s, hist, prefix) = false
+history_prev_prefix(s, hist, prefix) = false
 
 function history_prev(s, hist)
     l, ok = history_prev(mode(s).hist)
@@ -639,12 +648,12 @@ refresh_line(s, termbuf) = refresh_multi_line(termbuf, s)
 default_completion_cb(::IOBuffer) = []
 default_enter_cb(_) = true
 
-write_prompt(terminal, s::PromptState) = write_prompt(terminal, s, s.p.prompt)
-function write_prompt(terminal, s::PromptState, prompt)
-    prefix = isa(s.p.prompt_prefix,Function) ? s.p.prompt_prefix() : s.p.prompt_prefix
-    suffix = isa(s.p.prompt_suffix,Function) ? s.p.prompt_suffix() : s.p.prompt_suffix
+write_prompt(terminal, s::PromptState) = write_prompt(terminal, s.p)
+function write_prompt(terminal, p::Prompt)
+    prefix = isa(p.prompt_prefix,Function) ? p.prompt_prefix() : p.prompt_prefix
+    suffix = isa(p.prompt_suffix,Function) ? p.prompt_suffix() : p.prompt_suffix
     write(terminal, prefix)
-    write(terminal, prompt)
+    write(terminal, p.prompt)
     write(terminal, Base.text_colors[:normal])
     write(terminal, suffix)
 end
@@ -725,18 +734,21 @@ function normalize_keymap(keymap::Dict)
     ret
 end
 
-match_input(k::Function, s, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, last(cs)))
-match_input(k::Void, s, cs) = (s,p) -> return :ok
-function match_input(keymap::Dict, s, cs=Char[])
-    c = read(terminal(s), Char)
+match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
+match_input(k::Void, s, term, cs) = (s,p) -> return :ok
+function match_input(keymap::Dict, s, term=terminal(s), cs=Char[])
+    # if we run out of characters to match before resolving an action,
+    # return an empty keymap function
+    eof(term) && return keymap_fcn(nothing, s, "")
+    c = read(term, Char)
     push!(cs, c)
     k = haskey(keymap, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(keymap, k, nothing), s, cs)
+    return match_input(get(keymap, k, nothing), s, term, cs)
 end
 
 keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
-function keymap_fcn(f::Function, s, c::Char)
+function keymap_fcn(f::Function, s, c)
     return (s, p) -> begin
         r = f(s, p, c)
         if isa(r, Symbol)
@@ -829,8 +841,7 @@ end
 function keymap{D<:Dict}(keymaps::Array{D})
     # keymaps is a vector of prioritized keymaps, with highest priority first
     dict = map(normalize_keys, keymaps)
-    dict = keymap_prepare(merge(reverse(dict)...))
-    return (s,p)->match_input(dict, s)(s,p)
+    return keymap_prepare(merge(reverse(dict)...))
 end
 
 const escape_defaults = merge!(
@@ -868,7 +879,7 @@ function write_response_buffer(s::PromptState, data)
     refresh_line(s)
 end
 
-type SearchState
+type SearchState <: ModeState
     terminal
     histprompt
     #rsearch (true) or ssearch (false)
@@ -898,35 +909,7 @@ function history_set_backward(s::SearchState, backward)
     s.backward = backward
 end
 
-input_string(s::SearchState) = bytestring(pointer(s.query_buffer.data), s.query_buffer.size)
-
-refresh_multi_line(termbuf::TerminalBuffer, term, s::Union(SearchState,PromptState)) = (@assert term == terminal(s); refresh_multi_line(termbuf,s))
-function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
-    buf = IOBuffer()
-    write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
-    write(buf, "': ")
-    offset = buf.ptr
-    ptr = s.response_buffer.ptr
-    seek(s.response_buffer, 0)
-    write(buf, readall(s.response_buffer))
-    buf.ptr = offset + ptr - 1
-    s.response_buffer.ptr = ptr
-    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
-end
-
-function refresh_multi_line(s::Union(SearchState,PromptState))
-    refresh_multi_line(terminal(s), s)
-end
-
-function refresh_multi_line(terminal::UnixTerminal, args...; kwargs...)
-    outbuf = IOBuffer()
-    termbuf = TerminalBuffer(outbuf)
-    ret = refresh_multi_line(termbuf, terminal, args...;kwargs...)
-    # Output the entire refresh at once
-    write(terminal, takebuf_array(outbuf))
-    flush(terminal)
-    return ret
-end
+input_string(s::SearchState) = bytestring(s.query_buffer)
 
 function reset_state(s::SearchState)
     if s.query_buffer.size != 0
@@ -943,18 +926,84 @@ end
 type HistoryPrompt{T<:HistoryProvider} <: TextInterface
     hp::T
     complete
-    keymap_func::Function
+    keymap_dict::Dict{Char,Any}
     HistoryPrompt(hp) = new(hp, EmptyCompletionProvider())
 end
 
 HistoryPrompt{T<:HistoryProvider}(hp::T) = HistoryPrompt{T}(hp)
 init_state(terminal, p::HistoryPrompt) = SearchState(terminal, p, true, IOBuffer(), IOBuffer())
 
+type PrefixSearchState <: ModeState
+    terminal
+    histprompt
+    prefix::ByteString
+    response_buffer::IOBuffer
+    ias::InputAreaState
+    indent::Int
+    #The prompt whose input will be replaced by the matched history
+    parent
+    PrefixSearchState(terminal, histprompt, prefix, response_buffer) =
+        new(terminal, histprompt, prefix, response_buffer, InputAreaState(0,0), 0)
+end
+
+input_string(s::PrefixSearchState) = bytestring(s.response_buffer)
+
+# a meta-prompt that presents itself as parent_prompt, but which has an independent keymap
+# for prefix searching
+type PrefixHistoryPrompt{T<:HistoryProvider} <: TextInterface
+    hp::T
+    parent_prompt::Prompt
+    complete
+    keymap_dict::Dict{Char,Any}
+    PrefixHistoryPrompt(hp, parent_prompt) = new(hp, parent_prompt, EmptyCompletionProvider())
+end
+
+PrefixHistoryPrompt{T<:HistoryProvider}(hp::T, parent_prompt) = PrefixHistoryPrompt{T}(hp, parent_prompt)
+init_state(terminal, p::PrefixHistoryPrompt) = PrefixSearchState(terminal, p, "", IOBuffer())
+
+write_prompt(terminal, s::PrefixSearchState) = write_prompt(terminal, s.histprompt.parent_prompt)
+prompt_string(s::PrefixSearchState) = s.histprompt.parent_prompt.prompt
+
+terminal(s::PrefixSearchState) = s.terminal
+
+function reset_state(s::PrefixSearchState)
+    if s.response_buffer.size != 0
+        s.response_buffer.size = 0
+        s.response_buffer.ptr = 1
+    end
+end
+
+function transition(s::PrefixSearchState, mode)
+    s.parent = mode
+    s.histprompt.parent_prompt = mode
+end
+
+replace_line(s::PrefixSearchState, l::IOBuffer) = s.response_buffer = l
+function replace_line(s::PrefixSearchState, l)
+    s.response_buffer.ptr = 1
+    s.response_buffer.size = 0
+    write(s.response_buffer, l)
+end
+
+function refresh_multi_line(termbuf::TerminalBuffer, s::SearchState)
+    buf = IOBuffer()
+    write(buf, pointer(s.query_buffer.data), s.query_buffer.ptr-1)
+    write(buf, "': ")
+    offset = buf.ptr
+    ptr = s.response_buffer.ptr
+    seek(s.response_buffer, 0)
+    write(buf, readall(s.response_buffer))
+    buf.ptr = offset + ptr - 1
+    s.response_buffer.ptr = ptr
+    s.ias = refresh_multi_line(termbuf, s.terminal, buf, s.ias, s.backward ? "(reverse-i-search)`" : "(forward-i-search)`")
+end
+
 state(s::MIState, p) = s.mode_state[p]
 state(s::PromptState, p) = (@assert s.p == p; s)
 mode(s::MIState) = s.current_mode
 mode(s::PromptState) = s.p
 mode(s::SearchState) = @assert false
+mode(s::PrefixSearchState) = s.histprompt.parent_prompt
 
 # Search Mode completions
 function complete_line(s::SearchState, repeats)
@@ -993,6 +1042,22 @@ function enter_search(s::MIState, p::HistoryPrompt, backward::Bool)
     truncate(ss.query_buffer, 0)
     copybuf!(ss.response_buffer, buf)
     transition(s, p)
+end
+
+function enter_prefix_search(s::MIState, p::PrefixHistoryPrompt, backward::Bool)
+    buf = buffer(s)
+
+    pss = state(s, p)
+    pss.parent = mode(s)
+    pss.prefix = bytestring(pointer(buf.data), position(buf))
+    copybuf!(pss.response_buffer, buf)
+    pss.indent = state(s, mode(s)).indent
+    transition(s, p)
+    if backward
+        history_prev_prefix(pss, pss.histprompt.hp, pss.prefix)
+    else
+        history_next_prefix(pss, pss.histprompt.hp, pss.prefix)
+    end
 end
 
 function setup_search_keymap(hp)
@@ -1067,7 +1132,7 @@ function setup_search_keymap(hp)
         end,
         "*"       => (s,data,c)->(edit_insert(data.query_buffer, c); update_display_buffer(s, data))
     )
-    p.keymap_func = keymap([pkeymap, escape_defaults])
+    p.keymap_dict = keymap([pkeymap, escape_defaults])
     skeymap = AnyDict(
         "^R"    => (s,o...)->(enter_search(s, p, true)),
         "^S"    => (s,o...)->(enter_search(s, p, false)),
@@ -1075,8 +1140,8 @@ function setup_search_keymap(hp)
     (p, skeymap)
 end
 
-keymap(state, p::HistoryPrompt) = p.keymap_func
-keymap_data(state, ::HistoryPrompt) = state
+keymap(state, p::Union(HistoryPrompt,PrefixHistoryPrompt)) = p.keymap_dict
+keymap_data(state, ::Union(HistoryPrompt, PrefixHistoryPrompt)) = state
 
 Base.isempty(s::PromptState) = s.input_buffer.size == 0
 
@@ -1225,33 +1290,69 @@ AnyDict(
         end
         edit_insert(s, input)
     end,
-    "^T" => (s,o...)->edit_transpose(s),
+    "^T" => (s,o...)->edit_transpose(s)
 )
 
 const history_keymap = AnyDict(
     "^P" => (s,o...)->(history_prev(s, mode(s).hist)),
     "^N" => (s,o...)->(history_next(s, mode(s).hist)),
     # Up Arrow
-    "\e[A" => (s,o...)->(edit_move_up(s) || history_prev_prefix(s, mode(s).hist)),
+    "\e[A" => (s,o...)->(edit_move_up(s) || history_prev(s, mode(s).hist)),
     # Down Arrow
-    "\e[B" => (s,o...)->(edit_move_down(s) || history_next_prefix(s, mode(s).hist)),
+    "\e[B" => (s,o...)->(edit_move_down(s) || history_next(s, mode(s).hist)),
     # Page Up
     "\e[5~" => (s,o...)->(history_prev(s, mode(s).hist)),
     # Page Down
     "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
 )
 
-function deactivate(p::Union(Prompt,HistoryPrompt), s::Union(SearchState,PromptState), termbuf)
+const prefix_history_keymap = AnyDict(
+    # Up Arrow
+    "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+    # Down Arrow
+    "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
+    # by default, pass thru to the parent mode
+    "*"    => (s,data,c)->begin
+        accept_result(s, data.histprompt);
+        ps = state(s, mode(s))
+        match_input(keymap(ps, mode(s)), s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
+    end,
+    # match escape sequences for pass thru
+    "\e*" => "*",
+    "\e[*" => "*",
+    "\e[1~" => "*",
+    "\e[3~" => "*",
+    "\e[4~" => "*",
+    "\e[5~" => "*",
+    "\e[6~" => "*",
+    "\e[7~" => "*",
+    "\e[8~" => "*",
+    "\e[200~" => "*"
+)
+
+function setup_prefix_keymap(hp, parent_prompt)
+    p = PrefixHistoryPrompt(hp, parent_prompt)
+    p.keymap_dict = keymap([prefix_history_keymap])
+    pkeymap = AnyDict(
+        # Up Arrow
+        "\e[A" => (s,o...)->(edit_move_up(s) || enter_prefix_search(s, p, true)),
+        # Down Arrow
+        "\e[B" => (s,o...)->(edit_move_down(s) || enter_prefix_search(s, p, false)),
+    )
+    (p, pkeymap)
+end
+
+function deactivate(p::TextInterface, s::ModeState, termbuf)
     clear_input_area(termbuf, s)
     s
 end
 
-function activate(p::Union(Prompt,HistoryPrompt), s::Union(SearchState,PromptState), termbuf)
+function activate(p::TextInterface, s::ModeState, termbuf)
     s.ias = InputAreaState(0, 0)
     refresh_line(s, termbuf)
 end
 
-function activate(p::Union(Prompt,HistoryPrompt), s::MIState, termbuf)
+function activate(p::TextInterface, s::MIState, termbuf)
     @assert p == s.current_mode
     activate(p, s.mode_state[s.current_mode], termbuf)
 end
@@ -1287,13 +1388,13 @@ function reset_state(s::MIState)
     end
 end
 
-const default_keymap_func = keymap([default_keymap, escape_defaults])
+const default_keymap_dict = keymap([default_keymap, escape_defaults])
 
 function Prompt(prompt;
     first_prompt = prompt,
     prompt_prefix = "",
     prompt_suffix = "",
-    keymap_func = default_keymap_func,
+    keymap_dict = default_keymap_dict,
     keymap_func_data = nothing,
     complete = EmptyCompletionProvider(),
     on_enter = default_enter_cb,
@@ -1301,7 +1402,7 @@ function Prompt(prompt;
     hist = EmptyHistoryProvider(),
     sticky = false)
 
-    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_func, keymap_func_data,
+    Prompt(prompt, first_prompt, prompt_prefix, prompt_suffix, keymap_dict, keymap_func_data,
         complete, on_enter, on_done, hist, sticky)
 end
 
@@ -1332,30 +1433,31 @@ end
 
 buffer(s::PromptState) = s.input_buffer
 buffer(s::SearchState) = s.query_buffer
+buffer(s::PrefixSearchState) = s.response_buffer
 
-keymap(s::PromptState, prompt::Prompt) = prompt.keymap_func
+keymap(s::PromptState, prompt::Prompt) = prompt.keymap_dict
 keymap_data(s::PromptState, prompt::Prompt) = prompt.keymap_func_data
 keymap(ms::MIState, m::ModalInterface) = keymap(ms.mode_state[ms.current_mode], ms.current_mode)
 keymap_data(ms::MIState, m::ModalInterface) = keymap_data(ms.mode_state[ms.current_mode], ms.current_mode)
 
-function prompt!(terminal, prompt, s = init_state(terminal, prompt))
-    Base.reseteof(terminal)
-    raw!(terminal, true)
-    enable_bracketed_paste(terminal)
+function prompt!(term, prompt, s = init_state(term, prompt))
+    Base.reseteof(term)
+    raw!(term, true)
+    enable_bracketed_paste(term)
     try
-        start_reading(terminal)
-        activate(prompt, s, terminal)
+        start_reading(term)
+        activate(prompt, s, term)
         while true
-            state = keymap(s, prompt)(s, keymap_data(s, prompt))
+            state = match_input(keymap(s, prompt), s)(s, keymap_data(s, prompt))
             if state == :abort
-                stop_reading(terminal)
+                stop_reading(term)
                 return buffer(s), false, false
             elseif state == :done
-                stop_reading(terminal)
+                stop_reading(term)
                 return buffer(s), true, false
             elseif state == :suspend
                 @unix_only begin
-                    stop_reading(terminal)
+                    stop_reading(term)
                     return buffer(s), true, true
                 end
             else
@@ -1363,7 +1465,7 @@ function prompt!(terminal, prompt, s = init_state(terminal, prompt))
             end
         end
     finally
-        raw!(terminal, false) && disable_bracketed_paste(terminal)
+        raw!(term, false) && disable_bracketed_paste(term)
     end
 end
 

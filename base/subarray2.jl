@@ -23,6 +23,9 @@ for i = 1:4
     @eval begin
         stagedfunction getindex{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, $(varsInt...))
             if $i == 1 && length(IV) == LD  # linear indexing
+                if iscontiguous(V)
+                    return :(V.parent[V.first_index + i_1 - 1])
+                end
                 return :(V.parent[V.first_index + V.stride1*(i_1-1)])
             end
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])
@@ -33,6 +36,9 @@ for i = 1:4
         end
         stagedfunction setindex!{T,N,P,IV,LD}(V::SubArray{T,N,P,IV,LD}, v, $(varsInt...))
             if $i == 1 && length(IV) == LD  # linear indexing
+                if iscontiguous(V)
+                    return :(V.parent[V.first_index + i_1 - 1] = v)
+                end
                 return :(V.parent[V.first_index + V.stride1*(i_1-1)] = v)
             end
             exhead, ex = index_generate(ndims(P), IV, :V, [$(vars...)])

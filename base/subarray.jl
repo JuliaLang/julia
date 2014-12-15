@@ -5,7 +5,7 @@ typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int}, Colon)
 # LD is the last dimension up through which this object has efficient
 # linear indexing. If LD==N, then the object itself has efficient
 # linear indexing.
-type SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
+immutable SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
     parent::P
     indexes::I
     dims::NTuple{N,Int}
@@ -309,6 +309,23 @@ function stride1expr(Atype::Type, Itypes::Tuple, Aexpr, Inewsym, LD)
     end
     ex
 end
+
+# This might be conservative, but better safe than sorry
+function iscontiguous{T,N,P,I,LD}(::Type{SubArray{T,N,P,I,LD}})
+    LD == length(I) || return false
+    length(I) < 1 && return true
+    I[1] == Colon && return true
+    if I[1] <: UnitRange
+        # It might be stride1 == 1, or this might be because `sub` was
+        # used with an integer for the first index
+        for j = 2:length(I)
+            (I[j] == Colon || (I[j] <: AbstractVector)) && return false
+        end
+        return true
+    end
+    false
+end
+iscontiguous(S::SubArray) = iscontiguous(typeof(S))
 
 first_index(V::SubArray) = first_index(V.parent, V.indexes)
 function first_index(P::AbstractArray, indexes::Tuple)

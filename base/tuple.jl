@@ -36,9 +36,6 @@ ntuple(f::Function, n::Integer) =
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
-argtail(x, rest...) = rest
-tail(x::Tuple) = argtail(x...)
-
 # 0 argument function
 map(f::Callable) = f()
 # 1 argument function
@@ -90,7 +87,7 @@ const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
 hash(::(), h::UInt) = h + tuplehash_seed
 hash(x::(Any,), h::UInt)    = hash(x[1], hash((), h))
 hash(x::(Any,Any), h::UInt) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::UInt)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
+hash(x::Tuple, h::UInt)     = hash(x[1], hash(x[2], hash(tail(x), h)))
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)

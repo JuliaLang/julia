@@ -6,7 +6,8 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
-size{T,n}(t::AbstractArray{T,n}, d) = (d>n ? 1 : size(t)[d])
+size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
+size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
 eltype(x) = Any
 eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
@@ -142,19 +143,28 @@ reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 vec(a::AbstractArray) = reshape(a,length(a))
 vec(a::AbstractVector) = a
 
-function squeeze(A::AbstractArray, dims)
-    d = ()
-    for i in 1:ndims(A)
-        if in(i,dims)
-            if size(A,i) != 1
-                error("squeezed dims must all be size 1")
-            end
-        else
-            d = tuple(d..., size(A,i))
+_sub(::(), ::()) = ()
+_sub(t::Tuple, ::()) = t
+_sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
+
+function squeeze(A::AbstractArray, dims::Dims)
+    for i in 1:length(dims)
+        1 <= dims[i] <= ndims(A) || error("squeezed dims must be in range 1:ndims(A)")
+        size(A, dims[i]) == 1 || error("squeezed dims must all be size 1")
+        for j = 1:i-1
+            dims[j] == dims[i] && error("squeezed dims must be unique")
         end
     end
-    reshape(A, d)
+    d = ()
+    for i = 1:ndims(A)
+        if !in(i, dims)
+            d = tuple(d..., size(A, i))
+        end
+    end
+    reshape(A, d::typeof(_sub(size(A), dims)))
 end
+
+squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (int(dim),))
 
 function copy!(dest::AbstractArray, src)
     i = 1
@@ -168,36 +178,36 @@ end
 # copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
 function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer=1)
+    soffs < 1 && throw(BoundsError())
     st = start(src)
     for j = 1:(soffs-1)
+        done(src, st) && throw(BoundsError())
         _, st = next(src, st)
     end
+    dn = done(src, st)
+    dn && throw(BoundsError())
     i = doffs
-    while !done(src,st)
+    while !dn
         val, st = next(src, st)
         dest[i] = val
         i += 1
+        dn = done(src, st)
     end
-    return dest
-end
-
-# NOTE: this is to avoid ambiguity with the deprecation of
-#   copy!(dest::AbstractArray, src, doffs::Integer)
-# Remove this when that deprecation is removed.
-function copy!(dest::AbstractArray, doffs::Integer, src::Integer)
-    dest[doffs] = src
     return dest
 end
 
 # this method must be separate from the above since src might not have a length
 function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
+    n < 0 && throw(BoundsError())
     n == 0 && return dest
+    soffs < 1 && throw(BoundsError())
     st = start(src)
     for j = 1:(soffs-1)
+        done(src, st) && throw(BoundsError())
         _, st = next(src, st)
     end
     for i = doffs:(doffs+n-1)
-        done(src,st) && throw(BoundsError())
+        done(src, st) && throw(BoundsError())
         val, st = next(src, st)
         dest[i] = val
     end
@@ -205,7 +215,12 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Inte
 end
 
 # if src is an AbstractArray and a source offset is passed, use indexing
-function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer=length(src))
+function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer)
+    soffs > length(src) && throw(BoundsError())
+    copy!(dest, doffs, src, soffs, length(src)-soffs+1)
+end
+function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer)
+    n < 0 && throw(BoundsError())
     for i = 0:(n-1)
         dest[doffs+i] = src[soffs+i]
     end
@@ -1031,6 +1046,7 @@ ind2sub(dims::(Integer,Integer), ind::Int) =
 ind2sub(dims::(Integer,Integer,Integer), ind::Int) =
     (rem(ind-1,dims[1])+1, div(rem(ind-1,dims[1]*dims[2]), dims[1])+1,
      div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
+ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), Int(ind))
 
 function ind2sub{T<:Integer}(dims::(Integer,Integer...), ind::AbstractVector{T})
     n = length(dims)
@@ -1385,7 +1401,7 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
     empty!(S)
     p == 0 && return S
     nexpected = p * length(A)
-    sizehint(S, round(Int,nexpected + 5*sqrt(nexpected)))
+    sizehint!(S, round(Int,nexpected + 5*sqrt(nexpected)))
     if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
         for i = 1:n
             rand() <= p && push!(S, A[i])

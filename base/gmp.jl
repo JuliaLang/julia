@@ -18,10 +18,28 @@ else
 end
 typealias CdoubleMax Union(Float16, Float32, Float64)
 
+gmp_version() = VersionNumber(bytestring(unsafe_load(cglobal((:__gmp_version, :libgmp), Ptr{Cchar}))))
+gmp_bits_per_limb() = Int(unsafe_load(cglobal((:__gmp_bits_per_limb, :libgmp), Cint)))
+
+const GMP_VERSION = gmp_version()
+const GMP_BITS_PER_LIMB = gmp_bits_per_limb()
+
+# GMP's mp_limb_t is by default a typedef of `unsigned long`, but can also be configured to be either
+# `unsigned int` or `unsigned long long int`. The correct unsigned type is here named Limb, and must
+# be used whenever mp_limb_t is in the signature of ccall'ed GMP functions.
+if GMP_BITS_PER_LIMB == 32
+    typealias Limb UInt32
+elseif GMP_BITS_PER_LIMB == 64
+    typealias Limb UInt64
+else
+    error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
+end
+
+
 type BigInt <: Integer
     alloc::Cint
     size::Cint
-    d::Ptr{Culong}
+    d::Ptr{Limb}
     function BigInt()
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
@@ -34,6 +52,12 @@ _gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
 
 function __init__()
+    if gmp_version().major != GMP_VERSION.major || gmp_bits_per_limb() != GMP_BITS_PER_LIMB
+        error(string("The dynamically loaded GMP library (version $(gmp_version()) with __gmp_bits_per_limb == $(gmp_bits_per_limb()))\n",
+                     "does not correspond to the compile time version (version $GMP_VERSION with __gmp_bits_per_limb == $GMP_BITS_PER_LIMB).\n",
+                     "Please rebuild Julia."))
+    end
+
     global _gmp_clear_func = cglobal((:__gmpz_clear, :libgmp))
     global _mpfr_clear_func = cglobal((:mpfr_clear, :libmpfr))
     ccall((:__gmp_set_memory_functions, :libgmp), Void,

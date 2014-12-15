@@ -140,14 +140,14 @@ endif
 
 $(build_private_libdir)/sys0.o:
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
 ,:=,
 $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) --build $(call cygpath_w,$(build_private_libdir)/sys) \
+	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
 		-J$(call cygpath_w,$(build_private_libdir))/$$([ -e $(build_private_libdir)/sys.ji ] && echo sys.ji || echo sys0.ji) -f sysimg.jl \
 		|| { echo '*** This error is usually fixed by running `make clean`. If the error persists$(,) try `make cleanall`. ***' && false; } )
 
@@ -261,10 +261,18 @@ endif
 	done
 endif
 
+ifeq ($(USE_SYSTEM_LIBUV),0)
+ifeq ($(OS),WINNT)
+	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
+endif	
+	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
+endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
+	# Copy in system image build script
+	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
@@ -300,8 +308,8 @@ else ifeq ($(OS), Linux)
 	done
 endif
 
-	# Overwrite JL_SYSTEM_IMAGE_PATH in julia binaries
-	for julia in $(DESTDIR)$(bindir)/julia* ; do \
+	# Overwrite JL_SYSTEM_IMAGE_PATH in julia library
+	for julia in $(DESTDIR)$(private_libdir)/libjulia*.$(SHLIB_EXT) ; do \
 		$(call spawn,$(build_bindir)/stringreplace $$(strings -t x - $$julia | grep "sys.ji$$" | awk '{print $$1;}' ) "$(private_libdir_rel)/sys.ji" 256 $(call cygpath_w,$$julia)); \
 	done
 endif

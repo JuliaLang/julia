@@ -51,8 +51,8 @@ end
 
 function A_mul_B!(C::StridedVecOrMat, S::SymTridiagonal, B::StridedVecOrMat)
     m, n = size(B, 1), size(B, 2)
-    m == size(S, 1) == size(C, 1) || throw(DimensionMismatch(""))
-    n == size(C, 2) || throw(DimensionMismatch(""))
+    m == size(S, 1) == size(C, 1) || throw(DimensionMismatch())
+    n == size(C, 2) || throw(DimensionMismatch())
 
     α = S.dv
     β = S.ev
@@ -255,8 +255,8 @@ convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiag
 convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)
-    size(C,1) == size(B,1) == (nA = size(A,1)) || throw(DimensionMismatch(""))
-    size(C,2) == (nB = size(B,2)) || throw(DimensionMismatch(""))
+    size(C,1) == size(B,1) == (nA = size(A,1)) || throw(DimensionMismatch())
+    size(C,2) == (nB = size(B,2)) || throw(DimensionMismatch())
     l = A.dl
     d = A.d
     u = A.du

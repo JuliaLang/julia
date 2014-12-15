@@ -2514,6 +2514,9 @@ function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
     if popmeta!(body, :inline)[1]
         return true
     end
+    if popmeta!(body, :noinline)[1]
+        return false
+    end
     symlim = 1+5/cost
     if length(body.args) < symlim
         symlim *= 16
@@ -2643,7 +2646,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
             if f1===false || !(isa(f,Function) || isa(f,IntrinsicFunction))
                 f = _ieval(:call)
-                e.args = Any[f, e.args...]
+                e.args = Any[is_global(sv,:call) ? (:call) : GetfieldNode((inference_stack::CallStack).mod, :call, Function), e.args...]
             end
 
             if is(f, ^) || is(f, .^)

@@ -49,6 +49,11 @@ end
 @test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
 @test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
 
+# issue #9264
+@test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))
+@test hash(1//6) == hash(big(1)//big(6))
+@test hash(1//6) == hash(0x01//0x06)
+
 # hashing collections (e.g. issue #6870)
 vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],

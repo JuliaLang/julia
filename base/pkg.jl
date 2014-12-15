@@ -39,7 +39,7 @@ free(pkg::AbstractString) = cd(Entry.free,pkg)
 pin(pkg::AbstractString) = cd(Entry.pin,pkg)
 pin(pkg::AbstractString, ver::VersionNumber) = cd(Entry.pin,pkg,ver)
 
-update() = cd(Entry.update,META_BRANCH)
+update() = cd(Entry.update,Dir.getmetabranch())
 resolve() = cd(Entry.resolve)
 
 register(pkg::AbstractString) = cd(Entry.register,pkg)
@@ -55,7 +55,7 @@ tag(pkg::AbstractString, ver::VersionNumber, commit::AbstractString; force::Bool
 submit(pkg::AbstractString) = cd(Entry.submit,pkg)
 submit(pkg::AbstractString, commit::AbstractString) = cd(Entry.submit,pkg,commit)
 
-publish() = cd(Entry.publish,META_BRANCH)
+publish() = cd(Entry.publish,Dir.getmetabranch())
 
 build() = cd(Entry.build)
 build(pkgs::AbstractString...) = cd(Entry.build,[pkgs...])
@@ -68,9 +68,5 @@ test(;coverage::Bool=false) = cd(Entry.test; coverage=coverage)
 test(pkgs::AbstractString...; coverage::Bool=false) = cd(Entry.test,AbstractString[pkgs...]; coverage=coverage)
 
 dependents(packagename::AbstractString) = Reqs.dependents(packagename)
-
-@deprecate release free
-@deprecate fixup build
-@deprecate fix pin
 
 end # module

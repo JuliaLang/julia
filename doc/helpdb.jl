@@ -267,7 +267,9 @@ Any[
 
    Return \"x\" if \"condition\" is true, otherwise return \"y\". This
    differs from \"?\" or \"if\" in that it is an ordinary function, so
-   all the arguments are evaluated first.
+   all the arguments are evaluated first. In some cases, using
+   \"ifelse\" instead of an \"if\" statement can eliminate the branch
+   in generated code and provide higher performance in tight loops.
 
 "),
 
@@ -333,6 +335,12 @@ Any[
    Register a function \"f(x)\" to be called when there are no
    program-accessible references to \"x\". The behavior of this
    function is unpredictable if \"x\" is of a bits type.
+
+"),
+
+("Base","finalize","finalize(x)
+
+   Immediately run finalizers registered for object \"x\".
 
 "),
 
@@ -607,7 +615,9 @@ Any[
 ("Base","isimmutable","isimmutable(v)
 
    True if value \"v\" is immutable.  See *Immutable Composite Types*
-   for a discussion of immutability.
+   for a discussion of immutability. Note that this function works on
+   values, so if you give it a type, it will tell you that a value of
+   \"DataType\" is mutable.
 
 "),
 
@@ -1535,7 +1545,7 @@ Any[
       julia> b = Dict(utf8(\"baz\") => 17, utf8(\"qux\") => 4711)
       Dict{UTF8String,Int64} with 2 entries:
         \"baz\" => 17
-        \"foo\" => 0.0
+        \"qux\" => 4711
 
       julia> merge(a, b)
       Dict{UTF8String,Float64} with 4 entries:
@@ -1552,7 +1562,7 @@ Any[
 
 "),
 
-("Base","sizehint","sizehint(s, n)
+("Base","sizehint!","sizehint!(s, n)
 
    Suggest that collection \"s\" reserve capacity for at least \"n\"
    elements. This can improve performance.
@@ -2126,10 +2136,16 @@ Any[
 
 "),
 
-("Base","join","join(strings, delim)
+("Base","join","join(strings, delim[, last])
 
-   Join an array of strings into a single string, inserting the given
-   delimiter between adjacent strings.
+   Join an array of \"strings\" into a single string, inserting the
+   given delimiter between adjacent strings. If \"last\" is given, it
+   will be used instead of \"delim\" between the last two strings. For
+   example, \"join([\"apples\", \"bananas\", \"pineapples\"], \", \",
+   \" and \") == \"apples, bananas and pineapples\"\".
+
+   \"strings\" can be any iterable over elements \"x\" which are
+   convertible to strings via \"print(io::IOBuffer, x)\".
 
 "),
 
@@ -5847,8 +5863,8 @@ popdisplay(d::Display)
      \"['x','y','z']\"), or
 
    * a type: the set of values to pick from is then equivalent to
-     \"typemin(S):typemax(S)\" for integers, and to [0,1) for floating
-     point numbers;
+     \"typemin(S):typemax(S)\" for integers (this is not applicable to
+     \"BigInt\"), and to [0,1) for floating point numbers;
 
    \"S\" defaults to \"Float64\".
 
@@ -5886,15 +5902,40 @@ popdisplay(d::Display)
 
 "),
 
+("Base","randexp","randexp([rng][, dims...])
+
+   Generate a random number according to the exponential distribution
+   with scale 1. Optionally generate an array of such random numbers.
+
+"),
+
+("Base","randexp!","randexp!([rng], A::Array{Float64, N})
+
+   Fill the array A with random numbers following the exponential
+   distribution (with scale 1).
+
+"),
+
 ("Base","ndims","ndims(A) -> Integer
 
    Returns the number of dimensions of A
 
 "),
 
-("Base","size","size(A)
+("Base","size","size(A[, dim...])
 
-   Returns a tuple containing the dimensions of A
+   Returns a tuple containing the dimensions of A. Optionally you can
+   specify the dimension(s) you want the length of, and get the length
+   of that dimension, or a tuple of the lengths of dimensions you
+   asked for.:
+
+      julia> A = rand(2,3,4);
+
+      julia> size(A, 2)
+      3
+
+      julia> size(A,3,2)
+      (4,3)
 
 "),
 
@@ -5974,6 +6015,13 @@ popdisplay(d::Display)
 
    **Example** \"i, j, ... = ind2sub(size(A), indmax(A))\" provides
    the indices of the maximum element
+
+"),
+
+("Base","ind2sub","ind2sub(a, index) -> subscripts
+
+   Returns a tuple of subscripts into array \"a\" corresponding to the
+   linear index \"index\"
 
 "),
 
@@ -9152,6 +9200,20 @@ popdisplay(d::Display)
 
    An array of paths (as strings) where the \"require\" function looks
    for code.
+
+"),
+
+("Base","JULIA_HOME","JULIA_HOME
+
+   A string containing the full path to the directory containing the
+   \"julia\" executable.
+
+"),
+
+("Base","ANY","ANY
+
+   Equivalent to \"Any\" for dispatch purposes, but signals the
+   compiler to skip code generation specialization for that field
 
 "),
 

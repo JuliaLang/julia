@@ -923,7 +923,7 @@ function create_message_handler_loop(sock::AsyncStream; ntfy_join_complete=nothi
                 if in(iderr, rmprocset)
                     delete!(rmprocset, iderr)
                 else
-                    println("Worker $iderr terminated.")
+                    println(STDERR, "Worker $iderr terminated.")
                     rethrow(e)
                 end
             end
@@ -1109,7 +1109,7 @@ end
 immutable LocalManager <: ClusterManager
 end
 
-show(io::IO, manager::LocalManager) = println("LocalManager()")
+show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
 
 function launch(manager::LocalManager, np::Integer, config::Dict, resp_arr::Array, c::Condition)
     dir = config[:dir]
@@ -1150,7 +1150,7 @@ immutable SSHManager <: ClusterManager
     end
 end
 
-show(io::IO, manager::SSHManager) = println("SSHManager(machines=", manager.machines, ")")
+show(io::IO, manager::SSHManager) = println(io, "SSHManager(machines=", manager.machines, ")")
 
 function launch(manager::SSHManager, np::Integer, config::Dict, resp_arr::Array, machines_launch_ntfy::Condition)
     # Launch on each unique host in parallel.
@@ -1504,10 +1504,7 @@ function preduce(reducer, f, N::Int)
 end
 
 function pfor(f, N::Int)
-    for c in splitrange(N, nworkers())
-        @spawn f(first(c), last(c))
-    end
-    nothing
+    [@spawn f(first(c), last(c)) for c in splitrange(N, nworkers())]
 end
 
 function make_preduce_body(reducer, var, body, ran)

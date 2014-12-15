@@ -217,6 +217,10 @@ All Objects
 
    Register a function ``f(x)`` to be called when there are no program-accessible references to ``x``. The behavior of this function is unpredictable if ``x`` is of a bits type.
 
+.. function:: finalize(x)
+
+   Immediately run finalizers registered for object ``x``.
+
 .. function:: copy(x)
 
    Create a shallow copy of ``x``: the outer structure is copied, but not all internal values. For example, copying an array produces a new array with identically-same elements as the original.
@@ -1140,7 +1144,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
    Update collection with pairs from the other collections
 
-.. function:: sizehint(s, n)
+.. function:: sizehint!(s, n)
 
    Suggest that collection ``s`` reserve capacity for at least ``n`` elements. This can improve performance.
 
@@ -1302,6 +1306,22 @@ Dequeues
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
+Nullables
+---------
+
+.. function:: get(x)
+
+   Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
+   value if it is present; otherwise, throws a ``NullException``.
+
+.. function:: get(x, y)
+
+   Attempt to access the value of the ``Nullable{T}`` object, ``x``. Returns
+   the value if it is present; otherwise, returns ``convert(T, y)``.
+
+.. function:: isnull(x)
+
+   Is the ``Nullable`` object ``x`` null, i.e. missing a value?
 
 Strings
 -------
@@ -2135,6 +2155,23 @@ Network I/O
 
    Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
    the file changed, a return value of false indicates a timeout.
+
+.. function:: bind(socket::Union(UDPSocket, TCPSocket), host::IPv4, port::Integer)
+
+   Bind ``socket`` to the given ``host:port``. Note that `0.0.0.0` will listen on all devices.
+
+.. function:: send(socket::UDPSocket, host::IPv4, port::Integer, msg)
+
+   Send ``msg`` over ``socket to ``host:port``.
+
+.. function:: recv(socket::UDPSocket)
+
+   Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
+
+.. function:: setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+
+   Set UDP socket options. ``multicast_loop``: loopback for multicast packets (default: true). ``multicast_ttl``: TTL for multicast packets. ``enable_broadcast``: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). ``ttl``: Time-to-live of packets sent on the socket.
+
 
 Text I/O
 --------
@@ -4088,19 +4125,33 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
 Random Numbers
 --------------
 
-Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_. Julia has a global RNG, which is used by default. Multiple RNGs can be plugged in using the ``AbstractRNG`` object, which can then be used to have multiple streams of random numbers. Currently, only ``MersenneTwister`` is supported.
+Random number generation in Julia uses the `Mersenne Twister library <http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT>`_ via ``MersenneTwister`` objects.
+Julia has a global RNG, which is used by default. Other RNG types can be plugged in by inheriting the ``AbstractRNG`` type;
+they can then be used to have multiple streams of random numbers.
+Besides ``MersenneTwister``, Julia also provides the ``RandomDevice`` RNG type, which is a wrapper over the OS provided entropy.
 
-Most functions related to random generation accept an optional ``AbstractRNG`` as the first argument, ``rng`` , which defaults to the global one if not provided. Morever, some of them accept optionally dimension specifications ``dims...`` (which can be given as a tuple) to generate arrays of random values.
+Most functions related to random generation accept an optional ``AbstractRNG`` as the first argument, ``rng`` , which defaults to the global one if not provided.
+Morever, some of them accept optionally dimension specifications ``dims...`` (which can be given as a tuple) to generate arrays of random values.
 
-A ``MersenneTwister`` RNG can generate random numbers of the following types: ``Float16, Float32, Float64, Bool, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128`` (or complex numbers or arrays of those types). Random floating point numbers are generated uniformly in [0,1).
+A ``MersenneTwister`` or ``RandomDevice`` RNG can generate random numbers of the following types:
+``Float16``, ``Float32``, ``Float64``, ``Bool``, ``Int8``, ``UInt8``, ``Int16``, ``UInt16``,
+``Int32``, ``UInt32``, ``Int64``, ``UInt64``, ``Int128``, ``UInt128``, ``BigInt``
+(or complex numbers of those types). Random floating point numbers are generated uniformly in [0,1).
+As ``BigInt`` represents unbounded integers, the interval must be specified (e.g. ``rand(big(1:6))``).
 
 .. function:: srand([rng], [seed])
 
-   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system. The ``seed`` may be a non-negative integer, a vector of ``UInt32`` integers or a filename, in which case the seed is read from a file.
+   Reseed the random number generator. If a ``seed`` is provided, the RNG will give a reproducible sequence of numbers, otherwise Julia will get entropy from the system.
+   For ``MersenneTwister``, the ``seed`` may be a non-negative integer, a vector of ``UInt32`` integers or a filename, in which case the seed is read from a file.
+   ``RandomDevice`` does not support seeding.
 
 .. function:: MersenneTwister([seed])
 
    Create a ``MersenneTwister`` RNG object. Different RNG objects can have their own seeds, which may be useful for generating different streams of random numbers.
+
+.. function:: RandomDevice()
+
+   Create a ``RandomDevice`` RNG object. Two such objects will always generate different streams of random numbers.
 
 .. function:: rand([rng], [S], [dims...])
 
@@ -4108,7 +4159,7 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    * an indexable collection (for example ``1:n`` or ``['x','y','z']``), or
 
-   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers, and to [0,1) for floating point numbers;
+   * a type: the set of values to pick from is then equivalent to ``typemin(S):typemax(S)`` for integers (this is not applicable to ``BigInt``), and to [0,1) for floating point numbers;
 
    ``S`` defaults to ``Float64``.
 
@@ -4128,6 +4179,14 @@ A ``MersenneTwister`` RNG can generate random numbers of the following types: ``
 
    Fill the array A with normally-distributed (mean 0, standard deviation 1) random numbers. Also see the rand function.
 
+.. function:: randexp([rng], [dims...])
+
+   Generate a random number according to the exponential distribution with scale 1. Optionally generate an array of such random numbers.
+
+.. function:: randexp!([rng], A::Array{Float64,N})
+
+   Fill the array A with random numbers following the exponential distribution (with scale 1).
+
 Arrays
 ------
 
@@ -4138,9 +4197,17 @@ Basic functions
 
    Returns the number of dimensions of A
 
-.. function:: size(A)
+.. function:: size(A, [dim...])
 
-   Returns a tuple containing the dimensions of A
+   Returns a tuple containing the dimensions of A. Optionally you can specify the dimension(s) you want the length of, and get the length of that dimension, or a tuple of the lengths of dimensions you asked for.::
+
+    julia> A = rand(2,3,4);
+
+    julia> size(A, 2)
+    3
+
+    julia> size(A,3,2)
+    (4,3)
 
 .. function:: iseltype(A,T)
 
@@ -4197,6 +4264,10 @@ Basic functions
    Returns a tuple of subscripts into an array with dimensions ``dims``, corresponding to the linear index ``index``
 
    **Example** ``i, j, ... = ind2sub(size(A), indmax(A))`` provides the indices of the maximum element
+
+.. function:: ind2sub(a, index) -> subscripts
+
+   Returns a tuple of subscripts into array ``a`` corresponding to the linear index ``index``
 
 .. function:: sub2ind(dims, i, j, k...) -> index
 
@@ -4438,21 +4509,22 @@ Indexing, Assignment, and Concatenation
    Find the next index >= ``i`` of an element of ``A`` equal to ``v`` (using ``==``),
    or ``0`` if not found.
 
-.. function:: permutedims(A,perm)
+.. function:: permutedims(A, perm)
 
-   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A,[2,1])``.
+   Permute the dimensions of array ``A``. ``perm`` is a vector specifying a permutation of length ``ndims(A)``. This is a generalization of transpose for multi-dimensional arrays. Transpose is equivalent to ``permutedims(A, [2,1])``.
 
-.. function:: ipermutedims(A,perm)
+.. function:: ipermutedims(A, perm)
 
    Like :func:`permutedims`, except the inverse of the given permutation is applied.
 
-.. function:: permutedims!(dest,src,perm)
+.. function:: permutedims!(dest, src, perm)
 
-   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest)=size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
+   Permute the dimensions of array ``src`` and store the result in the array ``dest``. ``perm`` is a vector specifying a permutation of length ``ndims(src)``. The preallocated array ``dest`` should have ``size(dest) == size(src)[perm]`` and is completely overwritten. No in-place permutation is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
 
 .. function:: squeeze(A, dims)
 
-   Remove the dimensions specified by ``dims`` from array ``A``
+   Remove the dimensions specified by ``dims`` from array ``A``. Elements of
+   ``dims`` must be unique and within the range ``1:ndims(A)``.
 
 .. function:: vec(Array) -> Vector
 
@@ -4656,6 +4728,12 @@ Combinatorics
 .. function:: reverse(v [, start=1 [, stop=length(v) ]] )
 
    Return a copy of ``v`` reversed from start to stop.
+
+.. function:: reverseind(v, i)
+
+   Given an index ``i`` in ``reverse(v)``, return the corresponding
+   index in ``v`` so that ``v[reverseind(v,i)] == reverse(v)[i]``.
+   (This can be nontrivial in the case where ``v`` is a Unicode string.)
 
 .. function:: reverse!(v [, start=1 [, stop=length(v) ]]) -> v
 

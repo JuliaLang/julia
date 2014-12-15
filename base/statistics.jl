@@ -452,7 +452,7 @@ middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UI
 middle(x::FloatingPoint) = x
 middle(x::Float16) = float32(x)
 middle(x::Real) = (x + zero(x)) / 1
-middle(x::Real, y::Real) = (x + y) / 2
+middle(x::Real, y::Real) = x/2 + y/2
 middle(a::Range) = middle(a[1], a[end])
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 

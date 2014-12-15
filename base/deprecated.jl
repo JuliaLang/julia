@@ -1,10 +1,12 @@
 macro deprecate(old,new)
+    meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
         oldname = Expr(:quote,old)
         newname = Expr(:quote,new)
         Expr(:toplevel,
             Expr(:export,esc(old)),
             :(function $(esc(old))(args...)
+                  $meta
                   depwarn(string($oldname," is deprecated, use ",$newname," instead."),
                           $oldname)
                   $(esc(new))(args...)
@@ -23,6 +25,7 @@ macro deprecate(old,new)
         Expr(:toplevel,
             Expr(:export,esc(oldsym)),
             :($(esc(old)) = begin
+                  $meta
                   depwarn(string($oldcall," is deprecated, use ",$newcall," instead."),
                           $oldname)
                   $(esc(new))
@@ -33,9 +36,11 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    bt = backtrace()
-    caller = firstcaller(bt, funcsym)
-    warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+    if bool(compileropts().depwarn)
+        bt = backtrace()
+        caller = firstcaller(bt, funcsym)
+        warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+    end
 end
 
 function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
@@ -244,3 +249,13 @@ const Uint128 = UInt128
 export Base64Pipe, base64
 const Base64Pipe = Base64EncodePipe
 const base64 = base64encode
+
+@deprecate prevind(a::Any, i::Integer)   i-1
+@deprecate nextind(a::Any, i::Integer)   i+1
+
+@deprecate givens{T}(f::T, g::T, i1::Integer, i2::Integer, cols::Integer)   givens(f, g, i1, i2)
+
+@deprecate squeeze(X, dims) squeeze(X, tuple(dims...))
+
+@deprecate sizehint(A, n) sizehint!(A, n)
+

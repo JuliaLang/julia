@@ -4,30 +4,17 @@ abstract Period     <: AbstractTime
 abstract DatePeriod <: Period
 abstract TimePeriod <: Period
 
-immutable Year <: DatePeriod
-    value::Int64
+for T in (:Year,:Month,:Week,:Day)
+    @eval immutable $T <: DatePeriod
+        value::Int64
+        $T(v::Number) = new(v)
+    end
 end
-immutable Month <: DatePeriod
-    value::Int64
-end
-immutable Week <: DatePeriod
-    value::Int64
-end
-immutable Day <: DatePeriod
-    value::Int64
-end
-
-immutable Hour <: TimePeriod
-    value::Int64
-end
-immutable Minute <: TimePeriod
-    value::Int64
-end
-immutable Second <: TimePeriod
-    value::Int64
-end
-immutable Millisecond <: TimePeriod
-    value::Int64
+for T in (:Hour,:Minute,:Second,:Millisecond)
+    @eval immutable $T <: TimePeriod
+        value::Int64
+        $T(v::Number) = new(v)
+    end
 end
 
 # Instant types represent different monotonically increasing timelines

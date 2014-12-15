@@ -399,7 +399,7 @@ The following distributions include julia, but the versions may be out of date d
 
 Currently, Julia editing mode support is available for Emacs, Vim, Textmate,
 Sublime Text, Notepad++, and Kate, in `contrib/`. There is early support for
-IDEs such as [Light Table](https://github.com/one-more-minute/Julia-LT),
+IDEs such as [Juno](http://junolab.org/), 
 [Eclipse (LiClipse)](http://brainwy.github.io/liclipse/). A notebook interface
 is available through [IJulia](https://github.com/JuliaLang/IJulia.jl), which
 adds Julia support to [IPython](http://ipython.org). The

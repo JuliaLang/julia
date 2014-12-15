@@ -547,6 +547,20 @@ begin
     end
     @test retfinally() == 5
     @test glo == 18
+
+    @test try error() end === nothing
+end
+
+# finalizers
+let
+    A = [1]
+    x = 0
+    finalizer(A, a->(x+=1))
+    finalize(A)
+    @test x == 1
+    A = 0
+    gc(); gc()
+    @test x == 1
 end
 
 # issue #7307
@@ -824,7 +838,7 @@ let
 
     # issue #1886
     X = [1:4]
-    r = Array(Range1{Int},1)
+    r = Array(UnitRange{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -1541,8 +1555,8 @@ macro m6031(x); x; end
 
 # issue #6050
 @test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
-                          Dict{Int64,(Range1{Int64},Range1{Int64})},
-                          :vals) == Array{(Range1{Int64},Range1{Int64}),1}
+                          Dict{Int64,(UnitRange{Int64},UnitRange{Int64})},
+                          :vals) == Array{(UnitRange{Int64},UnitRange{Int64}),1}
 
 # issue #6068
 x6068 = 1
@@ -1636,7 +1650,7 @@ f6426(x,t::(Type...)) = string(t)
 @test f6426(1, (1.,2.)) == "((Float64,Float64),)"
 
 # issue #6502
-f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
+f6502() = convert(Base.tail((Bool,Int...)), (10,))
 @test f6502() === (10,)
 @test convert((Bool,Int...,), (true,10)) === (true,10)
 @test convert((Int,Bool...), (true,1,0)) === (1,true,false)

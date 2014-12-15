@@ -380,7 +380,7 @@ function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
     catch
         buf = PipeBuffer()
         versioninfo(buf)
-        error("A test has failed. Please submit a bug report including error messages\n" *
-            "above and the output of versioninfo():\n$(readall(buf))")
+        error("A test has failed. Please submit a bug report (https://github.com/JuliaLang/julia/issues)\n" *
+              "including error messages above and the output of versioninfo():\n$(readall(buf))")
     end
 end

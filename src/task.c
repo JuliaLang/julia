@@ -154,18 +154,29 @@ jl_value_t *jl_exception_in_transit;
 jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
-static void start_task(jl_task_t *t);
-
 #ifdef COPY_STACKS
-jl_jmp_buf * volatile jl_jmp_target;
-DLLEXPORT jl_jmp_buf jl_base_ctx;
+static jl_jmp_buf * volatile jl_jmp_target;
 
-static void save_stack(jl_task_t *t)
+#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#define ASM_COPY_STACKS
+#endif
+void *jl_stackbase;
+
+#ifndef ASM_COPY_STACKS
+static jl_jmp_buf jl_base_ctx; // base context of stack
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline)
+#else
+static void __attribute__((noinline))
+#endif
+save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
     volatile int _x;
-    size_t nb = (char*)t->stackbase - (char*)&_x;
+    size_t nb = (char*)jl_stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)allocb(nb);
@@ -180,12 +191,13 @@ static void save_stack(jl_task_t *t)
 }
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-void __declspec(noinline) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+void __declspec(noinline)
 #else
-void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+void __attribute__((noinline))
 #endif
+restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
-    char *_x = (char*)t->stackbase - t->ssize;
+    char *_x = (char*)jl_stackbase - t->ssize;
     if (!p) {
         p = _x;
         if ((char*)&_x > _x) {
@@ -199,6 +211,91 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, ch
         memcpy(_x, t->stkbuf, t->ssize);
     }
     jl_longjmp(*jl_jmp_target, 1);
+}
+#endif
+
+static jl_function_t *task_done_hook_func=NULL;
+
+static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
+{
+    if (t->exception != jl_nothing)
+        t->state = failed_sym;
+    else
+        t->state = done_sym;
+    t->result = resultval;
+    // TODO: early free of t->stkbuf
+#ifdef COPY_STACKS
+    t->stkbuf = NULL;
+#endif
+    if (task_done_hook_func == NULL) {
+        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
+                                                            jl_symbol("task_done_hook"));
+    }
+    if (task_done_hook_func != NULL) {
+        jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
+    }
+    abort();
+}
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline)
+#else
+static void __attribute__((noinline))
+#endif
+NORETURN start_task()
+{
+    // this runs the first time we switch to a task
+    jl_task_t *t = jl_current_task;
+    jl_value_t *res;
+    res = jl_apply(t->start, NULL, 0);
+    finish_task(t, res);
+    abort();
+}
+
+#ifndef ASM_COPY_STACKS
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline)
+#else
+static void __attribute__((noinline))
+#endif
+set_base_ctx(char *__stk)
+{
+    if (jl_setjmp(jl_base_ctx, 1)) {
+        start_task();
+    }
+}
+#else
+void set_base_ctx(char *__stk) { }
+#endif
+
+
+DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
+{ // keep this function small, since we want to keep the stack frame
+  // leading up to this also quite small
+    _julia_init(rel);
+#ifdef COPY_STACKS
+    char __stk;
+    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
+    set_base_ctx(&__stk); // separate function, to record the size of a stack frame
+#endif
+}
+
+#ifndef COPY_STACKS
+static void init_task(jl_task_t *t)
+{
+    if (jl_setjmp(t->ctx, 0)) {
+        start_task();
+    }
+    // this runs when the task is created
+    ptrint_t local_sp = (ptrint_t)&t;
+    ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
+#ifdef _P64
+    // SP must be 16-byte aligned
+    new_sp = new_sp&-16;
+    local_sp = local_sp&-16;
+#endif
+    memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
+    rebase_state(&t->ctx, local_sp, new_sp);
 }
 #endif
 
@@ -248,7 +345,31 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         if (t->stkbuf) {
             restore_stack(t, where, NULL);
         } else {
+#ifdef ASM_COPY_STACKS
+            void *stackbase = jl_stackbase - 0x10;
+#ifdef _CPU_X86_64_
+#ifdef _OS_WINDOWS_
+            stackbase -= 0x40;
+#endif
+            asm(" movq %0, %%rsp;\n"
+                " xorq %%rbp, %%rbp;\n"
+                " push %%rbp;\n" // instead of RSP
+                " jmp %P1;\n" // call stack_task with fake stack frame
+                " ud2"
+                : : "r"(stackbase), "i"(start_task) : "memory" );
+#elif defined(_CPU_X86_)
+            asm(" movl %0, %%esp;\n"
+                " xorl %%ebp, %%ebp;\n"
+                " push %%ebp;\n" // instead of ESP
+                " jmp %P1;\n" // call stack_task with fake stack frame
+                " ud2"
+                : : "r" (stackbase), ""(&start_task) : "memory" );
+#else
+#error ASM_COPY_STACKS not supported on this cpu architecture
+#endif
+#else // ASM_COPY_STACKS
             jl_longjmp(jl_base_ctx, 1);
+#endif
         }
 #else
         jl_longjmp(*where, 1);
@@ -368,74 +489,6 @@ jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg)
     return switchto(t);
 }
 
-static jl_function_t *task_done_hook_func=NULL;
-
-static void finish_task(jl_task_t *t, jl_value_t *resultval)
-{
-    if (t->exception != jl_nothing)
-        t->state = failed_sym;
-    else
-        t->state = done_sym;
-    t->result = resultval;
-    // TODO: early free of t->stkbuf
-#ifdef COPY_STACKS
-    t->stkbuf = NULL;
-#endif
-    if (task_done_hook_func == NULL) {
-        task_done_hook_func = (jl_function_t*)jl_get_global(jl_base_module,
-                                                            jl_symbol("task_done_hook"));
-    }
-    if (task_done_hook_func != NULL) {
-        jl_apply(task_done_hook_func, (jl_value_t**)&t, 1);
-    }
-    assert(0);
-}
-
-static void start_task(jl_task_t *t)
-{
-    // this runs the first time we switch to t
-    jl_value_t *arg = jl_task_arg_in_transit;
-    jl_value_t *res;
-    JL_GC_PUSH1(&arg);
-
-#ifdef COPY_STACKS
-    ptrint_t local_sp = (ptrint_t)jl_pgcstack;
-    // here we attempt to figure out how big our stack frame is, since we
-    // might need to copy all of it later. this is a bit of a fuzzy guess.
-    local_sp += sizeof(jl_gcframe_t);
-    local_sp += 12*sizeof(void*);
-    t->stackbase = (void*)(local_sp + _frame_offset);
-#endif
-    res = jl_apply(t->start, NULL, 0);
-    JL_GC_POP();
-    finish_task(t, res);
-    assert(0);
-}
-
-DLLEXPORT void jl_handle_stack_start()
-{
-    start_task(jl_current_task);
-}
-
-#ifndef COPY_STACKS
-static void init_task(jl_task_t *t)
-{
-    if (jl_setjmp(t->ctx, 0)) {
-        start_task(t);
-    }
-    // this runs when the task is created
-    ptrint_t local_sp = (ptrint_t)&t;
-    ptrint_t new_sp = (ptrint_t)t->stack + t->ssize - _frame_offset;
-#ifdef _P64
-    // SP must be 16-byte aligned
-    new_sp = new_sp&-16;
-    local_sp = local_sp&-16;
-#endif
-    memcpy((void*)new_sp, (void*)local_sp, _frame_offset);
-    rebase_state(&t->ctx, local_sp, new_sp);
-}
-#endif
-
 ptrint_t bt_data[MAX_BT_SIZE+1];
 size_t bt_size = 0;
 
@@ -455,65 +508,13 @@ static int frame_info_from_ip(
     int skipC)
 {
     static const char *name_unknown = "???";
-#if defined(_OS_WINDOWS_)
-    static char frame_info_func[
-        sizeof(SYMBOL_INFO) +
-        MAX_SYM_NAME * sizeof(TCHAR)];
-    static IMAGEHLP_LINE64 frame_info_line;
-#endif
     int fromC = 0;
 
     jl_getFunctionInfo(func_name, line_num, file_name, ip, &fromC, skipC);
-    if (*func_name == NULL) {
-#if defined(_OS_WINDOWS_)
-        fromC = 1;
-        if (jl_in_stackwalk) {
-            *func_name = name_unknown;
-            *file_name = name_unknown;
-            *line_num = ip;
-        }
-        else {
-            jl_in_stackwalk = 1;
-            DWORD64 dwDisplacement64 = 0;
-            DWORD64 dwAddress = ip;
-
-            PSYMBOL_INFO pSymbol = (PSYMBOL_INFO)frame_info_func;
-            pSymbol->SizeOfStruct = sizeof(SYMBOL_INFO);
-            pSymbol->MaxNameLen = MAX_SYM_NAME;
-
-            if (SymFromAddr(GetCurrentProcess(), dwAddress, &dwDisplacement64, pSymbol)) {
-                // SymFromAddr returned success
-                *func_name = pSymbol->Name;
-            }
-            else {
-                *func_name = name_unknown;
-                // SymFromAddr failed
-                //DWORD error = GetLastError();
-                //printf("SymFromAddr returned error : %d\n", error);
-            }
-
-            DWORD dwDisplacement = 0;
-            frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
-
-            if (SymGetLineFromAddr64(GetCurrentProcess(), dwAddress, &dwDisplacement, &frame_info_line)) {
-                // SymGetLineFromAddr64 returned success
-                *file_name = frame_info_line.FileName;
-                *line_num = frame_info_line.LineNumber;
-            }
-            else {
-                *file_name = name_unknown;
-                *line_num = ip;
-                // SymGetLineFromAddr64 failed
-                //DWORD error = GetLastError();
-                //printf("SymGetLineFromAddr64 returned error : %d\n", error);
-            }
-            jl_in_stackwalk = 0;
-        }
-#else
+    if (!*func_name) {
         *func_name = name_unknown;
         *file_name = name_unknown;
         *line_num = ip;
-#endif
     }
     return fromC;
 }
@@ -633,9 +634,8 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t
     do {
         if (n >= maxsize)
             break;
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
             break;
-        }
         data[n++] = ip;
     } while (unw_step(&cursor) > 0);
     return n;
@@ -654,9 +654,8 @@ size_t rec_backtrace_ctx_dwarf(ptrint_t *data, size_t maxsize, unw_context_t *uc
     do {
         if (n >= maxsize)
             break;
-        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0) {
+        if (unw_get_reg(&cursor, UNW_REG_IP, &ip) < 0)
             break;
-        }
         data[n++] = ip;
     } while (unw_step(&cursor) > 0);
     return n;
@@ -901,7 +900,6 @@ void jl_init_tasks(void *stack, size_t ssize)
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_current_task->type = (jl_value_t*)jl_task_type;
 #ifdef COPY_STACKS
-    jl_current_task->stackbase = NULL;
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;
 #else

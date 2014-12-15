@@ -123,8 +123,8 @@ are::
 
 
 .. note::
-   Updating operators may change the type of the variable, since any assignment
-   statement to a plain variable may change its type.
+   An updating operator rebinds the variable on the left-hand side.
+   As a result, the type of the variable may change.
    
    .. doctest::
 
@@ -359,18 +359,18 @@ such definitions make sense.
 Rounding functions
 ~~~~~~~~~~~~~~~~~~
 
-============= ==================================  =================
-Function      Description                         Return type
-============= ==================================  =================
-``round(x)``  round ``x`` to the nearest integer  ``typeof(x)``
-``round(T, x)`` round ``x`` to the nearest integer  ``T``
-``floor(x)``  round ``x`` towards ``-Inf``        ``typeof(x)``
-``floor(T, x)`` round ``x`` towards ``-Inf``        ``T``
-``ceil(x)``   round ``x`` towards ``+Inf``        ``typeof(x)``
-``ceil(T, x)``  round ``x`` towards ``+Inf``        ``T``
-``trunc(x)``  round ``x`` towards zero            ``typeof(x)``
-``trunc(T, x)`` round ``x`` towards zero            ``T``
-============= ==================================  =================
+=============== ====================================  =================
+Function        Description                           Return type
+=============== ====================================  =================
+``round(x)``    round ``x`` to the nearest integer    ``typeof(x)``
+``round(T, x)``   round ``x`` to the nearest integer    ``T``
+``floor(x)``    round ``x`` towards ``-Inf``          ``typeof(x)``
+``floor(T, x)``   round ``x`` towards ``-Inf``          ``T``
+``ceil(x)``     round ``x`` towards ``+Inf``          ``typeof(x)``
+``ceil(T, x)``    round ``x`` towards ``+Inf``          ``T``
+``trunc(x)``    round ``x`` towards zero              ``typeof(x)``
+``trunc(T, x)``   round ``x`` towards zero              ``T``
+=============== ====================================  =================
 
 Division functions
 ~~~~~~~~~~~~~~~~~~

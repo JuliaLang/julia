@@ -34,8 +34,47 @@ Notably missing from this list are
 Certain constructs introduce new variables into the current innermost
 scope. When a variable is introduced into a scope, it is also inherited
 by all inner scopes unless one of those inner scopes explicitly
-overrides it. These constructs which introduce new variables into the
-current scope are as follows:
+overrides it.
+
+Julia uses `lexical scoping <http://en.wikipedia.org/wiki/Scope_%28computer_science%29#Lexical_scoping_vs._dynamic_scoping>`_,
+meaning that a function's scope does not inherit from its caller's
+scope, but from the scope in which the function was defined.
+For example, in the following code the ``x`` inside ``foo`` is found
+in the global scope (and if no global variable ``x`` existed, an
+undefined variable error would be raised)::
+
+    function foo()
+      x
+    end
+
+    function bar()
+      x = 1
+      foo()
+    end
+
+    x = 2
+
+    julia> bar()
+    2
+
+If ``foo`` is instead defined inside ``bar``, then it accesses
+the local ``x`` present in that function::
+
+    function bar()
+      function foo()
+        x
+      end
+      x = 1
+      foo()
+    end
+
+    x = 2
+
+    julia> bar()
+    1
+
+The constructs that introduce new variables into the current scope
+are as follows:
 
 -  A declaration ``local x`` or ``const x`` introduces a new local variable.
 -  A declaration ``global x`` makes ``x`` in the current scope and inner

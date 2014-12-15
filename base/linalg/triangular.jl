@@ -329,7 +329,7 @@ A_mul_Bc!(C::AbstractVecOrMat, A::Triangular, B::AbstractVecOrMat) = A_mul_Bc!(A
 #Generic solver using naive substitution
 function naivesub!{T,S,UpLo,IsUnit}(A::Triangular{T,S,UpLo,IsUnit}, b::AbstractVector, x::AbstractVector=b)
     N = size(A, 2)
-    N==length(b)==length(x) || throw(DimensionMismatch(""))
+    N==length(b)==length(x) || throw(DimensionMismatch())
 
     if UpLo == :L #do forward substitution
         for j = 1:N

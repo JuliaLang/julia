@@ -147,7 +147,7 @@ export
     # method reflection
     applicable, invoke, method_exists,
     # constants
-    JULIA_HOME, nothing, Main,
+    nothing, Main,
     # intrinsics module
     Intrinsics
     #ccall, cglobal, llvmcall, abs_float, add_float, add_int, and_int, ashr_int,
