@@ -147,6 +147,7 @@ extern void __chkstk(void);
 #endif
 #else
 #if defined(_COMPILER_MINGW_)
+#undef _alloca
 extern void _alloca(void);
 #else
 extern void _chkstk(void);
