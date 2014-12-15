@@ -522,10 +522,7 @@ static Type *NoopType;
 
 // --- utilities ---
 
-#define XSTR(x) #x
-#define MSTR(x) XSTR(x)
 extern "C" {
-    const char *jl_cpu_string = MSTR(JULIA_TARGET_ARCH);
     int globalUnique = 0;
 }
 
@@ -4865,7 +4862,6 @@ extern "C" void jl_init_codegen(void)
     jl_setup_module(engine_module,false);
 #endif
 
-
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
 #ifdef JL_DEBUG_BUILD
@@ -4939,9 +4935,9 @@ extern "C" void jl_init_codegen(void)
             TheTriple,
             "",
 #if LLVM35
-            strcmp(jl_cpu_string,"native") ? jl_cpu_string : sys::getHostCPUName().data(),
+            strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : sys::getHostCPUName().data(),
 #else
-            strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+            strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : "",
 #endif
             MAttrs);
     assert(jl_TargetMachine);

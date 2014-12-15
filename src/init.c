@@ -92,6 +92,7 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       NULL, // julia_bin
                                       NULL, // build_path
                                       system_image_path, // image_file
+                                      NULL, // cpu_target ("native", "core2", etc...)
                                       0,    // code_coverage
                                       0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
@@ -869,6 +870,15 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
     jl_resolve_sysimg_location(rel);
+
+    // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
+    if (jl_compileropts.cpu_target == NULL) {
+        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(jl_compileropts.image_file);
+
+        // If we can't load anything from the sysimg, default to native
+        jl_compileropts.cpu_target = sysimg_cpu_target ? sysimg_cpu_target : "native";
+    }
+
     jl_page_size = jl_getpagesize();
     jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
