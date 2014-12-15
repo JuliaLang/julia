@@ -1298,6 +1298,10 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
             simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
             simple_escape_analysis(jl_exprarg(e,2), esc, ctx);
         }
+        else if (e->head == assign_sym) {
+            // don't consider assignment LHS as a variable "use"
+            simple_escape_analysis(jl_exprarg(e,1), esc, ctx);
+        }
         else if (e->head != line_sym) {
             size_t elen = jl_array_dim0(e->args);
             for(i=0; i < elen; i++) {
@@ -2770,6 +2774,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         }
         else {
             rval = emit_expr(r, ctx, true);
+            if (!vi.used)  // don't actually do the assignment if the var is never read
+                return;
             // Make sure this is already boxed. If not, there was
             // something wrong in the earlier analysis as this should
             // have been alloca'd
