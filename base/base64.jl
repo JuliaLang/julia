@@ -1,5 +1,5 @@
 module Base64
-import Base: read, write, close, eof
+import Base: read, write, close, eof, empty!
 export Base64EncodePipe, Base64DecodePipe, base64encode, base64decode
 
 # Base64EncodePipe is a pipe-like IO object, which converts into base64 data sent
@@ -59,23 +59,25 @@ for (val, ch) in enumerate(b64chars)
     revb64chars[uint8(ch)] = uint8(val - 1)
 end
 
-#Decode a block of at least 2 and at most 4 bytes
-function b64decode(encvec::Vector{UInt8})
+#Decode a block of at least 2 and at most 4 bytes, received in encvec
+#Returns the first decoded byte and stores up to two more in cache
+function b64decode!(encvec::Vector{UInt8}, cache::Vector{UInt8})
     if length(encvec) < 2
         error("Incorrect base64 format")
     end
     @inbounds u = revb64chars[encvec[1]]
     @inbounds v = revb64chars[encvec[2]]
-    decvec = [(u << 2) | (v >> 4)]
+    empty!(cache)
+    res = (u << 2) | (v >> 4)
     if length(encvec) > 2
         @inbounds w = revb64chars[encvec[3]]
-        push!(decvec, (v << 4) | (w >> 2))
+        push!(cache, (v << 4) | (w >> 2))
     end
     if length(encvec) > 3
         @inbounds z = revb64chars[encvec[4]]
-        push!(decvec, (w << 6) | z)
+        push!(cache, (w << 6) | z)
     end
-    decvec
+    res
 end
 
 
@@ -167,9 +169,10 @@ type Base64DecodePipe <: IO
     io::IO
     # reading works in blocks of 4 characters that are decoded into 3 bytes and 2 of them cached
     cache::Vector{UInt8}
+    encvec::Vector{UInt8}
 
     function Base64DecodePipe(io::IO)
-        b = new(io,[])
+        b = new(io,[],[])
         finalizer(b, close)
         return b
     end
@@ -179,16 +182,14 @@ function read(b::Base64DecodePipe, t::Type{UInt8})
     if length(b.cache) > 0
         val = shift!(b.cache)
     else
-        encvec = Array(UInt8, 0)
-        while !eof(b.io) && length(encvec) < 4
+        empty!(b.encvec)
+        while !eof(b.io) && length(b.encvec) < 4
             c::UInt8 = read(b.io, t)
             @inbounds if revb64chars[c] != sentinel
-                push!(encvec, c)
+                push!(b.encvec, c)
             end
         end
-        decvec = b64decode(encvec)
-        val = decvec[1]
-        b.cache = decvec[2:end]
+        val = b64decode!(b.encvec,b.cache)
     end
     val
 end
