@@ -123,8 +123,8 @@ are::
 
 
 .. note::
-   Updating operators may change the type of the variable, since any assignment
-   statement to a plain variable may change its type.
+   An updating operator rebinds the variable on the left-hand side.
+   As a result, the type of the variable may change.
    
    .. doctest::
 
