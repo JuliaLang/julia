@@ -166,7 +166,12 @@ void *jl_stackbase;
 static jl_jmp_buf jl_base_ctx; // base context of stack
 #endif
 
-static void save_stack(jl_task_t *t)
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+static void __declspec(noinline)
+#else
+static void __attribute__((noinline))
+#endif
+save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
