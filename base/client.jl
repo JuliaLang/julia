@@ -251,10 +251,10 @@ function process_options(args::Vector{UTF8String})
         elseif args[i]=="--machinefile"
             i == length(args) && error("--machinefile  no <file> provided")
             i+=1
-            machines, dirs = load_machine_file(args[i])
+            machines, options = load_machine_file(args[i])
             for machine in machines
-                if haskey(dirs, machine)
-                    addprocs([machine], dir=dirs[machine])
+                if haskey(options, machine)
+                    addprocs([machine]; options[machine]...)
                 else
                     addprocs([machine])
                 end
@@ -349,32 +349,46 @@ function load_juliarc()
 end
 
 function load_machine_file(path::AbstractString)
+    const VALIDOPTIONS=["tunnel", "dir", "sshflags", "max_parallel"]
     machines = AbstractString[]
-    dirs = Dict()
-    for line in split(readall(path),'\n'; keep=false)
-        dirfound=false
-        dir=""
-        machine=""
-        dircheck = split(line,r"\s+dir="; keep=false)
-        if length(dircheck) > 1
-            line = dircheck[1]
-            dir = dircheck[2]
-            dirfound = true
-        end
+    alloptions=Dict{AbstractString, Dict}()
 
-        s = split(line,'*'; keep=false)
+    for line in split(readall(path),'\n'; keep=false)
+        machineoptions = Dict{Symbol,AbstractString}()
+        machine=""
+        opts=""
+        s = split(line," "; limit=2, keep=false)
+        mach = s[1]
+        if length(s) > 1        # we have options
+            opts = s[2]
+            # println("options found: $opts")
+        end
+        s = split(mach,'*'; limit=2, keep=false)
         if length(s) > 1
-            append!(machines,fill(s[2],int(s[1])))
-            machine = s[2]
+            machine=s[2]
+            append!(machines,fill(machine,int(s[1])))
+            # println("found *, machine = $machine times $(s[1])")
         else
-            push!(machines,line)
-            machine = line
+            machine = mach
+            # println("no *, machine = $machine")
+            push!(machines,machine)
         end
-        if dirfound
-            dirs[machine] = dir
+        if length(opts) > 1
+            rx = r"(\S+)\s*=\s*(\S+)"
+            m = eachmatch(rx,opts)
+            for i in m
+                opt = i.captures[1]
+                val = i.captures[2]
+                if opt in [VALIDOPTIONS]
+                    # println("setting machine option $(i.captures) - opt = $opt, val = $val")
+                    machineoptions[symbol(opt)] = string(val)
+                end
+            end
         end
+        alloptions[machine] = machineoptions
     end
-    return machines, dirs
+    # println("alloptions = $alloptions")
+    return machines, alloptions
 end
 
 function early_init()
