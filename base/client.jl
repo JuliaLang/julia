@@ -392,6 +392,7 @@ function _start()
                 quiet || REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
+                    quiet || warn("Terminal not fully functional")
                 else
                     active_repl = REPL.LineEditREPL(term, true)
                     active_repl.no_history_file = no_history_file
