@@ -99,7 +99,8 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_DUMPBITCODE_OFF,
                                       0,    // int_literals
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
-                                      0     // opt_level
+                                      0,    // opt_level
+                                      1,    // depwarn
 };
 
 int jl_boot_file_loaded = 0;

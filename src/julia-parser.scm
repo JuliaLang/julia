@@ -501,17 +501,18 @@
 ;; --- misc ---
 
 (define (syntax-deprecation-warning s what instead)
-  (io.write
-   *stderr*
-   (string
-    #\newline "WARNING: deprecated syntax \"" what "\""
-    (if (eq? current-filename 'none)
-	""
-	(string " at " current-filename ":" (input-port-line (ts:port s))))
-    "."
-    (if (equal? instead "")
-	""
-	(string #\newline "Use \"" instead "\" instead." #\newline)))))
+  (if *depwarn*
+    (io.write
+     *stderr*
+     (string
+      #\newline "WARNING: deprecated syntax \"" what "\""
+      (if (eq? current-filename 'none)
+	  ""
+	  (string " at " current-filename ":" (input-port-line (ts:port s))))
+      "."
+      (if (equal? instead "")
+	  ""
+	  (string #\newline "Use \"" instead "\" instead." #\newline))))))
 
 ;; --- parser ---
 

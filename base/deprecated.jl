@@ -36,9 +36,11 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    bt = backtrace()
-    caller = firstcaller(bt, funcsym)
-    warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+    if bool(compileropts().depwarn)
+        bt = backtrace()
+        caller = firstcaller(bt, funcsym)
+        warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
+    end
 end
 
 function firstcaller(bt::Array{Ptr{Void},1}, funcsym::Symbol)
