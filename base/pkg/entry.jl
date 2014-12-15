@@ -690,9 +690,9 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
         cd(dirname(test_path)) do
             try
                 if coverage
-                    cmd = `$JULIA_HOME/julia --code-coverage $test_path`
+                    cmd = `$JULIA_HOME/julia --color --code-coverage $test_path`
                 else
-                    cmd = `$JULIA_HOME/julia $test_path`
+                    cmd = `$JULIA_HOME/julia --color $test_path`
                 end
                 run(cmd)
                 info("$pkg tests passed")
