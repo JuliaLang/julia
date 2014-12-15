@@ -53,7 +53,8 @@ static const char *opts =
     " -E, --print <expr>       Evaluate and show <expr>\n"
     " -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode\n"
     " -L, --load <file>        Load <file> immediately on all processors\n"
-    " -J, --sysimage <file>    Start up with the given system image file\n\n"
+    " -J, --sysimage <file>    Start up with the given system image file\n"
+    " -C --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
     " -p <n>                   Run n local processes\n"
     " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
@@ -77,15 +78,15 @@ static const char *opts =
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:T:hJ:O";
+    static char* shortopts = "+H:hJ:C:O";
     static struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
-        { "tab",           required_argument, 0, 'T' },
         { "build",         required_argument, 0, 'b' },
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", optional_argument, 0, 'c' },
+        { "cpu-target",    required_argument, 0, 'C' },
         { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "optimize",      no_argument,       0, 'O' },
@@ -117,6 +118,9 @@ void parse_opts(int *argcp, char ***argvp)
         case 'J':
             jl_compileropts.image_file = strdup(optarg);
             imagepathspecified = 1;
+            break;
+        case 'C':
+            jl_compileropts.cpu_target = strdup(optarg);
             break;
         case 'h':
             ios_printf(ios_stdout, "%s%s", usage, opts);
