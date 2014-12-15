@@ -163,6 +163,7 @@ export
     Inf,
     Inf16,
     Inf32,
+    JULIA_HOME,
     LOAD_PATH,
     MS_ASYNC,
     MS_INVALIDATE,
@@ -779,7 +780,7 @@ export
     setdiff,
     setindex!,
     similar,
-    sizehint,
+    sizehint!,
     splice!,
     symdiff!,
     symdiff,
@@ -872,6 +873,7 @@ export
     repeat,
     replace,
     repr,
+    reverseind,
     rpad,
     rsearch,
     rsearchindex,
@@ -902,11 +904,14 @@ export
 # random numbers
     AbstractRNG,
     MersenneTwister,
+    RandomDevice,
     rand!,
     rand,
     randbool,
     randn!,
     randn,
+    randexp!,
+    randexp,
     srand,
 
 # bigfloat & precision
@@ -1089,6 +1094,7 @@ export
 
 # RTS internals
     finalizer,
+    finalize,
     gc,
     gc_disable,
     gc_enable,
@@ -1402,6 +1408,7 @@ export
     @label,
     @goto,
     @inline,
+    @noinline,
     @doc,
     @doc_str,
     @doc_mstr

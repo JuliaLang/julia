@@ -39,12 +39,12 @@ convert(::(), ::()) = ()
 convert(::Type{Tuple}, x::Tuple) = x
 
 argtail(x, rest...) = rest
-tupletail(x::Tuple) = argtail(x...)
+tail(x::Tuple) = argtail(x...)
 
 convert(T::(Type, Type...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
+    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
 convert(T::(Any, Any...), x::(Any, Any...)) =
-    tuple(convert(T[1],x[1]), convert(tupletail(T), tupletail(x))...)
+    tuple(convert(T[1],x[1]), convert(tail(T), tail(x))...)
 
 convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
@@ -113,8 +113,9 @@ end
 type EOFError <: Exception end
 
 type DimensionMismatch <: Exception
-    name::ASCIIString
+    msg::AbstractString
 end
+DimensionMismatch() = DimensionMismatch("")
 
 type WeakRef
     value
@@ -145,6 +146,8 @@ function finalizer(o::ANY, f::Union(Function,Ptr))
     end
     ccall(:jl_gc_add_finalizer, Void, (Any,Any), o, f)
 end
+
+finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
 gc() = ccall(:jl_gc_collect, Void, ())
 gc_enable() = ccall(:jl_gc_enable, Void, ())

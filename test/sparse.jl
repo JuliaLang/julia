@@ -457,10 +457,10 @@ end
 let A = Array(Int,0,0), S = sparse(A)
     iA = try indmax(A) end
     iS = try indmax(S) end
-    @test iA == iS == false
+    @test iA === iS === nothing
     iA = try indmin(A) end
     iS = try indmin(S) end
-    @test iA == iS == false
+    @test iA === iS === nothing
 end
 
 # issue #8225

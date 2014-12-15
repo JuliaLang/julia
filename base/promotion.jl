@@ -94,8 +94,7 @@ end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S   ) = typejoin(T, S)
-promote_type(T, S...) = promote_type(T, promote_type(S...))
+promote_type(T, S, U, V...) = promote_type(T, promote_type(S, U, V...))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type{T}(::Type{T}, ::Type{T}) = T

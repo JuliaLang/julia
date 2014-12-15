@@ -6,7 +6,7 @@ arithtype(::Type{Bool}) = Int
 # multiply by diagonal matrix as vector
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    n == length(b) || throw(DimensionMismatch(""))
+    n == length(b) || throw(DimensionMismatch())
     for j = 1:n
         bj = b[j]
         for i = 1:m
@@ -18,7 +18,7 @@ end
 
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    m == length(b) || throw(DimensionMismatch(""))
+    m == length(b) || throw(DimensionMismatch())
     for j = 1:n, i = 1:m
         C[i,j] = A[i,j]*b[i]
     end
@@ -32,14 +32,14 @@ scale(b::Vector, A::Matrix) = scale!(similar(b, promote_type(eltype(A),eltype(b)
 dot{T<:BlasReal}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dot(x, y)
 dot{T<:BlasComplex}(x::StridedVector{T}, y::StridedVector{T}) = BLAS.dotc(x, y)
 function dot{T<:BlasReal, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
-    length(rx)==length(ry) || throw(DimensionMismatch(""))
+    length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
     BLAS.dot(length(rx), pointer(x)+(first(rx)-1)*sizeof(T), step(rx), pointer(y)+(first(ry)-1)*sizeof(T), step(ry))
 end
 function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},Range{TI}), y::Vector{T}, ry::Union(UnitRange{TI},Range{TI}))
-    length(rx)==length(ry) || throw(DimensionMismatch(""))
+    length(rx)==length(ry) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
     end
@@ -47,7 +47,7 @@ function dot{T<:BlasComplex, TI<:Integer}(x::Vector{T}, rx::Union(UnitRange{TI},
 end
 function dot(x::AbstractVector, y::AbstractVector)
     lx = length(x)
-    lx==length(y) || throw(DimensionMismatch(""))
+    lx==length(y) || throw(DimensionMismatch())
     if lx == 0
         return zero(eltype(x))*zero(eltype(y))
     end
@@ -206,8 +206,8 @@ end
 function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T}, x::StridedVector{T})
     stride(A, 1)==1 || return generic_matvecmul!(y, tA, A, x)
     mA, nA = lapack_size(tA, A)
-    nA==length(x) || throw(DimensionMismatch(""))
-    mA==length(y) || throw(DimensionMismatch(""))
+    nA==length(x) || throw(DimensionMismatch())
+    mA==length(y) || throw(DimensionMismatch())
     mA == 0 && return y
     nA == 0 && return fill!(y,0)
     return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
@@ -271,7 +271,7 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
     nA==mB || throw(DimensionMismatch("*"))
 
     if mA == 0 || nA == 0 || nB == 0
-        size(C) == (mA, nB) || throw(DimensionMismatch(""))
+        size(C) == (mA, nB) || throw(DimensionMismatch())
         return fill!(C,0)
     end
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2!(C,tA,tB,A,B); end

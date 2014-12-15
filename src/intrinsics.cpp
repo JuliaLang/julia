@@ -29,7 +29,7 @@ namespace JL_I {
         nan_dom_err,
         // functions
         abs_float, copysign_float, flipsign_int, select_value,
-        sqrt_llvm, powi_llvm,
+        ceil_llvm, floor_llvm, trunc_llvm, sqrt_llvm, powi_llvm,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1099,12 +1099,18 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(abs_float,1)
     {
         x = FP(x);
+#ifdef LLVM34
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::fabs,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+#else
         Type *intt = JL_INTT(x->getType());
         Value *bits = builder.CreateBitCast(FP(x), intt);
         Value *absbits =
             builder.CreateAnd(bits,
                               ConstantInt::get(intt, APInt::getSignedMaxValue(((IntegerType*)intt)->getBitWidth())));
         return builder.CreateBitCast(absbits, x->getType());
+#endif
     }
     HANDLE(copysign_float,2)
     {
@@ -1146,6 +1152,24 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     }
     HANDLE(jl_alloca,1) {
         return builder.CreateAlloca(IntegerType::get(jl_LLVMContext, 8),JL_INT(x));
+    }
+    HANDLE(ceil_llvm,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::ceil,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+    }
+    HANDLE(floor_llvm,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::floor,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+    }
+    HANDLE(trunc_llvm,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::trunc,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
     }
     HANDLE(sqrt_llvm,1) {
         x = FP(x);
@@ -1245,7 +1269,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(uitofp); ADD_I(sitofp);
     ADD_I(fptrunc); ADD_I(fpext);
     ADD_I(abs_float); ADD_I(copysign_float);
-    ADD_I(flipsign_int); ADD_I(select_value); ADD_I(sqrt_llvm);
+    ADD_I(flipsign_int); ADD_I(select_value); ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(sqrt_llvm);
     ADD_I(powi_llvm);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);

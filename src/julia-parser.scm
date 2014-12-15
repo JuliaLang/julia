@@ -501,17 +501,18 @@
 ;; --- misc ---
 
 (define (syntax-deprecation-warning s what instead)
-  (io.write
-   *stderr*
-   (string
-    #\newline "WARNING: deprecated syntax \"" what "\""
-    (if (eq? current-filename 'none)
-	""
-	(string " at " current-filename ":" (input-port-line (ts:port s))))
-    "."
-    (if (equal? instead "")
-	""
-	(string #\newline "Use \"" instead "\" instead." #\newline)))))
+  (if *depwarn*
+    (io.write
+     *stderr*
+     (string
+      #\newline "WARNING: deprecated syntax \"" what "\""
+      (if (eq? current-filename 'none)
+	  ""
+	  (string " at " current-filename ":" (input-port-line (ts:port s))))
+      "."
+      (if (equal? instead "")
+	  ""
+	  (string #\newline "Use \"" instead "\" instead." #\newline))))))
 
 ;; --- parser ---
 
@@ -950,10 +951,12 @@
 		       (loop (list 'ref ex)))
 		   (case (car al)
 		     ((dict)
-		      (syntax-deprecation-warning
-		       s (string #\( (deparse ex) #\) "[a=>b, ...]")
-		       (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
-		      (loop (list* 'typed_dict ex (cdr al))))
+		      (if (dict-literal? ex)
+			  (begin (syntax-deprecation-warning
+				  s (string #\( (deparse ex) #\) "[a=>b, ...]")
+				  (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
+				 (loop (list* 'typed_dict ex (cdr al))))
+			  (loop (list* 'ref ex (cdr al)))))
 		     ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
 		     ((vcat)
 		      (if (any (lambda (x)
@@ -1148,9 +1151,10 @@
 	 (take-token s)
 	 (cond
 	  ((eq? nxt 'end)
-	   (list* 'try try-block catchv catchb (if finalb
-						   (list finalb)
-						   '())))
+	   (list* 'try try-block catchv
+		  ;; default to empty catch block in `try ... end`
+		  (or catchb (if finalb #f '(block)))
+		  (if finalb (list finalb) '())))
 	  ((and (eq? nxt 'catch)
 		(not catchb))
 	   (let ((nl (memv (peek-token s) '(#\newline #\;))))
@@ -1502,14 +1506,14 @@
 	(begin (take-token s)
                '())
 	(let ((first (parse-eq* s)))
-          (if (dict-literal? first)
+          (if (and (dict-literal? first)
+		   (or (null? isdict) (car isdict)))
               (case (peek-non-newline-token s)
                 ((for)
                  (take-token s)
                  (parse-dict-comprehension s first closer))
                 (else
-		 (if (or (and (pair? isdict) (not (car isdict)))
-			 (null? isdict))
+		 (if (or (null? isdict) (not (car isdict)))
 		     (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
 		 (parse-dict s first closer)))
               (case (peek-token s)

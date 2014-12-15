@@ -208,17 +208,17 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned)
 
 static arraylist_t preserved_values;
 
-int jl_gc_n_preserved_values(void)
+DLLEXPORT int jl_gc_n_preserved_values(void)
 {
     return preserved_values.len;
 }
 
-void jl_gc_preserve(jl_value_t *v)
+DLLEXPORT void jl_gc_preserve(jl_value_t *v)
 {
     arraylist_push(&preserved_values, (void*)v);
 }
 
-void jl_gc_unpreserve(void)
+DLLEXPORT void jl_gc_unpreserve(void)
 {
     (void)arraylist_pop(&preserved_values);
 }
@@ -274,8 +274,11 @@ static void schedule_finalization(void *o)
 static void run_finalizer(jl_value_t *o, jl_value_t *ff)
 {
     jl_function_t *f;
-    while (jl_is_tuple(ff)) {
-        f = (jl_function_t*)jl_t0(ff);
+    while (1) {
+        if (jl_is_tuple(ff))
+            f = (jl_function_t*)jl_t0(ff);
+        else
+            f = (jl_function_t*)ff;
         assert(jl_is_function(f));
         JL_TRY {
             jl_apply(f, (jl_value_t**)&o, 1);
@@ -285,31 +288,36 @@ static void run_finalizer(jl_value_t *o, jl_value_t *ff)
             jl_static_show(JL_STDERR, jl_exception_in_transit);
             JL_PUTC('\n',JL_STDERR);
         }
-        ff = jl_t1(ff);
+        if (jl_is_tuple(ff))
+            ff = jl_t1(ff);
+        else
+            break;
     }
-    f = (jl_function_t*)ff;
-    assert(jl_is_function(f));
-    JL_TRY {
-        jl_apply(f, (jl_value_t**)&o, 1);
+}
+
+static int finalize_object(jl_value_t *o)
+{
+    jl_value_t *ff = NULL;
+    int success = 0;
+    JL_GC_PUSH1(&ff);
+    ff = (jl_value_t*)ptrhash_get(&finalizer_table, o);
+    if (ff != HT_NOTFOUND) {
+        ptrhash_remove(&finalizer_table, o);
+        run_finalizer((jl_value_t*)o, ff);
+        success = 1;
     }
-    JL_CATCH {
-        JL_PRINTF(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
-        JL_PUTC('\n',JL_STDERR);
-    }
+    JL_GC_POP();
+    return success;
 }
 
 static void run_finalizers(void)
 {
     void *o = NULL;
-    jl_value_t *ff = NULL;
-    JL_GC_PUSH2(&o, &ff);
+    JL_GC_PUSH1(&o);
     while (to_finalize.len > 0) {
         o = arraylist_pop(&to_finalize);
-        ff = (jl_value_t*)ptrhash_get(&finalizer_table, o);
-        assert(ff != HT_NOTFOUND);
-        ptrhash_remove(&finalizer_table, o);
-        run_finalizer((jl_value_t*)o, ff);
+        int ok = finalize_object((jl_value_t*)o);
+        assert(ok); (void)ok;
     }
     JL_GC_POP();
 }
@@ -334,6 +342,11 @@ void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
     else {
         *bp = (jl_value_t*)jl_tuple2((jl_value_t*)f, *bp);
     }
+}
+
+void jl_finalize(jl_value_t *o)
+{
+    (void)finalize_object(o);
 }
 
 // big value list
@@ -699,7 +712,7 @@ static void gc_mark_task(jl_task_t *ta, int d)
             gc_mark_stack(jl_pgcstack, offset, d);
         }
         else {
-            offset = (char *)ta->stkbuf - ((char *)ta->stackbase - ta->ssize);
+            offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
             gc_mark_stack(ta->gcstack, offset, d);
         }
 #else

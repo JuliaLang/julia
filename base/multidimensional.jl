@@ -692,7 +692,7 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
         offset = 1 - sum(@ntuple N d->strides_{d+1})
 
         if isa(B, SubArray)
-            offset += first_index(B) - 1
+            offset += first_index(B::SubArray) - 1
             B = B.parent
         end
 

@@ -30,28 +30,30 @@ isassigned(a::Array, i::Int...) = isdefined(a, i...)
 
 ## copy ##
 
-function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, N)
+function unsafe_copy!{T}(dest::Ptr{T}, src::Ptr{T}, n)
     ccall(:memmove, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-          dest, src, N*sizeof(T))
+          dest, src, n*sizeof(T))
     return dest
 end
 
-function unsafe_copy!{T}(dest::Array{T}, dsto, src::Array{T}, so, N)
+function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
     if isbits(T)
-        unsafe_copy!(pointer(dest, dsto), pointer(src, so), N)
+        unsafe_copy!(pointer(dest, doffs), pointer(src, soffs), n)
     else
-        for i=0:N-1
-            @inbounds arrayset(dest, src[i+so], i+dsto)
+        for i=0:n-1
+            @inbounds arrayset(dest, src[i+soffs], i+doffs)
         end
     end
     return dest
 end
 
-function copy!{T}(dest::Array{T}, dsto::Integer, src::Array{T}, so::Integer, N::Integer)
-    if so+N-1 > length(src) || dsto+N-1 > length(dest) || dsto < 1 || so < 1
+function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer)
+    n < 0 && throw(BoundsError())
+    n == 0 && return dest
+    if soffs+n-1 > length(src) || doffs+n-1 > length(dest) || doffs < 1 || soffs < 1
         throw(BoundsError())
     end
-    unsafe_copy!(dest, dsto, src, so, N)
+    unsafe_copy!(dest, doffs, src, soffs, n)
 end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
@@ -504,7 +506,7 @@ function resize!(a::Vector, nl::Integer)
     return a
 end
 
-function sizehint(a::Vector, sz::Integer)
+function sizehint!(a::Vector, sz::Integer)
     ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
     a
 end
@@ -808,7 +810,7 @@ end
 ## promotion to complex ##
 
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
-    if size(A) != size(B); throw(DimensionMismatch("")); end
+    if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
     for i=1:length(A)
         @inbounds F[i] = complex(A[i], B[i])
@@ -979,6 +981,7 @@ function reverse(A::AbstractVector, s=1, n=length(A))
     end
     B
 end
+reverseind(a::AbstractVector, i::Integer) = length(a) + 1 - i
 
 reverse(v::StridedVector) = (n=length(v); [ v[n-i+1] for i=1:n ])
 reverse(v::StridedVector, s, n=length(v)) = reverse!(copy(v), s, n)

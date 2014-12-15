@@ -106,9 +106,9 @@ function isvalid(s::AbstractString, i::Integer)
 end
 
 prevind(s::DirectIndexString, i::Integer) = i-1
-prevind(s                   , i::Integer) = i-1
+prevind(s::AbstractArray   , i::Integer) = i-1
 nextind(s::DirectIndexString, i::Integer) = i+1
-nextind(s                   , i::Integer) = i+1
+nextind(s::AbstractArray   , i::Integer) = i+1
 
 function prevind(s::AbstractString, i::Integer)
     e = endof(s)
@@ -747,6 +747,15 @@ reverse(s::AbstractString) = RevString(s)
 reverse(s::RevString) = s.string
 
 isascii(s::RevString{ASCIIString}) = true
+
+## reverse an index i so that reverse(s)[i] == s[reverseind(s,i)]
+
+reverseind(s::Union(DirectIndexString,SubString{DirectIndexString}), i::Integer) = length(s) + 1 - i
+reverseind(s::RevString, i::Integer) = endof(s) - i + 1
+lastidx(s::AbstractString) = nextind(s, endof(s)) - 1
+lastidx(s::DirectIndexString) = length(s)
+reverseind(s::SubString, i::Integer) =
+    reverseind(s.string, lastidx(s.string)-s.offset-s.endof+i) - s.offset
 
 ## ropes for efficient concatenation, etc. ##
 
@@ -1394,19 +1403,23 @@ function print_joined(io, strings, delim, last)
     end
     str, i = next(strings,i)
     print(io, str)
-    while !done(strings,i)
+    is_done = done(strings,i)
+    while !is_done
         str, i = next(strings,i)
-        print(io, done(strings,i) ? last : delim)
+        is_done = done(strings,i)
+        print(io, is_done ? last : delim)
         print(io, str)
     end
 end
 
 function print_joined(io, strings, delim)
     i = start(strings)
-    while !done(strings,i)
+    is_done = done(strings,i)
+    while !is_done
         str, i = next(strings,i)
+        is_done = done(strings,i)
         print(io, str)
-        if !done(strings,i)
+        if !is_done
             print(io, delim)
         end
     end

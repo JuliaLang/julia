@@ -501,13 +501,23 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_call(io, head, func, func_args, indent)
         end
 
-    # typed comprehension
-    elseif is(head, :typed_comprehension) && length(args) == 3
+    # comprehensions
+    elseif (head === :typed_comprehension || head === :typed_dict_comprehension) && length(args) == 3
+        isdict = (head === :typed_dict_comprehension)
+        isdict && print(io, '(')
         show_unquoted(io, args[1], indent)
+        isdict && print(io, ')')
         print(io, '[')
         show_unquoted(io, args[2], indent)
         print(io, " for ")
         show_unquoted(io, args[3], indent)
+        print(io, ']')
+
+    elseif (head === :comprehension || head === :dict_comprehension) && length(args) == 2
+        print(io, '[')
+        show_unquoted(io, args[1], indent)
+        print(io, " for ")
+        show_unquoted(io, args[2], indent)
         print(io, ']')
 
     elseif is(head, :ccall)
@@ -629,9 +639,9 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_unquoted(io, args[1])
 
     # transpose
-    elseif is(head, symbol('\'')) && length(args) == 1
+    elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1
         show_unquoted(io, args[1])
-        print(io, '\'')
+        print(io, head)
 
     elseif is(head, :import) || is(head, :importall) || is(head, :using)
         print(io, head)

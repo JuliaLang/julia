@@ -1,14 +1,8 @@
 # Instant arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::Instant,y::Instant) = throw(ArgumentError("Operation not defined for Instants"))
-end
 (+)(x::Instant) = x
 (-){T<:Instant}(x::T,y::T) = x.periods - y.periods
 
 # TimeType arithmetic
-for op in (:+,:*,:%,:/)
-    @eval ($op)(x::TimeType,y::TimeType) = throw(ArgumentError("Operation not defined for TimeTypes"))
-end
 (+)(x::TimeType) = x
 (-){T<:TimeType}(x::T,y::T) = x.instant - y.instant
 
@@ -63,8 +57,8 @@ function (-)(dt::Date,z::Month)
 end
 (+)(x::Date,y::Week) = return Date(UTD(value(x) + 7*value(y)))
 (-)(x::Date,y::Week) = return Date(UTD(value(x) - 7*value(y)))
-(+)(x::Date,y::Day)  = return Date(UTD(value(x) + y))
-(-)(x::Date,y::Day)  = return Date(UTD(value(x) - y))
+(+)(x::Date,y::Day)  = return Date(UTD(value(x) + value(y)))
+(-)(x::Date,y::Day)  = return Date(UTD(value(x) - value(y)))
 (+)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)+toms(y)))
 (-)(x::DateTime,y::Period)   = return DateTime(UTM(value(x)-toms(y)))
 (+)(y::Period,x::TimeType) = x + y

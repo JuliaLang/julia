@@ -341,14 +341,14 @@ end
 #                                          for BlasFloat Arrays)
 function axpy!(alpha, x::AbstractArray, y::AbstractArray)
     n = length(x)
-    n==length(y) || throw(DimensionMismatch(""))
+    n==length(y) || throw(DimensionMismatch())
     for i = 1:n
         @inbounds y[i] += alpha * x[i]
     end
     y
 end
 function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    length(x)==length(y) || throw(DimensionMismatch(""))
+    length(x)==length(y) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y) || length(rx) != length(ry)
         throw(BoundsError())
     end

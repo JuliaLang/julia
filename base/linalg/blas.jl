@@ -222,7 +222,7 @@ end
 function axpy!{T<:BlasFloat,Ta<:Number,Ti<:Integer}(alpha::Ta, x::Array{T}, rx::Union(UnitRange{Ti},Range{Ti}),
                                          y::Array{T}, ry::Union(UnitRange{Ti},Range{Ti}))
 
-    length(rx)==length(ry) || throw(DimensionMismatch(""))
+    length(rx)==length(ry) || throw(DimensionMismatch())
 
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y)
         throw(BoundsError())
@@ -264,7 +264,7 @@ for (fname, elty) in ((:dgemv_,:Float64),
              #      DOUBLE PRECISION A(LDA,*),X(*),Y(*)
         function gemv!(trans::BlasChar, alpha::($elty), A::StridedVecOrMat{$elty}, X::StridedVector{$elty}, beta::($elty), Y::StridedVector{$elty})
             m,n = size(A,1),size(A,2)
-            length(X) == (trans == 'N' ? n : m) && length(Y) == (trans == 'N' ? m : n) || throw(DimensionMismatch(""))
+            length(X) == (trans == 'N' ? n : m) && length(Y) == (trans == 'N' ? m : n) || throw(DimensionMismatch())
             ccall(($(blasfunc(fname)), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -335,7 +335,7 @@ for (fname, elty) in ((:dsymv_,:Float64),
         function symv!(uplo::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, x::StridedVector{$elty},beta::($elty), y::StridedVector{$elty})
             m, n = size(A)
             if m != n throw(DimensionMismatch("Matrix A is $m by $n but must be square")) end
-            if m != length(x) || m != length(y) throw(DimensionMismatch("")) end
+            if m != length(x) || m != length(y) throw(DimensionMismatch()) end
             ccall(($(blasfunc(fname)), libblas), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -360,8 +360,8 @@ for (fname, elty) in ((:zhemv_,:Complex128),
     @eval begin
         function hemv!(uplo::Char, α::$elty, A::StridedMatrix{$elty}, x::StridedVector{$elty}, β::$elty, y::StridedVector{$elty})
             n = size(A, 2)
-            n == length(x) || throw(DimensionMismatch(""))
-            size(A, 1) == length(y) || throw(DimensionMismatch(""))
+            n == length(x) || throw(DimensionMismatch())
+            size(A, 1) == length(y) || throw(DimensionMismatch())
             lda = max(1, stride(A, 2))
             incx = stride(x, 1)
             incy = stride(y, 1)
@@ -481,8 +481,8 @@ for (fname, elty) in ((:dger_,:Float64),
     @eval begin
         function ger!(α::$elty, x::StridedVector{$elty}, y::StridedVector{$elty}, A::StridedMatrix{$elty})
             m, n = size(A)
-            m == length(x) || throw(DimensionMismatch(""))
-            n == length(y) || throw(DimensionMismatch(""))
+            m == length(x) || throw(DimensionMismatch())
+            n == length(y) || throw(DimensionMismatch())
             ccall(($(blasfunc(fname)), libblas), Void,
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
@@ -554,7 +554,7 @@ for (gemm, elty) in
             k = size(A, transA == 'N' ? 2 : 1)
             n = size(B, transB == 'N' ? 2 : 1)
             if m != size(C,1) || n != size(C,2)
-                throw(DimensionMismatch(""))
+                throw(DimensionMismatch())
             end
             ccall(($(blasfunc(gemm)), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -592,7 +592,7 @@ for (mfname, elty) in ((:dsymm_,:Float64),
         function symm!(side::BlasChar, uplo::BlasChar, alpha::($elty), A::StridedMatrix{$elty}, B::StridedMatrix{$elty}, beta::($elty), C::StridedMatrix{$elty})
             m, n = size(C)
             j = chksquare(A)
-            if j != (side == 'L' ? m : n) || size(B,2) != n throw(DimensionMismatch("")) end
+            if j != (side == 'L' ? m : n) || size(B,2) != n throw(DimensionMismatch()) end
             ccall(($(blasfunc(mfname)), libblas), Void,
                 (Ptr{UInt8}, Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},

@@ -256,9 +256,13 @@ type ObjectIdDict <: Associative{Any,Any}
 
     function ObjectIdDict(itr)
         d = ObjectIdDict()
-        for (k,v) in itr
-            d[k] = v
-        end
+        for (k,v) in itr; d[k] = v; end
+        d
+    end
+
+    function ObjectIdDict(pairs::Pair...)
+        d = ObjectIdDict()
+        for (k,v) in pairs; d[k] = v; end
         d
     end
 
@@ -336,7 +340,7 @@ type Dict{K,V} <: Associative{K,V}
     Dict(p::Pair) = setindex!(Dict{K,V}(), p.second, p.first)
     function Dict(ps::Pair...)
         h = Dict{K,V}()
-        sizehint(h, length(ps))
+        sizehint!(h, length(ps))
         for p in ps
             h[p.first] = p.second
         end
@@ -399,7 +403,7 @@ end
 
 function deserialize{K,V}(s, T::Type{Dict{K,V}})
     n = read(s, Int32)
-    t = T(); sizehint(t, n)
+    t = T(); sizehint!(t, n)
     for i = 1:n
         k = deserialize(s)
         v = deserialize(s)
@@ -414,7 +418,7 @@ isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
 isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
 isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
 
-function rehash{K,V}(h::Dict{K,V}, newsz)
+function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     olds = h.slots
     oldk = h.keys
     oldv = h.vals
@@ -450,7 +454,7 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
 
             if h.count != count0
                 # if items are removed by finalizers, retry
-                return rehash(h, newsz)
+                return rehash!(h, newsz)
             end
         end
     end
@@ -464,17 +468,17 @@ function rehash{K,V}(h::Dict{K,V}, newsz)
     return h
 end
 
-function sizehint(d::Dict, newsz)
+function sizehint!(d::Dict, newsz)
     oldsz = length(d.slots)
     if newsz <= oldsz
         # todo: shrink
-        # be careful: rehash() assumes everything fits. it was only designed
+        # be careful: rehash!() assumes everything fits. it was only designed
         # for growing.
         return d
     end
     # grow at least 25%
     newsz = max(newsz, (oldsz*5)>>2)
-    rehash(d, newsz)
+    rehash!(d, newsz)
 end
 
 function empty!{K,V}(h::Dict{K,V})
@@ -547,7 +551,7 @@ function ht_keyindex2{K,V}(h::Dict{K,V}, key)
 
     avail < 0 && return avail
 
-    rehash(h, h.count > 64000 ? sz*2 : sz*4)
+    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
 
     return ht_keyindex2(h, key)
 end
@@ -562,7 +566,7 @@ function _setindex!(h::Dict, v, key, index)
     # Rehash now if necessary
     if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
         # > 3/4 deleted or > 2/3 full
-        rehash(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
     end
 end
 

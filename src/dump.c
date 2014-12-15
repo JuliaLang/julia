@@ -4,12 +4,14 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-#ifdef _OS_WINDOWS_
-#include <malloc.h>
-#endif
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
+
+#ifndef _OS_WINDOWS_
+#include <dlfcn.h>
+#endif
 
 #ifdef __cplusplus
 extern "C" {
@@ -163,12 +165,17 @@ jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
-char *jl_sysimage_name = NULL;
+uint64_t jl_sysimage_base = 0;
+#ifdef _OS_WINDOWS_
+#include <dbghelp.h>
+#endif
 
 static void jl_load_sysimg_so(char *fname)
 {
+#ifndef _OS_WINDOWS_
+    Dl_info dlinfo;
+#endif
     // attempt to load the pre-compiled sysimg at fname
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
@@ -177,7 +184,7 @@ static void jl_load_sysimg_so(char *fname)
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-        if (strcmp(cpu_target,jl_cpu_string) != 0)
+        if (strcmp(cpu_target,jl_compileropts.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.\n");
         uint32_t info[4];
@@ -185,15 +192,23 @@ static void jl_load_sysimg_so(char *fname)
         if (strcmp(cpu_target, "native") == 0) {
             uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
             if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
+                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.\n");
         }
         else if (strcmp(cpu_target,"core2") == 0) {
             int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.");
+                         "Please delete or regenerate sys.{so,dll,dylib}.\n");
         }
-        jl_sysimage_name = strdup(fname);
+#ifdef _OS_WINDOWS_
+        jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
+#else
+        if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
+            jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
+        } else {
+            jl_sysimage_base = 0;
+        }
+#endif
     }
     else {
         sysimg_gvars = 0;
@@ -436,8 +451,6 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     jl_serialize_value(s, m->parent);
     if (ref_only)
         return;
-    // set on every startup; don't save value
-    jl_sym_t *jhsym = jl_symbol("JULIA_HOME");
     size_t i;
     void **table = m->bindings.table;
     for(i=1; i < m->bindings.size; i+=2) {
@@ -445,12 +458,7 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->owner == m || m != jl_main_module) {
                 jl_serialize_value(s, b->name);
-                if (table[i-1] == jhsym && m == jl_core_module) {
-                    jl_serialize_value(s, NULL);
-                }
-                else {
-                    jl_serialize_value(s, b->value);
-                }
+                jl_serialize_value(s, b->value);
                 jl_serialize_value(s, b->type);
                 jl_serialize_value(s, b->owner);
                 write_int8(s, (b->constp<<2) | (b->exportp<<1) | (b->imported));
@@ -1289,7 +1297,7 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT void jl_save_system_image(char *fname)
+DLLEXPORT void jl_save_system_image(const char *fname)
 {
     jl_gc_collect();
     jl_gc_collect();
@@ -1321,10 +1329,8 @@ DLLEXPORT void jl_save_system_image(char *fname)
     // save module initialization order
     if (jl_module_init_order != NULL) {
         for(i=0; i < jl_array_len(jl_module_init_order); i++) {
-            // NULL out any modules that weren't saved
-            jl_value_t *mod = jl_cellref(jl_module_init_order, i);
-            if (ptrhash_get(&backref_table, mod) == HT_NOTFOUND)
-                jl_cellset(jl_module_init_order, i, NULL);
+            // verify that all these modules were saved
+            assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
     jl_serialize_value(&f, jl_module_init_order);
@@ -1343,12 +1349,37 @@ extern void jl_get_builtin_hooks(void);
 extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks();
 
+// Takes in a path of the form "usr/lib/julia/sys.ji", such as passed in to jl_restore_system_image()
 DLLEXPORT
-void jl_restore_system_image(char *fname)
+const char * jl_get_system_image_cpu_target(const char *fname)
+{
+    // If passed NULL, don't even bother
+    if (!fname)
+        return NULL;
+
+    // First, get "sys" from "sys.ji"
+    char *fname_shlib = (char*)alloca(strlen(fname));
+    strcpy(fname_shlib, fname);
+    char *fname_shlib_dot = strrchr(fname_shlib, '.');
+    if (fname_shlib_dot != NULL)
+        *fname_shlib_dot = 0;
+
+    // Get handle to sys.so
+    uv_lib_t * sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+
+    // Return jl_sysimg_cpu_target if we can
+    if (sysimg_handle)
+        return (const char *)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_target");
+
+    // If something goes wrong, return NULL
+    return NULL;
+}
+
+DLLEXPORT
+void jl_restore_system_image(const char *fname)
 {
     ios_t f;
-    char *fpath = fname;
-    if (ios_file(&f, fpath, 1, 0, 0, 0) == NULL) {
+    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
         JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
         exit(1);
     }
@@ -1416,14 +1447,10 @@ void jl_restore_system_image(char *fname)
     //ios_printf(ios_stderr, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
     ios_close(&f);
-    if (fpath != fname) free(fpath);
 
 #ifdef JL_GC_MARKSWEEP
     if (en) jl_gc_enable();
 #endif
-    // restore the value of our "magic" JULIA_HOME variable/constant
-    jl_get_binding_wr(jl_core_module, jl_symbol("JULIA_HOME"))->value =
-        jl_cstr_to_string(julia_home);
     mode = last_mode;
     jl_update_all_fptrs();
 }
@@ -1527,7 +1554,7 @@ jl_value_t *jl_uncompress_ast(jl_lambda_info_t *li, jl_value_t *data)
 }
 
 DLLEXPORT
-int jl_save_new_module(char *fname, jl_module_t *mod)
+int jl_save_new_module(const char *fname, jl_module_t *mod)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
@@ -1567,7 +1594,7 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method);
 
 DLLEXPORT
-jl_module_t *jl_restore_new_module(char *fname)
+jl_module_t *jl_restore_new_module(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {

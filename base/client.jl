@@ -37,7 +37,7 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_cmd(cmd)
+function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
@@ -50,15 +50,24 @@ function repl_cmd(cmd)
     if isempty(cmd.exec)
         error("no cmd to execute")
     elseif cmd.exec[1] == "cd"
+        new_oldpwd = pwd()
         if length(cmd.exec) > 2
             error("cd method only takes one argument")
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
-            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            if dir == "-"
+                if !haskey(ENV, "OLDPWD")
+                    error("cd: OLDPWD not set")
+                end
+                cd(ENV["OLDPWD"])
+            else
+                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            end
         else
             cd()
         end
-        println(pwd())
+        ENV["OLDPWD"] = new_oldpwd
+        println(out, pwd())
     else
         run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
@@ -128,6 +137,9 @@ function repl_callback(ast::ANY, show_value)
 end
 
 _repl_start = Condition()
+
+syntax_deprecation_warnings(warn::Bool) =
+    bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
 
 function parse_input_line(s::AbstractString)
     # s = bytestring(s)
@@ -356,6 +368,7 @@ function load_machine_file(path::AbstractString)
 end
 
 function early_init()
+    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
     Sys.init_sysinfo()
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from stating to many threads, unless/until specifically requested
@@ -372,13 +385,10 @@ import .Terminals
 import .REPL
 
 function _start()
-    early_init()
-
     try
         init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
-        init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
@@ -412,32 +422,25 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readall(STDIN)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)
                         eval_user_input(parse_input_line(STDIN), true)
                     end
                 end
-                if have_color
-                    print(color_normal)
-                end
-                quit()
+            else
+                REPL.run_repl(active_repl)
             end
-            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())
         println()
         exit(1)
     end
-    if is_interactive
-        if have_color
-            print(color_normal)
-        end
-        println()
+    if is_interactive && have_color
+        print(color_normal)
     end
-    ccall(:uv_atexit_hook, Void, ())
 end
 
 const atexit_hooks = []

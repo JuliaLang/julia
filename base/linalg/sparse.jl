@@ -11,8 +11,8 @@ end
 (*){TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{1}) = invoke(*, (SparseMatrixCSC, AbstractVector), A, X)
 # In matrix-vector multiplication, the correct orientation of the vector is assumed.
 function A_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
-    A.n == length(x) || throw(DimensionMismatch(""))
-    A.m == length(y) || throw(DimensionMismatch(""))
+    A.n == length(x) || throw(DimensionMismatch())
+    A.m == length(y) || throw(DimensionMismatch())
     if β != 1
         β != 0 ? scale!(y,β) : fill!(y,zero(eltype(y)))
     end
@@ -34,8 +34,8 @@ function *{TA,S,Tx}(A::SparseMatrixCSC{TA,S}, x::AbstractVector{Tx})
 end
 
 function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
-    A.n == length(y) || throw(DimensionMismatch(""))
-    A.m == length(x) || throw(DimensionMismatch(""))
+    A.n == length(y) || throw(DimensionMismatch())
+    A.m == length(x) || throw(DimensionMismatch())
     nzv = A.nzval
     rv = A.rowval
     zro = zero(eltype(y))
@@ -59,8 +59,8 @@ function Ac_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number
 end
 Ac_mul_B!(y::AbstractVector, A::SparseMatrixCSC, x::AbstractVector) = Ac_mul_B!(one(eltype(x)), A, x, zero(eltype(y)), y)
 function At_mul_B!(α::Number, A::SparseMatrixCSC, x::AbstractVector, β::Number, y::AbstractVector)
-    A.n == length(y) || throw(DimensionMismatch(""))
-    A.m == length(x) || throw(DimensionMismatch(""))
+    A.n == length(y) || throw(DimensionMismatch())
+    A.m == length(x) || throw(DimensionMismatch())
     nzv = A.nzval
     rv = A.rowval
     zro = zero(eltype(y))
@@ -96,7 +96,7 @@ end
 # In vector-matrix multiplication, the correct orientation of the vector is assumed.
 # XXX: this is wrong (i.e. not what Arrays would do)!!
 function *{T1,T2}(X::AbstractVector{T1}, A::SparseMatrixCSC{T2})
-    A.m==length(X) || throw(DimensionMismatch(""))
+    A.m==length(X) || throw(DimensionMismatch())
     Y = zeros(promote_type(T1,T2), A.n)
     nzv = A.nzval
     rv = A.rowval
@@ -109,7 +109,7 @@ end
 *{TvA,TiA}(A::SparseMatrixCSC{TvA,TiA}, X::BitArray{2}) = invoke(*, (SparseMatrixCSC, AbstractMatrix), A, X)
 function (*){TvA,TiA,TX}(A::SparseMatrixCSC{TvA,TiA}, X::AbstractMatrix{TX})
     mX, nX = size(X)
-    A.n==mX || throw(DimensionMismatch(""))
+    A.n==mX || throw(DimensionMismatch())
     Y = zeros(promote_type(TvA,TX), A.m, nX)
     nzv = A.nzval
     rv = A.rowval
@@ -129,7 +129,7 @@ end
 *{TvA,TiA}(X::Triangular, A::SparseMatrixCSC{TvA,TiA}) = full(X)*A
 function *{TX,TvA,TiA}(X::AbstractMatrix{TX}, A::SparseMatrixCSC{TvA,TiA})
     mX, nX = size(X)
-    nX == A.m || throw(DimensionMismatch(""))
+    nX == A.m || throw(DimensionMismatch())
     Y = zeros(promote_type(TX,TvA), mX, A.n)
     for multivec_row=1:mX, col=1:A.n, k=A.colptr[col]:(A.colptr[col+1]-1)
         Y[multivec_row, col] += X[multivec_row, A.rowval[k]] * A.nzval[k]
@@ -146,7 +146,7 @@ function spmatmul{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixCSC{Tv,Ti};
                          sortindices::Symbol = :sortcols)
     mA, nA = size(A)
     mB, nB = size(B)
-    nA==mB || throw(DimensionMismatch(""))
+    nA==mB || throw(DimensionMismatch())
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrB = B.colptr; rowvalB = B.rowval; nzvalB = B.nzval
@@ -596,7 +596,7 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 # multiply by diagonal matrix as vector
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
-    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
+    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     numnz = nnz(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)
@@ -609,7 +609,7 @@ end
 
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
-    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
+    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     numnz = nnz(A)
     C.colptr = convert(Array{Ti}, A.colptr)
     C.rowval = convert(Array{Ti}, A.rowval)

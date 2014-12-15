@@ -5,11 +5,12 @@ print_underestimates = false
 
 ######## Utilities ###########
 
-# Generate an array similar to A[indx1, indx2, ...], but only call getindex
-# with scalar-valued indexes. This will be safe even after getindex starts calling sub/slice.
+# Generate an array similar to A[indx1, indx2, ...], but only call
+# getindex with scalar-valued indexes. This will be safe even after
+# getindex starts calling sub/slice.
 
-# The "nodrop" variant is similar to current getindex/sub, except it doesn't drop any dimensions
-# (not even trailing ones)
+# The "nodrop" variant is similar to current getindex/sub, except it
+# doesn't drop any dimensions (not even trailing ones)
 function Agen_nodrop(A::AbstractArray, I...)
     irep = replace_colon(A, I)
     _Agen(A, irep...)
@@ -51,9 +52,11 @@ function copy_to_array(A::AbstractArray)
     copy!(Ac, A)
 end
 
-# Discover the highest dimension along which the values in A are separated by a single increment.
-# If A was extracted via getindex from reshape(1:N, ...), this is equivalent to finding the
-# highest dimension of the SubArray consistent with a single stride in the parent array.
+# Discover the highest dimension along which the values in A are
+# separated by a single increment.  If A was extracted via getindex
+# from reshape(1:N, ...), this is equivalent to finding the highest
+# dimension of the SubArray consistent with a single stride in the
+# parent array.
 function single_stride_dim(A::Array)
     ld = 0
     while ld < ndims(A)
@@ -207,6 +210,9 @@ function runtests(A::Array, I...)
     # sub
     S = sub(A, I...)
     getLD(S) == ldc || err_li(S, ldc)
+    if Base.iscontiguous(S)
+        @test S.stride1 == 1
+    end
     test_linear(S, C)
     test_cartesian(S, C)
     test_mixed(S, C)
@@ -368,4 +374,3 @@ msk[2,1] = false
 sA = sub(A, :, :, 1)
 sA[msk] = 1.0
 @test sA[msk] == ones(countnz(msk))
-

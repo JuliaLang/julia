@@ -59,6 +59,18 @@ a = reshape(b, (2, 2, 2, 2, 2))
 @test a[2,1,2,2,1] == b[14]
 @test a[2,2,2,2,2] == b[end]
 
+a = rand(1, 1, 8, 8, 1)
+@test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
+@test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
+@test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
+@test_throws ErrorException squeeze(a, 0)
+@test_throws ErrorException squeeze(a, (1, 1))
+@test_throws ErrorException squeeze(a, (1, 2, 1))
+@test_throws ErrorException squeeze(a, (1, 1, 2))
+@test_throws ErrorException squeeze(a, 3)
+@test_throws ErrorException squeeze(a, 4)
+@test_throws ErrorException squeeze(a, 6)
+
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
 @test A[2:6] == [2:6]
@@ -107,7 +119,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, Range1{Int}))
+rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # get
@@ -772,13 +784,13 @@ A = [NaN]; B = [NaN]
 # Inferred types
 Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
-    #indexing with (Range1, Range1, Range1)
-    args = ntuple(N, d->Range1{Int})
+    #indexing with (UnitRange, UnitRange, UnitRange)
+    args = ntuple(N, d->UnitRange{Int})
     @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
     @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
     @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
-    # Indexing with (Range1, Range1, Float64)
-    args = ntuple(N, d->d<N ? Range1{Int} : Float64)
+    # Indexing with (UnitRange, UnitRange, Float64)
+    args = ntuple(N, d->d<N ? UnitRange{Int} : Float64)
     N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N-1}]
     N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == [BitArray{N-1}]
     N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
@@ -812,6 +824,13 @@ function i7197()
     ind2sub(size(S), 5)
 end
 @test i7197() == (2,2)
+
+# PR #9256
+function pr9256()
+    m = [1 2 3; 4 5 6; 7 8 9]
+    ind2sub(m, 6)
+end
+@test pr9256() == (3,2)
 
 # PR #8622 and general indexin test
 function pr8622()
@@ -898,3 +917,16 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
+#6828 - size of specific dimensions
+a = Array(Float64, 10)
+@test size(a) == (10,)
+@test size(a, 1) == 10
+@test size(a,2,1) == (1,10)
+a = Array(Float64, 2,3)
+@test size(a) == (2,3)
+@test size(a,4,3,2,1) == (1,1,3,2)
+@test size(a,1,2) == (2,3)
+a = Array(Float64, 9,8,7,6,5,4,3,2,1)
+@test size(a,1,1) == (9,9)
+@test size(a,4) == 6
+@test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)

@@ -9,19 +9,42 @@ cd `dirname "$0"`/../..
 # Stop on error
 set -e
 
+# Fail fast on AppVeyor if there are newer pending commits in this PR
+curlflags="curl --retry 10 -k -L -y 5"
+if [ -n "$APPVEYOR_PULL_REQUEST_NUMBER" ]; then
+  # download a handy cli json parser
+  if ! [ -e jq.exe ]; then
+    $curlflags -O http://stedolan.github.io/jq/download/win64/jq.exe
+  fi
+  av_api_url="https://ci.appveyor.com/api/projects/StefanKarpinski/julia/history?recordsNumber=50"
+  query=".builds | map(select(.pullRequestId == \"$APPVEYOR_PULL_REQUEST_NUMBER\"))[0].buildNumber"
+  latestbuild="$(curl $av_api_url | ./jq "$query")"
+  if [ -n "$latestbuild" -a "$latestbuild" != "null" -a "$latestbuild" != "$APPVEYOR_BUILD_NUMBER" ]; then
+    echo "There are newer queued builds for this pull request, failing early."
+    exit 1
+  fi
+fi
+
 # If ARCH environment variable not set, choose based on uname -m
 if [ -z "$ARCH" -a -z "$XC_HOST" ]; then
   export ARCH=`uname -m`
 elif [ -z "$ARCH" ]; then
   ARCH=`echo $XC_HOST | sed 's/-w64-mingw32//'`
 fi
-if [ "$ARCH" = x86_64 ]; then
-  bits=64
-else
-  bits=32
-fi
+
 echo "" > Make.user
 echo "" > get-deps.log
+# set MARCH for consistency with how binaries get built
+if [ "$ARCH" = x86_64 ]; then
+  bits=64
+  archsuffix=64
+  echo "override MARCH = x86-64" >> Make.user
+else
+  bits=32
+  archsuffix=86
+  echo "override MARCH = i686" >> Make.user
+  echo "override JULIA_CPU_TARGET = pentium4" >> Make.user
+fi
 
 # Set XC_HOST if in Cygwin or Linux
 case $(uname) in
@@ -54,13 +77,11 @@ case $(uname) in
     ;;
 esac
 
-curlflags="curl --retry 10 -k -L -y 5"
-
 # Download most recent Julia binary for dependencies
 if ! [ -e julia-installer.exe ]; then
-  f=julia-nightly-win$bits.exe
+  f=julia-latest-win$bits.exe
   echo "Downloading $f"
-  $curlflags -o $f https://status.julialang.org/download/win$bits
+  $curlflags -O https://s3.amazonaws.com/julianightlies/bin/winnt/x$archsuffix/$f
   echo "Extracting $f"
   $SEVENZIP x -y $f >> get-deps.log
 fi
@@ -99,11 +120,6 @@ if [ -z "$USEMSVC" ]; then
 else
   echo "override USEMSVC = 1" >> Make.user
   echo "override ARCH = $ARCH" >> Make.user
-  if [ $ARCH = x86_64 ]; then
-    echo "override MARCH = x86-64" >> Make.user
-  else
-    echo "override MARCH = $ARCH" >> Make.user
-  fi
   echo "override XC_HOST = " >> Make.user
   export CC="$PWD/deps/libuv/compile cl -nologo -MD -Z7"
   export AR="$PWD/deps/libuv/ar-lib lib"
@@ -141,7 +157,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in LLVM ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
@@ -167,6 +183,7 @@ if [ -n "$USEMSVC" ]; then
 
   # Openlibm doesn't build well with MSVC right now
   echo 'USE_SYSTEM_OPENLIBM = 1' >> Make.user
+  echo 'USE_SYSTEM_SUITESPARSE = 1' >> Make.user
   # Since we don't have a static library for openlibm
   echo 'override UNTRUSTED_SYSTEM_LIBM = 0' >> Make.user
 
@@ -176,6 +193,12 @@ if [ -n "$USEMSVC" ]; then
   echo 'override CC += -TP' >> Make.user
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
+  echo 'override STAGE3_DEPS += suitesparse-wrapper' >> Make.user
+
+  # hack so all of suitesparse doesn't rebuild
+  make -C deps SuiteSparse-4.3.1/Makefile
+  touch deps/SuiteSparse-4.3.1/UMFPACK/Lib/libumfpack.a
+  touch usr/bin/libspqr.dll
 fi
 
 make -j2

@@ -30,6 +30,9 @@ macro chkuplo()
 Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
 
+subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
+subsetrows(X::AbstractMatrix, Y::AbstractArray, k) = Y[1:k, :]
+
 # (GB) general banded matrices, LU decomposition and solver
 for (gbtrf, gbtrs, elty) in
     ((:dgbtrf_,:dgbtrs_,:Float64),
@@ -525,7 +528,7 @@ for (gels, gesv, getrs, getri, elty) in
                 end
                 x
             end for i=1:size(B,2)]
-            F, isa(B, Vector) ? B[1:k] : B[1:k,:], ssr
+            F, subsetrows(B, B, k), ssr
         end
         # SUBROUTINE DGESV( N, NRHS, A, LDA, IPIV, B, LDB, INFO )
         # *     .. Scalar Arguments ..
@@ -746,7 +749,7 @@ for (gelsd, gelsy, elty) in
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
 
 #       SUBROUTINE DGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -789,7 +792,7 @@ for (gelsd, gelsy, elty) in
                 end
             end
             @lapackerror
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
     end
 end
@@ -836,7 +839,7 @@ for (gelsd, gelsy, elty, relty) in
                     iwork = Array(BlasInt, iwork[1])
                 end
             end
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
 
 #       SUBROUTINE ZGELSY( M, N, NRHS, A, LDA, B, LDB, JPVT, RCOND, RANK,
@@ -880,7 +883,7 @@ for (gelsd, gelsy, elty, relty) in
                 end
             end
             @lapackerror
-            isa(B, Vector) ? newB[1:n] : newB[1:n,:], rnk[1]
+            subsetrows(B, newB, n), rnk[1]
         end
     end
 end
@@ -1111,7 +1114,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
         function ggsvd!(jobu::BlasChar, jobv::BlasChar, jobq::BlasChar, A::Matrix{$elty}, B::Matrix{$elty})
             chkstride1(A, B)
             m, n = size(A)
-            if size(B, 2) != n; throw(DimensionMismatch("")); end
+            if size(B, 2) != n; throw(DimensionMismatch()); end
             p = size(B, 1)
             k = Array(BlasInt, 1)
             l = Array(BlasInt, 1)
@@ -1600,8 +1603,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
             nA    = size(A, 2)
             k     = length(tau)
-            if side == 'L' && m != nA throw(DimensionMismatch("")) end
-            if side == 'R' && n != nA throw(DimensionMismatch("")) end
+            if side == 'L' && m != nA throw(DimensionMismatch()) end
+            if side == 'R' && n != nA throw(DimensionMismatch()) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1634,8 +1637,8 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             m, n = ndims(C)==2 ? size(C) : (size(C, 1), 1)
             mA    = size(A, 1)
             k     = length(tau)
-            if side == 'L' && m != mA throw(DimensionMismatch("")) end
-            if side == 'R' && n != mA throw(DimensionMismatch("")) end
+            if side == 'L' && m != mA throw(DimensionMismatch()) end
+            if side == 'R' && n != mA throw(DimensionMismatch()) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1665,13 +1668,13 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             if k == 0 return C end
             if side == 'L'
                 0 <= k <= m || throw(DimensionMismatch("Wrong value for k"))
-                m == size(V,1) || throw(DimensionMismatch(""))
+                m == size(V,1) || throw(DimensionMismatch())
                 ldv = stride(V,2)
                 ldv >= max(1, m) || throw(DimensionMismatch("Q and C don't fit"))
                 wss = n*k
             elseif side == 'R'
                 0 <= k <= n || throw(DimensionMismatch("Wrong value for k"))
-                n == size(V,1) || throw(DimensionMismatch(""))
+                n == size(V,1) || throw(DimensionMismatch())
                 ldv = stride(V,2)
                 ldv >= max(1, n) || throw(DimensionMismatch("stride error"))
                 wss = m*k
@@ -1942,7 +1945,7 @@ for (trtri, trtrs, elty) in
             chkstride1(A)
             n = chksquare(A)
             @chkuplo
-            size(B,1)==n || throw(DimensionMismatch(""))
+            size(B,1)==n || throw(DimensionMismatch())
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(trtrs)), liblapack), Void,
                   (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
@@ -2056,7 +2059,7 @@ for (trcon, trevc, trrfs, elty) in
             @chkuplo
             n = size(A,2)
             nrhs = size(B,2)
-            nrhs == size(X,2) || throw(DimensionMismatch(""))
+            nrhs == size(X,2) || throw(DimensionMismatch())
             work = Array($elty, 3n)
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
@@ -2175,7 +2178,7 @@ for (trcon, trevc, trrfs, elty, relty) in
             @chkuplo
             n=size(A,2)
             nrhs=size(B,2)
-            nrhs==size(X,2) || throw(DimensionMismatch(""))
+            nrhs==size(X,2) || throw(DimensionMismatch())
             work=Array($elty, 2n)
             rwork=Array($relty, n)
             info=Array(BlasInt, 1)
@@ -3333,7 +3336,7 @@ for (orghr, elty) in
 #       DOUBLE PRECISION   A( LDA, * ), TAU( * ), WORK( * )
             chkstride1(A)
             n = chksquare(A)
-            if n - length(tau) != 1 throw(DimensionMismatch("")) end
+            if n - length(tau) != 1 throw(DimensionMismatch()) end
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
@@ -3739,7 +3742,7 @@ for (fn, elty) in ((:dtfsm_, :Float64),
         function pftrs!(transr::Char, side::Char, uplo::Char, trans::Char, diag::Char, alpha::Real, A::StridedVector{$elty}, B::StridedMatrix{$elty})
             chkstride1(B)
             m, n = size(B)
-            if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch("")) end
+            if int(div(sqrt(8length(A)), 2)) != m throw(DimensionMismatch()) end
             ldb = max(1, stride(B, 2))
             ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar},
@@ -3830,7 +3833,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
             lda = max(1, stride(A, 2))
             ldb = max(1, stride(B, 2))
             m1, n1 = size(C)
-            if m != m1 || n != n1 throw(DimensionMismatch("")) end
+            if m != m1 || n != n1 throw(DimensionMismatch()) end
             ldc = max(1, stride(C, 2))
 
             scale = Array($relty, 1)
