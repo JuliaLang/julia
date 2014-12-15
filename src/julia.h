@@ -868,6 +868,7 @@ DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char 
 DLLEXPORT void jl_atexit_hook(void);
 DLLEXPORT void NORETURN jl_exit(int status);
 
+DLLEXPORT const char * jl_get_system_image_cpu_target(const char *fname);
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
 DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);
@@ -1320,6 +1321,7 @@ typedef struct {
     const char *julia_bin;
     const char *build_path;
     const char *image_file;
+    const char *cpu_target;
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;
