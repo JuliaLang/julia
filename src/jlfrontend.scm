@@ -187,6 +187,12 @@
   (set! *filename-stack* (cdr *filename-stack*))
   (set! *ts-stack* (cdr *ts-stack*)))
 
+(define *depwarn* #t)
+(define (jl-parser-depwarn w)
+  (let ((prev *depwarn*))
+    (set! *depwarn* (eq? w #t))
+    prev))
+
 (define (jl-parser-next)
   (let* ((err (parser-wrap
 	       (lambda ()
