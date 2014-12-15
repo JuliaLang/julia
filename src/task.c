@@ -344,7 +344,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             void *stackbase = jl_stackbase - 0x10;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
-            stackbase -= 0x20;
+            stackbase -= 0x30;
 #endif
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
@@ -358,7 +358,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
                 " push %%ebp;\n" // instead of ESP
                 " jmp %P1;\n" // call stack_task with fake stack frame
                 " ud2"
-                : : "r"(stackbase), "i"(start_task) : "memory" );
+                : : "r" (stackbase), ""(&start_task) : "memory" );
 #else
 #error ASM_COPY_STACKS not supported on this cpu architecture
 #endif
