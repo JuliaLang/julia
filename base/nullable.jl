@@ -19,6 +19,8 @@ function convert{T}(::Type{Nullable{T}}, x::Nullable)
     return isnull(x) ? Nullable{T}() : Nullable(convert(T, get(x)))
 end
 
+convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
+
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull
         @printf(io, "Nullable{%s}()", repr(T))
