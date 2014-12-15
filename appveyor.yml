@@ -43,4 +43,5 @@ build_script:
   - sh --login /c/projects/julia/contrib/windows/msys_build.sh
 
 test_script:
+  - usr\bin\julia -e "versioninfo()"
   - cd test && ..\usr\bin\julia runtests.jl all
