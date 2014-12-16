@@ -30,7 +30,7 @@ ifeq ($(USE_LLVM_SHLIB),1)
 LLVMLINK = $(call exec,$(LLVM_CONFIG) --ldflags) -lLLVM-$(call exec,$(LLVM_CONFIG) --version)
 endif
 
-COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBMOJIBAKE) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) $(OSLIBS)
+COMMON_LIBS = -L$(build_shlibdir) -L$(build_libdir) $(LIBUV) $(LIBMOJIBAKE) $(NO_WHOLE_ARCHIVE) $(LLVMLINK) -lffi $(OSLIBS)
 DEBUG_LIBS = $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp-debug.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport-debug.a $(COMMON_LIBS)
 RELEASE_LIBS = $(WHOLE_ARCHIVE) $(BUILDDIR)/flisp/libflisp.a $(WHOLE_ARCHIVE) $(BUILDDIR)/support/libsupport.a $(COMMON_LIBS)
 
@@ -58,9 +58,9 @@ $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.o: %.cpp $(HEADERS) llvm-version.h $(LLVM_CONFIG) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) llvm-version.h $(LLVM_CONFIG) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/flisp/libflisp.a

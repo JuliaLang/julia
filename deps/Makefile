@@ -31,7 +31,7 @@ endif
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
-#autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
+#autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv libffi
 #custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
 #CMake libs: libgit2
 
@@ -79,6 +79,10 @@ endif
 
 ifeq ($(USE_SYSTEM_DSFMT), 0)
 STAGE1_DEPS += dsfmt
+endif
+
+ifeq ($(USE_SYSTEM_FFI), 0)
+STAGE1_DEPS += libffi
 endif
 
 ifeq ($(USE_SYSTEM_LLVM), 0)
@@ -173,6 +177,49 @@ $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
 $(build_prefix): $(DIRS)
 
+
+## libffi
+
+LIBFFI_OBJ_SOURCE = libffi-$(LIBFFI_VER)/build/.libs/libffi.$(SHLIB_EXT)
+LIBFFI_OBJ_TARGET = $(build_shlibdir)/libffi.$(SHLIB_EXT)
+
+LIBFFI_OPTS = --enable-portable-binary
+
+libffi-$(LIBFFI_VER).tar.gz:
+	$(JLDOWNLOAD) $@ ftp://sourceware.org/pub/libffi/libffi-$(LIBFFI_VER).tar.gz
+libffi-$(LIBFFI_VER)/configure: libffi-$(LIBFFI_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+libffi-$(LIBFFI_VER)/build/config.status: libffi-$(LIBFFI_VER)/configure
+	mkdir -p libffi-$(LIBFFI_VER)/build
+	cd libffi-$(LIBFFI_VER)/build/ && \
+	../configure $(CONFIGURE_COMMON) $(LIBFFI_OPTS)
+	touch -c $@
+$(LIBFFI_OBJ_SOURCE): libffi-$(LIBFFI_VER)/build/config.status
+	$(MAKE) -C libffi-$(LIBFFI_VER)/build
+	touch -c $@
+libffi-$(LIBFFI_VER)/build/checked: $(LIBFFI_OBJ_SOURCE)
+ifeq ($(OS),$(BUILD_OS))
+	$(MAKE) -C libffi-$(LIBGIT2_VER)/build test
+endif
+	echo 1 > $@
+$(LIBFFI_OBJ_TARGET): $(LIBFFI_OBJ_SOURCE) | $(build_shlibdir)
+	$(MAKE) -C libffi-$(LIBFFI_VER)/build $(MAKE_COMMON) install
+
+clean-libffi:
+	-rm -rf libffi-$(LIBFFI_VER)/build/
+	-rm -f $(LIBFFI_OBJ_TARGET)
+distclean-libffi:
+	-rm -rf libffi-$(LIBFFI_VER).tar.gz libffi-$(LIBFFI_VER)
+
+get-libffi: libffi-$(LIBFFI_VER).tar.gz
+configure-libffi: libffi-$(LIBFFI_VER)/build/config.status
+compile-libffi: $(LIBFFI_OBJ_SOURCE)
+check-libffi: libffi-$(LIBFFI_VER)/build/checked
+install-libffi: $(LIBFFI_OBJ_TARGET)
+
+
 ## LLVM ##
 LLVM_GIT_URL_BASE ?= http://llvm.org/git
 LLVM_GIT_URL_LLVM ?= $(LLVM_GIT_URL_BASE)/llvm.git
@@ -248,7 +295,7 @@ LLVM_CXXFLAGS = $(CXXFLAGS)
 LLVM_CPPFLAGS = $(CPPFLAGS)
 LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
-LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
+LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs --enable-libffi
 LLVM_MFLAGS =
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
@@ -500,7 +547,7 @@ endif
 endif
 	touch -c $@
 
-llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
+llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure $(LIBFFI_OBJ_TARGET) | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \

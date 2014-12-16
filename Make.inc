@@ -18,6 +18,7 @@ OPENBLAS_USE_THREAD=1
 
 # Use libraries available on the system instead of building them
 USE_SYSTEM_LLVM=0
+USE_SYSTEM_LIBFFI=0
 USE_SYSTEM_LIBUNWIND=0
 USE_SYSTEM_PCRE=0
 USE_SYSTEM_LIBM=0

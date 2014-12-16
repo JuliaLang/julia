@@ -21,6 +21,7 @@
 
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
+#include <llvm/ExecutionEngine/GenericValue.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/PassManager.h>
 #include <llvm/Target/TargetLibraryInfo.h>
@@ -44,10 +45,11 @@
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
 #include <llvm/ADT/DenseMapInfo.h>
 #include <llvm/Object/ObjectFile.h>
+#elif defined(USE_INTERP)
+#include <llvm/ExecutionEngine/Interpreter.h>
 #else
 #include <llvm/ExecutionEngine/JIT.h>
 #include <llvm/ExecutionEngine/JITMemoryManager.h>
-#include <llvm/ExecutionEngine/Interpreter.h>
 #endif
 #ifdef LLVM33
 #include <llvm/IR/DerivedTypes.h>
@@ -636,6 +638,19 @@ static void jl_setup_module(Module *m, bool add)
     }
 }
 
+
+extern "C" DLLEXPORT
+jl_value_t* jl_llvm_interpret(jl_function_t *f, jl_value_t **args, uint32_t nargs) {
+    GenericValue largs[3] = {
+        GenericValue(f), GenericValue(args), GenericValue()
+    };
+    largs[2].IntVal = APInt(32u, (uint64_t)nargs, false);
+    std::vector<GenericValue> ActualArgs (largs, largs + sizeof(largs) / sizeof(GenericValue) );
+    GenericValue ret = jl_ExecutionEngine->runFunction((Function*)f->linfo->functionObject, ActualArgs);
+    return (jl_value_t*)ret.PointerVal;
+}
+
+
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
     // objective: assign li->fptr
@@ -643,7 +658,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     assert(li->functionObject);
     if (li->fptr == &jl_trampoline) {
         JL_SIGATOMIC_BEGIN();
-        #ifdef USE_MCJIT
+#ifdef USE_MCJIT
         if (imaging_mode) {
             // Copy the function out of the shadow module
             Module *m = new Module("julia", jl_LLVMContext);
@@ -653,12 +668,14 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
             if (li->cFunctionObject != NULL)
                 li->cFunctionObject = MapValue((Function*)li->cFunctionObject,mover.VMap,RF_None,NULL,&mover);
         }
-        #endif
+#endif
 
         Function *llvmf = (Function*)li->functionObject;
-
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+#elif defined(USE_INTERP)
+        (void)llvmf;
+        li->fptr = (jl_fptr_t)jl_llvm_interpret;
 #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
@@ -671,14 +688,17 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 #endif
         }
         JL_SIGATOMIC_END();
+#ifndef USE_INTERP
         if (!imaging_mode) {
             llvmf->deleteBody();
             if (li->cFunctionObject != NULL)
                 ((Function*)li->cFunctionObject)->deleteBody();
         }
+#endif
     }
     f->fptr = li->fptr;
 }
+
 
 extern "C" void jl_compile(jl_function_t *f)
 {
@@ -4745,7 +4765,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createAddressSanitizerFunctionPass());
 #   endif
 #endif
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#if defined(LLVM33) && !defined(USE_INTERP)
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
     FPM->add(createTypeBasedAliasAnalysisPass());
@@ -4921,7 +4941,11 @@ extern "C" void jl_init_codegen(void)
     EngineBuilder *eb = new EngineBuilder(engine_module);
 #endif
     std::string ErrorStr;
+#ifdef USE_INTERP
+    eb  ->setEngineKind(EngineKind::Interpreter)
+#else
     eb  ->setEngineKind(EngineKind::JIT)
+#endif
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #if defined(USE_MCJIT)
         .setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
@@ -4933,7 +4957,7 @@ extern "C" void jl_init_codegen(void)
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
 #endif
-    ;
+        .setErrorStr(&ErrorStr);
     Triple TheTriple(sys::getProcessTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
@@ -4961,7 +4985,7 @@ extern "C" void jl_init_codegen(void)
         JL_PRINTF(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
         exit(1);
     }
-#ifdef LLVM35
+#if defined(LLVM35) && !defined(USE_INTERP)
     jl_ExecutionEngine->setProcessAllSections(true);
 #endif
 #endif // LLVM VERSION

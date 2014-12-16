@@ -982,7 +982,6 @@ STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
 }
 
 // calling into julia ---------------------------------------------------------
-
 STATIC_INLINE
 jl_value_t *jl_apply(jl_function_t *f, jl_value_t **args, uint32_t nargs)
 {
