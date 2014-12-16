@@ -224,6 +224,7 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef _OS_WINDOWS_
+BOOL (*pSetThreadStackGuarantee)(PULONG);
 void restore_signals(void)
 {
     SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
@@ -232,19 +233,23 @@ void restore_signals(void)
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
     assert(excpt != NULL);
-    CONTEXT Ctx = *ctxThread;
-    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, &Ctx) : 0;
-    jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
-    ctxThread->Rip = (DWORD64)&jl_rethrow;
-    ctxThread->Rsp &= (DWORD64)-16;
-    ctxThread->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
+    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
-    ctxThread->Eip = (DWORD)&jl_rethrow;
-    ctxThread->Esp &= (DWORD)-16;
-    ctxThread->Esp -= 4; //fix up the stack pointer
+    DWORD64 Esp = (ctxThread->Esp&(DWORD64)-16) - 4;
 #else
 #error WIN16 not supported :P
+#endif
+    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    jl_exception_in_transit = excpt;
+#if defined(_CPU_X86_64_)
+    *(DWORD64*)Rsp = 0;
+    ctxThread->Rsp = Rsp;
+    ctxThread->Rip = (DWORD64)&jl_rethrow;
+#elif defined(_CPU_X86_)
+    *(DWORD32*)Rsp = 0;
+    ctxThread->Esp = Esp;
+    ctxThread->Eip = (DWORD)&jl_rethrow;
 #endif
 }
 
@@ -304,8 +309,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
-                bt_size = 0;
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,0);
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
         ios_puts("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
@@ -630,6 +634,8 @@ char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifie
 
 #if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
 unsigned sig_stack_size = SIGSTKSZ;
+#elif defined(_OS_WINDOWS_)
+#define sig_stack_size 131072 // 128k
 #else
 #define sig_stack_size SIGSTKSZ
 #endif
@@ -914,6 +920,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     uv_dlopen("dbghelp.dll",&jl_dbghelp);
     if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
         hSymRefreshModuleList = 0;
+    ULONG StackSizeInBytes = sig_stack_size;
+    if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
+        pSetThreadStackGuarantee = NULL;
 #endif
     init_stdio();
 
