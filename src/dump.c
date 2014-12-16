@@ -102,7 +102,6 @@ jl_value_t ***sysimg_gvars = NULL;
 
 extern int globalUnique;
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
-extern const char *jl_cpu_string;
 uv_lib_t *jl_sysimg_handle = NULL;
 uint64_t jl_sysimage_base = 0;
 #ifdef _OS_WINDOWS_
@@ -122,7 +121,7 @@ static void jl_load_sysimg_so(char *fname)
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
         const char *cpu_target = (const char*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-        if (strcmp(cpu_target,jl_cpu_string) != 0)
+        if (strcmp(cpu_target,jl_compileropts.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.\n");
         uint32_t info[4];
@@ -130,13 +129,13 @@ static void jl_load_sysimg_so(char *fname)
         if (strcmp(cpu_target, "native") == 0) {
             uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
             if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.");
+                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.\n");
         }
         else if (strcmp(cpu_target,"core2") == 0) {
             int HasSSSE3 = (info[2] & 1<<9);
             if (!HasSSSE3)
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
-                         "Please delete or regenerate sys.{so,dll,dylib}.");
+                         "Please delete or regenerate sys.{so,dll,dylib}.\n");
         }
 #ifdef _OS_WINDOWS_
         jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
@@ -1194,6 +1193,32 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     if (en)
         jl_gc_enable();
     return v;
+}
+
+// Takes in a path of the form "usr/lib/julia/sys.ji", such as passed in to jl_restore_system_image()
+DLLEXPORT
+const char * jl_get_system_image_cpu_target(const char *fname)
+{
+    // If passed NULL, don't even bother
+    if (!fname)
+        return NULL;
+
+    // First, get "sys" from "sys.ji"
+    char *fname_shlib = (char*)alloca(strlen(fname));
+    strcpy(fname_shlib, fname);
+    char *fname_shlib_dot = strrchr(fname_shlib, '.');
+    if (fname_shlib_dot != NULL)
+        *fname_shlib_dot = 0;
+
+    // Get handle to sys.so
+    uv_lib_t * sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+
+    // Return jl_sysimg_cpu_target if we can
+    if (sysimg_handle)
+        return (const char *)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_target");
+
+    // If something goes wrong, return NULL
+    return NULL;
 }
 
 DLLEXPORT
