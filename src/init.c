@@ -232,7 +232,8 @@ void restore_signals(void)
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
     assert(excpt != NULL);
-    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
+    CONTEXT Ctx = *ctxThread;
+    bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, &Ctx) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
     ctxThread->Rip = (DWORD64)&jl_rethrow;
