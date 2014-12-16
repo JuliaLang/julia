@@ -1278,7 +1278,9 @@ Dequeues
 
 .. function:: resize!(collection, n) -> collection
 
-   Resize collection to contain ``n`` elements.
+   Resize collection to contain ``n`` elements. If ``n`` is smaller than the current
+   collection length, the first ``n`` elements will be retained. If ``n`` is larger,
+   the new elements will not be initialized.
 
 .. function:: append!(collection, items) -> collection.
 
