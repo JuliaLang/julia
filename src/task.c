@@ -346,10 +346,10 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
             restore_stack(t, where, NULL);
         } else {
 #ifdef ASM_COPY_STACKS
-            void *stackbase = jl_stackbase - 0x10;
+            void *stackbase = jl_stackbase;
 #ifdef _CPU_X86_64_
 #ifdef _OS_WINDOWS_
-            stackbase -= 0x40;
+            stackbase -= 0x20;
 #endif
             asm(" movq %0, %%rsp;\n"
                 " xorq %%rbp, %%rbp;\n"
