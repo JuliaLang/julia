@@ -2008,6 +2008,23 @@ Network I/O
    Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
    the file changed, a return value of false indicates a timeout. 
 
+.. function:: bind(socket::Union(UdpSocket, TcpSocket), host::IPv4, port::Integer)
+
+   Bind ``socket`` to the given ``host:port``. Note that `0.0.0.0` will listen on all devices.
+
+.. function:: send(socket::UdpSocket, host::IPv4, port::Integer, msg)
+
+   Send ``msg`` over ``socket to ``host:port``.
+
+.. function:: recv(socket::UdpSocket)
+
+   Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
+
+.. function:: setopt(sock::UdpSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+
+   Set UDP socket options. ``multicast_loop``: loopback for multicast packets (default: true). ``multicast_ttl``: TTL for multicast packets. ``enable_broadcast``: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). ``ttl``: Time-to-live of packets sent on the socket.
+
+
 Text I/O
 --------
 

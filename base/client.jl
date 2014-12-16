@@ -384,7 +384,7 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readall(STDIN)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)

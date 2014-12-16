@@ -27,8 +27,14 @@ sequence of function calls up to and including this line---is
 proportional to how often it appears in the set of all backtraces.
 
 A sampling profiler does not provide complete line-by-line coverage,
-because the backtraces occur at intervals (by default, 1 ms). However,
-this design has important strengths:
+because the backtraces occur at intervals (by default, 1 ms on Unix
+systems and 10 ms on Windows, although the actual scheduling is
+subject to operating system load). Moreover, as discussed further
+below, because samples are collected at a sparse subset of all
+execution points, the data collected by a sampling profiler is subject
+to statistical noise.
+
+Despite these limitations, sampling profilers have substantial strengths:
 
 - You do not have to make any modifications to your code to take
   timing measurements (in contrast to the alternative `instrumenting
@@ -36,7 +42,7 @@ this design has important strengths:
 - It can profile into Julia's core code and even (optionally) into C
   and Fortran libraries.
 - By running "infrequently" there is very little performance overhead;
-  while profiling, your code will run at nearly native speed.
+  while profiling, your code can run at nearly native speed.
 
 For these reasons, it's recommended that you try using the built-in
 sampling profiler before considering any alternatives.
