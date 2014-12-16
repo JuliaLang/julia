@@ -31,6 +31,7 @@
    manual/constructors
    manual/conversion-and-promotion
    manual/modules
+   manual/documentation
    manual/metaprogramming
    manual/arrays
    manual/linear-algebra
