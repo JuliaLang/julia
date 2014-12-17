@@ -67,16 +67,16 @@ end
 
 function next(s::Str, k::Int)
     a = bswap(getu32(s.data, k))
+    0 <= reinterpret(Int32, a) && return Char(a >> 24), k + 1
     l = leading_ones(a)
-    n = l + (~a >> 31)
-    b = (a << n >> n) $ 0x808080
-    r = 32 - 8n
+    b = (a << l >> l) $ 0x808080
+    r = 32 - 8l
     c = b >> r
     t = (l != 1) & (l <= 4) & ((b & 0xc0c0c0) >> r == 0)
     d = ( (c >> 24)         << 18) |
         (((c >> 16) & 0xff) << 12) |
         (((c >>  8) & 0xff) <<  6) | (c & 0xff)
-    ifelse(t, Char(d), '\ufffd'), k + ifelse(t, n, 1)
+    ifelse(t, Char(d), '\ufffd'), k + ifelse(t, l, 1)
 end
 
 const mask = div(typemax(UInt),typemax(UInt8))
