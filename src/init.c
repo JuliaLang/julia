@@ -247,7 +247,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
     ctxThread->Rsp = Rsp;
     ctxThread->Rip = (DWORD64)&jl_rethrow;
 #elif defined(_CPU_X86_)
-    *(DWORD32*)Rsp = 0;
+    *(DWORD32*)Esp = 0;
     ctxThread->Esp = Esp;
     ctxThread->Eip = (DWORD)&jl_rethrow;
 #endif
