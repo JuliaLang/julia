@@ -202,10 +202,11 @@ end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(itr::RegexMatchIterator) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, uint32(0))
-done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
+done(itr::RegexMatchIterator, prev_match) = (prev_match === nothing)
+nextval(itr::RegexMatchIterator, prev_match) = prev_match
 
 # Assumes prev_match is not nothing
-function next(itr::RegexMatchIterator, prev_match)
+function nextstate(itr::RegexMatchIterator, prev_match)
     prevempty = isempty(prev_match.match)
 
     if itr.overlap
@@ -232,10 +233,10 @@ function next(itr::RegexMatchIterator, prev_match)
                 break
             end
         else
-            return (prev_match, mat)
+            return mat
         end
     end
-    (prev_match, nothing)
+    nothing
 end
 
 function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)

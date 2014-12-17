@@ -215,6 +215,8 @@ using .I18n
 using .Help
 push!(I18n.CALLBACKS, Help.clear_cache)
 
+next(a,b) = (nextval(a,b), nextstate(a,b))
+
 # frontend
 include("Terminals.jl")
 include("LineEdit.jl")

@@ -235,18 +235,21 @@ copy(r::Range) = r
 ## iteration
 
 start(r::FloatRange) = 0
-next{T}(r::FloatRange{T}, i::Int) = (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+nextval{T}(r::FloatRange{T}, i::Int) = convert(T, (r.start + i*r.step)/r.divisor)
+nextstate(r::FloatRange, i::Int) = i+1
 done(r::FloatRange, i::Int) = (length(r) <= i)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
 start(r::StepRange) = convert(typeof(r.start+r.step), r.start)
-next{T}(r::StepRange{T}, i) = (convert(T,i), i+r.step)
+nextval{T}(r::StepRange{T}, i) = convert(T,i)
+nextstate(r::StepRange, i) = i+r.step
 done{T,S}(r::StepRange{T,S}, i) = isempty(r) | (i < min(r.start, r.stop)) | (i > max(r.start, r.stop))
 done{T,S}(r::StepRange{T,S}, i::Integer) = isempty(r) | (i == r.stop+r.step)
 
 start(r::UnitRange) = oftype(r.start+1, r.start)
-next{T}(r::UnitRange{T}, i) = (convert(T,i), i+1)
+nextval{T}(r::UnitRange{T}, i) = convert(T,i)
+nextstate{T}(r::UnitRange{T}, i) = i+1
 done(r::UnitRange, i) = i==oftype(i,r.stop)+1
 
 

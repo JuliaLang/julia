@@ -29,7 +29,8 @@ function in{T<:TimeType}(x::T, r::StepRange{T})
 end
 
 Base.start{T<:TimeType}(r::StepRange{T}) = 0
-Base.next{T<:TimeType}(r::StepRange{T}, i::Int) = (r.start+r.step*i,i+1)
+Base.nextval{T<:TimeType}(r::StepRange{T}, i::Int) = r.start+r.step*i
+Base.nextstate{T<:TimeType}(r::StepRange{T}, i::Int) = i+1
 Base.done{T<:TimeType,S<:Period}(r::StepRange{T,S}, i::Integer) = length(r) <= i
 
 .+{T<:TimeType}(x::Period, r::Range{T}) = (x+first(r)):step(r):(x+last(r))

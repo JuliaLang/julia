@@ -11,8 +11,13 @@ println(xs...) = println(STDOUT, xs...)
 
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")
 next(s::AbstractString, i::Int) = error("you must implement next(", typeof(s), ",Int)")
-next(s::DirectIndexString, i::Int) = (s[i],i+1)
 next(s::AbstractString, i::Integer) = next(s,int(i))
+nextval(s::AbstractString, i::Integer) = next(s,int(i))[1]
+nextstate(s::AbstractString, i::Integer) = next(s,int(i))[2]
+
+next(s::DirectIndexString, i::Int) = (s[i],i+1)
+nextval(s::DirectIndexString, i::Int) = s[i]
+nextstate(s::DirectIndexString, i::Int) = i+1
 
 ## conversion of general objects to strings ##
 
@@ -608,6 +613,8 @@ function next(s::SubString, i::Int)
     c, i = next(s.string, i+s.offset)
     c, i-s.offset
 end
+nextval(s::SubString, i::Int) = nextval(s.string, i+s.offset)
+nextstate(s::SubString, i::Int) = nextstate(s.string, i+s.offset)-s.offset
 
 function getindex(s::SubString, i::Int)
     if i < 1 || i > s.endof
@@ -742,6 +749,8 @@ function next(s::RevString, i::Int)
     n = endof(s); j = n-i+1
     (s.string[j], n-prevind(s.string,j)+1)
 end
+nextval(s::RevString, i::Int) = s.string[endof(s)-i+1]
+nextstate(s::RevString, i::Int) = (n = endof(s); j = n-i+1; n-prevind(s.string,j)+1)
 
 reverse(s::AbstractString) = RevString(s)
 reverse(s::RevString) = s.string

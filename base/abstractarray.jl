@@ -271,7 +271,8 @@ zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
 start(A::AbstractArray) = _start(A,linearindexing(A))
 _start(::AbstractArray,::LinearFast) = 1
-next(a::AbstractArray,i) = (a[i],i+1)
+nextval(a::AbstractArray,i) = a[i]
+nextstate(a::AbstractArray,i) = i+1
 done(a::AbstractArray,i) = (i > length(a))
 isempty(a::AbstractArray) = (length(a) == 0)
 

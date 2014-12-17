@@ -1,6 +1,6 @@
 module Collections
 
-import Base: setindex!, done, get, hash, haskey, isempty, length, next, getindex, start
+import Base: setindex!, done, get, hash, haskey, isempty, length, nextstate, nextval, getindex, start
 import ..Order: Forward, Ordering, lt
 
 export
@@ -282,10 +282,11 @@ start(pq::PriorityQueue) = start(pq.index)
 
 done(pq::PriorityQueue, i) = done(pq.index, i)
 
-function next(pq::PriorityQueue, i)
-    (k, idx), i = next(pq.index, i)
-    return ((k, pq.xs[idx].second), i)
+function nextval(pq::PriorityQueue, i)
+    (k, idx) = nextval(pq.index, i)
+    (k, pq.xs[idx].second)
 end
+nextstate(pq::PriorityQueue, i) = nextstate(pq.index, i)
 
 
 end # module Collections

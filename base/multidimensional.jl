@@ -3,6 +3,9 @@ module IteratorsMD
 
 import Base: start, _start, done, next, getindex, setindex!, linearindexing
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow
+import Base:
+    nextstate,
+    nextval
 
 export eachindex
 
@@ -64,8 +67,10 @@ end
 
 # Prevent an ambiguity warning
 gen_cartesian(1) # to make sure the next two lines are valid
-next(R::StepRange, state::(Bool, CartesianIndex{1})) = R[state[2].I_1], (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
-next{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = R[state[2].I_1], (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
+nextval(R::StepRange, state::(Bool, CartesianIndex{1})) = R[state[2].I_1]
+nextstate(R::StepRange, state::(Bool, CartesianIndex{1})) = (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
+nextval{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = R[state[2].I_1]
+nextstate{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
 
 # iteration
 eachindex(A::AbstractArray) = IndexIterator(size(A))
@@ -90,20 +95,22 @@ stagedfunction _start{T,N}(A::AbstractArray{T,N}, ::LinearSlow)
     end
 end
 
-stagedfunction next{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
+@inline nextval{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N})) = ((@inbounds v = A[state[2]]); v)
+stagedfunction nextstate{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
     indextype, _ = gen_cartesian(N)
     finishedex = (N==0 ? true : :(getfield(newindex, $N) > size(A, $N)))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
-        @inbounds v = A[index]
         newindex=@nif $N d->(getfield(index,d) < size(A, d)) d->@ncall($N, $indextype, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : 1))
         finished=$finishedex
-        v, (finished,newindex)
+        (finished,newindex)
     end
 end
-stagedfunction next{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N}))
+
+@inline nextval{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N})) = state[2]
+stagedfunction nextstate{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N}))
     indextype, _ = gen_cartesian(N)
     finishedex = (N==0 ? true : :(getfield(newindex, $N) > getfield(iter.dims, $N)))
     meta = Expr(:meta, :inline)
@@ -112,7 +119,7 @@ stagedfunction next{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N}))
         index=state[2]
         newindex=@nif $N d->(getfield(index,d) < getfield(iter.dims, d)) d->@ncall($N, $indextype, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : 1))
         finished=$finishedex
-        index, (finished,newindex)
+        (finished,newindex)
     end
 end
 

@@ -267,7 +267,8 @@ function done(itr::EachLine, nada)
     itr.ondone()
     true
 end
-next(itr::EachLine, nada) = (readline(itr.stream), nothing)
+nextval(itr::EachLine, nada) = readline(itr.stream)
+nextstate(itr::EachLine, nada) = nothing
 eltype(itr::EachLine) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))

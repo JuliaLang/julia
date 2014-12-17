@@ -257,11 +257,11 @@ function combinations(a, t::Integer)
 end
 
 start(c::Combinations) = [1:c.t]
-function next(c::Combinations, s)
-    comb = c.a[s]
+nextval(c::Combinations, s) = c.a[s]
+function nextstate(c::Combinations, s)
     if c.t == 0
         # special case to generate 1 result for t==0
-        return (comb,[length(c.a)+2])
+        return [length(c.a)+2]
     end
     s = copy(s)
     for i = length(s):-1:1
@@ -274,7 +274,7 @@ function next(c::Combinations, s)
         end
         break
     end
-    (comb,s)
+    s
 end
 done(c::Combinations, s) = !isempty(s) && s[1] > length(c.a)-c.t+1
 
@@ -291,11 +291,11 @@ length(c::Permutations) = factorial(length(c.a))
 permutations(a) = Permutations(a)
 
 start(p::Permutations) = [1:length(p.a)]
-function next(p::Permutations, s)
-    perm = p.a[s]
+nextval(p::Permutations, s) = p.a[s]
+function nextstate(p::Permutations, s)
     if length(p.a) == 0
         # special case to generate 1 result for len==0
-        return (perm,[1])
+        return [1]
     end
     s = copy(s)
     k = length(s)-1
@@ -308,7 +308,7 @@ function next(p::Permutations, s)
         s[k],s[l] = s[l],s[k]
         reverse!(s,k+1)
     end
-    (perm,s)
+    s
 end
 done(p::Permutations, s) = !isempty(s) && s[1] > length(p.a)
 
@@ -325,7 +325,8 @@ partitions(n::Integer) = IntegerPartitions(n)
 
 start(p::IntegerPartitions) = Int[]
 done(p::IntegerPartitions, xs) = length(xs) == p.n
-next(p::IntegerPartitions, xs) = (xs = nextpartition(p.n,xs); (xs,xs))
+nextval(p::IntegerPartitions, xs) = nextpartition(p.n,xs)
+nextstate(p::IntegerPartitions, xs) = nextpartition(p.n,xs)
 
 function nextpartition(n, as)
     if isempty(as);  return Int[n];  end
@@ -395,7 +396,8 @@ function done(f::FixedPartitions, s::Vector{Int})
     isempty(s) && return false
     return f.m == 1 || s[1]-1 <= s[end]
 end
-next(f::FixedPartitions, s::Vector{Int}) = (xs = nextfixedpartition(f.n,f.m,s); (xs,xs))
+nextval(f::FixedPartitions, s::Vector{Int}) = nextfixedpartition(f.n,f.m,s)
+nextstate(f::FixedPartitions, s::Vector{Int}) = nextfixedpartition(f.n,f.m,s)
 
 function nextfixedpartition(n, m, bs)
     as = copy(bs)
@@ -453,21 +455,19 @@ partitions(s::AbstractVector) = SetPartitions(s)
 
 start(p::SetPartitions) = (n = length(p.s); (zeros(Int32, n), ones(Int32, n-1), n, 1))
 done(p::SetPartitions, s) = s[1][1] > 0
-next(p::SetPartitions, s) = nextsetpartition(p.s, s...)
 
-function nextsetpartition(s::AbstractVector, a, b, n, m)
-    function makeparts(s, a, m)
-        temp = [ similar(s,0) for k = 0:m ]
-        for i = 1:n
-            push!(temp[a[i]+1], s[i])
-        end
-        filter!(x->!isempty(x), temp)
+function nextval(p::SetPartitions, s)
+    a, _, n, m = s
+    temp = [ similar(p.s,0) for k = 0:m ]
+    for i = 1:n
+        push!(temp[a[i]+1], p.s[i])
     end
+    filter!(x->!isempty(x), temp)
+end
 
-    if isempty(s);  return ([s], ([1], Int[], n, 1));  end
-
-    part = makeparts(s,a,m)
-
+function nextstate(p::SetPartitions, s)
+    a, b, n, m = s
+    isempty(p.s) && return ([1], Int[], n, 1)
     if a[end] != m
         a[end] += 1
     else
@@ -485,9 +485,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
         end
         a[end] = 0
     end
-
-    return (part, (a,b,n,m))
-
+    (a,b,n,m)
 end
 
 let _nsetpartitions = Dict{Int,Int}()
@@ -529,22 +527,22 @@ end
 # integer n
 
 done(p::FixedSetPartitions, s) = length(s[1]) == 0 || s[1][1] > 1
-next(p::FixedSetPartitions, s) = nextfixedsetpartition(p.s,p.m, s...)
 
-function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
-    function makeparts(s, a)
-        part = [ similar(s,0) for k = 1:m ]
-        for i = 1:n
-            push!(part[a[i]], s[i])
-        end
-        return part
+function nextval(p::FixedSetPartitions, s)
+    a, _, n = s
+    part = [ similar(p.s,0) for k = 1:p.m ]
+    for i = 1:n
+        push!(part[a[i]], p.s[i])
     end
+    part
+end
 
-    part = makeparts(s,a)
-
+function nextstate(p::FixedSetPartitions, s)
+    m = p.m
+    a, b, n = s
     if m == 1
         a[1] = 2
-        return (part, (a, b, n))
+        return (a, b, n)
     end
 
     if a[end] != m
@@ -575,8 +573,7 @@ function nextfixedsetpartition(s::AbstractVector, m, a, b, n)
             a[b]=1:m
         end
     end
-
-    return (part, (a,b,n))
+    (a,b,n)
 end
 
 function nfixedsetpartitions(n::Int,m::Int)

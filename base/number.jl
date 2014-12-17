@@ -35,7 +35,8 @@ angle(z::Real) = atan2(zero(z), z)
 widemul(x::Number, y::Number) = widen(x)*widen(y)
 
 start(x::Number) = false
-next(x::Number, state) = (x, true)
+nextval(x::Number, state) = x
+nextstate(x::Number, state) = true
 done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y

@@ -78,6 +78,8 @@ function next(s::UTF8String, i::Int)
     c -= utf8_offset[trailing+1]
     char(c), i
 end
+nextval(s::UTF8String, i::Int) = next(s,i)[1]
+nextstate(s::UTF8String, i::Int) = next(s,i)[2]
 
 function first_utf8_byte(ch::Char)
     c = reinterpret(UInt32, ch)
