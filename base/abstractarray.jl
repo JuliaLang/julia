@@ -178,9 +178,11 @@ end
 # copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
 function copy!(dest::AbstractArray, doffs::Integer, src)
+    doffs < 1 && throw(BoundsError())
     st = start(src)
-    i = doffs
-    while !done(src, st)
+    i, dmax = doffs, length(dest)
+    @inbounds while !done(src, st)
+        i > dmax && throw(BoundsError())
         val, st = next(src, st)
         dest[i] = val
         i += 1
@@ -189,7 +191,9 @@ function copy!(dest::AbstractArray, doffs::Integer, src)
 end
 
 function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
-    soffs < 1 && throw(BoundsError())
+    if (doffs < 1) | (soffs < 1)
+        throw(BoundsError())
+    end
     st = start(src)
     for j = 1:(soffs-1)
         done(src, st) && throw(BoundsError())
@@ -197,8 +201,9 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
     end
     dn = done(src, st)
     dn && throw(BoundsError())
-    i = doffs
-    while !dn
+    i, dmax = doffs, length(dest)
+   @inbounds while !dn
+        i > dmax && throw(BoundsError())
         val, st = next(src, st)
         dest[i] = val
         i += 1
@@ -211,23 +216,28 @@ end
 function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Integer)
     n < 0 && throw(BoundsError())
     n == 0 && return dest
-    soffs < 1 && throw(BoundsError())
+    dmax = doffs + n - 1
+    if (dmax > length(dest)) | (doffs < 1) | (soffs < 1)
+        throw(BoundsError())
+    end
     st = start(src)
     for j = 1:(soffs-1)
         done(src, st) && throw(BoundsError())
         _, st = next(src, st)
     end
-    for i = doffs:(doffs+n-1)
-        done(src, st) && throw(BoundsError())
+    i = doffs
+    @inbounds while i <= dmax && !done(src, st)
         val, st = next(src, st)
         dest[i] = val
+        i += 1
     end
+    i <= dmax && throw(BoundsError())
     return dest
 end
 
 # if src is an AbstractArray and a source offset is passed, use indexing
 function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray)
-    return isempty(src) ? dest : copy!(dest, doffs, src, 1)
+    copy!(dest, doffs, src, 1, length(src))
 end
 function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer)
     soffs > length(src) && throw(BoundsError())
@@ -235,7 +245,11 @@ function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::I
 end
 function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer, n::Integer)
     n < 0 && throw(BoundsError())
-    for i = 0:(n-1)
+    n == 0 && return dest
+    if soffs+n-1 > length(src) || doffs+n-1 > length(dest) || doffs < 1 || soffs < 1
+        throw(BoundsError())
+    end
+    @inbounds for i = 0:(n-1)
         dest[doffs+i] = src[soffs+i]
     end
     return dest
