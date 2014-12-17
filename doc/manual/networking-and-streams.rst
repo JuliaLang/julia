@@ -34,7 +34,7 @@ data to be read as the second argument. For example, to read a simple byte array
      0x00
      0x00
 
-    julia> read(STDIN,x)
+    julia> read!(STDIN,x)
     abcd 
     4-element Array{UInt8,1}:
      0x61
