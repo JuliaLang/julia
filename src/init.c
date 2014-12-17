@@ -236,7 +236,7 @@ void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 #if defined(_CPU_X86_64_)
     DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
 #elif defined(_CPU_X86_)
-    DWORD64 Esp = (ctxThread->Esp&(DWORD64)-16) - 4;
+    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
 #else
 #error WIN16 not supported :P
 #endif
