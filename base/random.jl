@@ -208,6 +208,18 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert((Int...),
 @inline rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float64}) = rand(r, CloseOpen)
 rand{T<:Union(Float16, Float32)}(r::Union(RandomDevice,MersenneTwister), ::Type{T}) = convert(T, rand(r, Float64))
 
+rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui10_raw(r::AbstractRNG)    = rand(r, UInt16)
+rand_ui23_raw(r::AbstractRNG)    = rand(r, UInt32)
+
+rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float16}) =
+    Float16(reinterpret(Float32, rand_ui10_raw(r) % UInt32 & 0x007fe000 | 0x3f800000) - 1)
+
+rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
+    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
+
 ## random integers
 
 @inline rand_ui52(r::AbstractRNG) = reinterpret(UInt64, rand(r, Close1Open2)) & 0x000fffffffffffff
