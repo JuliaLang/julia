@@ -263,8 +263,14 @@ function process_options(args::Vector{UTF8String})
         elseif args[i]=="--machinefile"
             i == length(args) && error("--machinefile  no <file> provided")
             i+=1
-            machines = load_machine_file(args[i])
-            addprocs(machines)
+            machines, options = load_machine_file(args[i])
+            for machine in machines
+                if haskey(options, machine)
+                    addprocs([machine]; options[machine]...)
+                else
+                    addprocs([machine])
+                end
+            end
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
             exit(0)
@@ -355,16 +361,46 @@ function load_juliarc()
 end
 
 function load_machine_file(path::AbstractString)
+    const VALIDOPTIONS=["tunnel", "dir", "sshflags", "max_parallel"]
     machines = AbstractString[]
+    alloptions=Dict{AbstractString, Dict}()
+
     for line in split(readall(path),'\n'; keep=false)
-        s = split(line,'*'; keep=false)
-        if length(s) > 1
-            append!(machines,fill(s[2],int(s[1])))
-        else
-            push!(machines,line)
+        machineoptions = Dict{Symbol,AbstractString}()
+        machine=""
+        opts=""
+        s = split(line," "; limit=2, keep=false)
+        mach = s[1]
+        if length(s) > 1        # we have options
+            opts = s[2]
+            # println("options found: $opts")
         end
+        s = split(mach,'*'; limit=2, keep=false)
+        if length(s) > 1
+            machine=s[2]
+            append!(machines,fill(machine,int(s[1])))
+            # println("found *, machine = $machine times $(s[1])")
+        else
+            machine = mach
+            # println("no *, machine = $machine")
+            push!(machines,machine)
+        end
+        if length(opts) > 1
+            rx = r"(\S+)\s*=\s*(\S+)"
+            m = eachmatch(rx,opts)
+            for i in m
+                opt = i.captures[1]
+                val = i.captures[2]
+                if opt in [VALIDOPTIONS]
+                    # println("setting machine option $(i.captures) - opt = $opt, val = $val")
+                    machineoptions[symbol(opt)] = string(val)
+                end
+            end
+        end
+        alloptions[machine] = machineoptions
     end
-    return machines
+    # println("alloptions = $alloptions")
+    return machines, alloptions
 end
 
 function early_init()
