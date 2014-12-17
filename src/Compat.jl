@@ -101,6 +101,18 @@ function rewrite_split(ex, f)
     end
 end
 
+if VERSION < v"0.4.0-dev+707"
+    macro inline(ex)
+        esc(ex)
+    end
+end
+
+if VERSION < v"0.4.0-dev+2099"
+    macro noinline(ex)
+        esc(ex)
+    end
+end
+
 function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
@@ -118,6 +130,6 @@ macro compat(ex)
     esc(_compat(ex))
 end
 
-export @compat
+export @compat, @inline, @noinline
 
 end # module

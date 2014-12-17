@@ -52,6 +52,20 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Base.Random.randmtzig_exprnd` is now `randexp` [#9144](https://github.com/JuliaLang/julia/pull/9144)
 
+## New macros
+
+* `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
+
 ## Other syntax changes
 
 * `Dict(ks, vs)` is now `Dict(zip(ks, vs))` [#8521](https://github.com/JuliaLang/julia/pull/8521)
+
+## Developer tips
+
+If you're adding additional compatibility code to this package, the following shell script is a useful for extracting the version number from a git commit SHA:
+
+```sh
+#! /bin/bash
+last_tag=$(git describe --tags --abbrev=0)
+git rev-list $1 ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g'
+```
