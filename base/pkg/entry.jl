@@ -689,12 +689,9 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
         info("Testing $pkg")
         cd(dirname(test_path)) do
             try
-                if coverage
-                    cmd = `$JULIA_HOME/julia --code-coverage $test_path`
-                else
-                    cmd = `$JULIA_HOME/julia $test_path`
-                end
-                run(cmd)
+                color = Base.have_color? "--color=yes" : "--color=no"
+                codecov = coverage? "--code-coverage=user" : "--code-coverage=none"
+                run(`$JULIA_HOME/julia $codecov $color $test_path`)
                 info("$pkg tests passed")
             catch err
                 warnbanner(err, label="[ ERROR: $pkg ]")
