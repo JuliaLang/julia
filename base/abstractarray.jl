@@ -177,7 +177,18 @@ end
 
 # copy with minimal requirements on src
 # if src is not an AbstractArray, moving to the offset might be O(n)
-function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer=1)
+function copy!(dest::AbstractArray, doffs::Integer, src)
+    st = start(src)
+    i = doffs
+    while !done(src, st)
+        val, st = next(src, st)
+        dest[i] = val
+        i += 1
+    end
+    return dest
+end
+
+function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer)
     soffs < 1 && throw(BoundsError())
     st = start(src)
     for j = 1:(soffs-1)
@@ -215,6 +226,9 @@ function copy!(dest::AbstractArray, doffs::Integer, src, soffs::Integer, n::Inte
 end
 
 # if src is an AbstractArray and a source offset is passed, use indexing
+function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray)
+    return isempty(src) ? dest : copy!(dest, doffs, src, 1)
+end
 function copy!(dest::AbstractArray, doffs::Integer, src::AbstractArray, soffs::Integer)
     soffs > length(src) && throw(BoundsError())
     copy!(dest, doffs, src, soffs, length(src)-soffs+1)
