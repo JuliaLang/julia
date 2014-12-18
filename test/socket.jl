@@ -17,6 +17,12 @@
 
 @test ip"0:0:0:0:0:ffff:127.0.0.1" == IPv6(0xffff7f000001)
 
+# isless and comparisons
+@test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
+@test ip"1.2.3.4" >= ip"1.2.3.4" >= ip"1.2.3.1"
+@test isless(ip"1.2.3.4", ip"1.2.3.5")
+@test_throws MethodError sort[ip"2.3.4.5", ip"1.2.3.4", ip"2001:1:2::1"]
+
 # RFC 5952 Compliance
 
 @test repr(ip"2001:db8:0:0:0:0:2:1") == "ip\"2001:db8::2:1\""
