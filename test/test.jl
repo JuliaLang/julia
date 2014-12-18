@@ -14,7 +14,7 @@ a[1,1,1,1,1] = 10
 
 @test rand() != rand()
 
-
+#=
 # Test with_handler
 successflag = false
 failureflag = false
@@ -39,7 +39,7 @@ Test.with_handler(test_handler) do
     @test !failureflag
     @test errorflag
 end
-
+=#
 # Test evaluation of comparison tests
 i7586_1() = 1
 i7586_2() = 7
