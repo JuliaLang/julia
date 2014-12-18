@@ -1,6 +1,5 @@
 include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
-
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on

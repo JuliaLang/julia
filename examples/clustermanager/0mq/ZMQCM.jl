@@ -195,7 +195,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open (`julia --worker custom worker.jl $i`, "r")
+        io, pobj = open (`julia --worker=custom worker.jl $i`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)

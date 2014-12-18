@@ -847,7 +847,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         return newmeth;
     }
     else {
-        if (jl_compileropts.compile_enabled == 0) {
+        if (jl_options.compile_enabled == 0) {
             if (method->linfo->unspecialized == NULL) {
                 jl_printf(JL_STDERR,"code missing for %s", method->linfo->name->name);
                 jl_static_show(JL_STDERR, (jl_value_t*)type);

@@ -31,6 +31,7 @@ include("reflection.jl")
 include("build_h.jl")
 include("version_git.jl")
 include("c.jl")
+include("options.jl")
 
 # core operations & types
 include("promotion.jl")

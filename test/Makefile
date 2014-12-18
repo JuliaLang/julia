@@ -6,7 +6,7 @@ TESTS = all linalg sparse $(filter-out TestHelpers runtests testdefs,$(subst .jl
 default: all
 
 $(TESTS) ::
-	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes -f ./runtests.jl $@)
+	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes --startup-file=no ./runtests.jl $@)
 
 perf:
 	@$(MAKE) -C perf all
