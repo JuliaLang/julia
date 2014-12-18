@@ -1,6 +1,9 @@
 ## IP ADDRESS HANDLING ##
 abstract IPAddr
 
+
+Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
+
 immutable IPv4 <: IPAddr
     host::UInt32
     IPv4(host::UInt32) = new(host)
