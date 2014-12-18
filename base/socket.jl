@@ -29,9 +29,6 @@ end
 # constructor: ("1.2.3.4")
 IPv4(ipstr::AbstractString) = parseipv4(ipstr)
 
-# pending decision
-# IPv4(iparr::AbstractArray) = map((x)->IPv4(x), iparr)
-
 show(io::IO,ip::IPv4) = print(io,"ip\"",ip,"\"")
 print(io::IO,ip::IPv4) = print(io,dec((ip.host&(0xFF000000))>>24),".",
                                   dec((ip.host&(0xFF0000))>>16),".",
@@ -74,9 +71,6 @@ function IPv6(host::Integer)
 end
 
 IPv6(ipstr::AbstractString) = parseipv6(ipstr)
-
-# pending decision
-# IPv6(iparr::AbstractArray) = map((x)->IPv6(x), iparr)
 
 # Suppress leading '0's and "0x"
 print_ipv6_field(io,field::UInt16) = print(io,hex(field))
