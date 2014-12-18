@@ -53,6 +53,11 @@ if VERSION < v"0.4.0-dev+1884"
     export randexp
 end
 
+if VERSION < v"0.4.0-dev+2014"
+    sizehint! = Base.sizehint
+    export sizehint!
+end
+
 function rewrite_dict(ex)
     length(ex.args) == 1 && return ex
 
@@ -71,7 +76,7 @@ function rewrite_dict(ex)
     newex
 end
 
-# rewrite Julia 0.4-style split or rsplit (str, splitter; kws...) 
+# rewrite Julia 0.4-style split or rsplit (str, splitter; kws...)
 # into 0.2/0.3-style positional arguments
 function rewrite_split(ex, f)
     limit = nothing
@@ -107,7 +112,7 @@ if VERSION < v"0.4.0-dev+707"
     end
 end
 
-if VERSION < v"0.4.0-dev+2099"
+if VERSION < v"0.4.0-dev+2056"
     macro noinline(ex)
         esc(ex)
     end

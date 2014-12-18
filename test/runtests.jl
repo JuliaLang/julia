@@ -49,6 +49,9 @@ d = Dict(zip([1, 2], [3, 4]))
 end
 @test f() == d2
 
+ns = length(d.slots)
+@test length(sizehint!(d, ns + 1).slots) > ns
+
 @test @compat split("a,b,,c", ',', limit=2) == ["a", "b,,c"]
 @test @compat split("a,b,,c", ',', limit=2,keep=true) == ["a", "b,,c"]
 @test @compat split("a,b,,c", ',', keep=false) == ["a", "b", "c"]

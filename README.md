@@ -52,6 +52,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Base.Random.randmtzig_exprnd` is now `randexp` [#9144](https://github.com/JuliaLang/julia/pull/9144)
 
+* `sizehint` is now `sizehint!` [#9278](https://github.com/JuliaLang/julia/pull/9278)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
