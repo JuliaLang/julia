@@ -57,9 +57,6 @@ let t = Dates.Period[Dates.Week(2), Dates.Day(14), Dates.Hour(14*24), Dates.Minu
             Pj = typeof(t[j])
             tj1 = t[j] + one(Pj)
             @test t[i] < tj1
-            @test_throws InexactError Pi(tj1)
-            @test_throws InexactError Pj(Pi(typemax(Int64)))
-            @test_throws InexactError Pj(Pi(typemin(Int64)))
         end
     end
 end

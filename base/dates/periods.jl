@@ -28,8 +28,16 @@ Base.typemin{P<:Period}(::Type{P}) = P(typemin(Int64))
 Base.typemax{P<:Period}(::Type{P}) = P(typemax(Int64))
 
 # Default values (as used by TimeTypes)
-default{T<:DatePeriod}(p::Union(T,Type{T})) = one(p)
-default{T<:TimePeriod}(p::Union(T,Type{T})) = zero(p)
+for t in (:Year,:Month,:Week,:Day)
+	@eval begin
+		default{T<:$t}(p::Union(T,Type{T})) = one(p)
+	end
+end
+for t in (:Hour, :Minute, :Second, :Millisecond)
+	@eval begin
+		default{T<:$t}(p::Union(T,Type{T})) = zero(p)
+	end
+end
 
 (-){P<:Period}(x::P) = P(-value(x))
 Base.isless{P<:Period}(x::P,y::P) = isless(value(x),value(y))
@@ -247,7 +255,7 @@ for i = 1:length(fixedperiod_conversions)
     N = n
     for j = i+1:length(fixedperiod_conversions) # more-precise periods
         (Tc,nc) = fixedperiod_conversions[j]
-        @eval Base.convert(::Type{$T}, x::$Tc) = $T(divexact(value(x), $N))
+        @eval Base.convert(::Type{$T}, x::$Tc) = $T(value(x)/$N)
         @eval Base.promote_rule(::Type{$T},::Type{$Tc}) = $Tc
         N *= nc
     end
