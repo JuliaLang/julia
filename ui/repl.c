@@ -43,75 +43,105 @@ static char *program = NULL;
 static int imagepathspecified = 0;
 
 static const char usage[] = "julia [options] [program] [args...]\n";
-static const char opts[] =
+static const char opts[]  =
     " -v, --version            Display version information\n"
     " -h, --help               Print this message\n"
     " -q, --quiet              Quiet startup without banner\n"
     " -H, --home <dir>         Set location of julia executable\n\n"
 
-    " -e, --eval <expr>        Evaluate <expr>\n"
-    " -E, --print <expr>       Evaluate and show <expr>\n"
-    " -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode\n"
-    " -L, --load <file>        Load <file> immediately on all processors\n"
-    " -J, --sysimage <file>    Start up with the given system image file\n"
-    " -C --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
+    " -e, --eval <expr>         Evaluate <expr>\n"
+    " -E, --print <expr>        Evaluate and show <expr>\n"
+    " -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode\n"
+    " -L, --load <file>         Load <file> immediately on all processors\n"
+    " -J, --sysimage <file>     Start up with the given system image file\n"
+    " -C, --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
-    " -p <n>                   Run n local processes\n"
-    " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
+    " -p, --procs <n>           Run n local processes\n"
+    " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
 
-    " -i                       Force isinteractive() to be true\n"
-    " --no-history-file        Don't load or save history\n"
-    " -f, --no-startup         Don't load ~/.juliarc.jl\n"
-    " -F                       Load ~/.juliarc.jl, then handle remaining inputs\n"
-    " --color={yes|no}         Enable or disable color text\n\n"
+    " -i                        Force isinteractive() to be true\n"
+    " --color={yes|no}          Enable or disable color text\n\n"
+    " --history-file={yes|no}   Load or save history\n"
+    " --no-history-file         Don't load history file (deprecated, use --history-file=no)\n"
+    " --startup-file={yes|no}   Load ~/.juliarc.jl\n"
+    " -f, --no-startup          Don't load ~/.juliarc (deprecated, use --startup-file=no)\n"
+    " -F                        Load ~/.juliarc (deprecated, use --startup-file=yes)\n\n"
 
-    " --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation\n\n"
+    " --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation\n\n"
 
     " --code-coverage={none|user|all}, --code-coverage\n"
-    "                          Count executions of source lines (omitting setting is equivalent to 'user')\n"
-    " --track-allocation={none|user|all}\n"
-    "                          Count bytes allocated by each source line\n"
-    " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
-    " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
-    " --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),\n"
-    "                          or adhere to declarations in source code\n"
-    " -O, --optimize           Run time-intensive code optimizations\n"
-    " --int-literals={32|64}   Select integer literal size independent of platform\n"
-    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
-    " --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings\n";
+    "                           Count executions of source lines (omitting setting is equivalent to 'user')\n\n"
+
+    " --track-allocation={none|user|all}, --track-allocation\n"
+    "                           Count bytes allocated by each source line\n\n"
+    " -O, --optimize\n"
+    "                           Run time-intensive code optimizations\n"
+    " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
+    " --int-literals={32|64}    Select integer literal size independent of platform\n"
+    " --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)\n"
+    " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n"
+    " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    enum {
-	opt_check_bounds = 300,
-	opt_int_literals,
-	opt_dump_bitcode,
-	opt_compile,
-	opt_depwarn,
-	opt_inline,
-        opt_math_mode
+    enum { opt_machinefile = 300,
+           opt_color,
+           opt_history_file,
+           opt_no_history_file,
+           opt_startup_file,
+           opt_compile,
+           opt_code_coverage,
+           opt_track_allocation,
+           opt_check_bounds,
+           opt_int_literals,
+           opt_dump_bitcode,
+           opt_depwarn,
+           opt_inline,
+           opt_math_mode,
+           opt_worker,
+           opt_bind_to
     };
-    static const char shortopts[] = "+H:hJ:C:O";
-    static const struct option longopts[] = {
-        { "home",          required_argument, 0, 'H' },
-        { "build",         required_argument, 0, 'b' },
-        { "lisp",          no_argument,       &lisp_prompt, 1 },
-        { "help",          no_argument,       0, 'h' },
-        { "sysimage",      required_argument, 0, 'J' },
-        { "code-coverage", optional_argument, 0, 'c' },
-        { "cpu-target",    required_argument, 0, 'C' },
-        { "track-allocation",required_argument, 0, 'm' },
-        { "check-bounds",  required_argument, 0, opt_check_bounds },
-        { "optimize",      no_argument,       0, 'O' },
-        { "int-literals",  required_argument, 0, opt_int_literals },
-        { "dump-bitcode",  required_argument, 0, opt_dump_bitcode },
-        { "compile",       required_argument, 0, opt_compile },
-        { "depwarn",       required_argument, 0, opt_depwarn },
-        { "inline",        required_argument, 0, opt_inline },
-        { "math-mode",     required_argument, 0, opt_math_mode },
+    static char* shortopts = "+vhqFfH:e:E:P:L:J:C:ip:Ob:";
+    static struct option longopts[] = {
+        // exposed command line options
+        // NOTE: This set of required arguments need to be kept in sync
+        // with the required arguments defined in base/client.jl `process_options()`
+        { "version",         no_argument,       0, 'v' },
+        { "help",            no_argument,       0, 'h' },
+        { "quiet",           no_argument,       0, 'q' },
+        { "home",            required_argument, 0, 'H' },
+        { "eval",            required_argument, 0, 'e' },
+        { "print",           required_argument, 0, 'E' },
+        { "post-boot",       required_argument, 0, 'P' },
+        { "load",            required_argument, 0, 'L' },
+        { "sysimage",        required_argument, 0, 'J' },
+        { "cpu-target",      required_argument, 0, 'C' },
+        { "procs",           required_argument, 0, 'p' },
+        { "machinefile",     required_argument, 0, opt_machinefile },
+        { "color",           required_argument, 0, opt_color },
+        { "history-file",    required_argument, 0, opt_history_file },
+        { "no-history-file", no_argument,       0, opt_no_history_file }, // deprecated
+        { "startup-file",    required_argument, 0, opt_startup_file },
+        { "no-startup",      no_argument,       0, 'f' },                 // deprecated
+        { "compile",         required_argument, 0, opt_compile },
+        { "code-coverage",   optional_argument, 0, opt_code_coverage },
+        { "track-allocation",optional_argument, 0, opt_track_allocation },
+        { "optimize",        no_argument,       0, 'O' },
+        { "check-bounds",    required_argument, 0, opt_check_bounds },
+        { "int-literals",    required_argument, 0, opt_int_literals },
+        { "dump-bitcode",    required_argument, 0, opt_dump_bitcode },
+        { "depwarn",         required_argument, 0, opt_depwarn },
+        { "inline",          required_argument, 0, opt_inline },
+        { "math-mode",       required_argument, 0, opt_math_mode },
+        // hidden command line options
+        { "build",           required_argument, 0, 'b' },
+        { "worker",          optional_argument, 0, opt_worker },
+        { "bind-to",         required_argument, 0, opt_bind_to },
+        { "lisp",            no_argument,       &lisp_prompt, 1 },
         { 0, 0, 0, 0 }
     };
     int c;
+    char *endptr;
     opterr = 0;
     int skip = 0;
     int lastind = optind;
@@ -120,31 +150,93 @@ void parse_opts(int *argcp, char ***argvp)
         case 0:
             break;
         case '?':
-            if (optind != lastind) skip++;
+        if (optind != lastind) skip++;
             lastind = optind;
             break;
-        case 'H':
-            jl_compileropts.julia_home = strdup(optarg);
+        case 'v': // version
+            jl_options.version = 1;
             break;
-        case 'b':
-            jl_compileropts.build_path = strdup(optarg);
-            if (!imagepathspecified)
-                jl_compileropts.image_file = NULL;
-            break;
-        case 'J':
-            jl_compileropts.image_file = strdup(optarg);
-            imagepathspecified = 1;
-            break;
-        case 'C':
-            jl_compileropts.cpu_target = strdup(optarg);
-            break;
-        case 'h':
+        case 'h': // help
             jl_printf(JL_STDOUT, "%s%s", usage, opts);
             jl_exit(0);
-        case 'O':
-            jl_compileropts.opt_level = 1;
+        case 'q': // quiet
+            jl_options.quiet = 1;
             break;
-        case 'c':
+        case 'H': // home
+            jl_options.julia_home = strdup(optarg);
+            break;
+        case 'e': // eval
+            jl_options.eval = strdup(optarg);
+            break;
+        case 'E': // print
+            jl_options.print = strdup(optarg);
+            break;
+        case 'P': // post-boot
+            jl_options.postboot = strdup(optarg);
+            break;
+        case 'L': // load
+            jl_options.load = strdup(optarg);
+            break;
+        case 'J': // sysimage
+            jl_options.image_file = strdup(optarg);
+            imagepathspecified = 1;
+            break;
+        case 'C': // cpu-target
+            jl_options.cpu_target = strdup(optarg);
+            break;
+        case 'p': // procs
+            errno = 0;
+            jl_options.nprocs = strtol(optarg, &endptr, 10);
+            if (errno != 0 || optarg == endptr || *endptr != 0 || jl_options.nprocs < 1)
+                jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+            break;
+        case opt_machinefile:
+            jl_options.machinefile = strdup(optarg);
+            break;
+        case opt_color:
+            if (!strcmp(optarg,"yes"))
+                jl_options.color = JL_OPTIONS_COLOR_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.color = JL_OPTIONS_COLOR_OFF;
+            else
+                jl_errorf("julia: invalid argument to --color={yes|no} (%s)\n", optarg);
+            break;
+        case opt_history_file:
+            if (!strcmp(optarg,"yes"))
+                jl_options.historyfile = JL_OPTIONS_HISTORYFILE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
+            else
+                jl_errorf("julia: invalid argument to --history-file={yes|no} (%s)\n", optarg);
+            break;
+        case opt_no_history_file:
+            jl_options.historyfile = JL_OPTIONS_HISTORYFILE_OFF;
+            break;
+        case opt_startup_file:
+            if (!strcmp(optarg,"yes"))
+                jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
+            else
+                jl_errorf("julia: invalid argument to --startup-file={yes|no} (%s)\n", optarg);
+            break;
+        case 'f':
+            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_OFF;
+            break;
+        case 'F':
+            jl_options.startupfile = JL_OPTIONS_STARTUPFILE_ON;
+            break;
+        case opt_compile:
+            if (!strcmp(optarg,"yes"))
+                jl_options.compile_enabled = JL_OPTIONS_COMPILE_ON;
+            else if (!strcmp(optarg,"no"))
+                jl_options.compile_enabled = JL_OPTIONS_COMPILE_OFF;
+            else if (!strcmp(optarg,"all"))
+                jl_options.compile_enabled = JL_OPTIONS_COMPILE_ALL;
+            else
+                jl_errorf("julia: invalid argument to --compile (%s)\n", optarg);
+            break;
+        case opt_code_coverage:
             if (optarg != NULL) {
                 if (!strcmp(optarg,"user"))
                     codecov = JL_LOG_USER;
@@ -158,7 +250,7 @@ void parse_opts(int *argcp, char ***argvp)
                 codecov = JL_LOG_USER;
             }
             break;
-        case 'm':
+        case opt_track_allocation:
             if (optarg != NULL) {
                 if (!strcmp(optarg,"user"))
                     malloclog = JL_LOG_USER;
@@ -168,78 +260,93 @@ void parse_opts(int *argcp, char ***argvp)
                     malloclog = JL_LOG_NONE;
                 break;
             }
+            else {
+                malloclog = JL_LOG_USER;
+            }
+            break;
+        case 'O': // optimize
+            jl_options.opt_level = 1;
+            break;
+        case 'i': // isinteractive
+            jl_options.isinteractive = 1;
+            break;
         case opt_check_bounds:
             if (!strcmp(optarg,"yes"))
-                jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
+                jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_ON;
             else if (!strcmp(optarg,"no"))
-                jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_OFF;
+                jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
+            else
+                jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)\n", optarg);
             break;
         case opt_int_literals:
             if (!strcmp(optarg,"32"))
-                jl_compileropts.int_literals = 32;
+                jl_options.int_literals = 32;
             else if (!strcmp(optarg,"64"))
-                jl_compileropts.int_literals = 64;
-            else {
-                jl_errorf("julia: invalid integer literal size (%s)\n", optarg);
-            }
+                jl_options.int_literals = 64;
+            else
+                jl_errorf("julia: invalid argument to --int-literals={32|64} (%s)\n", optarg);
             break;
         case opt_dump_bitcode:
             if (!strcmp(optarg,"yes"))
-                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_ON;
+                jl_options.dumpbitcode = JL_OPTIONS_DUMPBITCODE_ON;
             else if (!strcmp(optarg,"no"))
-                jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_OFF;
-            break;
-        case opt_compile:
-            if (!strcmp(optarg,"yes"))
-                jl_compileropts.compile_enabled = 1;
-            else if (!strcmp(optarg,"no"))
-                jl_compileropts.compile_enabled = 0;
-            else if (!strcmp(optarg,"all"))
-                jl_compileropts.compile_enabled = 2;
-            else {
-                jl_errorf("julia: invalid argument to --compile (%s)\n", optarg);
-            }
+                jl_options.dumpbitcode = JL_OPTIONS_DUMPBITCODE_OFF;
             break;
         case opt_depwarn:
             if (!strcmp(optarg,"yes"))
-                jl_compileropts.depwarn = 1;
+                jl_options.depwarn = 1;
             else if (!strcmp(optarg,"no"))
-                jl_compileropts.depwarn = 0;
-            else {
-                jl_errorf("julia: invalid argument to --depwarn (%s)\n", optarg);
-            }
+                jl_options.depwarn = 0;
+            else
+                jl_errorf("julia: invalid argument to --depwarn={yes|no} (%s)\n", optarg);
             break;
-        case opt_inline:      /* inline */
+        case opt_inline:
             if (!strcmp(optarg,"yes"))
-                jl_compileropts.can_inline = 1;
+                jl_options.can_inline = 1;
             else if (!strcmp(optarg,"no"))
-                jl_compileropts.can_inline = 0;
+                jl_options.can_inline = 0;
             else {
-                ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
-                exit(1);
+                jl_errorf("julia: invalid argument to --inline (%s)\n", optarg);
             }
             break;
         case opt_math_mode:
-            if (!strcmp(optarg, "ieee"))
-                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_OFF;
-            else if (!strcmp(optarg, "user"))
-                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_DEFAULT;
-            else {
-                ios_printf(ios_stderr, "julia: invalid argument to --math-mode (%s)\n", optarg);
-                exit(1);
-            }
+            if (!strcmp(optarg,"ieee"))
+                jl_options.fast_math = JL_OPTIONS_FAST_MATH_OFF;
+            else if (!strcmp(optarg,"user"))
+                jl_options.fast_math = JL_OPTIONS_FAST_MATH_DEFAULT;
+            else
+                jl_errorf("julia: invalid argument to --math-mode (%s)\n", optarg);
+            break;
+        case 'b': // build
+            jl_options.build_path = strdup(optarg);
+            if (!imagepathspecified)
+                jl_options.image_file = NULL;
+            break;
+        case opt_worker:
+            if (optarg != NULL)
+                if (!strcmp(optarg,"default"))
+                    jl_options.worker = JL_OPTIONS_WORKER_DEFAULT;
+                else if (!strcmp(optarg,"custom"))
+                    jl_options.worker = JL_OPTIONS_WORKER_CUSTOM;
+                else
+                    jl_errorf("julia: invalid argument to --worker={default|custom} (%s)\n", optarg);
+            else
+                jl_options.worker = JL_OPTIONS_WORKER_DEFAULT;
+            break;
+        case opt_bind_to:
+            jl_options.bindto = strdup(optarg);
             break;
         default:
             jl_errorf("julia: unhandled option -- %c\n"
                       "This is a bug, please report it.\n", c);
         }
     }
-    jl_compileropts.code_coverage = codecov;
-    jl_compileropts.malloc_log    = malloclog;
+    jl_options.code_coverage = codecov;
+    jl_options.malloc_log = malloclog;
     optind -= skip;
     *argvp += optind;
     *argcp -= optind;
-    if (jl_compileropts.image_file==NULL && *argcp > 0) {
+    if (jl_options.image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
         }

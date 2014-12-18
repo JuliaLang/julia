@@ -34,6 +34,7 @@ include(joinpath(dir, "queens.jl"))
 # Different cluster managers do not play well together. Since
 # the test infrastructure already uses LocalManager, we will test the simple
 # cluster manager example through a new Julia session.
+
 @unix_only begin
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`

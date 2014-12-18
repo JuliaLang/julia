@@ -103,41 +103,47 @@ There are various ways to run Julia code and provide options, similar to
 those available for the ``perl`` and ``ruby`` programs::
 
     julia [options] [program] [args...]
-     -v, --version            Display version information
-     -h, --help               Print this message
-     -q, --quiet              Quiet startup without banner
-     -H, --home <dir>         Set location of julia executable
+     -v, --version             Display version information
+     -h, --help                Print this message
+     -q, --quiet               Quiet startup without banner
+     -H, --home <dir>          Set location of julia executable
 
-     -e, --eval <expr>        Evaluate <expr>
-     -E, --print <expr>       Evaluate and show <expr>
-     -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode
-     -L, --load <file>        Load <file> immediately on all processors
-     -J, --sysimage <file>    Start up with the given system image file
+     -e, --eval <expr>         Evaluate <expr>
+     -E, --print <expr>        Evaluate and show <expr>
+     -P, --post-boot <expr>    Evaluate <expr>, but don't disable interactive mode
+     -L, --load <file>         Load <file> immediately on all processors
+     -J, --sysimage <file>     Start up with the given system image file
+     -C, --cpu-target <target> Limit usage of cpu features up to <target>
 
-     -p <n>                   Run n local processes
-     --machinefile <file>     Run processes on hosts listed in <file>
+     -p, --procs <n>           Run n local processes
+     --machinefile <file>      Run processes on hosts listed in <file>
 
-     -i                       Force isinteractive() to be true
-     --no-history-file        Don't load or save history
-     -f, --no-startup         Don't load ~/.juliarc.jl
-     -F                       Load ~/.juliarc.jl, then handle remaining inputs
-     --color={yes|no}         Enable or disable color text
+     -i                        Force isinteractive() to be true
+     --color={yes|no}          Enable or disable color text
 
-     --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation
+     --history-file={yes|no}   Load or save history
+     --no-history-file         Don't load history file (deprecated, use --history-file=no)
+     --startup-file={yes|no}   Load ~/.juliarc.jl
+     -f, --no-startup          Don't load ~/.juliarc   (deprecated, use --startup-file=no)
+     -F                        Load ~/.juliarc         (deprecated, use --startup-file=yes)
+
+     --compile={yes|no|all}    Enable or disable compiler, or request exhaustive compilation
 
      --code-coverage={none|user|all}, --code-coverage
                               Count executions of source lines (omitting setting is equivalent to 'user')
-     --track-allocation={none|user|all}
+
+    --track-allocation={none|user|all}, --track-allocation
                               Count bytes allocated by each source line
-     --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)
-     --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),
+
+    -O, --optimize
+                              Run time-intensive code optimizations
+    --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
+    --int-literals={32|64}    Select integer literal size independent of platform
+    --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)
+    --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings
+    --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
+    --math-mode={ieee|user}   Always use IEEE semantics for math (ignoring declarations),
                               or adhere to declarations in source code
-     -O, --optimize           Run time-intensive code optimizations
-     --int-literals={32|64}   Select integer literal size independent of platform
-     --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)
-     --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings
-
-
 Resources
 ---------
 
