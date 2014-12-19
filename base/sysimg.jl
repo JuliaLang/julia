@@ -138,16 +138,6 @@ include("multidimensional.jl")
 
 include("primes.jl")
 
-# concurrency and parallelism
-include("serialize.jl")
-include("multi.jl")
-
-# Polling (requires multi.jl)
-include("poll.jl")
-
-# code loading
-include("loading.jl")
-
 begin
     SOURCE_PATH = ""
     include = function(path)
@@ -196,6 +186,23 @@ include("dSFMT.jl")
 include("random.jl")
 importall .Random
 
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# nullable types
+include("nullable.jl")
+
+# concurrency and parallelism
+include("serialize.jl")
+include("multi.jl")
+
+# code loading
+include("loading.jl")
+
+# Polling (requires multi.jl)
+include("poll.jl")
+
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
 include("mmap.jl")
@@ -228,10 +235,6 @@ include("markdown/Markdown.jl")
 include("docs.jl")
 using .Docs
 using .Markdown
-
-# (s)printf macros
-include("printf.jl")
-importall .Printf
 
 # misc useful functions & macros
 include("util.jl")
@@ -282,9 +285,6 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
-
-# nullable types
-include("nullable.jl")
 
 # Some basic documentation
 include("basedocs.jl")
