@@ -1318,9 +1318,9 @@ const prefix_history_keymap = AnyDict(
         match_input(keymap(ps, mode(s)), s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
     end,
     # match escape sequences for pass thru
-    "\e[1;5*" => "*", # Ctrl-Arrow
     "\e*" => "*",
     "\e[*" => "*",
+    "\eO*"  => "*",
     "\e[1~" => "*",
     "\e[3~" => "*",
     "\e[4~" => "*",
@@ -1328,6 +1328,7 @@ const prefix_history_keymap = AnyDict(
     "\e[6~" => "*",
     "\e[7~" => "*",
     "\e[8~" => "*",
+    "\e[1;5*" => "*", # Ctrl-Arrow
     "\e[200~" => "*"
 )
 
