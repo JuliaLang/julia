@@ -1788,6 +1788,7 @@ ifeq ($(BUILD_OS),WINNT)
 else
 	$(TAR) zxf $<
 endif
+	cd libgit2-$(LIBGIT2_VER) && patch -p1 < ../libgit2-0.21.3-mingw.patch
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
