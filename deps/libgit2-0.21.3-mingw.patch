@@ -1,0 +1,25 @@
+diff --git a/src/path.h b/src/path.h
+index 6c50334..444337b 100644
+--- a/src/path.h
++++ b/src/path.h
+@@ -8,6 +8,7 @@
+ #define INCLUDE_path_h__
+ 
+ #include "common.h"
++#include "posix.h"
+ #include "buffer.h"
+ #include "vector.h"
+ 
+diff --git a/src/win32/path_w32.h b/src/win32/path_w32.h
+index 1d10166..033afbb 100644
+--- a/src/win32/path_w32.h
++++ b/src/win32/path_w32.h
+@@ -7,6 +7,8 @@
+ #ifndef INCLUDE_git_path_w32_h__
+ #define INCLUDE_git_path_w32_h__
+ 
++#include "common.h"
++
+ /*
+  * Provides a large enough buffer to support Windows paths:  MAX_PATH is
+  * 260, corresponding to a maximum path length of 259 characters plus a
