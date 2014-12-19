@@ -1358,7 +1358,7 @@ const char * jl_get_system_image_cpu_target(const char *fname)
         return NULL;
 
     // First, get "sys" from "sys.ji"
-    char *fname_shlib = (char*)alloca(strlen(fname));
+    char *fname_shlib = (char*)alloca(strlen(fname)+1);
     strcpy(fname_shlib, fname);
     char *fname_shlib_dot = strrchr(fname_shlib, '.');
     if (fname_shlib_dot != NULL)
