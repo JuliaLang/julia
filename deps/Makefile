@@ -1691,7 +1691,7 @@ GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(build_prefix)/git
 
 git-$(GIT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://git-core.googlecode.com/files/$@
+	$(JLDOWNLOAD) $@ https://www.kernel.org/pub/software/scm/git/git-$(GIT_VER).tar.gz
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
