@@ -73,25 +73,49 @@ close(server)
 
 @test_throws Base.UVError connect(".invalid",80)
 
-a = UDPSocket()
-b = UDPSocket()
-bind(a,ip"127.0.0.1",port)
-bind(b,ip"127.0.0.1",port+1)
+begin
+    a = UDPSocket()
+    b = UDPSocket()
+    bind(a,ip"127.0.0.1",port)
+    bind(b,ip"127.0.0.1",port+1)
 
-c = Condition()
-@async begin
-    @test bytestring(recv(a)) == "Hello World"
-    # Issue 6505
+    c = Condition()
     @async begin
         @test bytestring(recv(a)) == "Hello World"
-        notify(c)
+    # Issue 6505
+        @async begin
+            @test bytestring(recv(a)) == "Hello World"
+            notify(c)
+        end
+        send(b,ip"127.0.0.1",port,"Hello World")
     end
     send(b,ip"127.0.0.1",port,"Hello World")
+    wait(c)
+
+    @async begin
+        @test begin
+            (addr,data) = recvfrom(a)
+            addr == ip"127.0.0.1" && bytestring(data) == "Hello World"
+        end
+    end
+    send(b, ip"127.0.0.1",port,"Hello World")
+
+    @test_throws MethodError bind(UDPSocket(),port)
+
+    close(a)
+    close(b)
 end
-send(b,ip"127.0.0.1",port,"Hello World")
-wait(c)
+begin
+    a = UDPSocket()
+    b = UDPSocket()
+    bind(a, ip"::1", uint16(port))
+    bind(b, ip"::1", uint16(port+1))
 
-@test_throws MethodError bind(UDPSocket(),port)
-
-close(a)
-close(b)
+    @async begin
+        @test begin
+            (addr, data) = recvfrom(a)
+            addr == ip"::1" && bytestring(data) == "Hello World"
+        end
+    end
+    send(b, ip"::1", port, "Hello World")
+end

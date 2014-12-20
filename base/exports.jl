@@ -1177,6 +1177,7 @@ export
     redirect_stdin,
     redirect_stdout,
     recv,
+    recvfrom,
     reset,
     seek,
     seekend,
