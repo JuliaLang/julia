@@ -649,9 +649,9 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
             Module *m = new Module("julia", jl_LLVMContext);
             jl_setup_module(m,true);
             FunctionMover mover(m,shadow_module);
-            li->functionObject = MapValue((Function*)li->functionObject,mover.VMap,RF_None,NULL,&mover);
+            li->functionObject = mover.CloneFunction((Function*)li->functionObject);
             if (li->cFunctionObject != NULL)
-                li->cFunctionObject = MapValue((Function*)li->cFunctionObject,mover.VMap,RF_None,NULL,&mover);
+                li->cFunctionObject = mover.CloneFunction((Function*)li->cFunctionObject);
         }
         #endif
 
