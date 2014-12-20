@@ -491,12 +491,15 @@ a third argument:
     julia> search("xylophone", 'o', 8)
     0
 
-Another handy string function is ``repeat``:
+Two other handy string functions are ``repeat`` and ``join``:
 
 .. doctest::
 
     julia> repeat(".:Z:.", 10)
     ".:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:..:Z:."
+
+    julia> join(["apples", "bananas", "pineapples"], ", ", " and ")
+    "apples, bananas and pineapples"
 
 Some other useful functions include:
 
