@@ -1,5 +1,7 @@
 .. _man-strings:
 
+.. currentmodule:: Base
+
 *********
  Strings
 *********
@@ -97,7 +99,7 @@ convert an integer value back to a ``Char`` just as easily:
 Not all integer values are valid Unicode code points, but for
 performance, the ``char`` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
-valid code point, use the ``is_valid_char`` function:
+valid code point, use the :func:`is_valid_char` function:
 
 .. doctest::
 
