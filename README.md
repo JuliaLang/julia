@@ -145,7 +145,10 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. In extreme cases, you may wish to reset the source tree to a pristine state.
+3. If you've moved the source directory, you might get errors such as
+    ```CMake Error: The current CMakeCache.txt directory ... is different than the directory ... where     CMakeCache.txt was created.```, in which case you may delete the offending dependency under `deps`
+
+4. In extreme cases, you may wish to reset the source tree to a pristine state.
    The following git commands may be helpful:
 
    ```sh
@@ -155,6 +158,8 @@ latest version.
 
    _To avoid losing work, make sure you know what these commands do before you
    run them. `git` will not be able to undo these changes!_
+   
+
 
 <a name="Uninstalling-Julia"/>
 ## Uninstalling Julia
