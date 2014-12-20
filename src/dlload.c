@@ -183,7 +183,7 @@ void *jl_dlsym(jl_uv_libhandle handle, const char *symbol)
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-char *jl_dlfind_win32(char *f_name)
+char *jl_dlfind_win32(const char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
         return (char*)1;
