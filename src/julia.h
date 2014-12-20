@@ -861,10 +861,10 @@ typedef enum {
     //JL_IMAGE_LIBJULIA = 2,
 } JL_IMAGE_SEARCH;
 DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel);
-DLLEXPORT void jl_init(char *julia_home_dir);
-DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path);
+DLLEXPORT void jl_init(const char *julia_home_dir);
+DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path);
 DLLEXPORT int jl_is_initialized(void);
-DLLEXPORT int julia_trampoline(int argc, char *argv[], int (*pmain)(int ac,char *av[]));
+DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac,char *av[]));
 DLLEXPORT void jl_atexit_hook(void);
 DLLEXPORT void NORETURN jl_exit(int status);
 
@@ -885,7 +885,7 @@ jl_value_t *jl_parse_next(void);
 DLLEXPORT jl_value_t *jl_load_file_string(const char *text, char *filename);
 DLLEXPORT jl_value_t *jl_expand(jl_value_t *expr);
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr);
-DLLEXPORT void *jl_eval_string(char *str);
+DLLEXPORT void *jl_eval_string(const char *str);
 
 // external libraries
 enum JL_RTLD_CONSTANT {
@@ -899,17 +899,17 @@ enum JL_RTLD_CONSTANT {
 #define JL_RTLD_DEFAULT (JL_RTLD_LAZY | JL_RTLD_DEEPBIND)
 
 typedef void *jl_uv_libhandle; // uv_lib_t* (avoid uv.h dependency)
-DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(char *fname, unsigned flags);
-DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(char *fname, unsigned flags);
-DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol);
-DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, char *symbol);
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library(const char *fname, unsigned flags);
+DLLEXPORT jl_uv_libhandle jl_load_dynamic_library_e(const char *fname, unsigned flags);
+DLLEXPORT void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol);
+DLLEXPORT void *jl_dlsym(jl_uv_libhandle handle, const char *symbol);
 DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib, unsigned flags);
 DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle);
-char *jl_dlfind_win32(char *name);
+char *jl_dlfind_win32(const char *name);
 DLLEXPORT int add_library_mapping(char *lib, void *hnd);
 
 #if defined(__linux__) || defined(__FreeBSD__)
-DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n);
+DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 #endif
 
 // compiler
@@ -918,7 +918,7 @@ DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);
 DLLEXPORT jl_value_t *jl_load(const char *fname);
-jl_value_t *jl_parse_eval_all(char *fname);
+jl_value_t *jl_parse_eval_all(const char *fname);
 jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl);
@@ -1261,7 +1261,7 @@ DLLEXPORT int jl_idle_start(uv_idle_t *idle);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
 DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
-DLLEXPORT int jl_puts(char *str, uv_stream_t *stream);
+DLLEXPORT int jl_puts(const char *str, uv_stream_t *stream);
 DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
 
 DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
