@@ -756,7 +756,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (f->getParent() != jl_Module)
         {
             FunctionMover mover(jl_Module,f->getParent());
-            f = (llvm::Function*)MapValue(f,mover.VMap,RF_None,NULL,&mover);
+            f = mover.CloneFunction(f);
         }
 #endif
 

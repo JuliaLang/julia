@@ -89,21 +89,68 @@ static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 static std::map<Value *, void*> llvm_to_jl_value;
 
 #ifdef USE_MCJIT
-class FunctionMover;
-
-static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover);
-
 class FunctionMover : public ValueMaterializer
 {
 public:
     FunctionMover(llvm::Module *dest,llvm::Module *src) :
-        ValueMaterializer(), VMap(), destModule(dest), srcModule(src)
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
+        LazyFunctions(0)
     {
 
     }
     ValueToValueMapTy VMap;
     llvm::Module *destModule;
     llvm::Module *srcModule;
+    std::vector<Function *> LazyFunctions;
+
+    Function *CloneFunctionProto(Function *F)
+    {
+        Function *NewF = Function::Create(F->getFunctionType(),
+                                          Function::ExternalLinkage,
+                                          F->getName(),
+                                          destModule);
+        LazyFunctions.push_back(F);
+        VMap[F] = (Value*)NewF;
+        return NewF;
+    }
+
+    void CloneFunctionBody(Function *F)
+    {
+        Function *NewF = (Function*)(Value*)VMap[F];
+        assert(NewF != NULL);
+
+        Function::arg_iterator DestI = NewF->arg_begin();
+        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            VMap[I] = DestI++;        // Add mapping to VMap
+        }
+
+    #ifdef LLVM36
+        // Clone debug info - Not yet public API
+        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
+    #endif
+
+        SmallVector<ReturnInst*, 8> Returns;
+        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
+    }
+
+    Function *CloneFunction(Function *F)
+    {
+        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
+        ResolveLazyFunctions();
+        return NewF;
+    }
+
+    void ResolveLazyFunctions()
+    {
+        while (!LazyFunctions.empty()) {
+            Function *F = LazyFunctions.back();
+            LazyFunctions.pop_back();
+
+            CloneFunctionBody(F);
+        }
+    }
+
     virtual Value *materializeValueFor (Value *V)
     {
         Function *F = dyn_cast<Function>(V);
@@ -121,14 +168,14 @@ public:
                         Function *oldF = destModule->getFunction(F->getName());
                         if (oldF)
                             return oldF;
-                        return clone_llvm_function(shadow,this);
+                        return CloneFunctionProto(F);
                     }
                     else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
                 }
                 else if (!F->isDeclaration()) {
-                    return clone_llvm_function(F,this);
+                    return CloneFunctionProto(F);
                 }
             }
             // Still a declaration and still in a different module
@@ -172,28 +219,6 @@ public:
         return NULL;
     };
 };
-
-static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover)
-{
-    Function *NewF = Function::Create(toClone->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      toClone->getName(),
-                                      mover->destModule);
-    ClonedCodeInfo info;
-    Function::arg_iterator DestI = NewF->arg_begin();
-    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
-        DestI->setName(I->getName());    // Copy the name over...
-        mover->VMap[I] = DestI++;        // Add mapping to VMap
-    }
-
-    // Necessary in case the function is self referential
-    mover->VMap[toClone] = NewF;
-
-    SmallVector<ReturnInst*, 8> Returns;
-    llvm::CloneFunctionInto(NewF,toClone,mover->VMap,true,Returns,"",NULL,NULL,mover);
-
-    return NewF;
-}
 #endif
 
 // --- emitting pointers directly into code ---
