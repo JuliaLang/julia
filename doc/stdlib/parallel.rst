@@ -101,7 +101,7 @@ General Parallel Computing Support
 .. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
 
    Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. `addprocs(4)`` will add 4 processes on the local machine.
+   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 
 .. function:: addprocs() -> List of process identifiers
 

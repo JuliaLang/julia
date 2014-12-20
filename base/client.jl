@@ -222,8 +222,15 @@ function process_options(args::Vector{UTF8String})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
-            # doesn't return
+            worker_arg = (i == length(args)) ? "" : args[i+1]
+
+            if worker_arg == "custom"
+                i += 1
+            else
+                start_worker()
+                # doesn't return
+            end
+
         elseif args[i]=="--bind-to"
             i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"
