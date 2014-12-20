@@ -266,7 +266,11 @@ static GlobalVariable *jlexe_var;
 static GlobalVariable *jldll_var;
 #if defined(_CPU_X86_64_)
 #ifdef USE_MCJIT
-extern RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
+#if LLVM36
+extern std::unique_ptr<RTDyldMemoryManager> createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
+#else
+RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
+#endif
 #else
 extern JITMemoryManager* createJITMemoryManagerWin();
 #endif
@@ -4924,7 +4928,8 @@ extern "C" void jl_init_codegen(void)
     eb  ->setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
 #if defined(USE_MCJIT)
-        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(new SectionMemoryManager()))
+        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(
+                new SectionMemoryManager()))
 #else
         .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
