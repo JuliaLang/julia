@@ -427,7 +427,7 @@ _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = uint32(0)) = cc
 
 function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
     @assert sock.status == StatusInit
-    err = _bind(sock,host,ipv6only ? UV_UDP_IPV6ONLY : 0)
+    err = _bind(sock,host,port, uint32(ipv6only ? UV_UDP_IPV6ONLY : 0))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind",err))
