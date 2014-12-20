@@ -106,3 +106,23 @@ function eigs(A, B;
                                  resid, ncv, v, ldv, sigma, iparam, ipntr, workd, workl, lworkl, rwork)
 
 end
+
+
+## svds
+
+type SvdX <: AbstractArray{Float64, 2}
+    X
+end
+
+*(s::SvdX, v::Vector{Float64}) = s.X' * (s.X * v)
+size(s::SvdX)  = size(s.X, 2), size(s.X, 2)
+issym(s::SvdX) = true
+
+function svds(X; args...)
+  ex = eigs(SvdX(X), I; args...)
+  ## calculating left-side singular vectors
+  left_sv = X * ex[2]
+  return left_sv ./ sqrt(sum(left_sv.^2, 1)), sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5], ex[6]
+end
+
+
