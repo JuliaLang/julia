@@ -434,35 +434,48 @@ static int true_main(int argc, char *argv[])
         return ret;
     }
 
-    jl_function_t *start_client =
-        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start"));
+    jl_function_t *start_client = jl_base_module ?
+        (jl_function_t*)jl_get_global(jl_base_module, jl_symbol("_start")) : NULL;
 
     if (start_client) {
         jl_apply(start_client, NULL, 0);
         return 0;
     }
 
-    int iserr = 0;
-
- again:
-    ;
-    JL_TRY {
-        if (iserr) {
-            //jl_show(jl_exception_in_transit);# What if the error was in show?
-            jl_printf(JL_STDERR, "\n\n");
-            iserr = 0;
+    ios_puts("warning: Base._start not defined, falling back to economy mode repl.\n", ios_stdout);
+    if (!jl_errorexception_type)
+        ios_puts("warning: jl_errorexception_type not defined; any errors will be fatal.\n", ios_stdout);
+    while (!ios_eof(ios_stdin)) {
+        char *line = NULL;
+        JL_TRY {
+            ios_puts("\njulia> ", ios_stdout);
+            ios_flush(ios_stdout);
+            line = ios_readline(ios_stdin);
+            jl_value_t *val = jl_eval_string(line);
+            if (jl_exception_occurred()) {
+                jl_printf(JL_STDERR, "error during run:\n");
+                jl_static_show(JL_STDERR, jl_exception_in_transit);
+                jl_exception_clear();
+            } else if (val) {
+                jl_static_show(JL_STDOUT, val);
+            }
+            jl_printf(JL_STDOUT, "\n");
+            free(line);
+            line = NULL;
+            uv_run(jl_global_event_loop(),UV_RUN_NOWAIT);
         }
-        uv_run(jl_global_event_loop(),UV_RUN_DEFAULT);
+        JL_CATCH {
+            if (line) {
+                free(line);
+                line = NULL;
+            }
+            jl_printf(JL_STDERR, "\nparser error:\n");
+            jl_static_show(JL_STDERR, jl_exception_in_transit);
+            jl_printf(JL_STDERR, "\n");
+            jlbacktrace();
+        }
     }
-    JL_CATCH {
-        iserr = 1;
-        jl_printf(JL_STDERR, "error during run:\n");
-        jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
-        jlbacktrace();
-        goto again;
-    }
-    return iserr;
+    return 0;
 }
 
 DLLEXPORT extern void julia_save();
