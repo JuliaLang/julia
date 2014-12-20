@@ -54,13 +54,13 @@ release debug: %: libjulia-%
 $(BUILDDIR):
 	mkdir $(BUILDDIR)
 
-$(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.o: %.c $(HEADERS) julia_version.h.phony | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) julia_version.h.phony  | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.o: %.cpp $(HEADERS) julia_version.h.phony  | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) julia_version.h.phony  | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/flisp/libflisp.a
@@ -87,6 +87,18 @@ $(BUILDDIR)/flisp/libflisp.a: flisp/*.h flisp/*.c $(BUILDDIR)/support/libsupport
 $(BUILDDIR)/flisp/libflisp-debug.a: flisp/*.h flisp/*.c $(BUILDDIR)/support/libsupport-debug.a
 	$(MAKE) -C flisp debug BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
+julia_version.h.phony:
+	@echo "//This is autogenerate header file" >$@
+	@echo "#ifndef JULIA_VERSION_H" >>$@
+	@echo "#define JULIA_VERSION_STRING" \"$(JULIA_VERSION)\">>$@
+	@echo "#define JULIA_VERSION_H" >>$@ 
+	@echo $(JULIA_VERSION)|awk  'BEGIN {FS="[.,-]"} \
+	{print "#define JULIA_VERSION_MAJOR " $$1 "\n" \
+	"#define JULIA_VERSION_MINOR " $$2 "\n" \
+	"#define JULIA_VERSION_PATCH " $$3; \
+	if (NF<4) print "#define JULIA_VERSION_IS_RELEASE 1" ;else print  "#define JULIA_VERSION_IS_RELEASE 0"}' >> $@
+	@echo "#endif" >>$@
+	@mv $@ julia_version.h
 ifneq ($(USEMSVC), 1)
 CXXLD = $(CXX) -shared
 else
@@ -121,7 +133,6 @@ clean:
 	-rm -f $(build_shlibdir)/libjulia*
 	-rm -f $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/julia_flisp.boot.inc
 	-rm -f $(BUILDDIR)/*.dbg.obj $(BUILDDIR)/*.o *~ $(BUILDDIR)/*.$(SHLIB_EXT) $(BUILDDIR)/*.a *#
-
 clean-flisp:
 	-$(MAKE) -C flisp clean BUILDDIR='$(abspath $(BUILDDIR)/flisp)'
 
@@ -131,5 +142,5 @@ clean-support:
 
 cleanall: clean clean-flisp clean-support
 
-.PHONY: debug release clean cleanall clean-*
+.PHONY: debug release clean cleanall clean-* julia_version.h.phony
 
