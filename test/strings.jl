@@ -1402,3 +1402,25 @@ gstr = Base.GenericString("12");
 
 # issue #10307
 @test typeof(map(Int16,String[])) == Vector{Int16}
+
+for T in [Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt128]
+    for i in [typemax(T), typemin(T)]
+        s = "$i"
+        @test get(tryparse(T, s)) == i
+    end
+end
+
+for T in [Int8, Int16, Int32, Int64, Int128]
+    for i in [typemax(T), typemin(T)]
+        f = "$(i)0"
+        @test isnull(tryparse(T, f))
+    end
+end
+
+@test get(tryparse(BigInt, "1234567890")) == BigInt(1234567890)
+@test isnull(tryparse(BigInt, "1234567890-"))
+
+@test get(tryparse(Float64, "64")) == 64.0
+@test isnull(tryparse(Float64, "64o"))
+@test get(tryparse(Float32, "32")) == 32.0f0
+@test isnull(tryparse(Float32, "32o"))
