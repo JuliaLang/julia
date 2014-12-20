@@ -188,15 +188,14 @@ for f in (:atan2, :hypot)
     end
 end
 
-max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
+max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x) | (signbit(y) < signbit(x)), y, x)
 @vectorize_2arg Real max
 
-min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
+min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x) | (signbit(y) > signbit(x)), y, x)
 @vectorize_2arg Real min
 
-minmax{T<:FloatingPoint}(x::T, y::T) =  x <= y ? (x, y) :
-                                        x >  y ? (y, x) :
-                                        x == x ? (x, x) : (y, y)
+minmax{T<:FloatingPoint}(x::T, y::T) = ifelse( (y < x) | (signbit(y) > signbit(x)), (y,x),
+    ifelse( (y > x) | (signbit(y) < signbit(x)), (x,y), ifelse( x == x, (x, x), (y, y) ) ) )
 
 function exponent(x::Float64)
     if x==0 || !isfinite(x)
