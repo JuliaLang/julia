@@ -263,17 +263,17 @@ DLLEXPORT const int jl_ver_major()
     return JULIA_VERSION_MAJOR;
 }
 
-DLLEXPORT const int jl_ver_minor() 
+DLLEXPORT const int jl_ver_minor()
 {
     return JULIA_VERSION_MINOR;
 }
 
-DLLEXPORT const int jl_ver_patch() 
+DLLEXPORT const int jl_ver_patch()
 {
     return JULIA_VERSION_PATCH;
 }
 
-DLLEXPORT const int jl_ver_is_release() 
+DLLEXPORT const int jl_ver_is_release()
 {
     return JULIA_VERSION_IS_RELEASE;
 }
