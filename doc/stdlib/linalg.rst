@@ -564,7 +564,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Conjugate transpose array ``src`` and store the result in the preallocated array ``dest``, which should have a size corresponding to ``(size(src,2),size(src,1))``. No in-place transposition is supported and unexpected results will happen if `src` and `dest` have overlapping memory regions.
 
-.. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
+.. function:: eigs(A, [B,]; nev=6, which="LM", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0,))) -> (d,[v,],nconv,niter,nmult,resid)
 
    ``eigs`` computes eigenvalues ``d`` of ``A`` using Lanczos or Arnoldi iterations for real symmetric or general nonsymmetric matrices respectively. If ``B`` is provided, the generalized eigen-problem is solved.  The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
@@ -599,6 +599,23 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ``nothing``     ordinary (forward)                 :math:`A`
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
       =============== ================================== ==================================
+
+.. function:: svds(A; ritzvec=true, args...) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
+
+   ``svds`` computes singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations. Uses ``eigs`` underneath so following keyword arguments are supported:
+    * ``nev``: Number of singular values.
+    * ``ncv``: Number of Krylov vectors used in the computation; see ``eigs`` manual.
+    * ``ritzvec``: Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``, default is ``true``. If ``false`` the singular vectors are omitted from the output.
+    * ``which``: type of singular values (and vectors) to compute, default is largest values. See ``eigs`` manual.
+    * ``tol``: tolerance, see ``eigs``.
+    * ``maxiter``: Maximum number of iterations, see ``eigs``.
+    * ``sigma``: See ``eigs``.
+    * ``v0``: starting vector of right singular vector from which to start the iterations.
+
+   **Example**::
+
+      X = sprand(10, 5, 0.2)
+      svds(X, nev = 2)
 
 .. function:: peakflops(n; parallel=false)
 
