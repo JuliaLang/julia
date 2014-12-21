@@ -285,6 +285,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[MPFR]** (>= 3.0)        — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
 - **[libgit2]** (>= 0.21)    — the Git linkable library, used by Julia's package manager
 
+For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
 [GNU make]:     http://www.gnu.org/software/make/
 [patch]:        http://www.gnu.org/software/patch/
