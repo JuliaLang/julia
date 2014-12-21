@@ -84,6 +84,7 @@ Build as usual, and do `make clean testall` to test your contribution. If your c
 
  - 4 space indent
  - use whitespace to make the code more readable
+ - no whitespace at the end of a line
  - comments are good, especially when they explain the algorithm
 
 ##### General Formatting Guidelines For C code contributions
@@ -94,6 +95,19 @@ Build as usual, and do `make clean testall` to test your contribution. If your c
  - f(void) for 0-argument function declarations
  - newline between } and else instead of } else {
  - if one part of an if..else chain uses { } then all should
+ - no whitespace at the end of a line
+
+##### Git Recommendations For Pull Requests
+
+ - Avoid working from the `master` branch of your fork, creating a new branch will make it easier if Julia's `master` changes and you need to update your pull request.
+ - Try to [squash](http://gitready.com/advanced/2009/02/10/squashing-commits-with-rebase.html) together small commits that make repeated changes to the same section of code so your pull request is easier to review, and Julia's history won't have any broken intermediate commits. A reasonable number of separate well-factored commits is fine, especially for larger changes.
+ - If any conflicts arise due to changes in Julia's `master`, prefer updating your pull request branch with `git rebase` versus `git merge` or `git pull`, since the latter will introduce merge commits that clutter the git history with noise that makes your changes more difficult to review.
+ - If you see any unrelated changes to submodules like `deps/libuv`, `deps/openlibm`, etc, try running `git submodule update` first.
+ - Avoid committing changes to auto-generated files such as `doc/helpdb.jl`, which is a frequent source of conflicts and can be re-generated later.
+ - Descriptive commit messages are good.
+ - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
+ - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
+ - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a url that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
 
 ## Getting help
 
