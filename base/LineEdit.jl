@@ -1123,7 +1123,7 @@ function setup_search_keymap(hp)
         # Backspace/^H
         '\b'      => (s,data,c)->(edit_backspace(data.query_buffer) ?
                         update_display_buffer(s, data) : beep(terminal(s))),
-        127       => '\b',
+        127       => KeyAlias('\b'),
         # Meta Backspace
         "\e\b"    => (s,data,c)->(edit_delete_prev_word(data.query_buffer) ?
                         update_display_buffer(s, data) : beep(terminal(s))),
@@ -1264,10 +1264,10 @@ AnyDict(
             edit_insert(s, '\n')
         end
     end,
-    '\n' => '\r',
+    '\n' => KeyAlias('\r'),
     # Backspace/^H
     '\b' => (s,o...)->edit_backspace(s),
-    127 => '\b',
+    127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
     "\e\x7f" => "\e\b",
