@@ -110,16 +110,16 @@ end
 
 ## svds
 
-type SvdX <: AbstractArray{Float64, 2}
+type SVDOperator <: AbstractArray{Float64, 2}
     X
 end
 
-*(s::SvdX, v::Vector{Float64}) = s.X' * (s.X * v)
-size(s::SvdX)  = size(s.X, 2), size(s.X, 2)
-issym(s::SvdX) = true
+*(s::SVDOperator, v::Vector{Float64}) = s.X' * (s.X * v)
+size(s::SVDOperator)  = size(s.X, 2), size(s.X, 2)
+issym(s::SVDOperator) = true
 
 function svds(X; ritzvec::Bool = true, args...)
-    ex = eigs(SvdX(X), I; ritzvec = ritzvec, args...)
+    ex = eigs(SVDOperator(X), I; ritzvec = ritzvec, args...)
     if ! ritzvec
         return sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5]
     end
