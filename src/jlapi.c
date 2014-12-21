@@ -258,6 +258,7 @@ DLLEXPORT jl_value_t *jl_get_image_file(void)
 {
     return jl_cstr_to_string(jl_compileropts.image_file);
 }
+
 DLLEXPORT const int jl_ver_major()
 {
     return JULIA_VERSION_MAJOR;
