@@ -877,6 +877,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    restore_signals();
     jl_resolve_sysimg_location(rel);
 
     // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
