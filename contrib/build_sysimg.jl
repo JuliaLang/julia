@@ -1,15 +1,17 @@
 #!/usr/bin/env julia
 
-# Build a system image binary at sysimg_path.dlext.  By default, put the system image next to libjulia
+# Build a system image binary at sysimg_path.dlext.  By default, put the system image
+# next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
 # Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
 # don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-const default_sysimg_path = joinpath(dirname(Sys.dlpath("libjulia")),"sys")
+@unix_only const default_sysimg_path = joinpath(dirname(Sys.dlpath("libjulia")),"sys")
+@windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
 function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = dlopen_e("sys")
     if sysimg != C_NULL
-        if !force && Sys.dlpath(sysimg) == "$(sysimg_path).$(Sys.dlext)"
-            println("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
+        if !force && Base.samefile(Sys.dlpath(sysimg), "$(sysimg_path).$(Sys.dlext)")
+            info("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
             return
         end
     end
@@ -24,14 +26,13 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     cd(base_dir) do
         try
             julia = joinpath(JULIA_HOME, "julia")
-            julia_libdir = dirname(Sys.dlpath("libjulia"))
             ld = find_system_linker()
 
             # Ensure we have write-permissions to wherever we're trying to write to
             try
-                touch("$sysimg_path.$(Sys.dlext)")
+                touch("$sysimg_path.ji")
             catch
-                err_msg =  "Unable to modify $sysimg_path.$(Sys.dlext), ensure parent directory exists "
+                err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
                 err_msg *= "and is writable. Absolute paths work best. Do you need to run this with sudo?)"
                 error( err_msg )
             end
@@ -46,50 +47,25 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
             # Start by building sys0.{ji,o}
             sys0_path = joinpath(dirname(sysimg_path), "sys0")
-            println("Building sys0.o...")
+            info("Building sys0.o...")
             println("$julia -C $cpu_target --build $sys0_path sysimg.jl")
             run(`$julia -C $cpu_target --build $sys0_path sysimg.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
-            println("Building sys.o...")
+            info("Building sys.o...")
             println("$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl")
             run(`$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl`)
 
-            # Link sys.o into sys.$(dlext)
-            FLAGS = ["-L$julia_libdir"]
-            if OS_NAME == :Darwin
-                push!(FLAGS, "-dylib")
-                push!(FLAGS, "-undefined")
-                push!(FLAGS, "dynamic_lookup")
-                push!(FLAGS, "-macosx_version_min")
-                push!(FLAGS, "10.7")
-            else
-                if OS_NAME == :Linux
-                    push!(FLAGS, "-shared")
-                end
-                push!(FLAGS, "--unresolved-symbols")
-                push!(FLAGS, "ignore-all")
-            end
-            @windows_only append!(FLAGS, ["-L$JULIA_HOME", "-ljulia", "-lssp"])
-
             if ld != nothing
-                println("Linking sys.$(Sys.dlext)")
-                run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
-            end
-
-            println("System image successfully built at $sysimg_path.$(Sys.dlext)")
-            @windows_only begin
-                if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
-                    LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
-                    LLVM_msg *= " Delete generated sys.dll to avoid these problems"
-                    warn( LLVM_msg )
-                end
-            end
-
-            if default_sysimg_path != sysimg_path
-                println("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                link_sysimg(sysimg_path, ld)
             else
-                println("Julia will automatically load this system image at next startup")
+                info("System image successfully built at $sysimg_path.ji")
+            end
+
+            if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
+                info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+            else
+                info("Julia will automatically load this system image at next startup")
             end
         finally
             # Cleanup userimg.jl
@@ -109,16 +85,18 @@ function find_system_linker()
         return ENV["LD"]
     end
 
-    # On Windows, check to see if WinRPM is installed, and if so, see if binutils is installed
+    # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     @windows_only try
-        using WinRPM
-        if WinRPM.installed("binutils")
-            ENV["PATH"] = "$(ENV["PATH"]):$(joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32","sys-root","mingw","bin"))"
+        require("WinRPM")
+        winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
+            "sys-root","mingw","bin","gcc.exe")
+        if success(`$winrpmgcc --version`)
+            return winrpmgcc
         else
             throw()
         end
     catch
-        warn("Install Binutils via WinRPM.install(\"binutils\") to generate sys.dll for faster startup times" )
+        warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times")
     end
 
 
@@ -130,6 +108,39 @@ function find_system_linker()
     end
 
     warn( "No supported linker found; startup times will be longer" )
+end
+
+# Link sys.o into sys.$(dlext)
+function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
+    julia_libdir = dirname(Sys.dlpath("libjulia"))
+
+    FLAGS = ["-L$julia_libdir"]
+    if OS_NAME == :Darwin
+        push!(FLAGS, "-dylib")
+        push!(FLAGS, "-undefined")
+        push!(FLAGS, "dynamic_lookup")
+        push!(FLAGS, "-macosx_version_min")
+        push!(FLAGS, "10.7")
+    else
+        push!(FLAGS, "-shared")
+        # on windows we link using gcc for now
+        wl = @windows? "-Wl," : ""
+        push!(FLAGS, wl * "--unresolved-symbols")
+        push!(FLAGS, wl * "ignore-all")
+    end
+    @windows_only append!(FLAGS, ["-ljulia", "-lssp-0"])
+
+    info("Linking sys.$(Sys.dlext)")
+    run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
+
+    info("System image successfully built at $sysimg_path.$(Sys.dlext)")
+    @windows_only begin
+        if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
+            LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
+            LLVM_msg *= " Delete generated sys.dll to avoid these problems"
+            warn( LLVM_msg )
+        end
+    end
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
