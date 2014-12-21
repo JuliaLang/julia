@@ -118,11 +118,13 @@ end
 size(s::SvdX)  = size(s.X, 2), size(s.X, 2)
 issym(s::SvdX) = true
 
-function svds(X; args...)
-  ex = eigs(SvdX(X), I; args...)
-  ## calculating left-side singular vectors
-  left_sv = X * ex[2]
-  return left_sv ./ sqrt(sum(left_sv.^2, 1)), sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5], ex[6]
+function svds(X; ritzvec::Bool = true, args...)
+    ex = eigs(SvdX(X), I; ritzvec = ritzvec, args...)
+    if ! ritzvec
+        return sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5]
+    end
+
+    ## calculating left-side singular vectors
+    left_sv = X * ex[2]
+    return left_sv ./ sqrt(sum(left_sv.^2, 1)), sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5], ex[6]
 end
-
-
