@@ -3402,12 +3402,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 8-byte boundary
+    // tell Win32 to realign the stack to the next 16-byte boundary
     // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 8-byte-aligned stack) and
-    // Windows (which uses a 2-byte-aligned stack)
+    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
+    // i686 Windows (which uses a 4-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(8);
+    attr->addStackAlignmentAttr(16);
 #if LLVM32 && !LLVM33
     f->addAttribute(Attributes::FunctionIndex,
         Attributes::get(f->getContext(),*attr));
