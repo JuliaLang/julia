@@ -747,6 +747,7 @@ void julia_init(char *imageFile)
 {
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    restore_signals();
     // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
     if (jl_compileropts.cpu_target == NULL) {
         const char * sysimg_cpu_target = jl_get_system_image_cpu_target(imageFile);
