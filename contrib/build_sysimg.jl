@@ -26,7 +26,6 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     cd(base_dir) do
         try
             julia = joinpath(JULIA_HOME, "julia")
-            julia_libdir = dirname(Sys.dlpath("libjulia"))
             ld = find_system_linker()
 
             # Ensure we have write-permissions to wherever we're trying to write to
@@ -57,35 +56,8 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             println("$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl")
             run(`$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl`)
 
-            # Link sys.o into sys.$(dlext)
-            FLAGS = ["-L$julia_libdir"]
-            if OS_NAME == :Darwin
-                push!(FLAGS, "-dylib")
-                push!(FLAGS, "-undefined")
-                push!(FLAGS, "dynamic_lookup")
-                push!(FLAGS, "-macosx_version_min")
-                push!(FLAGS, "10.7")
-            else
-                if OS_NAME == :Linux
-                    push!(FLAGS, "-shared")
-                end
-                push!(FLAGS, "--unresolved-symbols")
-                push!(FLAGS, "ignore-all")
-            end
-            @windows_only append!(FLAGS, ["-L$JULIA_HOME", "-ljulia", "-lssp"])
-
             if ld != nothing
-                info("Linking sys.$(Sys.dlext)")
-                run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
-
-                info("System image successfully built at $sysimg_path.$(Sys.dlext)")
-                @windows_only begin
-                    if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
-                        LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
-                        LLVM_msg *= " Delete generated sys.dll to avoid these problems"
-                        warn( LLVM_msg )
-                    end
-                end
+                link_sysimg(sysimg_path, ld)
             else
                 info("System image successfully built at $sysimg_path.ji")
             end
@@ -136,6 +108,39 @@ function find_system_linker()
     end
 
     warn( "No supported linker found; startup times will be longer" )
+end
+
+# Link sys.o into sys.$(dlext)
+function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
+    julia_libdir = dirname(Sys.dlpath("libjulia"))
+
+    FLAGS = ["-L$julia_libdir"]
+    if OS_NAME == :Darwin
+        push!(FLAGS, "-dylib")
+        push!(FLAGS, "-undefined")
+        push!(FLAGS, "dynamic_lookup")
+        push!(FLAGS, "-macosx_version_min")
+        push!(FLAGS, "10.7")
+    else
+        if OS_NAME == :Linux
+            push!(FLAGS, "-shared")
+        end
+        push!(FLAGS, "--unresolved-symbols")
+        push!(FLAGS, "ignore-all")
+    end
+    @windows_only append!(FLAGS, ["-L$JULIA_HOME", "-ljulia", "-lssp-0"])
+
+    info("Linking sys.$(Sys.dlext)")
+    run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
+
+    info("System image successfully built at $sysimg_path.$(Sys.dlext)")
+    @windows_only begin
+        if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
+            LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
+            LLVM_msg *= " Delete generated sys.dll to avoid these problems"
+            warn( LLVM_msg )
+        end
+    end
 end
 
 # When running this file as a script, try to do so with default values.  If arguments are passed
