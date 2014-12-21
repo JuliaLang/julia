@@ -1351,6 +1351,15 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_DUMPBITCODE_ON 1
 #define JL_COMPILEROPT_DUMPBITCODE_OFF 2
 
+// Version information
+#include "julia_version.h"
+
+DLLEXPORT extern const int jl_ver_major(void);
+DLLEXPORT extern const int jl_ver_minor(void);
+DLLEXPORT extern const int jl_ver_patch(void);
+DLLEXPORT extern const int jl_ver_is_release(void);
+DLLEXPORT extern const char* jl_ver_string(void);
+
 #ifdef __cplusplus
 }
 #endif
