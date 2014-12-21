@@ -1,15 +1,17 @@
 #!/usr/bin/env julia
 
-# Build a system image binary at sysimg_path.dlext.  By default, put the system image next to libjulia
+# Build a system image binary at sysimg_path.dlext.  By default, put the system image
+# next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
 # Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
 # don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-const default_sysimg_path = joinpath(dirname(Sys.dlpath("libjulia")),"sys")
+@unix_only const default_sysimg_path = joinpath(dirname(Sys.dlpath("libjulia")),"sys")
+@windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
 function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Sys.dlpath(sysimg) == "$(sysimg_path).$(Sys.dlext)"
-            println("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
+            info("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
             return
         end
     end
@@ -29,9 +31,9 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
             # Ensure we have write-permissions to wherever we're trying to write to
             try
-                touch("$sysimg_path.$(Sys.dlext)")
+                touch("$sysimg_path.ji")
             catch
-                err_msg =  "Unable to modify $sysimg_path.$(Sys.dlext), ensure parent directory exists "
+                err_msg =  "Unable to modify $sysimg_path.ji, ensure parent directory exists "
                 err_msg *= "and is writable. Absolute paths work best. Do you need to run this with sudo?)"
                 error( err_msg )
             end
@@ -46,12 +48,12 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
 
             # Start by building sys0.{ji,o}
             sys0_path = joinpath(dirname(sysimg_path), "sys0")
-            println("Building sys0.o...")
+            info("Building sys0.o...")
             println("$julia -C $cpu_target --build $sys0_path sysimg.jl")
             run(`$julia -C $cpu_target --build $sys0_path sysimg.jl`)
 
             # Bootstrap off of that to create sys.{ji,o}
-            println("Building sys.o...")
+            info("Building sys.o...")
             println("$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl")
             run(`$julia -C $cpu_target --build $sysimg_path -J $sys0_path.ji -f sysimg.jl`)
 
@@ -73,23 +75,25 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
             @windows_only append!(FLAGS, ["-L$JULIA_HOME", "-ljulia", "-lssp"])
 
             if ld != nothing
-                println("Linking sys.$(Sys.dlext)")
+                info("Linking sys.$(Sys.dlext)")
                 run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
-            end
 
-            println("System image successfully built at $sysimg_path.$(Sys.dlext)")
-            @windows_only begin
-                if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
-                    LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
-                    LLVM_msg *= " Delete generated sys.dll to avoid these problems"
-                    warn( LLVM_msg )
+                info("System image successfully built at $sysimg_path.$(Sys.dlext)")
+                @windows_only begin
+                    if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
+                        LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
+                        LLVM_msg *= " Delete generated sys.dll to avoid these problems"
+                        warn( LLVM_msg )
+                    end
                 end
+            else
+                info("System image successfully built at $sysimg_path.ji")
             end
 
             if default_sysimg_path != sysimg_path
-                println("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
+                info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
             else
-                println("Julia will automatically load this system image at next startup")
+                info("Julia will automatically load this system image at next startup")
             end
         finally
             # Cleanup userimg.jl
@@ -111,9 +115,11 @@ function find_system_linker()
 
     # On Windows, check to see if WinRPM is installed, and if so, see if binutils is installed
     @windows_only try
-        using WinRPM
-        if WinRPM.installed("binutils")
-            ENV["PATH"] = "$(ENV["PATH"]):$(joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32","sys-root","mingw","bin"))"
+        require("WinRPM")
+        winrpmbinutilsdir = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
+            "sys-root","mingw","$(Sys.ARCH)-w64-mingw32","bin")
+        if filesize(joinpath(winrpmbinutilsdir, "ld.exe")) > 0
+            ENV["PATH"] = "$(ENV["PATH"]);$winrpmbinutilsdir"
         else
             throw()
         end
