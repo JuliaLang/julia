@@ -16,24 +16,29 @@ end
 # QR Factorization #
 ####################
 
-immutable QR{T} <: Factorization{T}
-    factors::Matrix{T}
+immutable QR{T,S<:AbstractMatrix} <: Factorization{T}
+    factors::S
     τ::Vector{T}
+    QR(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
+QR{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QR{T,typeof(factors)}(factors, τ)
 # Note. For QRCompactWY factorization without pivoting, the WY representation based method introduced in LAPACK 3.4
-immutable QRCompactWY{S} <: Factorization{S}
-    factors::Matrix{S}
-    T::Matrix{S}
+immutable QRCompactWY{S,M<:AbstractMatrix} <: Factorization{S}
+    factors::M
+    T::M
+    QRCompactWY(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) = new(factors, T)
 end
-QRCompactWY{S}(factors::Matrix{S}, T::Matrix{S})=QRCompactWY{S}(factors, T)
+QRCompactWY{S}(factors::AbstractMatrix{S}, T::AbstractMatrix{S}) = QRCompactWY{S,typeof(factors)}(factors, T)
 
-immutable QRPivoted{T} <: Factorization{T}
-    factors::Matrix{T}
+immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
+    factors::S
     τ::Vector{T}
     jpvt::Vector{BlasInt}
+    QRPivoted(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) = new(factors, τ, jpvt)
 end
+QRPivoted{T}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) = QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = pivot ? QRPivoted{T}(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = pivot ? QRPivoted(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
 function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
     pivot && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
     m, n = size(A)
@@ -109,14 +114,26 @@ end
 getq(A::QRCompactWY) = QRCompactWYQ(A.factors,A.T)
 getq(A::QRPivoted) = QRPackedQ(A.factors,A.τ)
 
-immutable QRPackedQ{T} <: AbstractMatrix{T}
-    factors::Matrix{T}
+immutable QRPackedQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
+    QRPackedQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
-immutable QRCompactWYQ{S} <: AbstractMatrix{S}
-    factors::Matrix{S}
+QRPackedQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = QRPackedQ{T,typeof(factors)}(factors, τ)
+
+immutable QRPackedWYQ{S,M<:AbstractMatrix} <: AbstractMatrix{S}
+    factors::M
     T::Matrix{S}
+    QRPackedWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)
 end
+QRPackedWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRPackedWYQ{S,typeof(factors)}(factors, T)
+
+immutable QRCompactWYQ{S, M<:AbstractMatrix} <: AbstractMatrix{S}
+    factors::M
+    T::Matrix{S}
+    QRCompactWYQ(factors::AbstractMatrix{S}, T::Matrix{S}) = new(factors, T)
+end
+QRCompactWYQ{S}(factors::AbstractMatrix{S}, T::Matrix{S}) = QRCompactWYQ{S,typeof(factors)}(factors, T)
 
 convert{T}(::Type{QRPackedQ{T}}, Q::QRPackedQ) = QRPackedQ(convert(AbstractMatrix{T}, Q.factors), convert(Vector{T}, Q.τ))
 convert{T}(::Type{AbstractMatrix{T}}, Q::QRPackedQ) = convert(QRPackedQ{T}, Q)
@@ -373,20 +390,25 @@ end
 ## Lower priority: Add LQ, QL and RQ factorizations
 
 # FIXME! Should add balancing option through xgebal
-immutable Hessenberg{T} <: Factorization{T}
-    factors::Matrix{T}
+immutable Hessenberg{T,S<:AbstractMatrix} <: Factorization{T}
+    factors::S
     τ::Vector{T}
+    Hessenberg(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
+Hessenberg{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = Hessenberg{T,typeof(factors)}(factors, τ)
+
 Hessenberg(A::StridedMatrix) = Hessenberg(LAPACK.gehrd!(A)...)
 
 hessfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Hessenberg(A)
 hessfact{T<:BlasFloat}(A::StridedMatrix{T}) = hessfact!(copy(A))
 hessfact{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? hessfact!(convert(AbstractMatrix{S},A)) : hessfact!(copy(A)))
 
-immutable HessenbergQ{T} <: AbstractMatrix{T}
-    factors::Matrix{T}
+immutable HessenbergQ{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+    factors::S
     τ::Vector{T}
+    HessenbergQ(factors::AbstractMatrix{T}, τ::Vector{T}) = new(factors, τ)
 end
+HessenbergQ{T}(factors::AbstractMatrix{T}, τ::Vector{T}) = HessenbergQ{T,typeof(factors)}(factors, τ)
 HessenbergQ(A::Hessenberg) = HessenbergQ(A.factors, A.τ)
 size(A::HessenbergQ, args...) = size(A.factors, args...)
 
@@ -407,16 +429,21 @@ print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer,
 #######################
 
 # Eigenvalues
-immutable Eigen{T,V} <: Factorization{T}
-    values::Vector{V}
-    vectors::Matrix{T}
+immutable Eigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+    values::U
+    vectors::S
+    Eigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
 end
+Eigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = Eigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
 
 # Generalized eigenvalue problem.
-immutable GeneralizedEigen{T,V} <: Factorization{T}
-    values::Vector{V}
-    vectors::Matrix{T}
+immutable GeneralizedEigen{T,V,S<:AbstractMatrix,U<:AbstractVector} <: Factorization{T}
+    values::U
+    vectors::S
+    GeneralizedEigen(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = new(values, vectors)
 end
+GeneralizedEigen{T,V}(values::AbstractVector{V}, vectors::AbstractMatrix{T}) = GeneralizedEigen{T,V,typeof(vectors),typeof(values)}(values, vectors)
+
 
 function getindex(A::Union(Eigen,GeneralizedEigen), d::Symbol)
     d == :values && return A.values
@@ -534,11 +561,14 @@ end
 eigvals{TA,TB}(A::AbstractMatrix{TA}, B::AbstractMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); eigvals!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))
 
 # SVD
-immutable SVD{T<:BlasFloat,Tr} <: Factorization{T}
-    U::Matrix{T}
+immutable SVD{T<:BlasFloat,Tr,M<:AbstractArray} <: Factorization{T}
+    U::M
     S::Vector{Tr}
-    Vt::Matrix{T}
+    Vt::M
+    SVD(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = new(U, S, Vt)
 end
+SVD{T<:BlasFloat,Tr}(U::AbstractArray{T}, S::Vector{Tr}, Vt::AbstractArray{T}) = SVD{T,Tr,typeof(U)}(U, S, Vt)
+
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}; thin::Bool=true)
     m,n = size(A)
     if m == 0 || n == 0
@@ -581,16 +611,18 @@ function \{T<:BlasFloat}(A::SVD{T}, B::StridedVecOrMat{T})
 end
 
 # Generalized svd
-immutable GeneralizedSVD{T} <: Factorization{T}
-    U::Matrix{T}
-    V::Matrix{T}
-    Q::Matrix{T}
+immutable GeneralizedSVD{T,S} <: Factorization{T}
+    U::S
+    V::S
+    Q::S
     a::Vector
     b::Vector
     k::Int
     l::Int
-    R::Matrix{T}
+    R::S
+    GeneralizedSVD(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = new(U, V, Q, a, b, k, l, R)
 end
+GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{T}, a::Vector, b::Vector, k::Int, l::Int, R::AbstractMatrix{T}) = GeneralizedSVD{T,typeof(U)}(U, V, Q, a, b, k, l, R)
 
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
@@ -643,11 +675,13 @@ end
 svdvals{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = svdvals!(copy(A),copy(B))
 svdvals{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(T)/norm(one(TA))),TB); svdvals!(S != TA ? convert(AbstractMatrix{S}, A) : copy(A), S != TB ? convert(AbstractMatrix{S}, B) : copy(B)))
 
-immutable Schur{Ty<:BlasFloat} <: Factorization{Ty}
-    T::Matrix{Ty}
-    Z::Matrix{Ty}
+immutable Schur{Ty<:BlasFloat, S<:AbstractMatrix} <: Factorization{Ty}
+    T::S
+    Z::S
     values::Vector
+    Schur(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = new(T, Z, values)
 end
+Schur{Ty}(T::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}, values::Vector) = Schur{Ty, typeof(T)}(T, Z, values)
 
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}) = Schur(LinAlg.LAPACK.gees!('V', A)...)
 schurfact{T<:BlasFloat}(A::StridedMatrix{T}) = schurfact!(copy(A))
@@ -670,14 +704,16 @@ ordschur{Ty<:BlasFloat}(Q::StridedMatrix{Ty}, T::StridedMatrix{Ty}, select::Arra
 ordschur!{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = (res=ordschur!(schur.Z, schur.T, select); schur[:values][:]=res[:values]; res)
 ordschur{Ty<:BlasFloat}(schur::Schur{Ty}, select::Array{Int}) = ordschur(schur.Z, schur.T, select)
 
-immutable GeneralizedSchur{Ty<:BlasFloat} <: Factorization{Ty}
-    S::Matrix{Ty}
-    T::Matrix{Ty}
+immutable GeneralizedSchur{Ty<:BlasFloat, M<:AbstractMatrix} <: Factorization{Ty}
+    S::M
+    T::M
     alpha::Vector
     beta::Vector{Ty}
-    Q::Matrix{Ty}
-    Z::Matrix{Ty}
+    Q::M
+    Z::M
+    GeneralizedSchur(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = new(S, T, alpha, beta, Q, Z)
 end
+GeneralizedSchur{Ty}(S::AbstractMatrix{Ty}, T::AbstractMatrix{Ty}, alpha::Vector, beta::Vector{Ty}, Q::AbstractMatrix{Ty}, Z::AbstractMatrix{Ty}) = GeneralizedSchur{Ty,typeof(S)}(S, T, alpha, beta, Q, Z)
 
 schurfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = GeneralizedSchur(LinAlg.LAPACK.gges!('V', 'V', A, B)...)
 schurfact{T<:BlasFloat}(A::StridedMatrix{T},B::StridedMatrix{T}) = schurfact!(copy(A),copy(B))
