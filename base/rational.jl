@@ -220,13 +220,25 @@ for op in (:div, :fld, :cld)
     end
 end
 
-trunc{T<:Integer}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
-floor{T<:Integer}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
-ceil {T<:Integer}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
-function round{T<:Integer}(::Type{T}, x::Rational)
-    t = trunc(T,x)
-    r = x-t
-    abs(r.num) > (r.den-one(r.den))>>1 ? t + copysign(one(t),x) : t
+trunc{T}(::Type{T}, x::Rational) = convert(T,div(x.num,x.den))
+floor{T}(::Type{T}, x::Rational) = convert(T,fld(x.num,x.den))
+ceil {T}(::Type{T}, x::Rational) = convert(T,cld(x.num,x.den))
+
+function round{T}(::Type{T}, x::Rational, ::RoundingMode{:Nearest})
+    q,r = divrem(x.num,x.den)
+    s = abs(r) < (x.den+one(x.den)+iseven(q))>>1 ? q : q+copysign(one(q),x.num)
+    convert(T,s)
+end
+round{T}(::Type{T}, x::Rational) = round(T,x,RoundNearest)
+function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesAway})
+    q,r = divrem(x.num,x.den)
+    s = abs(r) < (x.den+one(x.den))>>1 ? q : q+copysign(one(q),x.num)
+    convert(T,s)
+end
+function round{T}(::Type{T}, x::Rational, ::RoundingMode{:NearestTiesUp})
+    q,r = divrem(x.num,x.den)
+    s = abs(r) < (x.den+one(x.den)+(x.num<0))>>1 ? q : q+copysign(one(q),x.num)
+    convert(T,s)
 end
 
 trunc{T}(x::Rational{T}) = Rational(trunc(T,x))

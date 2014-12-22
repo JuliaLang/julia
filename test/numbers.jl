@@ -1340,16 +1340,29 @@ let ≈(x,y) = x==y && typeof(x)==typeof(y)
             r = (1:n)-div(n,2)
             y = t[x/4 for x in r]
             @test trunc(y) ≈ t[div(i,4) for i in r]
-            @test round(y) ≈ t[(i+1+(i>=0))>>2 for i in r]
             @test floor(y) ≈ t[i>>2 for i in r]
             @test ceil(y)  ≈ t[(i+3)>>2 for i in r]
+            @test round(y) ≈ t[(i+1+isodd(i>>2))>>2 for i in r]
+            @test round(y,RoundNearestTiesAway) ≈ t[(i+1+(i>=0))>>2 for i in r]
+            @test round(y,RoundNearestTiesUp) ≈ t[(i+2)>>2 for i in r]
         end
     end
 end
 
 @test_throws InexactError round(Int,Inf)
 @test_throws InexactError round(Int,NaN)
-@test round(Int,2.5) == 3
+@test round(Int,2.5) == 2
+@test round(Int,1.5) == 2
+@test round(Int,-2.5) == -2
+@test round(Int,-1.5) == -2
+@test round(Int,2.5,RoundNearestTiesAway) == 3
+@test round(Int,1.5,RoundNearestTiesAway) == 2
+@test round(Int,2.5,RoundNearestTiesUp) == 3
+@test round(Int,1.5,RoundNearestTiesUp) == 2
+@test round(Int,-2.5,RoundNearestTiesAway) == -3
+@test round(Int,-1.5,RoundNearestTiesAway) == -2
+@test round(Int,-2.5,RoundNearestTiesUp) == -2
+@test round(Int,-1.5,RoundNearestTiesUp) == -1
 @test round(Int,-1.9) == -2
 @test_throws InexactError round(Int64, 9.223372036854776e18)
 @test       round(Int64, 9.223372036854775e18) == 9223372036854774784
@@ -1372,28 +1385,45 @@ for n = 1:100
     @test n == m
 end
 
-@test round(UInt,-0.0) == 0
-@test round(Int,-0.0) == 0
+for Ti in [Int,UInt]
+    for Tf in [Float16,Float32,Float64]
 
-@test round(Int, 0.5) == 1
-@test round(Int, prevfloat(0.5)) == 0
-@test round(Int, -0.5) == -1
-@test round(Int, nextfloat(-0.5)) == 0
+        @test round(Ti,Tf(-0.0)) == 0
+        @test round(Ti,Tf(-0.0),RoundNearestTiesAway) == 0
+        @test round(Ti,Tf(-0.0),RoundNearestTiesUp) == 0
 
-@test round(UInt, 0.5) == 1
-@test round(UInt, prevfloat(0.5)) == 0
-@test_throws InexactError round(UInt, -0.5)
-@test round(UInt, nextfloat(-0.5)) == 0
+        @test round(Ti, Tf(0.5)) == 0
+        @test round(Ti, Tf(0.5), RoundNearestTiesAway) == 1
+        @test round(Ti, Tf(0.5), RoundNearestTiesUp) == 1
 
-@test round(Int, 0.5f0) == 1
-@test round(Int, prevfloat(0.5f0)) == 0
-@test round(Int, -0.5f0) == -1
-@test round(Int, nextfloat(-0.5f0)) == 0
+        @test round(Ti, prevfloat(Tf(0.5))) == 0
+        @test round(Ti, prevfloat(Tf(0.5)), RoundNearestTiesAway) == 0
+        @test round(Ti, prevfloat(Tf(0.5)), RoundNearestTiesUp) == 0
 
-@test round(UInt, 0.5f0) == 1
-@test round(UInt, prevfloat(0.5f0)) == 0
-@test_throws InexactError round(UInt, -0.5f0)
-@test round(UInt, nextfloat(-0.5f0)) == 0
+        @test round(Ti, nextfloat(Tf(0.5))) == 1
+        @test round(Ti, nextfloat(Tf(0.5)), RoundNearestTiesAway) == 1
+        @test round(Ti, nextfloat(Tf(0.5)), RoundNearestTiesUp) == 1
+
+        @test round(Ti, Tf(-0.5)) == 0
+        @test round(Ti, Tf(-0.5), RoundNearestTiesUp) == 0
+
+        @test round(Ti, nextfloat(Tf(-0.5))) == 0
+        @test round(Ti, nextfloat(Tf(-0.5)), RoundNearestTiesAway) == 0
+        @test round(Ti, nextfloat(Tf(-0.5)), RoundNearestTiesUp) == 0
+
+        if Ti <: Signed
+            @test round(Ti, Tf(-0.5), RoundNearestTiesAway) == -1
+            @test round(Ti, prevfloat(Tf(-0.5))) == -1
+            @test round(Ti, prevfloat(Tf(-0.5)), RoundNearestTiesAway) == -1
+            @test round(Ti, prevfloat(Tf(-0.5)), RoundNearestTiesUp) == -1
+        else
+            @test_throws InexactError round(Ti, Tf(-0.5), RoundNearestTiesAway)
+            @test_throws InexactError round(Ti, prevfloat(Tf(-0.5)))
+            @test_throws InexactError round(Ti, prevfloat(Tf(-0.5)), RoundNearestTiesAway)
+            @test_throws InexactError round(Ti, prevfloat(Tf(-0.5)), RoundNearestTiesUp)
+        end
+    end
+end
 
 # numbers that can't be rounded by trunc(x+0.5)
 @test round(Int64, 2.0^52 + 1) == 4503599627370497

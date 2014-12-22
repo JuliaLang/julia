@@ -909,7 +909,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
     else
         s, p = frexp(x)
         sigbits = 4*min(n-1,13)
-        s = 0.25*Base.Math.rint(ldexp(s,1+sigbits))
+        s = 0.25*round(ldexp(s,1+sigbits))
         # ensure last 2 exponent bits either 01 or 10
         u = (reinterpret(UInt64,s) & 0x003f_ffff_ffff_ffff) >> (52-sigbits)
         if n > 14
