@@ -44,16 +44,16 @@ end
 @vectorize_1arg Number isfinite
 
 
-round(x::Real, ::RoundingMode{:TowardZero}) = trunc(x)
-round(x::Real, ::RoundingMode{:TowardPositive}) = ceil(x)
-round(x::Real, ::RoundingMode{:TowardNegative}) = floor(x)
+round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
+round(x::Real, ::RoundingMode{:Up}) = ceil(x)
+round(x::Real, ::RoundingMode{:Down}) = floor(x)
 # C-style round
-function round(x::FloatingPoint, ::RoundingMode{:TiesToAway})
+function round(x::FloatingPoint, ::RoundingMode{:NearestTiesAway})
     y = trunc(x)
     ifelse(x==y,y,trunc(2*x-y))
 end
 # Java-style round
-function round(x::FloatingPoint, ::RoundingMode{:TiesToPositive})
+function round(x::FloatingPoint, ::RoundingMode{:NearestTiesUp})
     y = floor(x)
     ifelse(x==y,y,copysign(floor(2*x-y),x))
 end

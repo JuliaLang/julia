@@ -628,11 +628,11 @@ end
 maxintfloat(x::BigFloat) = BigFloat(2)^precision(x)
 maxintfloat(::Type{BigFloat}) = BigFloat(2)^get_bigfloat_precision()
 
-to_mpfr(::RoundingMode{:TiesToEven}) = Cint(0)
-to_mpfr(::RoundingMode{:TowardZero}) = Cint(1)
-to_mpfr(::RoundingMode{:TowardPositive}) = Cint(2)
-to_mpfr(::RoundingMode{:TowardNegative}) = Cint(3)
-to_mpfr(::RoundingMode{:AwayFromZero}) = Cint(4)
+to_mpfr(::RoundingMode{:Nearest}) = Cint(0)
+to_mpfr(::RoundingMode{:ToZero}) = Cint(1)
+to_mpfr(::RoundingMode{:Up}) = Cint(2)
+to_mpfr(::RoundingMode{:Down}) = Cint(3)
+to_mpfr(::RoundingMode{:FromZero}) = Cint(4)
 
 function from_mpfr(c::Integer)
     if c == 0
@@ -705,7 +705,7 @@ function round(x::BigFloat)
     ccall((:mpfr_rint, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Cint), &z, &x, ROUNDING_MODE[end])
     return z
 end
-function round(x::BigFloat,::RoundingMode{:TiesToAway})
+function round(x::BigFloat,::RoundingMode{:NearestTiesAway})
     z = BigFloat()
     ccall((:mpfr_round, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}), &z, &x)
     return z
