@@ -134,16 +134,69 @@ function complete_path(path::AbstractString, pos)
     return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
-function complete_methods(input::AbstractString)
-    tokens = split(input, '.')
-    fn = Main
-    for token in tokens
-        sym = symbol(token)
-        isdefined(fn, sym) || return UTF8String[]
-        fn = fn.(sym)
+# Determines whether a string endswiths ',' or '(' when disregarding whitespace_chars
+function ends_c(s::AbstractString)
+    for c in reverse(s)
+        if c in [',', '(']
+            return true
+        elseif !(c in whitespace_chars)
+            return false
+        end
     end
-    isgeneric(fn) || return UTF8String[]
-    UTF8String[string(m) for m in methods(fn)]
+    false
+end
+
+# Returns a range that includes the method name in front of the first non
+# closed start brace from the end of the string.
+function find_start_brace(s::AbstractString)
+    braces = 0
+    r = RevString(s)
+    i = start(r)
+    while !done(r, i)
+        c, i = next(r, i)
+        if c == '('
+            braces += 1
+        elseif c == ')'
+            braces -= 1
+        end
+        braces == 1 && break
+    end
+    braces != 1 && return 0:-1
+    method_name_end = reverseind(r, i)
+    startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
+    return startind:endof(s), method_name_end
+end
+
+# Return the next value when the sym is defined in current namespace fn
+function return_val(sym::Expr, fn)
+    sym.head != :. && return
+    for ex in sym.args
+        fn = return_val(ex, fn)
+        fn == nothing && return
+    end
+    fn
+end
+return_val(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
+return_val(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
+return_val(sym, fn) = sym
+
+# Method completion on function call expression that look like :(max(1))
+function complete_methods(ex_org::Expr)
+    args_ex = Any[]
+    for ex in ex_org.args # First ex is the function name
+        val = return_val(ex, Main)
+        val == nothing && return UTF8String[]
+        push!(args_ex, val)
+    end
+    isgeneric(args_ex[1]) || return UTF8String[]
+    out = UTF8String[]
+    t_in = tuple(args_ex[2:end]...) # Input types
+    for method in methods(args_ex[1])
+        # Check if the method's type signature intersects the input types
+        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], typeof(t_in)) != None &&
+            push!(out,string(method))
+    end
+    return out
 end
 
 include("latex_symbols.jl")
@@ -206,10 +259,12 @@ function completions(string, pos)
     # Make sure that only latex_completions is working on strings
     inc_tag==:string && return UTF8String[], 0:-1, false
 
-    if inc_tag == :other && string[pos] == '('
-        endpos = prevind(string, pos)
-        startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
-        return complete_methods(string[startpos:endpos]), startpos:endpos, false
+     if inc_tag == :other && ends_c(partial)
+        frange, method_name_end = find_start_brace(partial)
+        ex = parse(partial[frange] * ")", raise=false)
+        if isa(ex, Expr) && ex.head==:call
+            return complete_methods(ex), start(frange):method_name_end, false
+        end
     elseif inc_tag == :comment
         return UTF8String[], 0:-1, false
     end
