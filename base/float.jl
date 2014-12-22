@@ -166,13 +166,17 @@ floor{T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,floor(x))
 ceil {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,ceil(x))
 round {T<:Integer}(::Type{T}, x::FloatingPoint) = trunc(T,round(x))
 
+trunc(x::Float64) = box(Float64,trunc_llvm(unbox(Float64,x)))
+trunc(x::Float32) = box(Float32,trunc_llvm(unbox(Float32,x)))
 
-# this is needed very early because it is used by Range and colon
-function round(x::Float64)
-    y = trunc(x)
-    ifelse(x==y,y,trunc(2.0*x-y))
-end
 floor(x::Float64) = box(Float64,floor_llvm(unbox(Float64,x)))
+floor(x::Float32) = box(Float32,floor_llvm(unbox(Float32,x)))
+
+ceil(x::Float64) = box(Float64,ceil_llvm(unbox(Float64,x)))
+ceil(x::Float32) = box(Float32,ceil_llvm(unbox(Float32,x)))
+
+round(x::Float64) = box(Float64,rint_llvm(unbox(Float64,x)))
+round(x::Float32) = box(Float32,rint_llvm(unbox(Float32,x)))
 
 ## floating point promotions ##
 promote_rule(::Type{Float32}, ::Type{Float16}) = Float32
@@ -347,13 +351,6 @@ for Ti in (Int8, Int16, Int32, Int64, Int128, UInt8, UInt16, UInt32, UInt64, UIn
     end
 end
 
-# adding prevfloat(0.5) will prevent prevfloat(0.5) and odd x with eps(x)=1.0
-# from rounding in the wrong direction in RoundToNearest
-for Tf in (Float32,Float64)
-    @eval function round{T<:Integer}(::Type{T}, x::$Tf)
-        trunc(T,x+copysign($(prevfloat(Tf(0.5))),x))
-    end
-end
 
 
 @eval begin

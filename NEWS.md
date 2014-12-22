@@ -54,6 +54,9 @@ Language changes
       * `Char` + `Int` = `Char`
       * `Char` - `Char` = `Int`
 
+  * `round` rounds to the nearest integer using the default rounding mode,
+    which is ties to even by default ([#8750]).
+
 Compiler improvements
 ---------------------
 

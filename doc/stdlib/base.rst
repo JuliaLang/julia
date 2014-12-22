@@ -3226,12 +3226,36 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round([T,] x, [digits, [base]])
+.. function:: round([T,] x, [digits, [base]], [r::RoundingMode])
 
-   ``round(x)`` returns the nearest integral value of the same type as ``x``
-   to ``x``, breaking ties by rounding away from zero.
+   ``round(x)`` returns an integral value of the same type as ``x``
+   to ``x``, according to the default rounding mode (see ``get_rounding``). By
+   default, this will round to the nearest integer, with ties (fractional
+   values of 0.5) being rounded to the even integer.
 
-   ``round(T, x)`` converts the result to type ``T``, throwing an
+   .. doctest::
+
+      julia> round(1.7)
+      2.0
+
+      julia> round(1.5)
+      2.0
+
+      julia> round(2.5)
+      2.0
+
+   The optional ``roundingmode`` argument will change this
+   behaviour. Currently supported are
+
+   * `RoundNearestTiesAway`: this emulates C-style ``round`` behaviour, by
+     rounding ties away from zero.
+   * `RoundNearestTiesUp`: this emulates Java-style ``round`` behaviour, by
+     rounding ties toward positive infinity.
+   * `RoundToZero`: an alias for `trunc`
+   * `RoundUp`: an alias for `ceil`
+   * `RoundDown`: an alias for `floor`
+
+   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
    ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 1, 8)`` is ``3.125``.
