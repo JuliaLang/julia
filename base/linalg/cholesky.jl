@@ -13,20 +13,20 @@ immutable CholeskyPivoted{T} <: Factorization{T}
     info::BlasInt
 end
 
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
-    C, info = LAPACK.potrf!(char_uplo(uplo), A)
-    return @assertposdef Triangular{eltype(C),typeof(C),uplo,false}(C) info
+function chol!{T<:BlasFloat,UpLo}(A::StridedMatrix{T}, ::Type{€{UpLo}})
+    C, info = LAPACK.potrf!(char_uplo(UpLo), A)
+    return @assertposdef Triangular{eltype(C),typeof(C),UpLo,false}(C) info
 end
 
-function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
+function chol!{T,UpLo}(A::AbstractMatrix{T}, ::Type{€{UpLo}})
     n = chksquare(A)
     @inbounds begin
-        if uplo == :L
+        if UpLo == :L
             for k = 1:n
                 for i = 1:k - 1
                     A[k,k] -= A[k,i]*A[k,i]'
                 end
-                A[k,k] = chol!(A[k,k], uplo)
+                A[k,k] = chol!(A[k,k], €{UpLo})
                 AkkInv = inv(A[k,k]')
                 for j = 1:k
                     for i = k + 1:n
@@ -35,12 +35,12 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
                     end
                 end
             end
-        elseif uplo == :U
+        elseif UpLo == :U
             for k = 1:n
                 for i = 1:k - 1
                     A[k,k] -= A[i,k]'A[i,k]
                 end
-                A[k,k] = chol!(A[k,k], uplo)
+                A[k,k] = chol!(A[k,k], €{UpLo})
                 AkkInv = inv(A[k,k])
                 for j = k + 1:n
                     for i = 1:k - 1
@@ -50,21 +50,23 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
                 end
             end
         else
-            throw(ArgumentError("uplo must be either :U or :L but was $(uplo)"))
+            throw(ArgumentError("UpLo must be either :U or :L but was $(UpLo)"))
         end
     end
-    return Triangular(A, uplo, false)
+    return Triangular(A, €{UpLo}, €{false})
 end
+chol!(A::AbstractMatrix) = chol!(A, €{:U})
 
-function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
-    uplochar = char_uplo(uplo)
+function cholfact!{T<:BlasFloat,UpLo}(A::StridedMatrix{T}, ::Type{€{UpLo}}; pivot=false, tol=0.0)
+    uplochar = char_uplo(UpLo)
     if pivot
         A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
         return CholeskyPivoted{T}(A, uplochar, piv, rank, tol, info)
     end
-    return Cholesky{T,typeof(A),uplo}(chol!(A, uplo).data)
+    return Cholesky{T,typeof(A),UpLo}(chol!(A, €{UpLo}).data)
 end
-cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky{eltype(A),typeof(A),uplo}(chol!(A, uplo).data)
+cholfact!{UpLo}(A::AbstractMatrix, ::Type{€{UpLo}}) = Cholesky{eltype(A),typeof(A),UpLo}(chol!(A, €{UpLo}).data)
+cholfact!(A::AbstractMatrix) = cholfact!(A, €{:U})
 
 function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     _, info = LAPACK.potrf!(char_uplo(UpLo), C.UL)
@@ -72,27 +74,31 @@ function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     C
 end
 
-cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0) = cholfact!(copy(A), uplo, pivot=pivot, tol=tol)
-function cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
+cholfact{T<:BlasFloat,UpLo}(A::StridedMatrix{T}, ::Type{€{UpLo}}; pivot=false, tol=0.0) = cholfact!(copy(A), €{UpLo}, pivot=pivot, tol=tol)
+function cholfact{T,UpLo}(A::StridedMatrix{T}, ::Type{€{UpLo}}; pivot=false, tol=0.0)
     S = promote_type(typeof(chol(one(T))),Float32)
-    S <: BlasFloat && return cholfact!(convert(AbstractMatrix{S}, A), uplo, pivot = pivot, tol = tol)
+    S <: BlasFloat && return cholfact!(convert(AbstractMatrix{S}, A), €{UpLo}, pivot = pivot, tol = tol)
     pivot && throw(ArgumentError("pivot only supported for Float32, Float64, Complex{Float32} and Complex{Float64}"))
-    S != T && return cholfact!(convert(AbstractMatrix{S}, A), uplo)
-    return cholfact!(copy(A), uplo)
+    S != T && return cholfact!(convert(AbstractMatrix{S}, A), €{UpLo})
+    return cholfact!(copy(A), €{UpLo})
 end
-function cholfact(x::Number, uplo::Symbol=:U)
+function cholfact{UpLo}(x::Number, ::Type{€{UpLo}})
     xf = fill(chol!(x), 1, 1)
     Cholesky{:U, eltype(xf), typeof(xf)}(xf)
 end
+cholfact(A; pivot=false, tol=0.0) = cholfact(A, €{:U}; pivot = pivot, tol = tol)
 
-chol(A::AbstractMatrix, uplo::Symbol=:U) = chol!(copy(A), uplo)
-function chol!(x::Number, uplo::Symbol=:U)
+chol{UpLo}(A::AbstractMatrix, ::Type{€{UpLo}}) = chol!(copy(A), €{UpLo})
+chol(A::AbstractMatrix) = chol!(copy(A), €{:U})
+function chol!(x::Number)
     rx = real(x)
     rx == abs(x) || throw(DomainError())
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end
-chol(x::Number, uplo::Symbol=:U) = chol!(x, uplo)
+chol!(x::Number, ::Type) = chol!(x)
+chol(x::Number) = chol!(x)
+chol(x::Number, ::Type) = chol!(x, €{:U})
 
 function convert{Tnew,Told,S,UpLo}(::Type{Cholesky{Tnew}},C::Cholesky{Told,S,UpLo})
     Cnew = convert(AbstractMatrix{Tnew}, C.UL)
@@ -106,39 +112,33 @@ convert{T}(::Type{Factorization{T}}, C::Cholesky) = convert(Cholesky{T}, C)
 convert{T}(::Type{CholeskyPivoted{T}},C::CholeskyPivoted) = CholeskyPivoted(convert(AbstractMatrix{T},C.UL),C.uplo,C.piv,C.rank,C.tol,C.info)
 convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivoted{T}, C)
 
-full{T,S}(C::Cholesky{T,S,:U}) = C[:U]'C[:U]
-full{T,S}(C::Cholesky{T,S,:L}) = C[:L]*C[:L]'
+full{T,S}(C::Cholesky{T,S,:U}) = C[€{:U}]'C[€{:U}]
+full{T,S}(C::Cholesky{T,S,:L}) = C[€{:L}]*C[€{:L}]'
 
 size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 
-function getindex{T,S,UpLo}(C::Cholesky{T,S,UpLo}, d::Symbol)
-    d == :U && return Triangular(UpLo == d ? C.UL : C.UL',:U)
-    d == :L && return Triangular(UpLo == d ? C.UL : C.UL',:L)
-    d == :UL && return Triangular(C.UL, UpLo)
-    throw(KeyError(d))
-end
-function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    d == :U && return Triangular(symbol(C.uplo) == d ? C.UL : C.UL', :U)
-    d == :L && return Triangular(symbol(C.uplo) == d ? C.UL : C.UL', :L)
-    d == :p && return C.piv
-    if d == :P
-        n = size(C, 1)
-        P = zeros(T, n, n)
-        for i=1:n
-            P[C.piv[i],i] = one(T)
-        end
-        return P
+getindex{T,S,UpLo}(C::Cholesky{T,S,UpLo}, ::Type{€{:U}}) = Triangular(UpLo == :U ? C.UL : C.UL', €{:U})
+getindex{T,S,UpLo}(C::Cholesky{T,S,UpLo}, ::Type{€{:L}}) = Triangular(UpLo == :L ? C.UL : C.UL', €{:L})
+getindex{T,S,UpLo}(C::Cholesky{T,S,UpLo}, ::Type{€{:UL}}) = Triangular(C.UL, €{UpLo})
+getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, ::Type{€{:U}}) = Triangular(C.uplo == 'U' ? C.UL : C.UL', €{:U})
+getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, ::Type{€{:L}}) = Triangular(C.uplo == 'L' ? C.UL : C.UL', €{:L})
+getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, ::Type{€{:p}}) = C.piv
+function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, ::Type{€{:P}})
+    n = size(C, 1)
+    P = zeros(T, n, n)
+    for i = 1:n
+        P[C.piv[i],i] = one(T)
     end
-    throw(KeyError(d))
+    return P
 end
 
 show{T,S<:AbstractMatrix,UpLo}(io::IO, C::Cholesky{T,S,UpLo}) = (println("$(typeof(C)) with factor:");show(io,C[UpLo]))
 
 A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat{T}) = LAPACK.potrs!('U', C.UL, B)
 A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat{T}) = LAPACK.potrs!('L', C.UL, B)
-A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat) = Ac_ldiv_B!(Triangular(C.UL, :L, false), A_ldiv_B!(Triangular(C.UL, :L, false), B))
-A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat) = A_ldiv_B!(Triangular(C.UL, :U, false), Ac_ldiv_B!(Triangular(C.UL, :U, false), B))
+A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat) = Ac_ldiv_B!(Triangular(C.UL, €{:L}, €{false}), A_ldiv_B!(Triangular(C.UL, €{:L}, €{false}), B))
+A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat) = A_ldiv_B!(Triangular(C.UL, €{:U}, €{false}), Ac_ldiv_B!(Triangular(C.UL, €{:U}, €{false}), B))
 
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     chkfullrank(C)
@@ -156,8 +156,8 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     end
     B
 end
-A_ldiv_B!(C::CholeskyPivoted, B::StridedVector) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv]))[invperm(C.piv)] : A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv]))[invperm(C.piv)]
-A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv,:]))[invperm(C.piv),:] : A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv,:]))[invperm(C.piv),:]
+A_ldiv_B!(C::CholeskyPivoted, B::StridedVector) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), A_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), B[C.piv]))[invperm(C.piv)] : A_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), Ac_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), B[C.piv]))[invperm(C.piv)]
+A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), A_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), B[C.piv,:]))[invperm(C.piv),:] : A_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), Ac_ldiv_B!(Triangular(C.UL, €{symbol(C.uplo)}, €{false}), B[C.piv,:]))[invperm(C.piv),:]
 
 function det{T,S,UpLo}(C::Cholesky{T,S,UpLo})
     dd = one(T)

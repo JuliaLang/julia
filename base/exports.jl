@@ -16,6 +16,7 @@ export
     Markdown,
 
 # Types
+    €,
     AbstractMatrix,
     AbstractSparseArray,
     AbstractSparseMatrix,

@@ -173,17 +173,17 @@ for isupper in (true, false)
     end
 end
 
-A=SymTridiagonal(a, [1.0:n-1])
+A = SymTridiagonal(a, [1.0:n-1])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
+A = Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
+A = Triangular(full(Diagonal(a)), €{:L}) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
@@ -196,8 +196,8 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         A = randn(5,5)
     end
     A = convert(Matrix{elty}, A'A)
-    for ul in (:U, :L)
-        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Symbol),copy(A), ul))
+    for ul in (€{:U}, €{:L})
+        @test_approx_eq full(cholfact(A, ul)[ul]) full(invoke(Base.LinAlg.chol!, (AbstractMatrix,Type{ul}),copy(A), ul))
     end
 end
 

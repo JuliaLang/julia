@@ -187,7 +187,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
             A_mul_B!(G, R)
         end
     end
-    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
+    @test_approx_eq abs(A) abs(hessfact(Ac)[€{:H}])
     @test_approx_eq norm(R*eye(elty, 10)) one(elty)
 end
 
@@ -232,7 +232,7 @@ end
 a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
 b = rand(1:10,n,2)
 lua   = factorize(a)
-l,u,p = lua[:L], lua[:U], lua[:p]
+l,u,p = lua[€{:L}], lua[€{:U}], lua[€{:p}]
 @test_approx_eq l*u a[p,:]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
@@ -255,7 +255,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
                                -0.5     -0.5       0.1     1.0])
     F = eigfact(A,permute=false,scale=false)
-    @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
+    @test_approx_eq F[€{:vectors}]*Diagonal(F[€{:values}])/F[€{:vectors}] A
     F = eigfact(A)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
@@ -424,7 +424,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = Triangular(randn(3,3), €{:L})
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)
@@ -486,7 +486,7 @@ end
 #Issue 7304
 let
     A=[-√.5 -√.5; -√.5 √.5]
-    Q=full(qrfact(A)[:Q])
+    Q=full(qrfact(A)[€{:Q}])
     @test vecnorm(A-Q) < eps()
 end
 

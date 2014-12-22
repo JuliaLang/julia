@@ -69,7 +69,7 @@ lufact(F::LU) = F
 lu(x::Number) = (one(x), x, 1)
 function lu(A::AbstractMatrix; pivot = true)
     F = lufact(A, pivot = pivot)
-    F[:L], F[:U], F[:p]
+    F[€{:L}], F[€{:U}], F[€{:p}]
 end
 
 function convert{T}(::Type{LU{T}}, F::LU)
@@ -91,29 +91,33 @@ function ipiv2perm{T}(v::AbstractVector{T}, maxi::Integer)
     return p
 end
 
-function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
+function getindex{T,S<:StridedMatrix}(A::LU{T,S}, ::Type{€{:L}})
     m, n = size(A)
-    if d == :L
-        L = tril!(A.factors[1:m, 1:min(m,n)])
-        for i = 1:min(m,n); L[i,i] = one(T); end
-        return L
+    L = tril!(A.factors[1:m, 1:min(m,n)])
+    for i = 1:min(m,n); L[i,i] = one(T); end
+    return L
+end
+function getindex{T,S<:StridedMatrix}(A::LU{T,S}, ::Type{€{:U}})
+    m, n = size(A)
+    triu!(A.factors[1:min(m,n), 1:n])
+end
+function getindex{T,S<:StridedMatrix}(A::LU{T,S}, ::Type{€{:p}})
+    m, n = size(A)
+    ipiv2perm(A.ipiv, m)
+end
+function getindex{T,S<:StridedMatrix}(A::LU{T,S}, ::Type{€{:P}})
+    m, n = size(A)
+    p = A[€{:p}]
+    P = zeros(T, m, m)
+    for i in 1:m
+        P[i,p[i]] = one(T)
     end
-    d == :U && return triu!(A.factors[1:min(m,n), 1:n])
-    d == :p && return ipiv2perm(A.ipiv, m)
-    if d == :P
-        p = A[:p]
-        P = zeros(T, m, m)
-        for i in 1:m
-            P[i,p[i]] = one(T)
-        end
-        return P
-    end
-    throw(KeyError(d))
+    return P
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), b[ipiv2perm(A.ipiv, length(b))]))
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
+A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(Triangular(A.factors, €{:U}, €{false}), A_ldiv_B!(Triangular(A.factors, €{:L}, €{true}), b[ipiv2perm(A.ipiv, length(b))]))
+A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(Triangular(A.factors, €{:U}, €{false}), A_ldiv_B!(Triangular(A.factors, €{:L}, €{true}), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
 At_ldiv_B{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
 Ac_ldiv_B{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
 At_ldiv_Bt{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
@@ -148,8 +152,8 @@ end
 
 inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
 
-cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[:L]*A[:U])[A[:p],:], p)))
-cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
+cond{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, p::Number) = inv(LAPACK.gecon!(p == 1 ? '1' : 'I', A.factors, norm((A[€{:L}]*A[€{:U}])[A[€{:p}],:], p)))
+cond(A::LU, p::Number) = norm(A[€{:L}]*A[€{:U}],p)*norm(inv(A),p)
 
 # Tridiagonal
 
