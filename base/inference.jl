@@ -1286,7 +1286,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
-        if is(f.ast,ast0) && typeseq(f.types, atypes)
+        if (is(f.ast,ast0) || f.ast==ast0) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
             (f::CallStack).cycleid = CYCLE_ID
