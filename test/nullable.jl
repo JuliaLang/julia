@@ -243,3 +243,11 @@ for T in types
     @test !isnull(x1.v)
     @test get(x1.v, one(T)) === one(T)
 end
+
+# test map
+@test map(x->x, Nullable{Union()}()) === Nullable{Union()}()
+
+for T in types
+    @test isequal(map(x->x, Nullable{T}()), Nullable{Union()}())
+    @test map(x->x, Nullable(one(T))) === Nullable(one(T))
+end
