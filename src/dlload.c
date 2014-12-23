@@ -61,7 +61,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
 #ifdef RTLD_FIRST
                          | JL_RTLD(flags, FIRST)
 #endif
-	 );
+                         );
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;

@@ -11,9 +11,9 @@ extern size_t jl_cholmod_sizeof_long(void) {
 
 extern int jl_cholmod_version(int *ver) {
     if (ver != (int*) NULL) {
-	ver[0] = CHOLMOD_MAIN_VERSION;
-	ver[1] = CHOLMOD_SUB_VERSION;
-	ver[2] = CHOLMOD_SUBSUB_VERSION;
+        ver[0] = CHOLMOD_MAIN_VERSION;
+        ver[1] = CHOLMOD_SUB_VERSION;
+        ver[2] = CHOLMOD_SUBSUB_VERSION;
     }
     return CHOLMOD_VERSION;
 }
