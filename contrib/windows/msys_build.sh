@@ -196,8 +196,9 @@ else
   echo 'override STAGE3_DEPS += suitesparse-wrapper' >> Make.user
 
   # hack so all of suitesparse doesn't rebuild
-  make -C deps SuiteSparse-4.3.1/Makefile
-  touch deps/SuiteSparse-4.3.1/UMFPACK/Lib/libumfpack.a
+  echo 'override SUITESPARSE_VER = 4.4.1' >> Make.user
+  make -C deps SuiteSparse-4.4.1/Makefile
+  touch deps/SuiteSparse-4.4.1/UMFPACK/Lib/libumfpack.a
   touch usr/bin/libspqr.dll
 fi
 
