@@ -30,7 +30,7 @@ namespace JL_I {
         // functions
         abs_float, copysign_float, flipsign_int, select_value,
         ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
-	sqrt_llvm, powi_llvm,
+        sqrt_llvm, powi_llvm,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface

@@ -188,16 +188,16 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
-	case 304:
-	    if (!strcmp(optarg,"yes"))
+        case 304:
+            if (!strcmp(optarg,"yes"))
                 jl_compileropts.depwarn = 1;
-	    else if (!strcmp(optarg,"no"))
+            else if (!strcmp(optarg,"no"))
                 jl_compileropts.depwarn = 0;
             else {
                 ios_printf(ios_stderr, "julia: invalid argument to --depwarn (%s)\n", optarg);
                 exit(1);
             }
-	    break;
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
