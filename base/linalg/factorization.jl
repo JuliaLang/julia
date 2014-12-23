@@ -40,7 +40,7 @@ function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=fal
 end
 cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0) = cholfact!(copy(A), uplo, pivot=pivot, tol=tol)
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0) = (S = promote_type(typeof(sqrt(one(T))),Float32); S != T ? cholfact!(convert(AbstractMatrix{S},A), uplo, pivot=pivot, tol=tol) : cholfact!(copy(A), uplo, pivot=pivot, tol=tol)) # When julia Cholesky has been implemented, the promotion should be changed.
-cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), :U) !(imag(x) == 0 && real(x) > 0)
+cholfact(x::Number) = @assertposdef Cholesky(fill(sqrt(x), 1, 1), 'U') !(imag(x) == 0 && real(x) > 0)
 
 chol(A::Union(Number, AbstractMatrix), uplo::Symbol) = cholfact(A, uplo)[uplo]
 chol(A::Union(Number, AbstractMatrix)) = triu!(cholfact(A, :U).UL)
