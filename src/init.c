@@ -562,9 +562,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 #if defined(_OS_WINDOWS_)
             _dup2(_open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE), fd);
 #else
-	    dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
+            dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
 #endif
-	    // ...and continue on as in the UV_FILE case
+            // ...and continue on as in the UV_FILE case
         case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;

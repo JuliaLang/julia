@@ -397,7 +397,7 @@ jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
             jl_error("syntax: malformed \"importall\" statement");
         m = (jl_module_t*)jl_eval_global_var(m, name);
         if (!jl_is_module(m))
-	    jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
+            jl_errorf("invalid %s statement: name exists but does not refer to a module", ex->head->name);
         jl_module_importall(jl_current_module, m);
         return jl_nothing;
     }

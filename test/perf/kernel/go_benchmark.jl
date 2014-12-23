@@ -137,7 +137,7 @@ function has_additional_liberty(board::Board, i::Int, j::Int, libi::Int, libj::I
     for k = 1:4
       (bi, bj) = neighbor(ai, aj, k)
       if on_board(board, bi, bj) && board[bi, bj] == EMPTY && (bi != libi || bj != libj)
-	return true
+        return true
       end
     end
 
@@ -239,7 +239,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
     for k = 1:4
       (ai, aj) = neighbor(i, j, k)
       if on_board(board, ai, aj) && board[ai, aj] == color
-	remove_string(board, ai, aj)
+        remove_string(board, ai, aj)
       end
     end
     return
@@ -287,7 +287,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
           board.ko_i = ai
           board.ko_j = aj
         end
-	break
+        break
       end
     end
   end
@@ -309,13 +309,13 @@ function generate_move(board::Board, color::Int)
         # ...however, if the move captures at least one stone,
         # consider it anyway.
         for k = 1:4
-	  (bi, bj) = neighbor(ai, aj, k)
-	  if on_board(board, bi, bj) && board[bi, bj] == other_color(color)
-	    num_moves += 1
+          (bi, bj) = neighbor(ai, aj, k)
+          if on_board(board, bi, bj) && board[bi, bj] == other_color(color)
+            num_moves += 1
             moves[:,num_moves] = [ai, aj]
-	    break
-	  end
-	end
+            break
+          end
+        end
       end
     end
   end
@@ -397,7 +397,7 @@ function compute_final_status(board::Board)
               set_final_status_string(board, pos, DEAD)
             end
           end
-	end
+        end
         # Set the final status of the pos vertex to either black
         # or white territory.
         if board.final_status[i, j] == UNKNOWN

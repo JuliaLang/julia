@@ -131,29 +131,29 @@ void parse_opts(int *argcp, char ***argvp)
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
-	case 'c':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    codecov = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    codecov = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    codecov = JL_LOG_NONE;
-	        break;
-	    }
-	    else
-		codecov = JL_LOG_USER;
-	    break;
-	case 'm':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    malloclog = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    malloclog = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    malloclog = JL_LOG_NONE;
-	        break;
-	    }
+        case 'c':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    codecov = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    codecov = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    codecov = JL_LOG_NONE;
+                break;
+            }
+            else
+                codecov = JL_LOG_USER;
+            break;
+        case 'm':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    malloclog = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    malloclog = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    malloclog = JL_LOG_NONE;
+                break;
+            }
         case 300:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;

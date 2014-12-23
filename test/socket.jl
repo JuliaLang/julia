@@ -28,12 +28,12 @@
 c = Base.Condition()
 port = rand(2000:4000)
 @async begin
-	s = listen(port)
-	Base.notify(c)
-	sock = accept(s)
-	write(sock,"Hello World\n")
-	close(s)
-	close(sock)
+    s = listen(port)
+    Base.notify(c)
+    sock = accept(s)
+    write(sock,"Hello World\n")
+    close(s)
+    close(sock)
 end
 wait(c)
 @test readall(connect(port)) == "Hello World\n"
@@ -41,12 +41,12 @@ wait(c)
 socketname = @windows ? "\\\\.\\pipe\\uv-test" : "testsocket"
 @unix_only isfile(socketname) && Base.FS.unlink(socketname)
 @async begin
-	s = listen(socketname)
-	Base.notify(c)
-	sock = accept(s)
-	write(sock,"Hello World\n")
-	close(s)
-	close(sock)
+    s = listen(socketname)
+    Base.notify(c)
+    sock = accept(s)
+    write(sock,"Hello World\n")
+    close(s)
+    close(sock)
 end
 wait(c)
 @test readall(connect(socketname)) == "Hello World\n"

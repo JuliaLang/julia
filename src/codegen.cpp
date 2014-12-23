@@ -3822,12 +3822,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
-	if (do_malloc_log && lno != prevlno) {
-	    // Check memory allocation only after finishing a line
-	    if (prevlno != -1)
-		mallocVisitLine(filename, prevlno);
-	    prevlno = lno;
-	}
+        if (do_malloc_log && lno != prevlno) {
+            // Check memory allocation only after finishing a line
+            if (prevlno != -1)
+                mallocVisitLine(filename, prevlno);
+            prevlno = lno;
+        }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
             Value *retval;
@@ -3848,8 +3848,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
-	    if (do_malloc_log && lno != -1)
-		mallocVisitLine(filename, lno);
+            if (do_malloc_log && lno != -1)
+                mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 if (retty == T_void)
                     builder.CreateRetVoid();
@@ -4366,9 +4366,9 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
 
     diff_gc_total_bytes_func =
-	Function::Create(FunctionType::get(T_int64, false),
-			 Function::ExternalLinkage,
-			 "diff_gc_total_bytes", m);
+        Function::Create(FunctionType::get(T_int64, false),
+                         Function::ExternalLinkage,
+                         "diff_gc_total_bytes", m);
     add_named_global(diff_gc_total_bytes_func, (void*)*diff_gc_total_bytes);
 
     std::vector<Type *> execpoint_args(0);
