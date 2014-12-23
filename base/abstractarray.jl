@@ -26,6 +26,8 @@ endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
 first(a) = next(a,start(a))[1]
 last(a) = a[end]
+ctranspose(a::AbstractArray) = error("ctranspose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
+transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C.') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
 
 function stride(a::AbstractArray, i::Integer)
     if i > ndims(a)
