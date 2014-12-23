@@ -133,3 +133,9 @@ for major=0:3, minor=0:3, patch=0:3
 		@test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
 	end
 end
+
+# julia_version.h version test
+
+@test VERSION.major == ccall(:jl_ver_major,Int,())
+@test VERSION.minor == ccall(:jl_ver_minor,Int,())
+@test VERSION.patch == ccall(:jl_ver_patch,Int,())

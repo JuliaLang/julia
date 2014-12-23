@@ -259,6 +259,31 @@ DLLEXPORT jl_value_t *jl_get_image_file(void)
     return jl_cstr_to_string(jl_compileropts.image_file);
 }
 
+DLLEXPORT const int jl_ver_major(void)
+{
+    return JULIA_VERSION_MAJOR;
+}
+
+DLLEXPORT const int jl_ver_minor(void)
+{
+    return JULIA_VERSION_MINOR;
+}
+
+DLLEXPORT const int jl_ver_patch(void)
+{
+    return JULIA_VERSION_PATCH;
+}
+
+DLLEXPORT const int jl_ver_is_release(void)
+{
+    return JULIA_VERSION_IS_RELEASE;
+}
+
+DLLEXPORT const char* jl_ver_string(void)
+{
+   return JULIA_VERSION_STRING;
+}
+
 #ifdef __cplusplus
 }
 #endif
