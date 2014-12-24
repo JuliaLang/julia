@@ -27,7 +27,7 @@ function run_test(d,buf)
     global a_foo, a_bar, b_bar
     a_foo = a_bar = b_bar = 0
     while !eof(buf)
-        LineEdit.match_input(d, d, nothing, buf)(nothing,nothing)
+        LineEdit.match_input(d, nothing, buf)(nothing,nothing)
     end
 end
 
@@ -67,7 +67,7 @@ const test_keymap_3 = Dict(
 
 function keymap_fcn(keymaps)
     d = LineEdit.keymap(keymaps)
-    f = buf->(LineEdit.match_input(d, d, nothing, buf)(nothing,nothing))
+    f = buf->(LineEdit.match_input(d, nothing, buf)(nothing,nothing))
 end
 
 let f = keymap_fcn([test_keymap_3, test_keymap_2])
