@@ -159,7 +159,8 @@ This function provides equivalent functionality, but makes no efforts to optimis
               (not (any "(" ")"))))
       ")"
       (* space)
-      "="))
+      "="
+      (not (any "="))))
 
 (defconst julia-type-regex
   (rx symbol-start (or "immutable" "type" "abstract") (1+ space) (group (1+ (or word (syntax symbol))))))
