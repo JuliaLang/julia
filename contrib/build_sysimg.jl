@@ -10,7 +10,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = dlopen_e("sys")
     if sysimg != C_NULL
-        if !force && Sys.dlpath(sysimg) == "$(sysimg_path).$(Sys.dlext)"
+        if !force && Base.samefile(Sys.dlpath(sysimg), "$(sysimg_path).$(Sys.dlext)")
             info("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
             return
         end
@@ -62,7 +62,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
                 info("System image successfully built at $sysimg_path.ji")
             end
 
-            if default_sysimg_path != sysimg_path
+            if !Base.samefile(default_sysimg_path, sysimg_path)
                 info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
             else
                 info("Julia will automatically load this system image at next startup")
@@ -85,18 +85,18 @@ function find_system_linker()
         return ENV["LD"]
     end
 
-    # On Windows, check to see if WinRPM is installed, and if so, see if binutils is installed
+    # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
     @windows_only try
         require("WinRPM")
-        winrpmbinutilsdir = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
-            "sys-root","mingw","$(Sys.ARCH)-w64-mingw32","bin")
-        if filesize(joinpath(winrpmbinutilsdir, "ld.exe")) > 0
-            ENV["PATH"] = "$(ENV["PATH"]);$winrpmbinutilsdir"
+        winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
+            "sys-root","mingw","bin","gcc.exe")
+        if success(`$winrpmgcc --version`)
+            return winrpmgcc
         else
             throw()
         end
     catch
-        warn("Install Binutils via WinRPM.install(\"binutils\") to generate sys.dll for faster startup times" )
+        warn("Install GCC via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")` to generate sys.dll for faster startup times")
     end
 
 
@@ -122,13 +122,13 @@ function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
         push!(FLAGS, "-macosx_version_min")
         push!(FLAGS, "10.7")
     else
-        if OS_NAME == :Linux
-            push!(FLAGS, "-shared")
-        end
-        push!(FLAGS, "--unresolved-symbols")
-        push!(FLAGS, "ignore-all")
+        push!(FLAGS, "-shared")
+        # on windows we link using gcc for now
+        wl = @windows? "-Wl," : ""
+        push!(FLAGS, wl * "--unresolved-symbols")
+        push!(FLAGS, wl * "ignore-all")
     end
-    @windows_only append!(FLAGS, ["-L$JULIA_HOME", "-ljulia", "-lssp-0"])
+    @windows_only append!(FLAGS, ["-ljulia", "-lssp-0"])
 
     info("Linking sys.$(Sys.dlext)")
     run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
