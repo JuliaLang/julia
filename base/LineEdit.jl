@@ -773,9 +773,58 @@ function update_key_repeats(s::MIState, keystroke)
     return
 end
 
+
+## Conflict fixing
+# Consider a keymap of the form
+#
+# {
+#   "**" => f
+#   "ab" => g
+# }
+#
+# Naively this is transformed into a tree as
+#
+# {
+#   '*' => {
+#       '*' => f
+#   }
+#   'a' => {
+#       'b' => g
+#   }
+# }
+#
+# However, that's not what we want, because now "ac" is
+# is not defined. We need to fix this up and turn it into
+#
+# {
+#   '*' => {
+#       '*' => f
+#   }
+#   'a' => {
+#       '*' => f
+#       'b' => g
+#   }
+# }
+#
+# i.e. copy over the appropraite default subdict
+#
+
+# deep merge where target has higher precedence
+function keymap_merge!(target::Dict, source::Dict)
+    for k in keys(source)
+        if !haskey(target, k)
+            target[k] = source[k]
+        elseif isa(target[k], Dict)
+            keymap_merge!(target[k], source[k])
+        else
+            # Ignore, target has higher precedence
+        end
+    end
+end
+
 fixup_keymaps!(d, l, s, sk) = nothing
 function fixup_keymaps!(dict::Dict, level, s, subkeymap)
-    if level > 1
+    if level > 0
         for d in values(dict)
             fixup_keymaps!(d, level-1, s, subkeymap)
         end
@@ -793,6 +842,8 @@ end
 function add_specialisations(dict, subdict, level)
     default_branch = subdict['\0']
     if isa(default_branch, Dict)
+        # Go through all the keymaps in the default branch
+        # and copy them over to dict
         for s in keys(default_branch)
             s == '\0' && add_specialisations(dict, default_branch, level+1)
             fixup_keymaps!(dict, level, s, default_branch[s])
@@ -800,16 +851,17 @@ function add_specialisations(dict, subdict, level)
     end
 end
 
-fix_conflicts!(x) = fix_conflicts!(x, 1)
-fix_conflicts!(others, level) = nothing
-function fix_conflicts!(dict::Dict, level)
+postprocess!(others) = nothing
+function postprocess!(dict::Dict)
     # needs to be done first for every branch
     if haskey(dict, '\0')
-        add_specialisations(dict, dict, level)
+        add_specialisations(dict, dict, 1)
+    else
+        dict['\0'] = (args...)->error("Unrecognized input")
     end
     for (k,v) in dict
         k == '\0' && continue
-        fix_conflicts!(v, level+1)
+        postprocess!(v)
     end
 end
 
@@ -866,7 +918,7 @@ function keymap_unify(keymaps)
     for keymap in keymaps
         ret = keymap_merge(ret, keymap)
     end
-    fix_conflicts!(ret)
+    postprocess!(ret)
     return ret
 end
 
