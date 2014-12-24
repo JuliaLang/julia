@@ -85,23 +85,6 @@ allows methods to be documented individually if necessary. For example:
 When retrieving documentation for a generic function, the metadata for each
 method is concatenated with the ``catdoc`` function.
 
-Types & Constructors
---------------------
-
-Similarly to functions, type constructors can be overloaded with multiple
-methods. These can be documented in exactly the same way as generic functions.
-
-.. doctest::
-
-    @doc doc"""
-      We don't take kindly to your type round these parts.
-      """ ->
-    type NotFromTheseParts
-    end
-
-    @doc "I have nothing" ->
-    NotFromTheseParts(x) = ...
-
 Notes
 -----
 
@@ -109,7 +92,7 @@ Julia 0.4 will introduce the more convenient syntax
 
 .. doctest::
 
-    "Foos the living hell out of x"
-    foo(x) = ...
+    "..."
+    f(x) = ...
 
 but this is not yet implemented.
