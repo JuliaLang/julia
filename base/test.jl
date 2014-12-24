@@ -54,7 +54,7 @@ end
 function do_test_throws(body, qex, bt, extype)
     handler()(try
         body()
-        Failure(qex)
+        Failure(qex, "$qex did not throw $(extype == nothing ? "anything" : extype)")
     catch err
         if extype == nothing
             Base.warn("""
@@ -66,7 +66,7 @@ function do_test_throws(body, qex, bt, extype)
             if isa(err, extype)
                 Success(qex)
             else
-                Failure(qex)
+                Failure(qex, "$err was thrown instead of $extype")
             end
         end
     end)
