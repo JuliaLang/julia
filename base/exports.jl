@@ -113,6 +113,7 @@ export
     UnitRange,
     UTF16String,
     UTF32String,
+    Val,
     VecOrMat,
     Vector,
     VersionNumber,
