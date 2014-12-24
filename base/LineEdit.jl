@@ -740,10 +740,10 @@ immutable KeyAlias
     KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, keymap, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
-match_input(k::Void, keymap, s, term, cs) = (s,p) -> return :ok
-match_input(k::KeyAlias, keymap, s, term, cs) = match_input(keymap, keymap, s, IOBuffer(k.seq), Char[])
-function match_input(k::Dict, keymap, s, term=terminal(s), cs=Char[])
+match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
+match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
+match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, s, "")
@@ -751,7 +751,7 @@ function match_input(k::Dict, keymap, s, term=terminal(s), cs=Char[])
     push!(cs, c)
     key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(k, key, nothing), keymap, s, term, cs)
+    return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
 
 keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
@@ -1417,7 +1417,7 @@ const prefix_history_keymap = AnyDict(
         accept_result(s, data.histprompt);
         ps = state(s, mode(s))
         map = keymap(ps, mode(s))
-        match_input(map, map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
+        match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
     end,
     # match escape sequences for pass thru
     "\e[1;5*" => "*", # Ctrl-Arrow
@@ -1552,7 +1552,7 @@ function prompt!(term, prompt, s = init_state(term, prompt))
         activate(prompt, s, term)
         while true
             map = keymap(s, prompt)
-            state = match_input(map, map, s)(s, keymap_data(s, prompt))
+            state = match_input(map, s)(s, keymap_data(s, prompt))
             if state == :abort
                 stop_reading(term)
                 return buffer(s), false, false
