@@ -1,18 +1,4 @@
 #include "platform.h"
-/*
- * We include <mathimf.h> here, because somewhere below <math.h> is included also.
- * As a result, Intel C++ Composer generates an error. To prevent this error, we
- * include <mathimf.h> as soon as possible. <mathimf.h> defines several macros
- * (like _INC_MATH, __MATH_H_INCLUDED, __COMPLEX_H_INCLUDED) that prevent
- * including <math.h> (or rather its content).
- */
-#if defined(_OS_WINDOWS_)
-#if defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
-#include <math.h>
-#endif
-#endif
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS

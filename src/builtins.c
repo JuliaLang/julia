@@ -14,14 +14,8 @@
 #include <fcntl.h>
 #if defined(_OS_WINDOWS_)
 #include <malloc.h>
-#if defined(_COMPILER_INTEL_)
-#include <mathimf.h>
-#else
-#include <math.h>
-#endif
 #else
 #include <unistd.h>
-#include <math.h>
 #endif
 #include <ctype.h>
 #include "julia.h"
