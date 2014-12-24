@@ -157,6 +157,50 @@ let f = keymap_fcn([test_keymap_7, test_keymap_6])
     @test eof(buf)
 end
 
+# Test requiring postprocessing (see conflict fixing in LineEdit.jl )
+
+global path1 = 0
+global path2 = 0
+global path3 = 0
+
+const test_keymap_8 = Dict(
+    "**" => (o...)->(global path1 += 1),
+    "ab" => (o...)->(global path2 += 1),
+    "cd" => (o...)->(global path3 += 1),
+    "d" => (o...)->(error("This is not the key you're looking for"))
+)
+
+let f = keymap_fcn([test_keymap_8])
+    buf = IOBuffer("bbabaccd")
+    f(buf)
+    @test path1 == 1
+    f(buf)
+    @test path2 == 1
+    f(buf)
+    @test path1 == 2
+    f(buf)
+    @test path3 == 1
+    @test eof(buf)
+end
+
+global path1 = 0
+global path2 = 0
+
+const test_keymap_9 = Dict(
+    "***" => (o...)->(global path1 += 1),
+    "*a*" => (o...)->(global path2 += 1)
+)
+
+let f = keymap_fcn([test_keymap_9])
+    buf = IOBuffer("abaaaa")
+    f(buf)
+    @test path1 == 1
+    f(buf)
+    @test path2 == 1
+    @test eof(buf)
+end
+
+
 ## edit_move{left,right} ##
 buf = IOBuffer("a\na\na\n")
 seek(buf, 0)
