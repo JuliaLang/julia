@@ -4,6 +4,11 @@
 #include <stddef.h>
 #include <stddef.h> // double include of stddef.h fixes #3421
 #include <stdint.h>
+#if defined(_COMPILER_INTEL_)
+#include <mathimf.h>
+#else
+#include <math.h>
+#endif
 
 #include "platform.h"
 
@@ -173,14 +178,14 @@ typedef uptrint_t u_ptrint_t;
 #define S32_MIN    (-S32_MAX - 1L)
 #define BIT31      0x80000000
 
-extern double D_PNAN;
-extern double D_NNAN;
-extern double D_PINF;
-extern double D_NINF;
-extern float  F_PNAN;
-extern float  F_NNAN;
-extern float  F_PINF;
-extern float  F_NINF;
+#define D_PNAN ((double)+NAN)
+#define D_NNAN ((double)-NAN)
+#define D_PINF ((double)+INFINITY)
+#define D_NINF ((double)-INFINITY)
+#define F_PNAN ((float)+NAN)
+#define F_NNAN ((float)-NAN)
+#define F_PINF ((float)+INFINITY)
+#define F_NINF ((float)-INFINITY)
 
 typedef enum { T_INT8, T_UINT8, T_INT16, T_UINT16, T_INT32, T_UINT32,
                T_INT64, T_UINT64, T_FLOAT, T_DOUBLE } numerictype_t;
