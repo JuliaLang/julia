@@ -62,7 +62,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
                 info("System image successfully built at $sysimg_path.ji")
             end
 
-            if !Base.samefile(default_sysimg_path, sysimg_path)
+            if !Base.samefile("$default_sysimg_path.ji", "$sysimg_path.ji")
                 info("To run Julia with this image loaded, run: julia -J $sysimg_path.ji")
             else
                 info("Julia will automatically load this system image at next startup")
