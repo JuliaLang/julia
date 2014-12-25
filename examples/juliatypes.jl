@@ -385,6 +385,8 @@ function issub(a::Ty, b::Var, env)
         !issub(a, bb.ub, env) && return false
         if issub(bb.lb, a, env)
             bb.lb = a
+        elseif !issub(a, bb.lb, env)
+            bb.lb = UnionT(bb.lb, a)
         end
     end
     return true
@@ -641,6 +643,12 @@ function test_3()
 
     @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)),
                  (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+
+    @test !issub(Ty((Int,String,Vector{Integer})),
+                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
+
+    @test  issub(Ty((Int,String,Vector{Any})),
+                 @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
     @test isequal_type(Ty(Array{(Any,),1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
