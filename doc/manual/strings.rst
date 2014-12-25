@@ -510,7 +510,7 @@ contained in a string:
     julia> contains("Xylophon", 'o')
     ERROR: `contains` has no method matching contains(::ASCIIString, ::Char)
 
-The last error is because ``'0'`` is a character literal, and :func:`contains`
+The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
 sequence, you must use the :func:`in` function instead.
 
