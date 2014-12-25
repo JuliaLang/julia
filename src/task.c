@@ -170,7 +170,7 @@ save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
-    volatile int _x;
+    volatile char *_x;
     size_t nb = (char*)t->stackbase - (char*)&_x;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
@@ -200,10 +200,8 @@ void __attribute__((noinline)) restore_stack(jl_task_t *t, jl_jmp_buf *where, ch
         restore_stack(t, where, p);
     }
     jl_jmp_target = where;
-
-    if (t->stkbuf != NULL) {
-        memcpy(_x, t->stkbuf, t->ssize);
-    }
+    assert(t->stkbuf != NULL);
+    memcpy(_x, t->stkbuf, t->ssize);
     jl_longjmp(*jl_jmp_target, 1);
 }
 
@@ -716,7 +714,7 @@ void NORETURN throw_internal(jl_value_t *e)
             JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
             jl_static_show(JL_STDERR, e);
             JL_PRINTF(JL_STDERR, "\n");
-            exit(1);
+            jl_exit(1);
         }
         jl_current_task->exception = e;
         finish_task(jl_current_task, e);
