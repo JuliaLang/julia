@@ -566,7 +566,9 @@
 ("Base","isimmutable","isimmutable(v)
 
    True if value \"v\" is immutable.  See *Immutable Composite Types*
-   for a discussion of immutability.
+   for a discussion of immutability. Note that this function works on
+   values, so if you give it a type, it will tell you that a value of
+   \"DataType\" is mutable.
 
 "),
 
@@ -2047,10 +2049,16 @@
 
 "),
 
-("Base","join","join(strings, delim)
+("Base","join","join(strings, delim[, last])
 
-   Join an array of strings into a single string, inserting the given
-   delimiter between adjacent strings.
+   Join an array of \"strings\" into a single string, inserting the
+   given delimiter between adjacent strings. If \"last\" is given, it
+   will be used instead of \"delim\" between the last two strings. For
+   example, \"join([\"apples\", \"bananas\", \"pineapples\"], \", \",
+   \" and \") == \"apples, bananas and pineapples\"\".
+
+   \"strings\" can be any iterable over elements \"x\" which are
+   convertible to strings via \"print(io::IOBuffer, x)\".
 
 "),
 
@@ -2985,6 +2993,37 @@
    Monitor a file for changes by polling every *interval_seconds*
    seconds for *seconds* seconds. A return value of true indicates the
    file changed, a return value of false indicates a timeout.
+
+"),
+
+("Base","bind","bind(socket::Union(UdpSocket, TcpSocket), host::IPv4, port::Integer)
+
+   Bind \"socket\" to the given \"host:port\". Note that *0.0.0.0*
+   will listen on all devices.
+
+"),
+
+("Base","send","send(socket::UdpSocket, host::IPv4, port::Integer, msg)
+
+   Send \"msg\" over \"socket to ``host:port\".
+
+"),
+
+("Base","recv","recv(socket::UdpSocket)
+
+   Read a UDP packet from the specified socket, and return the bytes
+   received. This call blocks.
+
+"),
+
+("Base","setopt","setopt(sock::UdpSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
+
+   Set UDP socket options. \"multicast_loop\": loopback for multicast
+   packets (default: true). \"multicast_ttl\": TTL for multicast
+   packets. \"enable_broadcast\": flag must be set to true if socket
+   will be used for broadcast messages, or else the UDP system will
+   return an access error (default: false). \"ttl\": Time-to-live of
+   packets sent on the socket.
 
 "),
 
@@ -7766,6 +7805,13 @@ popdisplay(d::Display)
 
    Note: This function raises an error under operating systems that do not
      support soft symbolic links, such as Windows XP.
+
+"),
+
+("Base","chmod","chmod(path, mode)
+
+   Change the permissions mode of \"path\" to \"mode\". Only integer
+   modes (e.g. 0o777) are currently supported.
 
 "),
 
