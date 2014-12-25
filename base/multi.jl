@@ -1031,8 +1031,8 @@ function start_cluster_workers(manager, params, resp_arr, launched_ntfy)
             if length(launched) > 0
                 wconfig = shift!(launched)
                 rr = connect_n_create_worker(manager, get_next_pid(), wconfig)
-                let rr=rr
-                    @async launch_additional(worker_from_id(fetch(rr)), resp_arr, launched_ntfy)
+                let rr=rr, exename = params[:exename]
+                    @async launch_additional(worker_from_id(fetch(rr)), exename, resp_arr, launched_ntfy)
                 end
 
                 push!(resp_arr, rr)
@@ -1044,16 +1044,18 @@ function start_cluster_workers(manager, params, resp_arr, launched_ntfy)
     notify(launched_ntfy)
 end
 
-function launch_additional(w::Worker, resp_arr::Array, launched_ntfy::Condition)
+function launch_additional(w::Worker, exename, resp_arr::Array, launched_ntfy::Condition)
     cnt = get(w.config.count, 1)
     if cnt == :auto
         cnt = get(w.config.environ)[:cpu_cores]
     end
     cnt = cnt - 1   # Removing self from the requested number
 
+    exeflags = get(w.config.exeflags, ``)
+    cmd = `$exename $exeflags`
     if cnt > 0
         npids = [get_next_pid() for x in 1:cnt]
-        new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, get(w.config.exeflags, ``))
+        new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, cmd)
 
         # keyword argument max_parallel is only relevant for concurrent ssh connections to a unique host
         # Post launch, ssh from master to workers is used only if tunnel is true
@@ -1111,14 +1113,14 @@ function connect_n_create_worker(manager, pid, wconfig)
 end
 
 
-function launch_additional(np::Integer, pids::Array, exeflags::Cmd)
+function launch_additional(np::Integer, pids::Array, cmd::Cmd)
     assert(np == length(pids))
 
     io_objs = cell(np)
     addresses = cell(np)
 
     for i in 1:np
-        io, pobj = open(detach(`$(JULIA_HOME)/$(exename()) $exeflags`), "r")
+        io, pobj = open(detach(cmd), "r")
         io_objs[i] = io
     end
 
@@ -1214,7 +1216,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
     exeflags = params[:exeflags]
 
     for i in 1:manager.np
-        io, pobj = open(detach(`$(dir)/$(exename) $exeflags --bind-to $(LPROC.bind_addr) --worker`), "r")
+        io, pobj = open(detach(setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
@@ -1489,11 +1491,9 @@ function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_paral
 end
 
 default_addprocs_params() = AnyDict(
-    :dir=>JULIA_HOME,
-    :exename=>exename(),
-    :exeflags=>``)
-
-exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "./julia" : "./julia-debug"
+    :dir      => pwd(),
+    :exename  => joinpath(JULIA_HOME,julia_exename()),
+    :exeflags => ``)
 
 ## higher-level functions: spawn, pmap, pfor, etc. ##
 
