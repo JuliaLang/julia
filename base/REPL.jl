@@ -608,6 +608,28 @@ function reset(repl::LineEditREPL)
     print(repl.t,Base.text_colors[:normal])
 end
 
+function mode_keymap(julia_prompt)
+    AnyDict(
+    '\b' => function (s,o...)
+        if isempty(s) || position(LineEdit.buffer(s)) == 0
+            buf = copy(LineEdit.buffer(s))
+            transition(s, julia_prompt)
+            LineEdit.state(s, julia_prompt).input_buffer = buf
+            LineEdit.refresh_line(s)
+        else
+            LineEdit.edit_backspace(s)
+        end
+    end,
+    "^C" => function (s,o...)
+        LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
+        print(LineEdit.terminal(s), "^C\n\n")
+        transition(s, julia_prompt)
+        transition(s, :reset)
+        LineEdit.refresh_line(s)
+    end)
+end
+
 function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
     ###
     #
@@ -788,28 +810,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
     julia_prompt.keymap_dict = LineEdit.keymap(a)
 
-    const mode_keymap = AnyDict(
-        '\b' => function (s,o...)
-            if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, julia_prompt)
-                LineEdit.state(s, julia_prompt).input_buffer = buf
-                LineEdit.refresh_line(s)
-            else
-                LineEdit.edit_backspace(s)
-            end
-        end,
-        "^C" => function (s,o...)
-            LineEdit.move_input_end(s)
-            LineEdit.refresh_line(s)
-            print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, julia_prompt)
-            transition(s, :reset)
-            LineEdit.refresh_line(s)
-        end
-    )
+    mk = mode_keymap(julia_prompt)
 
-    b = Dict{Any,Any}[skeymap, mode_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)
 
     shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)
