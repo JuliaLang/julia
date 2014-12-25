@@ -134,11 +134,11 @@ what makes the ``...`` operator confusing is that it means two different things
 depending on context.
 
 ``...`` combines many arguments into one argument in function definitions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 In the context of function definitions, the ``...`` operator is used to combine
 many different arguments into a single argument. This use of ``...`` for
-combining many different arguments into a single argument is called slurping:
+combining many different arguments into a single argument is called slurping::
 
     julia> function printargs(args...)
                @printf("%s\n", typeof(args))
@@ -164,7 +164,7 @@ In contrast to the use of the ``...`` operator to denote slurping many
 different arguments into one argument when defining a function, the ``...``
 operator is also used to cause a single function argument to be split apart
 into many different arguments when used in the context of a function call. This
-use of ``...`` is called splatting:
+use of ``...`` is called splatting::
 
     julia> function threeargs(a, b, c)
                @printf("a = %s::%s\n", a, typeof(a))
