@@ -9,6 +9,7 @@
 .. toctree::
    :maxdepth: 1
 
+   object
    cartesian
    meta
    subarrays
