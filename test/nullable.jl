@@ -243,3 +243,9 @@ for T in types
     @test !isnull(x1.v)
     @test get(x1.v, one(T)) === one(T)
 end
+
+# issue #9462
+for T in types
+    @test isa(convert(Nullable{Number}, Nullable(one(T))), Nullable{Number})
+    @test isa(convert(Nullable{Any}, Nullable(one(T))), Nullable{Any})
+end
