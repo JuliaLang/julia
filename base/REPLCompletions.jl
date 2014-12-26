@@ -291,7 +291,7 @@ function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
     inc_tag = Base.syntax_deprecation_warnings(false) do
-        Base.incomplete_tag(parse(partial, raise=false))
+        Base.incomplete_tag(Base.parse_input_line(partial))
     end
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
