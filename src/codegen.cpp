@@ -615,7 +615,7 @@ static void jl_setup_module(Module *m, bool add)
 #else
         jl_ExecutionEngine->addModule(m);
 #endif
-#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
+#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_) && defined(USE_MCJIT)
         ArrayType *atype = ArrayType::get(T_uint8,12);
         (new GlobalVariable(*m, atype,
             false, GlobalVariable::InternalLinkage,
