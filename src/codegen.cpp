@@ -250,18 +250,10 @@ static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
 static GlobalVariable *jldll_var;
-#if defined(_CPU_X86_64_)
-#ifdef USE_MCJIT
-#if LLVM36
-extern std::unique_ptr<RTDyldMemoryManager> createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
-#else
-RTDyldMemoryManager* createRTDyldMemoryManagerWin(RTDyldMemoryManager *MM);
-#endif
-#else
+#if defined(_CPU_X86_64_) && !defined(USE_MCJIT)
 extern JITMemoryManager* createJITMemoryManagerWin();
 #endif
-#endif
-#endif
+#endif //_OS_WINDOWS_
 
 // important functions
 static Function *jlnew_func;
@@ -622,6 +614,15 @@ static void jl_setup_module(Module *m, bool add)
         jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
 #else
         jl_ExecutionEngine->addModule(m);
+#endif
+#if defined(_CPU_X86_64_) && defined(_OS_WINDOWS_)
+        ArrayType *atype = ArrayType::get(T_uint8,12);
+        (new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__UnwindData"))->setSection(".text");
+        (new GlobalVariable(*m, atype,
+            false, GlobalVariable::InternalLinkage,
+            ConstantAggregateZero::get(atype), "__catchjmp"))->setSection(".text");
 #endif
     }
 }
@@ -4881,10 +4882,10 @@ extern "C" void jl_init_codegen(void)
     options.NoFramePointerElimNonLeaf = true;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to assume the stack is always 8-byte aligned,
-    // and to ensure that it is 8-byte aligned for out-going calls,
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
-    options.StackAlignmentOverride = 8;
+    options.StackAlignmentOverride = 16;
 #endif
 #if defined(__APPLE__) && !defined(LLVM34)
     // turn on JIT support for libunwind to walk the stack
@@ -4899,7 +4900,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         ,"-avx"
 #endif
-#if defined(LLVM35) && defined(_OS_WINDOWS_)
+#if defined(LLVM35) && defined(_OS_WINDOWS_) && !defined(LLVM36)
         ,"-disable-copyprop" // llvm bug 21743
 #endif
     };
@@ -4912,13 +4913,8 @@ extern "C" void jl_init_codegen(void)
 #endif
     std::string ErrorStr;
     eb  ->setEngineKind(EngineKind::JIT)
-#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
-#if defined(USE_MCJIT)
-        .setMCJITMemoryManager(createRTDyldMemoryManagerWin(
-                new SectionMemoryManager()))
-#else
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
-#endif
 #endif
         .setTargetOptions(options)
 #if defined(USE_MCJIT) && !defined(LLVM36)
