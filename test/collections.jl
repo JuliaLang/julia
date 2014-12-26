@@ -236,6 +236,12 @@ for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
     @test !isempty(summary(values(d)))
 end
 
+# issue #9463
+type Alpha end
+Base.show(io::IO, ::Alpha) = print(io,"α")
+sbuff = IOBuffer()
+Base.showdict(sbuff, Dict(Alpha()=>1), limit=true, sz=(10,20))
+@test !contains(bytestring(sbuff), "…")
 
 # issue #2540
 d = Dict{Any,Any}([x => 1 for x in ['a', 'b', 'c']])
