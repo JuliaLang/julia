@@ -76,6 +76,10 @@ eltype{T<:AbstractString}(::Type{T}) = Char
 (*)(s::AbstractString...) = string(s...)
 (^)(s::AbstractString, r::Integer) = repeat(s,r)
 
+ctranspose(s::AbstractString) = s
+transpose(s::AbstractString) = s
+conj(s::AbstractString) = s
+
 length(s::DirectIndexString) = endof(s)
 function length(s::AbstractString)
     i = start(s)
