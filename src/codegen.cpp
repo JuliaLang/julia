@@ -4529,10 +4529,10 @@ extern "C" void jl_init_codegen(void)
     options.NoFramePointerElimNonLeaf = true;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to assume the stack is always 8-byte aligned,
-    // and to ensure that it is 8-byte aligned for out-going calls,
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
-    options.StackAlignmentOverride = 8;
+    options.StackAlignmentOverride = 16;
 #endif
 #if defined(__APPLE__) && !defined(LLVM34)
     // turn on JIT support for libunwind to walk the stack
