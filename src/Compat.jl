@@ -43,6 +43,7 @@ if VERSION < v"0.4.0-dev+1827"
         @eval begin
             ($fnew){T<:Integer}(::Type{T}, x::Integer) = convert(T, x)  # ambiguity resolution with digits/base version, not all old methods defined
             ($fnew){T<:Integer}(::Type{T}, x) = ($fold)(T, x)
+            ($fnew){T<:Integer}(::Type{T}, x::Rational) = convert(T, ($fold)(x)) # no e.g. iround(::Type{T}, x::Rational) is defined in 0.3
         end
     end
 end

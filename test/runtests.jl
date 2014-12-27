@@ -65,3 +65,5 @@ ns = length(d.slots)
 if VERSION < v"0.4.0-dev+1387"
     @test isdefined(Main, :AbstractString)
 end
+
+@test round(Int, 3//4) == 1
