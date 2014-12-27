@@ -878,8 +878,9 @@ static void coverageVisitLine(std::string filename, int line)
     if (vec.size() <= (size_t)line)
         vec.resize(line+1, NULL);
     if (vec[line] == NULL)
-        vec[line] = new GlobalVariable(*jl_Module, T_int64, false, GlobalVariable::InternalLinkage,
-                                       ConstantInt::get(T_int64,0), "lcnt");
+        vec[line] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
+                                                 GlobalVariable::InternalLinkage,
+                                                 ConstantInt::get(T_int64,0), "lcnt"));
     GlobalVariable *v = vec[line];
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
                                           ConstantInt::get(T_int64,1)),
@@ -957,9 +958,9 @@ static void mallocVisitLine(std::string filename, int line)
     if (vec.size() <= (size_t)line)
         vec.resize(line+1, NULL);
     if (vec[line] == NULL)
-        vec[line] = new GlobalVariable(*jl_Module, T_int64, false,
-                                       GlobalVariable::InternalLinkage,
-                                       ConstantInt::get(T_int64,0), "bytecnt");
+        vec[line] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
+                                                 GlobalVariable::InternalLinkage,
+                                                 ConstantInt::get(T_int64,0), "bytecnt"));
     GlobalVariable *v = vec[line];
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
                                           builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
@@ -3415,6 +3416,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 
     Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
                                    funcName.str(), f->getParent());
+    addComdat(w);
     Function::arg_iterator AI = w->arg_begin();
     AI++; //const Argument &fArg = *AI++;
     Value *argArray = AI++;
@@ -3651,6 +3653,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
                              Function::ExternalLinkage, funcName.str(), m);
+        addComdat(f);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
             lam->cFunctionID = jl_assign_functionID(f);
@@ -3664,6 +3667,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     else {
         f = Function::Create(jl_func_sig, Function::ExternalLinkage,
                              funcName.str(), m);
+        addComdat(f);
         if (lam->functionObject == NULL) {
             lam->functionObject = (void*)f;
             lam->functionID = jl_assign_functionID(f);
@@ -4423,10 +4427,10 @@ static void init_julia_llvm_env(Module *m)
 #if JL_NEED_FLOATTEMP_VAR
     // Has to be big enough for the biggest LLVM-supported float type
     jlfloattemp_var =
-        new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
+        addComdat(new GlobalVariable(*m, IntegerType::get(jl_LLVMContext,128),
                            false, GlobalVariable::ExternalLinkage,
                            ConstantInt::get(IntegerType::get(jl_LLVMContext,128),0),
-                           "jl_float_temp");
+                           "jl_float_temp"));
 #endif
 
     std::vector<Type*> args1(0);
