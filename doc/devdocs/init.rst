@@ -20,7 +20,7 @@ and :ref:`dev-ios`).
 Next `parse_opts()
 <https://github.com/JuliaLang/julia/blob/master/ui/repl.c#L80>`_
 is called to process command line options. Note that parse_opts()
-only deals with options that effect early initialisation. Other
+only deals with options that affect code generation or early initialisation. Other
 options are handled later by `process_options() in base/client.jl
 <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L214>`_
 
@@ -90,56 +90,60 @@ initialises 8-bit serialisation tags for 256 frequently used
 jl_value_t values. The serialisation mechanism uses these tags as
 shorthand (in lieu of storing whole objects) to save storage space.
 
+.. sidebar:: sysimg
+
+    If there is a sysimg file, it contains a pre-cooked image of the "Core" and "Main" modules (and whatever else is created by "boot.jl"). See :ref:`dev-sysimg`.
+
+    `jl_restore_system_image() <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ de-serialises the saved sysimg into the current Julia runtime environment and initialisation continues after jl_init_box_caches() below...
+
+    Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ uses the :ref:`dev-ios`.
+
+
 If there is no sysimg file (:code:`!jl_compileropts.image_file`) then
 then "Core" and "Main" modules are created and "boot.jl" is evaluated:
 
- - :code:`jl_core_module = jl_new_module(jl_symbol("Core"))` creates
-   the Julia "Core" module.
+:code:`jl_core_module = jl_new_module(jl_symbol("Core"))` creates
+the Julia "Core" module.
 
- - `jl_init_intrinsic_functions()
-   <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L1254>`_
-   creates a new Julia module "Intrinsics" containing constant
-   jl_intrinsic_type symbols. These define an integer code for
-   each `intrinsic function
-   <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L2>`_.
-   `emit_intrinsic()
-   <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L757>`_
-   translates these symbols into LLVM instructions during code generation.
+`jl_init_intrinsic_functions()
+<https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L1254>`_
+creates a new Julia module "Intrinsics" containing constant
+jl_intrinsic_type symbols. These define an integer code for
+each `intrinsic function
+<https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L2>`_.
+`emit_intrinsic()
+<https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L757>`_
+translates these symbols into LLVM instructions during code generation.
 
- - `jl_init_primitives()
-   <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L989>`_
-   hooks C functions up to Julia function symbols. e.g. the symbol
-   :func:`Base.is` is bound to C function pointer :code:`jl_f_is`
-   by calling :code:`add_builtin_func("eval", jl_f_top_eval)`, which does::
+`jl_init_primitives()
+<https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L989>`_
+hooks C functions up to Julia function symbols. e.g. the symbol
+:func:`Base.is` is bound to C function pointer :code:`jl_f_is`
+by calling :code:`add_builtin_func("eval", jl_f_top_eval)`, which does::
 
     jl_set_const(jl_core_module,
                  jl_symbol("is"),
                  jl_new_closure(jl_f_top_eval, jl_symbol("eval"), NULL));
 
 
- - `jl_new_main_module()
-   <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_
-   creates the global "Main" module and sets
-   :code:`jl_current_task->current_module = jl_main_module`.
+`jl_new_main_module()
+<https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_
+creates the global "Main" module and sets
+:code:`jl_current_task->current_module = jl_main_module`.
 
- - Note: _julia_init() `then sets <https://github.com/JuliaLang/julia/blob/master/src/init.c#L975>`_ :code:`jl_root_task->current_module = jl_core_module`. :code:`jl_root_task` is an alias of :code:`jl_current_task` at this point, so the current_module set by jl_new_main_module() above is overwritten.
+Note: _julia_init() `then sets <https://github.com/JuliaLang/julia/blob/master/src/init.c#L975>`_ :code:`jl_root_task->current_module = jl_core_module`. :code:`jl_root_task` is an alias of :code:`jl_current_task` at this point, so the current_module set by jl_new_main_module() above is overwritten.
 
- - `jl_load("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ calls `jl_parse_eval_all("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute `boot.jl <https://github.com/JuliaLang/julia/blob/master/base/boot.jl#L116>`_. TODO -- drill down into eval?
+`jl_load("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ calls `jl_parse_eval_all("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute `boot.jl <https://github.com/JuliaLang/julia/blob/master/base/boot.jl#L116>`_. TODO -- drill down into eval?
  
- - `jl_get_builtin_hooks() <https://github.com/JuliaLang/julia/blob/master/src/init.c#L1209>`_ initialises global C pointers to Julia globals defined in boot.jl.
+`jl_get_builtin_hooks() <https://github.com/JuliaLang/julia/blob/master/src/init.c#L1209>`_ initialises global C pointers to Julia globals defined in boot.jl.
 
 
- - `jl_init_box_caches() <https://github.com/JuliaLang/julia/blob/master/src/alloc.c#L850>`_ pre-allocates global boxed integer value objects for values up to 1024. This speeds up allocation of boxed ints later on. e.g.::
+`jl_init_box_caches() <https://github.com/JuliaLang/julia/blob/master/src/alloc.c#L850>`_ pre-allocates global boxed integer value objects for values up to 1024. This speeds up allocation of boxed ints later on. e.g.::
 
     jl_value_t *jl_box_uint8(uint32_t x)
     {
         return boxed_uint8_cache[(uint8_t)x];
     }
-
-If there is a sysimg file, it contains a pre-cooked image of the "Core" and "Main" modules (and whatever else is created above by "boot.jl"). See :ref:`dev-sysimg`.
-
- - `jl_restore_system_image() <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ de-serialises the saved sysimg into the current Julia runtime environment.
- - Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ uses the :ref:`dev-ios`.
 
 `_julia_init() iterates <https://github.com/JuliaLang/julia/blob/master/src/init.c#L997>`_ over the :code:`jl_core_module->bindings.table` looking for :code:`jl_datatype_t` values and sets the type name's module prefix to :code:`jl_core_module`.
 
