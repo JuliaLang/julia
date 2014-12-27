@@ -117,6 +117,10 @@ type DimensionMismatch <: Exception
 end
 DimensionMismatch() = DimensionMismatch("")
 
+# For passing constants through type inference
+immutable Val{T}
+end
+
 type WeakRef
     value
     WeakRef() = WeakRef(nothing)
