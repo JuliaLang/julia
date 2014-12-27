@@ -5,13 +5,20 @@ Memory layout of Julia Objects
 Object layout (jl_value_t)
 --------------------------
 
+.. sidebar:: `special case. <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2897>`_
+
+    :code:`jl_tuple_type->type = jl_tuple_type`
+
 The :code:`jl_value_t` struct defines the minimal header for a Julia
-object in memory.  Every object begins with a pointer to a
+object in memory.
+The :code:`type` field points to a
 `jl_datatype_t <http://github.com/JuliaLang/julia/blob/master/src/julia.h#L204>`_ object::
 
     typedef struct _jl_value_t {
         struct _jl_value_t *type;
     } jl_value_t;
+
+
 
 The layout of the rest of the object is dependant on its type.
 
@@ -46,7 +53,7 @@ reachable object, deallocates objects that are not marked, then
 clears the mark bits. While the mark/sweep is in progress the
 :code:`jl_value_t.type` pointer is altered by the mark bit. The gc
 uses the :func:`gc_typeof` macro to retrieve the original type
-pointer.
+pointer::
 
     #define gc_typeof(v) ((jl_value_t*)(((uptrint_t)jl_typeof(v))&~1UL))
 
