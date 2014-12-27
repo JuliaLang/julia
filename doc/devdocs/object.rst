@@ -7,7 +7,7 @@ Object layout (jl_value_t)
 
 The :code:`jl_value_t` struct defines the minimal header for a Julia
 object in memory.  Every object begins with a pointer to a
-:code:`jl_datatype_t` object::
+`jl_datatype_t <http://github.com/JuliaLang/julia/blob/master/src/julia.h#L204>`_ object::
 
     typedef struct _jl_value_t {
         struct _jl_value_t *type;
@@ -32,6 +32,8 @@ follows::
         uint16_t data;            -- 2 bytes
                                   -- 6 bytes padding
     };
+
+Structs for the built-in types are `defined in julia.h <http://github.com/JuliaLang/julia/blob/master/src/julia.h#L69>`_. The corresponding global jl_datatype_t objects are created by `jl_init_types() <http://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2887>`_.
 
 
 Garbage collector mark bit

@@ -9,6 +9,7 @@
 .. toctree::
    :maxdepth: 1
 
+   init
    object
    cartesian
    meta
