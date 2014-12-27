@@ -82,7 +82,7 @@ sets jl_current_task to the root task.
 
 `jl_init_codegen()
 <https://github.com/JuliaLang/julia/blob/master/src/codegen.cpp#L4830>`_
-initialises the `LLVM libray <http://llvm.org>`_.
+initialises the `LLVM library <http://llvm.org>`_.
 
 `jl_init_serializer()
 <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1732>`_
@@ -99,7 +99,7 @@ then "Core" and "Main" modules are created and "boot.jl" is evaluated:
  - `jl_init_intrinsic_functions()
    <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L1254>`_
    creates a new Julia module "Intrinsics" containing constant
-   jl_intrinsic_type symbols. These that define an integer code for
+   jl_intrinsic_type symbols. These define an integer code for
    each `intrinsic function
    <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp#L2>`_.
    `emit_intrinsic()
@@ -124,7 +124,7 @@ then "Core" and "Main" modules are created and "boot.jl" is evaluated:
 
  - Note: _julia_init() `then sets <https://github.com/JuliaLang/julia/blob/master/src/init.c#L975>`_ :code:`jl_root_task->current_module = jl_core_module`. :code:`jl_root_task` is an alias of :code:`jl_current_task` at this point, so the current_module set by jl_new_main_module() above is overwritten.
 
- - `jl_load("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ calls `jl_parse_eval_all("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute `boot.jl <https://github.com/JuliaLang/julia/blob/master/base/boot.jl#L116>`_. TODO -- dill down into eval?
+ - `jl_load("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ calls `jl_parse_eval_all("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute `boot.jl <https://github.com/JuliaLang/julia/blob/master/base/boot.jl#L116>`_. TODO -- drill down into eval?
  
  - `jl_get_builtin_hooks() <https://github.com/JuliaLang/julia/blob/master/src/init.c#L1209>`_ initialises global C pointers to Julia globals defined in boot.jl.
 
@@ -139,7 +139,7 @@ then "Core" and "Main" modules are created and "boot.jl" is evaluated:
 If there is a sysimg file, it contains a pre-cooked image of the "Core" and "Main" modules (and whatever else is created above by "boot.jl"). See :ref:`dev-sysimg`.
 
  - `jl_restore_system_image() <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ de-serialises the saved sysimg into the current Julia runtime environment.
- - Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ uses the :ref:`dev-ios`.G
+ - Note: `jl_restore_system_image() (and dump.c in general) <https://github.com/JuliaLang/julia/blob/master/src/dump.c#L1379>`_ uses the :ref:`dev-ios`.
 
 `_julia_init() iterates <https://github.com/JuliaLang/julia/blob/master/src/init.c#L997>`_ over the :code:`jl_core_module->bindings.table` looking for :code:`jl_datatype_t` values and sets the type name's module prefix to :code:`jl_core_module`.
 
@@ -165,7 +165,7 @@ true_main()
 
 If a .jl "program" file was supplied on the command line, then `exec_program() <https://github.com/JuliaLang/julia/blob/master/ui/repl.c#L219>`_ calls `jl_load(program) <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ which calls `jl_parse_eval_all() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute the program.
 
-However, in our :code:`julia -e 'println("Hello World!")'` example, `jl_get_global(jl_base_module, jl_symbol("_start")) <https://github.com/JuliaLang/julia/blob/master/src/module.c#L320>`_ looks up `Base._start <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L388>`_ and `jl_apply() <https://github.com/JuliaLang/julia/blob/master/src/julia.h#L987>`_ executes it.
+However, in our example (:code:`julia -e 'println("Hello World!")'`), `jl_get_global(jl_base_module, jl_symbol("_start")) <https://github.com/JuliaLang/julia/blob/master/src/module.c#L320>`_ looks up `Base._start <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L388>`_ and `jl_apply() <https://github.com/JuliaLang/julia/blob/master/src/julia.h#L987>`_ executes it.
 
 
 Base._start
@@ -181,9 +181,9 @@ Base.eval was `mapped to jl_f_top_eval <https://github.com/JuliaLang/julia/blob/
 
 `jl_f_top_eval() <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L444>`_ calls `jl_toplevel_eval_in(jl_main_module, ex) <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L444>`_, where "ex" is the parsed expression :code:`println("Hello World!")`.
 
-`jl_toplevel_eval_in() <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L417>`_ calls `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ which calls `eval() in interpreter.c https://github.com/JuliaLang/julia/blob/master/src/interpreter.c#L112`_.
+`jl_toplevel_eval_in() <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L417>`_ calls `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ which calls `eval() in interpreter.c <https://github.com/JuliaLang/julia/blob/master/src/interpreter.c#L112>`_.
 
-The stack dump below shows how the interpreter works its way through methods of println, print before arriving at `write{T}(s::AsyncStream, a::Array{T}) <https://github.com/JuliaLang/julia/blob/master/base/stream.jl#L782>`_  which does :code:`ccall(jl_write_no_copy())`.
+The stack dump below shows how the interpreter works its way through various methods of :func:`Base.println` and :func:`Base.print` before arriving at `write{T}(s::AsyncStream, a::Array{T}) <https://github.com/JuliaLang/julia/blob/master/base/stream.jl#L782>`_  which does :code:`ccall(jl_write_no_copy())`.
 
 `jl_write_no_copy() <https://github.com/JuliaLang/julia/blob/master/src/jl_uv.c#L580>`_
 calls uv_write() to write "Hello World!" to JL_STDOUT. See :ref:`dev-libuv`.::
@@ -235,7 +235,7 @@ jl_atexit_hook()
 
 main() calls `jl_atexit_hook()
 <https://github.com/JuliaLang/julia/blob/master/src/init.c#L448>`_. This
-calls _atexit for each module, calls `jl_gc_run_all_finalizers()
+calls _atexit for each module, then calls `jl_gc_run_all_finalizers()
 <https://github.com/JuliaLang/julia/blob/master/src/gc.c#L325>`_
 and cleans up libuv handles.
 
