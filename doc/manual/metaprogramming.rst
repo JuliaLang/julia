@@ -22,13 +22,13 @@ all data types and code are represented by normal Julia data structures,
 so the structure of the program and its types can be explored
 programmatically just like any other data.
 
-Expressions and Eval
---------------------
+Expressions and :func:`eval`
+----------------------------
 
 Julia code is represented as a syntax tree built out of Julia data
-structures of type ``Expr``. This makes it easy to construct and
+structures of type :obj:`Expr`. This makes it easy to construct and
 manipulate Julia code from within Julia, without generating or parsing
-source text. Here is the definition of the ``Expr`` type::
+source text. Here is the definition of the :obj:`Expr` type::
 
     type Expr
       head::Symbol
@@ -38,14 +38,14 @@ source text. Here is the definition of the ``Expr`` type::
 
 The ``head`` is a symbol identifying the kind of expression, and
 ``args`` is an array of subexpressions, which may be symbols referencing
-the values of variables at evaluation time, may be nested ``Expr``
+the values of variables at evaluation time, may be nested :obj:`Expr`
 objects, or may be actual values of objects. The ``typ`` field is used
 by type inference to store type annotations, and can generally be
 ignored.
 
 There is special syntax for "quoting" code (analogous to quoting
 strings) that makes it easy to create expression objects without
-explicitly constructing ``Expr`` objects. There are two forms: a short
+explicitly constructing :obj:`Expr` objects. There are two forms: a short
 form for inline expressions using ``:`` followed by a single expression,
 and a long form for blocks of code, enclosed in ``quote ... end``. Here
 is an example of the short form used to quote an arithmetic expression:
@@ -107,8 +107,8 @@ quoting form:
 Symbols
 ~~~~~~~
 
-When the argument to ``:`` is just a symbol, a ``Symbol`` object results
-instead of an ``Expr``:
+When the argument to ``:`` is just a symbol, a :obj:`Symbol` object results
+instead of an :obj:`Expr`:
 
 .. doctest::
 
@@ -134,7 +134,7 @@ ambiguity in parsing.:
     julia> :(::)
     :(::)
 
-``Symbol``\ s can also be created using the ``symbol`` function, which takes
+:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes
 a character or string as its argument:
 
 .. doctest::
@@ -145,11 +145,11 @@ a character or string as its argument:
     julia> symbol("'")
     :'
 
-``eval`` and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~~~~~
+:func:`eval` and Interpolation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
-at global scope using the ``eval`` function:
+at global scope using :func:`eval`:
 
 .. doctest::
 
@@ -170,9 +170,9 @@ at global scope using the ``eval`` function:
     julia> eval(ex)
     3
 
-Every :ref:`module <man-modules>` has its own ``eval`` function that
+Every :ref:`module <man-modules>` has its own :func:`eval` function that
 evaluates expressions in its global scope.
-Expressions passed to ``eval`` are not limited to returning values
+Expressions passed to :func:`eval` are not limited to returning values
 — they can also have side-effects that alter the state of the enclosing
 module's environment:
 
@@ -193,10 +193,10 @@ module's environment:
 Here, the evaluation of an expression object causes a value to be
 assigned to the global variable ``x``.
 
-Since expressions are just ``Expr`` objects which can be constructed
+Since expressions are just :obj:`Expr` objects which can be constructed
 programmatically and then evaluated, one can, from within Julia code,
 dynamically generate arbitrary code which can then be run using
-``eval``. Here is a simple example:
+:func:`eval`. Here is a simple example:
 
 .. doctest::
 
@@ -226,7 +226,7 @@ the important distinction between the way ``a`` and ``b`` are used:
    the symbol ``:b`` is resolved by looking up the value of the variable
    ``b``.
 
-Constructing ``Expr`` objects like this is powerful, but somewhat
+Constructing :obj:`Expr` objects like this is powerful, but somewhat
 tedious and ugly. Since the Julia parser is already excellent at
 producing expression objects, Julia allows "splicing" or interpolation
 of expression objects, prefixed with ``$``, into quoted expressions,
@@ -241,7 +241,7 @@ clearly and concisely using interpolation:
     :(1 + b)
 
 This syntax is automatically rewritten to the form above where we
-explicitly called ``Expr``. The use of ``$`` for expression
+explicitly called :obj:`Expr`. The use of ``$`` for expression
 interpolation is intentionally reminiscent of
 :ref:`string interpolation <man-string-interpolation>` and
 :ref:`command interpolation <man-command-interpolation>`.
@@ -255,7 +255,7 @@ When a significant amount of repetitive boilerplate code is required, it
 is common to generate it programmatically to avoid redundancy. In most
 languages, this requires an extra build step, and a separate program to
 generate the repetitive code. In Julia, expression interpolation and
-eval allow such code generation to take place in the normal course of
+:func:`eval` allow such code generation to take place in the normal course of
 program execution. For example, the following code defines a series of
 operators on three arguments in terms of their 2-argument forms::
 
@@ -281,9 +281,9 @@ macro to abbreviate this pattern::
       @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
     end
 
-The ``@eval`` macro rewrites this call to be precisely equivalent to the
+The :obj:`@eval` macro rewrites this call to be precisely equivalent to the
 above longer versions. For longer blocks of generated code, the
-expression argument given to ``@eval`` can be a block::
+expression argument given to :obj:`@eval` can be a block::
 
     @eval begin
       # multiple lines
@@ -331,7 +331,7 @@ expression arguments. Expanders are defined with the ``macro`` keyword::
         return resulting_expr
     end
 
-Here, for example, is a simplified definition of Julia's ``@assert`` macro::
+Here, for example, is a simplified definition of Julia's :obj:`@assert` macro::
 
     macro assert(ex)
         return :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
@@ -356,7 +356,7 @@ its returned result. This is equivalent to writing::
 That is, in the first call, the expression ``:(1==1.0)`` is spliced into
 the test condition slot, while the value of ``string(:(1==1.0))`` is
 spliced into the assertion message slot. The entire expression, thus
-constructed, is placed into the syntax tree where the ``@assert`` macro
+constructed, is placed into the syntax tree where the :obj:`@assert` macro
 call occurs. Then at execution time, if the test expression evaluates to
 true, then ``nothing`` is returned, whereas if the test is false, an error 
 is raised indicating the asserted expression that was false. Notice that 
@@ -364,7 +364,7 @@ it would not be possible to write this as a function, since only the
 *value* of the condition is available and it would be impossible to
 display the expression that computed it in the error message.
 
-The actual definition of ``@assert`` in the standard library is more
+The actual definition of :obj:`@assert` in the standard library is more
 complicated. It allows the user to optionally specify their own error
 message, instead of just printing the failed expression. Just like in
 functions with a variable number of arguments, this is specified with an
@@ -376,7 +376,7 @@ ellipses following the last argument::
         return :($ex ? nothing : error($msg))
     end
 
-Now ``@assert`` has two modes of operation, depending upon the number of
+Now :obj:`@assert` has two modes of operation, depending upon the number of
 arguments it receives! If there's only one argument, the tuple of expressions
 captured by ``msgs`` will be empty and it will behave the same as the simpler
 definition above. But now if the user specifies a second argument, it is
@@ -400,13 +400,13 @@ function:
             Base.error("assertion failed: a should equal b!")
         end)
 
-There is yet another case that the actual ``@assert`` macro handles: what
+There is yet another case that the actual :obj:`@assert` macro handles: what
 if, in addition to printing "a should equal b," we wanted to print their
 values? One might naively try to use string interpolation in the custom
 message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this 
 won't work as expected with the above macro. Can you see why? Recall
 from :ref:`string interpolation <man-string-interpolation>` that an 
-interpolated string is rewritten to a call to the ``string`` function.
+interpolated string is rewritten to a call to :func:`string`.
 Compare:
 
 .. doctest::
@@ -431,11 +431,11 @@ Compare:
 So now instead of getting a plain string in ``msg_body``, the macro is
 receiving a full expression that will need to be evaluated in order to
 display as expected. This can be spliced directly into the returned expression
-as an argument to the ``string`` call; see `error.jl
+as an argument to the :func:`string` call; see `error.jl
 <https://github.com/JuliaLang/julia/blob/master/base/error.jl>`_ for
 the complete implementation.
 
-The ``@assert`` macro makes great use of splicing into quoted expressions
+The :obj:`@assert` macro makes great use of splicing into quoted expressions
 to simplify the manipulation of expressions inside the macro body.
 
 
@@ -454,7 +454,7 @@ was defined. In this case we need to ensure that all global variables are
 resolved to the correct module. Julia already has a major advantage over
 languages with textual macro expansion (like C) in that it only needs to
 consider the returned expression. All the other variables (such as ``msg`` in
-``@assert`` above) follow the :ref:`normal scoping block behavior
+:obj:`@assert` above) follow the :ref:`normal scoping block behavior
 <man-variables-and-scoping>`.
 
 To demonstrate these issues,
@@ -475,7 +475,7 @@ The macro might look like this::
     end
 
 Here, we want ``t0``, ``t1``, and ``val`` to be private temporary variables,
-and we want ``time`` to refer to the ``time`` function in the standard library,
+and we want ``time`` to refer to the :func:`time` function in the standard library,
 not to any ``time`` variable the user might have (the same applies to
 ``println``). Imagine the problems that could occur if the user expression
 ``ex`` also contained assignments to a variable called ``t0``, or defined
@@ -487,7 +487,7 @@ variables within a macro result are classified as either local or global.
 A variable is considered local if it is assigned to (and not declared
 global), declared local, or used as a function argument name. Otherwise,
 it is considered global. Local variables are then renamed to be unique
-(using the ``gensym`` function, which generates new symbols), and global
+(using the :func:`gensym` function, which generates new symbols), and global
 variables are resolved within the macro definition environment. Therefore
 both of the above concerns are handled; the macro's locals will not conflict
 with any user variables, and ``time`` and ``println`` will refer to the
@@ -507,7 +507,7 @@ Here the user expression ``ex`` is a call to ``time``, but not the same
 ``time`` function that the macro uses. It clearly refers to ``MyModule.time``.
 Therefore we must arrange for the code in ``ex`` to be resolved in the
 macro call environment. This is done by "escaping" the expression with
-the ``esc`` function::
+:func:`esc`::
 
     macro time(ex)
         ...
@@ -572,7 +572,7 @@ directly into the syntax tree::
 
 Not only is the string literal form shorter and far more convenient, but
 it is also more efficient: since the regular expression is compiled and
-the ``Regex`` object is actually created *when the code is compiled*,
+the :obj:`Regex` object is actually created *when the code is compiled*,
 the compilation occurs only once, rather than every time the code is
 executed. Consider if the regular expression occurs in a loop::
 
@@ -636,7 +636,7 @@ In addition to the syntax-level introspection utilized in metaprogramming,
 Julia provides several other runtime reflection capabilities.
 
 **Type fields** The names of data type fields (or module members) may be interrogated
-using the ``names`` function. For example, given the following type::
+using :func:`names`. For example, given the following type::
 
 	type Point
 	  x::FloatingPoint
@@ -651,8 +651,8 @@ each field in a ``Point`` is stored in the ``types`` field of the Point object::
 	julia> Point.types
 	(FloatingPoint,Any)
 
-**Subtypes** The *direct* subtypes of any DataType may be listed using
-``subtypes(t::DataType)``. For example, the abstract DataType ``FloatingPoint``
+**Subtypes** The *direct* subtypes of any :obj:`DataType` may be listed using
+:func:`subtypes`. For example, the abstract :obj:`DataType` :obj:`FloatingPoint`
 has four (concrete) subtypes::
 	
 	julia> subtypes(FloatingPoint)
@@ -663,23 +663,23 @@ has four (concrete) subtypes::
 	 Float64
 
 Any abstract subtype will also be included in this list, but further subtypes
-thereof will not; recursive applications of ``subtypes`` allow to build the
+thereof will not; recursive applications of :func:`subtypes` allow to build the
 full type tree.
 
 **Type internals** The internal representation of types is critically important
-when interfacing with C code. ``isbits(T::DataType)`` returns true if `T` is
+when interfacing with C code. :func:`isbits(T::DataType) <isbits>` returns true if `T` is
 stored with C-compatible alignment. The offsets of each field may be listed
-using ``fieldoffsets(T::DataType)``.
+using :func:`fieldoffsets(T::DataType) <fieldoffsets>`.
 
 **Function methods** The methods of any function may be listed using
-``methods(f::Function)``. 
+:func:`methods`. 
 
 **Function representations** Functions may be introspected at several levels
 of representation. The lowered form of a function is available
-using ``code_lowered(f::Function, (Args...))``, and the type-inferred lowered form
-is available using ``code_typed(f::Function, (Args...))``.
+using :func:`code_lowered(f::Function, (Args...)) <code_lowered>`, and the type-inferred lowered form
+is available using :func:`code_typed(f::Function, (Args...)) <code_typed>`.
 
-Closer to the machine, the LLVM Intermediate Representation of a function is
-printed by ``code_llvm(f::Function, (Args...))``, and finally the resulting
+Closer to the machine, the LLVM intermediate representation of a function is
+printed by :func:`code_llvm(f::Function, (Args...)) <code_llvm>`, and finally the resulting
 assembly instructions (after JIT'ing step) are available using
-``code_native(f::Function, (Args...)``.
+:func:`code_native(f::Function, (Args...) <code_native>`.
