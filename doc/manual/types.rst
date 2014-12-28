@@ -1,5 +1,7 @@
 .. _man-types:
 
+.. currentmodule:: Base
+
 *********
  Types
 *********
@@ -62,7 +64,7 @@ Julia's type system that should be mentioned up front are:
    bound to values.
 -  Both abstract and concrete types can be parameterized by other types.
    They can also be parameterized by symbols, by values of any type for
-   which `isbits` returns true (essentially, things like numbers and bools
+   which :func:`isbits` returns true (essentially, things like numbers and bools
    that are stored like C types or structs with no pointers to other objects),
    and also by tuples thereof. Type parameters may be omitted when they
    do not need to be referenced or restricted.
@@ -115,7 +117,7 @@ operator means something a bit
 different: it declares the variable to always have the specified type,
 like a type declaration in a statically-typed language such as C. Every
 value assigned to the variable will be converted to the declared type
-using the ``convert`` function:
+using :func:`convert`:
 
 .. doctest:: foo-func
 
@@ -162,14 +164,14 @@ the type system: they form the conceptual hierarchy which makes Julia's
 type system more than just a collection of object implementations.
 
 Recall that in :ref:`man-integers-and-floating-point-numbers`, we
-introduced a variety of concrete types of numeric values: ``Int8``,
-``Uint8``, ``Int16``, ``Uint16``, ``Int32``, ``Uint32``, ``Int64``,
-``Uint64``, ``Int128``, ``Uint128``, ``Float16``, ``Float32``, and
-``Float64``.  Although they have different representation sizes, ``Int8``,
-``Int16``, ``Int32``, ``Int64``  and ``Int128`` all have in common that
-they are signed integer types. Likewise ``Uint8``, ``Uint16``, ``Uint32``,
-``Uint64`` and ``Uint128`` are all unsigned integer types, while
-``Float16``, ``Float32`` and ``Float64`` are distinct in being
+introduced a variety of concrete types of numeric values: :class:`Int8`,
+:class:`Uint8`, :class:`Int16`, :class:`Uint16`, :class:`Int32`, :class:`Uint32`, :class:`Int64`,
+:class:`Uint64`, :class:`Int128`, :class:`Uint128`, :class:`Float16`, :class:`Float32`, and
+:class:`Float64`.  Although they have different representation sizes, :class:`Int8`,
+:class:`Int16`, :class:`Int32`, :class:`Int64`  and :class:`Int128` all have in common that
+they are signed integer types. Likewise :class:`Uint8`, :class:`Uint16`, :class:`Uint32`,
+:class:`Uint64` and :class:`Uint128` are all unsigned integer types, while
+:class:`Float16`, :class:`Float32` and :class:`Float64` are distinct in being
 floating-point types rather than integers. It is common for a piece of code
 to make sense, for example, only if its arguments are some kind of integer,
 but not really depend on what particular *kind* of integer.  For example,
@@ -191,12 +193,12 @@ given by ``«name»``. This name can be optionally followed by ``<:`` and
 an already-existing type, indicating that the newly declared abstract
 type is a subtype of this "parent" type.
 
-When no supertype is given, the default supertype is ``Any`` — a
+When no supertype is given, the default supertype is :obj:`Any` — a
 predefined abstract type that all objects are instances of and all types
-are subtypes of. In type theory, ``Any`` is commonly called "top"
+are subtypes of. In type theory, :obj:`Any` is commonly called "top"
 because it is at the apex of the type graph. Julia also has a predefined
 abstract "bottom" type, at the nadir of the type graph, which is called
-``None``. It is the exact opposite of ``Any``: no object is an instance
+``None``. It is the exact opposite of :obj:`Any`: no object is an instance
 of ``None`` and all types are supertypes of ``None``.
 
 Let's consider some of the abstract types that make up Julia's numerical
@@ -209,15 +211,15 @@ hierarchy::
     abstract Signed   <: Integer
     abstract Unsigned <: Integer
 
-The ``Number`` type is a direct child type of ``Any``, and ``Real`` is
-its child. In turn, ``Real`` has two children (it has more, but only two
-are shown here; we'll get to the others later): ``Integer`` and
-``FloatingPoint``, separating the world into representations of integers and
+The :obj:`Number` type is a direct child type of :obj:`Any`, and :obj:`Real` is
+its child. In turn, :obj:`Real` has two children (it has more, but only two
+are shown here; we'll get to the others later): :class:`Integer` and
+:class:`FloatingPoint`, separating the world into representations of integers and
 representations of real numbers. Representations of real numbers
 include, of course, floating-point types, but also include other types,
-such as rationals. Hence, ``FloatingPoint`` is a proper subtype of
-``Real``, including only floating-point representations of real numbers.
-Integers are further subdivided into ``Signed`` and ``Unsigned``
+such as rationals. Hence, :class:`FloatingPoint` is a proper subtype of
+:obj:`Real`, including only floating-point representations of real numbers.
+Integers are further subdivided into :obj:`Signed` and :obj:`Unsigned`
 varieties.
 
 The ``<:`` operator in general means "is a subtype of", and, used in
@@ -248,7 +250,7 @@ to ``x::Any`` and ``y::Any``. When this function is invoked, say as
 information on multiple dispatch.)
 
 Assuming no method more specific than the above is found, Julia next internally
-defines and compiles a method called ``myplus`` specifically for two ``Int``
+defines and compiles a method called ``myplus`` specifically for two :class:`Int`
 arguments based on the generic function given above, i.e., it implicitly
 defines and compiles::
  
@@ -305,25 +307,25 @@ The general syntaxes for declaration of a ``bitstype`` are::
 The number of bits indicates how much storage the type requires and the
 name gives the new type a name. A bits type can optionally be declared
 to be a subtype of some supertype. If a supertype is omitted, then the
-type defaults to having ``Any`` as its immediate supertype. The
-declaration of ``Bool`` above therefore means that a boolean value takes
-eight bits to store, and has ``Integer`` as its immediate supertype.
+type defaults to having :obj:`Any` as its immediate supertype. The
+declaration of :obj:`Bool` above therefore means that a boolean value takes
+eight bits to store, and has :class:`Integer` as its immediate supertype.
 Currently, only sizes that are multiples of 8 bits are supported.
 Therefore, boolean values, although they really need just a single bit,
 cannot be declared to be any smaller than eight bits.
 
-The types ``Bool``, ``Int8`` and ``Uint8`` all have identical
+The types :obj:`Bool`, :class:`Int8` and :class:`Uint8` all have identical
 representations: they are eight-bit chunks of memory. Since Julia's type
 system is nominative, however, they are not interchangeable despite
 having identical structure. Another fundamental difference between them
-is that they have different supertypes: ``Bool``'s direct supertype is
-``Integer``, ``Int8``'s is ``Signed``, and ``Uint8``'s is ``Unsigned``.
-All other differences between ``Bool``, ``Int8``, and ``Uint8`` are
+is that they have different supertypes: :obj:`Bool`'s direct supertype is
+:class:`Integer`, :class:`Int8`'s is :obj:`Signed`, and :class:`Uint8`'s is :obj:`Unsigned`.
+All other differences between :obj:`Bool`, :class:`Int8`, and :class:`Uint8` are
 matters of behavior — the way functions are defined to act when given
 objects of these types as arguments. This is why a nominative type
 system is necessary: if structure determined type, which in turn
-dictates behavior, then it would be impossible to make ``Bool`` behave any
-differently than ``Int8`` or ``Uint8``.
+dictates behavior, then it would be impossible to make :obj:`Bool` behave any
+differently than :class:`Int8` or :class:`Uint8`.
 
 .. _man-composite-types:
 
@@ -331,7 +333,7 @@ Composite Types
 ---------------
 
 `Composite types <http://en.wikipedia.org/wiki/Composite_data_type>`_
-are called records, structures (``structs`` in C), or objects in various
+are called records, structures (``struct``\ s in C), or objects in various
 languages. A composite type is a collection of named fields, an instance
 of which can be treated as a single value. In many languages, composite
 types are the only kind of user-definable type, and they are by far the
@@ -370,7 +372,7 @@ operator:
              qux::Float64
            end
 
-Fields with no type annotation default to ``Any``, and can accordingly
+Fields with no type annotation default to :obj:`Any`, and can accordingly
 hold any type of value.
 
 New objects of composite type ``Foo`` are created by applying the
@@ -386,14 +388,14 @@ New objects of composite type ``Foo`` are created by applying the
 
 When a type is applied like a function it is called a *constructor*.
 Two constructors are generated automatically (these are called *default
-constructors*). One accepts any arguments and calls ``convert`` to convert
+constructors*). One accepts any arguments and calls :func:`convert` to convert
 them to the types of the fields, and the other accepts arguments that
 match the field types exactly. The reason both of these are generated is
 that this makes it easier to add new definitions without inadvertently
 replacing a default constructor.
 
 Since the ``bar`` field is unconstrained in type, any value will do.
-However, the value for ``baz`` must be convertible to ``Int``:
+However, the value for ``baz`` must be convertible to :class:`Int`:
 
 .. doctest::
 
@@ -527,7 +529,7 @@ are actually all closely related. They share the same key properties:
 - They may have parameters.
 
 Because of these shared properties, these types are internally
-represented as instances of the same concept, ``DataType``, which
+represented as instances of the same concept, :obj:`DataType`, which
 is the type of any of these types:
 
 .. doctest::
@@ -538,14 +540,14 @@ is the type of any of these types:
     julia> typeof(Int)
     DataType
 
-A ``DataType`` may be abstract or concrete. If it is concrete, it
+A :obj:`DataType` may be abstract or concrete. If it is concrete, it
 has a specified size, storage layout, and (optionally) field names.
-Thus a bits type is a ``DataType`` with nonzero size, but no field
-names. A composite type is a ``DataType`` that has field names or
+Thus a bits type is a :obj:`DataType` with nonzero size, but no field
+names. A composite type is a :obj:`DataType` that has field names or
 is empty (zero size).
 
 Every concrete value in the system is either an instance of some
-``DataType``, or is a tuple.
+:obj:`DataType`, or is a tuple.
 
 Tuple Types
 -----------
@@ -664,7 +666,7 @@ all type decisions at compile time, many traditional difficulties
 encountered in static parametric type systems can be relatively easily
 handled.
 
-All declared types (the ``DataType`` variety) can be parameterized, with
+All declared types (the :obj:`DataType` variety) can be parameterized, with
 the same syntax in each case. We will discuss them in the following
 order: first, parametric composite types, then parametric abstract
 types, and finally parametric bits types.
@@ -694,7 +696,7 @@ that's precisely the point of parametric types: it can be any type at
 all (or an integer, actually, although here it's clearly used as a
 type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
-``Float64``. Thus, this single declaration actually declares an
+:class:`Float64`. Thus, this single declaration actually declares an
 unlimited number of types: ``Point{Float64}``, ``Point{String}``,
 ``Point{Int64}``, etc. Each of these is now a usable concrete type:
 
@@ -764,20 +766,20 @@ types have different representations in memory:
 -  An instance of ``Point{Float64}`` can be represented compactly and
    efficiently as an immediate pair of 64-bit values;
 -  An instance of ``Point{Real}`` must be able to hold any pair of
-   instances of ``Real``. Since objects that are instances of ``Real``
+   instances of :obj:`Real`. Since objects that are instances of :obj:`Real`
    can be of arbitrary size and structure, in practice an instance of
    ``Point{Real}`` must be represented as a pair of pointers to
-   individually allocated ``Real`` objects.
+   individually allocated :obj:`Real` objects.
 
 The efficiency gained by being able to store ``Point{Float64}`` objects
 with immediate values is magnified enormously in the case of arrays: an
 ``Array{Float64}`` can be stored as a contiguous memory block of 64-bit
 floating-point values, whereas an ``Array{Real}`` must be an array of
-pointers to individually allocated ``Real`` objects — which may well be
+pointers to individually allocated :obj:`Real` objects — which may well be
 `boxed <http://en.wikipedia.org/wiki/Object_type_%28object-oriented_programming%29#Boxing>`_
 64-bit floating-point values, but also might be arbitrarily large,
 complex objects, which are declared to be implementations of the
-``Real`` abstract type.
+:obj:`Real` abstract type.
 
 How does one construct a ``Point`` object? It is possible to define
 custom constructors for composite types, which will be discussed in
@@ -788,7 +790,7 @@ given and the other in which they are implied by the arguments to the
 object constructor.
 
 Since the type ``Point{Float64}`` is a concrete type equivalent to
-``Point`` declared with ``Float64`` in place of ``T``, it can be applied
+``Point`` declared with :class:`Float64` in place of ``T``, it can be applied
 as a constructor accordingly:
 
 .. doctest::
@@ -933,8 +935,8 @@ constrain the range of ``T`` like so::
     abstract Pointy{T<:Real}
 
 With such a declaration, it is acceptable to use any type that is a
-subtype of ``Real`` in place of ``T``, but not types that are not
-subtypes of ``Real``:
+subtype of :obj:`Real` in place of ``T``, but not types that are not
+subtypes of :obj:`Real`:
 
 .. testsetup:: real-pointy
 
@@ -964,7 +966,7 @@ same manner::
 
 To give a real-world example of how all this parametric type
 machinery can be useful, here is the actual definition of Julia's
-``Rational`` immutable type (except that we omit the constructor here
+:obj:`Rational` immutable type (except that we omit the constructor here
 for simplicity), representing an exact ratio of integers::
 
     immutable Rational{T<:Integer} <: Real
@@ -973,9 +975,9 @@ for simplicity), representing an exact ratio of integers::
     end
 
 It only makes sense to take ratios of integer values, so the parameter
-type ``T`` is restricted to being a subtype of ``Integer``, and a ratio
+type ``T`` is restricted to being a subtype of :class:`Integer`, and a ratio
 of integers represents a value on the real number line, so any
-``Rational`` is an instance of the ``Real`` abstraction.
+:obj:`Rational` is an instance of the :obj:`Real` abstraction.
 
 .. _man-singleton-types:
 
@@ -1002,9 +1004,9 @@ at some examples:
     julia> isa(Float64, Type{Real})
     false
 
-In other words, ``isa(A,Type{B})`` is true if and only if ``A`` and
+In other words, :func:`isa(A,Type{B}) <isa>` is true if and only if ``A`` and
 ``B`` are the same object and that object is a type. Without the
-parameter, ``Type`` is simply an abstract type which has all type
+parameter, :obj:`Type` is simply an abstract type which has all type
 objects as its instances, including, of course, singleton types:
 
 .. doctest::
@@ -1078,8 +1080,8 @@ Type Aliases
 
 Sometimes it is convenient to introduce a new name for an already
 expressible type. For such occasions, Julia provides the ``typealias``
-mechanism. For example, ``Uint`` is type aliased to either ``Uint32`` or
-``Uint64`` as is appropriate for the size of pointers on the system::
+mechanism. For example, :class:`Uint` is type aliased to either :class:`Uint32` or
+:class:`Uint64` as is appropriate for the size of pointers on the system::
 
     # 32-bit system:
     julia> Uint
@@ -1097,8 +1099,8 @@ This is accomplished via the following code in ``base/boot.jl``::
         typealias Uint Uint32
     end
 
-Of course, this depends on what ``Int`` is aliased to — but that is
-predefined to be the correct type — either ``Int32`` or ``Int64``.
+Of course, this depends on what :class:`Int` is aliased to — but that is
+predefined to be the correct type — either :class:`Int32` or :class:`Int64`.
 
 For parametric types, ``typealias`` can be convenient for providing
 names for cases where some of the parameter choices are fixed.
@@ -1160,7 +1162,7 @@ true or false:
     julia> isa(1,FloatingPoint)
     false
 
-The ``typeof`` function, already used throughout the manual in examples,
+The :func:`typeof` function, already used throughout the manual in examples,
 returns the type of its argument. Since, as noted above, types are
 objects, they also have types, and we can ask what their types are:
 
@@ -1177,7 +1179,7 @@ objects, they also have types, and we can ask what their types are:
 
 What if we repeat the process? What is the type of a type of a type?
 As it happens, types are all composite values and thus all have a type of
-``DataType``:
+:obj:`DataType`:
 
 .. doctest::
 
@@ -1187,10 +1189,10 @@ As it happens, types are all composite values and thus all have a type of
     julia> typeof(UnionType)
     DataType
 
-The reader may note that ``DataType`` shares with the empty tuple
+The reader may note that :obj:`DataType` shares with the empty tuple
 (see `above <#tuple-types>`_), the distinction of being its own type
-(i.e. a fixed point of the ``typeof`` function). This leaves any number
-of tuple types recursively built with ``()`` and ``DataType`` as
+(i.e. a fixed point of the :func:`typeof` function). This leaves any number
+of tuple types recursively built with ``()`` and :obj:`DataType` as
 their only atomic values, which are their own type:
 
 .. doctest::
@@ -1210,11 +1212,11 @@ their only atomic values, which are their own type:
     julia> typeof(((),DataType))
     ((),DataType)
 
-All fixed points of the ``typeof`` function are like this.
+All fixed points of :func:`typeof` are like this.
 
-Another operation that applies to some types is ``super``, which
+Another operation that applies to some types is :func:`super`, which
 reveals a type's supertype.
-Only declared types (``DataType``) have unambiguous supertypes:
+Only declared types (:obj:`DataType`) have unambiguous supertypes:
 
 .. doctest::
 
@@ -1230,8 +1232,8 @@ Only declared types (``DataType``) have unambiguous supertypes:
     julia> super(Any)
     Any
 
-If you apply ``super`` to other type objects (or non-type objects), a
-"no method" error is raised::
+If you apply :func:`super` to other type objects (or non-type objects), a
+:exc:`MethodError` is raised::
 
     julia> super(Union(Float64,Int64))
     ERROR: `super` has no method matching super(::Type{Union(Float64,Int64)})
