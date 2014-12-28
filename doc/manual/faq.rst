@@ -1,5 +1,7 @@
 .. _man-faq:
 
+.. currentmodule:: Base
+
 ****************************
  Frequently Asked Questions
 ****************************
@@ -18,7 +20,7 @@ If memory usage is your concern, you can always replace objects with
 ones that consume less memory.  For example, if ``A`` is a
 gigabyte-sized array that you no longer need, you can free the memory
 with ``A = 0``.  The memory will be released the next time the garbage
-collector runs; you can force this to happen with ``gc()``.
+collector runs; you can force this to happen with :func:`gc`.
 
 How can I modify the declaration of a type/immutable in my session?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -88,7 +90,7 @@ Here we created a function ``change_array!()``, that assigns ``5`` to the first 
 
 
 Can I use ``using`` or ``import`` inside a function?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 No, you are not allowed to have a ``using`` or ``import`` statement inside
 a function.  If you want to import a module but only use its symbols
@@ -102,7 +104,7 @@ inside a specific function or set of functions, you have two options:
         end
 
 
-    This loads the module Foo and defines a variable ``Foo`` that refers
+    This loads the module ``Foo`` and defines a variable ``Foo`` that refers
     to the module, but does not import any of the other symbols from the
     module into the current namespace.  You refer to the ``Foo`` symbols by
     their qualified names ``Foo.bar`` etc.
@@ -119,7 +121,7 @@ inside a specific function or set of functions, you have two options:
         end
         using Bar
 
-    This imports all the symbols from Foo, but only inside the module Bar.
+    This imports all the symbols from ``Foo``, but only inside the module ``Bar``.
 
 .. _man-slurping-splatting:
 
@@ -230,13 +232,13 @@ Certain operations make mathematical sense but result in errors::
      in ^ at intfuncs.jl:84
 
 This behavior is an inconvenient consequence of the requirement for
-type-stability.  In the case of ``sqrt``, most users want
+type-stability.  In the case of :func:`sqrt`, most users want
 ``sqrt(2.0)`` to give a real number, and would be unhappy if it
 produced the complex number ``1.4142135623730951 + 0.0im``.  One could
-write the ``sqrt`` function to switch to a complex-valued output only
-when passed a negative number (which is what ``sqrt`` does in some
+write the :func:`sqrt` function to switch to a complex-valued output only
+when passed a negative number (which is what :func:`sqrt` does in some
 other languages), but then the result would not be `type-stable
-<#man-type-stable>`_ and the ``sqrt`` function would have poor
+<#man-type-stable>`_ and the :func:`sqrt` function would have poor
 performance.
 
 In these and other cases, you can get the result you want by choosing
@@ -274,7 +276,7 @@ premium, however, the alternatives are worse.
 
 One alternative to consider would be to check each integer operation for
 overflow and promote results to bigger integer types such as ``Int128`` or
-``BigInt`` in the case of overflow. Unfortunately, this introduces major
+:class:`BigInt` in the case of overflow. Unfortunately, this introduces major
 overhead on every integer operation (think incrementing a loop counter) – it
 requires emitting code to perform run-time overflow checks after arithmetic
 instructions and branches to handle potential overflows. Worse still, this
@@ -284,7 +286,7 @@ generation of efficient code. If you can't count on the results of integer
 operations being integers, it's impossible to generate fast, simple code the
 way C and Fortran compilers do.
 
-A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and ``BigInt`` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
+A variation on this approach, which avoids the appearance of type instability is to merge the ``Int`` and :class:`BigInt` types into a single hybrid integer type, that internally changes representation when a result no longer fits into the size of a machine integer. While this superficially avoids type-instability at the level of Julia code, it just sweeps the problem under the rug by foisting all of the same difficulties onto the C code implementing this hybrid integer type. This approach *can* be made to work and can even be made quite fast in many cases, but has several drawbacks. One problem is that the in-memory representation of integers and arrays of integers no longer match the natural representation used by C, Fortran and other languages with native machine integers. Thus, to interoperate with those languages, we would ultimately need to introduce native integer types anyway. Any unbounded representation of integers cannot have a fixed number of bits, and thus cannot be stored inline in an array with fixed-size slots – large integer values will always require separate heap-allocated storage. And of course, no matter how clever a hybrid integer implementation one uses, there are always performance traps – situations where performance degrades unexpectedly. Complex representation, lack of interoperability with C and Fortran, the inability to represent integer arrays without additional heap storage, and unpredictable performance characteristics make even the cleverest hybrid integer implementations a poor choice for high-performance numerical work.
 
 An alternative to using hybrid integers or promoting to BigInts is to use
 saturating integer arithmetic, where adding to the largest integer value
@@ -315,7 +317,7 @@ value. This is precisely what Matlab™ does::
 
      -9223372036854775808
 
-At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with ``typemin(Int)`` or ``typemax(Int)`` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
+At first blush, this seems reasonable enough since 9223372036854775807 is much closer to 9223372036854775808 than -9223372036854775808 is and integers are still represented with a fixed size in a natural way that is compatible with C and Fortran. Saturated integer arithmetic, however, is deeply problematic. The first and most obvious issue is that this is not the way machine integer arithmetic works, so implementing saturated operations requires emitting instructions after each machine integer operation to check for underflow or overflow and replace the result with :func:`typemin(Int) <typemin>` or :func:`typemax(Int) <typemax>` as appropriate. This alone expands each integer operation from a single, fast instruction into half a dozen instructions, probably including branches. Ouch. But it gets worse – saturating integer arithmetic isn't associative. Consider this Matlab computation::
 
     >> n = int64(2)^62
     4611686018427387904
@@ -437,7 +439,7 @@ algebraically reduce multiple operations into fewer equivalent operations.
 The most reasonable alternative to having integer arithmetic silently overflow
 is to do checked arithmetic everywhere, raising errors when adds, subtracts,
 and multiplies overflow, producing values that are not value-correct. In this
-[blog post](http://danluu.com/integer-overflow/), Dan Luu analyzes this and
+`blog post <http://danluu.com/integer-overflow>`_, Dan Luu analyzes this and
 finds that rather than the trivial cost that this approach should in theory
 have, it ends up having a substantial cost due to compilers (LLVM and GCC)
 not gracefully optimizing around the added overflow checks. If this improves
