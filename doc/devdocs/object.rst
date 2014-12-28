@@ -25,7 +25,7 @@ The :code:`type` field points to a
 The layout of the rest of the object is dependant on its type.
 
 e.g. a :func:`Base.tuple` object has an array of pointers to the
-objects contained by the tuple (or an array of raw values for un-boxed bitstype tuples)::
+objects contained by the tuple::
 
     typedef struct {
         struct _jl_value_t *type;
@@ -71,6 +71,12 @@ Storage for new objects is allocated by :func:`newobj` in julia_internal.h::
         jv->type = type;
         return jv;
     }
+
+.. sidebar:: `special case. <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2973>`_
+
+    The special singleton object :data:`nothing` is "void".
+    It has no data and consumes only 8 bytes.
+    :code:`jl_nothing = newstruct(jl_void_type)`
 
 Note that all objects are allocated in multiples of 8 bytes, so the
 smallest object size is 16 bytes (8 byte type pointer + 8 bytes
