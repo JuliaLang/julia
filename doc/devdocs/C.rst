@@ -1,6 +1,6 @@
 :orphan:
 
-.. _devdocs-index:
+.. _devdocs-c-index:
 
 #####################################
  Developing/debugging Julia's C code
