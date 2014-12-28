@@ -34,7 +34,7 @@ objects contained by the tuple (or an array of raw values for un-boxed bitstype 
     } jl_tuple_t;
 
 e.g. a "boxed" uint16_t (created by :func:`jl_box_uint16`) is stored as
-follows::
+follows (assuming machine is 64-bit)::
 
     struct {
         struct _jl_value_t *type; -- 8 bytes
