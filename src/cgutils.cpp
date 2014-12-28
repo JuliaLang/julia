@@ -180,6 +180,8 @@ public:
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
+                if (F->getName().empty())
+                    return CloneFunctionProto(F);
                 Function *shadow = srcModule->getFunction(F->getName());
                 if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
@@ -220,10 +222,12 @@ public:
             newGV->copyAttributesFrom(GV);
             if (GV->isDeclaration())
                 return newGV;
-            uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
-            if (addr != 0) {
-                newGV->setExternallyInitialized(true);
-                return newGV;
+            if (!GV->getName().empty()) {
+                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
+                if (addr != 0) {
+                    newGV->setExternallyInitialized(true);
+                    return newGV;
+                }
             }
             std::map<Value*, void *>::iterator it;
             it = llvm_to_jl_value.find(GV);
