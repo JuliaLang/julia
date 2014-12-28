@@ -728,40 +728,41 @@ argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to ena
 to connect to it at the specified ``bind_addr`` and ``port``. Useful for multi-homed hosts.
 
 
-For every worker launched, the ``launch`` method must add a ``WorkerConfig``object with appropriate
-fields initialized to ``launched``::
+For every worker launched, the ``launch`` method must add a ``WorkerConfig``
+object with appropriate fields initialized to ``launched`` ::
 
-type WorkerConfig
-    # Common fields relevant to all cluster managers
-    io::Nullable{IO}
-    host::Nullable{AbstractString}
-    port::Nullable{Integer}
+ type WorkerConfig
+     # Common fields relevant to all cluster managers
+     io::Nullable{IO}
+     host::Nullable{AbstractString}
+     port::Nullable{Integer}
 
-    # Used when launching additional workers at a host
-    count::Nullable{Union(Int, Symbol)}
-    exeflags::Nullable{Cmd}
+     # Used when launching additional workers at a host
+     count::Nullable{Union(Int, Symbol)}
+     exeflags::Nullable{Cmd}
 
-    # External cluster managers can use this to store information at a per-worker level
-    # Can be a dict if multiple fields need to be stored.
-    userdata::Nullable{Any}
+     # External cluster managers can use this to store information at a per-worker level
+     # Can be a dict if multiple fields need to be stored.
+     userdata::Nullable{Any}
 
-    # SSHManager / SSH tunnel connections to workers
-    tunnel::Nullable{Bool}
-    bind_addr::Nullable{AbstractString}
-    sshflags::Nullable{Cmd}
-    max_parallel::Nullable{Integer}
+     # SSHManager / SSH tunnel connections to workers
+     tunnel::Nullable{Bool}
+     bind_addr::Nullable{AbstractString}
+     sshflags::Nullable{Cmd}
+     max_parallel::Nullable{Integer}
 
-    .....
-end
+     .....
+ end
 
 Most of the fields in ``WorkerConfig`` are used by the inbuilt managers.
 Custom cluster managers would typically specify only ``io`` or ``host`` / ``port``:
 
-If ``io`` is specified, it is used to read host/port information. A julia worker prints out
-its bind address and port at startup. This allows julia workers to listen on any free port
-available instead of requiring worker ports to be configured manually.
+If ``io`` is specified, it is used to read host/port information. A Julia
+worker prints out its bind address and port at startup. This allows Julia
+workers to listen on any free port available instead of requiring worker ports
+to be configured manually.
 
-If ``io`` is not specfied, ``host`` and ``port`` are used to connect.
+If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 
 ``count`` and ``exeflags`` are relevant for launching additional workers from a worker.
 For example, a cluster manager may launch a single worker per node, and use that to launch
