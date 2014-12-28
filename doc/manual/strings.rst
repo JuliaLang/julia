@@ -34,15 +34,15 @@ handle non-ASCII data is straightforward.
 
 There are a few noteworthy high-level features about Julia's strings:
 
--  ``AbstractString`` is an abstraction, not a concrete type — many different
-   representations can implement the ``AbstractString`` interface, but they can
+-  :obj:`AbstractString` is an abstraction, not a concrete type — many different
+   representations can implement the :obj:`AbstractString` interface, but they can
    easily be used together and interact transparently. Any string type
-   can be used in any function expecting a ``AbstractString``.
+   can be used in any function expecting a :obj:`AbstractString`.
 -  Like C and Java, but unlike most dynamic languages, Julia has a
-   first-class type representing a single character, called ``Char``.
+   first-class type representing a single character, called :obj:`Char`.
    This is just a special kind of 32-bit bitstype whose numeric value
    represents a Unicode code point.
--  As in Java, strings are immutable: the value of a ``AbstractString`` object
+-  As in Java, strings are immutable: the value of a :obj:`AbstractString` object
    cannot be changed. To construct a different string value, you
    construct a new string from parts of other strings.
 -  Conceptually, a string is a *partial function* from indices to
@@ -63,10 +63,10 @@ There are a few noteworthy high-level features about Julia's strings:
 Characters
 ----------
 
-A ``Char`` value represents a single character: it is just a 32-bit
+A :obj:`Char` value represents a single character: it is just a 32-bit
 bitstype with a special literal representation and appropriate arithmetic
 behaviors, whose numeric value is interpreted as a `Unicode code
-point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how ``Char``
+point <http://en.wikipedia.org/wiki/Code_point>`_. Here is how :obj:`Char`
 values are input and shown:
 
 .. doctest::
@@ -77,7 +77,7 @@ values are input and shown:
     julia> typeof(ans)
     Char
 
-You can convert a ``Char`` to its integer value, i.e. code point,
+You can convert a :obj:`Char` to its integer value, i.e. code point,
 easily:
 
 .. doctest::
@@ -88,8 +88,8 @@ easily:
     julia> typeof(ans)
     Int64
 
-On 32-bit architectures, ``typeof(ans)`` will be ``Int32``. You can
-convert an integer value back to a ``Char`` just as easily:
+On 32-bit architectures, :func:`typeof(ans) <typeof>` will be ``Int32``. You can
+convert an integer value back to a :obj:`Char` just as easily:
 
 .. doctest::
 
@@ -164,7 +164,7 @@ also be used:
     255
 
 You can do comparisons and a limited amount of arithmetic with
-``Char`` values:
+:obj:`Char` values:
 
 .. doctest::
 
@@ -183,10 +183,10 @@ You can do comparisons and a limited amount of arithmetic with
     julia> 'A' + 1
     'B'
 
-AbstractString Basics
----------------------
+:obj:`AbstractString` Basics
+----------------------------
 
-AbstractString literals are delimited by double quotes or triple double quotes:
+:obj:`AbstractString` literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
@@ -215,7 +215,7 @@ element is found at index ``n``, when the string has
 a length of ``n``.
 
 In any indexing expression, the keyword ``end`` can be used as a
-shorthand for the last index (computed by ``endof(str)``).
+shorthand for the last index (computed by :func:`endof(str) <endof>`).
 You can perform arithmetic and other operations with ``end``, just like
 a normal value:
 
@@ -262,7 +262,7 @@ Notice that the expressions ``str[k]`` and ``str[k:k]`` do not give the same res
     julia> str[6:6]
     ","
 
-The former is a single character value of type ``Char``, while the
+The former is a single character value of type :obj:`Char`, while the
 latter is a string value that happens to contain only a single
 character. In Julia these are very different things.
 
@@ -314,8 +314,8 @@ In this case, the character ``∀`` is a three-byte character, so the
 indices 2 and 3 are invalid and the next character's index is 4.
 
 Because of variable-length encodings, the number of characters in a
-string (given by ``length(s)``) is not always the same as the last index.
-If you iterate through the indices 1 through ``endof(s)`` and index
+string (given by :func:`length(s) <length>`) is not always the same as the last index.
+If you iterate through the indices 1 through :func:`endof(s) <endof>` and index
 into ``s``, the sequence of characters returned when errors aren't
 thrown is the sequence of characters comprising the string ``s``.
 Thus we have the identity that ``length(s) <= endof(s)``, since each
@@ -359,10 +359,10 @@ exception handling required:
 
 UTF-8 is not the only encoding that Julia supports, and adding support
 for new encodings is quite easy.  In particular, Julia also provides
-``UTF16String`` and ``UTF32String`` types, constructed by the
-``utf16(s)`` and ``utf32(s)`` functions respectively, for UTF-16 and
-UTF-32 encodings.  It also provides aliases ``WString`` and
-``wstring(s)`` for either UTF-16 or UTF-32 strings, depending on the
+:obj:`UTF16String` and :obj:`UTF32String` types, constructed by
+:func:`utf16` and :func:`utf32` respectively, for UTF-16 and
+UTF-32 encodings.  It also provides aliases :obj:`WString` and
+:func:`wstring` for either UTF-16 or UTF-32 strings, depending on the
 size of ``Cwchar_t``. Additional discussion of other encodings and how to
 implement support for them is beyond the scope of this document for
 the time being. For further discussion of UTF-8 encoding issues, see
@@ -409,9 +409,9 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call the generic
-``string`` function to convert objects into string form. Most
-non-``AbstractString`` objects are converted to strings closely
+Both concatenation and string interpolation call 
+:func:`string` to convert objects into string form. Most
+non-:obj:`AbstractString` objects are converted to strings closely
 corresponding to how they are entered as literal expressions:
 
 .. doctest::
@@ -425,7 +425,7 @@ corresponding to how they are entered as literal expressions:
     julia> "v: $v"
     "v: [1,2,3]"
 
-The ``string`` function is the identity for ``AbstractString`` and ``Char``
+:func:`string` is the identity for :obj:`AbstractString` and :obj:`Char`
 values, so these are interpolated into strings as themselves, unquoted
 and unescaped:
 
@@ -512,7 +512,7 @@ contained in a string:
 
 The last error is because ``'o'`` is a character literal, and :func:`contains`
 is a generic function that looks for subsequences. To look for an element in a
-sequence, you must use the :func:`in` function instead.
+sequence, you must use :func:`in` instead.
 
 Two other handy string functions are :func:`repeat` and :func:`join`:
 
@@ -526,18 +526,18 @@ Two other handy string functions are :func:`repeat` and :func:`join`:
 
 Some other useful functions include:
 
--  ``endof(str)`` gives the maximal (byte) index that can be used to
+-  :func:`endof(str) <endof>` gives the maximal (byte) index that can be used to
    index into ``str``.
--  ``length(str)`` the number of characters in ``str``.
--  ``i = start(str)`` gives the first valid index at which a character
+-  :func:`length(str) <length>` the number of characters in ``str``.
+-  :func:`i = start(str) <start>` gives the first valid index at which a character
    can be found in ``str`` (typically 1).
--  ``c, j = next(str,i)`` returns next character at or after the index
+-  :func:`c, j = next(str,i) <next>` returns next character at or after the index
    ``i`` and the next valid character index following that. With
-   ``start`` and ``endof``, can be used to iterate through the
+   :func:`start` and :func:`endof`, can be used to iterate through the
    characters in ``str``.
--  ``ind2chr(str,i)`` gives the number of characters in ``str`` up to
+-  :func:`ind2chr(str,i) <ind2chr>` gives the number of characters in ``str`` up to
    and including any at index ``i``.
--  ``chr2ind(str,j)`` gives the index at which the ``j``\ th character
+-  :func:`chr2ind(str,j) <chr2ind>` gives the index at which the ``j``\ th character
    in ``str`` occurs.
 
 .. _man-non-standard-string-literals:
@@ -579,7 +579,7 @@ any options turned on just uses ``r"..."``:
     julia> typeof(ans)
     Regex (constructor with 3 methods)
 
-To check if a regex matches a string, use the :func:`ismatch` function:
+To check if a regex matches a string, use :func:`ismatch`:
 
 .. doctest::
 
@@ -589,7 +589,7 @@ To check if a regex matches a string, use the :func:`ismatch` function:
     julia> ismatch(r"^\s*(?:#|$)", "# a comment")
     true
 
-As one can see here, ``ismatch`` simply returns true or false,
+As one can see here, :func:`ismatch` simply returns true or false,
 indicating whether the given regex matches the string or not. Commonly,
 however, one wants to know not just whether a string matched, but also
 *how* it matched. To capture this information about a match, use the
@@ -602,7 +602,7 @@ however, one wants to know not just whether a string matched, but also
     julia> match(r"^\s*(?:#|$)", "# a comment")
     RegexMatch("#")
 
-If the regular expression does not match the given string, ``match``
+If the regular expression does not match the given string, :func:`match`
 returns ``nothing`` — a special value that does not print anything at
 the interactive prompt. Other than not printing, it is a completely
 normal value and you can test for it programmatically::
@@ -614,8 +614,8 @@ normal value and you can test for it programmatically::
       println("blank or comment")
     end
 
-If a regular expression does match, the value returned by ``match`` is a
-``RegexMatch`` object. These objects record how the expression matches,
+If a regular expression does match, the value returned by :func:`match` is a
+:obj:`RegexMatch` object. These objects record how the expression matches,
 including the substring that the pattern matches and any captured
 substrings, if there are any. This example only captures the portion of
 the substring that matches, but perhaps we want to capture any non-blank
@@ -626,7 +626,7 @@ text after the comment character. We could do the following:
     julia> m = match(r"^\s*(?:#\s*(.*?)\s*$|$)", "# a comment ")
     RegexMatch("# a comment ", 1="a comment")
 
-When calling ``match``, you have the option to specify an index at
+When calling :func:`match`, you have the option to specify an index at
 which to start the search. For example:
 
 .. doctest::
@@ -640,7 +640,7 @@ which to start the search. For example:
    julia> m = match(r"[0-9]","aaaa1aaaa2aaaa3",11)
    RegexMatch("3")
 
-You can extract the following info from a ``RegexMatch`` object:
+You can extract the following info from a :obj:`RegexMatch` object:
 
 -  the entire substring matched: ``m.match``
 -  the captured substrings as a tuple of strings: ``m.captures``
@@ -841,7 +841,7 @@ Version Number Literals
 -----------------------
 
 Version numbers can easily be expressed with non-standard string literals of
-the form ``v"..."``. Version number literals create ``VersionNumber`` objects
+the form ``v"..."``. Version number literals create :obj:`VersionNumber` objects
 which follow the specifications of `semantic versioning <http://semver.org>`_,
 and therefore are composed of major, minor and patch numeric values, followed
 by pre-release and build alpha-numeric annotations. For example,
@@ -852,10 +852,10 @@ therefore e.g.  ``v"0.2"`` is equivalent to ``v"0.2.0"`` (with empty
 pre-release/build annotations), ``v"2"`` is equivalent to ``v"2.0.0"``, and so
 on.
 
-``VersionNumber`` objects are mostly useful to easily and correctly compare two
+:obj:`VersionNumber` objects are mostly useful to easily and correctly compare two
 (or more) versions. For example, the constant ``VERSION`` holds Julia version
-number as a ``VersionNumber`` object, and therefore one can define some
-version-specific behaviour using simple statements as::
+number as a :obj:`VersionNumber` object, and therefore one can define some
+version-specific behavior using simple statements as::
 
     if v"0.2" <= VERSION < v"0.3-"
         # do something specific to 0.2 release series
@@ -881,6 +881,6 @@ the trailing ``-`` should always be used on upper bounds unless there's a good
 reason not to), but they must not be used as the actual version number of
 anything, as they are invalid in the semantic versioning scheme.
 
-Besides being used for the ``VERSION`` constant, ``VersionNumber`` objects are
-widely used in the ``Pkg`` module, to specify packages versions and their
+Besides being used for the :const:`VERSION` constant, :obj:`VersionNumber` objects are
+widely used in the :mod:`Pkg <Base.Pkg>` module, to specify packages versions and their
 dependencies.
