@@ -1,5 +1,7 @@
 .. _man-packages:
 
+.. currentmodule:: Base
+
 **********
  Packages
 **********
@@ -7,12 +9,12 @@
 Julia has a built-in package manager for installing add-on functionality written in Julia.
 It can also install external libraries using your operating system's standard system for doing so, or by compiling from source.
 The list of registered Julia packages can be found at `<http://pkg.julialang.org>`_.
-All package manager commands are found in the ``Pkg`` module, included in Julia's Base install.
+All package manager commands are found in the :mod:`Pkg <Base.Pkg>` module, included in Julia's :mod:`Base` install.
 
 Package Status
 --------------
 
-The ``Pkg.status()`` function prints out a summary of the state of packages you have installed.
+The :func:`Pkg.status` function prints out a summary of the state of packages you have installed.
 Initially, you'll have no packages installed::
 
     julia> Pkg.status()
@@ -20,7 +22,7 @@ Initially, you'll have no packages installed::
     INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
     No packages installed.
 
-Your package directory is automatically initialized the first time you run a ``Pkg`` command that expects it to exist – which includes ``Pkg.status()``.
+Your package directory is automatically initialized the first time you run a :mod:`Pkg <Base.Pkg>` command that expects it to exist – which includes  :func:`Pkg.status`.
 Here's an example non-trivial set of required and additional packages::
 
     julia> Pkg.status()
@@ -31,9 +33,9 @@ Here's an example non-trivial set of required and additional packages::
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-These packages are all on registered versions, managed by ``Pkg``.
+These packages are all on registered versions, managed by :mod:`Pkg <Base.Pkg>`.
 Packages can be in more complicated states, indicated by annotations to the right of the installed package version; we will explain these states and annotations as we encounter them.
-For programmatic usage, ``Pkg.installed()`` returns a dictionary, mapping installed package names to the version of that package which is installed::
+For programmatic usage, :func:`Pkg.installed` returns a dictionary, mapping installed package names to the version of that package which is installed::
 
     julia> Pkg.installed()
     Dict{ASCIIString,VersionNumber} with 4 entries:
@@ -51,10 +53,10 @@ So rather than installing a package, you just add it to the list of requirements
 In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn't have that requirement anymore, updating will actually remove that package.
 
 Your package requirements are in the file ``~/.julia/v0.3/REQUIRE``.
-You can edit this file by hand and then call ``Pkg.resolve()`` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do ``Pkg.edit()``, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call ``Pkg.resolve()`` afterwards if necessary.
-If you only want to add or remove the requirement for a single package, you can also use the non-interactive ``Pkg.add`` and ``Pkg.rm`` commands, which add or remove a single requirement to ``REQUIRE`` and then call ``Pkg.resolve()``.
+You can edit this file by hand and then call :func:`Pkg.resolve` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do :func:`Pkg.edit`, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call :func:`Pkg.resolve` afterwards if necessary.
+If you only want to add or remove the requirement for a single package, you can also use the non-interactive :func:`Pkg.add` and :func:`Pkg.rm` commands, which add or remove a single requirement to ``REQUIRE`` and then call :func:`Pkg.resolve`.
 
-You can add a package to the list of requirements with the ``Pkg.add`` function, and the package and all the packages that it depends on will be installed::
+You can add a package to the list of requirements with the :func:`Pkg.add` function, and the package and all the packages that it depends on will be installed::
 
     julia> Pkg.status()
     No packages installed.
@@ -80,8 +82,8 @@ What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.3/REQ
     $ cat ~/.julia/v0.3/REQUIRE
     Distributions
 
-It then runs ``Pkg.resolve()`` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
-As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.3/REQUIRE`` file by hand and then running ``Pkg.resolve()`` yourself::
+It then runs :func:`Pkg.resolve` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
+As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.3/REQUIRE`` file by hand and then running :func:`Pkg.resolve` yourself::
 
     $ echo UTF16 >> ~/.julia/v0.3/REQUIRE
 
@@ -97,11 +99,11 @@ As stated before, you can accomplish the same thing by editing your ``~/.julia/v
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-This is functionally equivalent to calling ``Pkg.add("UTF16")``, except that ``Pkg.add`` doesn't change ``REQUIRE`` until *after* installation has completed, so if there are problems, ``REQUIRE`` will be left as it was before calling ``Pkg.add``.
+This is functionally equivalent to calling :func:`Pkg.add("UTF16") <Pkg.add>`, except that :func:`Pkg.add` doesn't change ``REQUIRE`` until *after* installation has completed, so if there are problems, ``REQUIRE`` will be left as it was before calling :func:`Pkg.add`.
 The format of the ``REQUIRE`` file is described in `Requirements Specification`_;
 it allows, among other things, requiring specific ranges of versions of packages.
 
-When you decide that you don't want to have a package around any more, you can use ``Pkg.rm`` to remove the requirement for it from the ``REQUIRE`` file::
+When you decide that you don't want to have a package around any more, you can use :func:`Pkg.rm` to remove the requirement for it from the ``REQUIRE`` file::
 
     julia> Pkg.rm("Distributions")
     INFO: Removing Distributions v0.2.7
@@ -120,11 +122,11 @@ When you decide that you don't want to have a package around any more, you can u
     julia> Pkg.status()
     No packages installed.
 
-Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running ``Pkg.resolve()`` to update the set of installed packages to match.
-While ``Pkg.add`` and ``Pkg.rm`` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call ``Pkg.edit()`` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
-``Pkg.edit()`` does not roll back the contents of ``REQUIRE`` if ``Pkg.resolve()`` fails – rather, you have to run ``Pkg.edit()`` again to fix the files contents yourself.
+Once again, this is equivalent to editing the ``REQUIRE`` file to remove the line with each package name on it then running :func:`Pkg.resolve` to update the set of installed packages to match.
+While :func:`Pkg.add` and :func:`Pkg.rm` are convenient for adding and removing requirements for a single package, when you want to add or remove multiple packages, you can call :func:`Pkg.edit` to manually change the contents of ``REQUIRE`` and then update your packages accordingly.
+:func:`Pkg.edit` does not roll back the contents of ``REQUIRE`` if :func:`Pkg.resolve` fails – rather, you have to run :func:`Pkg.edit` again to fix the files contents yourself.
 
-Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running ``Pkg.add``. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
+Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
 
     git config --global url."https://".insteadOf git://
 
@@ -133,8 +135,8 @@ Installing Unregistered Packages
 
 Julia packages are simply git repositories, clonable via any of the `protocols <https://www.kernel.org/pub/software/scm/git/docs/git-clone.html#URLS>`_ that git supports, and containing Julia code that follows certain layout conventions.
 Official Julia packages are registered in the `METADATA.jl <https://github.com/JuliaLang/METADATA.jl>`_ repository, available at a well-known location [1]_.
-The ``Pkg.add`` and ``Pkg.rm`` commands in the previous section interact with registered packages, but the package manager can install and work with unregistered packages too.
-To install an unregistered package, use ``Pkg.clone(url)``, where ``url`` is a git URL from which the package can be cloned::
+The :func:`Pkg.add` and :func:`Pkg.rm` commands in the previous section interact with registered packages, but the package manager can install and work with unregistered packages too.
+To install an unregistered package, use :func:`Pkg.clone(url) <Pkg.clone>`, where ``url`` is a git URL from which the package can be cloned::
 
     julia> Pkg.clone("git://example.com/path/to/Package.jl.git")
     INFO: Cloning Package from git://example.com/path/to/Package.jl.git
@@ -157,7 +159,7 @@ Updating Packages
 -----------------
 
 When package developers publish new registered versions of packages that you're using, you will, of course, want the new shiny versions.
-To get the latest and greatest versions of all your packages, just do ``Pkg.update()``::
+To get the latest and greatest versions of all your packages, just do :func:`Pkg.update`::
 
     julia> Pkg.update()
     INFO: Updating METADATA...
@@ -166,14 +168,14 @@ To get the latest and greatest versions of all your packages, just do ``Pkg.upda
     INFO: Upgrading Stats: v0.2.7 => v0.2.8
 
 The first step of updating packages is to pull new changes to ``~/.julia/v0.3/METADATA`` and see if any new registered package versions have been published.
-After this, ``Pkg.update()`` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
+After this, :func:`Pkg.update` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
 Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
 If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
 
 Finally, the update process recomputes an optimal set of package versions to have installed to satisfy your top-level requirements and the requirements of "fixed" packages.
 A package is considered fixed if it is one of the following:
 
-1. **Unregistered:** the package is not in ``METADATA`` – you installed it with ``Pkg.clone``.
+1. **Unregistered:** the package is not in ``METADATA`` – you installed it with :func:`Pkg.clone`.
 2. **Checked out:** the package repo is on a development branch.
 3. **Dirty:** changes have been made to files in the repo.
 
@@ -185,7 +187,7 @@ Checkout, Pin and Free
 
 You may want to use the ``master`` version of a package rather than one of its registered versions.
 There might be fixes or functionality on master that you need that aren't yet published in any registered versions, or you may be a developer of the package and need to make changes on ``master`` or some other development branch.
-In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branch of ``pkg`` or ``Pkg.checkout(pkg,branch)`` to checkout some other branch::
+In such cases, you can do :func:`Pkg.checkout(pkg) <Pkg.checkout>` to checkout the ``master`` branch of ``pkg`` or :func:`Pkg.checkout(pkg,branch) <Pkg.checkout>` to checkout some other branch::
 
     julia> Pkg.add("Distributions")
     INFO: Installing Distributions v0.2.9
@@ -211,14 +213,14 @@ In such cases, you can do ``Pkg.checkout(pkg)`` to checkout the ``master`` branc
      - NumericExtensions             0.2.17
      - Stats                         0.2.7
 
-Immediately after installing ``Distributions`` with ``Pkg.add`` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
-Then after running ``Pkg.checkout("Distributions")``, you can see from the output of ``Pkg.status()`` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
+Immediately after installing ``Distributions`` with :func:`Pkg.add` it is on the current most recent registered version – ``0.2.9`` at the time of writing this.
+Then after running :func:`Pkg.checkout("Distributions") <Pkg.checkout>`, you can see from the output of :func:`Pkg.status` that ``Distributions`` is on an unregistered version greater than ``0.2.9``, indicated by the "pseudo-version" number ``0.2.9+``.
 
 When you checkout an unregistered version of a package, the copy of the ``REQUIRE`` file in the package repo takes precedence over any requirements registered in ``METADATA``, so it is important that developers keep this file accurate and up-to-date, reflecting the actual requirements of the current version of the package.
 If the ``REQUIRE`` file in the package repo is incorrect or missing, dependencies may be removed when the package is checked out.
-This file is also used to populate newly published versions of the package if you use the API that ``Pkg`` provides for this (described below).
+This file is also used to populate newly published versions of the package if you use the API that :mod:`Pkg <Base.Pkg>` provides for this (described below).
 
-When you decide that you no longer want to have a package checked out on a branch, you can "free" it back to the control of the package manager with ``Pkg.free(pkg)``::
+When you decide that you no longer want to have a package checked out on a branch, you can "free" it back to the control of the package manager with :func:`Pkg.free(pkg) <Pkg.free>`::
 
     julia> Pkg.free("Distributions")
     INFO: Freeing Distributions...
@@ -233,7 +235,7 @@ When you decide that you no longer want to have a package checked out on a branc
 
 After this, since the package is on a registered version and not on a branch, its version will be updated as new registered versions of the package are published.
 
-If you want to pin a package at a specific version so that calling ``Pkg.update()`` won't change the version the package is on, you can use the ``Pkg.pin`` function::
+If you want to pin a package at a specific version so that calling :func:`Pkg.update` won't change the version the package is on, you can use the :func:`Pkg.pin` function::
 
     julia> Pkg.pin("Stats")
     INFO: Creating Stats branch pinned.47c198b1.tmp
@@ -246,7 +248,7 @@ If you want to pin a package at a specific version so that calling ``Pkg.update(
      - Stats                         0.2.7              pinned.47c198b1.tmp
 
 After this, the ``Stats`` package will remain pinned at version ``0.2.7`` – or more specifically, at commit ``47c198b1``, but since versions are permanently associated a given git hash, this is the same thing.
-``Pkg.pin`` works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
+:func:`Pkg.pin` works by creating a throw-away branch for the commit you want to pin the package at and then checking that branch out.
 By default, it pins a package at the current commit, but you can choose a different version by passing a second argument::
 
     julia> Pkg.pin("Stats",v"0.2.5")
@@ -261,7 +263,7 @@ By default, it pins a package at the current commit, but you can choose a differ
      - Stats                         0.2.5              pinned.1fd0983b.tmp
 
 Now the ``Stats`` package is pinned at commit ``1fd0983b``, which corresponds to version ``0.2.5``.
-When you decide to "unpin" a package and let the package manager update it again, you can use ``Pkg.free`` like you would to move off of any branch::
+When you decide to "unpin" a package and let the package manager update it again, you can use :func:`Pkg.free` like you would to move off of any branch::
 
     julia> Pkg.free("Stats")
     INFO: Freeing Stats...
@@ -274,7 +276,7 @@ When you decide to "unpin" a package and let the package manager update it again
      - NumericExtensions             0.2.17
      - Stats                         0.2.7
 
-After this, the ``Stats`` package is managed by the package manager again, and future calls to ``Pkg.update()`` will upgrade it to newer versions when they are published.
+After this, the ``Stats`` package is managed by the package manager again, and future calls to :func:`Pkg.update` will upgrade it to newer versions when they are published.
 The throw-away ``pinned.1fd0983b.tmp`` branch remains in your local ``Stats`` repo, but since git branches are extremely lightweight, this doesn't really matter;
 if you feel like cleaning them up, you can go into the repo and delete those branches.
 
@@ -311,7 +313,7 @@ Generating a New Package
 ------------------------
 
 Suppose you want to create a new Julia package called ``FooBar``.
-To get started, do ``Pkg.generate(pkg,license)`` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
+To get started, do :func:`Pkg.generate(pkg,license) <Pkg.generate>` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
 
     julia> Pkg.generate("FooBar","MIT")
     INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.3/FooBar
@@ -350,7 +352,7 @@ This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git rep
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
 If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
 
-If you created a GitHub account and configured git to know about it, ``Pkg.generate`` will set an appropriate origin URL for you.
+If you created a GitHub account and configured git to know about it, :func:`Pkg.generate` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
 You will have to enable testing on the Travis website for your package repository, but once you've done that, it will already have working tests.
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
@@ -366,7 +368,7 @@ Once you've done this, letting people try out your code is as simple as sending 
     git://github.com/StefanKarpinski/FooBar.jl.git
 
 For your package, it will be your GitHub user name and the name of your package, but you get the idea.
-People you send this URL to can use ``Pkg.clone`` to install the package and try it out::
+People you send this URL to can use :func:`Pkg.clone` to install the package and try it out::
 
     julia> Pkg.clone("git://github.com/StefanKarpinski/FooBar.jl.git")
     INFO: Cloning FooBar from git@github.com:StefanKarpinski/FooBar.jl.git
@@ -376,7 +378,7 @@ People you send this URL to can use ``Pkg.clone`` to install the package and try
 Publishing Your Package
 -----------------------
 
-Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using ``Pkg.register``::
+Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using :func:`Pkg.register`::
 
     julia> Pkg.register("FooBar")
     INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
@@ -402,7 +404,7 @@ This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
 
 This commit is only locally visible, however.  In order to make it visible to
 the world, you need to merge your local ``METADATA`` upstream into the official
-repo.  The ``Pkg.publish()`` command will fork the ``METADATA`` repository on
+repo.  The :func:`Pkg.publish` command will fork the ``METADATA`` repository on
 GitHub, push your changes to your fork, and open a pull request::
 
     julia> Pkg.publish()
@@ -415,19 +417,19 @@ GitHub, push your changes to your fork, and open a pull request::
 
       https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/ef45f54b
 
-For various reasons ``Pkg.publish()`` sometimes does not succeed.  
+For various reasons :func:`Pkg.publish` sometimes does not succeed.  
 In those cases, you may make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
-This means that ``Pkg.add("FooBar")`` won't work yet since it only installs official versions.
-``Pkg.clone("FooBar")`` without having to specify a URL for it.
-Moreover, when they run ``Pkg.update()``, they will get the latest version of ``FooBar`` that you've pushed to the repo.
+This means that :func:`Pkg.add("FooBar") <Pkg.add>` won't work yet since it only installs official versions.
+:func:`Pkg.clone("FooBar") <Pkg.clone>` without having to specify a URL for it.
+Moreover, when they run :func:`Pkg.update`, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
 
 Tagging Package Versions
 ------------------------
 
-Once you are ready to make an official version your package, you can tag and register it with the ``Pkg.tag`` command::
+Once you are ready to make an official version your package, you can tag and register it with the :func:`Pkg.tag` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.1
@@ -456,15 +458,15 @@ It also creates a new version entry in your local ``METADATA`` repo for ``FooBar
     +84b8e266dae6de30ab9703150b3bf771ec7b6285
 
 If there is a ``REQUIRE`` file in your package repo, it will be copied into the appropriate spot in ``METADATA`` when you tag a version.
-Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using ``Pkg.tag``.
+Package developers should make sure that the ``REQUIRE`` file in their package correctly reflects the requirements of their package, which will automatically flow into the official metadata if you're using :func:`Pkg.tag`.
 See the `Requirements Specification <#man-package-requirements>`_ for the full format of ``REQUIRE``.
 
-The ``Pkg.tag`` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
+The :func:`Pkg.tag` command takes an optional second argument that is either an explicit version number object like ``v"0.0.1"`` or one of the symbols ``:patch``, ``:minor`` or ``:major``.
 These increment the patch, minor or major version number of your package intelligently.
 
-As with ``Pkg.register``, these changes to ``METADATA`` aren't
+As with :func:`Pkg.register`, these changes to ``METADATA`` aren't
 available to anyone else until they've been included upstream.  Again,
-use the ``Pkg.publish()`` command, which first makes sure that
+use the :func:`Pkg.publish` command, which first makes sure that
 individual package repos have been tagged, pushes them if they haven't
 already been, and then opens a pull request to ``METADATA``::
 
@@ -561,7 +563,7 @@ Examples::
 The first condition applies to any system but Windows and the second condition applies to any UNIX system besides OS X.
 
 Runtime checks for the current version of Julia can be made using the built-in
-``VERSION`` variable, which is of type ``VersionNumber``. Such code is
+``VERSION`` variable, which is of type :class:`VersionNumber`. Such code is
 occasionally necessary to keep track of new or deprecated functionality between
 various releases of Julia. Examples of runtime checks::
 
@@ -574,6 +576,4 @@ various releases of Julia. Examples of runtime checks::
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
 See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
-
-
 
