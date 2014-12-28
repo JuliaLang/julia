@@ -12,18 +12,20 @@ Object layout (jl_value_t)
 The :code:`jl_value_t` struct defines the minimal header for a Julia
 object in memory.
 The :code:`type` field points to a
-`jl_datatype_t <http://github.com/JuliaLang/julia/blob/master/src/julia.h#L204>`_ object::
+`jl_datatype_t <http://github.com/JuliaLang/julia/blob/master/src/julia.h#L204>`_ object,
+(the jl_typeof() macro should be used to query it)::
 
     typedef struct _jl_value_t {
         struct _jl_value_t *type;
     } jl_value_t;
 
+    #define jl_typeof(v) (((jl_value_t*)(v))->type)
 
 
 The layout of the rest of the object is dependant on its type.
 
 e.g. a :func:`Base.tuple` object has an array of pointers to the
-objects contained by the tuple::
+objects contained by the tuple (or an array of raw values for un-boxed bitstype tuples)::
 
     typedef struct {
         struct _jl_value_t *type;
@@ -74,4 +76,4 @@ Note that all objects are allocated in multiples of 8 bytes, so the
 smallest object size is 16 bytes (8 byte type pointer + 8 bytes
 data).  :func:`allocobj` in gc.c allocates memory for new objects.
 Memory is allocated from a pool for objects up to 2048 bytes, or
-by malloc() otherwise.::
+by malloc() otherwise.
