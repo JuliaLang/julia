@@ -260,3 +260,12 @@ immutable JLCompilerOpts
 end
 
 compileropts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))
+
+function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
+    opts = compileropts()
+    cpu_target = bytestring(opts.cpu_target)
+    image_file = bytestring(opts.image_file)
+    `$julia -C$cpu_target -J$image_file`
+end
+
+julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
