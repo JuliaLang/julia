@@ -84,7 +84,7 @@ Function                                            Description
 :func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
                                                     specified element type
 :func:`rand(dims) <rand>`                           ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
-                                                    distributed values in [0,1)
+                                                    distributed values in [0, 1])
 :func:`randn(dims) <randn>`                         ``Array`` of ``Float64``\ s with random, iid and standard normally
                                                     distributed random values
 :func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
