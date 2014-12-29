@@ -712,6 +712,24 @@ begin
     @test typeof(b) === SI{1,-2,1}
 end
 
+# pointer arithmetic
+begin
+   local a,b,c
+   a = C_NULL
+   b = C_NULL + 1
+   c = C_NULL - 1
+
+   @test a != b != c
+   @test UInt(a) == 0
+   @test UInt(b) == 1
+   @test UInt(c) == typemax(UInt)
+
+   @test b - a == -(a - b) == 1
+   @test c - a == -(a - c) == typemax(UInt)
+   @test c - b == -(b - c) == typemax(UInt) - 1
+   @test a < b < c
+end
+
 # pull request 1270
 begin
     local a,p, a2,p2
