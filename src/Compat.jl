@@ -17,6 +17,21 @@ if VERSION < v"0.4.0-dev+1387"
     export AbstractString
 end
 
+if VERSION < v"0.4.0-dev+412"
+    eval(Base, :(const IPAddr = IpAddr))
+end
+
+if VERSION < v"0.4.0-dev+2197"
+    IPv4(ipstr::AbstractString) = parseipv4(ipstr)
+    IPv6(ipstr::AbstractString) = parseipv6(ipstr)
+end
+
+if VERSION < v"0.4.0-dev+2200"
+    function Base.isless{T<:Base.IPAddr}(a::T, b::T)
+        return isless(a.host, b.host)
+    end
+end
+
 if VERSION < v"0.4.0-dev+980"
     macro Dict(pairs...)
         esc(Expr(:dict, pairs...))
