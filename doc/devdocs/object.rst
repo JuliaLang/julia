@@ -72,11 +72,14 @@ Storage for new objects is allocated by :func:`newobj` in julia_internal.h::
         return jv;
     }
 
-.. sidebar:: `special case. <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2973>`_
+.. sidebar:: :ref:`man-singleton-types`
 
-    The special singleton object :data:`nothing` is "void".
-    It has no data and consumes only 8 bytes.
-    :code:`jl_nothing = newstruct(jl_void_type)`
+
+    Singleton types have only one instance and no data fields.
+    Singleton instances use only 8 bytes.
+    e.g. :data:`nothing::Void`.
+
+    See :ref:`man-singleton-types` and :ref:`man-nothing`
 
 Note that all objects are allocated in multiples of 8 bytes, so the
 smallest object size is 16 bytes (8 byte type pointer + 8 bytes
