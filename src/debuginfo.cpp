@@ -107,13 +107,12 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
         mod_size = (DWORD)Allocated+48;
     }
     PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)(UnwindData+12);
-    tbl->UnwindData = (DWORD)(intptr_t)(UnwindData - Section);
 #else
     PRUNTIME_FUNCTION tbl = (PRUNTIME_FUNCTION)malloc(sizeof(RUNTIME_FUNCTION));
-    tbl->UnwindData = (DWORD)(intptr_t)(UnwindData);
 #endif
-    tbl->BeginAddress = (DWORD)(intptr_t)(Code);
-    tbl->EndAddress = (DWORD)(intptr_t)(Code + Size);
+    tbl->BeginAddress = (DWORD)(Code - Section);
+    tbl->EndAddress = (DWORD)(Code - Section + Size);
+    tbl->UnwindData = (DWORD)(UnwindData - Section);
 #else // defined(_CPU_X86_64_)
     Section += (uintptr_t)Code;
     mod_size = Size;
@@ -179,7 +178,7 @@ public:
                                        size_t Size, const EmittedFunctionDetails &Details)
     {
 #if defined(_OS_WINDOWS_)
-        create_PRUNTIME_FUNCTION((uint8_t*)0, Size, F.getName(), (uint8_t*)Code, Size, NULL);
+        create_PRUNTIME_FUNCTION((uint8_t*)Code, Size, F.getName(), (uint8_t*)Code, Size, NULL);
 #endif
         FuncInfo tmp = {&F, Size, F.getName().str(), std::string(), Details.LineStarts};
         info[(size_t)(Code)] = tmp;
@@ -216,12 +215,13 @@ public:
 #ifdef _OS_WINDOWS_
         uint64_t SectionAddr;
         uint64_t SectionSize;
+        uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #endif
 
 #if defined(_OS_WINDOWS_)
 #if defined(_CPU_X86_64_)
-        uint8_t *UnwindData = NULL, *rel_UnwindData = NULL;
-        uint8_t *catchjmp = NULL, *rel_catchjmp = NULL;
+        uint8_t *UnwindData = NULL;
+        uint8_t *catchjmp = NULL;
         for (const object::SymbolRef &sym_iter : obj.symbols()) {
             sym_iter.getName(sName);
             if (sName.equals("__UnwindData")) {
@@ -229,32 +229,36 @@ public:
                 sym_iter.getSection(Section);
 #ifdef LLVM36
                 assert(Section->isText());
-                rel_UnwindData = (uint8_t*)Addr;
                 Section->getName(sName);
-                Addr += L.getSectionLoadAddress(sName);
-                UnwindData = (uint8_t*)Addr;
+                SectionAddr = L.getSectionLoadAddress(sName);
+                Addr += SectionAddr;
 #else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
                 Section->getAddress(SectionAddr);
-                UnwindData = (uint8_t*)Addr;
-                rel_UnwindData = (uint8_t*)(Addr - SectionAddr);
 #endif
+                UnwindData = (uint8_t*)Addr;
+                if (SectionAddrCheck)
+                    assert(SectionAddrCheck == SectionAddr);
+                else
+                    SectionAddrCheck = SectionAddr;
             }
             if (sName.equals("__catchjmp")) {
                 sym_iter.getAddress(Addr);
                 sym_iter.getSection(Section);
 #ifdef LLVM36
                 assert(Section->isText());
-                rel_catchjmp = (uint8_t*)Addr;
                 Section->getName(sName);
-                Addr += L.getSectionLoadAddress(sName);
-                catchjmp = (uint8_t*)Addr;
+                SectionAddr = L.getSectionLoadAddress(sName);
+                Addr += SectionAddr;
 #else
                 if (Section->isText(isText) || !isText) assert(0 && "!isText");
                 Section->getAddress(SectionAddr);
-                catchjmp = (uint8_t*)Addr;
-                rel_catchjmp = (uint8_t*)(Addr - SectionAddr);
 #endif
+                catchjmp = (uint8_t*)Addr;
+                if (SectionAddrCheck)
+                    assert(SectionAddrCheck == SectionAddr);
+                else
+                    SectionAddrCheck = SectionAddr;
             }
         }
         assert(catchjmp);
@@ -272,9 +276,9 @@ public:
         UnwindData[5] = 0x03; // mov RBP, RSP
         UnwindData[6] = 1;    // first instruction
         UnwindData[7] = 0x50; // push RBP
-        *(DWORD*)&UnwindData[8] = (DWORD)(intptr_t)rel_catchjmp; // relative location of catchjmp
+        *(DWORD*)&UnwindData[8] = (DWORD)(catchjmp - (uint8_t*)SectionAddr); // relative location of catchjmp
 #else // defined(_OS_X86_64_)
-        uint8_t *rel_UnwindData = NULL;
+        uint8_t *UnwindData = NULL;
 #endif // defined(_OS_X86_64_)
 #endif // defined(_OS_WINDOWS_)
 
@@ -309,18 +313,22 @@ public:
             SectionSize = Section->getSize();
             Section->getName(sName);
             SectionAddr = L.getSectionLoadAddress(sName);
+            Addr += SectionAddr;
 #else
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
-            Addr -= SectionAddr;
 #endif
             sym_iter.getName(sName);
 #ifdef _CPU_X86_
             if (sName[0] == '_') sName = sName.substr(1);
 #endif
+            if (SectionAddrCheck)
+                assert(SectionAddrCheck == SectionAddr);
+            else
+                SectionAddrCheck = SectionAddr;
             create_PRUNTIME_FUNCTION(
                    (uint8_t*)(intptr_t)Addr, (size_t)Size, sName,
-                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, rel_UnwindData);
+                   (uint8_t*)(intptr_t)SectionAddr, (size_t)SectionSize, UnwindData);
 #endif
             const object::ObjectFile *objfile =
 #ifdef LLVM36
