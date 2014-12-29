@@ -54,6 +54,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `sizehint` is now `sizehint!` [#9278](https://github.com/JuliaLang/julia/pull/9278)
 
+* `Base.IPv4` and `Base.IPv6` can now accept `String`s as constructor arguments [#9346](https://github.com/JuliaLang/julia/pull/9346)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
