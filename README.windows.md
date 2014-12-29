@@ -47,11 +47,11 @@ or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
 # Source distribution
 
 ## Supported build platforms
-
+- Windows 10: supported (32 and 64 bits)
 - Windows 8: supported (32 and 64 bits)
 - Windows 7: supported (32 and 64 bits)
-- Windows Vista: unknown
-- Windows XP: not supported (however, there have been some reports of success following the msys2 steps)
+- Windows Vista: not officially supported (but probably works anyways)
+- Windows XP: not officially supported (but may work anyways)
 
 ## Compiling with MinGW/MSYS2
 
@@ -198,16 +198,10 @@ Julia can be also compiled from source in [Cygwin](http://www.cygwin.com), using
     make -j 4   # Adjust the number of cores (4) to match your build environment.
 ```
 
-7. Run Julia with _either_ of:
-  - Using `make`
+7. Run Julia using the Julia executables directly
     ```
-    make run-julia
-   ```
-   (the full syntax is `make run-julia[-release|-debug]`)
-
-  - Using the Julia executables directly
-    ```
-    usr/bin/julia
+    usr/bin/julia.exe
+    usr/bin/julia-debug.exe
 ```
 
 ## Cross-compiling from Unix

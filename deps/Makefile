@@ -1813,7 +1813,7 @@ distclean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
 get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
-configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
+configure-libgit2: libgit2-$(LIBGIT2_VER)/build/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
 check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
 install-libgit2: $(LIBGIT2_OBJ_TARGET)
