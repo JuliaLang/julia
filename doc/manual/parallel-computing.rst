@@ -690,7 +690,7 @@ Julia provides two in-built cluster managers:
 - :class:`LocalManager`, used when :func:`addprocs` or :func:`addprocs(::Integer) <addprocs>` are called
 - :class:`SSHManager`, used when :func:`addprocs(::Array) <addprocs>` is called with a list of hostnames
 
-:func:`addprocs(manager::FooManager)` <addprocs>` requires ``FooManager`` to implement::
+:func:`addprocs(manager::FooManager) <addprocs>` requires ``FooManager`` to implement::
 
     function launch(manager::FooManager, params::Dict, launched::Array, c::Condition)
         ...

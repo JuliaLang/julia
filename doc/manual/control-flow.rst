@@ -536,7 +536,7 @@ handle such exceptional circumstances, allow that code to take the
 appropriate action.
 
 Built-in :exc:`Exception`\ s
-~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 :exc:`Exception`\ s are thrown when an unexpected condition has occurred. The
 built-in :exc:`Exception`\ s listed below all interrupt the normal flow of control.
