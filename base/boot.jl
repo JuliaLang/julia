@@ -71,8 +71,8 @@
 #    module::Module
 #end
 
-#type Box{T}
-#    contents::T
+#type Box
+#    contents::Any
 #end
 
 #abstract Ref{T}
@@ -284,6 +284,7 @@ _new(:TopNode, :Symbol)
 _new(:NewvarNode, :Symbol)
 _new(:QuoteNode, :ANY)
 _new(:GenSym, :Int)
+_new(:Box, :ANY)
 
 Module(name::Symbol=:anonymous, std_imports::Bool=true) = ccall(:jl_f_new_module, Any, (Any, Bool), name, std_imports)::Module
 
