@@ -32,7 +32,10 @@ parent(a::AbstractArray) = a
 parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
 
 ## SubArray creation
-stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
+# Drops singleton dimensions (those indexed with a scalar)
+slice(A::AbstractArray, I::ViewIndex...) = _slice(A, I)
+slice(A::AbstractArray, I::(ViewIndex...)) = _slice(A, I)
+stagedfunction _slice{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     for k = 1:length(I)
@@ -52,8 +55,11 @@ stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     end
 end
 
-# Conventional style (drop trailing singleton dimensions, keep any other singletons)
-stagedfunction sub{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
+# Conventional style (drop trailing singleton dimensions, keep any
+# other singletons)
+sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
+sub(A::AbstractArray, I::(ViewIndex...)) = _sub(A, I)
+stagedfunction _sub{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
@@ -87,7 +93,7 @@ end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
+stagedfunction _slice{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
@@ -157,7 +163,7 @@ stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex..
     end
 end
 
-stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
+stagedfunction _sub{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
     N = length(I)
     while N > 0 && I[N] <: Real
         N -= 1
