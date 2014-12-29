@@ -49,27 +49,33 @@ function _require_from_serialized(content)
     return m
 end
 
-function require(sname::Symbol)
-    name = string(sname)
+function _require_from_cache(name::AbstractString)
     for prefix in LOAD_CACHE_PATH
         path = joinpath(prefix, name*".ji")
         if isfile(path)
             if nprocs() == 1
                 if ccall(:jl_restore_new_module, UInt, (Ptr{Uint8},), path) != 0
                     #package_list[path] = time()
-                    return
+                    return true
                 end
             else
                 content = open(readbytes, path)
                 if _require_from_serialized(content) != 0
                     refs = Any[ @spawnat p _require_from_serialized(content) for p in filter(x->x!=1, procs()) ]
                     for r in refs; wait(r); end
-                    return
+                    return true
                 end
             end
         end
     end
-    require(name)
+    return false
+end
+
+function require(sname::Symbol)
+    name = string(sname)
+    if !_require_from_cache(name)
+        require(name)
+    end
 end
 
 function require(name::AbstractString)
@@ -188,7 +194,7 @@ function reload_path(path::AbstractString)
         had || delete!(package_list, path)
         rethrow(e)
     finally
-        if prev != nothing
+        if prev !== nothing
             tls[:SOURCE_PATH] = prev
         end
     end
@@ -209,3 +215,47 @@ function evalfile(path::AbstractString, args::Vector{UTF8String}=UTF8String[])
                      :(include($path))))
 end
 evalfile(path::AbstractString, args::Vector) = evalfile(path, UTF8String[args...])
+
+function create_expr_cache(m::Expr)
+    assert(m.head === :module)
+    typeassert(m.args[2], Symbol)
+    cachepath = LOAD_CACHE_PATH[1]
+    if !isdir(cachepath)
+        mkdir(cachepath)
+    end
+    code_object = """
+        while !eof(STDIN)
+            eval(Main, deserialize(STDIN))
+        end
+        """
+    io, pobj = open(detach(setenv(`$(julia_cmd()) --build $cachepath --startup-file=no --history-file=no -E $code_object`,["JULIA_HOME=$JULIA_HOME","HOME=$(homedir())"])), "w")
+    serialize(io, quote
+        empty!(Base.LOAD_PATH)
+        append!(Base.LOAD_PATH, $LOAD_PATH)
+        empty!(Base.LOAD_CACHE_PATH)
+        append!(Base.LOAD_CACHE_PATH, $LOAD_CACHE_PATH)
+        empty!(Base.DL_LOAD_PATH)
+        append!(Base.DL_LOAD_PATH, $DL_LOAD_PATH)
+    end)
+    source = source_path(nothing)
+    if source !== nothing
+        serialize(io, quote
+            task_local_storage()[:SOURCE_PATH] = $(source)
+        end)
+    end
+    serialize(io, m)
+    if source !== nothing
+        serialize(io, quote
+            delete!(task_local_storage(), :SOURCE_PATH)
+        end)
+    end
+    close(io)
+    wait(pobj)
+    if !_require_from_cache(string(m.args[2]))
+        error("Warning: @cacheable module failed to define a module")
+    end
+end
+
+macro cacheable(m)
+    :(create_expr_cache($(QuoteNode(m))))
+end
