@@ -263,6 +263,7 @@ const bin_ops = Set{Symbol}(keys(bin_op_precs))
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||)])
 const expr_infix = Set([:(:), :(<:), :(->), :(=>), symbol("::")])
+const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = [:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}')]
 const expr_parens = [:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>('{','}'),
                      :hcat =>('[',']'), :row =>('[',']')]
@@ -431,15 +432,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x<:y" or "x = y")
-    elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
-        show_list(io, args, head, indent)
-
-    elseif head in expr_infix_wide && nargs == 2
+    elseif (head in expr_infix_any && nargs==2) || (is(head,:(:)) && nargs==3)
         func_prec = get(bin_op_precs, head, 0)
+        head_ = head in expr_infix_wide ? " $head " : head
         if func_prec < prec
-            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec)
+            show_enclosed_list(io, '(', args, head_, ')', indent, func_prec)
         else
-            show_list(io, args, " $head ", indent, func_prec)
+            show_list(io, args, head_, indent, func_prec)
         end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
