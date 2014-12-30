@@ -56,3 +56,9 @@ function hash(x::Nullable, h::UInt)
         return hash(x.value, h + nullablehash_seed)
     end
 end
+
+# Specialized map over Nullable
+function map(f::Callable, x::Nullable)
+    isnull(x) && return Nullable{Union()}()
+    Nullable(f(get(x)))
+end
