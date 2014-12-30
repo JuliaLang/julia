@@ -1976,3 +1976,9 @@ function f9134()
     end
 end
 @test_throws UndefVarError f9134()
+
+# issue #9475
+module I9475
+    arr = Array(Any, 1)
+    @eval @eval $arr[1] = 1
+end
