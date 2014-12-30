@@ -27,7 +27,7 @@ tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/lapack", "linalg/triangular", "linalg/tridiag", "linalg/pinv", "linalg/cholmod", "linalg/umfpack"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/lapack", "linalg/triangular", "linalg/tridiag", "linalg/pinv", "linalg/cholmod", "linalg/umfpack", "linalg/givens"])
 end
 
 net_required_for = ["socket", "parallel"]

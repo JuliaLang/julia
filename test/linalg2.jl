@@ -170,27 +170,6 @@ for elty in (Complex64, Complex128)
     @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)
 end
 
-# Test givens rotations
-for elty in (Float32, Float64, Complex64, Complex128)
-    if elty <: Real
-        A = convert(Matrix{elty}, randn(10,10))
-    else
-        A = convert(Matrix{elty}, complex(randn(10,10),randn(10,10)))
-    end
-    Ac = copy(A)
-    R = Base.LinAlg.Rotation(Base.LinAlg.Givens{elty}[])
-    for j = 1:8
-        for i = j+2:10
-            G = givens(A, j+1, i, j)
-            A_mul_B!(G, A)
-            A_mul_Bc!(A, G)
-            A_mul_B!(G, R)
-        end
-    end
-    @test_approx_eq abs(A) abs(hessfact(Ac)[:H])
-    @test_approx_eq norm(R*eye(elty, 10)) one(elty)
-end
-
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     if elty <: Real
