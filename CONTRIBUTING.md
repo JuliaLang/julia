@@ -70,13 +70,17 @@ Julia's documentation is stored in the `doc` directory, and like everything else
 
 The Julia community uses [GitHub issues](https://github.com/JuliaLang/julia/issues) to track and discuss problems, feature requests, and pull requests. You can make pull requests for incomplete features to get code review. The convention is to prefix the pull request title with "WIP:" for Work In Progress, or "RFC:" for Request for Comments when work is completed and ready for merging. This will prevent accidental merging of work that is in progress.
 
-Note: These instructions are for adding functionality to the base library. Usually, this is not encouraged, and before doing so, it is essential to discuss the proposed changes or additions on the mailing list or in a github issue. Changing stuff in the base can potentially break a lot of things. Make sure you test your code as described here, together with the latest Julia updates, to avoid problems. Add new code to Julia's base libraries as follows:
+Note: These instructions are for adding to or improving functionality in the base library. Before getting started, it can be helpful to discuss the proposed changes or additions on the mailing list or in a github issue---it's possible your proposed change belongs in a package rather than the core language. Also, keep in mind that changing stuff in the base can potentially break a lot of things. Finally, because of the time required to build julia, note that it's usually faster to develop your code in stand-alone files, get it working, and then migrate it into the base libraries.
 
- 1. Add files to the `base/` directory, and tests into `test/`. Often, this may not be necessary and you may be able to add your code to an existing file in `base/`.
+Add new code to Julia's base libraries as follows:
 
- 2. Add any new files to `sysimg.jl` in order to build them into the Julia system image and export necessary symbols in `exports.jl`.
+ 1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of julia's REPL initialization live in `ui/`.
 
- 3. Include your tests in `test/Makefile` and `test/runtests.jl`.
+ 2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
+ 
+ 3. Add any necessary export symbols in `exports.jl`.
+
+ 4. Include your tests in `test/Makefile` and `test/runtests.jl`.
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
 
