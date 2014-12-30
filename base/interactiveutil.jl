@@ -203,6 +203,29 @@ function which(f, t::(Type...))
     ms[1]
 end
 
+# displaying type-ambiguity warnings
+
+function code_warntype(f, t::(Type...))
+    global show_expr_type_colorize
+    state = show_expr_type_colorize::Bool
+    ct = code_typed(f, t)
+    show_expr_type_colorize::Bool = true
+    for ast in ct
+        println(STDOUT, "Variables:")
+        vars = ast.args[2][2]
+        for v in vars
+            print(STDOUT, "  ", v[1])
+            show_expr_type(STDOUT, v[2])
+            print(STDOUT, '\n')
+        end
+        print(STDOUT, "\nBody:\n  ")
+        show_unquoted(STDOUT, ast.args[3], 2)
+        print(STDOUT, '\n')
+    end
+    show_expr_type_colorize::Bool = false
+    nothing
+end
+
 typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
 
 function gen_call_with_extracted_types(fcn, ex0)
@@ -248,7 +271,7 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
+for fname in [:which, :less, :edit, :code_typed, :code_warntype, :code_lowered, :code_llvm, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
