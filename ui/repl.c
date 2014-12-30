@@ -72,6 +72,7 @@ static const char *opts =
     " --track-allocation={none|user|all}\n"
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
+    " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
     " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
@@ -95,6 +96,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "dump-bitcode",  required_argument, 0, 302 },
         { "compile",       required_argument, 0, 303 },
         { "depwarn",       required_argument, 0, 304 },
+        { "inline",        required_argument, 0, 305 },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -195,6 +197,16 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_compileropts.depwarn = 0;
             else {
                 ios_printf(ios_stderr, "julia: invalid argument to --depwarn (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case 305:      /* inline */
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.can_inline = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.can_inline = 0;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
                 exit(1);
             }
             break;
