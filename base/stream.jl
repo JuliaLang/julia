@@ -290,7 +290,7 @@ function isopen(x::Union(AsyncStream,UVServer))
 end
 
 function check_open(x)
-    if !isopen(x)
+    if !isopen(x) || x.status == StatusClosing
         error("stream is closed or unusable")
     end
 end

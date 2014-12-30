@@ -64,7 +64,8 @@ static const char *opts =
     " -E, --print <expr>       Evaluate and show <expr>\n"
     " -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode\n"
     " -L, --load <file>        Load <file> immediately on all processors\n"
-    " -J, --sysimage <file>    Start up with the given system image file\n\n"
+    " -J, --sysimage <file>    Start up with the given system image file\n"
+    " -C --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
     " -p <n>                   Run n local processes\n"
     " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
@@ -84,15 +85,15 @@ static const char *opts =
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:T:hJ:";
+    static char* shortopts = "+H:hJ:C:";
     static struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
-        { "tab",           required_argument, 0, 'T' },
         { "build",         required_argument, 0, 'b' },
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", optional_argument, 0, 'c' },
+        { "cpu-target",    required_argument, 0, 'C' },
         { "track-allocation",required_argument, 0, 'm' },
         { "check-bounds",  required_argument, 0, 300 },
         { "int-literals",  required_argument, 0, 301 },
@@ -124,32 +125,35 @@ void parse_opts(int *argcp, char ***argvp)
             image_file = strdup(optarg);
             imagepathspecified = 1;
             break;
+        case 'C':
+            jl_compileropts.cpu_target = strdup(optarg);
+            break;
         case 'h':
             printf("%s%s", usage, opts);
             exit(0);
-	case 'c':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    codecov = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    codecov = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    codecov = JL_LOG_NONE;
-	        break;
-	    }
-	    else
-		codecov = JL_LOG_USER;
-	    break;
-	case 'm':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    malloclog = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    malloclog = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    malloclog = JL_LOG_NONE;
-	        break;
-	    }
+        case 'c':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    codecov = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    codecov = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    codecov = JL_LOG_NONE;
+                break;
+            }
+            else
+                codecov = JL_LOG_USER;
+            break;
+        case 'm':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    malloclog = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    malloclog = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    malloclog = JL_LOG_NONE;
+                break;
+            }
         case 300:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;

@@ -117,19 +117,19 @@ import Base: thispatch, thisminor, thismajor,
 @test v"2" == nextmajor(v"1.2.3+")
 
 for major=0:3, minor=0:3, patch=0:3
-	a = VersionNumber(major,minor,patch,("",),())
-	b = VersionNumber(major,minor,patch,("pre",),())
-	c = VersionNumber(major,minor,patch,(),())
-	d = VersionNumber(major,minor,patch,(),("post",))
-	e = VersionNumber(major,minor,patch,(),("",))
-	@test a < b < c < d < e
-	for x in [a,b,c,d,e]
-		@test thispatch(x) == VersionNumber(major,minor,patch)
-		@test thisminor(x) == VersionNumber(major,minor,0)
-		@test thismajor(x) == VersionNumber(major,0,0)
-		@test x < nextpatch(x) <= nextminor(x) <= nextmajor(x)
-		@test x < thispatch(x) ? nextpatch(x) == thispatch(x) : thispatch(x) < nextpatch(x)
-		@test x < thisminor(x) ? nextminor(x) == thisminor(x) : thisminor(x) < nextminor(x)
-		@test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
-	end
+    a = VersionNumber(major,minor,patch,("",),())
+    b = VersionNumber(major,minor,patch,("pre",),())
+    c = VersionNumber(major,minor,patch,(),())
+    d = VersionNumber(major,minor,patch,(),("post",))
+    e = VersionNumber(major,minor,patch,(),("",))
+    @test a < b < c < d < e
+    for x in [a,b,c,d,e]
+        @test thispatch(x) == VersionNumber(major,minor,patch)
+        @test thisminor(x) == VersionNumber(major,minor,0)
+        @test thismajor(x) == VersionNumber(major,0,0)
+        @test x < nextpatch(x) <= nextminor(x) <= nextmajor(x)
+        @test x < thispatch(x) ? nextpatch(x) == thispatch(x) : thispatch(x) < nextpatch(x)
+        @test x < thisminor(x) ? nextminor(x) == thisminor(x) : thisminor(x) < nextminor(x)
+        @test x < thismajor(x) ? nextmajor(x) == thismajor(x) : thismajor(x) < nextmajor(x)
+    end
 end

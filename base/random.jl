@@ -24,7 +24,7 @@ type MersenneTwister <: AbstractRNG
     MersenneTwister(seed=0) = MersenneTwister(make_seed(seed))
 end
 
-function srand(r::MersenneTwister, seed) 
+function srand(r::MersenneTwister, seed)
     r.seed = seed
     dsfmt_init_gen_rand(r.state, seed)
     return r
@@ -212,7 +212,7 @@ rand{T}(r::Range{T}) = r[rand(1:(length(r)))]
 function rand!(g::RandIntGen, A::AbstractArray)
     for i = 1 : length(A)
         @inbounds A[i] = rand(g)
-    end    
+    end
     return A
 end
 
@@ -243,7 +243,7 @@ randbool!(B::BitArray) = rand!(B)
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 
 # The Ziggurat Method for generating random variables - Marsaglia and Tsang
-# Paper and reference code: http://www.jstatsoft.org/v05/i08/ 
+# Paper and reference code: http://www.jstatsoft.org/v05/i08/
 
 # randmtzig (covers also exponential variates)
 ## Tables for normal variates
@@ -399,7 +399,7 @@ const wi =
      1.3446300925011171e-15,1.3693606835128518e-15,1.3979436672775240e-15,
      1.4319989869661328e-15,1.4744848603597596e-15,1.5317872741611144e-15,
      1.6227698675312968e-15]
-const fi = 
+const fi =
     [1.0000000000000000e+00,9.7710170126767082e-01,9.5987909180010600e-01,
      9.4519895344229909e-01,9.3206007595922991e-01,9.1999150503934646e-01,
      9.0872644005213032e-01,8.9809592189834297e-01,8.8798466075583282e-01,
@@ -641,7 +641,7 @@ const we =
      1.2174462832361815e-15,1.2581958069755114e-15,1.3060984107128082e-15,
      1.3642786158057857e-15,1.4384889932178723e-15,1.5412190700064194e-15,
      1.7091034077168055e-15]
-const fe = 
+const fe =
     [1.0000000000000000e+00,9.3814368086217470e-01,9.0046992992574648e-01,
      8.7170433238120359e-01,8.4778550062398961e-01,8.2699329664305032e-01,
      8.0842165152300838e-01,7.9152763697249562e-01,7.7595685204011555e-01,
@@ -736,32 +736,33 @@ ziggurat_exp_r      = 7.6971174701310497140446280481
 rand(state::DSFMT_state) = dsfmt_genrand_close_open(state)
 randi() = reinterpret(Uint64,dsfmt_gv_genrand_close1_open2()) & 0x000fffffffffffff
 randi(state::DSFMT_state) = reinterpret(Uint64,dsfmt_genrand_close1_open2(state)) & 0x000fffffffffffff
-for (lhs, rhs) in (([], []), 
+for (lhs, rhs) in (([], []),
                   ([:(state::DSFMT_state)], [:state]))
-    @eval begin                
+    @eval begin
         function randmtzig_randn($(lhs...))
             @inbounds begin
-                while true
-                    r = randi($(rhs...))
-                    rabs = int64(r>>1) # One bit for the sign
-                    idx = rabs & 0xFF
-                    x = ifelse(r&1 != 0x000000000, -rabs, rabs)*wi[idx+1]
-                    if rabs < ki[idx+1]
-                        return x # 99.3% of the time we return here 1st try
-                    elseif idx == 0
-                        while true
-                            xx = -$(ziggurat_nor_inv_r)*log(rand($(rhs...)))
-                            yy = -log(rand($(rhs...)))
-                            if yy+yy > xx*xx
-                                return (rabs & 0x100) != 0x000000000 ? -$(ziggurat_nor_r)-xx : $(ziggurat_nor_r)+xx
-                            end
-                        end
-                    elseif (fi[idx] - fi[idx+1])*rand($(rhs...)) + fi[idx+1] < exp(-0.5*x*x)
-                        return x # return from the triangular area
-                    end
-                end
+                r = randi($(rhs...))
+                rabs = int64(r>>1) # One bit for the sign
+                idx = rabs & 0xFF
+                x = ifelse(r&1 != 0x000000000, -rabs, rabs)*wi[idx+1]
+                rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
+                return randn_unlikely($(rhs...),idx,rabs,x)
             end
-        end    
+        end
+
+        function randn_unlikely($(lhs...),idx,rabs,x)
+            @inbounds if idx == 0
+                while true
+                    xx = -$(ziggurat_nor_inv_r)*log(rand($(rhs...)))
+                    yy = -log(rand($(rhs...)))
+                    yy+yy > xx*xx && return (rabs & 0x100) != 0x000000000 ? -$(ziggurat_nor_r)-xx : $(ziggurat_nor_r)+xx
+                end
+            elseif (fi[idx] - fi[idx+1])*rand($(rhs...)) + fi[idx+1] < exp(-0.5*x*x)
+                return x # return from the triangular area
+            else
+                return randmtzig_randn($(lhs...))
+            end
+        end
 
         function randmtzig_exprnd($(lhs...))
             @inbounds begin
@@ -778,7 +779,7 @@ for (lhs, rhs) in (([], []),
                     end
                 end
             end
-        end       
+        end
     end
 end
 

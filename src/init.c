@@ -81,6 +81,7 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 
 char *julia_home = NULL;
 jl_compileropts_t jl_compileropts = { NULL, // build_path
+                                      NULL, // cpu_target ("native", "core2", etc...)
                                       0,    // code_coverage
                                       0,    // malloc_log
                                       JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
@@ -208,6 +209,7 @@ volatile sig_atomic_t jl_signal_pending = 0;
 volatile sig_atomic_t jl_defer_signal = 0;
 
 #ifdef _OS_WINDOWS_
+BOOL (*pSetThreadStackGuarantee)(PULONG);
 void restore_signals(void)
 {
     SetConsoleCtrlHandler(NULL, 0); //turn on ctrl-c handler
@@ -216,18 +218,23 @@ void restore_signals(void)
 void jl_throw_in_ctx(jl_value_t *excpt, CONTEXT *ctxThread, int bt)
 {
     assert(excpt != NULL);
+#if defined(_CPU_X86_64_)
+    DWORD64 Rsp = (ctxThread->Rsp&(DWORD64)-16) - 8;
+#elif defined(_CPU_X86_)
+    DWORD32 Esp = (ctxThread->Esp&(DWORD32)-16) - 4;
+#else
+#error WIN16 not supported :P
+#endif
     bt_size = bt ? rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ctxThread) : 0;
     jl_exception_in_transit = excpt;
 #if defined(_CPU_X86_64_)
+    *(DWORD64*)Rsp = 0;
+    ctxThread->Rsp = Rsp;
     ctxThread->Rip = (DWORD64)&jl_rethrow;
-    ctxThread->Rsp &= (DWORD64)-16;
-    ctxThread->Rsp -= 8; //fix up the stack pointer -- this seems to be correct by observation
 #elif defined(_CPU_X86_)
+    *(DWORD32*)Esp = 0;
+    ctxThread->Esp = Esp;
     ctxThread->Eip = (DWORD)&jl_rethrow;
-    ctxThread->Esp &= (DWORD)-16;
-    ctxThread->Esp -= 4; //fix up the stack pointer
-#else
-#error WIN16 not supported :P
 #endif
 }
 
@@ -287,8 +294,7 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_diverror_exception, ExceptionInfo->ContextRecord,in_ctx);
                 return EXCEPTION_CONTINUE_EXECUTION;
             case EXCEPTION_STACK_OVERFLOW:
-                bt_size = 0;
-                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,0);
+                jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
         ios_puts("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
@@ -556,9 +562,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 #if defined(_OS_WINDOWS_)
             _dup2(_open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE), fd);
 #else
-	    dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
+            dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
 #endif
-	    // ...and continue on as in the UV_FILE case
+            // ...and continue on as in the UV_FILE case
         case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
@@ -612,7 +618,9 @@ char jl_using_intel_jitevents; // Non-zero if running under Intel VTune Amplifie
 #endif
 
 #if defined(JL_USE_INTEL_JITEVENTS) && defined(__linux__)
-unsigned sig_stack_size = SIGSTKSZ; 
+unsigned sig_stack_size = SIGSTKSZ;
+#elif defined(_OS_WINDOWS_)
+#define sig_stack_size 131072 // 128k
 #else
 #define sig_stack_size SIGSTKSZ
 #endif
@@ -739,6 +747,13 @@ void julia_init(char *imageFile)
 {
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
+    if (jl_compileropts.cpu_target == NULL) {
+        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(imageFile);
+
+        // If we can't load anything from the sysimg, default to native
+        jl_compileropts.cpu_target = sysimg_cpu_target ? sysimg_cpu_target : "native";
+    }
     jl_page_size = jl_getpagesize();
     jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM 
     jl_find_stack_bottom();
@@ -768,6 +783,9 @@ void julia_init(char *imageFile)
     uv_dlopen("dbghelp.dll",&jl_dbghelp);
     if (uv_dlsym(&jl_dbghelp, "SymRefreshModuleList", (void**)&hSymRefreshModuleList))
         hSymRefreshModuleList = 0;
+    ULONG StackSizeInBytes = sig_stack_size;
+    if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
+        pSetThreadStackGuarantee = NULL;
 #endif
     init_stdio();
 

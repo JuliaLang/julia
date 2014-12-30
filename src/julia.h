@@ -867,6 +867,7 @@ DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_pat
 DLLEXPORT int jl_is_initialized(void);
 DLLEXPORT extern char *julia_home;
 
+DLLEXPORT const char * jl_get_system_image_cpu_target(const char *fname);
 DLLEXPORT void jl_save_system_image(char *fname);
 DLLEXPORT void jl_restore_system_image(char *fname);
 void jl_init_restored_modules();
@@ -1322,6 +1323,7 @@ void show_execution_point(char *filename, int lno);
 
 typedef struct {
     char *build_path;
+    const char *cpu_target;
     int8_t code_coverage;
     int8_t malloc_log;
     int8_t check_bounds;

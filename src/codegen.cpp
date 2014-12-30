@@ -506,10 +506,7 @@ static Type *NoopType;
 
 // --- utilities ---
 
-#define XSTR(x) #x
-#define MSTR(x) XSTR(x)
 extern "C" {
-    const char *jl_cpu_string = MSTR(JULIA_TARGET_ARCH);
     int globalUnique = 0;
 }
 
@@ -3402,12 +3399,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     if (jlrettype == (jl_value_t*)jl_bottom_type)
         f->setDoesNotReturn();
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to realign the stack to the next 8-byte boundary
+    // tell Win32 to realign the stack to the next 16-byte boundary
     // upon entry to any function. This achieves compatibility
-    // with both MinGW-GCC (which assumes an 8-byte-aligned stack) and
-    // Windows (which uses a 2-byte-aligned stack)
+    // with both MinGW-GCC (which assumes an 16-byte-aligned stack) and
+    // i686 Windows (which uses a 4-byte-aligned stack)
     AttrBuilder *attr = new AttrBuilder();
-    attr->addStackAlignmentAttr(8);
+    attr->addStackAlignmentAttr(16);
 #if LLVM32 && !LLVM33
     f->addAttribute(Attributes::FunctionIndex,
         Attributes::get(f->getContext(),*attr));
@@ -3825,12 +3822,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
-	if (do_malloc_log && lno != prevlno) {
-	    // Check memory allocation only after finishing a line
-	    if (prevlno != -1)
-		mallocVisitLine(filename, prevlno);
-	    prevlno = lno;
-	}
+        if (do_malloc_log && lno != prevlno) {
+            // Check memory allocation only after finishing a line
+            if (prevlno != -1)
+                mallocVisitLine(filename, prevlno);
+            prevlno = lno;
+        }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
             Value *retval;
@@ -3851,8 +3848,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
                                 prepare_global(jlpgcstack_var));
 #endif
-	    if (do_malloc_log && lno != -1)
-		mallocVisitLine(filename, lno);
+            if (do_malloc_log && lno != -1)
+                mallocVisitLine(filename, lno);
             if (builder.GetInsertBlock()->getTerminator() == NULL) {
                 if (retty == T_void)
                     builder.CreateRetVoid();
@@ -4369,9 +4366,9 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlgetnthfieldchecked_func, (void*)*jl_get_nth_field_checked);
 
     diff_gc_total_bytes_func =
-	Function::Create(FunctionType::get(T_int64, false),
-			 Function::ExternalLinkage,
-			 "diff_gc_total_bytes", m);
+        Function::Create(FunctionType::get(T_int64, false),
+                         Function::ExternalLinkage,
+                         "diff_gc_total_bytes", m);
     add_named_global(diff_gc_total_bytes_func, (void*)*diff_gc_total_bytes);
 
     std::vector<Type *> execpoint_args(0);
@@ -4510,7 +4507,6 @@ extern "C" void jl_init_codegen(void)
     jl_setup_module(engine_module,false);
 #endif
 
-
 #if !defined(LLVM_VERSION_MAJOR) || (LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR == 0)
     jl_ExecutionEngine = EngineBuilder(m).setEngineKind(EngineKind::JIT).create();
 #ifdef JL_DEBUG_BUILD
@@ -4533,10 +4529,10 @@ extern "C" void jl_init_codegen(void)
     options.NoFramePointerElimNonLeaf = true;
 #endif
 #if defined(_OS_WINDOWS_) && !defined(_CPU_X86_64_)
-    // tell Win32 to assume the stack is always 8-byte aligned,
-    // and to ensure that it is 8-byte aligned for out-going calls,
+    // tell Win32 to assume the stack is always 16-byte aligned,
+    // and to ensure that it is 16-byte aligned for out-going calls,
     // to ensure compatibility with GCC codes
-    options.StackAlignmentOverride = 8;
+    options.StackAlignmentOverride = 16;
 #endif
 #if defined(__APPLE__) && !defined(LLVM34)
     // turn on JIT support for libunwind to walk the stack
@@ -4576,9 +4572,9 @@ extern "C" void jl_init_codegen(void)
             TheTriple,
             "",
 #if LLVM35
-            strcmp(jl_cpu_string,"native") ? jl_cpu_string : sys::getHostCPUName().data(),
+            strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : sys::getHostCPUName().data(),
 #else
-            strcmp(jl_cpu_string,"native") ? jl_cpu_string : "",
+            strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : "",
 #endif
             MAttrs);
     assert(jl_TargetMachine);

@@ -637,7 +637,7 @@ function build(pkgs::Vector)
     WARNING: $(join(map(x->x[1],errs),", "," and ")) had build errors.
 
      - packages with build errors remain installed in $(pwd())
-     - build a package and all its dependencies with `Pkg.build(pkg)`
+     - build the package(s) and all dependencies with `Pkg.build("$(join(map(x->x[1],errs),"\", \""))")`
      - build a single package by running its `deps/build.jl` script
     """)
 end
