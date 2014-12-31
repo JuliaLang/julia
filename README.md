@@ -71,3 +71,6 @@ If you're adding additional compatibility code to this package, the following sh
 last_tag=$(git describe --tags --abbrev=0)
 git rev-list $1 ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g'
 ```
+This will print a number `XXXX`, and you can then test whether Julia
+is at least this version by `VERSION >= v"0.4.0-dev+XXXX"` (assuming
+it is a commit from the 0.4 development cycle).
