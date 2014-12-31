@@ -807,8 +807,10 @@ export
 # strings and text output
     ascii,
     base,
-    base64,
-    Base64Pipe,
+    base64encode,
+    base64decode,
+    Base64EncodePipe,
+    Base64DecodePipe,
     beginswith,
     bin,
     bits,
