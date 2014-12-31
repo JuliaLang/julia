@@ -640,20 +640,29 @@ The macro ``@code_warntype`` (or its function variant) can sometimes be helpful 
     end
 
     julia> @code_warntype f(3.2)
-    1-element Array{Union(Expr,Array{T,N}),1}:
-     :($(Expr(:lambda, Any[:x], Any[Any[:y,:_var0,:_var3,:_var4,:_var1,:_var2],Any[Any[:x,Float64,0],Any[:y,UNION(FLOAT64,INT64),18],Any[:_var0,Float64,18],Any[:_var3,(Int64,),0],Any[:_var4,UNION(FLOAT64,INT64),2],Any[:_var1,Float64,18],Any[:_var2,Float64,18]],Any[]], :(begin  # none, line 2:
-            _var0 = (top(box))(Float64,(top(sitofp))(Float64,0))::Float64
-            unless (top(box))(Bool,(top(or_int))((top(lt_float))(x::Float64,_var0::Float64)::Bool,(top(box))(Bool,(top(and_int))((top(box))(Bool,(top(and_int))((top(eq_float))(x::Float64,_var0::Float64)::Bool,(top(lt_float))(_var0::Float64,9.223372036854776e18)::Bool))::Bool,(top(slt_int))((top(box))(Int64,(top(fptosi))(Int64,_var0::Float64))::Int64,0)::Bool))::Bool))::Bool goto 1
-            _var4 = 0
-            goto 2
-            1:
-            _var4 = x::Float64
-            2:
-            y = _var4::UNION(FLOAT64,INT64) # line 3:
-            _var1 = y::UNION(FLOAT64,INT64) * x::Float64::Float64
-            _var2 = (top(box))(Float64,(top(add_float))(_var1::Float64,(top(box))(Float64,(top(sitofp))(Float64,1))::Float64))::Float64
-            return (GetfieldNode(Base.Math,:nan_dom_err,Any))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GetfieldNode(Base.Math,:libm,Any)))::(ASCIIString,ASCIIString),Float64,$(Expr(:call1, :(top(tuple)), :Float64))::(Type{Float64},),_var2::Float64,0)::Float64,_var2::Float64)::Float64
-        end::Float64))))
+    Variables:
+      x::Float64
+      y::UNION(INT64,FLOAT64)
+      _var0::Float64
+      _var3::(Int64,)
+      _var4::UNION(INT64,FLOAT64)
+      _var1::Float64
+      _var2::Float64
+
+    Body:
+      begin  # none, line 2:
+          _var0 = (top(box))(Float64,(top(sitofp))(Float64,0))
+          unless (top(box))(Bool,(top(or_int))((top(lt_float))(x::Float64,_var0::Float64)::Bool,(top(box))(Bool,(top(and_int))((top(box))(Bool,(top(and_int))((top(eq_float))(x::Float64,_var0::Float64)::Bool,(top(lt_float))(_var0::Float64,9.223372036854776e18)::Bool)),(top(slt_int))((top(box))(Int64,(top(fptosi))(Int64,_var0::Float64)),0)::Bool)))) goto 1
+          _var4 = 0
+          goto 2
+          1:
+          _var4 = x::Float64
+          2:
+          y = _var4::UNION(INT64,FLOAT64) # line 3:
+          _var1 = y::UNION(INT64,FLOAT64) * x::Float64::Float64
+          _var2 = (top(box))(Float64,(top(add_float))(_var1::Float64,(top(box))(Float64,(top(sitofp))(Float64,1))))
+          return (GetfieldNode(Base.Math,:nan_dom_err,Any))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GetfieldNode(Base.Math,:libm,Any))),Float64,$(Expr(:call1, :(top(tuple)), :Float64)),_var2::Float64,0)::Float64,_var2::Float64)::Float64
+      end::Float64
 
 Interpreting the output of ``@code_warntype``, like that of its cousins
 ``@code_lowered``, ``@code_typed``, ``@code_llvm``, and
@@ -661,17 +670,14 @@ Interpreting the output of ``@code_warntype``, like that of its cousins
 code is being presented in form that has been partially-digested on
 its way to generating compiled machine code.  Most of the expressions
 are annotated by a type, indicated by the ``::T`` (where ``T`` might
-be ``Float64``, for example). The particular characteristic of
+be ``Float64``, for example). The most important characteristic of
 ``@code_warntype`` is that non-concrete types are displayed in red; in
 the above example, such output is shown in all-caps.
 
-The first line of the output, beginning with ``1-element Array``,
-simply means that there is only one method that matches the function
-and input types you provided. The next line of the output summarizes
-information about the different variables. You can see that ``y``, one
-of the variables you created, is a ``Union(Float64,Int64)``, due to
+The top part of the output summarizes the type information for the different variables internal to the function. You can see that ``y``, one
+of the variables you created, is a ``Union(Int64,Float64)``, due to
 the type-instability of ``pos``.  There is another variable,
-``_var1``, which you can see also has the same type.
+``_var4``, which you can see also has the same type.
 
 The next lines represent the body of ``f``. The lines starting with a
 number followed by a colon (``1:``, ``2:``) are labels, and represent
@@ -681,11 +687,10 @@ before ``2:`` comes from code defined in ``pos``.
 
 Starting at ``2:``, the variable ``y`` is defined, and again annotated
 as a ``Union`` type.  Next, we see that the compiler created the
-temporary variable ``_var1`` to hold the result of ``y*x``; it too is
-type-unstable.  However, at the next line, all type-instability ends:
-because ``sin`` converts integer inputs into ``Float64``, the final
-return value of ``f`` is a ``Float64``.  So calls of the form
-``f(x::Float64)`` will not be type-unstable in their output, even if
+temporary variable ``_var1`` to hold the result of ``y*x``. Because
+a ``Float64`` times *either* an ``Int64`` or ``Float64`` yields a ``Float64``,
+all type-instability ends here.  The net result is that
+``f(x::Float64)`` will not be type-unstable in its output, even if
 some of the intermediate computations are type-unstable.
 
 How you use this information is up to you.  Obviously, it would be far
