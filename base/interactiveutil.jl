@@ -27,7 +27,7 @@ function edit(file::String, line::Integer)
     no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if beginswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim" || edname == "nano"
+    elseif edname == "vim" || edname == "nvim" || edname == "nano"
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
