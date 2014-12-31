@@ -29,7 +29,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
     Rnz[1] = 1
     nz = 0
     for k=1:N
-        if V[k] != 0
+        if V[k] != zero(Tv)
             Rnz[I[k]+1] += 1
             nz += 1
         end
@@ -49,7 +49,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         ((iind > 0) && (jind > 0)) || throw(BoundsError())
         p = Wj[iind]
         Vk = V[k]
-        if Vk != 0
+        if Vk != zero(Tv)
             Wj[iind] += 1
             Rx[p] = Vk
             Ri[p] = jind
