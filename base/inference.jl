@@ -34,6 +34,26 @@ end
 
 inference_stack = EmptyCallStack()
 
+# Julia compiler options struct (see jl_compileropts_t in src/julia.h)
+immutable JLCompilerOpts
+    julia_home::Ptr{Cchar}
+    julia_bin::Ptr{Cchar}
+    build_path::Ptr{Cchar}
+    image_file::Ptr{Cchar}
+    cpu_target::Ptr{Cchar}
+    code_coverage::Int8
+    malloc_log::Int8
+    check_bounds::Int8
+    dumpbitcode::Int8
+    int_literals::Cint
+    compile_enabled::Int8
+    opt_level::Int8
+    depwarn::Int8
+    can_inline::Int8
+end
+
+compileropts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))
+
 function is_static_parameter(sv::StaticVarInfo, s::Symbol)
     sp = sv.sp
     for i=1:2:length(sp)
@@ -1554,9 +1574,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     if !rec
         @assert fulltree.args[3].head === :body
-        fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
-        # inlining can add variables
-        sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+        if compileropts().can_inline == 1
+            fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
+            # inlining can add variables
+            sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+        end
         tuple_elim_pass(fulltree)
         tupleref_elim_pass(fulltree.args[3], sv)
         linfo.inferred = true
