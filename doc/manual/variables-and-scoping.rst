@@ -30,7 +30,7 @@ The constructs introducing such blocks are:
 -  ``type`` blocks.
 
 Notably missing from this list are
-:ref:`begin blocks <man-compound-expressions>`, which do
+:ref:`begin blocks <man-compound-expressions>` and :ref:`if blocks <man-conditional-evaluation>`, which do
 *not* introduce new scope blocks.
 
 Certain constructs introduce new variables into the current innermost
