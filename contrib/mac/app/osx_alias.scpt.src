@@ -1,0 +1,16 @@
+-- Julia aliaser
+
+set juliaVersion to "0.4.0-dev-d066c3f061"
+set aliasingJuliaScript to "ln -s /Applications/Julia-" & juliaVersion & ".app/Contents/Resources/julia/bin/julia /usr/local/bin/julia"
+
+try
+	do shell script aliasingJuliaScript with administrator privileges
+on error errStr number errorNumber
+	if the errorNumber is equal to 1 then
+		display dialog "A Julia alias already exists under /usr/local/bin. Would you like to update the alias to the currently installed version?" buttons {"Yes", "No"} default button 1
+		if result = {button returned:"Yes"} then
+			do shell script "rm /usr/local/bin/julia" with administrator privileges
+			do shell script aliasingJuliaScript with administrator privileges
+		end if
+	end if
+end try
