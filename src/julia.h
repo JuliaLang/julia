@@ -1331,6 +1331,7 @@ typedef struct {
     int8_t compile_enabled;
     int8_t opt_level;
     int8_t depwarn;
+    int8_t can_inline;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
