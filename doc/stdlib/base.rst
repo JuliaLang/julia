@@ -6441,6 +6441,14 @@ Internals
 
    Evaluates the arguments to the function call, determines their types, and calls the ``code_typed`` function on the resulting expression
 
+.. function:: code_warntype(f, types)
+
+   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be displayed in red. This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See :ref:`man-code-warntype` for more information.
+
+.. function:: @code_warntype
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_warntype`` function on the resulting expression
+
 .. function:: code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT.
