@@ -1861,3 +1861,9 @@ type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
 end
 
 @test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
+
+# issue #9475
+module I9475
+    arr = Array(Any, 1)
+    @eval @eval $arr[1] = 1
+end
