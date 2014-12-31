@@ -302,6 +302,31 @@ Macros for function bodies
 	    println("All OK")
 	end
 
+-- function:: @nifs N conditionexpr expr
+              @nifs N conditionexpr expr elseexpr
+
+    Similar to ``@nif``, but doesn't nest the if statements with ``elseif``, but
+    rather executes them all in order. To re-use the sample above::
+
+        @nifs 3 d->(i_d >= size(A,d)) d->(error("Dimension", d, " too big")) d->(println("Dimension "*string(d)*" OK"))
+
+    would generate::
+
+        if i_1 >= size(A,1)
+            error("Dimension", 1, " too big")
+        else
+            println("Dimension "*string(1)*" OK")
+        end
+        if i_2 >= size(A,2)
+            error("Dimension", 2, " too big")
+        else
+            println("Dimension "*string(2)*" OK")
+        end
+        if i_3 >= size(A,3)
+            error("Dimension", 3, " too big")
+        else
+            println("Dimension "*string(3)*" OK")
+        end
 
 Frequently asked questions
 ^^^^^^^^^^^^^^^^^^^^^^^^^^

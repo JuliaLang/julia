@@ -1,6 +1,6 @@
 module Cartesian
 
-export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, ngenerate
+export @ngenerate, @nsplat, @nloops, @nref, @ncall, @nexprs, @nextract, @nall, @ntuple, @nif, @nifs, ngenerate
 
 const CARTESIAN_DIMS = 4
 
@@ -382,6 +382,27 @@ macro nif(N, condition, operation...)
     # Make the nested if statements
     for i = N-1:-1:1
         ex = Expr(:if, esc(inlineanonymous(condition,i)), esc(inlineanonymous(operation[1],i)), ex)
+    end
+    ex
+end
+
+# Similar to @nif, but doesn't nest the if clauses:
+# if condition1; op_if_true1; else op_if_false1; end; if condition2...
+# or, alternatively,
+# if condition1; op_if_true1; end; if condition2...
+#
+# Call syntax (last argument is optional):
+# @nifs N d->condition_d d->op_if_true_d d->op_if_false_d
+macro nifs(N,condition,operation...)
+    ex = Expr(:block)
+    for i = 1:N
+        ifex = Expr(:if)
+        push!(ifex.args, esc(inlineanonymous(condition, i)))
+        push!(ifex.args, esc(inlineanonymous(operation[1], i)))
+        if (length(operation) > 1)
+            push!(ifex.args, esc(inlineanonymous(operation[2], i)))
+        end
+        push!(ex.args, ifex)
     end
     ex
 end
