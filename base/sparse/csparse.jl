@@ -47,6 +47,7 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
         iind = I[k]
         jind = J[k]
         ((iind > 0) && (jind > 0)) || throw(BoundsError())
+        ((iind <= nrow) && (jind <= ncol)) || throw(BoundsError())
         p = Wj[iind]
         Vk = V[k]
         if Vk != 0
