@@ -79,8 +79,8 @@ function reprmime(m::MIME, x)
     takebuf_array(s)
 end
 reprmime(m::MIME, x::Vector{UInt8}) = x
-stringmime(m::MIME, x) = base64(writemime, m, x)
-stringmime(m::MIME, x::Vector{UInt8}) = base64(write, x)
+stringmime(m::MIME, x) = base64encode(writemime, m, x)
+stringmime(m::MIME, x::Vector{UInt8}) = base64encode(write, x)
 
 # it is convenient to accept strings instead of ::MIME
 istext(m::AbstractString) = istext(MIME(m))
