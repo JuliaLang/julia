@@ -359,7 +359,8 @@ end
 # show a normal (non-operator) function call, e.g. f(x,y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
+    if isa(func, Symbol) || (isa(func, Expr) &&
+            (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
