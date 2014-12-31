@@ -21,6 +21,10 @@
 	<array>
 		<dict>
 			<key>include</key>
+			<string>#symbol</string>
+		</dict>
+		<dict>
+			<key>include</key>
 			<string>#operator</string>
 		</dict>
 		<dict>
@@ -37,6 +41,10 @@
 		</dict>
 		<dict>
 			<key>include</key>
+			<string>#type_decl</string>
+		</dict>
+		<dict>
+			<key>include</key>
 			<string>#function_decl</string>
 		</dict>
 		<dict>
@@ -46,6 +54,10 @@
 		<dict>
 			<key>include</key>
 			<string>#keyword</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#base</string>
 		</dict>
 		<dict>
 			<key>include</key>
@@ -90,6 +102,25 @@
 							<string>$self</string>
 						</dict>
 					</array>
+				</dict>
+			</array>
+		</dict>
+		<key>repository.base</key>
+		<dict>
+			<key>patterns</key>
+			<array>
+				<dict>
+					<key>match</key>
+					<string>\b(?:Abstract(Array|(Sparse)?Matrix|Vector)|Pkg|Any|Array|ASCIIString|Associative|AsyncStream|Bit(Array|Matrix|Vector)|BigFloat|BigInt|Bool|ByteString|Char(String)?|Colon|Complex|Complex64|Complex128|ComplexPair|DArray|Dict|Dims|EachLine|EnvHash|Exception|Expr|FileOffset|Filter|Float(32|64)?|Function|ObjectIdDict|Int(8|16|32|64|128|eger|Set)?|ImaginaryUnit|IO(Buffer|Stream)?|LocalProcess|Matrix|NTuple|Number|ObjectIdDict|OrdinalRange|PipeBuffer|ProcessGroup|Ptr|Range(1|Index|s)?|Rational|Real|Regex(Match(Iterator)?)?|RemoteRef|RepString|RevString|Reverse|RopeString|Set|Signed|SparseMatrixCSC|SpawnNullStream|Strided(Array|Matrix|VecOrMat|Vector)|String|Sub(Array|DArray|OrDArray|String)|Symbol|SymTridiagonal|Task|TcpSocket|Tridiagonal|Tuple|Type|UInt(8|16|32|64|128)?|Union|Unsigned|UTF8String|UVError|VecOrMat|Vector|VersionNumber|Void|WeakKeyDict|WeakRef|Woodbury|Zip|Stat|Factorization|BunchKaufman|Cholesky(Pivoted)?Dense|(LU|QR(Pivoted)?|SVD|GSVD)Dense|LUTridiagonal|LDLTTridiagonal|(Insertion|Quick|Merge|Tim)Sort|C((u)?char|(u)?short|(u)?int|(u)?long|ptrdiff_t|size_t|(u)?longlong|(u)?intmax_t|float|double)|DisconnectException|ErrorException|(Argument|EOF|Key|Load|Method|Parse|System|Type)Error)\b</string>
+					<key>name</key>
+					<string>support.type.julia</string>
+				</dict>
+				<dict>
+					<key>match</key>
+					<string>\b(?:@(MIME|MIME_str|__FILE__|allocated|assert|async|b_str|bigint_str|boundscheck|cmd|code_llvm|code_lowered|code_native|code_typed|deprecate|edit|elapsed|eval|evalpoly|everywhere|fetch|fetchfrom|gensym|goto|inbounds|int128_str|ip_str|label|less|linux|linux_only|mstr|non_windowsxp_only|osx|osx_only|parallel|printf|profile|r_mstr|r_str|schedule|show|simd|spawn|spawnat|sprintf|sync|task|thunk|time|timed|uint128_str|unexpected|unix(_only)?|v_str|vectorize_1arg|vectorize_2arg|which|windows|windows_only|windowsxp_only)|A_ldiv_B!|A_ldiv_Bc|A_ldiv_Bt|A_mul_B!|A_mul_Bc|A_mul_Bc!|A_mul_Bt|A_mul_Bt!|A_rdiv_Bc|A_rdiv_Bt|Ac_ldiv_B|Ac_ldiv_Bc|Ac_mul_B|Ac_mul_B!|Ac_mul_Bc|Ac_mul_Bc!|Ac_rdiv_B|Ac_rdiv_Bc|At_ldiv_B|At_ldiv_Bt|At_mul_B|At_mul_B!|At_mul_Bt|At_mul_Bt!|At_rdiv_B|At_rdiv_Bt|PipeBuffer|abs|abs2|abspath|accept|acos|acosd|acosh|acot|acotd|acoth|acsc|acscd|acsch|addprocs|airy|airyai|airyaiprime|airybi|airybiprime|airyprime|airyx|all|all!|angle|any|any!|append!|apropos|ascii|asec|asecd|asech|asin|asind|asinh|assert|atan|atan2|atand|atanh|atexit|backtrace|base|base64|basename|beginswith|besselh|besseli|besselix|besselj|besselj0|besselj1|besseljx|besselk|besselkx|bessely|bessely0|bessely1|besselyx|beta|bfft|bfft!|big|bin|bind|binomial|bitbroadcast|bitmix|bitpack|bits|bitunpack|bkfact|bkfact!|blas_set_num_threads|blkdiag|bool|brfft|broadcast|broadcast!|broadcast!_function|broadcast_function|broadcast_getindex|broadcast_setindex!|bswap|bytes2hex|bytestring|c_calloc|c_free|c_malloc|c_realloc|cartesianmap|cat|catch_backtrace|cbrt|cd|ceil|cell|cfunction|char|charwidth|checkbounds|chol|cholfact|cholfact!|chomp|chop|chr2ind|circshift|cis|clamp|clear_malloc_data|clipboard|close|cmp|code_llvm|code_lowered|code_native|code_typed|collect|colon|combinations|complement|complement!|complex|complex128|complex32|complex64|cond|condskeel|conj|conj!|connect|consume|contains|conv|conv2|convert|copy|copy!|copysign|cor|cos|cosc|cosd|cosh|cospi|cot|cotd|coth|count|count_ones|count_zeros|countlines|countnz|cov|cp|cross|csc|cscd|csch|ctime|ctranspose|cummax|cummin|cumprod|cumprod!|cumsum|cumsum!|cumsum_kbn|current_module|current_task|dawson|dct|dct!|dec|deconv|deepcopy|deg2rad|degrees2radians|delete!|deleteat!|den|dense|deserialize|det|detach|dfill|diag|diagind|diagm|diff|digamma|digits|dirname|disable_sigint|display|displayable|distribute|div|divrem|dlclose|dlopen|dlopen_e|dlsym|dlsym_e|done|dones|dot|download|drand|drandn|dump|dzeros|eachline|eachmatch|edit|eig|eigfact|eigfact!|eigmax|eigmin|eigs|eigvals|eigvecs|eltype|empty!|endof|endswith|enumerate|eof|eps|erf|erfc|erfcinv|erfcx|erfi|erfinv|errno|error|esc|escape_string|eta|etree|evalfile|exit|exp|exp10|exp2|expand|expanduser|expm|expm1|exponent|extrema|eye|factor|factorial|factorize|falses|fd|fdio|fetch|fft|fft!|fftshift|fieldoffsets|filemode|filesize|fill|fill!|filt|filt!|filter|filter!|finalizer|find|find_library|findfirst|findin|findmax|findmin|findn|findnext|findnz|first|fld|flipbits!|flipdim|fliplr|flipsign|flipud|float|float16|float32|float32_isvalid|float64|float64_isvalid|floor|flush|flush_cstdio|foldl|foldr|frexp|full|fullname|functionloc|functionlocs|gamma|gc|gc_disable|gc_enable|gcd|gcdx|gensym|get|get!|get_bigfloat_precision|get_bigfloat_rounding|get_rounding|getaddrinfo|gethostname|getindex|getipaddr|getkey|getpid|givens|gperm|gradient|hankelh1|hankelh1x|hankelh2|hankelh2x|hash|haskey|hcat|help|hessfact|hessfact!|hex|hex2bytes|hex2num|hist|hist2d|histrange|homedir|htol|hton|hvcat|hypot|iceil|idct|idct!|identity|ifelse|ifft|ifft!|ifftshift|ifloor|ignorestatus|imag|in|include|include_string|ind2chr|ind2sub|indexin|indexpids|indmax|indmin|inf|info|infs|insert!|int|int128|int16|int32|int64|int8|integer|interrupt|intersect|intersect!|inv|invdigamma|invmod|invperm|ipermute!|ipermutedims|irfft|iround|is_assigned_char|is_valid_ascii|is_valid_char|is_valid_utf16|is_valid_utf8|isabspath|isalnum|isalpha|isapprox|isascii|isbits|isblank|isblockdev|ischardev|iscntrl|isconst|isdigit|isdir|isdirpath|iseltype|isempty|isequal|iseven|isexecutable|isfifo|isfile|isfinite|isgeneric|isgraph|ishermitian|isimmutable|isinf|isinteger|isinteractive|isleaftype|isless|islink|islower|ismarked|ismatch|isnan|isodd|isopen|ispath|isperm|isposdef|isposdef!|ispow2|isprime|isprint|ispunct|isqrt|isreadable|isreadonly|isready|isreal|issetgid|issetuid|issocket|issorted|isspace|issparse|issticky|issubnormal|issubset|issym|istaskdone|istext|istril|istriu|isupper|isvalid|iswritable|isxdigit|itrunc|join|joinpath|keys|kill|kron|last|lbeta|lcfirst|lcm|ldexp|ldltfact|ldltfact!|leading_ones|leading_zeros|length|less|lexcmp|lexless|lfact|lgamma|linrange|linreg|linspace|listen|listenany|localindexes|localpart|log|log10|log1p|log2|logdet|logspace|lowercase|lpad|lstat|lstrip|ltoh|lu|lufact|lufact!|lyap|macroexpand|map|map!|mapreduce|mapslices|mark|match|matchall|max|maxabs|maxabs!|maximum|maximum!|maxintfloat|mean|mean!|median|median!|merge|merge!|methods|methodswith|middle|midpoints|mimewritable|min|minabs|minabs!|minimum|minimum!|minmax|mkdir|mkpath|mktemp|mktempdir|mmap|mmap_array|mmap_bitarray|mod|mod1|mod2pi|modf|module_name|module_parent|msync|mtime|mv|myid|myindexes|names|nan|nans|nb_available|ndigits|ndims|next|nextfloat|nextind|nextpow|nextpow2|nextprod|nfilled|nnz|nonzeros|norm|normalize_string|normfro|normpath|notify|nprocs|nthperm|nthperm!|ntoh|ntuple|null|num|num2hex|nworkers|object_id|oct|oftype|one|ones|open|operm|parent|parentindexes|parse|parsefloat|parseint|parseip|partitions|peakflops|permutations|permute!|permutedims|permutedims!|pinv|plan_bfft|plan_bfft!|plan_brfft|plan_dct|plan_dct!|plan_fft|plan_fft!|plan_idct|plan_idct!|plan_ifft|plan_ifft!|plan_irfft|plan_rfft|pmap|pointer|pointer_from_objref|pointer_to_array|poll_fd|poll_file|polygamma|pop!|popdisplay|position|powermod|precision|precompile|prepend!|prevfloat|prevind|prevpow|prevpow2|prevprod|primes|print|print_escaped|print_joined|print_shortest|print_unescaped|print_with_color|println|process_exited|process_running|procs|prod|prod!|produce|promote|promote_rule|promote_shape|promote_type|push!|pushdisplay|put|put!|pwd|qr|qrfact|qrfact!|quadgk|quantile|quantile!|quit|rad2deg|radians2degrees|rand|rand!|randbool|randbool!|randcycle|randn|randn!|randperm|randstring|randsubseq|randsubseq!|range|rank|rationalize|read|read!|readall|readandwrite|readavailable|readbytes|readbytes!|readchomp|readcsv|readdir|readdlm|readline|readlines|readsfrom|readuntil|real|realmax|realmin|realpath|recv|redirect_stderr|redirect_stdin|redirect_stdout|redisplay|reduce|reducedim|reenable_sigint|reim|reinterpret|reload|rem|rem1|remotecall|remotecall_fetch|remotecall_wait|repeat|replace|repmat|repr|reprmime|require|reset|reshape|resize!|rethrow|reverse|reverse!|rfft|rm|rmdir|rmprocs|rol|ror|rot180|rotl90|rotr90|round|rpad|rref|rsearch|rsearchindex|rsplit|rstrip|run|scale|scale!|schedule|schur|schurfact|schurfact!|sdata|search|searchindex|searchsorted|searchsortedfirst|searchsortedlast|sec|secd|sech|seek|seekend|seekstart|select|select!|send|serialize|set_bigfloat_precision|set_bigfloat_rounding|set_rounding|setdiff|setdiff!|setenv|setfield|setindex!|shift!|show|showall|showcompact|showerror|shuffle|shuffle!|sign|signbit|signed|signif|significand|similar|sin|sinc|sind|sinh|sinpi|size|sizehint|sizeof|skip|skipchars|sleep|slice|slicedim|sort|sort!|sortcols|sortperm|sortrows|sparse|sparsevec|spawn|spdiagm|speye|splice!|split|splitdir|splitdrive|splitext|spones|sprand|sprandbool|sprandn|sprint|spzeros|sqrt|sqrtm|squeeze|srand|start|start_reading|start_timer|start_watching|stat|std|stdm|step|stop_reading|stop_timer|strerror|strftime|stride|strides|string|stringmime|strip|strptime|strwidth|sub|sub2ind|subtypes|success|sum|sum!|sum_kbn|sumabs|sumabs!|sumabs2|sumabs2!|summary|super|svd|svdfact|svdfact!|svdvals|svdvals!|sylvester|symbol|symdiff|symdiff!|symlink|symperm|systemerror|take|take!|takebuf_array|takebuf_string|tan|tand|tanh|task_local_storage|tempdir|tempname|tic|time|time_ns|timedwait|toc|toq|touch|trace|trailing_ones|trailing_zeros|transpose|trigamma|tril|tril!|triu|triu!|trues|trunc|truncate|typeintersect|typejoin|typemax|typemin|ucfirst|uint|uint128|uint16|uint32|uint64|uint8|unescape_string|union|union!|unique|unmark|unsafe_copy!|unsafe_load|unsafe_pointer_to_objref|unsafe_store!|unshift!|unsigned|uperm|uppercase|utf16|utf32|utf8|values|var|varm|vcat|vec|vecnorm|versioninfo|wait|warn|watch_file|which|whos|widemul|widen|with_bigfloat_precision|with_bigfloat_rounding|with_rounding|workers|workspace|write|writecsv|writedlm|writemime|writesto|wstring|xcorr|xdump|yield|zero|zeros|zeta|zip
+)\b</string>
+					<key>name</key>
+					<string>support.function.julia</string>
 				</dict>
 			</array>
 		</dict>
