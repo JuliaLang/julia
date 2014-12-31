@@ -291,7 +291,7 @@ unquoted(ex::Expr)       = ex.args[1]
 ## AST printing helpers ##
 
 const indent_width = 4
-show_expr_type_colorize = false
+show_expr_type_emphasize = false
 
 function show_expr_type(io::IO, ty)
     if is(ty, Function)
@@ -299,8 +299,8 @@ function show_expr_type(io::IO, ty)
     elseif is(ty, IntrinsicFunction)
         print(io, "::I")
     else
-        if show_expr_type_colorize::Bool && !isleaftype(ty)
-            print_with_color(:red, io, "::$ty")
+        if show_expr_type_emphasize::Bool && !isleaftype(ty)
+            emphasize(io, "::$ty")
         else
             if !is(ty, Any)
                 print(io, "::$ty")
@@ -308,6 +308,8 @@ function show_expr_type(io::IO, ty)
         end
     end
 end
+
+emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io," # line ",line,':')
 show_linenumber(io::IO, line, file) = print(io," # ",file,", line ",line,':')
@@ -416,8 +418,8 @@ end
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
     show_type = true
-    global show_expr_type_colorize
-    state = show_expr_type_colorize::Bool
+    global show_expr_type_emphasize
+    state = show_expr_type_emphasize::Bool
 
     # dot (i.e. "x.y")
     if is(head, :(.))
@@ -468,7 +470,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         func_args = args[2:end]
 
         if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
-            show_expr_type_colorize::Bool = show_type = false
+            show_expr_type_emphasize::Bool = show_type = false
         end
 
         # scalar multiplication (i.e. "100x")
@@ -672,7 +674,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # print anything else as "Expr(head, args...)"
     else
-        show_expr_type_colorize::Bool = show_type = false
+        show_type = false
+        show_expr_type_emphasize::Bool = in(ex.head, (:lambda, :method))
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -692,7 +695,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_expr_type(io, ex.typ)
     end
 
-    show_expr_type_colorize::Bool = state
+    show_expr_type_emphasize::Bool = state
 end
 
 show_type_assignment(::Number) = false

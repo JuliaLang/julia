@@ -155,8 +155,10 @@ function _dump_function(f, t::ANY, native, wrapper)
     str
 end
 
-code_llvm  (f::Function, types::(Type...)) = print(_dump_function(f, types, false, false))
-code_native(f::Function, types::(Type...)) = print(_dump_function(f, types, true, false))
+code_llvm(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, false, false))
+code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
+code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
+code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
 function functionlocs(f::ANY, types=(Type...))
     locs = Any[]
