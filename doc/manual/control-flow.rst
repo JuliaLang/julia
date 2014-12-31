@@ -121,7 +121,7 @@ blocks as desired can be used. The condition expressions in the
 evaluates to ``true``, after which the associated block is evaluated,
 and no further condition expressions or blocks are evaluated.
 
-``if```blocks are "leaky", i.e. they do not introduce a local scope. 
+``if`` blocks are "leaky", i.e. they do not introduce a local scope. 
 This means that new variables defined inside the ``ìf`` clauses can 
 be used after the ``if`` block, even if they weren't defined before.
 So, we could have defined the ``test`` function above as
