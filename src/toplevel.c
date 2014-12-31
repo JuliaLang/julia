@@ -522,7 +522,7 @@ jl_value_t *jl_toplevel_eval(jl_value_t *v)
 }
 
 // repeatedly call jl_parse_next and eval everything
-jl_value_t *jl_parse_eval_all(char *fname)
+jl_value_t *jl_parse_eval_all(const char *fname)
 {
     //jl_printf(JL_STDERR, "***** loading %s\n", fname);
     int last_lineno = jl_lineno;
