@@ -1254,7 +1254,7 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
     ex, pos = ccall(:jl_parse_string, Any,
                     (Ptr{UInt8}, Int32, Int32),
                     str, pos-1, greedy ? 1:0)
-    if raise && isa(ex,Expr) && is(ex.head,:error)
+    if raise && isa(ex,Expr) && (is(ex.head,:error) || is(ex.head, :incomplete))
         throw(ParseError(ex.args[1]))
     end
     if ex == ()
