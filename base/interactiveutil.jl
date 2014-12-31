@@ -205,26 +205,27 @@ end
 
 # displaying type-ambiguity warnings
 
-function code_warntype(f, t::(Type...))
-    global show_expr_type_colorize
-    state = show_expr_type_colorize::Bool
+function code_warntype(io::IO, f, t::(Type...))
+    global show_expr_type_emphasize
+    state = show_expr_type_emphasize::Bool
     ct = code_typed(f, t)
-    show_expr_type_colorize::Bool = true
+    show_expr_type_emphasize::Bool = true
     for ast in ct
-        println(STDOUT, "Variables:")
+        println(io, "Variables:")
         vars = ast.args[2][2]
         for v in vars
-            print(STDOUT, "  ", v[1])
-            show_expr_type(STDOUT, v[2])
-            print(STDOUT, '\n')
+            print(io, "  ", v[1])
+            show_expr_type(io, v[2])
+            print(io, '\n')
         end
-        print(STDOUT, "\nBody:\n  ")
-        show_unquoted(STDOUT, ast.args[3], 2)
-        print(STDOUT, '\n')
+        print(io, "\nBody:\n  ")
+        show_unquoted(io, ast.args[3], 2)
+        print(io, '\n')
     end
-    show_expr_type_colorize::Bool = false
+    show_expr_type_emphasize::Bool = false
     nothing
 end
+code_warntype(f, t::(Type...)) = code_warntype(STDOUT, f, t)
 
 typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
 
