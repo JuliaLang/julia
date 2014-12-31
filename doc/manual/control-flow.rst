@@ -119,6 +119,39 @@ blocks as desired can be used. The condition expressions in the
 evaluates to ``true``, after which the associated block is evaluated,
 and no further condition expressions or blocks are evaluated.
 
+``if`` blocks are "leaky", i.e. they do not introduce a local scope. 
+This means that new variables defined inside the ``ìf`` clauses can 
+be used after the ``if`` block, even if they weren't defined before.
+So, we could have defined the ``test`` function above as
+
+.. doctest::
+
+    julia> function test(x,y)
+             if x < y
+               relation = "less than"
+             elseif x == y
+               relation = "equal to"
+             else 
+               relation = "greater than"
+             end
+             println("x is ", relation, " than y.")
+           end
+    
+``if`` blocks also return a value, which may seem unintuitive to users
+coming from many other languages. This value is simply the return value
+of the last executed statement in the branch that was chosen, so
+
+.. doctest::
+
+    julia> x = 3
+    
+    julia> if x > 0
+             "positive!"
+          else
+             "negative..."
+          end
+    "positive!"
+
 Note that very short conditional statements (one-liners) are frequently expressed using
 Short-Circuit Evaluation in Julia, as outlined in the next section.
 
