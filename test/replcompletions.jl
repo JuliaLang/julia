@@ -1,6 +1,13 @@
 using Base.REPLCompletions
 
 module CompletionFoo
+    type Test_y
+        yy
+    end
+    type Test_x
+        xx :: Test_y
+    end
+    type_test = Test_x(Test_y(1))
     module CompletionFoo2
 
     end
@@ -9,6 +16,19 @@ module CompletionFoo
     macro foobar()
         :()
     end
+end
+
+function temp_pkg_dir(fn::Function)
+  # Used in tests below to setup and teardown a sandboxed package directory
+  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
+  @test !isdir(Pkg.dir())
+  try
+    mkpath(Pkg.dir())
+    @test isdir(Pkg.dir())
+    fn()
+  finally
+    rm(tmpdir, recursive=true)
+  end
 end
 
 test_complete(s) = completions(s,endof(s))
@@ -54,6 +74,21 @@ c,r = test_complete(s)
 @test s[r] == "@f"
 @test !("foo" in c)
 
+s = "Main.CompletionFoo.type_test.x"
+c,r = test_complete(s)
+@test "xx" in c
+@test r == 30:30
+@test s[r] == "x"
+
+# To complete on a variable of a type, the type T of the variable
+# must be a concrete type, hence Base.isstructtype(T) returns true,
+# for the completion to succeed. That why `xx :: Test_y` of `Test_x`.
+s = "Main.CompletionFoo.type_test.xx.y"
+c,r = test_complete(s)
+@test "yy" in c
+@test r == 33:33
+@test s[r] == "y"
+
 # issue #6333
 s = "Base.return_types(getin"
 c,r = test_complete(s)
@@ -93,38 +128,58 @@ c,r,res = test_complete(s)
 @test r == 7:12
 @test length(c) == 1
 
+s = "\\a"
+c, r, res = test_complete(s)
+"\\alpha" in c
+@test r == 1:2
+@test s[r] == "\\a"
+
 # `cd("C:\U should not make the repl crash due to escaping see comment #9137
 s = "cd(\"C:\\U"
 c,r,res = test_complete(s)
 
-## Test completion of packages
-#mkp(p) = ((@assert !isdir(p)); mkdir(p))
-#temp_pkg_dir() do
-#    mkp(Pkg.dir("MyAwesomePackage"))
-#    mkp(Pkg.dir("CompletionFooPackage"))
-#
-#    s = "using MyAwesome"
-#    c,r = test_complete(s)
-#    @test "MyAwesomePackage" in c
-#    @test s[r] == "MyAwesome"
-#
-#    s = "using Completion"
-#    c,r = test_complete(s)
-#    @test "CompletionFoo" in c #The module
-#    @test "CompletionFooPackage" in c #The package
-#    @test s[r] == "Completion"
-#
-#    s = "using CompletionFoo.Completion"
-#    c,r = test_complete(s)
-#    @test "CompletionFoo2" in c
-#    @test s[r] == "Completion"
-#
-#    rm(Pkg.dir("MyAwesomePackage"))
-#    rm(Pkg.dir("CompletionFooPackage"))
-#end
+# Test method completions
+s = "max("
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(start(methods(max)))
+@test r == 1:3
+@test s[r] == "max"
 
-#This should not throw an error
-c,r = test_scomplete("\$a")
+# Test completion in multi-line comments
+s = "#=\n\\alpha"
+c, r, res = test_complete(s)
+@test c[1] == "α"
+@test r == 4:9
+@test length(c) == 1
+
+# Test that completion do not work in multi-line comments
+s = "#=\nmax"
+c, r, res = test_complete(s)
+@test length(c) == 0
+
+# Test completion of packages
+mkp(p) = ((@assert !isdir(p)); mkdir(p))
+temp_pkg_dir() do
+    mkp(Pkg.dir("CompletionFooPackage"))
+
+    s = "using Completion"
+    c,r = test_complete(s)
+    @test "CompletionFoo" in c #The module
+    @test "CompletionFooPackage" in c #The package
+    @test s[r] == "Completion"
+end
+
+# Test $ in shell-mode
+s = "cd \$(max"
+c, r, res = test_scomplete(s)
+@test "max" in c
+@test r == 6:8
+@test s[r] == "max"
+
+# The return type is of importance, before #8995 it would return nothing
+# which would raise an error in the repl code.
+@test (UTF8String[], 0:-1, false) == test_scomplete("\$a")
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
