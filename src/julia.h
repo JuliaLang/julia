@@ -1355,10 +1355,10 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 // Version information
 #include "julia_version.h"
 
-DLLEXPORT extern const int jl_ver_major(void);
-DLLEXPORT extern const int jl_ver_minor(void);
-DLLEXPORT extern const int jl_ver_patch(void);
-DLLEXPORT extern const int jl_ver_is_release(void);
+DLLEXPORT extern int jl_ver_major(void);
+DLLEXPORT extern int jl_ver_minor(void);
+DLLEXPORT extern int jl_ver_patch(void);
+DLLEXPORT extern int jl_ver_is_release(void);
 DLLEXPORT extern const char* jl_ver_string(void);
 
 #ifdef __cplusplus
