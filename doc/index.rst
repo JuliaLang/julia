@@ -85,5 +85,6 @@ Developer Documentation
 .. toctree::
    :maxdepth: 2
 
+   devdocs/reflection
    devdocs/julia
    devdocs/C
