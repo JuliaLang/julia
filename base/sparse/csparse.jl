@@ -18,7 +18,9 @@ function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
     N = length(I)
-    ((N == length(J)) && (N == length(V))) || throw(BoundsError())
+    (N == length(J) && N == length(V)) || throw(BoundsError())
+    maximum(I) <= nrow || throw(BoundsError())
+    maximum(J) <= ncol || throw(BoundsError())
 
     # Work array
     Wj = Array(Ti, max(nrow,ncol)+1)
