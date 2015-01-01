@@ -2020,3 +2020,6 @@ let x = [1,2,3]
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int,Int,Int), x) === (1,2,3)
     @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int16,(Void,),Int8,(),Int,Void,Int), x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
+
+# sig 2 is SIGINT per the POSIX.1-1990 standard
+@test_throws InterruptException ccall(:raise, Void, (Cint,), 2)

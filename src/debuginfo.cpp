@@ -213,8 +213,8 @@ public:
         StringRef sName;
 #endif
 #ifdef _OS_WINDOWS_
-        uint64_t SectionAddr;
-        uint64_t SectionSize;
+        uint64_t SectionAddr = 0;
+        uint64_t SectionSize = 0;
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #endif
 

@@ -1107,8 +1107,10 @@ DLLEXPORT extern volatile sig_atomic_t jl_defer_signal;
 #define JL_SIGATOMIC_END()                                      \
     do {                                                        \
         jl_defer_signal--;                                      \
-        if (jl_defer_signal == 0 && jl_signal_pending != 0)     \
-            raise(jl_signal_pending);                           \
+        if (jl_defer_signal == 0 && jl_signal_pending != 0) {   \
+            jl_signal_pending = 0;                              \
+            jl_throw(jl_interrupt_exception);                   \
+        }                                                       \
     } while(0)
 
 DLLEXPORT void restore_signals(void);
