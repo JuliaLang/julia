@@ -16,5 +16,6 @@
 *.obj
 *.dylib
 *.dSYM
+*.cov
 
 .DS_Store
