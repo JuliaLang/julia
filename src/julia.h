@@ -646,6 +646,7 @@ DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t proc, jl_value_t *env,
                                         jl_lambda_info_t *li);
 DLLEXPORT jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams);
 DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...);
+DLLEXPORT jl_tuple_t *jl_tuplev(size_t n, jl_value_t **v);
 DLLEXPORT jl_tuple_t *jl_tuple1(void *a);
 DLLEXPORT jl_tuple_t *jl_tuple2(void *a, void *b);
 DLLEXPORT jl_tuple_t *jl_alloc_tuple(size_t n);
@@ -825,16 +826,20 @@ DLLEXPORT jl_value_t *jl_environ(int i);
 // throwing common exceptions
 DLLEXPORT void NORETURN jl_error(const char *str);
 DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...);
-DLLEXPORT void jl_too_few_args(const char *fname, int min);
-DLLEXPORT void jl_too_many_args(const char *fname, int max);
-DLLEXPORT void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
-DLLEXPORT void jl_type_error_rt(const char *fname, const char *context,
+DLLEXPORT void NORETURN jl_too_few_args(const char *fname, int min);
+DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max);
+DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
+DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
                                 jl_value_t *ty, jl_value_t *got);
-DLLEXPORT void jl_type_error_rt_line(const char *fname, const char *context,
+DLLEXPORT void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
                                      jl_value_t *ty, jl_value_t *got, int line);
-jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
-DLLEXPORT void jl_undefined_var_error(jl_sym_t *var);
-void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
+DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var);
+DLLEXPORT void NORETURN jl_new_bounds_error(jl_value_t* v, jl_value_t* t);
+DLLEXPORT void NORETURN jl_new_bounds_error_v(jl_value_t* v, jl_value_t **idxs, size_t nidxs);
+DLLEXPORT void NORETURN jl_new_bounds_error_i(jl_value_t* v, size_t i);
+DLLEXPORT void NORETURN jl_new_v_bounds_error_i(jl_value_t** v, size_t nv, size_t i);
+DLLEXPORT void NORETURN jl_new_unboxed_bounds_error_i(void *v, jl_value_t *vt, size_t i);
+DLLEXPORT void NORETURN jl_new_bounds_error_unboxed(jl_value_t* v, size_t *idxs, size_t nidxs);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);
 

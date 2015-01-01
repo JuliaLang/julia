@@ -28,7 +28,7 @@ extern "C" {
 
 // exceptions -----------------------------------------------------------------
 
-DLLEXPORT void jl_error(const char *str)
+DLLEXPORT void NORETURN jl_error(const char *str)
 {
     if (jl_errorexception_type == NULL) {
         JL_PRINTF(JL_STDERR, "%s", str);
@@ -39,7 +39,7 @@ DLLEXPORT void jl_error(const char *str)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
-DLLEXPORT void jl_errorf(const char *fmt, ...)
+DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
 {
     va_list args;
     ios_t buf;
@@ -56,18 +56,18 @@ DLLEXPORT void jl_errorf(const char *fmt, ...)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
-void jl_too_few_args(const char *fname, int min)
+void NORETURN jl_too_few_args(const char *fname, int min)
 {
     // TODO: ArgumentError
     jl_errorf("%s: too few arguments (expected %d)", fname, min);
 }
 
-void jl_too_many_args(const char *fname, int max)
+void NORETURN jl_too_many_args(const char *fname, int max)
 {
     jl_errorf("%s: too many arguments (expected %d)", fname, max);
 }
 
-void jl_type_error_rt(const char *fname, const char *context,
+void NORETURN jl_type_error_rt(const char *fname, const char *context,
                       jl_value_t *ty, jl_value_t *got)
 {
     jl_value_t *ctxt=NULL;
@@ -78,18 +78,18 @@ void jl_type_error_rt(const char *fname, const char *context,
     jl_throw(ex);
 }
 
-void jl_type_error_rt_line(const char *fname, const char *context,
+void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
                            jl_value_t *ty, jl_value_t *got, int line)
 {
     jl_type_error_rt(fname, context, ty, got);
 }
 
-void jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
+void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got)
 {
     jl_type_error_rt(fname, "", expected, got);
 }
 
-void jl_undefined_var_error(jl_sym_t *var)
+DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var)
 {
     if (var->name[0] == '#') {
         // convention for renamed variables: #...#original_name
@@ -98,6 +98,54 @@ void jl_undefined_var_error(jl_sym_t *var)
             var = jl_symbol(nxt+1);
     }
     jl_throw(jl_new_struct(jl_undefvarerror_type, var));
+}
+
+DLLEXPORT void NORETURN jl_new_bounds_error(jl_value_t* v, jl_value_t* t) // t::Union(Tuple, Int)
+{
+    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_bounds_exception->type, v, t));
+}
+
+DLLEXPORT void NORETURN jl_new_bounds_error_v(jl_value_t* v, jl_value_t **idxs, size_t nidxs)
+{
+    jl_tuple_t *t = NULL;
+    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    t = jl_tuplev(nidxs, idxs);
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_bounds_exception->type, v, t));
+}
+
+DLLEXPORT void NORETURN jl_new_v_bounds_error_i(jl_value_t** v, size_t nv, size_t i)
+{
+    jl_new_bounds_error_i((jl_value_t*)jl_tuplev(nv, v), i);
+}
+
+DLLEXPORT void NORETURN jl_new_unboxed_bounds_error_i(void* data, jl_value_t *vt, size_t i)
+{
+    jl_value_t *t = NULL, *v = NULL;
+    JL_GC_PUSH2(v, t);
+    v = jl_new_bits(vt, data);
+    t = jl_box_long(i);
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_bounds_exception->type, v, t));
+}
+
+DLLEXPORT void NORETURN jl_new_bounds_error_i(jl_value_t* v, size_t i)
+{
+    jl_value_t *t = NULL;
+    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    t = jl_box_long(i);
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_bounds_exception->type, v, t));
+}
+
+DLLEXPORT void NORETURN jl_new_bounds_error_unboxed(jl_value_t* v, size_t *idxs, size_t nidxs)
+{
+    size_t i;
+    jl_tuple_t *t = NULL;
+    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    t = jl_alloc_tuple(nidxs);
+    for (i = 0; i < nidxs; i++) {
+        jl_tupleset(t, i, jl_box_long(idxs[i]));
+    }
+    jl_throw(jl_new_struct((jl_datatype_t*)jl_bounds_exception->type, v, t));
 }
 
 JL_CALLABLE(jl_f_throw)
@@ -404,7 +452,8 @@ JL_CALLABLE(jl_f_kwcall)
     assert(jl_is_gf(sorter));
     jl_function_t *m = jl_method_lookup((jl_methtable_t*)sorter->env, args, nargs, 1);
     if (m == jl_bottom_func) {
-        return jl_no_method_error(f, args+1, nargs-1);
+        jl_no_method_error(f, args+1, nargs-1);
+        // unreachable
     }
 
     return jl_apply(m, args, nargs);
@@ -523,7 +572,7 @@ JL_CALLABLE(jl_f_tupleref)
     jl_tuple_t *t = (jl_tuple_t*)args[0];
     size_t i = jl_unbox_long(args[1])-1;
     if (i >= jl_tuple_len(t))
-        jl_throw(jl_bounds_exception);
+        jl_new_bounds_error(args[0], args[1]);
     return jl_tupleref(t, i);
 }
 
@@ -552,7 +601,7 @@ JL_CALLABLE(jl_f_get_field)
     if (jl_is_long(args[1])) {
         idx = jl_unbox_long(args[1])-1;
         if (idx >= jl_tuple_len(st->names))
-            jl_throw(jl_bounds_exception);
+            jl_new_bounds_error(args[0], args[1]);
     }
     else {
         JL_TYPECHK(getfield, symbol, args[1]);
@@ -581,7 +630,7 @@ JL_CALLABLE(jl_f_set_field)
     if (jl_is_long(args[1])) {
         idx = jl_unbox_long(args[1])-1;
         if (idx >= jl_tuple_len(st->names))
-            jl_throw(jl_bounds_exception);
+            jl_new_bounds_error(args[0], args[1]);
     }
     else {
         JL_TYPECHK(setfield!, symbol, args[1]);
@@ -605,7 +654,7 @@ JL_CALLABLE(jl_f_field_type)
     if (jl_is_long(args[1])) {
         field_index = jl_unbox_long(args[1]) - 1;
         if (field_index < 0 || field_index >= jl_tuple_len(st->names))
-            jl_throw(jl_bounds_exception);
+            jl_new_bounds_error(args[0], args[1]);
     }
     else {
         JL_TYPECHK(fieldtype, symbol, args[1]);
