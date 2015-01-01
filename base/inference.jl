@@ -1389,9 +1389,27 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
         end
     end
-    for i=1:la
-        s[1][args[i]] = atypes[i]
+
+    laty = length(atypes)
+    if laty > 0
+        lastatype = atypes[laty]
+        if isvarargtype(lastatype)
+            lastatype = lastatype.parameters[1]
+            laty -= 1
+        end
+        if laty > la
+            laty = la
+        end
+        for i=1:laty
+            s[1][args[i]] = atypes[i]
+        end
+        for i=laty+1:la
+            s[1][args[i]] = lastatype
+        end
+    else
+        @assert la == 0
     end
+
     # types of closed vars
     cenv = ObjectIdDict()
     for vi = ((ast.args[2][3])::Array{Any,1})
@@ -2351,7 +2369,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 else
                     methitype = methargs[end]
                     if isvarargtype(methitype)
-                        methitype = (methitype::Vararg).parameters[1]
+                        methitype = methitype.parameters[1]
                     else
                         @assert i==nm
                     end
