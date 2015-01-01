@@ -2011,3 +2011,42 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+
+# pull request #9534
+@test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
+@test try; [][]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,); end
+@test try; [][1,2]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,2); end
+@test try; [][10]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (10,); end
+f9534a() = (a=1+2im; a.(-100))
+f9534a(x) = (a=1+2im; a.(x))
+@test try; f9534a() catch ex; (ex::BoundsError).a === 1+2im && ex.i == -100; end
+@test try; f9534a(3) catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+f9534b() = (a=(1,2.,""); a[5])
+f9534b(x) = (a=(1,2.,""); a[x])
+@test try; f9534b() catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 5; end
+@test try; f9534b(4) catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 4; end
+f9534c() = (a=(1,2.); a[3])
+f9534c(x) = (a=(1,2.); a[x])
+@test try; f9534c() catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 3; end
+@test try; f9534c(0) catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 0; end
+f9534d() = (a=(1,2,4,6,7); a[7])
+f9534d(x) = (a=(1,2,4,6,7); a[x])
+@test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
+@test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
+f9534e(x) = (a=IOBuffer(); a.(x) = 3)
+@test try; f9534e(-2) catch ex; is((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
+f9534f() = (a=IOBuffer(); a.(-2))
+f9534f(x) = (a=IOBuffer(); a.(x))
+@test try; f9534f() catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
+@test try; f9534f(typemin(Int64)+2) catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == typemin(Int64)+2; end
+x9634 = 3
+@test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+@test try; error(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
+@test try; error(BoundsError(Int)) catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test try; error(BoundsError(Int, typemin(Int))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == typemin(Int); end
+@test try; error(BoundsError(Int, (:a,))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == (:a,); end
+f9534g(a,b,c...) = c[0]
+@test try; f9534g(1,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 0; end
+f9534h(a,b,c...) = c[a]
+@test f9534h(4,2,3,4,5,6) == 6
+@test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
