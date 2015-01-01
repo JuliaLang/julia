@@ -2011,3 +2011,12 @@ f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
 @test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
 @test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+
+# jl_new_bits testing
+let x = [1,2,3]
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int,Int,Int), x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int16,(Void,),Int8,(),Int,Void,Int), x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+end
