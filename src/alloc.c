@@ -120,10 +120,24 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
         jl_tuple_t *tuple = (jl_tuple_t*)dt;
         *len = LLT_ALIGN(*len, jl_new_bits_align(dt));
         size_t i, l = jl_tuple_len(tuple);
-        jl_value_t *v = (jl_value_t*) jl_alloc_tuple(l);
+        jl_value_t *v = (jl_value_t*)jl_alloc_tuple(l);
         JL_GC_PUSH1(v);
         for (i = 0; i < l; i++) {
             jl_tupleset(v,i,jl_new_bits_internal(jl_tupleref(tuple,i), (char*)data, len));
+        }
+        JL_GC_POP();
+        return v;
+    }
+    if (jl_is_ntuple_type(dt)) {
+        jl_value_t *lenvar = jl_tparam0(dt);
+        jl_value_t *elty = jl_tparam1(dt);
+        *len = LLT_ALIGN(*len, jl_new_bits_align(elty));
+        assert(jl_is_long(lenvar));
+        size_t i, l = jl_unbox_long(lenvar);
+        jl_value_t *v = (jl_value_t*)jl_alloc_tuple(l);
+        JL_GC_PUSH1(v);
+        for (i = 0; i < l; i++) {
+            jl_tupleset(v, i, jl_new_bits_internal(elty, (char*)data, len));
         }
         JL_GC_POP();
         return v;
@@ -233,7 +247,7 @@ jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (i >= jl_tuple_len(st->names))
-        jl_throw(jl_bounds_exception);
+        jl_new_bounds_error_i(v, i+1);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
     if (st->fields[i].isptr) {
         jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
@@ -309,16 +323,20 @@ DLLEXPORT jl_tuple_t *jl_tuple(size_t n, ...)
     va_list args;
     if (n == 0) return jl_null;
     va_start(args, n);
-#ifdef OVERLAP_TUPLE_LEN
-    jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n);
-#else
-    jl_tuple_t *jv = (jl_tuple_t*)newobj((jl_value_t*)jl_tuple_type, n+1);
-#endif
-    jl_tuple_set_len_unsafe(jv, n);
+    jl_tuple_t *jv = jl_alloc_tuple_uninit(n);
     for(size_t i=0; i < n; i++) {
         jl_tupleset(jv, i, va_arg(args, jl_value_t*));
     }
     va_end(args);
+    return jv;
+}
+
+DLLEXPORT jl_tuple_t *jl_tuplev(size_t n, jl_value_t **v)
+{
+    jl_tuple_t *jv = jl_alloc_tuple_uninit(n);
+    for(size_t i=0; i < n; i++) {
+        jl_tupleset(jv, i, v[i]);
+    }
     return jv;
 }
 

@@ -1345,14 +1345,13 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     return ml;
 }
 
-jl_value_t *jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
+void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 {
     jl_value_t *argtup = jl_f_tuple(NULL, args, na);
     JL_GC_PUSH1(&argtup);
     jl_value_t *fargs[3] = { (jl_value_t*)jl_methoderror_type, (jl_value_t*)f, argtup };
     jl_throw(jl_apply(jl_module_call_func(jl_base_module), fargs, 3));
     // not reached
-    return jl_nothing;
 }
 
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
@@ -1637,7 +1636,8 @@ JL_CALLABLE(jl_apply_generic)
             show_call(F, args, nargs);
 #endif
         JL_GC_POP();
-        return jl_no_method_error((jl_function_t*)F, args, nargs);
+        jl_no_method_error((jl_function_t*)F, args, nargs);
+        // unreachable
     }
     assert(!mfunc->linfo || !mfunc->linfo->inInference);
     jl_value_t *res = jl_apply(mfunc, args, nargs);
@@ -1679,7 +1679,8 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     }
 
     if (m == JL_NULL) {
-        return jl_no_method_error(gf, args, nargs);
+        jl_no_method_error(gf, args, nargs);
+        // unreachable
     }
 
     // now we have found the matching definition.

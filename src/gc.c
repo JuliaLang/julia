@@ -869,6 +869,7 @@ static void gc_mark(void)
     gc_push_root(jl_null, 0);
     gc_push_root(jl_true, 0);
     gc_push_root(jl_false, 0);
+    gc_push_root(jl_bounds_exception, 0);
 
     jl_mark_box_caches();
 
