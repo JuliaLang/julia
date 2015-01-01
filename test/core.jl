@@ -2000,3 +2000,14 @@ module I9475
     arr = Array(Any, 1)
     @eval @eval $arr[1] = 1
 end
+
+# issue #9520
+f9520a(::Any, ::Any, args...) = 15
+f9520b(::Any, ::Any, ::Any, args...) = 23
+f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+@test invoke(f9520a, (Any, Any), 1, 2) == 15
+@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
+@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
+@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
