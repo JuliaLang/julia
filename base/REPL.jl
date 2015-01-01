@@ -472,9 +472,9 @@ end
 function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
-                             backwards::Bool)
+                             backwards::Bool,
+                             cur_idx = hist.cur_idx)
     cur_response = bytestring(LineEdit.buffer(s))
-    cur_idx = hist.cur_idx
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -484,16 +484,20 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):max_idx)
     for idx in idxs
         if (idx == max_idx) || (beginswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
-            history_move(s, hist, idx)
-            if length(prefix) == 0
-                # on empty prefix search, move cursor to the end
-                LineEdit.move_input_end(s)
-            else
-                # otherwise, keep cursor at the prefix position as a visual cue
-                seek(LineEdit.buffer(s), length(prefix))
+            m = history_move(s, hist, idx)
+            if m == :ok
+                if length(prefix) == 0
+                    # on empty prefix search, move cursor to the end
+                    LineEdit.move_input_end(s)
+                else
+                    # otherwise, keep cursor at the prefix position as a visual cue
+                    seek(LineEdit.buffer(s), length(prefix))
+                end
+                LineEdit.refresh_line(s)
+                return :ok
+            elseif m == :skip
+                return history_move_prefix(s,hist,prefix,backwards,idx)
             end
-            LineEdit.refresh_line(s)
-            return :ok
         end
     end
     Terminals.beep(LineEdit.terminal(s))
