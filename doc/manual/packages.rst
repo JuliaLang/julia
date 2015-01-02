@@ -417,8 +417,20 @@ GitHub, push your changes to your fork, and open a pull request::
 
       https://github.com/StefanKarpinski/METADATA.jl/compare/pull-request/ef45f54b
 
-For various reasons :func:`Pkg.publish` sometimes does not succeed.  
-In those cases, you may make a pull request on GitHub, which is `not difficult <https://help.github.com/articles/creating-a-pull-request>`_.
+.. tip::
+
+    If :func:`Pkg.publish` fails with error::
+
+        ERROR: key not found: "token"
+
+    then you may have encountered an issue from using the GitHub API on
+    multiple systems. The solution is to delete the "Julia Package Manager"
+    personal access token `from your Github account
+    <https://github.com/settings/applications>`_ and try again.
+
+    Other failures may require you to circumvent :func:`Pkg.publish` by
+    `creating a pull request on GitHub
+    <https://help.github.com/articles/creating-a-pull-request>`_.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that :func:`Pkg.add("FooBar") <Pkg.add>` won't work yet since it only installs official versions.
