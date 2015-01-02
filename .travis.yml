@@ -2,6 +2,13 @@ language: cpp
 os:
     - linux
     - osx
+env:
+    - DOCCHECK="yes"
+    - DOCCHECK="no"
+matrix:
+  exclude:
+    - os: osx
+      env: DOCCHECK="yes"
 notifications:
     email: false
     irc:
@@ -16,47 +23,48 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
+        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0" &&
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND OPENLIBM RMATH; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
-        done;
-        sudo apt-get update -qq -y;
-        sudo apt-get install zlib1g-dev;
-        sudo add-apt-repository ppa:staticfloat/julia-deps -y;
-        sudo apt-get update -qq -y;
+        done &&
+        sudo apt-get update -qq -y &&
+        sudo apt-get install zlib1g-dev &&
+        sudo add-apt-repository ppa:staticfloat/julia-deps -y &&
+        sudo apt-get update -qq -y &&
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
       elif [ `uname` = "Darwin" ]; then
-        brew tap staticfloat/julia;
-        brew rm --force $(brew deps --HEAD julia);
-        brew update;
-        brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
-        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
+        brew tap staticfloat/julia &&
+        brew rm --force $(brew deps --HEAD julia) &&
+        brew update &&
+        brew install -v --only-dependencies --HEAD julia &&
+        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include" &&
+        BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas" &&
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
-        done;
-        export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
-        export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib";
+        done &&
+        export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib" &&
+        export DYLD_FALLBACK_LIBRARY_PATH="/usr/local/lib:/lib:/usr/lib:$(brew --prefix openblas-julia)/lib:$(brew --prefix suite-sparse-julia)/lib:$(brew --prefix arpack-julia)/lib" &&
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
-    - if git --no-pager grep --color -n --full-name ' $' -- \*.jl \*.scm \*.c \*.cpp \*.h; then
-        echo "Error trailing whitespace found in source file(s)";
-        echo "";
-        echo "This can often be fixed with:";
-        echo "    git rebase --whitespace=fix HEAD~1";
-        echo "or";
-        echo "    git rebase --whitespace=fix master";
-        echo "and then a forced push of the correct branch";
-        exit 1;
+    - if [ "$DOCCHECK" = "yes" ]; then
+        make check-whitespace &&
+        make -C doc html &&
+        make -C doc latex &&
+        make -C doc doctest &&
+        make -C doc linkcheck &&
+        make -C doc helpdb.jl;
+      else
+        make $BUILDOPTS prefix=/tmp/julia install &&
+        if [ `uname` = "Darwin" ]; then
+          for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
+              install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
+          done;
+        fi &&
+        cd .. && mv julia julia2 &&
+        cd /tmp/julia/share/julia/test &&
+        /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all &&
+        /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg &&
+        cd - && mv julia2 julia;
       fi
-    - make $BUILDOPTS prefix=/tmp/julia install
-    - if [ `uname` = "Darwin" ]; then
-        for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
-            install -pm755 usr/lib/lib${name}*.dylib* /tmp/julia/lib/julia/;
-        done;
-      fi
-    - cd .. && mv julia julia2
-    - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
-    - cd - && mv julia2 julia
     - echo "Ready for packaging..."

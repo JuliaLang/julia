@@ -449,6 +449,22 @@ perf: release
 perf-%: release
 	@$(MAKE) $(QUIET_MAKE) -C test/perf $*
 
+check-whitespace:
+ifneq ($(NO_GIT), 1)
+	@if git --no-pager grep --color -n --full-name ' $$' -- \*.jl \*.scm \*.c \*.cpp \*.h; then \
+	echo "Error: trailing whitespace found in source file(s)"; \
+	echo ""; \
+	echo "This can often be fixed with:"; \
+	echo "    git rebase --whitespace=fix HEAD~1"; \
+	echo "or"; \
+	echo "    git rebase --whitespace=fix master"; \
+	echo "and then a forced push of the correct branch"; \
+	exit 1; \
+	fi
+else
+       $(warn "Skipping whitespace check because git is unavailable")
+endif
+
 # download target for some hardcoded windows dependencies
 .PHONY: win-extras wine_path
 win-extras:
