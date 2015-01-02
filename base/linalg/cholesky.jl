@@ -90,7 +90,7 @@ function cholfact(x::Number, uplo::Symbol=:U)
     Cholesky(xf, uplo)
 end
 
-chol(A::AbstractMatrix, uplo::Symbol=:U) = chol!(copy(A), uplo)
+chol{T}(A::AbstractMatrix{T}, uplo::Symbol=:U) = (S = promote_type(typeof(chol(one(T))),Float32); S != T ? chol!(convert(AbstractMatrix{S}, A), uplo) : chol!(copy(A), uplo))
 function chol!(x::Number, uplo::Symbol=:U)
     rx = real(x)
     rx == abs(x) || throw(DomainError())

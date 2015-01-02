@@ -659,6 +659,8 @@ function write_prompt(terminal, p::Prompt)
 end
 write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 
+### Keymap Support
+
 normalize_key(key::Char) = string(key)
 normalize_key(key::Integer) = normalize_key(char(key))
 function normalize_key(key::AbstractString)
@@ -673,16 +675,16 @@ function normalize_key(key::AbstractString)
             c, i = next(key, i)
             write(buf, uppercase(c)-64)
         elseif c == '\\'
-            c, i == next(key, i)
+            c, i = next(key, i)
             if c == 'C'
-                c, i == next(key, i)
+                c, i = next(key, i)
                 @assert c == '-'
-                c, i == next(key, i)
+                c, i = next(key, i)
                 write(buf, uppercase(c)-64)
             elseif c == 'M'
-                c, i == next(key, i)
+                c, i = next(key, i)
                 @assert c == '-'
-                c, i == next(key, i)
+                c, i = next(key, i)
                 write(buf, '\e')
                 write(buf, c)
             end
@@ -694,16 +696,31 @@ function normalize_key(key::AbstractString)
 end
 
 function normalize_keys(keymap::Dict)
-    return [normalize_key(k) => v for (k,v) in keymap]
+    ret = Dict{Any,Any}()
+    for (k,v) in keymap
+        normalized = normalize_key(k)
+        if haskey(ret,normalized)
+            error("""Multiple spellings of a key in a single keymap
+                     (\"$k\" conflicts with existing mapping)""")
+        end
+        ret[normalized] = v
+    end
+    return ret
 end
 
-function add_nested_key!(keymap::Dict, key, value)
+function add_nested_key!(keymap::Dict, key, value; override = false)
     i = start(key)
     while !done(key, i)
         c, i = next(key, i)
         if c in keys(keymap)
-            if !isa(keymap[c], Dict)
-                error("Conflicting Definitions for keyseq " * escape_string(key) * " within one keymap")
+            if done(key, i) && override
+                # isa(keymap[c], Dict) - In this case we're overriding a prefix of an existing command
+                keymap[c] = value
+                break
+            else
+                if !isa(keymap[c], Dict)
+                    error("Conflicting definitions for keyseq " * escape_string(key) * " within one keymap")
+                end
             end
         elseif done(key, i)
             keymap[c] = value
@@ -715,36 +732,26 @@ function add_nested_key!(keymap::Dict, key, value)
     end
 end
 
-# Turn a Dict{Any,Any} into a Dict{Char,Any}
-# For now we use \0 to represent unknown chars so that they are sorted before everything else
-# If we ever actually want to match \0 in input, this will have to be reworked
-function normalize_keymap(keymap::Dict)
-    ret = Dict{Char,Any}()
-    direct_keys = filter((k,v) -> isa(v, Union(Function, Void)), keymap)
-    # first direct entries
-    for key in keys(direct_keys)
-        add_nested_key!(ret, key, keymap[key])
-    end
-    # then redirected entries
-    for key in setdiff(keys(keymap), keys(direct_keys))
-        value = normalize_key(keymap[key])
-        haskey(keymap, value) || error("Could not find redirected value " * escape_string(keymap[key]))
-        add_nested_key!(ret, key, keymap[value])
-    end
-    ret
+# Redirect a key as if `seq` had been the keysequence instead in a lazy fashion.
+# This is different from the default eager redirect, which only looks at the current and lower
+# layers of the stack.
+immutable KeyAlias
+    seq::ASCIIString
+    KeyAlias(seq) = new(normalize_key(seq))
 end
 
-match_input(k::Function, s, term, cs) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
-match_input(k::Void, s, term, cs) = (s,p) -> return :ok
-function match_input(keymap::Dict, s, term=terminal(s), cs=Char[])
+match_input(k::Function, s, term, cs, keymap) = (update_key_repeats(s, cs); return keymap_fcn(k, s, ByteString(cs)))
+match_input(k::Void, s, term, cs, keymap) = (s,p) -> return :ok
+match_input(k::KeyAlias, s, term, cs, keymap) = match_input(keymap, s, IOBuffer(k.seq), Char[], keymap)
+function match_input(k::Dict, s, term=terminal(s), cs=Char[], keymap = k)
     # if we run out of characters to match before resolving an action,
     # return an empty keymap function
     eof(term) && return keymap_fcn(nothing, s, "")
     c = read(term, Char)
     push!(cs, c)
-    k = haskey(keymap, c) ? c : '\0'
+    key = haskey(k, c) ? c : '\0'
     # if we don't match on the key, look for a default action then fallback on 'nothing' to ignore
-    return match_input(get(keymap, k, nothing), s, term, cs)
+    return match_input(get(k, key, nothing), s, term, cs, keymap)
 end
 
 keymap_fcn(f::Void, s, c) = (s, p) -> return :ok
@@ -766,6 +773,42 @@ function update_key_repeats(s::MIState, keystroke)
     return
 end
 
+
+## Conflict fixing
+# Consider a keymap of the form
+#
+# {
+#   "**" => f
+#   "ab" => g
+# }
+#
+# Naively this is transformed into a tree as
+#
+# {
+#   '*' => {
+#       '*' => f
+#   }
+#   'a' => {
+#       'b' => g
+#   }
+# }
+#
+# However, that's not what we want, because now "ac" is
+# is not defined. We need to fix this up and turn it into
+#
+# {
+#   '*' => {
+#       '*' => f
+#   }
+#   'a' => {
+#       '*' => f
+#       'b' => g
+#   }
+# }
+#
+# i.e. copy over the appropraite default subdict
+#
+
 # deep merge where target has higher precedence
 function keymap_merge!(target::Dict, source::Dict)
     for k in keys(source)
@@ -781,7 +824,7 @@ end
 
 fixup_keymaps!(d, l, s, sk) = nothing
 function fixup_keymaps!(dict::Dict, level, s, subkeymap)
-    if level > 1
+    if level > 0
         for d in values(dict)
             fixup_keymaps!(d, level-1, s, subkeymap)
         end
@@ -799,6 +842,8 @@ end
 function add_specialisations(dict, subdict, level)
     default_branch = subdict['\0']
     if isa(default_branch, Dict)
+        # Go through all the keymaps in the default branch
+        # and copy them over to dict
         for s in keys(default_branch)
             s == '\0' && add_specialisations(dict, default_branch, level+1)
             fixup_keymaps!(dict, level, s, default_branch[s])
@@ -806,42 +851,96 @@ function add_specialisations(dict, subdict, level)
     end
 end
 
-fix_conflicts!(x) = fix_conflicts!(x, 1)
-fix_conflicts!(others, level) = nothing
-function fix_conflicts!(dict::Dict, level)
+postprocess!(others) = nothing
+function postprocess!(dict::Dict)
     # needs to be done first for every branch
     if haskey(dict, '\0')
-        add_specialisations(dict, dict, level)
+        add_specialisations(dict, dict, 1)
+    else
+        dict['\0'] = (args...)->error("Unrecognized input")
     end
     for (k,v) in dict
         k == '\0' && continue
-        fix_conflicts!(v, level+1)
+        postprocess!(v)
     end
 end
 
-function keymap_prepare(keymap::Dict)
-    if !haskey(keymap, "\0")
-        keymap["\0"] = (o...)->error("Unrecognized input")
+function getEntry(keymap,key)
+    v = keymap
+    for c in key
+        if !haskey(v,c)
+            return nothing
+        end
+        v = v[c]
     end
-    keymap = normalize_keymap(keymap)
-    fix_conflicts!(keymap)
-    keymap
+    return v
+end
+
+# `target` is the total keymap being built up, already being a nested tree of Dicts.
+# source is the keymap specified by the user (with normalized keys)
+function keymap_merge(target,source)
+    ret = copy(target)
+    direct_keys = filter((k,v) -> isa(v, Union(Function, KeyAlias, Void)), source)
+    # first direct entries
+    for key in keys(direct_keys)
+        add_nested_key!(ret, key, source[key]; override = true)
+    end
+    # then redirected entries
+    for key in setdiff(keys(source), keys(direct_keys))
+        # We first resolve redirects in the source
+        value = source[key]
+        visited = Array(Any,0)
+        while isa(value, Union(Char,AbstractString))
+            value = normalize_key(value)
+            if value in visited
+                error("Eager redirection cycle detected for key " * escape_string(key))
+            end
+            push!(visited,value)
+            if !haskey(source,value)
+                break
+            end
+            value = source[value]
+        end
+
+        if isa(value, Union(Char,AbstractString))
+            value = getEntry(ret, value)
+            if value === nothing
+                error("Could not find redirected value " * escape_string(source[key]))
+            end
+        end
+        add_nested_key!(ret, key, value; override = true)
+    end
+    ret
 end
 
 function keymap_unify(keymaps)
-    length(keymaps) == 1 && return keymaps[1]
     ret = Dict{Char,Any}()
     for keymap in keymaps
-        keymap_merge!(ret, keymap)
+        ret = keymap_merge(ret, keymap)
     end
-    fix_conflicts!(ret)
+    postprocess!(ret)
     return ret
+end
+
+function validate_keymap(keymap)
+    for key in keys(keymap)
+        visited_keys = Any[key]
+        v = getEntry(keymap,key)
+        while isa(v,KeyAlias)
+            if v.seq in visited_keys
+                error("Alias cycle detected in keymap")
+            end
+            push!(visited_keys,v.seq)
+            v = getEntry(keymap,v.seq)
+        end
+    end
 end
 
 function keymap{D<:Dict}(keymaps::Array{D})
     # keymaps is a vector of prioritized keymaps, with highest priority first
-    dict = map(normalize_keys, keymaps)
-    return keymap_prepare(merge(reverse(dict)...))
+    ret = keymap_unify(map(normalize_keys, reverse(keymaps)))
+    validate_keymap(ret)
+    ret
 end
 
 const escape_defaults = merge!(
@@ -857,16 +956,18 @@ const escape_defaults = merge!(
     "\e[4**" => nothing,
     "\e[5**" => nothing,
     "\e[6**" => nothing,
-    "\e[1~" => "\e[H",
-    "\e[4~" => "\e[F",
-    "\e[7~" => "\e[H",
-    "\e[8~" => "\e[F",
-    "\eOA"  => "\e[A",
-    "\eOB"  => "\e[B",
-    "\eOC"  => "\e[C",
-    "\eOD"  => "\e[D",
-    "\eOH"  => "\e[H",
-    "\eOF"  => "\e[F",
+    # These are different spellings of arrow keys, home keys, etc.
+    # and should always do the same as the canonical key sequence
+    "\e[1~" => KeyAlias("\e[H"),
+    "\e[4~" => KeyAlias("\e[F"),
+    "\e[7~" => KeyAlias("\e[H"),
+    "\e[8~" => KeyAlias("\e[F"),
+    "\eOA"  => KeyAlias("\e[A"),
+    "\eOB"  => KeyAlias("\e[B"),
+    "\eOC"  => KeyAlias("\e[C"),
+    "\eOD"  => KeyAlias("\e[D"),
+    "\eOH"  => KeyAlias("\e[H"),
+    "\eOF"  => KeyAlias("\e[F"),
 ))
 
 function write_response_buffer(s::PromptState, data)
@@ -1074,7 +1175,7 @@ function setup_search_keymap(hp)
         # Backspace/^H
         '\b'      => (s,data,c)->(edit_backspace(data.query_buffer) ?
                         update_display_buffer(s, data) : beep(terminal(s))),
-        127       => '\b',
+        127       => KeyAlias('\b'),
         # Meta Backspace
         "\e\b"    => (s,data,c)->(edit_delete_prev_word(data.query_buffer) ?
                         update_display_buffer(s, data) : beep(terminal(s))),
@@ -1215,10 +1316,10 @@ AnyDict(
             edit_insert(s, '\n')
         end
     end,
-    '\n' => '\r',
+    '\n' => KeyAlias('\r'),
     # Backspace/^H
     '\b' => (s,o...)->edit_backspace(s),
-    127 => '\b',
+    127 => KeyAlias('\b'),
     # Meta Backspace
     "\e\b" => (s,o...)->edit_delete_prev_word(s),
     "\e\x7f" => "\e\b",
@@ -1315,7 +1416,8 @@ const prefix_history_keymap = AnyDict(
     "*"    => (s,data,c)->begin
         accept_result(s, data.histprompt);
         ps = state(s, mode(s))
-        match_input(keymap(ps, mode(s)), s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
+        map = keymap(ps, mode(s))
+        match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
     end,
     # match escape sequences for pass thru
     "\e*" => "*",
@@ -1450,7 +1552,8 @@ function prompt!(term, prompt, s = init_state(term, prompt))
         start_reading(term)
         activate(prompt, s, term)
         while true
-            state = match_input(keymap(s, prompt), s)(s, keymap_data(s, prompt))
+            map = keymap(s, prompt)
+            state = match_input(map, s)(s, keymap_data(s, prompt))
             if state == :abort
                 stop_reading(term)
                 return buffer(s), false, false

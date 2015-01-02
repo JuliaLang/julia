@@ -103,7 +103,7 @@ typedef struct {
 static size_t jl_new_bits_align(jl_value_t *dt)
 {
     if (jl_is_tuple(dt)) {
-        size_t i, l = jl_tuple_len(dt), align = 0;
+        size_t i, l = jl_tuple_len(dt), align = 1;
         for (i = 0; i < l; i++) {
             size_t l = jl_new_bits_align(jl_tupleref(dt,i));
             if (l > align)
@@ -605,7 +605,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
 
 void jl_compute_field_offsets(jl_datatype_t *st)
 {
-    size_t sz = 0, alignm = 0;
+    size_t sz = 0, alignm = 1;
     int ptrfree = 1;
 
     for(size_t i=0; i < jl_tuple_len(st->types); i++) {
@@ -674,7 +674,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->instance = NULL;
     t->struct_decl = NULL;
     t->size = 0;
-    t->alignment = 0;
+    t->alignment = 1;
 
     if (tn == NULL) {
         t->name = NULL;

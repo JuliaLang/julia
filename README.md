@@ -378,7 +378,7 @@ Now you should be able to run Julia like this:
 
     julia
 
-On Windows, double-click `julia.bat`.
+On Windows, double-click `usr/bin/julia.exe`.
 
 If everything works correctly, you will see a Julia banner and an interactive prompt into which you can enter expressions for evaluation.
 You can read about [getting started](http://julialang.org/manual/getting-started) in the manual.

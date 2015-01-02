@@ -27,7 +27,7 @@ function edit(file::AbstractString, line::Integer)
     no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if beginswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim" || edname == "nano"
+    elseif edname == "vim" || edname == "nvim" || edname == "nano"
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
@@ -203,6 +203,30 @@ function which(f, t::(Type...))
     ms[1]
 end
 
+# displaying type-ambiguity warnings
+
+function code_warntype(io::IO, f, t::(Type...))
+    global show_expr_type_emphasize
+    state = show_expr_type_emphasize::Bool
+    ct = code_typed(f, t)
+    show_expr_type_emphasize::Bool = true
+    for ast in ct
+        println(io, "Variables:")
+        vars = ast.args[2][2]
+        for v in vars
+            print(io, "  ", v[1])
+            show_expr_type(io, v[2])
+            print(io, '\n')
+        end
+        print(io, "\nBody:\n  ")
+        show_unquoted(io, ast.args[3], 2)
+        print(io, '\n')
+    end
+    show_expr_type_emphasize::Bool = false
+    nothing
+end
+code_warntype(f, t::(Type...)) = code_warntype(STDOUT, f, t)
+
 typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
 
 function gen_call_with_extracted_types(fcn, ex0)
@@ -248,7 +272,7 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_lowered, :code_llvm, :code_native]
+for fname in [:which, :less, :edit, :code_typed, :code_warntype, :code_lowered, :code_llvm, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
@@ -375,7 +399,7 @@ function runtests(tests = ["all"], numcores = ceil(Int,CPU_CORES/2))
     ENV2 = copy(ENV)
     ENV2["JULIA_CPU_CORES"] = "$numcores"
     try
-        run(setenv(`$(joinpath(JULIA_HOME, "julia")) $(joinpath(JULIA_HOME,
+        run(setenv(`$(julia_cmd()) $(joinpath(JULIA_HOME,
             Base.DATAROOTDIR, "julia", "test", "runtests.jl")) $tests`, ENV2))
     catch
         buf = PipeBuffer()

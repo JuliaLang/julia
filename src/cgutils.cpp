@@ -1,5 +1,21 @@
 // utility procedures used in code generation
 
+#if defined(USE_MCJIT) && defined(_OS_WINDOWS_)
+template<class T> // for GlobalObject's
+static T* addComdat(T *G)
+{
+    if (imaging_mode) {
+        Comdat *jl_Comdat = shadow_module->getOrInsertComdat(G->getName());
+        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
+        G->setComdat(jl_Comdat);
+    }
+    return G;
+}
+#else
+template<class T>
+static T* addComdat(T *G) { return G; }
+#endif
+
 // Fixing up references to other modules for MCJIT
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
@@ -39,9 +55,14 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
     return Callee;
 }
 
+#ifdef LLVM35
+static inline void add_named_global(GlobalObject *gv, void *addr)
+#else
 static inline void add_named_global(GlobalValue *gv, void *addr)
+#endif
 {
 #ifdef USE_MCJIT
+    addComdat(gv);
     sys::DynamicLibrary::AddSymbol(gv->getName(),addr);
 #else
     jl_ExecutionEngine->addGlobalMapping(gv,addr);
@@ -74,7 +95,7 @@ static GlobalVariable *stringConst(const std::string &txt)
                                                        (const unsigned char*)txt.c_str(),
                                                        txt.length()+1)),
 #endif
-        vname);
+                                vname);
         stringConstants[txt] = gv;
         strno++;
     }
@@ -159,6 +180,8 @@ public:
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
+                if (F->getName().empty())
+                    return CloneFunctionProto(F);
                 Function *shadow = srcModule->getFunction(F->getName());
                 if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
@@ -199,10 +222,12 @@ public:
             newGV->copyAttributesFrom(GV);
             if (GV->isDeclaration())
                 return newGV;
-            uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
-            if (addr != 0) {
-                newGV->setExternallyInitialized(true);
-                return newGV;
+            if (!GV->getName().empty()) {
+                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
+                if (addr != 0) {
+                    newGV->setExternallyInitialized(true);
+                    return newGV;
+                }
             }
             std::map<Value*, void *>::iterator it;
             it = llvm_to_jl_value.find(GV);
@@ -256,40 +281,42 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
     // emit the variable table into the code image. used just before dumping bitcode.
     // afterwards, call eraseFromParent on everything in globalvars to reset code generator.
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
-    globalvars.push_back(new GlobalVariable(
-            *mod,
-            atype,
-            true,
-            GlobalVariable::ExternalLinkage,
-            ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
-            "jl_sysimg_gvars"));
-    globalvars.push_back(new GlobalVariable(
-            *mod,
-            T_size,
-            true,
-            GlobalVariable::ExternalLinkage,
-            ConstantInt::get(T_size,globalUnique+1),
-            "jl_globalUnique"));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    atype,
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
+                    "jl_sysimg_gvars")));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    T_size,
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    ConstantInt::get(T_size,globalUnique+1),
+                    "jl_globalUnique")));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_compileropts.cpu_target);
-    globalvars.push_back(new GlobalVariable(*mod,
-                       feature_string->getType(),
-                       true,
-                       GlobalVariable::ExternalLinkage,
-                       feature_string,
-                       "jl_sysimg_cpu_target"));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    feature_string->getType(),
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    feature_string,
+                    "jl_sysimg_cpu_target")));
 
     // For native also store the cpuid
     if (strcmp(jl_compileropts.cpu_target,"native") == 0) {
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        globalvars.push_back(new GlobalVariable(*mod,
-                           T_int64,
-                           true,
-                           GlobalVariable::ExternalLinkage,
-                           ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                           "jl_sysimg_cpu_cpuid"));
+        globalvars.push_back(addComdat(new GlobalVariable(
+                        *mod,
+                        T_int64,
+                        true,
+                        GlobalVariable::ExternalLinkage,
+                        ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
+                        "jl_sysimg_cpu_cpuid")));
     }
 }
 
@@ -314,9 +341,10 @@ static Value *julia_gv(const char *cname, void *addr)
     std::stringstream gvname;
     gvname << cname << globalUnique++;
     // no existing GlobalVariable, create one and store it
-    GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
+    GlobalVariable *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
                            false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), gvname.str());
+    addComdat(gv);
 
     // make the pointer valid for this session
 #ifdef USE_MCJIT

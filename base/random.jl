@@ -214,7 +214,7 @@ rand_ui10_raw(r::AbstractRNG)    = rand(r, UInt16)
 rand_ui23_raw(r::AbstractRNG)    = rand(r, UInt32)
 
 rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float16}) =
-    Float16(reinterpret(Float32, rand_ui10_raw(r) % UInt32 & 0x007fe000 | 0x3f800000) - 1)
+    Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
 
 rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
     reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1

@@ -46,6 +46,161 @@ run_test(test3_dict,IOBuffer("aab"))
 @test a_bar == 2
 @test b_bar == 1
 
+# Multiple spellings in the same keymap
+const test_keymap_1 = Dict(
+    "^C" => (o...)->1,
+    "\\C-C" => (o...)->2
+)
+
+@test_throws ErrorException LineEdit.keymap([test_keymap_1])
+
+a_foo = a_bar = 0
+
+const test_keymap_2 = Dict(
+    "abc" => (o...)->(global a_foo = 1)
+)
+
+const test_keymap_3 = Dict(
+    "a"  => (o...)->(global a_foo = 2),
+    "bc" => (o...)->(global a_bar = 3)
+)
+
+function keymap_fcn(keymaps)
+    d = LineEdit.keymap(keymaps)
+    f = buf->(LineEdit.match_input(d, nothing, buf)(nothing,nothing))
+end
+
+let f = keymap_fcn([test_keymap_3, test_keymap_2])
+    buf = IOBuffer("abc")
+    f(buf); f(buf)
+    @test a_foo == 2
+    @test a_bar == 3
+    @test eof(buf)
+end
+
+# Eager redirection when the redirected-to behavior is changed.
+
+a_foo = 0
+
+const test_keymap_4 = Dict(
+    "a" => (o...)->(global a_foo = 1),
+    "b" => "a",
+    "c" => (o...)->(global a_foo = 2),
+)
+
+const test_keymap_5 = Dict(
+    "a" => (o...)->(global a_foo = 3),
+    "d" => "c"
+)
+
+let f = keymap_fcn([test_keymap_5, test_keymap_4])
+    buf = IOBuffer("abd")
+    f(buf)
+    @test a_foo == 3
+    f(buf)
+    @test a_foo == 1
+    f(buf)
+    @test a_foo == 2
+    @test eof(buf)
+end
+
+# Eager redirection with cycles
+
+const test_cycle = Dict(
+    "a" => "b",
+    "b" => "a"
+)
+
+@test_throws ErrorException keymap([test_cycle])
+
+# Lazy redirection with Cycles
+
+const level1 = Dict(
+    "a" => LineEdit.KeyAlias("b")
+)
+
+const level2a = Dict(
+    "b" => "a"
+)
+
+const level2b = Dict(
+    "b" => LineEdit.KeyAlias("a")
+)
+
+@test_throws ErrorException keymap([level2a,level1])
+@test_throws ErrorException keymap([level2b,level1])
+
+# Lazy redirection functionality test
+
+a_foo = 0
+
+const test_keymap_6 = Dict(
+    "a" => (o...)->(global a_foo = 1),
+    "b" => LineEdit.KeyAlias("a"),
+    "c" => (o...)->(global a_foo = 2),
+)
+
+const test_keymap_7 = Dict(
+    "a" => (o...)->(global a_foo = 3),
+    "d" => "c"
+)
+
+let f = keymap_fcn([test_keymap_7, test_keymap_6])
+    buf = IOBuffer("abd")
+    f(buf)
+    @test a_foo == 3
+    a_foo = 0
+    f(buf)
+    @test a_foo == 3
+    f(buf)
+    @test a_foo == 2
+    @test eof(buf)
+end
+
+# Test requiring postprocessing (see conflict fixing in LineEdit.jl )
+
+global path1 = 0
+global path2 = 0
+global path3 = 0
+
+const test_keymap_8 = Dict(
+    "**" => (o...)->(global path1 += 1),
+    "ab" => (o...)->(global path2 += 1),
+    "cd" => (o...)->(global path3 += 1),
+    "d" => (o...)->(error("This is not the key you're looking for"))
+)
+
+let f = keymap_fcn([test_keymap_8])
+    buf = IOBuffer("bbabaccd")
+    f(buf)
+    @test path1 == 1
+    f(buf)
+    @test path2 == 1
+    f(buf)
+    @test path1 == 2
+    f(buf)
+    @test path3 == 1
+    @test eof(buf)
+end
+
+global path1 = 0
+global path2 = 0
+
+const test_keymap_9 = Dict(
+    "***" => (o...)->(global path1 += 1),
+    "*a*" => (o...)->(global path2 += 1)
+)
+
+let f = keymap_fcn([test_keymap_9])
+    buf = IOBuffer("abaaaa")
+    f(buf)
+    @test path1 == 1
+    f(buf)
+    @test path2 == 1
+    @test eof(buf)
+end
+
+
 ## edit_move{left,right} ##
 buf = IOBuffer("a\na\na\n")
 seek(buf, 0)

@@ -1,5 +1,7 @@
 .. _man-parallel-computing:
 
+.. currentmodule:: Base
+
 ********************
  Parallel Computing
 ********************
@@ -35,9 +37,9 @@ function on certain arguments on another (possibly the same) process.
 A remote call returns a remote reference to its result. Remote calls
 return immediately; the process that made the call proceeds to its
 next operation while the remote call happens somewhere else. You can
-wait for a remote call to finish by calling ``wait`` on its remote
+wait for a remote call to finish by calling :func:`wait` on its remote
 reference, and you can obtain the full value of the result using
-``fetch``. You can store a value to a remote reference using ``put!``.
+:func:`fetch`. You can store a value to a remote reference using :func:`put!`.
 
 Let's try this out. Starting with ``julia -p n`` provides ``n`` worker
 processes on the local machine. Generally it makes sense for ``n`` to
@@ -63,22 +65,22 @@ equal the number of CPU cores on the machine.
      1.60401  1.50111
      1.17457  1.15741
 
-The first argument to ``remotecall`` is the index of the process
+The first argument to :func:`remotecall` is the index of the process
 that will do the work. Most parallel programming in Julia does not
 reference specific processes or the number of processes available,
-but ``remotecall`` is considered a low-level interface providing
-finer control. The second argument to ``remotecall`` is the function
+but :func:`remotecall` is considered a low-level interface providing
+finer control. The second argument to :func:`remotecall` is the function
 to call, and the remaining arguments will be passed to this
 function. As you can see, in the first line we asked process 2 to
 construct a 2-by-2 random matrix, and in the second line we asked it
 to add 1 to it. The result of both calculations is available in the
-two remote references, ``r`` and ``s``. The ``@spawnat`` macro
+two remote references, ``r`` and ``s``. The :obj:`@spawnat` macro
 evaluates the expression in the second argument on the process
 specified by the first argument.
 
 Occasionally you might want a remotely-computed value immediately. This
 typically happens when you read from a remote object to obtain data
-needed by the next local operation. The function ``remotecall_fetch``
+needed by the next local operation. The function :func:`remotecall_fetch`
 exists for this purpose. It is equivalent to ``fetch(remotecall(...))``
 but is more efficient.
 
@@ -87,12 +89,12 @@ but is more efficient.
     julia> remotecall_fetch(2, getindex, r, 1, 1)
     0.10824216411304866
 
-Remember that ``getindex(r,1,1)`` is :ref:`equivalent <man-array-indexing>` to
+Remember that :func:`getindex(r,1,1) <getindex>` is :ref:`equivalent <man-array-indexing>` to
 ``r[1,1]``, so this call fetches the first element of the remote
 reference ``r``.
 
-The syntax of ``remotecall`` is not especially convenient. The macro
-``@spawn`` makes things easier. It operates on an expression rather than
+The syntax of :func:`remotecall` is not especially convenient. The macro
+:obj:`@spawn` makes things easier. It operates on an expression rather than
 a function, and picks where to do the operation for you::
 
     julia> r = @spawn rand(2,2)
@@ -106,12 +108,12 @@ a function, and picks where to do the operation for you::
     1.12376292706355074 1.18750497916607167
 
 Note that we used ``1 .+ fetch(r)`` instead of ``1 .+ r``. This is because we
-do not know where the code will run, so in general a ``fetch`` might be
+do not know where the code will run, so in general a :func:`fetch` might be
 required to move ``r`` to the process doing the addition. In this
-case, ``@spawn`` is smart enough to perform the computation on the
-process that owns ``r``, so the ``fetch`` will be a no-op.
+case, :obj:`@spawn` is smart enough to perform the computation on the
+process that owns ``r``, so the :func:`fetch` will be a no-op.
 
-(It is worth noting that ``@spawn`` is not built-in but defined in Julia
+(It is worth noting that :obj:`@spawn` is not built-in but defined in Julia
 as a :ref:`macro <man-macros>`. It is possible to define your
 own such constructs.)
 
@@ -120,7 +122,7 @@ Code Availability and Loading Packages
 --------------------------------------
 
 Your code must be available on any process that runs it. For example,
-type the following into the julia prompt::
+type the following into the Julia prompt::
 
     julia> function rand2(dims...)
              return 2*rand(dims...)
@@ -162,7 +164,7 @@ the following code::
 
 Starting julia with ``julia -p 2``, you can use this to verify the following:
 
-- ``include("DummyModule.jl")`` loads the file on just a single process (whichever one executes the statement).
+- :func:`include("DummyModule.jl") <include>` loads the file on just a single process (whichever one executes the statement).
 - ``using DummyModule`` causes the module to be loaded on all processes; however, the module is brought into scope only on the one executing the statement.
 - As long as ``DummyModule`` is loaded on process 2, commands like ::
 
@@ -171,12 +173,12 @@ Starting julia with ``julia -p 2``, you can use this to verify the following:
 
   allow you to store an object of type ``MyType`` on process 2 even if ``DummyModule`` is not in scope on process 2.
 
-You can force a command to run on all processes using the ``@everywhere`` macro.
+You can force a command to run on all processes using the :obj:`@everywhere` macro.
 Consequently, an easy way to load *and* use a package on all processes is::
 
     @everywhere using DummyModule
 
-``@everywhere`` can also be used to directly define a function on all processes::
+:obj:`@everywhere` can also be used to directly define a function on all processes::
 
     julia> @everywhere id = myid()
 
@@ -187,10 +189,10 @@ A file can also be preloaded on multiple processes at startup, and a driver scri
 
     julia -p <n> -L file1.jl -L file2.jl driver.jl
 
-Each process has an associated identifier. The process providing the interactive julia prompt
-always has an id equal to 1, as would the julia process running the driver script in the
+Each process has an associated identifier. The process providing the interactive Julia prompt
+always has an id equal to 1, as would the Julia process running the driver script in the
 example above.
-The processes used by default for parallel operations are referred to as ``workers``.
+The processes used by default for parallel operations are referred to as "workers".
 When there is only one process, process 1 is considered a worker. Otherwise, workers are
 considered to be all processes other than process 1.
 
@@ -202,11 +204,11 @@ The base Julia installation has in-built support for two types of clusters:
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
 
-Functions ``addprocs``, ``rmprocs``, ``workers``, and others are available as a programmatic means of
+Functions :func:`addprocs`, :func:`rmprocs`, :func:`workers`, and others are available as a programmatic means of
 adding, removing and querying the processes in a cluster.
 
 Other types of clusters can be supported by writing your own custom
-``ClusterManager``, as described below in the :ref:`man-clustermanagers`
+:class:`ClusterManager`, as described below in the :ref:`man-clustermanagers`
 section.
 
 Data Movement
@@ -218,9 +220,9 @@ sent is critical to achieving performance and scalability. To this end,
 it is important to understand the data movement performed by Julia's
 various parallel programming constructs.
 
-``fetch`` can be considered an explicit data movement operation, since
+:func:`fetch` can be considered an explicit data movement operation, since
 it directly asks that an object be moved to the local machine.
-``@spawn`` (and a few related constructs) also moves data, but this is
+:obj:`@spawn` (and a few related constructs) also moves data, but this is
 not as obvious, hence it can be called an implicit data movement
 operation. Consider these two approaches to constructing and squaring a
 random matrix::
@@ -237,7 +239,7 @@ random matrix::
     fetch(Bref)
 
 The difference seems trivial, but in fact is quite significant due to
-the behavior of ``@spawn``. In the first method, a random matrix is
+the behavior of :obj:`@spawn`. In the first method, a random matrix is
 constructed locally, then sent to another process where it is squared.
 In the second method, a random matrix is both constructed and squared on
 another process. Therefore the second method sends much less data than
@@ -249,10 +251,10 @@ more thought and likely some measurement. For example, if the first
 process needs matrix ``A`` then the first method might be better. Or,
 if computing ``A`` is expensive and only the current process has it,
 then moving it to another process might be unavoidable. Or, if the
-current process has very little to do between the ``@spawn`` and
+current process has very little to do between the :obj:`@spawn` and
 ``fetch(Bref)`` then it might be better to eliminate the parallelism
 altogether. Or imagine ``rand(1000,1000)`` is replaced with a more
-expensive operation. Then it might make sense to add another ``@spawn``
+expensive operation. Then it might make sense to add another :obj:`@spawn`
 statement just for this step.
 
 Parallel Map and Loops
@@ -261,7 +263,7 @@ Parallel Map and Loops
 Fortunately, many useful parallel computations do not require data
 movement. A common example is a Monte Carlo simulation, where multiple
 processes can handle independent simulation trials simultaneously. We
-can use ``@spawn`` to flip coins on two processes. First, write the
+can use :obj:`@spawn` to flip coins on two processes. First, write the
 following function in ``count_heads.jl``::
 
     function count_heads(n)
@@ -295,7 +297,7 @@ associative, so that it does not matter what order the operations are
 performed in.
 
 Notice that our use of this pattern with ``count_heads`` can be
-generalized. We used two explicit ``@spawn`` statements, which limits
+generalized. We used two explicit :obj:`@spawn` statements, which limits
 the parallelism to two processes. To run on any number of processes,
 we can use a *parallel for loop*, which can be written in Julia like
 this::
@@ -342,26 +344,26 @@ vector ``a`` shared by all processes.
 
 As you could see, the reduction operator can be omitted if it is not needed.
 In that case, the loop executes asynchronously, i.e. it spawns independent
-tasks on all available workers and returns an array of ``RemoteRef``
+tasks on all available workers and returns an array of :class:`RemoteRef`
 immediately without waiting for completion.
-The caller can wait for the ``RemoteRef`` completions at a later
-point by calling ``fetch`` on them, or wait for completion at the end of the
-loop by prefixing it with ``@sync``, like ``@sync @parallel for``.
+The caller can wait for the :class:`RemoteRef` completions at a later
+point by calling :func:`fetch` on them, or wait for completion at the end of the
+loop by prefixing it with :obj:`@sync`, like ``@sync @parallel for``.
 
 In some cases no reduction operator is needed, and we merely wish to
 apply a function to all integers in some range (or, more generally, to
 all elements in some collection). This is another useful operation
-called *parallel map*, implemented in Julia as the ``pmap`` function.
+called *parallel map*, implemented in Julia as the :func:`pmap` function.
 For example, we could compute the singular values of several large
 random matrices in parallel as follows::
 
     M = {rand(1000,1000) for i=1:10}
     pmap(svd, M)
 
-Julia's ``pmap`` is designed for the case where each function call does
+Julia's :func:`pmap` is designed for the case where each function call does
 a large amount of work. In contrast, ``@parallel for`` can handle
 situations where each iteration is tiny, perhaps merely summing two
-numbers. Only worker processes are used by both ``pmap`` and ``@parallel for``
+numbers. Only worker processes are used by both :func:`pmap` and ``@parallel for``
 for the parallel computation. In case of ``@parallel for``, the final reduction
 is done on the calling process.
 
@@ -376,7 +378,7 @@ Scheduling
 Julia's parallel programming platform uses
 :ref:`man-tasks` to switch among
 multiple computations. Whenever code performs a communication operation
-like ``fetch`` or ``wait``, the current task is suspended and a
+like :func:`fetch` or :func:`wait`, the current task is suspended and a
 scheduler picks another task to run. A task is restarted when the event
 it is waiting for completes.
 
@@ -398,7 +400,7 @@ If one process handles both 800x800 matrices and another handles both
 600x600 matrices, we will not get as much scalability as we could. The
 solution is to make a local task to "feed" work to each process when
 it completes its current task. This can be seen in the implementation of
-``pmap``::
+:func:`pmap`::
 
     function pmap(f, lst)
         np = nprocs()  # determine the number of processes available
@@ -426,18 +428,18 @@ it completes its current task. This can be seen in the implementation of
         results
     end
 
-``@async`` is similar to ``@spawn``, but only runs tasks on the
+:obj:`@async` is similar to :obj:`@spawn`, but only runs tasks on the
 local process. We use it to create a "feeder" task for each process.
 Each task picks the next index that needs to be computed, then waits for
 its process to finish, then repeats until we run out of indexes. Note
 that the feeder tasks do not begin to execute until the main task
-reaches the end of the ``@sync`` block, at which point it surrenders
+reaches the end of the :obj:`@sync` block, at which point it surrenders
 control and waits for all the local tasks to complete before returning
 from the function. The feeder tasks are able to share state via
-``nextidx()`` because they all run on the same process. No locking is
+:func:`nextidx` because they all run on the same process. No locking is
 required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
-points: in this case, when ``remotecall_fetch`` is called.
+points: in this case, when :func:`remotecall_fetch` is called.
 
 Distributed Arrays
 ------------------
@@ -450,10 +452,10 @@ on one machine. Each process operates on the part of the array it
 owns, providing a ready answer to the question of how a program should
 be divided among machines.
 
-Julia distributed arrays are implemented by the ``DArray`` type. A
-``DArray`` has an element type and dimensions just like an ``Array``.
-A ``DArray`` can also use arbitrary array-like types to represent the local
-chunks that store actual data. The data in a ``DArray`` is distributed by
+Julia distributed arrays are implemented by the :class:`DArray` type. A
+:class:`DArray` has an element type and dimensions just like an :class:`Array`.
+A :class:`DArray` can also use arbitrary array-like types to represent the local
+chunks that store actual data. The data in a :class:`DArray` is distributed by
 dividing the index space into some number of blocks in each dimension.
 
 Common kinds of arrays can be constructed with functions beginning with
@@ -463,7 +465,7 @@ Common kinds of arrays can be constructed with functions beginning with
     dones(100,100,10)
     drand(100,100,10)
     drandn(100,100,10)
-    dfill(x, 100,100,10)
+    dfill(x,100,100,10)
 
 In the last case, each element will be initialized to the specified
 value ``x``. These functions automatically pick a distribution for you.
@@ -474,8 +476,8 @@ data should be distributed::
 
 The second argument specifies that the array should be created on the first
 four workers. When dividing data among a large number of processes,
-one often sees diminishing returns in performance. Placing ``DArray``\ s
-on a subset of processes allows multiple ``DArray`` computations to
+one often sees diminishing returns in performance. Placing :class:`DArray`\ s
+on a subset of processes allows multiple :class:`DArray` computations to
 happen at once, with a higher ratio of work to communication on each
 process.
 
@@ -486,24 +488,24 @@ dimension will be divided into 4 pieces. Therefore each local chunk will be
 of size ``(100,25)``. Note that the product of the distribution array must
 equal the number of processes.
 
-``distribute(a::Array)`` converts a local array to a distributed array.
+:func:`distribute(a::Array) <distribute>` converts a local array to a distributed array.
 
-``localpart(a::DArray)`` obtains the locally-stored portion
-of a ``DArray``.
+:func:`localpart(a::DArray) <localpart>` obtains the locally-stored portion
+of a :class:`DArray`.
 
-``localindexes(a::DArray)`` gives a tuple of the index ranges owned by the
+:func:`localindexes(a::DArray) <localindexes>` gives a tuple of the index ranges owned by the
 local process.
 
-``convert(Array, a::DArray)`` brings all the data to the local process.
+:func:`convert(Array, a::DArray) <convert>` brings all the data to the local process.
 
-Indexing a ``DArray`` (square brackets) with ranges of indexes always
-creates a ``SubArray``, not copying any data.
+Indexing a :class:`DArray` (square brackets) with ranges of indexes always
+creates a :class:`SubArray`, not copying any data.
 
 
 Constructing Distributed Arrays
 -------------------------------
 
-The primitive ``DArray`` constructor has the following somewhat elaborate signature::
+The primitive :func:`DArray <DArray>` constructor has the following somewhat elaborate signature::
 
     DArray(init, dims[, procs, dist])
 
@@ -517,12 +519,12 @@ distributed array should be divided into in each dimension.
 The last two arguments are optional, and defaults will be used if they
 are omitted.
 
-As an example, here is how to turn the local array constructor ``fill``
+As an example, here is how to turn the local array constructor :func:`fill`
 into a distributed array constructor::
 
     dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
 
-In this case the ``init`` function only needs to call ``fill`` with the
+In this case the ``init`` function only needs to call :func:`fill` with the
 dimensions of the local piece it is creating.
 
 Distributed Array Operations
@@ -560,10 +562,10 @@ following code accomplishes this::
 
 As you can see, we use a series of indexing expressions to fetch
 data into a local array ``old``. Note that the ``do`` block syntax is
-convenient for passing ``init`` functions to the ``DArray`` constructor.
+convenient for passing ``init`` functions to the :class:`DArray` constructor.
 Next, the serial function ``life_rule`` is called to apply the update rules
-to the data, yielding the needed ``DArray`` chunk. Nothing about ``life_rule``
-is ``DArray``\ -specific, but we list it here for completeness::
+to the data, yielding the needed :class:`DArray` chunk. Nothing about ``life_rule``
+is :class:`DArray`\ -specific, but we list it here for completeness::
 
     function life_rule(old)
         m, n = size(old)
@@ -585,22 +587,22 @@ Shared Arrays (Experimental)
 -----------------------------------------------
 
 Shared Arrays use system shared memory to map the same array across
-many processes.  While there are some similarities to a ``DArray``,
-the behavior of a ``SharedArray`` is quite different. In a ``DArray``,
+many processes.  While there are some similarities to a :class:`DArray`,
+the behavior of a :class:`SharedArray` is quite different. In a :class:`DArray`,
 each process has local access to just a chunk of the data, and no two
-processes share the same chunk; in contrast, in a ``SharedArray`` each
+processes share the same chunk; in contrast, in a :class:`SharedArray` each
 "participating" process has access to the entire array.  A
-``SharedArray`` is a good choice when you want to have a large amount
+:class:`SharedArray` is a good choice when you want to have a large amount
 of data jointly accessible to two or more processes on the same machine.
 
-``SharedArray`` indexing (assignment and accessing values) works just
+:class:`SharedArray` indexing (assignment and accessing values) works just
 as with regular arrays, and is efficient because the underlying memory
 is available to the local process.  Therefore, most algorithms work
-naturally on ``SharedArrays``, albeit in single-process mode.  In
-cases where an algorithm insists on an ``Array`` input, the underlying
-array can be retrieved from a ``SharedArray`` by calling ``sdata(S)``.
-For other ``AbstractArray`` types, ``sdata`` just returns the object
-itself, so it's safe to use ``sdata`` on any Array-type object.
+naturally on :class:`SharedArray`\ s, albeit in single-process mode.  In
+cases where an algorithm insists on an :class:`Array` input, the underlying
+array can be retrieved from a :class:`SharedArray` by calling :func:`sdata`.
+For other :class:`AbstractArray` types, ``sdata`` just returns the object
+itself, so it's safe to use :func:`sdata` on any Array-type object.
 
 The constructor for a shared array is of the form::
 
@@ -640,7 +642,7 @@ Here's a brief example::
    2  3  3  4
    2  7  4  4
 
-``localindexes`` provides disjoint one-dimensional ranges of indexes,
+:func:`localindexes` provides disjoint one-dimensional ranges of indexes,
 and is sometimes convenient for splitting up tasks among processes.
 You can, of course, divide the work any way you wish::
 
@@ -674,21 +676,21 @@ ClusterManagers
 
 Julia worker processes can also be spawned on arbitrary machines,
 enabling Julia's natural parallelism to function quite transparently
-in a cluster environment. The ``ClusterManager`` interface provides a
+in a cluster environment. The :class:`ClusterManager` interface provides a
 way to specify a means to launch and manage worker processes.
 
 Thus, a custom cluster manager would need to:
 
-- be a subtype of the abstract ``ClusterManager``
-- implement ``launch``, a method responsible for launching new workers
-- implement ``manage``, which is called at various events during a worker's lifetime
+- be a subtype of the abstract :class:`ClusterManager`
+- implement :func:`launch`, a method responsible for launching new workers
+- implement :func:`manage`, which is called at various events during a worker's lifetime
 
 Julia provides two in-built cluster managers:
 
-- ``LocalManager`` used when ``addprocs()`` or ``addprocs(::Integer)`` are called
-- ``SSHManager`` used when ``addprocs(::Array)`` is called with a list of hostnames
+- :class:`LocalManager`, used when :func:`addprocs` or :func:`addprocs(::Integer) <addprocs>` are called
+- :class:`SSHManager`, used when :func:`addprocs(::Array) <addprocs>` is called with a list of hostnames
 
-``addprocs(manager::FooManager)`` requires ``FooManager`` to implement::
+:func:`addprocs(manager::FooManager) <addprocs>` requires ``FooManager`` to implement::
 
     function launch(manager::FooManager, params::Dict, launched::Array, c::Condition)
         ...
@@ -699,7 +701,7 @@ Julia provides two in-built cluster managers:
     end
 
 
-As an example let us see how the ``LocalManager``, the manager responsible for
+As an example let us see how the :class:`LocalManager`, the manager responsible for
 starting workers on the same host, is implemented::
 
     immutable LocalManager <: ClusterManager
@@ -714,54 +716,55 @@ starting workers on the same host, is implemented::
         ...
     end
 
-The ``launch`` method takes the following arguments:
+The :func:`launch` method takes the following arguments:
 
-    - ``manager::ClusterManager`` - the cluster manager ``addprocs`` is called with
-    - ``params::Dict`` - all the keyword arguments passed to ``addprocs``
+    - ``manager::ClusterManager`` - the cluster manager :func:`addprocs` is called with
+    - ``params::Dict`` - all the keyword arguments passed to :func:`addprocs`
     - ``launched::Array`` - the array to append one or more ``WorkerConfig`` objects to
     - ``c::Condition`` - the condition variable to be notified as and when workers are launched
 
-The ``launch`` method is called asynchronously in a separate task. The termination of this task
-signals that all requested workers have been launched. Hence the ``launch`` function MUST exit as soon
-as all the requested workers have been launched. The julia worker MUST be launched with a ``--worker``
+The :func:`launch` method is called asynchronously in a separate task. The termination of this task
+signals that all requested workers have been launched. Hence the :func:`launch` function MUST exit as soon
+as all the requested workers have been launched. The Julia worker MUST be launched with a ``--worker``
 argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers
 to connect to it at the specified ``bind_addr`` and ``port``. Useful for multi-homed hosts.
 
 
-For every worker launched, the ``launch`` method must add a ``WorkerConfig``object with appropriate
-fields initialized to ``launched``::
+For every worker launched, the :func:`launch` method must add a :clas`WorkerConfig`
+object with appropriate fields initialized to ``launched`` ::
 
-type WorkerConfig
-    # Common fields relevant to all cluster managers
-    io::Nullable{IO}
-    host::Nullable{AbstractString}
-    port::Nullable{Integer}
+ type WorkerConfig
+     # Common fields relevant to all cluster managers
+     io::Nullable{IO}
+     host::Nullable{AbstractString}
+     port::Nullable{Integer}
 
-    # Used when launching additional workers at a host
-    count::Nullable{Union(Int, Symbol)}
-    exeflags::Nullable{Cmd}
+     # Used when launching additional workers at a host
+     count::Nullable{Union(Int, Symbol)}
+     exeflags::Nullable{Cmd}
 
-    # External cluster managers can use this to store information at a per-worker level
-    # Can be a dict if multiple fields need to be stored.
-    userdata::Nullable{Any}
+     # External cluster managers can use this to store information at a per-worker level
+     # Can be a dict if multiple fields need to be stored.
+     userdata::Nullable{Any}
 
-    # SSHManager / SSH tunnel connections to workers
-    tunnel::Nullable{Bool}
-    bind_addr::Nullable{AbstractString}
-    sshflags::Nullable{Cmd}
-    max_parallel::Nullable{Integer}
+     # SSHManager / SSH tunnel connections to workers
+     tunnel::Nullable{Bool}
+     bind_addr::Nullable{AbstractString}
+     sshflags::Nullable{Cmd}
+     max_parallel::Nullable{Integer}
 
-    .....
-end
+     .....
+ end
 
-Most of the fields in ``WorkerConfig`` are used by the inbuilt managers.
+Most of the fields in :class:`WorkerConfig` are used by the inbuilt managers.
 Custom cluster managers would typically specify only ``io`` or ``host`` / ``port``:
 
-If ``io`` is specified, it is used to read host/port information. A julia worker prints out
-its bind address and port at startup. This allows julia workers to listen on any free port
-available instead of requiring worker ports to be configured manually.
+If ``io`` is specified, it is used to read host/port information. A Julia
+worker prints out its bind address and port at startup. This allows Julia
+workers to listen on any free port available instead of requiring worker ports
+to be configured manually.
 
-If ``io`` is not specfied, ``host`` and ``port`` are used to connect.
+If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 
 ``count`` and ``exeflags`` are relevant for launching additional workers from a worker.
 For example, a cluster manager may launch a single worker per node, and use that to launch
@@ -776,13 +779,13 @@ required to connect to the workers from the master process.
 
 
 
-``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
+:func:`manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol) <manage>` is called at different
 times during the worker's lifetime with different ``op`` values:
 
       - with ``:register``/``:deregister`` when a worker is added / removed
         from the Julia worker pool.
       - with ``:interrupt`` when ``interrupt(workers)`` is called. The
-        ``ClusterManager`` should signal the appropriate worker with an
+        :class:`ClusterManager` should signal the appropriate worker with an
         interrupt signal.
       - with ``:finalize`` for cleanup purposes.
 

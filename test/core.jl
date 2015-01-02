@@ -712,6 +712,24 @@ begin
     @test typeof(b) === SI{1,-2,1}
 end
 
+# pointer arithmetic
+begin
+   local a,b,c
+   a = C_NULL
+   b = C_NULL + 1
+   c = C_NULL - 1
+
+   @test a != b != c
+   @test UInt(a) == 0
+   @test UInt(b) == 1
+   @test UInt(c) == typemax(UInt)
+
+   @test b - a == -(a - b) == 1
+   @test c - a == -(a - c) == typemax(UInt)
+   @test c - b == -(b - c) == typemax(UInt) - 1
+   @test a < b < c
+end
+
 # pull request 1270
 begin
     local a,p, a2,p2
@@ -1976,3 +1994,32 @@ function f9134()
     end
 end
 @test_throws UndefVarError f9134()
+
+# issue #9475
+module I9475
+    arr = Array(Any, 1)
+    @eval @eval $arr[1] = 1
+end
+
+# issue #9520
+f9520a(::Any, ::Any, args...) = 15
+f9520b(::Any, ::Any, ::Any, args...) = 23
+f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+@test invoke(f9520a, (Any, Any), 1, 2) == 15
+@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
+@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
+@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+
+# jl_new_bits testing
+let x = [1,2,3]
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int,Int,Int), x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int16,(Void,),Int8,(),Int,Void,Int), x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+end
+
+# sig 2 is SIGINT per the POSIX.1-1990 standard
+@test_throws InterruptException ccall(:raise, Void, (Cint,), 2)

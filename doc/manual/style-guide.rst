@@ -1,5 +1,7 @@
 .. _man-style-guide:
 
+.. currentmodule:: Base
+
 *************
  Style Guide
 *************
@@ -19,7 +21,7 @@ Furthermore, code inside functions tends to run much faster than top level
 code, due to how Julia's compiler works.
 
 It is also worth emphasizing that functions should take arguments, instead
-of operating directly on global variables (aside from constants like ``pi``).
+of operating directly on global variables (aside from constants like :const:`pi`).
 
 Avoid writing overly-specific types
 -----------------------------------
@@ -40,7 +42,7 @@ example, don't declare an argument to be of type ``Int`` or ``Int32``
 if it really could be any integer, expressed with the abstract type
 ``Integer``.  In fact, in many cases you can omit the argument type
 altogether, unless it is needed to disambiguate from other method
-definitions, since a ``MethodError`` will be thrown anyway if a type
+definitions, since a :exc:`MethodError` will be thrown anyway if a type
 is passed that does not support any of the requisite operations.
 (This is known as `duck typing <http://en.wikipedia.org/wiki/Duck_typing>`_.)
 
@@ -52,15 +54,15 @@ For example, consider the following definitions of a function
     addone(x::Number) = x + one(x)     # any numeric type
     addone(x) = x + one(x)             # any type supporting + and one
 
-The last definition of ``addone`` handles any type supporting the
-``one`` function (which returns 1 in the same type as ``x``, which
-avoids unwanted type promotion) and the ``+`` function with those
+The last definition of ``addone`` handles any type supporting
+:func:`one` (which returns 1 in the same type as ``x``, which
+avoids unwanted type promotion) and the :obj:`+` function with those
 arguments.  The key thing to realize is that there is *no performance
 penalty* to defining *only* the general ``addone(x) = x + one(x)``,
 because Julia will automatically compile specialized versions as
 needed.  For example, the first time you call ``addone(12)``, Julia
 will automatically compile a specialized ``addone`` function for
-``x::Int`` arguments, with the call to ``one`` replaced by its inlined
+``x::Int`` arguments, with the call to :func:`one` replaced by its inlined
 value ``1``.  Therefore, the first three definitions of ``addone``
 above are completely redundant.
 
@@ -109,8 +111,8 @@ use::
 
 The Julia standard library uses this convention throughout and
 contains examples of functions with both copying and modifying forms
-(e.g., ``sort`` and ``sort!``), and others which are just modifying
-(e.g., ``push!``, ``pop!``, ``splice!``).  It is typical for
+(e.g., :func:`sort` and :func:`sort!`), and others which are just modifying
+(e.g., :func:`push!`, :func:`pop!`, :func:`splice!`).  It is typical for
 such functions to also return the modified array for convenience.
 
 Avoid strange type Unions
@@ -139,7 +141,7 @@ It is usually not much help to construct arrays like the following::
 
     a = Array(Union(Int,AbstractString,Tuple,Array), n)
 
-In this case ``cell(n)`` is better. It is also more helpful to the compiler
+In this case :func:`cell(n) <cell>` is better. It is also more helpful to the compiler
 to annotate specific uses (e.g. ``a[i]::Int``) than to try to pack many
 alternatives into one type.
 
@@ -148,14 +150,14 @@ Use naming conventions consistent with Julia's ``base/``
 
 - modules and type names use capitalization and camel case:
   ``module SparseMatrix``,  ``immutable UnitRange``.
-- functions are lowercase (``maximum``, ``convert``) and,
-  when readable, with multiple words squashed together (``isequal``, ``haskey``).
+- functions are lowercase (:func:`maximum`, :func:`convert`) and,
+  when readable, with multiple words squashed together (:func:`isequal`, :func:`haskey`).
   When necessary, use underscores as word separators.
   Underscores are also used to indicate a combination of
-  concepts (``remotecall_fetch`` as a more efficient implementation
-  of ``remotecall(fetch(...))``) or as modifiers (``sum_kbn``).
+  concepts (:func:`remotecall_fetch` as a more efficient implementation
+  of ``remotecall(fetch(...))``) or as modifiers (:func:`sum_kbn`).
 - conciseness is valued, but avoid abbreviation
-  (``indexin`` rather than ``indxin``) as it becomes difficult to
+  (:func:`indexin` rather than ``indxin()``) as it becomes difficult to
   remember whether and how particular words are abbreviated.
 
 If a function name requires multiple words, consider whether it might
@@ -183,7 +185,7 @@ Don't overuse ...
 
 Splicing function arguments can be addictive. Instead of ``[a..., b...]``,
 use simply ``[a, b]``, which already concatenates arrays.
-``collect(a)`` is better than ``[a...]``, but since ``a`` is already iterable
+:func:`collect(a) <collect>` is better than ``[a...]``, but since ``a`` is already iterable
 it is often even better to leave it alone, and not convert it to an array.
 
 Don't use unnecessary static parameters
@@ -198,7 +200,7 @@ should be written as::
     foo(x::Real) = ...
 
 instead, especially if ``T`` is not used in the function body.
-Even if ``T`` is used, it can be replaced with ``typeof(x)`` if convenient.
+Even if ``T`` is used, it can be replaced with :func:`typeof(x) <typeof>` if convenient.
 There is no performance difference.
 Note that this is not a general caution against static parameters, just
 against uses where they are not needed.
@@ -233,7 +235,7 @@ Don't overuse macros
 
 Be aware of when a macro could really be a function instead.
 
-Calling ``eval`` inside a macro is a particularly dangerous warning sign;
+Calling :func:`eval` inside a macro is a particularly dangerous warning sign;
 it means the macro will only work when called at the top level. If such
 a macro is written as a function instead, it will naturally have access
 to the run-time values it needs.
@@ -267,13 +269,13 @@ It is possible to write definitions like the following::
 
 This would provide custom showing of vectors with a specific new element type.
 While tempting, this should be avoided. The trouble is that users will expect
-a well-known type like ``Vector`` to behave in a certain way, and overly
+a well-known type like :func:`Vector` to behave in a certain way, and overly
 customizing its behavior can make it harder to work with.
 
 Be careful with type equality
 -----------------------------
 
-You generally want to use ``isa`` and ``<:`` (``issubtype``) for testing types,
+You generally want to use :func:`isa` and ``<:`` (:func:`issubtype`) for testing types,
 not ``==``. Checking types for exact equality typically only makes sense
 when comparing to a known concrete type (e.g. ``T == Float64``), or if you
 *really, really* know what you're doing.
@@ -285,4 +287,5 @@ Since higher-order functions are often called with anonymous functions, it
 is easy to conclude that this is desirable or even necessary.
 But any function can be passed directly, without being "wrapped" in an
 anonymous function. Instead of writing ``map(x->f(x), a)``, write
-``map(f, a)``.
+:func:`map(f, a) <map>`.
+

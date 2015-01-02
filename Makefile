@@ -67,7 +67,7 @@ release-candidate: release test
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
 	@# Check to see if the above make invocations changed anything important
-	@if [ -n "$(git status --porcelain)" ]; then \
+	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Git repository dirty; Verify and commit changes to the repository, then retry"; \
 		exit 1; \
 	fi

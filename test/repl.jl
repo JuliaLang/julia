@@ -169,6 +169,19 @@ begin
     @test buffercontents(LineEdit.buffer(s)) == "2 + 2"
     LineEdit.history_next(s, hp)
 
+    # Test that the same holds for prefix search
+    ps = LineEdit.state(s,interface.modes[5])
+    LineEdit.history_prev_prefix(ps, hp, "")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "2 + 2"
+    LineEdit.history_prev_prefix(ps, hp, "")
+    @test ps.parent == shell_mode
+    @test LineEdit.input_string(ps) == "ls"
+    LineEdit.history_prev_prefix(ps, hp, "sh")
+    @test ps.parent == repl_mode
+    @test LineEdit.input_string(ps) == "shell"
+    LineEdit.history_next_prefix(ps, hp, "sh")
+
     # Test that searching backwards puts you into the correct mode and
     # skips invalid modes.
     LineEdit.enter_search(s, histp, true)

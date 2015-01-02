@@ -177,7 +177,7 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export TcpSocket, UdpSocket, IpAddr
+export UdpSocket
 const TcpSocket = TCPSocket
 const UdpSocket = UDPSocket
 const IpAddr = IPAddr
@@ -246,6 +246,10 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
+export Base64Pipe, base64
+const Base64Pipe = Base64EncodePipe
+const base64 = base64encode
+
 @deprecate prevind(a::Any, i::Integer)   i-1
 @deprecate nextind(a::Any, i::Integer)   i+1
 
@@ -254,3 +258,4 @@ const Uint128 = UInt128
 @deprecate squeeze(X, dims) squeeze(X, tuple(dims...))
 
 @deprecate sizehint(A, n) sizehint!(A, n)
+

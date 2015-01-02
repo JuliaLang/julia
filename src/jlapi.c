@@ -22,7 +22,7 @@ DLLEXPORT char * __cdecl basename(char *);
 #include <libgen.h>
 #endif
 
-DLLEXPORT void *jl_eval_string(char *str);
+DLLEXPORT void *jl_eval_string(const char *str);
 
 int jl_is_initialized(void) { return jl_main_module!=NULL; }
 
@@ -32,7 +32,7 @@ int jl_is_initialized(void) { return jl_main_module!=NULL; }
 // Second argument is the path of a system image file (*.ji) relative to the
 // first argument path, or relative to the default julia home dir. The default
 // is something like ../lib/julia/sys.ji
-DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_path)
+DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_relative_path)
 {
     if (jl_is_initialized()) return;
     libsupport_init();
@@ -49,12 +49,12 @@ DLLEXPORT void jl_init_with_image(char *julia_home_dir, char *image_relative_pat
     jl_exception_clear();
 }
 
-DLLEXPORT void jl_init(char *julia_home_dir)
+DLLEXPORT void jl_init(const char *julia_home_dir)
 {
     jl_init_with_image(julia_home_dir, NULL);
 }
 
-DLLEXPORT void *jl_eval_string(char *str)
+DLLEXPORT void *jl_eval_string(const char *str)
 {
     jl_value_t *r;
     JL_TRY {
@@ -259,22 +259,22 @@ DLLEXPORT jl_value_t *jl_get_image_file(void)
     return jl_cstr_to_string(jl_compileropts.image_file);
 }
 
-DLLEXPORT const int jl_ver_major(void)
+DLLEXPORT int jl_ver_major(void)
 {
     return JULIA_VERSION_MAJOR;
 }
 
-DLLEXPORT const int jl_ver_minor(void)
+DLLEXPORT int jl_ver_minor(void)
 {
     return JULIA_VERSION_MINOR;
 }
 
-DLLEXPORT const int jl_ver_patch(void)
+DLLEXPORT int jl_ver_patch(void)
 {
     return JULIA_VERSION_PATCH;
 }
 
-DLLEXPORT const int jl_ver_is_release(void)
+DLLEXPORT int jl_ver_is_release(void)
 {
     return JULIA_VERSION_IS_RELEASE;
 }

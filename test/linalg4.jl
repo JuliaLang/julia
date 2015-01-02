@@ -201,6 +201,16 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
     end
 end
 
+# Because transpose(x) == x
+@test_throws ErrorException transpose(qrfact(randn(3,3)))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3)))
+@test_throws ErrorException transpose(qrfact(randn(3,3), pivot = false))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), pivot = false))
+@test_throws ErrorException transpose(qrfact(big(randn(3,3))))
+@test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
+@test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
+@test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
+
 # Issue #7933
 A7933 = [1 2; 3 4]
 B7933 = copy(A7933)

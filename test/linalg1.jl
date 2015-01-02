@@ -66,6 +66,11 @@ debug && println("(Automatic) upper Cholesky factor")
     apos = asym[1,1]            # test chol(x::Number), needs x>0
     @test_approx_eq cholfact(apos).UL √apos
 
+    # test chol of 2x2 Strang matrix
+    S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
+    U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+    @test_approx_eq full(chol(S)) full(U)
+
 debug && println("lower Cholesky factor")
     lapd = cholfact(apd, :L)
     @test_approx_eq full(lapd) apd

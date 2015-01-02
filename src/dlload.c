@@ -75,7 +75,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
 #endif
 }
 
-static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
+static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
 {
     int error;
     char *ext;
@@ -153,17 +153,17 @@ done:
     return handle;
 }
 
-jl_uv_libhandle jl_load_dynamic_library_e(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library_e(const char *modname, unsigned flags)
 {
     return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 0);
 }
 
-jl_uv_libhandle jl_load_dynamic_library(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library(const char *modname, unsigned flags)
 {
     return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 1);
 }
 
-void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol)
+void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
     int  error=uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
@@ -171,7 +171,7 @@ void *jl_dlsym_e(jl_uv_libhandle handle, char *symbol)
     return ptr;
 }
 
-void *jl_dlsym(jl_uv_libhandle handle, char *symbol)
+void *jl_dlsym(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
     int  error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
@@ -183,7 +183,7 @@ void *jl_dlsym(jl_uv_libhandle handle, char *symbol)
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-char *jl_dlfind_win32(char *f_name)
+char *jl_dlfind_win32(const char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
         return (char*)1;
