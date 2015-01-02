@@ -41,6 +41,21 @@ writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
 
 showerror(io::IO, e) = show(io, e)
 
+function show(io::IO, be::BoundsError)
+    print(io, "BoundsError(")
+    if isdefined(be, :a)
+        print(io, "\n  attempt to access ")
+        writemime(io, MIME"text/plain"(), be.a)
+        if isdefined(be, :i)
+            print(io, "\n  at index [")
+            print_joined(io, be.i, ',')
+            print(io, ']')
+        end
+        print(io, "\n  ")
+    end
+    print(io, ')')
+end
+
 function showerror(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
