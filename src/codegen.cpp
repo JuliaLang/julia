@@ -880,11 +880,12 @@ static void coverageVisitLine(std::string filename, int line)
     std::vector<GlobalVariable*> &vec = coverageData[filename];
     if (vec.size() <= (size_t)line)
         vec.resize(line+1, NULL);
-    if (vec[line] == NULL)
+    if (vec[line] == NULL) {
         vec[line] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
                                                  GlobalVariable::InternalLinkage,
                                                  ConstantInt::get(T_int64,0), "lcnt"));
-    GlobalVariable *v = vec[line];
+    }
+    GlobalVariable *v = prepare_global(vec[line]);
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v),
                                           ConstantInt::get(T_int64,1)),
                         v);
@@ -960,11 +961,12 @@ static void mallocVisitLine(std::string filename, int line)
     std::vector<GlobalVariable*> &vec = mallocData[filename];
     if (vec.size() <= (size_t)line)
         vec.resize(line+1, NULL);
-    if (vec[line] == NULL)
+    if (vec[line] == NULL) {
         vec[line] = addComdat(new GlobalVariable(*jl_Module, T_int64, false,
                                                  GlobalVariable::InternalLinkage,
                                                  ConstantInt::get(T_int64,0), "bytecnt"));
-    GlobalVariable *v = vec[line];
+    }
+    GlobalVariable *v = prepare_global(vec[line]);
     builder.CreateStore(builder.CreateAdd(builder.CreateLoad(v, true),
                                           builder.CreateCall(prepare_call(diff_gc_total_bytes_func))),
                         v, true);
