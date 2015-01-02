@@ -894,9 +894,9 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
                 a = tempSpace;
             }
             builder.CreateCall3(prepare_call(jluboundserror_func),
-                    builder.CreatePointerCast(a, T_pint8),
-                    literal_pointer_val(ty),
-                    i);
+                                builder.CreatePointerCast(a, T_pint8),
+                                literal_pointer_val(ty),
+                                i);
         }
         else {
             builder.CreateCall2(prepare_call(jlboundserror_func), a, i);

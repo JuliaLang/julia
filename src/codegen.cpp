@@ -4489,9 +4489,9 @@ static void init_julia_llvm_env(Module *m)
     jlboundserrorv_func =
         Function::Create(FunctionType::get(T_void, args2_boundserrorv, false),
                          Function::ExternalLinkage,
-                         "jl_new_bounds_error_unboxed", m);
+                         "jl_bounds_error_ints", m);
     jlboundserrorv_func->setDoesNotReturn();
-    add_named_global(jlboundserrorv_func, (void*)&jl_new_bounds_error_unboxed);
+    add_named_global(jlboundserrorv_func, (void*)&jl_bounds_error_ints);
 
     std::vector<Type*> args2_boundserror(0);
     args2_boundserror.push_back(jl_pvalue_llvmt);
@@ -4499,9 +4499,9 @@ static void init_julia_llvm_env(Module *m)
     jlboundserror_func =
         Function::Create(FunctionType::get(T_void, args2_boundserror, false),
                          Function::ExternalLinkage,
-                         "jl_new_bounds_error_i", m);
+                         "jl_bounds_error_int", m);
     jlboundserror_func->setDoesNotReturn();
-    add_named_global(jlboundserror_func, (void*)&jl_new_bounds_error_i);
+    add_named_global(jlboundserror_func, (void*)&jl_bounds_error_int);
 
     std::vector<Type*> args3_vboundserror(0);
     args3_vboundserror.push_back(jl_ppvalue_llvmt);
@@ -4510,9 +4510,9 @@ static void init_julia_llvm_env(Module *m)
     jlvboundserror_func =
         Function::Create(FunctionType::get(T_void, args3_vboundserror, false),
                          Function::ExternalLinkage,
-                         "jl_new_v_bounds_error_i", m);
+                         "jl_bounds_error_tuple_int", m);
     jlvboundserror_func->setDoesNotReturn();
-    add_named_global(jlvboundserror_func, (void*)&jl_new_v_bounds_error_i);
+    add_named_global(jlvboundserror_func, (void*)&jl_bounds_error_tuple_int);
 
     std::vector<Type*> args3_uboundserror(0);
     args3_uboundserror.push_back(T_pint8);
@@ -4521,9 +4521,9 @@ static void init_julia_llvm_env(Module *m)
     jluboundserror_func =
         Function::Create(FunctionType::get(T_void, args3_uboundserror, false),
                          Function::ExternalLinkage,
-                         "jl_new_unboxed_bounds_error_i", m);
+                         "jl_bounds_error_unboxed_int", m);
     jluboundserror_func->setDoesNotReturn();
-    add_named_global(jluboundserror_func, (void*)&jl_new_unboxed_bounds_error_i);
+    add_named_global(jluboundserror_func, (void*)&jl_bounds_error_unboxed_int);
 
     std::vector<Type*> args2_throw(0);
     args2_throw.push_back(jl_pvalue_llvmt);

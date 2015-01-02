@@ -441,13 +441,13 @@ static size_t array_nd_index(jl_array_t *a, jl_value_t **args, size_t nidxs,
         i += ii * stride;
         size_t d = k>=nd ? 1 : jl_array_dim(a, k);
         if (k < nidxs-1 && ii >= d)
-            jl_new_bounds_error_v((jl_value_t*)a, args, nidxs);
+            jl_bounds_error_v((jl_value_t*)a, args, nidxs);
         stride *= d;
     }
     for(; k < nd; k++)
         stride *= jl_array_dim(a, k);
     if (i >= stride)
-        jl_new_bounds_error_v((jl_value_t*)a, args, nidxs);
+        jl_bounds_error_v((jl_value_t*)a, args, nidxs);
     return i;
 }
 
@@ -518,7 +518,7 @@ JL_CALLABLE(jl_f_arrayset)
 void jl_arrayunset(jl_array_t *a, size_t i)
 {
     if (i >= jl_array_len(a))
-        jl_new_bounds_error_i((jl_value_t*)a, i+1);
+        jl_bounds_error_int((jl_value_t*)a, i+1);
     char *ptail = (char*)a->data + i*a->elsize;
     if (a->ptrarray)
         memset(ptail, 0, a->elsize);
@@ -622,7 +622,7 @@ void jl_array_del_end(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
-        jl_new_bounds_error_i((jl_value_t*)a, a->nrows - dec);
+        jl_bounds_error_int((jl_value_t*)a, a->nrows - dec);
     if (a->isshared) array_try_unshare(a);
     if (a->elsize > 0) {
         char *ptail = (char*)a->data + (a->nrows-dec)*a->elsize;
@@ -697,7 +697,7 @@ void jl_array_del_beg(jl_array_t *a, size_t dec)
 {
     if (dec == 0) return;
     if (dec > a->nrows)
-        jl_new_bounds_error_i((jl_value_t*)a, dec);
+        jl_bounds_error_int((jl_value_t*)a, dec);
     if (a->isshared) array_try_unshare(a);
     size_t es = a->elsize;
     size_t nb = dec*es;
