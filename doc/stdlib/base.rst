@@ -1,8 +1,8 @@
 .. currentmodule:: Base
 
-**********************
- The Standard Library
-**********************
+************
+ Essentials
+************
 
 Introduction
 ------------
