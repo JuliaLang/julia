@@ -2,7 +2,7 @@ using Base.Test
 
 let # svds test
     A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
-    S1 = svds(A, nev = 2)
+    S1 = svds(A, nsv = 2)
     S2 = svd(full(A))
 
     ## singular values match:

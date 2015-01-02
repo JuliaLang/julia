@@ -112,19 +112,27 @@ end
 
 type SVDOperator <: AbstractArray{Float64, 2}
     X
+    m::Int
+    n::Int
+    SVDOperator(X) = new(X, size(X,1), size(X,2))
 end
 
-*(s::SVDOperator, v::Vector{Float64}) = s.X' * (s.X * v)
-size(s::SVDOperator)  = size(s.X, 2), size(s.X, 2)
+## v = [ left_singular_vector; right_singular_vector ]
+*(s::SVDOperator, v::Vector{Float64}) = [s.X * v[s.m+1:end]; s.X' * v[1:s.m]]
+size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
-function svds(X; ritzvec::Bool = true, args...)
-    ex = eigs(SVDOperator(X), I; ritzvec = ritzvec, args...)
-    if ! ritzvec
-        return sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5]
-    end
-
-    ## calculating left-side singular vectors
-    left_sv = X * ex[2]
-    return left_sv ./ sqrt(sum(left_sv.^2, 1)), sqrt(ex[1]), ex[2], ex[3], ex[4], ex[5], ex[6]
+function svds(X; ritzvec::Bool = true, nsv::Int = 6, tol::Float64 = 0.0, maxiter::Int = 1000)
+  ex   = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
+  ind  = [1:2:nsv*2]
+  sval = (abs(ex[1][ind]) + abs(ex[1][ind + 1])) / 2
+  
+  if ! ritzvec
+    return sval, ex[2], ex[3], ex[4], ex[5]
+  end
+  
+  ## calculating singular vectors
+  left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')
+  right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
+  return left_sv, sval, right_sv, ex[3], ex[4], ex[5], ex[6]
 end
