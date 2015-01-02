@@ -1249,7 +1249,9 @@ If you apply :func:`super` to other type objects (or non-type objects), a
 As one application of these ideas, Julia includes a parametric type,
 ``Val{T}``, designated for dispatching on bits-type *values*.  For
 example, if you pass a boolean to a function, you have to test the
-value at run-time::
+value at run-time:
+
+.. doctest::
 
     function firstlast(b::Bool)
         return b ? "First" : "Last"
@@ -1258,7 +1260,9 @@ value at run-time::
     println(firstlast(true))
 
 You can instead cause the conditional to be evaluated during function
-compilation by using the ``Val`` trick::
+compilation by using the ``Val`` trick:
+
+.. doctest::
 
     firstlast(::Val{true}) = "First"
     firstlast(::Val{false}) = "Last"
