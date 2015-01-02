@@ -111,7 +111,7 @@ diagnose problems and improve the performance of your code:
   suspect a type problem.  You can also start Julia with the
   ``--track-allocation=user`` option and examine the resulting
   ``*.mem`` files to see information about where those allocations
-  occur.  See :ref:`stdlib-track-allocation`.
+  occur.  See :ref:`man-track-allocation`.
 
 - ``@code_warntype`` generates a representation of your code that can
   be helpful in finding expressions that result in type uncertainty.
