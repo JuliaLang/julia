@@ -25,8 +25,8 @@ All Julia streams expose at least a :func:`read` and a :func:`write` method, tak
 
     '\n'
 
-Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example, the
-:func:`write` method takes the data to write as its second argument, while the read method takes the type of the
+Note that I pressed enter again so that Julia would read the newline. Now, as you can see from this example,
+:func:`write` takes the data to write as its second argument, while :func:`read` takes the type of the
 data to be read as the second argument. For example, to read a simple byte array, we could do::
 
     julia> x = zeros(UInt8,4)
@@ -210,7 +210,7 @@ A great strength of Julia is that since the API is exposed synchronously even th
              server = listen(2001)
              while true
                sock = accept(server)
-               @async while true
+               @async while isopen(sock)
                  write(sock,readline(sock))
                end
              end
@@ -227,6 +227,10 @@ A great strength of Julia is that since the API is exposed synchronously even th
     julia> println(clientside,"Hello World from the Echo Server")
 
     julia> Hello World from the Echo Server
+
+As with other streams, use :func:`close` to disconnect the socket::
+
+    julia> close(clientside)
 
 Resolving IP Addresses
 ----------------------
