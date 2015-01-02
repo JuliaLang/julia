@@ -42,13 +42,32 @@ inv{T<:BlasFloat}(A::Hermitian{T}) = Hermitian{T}(inv(bkfact(A.S, symbol(A.uplo)
 inv{T<:BlasFloat}(A::Symmetric{T}) = Symmetric{T}(inv(bkfact(A.S, symbol(A.uplo), true)), A.uplo)
 
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}) = Eigen(LAPACK.syevr!('V', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)...)
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigfact{T1<:Real}(A::RealHermSymComplexHerm{T1}) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)))
+
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, irange::UnitRange) = Eigen(LAPACK.syevr!('V', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)...)
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigfact{T1<:Real}(A::RealHermSymComplexHerm{T1}, irange::UnitRange) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange))
+
 eigfact!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, vl::Real, vh::Real) = Eigen(LAPACK.syevr!('V', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)...)
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigfact{T1<:Real}(A::RealHermSymComplexHerm{T1}, vl::Real, vh::Real) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh))
+
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}) = LAPACK.syevr!('N', 'A', A.uplo, A.S, 0.0, 0.0, 0, 0, -1.0)[1]
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigvals{T1<:Real}(A::RealHermSymComplexHerm{T1}) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A)))
+
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, irange::UnitRange) = LAPACK.syevr!('N', 'I', A.uplo, A.S, 0.0, 0.0, irange.start, irange.stop, -1.0)[1]
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigvals{T1<:Real}(A::RealHermSymComplexHerm{T1}, irange::UnitRange) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), irange))
+
 eigvals!{T<:BlasReal}(A::RealHermSymComplexHerm{T}, vl::Real, vh::Real) = LAPACK.syevr!('N', 'V', A.uplo, A.S, convert(T, vl), convert(T, vh), 0, 0, -1.0)[1]
+# Because of #6721 it is necessay to specify the parameters explicitly here.
+eigvals{T1<:Real}(A::RealHermSymComplexHerm{T1}, vl::Real, vh::Real) = (T = eltype(A); S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), vl, vh))
+
 eigmax{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, size(A, 1):size(A, 1))[1]
 eigmin{T<:Real}(A::RealHermSymComplexHerm{T}) = eigvals(A, 1:1)[1]
+
 
 function eigfact!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
@@ -58,6 +77,7 @@ function eigfact!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
     GeneralizedEigen(vals, vecs)
 end
+
 eigvals!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 eigvals!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 
