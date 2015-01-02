@@ -1014,6 +1014,7 @@ export
     Condition,
     consume,
     current_task,
+    istaskstarted,
     istaskdone,
     notify,
     produce,
