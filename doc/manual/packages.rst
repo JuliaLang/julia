@@ -427,12 +427,45 @@ GitHub, push your changes to your fork, and open a pull request::
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
     <https://help.github.com/articles/creating-a-pull-request>`_.
+    See: :ref:`man-manual-publish` below.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that :func:`Pkg.add("FooBar") <Pkg.add>` won't work yet since it only installs official versions.
 :func:`Pkg.clone("FooBar") <Pkg.clone>` without having to specify a URL for it.
 Moreover, when they run :func:`Pkg.update`, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
+
+.. _man-manual-publish:
+
+Publishing METADATA manually
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If :func:`Pkg.publish` fails you can follow these instructions to
+manually publish your package.
+
+By "forking" the main METADATA repository, you can create a
+personal copy (of METADATA.jl) under your GitHub account. Once
+that copy exists, you can push your local changes to your copy
+(just like any other GitHub project).
+
+
+1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
+fork.
+
+2. add your fork as a remote repository for the METADATA
+repository on your local computer (in the terminal where USERNAME is
+your github username)::
+
+    cd ~/.julia/METADATA
+    git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
+
+3. push your changes to your fork::
+
+    git push USERNAME metadata-v2
+
+4. If all of that works, then go back to the GitHub page for your
+fork, and click the "pull request" link.
+
 
 Tagging Package Versions
 ------------------------
