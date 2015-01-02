@@ -620,17 +620,15 @@ properties:
 -  In some simple cases, for example with 2-3 arrays accessed in a loop, the
    LLVM auto-vectorization may kick in automatically, leading to no further
    speedup with :obj:`@simd`.
-   speedup with ``@simd``.
-
-.. raw:: html
-    <style> .red {color:red} </style>
 
 .. _man-code-warntype:
 
-``@code_warntype``
-------------------
+:obj:`@code_warntype`
+---------------------
 
-The macro ``@code_warntype`` (or its function variant) can sometimes be helpful in diagnosing type-related problems.  Here's an example::
+The macro :obj:`@code_warntype` (or its function variant :func:`code_warntype`)
+can sometimes be helpful in diagnosing type-related problems. Here's an
+example::
 
     pos(x) = x < 0 ? 0 : x
 
@@ -664,20 +662,21 @@ The macro ``@code_warntype`` (or its function variant) can sometimes be helpful 
           return (GetfieldNode(Base.Math,:nan_dom_err,Any))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GetfieldNode(Base.Math,:libm,Any))),Float64,$(Expr(:call1, :(top(tuple)), :Float64)),_var2::Float64,0)::Float64,_var2::Float64)::Float64
       end::Float64
 
-Interpreting the output of ``@code_warntype``, like that of its cousins
-``@code_lowered``, ``@code_typed``, ``@code_llvm``, and
-``@code_native``, takes a little practice. Your
-code is being presented in form that has been partially-digested on
+Interpreting the output of :obj:`@code_warntype`, like that of its cousins
+:obj:`@code_lowered`, :obj:`@code_typed`, :obj:`@code_llvm`, and
+:obj:`@code_native`, takes a little practice. Your
+code is being presented in form that has been partially digested on
 its way to generating compiled machine code.  Most of the expressions
 are annotated by a type, indicated by the ``::T`` (where ``T`` might
-be ``Float64``, for example). The most important characteristic of
-``@code_warntype`` is that non-concrete types are displayed in red; in
+be :obj:`Float64`, for example). The most important characteristic of
+:obj:`@code_warntype` is that non-concrete types are displayed in red; in
 the above example, such output is shown in all-caps.
 
-The top part of the output summarizes the type information for the different variables internal to the function. You can see that ``y``, one
-of the variables you created, is a ``Union(Int64,Float64)``, due to
-the type-instability of ``pos``.  There is another variable,
-``_var4``, which you can see also has the same type.
+The top part of the output summarizes the type information for the different
+variables internal to the function. You can see that ``y``, one of the
+variables you created, is a ``Union(Int64,Float64)``, due to the
+type-instability of ``pos``.  There is another variable, ``_var4``, which you
+can see also has the same type.
 
 The next lines represent the body of ``f``. The lines starting with a
 number followed by a colon (``1:``, ``2:``) are labels, and represent
@@ -686,20 +685,20 @@ you can see that ``pos`` has been *inlined* into ``f``---everything
 before ``2:`` comes from code defined in ``pos``.
 
 Starting at ``2:``, the variable ``y`` is defined, and again annotated
-as a ``Union`` type.  Next, we see that the compiler created the
+as a :obj:`Union` type.  Next, we see that the compiler created the
 temporary variable ``_var1`` to hold the result of ``y*x``. Because
-a ``Float64`` times *either* an ``Int64`` or ``Float64`` yields a ``Float64``,
-all type-instability ends here.  The net result is that
-``f(x::Float64)`` will not be type-unstable in its output, even if
-some of the intermediate computations are type-unstable.
+a :obj:`Float64` times *either* an :obj:`Int64` or :obj:`Float64` yields a
+:obj:`Float64`, all type-instability ends here. The net result is that
+``f(x::Float64)`` will not be type-unstable in its output, even if some of the
+intermediate computations are type-unstable.
 
-How you use this information is up to you.  Obviously, it would be far
+How you use this information is up to you. Obviously, it would be far
 and away best to fix ``pos`` to be type-stable: if you did so, all of
 the variables in ``f`` would be concrete, and its performance would be
 optimal.  However, there are circumstances where this kind of
 *ephemeral* type instability might not matter too much: for example,
 if ``pos`` is never used in isolation, the fact that ``f``\'s output
-is type-stable (for ``Float64`` inputs) will shield later code from
+is type-stable (for :obj:`Float64` inputs) will shield later code from
 the propagating effects of type instability.  This is particularly
 relevant in cases where fixing the type instability is difficult or
 impossible: for example, currently it's not possible to infer the

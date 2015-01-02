@@ -6434,7 +6434,7 @@ Internals
 
 .. function:: gc_enable()
 
-   Re-enable garbage collection after calling ``gc_disable``.
+   Re-enable garbage collection after calling :func:`gc_disable`.
 
 .. function:: macroexpand(x)
 
@@ -6450,7 +6450,7 @@ Internals
 
 .. function:: @code_lowered
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``code_lowered`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 
 .. function:: code_typed(f, types)
 
@@ -6458,7 +6458,7 @@ Internals
 
 .. function:: @code_typed
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``code_typed`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_typed` on the resulting expression
 
 .. function:: code_warntype(f, types)
 
@@ -6466,15 +6466,15 @@ Internals
 
 .. function:: @code_warntype
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``code_warntype`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_warntype` on the resulting expression
 
 .. function:: code_llvm(f, types)
 
-   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to STDOUT.
+   Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
 
 .. function:: @code_llvm
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``code_llvm`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
 
 .. function:: code_native(f, types)
 
@@ -6482,7 +6482,7 @@ Internals
 
 .. function:: @code_native
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``code_native`` function on the resulting expression
+   Evaluates the arguments to the function call, determines their types, and calls :func:`code_native` on the resulting expression
 
 .. function:: precompile(f,args::(Any...,))
 
