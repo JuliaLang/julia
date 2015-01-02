@@ -1,15 +1,31 @@
+*****************************
+ Unit and Functional Testing
+*****************************
+
+Testing Base Julia
+------------------
+
+Julia is under rapid development and has an extensive test suite to
+verify functionality across multiple platforms. If you build Julia
+from source, you can run this test suite with ``make test``. In a
+binary install, you can run the test suite using ``Base.runtests()``.
+
+.. currentmodule:: Base
+
+.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
+
+   Run the Julia unit tests listed in ``tests``, which can be either a
+   string or an array of strings, using ``numcores`` processors.
+
+
 .. module:: Base.Test
 
-Unit and Functional Testing
-===========================
+Test Framework
+--------------
 
 The ``Test`` module contains macros and functions related to testing.
 A default handler is provided to run the tests, and a custom one can be
 provided by the user by using the :func:`registerhandler` function.
-
-
-Overview
-________
 
 To use the default handler, the macro :func:`@test` can be used directly::
 
@@ -75,7 +91,7 @@ As floating point comparisons can be imprecise, two additional macros exist taki
    in test_approx_eq at test.jl:68
 
 Handlers
-________
+--------
 
 A handler is a function defined for three kinds of arguments: ``Success``, ``Failure``, ``Error``::
 
@@ -113,7 +129,7 @@ A different handler can be used for a block (with :func:`with_handler`)::
 The ``Success`` and ``Failure`` types include an additonal field, ``resultexpr``, which is a partially evaluated expression. For example, in a comparison it will contain an expression with the left and right sides evaluated.
 
 Macros
-______
+------
 
 .. function:: @test(ex)
 
@@ -134,24 +150,9 @@ ______
    a margin of tolerance given by ``tol``.
 
 Functions
-_________
+---------
 
 .. function:: with_handler(f, handler)
 
    Run the function ``f`` using the ``handler`` as the handler.
 
-
-Testing Base Julia
-==================
-
-Julia is under rapid development and has an extensive test suite to
-verify functionality across multiple platforms. If you build Julia
-from source, you can run this test suite with ``make test``. In a
-binary install, you can run the test suite using ``Base.runtests()``.
-
-.. currentmodule:: Base
-
-.. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
-
-   Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors.
