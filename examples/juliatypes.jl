@@ -150,11 +150,9 @@ isequal_type(x, y) = issub(x, y) && issub(y, x)
 
 type Bounds
     # record current lower and upper bounds of a Var
-    # depth: invariant position nesting depth of a Var's UnionAll
     # right: whether this Var is on the right-hand side of A <: B
     lb
     ub
-    depth::Int
     right::Bool
 end
 
@@ -173,10 +171,9 @@ end
 
 type Env
     vars::Dict{Var,Bounds}
-    depth::Int
     Lunions::UnionState
     Runions::UnionState
-    Env() = new(Dict{Var,Bounds}(), 1, UnionState(), UnionState())
+    Env() = new(Dict{Var,Bounds}(), UnionState(), UnionState())
 end
 
 issub(x, y) = forall_exists_issub(x, y, Env(), 0)
@@ -247,7 +244,7 @@ function exists_issub(x, y, env, nR)
     return false
 end
 
-function issub_union(t::Ty, u::UnionT, env, R, state::UnionState)
+function issub_union(t, u::UnionT, env, R, state::UnionState)
     if state.depth > length(state.stack)
         # at a new nesting depth, begin by just counting unions
         state.nnew += 1
@@ -264,6 +261,9 @@ end
 issub(a::UnionT, b::UnionT, env) = a === b || issub_union(a, b, env, true, env.Runions)
 issub(a::UnionT, b::Ty, env) = issub_union(b, a, env, false, env.Lunions)
 issub(a::Ty, b::UnionT, env) = a === BottomT || issub_union(a, b, env, true, env.Runions)
+# take apart unions before handling vars
+issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
+issub(a::Var, b::UnionT, env) = a === BottomT || issub_union(a, b, env, true, env.Runions)
 
 function issub(a::TagT, b::TagT, env)
     a === b && return true
@@ -294,84 +294,51 @@ function issub(a::TagT, b::TagT, env)
         end
         @assert false
     else
-        env.depth += 1  # crossing invariant constructor, increment depth
         for i = 1:length(a.params)
             ai, bi = a.params[i], b.params[i]
             # use issub in both directions to test equality
             if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
-                env.depth -= 1
                 return false
             end
         end
-        env.depth -= 1
     end
     return true
 end
 
-function issub(a::Var, b::Ty, env)
-    aa = env.vars[a]
-    # Vars are fully checked by the "forward" direction of A<:B in
-    # invariant position. So just return true when checking the "flipped"
-    # direction B<:A.
-    aa.right && return true
-    !issub(aa.ub, b, env) && return false
-    if env.depth > aa.depth
-        # invariant position; only true if a.ub <: b <: a.lb  (i.e. a.lb==a.ub)
-        !issub(b, aa.lb, env) && return false
-    end
-    return true
+function join(a,b,env)
+    a === b && return a
+    (a===BottomT || b===AnyT) && return b
+    (b===BottomT || a===AnyT) && return a
+    UnionT(a,b)
 end
 
-lb(x::Var, env) = lb(env.vars[x].lb, env)
-lb(x, env) = x
-ub(x::Var, env) = ub(env.vars[x].ub, env)
-ub(x, env) = x
+issub(a::Ty, b::Var, env) = var_gt(b, a, env)
+issub(a::Var, b::Ty, env) = var_lt(a, b, env)
+function issub(a::Var, b::Var, env)
+    a === b && return true
+    aa = env.vars[a]; bb = env.vars[b]
+    if aa.right
+        bb.right && return false
+        return var_lt(a, b, env)
+    else
+        #!bb.right && return issub(aa.ub, bb.lb, env) # shortcut check ∀a,b . a<:b
+        return var_gt(b, a, env)
+    end
+end
 
-join(a,b,env) = issub(a,b,env) ? b : issub(b,a,env) ? a : UnionT(a,b)
-
-function issub(a::Union(Ty,Var), b::Var, env)
+function var_lt(b::Var, a::Union(Ty,Var), env)
     bb = env.vars[b]
-    !bb.right && return true
-    b_lb, b_ub = ub(bb.lb,env), lb(bb.ub,env)
-    if isa(a,Var)
-        aa = env.vars[a]
-        # Vars must occur at same depth
-        aa.depth != bb.depth && return false
-        a_lb, a_ub = ub(a.lb,env), lb(a.ub,env)
-    else
-        a_lb, a_ub = a, a
-    end
-    # make sure constraint is within the current bounds of Var
-    if !isa(bb.ub,Var)
-        !issub(a_ub, b_ub, env) && return false
-    end
-    if env.depth > bb.depth && !isa(bb.lb,Var)
-        !issub(b_lb, a_lb, env) && return false
-    end
+    !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
+    !issub(bb.lb, a, env) && return false
+    bb.ub = a
+    return true
+end
 
-    # check & update bounds for covariant position
-    # for each type a<:b, grow b's lower bound to include a, or set b's
-    # lower bound equal to a typevar if its lower bound is big enough.
-    if isa(a,Var) && (a === bb.lb || issub(b_lb, a_lb, env))
-        bb.lb = a
-    else
-        isa(bb.ub,Var) && !issub(a_ub, b_ub, env) && return false
-        bb.lb = join(b_lb, a_ub, env)
-    end
-
-    if env.depth > bb.depth
-        # check & update bounds for invariant position.
-        # this would be the code for contravariant position, but since
-        # we only have invariant, the covariant code above always runs too.
-        if isa(a,Var) && (a === bb.ub || issub(a_ub, b_ub, env))
-            bb.ub = a
-        else
-            #!issub(b_lb, a_lb, env) && return false
-            # for true contravariance we would need to compute a meet here,
-            # but because of invariance b_ub⊓a_lb = a_lb here always
-            bb.ub = a_lb #issub(b_ub, a_lb, env) ? b_ub : a_lb #meet(b_ub, a_lb, env)
-        end
-    end
+function var_gt(b::Var, a::Union(Ty,Var), env)
+    bb = env.vars[b]
+    !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
+    !issub(a, bb.ub, env) && return false
+    bb.lb = join(bb.lb, a, env)
     return true
 end
 
@@ -382,7 +349,7 @@ end
 
 function issub_unionall(t::Ty, u::UnionAllT, env, R)
     haskey(env.vars, u.var) && (u = rename(u))
-    env.vars[u.var] = Bounds(u.var.lb, u.var.ub, env.depth, R)
+    env.vars[u.var] = Bounds(u.var.lb, u.var.ub, R)
     ans = R ? issub(t, u.T, env) : issub(u.T, t, env)
     delete!(env.vars, u.var)
     return ans
@@ -609,6 +576,8 @@ function test_3()
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
     @test !issub(Ty((String,Int,Vector{Integer})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
+    @test !issub(Ty((Int,String,Vector{(Integer,)})),
+                 @UnionAll T tupletype(T,T,inst(ArrayT,tupletype(T),1)))
 
     @test  issub(Ty((Int,String,Vector{Any})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
@@ -666,6 +635,11 @@ function test_3()
     @test isequal_type(X,Y)
     Z = (@UnionAll A<:Ty(Real) @UnionAll B<:inst(AbstractArrayT,A,1) tupletype(Ty(Real),B))
     @test issub_strict(X,Z)
+
+    @test issub_strict((@UnionAll T @UnionAll S<:T inst(PairT,T,S)),
+                       (@UnionAll T @UnionAll S    inst(PairT,T,S)))
+    @test issub_strict((@UnionAll T @UnionAll S>:T inst(PairT,T,S)),
+                       (@UnionAll T @UnionAll S    inst(PairT,T,S)))
 end
 
 # level 4: Union
@@ -703,6 +677,13 @@ function test_4()
     @test issub_strict(UnionT(UnionT(A,C), UnionT(D)),  UnionT(A,B,C,D))
 
     @test !issub(UnionT(UnionT(A,B,C), UnionT(D)),  UnionT(A,C,D))
+
+    # obviously these unions can be simplified, but when they aren't there's trouble
+    X = UnionT(UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),
+               UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C))
+    Y = UnionT(UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),
+               UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(A,B,C))
+    @test issub_strict(X,Y)
 end
 
 # level 5: union and UnionAll
@@ -759,28 +740,43 @@ function test_6()
                  (@UnionAll T tupletype(T,inst(RefT,T),T)))
 
     i = Ty(Int); ai = Ty(Integer)
-    @test issub((@UnionAll i<:T<:i   inst(RefT,T)), inst(RefT,i))
-    @test issub((@UnionAll ai<:T<:ai inst(RefT,T)), inst(RefT,ai))
+    @test isequal_type((@UnionAll i<:T<:i   inst(RefT,T)), inst(RefT,i))
+    @test isequal_type((@UnionAll ai<:T<:ai inst(RefT,T)), inst(RefT,ai))
 
     # Pair{T,S} <: Pair{T,T} can be true with certain bounds
-    @test issub((@UnionAll i<:T<:i @UnionAll i<:S<:i inst(PairT,T,S)),
-                @UnionAll T inst(PairT,T,T))
-end
+    @test issub_strict((@UnionAll i<:T<:i @UnionAll i<:S<:i inst(PairT,T,S)),
+                       @UnionAll T inst(PairT,T,T))
 
-# examples that might take a long time
-function test_slow()
-    A = Ty(Int);   B = Ty(Int8)
-    C = Ty(Int16); D = Ty(Int32)
-    # obviously these unions can be simplified, but when they aren't there's trouble
-    X = UnionT(UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),
-               UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C),UnionT(A,B,C))
-    Y = UnionT(UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),
-               UnionT(D,B,C),UnionT(D,B,C),UnionT(D,B,C),UnionT(A,B,C))
-    @test issub_strict(X,Y)
+    @test issub_strict(tupletype(Ty(Int), inst(RefT,Ty(Int))),
+                       (@UnionAll T @UnionAll S<:T tupletype(S,inst(RefT,T))))
+
+    @test !issub(tupletype(Ty(Real), inst(RefT,Ty(Int))),
+                 (@UnionAll T @UnionAll S<:T tupletype(S,inst(RefT,T))))
+
+    # S >: T
+    @test issub_strict(tupletype(Ty(Real), inst(RefT,Ty(Int))),
+                       (@UnionAll T @UnionAll S>:T tupletype(S,inst(RefT,T))))
+
+    @test !issub(tupletype(inst(RefT,Ty(Int)), inst(RefT,Ty(Integer))),
+                 (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,S),inst(RefT,T))))
+
+    @test issub_strict(tupletype(inst(RefT,Ty(Real)), inst(RefT,Ty(Integer))),
+                       (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,S),inst(RefT,T))))
+
+
+    @test issub_strict(tupletype(Ty(Real), inst(RefT,tupletype(Ty(Int)))),
+                       (@UnionAll T @UnionAll S>:T tupletype(S,inst(RefT,tupletype(T)))))
+
+    @test !issub(tupletype(inst(RefT,tupletype(Ty(Int))), inst(RefT,tupletype(Ty(Integer)))),
+                 (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,tupletype(S)),inst(RefT,tupletype(T)))))
+
+    @test issub_strict(tupletype(inst(RefT,tupletype(Ty(Real))), inst(RefT,tupletype(Ty(Integer)))),
+                       (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,tupletype(S)),inst(RefT,tupletype(T)))))
 end
 
 # tests that don't pass yet
 function test_failing()
+    # TODO: S <: Array{T} cases
 end
 
 function test_all()
@@ -790,7 +786,6 @@ function test_all()
     test_4()
     test_5()
     test_6()
-    test_slow()
     test_failing()
 end
 
@@ -875,12 +870,6 @@ function test_properties()
     end
 end
 
-# ideas for handling typevars in covariant position:
-# - if a var only appears covariant, automatically make it range over
-#   only concrete types
-#
-# - introduce ⟦Concrete{T}⟧ = is T concrete ? ⟦T⟧ : ∅
-
 # function non_terminating_F()
 #     # undecidable F_<: instance
 #     ¬T = @ForAll α<:T α
@@ -902,6 +891,6 @@ function non_terminating_2()
     U = AnyT
     X = Var(:X, BottomT, ¬U)
     e = Env()
-    e.vars[X] = Bounds(BottomT, ¬U, e.depth, false)
+    e.vars[X] = Bounds(BottomT, ¬U, false)
     issub(X, ¬inst(C,X), e)
 end
