@@ -228,7 +228,7 @@ A great strength of Julia is that since the API is exposed synchronously even th
 
     julia> Hello World from the Echo Server
 
-As with other streams, use the `close` method to finalize the socket::
+As with other streams, use :func:`close` to disconnect the socket::
 
     julia> close(clientside)
 
