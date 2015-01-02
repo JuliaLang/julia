@@ -993,7 +993,7 @@ DLLEXPORT void jl_handle_stack_switch();
 
 #ifdef COPY_STACKS
 // initialize base context of root task
-extern jl_jmp_buf jl_base_ctx;
+extern DLLEXPORT jl_jmp_buf jl_base_ctx;
 #define JL_SET_STACK_BASE                               \
     {                                                   \
         int __stk;                                      \
