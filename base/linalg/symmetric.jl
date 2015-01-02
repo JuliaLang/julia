@@ -58,7 +58,6 @@ function eigfact!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T})
     vals, vecs, _ = LAPACK.sygvd!(1, 'V', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')
     GeneralizedEigen(vals, vecs)
 end
-
 eigvals!{T<:BlasReal}(A::HermOrSym{T}, B::HermOrSym{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 eigvals!{T<:BlasComplex}(A::Hermitian{T}, B::Hermitian{T}) = LAPACK.sygvd!(1, 'N', A.uplo, A.S, B.uplo == A.uplo ? B.S : B.S')[1]
 
