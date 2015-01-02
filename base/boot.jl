@@ -203,11 +203,10 @@ abstract Exception
 
 immutable BoundsError        <: Exception
     a::Any
-    i::Union(Tuple, Int)
+    i::Any
     BoundsError() = new()
     BoundsError(a::ANY) = new(a)
-    BoundsError(a::ANY, i::Tuple) = new(a,i)
-    BoundsError(a::ANY, i::Int) = new(a,i)
+    BoundsError(a::ANY, i::ANY) = new(a,i)
 end
 immutable DivideError        <: Exception end
 immutable DomainError        <: Exception end

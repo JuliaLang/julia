@@ -340,7 +340,7 @@ extern DLLEXPORT jl_value_t *jl_overflow_exception;
 extern DLLEXPORT jl_value_t *jl_inexact_exception;
 extern DLLEXPORT jl_value_t *jl_undefref_exception;
 extern DLLEXPORT jl_value_t *jl_interrupt_exception;
-extern DLLEXPORT jl_value_t *jl_bounds_exception;
+extern DLLEXPORT jl_datatype_t *jl_boundserror_type;
 extern DLLEXPORT jl_value_t *jl_an_empty_cell;
 
 extern DLLEXPORT jl_datatype_t *jl_bool_type;
@@ -834,12 +834,12 @@ DLLEXPORT void NORETURN jl_type_error_rt(const char *fname, const char *context,
 DLLEXPORT void NORETURN jl_type_error_rt_line(const char *fname, const char *context,
                                      jl_value_t *ty, jl_value_t *got, int line);
 DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var);
-DLLEXPORT void NORETURN jl_new_bounds_error(jl_value_t* v, jl_value_t* t);
-DLLEXPORT void NORETURN jl_new_bounds_error_v(jl_value_t* v, jl_value_t **idxs, size_t nidxs);
-DLLEXPORT void NORETURN jl_new_bounds_error_i(jl_value_t* v, size_t i);
-DLLEXPORT void NORETURN jl_new_v_bounds_error_i(jl_value_t** v, size_t nv, size_t i);
-DLLEXPORT void NORETURN jl_new_unboxed_bounds_error_i(void *v, jl_value_t *vt, size_t i);
-DLLEXPORT void NORETURN jl_new_bounds_error_unboxed(jl_value_t* v, size_t *idxs, size_t nidxs);
+DLLEXPORT void NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t);
+DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs);
+DLLEXPORT void NORETURN jl_bounds_error_int(jl_value_t *v, size_t i);
+DLLEXPORT void NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i);
+DLLEXPORT void NORETURN jl_bounds_error_unboxed_int(void *v, jl_value_t *vt, size_t i);
+DLLEXPORT void NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t nidxs);
 DLLEXPORT jl_value_t *jl_exception_occurred(void);
 DLLEXPORT void jl_exception_clear(void);
 

@@ -65,7 +65,7 @@ jl_value_t *jl_overflow_exception;
 jl_value_t *jl_inexact_exception;
 jl_value_t *jl_undefref_exception;
 jl_value_t *jl_interrupt_exception;
-jl_value_t *jl_bounds_exception;
+jl_datatype_t *jl_boundserror_type;
 jl_value_t *jl_memory_exception;
 
 jl_sym_t *call_sym;    jl_sym_t *dots_sym;
@@ -247,7 +247,7 @@ jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (i >= jl_tuple_len(st->names))
-        jl_new_bounds_error_i(v, i+1);
+        jl_bounds_error_int(v, i+1);
     size_t offs = jl_field_offset(st,i) + sizeof(void*);
     if (st->fields[i].isptr) {
         jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
