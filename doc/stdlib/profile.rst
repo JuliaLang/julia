@@ -2,8 +2,9 @@
 
 .. _stdlib-profiling:
 
-Profiling
-=========
+***********
+ Profiling
+***********
 
 .. currentmodule:: Base
 
@@ -32,7 +33,7 @@ Profiling
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine
-   results exported by a previous call to :func:`.retrieve`.
+   results exported by a previous call to :func:`retrieve`.
    Supply the vector ``data`` of backtraces and a dictionary
    ``lidict`` of line information.
 

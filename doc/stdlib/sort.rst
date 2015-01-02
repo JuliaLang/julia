@@ -1,8 +1,9 @@
 
 .. currentmodule:: Base
 
-Sorting and Related Functions
-=============================
+*******************************
+ Sorting and Related Functions
+*******************************
 
 Julia has an extensive, flexible API for sorting and interacting with
 already-sorted arrays of values. By default, Julia picks reasonable

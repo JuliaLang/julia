@@ -1,7 +1,11 @@
 .. module:: Dates
 
-Dates Types
------------
+****************
+ Dates and Time
+****************
+
+Dates and Time Types
+--------------------
 
 .. data:: Period
 .. data:: Year
