@@ -706,28 +706,29 @@ return type of an anonymous function.  In such cases, the tips above
 (e.g., adding type annotations and/or breaking up functions) are your
 best tools to contain the "damage" from type instability.
 
-Here is a table which can help you interpret expressions marked as
+The following examples may help you interpret expressions marked as
 containing non-leaf types:
 
-.. |I0| replace:: Interpretation
-.. |F0| replace:: Possible fix
-.. |I1| replace:: Function with unstable return type
-.. |F1| replace:: Make the return value type-stable, even if you have to annotate it
-.. |I2| replace:: Call to a type-unstable function
-.. |F2| replace:: Fix the function, or annotate the return value
-.. |I3| replace:: Accessing elements of poorly-typed arrays
-.. |F3| replace:: Use arrays with better-defined types, or annotate the type of individual element accesses
-.. |I4| replace:: Getting a field that is of non-leaf type. In this case, ``ArrayContainer`` had a field ``data::Array{T}``. But ``Array`` needs the dimension ``N``, too.
-.. |F4| replace:: Use concrete types like ``Array{T,3}`` or ``Array{T,N}``, where ``N`` is now a parameter of ``ArrayContainer``
+- Function body ending in ``end::Union(T1,T2))``
 
-+-------------------------------------------------------------------------+------+------+
-|  Marked expression                                                      | |I0| | |F0| |
-+=========================================================================+======+======+
-| Function ending in ``end::Union(T1,T2)))``                              | |I1| | |F1| |
-+-------------------------------------------------------------------------+------+------+
-| ``f(x::T)::Union(T1,T2)``                                               | |I2| | |F2| |
-+-------------------------------------------------------------------------+------+------+
-| ``(top(arrayref))(A::Array{Any,1},1)::Any``                             | |I3| | |F3| |
-+-------------------------------------------------------------------------+------+------+
-| ``(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}`` | |I4| | |F4| |
-+-------------------------------------------------------------------------+------+------+
+  + Interpretation: function with unstable return type
+
+  + Suggestion: make the return value type-stable, even if you have to annotate it
+
+- ``f(x::T)::Union(T1,T2)``
+
+  + Interpretation: call to a type-unstable function
+
+  + Suggestion: fix the function, or if necessary annotate the return value
+
+- ``(top(arrayref))(A::Array{Any,1},1)::Any``
+
+  + Interpretation: accessing elements of poorly-typed arrays
+
+  + Suggestion: use arrays with better-defined types, or if necessary annotate the type of individual element accesses
+
+- ``(top(getfield))(A::ArrayContainer{Float64},:data)::Array{Float64,N}``
+
+  + Interpretation: getting a field that is of non-leaf type. In this case, ``ArrayContainer`` had a field ``data::Array{T}``. But ``Array`` needs the dimension ``N``, too, to be a concrete type.
+
+  + Suggestion: use concrete types like ``Array{T,3}`` or ``Array{T,N}``, where ``N`` is now a parameter of ``ArrayContainer``
