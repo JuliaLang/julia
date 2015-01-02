@@ -1278,16 +1278,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
 
-    jl_stackovf_exception  = jl_new_struct((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct((jl_datatype_t*)core("DivideError"));
-    jl_domain_exception    = jl_new_struct((jl_datatype_t*)core("DomainError"));
-    jl_overflow_exception  = jl_new_struct((jl_datatype_t*)core("OverflowError"));
-    jl_inexact_exception   = jl_new_struct((jl_datatype_t*)core("InexactError"));
-    jl_undefref_exception  = jl_new_struct((jl_datatype_t*)core("UndefRefError"));
+    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
+    jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
+    jl_inexact_exception   = jl_new_struct_uninit((jl_datatype_t*)core("InexactError"));
+    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_interrupt_exception = jl_new_struct((jl_datatype_t*)core("InterruptException"));
-    jl_bounds_exception    = jl_new_struct((jl_datatype_t*)core("BoundsError"));
-    jl_memory_exception    = jl_new_struct((jl_datatype_t*)core("MemoryError"));
+    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
+    jl_bounds_exception    = jl_new_struct_uninit((jl_datatype_t*)core("BoundsError"));
+    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("MemoryError"));
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");

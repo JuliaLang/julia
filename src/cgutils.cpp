@@ -872,8 +872,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
 }
 
 #define CHECK_BOUNDS 1
-
-static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
+static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
@@ -881,7 +880,30 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
          jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
         jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON) {
         Value *ok = builder.CreateICmpULT(im1, len);
-        raise_exception_unless(ok, prepare_global(jlboundserr_var), ctx);
+        BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+        BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+        builder.CreateCondBr(ok, passBB, failBB);
+        builder.SetInsertPoint(failBB);
+        if (ty == (jl_value_t*)jl_any_type) {
+            builder.CreateCall3(prepare_call(jlvboundserror_func), a, len, i);
+        }
+        else if (ty) {
+            if (!a->getType()->isPtrOrPtrVectorTy()) {
+                Value *tempSpace = builder.CreateAlloca(a->getType());
+                builder.CreateStore(a, tempSpace);
+                a = tempSpace;
+            }
+            builder.CreateCall3(prepare_call(jluboundserror_func),
+                    builder.CreatePointerCast(a, T_pint8),
+                    literal_pointer_val(ty),
+                    i);
+        }
+        else {
+            builder.CreateCall2(prepare_call(jlboundserror_func), a, i);
+        }
+        builder.CreateUnreachable();
+        ctx->f->getBasicBlockList().push_back(passBB);
+        builder.SetInsertPoint(passBB);
     }
 #endif
     return im1;
@@ -972,8 +994,8 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
 static Value *julia_bool(Value *cond)
 {
     return builder.CreateSelect(cond,
-                                literal_pointer_val(jl_true),
-                                literal_pointer_val(jl_false));
+                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var))),
+                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
 }
 
 // --- get the inferred type of an AST node ---
@@ -1239,8 +1261,10 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     SwitchInst *sw = builder.CreateSwitch(ival,deflt,n);
     // Anything else is a bounds error
     builder.SetInsertPoint(deflt);
-    builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
-                        ConstantInt::get(T_int32, ctx->lineno));
+    Value *tmp = builder.CreateAlloca(ty);
+    builder.CreateStore(tuple, tmp);
+    jl_add_linfo_root(ctx->linfo, jt);
+    builder.CreateCall3(prepare_call(jluboundserror_func), builder.CreatePointerCast(tmp, T_pint8), literal_pointer_val(jt), ival);
     builder.CreateUnreachable();
     size_t ntuple = jl_tuple_len(jt);
     PHINode *ret = PHINode::Create(jl_pvalue_llvmt, ntuple);
@@ -1411,9 +1435,12 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
         endBB = BasicBlock::Create(getGlobalContext(), "idxend");
     }
 #endif
+    Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
     for(size_t k=0; k < nidxs; k++) {
-        Value *ii = emit_unbox(T_size, emit_unboxed(args[k], ctx), NULL);
-        ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
+        idxs[k] = emit_unbox(T_size, emit_unboxed(args[k], ctx), NULL);
+    }
+    for(size_t k=0; k < nidxs; k++) {
+        Value *ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
             Value *d =
@@ -1438,8 +1465,11 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
-        builder.CreateCall2(prepare_call(jlthrow_line_func), tbaa_decorate(tbaa_const,builder.CreateLoad(prepare_global(jlboundserr_var))),
-                            ConstantInt::get(T_int32, ctx->lineno));
+        Value *tmp = builder.CreateAlloca(T_size, ConstantInt::get(T_size, nidxs));
+        for(size_t k=0; k < nidxs; k++) {
+            builder.CreateStore(idxs[k], builder.CreateGEP(tmp, ConstantInt::get(T_size, k)));
+        }
+        builder.CreateCall3(prepare_call(jlboundserrorv_func), a, tmp, ConstantInt::get(T_size, nidxs));
         builder.CreateUnreachable();
 
         ctx->f->getBasicBlockList().push_back(endBB);
