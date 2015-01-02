@@ -2022,4 +2022,6 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
+ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
 @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
+ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
