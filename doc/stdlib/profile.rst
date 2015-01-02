@@ -1,6 +1,6 @@
 .. module:: Profile
 
-.. _stdlib-linalg:
+.. _stdlib-profiling:
 
 Profiling
 =========
@@ -32,7 +32,7 @@ Profiling
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine
-   results exported by a previous call to ``Profile.retrieve()``.
+   results exported by a previous call to :func:`.retrieve`.
    Supply the vector ``data`` of backtraces and a dictionary
    ``lidict`` of line information.
 
@@ -49,12 +49,12 @@ Profiling
 .. function:: fetch() -> data
 
    Returns a reference to the internal buffer of backtraces. Note that
-   subsequent operations, like ``Profile.clear()``, can affect
+   subsequent operations, like :func:`clear`, can affect
    ``data`` unless you first make a copy. Note that the values in
    ``data`` have meaning only on this machine in the current session,
    because it depends on the exact memory addresses used in
    JIT-compiling. This function is primarily for internal use;
-   ``Profile.retrieve()`` may be a better choice for most users.
+   :func:`retrieve` may be a better choice for most users.
 
 .. function:: retrieve() -> data, lidict
 
@@ -65,7 +65,7 @@ Profiling
    number. This function allows you to save profiling results for
    future analysis.
 
-.. function::callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{(count, linfo)}
+.. function:: callers(funcname, [data, lidict], [filename=<filename>], [linerange=<start:stop>]) -> Vector{(count, linfo)}
 
    Given a previous profiling run, determine who called a particular
    function. Supplying the filename (and optionally, range of line
@@ -73,13 +73,13 @@ Profiling
    disambiguate an overloaded method. The returned value is a vector
    containing a count of the number of calls and line information
    about the caller.  One can optionally supply backtrace data
-   obtained from ``retrieve``; otherwise, the current internal profile
+   obtained from :func:`retrieve`; otherwise, the current internal profile
    buffer is used.
 
 .. function:: clear_malloc_data()
 
    Clears any stored memory allocation data when running julia with
    ``--track-allocation``.  Execute the command(s) you want to test
-   (to force JIT-compilation), then call ``clear_malloc_data()``.
-   Then execute your command(s) again, quit julia, and examine the
+   (to force JIT-compilation), then call :func:`clear_malloc_data`.
+   Then execute your command(s) again, quit Julia, and examine the
    resulting ``*.mem`` files.
