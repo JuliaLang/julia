@@ -182,7 +182,7 @@ end
 
 function isperm(A)
     n = length(A)
-    used = falses(n)
+    used = zeros(Bit, n)
     for a in A
         (0 < a <= n) && (used[a] $= true) || return false
     end

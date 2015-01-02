@@ -16,7 +16,7 @@ end
 #function aTb(A::BitMatrix, B::BitMatrix)
     #(mA, nA) = size(A)
     #(mB, nB) = size(B)
-    #C = falses(nA, nB)
+    #C = zeros(Bit, nA, nB)
     #if mA != mB; throw(DimensionMismatch()) end
     #if mA == 0; return C; end
     #col_ch = num_bit_chunks(mA)
@@ -42,7 +42,7 @@ end
 
 function triu(B::BitMatrix, k::Integer=0)
     m,n = size(B)
-    A = falses(m,n)
+    A = zeros(Bit, m,n)
     Ac = A.chunks
     Bc = B.chunks
     for i = max(k+1,1):n
@@ -54,7 +54,7 @@ end
 
 function tril(B::BitMatrix, k::Integer=0)
     m,n = size(B)
-    A = falses(m, n)
+    A = zeros(Bit, m, n)
     Ac = A.chunks
     Bc = B.chunks
     for i = 1:min(n, m+k)
@@ -87,7 +87,7 @@ end
 function diagm(v::Union(BitVector,BitMatrix))
     isa(v, BitMatrix) && size(v,1)==1 || size(v,2)==1 || throw(DimensionMismatch())
     n = length(v)
-    a = falses(n, n)
+    a = zeros(Bit, n, n)
     for i=1:n
         a[i,i] = v[i]
     end
@@ -104,7 +104,7 @@ qr(A::BitMatrix) = qr(float(A))
 function kron(a::BitVector, b::BitVector)
     m = length(a)
     n = length(b)
-    R = falses(n * m)
+    R = zeros(Bit, n * m)
     Rc = R.chunks
     bc = b.chunks
     for j = 1:m
@@ -116,7 +116,7 @@ end
 function kron(a::BitMatrix, b::BitMatrix)
     mA,nA = size(a)
     mB,nB = size(b)
-    R = falses(mA*mB, nA*nB)
+    R = zeros(Bit, mA*mB, nA*nB)
 
     for i = 1:mA
         ri = (1:mB)+(i-1)*mB

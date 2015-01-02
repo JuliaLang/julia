@@ -135,7 +135,7 @@ let
     @test x == -12
     X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
-    @test isnan(X) == [trues(6),falses(5)]
+    @test isnan(X) == [ones(Bit, 6),zeros(Bit, 5)]
     @test X[7:11] == [1:5]
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)

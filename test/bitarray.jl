@@ -39,7 +39,7 @@ allsizes = [((), BitArray{0}), ((v1,), BitVector),
 ## Conversions ##
 
 for (sz,T) in allsizes
-    b1 = rand!(falses(sz...))
+    b1 = rand!(zeros(Bit, sz...))
     @test isequal(bitpack(bitunpack(b1)), b1)
     @test isequal(convert(Array{Float64,ndims(b1)}, b1),
                   convert(Array{Float64,ndims(b1)}, bitunpack(b1)))
@@ -55,14 +55,14 @@ timesofar("conversions")
 ## utility functions ##
 
 b1 = randbool(v1)
-@test isequal(fill!(b1, true), trues(size(b1)))
-@test isequal(fill!(b1, false), falses(size(b1)))
+@test isequal(fill!(b1, true), ones(Bit, size(b1)))
+@test isequal(fill!(b1, false), zeros(Bit, size(b1)))
 
 for (sz,T) in allsizes
-    @test isequal(bitunpack(trues(sz...)), ones(Bool, sz...))
-    @test isequal(bitunpack(falses(sz...)), zeros(Bool, sz...))
+    @test isequal(bitunpack(ones(Bit, sz...)), ones(Bool, sz...))
+    @test isequal(bitunpack(zeros(Bit, sz...)), zeros(Bool, sz...))
 
-    b1 = rand!(falses(sz...))
+    b1 = rand!(zeros(Bit, sz...))
     @test isa(b1, T)
 
     @check_bit_operation length(b1) Int
@@ -79,7 +79,7 @@ timesofar("utils")
 
 # 0d
 for (sz,T) in allsizes
-    b1 = rand!(falses(sz...))
+    b1 = rand!(zeros(Bit, sz...))
     @check_bit_operation getindex(b1)         Bool
     @check_bit_operation setindex!(b1, true)  T
     @check_bit_operation setindex!(b1, false) T
@@ -89,7 +89,7 @@ end
 # linear
 for (sz,T) in allsizes[2:end]
     l = *(sz...)
-    b1 = rand!(falses(sz...))
+    b1 = rand!(zeros(Bit, sz...))
     for j = 1:l
         @check_bit_operation getindex(b1, j) Bool
     end
@@ -558,7 +558,7 @@ b1 = randbool(n1, n2)
 @check_bit_operation imag(b1) BitMatrix
 @check_bit_operation conj(b1) BitMatrix
 
-b0 = falses(0)
+b0 = zeros(Bit, 0)
 @check_bit_operation (~)(b0)  BitVector
 @check_bit_operation (!)(b0)  BitVector
 @check_bit_operation (-)(b0)  Vector{Int}
@@ -581,7 +581,7 @@ b2 = randbool(n1, n2)
 @check_bit_operation (./)(b1, b2) Matrix{Float64}
 @check_bit_operation (.^)(b1, b2) BitMatrix
 
-b2 = trues(n1, n2)
+b2 = ones(Bit, n1, n2)
 @check_bit_operation div(b1, b2) BitMatrix
 @check_bit_operation mod(b1, b2) BitMatrix
 
@@ -598,7 +598,7 @@ b2 = randbool(n1, n1)
 @check_bit_operation (/)(b1, b1) Matrix{Float64}
 @check_bit_operation (\)(b1, b1) Matrix{Float64}
 
-b0 = falses(0)
+b0 = zeros(Bit, 0)
 @check_bit_operation (&)(b0, b0)  BitVector
 @check_bit_operation (|)(b0, b0)  BitVector
 @check_bit_operation ($)(b0, b0)  BitVector
@@ -660,7 +660,7 @@ for (x1,t1) = [(f1, Float64),
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
 end
 
-b2 = trues(n1, n2)
+b2 = ones(Bit, n1, n2)
 @check_bit_operation (./)(true, b2)  Matrix{Float64}
 @check_bit_operation div(true, b2)   BitMatrix
 @check_bit_operation mod(true, b2)   BitMatrix
@@ -782,7 +782,7 @@ cf2 = complex(f2)
 @check_bit_operation (.^)(b1, 0x0im) Matrix{Complex128}
 @check_bit_operation (.^)(b1, 0im)   Matrix{Complex128}
 
-b1 = trues(n1, n2)
+b1 = ones(Bit, n1, n2)
 @check_bit_operation (.^)(b1, -1.0im) Matrix{Complex128}
 @check_bit_operation (.^)(b1, 1.0im)  Matrix{Complex128}
 @check_bit_operation (.^)(b1, -1im)   Matrix{Complex128}
@@ -825,8 +825,8 @@ end
 
 b1 = randbool(v1)
 for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
-    @test isequal(b1 << m, [ b1[m+1:end]; falses(m) ])
-    @test isequal(b1 >>> m, [ falses(m); b1[1:end-m] ])
+    @test isequal(b1 << m, [ b1[m+1:end]; zeros(Bit, m) ])
+    @test isequal(b1 >>> m, [ zeros(Bit, m); b1[1:end-m] ])
     @test isequal(rol(b1, m), [ b1[m+1:end]; b1[1:m] ])
     @test isequal(ror(b1, m), [ b1[end-m+1:end]; b1[1:end-m] ])
     @test isequal(ror(b1, m), rol(b1, -m))
@@ -837,7 +837,7 @@ timesofar("datamove")
 
 ## countnz & find ##
 
-for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
+for m = 0:v1, b1 in Any[randbool(m), ones(Bit, m), zeros(Bit, m)]
     @check_bit_operation countnz(b1) Int
 
     @check_bit_operation findfirst(b1) Int
@@ -854,7 +854,7 @@ for m = 0:v1, b1 in Any[randbool(m), trues(m), falses(m)]
     @check_bit_operation find(b1) Vector{Int}
 end
 
-b1 = trues(v1)
+b1 = ones(Bit, v1)
 for i = 0:v1-1
     @test findfirst(b1 >> i) == i+1
     @test Base.findfirstnot(~(b1 >> i)) == i+1
@@ -888,7 +888,7 @@ m2 = 3
 @check_bit_operation all(b1) Bool
 @check_bit_operation sum(b1) Int
 
-b0 = falses(0)
+b0 = zeros(Bit, 0)
 @check_bit_operation any(b0) Bool
 @check_bit_operation all(b0) Bool
 @check_bit_operation sum(b0) Int

@@ -7,6 +7,15 @@ macro _mod64(l) :($(esc(l)) & 63) end
 macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
 num_bit_chunks(n::Int) = @_div64 (n+63)
 
+## Bit
+immutable Bit end
+
+Array{N}(::Type{Bit}, dims::NTuple{N,Int}) = BitArray(dims)
+Array(::Type{Bit}, dims::Int...) = BitArray(dims)
+
+zero(::Type{Bit}) = false
+one(::Type{Bit}) = true
+
 ## BitArray
 
 # notes: bits are stored in contiguous chunks
@@ -224,13 +233,11 @@ function fill!(B::BitArray, x)
     return B
 end
 
-falses(args...) = fill!(BitArray(args...), false)
-trues(args...) = fill!(BitArray(args...), true)
 
 function one(x::BitMatrix)
     m, n = size(x)
     m == n || throw(DimensionMismatch("multiplicative identity defined only for square matrices"))
-    a = falses(n, n)
+    a = zeros(Bit, n, n)
     for i = 1:n
         a[i,i] = true
     end
@@ -905,7 +912,7 @@ function div(B::BitArray, x::Bool)
 end
 function div(x::Bool, B::BitArray)
     all(B) || throw(DivideError())
-    return x ? trues(size(B)) : falses(size(B))
+    return fill!(BitArray(size(B)), x)
 end
 function div(x::Number, B::BitArray)
     all(B) || throw(DivideError())
@@ -917,16 +924,16 @@ end
 function mod(A::BitArray, B::BitArray)
     shp = promote_shape(size(A), size(B))
     all(B) || throw(DivideError())
-    return falses(shp)
+    return zeros(Bit, shp)
 end
 mod(A::BitArray, B::Array{Bool}) = mod(A, bitpack(B))
 mod(A::Array{Bool}, B::BitArray) = mod(bitpack(A), B)
 function mod(B::BitArray, x::Bool)
-    return x ? falses(size(B)) : throw(DivideError())
+    return x ? zeros(Bit, size(B)) : throw(DivideError())
 end
 function mod(x::Bool, B::BitArray)
     all(B) || throw(DivideError())
-    return falses(size(B))
+    return zeros(Bit, size(B))
 end
 function mod(x::Number, B::BitArray)
     all(B) || throw(DivideError())
@@ -948,12 +955,12 @@ for f in (:div, :mod)
 end
 
 function (&)(B::BitArray, x::Bool)
-    x ? copy(B) : falses(size(B))
+    x ? copy(B) : zeros(Bit, size(B))
 end
 (&)(x::Bool, B::BitArray) = B & x
 
 function (|)(B::BitArray, x::Bool)
-    x ? trues(size(B)) : copy(B)
+    x ? ones(Bit, size(B)) : copy(B)
 end
 (|)(x::Bool, B::BitArray) = B | x
 
@@ -984,10 +991,10 @@ for f in (:&, :|, :$)
 end
 
 function (.^)(B::BitArray, x::Bool)
-    x ? copy(B) : trues(size(B))
+    x ? copy(B) : ones(Bit, size(B))
 end
 function (.^)(x::Bool, B::BitArray)
-    x ? trues(size(B)) : ~B
+    x ? ones(Bit, size(B)) : ~B
 end
 function (.^)(x::Number, B::BitArray)
     z = x ^ false
@@ -996,7 +1003,7 @@ function (.^)(x::Number, B::BitArray)
 end
 function (.^)(B::BitArray, x::Integer)
     if x == 0
-        return trues(size(B))
+        return ones(Bit, size(B))
     elseif x < 0
         throw(DomainError())
     else
@@ -1195,7 +1202,7 @@ reverse(v::BitVector) = reverse!(copy(v))
 function (<<)(B::BitVector, i::Int64)
     n = length(B)
     i == 0 && return copy(B)
-    A = falses(n)
+    A = zeros(Bit, n)
     i < n && copy_chunks!(A.chunks, 1, B.chunks, i+1, n-i)
     return A
 end
@@ -1205,7 +1212,7 @@ end
 function (>>>)(B::BitVector, i::Int64)
     n = length(B)
     i == 0 && return copy(B)
-    A = falses(n)
+    A = zeros(Bit, n)
     i < n && copy_chunks!(A.chunks, i+1, B.chunks, 1, n-i)
     return A
 end
@@ -1380,7 +1387,7 @@ end
 
 function findnz(B::BitMatrix)
     I, J = findn(B)
-    return I, J, trues(length(I))
+    return I, J, ones(Bit, length(I))
 end
 
 ## Reductions ##
@@ -1524,7 +1531,7 @@ end
 function transpose(B::BitMatrix)
     l1 = size(B, 1)
     l2 = size(B, 2)
-    Bt = falses(l2, l1)
+    Bt = zeros(Bit, l2, l1)
 
     cgap1 = @_div64 l1
     cinc1 = @_mod64 l1

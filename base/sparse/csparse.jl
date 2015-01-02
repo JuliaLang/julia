@@ -265,7 +265,7 @@ etree(A::SparseMatrixCSC) = etree(A, false)
 function ereach{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, k::Integer, parent::Vector{Ti})
     m,n = size(A); Ap = A.colptr; Ai = A.rowval
     s = Ti[]; sizehint!(s, n)            # to be used as a stack
-    visited = falses(n)
+    visited = zeros(Bit, n)
     visited[k] = true
     for p in Ap[k]:(Ap[k+1] - 1)
         i = Ai[p]                # A[i,k] is nonzero

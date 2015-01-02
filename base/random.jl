@@ -7,7 +7,6 @@ export srand,
        rand, rand!,
        randn, randn!,
        randexp, randexp!,
-       randbool,
        AbstractRNG, RNG, MersenneTwister, RandomDevice
 
 
@@ -553,15 +552,6 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
 ## random BitArrays (AbstractRNG)
 
 rand!(r::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(r, B)
-
-randbool(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
-randbool(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
-
-randbool(dims::Dims)   = rand!(BitArray(dims))
-randbool(dims::Int...) = rand!(BitArray(dims))
-
-randbool(r::AbstractRNG=GLOBAL_RNG) = rand(r, Bool)
-
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

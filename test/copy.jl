@@ -9,7 +9,7 @@ for (dest, src, bigsrc, emptysrc, res) in [
     ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
     ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
     ([1, 2, 3], () -> tsk(4:5), () -> tsk(1:5), () -> tsk(1:0), mainres),
-    (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
+    (zeros(Bit, 3), () -> ones(Bit, 2), () -> ones(Bit, 5), () -> ones(Bit, 0), bitres)]
 
     @test copy!(copy(dest), src()) == res[1]
     @test copy!(copy(dest), 1, src()) == res[1]

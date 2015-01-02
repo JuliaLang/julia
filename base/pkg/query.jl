@@ -180,7 +180,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         vmask[p] = Dict{VersionNumber,BitVector}()
         vmaskp = vmask[p]
         for vn in keys(fdepsp)
-            vmaskp[vn] = falses(luds)
+            vmaskp[vn] = zeros(Bit, luds)
         end
         for (vn,a) in fdepsp
             vmind = findfirst(uniqdepssets, a)

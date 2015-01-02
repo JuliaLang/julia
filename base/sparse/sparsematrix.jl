@@ -1473,7 +1473,7 @@ function setindex!{Tv,Ti,T<:Integer}(A::SparseMatrixCSC{Tv,Ti}, B::SparseMatrixC
     colB = 1
     asgn_col = J[colB]
 
-    I_asgn = falses(m)
+    I_asgn = zeros(Bit, m)
     I_asgn[I] = true
 
     ptrS = 1

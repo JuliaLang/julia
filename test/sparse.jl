@@ -368,7 +368,7 @@ let ASZ = 1000, TSZ = 800
     @test A == B
 end
 
-let A = speye(Int, 5), I=[1:10], X=reshape([trues(10), falses(15)],5,5)
+let A = speye(Int, 5), I=[1:10], X=reshape([ones(Bit, 10), zeros(Bit, 15)],5,5)
     @test A[I] == A[X] == reshape([1,0,0,0,0,0,1,0,0,0], 10, 1)
     A[I] = [1:10]
     @test A[I] == A[X] == reshape([1:10], 10, 1)

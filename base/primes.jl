@@ -24,7 +24,7 @@ function primesmask(s::AbstractVector{Bool})
     end
     return s
 end
-primesmask(n::Int) = primesmask(falses(n))
+primesmask(n::Int) = primesmask(zeros(Bit, n))
 primesmask(n::Integer) = n <= typemax(Int) ? primesmask(int(n)) :
     error("you want WAY too many primes ($n)")
 

@@ -727,11 +727,10 @@ export
 # bitarrays
     bitpack,
     bitunpack,
-    falses,
     flipbits!,
     rol,
     ror,
-    trues,
+    Bit,
 
 # dequeues
     append!,

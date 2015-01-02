@@ -752,7 +752,7 @@ hash(x::Prehashed) = x.hash
     uniquerows = collect(values(firstrow))
 
     # Check for collisions
-    collided = falses(size(A, dim))
+    collided = zeros(Bit, size(A, dim))
     @inbounds begin
         @nloops N i A d->(if d == dim
                               k = i_d

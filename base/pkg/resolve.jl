@@ -69,7 +69,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     svdict = ((ByteString,VersionNumber)=>Int)[ vers[i][1:2]=>i for i = 1:nv ]
 
-    checked = falses(nv)
+    checked = zeros(Bit, nv)
 
     problematic = Array((ByteString,VersionNumber,ByteString),0)
     i = 1
