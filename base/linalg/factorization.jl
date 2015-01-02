@@ -482,7 +482,7 @@ function eigfact!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
     ishermitian(A) && return eigfact!(Hermitian(A))
     return Eigen(LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'V', 'N', A)[[2,4]]...)
 end
-eigfact{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigfact!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigfact!(copy(A), args...; kwargs...))
+eigfact{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); eigfact!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), permute = permute, scale = scale))
 eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 
 # function eig(A::Union(Number, AbstractMatrix); permute::Bool=true, scale::Bool=true)
@@ -505,16 +505,16 @@ function eigvals!{T<:BlasComplex}(A::StridedMatrix{T}; permute::Bool=true, scale
     ishermitian(A) && return eigvals(Hermitian(A))
     return LAPACK.geevx!(permute ? (scale ? 'B' : 'P') : (scale ? 'S' : 'N'), 'N', 'N', 'N', A)[2]
 end
-eigvals{T}(A::AbstractMatrix{T}, args...; kwargs...) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? eigvals!(convert(AbstractMatrix{S}, A), args...; kwargs...) : eigvals!(copy(A), args...; kwargs...))
+eigvals{T}(A::StridedMatrix{T}; permute::Bool=true, scale::Bool=true) = (S = promote_type(Float32, typeof(one(T)/norm(one(T)))); eigvals!(S != T ? convert(AbstractMatrix{S}, A) : copy(A), permute = permute, scale = scale))
 eigvals{T<:Number}(x::T; kwargs...) = (val = convert(promote_type(Float32,typeof(one(T)/norm(one(T)))),x); imag(val) == 0 ? [real(val)] : [val])
 
 #Computes maximum and minimum eigenvalue
-function eigmax(A::Union(Number, AbstractMatrix); kwargs...)
-    v = eigvals(A; kwargs...)
+function eigmax(A::Union(Number, StridedMatrix); permute::Bool=true, scale::Bool=true)
+    v = eigvals(A, permute = permute, scale = scale)
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : maximum(v)
 end
-function eigmin(A::Union(Number, AbstractMatrix); kwargs...)
-    v = eigvals(A; kwargs...)
+function eigmin(A::Union(Number, StridedMatrix); permute::Bool=true, scale::Bool=true)
+    v = eigvals(A, permute = permute, scale = scale)
     iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
 end
 
