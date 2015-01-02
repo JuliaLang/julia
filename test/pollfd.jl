@@ -1,5 +1,4 @@
 @unix_only begin
-require("testdefs.jl")
 
 pipe_fds = Array(Cint,2)
 @test 0 == ccall(:pipe, Cint, (Ptr{Cint},), pipe_fds)

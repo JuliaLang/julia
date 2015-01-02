@@ -150,6 +150,19 @@ function test_monitor_wait(tval)
     @test events.changed
 end
 
+function test_monitor_wait_poll(tval)
+    fm = watch_file(file, poll=true)
+    @async begin
+        sleep(tval)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    @test fname == basename(file)
+    @test events.writable
+end
+
 # Commented out the tests below due to issues 3015, 3016 and 3020
 test_timeout(0.1)
 test_timeout(1)
@@ -159,6 +172,7 @@ test_touch(2)
 #test_monitor(0.1)
 test_monitor(2)
 test_monitor_wait(0.1)
+test_monitor_wait_poll(0.5)
 
 ##########
 #  mmap  #
