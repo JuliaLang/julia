@@ -34,6 +34,7 @@
    calling-c-and-fortran-code
    embedding
    packages
+   profile
    performance-tips
    style-guide
    faq
