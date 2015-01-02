@@ -1,18 +1,20 @@
 .. _man-dates:
 
+.. currentmodule:: Base.Dates
+
 *************************************
  Date and DateTime  
 *************************************
 
-The ``Dates`` module provides two types for working with dates: ``Date`` and ``DateTime``, representing day and millisecond precision, respectively; both are subtypes of the abstract ``TimeType``. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don't have to be dealt with. For example, since the ``Date`` type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.
+The :mod:`Dates` module provides two types for working with dates: :class:`Date` and :class:`DateTime`, representing day and millisecond precision, respectively; both are subtypes of the abstract :class:`TimeType`. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don't have to be dealt with. For example, since the :class:`Date` type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.
 
-Both ``Date`` and ``DateTime`` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The ``DateTime`` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both ``Date`` and ``DateTime`` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
+Both :class:`Date` and :class:`DateTime` are basically immutable ``Int64`` wrappers. The single ``instant`` field of either type is actually a ``UTInstant{P}`` type, which represents a continuously increasing machine timeline based on the UT second [1]_. The :class:`DateTime` type is *timezone-unaware* (in Python parlance) or is analogous to a *LocalDateTime* in Java 8. Additional time zone functionality can be added through the `Timezones.jl package <https://github.com/quinnj/Timezones.jl/>`_, which compiles the `Olsen Time Zone Database <http://www.iana.org/time-zones>`_. Both :class:`Date` and :class:`DateTime` are based on the ISO 8601 standard, which follows the proleptic Gregorian calendar. One note is that the ISO 8601 standard is particular about BC/BCE dates. In general, the last day of the BC/BCE era, 1-12-31 BC/BCE, was followed by 1-1-1 AD/CE, thus no year zero exists. The ISO standard, however, states that 1 BC/BCE is year zero, so ``0000-12-31`` is the day before ``0001-01-01``, and year ``-0001`` (yes, negative one for the year) is 2 BC/BCE, year ``-0002`` is 3 BC/BCE, etc.
 
-.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that ``Date`` and ``DateTime`` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <http://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
+.. [1] The notion of the UT second is actually quite fundamental. There are basically two different notions of time generally accepted, one based on the physical rotation of the earth (one full rotation = 1 day), the other based on the SI second (a fixed, constant value). These are radically different! Think about it, a "UT second", as defined relative to the rotation of the earth, may have a different absolute length depending on the day! Anyway, the fact that :class:`Date` and :class:`DateTime` are based on UT seconds is a simplifying, yet honest assumption so that things like leap seconds and all their complexity can be avoided. This basis of time is formally called `UT <http://en.wikipedia.org/wiki/Universal_Time>`_ or UT1. Basing types on the UT second basically means that every minute has 60 seconds and every day has 24 hours and leads to more natural calculations when working with calendar dates.
 
 Constructors
 ------------
-``Date`` and ``DateTime`` types can be constructed by integer or ``Period`` types, by parsing, or through adjusters (more on those later)::
+:class:`Date` and :class:`DateTime` types can be constructed by integer or :class:`Period` types, by parsing, or through adjusters (more on those later)::
 
   julia> DateTime(2013)
   2013-01-01T00:00:00
@@ -50,20 +52,20 @@ Constructors
   julia> Date(Dates.Month(7),Dates.Year(2013))
   2013-07-01
 
-``Date`` or ``DateTime`` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and pass to a ``Date`` or ``DateTime`` constructor. 
+:class:`Date` or :class:`DateTime` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and pass to a :class:`Date` or :class:`DateTime` constructor. 
 
 Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so ``"y-m-d"`` lets the parser know that between the first and second slots in a date string like ``"2014-07-16"``, it should find the ``-`` character. The ``y``, ``m``, and ``d`` characters let the parser know which periods to parse in each slot. 
 
 Fixed-width slots are specified by repeating the period character the number of times corresponding to the width. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next. 
 
-Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions ``dayname`` and ``monthname``, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the ``Dates.MONTHTOVALUEABBR`` and ``Dates.MONTHTOVALUE`` dicts for abbreviated and full-name month names, respectively.
+Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
 A full suite of parsing and formatting tests and examples is available in `tests/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
 
 Durations/Comparisons
 ---------------------
 
-Finding the length of time between two ``Date`` or ``DateTime`` is straightforward given their underlying representation as ``UTInstant{Day}`` and ``UTInstant{Millisecond}``, respectively. The difference between ``Date`` is returned in the number of ``Day``, and ``DateTime`` in the number of ``Millisecond``. Similarly, comparing ``TimeType`` is a simple matter of comparing the underlying machine instants (which in turn compares the internal ``Int64`` values).
+Finding the length of time between two :class:`Date` or :class:`DateTime` is straightforward given their underlying representation as ``UTInstant{Day}`` and ``UTInstant{Millisecond}``, respectively. The difference between :class:`Date` is returned in the number of :class:`Day`, and :class:`DateTime` in the number of :class:`Millisecond`. Similarly, comparing :class:`TimeType` is a simple matter of comparing the underlying machine instants (which in turn compares the internal ``Int64`` values).
 
 ::
 
@@ -119,7 +121,7 @@ Finding the length of time between two ``Date`` or ``DateTime`` is straightforwa
 Accessor Functions
 ------------------
 
-Because the `Date` and `DateTime` types are stored as single ``Int64`` values, date parts or fields can be retrieved through accessor functions. The lowercase accessors return the field as an integer::
+Because the :class:`Date` and :class:`DateTime` types are stored as single ``Int64`` values, date parts or fields can be retrieved through accessor functions. The lowercase accessors return the field as an integer::
 
   julia> t = Date(2014,1,31)
   2014-01-31
@@ -136,7 +138,7 @@ Because the `Date` and `DateTime` types are stored as single ``Int64`` values, d
   julia> Dates.day(t)
   31
 
-While propercase return the same value in the corresponding ``Period`` type::
+While propercase return the same value in the corresponding :class:`Period` type::
 
   julia> Dates.Year(t)
   2014 years
@@ -172,7 +174,7 @@ One may also access the underlying ``UTInstant`` or integer value::
 Query Functions
 ---------------
 
-Query functions provide calendrical information about a ``TimeType``. They include information about the day of the week::
+Query functions provide calendrical information about a :class:`TimeType`. They include information about the day of the week::
 
   julia> t = Date(2014,1,31)
   2014-01-31
@@ -194,7 +196,7 @@ Month of the year::
   julia> Dates.daysinmonth(t)
   31
 
-As well as information about the ``TimeType``'s year and quarter::
+As well as information about the :class:`TimeType`'s year and quarter::
 
   julia> Dates.isleapyear(t)
   false
@@ -208,7 +210,7 @@ As well as information about the ``TimeType``'s year and quarter::
   julia> Dates.dayofquarter(t)
   31
 
-The ``dayname`` and ``monthname`` methods can also take an optional ``locale`` keyword that can be used to return the name of the day or month of the year for other languages/locales::
+The :func:`dayname` and :func:`monthname` methods can also take an optional ``locale`` keyword that can be used to return the name of the day or month of the year for other languages/locales::
 
   julia> const french_daysofweek = Dict(1=>"Lundi",2=>"Mardi",3=>"Mercredi",4=>"Jeudi",5=>"Vendredi",6=>"Samedi",7=>"Dimanche");
 
@@ -218,14 +220,14 @@ The ``dayname`` and ``monthname`` methods can also take an optional ``locale`` k
   julia> Dates.dayname(t;locale="french")
   "Vendredi"
 
-Similarly for the ``monthname`` function, a mapping of ``locale=>Dict{Int,UTF8String}`` should be loaded in ``Dates.VALUETOMONTH``.
+Similarly for the :func:`monthname` function, a mapping of ``locale=>Dict{Int,UTF8String}`` should be loaded in :const:`VALUETOMONTH`.
 
 TimeType-Period Arithmetic
 --------------------------
 
 It's good practice when using any language/date framework to be familiar with how date-period arithmetic is handled as there are some `tricky issues <http://msmvps.com/blogs/jon_skeet/archive/2010/12/01/the-joys-of-date-time-arithmetic.aspx>`_ to deal with (though much less so for day-precision types).
 
-The ``Dates`` module approach tries to follow the simple principle of trying to change as little as possible when doing ``Period`` arithmetic. This approach is also often known as *calendrical* arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let's take a classic example: add 1 month to January 31st, 2014. What's the answer? Javascript will say `March 3 <http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/>`_ (assumes 31 days). PHP says `March 2 <http://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month>`_ (assumes 30 days). The fact is, there is no right answer. In the ``Dates`` module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.
+The :mod:`Dates` module approach tries to follow the simple principle of trying to change as little as possible when doing :class:`Period` arithmetic. This approach is also often known as *calendrical* arithmetic or what you would probably guess if someone were to ask you the same calculation in a conversation. Why all the fuss about this? Let's take a classic example: add 1 month to January 31st, 2014. What's the answer? Javascript will say `March 3 <http://www.markhneedham.com/blog/2009/01/07/javascript-add-a-month-to-a-date/>`_ (assumes 31 days). PHP says `March 2 <http://stackoverflow.com/questions/5760262/php-adding-months-to-a-date-while-not-exceeding-the-last-day-of-the-month>`_ (assumes 30 days). The fact is, there is no right answer. In the :mod:`Dates` module, it gives the result of February 28th. How does it figure that out? I like to think of the classic 7-7-7 gambling game in casinos.
 
 Now just imagine that instead of 7-7-7, the slots are Year-Month-Day, or in our example, 2014-01-31. When you ask to add 1 month to this date, the month slot is incremented, so now we have 2014-02-31. Then the day number is checked if it is greater than the last valid day of the new month; if it is (as in the case above), the day number is adjusted down to the last valid day (28). What are the ramifications with this approach? Go ahead and add another month to our date, ``2014-02-28 + Month(1) == 2014-03-28``. What? Were you expecting the last day of March? Nope, sorry, remember the 7-7-7 slots. As few slots as possible are going to change, so we first increment the month slot by 1, 2014-03-28, and boom, we're done because that's a valid date. On the other hand, if we were to add 2 months to our original date, 2014-01-31, then we end up with 2014-03-31, as expected. The other ramification of this approach is a loss in associativity when a specific ordering is forced (i.e. adding things in different orders results in different outcomes). For example::
 
@@ -243,7 +245,7 @@ What's going on there? In the first line, we're adding 1 day to January 29th, wh
   julia> Date(2014,1,29) + Dates.Month(1) + Dates.Day(1)
   2014-03-01
 
-Tricky? Perhaps. What is an innocent ``Dates`` user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that's pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the "joys" of dealing with daylight savings, leap seconds, etc.).
+Tricky? Perhaps. What is an innocent :mod:`Dates` user to do? The bottom line is to be aware that explicitly forcing a certain associativity, when dealing with months, may lead to some unexpected results, but otherwise, everything should work as expected. Thankfully, that's pretty much the extent of the odd cases in date-period arithmetic when dealing with time in UT (avoiding the "joys" of dealing with daylight savings, leap seconds, etc.).
 
 
 Adjuster Functions
@@ -251,7 +253,7 @@ Adjuster Functions
 
 As convenient as date-period arithmetics are, often the kinds of calculations needed on dates take on a *calendrical* or *temporal* nature rather than a fixed number of periods. Holidays are a perfect example; most follow rules such as "Memorial Day = Last Monday of May", or "Thanksgiving = 4th Thursday of November". These kinds of temporal expressions deal with rules relative to the calendar, like first or last of the month, next Tuesday, or the first and third Wednesdays, etc.
 
-The ``Dates`` module provides the *adjuster* API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single ``TimeType`` as input and return or *adjust to* the first or last of the desired period relative to the input.
+The :mod:`Dates` module provides the *adjuster* API through several convenient methods that aid in simply and succinctly expressing temporal rules. The first group of adjuster methods deal with the first and last of weeks, months, quarters, and years. They each take a single :class:`TimeType` as input and return or *adjust to* the first or last of the desired period relative to the input.
 
 ::
 
@@ -267,7 +269,7 @@ The ``Dates`` module provides the *adjuster* API through several convenient meth
   julia> Dates.lastdayofquarter(Date(2014,7,16))
   2014-09-30
 
-The next two higher-order methods, ``tonext``, and ``toprev``, generalize working with temporal expressions by taking a ``DateFunction`` as first argument, along with a starting ``TimeType``. A ``DateFunction`` is just a function, usually anonymous, that takes a single ``TimeType`` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion. 
+The next two higher-order methods, :func:`tonext`, and :func:`toprev`, generalize working with temporal expressions by taking a :class:`DateFunction` as first argument, along with a starting :class:`TimeType`. A :class:`DateFunction` is just a function, usually anonymous, that takes a single :class:`TimeType` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion. 
 For example::
 
   julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday  # Returns true if the day of the week of x is Tuesday
@@ -290,7 +292,7 @@ This is useful with the do-block syntax for more complex temporal expressions::
         end
   2014-11-27
 
-The final method in the adjuster API is the ``recur`` function. ``recur`` vectorizes the adjustment process by taking a start and stop date (optionally specificed by a ``StepRange``), along with a ``DateFunction`` to specify all valid dates/moments to be returned in the specified range. In this case, the ``DateFunction`` is often referred to as the "inclusion" function because it specifies (by returning true) which dates/moments should be included in the returned vector of dates.
+The final method in the adjuster API is the :func:`recur` function. :func:`recur` vectorizes the adjustment process by taking a start and stop date (optionally specificed by a :class:`StepRange`), along with a :class:`DateFunction` to specify all valid dates/moments to be returned in the specified range. In this case, the :class:`DateFunction` is often referred to as the "inclusion" function because it specifies (by returning ``true``) which dates/moments should be included in the returned vector of dates.
 
 ::
 
@@ -318,7 +320,7 @@ Additional examples and tests are available in `test/dates/adjusters.jl <https:/
 Period Types
 ------------
 
-Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. ``Period`` types are simple ``Int64`` wrappers and are constructed by wrapping any ``Int64`` convertible type, i.e. ``Year(1)`` or ``Month(3.0)``. Arithmetic between ``Period`` of the same type behave like integers, and limited ``Period-Real`` arithmetic is available.
+Periods are a human view of discrete, sometimes irregular durations of time. Consider 1 month; it could represent, in days, a value of 28, 29, 30, or 31 depending on the year and month context. Or a year could represent 365 or 366 days in the case of a leap year. :class:`Period` types are simple ``Int64`` wrappers and are constructed by wrapping any ``Int64`` convertible type, i.e. ``Year(1)`` or ``Month(3.0)``. Arithmetic between :class:`Period` of the same type behave like integers, and limited ``Period-Real`` arithmetic is available.
 ::
 
   julia> y1 = Dates.Year(1)

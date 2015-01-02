@@ -247,6 +247,7 @@ const uni_ops = Set{Symbol}([:(+), :(-), :(!), :(¬), :(~), :(<:), :(>:), :(√)
 const expr_infix_wide = Set([:(=), :(+=), :(-=), :(*=), :(/=), :(\=), :(&=),
     :(|=), :($=), :(>>>=), :(>>=), :(<<=), :(&&), :(||), :(<:), :(=>)])
 const expr_infix = Set([:(:), :(->), symbol("::")])
+const expr_infix_any = union(expr_infix, expr_infix_wide)
 const expr_calls  = Dict(:call =>('(',')'), :calldecl =>('(',')'), :ref =>('[',']'), :curly =>('{','}'))
 const expr_parens = Dict(:tuple=>('(',')'), :vcat=>('[',']'), :cell1d=>("Any[","]"),
                          :hcat =>('[',']'), :row =>('[',']'))
@@ -290,18 +291,25 @@ unquoted(ex::Expr)       = ex.args[1]
 ## AST printing helpers ##
 
 const indent_width = 4
+show_expr_type_emphasize = false
 
 function show_expr_type(io::IO, ty)
-    if !is(ty, Any)
-        if is(ty, Function)
-            print(io, "::F")
-        elseif is(ty, IntrinsicFunction)
-            print(io, "::I")
+    if is(ty, Function)
+        print(io, "::F")
+    elseif is(ty, IntrinsicFunction)
+        print(io, "::I")
+    else
+        if show_expr_type_emphasize::Bool && !isleaftype(ty)
+            emphasize(io, "::$ty")
         else
-            print(io, "::$ty")
+            if !is(ty, Any)
+                print(io, "::$ty")
+            end
         end
     end
 end
+
+emphasize(io, str::AbstractString) = have_color ? print_with_color(:red, io, str) : print(io, uppercase(str))
 
 show_linenumber(io::IO, line)       = print(io," # line ",line,':')
 show_linenumber(io::IO, line, file) = print(io," # ",file,", line ",line,':')
@@ -351,7 +359,8 @@ end
 # show a normal (non-operator) function call, e.g. f(x,y) or A[z]
 function show_call(io::IO, head, func, func_args, indent)
     op, cl = expr_calls[head]
-    if isa(func, Symbol) || (isa(func, Expr) && func.head == :.)
+    if isa(func, Symbol) || (isa(func, Expr) &&
+            (func.head == :. || func.head == :curly))
         show_unquoted(io, func, indent)
     else
         print(io, '(')
@@ -409,6 +418,9 @@ end
 # TODO: implement interpolated strings
 function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     head, args, nargs = ex.head, ex.args, length(ex.args)
+    show_type = true
+    global show_expr_type_emphasize
+    state = show_expr_type_emphasize::Bool
 
     # dot (i.e. "x.y")
     if is(head, :(.))
@@ -423,15 +435,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
 
     # infix (i.e. "x<:y" or "x = y")
-    elseif (head in expr_infix && nargs==2) || (is(head,:(:)) && nargs==3)
-        show_list(io, args, head, indent, 0, true)
-
-    elseif head in expr_infix_wide && nargs == 2
+    elseif (head in expr_infix_any && nargs==2) || (is(head,:(:)) && nargs==3)
         func_prec = operator_precedence(head)
+        head_ = head in expr_infix_wide ? " $head " : head
         if func_prec < prec
-            show_enclosed_list(io, '(', args, " $head ", ')', indent, func_prec, true)
+            show_enclosed_list(io, '(', args, head_, ')', indent, func_prec, true)
         else
-            show_list(io, args, " $head ", indent, func_prec, true)
+            show_list(io, args, head_, indent, func_prec, true)
         end
 
     # list (i.e. "(1,2,3)" or "[1,2,3]")
@@ -459,6 +469,10 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         func = args[1]
         func_prec = operator_precedence(func)
         func_args = args[2:end]
+
+        if in(ex.args[1], (:box, TopNode(:box), :throw)) || ismodulecall(ex)
+            show_expr_type_emphasize::Bool = show_type = false
+        end
 
         # scalar multiplication (i.e. "100x")
         if (func == :(*) && length(func_args)==2 &&
@@ -579,6 +593,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         show_list(io, args, ' ', indent)
 
     elseif is(head, :line) && 1 <= nargs <= 2
+        show_type = false
         show_linenumber(io, args...)
 
     elseif is(head, :if) && nargs == 3     # if/else
@@ -660,6 +675,8 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     # print anything else as "Expr(head, args...)"
     else
+        show_type = false
+        show_expr_type_emphasize::Bool = in(ex.head, (:lambda, :method))
         print(io, "\$(Expr(")
         show(io, ex.head)
         for arg in args
@@ -669,7 +686,31 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "))")
     end
 
-    show_expr_type(io, ex.typ)
+    if ex.head == :(=)
+        show_type = show_type_assignment(ex.args[2])
+    elseif in(ex.head, (:boundscheck, :gotoifnot, :return))
+        show_type = false
+    end
+
+    if show_type
+        show_expr_type(io, ex.typ)
+    end
+
+    show_expr_type_emphasize::Bool = state
+end
+
+show_type_assignment(::Number) = false
+show_type_assignment(::(Number...)) = false
+show_type_assignment(::Expr) = false
+show_type_assignment(::SymbolNode) = false
+show_type_assignment(::LambdaStaticData) = false
+show_type_assignment(a) = true
+
+function ismodulecall(ex::Expr)
+    ex.head == :call && ex.args[1] == TopNode(:getfield) &&
+        isa(ex.args[2], Symbol) &&
+        isdefined(current_module(), ex.args[2]) &&
+        isa(getfield(current_module(), ex.args[2]), Module)
 end
 
 # dump & xdump - structured tree representation like R's str()

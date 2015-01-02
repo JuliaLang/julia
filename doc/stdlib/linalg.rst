@@ -209,9 +209,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`,
-   :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate
-   only a subset of the eigenvalues by specifying either a :func:`UnitRange`
+   Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
+   :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
+   only a subset of the eigenvalues by specifying either a :class:`UnitRange`
    ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
    ``vu`` for the lower and upper boundaries of the eigenvalues.
 
@@ -235,7 +235,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues
+   For :class:`SymTridiagonal` matrices, if the optional vector of eigenvalues
    ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
 .. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
@@ -248,9 +248,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following functions are available for ``Eigen`` objects: ``inv``,
    ``det``.
 
-   If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`,
+   If ``A`` is :class:`Symmetric`, :class:`Hermitian` or :class:`SymTridiagonal`,
    it is possible to calculate only a subset of the eigenvalues by specifying
-   either a :func:`UnitRange` ``irange`` covering indices of the sorted
+   either a :class:`UnitRange` ``irange`` covering indices of the sorted
    eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
    of the eigenvalues.
 

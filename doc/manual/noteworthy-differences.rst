@@ -144,3 +144,8 @@ Noteworthy differences from Python
   looping over arrays, the order of the loops should be reversed in
   Julia relative to `numpy` (see relevant section of
   :ref:`man-performance-tips`).
+- Julia evaluates default values of function arguments every time the method is
+  invoked (not once when the function is defined as in Python). This means
+  that function ``f(x=rand()) = x`` returns a new random number every time
+  it is invoked without argument. On the other hand function
+  ``g(x=[1,2]) = push!(x,3)`` returns ``[1,2,3]`` every time it is called as ``g()``.

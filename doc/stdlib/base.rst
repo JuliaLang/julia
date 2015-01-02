@@ -1422,8 +1422,8 @@ Strings
    Returns an iterator over substrings of ``s`` that correspond to
    the extended graphemes in the string, as defined by Unicode UAX #29.
    (Roughly, these are what users would perceive as single characters,
-    even though they may contain more than one codepoint; for example
-    a letter combined with an accent mark is a single grapheme.)
+   even though they may contain more than one codepoint; for example
+   a letter combined with an accent mark is a single grapheme.)
 
 .. function:: is_valid_ascii(s) -> Bool
 
@@ -2335,15 +2335,20 @@ Text I/O
 
    Equivalent to ``writedlm`` with ``delim`` set to comma.
 
-.. function:: Base64Pipe(ostream)
+.. function:: Base64EncodePipe(ostream)
 
    Returns a new write-only I/O stream, which converts any bytes written
    to it into base64-encoded ASCII bytes written to ``ostream``.  Calling
    ``close`` on the ``Base64Pipe`` stream is necessary to complete the
    encoding (but does not close ``ostream``).
 
-.. function:: base64(writefunc, args...)
-              base64(args...)
+.. function:: Base64DecodePipe(istream)
+
+   Returns a new read-only I/O stream, which decodes base64-encoded data
+   read from ``istream``.
+
+.. function:: base64encode(writefunc, args...)
+              base64encode(args...)
 
    Given a ``write``-like function ``writefunc``, which takes an I/O
    stream as its first argument, ``base64(writefunc, args...)``
@@ -2352,6 +2357,10 @@ Text I/O
    ``base64(write, args...)``: it converts its arguments into bytes
    using the standard ``write`` functions and returns the base64-encoded
    string.
+
+.. function:: base64decode(string)
+
+   Decodes the base64-encoded ``string`` and returns the obtained bytes.
 
 Multimedia I/O
 --------------
@@ -6440,6 +6449,14 @@ Internals
 .. function:: @code_typed
 
    Evaluates the arguments to the function call, determines their types, and calls the ``code_typed`` function on the resulting expression
+
+.. function:: code_warntype(f, types)
+
+   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The ASTs are annotated in such a way as to cause "non-leaf" types to be displayed in red. This serves as a warning of potential type instability. Not all non-leaf types are particularly problematic for performance, so the results need to be used judiciously. See :ref:`man-code-warntype` for more information.
+
+.. function:: @code_warntype
+
+   Evaluates the arguments to the function call, determines their types, and calls the ``code_warntype`` function on the resulting expression
 
 .. function:: code_llvm(f, types)
 

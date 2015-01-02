@@ -472,3 +472,6 @@ end
 # issue #8976
 @test conj(sparse([1im])) == sparse(conj([1im]))
 @test conj!(sparse([1im])) == sparse(conj!([1im]))
+
+# issue #9525
+@test_throws BoundsError sparse([3], [5], 1.0, 3, 3)

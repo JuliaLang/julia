@@ -101,6 +101,7 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
                                       0,    // opt_level
                                       1,    // depwarn
+                                      1     // can_inline
 };
 
 int jl_boot_file_loaded = 0;
@@ -125,21 +126,55 @@ static void jl_find_stack_bottom(void)
 }
 
 #ifdef _OS_WINDOWS_
-void __cdecl fpe_handler(int arg, int num)
+static char *strsignal(int sig)
 {
-    (void)arg;
-    fpreset();
-    signal(SIGFPE, (void (__cdecl *)(int))fpe_handler);
-    switch(num) {
-    case _FPE_INVALID:
-    case _FPE_OVERFLOW:
-    case _FPE_UNDERFLOW:
-    default:
-        jl_errorf("Unexpected FPE Error 0x%X", num);
+    switch (sig) {
+    case SIGINT:         return "SIGINT"; break;
+    case SIGILL:         return "SIGILL"; break;
+    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
+    case SIGFPE:         return "SIGFPE"; break;
+    case SIGSEGV:        return "SIGSEGV"; break;
+    case SIGTERM:        return "SIGTERM"; break;
+    case SIGBREAK:       return "SIGBREAK"; break;
+    case SIGABRT:        return "SIGABRT"; break;
+    }
+    return "?";
+}
+
+void __cdecl crt_sig_handler(int sig, int num)
+{
+    switch (sig) {
+    case SIGFPE:
+        fpreset();
+        signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler);
+        switch(num) {
+        case _FPE_INVALID:
+        case _FPE_OVERFLOW:
+        case _FPE_UNDERFLOW:
+        default:
+            jl_errorf("Unexpected FPE Error 0x%X", num);
+            break;
+        case _FPE_ZERODIVIDE:
+            jl_throw(jl_diverror_exception);
+            break;
+        }
         break;
-    case _FPE_ZERODIVIDE:
-        jl_throw(jl_diverror_exception);
+    case SIGINT:
+        signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
+        if (exit_on_sigint) jl_exit(0);
+        if (jl_defer_signal) {
+            jl_signal_pending = sig;
+        }
+        else {
+            jl_signal_pending = 0;
+            jl_throw(jl_interrupt_exception);
+        }
         break;
+    default: // SIGSEGV, (SSIGTERM, IGILL)
+        ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
+        bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
+        jlbacktrace();
+        raise(sig);
     }
 }
 #else
@@ -259,7 +294,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 {
     if (exit_on_sigint) jl_exit(0);
     int sig;
-    //windows signals use different numbers from unix
+    //windows signals use different numbers from unix (raise)
     switch(wsig) {
         case CTRL_C_EVENT: sig = SIGINT; break;
         //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
@@ -1113,8 +1148,24 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_exit(1);
     }
 #else // defined(_OS_WINDOWS_)
-    if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
+    if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGFPE\n");
+        jl_exit(1);
+    }
+    if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGILL\n");
+        jl_exit(1);
+    }
+    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGINT\n");
+        jl_exit(1);
+    }
+    if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGSEGV\n");
+        jl_exit(1);
+    }
+    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGTERM\n");
         jl_exit(1);
     }
     SetUnhandledExceptionFilter(exception_handler);
