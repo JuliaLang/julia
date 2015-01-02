@@ -29,8 +29,8 @@ differences that may trip up Julia users accustomed to MATLAB:
    literals are supported. But this means that some operations such as
    ``2^-1`` will throw a domain error as the result is not an integer (see
    :ref:`the FAQ entry on domain errors <man-domain-error>` for details).
-- Multiple values are returned and assigned with parentheses, ``return
-   (a, b)`` and ``(a, b) = f(x)``. The equivalent of ``nargout``,
+- Multiple values are returned and assigned with parentheses, e.g.
+   ``return (a, b)`` and ``(a, b) = f(x)``. The equivalent of ``nargout``,
    which is often used in Matlab to do optional work based on the
    number of returned values does not exist in Julia. Instead, users
    can use optional and keyword arguments to achieve similar
