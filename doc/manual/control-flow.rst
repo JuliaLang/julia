@@ -823,6 +823,13 @@ Instead, use a semicolon or insert a line break after ``catch``::
       x
     end
 
+The ``catch`` clause is not strictly necessary; when omitted, the default
+return value is ``nothing``.
+
+.. doctest::
+
+    julia> try error() end #Returns nothing
+
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
