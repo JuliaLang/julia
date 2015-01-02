@@ -289,7 +289,7 @@ end
 
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
-        s = StatStruct(convert(Ptr{UInt8},cur))
+        s = StatStruct(convert(Ptr{Uint8},cur))
         t.cb(t, FDEvent(isreadable(s), iswritable(s), false), status)
     end
 end
