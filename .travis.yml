@@ -22,7 +22,7 @@ notifications:
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - if [ `uname` = "Linux" ]; then
-        BUILDOPTS="USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
+        BUILDOPTS="-j3 USEGCC=1 LLVM_CONFIG=llvm-config-3.3 LLVM_LLC=llc-3.3 VERBOSE=1 USE_BLAS64=0";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND OPENLIBM RMATH; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
@@ -42,7 +42,7 @@ before_install:
         sed -i '' -e "s@https://downloads.sf.net/project/machomebrew/Bottles@https://cache.e.ip.saba.us/https://downloads.sf.net/project/machomebrew/Bottles@" /usr/local/Library/Homebrew/software_spec.rb;
         sed -i '' -e "s@https://homebrew.bintray.com@https://cache.e.ip.saba.us/https://homebrew.bintray.com@" /usr/local/Library/Homebrew/software_spec.rb;
         brew install -v --only-dependencies --HEAD julia;
-        BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
+        BUILDOPTS="-j3 USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
         for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
