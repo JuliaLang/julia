@@ -338,7 +338,7 @@ static void jl_update_all_fptrs()
     delayed_fptrs = NULL;
 }
 
-static int is_submodule(jl_module_t *parent, jl_module_t *child)
+int is_submodule(jl_module_t *parent, jl_module_t *child)
 {
     while (1) {
         if (parent == child)
