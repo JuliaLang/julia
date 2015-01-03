@@ -658,12 +658,12 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
 
-# {begins,ends}with
-@test beginswith("abcd", 'a')
-@test beginswith("abcd", "a")
-@test beginswith("abcd", "ab")
-@test !beginswith("ab", "abcd")
-@test !beginswith("abcd", "bc")
+# {starts,ends}with
+@test startswith("abcd", 'a')
+@test startswith("abcd", "a")
+@test startswith("abcd", "ab")
+@test !startswith("ab", "abcd")
+@test !startswith("abcd", "bc")
 @test endswith("abcd", 'd')
 @test endswith("abcd", "d")
 @test endswith("abcd", "cd")

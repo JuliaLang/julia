@@ -264,3 +264,5 @@ const base64 = base64encode
 @deprecate randbool(dims::Int...)                  bitrand(dims)
 @deprecate randbool(r::AbstractRNG, dims::Dims)    bitrand(r, dims)
 @deprecate randbool(r::AbstractRNG, dims::Int...)  bitrand(r, dims)
+
+@deprecate beginswith startswith

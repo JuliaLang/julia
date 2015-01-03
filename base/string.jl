@@ -490,9 +490,9 @@ end
 ==(a::AbstractString, b::AbstractString) = cmp(a,b) == 0
 isless(a::AbstractString, b::AbstractString) = cmp(a,b) < 0
 
-# begins with and ends with predicates
+# starts with and ends with predicates
 
-function beginswith(a::AbstractString, b::AbstractString)
+function startswith(a::AbstractString, b::AbstractString)
     i = start(a)
     j = start(b)
     while !done(a,i) && !done(b,i)
@@ -502,7 +502,7 @@ function beginswith(a::AbstractString, b::AbstractString)
     end
     done(b,i)
 end
-beginswith(str::AbstractString, chars::Chars) = !isempty(str) && str[start(str)] in chars
+startswith(str::AbstractString, chars::Chars) = !isempty(str) && str[start(str)] in chars
 
 function endswith(a::AbstractString, b::AbstractString)
     i = endof(a)
@@ -528,8 +528,8 @@ cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
 
-beginswith(a::ByteString, b::ByteString) = beginswith(a.data, b.data)
-beginswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
+startswith(a::ByteString, b::ByteString) = startswith(a.data, b.data)
+startswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
     (length(a) >= length(b) && ccall(:strncmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), a, b, length(b)) == 0)
 
 # TODO: fast endswith
