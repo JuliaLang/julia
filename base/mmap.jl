@@ -209,9 +209,9 @@ function mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset::FileOffs
     end
     chunks = mmap_array(UInt64, (nc,), s, offset)
     if iswrite
-        chunks[end] &= @_msk_end n
+        chunks[end] &= _msk_end(n)
     else
-        if chunks[end] != chunks[end] & @_msk_end n
+        if chunks[end] != chunks[end] & _msk_end(n)
             error("the given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with \"r+\" mode to override)")
         end
     end

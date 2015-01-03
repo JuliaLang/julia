@@ -1255,8 +1255,8 @@ show(io::IO, v::AbstractVector) = show_vector(io, v, "[", "]")
 
 # (following functions not exported - mainly intended for debug)
 
-function print_bit_chunk(io::IO, c::UInt64, l::Integer)
-    for s = 0 : l - 1
+function print_bit_chunk(io::IO, c::UInt64, l::Integer = 64)
+    for s = 0:l-1
         d = (c >>> s) & 1
         print(io, "01"[d + 1])
         if (s + 1) & 7 == 0
@@ -1265,21 +1265,18 @@ function print_bit_chunk(io::IO, c::UInt64, l::Integer)
     end
 end
 
-print_bit_chunk(io::IO, c::UInt64) = print_bit_chunk(io, c, 64)
-
 print_bit_chunk(c::UInt64, l::Integer) = print_bit_chunk(STDOUT, c, l)
 print_bit_chunk(c::UInt64) = print_bit_chunk(STDOUT, c)
 
 function bitshow(io::IO, B::BitArray)
-    if length(B) == 0
-        return
-    end
-    for i = 1 : length(B.chunks) - 1
-        print_bit_chunk(io, B.chunks[i])
+    length(B) == 0 && return
+    Bc = B.chunks
+    for i = 1:length(Bc)-1
+        print_bit_chunk(io, Bc[i])
         print(io, ": ")
     end
-    l = (@_mod64 (length(B)-1)) + 1
-    print_bit_chunk(io, B.chunks[end], l)
+    l = _mod64(length(B)-1) + 1
+    print_bit_chunk(io, Bc[end], l)
 end
 bitshow(B::BitArray) = bitshow(STDOUT, B)
 
