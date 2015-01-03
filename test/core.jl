@@ -1876,3 +1876,10 @@ let x = [1,2,3]
     @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int,Int,Int), x) === (1,2,3)
     @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int16,(Nothing,),Int8,(),Int,Nothing,Int), x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
 end
+
+# issue #9535
+counter9535 = 0
+f9535() = (global counter9535; counter9535 += 1; counter9535)
+g9535() = (f9535(),f9535())
+@assert g9535() == (1,2)
+@assert g9535() == (3,4)
