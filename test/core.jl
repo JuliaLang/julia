@@ -502,16 +502,6 @@ begin
     @test is(g(a),a)
 end
 
-# dispatch using Val{T}
-begin
-    local firstlast
-    firstlast(::Val{true}) = "First"
-    firstlast(::Val{false}) = "Last"
-
-    @test firstlast(Val{true}()) == "First"
-    @test firstlast(Val{false}()) == "Last"
-end
-
 # try/finally
 begin
     after = 0
