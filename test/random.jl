@@ -11,7 +11,7 @@ srand(0); rand(); x = rand(384);
 @test(typeof(rand(false:true)) == Bool)
 
 @test length(randn(4, 5)) == 20
-@test length(randbool(4, 5)) == 20
+@test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister()) == 0.8236475079774124
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -276,9 +276,8 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         f!(rng..., Array(Float64, 2, 3)) ::Array{Float64, 2}
     end
 
-    randbool(rng...)               ::Bool
-    randbool(rng..., 5)            ::BitArray{1}
-    randbool(rng..., 2, 3)         ::BitArray{2}
+    bitrand(rng..., 5)             ::BitArray{1}
+    bitrand(rng..., 2, 3)          ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 

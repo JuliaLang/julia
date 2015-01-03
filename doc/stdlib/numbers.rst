@@ -535,9 +535,9 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 
    Populate the array A with random values. If the indexable collection ``coll`` is specified, the values are picked randomly from ``coll``. This is equivalent to ``copy!(A, rand(rng, coll, size(A)))`` or ``copy!(A, rand(rng, eltype(A), size(A)))`` but without allocating a new array.
 
-.. function:: randbool([rng], [dims...])
+.. function:: bitrand([rng], [dims...])
 
-   Generate a random boolean value. Optionally, generate a ``BitArray`` of random boolean values.
+   Generate a ``BitArray`` of random boolean values.
 
 .. function:: randn([rng], [dims...])
 
@@ -554,4 +554,3 @@ As ``BigInt`` represents unbounded integers, the interval must be specified (e.g
 .. function:: randexp!([rng], A::Array{Float64,N})
 
    Fill the array A with random numbers following the exponential distribution (with scale 1).
-

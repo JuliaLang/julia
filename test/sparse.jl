@@ -297,8 +297,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[p,p]) == aa116[p,p]
 
     # bool indexing
-    li = randbool(size(aa116,1))
-    lj = randbool(size(aa116,2))
+    li = bitrand(size(aa116,1))
+    lj = bitrand(size(aa116,2))
     @test full(ss116[li,j]) == aa116[li,j]''
     @test full(ss116[li,:]) == aa116[li,:]
     @test full(ss116[i,lj]) == aa116[i,lj]
