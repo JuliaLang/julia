@@ -523,6 +523,7 @@ ifeq ($(USE_SYSTEM_LLVM), 1)
 LLVM_CONFIG ?= llvm-config$(EXE)
 LLVM_LLC ?= llc$(EXE)
 JCPPFLAGS+=-DSYSTEM_LLVM
+LLVM_VER = $(shell $(LLVM_CONFIG) --version)
 else
 LLVM_CONFIG=$(build_bindir)/llvm-config$(EXE)
 LLVM_LLC=$(build_bindir)/llc$(EXE)
