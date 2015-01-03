@@ -2076,3 +2076,10 @@ f9534g(a,b,c...) = c[0]
 f9534h(a,b,c...) = c[a]
 @test f9534h(4,2,3,4,5,6) == 6
 @test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+
+# issue #9535
+counter9535 = 0
+f9535() = (global counter9535; counter9535 += 1; counter9535)
+g9535() = (f9535(),f9535())
+@assert g9535() == (1,2)
+@assert g9535() == (3,4)
