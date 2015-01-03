@@ -198,7 +198,7 @@ Y = [2, 1, 4, 3]
 @test X[Y[end],1] == 5
 @test X[end,Y[end]] == 11
 
-## find, findfirst ##
+## find, findfirst, findnext, findlast, findprev ##
 a = [0,1,2,3,0,1,2,3]
 @test find(a) == [2,3,4,6,7,8]
 @test find(a.==2) == [3,7]
@@ -209,7 +209,24 @@ a = [0,1,2,3,0,1,2,3]
 @test findfirst([1,2,4,1,2,3,4], 3) == 6
 @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
 @test findfirst(isodd, [2,4,6,2,0]) == 0
-
+@test findnext(a,4) == 4
+@test findnext(a,5) == 6
+@test findnext(a,1) == 2
+@test findnext(a,1,4) == 6
+@test findnext(a,5,4) == 0
+@test findlast(a) == 8
+@test findlast(a.==0) == 5
+@test findlast(a.==5) == 0
+@test findlast([1,2,4,1,2,3,4], 3) == 6
+@test findlast(isodd, [2,4,6,3,9,2,0]) == 5
+@test findlast(isodd, [2,4,6,2,0]) == 0
+@test findprev(a,4) == 4
+@test findprev(a,5) == 4
+@test findprev(a,1) == 0
+@test findprev(a,1,4) == 2
+@test findprev(a,1,8) == 6
+@test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
+@test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 
 ## findn ##
 
