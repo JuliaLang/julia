@@ -329,16 +329,6 @@ reinterpret{N}(B::BitArray, dims::NTuple{N,Int}) = reshape(B, dims)
 bitunpack{N}(B::BitArray{N}) = convert(Array{Bool,N}, B)
 bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 
-## Random ##
-
-function bitarray_rand_fill!(rng, B::BitArray) # rng is an AbstractRNG
-    length(B) == 0 && return B
-    Bc = B.chunks
-    rand!(rng, Bc)
-    Bc[end] &= @_msk_end length(B)
-    return B
-end
-
 ## Indexing: getindex ##
 
 function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
