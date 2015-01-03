@@ -11,104 +11,123 @@ support. Like Lisp, Julia represents its own code as a data structure of
 the language itself.
 Since code is represented by objects that can be created and manipulated
 from within the language, it is possible for a program to transform and
-generate its own code. This allows sophisticated code generation without
-extra build steps, and also allows true Lisp-style macros, as compared
-to preprocessor "macro" systems, like that of C and C++, that perform
-superficial textual manipulation as a separate pass before any real
-parsing or interpretation occurs. Another aspect of metaprogramming is
-reflection: the ability of a running program to dynamically discover
-properties of itself. Reflection emerges naturally from the fact that
-all data types and code are represented by normal Julia data structures,
-so the structure of the program and its types can be explored
-programmatically just like any other data.
+generate its own code. This allows sophisticated code generation
+without extra build steps, and also allows true Lisp-style macros operating at
+the level of `abstract syntax trees <http://en.wikipedia.org/wiki/Abstract_syntax_tree>`_.
+In contrast, preprocessor "macro" systems, like that of C and C++, perform
+textual manipulation and substitution before any actual parsing or
+interpretation occurs. In addition, Because all data types and code in Julia
+are represented by Julia data structures, powerful
+`reflection <http://en.wikipedia.org/wiki/Reflection_%28computer_programming%29`_
+capabilities are available to explore the internals of a program and its types
+just like any other data. 
 
-Expressions and :func:`eval`
-----------------------------
+Program representation
+----------------------
 
-Julia code is represented as a syntax tree built out of Julia data
-structures of type :obj:`Expr`. This makes it easy to construct and
-manipulate Julia code from within Julia, without generating or parsing
-source text. Here is the definition of the :obj:`Expr` type::
-
-    type Expr
-      head::Symbol
-      args::Array{Any,1}
-      typ
-    end
-
-The ``head`` is a symbol identifying the kind of expression, and
-``args`` is an array of subexpressions, which may be symbols referencing
-the values of variables at evaluation time, may be nested :obj:`Expr`
-objects, or may be actual values of objects. The ``typ`` field is used
-by type inference to store type annotations, and can generally be
-ignored.
-
-There is special syntax for "quoting" code (analogous to quoting
-strings) that makes it easy to create expression objects without
-explicitly constructing :obj:`Expr` objects. There are two forms: a short
-form for inline expressions using ``:`` followed by a single expression,
-and a long form for blocks of code, enclosed in ``quote ... end``. Here
-is an example of the short form used to quote an arithmetic expression:
+Every Julia program starts life as a string:
 
 .. doctest::
 
-    julia> ex = :(a+b*c+1)
-    :(a + b * c + 1)
+    julia> prog = "1 + 1"
+    "1 + 1"
+
+**What happens next?**
+
+The next step is to `parse <http://en.wikipedia.org/wiki/Parsing#Computer_languages>`_
+each string into an object called an expression, represented by the Julia type
+:obj:`Expr`:
+
+.. doctest::
+
+    julia> ex1 = parse(prog)
+    :(1 + 1)
 
     julia> typeof(ex)
     Expr
 
-    julia> ex.head
-    :call
-
-    julia> typeof(ans)
-    Symbol
-
-    julia> ex.args
-    4-element Array{Any,1}:
-      :+
-      :a
-      :(b * c)
-     1
-
-    julia> typeof(ex.args[1])
-    Symbol
-
-    julia> typeof(ex.args[2])
-    Symbol
-
-    julia> typeof(ex.args[3])
-    Expr
-
-    julia> typeof(ex.args[4])
-    Int64
-
-Expressions provided by the parser generally only have symbols, other
-expressions, and literal values as their args, whereas expressions
-constructed by Julia code can easily have arbitrary run-time values
-without literal forms as args. In this specific example, ``+`` and ``a``
-are symbols, ``*(b,c)`` is a subexpression, and ``1`` is a literal
-64-bit signed integer. Here's an example of the longer expression
-quoting form:
+Expressions may also be constructed directly in
+`prefix notation <http://en.wikipedia.org/wiki/Polish_notation>`_:
 
 .. doctest::
 
-    julia> quote
-             x = 1
-             y = 2
-             x + y
-           end
-    quote  # none, line 2:
-        x = 1 # line 3:
-        y = 2 # line 4:
-        x + y
-    end
+    julia> ex2 = Expr(:call, :+, 1, 1)
+    true
+
+The two expressions constructed above -- by parsing and by direct
+construction -- are equivalent:
+
+.. doctest::
+
+    julia> ex1 == ex2
+    true
+
+**The key point here is that Julia code is internally represented
+as a data structure that is accessible from the language itself.**
+
+:obj:`Expr` objects contain three parts:
+
+- a symbol identifying the action represented by the expression (see
+  below for more discussion of Symbols):
+
+.. doctest::
+
+    julia> ex1.head
+    :call
+
+- the expression arguments, which may be symbols, other expressions, or literal values:
+
+.. doctest::
+
+    julia> ex1.args
+    3-element Array{Any,1}:
+      :+
+     1
+     1
+
+- finally, the expression result type, which may be annotated by the user or inferred
+  by the compiler (and may be ignored completely for the purposes of this chapter):
+
+.. doctest::
+
+    julia> ex1.typ
+    Any
+
+The :func:`dump` function provides indented and annotated display of :obj:`Expr`
+objects:
+
+.. doctest::
+
+    julia> dump(ex2)
+    Expr
+      head: Symbol call
+      args: Array(Any,(3,))
+	1: Symbol +
+	2: Int64 1
+	3: Int64 1
+      typ: Any
+
+:obj:`Expr` objects may also be nested:
+
+.. doctest::
+
+    julia> ex3 = parse("(4 + 4) / 2")
+    :((4 + 4) / 2)
+
+Another way to view expressions is with Meta.show_sexpr, which displays the
+`S-expression <http://en.wikipedia.org/wiki/S-expression>`_ form of a given
+:obj:Expr, which may look very familiar to users of Lisp. Here's an example
+illustrating the display on a nested :obj:Expr:
+
+    julia> Meta.show_sexpr(ex3)
+    (:call, :/, (:call, :+, 4, 4), 2)
 
 Symbols
 ~~~~~~~
 
-When the argument to ``:`` is just a symbol, a :obj:`Symbol` object results
-instead of an :obj:`Expr`:
+The ``:`` character has two syntactic purposes in Julia. The first form creates a
+:obj:`Symbol`, a special kind of string-like identifier used as one building-block of
+expressions:
 
 .. doctest::
 
@@ -118,8 +137,19 @@ instead of an :obj:`Expr`:
     julia> typeof(ans)
     Symbol
 
+:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes
+a character or string as its argument:
+
+.. doctest::
+
+    julia> :foo == symbol("foo")
+    true
+
+    julia> symbol("'")
+    :'
+
 In the context of an expression, symbols are used to indicate access to
-variables, and when an expression is evaluated, a symbol evaluates to
+variables; when an expression is evaluated, a symbol is replaced with
 the value bound to that symbol in the appropriate :ref:`scope
 <man-variables-and-scoping>`.
 
@@ -134,19 +164,109 @@ ambiguity in parsing.:
     julia> :(::)
     :(::)
 
-:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes
-a character or string as its argument:
+Expressions and evaluation
+--------------------------
+
+Quoting
+~~~~~~~
+
+The second syntactic purpose of the ``:`` character is to create expression
+objects without using the explicit :obj:`Expr` constructor. This is referred
+to as *quoting*. The ``:`` character, followed by a parenthesized Julia
+statement, generates an :obj:`Expr` object based on the enclosed code.
+Here is example of the short form used to quote an arithmetic expression:
 
 .. doctest::
 
-    julia> symbol('\'')
-    :'
+    julia> ex = :(a+b*c+1)
+    :(a + b * c + 1)
 
-    julia> symbol("'")
-    :'
+    julia> typeof(ex)
+    Expr
 
-:func:`eval` and Interpolation
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+(to view the structure of this expression, try ``ex.head`` and ``ex.args``,
+or use :func:`dump` as above).
+
+Note that equivalent expressions may be constructed using :func:`parse` or
+the direct :obj:`Expr` form:
+
+.. doctest::
+
+   julia>      :(a + b*c + 1)  ==
+     parse("a + b*c + 1") ==
+	 Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
+   true
+
+Expressions provided by the parser generally only have symbols, other
+expressions, and literal values as their args, whereas expressions
+constructed by Julia code can have arbitrary run-time values
+without literal forms as args. In this specific example, ``+`` and ``a``
+are symbols, ``*(b,c)`` is a subexpression, and ``1`` is a literal
+64-bit signed integer.
+
+There is a second syntactic form of quoting for multiple expressions:
+blocks of code enclosed in ``quote ... end``. Note that this form
+introduces :obj:`QuoteNode` elements to the expression tree, which
+must be considered when directly manipulating an expression tree
+generated from ``quote`` blocks. For other purposes, ``:( ... )``
+and ``quote .. end`` blocks are treated identically.
+
+.. doctest::
+
+    julia> ex = quote
+		    x = 1
+		    y = 2
+		    x + y
+		end
+    quote  # none, line 2:
+	x = 1 # line 3:
+	y = 2 # line 4:
+	x + y
+    end
+
+    julia> typeof(ex)
+    Expr
+
+Interpolation
+~~~~~~~~~~~~~
+
+Direct construction of :obj:`Expr` objects with value arguments is
+powerful, but :obj:`Expr` constructors can be tedious compared to "normal"
+Julia syntax. As an alternative, Julia allows "splicing" or interpolation
+of literals or expressions into quoted expressions. Interpolation is
+indicated by the ``$`` prefix.
+
+In this example, the literal value of `a` is interpolated:
+
+.. doctest::
+
+    julia> a = 1;
+
+    julia> ex = :($a + b)
+    :(1 + b)
+
+In this example, the tuple ``(1,2,3)`` is interpolated as an
+expression into a conditional test:
+
+.. doctest::
+
+    julia> ex = :(a in $:((1,2,3)) )
+    :($(Expr(:in, :a, :((1,2,3)))))
+
+Interpolating symbols into a nested expression requires enclosing each 
+symbol in an enclosing quote block:
+
+    julia> :( :a in $( :(:a + :b) ) )
+                       ^^^^^^^^^^
+                       quoted inner expression
+
+The use of ``$`` for expression interpolation is intentionally reminiscent
+of :ref:`string interpolation <man-string-interpolation>` and :ref:`command
+interpolation <man-command-interpolation>`. Expression interpolation allows
+convenient, readable programmatic construction of complex Julia expressions.
+
+:func:`eval` and effects
+~~~~~~~~~~~~~~~~~~~~~~~~
 
 Given an expression object, one can cause Julia to evaluate (execute) it
 at global scope using :func:`eval`:
@@ -194,15 +314,14 @@ Here, the evaluation of an expression object causes a value to be
 assigned to the global variable ``x``.
 
 Since expressions are just :obj:`Expr` objects which can be constructed
-programmatically and then evaluated, one can, from within Julia code,
-dynamically generate arbitrary code which can then be run using
-:func:`eval`. Here is a simple example:
+programmatically and then evaluated, it is possible to dynamically generate
+arbitrary code which can then be run using :func:`eval`. Here is a simple example:
 
 .. doctest::
 
     julia> a = 1;
 
-    julia> ex = Expr(:call, :+,a,:b)
+    julia> ex = Expr(:call, :+, a, :b)
     :(1 + b)
 
     julia> a = 0; b = 2;
@@ -226,89 +345,113 @@ the important distinction between the way ``a`` and ``b`` are used:
    the symbol ``:b`` is resolved by looking up the value of the variable
    ``b``.
 
-Constructing :obj:`Expr` objects like this is powerful, but somewhat
-tedious and ugly. Since the Julia parser is already excellent at
-producing expression objects, Julia allows "splicing" or interpolation
-of expression objects, prefixed with ``$``, into quoted expressions,
-written using normal syntax. The above example can be written more
-clearly and concisely using interpolation:
+Functions on :obj:`Expr`\essions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-.. doctest::
+As hinted above, one extremely useful feature of Julia is the capability to
+generate and manipulate Julia code within Julia itself. We have already
+seen one example of a function returning :obj:`Expr` objects: the :func:`parse`
+function, which takes a string of Julia code and returns the corresponding
+:obj:`Expr`. A function can also take one or more :obj:`Expr` objects as
+arguments, and return another :obj:`Expr`. Here is a simple, motivating example::
 
-    julia> a = 1;
+   julia>   function math_expr(op, op1, op2)
+		expr = Expr(:call, op, op1, op2)
+		return expr
+	    end
 
-    julia> ex = :($a + b)
-    :(1 + b)
+    julia>  ex = math_expr(:+, 1, Expr(:call, :*, 4, 5))
+    :(1 + 4*5)
 
-This syntax is automatically rewritten to the form above where we
-explicitly called :obj:`Expr`. The use of ``$`` for expression
-interpolation is intentionally reminiscent of
-:ref:`string interpolation <man-string-interpolation>` and
-:ref:`command interpolation <man-command-interpolation>`.
-Expression interpolation allows convenient, readable programmatic construction
-of complex Julia expressions.
+    julia> eval(ex)
+    21
 
-Code Generation
-~~~~~~~~~~~~~~~
+As another example, here is a function that doubles any numeric argument,
+but leaves expressions alone::
 
-When a significant amount of repetitive boilerplate code is required, it
-is common to generate it programmatically to avoid redundancy. In most
-languages, this requires an extra build step, and a separate program to
-generate the repetitive code. In Julia, expression interpolation and
-:func:`eval` allow such code generation to take place in the normal course of
-program execution. For example, the following code defines a series of
-operators on three arguments in terms of their 2-argument forms::
+    julia> function make_expr2(op, opr1, opr2)
+	       opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x,
+					   (opr1, opr2))
+	       retexpr = Expr(:call, op, opr1f, opr2f)
+	       return retexpr
+	   end
+    make_expr2 (generic function with 1 method)
 
-    for op = (:+, :*, :&, :|, :$)
-      eval(quote
-        ($op)(a,b,c) = ($op)(($op)(a,b),c)
-      end)
-    end
+    julia> make_expr2(:+, 1, 2)
+    :(2 + 4)
 
-In this manner, Julia acts as its own preprocessor, and allows code
-generation from inside the language. The above code could be written
-slightly more tersely using the ``:`` prefix quoting form::
+    julia> ex = make_expr2(:+, 1, Expr(:call, :*, 5, 8))
+    :(2 + 5 * 8)
 
-    for op = (:+, :*, :&, :|, :$)
-      eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
-    end
+    julia> eval(ex)
+    42
 
-This sort of in-language code generation, however, using the
-``eval(quote(...))`` pattern, is common enough that Julia comes with a
-macro to abbreviate this pattern::
-
-    for op = (:+, :*, :&, :|, :$)
-      @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
-    end
-
-The :obj:`@eval` macro rewrites this call to be precisely equivalent to the
-above longer versions. For longer blocks of generated code, the
-expression argument given to :obj:`@eval` can be a block::
-
-    @eval begin
-      # multiple lines
-    end
-
-Interpolating into an unquoted expression is not supported and will
-cause a compile-time error:
-
-.. doctest::
-
-    julia> $a + b
-    ERROR: unsupported or misplaced expression $
-
-.. _man-macros:
 
 Macros
 ------
 
 Macros are the analogue of functions for expression generation at
-compile time. Just as functions map a tuple of argument values to a 
-return value, macros map a tuple of argument *expressions* to a returned
-*expression*. They allow the programmer to arbitrarily transform the
-written code to a resulting expression, which then takes the place of
-the macro call in the final syntax tree. Macros are invoked with the
-following general syntax::
+compile time. Just as a function maps a tuple of argument values to a
+return value, a macro maps a tuple of arguments to a returned
+*expression*. Macro arguments may include expressions, literal values,
+and symbols.
+
+Why macros
+~~~~~~~~~~
+
+Here is an extraordinarily simple macro:
+
+.. doctest::
+
+    julia> macro sayhello(name)
+	       :( println("Hello, ", $name, "!") )
+	   end
+
+The "return value" of this macro is the *interpolated* expression; that is,
+with the value of the variable ``name`` passed directly as an argument to
+:func:`println`. We can verify this with the **extremely
+important** function :func:`macroexpand`::
+
+    julia> ex = macroexpand( :(@sayhello("human")) )
+    :(println("Hello, ","human","!"))
+                        ^^^^^^^
+                        interpolated: now a literal string
+
+    julia> typeof(ex)
+    Expr
+
+:func:`macroexpand` takes a *quoted* macro and returns the resulting
+:obj:`Expr`\ession *after interpolation*.
+
+**Hold up.**
+
+We have already seen a function ``f(::Expr...) -> Expr`` in a previous
+section. In fact, :func:`macroexpand` is such a function itself;
+evaluating the result of :func:`macroexpand` will give the expected
+output:
+
+.. doctest::
+
+    julia> eval(macroexpand( quote @sayhello("human") end ))
+    Hello, human!
+
+So, why are macros even necessary? As a simplifying analogy, let's
+define ``The Full Julia Compiler`` as ``eval, but much faster``.
+We actually want to *avoid* calling the :func:`eval` directly in
+"real" code, because it will be exceptionally slow compared to using
+``The Full Julia Compiler``. But, if we are generating code, how
+how can execute our expression without calling :func:`eval`?
+
+The answer is macros.
+
+Macros are useful because they execute at when the code is parsed,
+not at the time it is run. Therefore, they allow the programmer to
+generate code *before* the full program is compiled and executed.
+
+Macro invocation
+~~~~~~~~~~~~~~~~
+
+Macros are invoked with the following general syntax::
 
     @name expr1 expr2 ...
     @name(expr1, expr2, ...)
@@ -331,7 +474,10 @@ expression arguments. Expanders are defined with the ``macro`` keyword::
         return resulting_expr
     end
 
-Here, for example, is a simplified definition of Julia's :obj:`@assert` macro::
+Building an advanced macro
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Here is a simplified definition of Julia's :obj:`@assert` macro::
 
     macro assert(ex)
         return :($ex ? nothing : error("Assertion failed: ", $(string(ex))))
@@ -538,6 +684,58 @@ is occasionally quite handy.
 
 .. _man-non-standard-string-literals2:
 
+Code Generation
+~~~~~~~~~~~~~~~
+
+When a significant amount of repetitive boilerplate code is required, it
+is common to generate it programmatically to avoid redundancy. In most
+languages, this requires an extra build step, and a separate program to
+generate the repetitive code. In Julia, expression interpolation and
+:func:`eval` allow such code generation to take place in the normal course of
+program execution. For example, the following code defines a series of
+operators on three arguments in terms of their 2-argument forms::
+
+    for op = (:+, :*, :&, :|, :$)
+      eval(quote
+	($op)(a,b,c) = ($op)(($op)(a,b),c)
+      end)
+    end
+
+In this manner, Julia acts as its own `preprocessor
+<http://en.wikipedia.org/wiki/Preprocessor>`_, and allows code
+generation from inside the language. The above code could be written
+slightly more tersely using the ``:`` prefix quoting form::
+
+    for op = (:+, :*, :&, :|, :$)
+      eval(:(($op)(a,b,c) = ($op)(($op)(a,b),c)))
+    end
+
+This sort of in-language code generation, however, using the
+``eval(quote(...))`` pattern, is common enough that Julia comes with a
+macro to abbreviate this pattern::
+
+    for op = (:+, :*, :&, :|, :$)
+      @eval ($op)(a,b,c) = ($op)(($op)(a,b),c)
+    end
+
+The :obj:`@eval` macro rewrites this call to be precisely equivalent to the
+above longer versions. For longer blocks of generated code, the
+expression argument given to :obj:`@eval` can be a block::
+
+    @eval begin
+      # multiple lines
+    end
+
+Interpolating into an unquoted expression is not supported and will
+cause a compile-time error:
+
+.. doctest::
+
+    julia> $a + b
+    ERROR: unsupported or misplaced expression $
+
+.. _man-macros:
+
 Non-Standard AbstractString Literals
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -610,9 +808,9 @@ variable into the regular expression, one must take this more verbose
 approach; in cases where the regular expression pattern itself is
 dynamic, potentially changing upon each loop iteration, a new regular
 expression object must be constructed on each iteration. In the vast
-majority of use cases, however, regular expressions are not constructed based on run-time data. In this majority of
-cases, the ability to write regular expressions as compile-time values
-is invaluable.
+majority of use cases, however, regular expressions are not constructed
+based on run-time data. In this majority of cases, the ability to write
+regular expressions as compile-time values is invaluable.
 
 The mechanism for user-defined string literals is deeply, profoundly
 powerful. Not only are Julia's non-standard literals implemented using
