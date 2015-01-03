@@ -1,10 +1,9 @@
 # preliminary definitions: constants, macros
 # and functions used throughout the code
 const _msk64 = ~uint64(0)
-macro _mskr(l) :(_msk64 >>> (63 & (64-$(esc(l))))) end
 macro _div64(l) :($(esc(l)) >>> 6) end
 macro _mod64(l) :($(esc(l)) & 63) end
-macro _msk_end(l) :(@_mskr @_mod64 $(esc(l))) end
+macro _msk_end(l) :(_msk64 >>> (63 & (64-$(esc(l))))) end
 num_bit_chunks(n::Int) = @_div64 (n+63)
 
 ## BitArray
@@ -1171,7 +1170,7 @@ function reverse!(B::BitVector)
     i = hnc + 1
     j = hnc << 6
     l = (@_mod64 (n+63)) + 1
-    msk = @_mskr l
+    msk = @_msk_end n
 
     aux_chunks[1] = reverse_bits(B.chunks[i] & msk)
     aux_chunks[1] >>>= (64 - l)
