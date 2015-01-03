@@ -800,7 +800,7 @@ DLLEXPORT jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i);
 DLLEXPORT void        jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs);
 DLLEXPORT int         jl_field_isdefined(jl_value_t *v, size_t i);
 DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld);
-DLLEXPORT void       *jl_value_ptr(jl_value_t *a);
+DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a);
 
 // arrays
 
