@@ -332,7 +332,7 @@ As you can see, the second version, where we used an :obj:`Int` literal, preserv
 the type of the input argument, while the first didn't. This is because e.g. 
 ``promote_type(Int, Float64) == Float64``, and promotion happens with the 
 multiplication. Similarly, :obj:`Rational` literals are less type disruptive than
-:obj:`Float64` literals, but more disruptive than :obj:`Int`s:
+:obj:`Float64` literals, but more disruptive than :obj:`Int`\ s:
 
 .. doctest::
 
