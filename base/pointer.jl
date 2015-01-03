@@ -52,7 +52,7 @@ unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), Int(i))
 unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
-unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))
+unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
 pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 
 integer(x::Ptr) = convert(UInt, x)
