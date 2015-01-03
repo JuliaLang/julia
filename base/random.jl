@@ -556,7 +556,7 @@ function rand!(rng::AbstractRNG, B::BitArray)
     length(B) == 0 && return B
     Bc = B.chunks
     rand!(rng, Bc)
-    Bc[end] &= Base.@_msk_end length(B)
+    Bc[end] &= Base._msk_end(B)
     return B
 end
 

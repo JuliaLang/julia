@@ -203,9 +203,8 @@ function findmin(a::BitArray)
         ti += k
         k==64 || return (false, ti)
     end
-    l = (Base.@_mod64 (length(a)-1)) + 1
-    msk = Base.@_msk_end l
-    @inbounds k = trailing_ones(ac[end] & msk)
+    l = Base._mod64(length(a)-1) + 1
+    @inbounds k = trailing_ones(ac[end] & Base._msk_end(l))
     ti += k
     k==l || return (false, ri)
     return m, mi

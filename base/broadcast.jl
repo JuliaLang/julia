@@ -3,7 +3,7 @@ module Broadcast
 using ..Cartesian
 import Base.promote_eltype
 import Base.@get!
-import Base.num_bit_chunks, Base.@_msk_end, Base.unsafe_bitgetindex
+import Base.num_bit_chunks, Base._msk_end, Base.unsafe_bitgetindex
 import Base.(.+), Base.(.-), Base.(.*), Base.(./), Base.(.\), Base.(.//)
 import Base.(.==), Base.(.<), Base.(.!=), Base.(.<=)
 export broadcast, broadcast!, broadcast_function, broadcast!_function, bitbroadcast
@@ -348,8 +348,7 @@ for (f, scalarf, bitf, bitfbody) in ((:.==, :(==), :biteq , :(~a $ b)),
                 for i = 1:length(Fc) - 1
                     Fc[i] = ($bitf)(Ac[i], Bc[i])
                 end
-                msk = @_msk_end length(F)
-                Fc[end] = msk & ($bitf)(Ac[end], Bc[end])
+                Fc[end] = ($bitf)(Ac[end], Bc[end]) & _msk_end(F)
             end
             return F
         end
