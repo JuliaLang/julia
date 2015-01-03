@@ -156,6 +156,15 @@ function showerror(io::IO, e::MethodError)
         print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
         print(io, "\nYou can convert to a column vector with the vec() function.")
     end
+    # Give a helpful error message if the user likely called a type constructor
+    # and sees a no method error for convert
+    if e.f == Base.convert && !isempty(e.args)
+        if isa(e.args[1], Type)
+            println(io)
+            print(io, "This may have arisen from a call to the constructor $(e.args[1])(...), ")
+            print(io, "since type constructors always fall back to convert methods.")
+        end
+    end
 
     # Display up to three closest candidates
     lines = Array((IOBuffer, Int), 0)
