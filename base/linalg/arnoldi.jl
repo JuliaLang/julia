@@ -110,22 +110,40 @@ end
 
 ## svds
 
-type SVDOperator <: AbstractArray{Float64, 2}
-    X
+type SVDOperator{T,S} <: AbstractArray{T, 2}
+    X::S
     m::Int
     n::Int
-    SVDOperator(X) = new(X, size(X,1), size(X,2))
+    SVDOperator(X::S) = new(X, size(X,1), size(X,2))
 end
 
 ## v = [ left_singular_vector; right_singular_vector ]
-*(s::SVDOperator, v::Vector{Float64}) = [s.X * v[s.m+1:end]; s.X' * v[1:s.m]]
+*{T,S}(s::SVDOperator{T,S}, v::Vector{T}) = [s.X * v[s.m+1:end]; s.X' * v[1:s.m]]
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
-function svds(X; ritzvec::Bool = true, nsv::Int = 6, tol::Float64 = 0.0, maxiter::Int = 1000)
-  ex   = eigs(SVDOperator(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
-  ind  = [1:2:nsv*2]
-  sval = (abs(ex[1][ind]) + abs(ex[1][ind + 1])) / 2
+function getOperatorType(X)
+  et = eltype(X)
+  if et <: Integer || et <: Float64
+    return Float64
+  end
+  if et <: Complex64
+    return Complex64
+  end
+  if et <: Complex
+    return Complex128
+  end
+  if et <: Float32
+    return Float32
+  end
+  error("Element type $et is not supported for 'svds'.")
+end
+
+function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
+  otype = getOperatorType(X)
+  ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
+  ind   = [1:2:nsv*2]
+  sval  = abs(ex[1][ind])
   
   if ! ritzvec
     return sval, ex[2], ex[3], ex[4], ex[5]
