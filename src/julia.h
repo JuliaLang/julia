@@ -749,8 +749,9 @@ STATIC_INLINE void jl_array_uint8_set(void *a, size_t i, uint8_t x)
 #define jl_nfields(v)    jl_datatype_nfields(jl_typeof(v))
 
 // Not using jl_fieldref to avoid allocations
-#define jl_linenode_line(x) (((intptr_t*)(x))[0])
-#define jl_linenode_file(x) (((jl_value_t**)(x))[1])
+#define jl_linenode_file(x) (((jl_value_t**)(x))[0])
+#define jl_linenode_line(x) (((intptr_t*)(x))[1])
+#define jl_linenode_col(x) (((intptr_t*)(x))[2])
 #define jl_labelnode_label(x) (((intptr_t*)(x))[0])
 #define jl_slot_number(x) (((intptr_t*)(x))[0])
 #define jl_typedslot_get_type(x) (((jl_value_t**)(x))[1])

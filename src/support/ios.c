@@ -862,6 +862,7 @@ static void _ios_init(ios_t *s)
     s->ndirty = 0;
     s->fpos = -1;
     s->lineno = 1;
+    s->colno = 0;
     s->fd = -1;
     s->ownbuf = 1;
     s->ownfd = 0;
@@ -1049,7 +1050,11 @@ int ios_getc(ios_t *s)
         if (ios_read(s, &ch, 1) < 1)
             return IOS_EOF;
     }
-    if (ch == '\n') s->lineno++;
+    s->colno++;
+    if (ch == '\n') {
+        s->lineno++;
+        s->colno = 1;
+    }
     return (unsigned char)ch;
 }
 

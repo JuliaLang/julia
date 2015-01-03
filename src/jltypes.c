@@ -1853,8 +1853,8 @@ void jl_init_types(void)
 
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), core, jl_any_type, jl_emptysvec,
-                        jl_perm_symsvec(2, "line", "file"),
-                        jl_svec(2, jl_long_type, jl_any_type), 0, 0, 2);
+                        jl_perm_symsvec(3, "file", "line", "col"),
+                        jl_svec(3, jl_any_type, jl_long_type, jl_long_type), 0, 0, 3);
 
     jl_labelnode_type =
         jl_new_datatype(jl_symbol("LabelNode"), core, jl_any_type, jl_emptysvec,

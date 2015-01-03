@@ -536,9 +536,13 @@ end
 
 emphasize(io, str::AbstractString) = have_color ? print_with_color(Base.error_color(), io, str; bold = true) : print(io, uppercase(str))
 
-show_linenumber(io::IO, line)       = print(io, "#= line ", line, " =#")
-show_linenumber(io::IO, line, file) = print(io, "#= ", file, ":", line, " =#")
-show_linenumber(io::IO, line, file::Void) = show_linenumber(io, line)
+function show_linenumber(io::IO, line, file=nothing, col=0)
+    print(io, "#= ")
+    file === nothing ? print("line ") : print(io, file, ":")
+    print(io, line)
+    col > 0 && print(io, ",", col)
+    print(io, " =#")
+end
 
 # show a block, e g if/for/etc
 function show_block(io::IO, head, args::Vector, body, indent::Int)
@@ -615,7 +619,7 @@ end
 ## AST printing ##
 
 show_unquoted(io::IO, sym::Symbol, ::Int, ::Int)        = print(io, sym)
-show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file)
+show_unquoted(io::IO, ex::LineNumberNode, ::Int, ::Int) = show_linenumber(io, ex.line, ex.file, ex.col)
 show_unquoted(io::IO, ex::LabelNode, ::Int, ::Int)      = print(io, ex.label, ": ")
 show_unquoted(io::IO, ex::GotoNode, ::Int, ::Int)       = print(io, "goto ", ex.label)
 show_unquoted(io::IO, ex::GlobalRef, ::Int, ::Int)      = print(io, ex.mod, '.', ex.name)
@@ -931,7 +935,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             show_list(io, show_args, ' ', indent)
         end
 
-    elseif head === :line && 1 <= nargs <= 2
+    elseif head === :line && 1 <= nargs <= 3
         show_linenumber(io, args...)
 
     elseif head === :if && nargs == 3     # if/else

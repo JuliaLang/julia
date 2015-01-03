@@ -587,6 +587,9 @@
 (define (line-number-node s)
   `(line ,(input-port-line (ts:port s)) ,current-filename))
 
+(define (line-column-node s)
+  `(line ,(input-port-line (ts:port s)) ,current-filename ,(input-port-column (ts:port s))))
+
 ;; parse a@b@c@... as (@ a b c ...) for some operator @
 ;; ops: operators to look for
 ;; head: the expression head to yield in the result, e.g. "a;b" => (block a b)
@@ -1131,7 +1134,7 @@
                       (not (operator? ex))
                       (not (ts:space? s)))
                  ;; custom string and command literals; x"s" => @x_str "s"
-                 (let* ((startloc  (line-number-node s))
+                 (let* ((startloc  (line-column-node s))
                         (macstr (begin (take-token s)
                                        (parse-raw-literal s t)))
                         (nxt (peek-token s))
@@ -2137,7 +2140,7 @@
           ((eqv? t #\@)
            (take-token s)
            (with-space-sensitive
-            (let ((startloc  (line-number-node s))
+            (let ((startloc  (line-column-node s))
                   (head (if (eq? (peek-token s) '|.|)
                             (begin (take-token s) '__dot__)
                             (parse-unary-prefix s))))
@@ -2157,7 +2160,7 @@
           ;; command syntax
           ((eqv? t #\`)
            (take-token s)
-           `(macrocall @cmd ,(line-number-node s) ,(parse-raw-literal s #\`)))
+           `(macrocall @cmd ,(line-column-node s) ,(parse-raw-literal s #\`)))
 
           ((or (string? t) (number? t) (large-number? t)) (take-token s))
 
@@ -2189,7 +2192,7 @@
            (eq? (cadr e) '@doc_str))))
 
 (define (parse-docstring s production)
-  (let ((startloc (line-number-node s)) ; be sure to use the line number from the head of the docstring
+  (let ((startloc (line-column-node s)) ; be sure to use the line number from the head of the docstring
         (ex (production s)))
     (if (and (doc-string-literal? ex)
              (let loop ((t (peek-token s)))

@@ -86,8 +86,9 @@
 #end
 
 #struct LineNumberNode
-#    line::Int
 #    file::Any # nominally Union{Symbol,Void}
+#    line::Int
+#    col::Int
 #end
 
 #struct LabelNode
@@ -282,8 +283,8 @@ _new(:GotoNode, :Int)
 _new(:NewvarNode, :SlotNumber)
 _new(:QuoteNode, :ANY)
 _new(:SSAValue, :Int)
-eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, :l, nothing))))
-eval(:((::Type{LineNumberNode})(l::Int, f::ANY) = $(Expr(:new, :LineNumberNode, :l, :f))))
+eval(:((::Type{LineNumberNode})(l::Int) = $(Expr(:new, :LineNumberNode, nothing, :l, 0))))
+eval(:((::Type{LineNumberNode})(l::Int, f::ANY) = $(Expr(:new, :LineNumberNode, :f, :l, 0))))
 eval(:((::Type{GlobalRef})(m::Module, s::Symbol) = $(Expr(:new, :GlobalRef, :m, :s))))
 eval(:((::Type{SlotNumber})(n::Int) = $(Expr(:new, :SlotNumber, :n))))
 eval(:((::Type{TypedSlot})(n::Int, t::ANY) = $(Expr(:new, :TypedSlot, :n, :t))))

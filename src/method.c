@@ -299,7 +299,7 @@ JL_DLLEXPORT jl_code_info_t *jl_code_for_staged(jl_method_instance_t *linfo)
 
         // add location meta
         linenum = jl_box_long(linfo->def.method->line);
-        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linenum, linfo->def.method->file);
+        jl_value_t *linenode = jl_new_struct(jl_linenumbernode_type, linfo->def.method->file, linenum, jl_box_long(0));
         jl_array_ptr_set(body->args, 0, linenode);
         jl_expr_t *pushloc = jl_exprn(meta_sym, 3);
         jl_array_ptr_set(body->args, 1, pushloc);
