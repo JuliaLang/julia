@@ -144,11 +144,11 @@ function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, m
   ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
   ind   = [1:2:nsv*2]
   sval  = abs(ex[1][ind])
-  
+
   if ! ritzvec
     return sval, ex[2], ex[3], ex[4], ex[5]
   end
-  
+
   ## calculating singular vectors
   left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')
   right_sv = sqrt(2) * ex[2][ size(X,1)+1:end, ind ]
