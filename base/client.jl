@@ -282,7 +282,7 @@ function process_options(args::Vector{UTF8String})
             startup = false
         elseif args[i] == "-i"
             global is_interactive = true
-        elseif beginswith(args[i], "--color")
+        elseif startswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
                 global have_color = true

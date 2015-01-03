@@ -5,7 +5,7 @@ export completions, shell_completions, latex_completions
 using Base.Meta
 
 function completes_global(x, name)
-    return beginswith(x, name) && !('#' in x)
+    return startswith(x, name) && !('#' in x)
 end
 
 function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
@@ -82,7 +82,7 @@ function complete_symbol(sym, ffunc)
         fields = t.names
         for field in fields
             s = string(field)
-            if beginswith(s, name)
+            if startswith(s, name)
                 push!(suggestions, s)
             end
         end
@@ -100,7 +100,7 @@ function complete_keyword(s::ByteString)
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
-    while i <= n && beginswith(sorted_keywords[i],s)
+    while i <= n && startswith(sorted_keywords[i],s)
         r = first(r):i
         i += 1
     end
@@ -124,7 +124,7 @@ function complete_path(path::AbstractString, pos)
 
     matches = UTF8String[]
     for file in files
-        if beginswith(file, prefix)
+        if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
             # joinpath is not used because windows needs to complete with double-backslash
             push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
@@ -175,7 +175,7 @@ function latex_completions(string, pos)
         else
             # return possible matches; these cannot be mixed with regular
             # Julian completions as only latex symbols contain the leading \
-            latex_names = filter(k -> beginswith(k, s), keys(latex_symbols))
+            latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
     end
@@ -232,7 +232,7 @@ function completions(string, pos)
                 pname[1] != '.' &&
                 pname != "METADATA" &&
                 pname != "REQUIRE" &&
-                beginswith(pname, s)
+                startswith(pname, s)
             end)
         end
         ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
