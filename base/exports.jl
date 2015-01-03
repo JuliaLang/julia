@@ -916,12 +916,12 @@ export
     RandomDevice,
     rand!,
     rand,
-    randbool,
     randn!,
     randn,
     randexp!,
     randexp,
     srand,
+    bitrand,
 
 # bigfloat & precision
     precision,

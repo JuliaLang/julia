@@ -289,7 +289,7 @@ For example, the following contrived function returns an array of a
 randomly-chosen type::
 
     function strange_twos(n)
-        a = Array(randbool() ? Int64 : Float64, n)
+        a = Array(rand(Bool) ? Int64 : Float64, n)
         for i = 1:n
             a[i] = 2
         end
@@ -305,7 +305,7 @@ This should be written as::
     end
 
     function strange_twos(n)
-        a = Array(randbool() ? Int64 : Float64, n)
+        a = Array(rand(Bool) ? Int64 : Float64, n)
         fill_twos!(a)
         return a
     end

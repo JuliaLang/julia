@@ -159,12 +159,14 @@ Deprecated or removed
   `trunc{T<:Integer}(T,x)`, `floor{T<:Integer}(T,x)`, etc.. `trunc` is now
   always bound-checked;`Base.unsafe_trunc` provides the old unchecked `itrunc`
   behaviour ([#9133]).
- 
+
   * `squeeze` now requires that passed dimension(s) are an `Int` or tuple of `Int`s;
     calling `squeeze` with an arbitrary iterator is deprecated ([#9271]).
     Additionally, passed dimensions must be unique and correspond to extant
     dimensions of the input array.
-  
+
+  * `randbool` is deprecated. Use `rand(Bool)` to produce a random boolean value, and
+    `bitrand` to produce a random BitArray ([#9105], [#9569]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -1113,6 +1115,7 @@ Too numerous to mention.
 [#8660]: https://github.com/JuliaLang/julia/issues/8660
 [#8712]: https://github.com/JuliaLang/julia/issues/8712
 [#8734]: https://github.com/JuliaLang/julia/issues/8734
+[#8750]: https://github.com/JuliaLang/julia/issues/8750
 [#8776]: https://github.com/JuliaLang/julia/issues/8776
 [#8791]: https://github.com/JuliaLang/julia/issues/8791
 [#8792]: https://github.com/JuliaLang/julia/issues/8792
@@ -1131,6 +1134,7 @@ Too numerous to mention.
 [#9049]: https://github.com/JuliaLang/julia/issues/9049
 [#9065]: https://github.com/JuliaLang/julia/issues/9065
 [#9083]: https://github.com/JuliaLang/julia/issues/9083
+[#9105]: https://github.com/JuliaLang/julia/issues/9105
 [#9122]: https://github.com/JuliaLang/julia/issues/9122
 [#9126]: https://github.com/JuliaLang/julia/issues/9126
 [#9132]: https://github.com/JuliaLang/julia/issues/9132
@@ -1140,3 +1144,4 @@ Too numerous to mention.
 [#9261]: https://github.com/JuliaLang/julia/issues/9261
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
+[#9569]: https://github.com/JuliaLang/julia/issues/9569
