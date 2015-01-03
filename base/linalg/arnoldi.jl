@@ -123,6 +123,8 @@ size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
 function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
+  if nsv > minimum(size(X)); error("nsv($nsv) should be at most $(minimum(size(X)))"); end
+
   otype = eltype(X)
   ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
   ind   = [1:2:nsv*2]
