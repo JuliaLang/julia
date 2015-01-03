@@ -1000,7 +1000,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == (void *) &jl_array_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
-        Value *ary = emit_expr(args[4], ctx);
+        assert(!isVa);
+        assert(nargt==1);
+        jl_value_t *argi = args[4];
+        assert(!(jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym));
+        Value *ary = emit_expr(argi, ctx);
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_arrayptr(ary),lrt),
                                         args[2], rt, static_rt, ctx);
@@ -1008,13 +1012,22 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (fptr == (void *) &jl_value_ptr ||
         (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
         assert(lrt->isPointerTy());
+        assert(!isVa);
+        assert(nargt==1);
         jl_value_t *argi = args[4];
         bool addressOf = false;
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
-        Value *ary = boxed(emit_expr(argi, ctx),ctx);
+        Value *ary;
+        Type *largty = fargt[0];
+        if (largty == jl_pvalue_llvmt) {
+            ary = boxed(emit_expr(argi, ctx),ctx);
+        } else {
+            assert(!addressOf);
+            ary = emit_unbox(largty, emit_unboxed(argi, ctx), jl_tupleref(tt, 0));
+        }
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
                                         args[2], rt, static_rt, ctx);
@@ -1067,7 +1080,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     bool needTempSpace = false;
     bool needStackRestore = false;
     for(i=4; i < nargs+1; i+=2) {
-        int ai = (i-4)/2;
+        size_t ai = (i-4)/2;
         jl_value_t *argi = args[i];
         bool addressOf = false;
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
@@ -1076,9 +1089,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Type *largty;
         jl_value_t *jargty;
-        if (isVa && ai >= nargty-1) {
-            largty = fargt[nargty-1];
-            jargty = jl_tparam0(jl_tupleref(tt,nargty-1));
+        if (isVa && ai >= nargt-1) {
+            largty = fargt[nargt-1];
+            jargty = jl_tparam0(jl_tupleref(tt,nargt-1));
         }
         else {
             largty = fargt[ai];
