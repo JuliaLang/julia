@@ -929,8 +929,8 @@ const latex_symbols = Dict(
     "\\llbracket" => "⟦",
     "\\openbracketright" => "⟧",
     "\\rrbracket" => "⟧",
-    "\\overbrace" => "︷",
-    "\\underbrace" => "︸",
+    "\\overbrace" => "⏞",
+    "\\underbrace" => "⏟",
 
 # 1607 symbols generated from unicode-math-table.tex:
     "\\Zbar" => "Ƶ",  # impedance (latin capital letter z with stroke)
