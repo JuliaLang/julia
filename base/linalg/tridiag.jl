@@ -1,6 +1,6 @@
 #### Specialized matrix types ####
 
-## Hermitian tridiagonal matrices
+## (complex) symmetric tridiagonal matrices
 immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
@@ -21,7 +21,19 @@ SymTridiagonal(A::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A)
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
+function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
+    n = size(M, 1)
+    Mf = zeros(T, n, n)
+    @inbounds begin
+        @simd for i = 1:n-1
+            Mf[i,i] = M.dv[i]
+            Mf[i+1,i] = M.ev[i]
+            Mf[i,i+1] = M.ev[i]
+        end
+        Mf[n,n] = M.dv[n]
+    end
+    return Mf
+end
 convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
