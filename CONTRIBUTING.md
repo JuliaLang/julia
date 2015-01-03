@@ -112,6 +112,11 @@ Build as usual, and do `make clean testall` to test your contribution. If your c
  - Using `git add -p` or `git add -i` can be useful to avoid accidentally committing unrelated changes.
  - GitHub does not send notifications when you push a new commit to a pull request, so please add a comment to the pull request thread to let reviewers know when you've made changes.
  - When linking to specific lines of code in discussion of an issue or pull request, hit the `y` key while viewing code on GitHub to reload the page with a url that includes the specific version that you're viewing. That way any lines of code that you refer to will still make sense in the future, even if the content of the file changes.
+ - Whitespace can be automatically removed from existing commits with `git rebase`.
+   - To remove whitespace for the previous commit, run
+     `git rebase --whitespace=fix HEAD~1`.
+   - To remove whitespace relative to the `master` branch, run
+     `git rebase --whitespace=fix master`.
 
 ## Getting help
 
