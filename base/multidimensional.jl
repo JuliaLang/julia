@@ -32,7 +32,7 @@ function gen_cartesian(N::Int)
     if !in(N,implemented)
         fieldnames = [symbol("I_$i") for i = 1:N]
         fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
-        extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
+        extype = Expr(:type, false, Expr(:comparison, indextype, :(<:), Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
         exindices = Expr[:(index[$i]) for i = 1:N]
         totalex = quote
             # type definition of state

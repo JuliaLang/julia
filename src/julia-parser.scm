@@ -881,13 +881,6 @@
 	(else
 	 ex)))))
 
-;; convert (comparison a <: b) to (<: a b)
-(define (subtype-syntax e)
-  (if (and (pair? e) (eq? (car e) 'comparison)
-	   (length= e 4) (eq? (caddr e) '|<:|))
-      `(<: ,(cadr e) ,(cadddr e))
-      e))
-
 (define (parse-unary-prefix s)
   (let ((op (peek-token s)))
     (if (syntactic-unary-op? op)
@@ -987,7 +980,7 @@
 	     (loop (list t ex)))
 	    ((#\{ )   (take-token s)
 	     (loop (list* 'curly ex
-			  (map subtype-syntax (parse-arglist s #\} )))))
+			  (parse-arglist s #\} ))))
 	    ((#\")
 	     (if (and (symbol? ex) (not (operator? ex))
 		      (not (ts:space? s)))
@@ -1022,7 +1015,7 @@
 			  " expected \"end\", got \"" t "\""))))))
 
 (define (parse-subtype-spec s)
-  (subtype-syntax (parse-comparison s)))
+  (parse-comparison s))
 
 ; parse expressions or blocks introduced by syntactic reserved words
 (define (parse-resword s word)

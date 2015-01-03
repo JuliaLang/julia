@@ -30,6 +30,8 @@ New language features
 Language changes
 ----------------
 
+  * `A <: B` is parsed consistently as `Expr(:comparison, :A, :(<:), :B)` ([#9582]).
+
   * `Uint` et al. are now spelled `UInt` ([#8905]).
 
   * `String` has been renamed to `AbstractString` ([#8872]).
