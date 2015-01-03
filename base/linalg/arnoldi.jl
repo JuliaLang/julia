@@ -122,25 +122,8 @@ end
 size(s::SVDOperator)  = s.m + s.n, s.m + s.n
 issym(s::SVDOperator) = true
 
-function getOperatorType(X)
-  et = eltype(X)
-  if et <: Integer || et <: Float64
-    return Float64
-  end
-  if et <: Complex64
-    return Complex64
-  end
-  if et <: Complex
-    return Complex128
-  end
-  if et <: Float32
-    return Float32
-  end
-  error("Element type $et is not supported for 'svds'.")
-end
-
 function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, maxiter::Int = 1000)
-  otype = getOperatorType(X)
+  otype = eltype(X)
   ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
   ind   = [1:2:nsv*2]
   sval  = abs(ex[1][ind])
