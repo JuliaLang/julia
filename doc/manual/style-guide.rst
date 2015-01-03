@@ -298,6 +298,8 @@ type that will affect the arguments as little as possible through promotion.
 
 For example,
 
+.. doctest::
+
     julia> f(x) = 2.0 * x
     f (generic function with 1 method)
     
@@ -312,6 +314,8 @@ For example,
     
 while
 
+.. doctest::
+
     julia> g(x) = 2 * x
     g (generic function with 1 method)
     
@@ -324,11 +328,13 @@ while
     julia> g(2)
     4
     
-As you can see, the second version, where we used an `Int` literal, preserved
+As you can see, the second version, where we used an :obj:`Int` literal, preserved
 the type of the input argument, while the first didn't. This is because e.g. 
 ``promote_type(Int, Float64) == Float64``, and promotion happens with the 
-multiplication. Similarly, ``Rational`` literals are less type disruptive than 
-``Float64`` literals, but more disruptive than ``Int``s:
+multiplication. Similarly, :obj:`Rational` literals are less type disruptive than
+:obj:`Float64` literals, but more disruptive than :obj:`Int`s:
+
+.. doctest::
 
     julia> h(x) = 2//1 * x
     h (generic function with 1 method)
@@ -342,5 +348,5 @@ multiplication. Similarly, ``Rational`` literals are less type disruptive than
     julia> h(1)
     2//1
 
-Thus, use ``Int`` literals when possible, with ``Rational{Int}`` for literal 
+Thus, use :obj:`Int` literals when possible, with :obj:`Rational{Int}` for literal
 non-integer numbers, in order to make it easier to use your code.
