@@ -185,8 +185,6 @@ const IpAddr = IPAddr
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
 
-@deprecate randbool! rand!
-
 export Nothing
 const Nothing = Void
 
@@ -259,3 +257,10 @@ const base64 = base64encode
 
 @deprecate sizehint(A, n) sizehint!(A, n)
 
+@deprecate randbool!                               rand!
+@deprecate randbool()                              rand(Bool)
+@deprecate randbool(r::AbstractRNG)                rand(r, Bool)
+@deprecate randbool(dims::Dims)                    bitrand(dims)
+@deprecate randbool(dims::Int...)                  bitrand(dims)
+@deprecate randbool(r::AbstractRNG, dims::Dims)    bitrand(r, dims)
+@deprecate randbool(r::AbstractRNG, dims::Int...)  bitrand(r, dims)

@@ -376,7 +376,7 @@ J = UniformScaling(λ)
 @test I + I === UniformScaling(2) # +
 @test inv(I) == I
 @test inv(J) == UniformScaling(inv(λ))
-B = randbool(2,2)
+B = bitrand(2,2)
 @test B + I == B + eye(B)
 @test I + B == B + eye(B)
 A = randn(2,2)
@@ -468,4 +468,3 @@ let
     Q=full(qrfact(A)[:Q])
     @test vecnorm(A-Q) < eps()
 end
-
