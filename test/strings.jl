@@ -1294,3 +1294,22 @@ for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
         end
     end
 end
+
+# Test passing of line/column numbers to custom string literals
+macro linecoltest_str(s,file,line,col)
+    # Change these if the file/line numbers change
+    @test s == "HELLO WORLD"
+    @test endswith(string(file),"strings.jl")
+    @test line == 1306
+    @test col == 13
+end
+linecoltest"HELLO WORLD"
+
+macro linecoltest_mstr(s,file,line,col)
+    # Change these if the file/line numbers change
+    @test endswith(string(file),"strings.jl")
+    @test line == 1314
+    @test col == 15
+end
+linecoltest"""HELLO
+WORLD"""

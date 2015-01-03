@@ -26,7 +26,7 @@ macro MIME(s)
     end
 end
 
-macro MIME_str(s)
+macro MIME_str(s,args...)
     :(MIME{$(Expr(:quote, symbol(s)))})
 end
 

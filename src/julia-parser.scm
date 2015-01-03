@@ -992,18 +992,21 @@
 	     (if (and (symbol? ex) (not (operator? ex))
 		      (not (ts:space? s)))
 		 ;; custom prefixed string literals, x"s" => @x_str "s"
-		 (let* ((str (begin (take-token s)
-				    (parse-string-literal s #t)))
+         (begin (take-token s) (let* (
+            (lineno (input-port-line (ts:port s)))
+            (colno (input-port-column (ts:port s)))
+            (str (parse-string-literal s #t))
 			(nxt (peek-token s))
 			(suffix (if (triplequote-string-literal? str) '_mstr '_str))
+            (textcolno (if (triplequote-string-literal? str) (+ colno 2) colno))
 			(macname (symbol (string #\@ ex suffix)))
 			(macstr (cdr str)))
 		   (if (and (symbol? nxt) (not (operator? nxt))
 			    (not (ts:space? s)))
 		       ;; string literal suffix, "s"x
-		       (loop `(macrocall ,macname ,@macstr
+		       (loop `(macrocall ,macname ,@macstr ,current-filename ,lineno ,textcolno
 					 ,(string (take-token s))))
-		       (loop `(macrocall ,macname ,@macstr))))
+		       (loop `(macrocall ,macname ,@macstr ,current-filename ,lineno ,textcolno)))))
 		 ex))
 	    (else ex))))))
 

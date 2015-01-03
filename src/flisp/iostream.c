@@ -212,6 +212,13 @@ value_t fl_iolineno(value_t *args, u_int32_t nargs)
     return size_wrap(s->lineno);
 }
 
+value_t fl_iocolno(value_t *args, u_int32_t nargs)
+{
+    argcount("input-port-column", nargs, 1);
+    ios_t *s = toiostream(args[0], "input-port-column");
+    return size_wrap(s->colno);
+}
+
 value_t fl_ioseek(value_t *args, u_int32_t nargs)
 {
     argcount("io.seek", nargs, 2);
@@ -426,6 +433,7 @@ static builtinspec_t iostreamfunc_info[] = {
     { "io.copyuntil", fl_iocopyuntil },
     { "io.tostring!", fl_iotostring },
     { "input-port-line", fl_iolineno },
+    { "input-port-column", fl_iocolno },
 
     { NULL, NULL }
 };

@@ -40,6 +40,7 @@ typedef struct {
 
     off_t fpos;       // cached file pos
     size_t lineno;    // current line number
+    size_t colno;     // current column number
 
     // pointer-size integer to support platforms where it might have
     // to be a pointer
