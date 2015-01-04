@@ -401,3 +401,96 @@ let
         Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
     @test s == Base.LineEdit.InputAreaState(3,1)
 end
+
+# test Undo
+let
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.init_state(term, ModalInterface([Prompt("test> ")]))
+    function bufferdata(s)
+        buf = LineEdit.buffer(s)
+        String(buf.data[1:buf.size])
+    end
+
+    LineEdit.edit_insert(s, "one two three")
+
+    LineEdit.edit_delete_prev_word(s)
+    @test bufferdata(s) == "one two "
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_insert(s, " four")
+    LineEdit.edit_insert(s, " five")
+    @test bufferdata(s) == "one two three four five"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three four"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_clear(s)
+    @test bufferdata(s) == ""
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_transpose(s)
+    @test bufferdata(s) == "one two there"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    @test bufferdata(s) == ""
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.move_line_start(s)
+    LineEdit.edit_kill_line(s)
+    LineEdit.edit_yank(s)
+    LineEdit.edit_yank(s)
+    @test bufferdata(s) == "one two threeone two three"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == ""
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.move_line_end(s)
+    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s)
+    LineEdit.edit_backspace(s)
+    @test bufferdata(s) == "one two th"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two thr"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two thre"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_replace(s, 4, 7, "stott")
+    @test bufferdata(s) == "one stott three"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_move_left(s)
+    LineEdit.edit_delete(s)
+    @test bufferdata(s) == "one two thee"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    LineEdit.edit_move_word_left(s)
+    LineEdit.edit_werase(s)
+    LineEdit.edit_delete_next_word(s)
+    @test bufferdata(s) == "one "
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one three"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == "one two three"
+
+    # pop initial insert of "one two three"
+    LineEdit.pop_undo(s)
+    @test bufferdata(s) == ""
+end

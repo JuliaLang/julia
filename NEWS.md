@@ -128,6 +128,8 @@ Library improvements
   * `Diagonal` is now parameterized on the type of the wrapped vector. This allows
     for `Diagonal` matrices with arbitrary `AbstractVector`s ([#22718]).
 
+  * REPL Undo via Ctrl-/ and Ctrl-_
+
 Compiler/Runtime improvements
 -----------------------------
 
