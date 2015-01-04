@@ -29,7 +29,9 @@ New language features
 
 Language changes
 ----------------
-
+  
+  * `--` is now no longer a valid operator ([#9561]).
+  
   * `Uint` et al. are now spelled `UInt` ([#8905]).
 
   * `String` has been renamed to `AbstractString` ([#8872]).
