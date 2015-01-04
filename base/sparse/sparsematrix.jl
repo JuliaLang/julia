@@ -2159,20 +2159,18 @@ function rotr90(A::SparseMatrixCSC)
     I,J,V = findnz(A)
     m,n = size(A)
     #old col inds are new row inds
-    newJ = similar(J)
-    for i=1:length(newJ)
-        newJ[i] = m - I[i] + 1
+    for i=1:length(I)
+        I[i] = m - I[i] + 1
     end
-    return sparse(J, newJ, V, n, m)
+    return sparse(J, I, V, n, m)
 end
 
 function rotl90(A::SparseMatrixCSC)
     I,J,V = findnz(A)
     m,n = size(A)
     #old row inds are new col inds
-    newI = similar(I)
-    for i=1:length(newI)
-        newI[i] = n - J[i] + 1
+    for i=1:length(J)
+        J[i] = n - J[i] + 1
     end
-    return sparse(newI, I, V, n, m)
+    return sparse(J, I, V, n, m)
 end
