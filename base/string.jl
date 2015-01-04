@@ -141,9 +141,9 @@ function nextind(s::AbstractString, i::Integer)
     next(s,e)[2] # out of range
 end
 
-checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError())
+checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
 checkbounds(s::AbstractString, i::Real) = checkbounds(s, to_index(i))
-checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError())
+checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
