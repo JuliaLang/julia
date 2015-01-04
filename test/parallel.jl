@@ -33,11 +33,11 @@ dims = (20,20,20)
 
 @linux_only begin
     S = SharedArray(Int64, dims)
-    @test beginswith(S.segname, "/jl")
+    @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
     S = SharedArray(Int64, dims; pids=[id_other])
-    @test beginswith(S.segname, "/jl")
+    @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
 

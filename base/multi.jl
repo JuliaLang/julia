@@ -1139,7 +1139,7 @@ end
 function redirect_worker_output(ident, stream)
     @schedule while !eof(stream)
         line = readline(stream)
-        if beginswith(line, "\tFrom worker ")
+        if startswith(line, "\tFrom worker ")
             print(line)
         else
             print("\tFrom worker $(ident):\t$line")
