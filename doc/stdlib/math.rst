@@ -78,6 +78,7 @@ Mathematical Operators
    Element-wise exponentiation operator.
 
 .. function:: div(a,b)
+.. function:: a ÷ b
 
    Compute a/b, truncating to an integer.
 
@@ -190,6 +191,7 @@ Mathematical Operators
 
 .. _!=:
 .. function:: !=(x, y)
+.. function:: x ≠ y
 
    Not-equals comparison operator. Always gives the opposite answer as ``==``.
    New types should generally not implement this, and rely on the fallback
@@ -197,11 +199,13 @@ Mathematical Operators
 
 .. _===:
 .. function:: ===(x, y)
+.. function:: x ≡ y
 
    See the :func:`is` operator
 
 .. _!==:
 .. function:: !==(x, y)
+.. function:: x ≢ y
 
    Equivalent to ``!is(x, y)``
 
@@ -216,6 +220,7 @@ Mathematical Operators
 
 .. _<=:
 .. function:: <=(x, y)
+.. function:: x ≤ y
 
    Less-than-or-equals comparison operator.
 
@@ -227,6 +232,7 @@ Mathematical Operators
 
 .. _>=:
 .. function:: >=(x, y)
+.. function:: x ≥ y
 
    Greater-than-or-equals comparison operator.
 
@@ -237,6 +243,7 @@ Mathematical Operators
 
 .. _.!=:
 .. function:: .!=(x, y)
+.. function:: x .≠ y
 
    Element-wise not-equals comparison operator.
 
@@ -247,6 +254,7 @@ Mathematical Operators
 
 .. _.<=:
 .. function:: .<=(x, y)
+.. function:: x .≤ y
 
    Element-wise less-than-or-equals comparison operator.
 
@@ -257,6 +265,7 @@ Mathematical Operators
 
 .. _.>=:
 .. function:: .>=(x, y)
+.. function:: x .≥ y
 
    Element-wise greater-than-or-equals comparison operator.
 
@@ -698,6 +707,7 @@ Mathematical Functions
    Return ``x`` with its sign flipped if ``y`` is negative. For example ``abs(x) = flipsign(x,x)``.
 
 .. function:: sqrt(x)
+.. function:: √x
 
    Return :math:`\sqrt{x}`. Throws ``DomainError`` for negative ``Real`` arguments. Use complex negative arguments instead.
    The prefix operator ``√`` is equivalent to ``sqrt``.
@@ -707,6 +717,7 @@ Mathematical Functions
    Integer square root: the largest integer ``m`` such that ``m*m <= n``.
 
 .. function:: cbrt(x)
+.. function:: ∛x
 
    Return :math:`x^{1/3}`.   The prefix operator ``∛`` is equivalent to ``cbrt``.
 

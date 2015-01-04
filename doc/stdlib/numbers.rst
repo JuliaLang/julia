@@ -203,6 +203,7 @@ Numbers
    Get the additive identity element for the type of x (x can also specify the type itself).
 
 .. data:: pi
+.. data:: π
 
    The constant pi
 
@@ -217,6 +218,14 @@ Numbers
 .. data:: catalan
 
    Catalan's constant
+
+.. data:: γ
+
+   Euler's constant
+
+.. data:: φ
+
+   The golden ratio
 
 .. data:: Inf
 

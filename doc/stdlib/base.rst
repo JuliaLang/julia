@@ -140,6 +140,7 @@ All Objects
 -----------
 
 .. function:: is(x, y) -> Bool
+.. function:: x ≡ y -> Bool
 
    Determine whether ``x`` and ``y`` are identical, in the sense that no program could distinguish them. Compares mutable objects by address in memory, and compares immutable objects (such as numbers) by contents at the bit level. This function is sometimes called ``egal``. The ``===`` operator is an alias for this function.
 

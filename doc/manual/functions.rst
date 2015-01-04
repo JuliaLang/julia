@@ -64,6 +64,12 @@ function:
 The ``apply`` function applies its first argument — a function object —
 to its remaining arguments.
 
+As with variables, Unicode can also be used for function names::
+
+    julia> ∑(x,y) = x + y
+    ∑ (generic function with 1 method)
+
+
 Argument Passing Behavior
 -------------------------
 
