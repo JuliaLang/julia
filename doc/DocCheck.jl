@@ -25,7 +25,7 @@ isdeprecated(v)            = try endswith(functionloc(eval(v))[1], "deprecated.j
 isdocumented(v) = (s=string(v); haskey(FUNCTION_DICT, s) || haskey(MODULE_DICT, s))
 
 
-modfuncjoin(m::AbstractString, f::AbstractString) = beginswith(f, '@') ? "@$m.$(f[2:end])" : "$m.$f"
+modfuncjoin(m::AbstractString, f::AbstractString) = startswith(f, '@') ? "@$m.$(f[2:end])" : "$m.$f"
 modfuncjoin(m, f) = modfuncjoin(string(m), string(f))
 
 # return a list of undefined exports in a module
@@ -56,7 +56,7 @@ function undocumented_by_file(m::Module)
         s = string(f)
         try
             for (file, line) in functionlocs(eval(f))
-                if beginswith(file, JULIA_HOME)
+                if startswith(file, JULIA_HOME)
                     file = replace(file, JULIA_HOME, "\$JULIA_HOME", 1)
                 end
                 if !haskey(undocf, file)
@@ -120,10 +120,10 @@ function _undocumented_rst()
 
     deprecated=[strip(x) for x in split(replace(open(readall, "$JULIA_HOME/../../base/deprecated.jl"),",",""),"\n")]
     for line in deprecated
-        if beginswith(line, "@deprecated")
+        if startswith(line, "@deprecated")
             fn = split(line, r" +")[2]
             if haskey(MODULE_DICT, fn); push!(out, string("- [ ] ", fn)); depdoc += 1 end
-        elseif beginswith(line, "export")
+        elseif startswith(line, "export")
             for fn in split(line, r"[ ,]+")[2:end]
                 if haskey(MODULE_DICT, fn); push!(out, string("- [ ]", fn)); depdoc += 1 end
             end

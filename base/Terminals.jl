@@ -196,7 +196,7 @@ start_reading(t::UnixTerminal) = start_reading(t.in_stream)
 stop_reading(t::UnixTerminal) = stop_reading(t.in_stream)
 eof(t::UnixTerminal) = eof(t.in_stream)
 
-@unix_only hascolor(t::TTYTerminal) = (beginswith(t.term_type, "xterm") || success(`tput setaf 0`))
+@unix_only hascolor(t::TTYTerminal) = (startswith(t.term_type, "xterm") || success(`tput setaf 0`))
 @windows_only hascolor(t::TTYTerminal) = true
 
 end # module
