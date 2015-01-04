@@ -447,6 +447,17 @@ void jl_module_run_initializer(jl_module_t *m)
     }
 }
 
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+{
+    while (1) {
+        if (parent == child)
+            return 1;
+        if (child == NULL || child == child->parent)
+            return 0;
+        child = child->parent;
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif

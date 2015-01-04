@@ -3429,7 +3429,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.f = f;
 
     // step 5. set up debug info context and create first basic block
-    bool in_user_code = lam->module != jl_base_module && lam->module != jl_core_module;
+    bool in_user_code = !jl_is_submodule(lam->module, jl_base_module) && !jl_is_submodule(lam->module, jl_core_module);
     bool do_coverage = jl_compileropts.code_coverage == JL_LOG_ALL || (jl_compileropts.code_coverage == JL_LOG_USER && in_user_code);
     bool do_malloc_log = jl_compileropts.malloc_log  == JL_LOG_ALL || (jl_compileropts.malloc_log    == JL_LOG_USER && in_user_code);
     jl_value_t *stmt = jl_cellref(stmts,0);

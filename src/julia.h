@@ -809,6 +809,7 @@ STATIC_INLINE jl_function_t *jl_get_function(jl_module_t *m, const char *name)
 }
 DLLEXPORT int jl_module_has_initializer(jl_module_t *m);
 DLLEXPORT void jl_module_run_initializer(jl_module_t *m);
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent);
 
 // eq hash tables
 DLLEXPORT jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val);
