@@ -252,7 +252,7 @@ n = bigfib(1000001)
 s = string(n)
 @test length(s) == 208988
 @test endswith(s, "359244926937501")
-@test beginswith(s, "316047687386689")
+@test startswith(s, "316047687386689")
 
 # serialization (#5133)
 let

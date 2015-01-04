@@ -25,13 +25,13 @@ function edit(file::AbstractString, line::Integer)
         f != nothing && (file = f)
     end
     no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
-    if beginswith(edname, "emacs") || edname == "gedit"
+    if startswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
     elseif edname == "vim" || edname == "nvim" || edname == "nano"
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
-    elseif beginswith(edname, "subl") || edname == "atom"
+    elseif startswith(edname, "subl") || edname == "atom"
         spawn(`$(shell_split(edpath)) $file:$line`)
     elseif OS_NAME == :Windows && (edname == "start" || edname == "open")
         spawn(`cmd /c start /b $file`)

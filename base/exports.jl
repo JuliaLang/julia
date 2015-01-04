@@ -813,7 +813,7 @@ export
     base64decode,
     Base64EncodePipe,
     Base64DecodePipe,
-    beginswith,
+    startswith,
     bin,
     bits,
     bytes2hex,
