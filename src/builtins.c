@@ -102,27 +102,31 @@ DLLEXPORT void NORETURN jl_undefined_var_error(jl_sym_t *var)
 
 DLLEXPORT void NORETURN jl_bounds_error(jl_value_t *v, jl_value_t *t)
 {
-    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
 DLLEXPORT void NORETURN jl_bounds_error_v(jl_value_t *v, jl_value_t **idxs, size_t nidxs)
 {
     jl_tuple_t *t = NULL;
-    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    // items in idxs are assumed to already be rooted
+    JL_GC_PUSH2(&v, &t); // root v so the caller doesn't need to
     t = jl_tuplev(nidxs, idxs);
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
 
 DLLEXPORT void NORETURN jl_bounds_error_tuple_int(jl_value_t **v, size_t nv, size_t i)
 {
+    // values in v are expected to already be gc-rooted
     jl_bounds_error_int((jl_value_t*)jl_tuplev(nv, v), i);
 }
 
 DLLEXPORT void NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, size_t i)
 {
     jl_value_t *t = NULL, *v = NULL;
-    JL_GC_PUSH2(v, t);
+    // data is expected to be gc-safe (either gc-rooted, or alloca)
+    // vt is expected to be gc-rooted (in a linfo-root probably)
+    JL_GC_PUSH2(&v, &t);
     v = jl_new_bits(vt, data);
     t = jl_box_long(i);
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
@@ -131,7 +135,7 @@ DLLEXPORT void NORETURN jl_bounds_error_unboxed_int(void *data, jl_value_t *vt, 
 DLLEXPORT void NORETURN jl_bounds_error_int(jl_value_t *v, size_t i)
 {
     jl_value_t *t = NULL;
-    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     t = jl_box_long(i);
     jl_throw(jl_new_struct((jl_datatype_t*)jl_boundserror_type, v, t));
 }
@@ -140,7 +144,7 @@ DLLEXPORT void NORETURN jl_bounds_error_ints(jl_value_t *v, size_t *idxs, size_t
 {
     size_t i;
     jl_tuple_t *t = NULL;
-    JL_GC_PUSH2(v, t); // root arguments so the caller doesn't need to
+    JL_GC_PUSH2(&v, &t); // root arguments so the caller doesn't need to
     t = jl_alloc_tuple(nidxs);
     for (i = 0; i < nidxs; i++) {
         jl_tupleset(t, i, jl_box_long(idxs[i]));
