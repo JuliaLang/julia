@@ -251,6 +251,8 @@ Library improvements
 
   * `BigFloat` random numbers can now be generated ([#22720]).
 
+  * REPL Undo via Ctrl-/ and Ctrl-_
+
 Compiler/Runtime improvements
 -----------------------------
 

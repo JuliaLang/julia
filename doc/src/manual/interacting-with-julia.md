@@ -173,7 +173,7 @@ to do so).
 | `meta-d`            | Forward delete the next word                                                                               |
 | `^W`                | Delete previous text up to the nearest whitespace                                                          |
 | `meta-w`            | Copy the current region in the kill ring                                                                   |
-| `meta-W`            | "Kill" the current region, placing the text in the kill ring                                                |
+| `meta-W`            | "Kill" the current region, placing the text in the kill ring                                               |
 | `^K`                | "Kill" to end of line, placing the text in the kill ring                                                   |
 | `^Y`                | "Yank" insert the text from the kill ring                                                                  |
 | `meta-y`            | Replace a previously yanked text with an older entry from the kill ring                                    |
@@ -181,7 +181,9 @@ to do so).
 | `meta-u`            | Change the next word to uppercase                                                                          |
 | `meta-c`            | Change the next word to titlecase                                                                          |
 | `meta-l`            | Change the next word to lowercase                                                                          |
+| `^/`, `^_`          | Undo previous editing action                                                                               |
 | `^Q`                | Write a number in REPL and press `^Q` to open editor at corresponding stackframe or method                 |
+
 
 
 ### Customizing keybindings
