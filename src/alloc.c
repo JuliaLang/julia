@@ -143,6 +143,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
         return v;
     }
 
+    assert(jl_is_datatype(dt));
     jl_datatype_t *bt = (jl_datatype_t*)dt;
     size_t nb = jl_datatype_size(bt);
     if (nb == 0)
@@ -636,6 +637,8 @@ void jl_compute_field_offsets(jl_datatype_t *st)
         }
         else {
             fsz = sizeof(void*);
+            if (fsz > MAX_ALIGN)
+                fsz = MAX_ALIGN;
             al = fsz;
             st->fields[i].isptr = 1;
             ptrfree = 0;
