@@ -718,32 +718,32 @@ Memory-mapped I/O
 
    The type determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
    
-   dims is a tuple specifying the size of the array.
+   ``dims`` is a tuple specifying the size of the array.
 
    The file is passed via the stream argument.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
    
    Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position.
 
-   **Example**::
-   
-       # Create a file for mmapping
-       # (you could alternatively use mmap_array to do this step, too)
-       A = rand(1:20, 5, 30)
-       s = open("/tmp/mmap.bin", "w+")
-       # We'll write the dimensions of the array as the first two Ints in the file
-       write(s, size(A,1))
-       write(s, size(A,2))
-       # Now write the data
-       write(s, A)
-       close(s)
-       
-       # Test by reading it back in
-       s = open("/tmp/mmap.bin")   # default is read-only
-       m = read(s, Int)
-       n = read(s, Int)
-       A2 = mmap_array(Int, (m,n), s)
+   For example, the following code::
 
-   This would create a m-by-n ``Matrix{Int}``, linked to the file associated with stream ``s``.
+      # Create a file for mmapping
+      # (you could alternatively use mmap_array to do this step, too)
+      A = rand(1:20, 5, 30)
+      s = open("/tmp/mmap.bin", "w+")
+      # We'll write the dimensions of the array as the first two Ints in the file
+      write(s, size(A,1))
+      write(s, size(A,2))
+      # Now write the data
+      write(s, A)
+      close(s)
+
+      # Test by reading it back in
+      s = open("/tmp/mmap.bin")   # default is read-only
+      m = read(s, Int)
+      n = read(s, Int)
+      A2 = mmap_array(Int, (m,n), s)
+
+   creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
    
    A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
@@ -761,26 +761,26 @@ Memory-mapped I/O
 
 .. function:: msync(ptr, len, [flags])
 
-   Forces synchronization of the mmap'd memory region from ptr to ptr+len. Flags defaults to MS_SYNC, but can be a combination of MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for specifics. The flags argument is not valid on Windows.
+   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
  
    You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. data:: MS_ASYNC
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_SYNC
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. data:: MS_INVALIDATE
 
-   Enum constant for msync. See your platform man page for details. (not available on Windows).
+   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
 
 .. function:: mmap(len, prot, flags, fd, offset)
 
-   Low-level interface to the mmap system call. See the man page.
+   Low-level interface to the ``mmap`` system call. See the man page.
 
 .. function:: munmap(pointer, len)
 
-   Low-level interface for unmapping memory (see the man page). With mmap_array you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.
+   Low-level interface for unmapping memory (see the man page). With :func:`mmap_array` you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.

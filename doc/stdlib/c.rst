@@ -35,52 +35,52 @@
    Load a shared library, returning an opaque handle.
 
    The optional flags argument is a bitwise-or of zero or more of
-   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
-   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
+   ``RTLD_LOCAL``, ``RTLD_GLOBAL``, ``RTLD_LAZY``, ``RTLD_NOW``, ``RTLD_NODELETE``,
+   ``RTLD_NOLOAD``, ``RTLD_DEEPBIND``, and ``RTLD_FIRST``.  These are converted to
    the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
    dlopen command, if possible, or are ignored if the specified
    functionality is not available on the current platform.  The
-   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
+   default is ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL``.  An important usage
    of these flags, on POSIX platforms, is to specify
-   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
+   ``RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL`` in order for the library's
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
 .. function:: dlopen_e(libfile::String [, flags::Integer])
 
-   Similar to ``dlopen``, except returns a NULL pointer instead of raising errors.
+   Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
 .. data:: RTLD_DEEPBIND
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_FIRST
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_GLOBAL
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_LAZY
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_LOCAL
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NODELETE
     
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NOLOAD
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NOW
 
-   Enum constant for dlopen. See your platform man page for details, if applicable.
+   Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. function:: dlsym(handle, sym)
 

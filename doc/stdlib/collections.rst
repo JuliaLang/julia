@@ -44,11 +44,12 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
 .. function:: enumerate(iter)
 
-   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``ith`` value from the given iterator. It's useful when you need not only the values `x` over which you are iterating, but also the index `i` of the iterations.
+   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
    
-   **Example**::
+   .. doctest::
 
-   	julia> a = ["a", "b", "c"]
+       julia> a = ["a", "b", "c"];
+
    	julia> for (index, value) in enumerate(a)
                    println("$index $value")
                end
@@ -66,16 +67,13 @@ General Collections
 
    Determine whether a collection is empty (has no elements).
    
-   **Examples**::
+   .. doctest::
    
-   	julia> a = []
-   	julia> isempty(a)
+       julia> isempty([])
    	true
 	
-   	julia> b = [1 2 3]
-   	julia> isempty(b)
+       julia> isempty([1 2 3])
    	false
-
 
 .. function:: empty!(collection) -> collection
 
@@ -89,8 +87,8 @@ General Collections
 
    Returns the last index of the collection.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> endof([1,2,4])
    	3
 
@@ -368,8 +366,8 @@ Iterable Collections
 
    Determine whether predicate ``p`` returns true for all elements of ``itr``.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> all(i->(4<=i<=6), [4,5,6])
    	true
 
@@ -378,12 +376,19 @@ Iterable Collections
    Transform collection ``c`` by applying ``f`` to each element.
    For multiple collection arguments, apply ``f`` elementwise.
 
-   **Examples**::
-   
-   	julia> map((x) -> x * 2, [1, 2, 3])
-   	[2, 4, 6]
-   	julia> map(+, [1, 2, 3], [10, 20, 30])
-   	[11, 22, 33]
+   .. doctest::
+
+      julia> map((x) -> x * 2, [1, 2, 3])
+      3-element Array{Int64,1}:
+       2
+       4
+       6
+
+      julia> map(+, [1, 2, 3], [10, 20, 30])
+      3-element Array{Int64,1}:
+       11
+       22
+       33
 
 .. function:: map!(function, collection)
 
@@ -408,7 +413,10 @@ Iterable Collections
    intermediate collection needs to be created. See documentation for
    ``reduce`` and ``map``.
 
-   **Example**: ``mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14``
+   .. doctest::
+
+      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      14
 
    The associativity of the reduction is implementation-dependent. Use
    ``mapfoldl`` or ``mapfoldr`` instead for guaranteed left or right
@@ -516,7 +524,11 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
 .. function:: Dict()
 
-   ``Dict{K,V}()`` constructs a hashtable with keys of type K and values of type V.
+   ``Dict{K,V}()`` constructs a hash
+
+
+
+   table with keys of type K and values of type V.
    The literal syntax is ``{"A"=>1, "B"=>2}`` for a ``Dict{Any,Any}``, or
    ``["A"=>1, "B"=>2]`` for a ``Dict`` of inferred type.
 
@@ -536,7 +548,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
      get(dict, key) do
          # default value calculated here
-	 time()
+	      time()
      end
 
 .. function:: get!(collection, key, default)
@@ -551,7 +563,7 @@ Given a dictionary ``D``, the syntax ``D[x]`` returns the value of key ``x`` (if
 
      get!(dict, key) do
          # default value calculated here
-	 time()
+	      time()
      end
 
 .. function:: getkey(collection, key, default)
@@ -645,15 +657,15 @@ Set-Like Collections
 
 .. function:: complement(s)
 
-   Returns the set-complement of IntSet s.
+   Returns the set-complement of IntSet ``s``.
 
 .. function:: complement!(s)
 
-   Mutates IntSet s into its set-complement.
+   Mutates IntSet ``s`` into its set-complement.
 
 .. function:: intersect!(s1, s2)
 
-   Intersects IntSets s1 and s2 and overwrites the set s1 with the result. If needed, s1 will be expanded to the size of s2.
+   Intersects IntSets ``s1`` and ``s2`` and overwrites the set ``s1`` with the result. If needed, s1 will be expanded to the size of ``s2``.
 
 .. function:: issubset(A, S) -> Bool
 .. function:: A ⊆ S -> Bool
@@ -694,8 +706,8 @@ Dequeues
 
 .. function:: deleteat!(collection, itr)
 
-   Remove the items at the indices given by `itr`, and return the modified collection. Subsequent 
-   items are shifted to fill the resulting gap.  `itr` must be sorted and unique.
+   Remove the items at the indices given by ``itr``, and return the modified collection. Subsequent
+   items are shifted to fill the resulting gap.  ``itr`` must be sorted and unique.
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
@@ -720,11 +732,27 @@ Dequeues
 
 .. function:: append!(collection, items) -> collection.
 
-   Add the elements of ``items`` to the end of a collection. ``append!([1],[2,3]) => [1,2,3]``
+   Add the elements of ``items`` to the end of a collection.
+
+   .. doctest::
+
+      julia> append!([1],[2,3])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 .. function:: prepend!(collection, items) -> collection
 
-   Insert the elements of ``items`` to the beginning of a collection. ``prepend!([3],[1,2]) => [1,2,3]``
+   Insert the elements of ``items`` to the beginning of a collection.
+
+   .. doctest::
+
+      julia> prepend!([3],[1,2])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
 
@@ -741,9 +769,9 @@ changed efficiently.
 
 .. function:: PriorityQueue{K,V}([ord])
 
-   Construct a new PriorityQueue, with keys of type K and values/priorites of
-   type V. If an order is not given, the priority queue is min-ordered using
-   the default comparison for V.
+   Construct a new PriorityQueue, with keys of type ``K`` and values/priorites of
+   type ``V``. If an order is not given, the priority queue is min-ordered using
+   the default comparison for ``V``.
 
 .. function:: enqueue!(pq, k, v)
 
@@ -761,7 +789,7 @@ changed efficiently.
 inserted and priorities accessed or changed using indexing notation::
 
   # Julia code
-  pq = PriorityQueue()
+  pq = Collections.PriorityQueue()
 
   # Insert keys with associated priorities
   pq["a"] = 10

@@ -799,10 +799,12 @@ Mathematical Functions
 
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
-   **Example**: :math:`100=2*2*5*5`; then::
+   .. doctest::
    
-   	julia> factor(100)
-   	[5=>2,2=>2]
+      julia> factor(100) # == 2*2*5*5
+      Dict{Int64,Int64} with 2 entries:
+        2 => 2
+        5 => 2
 	
 .. function:: gcd(x,y)
 
@@ -814,7 +816,21 @@ Mathematical Functions
 
 .. function:: gcdx(x,y)
 
-   Greatest common (positive) divisor, also returning integer coefficients ``u`` and ``v`` that solve ``ux+vy == gcd(x,y)``
+   Computes the greatest common (positive) divisor of ``x`` and ``y`` and their Bézout coefficients, i.e. the integer coefficients ``u`` and ``v`` that satisfy :math:`ux+vy = d = gcd(x,y)`.
+
+   .. doctest::
+
+      julia> gcdx(12, 42)
+      (6,-3,1)
+
+   .. doctest::
+
+      julia> gcdx(240, 46)
+      (2,-9,47)
+
+   .. note::
+
+      Bézout coefficients are *not* uniquely defined. ``gcdx`` returns the minimal Bézout coefficients that are computed by the extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325, Algorithm X.) These coefficients ``u`` and ``v`` are minimal in the sense that :math:`|u| < |\frac y d` and :math:`|v| < |\frac x d`. Furthermore, the signs of ``u`` and ``v`` are chosen so that ``d`` is positive.
 
 .. function:: ispow2(n) -> Bool
 

@@ -13,8 +13,8 @@ Strings
 
    Concatenate strings. The ``*`` operator is an alias to this function.
 
-   **Example**::
-   
+   .. doctest::
+
 	   julia> "Hello " * "world"
 	   "Hello world"
 
@@ -22,7 +22,7 @@ Strings
 
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
-   **Example**::
+   .. doctest::
    
    	julia> "Test "^3
    	"Test Test Test "

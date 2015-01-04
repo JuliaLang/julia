@@ -148,7 +148,13 @@ Data Formats
 
    Extract the significand(s) (a.k.a. mantissa), in binary representation, of a floating-point number or array.
 
-   For example, ``significand(15.2)/15.2 == 0.125``, and ``significand(15.2)*8 == 15.2``
+   .. doctest::
+
+      julia> significand(15.2)/15.2
+      0.125
+
+      julia> significand(15.2)*8
+      15.2
 
 .. function:: exponent(x) -> Int
 
@@ -336,44 +342,62 @@ Integers
 
    Number of ones in the binary representation of ``x``.
 
-   **Example**: ``count_ones(7) -> 3``
+   .. doctest::
+
+      julia> count_ones(7)
+      3
 
 .. function:: count_zeros(x::Integer) -> Integer
 
    Number of zeros in the binary representation of ``x``.
 
-   **Example**: ``count_zeros(int32(2 ^ 16 - 1)) -> 16``
+   .. doctest::
+
+      julia> count_zeros(int32(2 ^ 16 - 1))
+      16
 
 .. function:: leading_zeros(x::Integer) -> Integer
 
    Number of zeros leading the binary representation of ``x``.
 
-   **Example**: ``leading_zeros(int32(1)) -> 31``
+   .. doctest::
+
+      julia> leading_zeros(int32(1))
+      31
 
 .. function:: leading_ones(x::Integer) -> Integer
 
    Number of ones leading the binary representation of ``x``.
 
-   **Example**: ``leading_ones(int32(2 ^ 32 - 2)) -> 31``
+   .. doctest::
+
+      julia> leading_ones(int32(2 ^ 32 - 2))
+      31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
 
    Number of zeros trailing the binary representation of ``x``.
 
-   **Example**: ``trailing_zeros(2) -> 1``
+   .. doctest::
+
+      julia> trailing_zeros(2)
+      1
 
 .. function:: trailing_ones(x::Integer) -> Integer
 
    Number of ones trailing the binary representation of ``x``.
 
-   **Example**: ``trailing_ones(3) -> 2``
+   .. doctest::
+
+      julia> trailing_ones(3)
+      2
 
 .. function:: isprime(x::Integer) -> Bool
 
    Returns ``true`` if ``x`` is prime, and ``false`` otherwise.
 
-   **Example**::
-   
+   .. doctest::
+
    	julia> isprime(3)
    	true
 
@@ -385,7 +409,7 @@ Integers
 
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
-   **Examples**::
+   .. doctest::
    
    	julia> isodd(9)
    	true
@@ -397,7 +421,7 @@ Integers
 
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
-   **Examples**::
+   .. doctest::
    
    	julia> iseven(10)
    	true

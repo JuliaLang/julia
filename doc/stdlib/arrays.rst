@@ -404,13 +404,13 @@ Array functions
    Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
    integers in the ranges ``1:m``, ``1:n``, etc.
    
-   **Example**::
+   .. doctest::
 
-       julia> cartesianmap(println, (2,2))
-       11
-       21
-       12
-       22
+      julia> cartesianmap(println, (2,2))
+      11
+      21
+      12
+      22
 
 Combinatorics
 -------------
