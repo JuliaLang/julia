@@ -446,13 +446,17 @@ implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
 generally implement at least :func:`size(A) <size>` (returing an ``Int`` tuple),
-:func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>` (returning an element
-of type ``T``); mutable arrays should also implement :func:`setindex!`.  It
+:func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>`;
+mutable arrays should also implement :func:`setindex!`.  It
 is recommended that these operations have nearly constant time complexity,
 or technically Õ(1) complexity, as otherwise some array functions may
 be unexpectedly slow.   Concrete types should also typically provide
 a :func:`similar(A,T=eltype(A),dims=size(A)) <similar>` method, which is used to allocate
 a similar array for :func:`copy` and other out-of-place operations.
+No matter how an ``AbstractArray{T,N}`` is represented internally,
+``T`` is the type of object returned by *integer* indexing (``A[1,
+..., 1]``, when ``A`` is not empty) and ``N`` should be the length of
+the tuple returned by :func:`size`.
 
 ``DenseArray`` is an abstract subtype of ``AbstractArray`` intended
 to include all arrays that are laid out at regular offsets in memory,
