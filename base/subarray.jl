@@ -127,7 +127,7 @@ stagedfunction _slice{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::I
                     N += 1
                     push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :V, :I))
                 end
-                push!(indexexprs, :(V.indexes[$j][I[$k]]))
+                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
                 push!(Itypes, rangetype(IV[j], I[k]))
             else
                 # We have a linear index that spans more than one dimension of the parent
@@ -189,12 +189,12 @@ stagedfunction _sub{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::Ind
             if k < N && I[k] <: Real
                 # convert scalar to a range
                 sym = gensym()
-                push!(preexprs, :($sym = V.indexes[$j][int(I[$k])]))
+                push!(preexprs, :($sym = reindex(V.indexes[$j], int(I[$k]))))
                 push!(indexexprs, :($sym:$sym))
                 push!(Itypes, UnitRange{Int})
             elseif k < length(I) || k == NV || j == length(IV)
                 # simple indexing
-                push!(indexexprs, :(V.indexes[$j][I[$k]]))
+                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
                 push!(Itypes, rangetype(IV[j], I[k]))
             else
                 # We have a linear index that spans more than one dimension of the parent
@@ -244,6 +244,12 @@ function rangetype(T1, T2)
     length(rt) == 1 || error("Can't infer return type")
     rt[1]
 end
+
+reindex(a, b) = a[b]
+reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
+reindex(a::UnitRange, b::StepRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), step(b), length(b))
+reindex(a::StepRange, b::Range{Int}) = range(oftype(first(a), first(a)+(first(b)-1)*step(a)), step(a)*step(b), length(b))
+reindex(a, b::Int) = unsafe_getindex(a, b)
 
 dimsizeexpr(Itype, d::Int, len::Int, Asym::Symbol, Isym::Symbol) = :(length($Isym[$d]))
 function dimsizeexpr(Itype::Type{Colon}, d::Int, len::Int, Asym::Symbol, Isym::Symbol)
