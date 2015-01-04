@@ -63,6 +63,15 @@ Julia's documentation is stored in the `doc` directory, and like everything else
 - Provide a title, and optionally a longer description of your change 
 - Submit your change
 
+Julia's documentation is built with [Sphinx](http://sphinx-doc.org/contents.html), which supports (and Julia's docs rely heavily on) [ReST directives](http://docutils.sourceforge.net/docs/ref/rst/directives.html). To build the documentation locally, run
+
+    make -C doc html
+
+or 
+
+    make -C doc latex
+
+from Julia's root directory. Sometimes errors only show up in one of them, so if you're preparing a pull request it is nice if you've checked both formats before you submit.
 
 ### Contributing to core functionality or base libraries
 
