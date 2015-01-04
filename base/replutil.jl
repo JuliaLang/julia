@@ -158,12 +158,10 @@ function showerror(io::IO, e::MethodError)
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if e.f == Base.convert && !isempty(e.args)
-        if isa(e.args[1], Type)
-            println(io)
-            print(io, "This may have arisen from a call to the constructor $(e.args[1])(...), ")
-            print(io, "since type constructors always fall back to convert methods.")
-        end
+    if e.f == Base.convert && !isempty(e.args) && isa(e.args[1], Type)
+        println(io)
+        print(io, "This may have arisen from a call to the constructor $(e.args[1])(...), ")
+        print(io, "since type constructors fall back to convert methods in julia v0.4.")
     end
 
     # Display up to three closest candidates
