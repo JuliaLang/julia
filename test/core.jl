@@ -502,6 +502,16 @@ begin
     @test is(g(a),a)
 end
 
+# dispatch using Val{T}. See discussion in #9452 for instances vs types
+begin
+    local firstlast
+    firstlast(::Type{Val{true}}) = "First"
+    firstlast(::Type{Val{false}}) = "Last"
+
+    @test firstlast(Val{true}) == "First"
+    @test firstlast(Val{false}) == "Last"
+end
+
 # try/finally
 begin
     after = 0

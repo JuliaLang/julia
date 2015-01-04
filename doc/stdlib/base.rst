@@ -438,6 +438,14 @@ Types
 
    Compute a type that contains the intersection of ``T`` and ``S``. Usually this will be the smallest such type or one close to it.
 
+.. function:: Val{c}
+
+   Create a "value type" out of ``c``, which must be an ``isbits``
+   value. The intent of this construct is to be able to dispatch on
+   constants, e.g., ``f(Val{false})`` allows you to dispatch directly
+   (at compile-time) to an implementation ``f(::Type{Val{false}})``,
+   without having to test the boolean value at runtime.
+
 Generic Functions
 -----------------
 
