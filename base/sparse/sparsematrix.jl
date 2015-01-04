@@ -2142,3 +2142,35 @@ function sortSparseMatrixCSC!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}; sortindices::Sym
 
     return A
 end
+
+## rotations
+
+function rot180(A::SparseMatrixCSC)
+    I,J,V = findnz(A)
+    m,n = size(A)
+    for i=1:length(I)
+        I[i] = m - I[i] + 1
+        J[i] = n - J[i] + 1
+    end
+    return sparse(I,J,V,m,n)
+end
+
+function rotr90(A::SparseMatrixCSC)
+    I,J,V = findnz(A)
+    m,n = size(A)
+    #old col inds are new row inds
+    for i=1:length(I)
+        I[i] = m - I[i] + 1
+    end
+    return sparse(J, I, V, n, m)
+end
+
+function rotl90(A::SparseMatrixCSC)
+    I,J,V = findnz(A)
+    m,n = size(A)
+    #old row inds are new col inds
+    for i=1:length(J)
+        J[i] = n - J[i] + 1
+    end
+    return sparse(J, I, V, n, m)
+end
