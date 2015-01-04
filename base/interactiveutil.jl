@@ -195,14 +195,6 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
 end
 versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
-# searching definitions
-
-function which(f, t::(Type...))
-    ms = methods(f, t)
-    isempty(ms) && error("no method found for the specified argument types")
-    ms[1]
-end
-
 # displaying type-ambiguity warnings
 
 function code_warntype(io::IO, f, t::(Type...))
