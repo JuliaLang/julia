@@ -156,17 +156,11 @@ type Bounds
     right::Bool
 end
 
-type UnionSearchState
-    i::Int       # traversal-order index of current union (0 <= i < nbits(idxs))
-    idxs::Int64  # bit vector representing current combination being tested
-    UnionSearchState() = new(0,0)
-end
-
 type UnionState
-    depth::Int        # number of union decision points we're inside
-    nnew::Int         # # unions found at next nesting depth
-    stack::Vector{UnionSearchState}  # stack of decisions for each depth
-    UnionState() = new(1,0,UnionSearchState[])
+    depth::Int           # number of union decision points we're inside
+    more::Bool           # new union found; need to grow stack
+    stack::Vector{Bool}  # stack of decisions
+    UnionState() = new(1,0,Bool[])
 end
 
 type Env
@@ -176,50 +170,43 @@ type Env
     Env() = new(Dict{Var,Bounds}(), UnionState(), UnionState())
 end
 
-issub(x, y) = forall_exists_issub(x, y, Env(), 0)
+issub(x, y) = forall_exists_issub(x, y, Env(), false)
 issub(x, y, env) = (x === y)
 issub(x::Ty, y::Ty, env) = (x === y) || x === BottomT
 
-function forall_exists_issub(x, y, env, nL)
-    assert(nL < 63)
+function forall_exists_issub(x, y, env, anyunions::Bool)
     # for all combinations of elements from Unions on the left, there must
     # exist a combination of elements from Unions on the right that makes
     # issub() true. Unions in invariant position are on both the left and
     # the right in this formula.
-
-    for forall in 1:(1<<nL)
+    for forall in false:anyunions
         if !isempty(env.Lunions.stack)
-            env.Lunions.stack[end].idxs = forall
+            env.Lunions.stack[end] = forall
         end
 
-        !exists_issub(x, y, env, 0) && return false
+        !exists_issub(x, y, env, false) && return false
 
-        if env.Lunions.nnew > 0
-            push!(env.Lunions.stack, UnionSearchState())
-            sub = forall_exists_issub(x, y, env, env.Lunions.nnew)
+        if env.Lunions.more
+            push!(env.Lunions.stack, false)
+            sub = forall_exists_issub(x, y, env, true)
             pop!(env.Lunions.stack)
-            if !sub
-                return false
-            end
+            !sub && return false
         end
     end
     return true
 end
 
-function exists_issub(x, y, env, nR)
-    assert(nR < 63)
-    for exists in 1:(1<<nR)
+function exists_issub(x, y, env, anyunions::Bool)
+    for exists in false:anyunions
         if !isempty(env.Runions.stack)
-            env.Runions.stack[end].idxs = exists
+            env.Runions.stack[end] = exists
         end
-        for ru in env.Runions.stack; ru.i = -1; end
-        for lu in env.Lunions.stack; lu.i = -1; end
         env.Lunions.depth = env.Runions.depth = 1
-        env.Lunions.nnew = env.Runions.nnew = 0
+        env.Lunions.more = env.Runions.more = false
 
-        sub = issub(x, y, env)
+        found = issub(x, y, env)
 
-        if env.Lunions.nnew > 0
+        if env.Lunions.more
             # return up to forall_exists_issub. the recursion must have this shape:
             # ∀₁         ∀₁
             #   ∃₁  =>     ∀₂
@@ -228,16 +215,13 @@ function exists_issub(x, y, env, nR)
             #                  ∃₂
             return true
         end
-        if env.Runions.nnew > 0
-            push!(env.Runions.stack, UnionSearchState())
-            found = exists_issub(x, y, env, env.Runions.nnew)
+        if env.Runions.more
+            push!(env.Runions.stack, false)
+            found = exists_issub(x, y, env, true)
             pop!(env.Runions.stack)
-            if env.Lunions.nnew > 0
-                # return up to forall_exists_issub
-                return true
+            if env.Lunions.more
+                return true  # return up to forall_exists_issub
             end
-        else
-            found = sub
         end
         found && return true
     end
@@ -247,23 +231,21 @@ end
 function issub_union(t, u::UnionT, env, R, state::UnionState)
     if state.depth > length(state.stack)
         # at a new nesting depth, begin by just counting unions
-        state.nnew += 1
+        state.more = true
         return true
     end
-    ui = state.stack[state.depth]; ui.i += 1
-    state.depth += 1
-    choice = u.((ui.idxs&(1<<ui.i)!=0) + 1)
-    ans = R ? issub(t, choice, env) : issub(choice, t, env)
-    state.depth -= 1
-    return ans
+    ui = state.stack[state.depth]; state.depth += 1
+    choice = u.(1+ui)
+    return R ? issub(t, choice, env) : issub(choice, t, env)
 end
 
 issub(a::UnionT, b::UnionT, env) = a === b || issub_union(a, b, env, true, env.Runions)
-issub(a::UnionT, b::Ty, env) = issub_union(b, a, env, false, env.Lunions)
-issub(a::Ty, b::UnionT, env) = a === BottomT || issub_union(a, b, env, true, env.Runions)
+issub(a::UnionT, b::Ty, env) = b===AnyT || issub_union(b, a, env, false, env.Lunions)
+issub(a::Ty, b::UnionT, env) =
+    a===BottomT || a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
 # take apart unions before handling vars
 issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
-issub(a::Var, b::UnionT, env) = a === BottomT || issub_union(a, b, env, true, env.Runions)
+issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
 
 function issub(a::TagT, b::TagT, env)
     a === b && return true
@@ -306,8 +288,7 @@ function issub(a::TagT, b::TagT, env)
 end
 
 function join(a,b,env)
-    a === b && return a
-    (a===BottomT || b===AnyT) && return b
+    (a===BottomT || b===AnyT || a === b) && return b
     (b===BottomT || a===AnyT) && return a
     UnionT(a,b)
 end
@@ -318,7 +299,9 @@ function issub(a::Var, b::Var, env)
     a === b && return true
     aa = env.vars[a]; bb = env.vars[b]
     if aa.right
-        bb.right && return false
+        # this is a bit odd, but seems necessary to make this case work:
+        # (@UnionAll x<:T<:x RefT{RefT{T}}) == RefT{@UnionAll x<:T<:x RefT{T}}
+        bb.right && return issub(bb.ub, bb.lb, env) && issub(aa.ub, aa.lb, env)
         return var_lt(a, b, env)
     else
         #!bb.right && return issub(aa.ub, bb.lb, env) # shortcut check ∀a,b . a<:b
@@ -330,7 +313,11 @@ function var_lt(b::Var, a::Union(Ty,Var), env)
     bb = env.vars[b]
     !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
     !issub(bb.lb, a, env) && return false
-    bb.ub = a
+    # for contravariance we would need to compute a meet here, but
+    # because of invariance bb.ub ⊓ a == a here always. however for this
+    # to work we need to compute issub(left,right) before issub(right,left),
+    # since otherwise the issub(a, bb.ub) check in var_gt becomes vacuous.
+    bb.ub = a  # meet(bb.ub, a)
     return true
 end
 
@@ -348,7 +335,7 @@ function rename(t::UnionAllT)
 end
 
 function issub_unionall(t::Ty, u::UnionAllT, env, R)
-    haskey(env.vars, u.var) && (u = rename(u))
+    haskey(env.vars, u.var) && (u = rename(u))  # TODO: tests for this
     env.vars[u.var] = Bounds(u.var.lb, u.var.ub, R)
     ans = R ? issub(t, u.T, env) : issub(u.T, t, env)
     delete!(env.vars, u.var)
@@ -359,7 +346,7 @@ issub(a::UnionAllT, b::UnionAllT, env) = a === b || issub_unionall(a, b, env, tr
 issub(a::UnionT, b::UnionAllT, env) = issub_unionall(a, b, env, true)
 issub(a::UnionAllT, b::UnionT, env) = issub_unionall(b, a, env, false)
 issub(a::Ty, b::UnionAllT, env) = a === BottomT || issub_unionall(a, b, env, true)
-issub(a::UnionAllT, b::Ty, env) = issub_unionall(b, a, env, false)
+issub(a::UnionAllT, b::Ty, env) = b === AnyT || issub_unionall(b, a, env, false)
 
 
 # convenient syntax
@@ -747,31 +734,50 @@ function test_6()
     @test issub_strict((@UnionAll i<:T<:i @UnionAll i<:S<:i inst(PairT,T,S)),
                        @UnionAll T inst(PairT,T,T))
 
-    @test issub_strict(tupletype(Ty(Int), inst(RefT,Ty(Int))),
+    @test issub_strict(tupletype(i, inst(RefT,i)),
                        (@UnionAll T @UnionAll S<:T tupletype(S,inst(RefT,T))))
 
-    @test !issub(tupletype(Ty(Real), inst(RefT,Ty(Int))),
+    @test !issub(tupletype(Ty(Real), inst(RefT,i)),
                  (@UnionAll T @UnionAll S<:T tupletype(S,inst(RefT,T))))
 
     # S >: T
-    @test issub_strict(tupletype(Ty(Real), inst(RefT,Ty(Int))),
+    @test issub_strict(tupletype(Ty(Real), inst(RefT,i)),
                        (@UnionAll T @UnionAll S>:T tupletype(S,inst(RefT,T))))
 
-    @test !issub(tupletype(inst(RefT,Ty(Int)), inst(RefT,Ty(Integer))),
+    @test !issub(tupletype(inst(RefT,i), inst(RefT,ai)),
                  (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,S),inst(RefT,T))))
 
-    @test issub_strict(tupletype(inst(RefT,Ty(Real)), inst(RefT,Ty(Integer))),
+    @test issub_strict(tupletype(inst(RefT,Ty(Real)), inst(RefT,ai)),
                        (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,S),inst(RefT,T))))
 
 
-    @test issub_strict(tupletype(Ty(Real), inst(RefT,tupletype(Ty(Int)))),
+    @test issub_strict(tupletype(Ty(Real), inst(RefT,tupletype(i))),
                        (@UnionAll T @UnionAll S>:T tupletype(S,inst(RefT,tupletype(T)))))
 
-    @test !issub(tupletype(inst(RefT,tupletype(Ty(Int))), inst(RefT,tupletype(Ty(Integer)))),
+    @test !issub(tupletype(inst(RefT,tupletype(i)), inst(RefT,tupletype(ai))),
                  (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,tupletype(S)),inst(RefT,tupletype(T)))))
 
-    @test issub_strict(tupletype(inst(RefT,tupletype(Ty(Real))), inst(RefT,tupletype(Ty(Integer)))),
+    @test issub_strict(tupletype(inst(RefT,tupletype(Ty(Real))), inst(RefT,tupletype(ai))),
                        (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,tupletype(S)),inst(RefT,tupletype(T)))))
+
+    # (@UnionAll x<:T<:x Q{T}) == Q{x}
+    @test isequal_type(inst(RefT,inst(RefT,i)),
+                       inst(RefT,@UnionAll i<:T<:i inst(RefT,T)))
+    @test isequal_type((@UnionAll i<:T<:i inst(RefT,inst(RefT,T))),
+                       inst(RefT,@UnionAll i<:T<:i inst(RefT,T)))
+    @test !issub((@UnionAll i<:T<:i inst(RefT,inst(RefT,T))),
+                 inst(RefT,@UnionAll T<:i inst(RefT,T)))
+
+    u = Ty(Union(Int8,Int64))
+    A = inst(RefT,BottomT)
+    B = @UnionAll S<:u inst(RefT,S)
+    @test issub(inst(RefT,B), @UnionAll A<:T<:B inst(RefT,T))
+
+    C = @UnionAll S<:u S
+    @test issub(inst(RefT,C), @UnionAll u<:T<:u inst(RefT,T))
+
+    BB = @UnionAll S<:BottomT S
+    @test issub(inst(RefT,B), @UnionAll BB<:U<:B inst(RefT,U))
 end
 
 # tests that don't pass yet
@@ -839,6 +845,7 @@ function test_properties()
 
         # unionall identity
         @test isequal_type(T, @UnionAll S<:T S)
+        @test isequal_type(inst(RefT,T), @UnionAll T<:U<:T inst(RefT,U))
 
         # equality under renaming
         if isa(T, UnionAllT)
@@ -849,7 +856,10 @@ function test_properties()
             # transitivity
             if issub(T, S)
                 for R in menagerie
-                    @test issub(S, R) → issub(T, R)
+                    if issub(S, R)
+                        @test issub(T, R)  # issub(S, R) → issub(T, R)
+                        @test issub(inst(RefT,S), @UnionAll T<:U<:R inst(RefT,U))
+                    end
                 end
             end
 
