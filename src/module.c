@@ -452,6 +452,17 @@ jl_function_t *jl_module_call_func(jl_module_t *m)
     return m->call_func;
 }
 
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+{
+    while (1) {
+        if (parent == child)
+            return 1;
+        if (child == NULL || child == child->parent)
+            return 0;
+        child = child->parent;
+    }
+}
+
 #ifdef __cplusplus
 }
 #endif
