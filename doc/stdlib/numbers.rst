@@ -209,7 +209,7 @@ Numbers
    Get the additive identity element for the type of x (x can also specify the type itself).
 
 .. data:: pi
-.. data:: π
+          π
 
    The constant pi
 
