@@ -406,8 +406,7 @@ end
 ## getindex
 
 # general scalar indexing with two or more indices
-# (uses linear indexing, which - in the safe version - performs the final
-# bounds check and is defined in bitarray.jl)
+# (uses linear indexing, which is defined in bitarray.jl)
 # (code is duplicated for safe and unsafe versions for performance reasons)
 
 @ngenerate N Bool function unsafe_getindex(B::BitArray, I_0::Int, I::NTuple{N,Int}...)
@@ -426,10 +425,11 @@ end
     @nexprs N d->begin
         l = size(B,d)
         stride *= l
-        1 <= I_{d-1} <= l || throw(BoundsError())
+        1 <= I_{d-1} <= l || throw(BoundsError(B, tuple(I_0, @ntuple(N,I)...)))
         index += (I_d - 1) * stride
     end
-    return B[index]
+    1 <= index <= length(B) || throw(BoundsError(B, tuple(I_0, @ntuple(N,I)...)))
+    return unsafe_getindex(B, index)
 end
 
 # contiguous multidimensional indexing: if the first dimension is a range,
@@ -521,10 +521,11 @@ end
     @nexprs N d->begin
         l = size(B,d)
         stride *= l
-        1 <= I_{d-1} <= l || throw(BoundsError())
+        1 <= I_{d-1} <= l || throw(BoundsError(B, tuple(I_0, @ntuple(N,I)...)))
         index += (I_d - 1) * stride
     end
-    B[index] = x
+    1 <= index <= length(B) || throw(BoundsError(B, tuple(I_0, @ntuple(N,I)...)))
+    unsafe_setindex!(B, x, index)
     return B
 end
 
