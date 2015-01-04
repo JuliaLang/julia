@@ -1092,7 +1092,6 @@ export
     module_parent,
     names,
     versioninfo,
-    which,
     whos,
     workspace,
 
