@@ -480,3 +480,22 @@ end
 b = findn( speye(4) )
 @test (length(b[1]) == 4)
 @test (length(b[2]) == 4)
+
+#rotations
+a = sparse( [1,1,2,3], [1,3,4,1], [1,2,3,4] )
+
+@test rot180(a,2) == a
+@test rot180(a,1) == sparse( [3,3,2,1], [4,2,1,4], [1,2,3,4] )
+@test rotr90(a,1) == sparse( [1,3,4,1], [3,3,2,1], [1,2,3,4] )
+@test rotl90(a,1) == sparse( [4,2,1,4], [1,1,2,3], [1,2,3,4] )
+@test rotl90(a,2) == rot180(a)
+@test rotr90(a,2) == rot180(a)
+@test rotl90(a,3) == rotr90(a)
+@test rotr90(a,3) == rotl90(a)
+
+#ensure we have preserved the correct dimensions!
+
+a = speye(3,5)
+@test size(rot180(a)) == (3,5)
+@test size(rotr90(a)) == (5,3)
+@test size(rotl90(a)) == (5,3)
