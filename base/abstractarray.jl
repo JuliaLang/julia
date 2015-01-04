@@ -75,39 +75,39 @@ linearindexing{A<:Array}(::Type{A}) = LinearFast()
 linearindexing{A<:Range}(::Type{A}) = LinearFast()
 
 ## Bounds checking ##
-checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
-checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
-checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
-checkbounds(sz::Int, r::Range{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
-checkbounds{T<:Real}(sz::Int, r::Range{T}) = checkbounds(sz, to_index(r))
+_checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
+_checkbounds(sz::Int, i::Real) = _checkbounds(sz, to_index(i))
+_checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
+_checkbounds(sz::Int, r::Range{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
+_checkbounds{T<:Real}(sz::Int, r::Range{T}) = _checkbounds(sz, to_index(r))
 
-function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
+function _checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
     for i in I
-        checkbounds(sz, i)
+        _checkbounds(sz, i)
     end
 end
 
 checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw(BoundsError())
 
-checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
+checkbounds(A::AbstractArray, I) = _checkbounds(length(A), I)
 
 function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
-    checkbounds(size(A,1), I)
-    checkbounds(size(A,2), J)
+    _checkbounds(size(A,1), I)
+    _checkbounds(size(A,2), J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
-    checkbounds(size(A,1), I)
-    checkbounds(trailingsize(A,2), J)
+    _checkbounds(size(A,1), I)
+    _checkbounds(trailingsize(A,2), J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
-            checkbounds(size(A,dim), I[dim])
+            _checkbounds(size(A,dim), I[dim])
         end
-        checkbounds(trailingsize(A,n), I[n])
+        _checkbounds(trailingsize(A,n), I[n])
     end
 end
 
