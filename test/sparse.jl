@@ -441,3 +441,8 @@ end
 
 # issue #9525
 @test_throws BoundsError sparse([3], [5], 1.0, 3, 3)
+
+#findn
+b = findn( speye(4) )
+@test (length(b[1]) == 4)
+@test (length(b[2]) == 4)
