@@ -236,7 +236,7 @@ function one(x::BitMatrix)
 end
 
 function copy!(dest::BitArray, src::BitArray)
-    length(src) > length(dest) && throw(BoundsError())
+    length(src) > length(dest) && throw(BoundsError(dest, length(dest)+1))
     destc = dest.chunks; srcc = src.chunks
     nc = min(length(destc), length(srcc))
     nc == 0 && return dest
@@ -257,9 +257,10 @@ end
 
 function copy!(dest::BitArray, doffs::Integer, src::BitArray, soffs::Integer, n::Integer)
     n == 0 && return dest
-    if soffs+n-1 > length(src) || doffs+n-1 > length(dest) || doffs < 1 || soffs < 1
-        throw(BoundsError())
-    end
+    soffs < 1 && throw(BoundsError(src, soffs))
+    doffs < 1 && throw(BoundsError(dest, doffs))
+    soffs+n-1 > length(src) && throw(BoundsError(src, length(src)+1))
+    doffs+n-1 > length(dest) && throw(BoundsError(dest, length(dest)+1))
     copy_chunks!(dest.chunks, doffs, src.chunks, soffs, n)
     return dest
 end
@@ -334,7 +335,7 @@ function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
 end
 
 function getindex(B::BitArray, i::Int)
-    1 <= i <= length(B) || throw(BoundsError())
+    1 <= i <= length(B) || throw(BoundsError(B, i))
     return unsafe_bitgetindex(B.chunks, i)
 end
 
@@ -354,7 +355,7 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
     for i in I
         # faster X[ind] = B[i]
         j = to_index(i)
-        1 <= j <= lB || throw(BoundsError())
+        1 <= j <= lB || throw(BoundsError(B, j))
         unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, j), ind)
         ind += 1
     end
@@ -400,7 +401,7 @@ end
 setindex!(B::BitArray, x) = setindex!(B, convert(Bool,x), 1)
 
 function setindex!(B::BitArray, x::Bool, i::Int)
-    1 <= i <= length(B) || throw(BoundsError())
+    1 <= i <= length(B) || throw(BoundsError(B, i))
     unsafe_bitsetindex!(B.chunks, x, i)
     return B
 end
@@ -506,7 +507,7 @@ end
 function resize!(B::BitVector, n::Integer)
     n0 = length(B)
     n == n0 && return B
-    n >= 0 || throw(BoundsError())
+    n >= 0 || throw(BoundsError(B, n))
     if n < n0
         deleteat!(B, n+1:n0)
         return B
@@ -581,7 +582,7 @@ end
 
 function insert!(B::BitVector, i::Integer, item)
     n = length(B)
-    1 <= i <= n+1 || throw(BoundsError())
+    1 <= i <= n+1 || throw(BoundsError(B, i))
     item = convert(Bool, item)
 
     Bc = B.chunks
@@ -642,7 +643,7 @@ end
 
 function deleteat!(B::BitVector, i::Integer)
     n = length(B)
-    1 <= i <= n || throw(BoundsError())
+    1 <= i <= n || throw(BoundsError(B, i))
 
     return _deleteat!(B, i)
 end
@@ -651,7 +652,8 @@ function deleteat!(B::BitVector, r::UnitRange{Int})
     n = length(B)
     i_f = first(r)
     i_l = last(r)
-    (1 <= i_f && i_l <= n) || throw(BoundsError())
+    1 <= i_f || throw(BoundsError(B, i_f))
+    i_l <= n || throw(BoundsError(B, n+1))
 
     Bc = B.chunks
     new_l = length(B) - length(r)
@@ -684,7 +686,7 @@ function deleteat!(B::BitVector, inds)
         (i,s) = next(inds, s)
         if !(q <= i <= n)
             i < q && error("indices must be unique and sorted")
-            throw(BoundsError())
+            throw(BoundsError(B, i))
         end
         new_l -= 1
         if i > q
@@ -710,7 +712,7 @@ end
 
 function splice!(B::BitVector, i::Integer)
     n = length(B)
-    1 <= i <= n || throw(BoundsError())
+    1 <= i <= n || throw(BoundsError(B, i))
 
     v = B[i]   # TODO: change to a copy if/when subscripting becomes an ArrayView
     _deleteat!(B, i)
@@ -724,8 +726,8 @@ function splice!(B::BitVector, r::Union(UnitRange{Int}, Integer), ins::AbstractA
     i_f = first(r)
     i_l = last(r)
 
-    1 <= i_f <= n+1 || throw(BoundsError())
-    i_l <= n || throw(BoundsError())
+    1 <= i_f <= n+1 || throw(BoundsError(B, i_f))
+    i_l <= n || throw(BoundsError(B, n+1))
 
     Bins = convert(BitArray, ins)
 
@@ -1239,7 +1241,7 @@ end
 
 # returns the index of the next non-zero element, or 0 if all zeros
 function findnext(B::BitArray, start::Integer)
-    start > 0 || throw(BoundsError())
+    start > 0 || throw(BoundsError(B, start))
     start > length(B) && return 0
 
     Bc = B.chunks
@@ -1265,7 +1267,7 @@ end
 
 # aux function: same as findnext(~B, start), but performed without temporaries
 function findnextnot(B::BitArray, start::Integer)
-    start > 0 || throw(BoundsError())
+    start > 0 || throw(BoundsError(B, start))
     start > length(B) && return 0
 
     Bc = B.chunks
