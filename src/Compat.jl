@@ -22,8 +22,8 @@ if VERSION < v"0.4.0-dev+412"
 end
 
 if VERSION < v"0.4.0-dev+2197"
-    IPv4(ipstr::AbstractString) = parseipv4(ipstr)
-    IPv6(ipstr::AbstractString) = parseipv6(ipstr)
+    Base.IPv4(ipstr::AbstractString) = Base.parseipv4(ipstr)
+    Base.IPv6(ipstr::AbstractString) = Base.parseipv6(ipstr)
 end
 
 if VERSION < v"0.4.0-dev+2200"

@@ -67,3 +67,7 @@ if VERSION < v"0.4.0-dev+1387"
 end
 
 @test round(Int, 3//4) == 1
+
+@test IPv4("1.2.3.4") == ip"1.2.3.4"
+@test IPv6("2001:1:2:3::1") == ip"2001:1:2:3::1"
+@test isless(ip"1.2.3.4", ip"1.2.3.5")
