@@ -692,7 +692,7 @@ surrounded by curly braces::
 This declaration defines a new parametric type, ``Point{T}``, holding
 two "coordinates" of type ``T``. What, one may ask, is ``T``? Well,
 that's precisely the point of parametric types: it can be any type at
-all (or an integer, actually, although here it's clearly used as a
+all (or any bits type, actually, although here it's clearly used as a
 type). ``Point{Float64}`` is a concrete type equivalent to the type
 defined by replacing ``T`` in the definition of ``Point`` with
 :class:`Float64`. Thus, this single declaration actually declares an
@@ -1242,6 +1242,39 @@ If you apply :func:`super` to other type objects (or non-type objects), a
 
     julia> super((Float64,Int64))
     ERROR: `super` has no method matching super(::Type{(Float64,Int64)})
+
+"Value types"
+-------------
+
+As one application of these ideas, Julia includes a parametric type,
+``Val{T}``, designated for dispatching on bits-type *values*.  For
+example, if you pass a boolean to a function, you have to test the
+value at run-time:
+
+.. doctest::
+
+    function firstlast(b::Bool)
+        return b ? "First" : "Last"
+    end
+
+    println(firstlast(true))
+
+You can instead cause the conditional to be evaluated during function
+compilation by using the ``Val`` trick:
+
+.. doctest::
+
+    firstlast(::Type{Val{true}}) = "First"
+    firstlast(::Type{Val{false}}) = "Last"
+
+    println(firstlast(Val{true}))
+
+Any legal type parameter (Types, Symbols, Integers, floating-point
+numbers, tuples, etc.) can be passed via ``Val``.
+
+For consistency across Julia, the call site should always pass a
+``Val`` type rather than creating an instance, i.e., use
+``foo(Val{:bar})`` rather than ``foo(Val{:bar}())``.
 
 Nullable Types: Representing Missing Values
 -------------------------------------------

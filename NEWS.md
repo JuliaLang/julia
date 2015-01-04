@@ -143,6 +143,7 @@ Library improvements
 
   * The `randexp` and `randexp!` functions are exported ([#9144])
 
+  * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
 
 Deprecated or removed
 ---------------------
@@ -1145,3 +1146,4 @@ Too numerous to mention.
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9452]: https://github.com/JuliaLang/julia/issues/9452
