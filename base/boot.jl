@@ -208,8 +208,12 @@ immutable BoundsError        <: Exception
     BoundsError(a::ANY) = new(a)
     BoundsError(a::ANY, i::ANY) = new(a,i)
 end
+immutable DomainError        <: Exception
+    msg::Any
+    DomainError() = new()
+    DomainError(msg::ANY) = new(msg)
+end
 immutable DivideError        <: Exception end
-immutable DomainError        <: Exception end
 immutable OverflowError      <: Exception end
 immutable InexactError       <: Exception end
 immutable MemoryError        <: Exception end
