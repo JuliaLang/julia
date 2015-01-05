@@ -150,6 +150,10 @@ end
 
 @test a+BigInt(1) == b
 
+@test BigInt(5) << -1 == 0
+@test BigInt(5) >> -1 == 0
+@test BigInt(5) << 0 == 5
+@test BigInt(5) >> 0 == 5
 @test BigInt(5) << 3 == 40
 @test BigInt(5) >> 1 == 2
 @test BigInt(-5) << 3 == -40
