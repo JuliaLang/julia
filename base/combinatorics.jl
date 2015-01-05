@@ -23,7 +23,7 @@ const _fact_table128 =
             0x0688589cc0e9505e2f2fee5580000000, 0xde1bc4d19efcac82445da75b00000000]
 
 function factorial_lookup(n::Integer, table, lim)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError("factorial(n) for n < 0 is undefined"))
     n > lim && throw(OverflowError())
     n == 0 && return one(n)
     @inbounds f = table[n]
@@ -50,7 +50,7 @@ function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
 end
 
 function factorial(n::Integer)
-    n < 0 && throw(DomainError())
+    n < 0 && throw(DomainError("factorial(n) for n < 0 is undefined"))
     local f::typeof(n*n), i::typeof(n*n)
     f = 1
     for i = 2:n
@@ -387,7 +387,12 @@ end
 
 length(f::FixedPartitions) = npartitions(f.n,f.m)
 
-partitions(n::Integer, m::Integer) = n >= 1 && m >= 1 ? FixedPartitions(n,m) : throw(DomainError())
+function partitions(n::Integer, m::Integer)
+    if n <= 0 || m <= 0
+        throw(DomainError("partitions(n, m) is undefined for n ≤ 0 or m ≤ 0"))
+    end
+    return FixedPartitions(n,m)
+end
 
 start(f::FixedPartitions) = Int[]
 function done(f::FixedPartitions, s::Vector{Int})
@@ -516,7 +521,14 @@ end
 
 length(p::FixedSetPartitions) = nfixedsetpartitions(length(p.s),p.m)
 
-partitions(s::AbstractVector,m::Int) = length(s) >= 1 && m >= 1 ? FixedSetPartitions(s,m) : throw(DomainError())
+function partitions(s::AbstractVector,m::Int)
+    if isempty(s)
+        throw(DomainError("partions(s::AbstractVector,m) is undefined for empty vectors"))
+    else m <= 0
+        throw(DomainError("partions(s::AbstractVector,m) is undefined for m ≤ 0"))
+    end
+    return FixedSetPartitions(s,m)
+end
 
 function start(p::FixedSetPartitions)
     n = length(p.s)
