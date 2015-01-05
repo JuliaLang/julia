@@ -93,6 +93,10 @@ function factor{T<:Integer}(n::T)
                 n = oftype(n, div(n,p))
             end
             n == 1 && return h
+            if isprime(n)
+                h[n] = 1
+                return h
+            end
             s = isqrt(n)
         end
     end
@@ -103,7 +107,9 @@ function factor{T<:Integer}(n::T)
                 h[p] = get(h,p,0)+1
                 n = oftype(n, div(n,p))
             end
-            if n == 1
+            n == 1 && return h
+            if isprime(n)
+                h[n] = 1
                 return h
             end
             s = isqrt(n)
