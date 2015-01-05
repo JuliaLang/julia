@@ -1,5 +1,7 @@
 @test factorial(7) == 5040
 @test factorial(7,3) == 7*6*5*4
+@test binomial(5,-1) == 0
+@test binomial(5,10) == 0
 @test binomial(5,3) == 10
 p = shuffle([1:1000])
 @test isperm(p)
