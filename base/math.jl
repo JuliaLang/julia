@@ -9,7 +9,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
-       ceil, floor, trunc, round, significand,
+       significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
@@ -22,10 +22,10 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ceil, floor, trunc, round, ^, exp2,
+             max, min, minmax, ^, exp2,
              exp10, expm1, log1p
 
-import Core.Intrinsics: nan_dom_err, ceil_llvm, floor_llvm, trunc_llvm, sqrt_llvm, box, unbox, powi_llvm
+import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
 # non-type specific math functions
 
@@ -132,15 +132,8 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-ceil(x::Float64) = box(Float64,ceil_llvm(unbox(Float64,x)))
-ceil(x::Float32) = box(Float32,ceil_llvm(unbox(Float32,x)))
-@vectorize_1arg Real ceil
 
-trunc(x::Float64) = box(Float64,trunc_llvm(unbox(Float64,x)))
-trunc(x::Float32) = box(Float32,trunc_llvm(unbox(Float32,x)))
-@vectorize_1arg Real trunc
-
-for f in (:significand, :rint) # :nearbyint
+for f in (:significand,)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -148,14 +141,6 @@ for f in (:significand, :rint) # :nearbyint
     end
 end
 
-function round(x::Float32)
-    y = trunc(x)
-    ifelse(x==y,y,trunc(2.f0*x-y))
-end
-@vectorize_1arg Real round
-
-floor(x::Float32) = box(Float32,floor_llvm(unbox(Float32,x)))
-@vectorize_1arg Real floor
 
 hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
 function hypot{T<:FloatingPoint}(x::T, y::T)

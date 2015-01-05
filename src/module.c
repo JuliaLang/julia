@@ -97,7 +97,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
-            if (!b->imported && b->value!=NULL && jl_is_function(b->value))
+            if (!b->imported && (b2->value==NULL || jl_is_function(b2->value)))
                 jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
@@ -450,6 +450,17 @@ jl_function_t *jl_module_call_func(jl_module_t *m)
         m->call_func = cf;
     }
     return m->call_func;
+}
+
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+{
+    while (1) {
+        if (parent == child)
+            return 1;
+        if (child == NULL || child == child->parent)
+            return 0;
+        child = child->parent;
+    }
 }
 
 #ifdef __cplusplus

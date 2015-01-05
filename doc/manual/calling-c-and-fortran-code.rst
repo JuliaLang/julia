@@ -163,21 +163,34 @@ example computes a dot product using a BLAS function.
     end
 
 The meaning of prefix ``&`` is not quite the same as in C. In
-particular, any changes to the referenced variables will not be visible
-in Julia. However, it will
-never cause any harm for called functions to attempt such modifications
-(that is, writing through the passed pointers). Since this ``&`` is not
-a real address operator, it may be used with any syntax, such as
-``&0`` or ``&f(x)``.
+particular, any changes to the referenced variables will not be
+visible in Julia unless the type is mutable (declared via
+``type``). However, even for immutable types it will not cause any
+harm for called functions to attempt such modifications (that is,
+writing through the passed pointers). Moreover, ``&`` may be used with
+any expression, such as ``&0`` or ``&f(x)``.
 
-Note that no C header files are used anywhere in the process. Currently,
-it is not possible to pass structs and other non-primitive types from
-Julia to C libraries. However, C functions that generate and use opaque
-struct types by passing pointers to them can return such values
-to Julia as ``Ptr{Void}``, which can then be passed to other C functions
-as ``Ptr{Void}``. Memory allocation and deallocation of such objects
-must be handled by calls to the appropriate cleanup routines in the
-libraries being used, just like in any C program.
+Currently, it is not possible to reliably pass structs and other non-primitive
+types by *value* from Julia to/from C libraries. However, *pointers*
+to structs can be passed.  The simplest case is that of C functions
+that generate and use *opaque* pointers to struct types, which can be
+passed to/from Julia as ``Ptr{Void}`` (or any other ``Ptr``
+type). Memory allocation and deallocation of such objects must be
+handled by calls to the appropriate cleanup routines in the libraries
+being used, just like in any C program.  A more complicated approach
+is to declare a composite type in Julia that mirrors a C struct, which
+allows the structure fields to be directly accessed in Julia.  Given a
+Julia variable ``x`` of that type, a pointer can be passed as ``&x``
+to a C function expecting a pointer to the corresponding struct.  If
+the Julia type ``T`` is ``immutable``, then a Julia ``Array{T}`` is
+stored in memory identically to a C array of the corresponding struct,
+and can be passed to a C program expecting such an array pointer.
+
+Note that no C header files are used anywhere in the process: you are
+responsible for making sure that your Julia types and call signatures
+accurately reflect those in the C header file.  (The `Clang package
+<https://github.com/ihnorton/Clang.jl>` can be used to generate Julia
+code from a C header file.)
 
 Mapping C Types to Julia
 ------------------------
@@ -261,10 +274,6 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 | ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{UInt8}}``            |
 +------------------------+-------------------+--------------------------------+
 | ``struct T*`` (where T represents an       | ``Ptr{T}`` (call using         |
-| appropriately defined bits type)           | &variable_name in the          |
-|                                            | parameter list)                |
-+------------------------+-------------------+--------------------------------+
-| ``struct T`` (where T represents  an       | ``T`` (call using              |
 | appropriately defined bits type)           | &variable_name in the          |
 |                                            | parameter list)                |
 +------------------------+-------------------+--------------------------------+

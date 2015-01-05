@@ -1,7 +1,8 @@
 .. module:: Base.Pkg
 
-Package Manager Functions
--------------------------
+***************************
+ Package Manager Functions
+***************************
 
 All package manager functions are defined in the ``Pkg`` module. None of the ``Pkg`` module's functions are exported;
 to use them, you'll need to prefix each function call with an explicit ``Pkg.``, e.g. ``Pkg.status()`` or ``Pkg.dir()``.
@@ -114,7 +115,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: generate(pkg,license)
 
-   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"`` or ``"BSD"``.
+   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``, ``"BSD"`` or ``"ASL"``.
    If you want to make a package with a different license, you can edit it afterwards.
    Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``, ``README.md``, the julia entrypoint ``$pkg/src/$pkg.jl``, and a travis test file, ``.travis.yml``.
 

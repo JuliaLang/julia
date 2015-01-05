@@ -92,6 +92,8 @@ done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
 done
+# suppress "bash.exe: warning: could not find /tmp, please create!"
+mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
 rm -f usr/bin/libjulia.dll
 rm -f usr/bin/libjulia-debug.dll
@@ -196,8 +198,9 @@ else
   echo 'override STAGE3_DEPS += suitesparse-wrapper' >> Make.user
 
   # hack so all of suitesparse doesn't rebuild
-  make -C deps SuiteSparse-4.3.1/Makefile
-  touch deps/SuiteSparse-4.3.1/UMFPACK/Lib/libumfpack.a
+  echo 'override SUITESPARSE_VER = 4.4.1' >> Make.user
+  make -C deps SuiteSparse-4.4.1/Makefile
+  touch deps/SuiteSparse-4.4.1/UMFPACK/Lib/libumfpack.a
   touch usr/bin/libspqr.dll
 fi
 

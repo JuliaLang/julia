@@ -33,11 +33,11 @@ dims = (20,20,20)
 
 @linux_only begin
     S = SharedArray(Int64, dims)
-    @test beginswith(S.segname, "/jl")
+    @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 
     S = SharedArray(Int64, dims; pids=[id_other])
-    @test beginswith(S.segname, "/jl")
+    @test startswith(S.segname, "/jl")
     @test !ispath("/dev/shm" * S.segname)
 end
 
@@ -107,7 +107,7 @@ d[5,1:2:4,8] = 19
 AA = rand(4,2)
 A = convert(SharedArray, AA)
 B = convert(SharedArray, AA')
-@test B*A == AA'*AA
+@test B*A == ctranspose(AA)*AA
 
 d=SharedArray(Int64, (10,10); init = D->fill!(D.loc_subarr_1d, myid()), pids=[id_me, id_other])
 d2 = map(x->1, d)

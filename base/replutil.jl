@@ -41,6 +41,19 @@ writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
 
 showerror(io::IO, e) = show(io, e)
 
+function showerror(io::IO, be::BoundsError)
+    print(io, "BoundsError")
+    if isdefined(be, :a)
+        print(io, ": attempt to access ")
+        writemime(io, MIME"text/plain"(), be.a)
+        if isdefined(be, :i)
+            print(io, "\n  at index [")
+            print_joined(io, be.i, ',')
+            print(io, ']')
+        end
+    end
+end
+
 function showerror(io::IO, e::TypeError)
     ctx = isempty(e.context) ? "" : "in $(e.context), "
     if e.expected === Bool
@@ -142,6 +155,13 @@ function showerror(io::IO, e::MethodError)
         print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
         print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
         print(io, "\nYou can convert to a column vector with the vec() function.")
+    end
+    # Give a helpful error message if the user likely called a type constructor
+    # and sees a no method error for convert
+    if e.f == Base.convert && !isempty(e.args) && isa(e.args[1], Type)
+        println(io)
+        print(io, "This may have arisen from a call to the constructor $(e.args[1])(...), ")
+        print(io, "since type constructors fall back to convert methods in julia v0.4.")
     end
 
     # Display up to three closest candidates

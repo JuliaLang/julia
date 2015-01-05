@@ -177,15 +177,13 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export TcpSocket, UdpSocket, IpAddr
+export UdpSocket
 const TcpSocket = TCPSocket
 const UdpSocket = UDPSocket
 const IpAddr = IPAddr
 
 @deprecate isblank(c::Char) c == ' ' || c == '\t'
 @deprecate isblank(s::AbstractString) all(c -> c == ' ' || c == '\t', s)
-
-@deprecate randbool! rand!
 
 export Nothing
 const Nothing = Void
@@ -246,6 +244,10 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
+export Base64Pipe, base64
+const Base64Pipe = Base64EncodePipe
+const base64 = base64encode
+
 @deprecate prevind(a::Any, i::Integer)   i-1
 @deprecate nextind(a::Any, i::Integer)   i+1
 
@@ -254,3 +256,15 @@ const Uint128 = UInt128
 @deprecate squeeze(X, dims) squeeze(X, tuple(dims...))
 
 @deprecate sizehint(A, n) sizehint!(A, n)
+
+@deprecate randbool!                               rand!
+@deprecate randbool()                              rand(Bool)
+@deprecate randbool(r::AbstractRNG)                rand(r, Bool)
+@deprecate randbool(dims::Dims)                    bitrand(dims)
+@deprecate randbool(dims::Int...)                  bitrand(dims)
+@deprecate randbool(r::AbstractRNG, dims::Dims)    bitrand(r, dims)
+@deprecate randbool(r::AbstractRNG, dims::Int...)  bitrand(r, dims)
+
+@deprecate which(f, t::(Type...))  methods(f, t)[1]
+
+@deprecate beginswith startswith

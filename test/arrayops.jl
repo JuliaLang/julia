@@ -154,6 +154,9 @@ v = pop!(l)
 v = pop!(l)
 @test v == 3
 @test length(l)==2
+m = Any[]
+@test_throws ErrorException pop!(m)
+@test_throws ErrorException shift!(m)
 unshift!(l,4,7,5)
 @test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
 v = shift!(l)
@@ -198,7 +201,7 @@ Y = [2, 1, 4, 3]
 @test X[Y[end],1] == 5
 @test X[end,Y[end]] == 11
 
-## find, findfirst ##
+## find, findfirst, findnext, findlast, findprev ##
 a = [0,1,2,3,0,1,2,3]
 @test find(a) == [2,3,4,6,7,8]
 @test find(a.==2) == [3,7]
@@ -209,7 +212,24 @@ a = [0,1,2,3,0,1,2,3]
 @test findfirst([1,2,4,1,2,3,4], 3) == 6
 @test findfirst(isodd, [2,4,6,3,9,2,0]) == 4
 @test findfirst(isodd, [2,4,6,2,0]) == 0
-
+@test findnext(a,4) == 4
+@test findnext(a,5) == 6
+@test findnext(a,1) == 2
+@test findnext(a,1,4) == 6
+@test findnext(a,5,4) == 0
+@test findlast(a) == 8
+@test findlast(a.==0) == 5
+@test findlast(a.==5) == 0
+@test findlast([1,2,4,1,2,3,4], 3) == 6
+@test findlast(isodd, [2,4,6,3,9,2,0]) == 5
+@test findlast(isodd, [2,4,6,2,0]) == 0
+@test findprev(a,4) == 4
+@test findprev(a,5) == 4
+@test findprev(a,1) == 0
+@test findprev(a,1,4) == 2
+@test findprev(a,1,8) == 6
+@test findprev(isodd, [2,4,5,3,9,2,0], 7) == 5
+@test findprev(isodd, [2,4,5,3,9,2,0], 2) == 0
 
 ## findn ##
 
@@ -710,7 +730,9 @@ for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:
 end
 a = [1:10]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
-
+@test_throws BoundsError deleteat!(a, 13)
+@test_throws BoundsError deleteat!(a, [1,13])
+@test_throws ErrorException deleteat!(a, [5,3])
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -940,3 +962,15 @@ I2 = CartesianIndex((-1,5,2))
 
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
+
+#rotates
+
+a = [ [ 1 0 0 ], [ 0 0 0 ] ]
+@test rotr90(a,1) == [ [ 0 1 ], [ 0 0 ], [ 0 0 ] ]
+@test rotr90(a,2) == rot180(a,1)
+@test rotr90(a,3) == rotl90(a,1)
+@test rotl90(a,3) == rotr90(a,1)
+@test rotl90(a,1) == rotr90(a,3)
+@test rotl90(a,4) == a
+@test rotr90(a,4) == a
+@test rot180(a,2) == a

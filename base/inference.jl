@@ -34,6 +34,26 @@ end
 
 inference_stack = EmptyCallStack()
 
+# Julia compiler options struct (see jl_compileropts_t in src/julia.h)
+immutable JLCompilerOpts
+    julia_home::Ptr{Cchar}
+    julia_bin::Ptr{Cchar}
+    build_path::Ptr{Cchar}
+    image_file::Ptr{Cchar}
+    cpu_target::Ptr{Cchar}
+    code_coverage::Int8
+    malloc_log::Int8
+    check_bounds::Int8
+    dumpbitcode::Int8
+    int_literals::Cint
+    compile_enabled::Int8
+    opt_level::Int8
+    depwarn::Int8
+    can_inline::Int8
+end
+
+compileropts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))
+
 function is_static_parameter(sv::StaticVarInfo, s::Symbol)
     sp = sv.sp
     for i=1:2:length(sp)
@@ -1286,7 +1306,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # check for recursion
     f = inference_stack
     while !isa(f,EmptyCallStack)
-        if is(f.ast,ast0) && typeseq(f.types, atypes)
+        if (is(f.ast,ast0) || f.ast==ast0) && typeseq(f.types, atypes)
             # return best guess so far
             (f::CallStack).recurred = true
             (f::CallStack).cycleid = CYCLE_ID
@@ -1369,9 +1389,27 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
         end
     end
-    for i=1:la
-        s[1][args[i]] = atypes[i]
+
+    laty = length(atypes)
+    if laty > 0
+        lastatype = atypes[laty]
+        if isvarargtype(lastatype)
+            lastatype = lastatype.parameters[1]
+            laty -= 1
+        end
+        if laty > la
+            laty = la
+        end
+        for i=1:laty
+            s[1][args[i]] = atypes[i]
+        end
+        for i=laty+1:la
+            s[1][args[i]] = lastatype
+        end
+    else
+        @assert la == 0
     end
+
     # types of closed vars
     cenv = ObjectIdDict()
     for vi = ((ast.args[2][3])::Array{Any,1})
@@ -1554,9 +1592,11 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     if !rec
         @assert fulltree.args[3].head === :body
-        fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
-        # inlining can add variables
-        sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+        if compileropts().can_inline == 1
+            fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
+            # inlining can add variables
+            sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+        end
         tuple_elim_pass(fulltree)
         tupleref_elim_pass(fulltree.args[3], sv)
         linfo.inferred = true
@@ -1948,7 +1988,19 @@ end
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
 function effect_free(e::ANY, sv, allow_volatile::Bool)
-    if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,AbstractString) ||
+    if isa(e,SymbolNode)
+        allow_volatile && return true
+        if is_global(sv, (e::SymbolNode).name)
+            return false
+        end
+    end
+    if isa(e,Symbol)
+        allow_volatile && return true
+        if is_global(sv, e::Symbol)
+            return false
+        end
+    end
+    if isa(e,Number) || isa(e,AbstractString) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
@@ -2329,7 +2381,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                 else
                     methitype = methargs[end]
                     if isvarargtype(methitype)
-                        methitype = (methitype::Vararg).parameters[1]
+                        methitype = methitype.parameters[1]
                     else
                         @assert i==nm
                     end
@@ -2349,9 +2401,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                         # we need to keep it as a variable name
         for vi in vinflist
             if vi[1] === a && vi[3] != 0
-                if !islocal
-                    islocal = true
-                end
+                islocal = true
                 aeitype = tmerge(aeitype, vi[2])
                 if aeitype === Any
                     break
@@ -2391,14 +2441,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             occ = 0
             for j = length(body.args):-1:1
                 b = body.args[j]
-                if occ < 1
-                    occ += occurs_more(b, x->is(x,a), 5)
+                if occ < 6
+                    occ += occurs_more(b, x->is(x,a), 6)
                 end
                 if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
                     affect_free = false
                 end
-                if occ > 5
-                    occ = 6
+                if occ > 5 && !affect_free
                     break
                 end
             end

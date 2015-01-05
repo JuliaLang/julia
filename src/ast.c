@@ -769,7 +769,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
 
 DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {
-    if (jl_is_expr(expr)) {
+    if (expr == NULL) {
+        return NULL;
+    }
+    else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i, l = jl_array_len(e->args);
         jl_expr_t *ne = NULL;

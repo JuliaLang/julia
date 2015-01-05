@@ -201,18 +201,24 @@ end
 
 abstract Exception
 
-type BoundsError        <: Exception end
-type DivideError        <: Exception end
-type DomainError        <: Exception end
-type OverflowError      <: Exception end
-type InexactError       <: Exception end
-type MemoryError        <: Exception end
-type StackOverflowError <: Exception end
-type UndefRefError      <: Exception end
-type UndefVarError      <: Exception
+immutable BoundsError        <: Exception
+    a::Any
+    i::Any
+    BoundsError() = new()
+    BoundsError(a::ANY) = new(a)
+    BoundsError(a::ANY, i::ANY) = new(a,i)
+end
+immutable DivideError        <: Exception end
+immutable DomainError        <: Exception end
+immutable OverflowError      <: Exception end
+immutable InexactError       <: Exception end
+immutable MemoryError        <: Exception end
+immutable StackOverflowError <: Exception end
+immutable UndefRefError      <: Exception end
+immutable UndefVarError      <: Exception
     var::Symbol
 end
-type InterruptException <: Exception end
+immutable InterruptException <: Exception end
 
 abstract AbstractString
 abstract DirectIndexString <: AbstractString

@@ -93,7 +93,7 @@ for arr in (identity, as_sub)
         bittest(f, ewf, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
-        bittest(f, ewf, arr(randbool(n1, n2, n3)), arr(randbool(n1, n2, n3)))
+        bittest(f, ewf, arr(bitrand(n1, n2, n3)), arr(bitrand(n1, n2, n3)))
     end
 end
 

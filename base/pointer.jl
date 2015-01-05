@@ -60,6 +60,7 @@ eltype{T}(::Ptr{T}) = T
 ## limited pointer arithmetic & comparison ##
 
 ==(x::Ptr, y::Ptr) = uint(x) == uint(y)
+isless(x::Ptr, y::Ptr) = isless(uint(x), uint(y))
 -(x::Ptr, y::Ptr) = uint(x) - uint(y)
 
 +(x::Ptr, y::Integer) = oftype(x, (uint(x) + (y % UInt) % UInt))

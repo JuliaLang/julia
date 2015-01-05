@@ -472,9 +472,9 @@ end
 function history_move_prefix(s::LineEdit.PrefixSearchState,
                              hist::REPLHistoryProvider,
                              prefix::AbstractString,
-                             backwards::Bool)
+                             backwards::Bool,
+                             cur_idx = hist.cur_idx)
     cur_response = bytestring(LineEdit.buffer(s))
-    cur_idx = hist.cur_idx
     # when searching forward, start at last_idx
     if !backwards && hist.last_idx > 0
         cur_idx = hist.last_idx
@@ -483,17 +483,21 @@ function history_move_prefix(s::LineEdit.PrefixSearchState,
     max_idx = length(hist.history)+1
     idxs = backwards ? ((cur_idx-1):-1:1) : ((cur_idx+1):max_idx)
     for idx in idxs
-        if (idx == max_idx) || (beginswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
-            history_move(s, hist, idx)
-            if length(prefix) == 0
-                # on empty prefix search, move cursor to the end
-                LineEdit.move_input_end(s)
-            else
-                # otherwise, keep cursor at the prefix position as a visual cue
-                seek(LineEdit.buffer(s), length(prefix))
+        if (idx == max_idx) || (startswith(hist.history[idx], prefix) && (hist.history[idx] != cur_response || hist.modes[idx] != LineEdit.mode(s)))
+            m = history_move(s, hist, idx)
+            if m == :ok
+                if length(prefix) == 0
+                    # on empty prefix search, move cursor to the end
+                    LineEdit.move_input_end(s)
+                else
+                    # otherwise, keep cursor at the prefix position as a visual cue
+                    seek(LineEdit.buffer(s), length(prefix))
+                end
+                LineEdit.refresh_line(s)
+                return :ok
+            elseif m == :skip
+                return history_move_prefix(s,hist,prefix,backwards,idx)
             end
-            LineEdit.refresh_line(s)
-            return :ok
         end
     end
     Terminals.beep(LineEdit.terminal(s))
@@ -606,6 +610,28 @@ end
 function reset(repl::LineEditREPL)
     raw!(repl.t, false)
     print(repl.t,Base.text_colors[:normal])
+end
+
+function mode_keymap(julia_prompt)
+    AnyDict(
+    '\b' => function (s,o...)
+        if isempty(s) || position(LineEdit.buffer(s)) == 0
+            buf = copy(LineEdit.buffer(s))
+            transition(s, julia_prompt)
+            LineEdit.state(s, julia_prompt).input_buffer = buf
+            LineEdit.refresh_line(s)
+        else
+            LineEdit.edit_backspace(s)
+        end
+    end,
+    "^C" => function (s,o...)
+        LineEdit.move_input_end(s)
+        LineEdit.refresh_line(s)
+        print(LineEdit.terminal(s), "^C\n\n")
+        transition(s, julia_prompt)
+        transition(s, :reset)
+        LineEdit.refresh_line(s)
+    end)
 end
 
 function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_repl_keymap = Dict{Any,Any}[])
@@ -788,28 +814,9 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
 
     julia_prompt.keymap_dict = LineEdit.keymap(a)
 
-    const mode_keymap = AnyDict(
-        '\b' => function (s,o...)
-            if isempty(s) || position(LineEdit.buffer(s)) == 0
-                buf = copy(LineEdit.buffer(s))
-                transition(s, julia_prompt)
-                LineEdit.state(s, julia_prompt).input_buffer = buf
-                LineEdit.refresh_line(s)
-            else
-                LineEdit.edit_backspace(s)
-            end
-        end,
-        "^C" => function (s,o...)
-            LineEdit.move_input_end(s)
-            LineEdit.refresh_line(s)
-            print(LineEdit.terminal(s), "^C\n\n")
-            transition(s, julia_prompt)
-            transition(s, :reset)
-            LineEdit.refresh_line(s)
-        end
-    )
+    mk = mode_keymap(julia_prompt)
 
-    b = Dict{Any,Any}[skeymap, mode_keymap, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
+    b = Dict{Any,Any}[skeymap, mk, prefix_keymap, LineEdit.history_keymap, LineEdit.default_keymap, LineEdit.escape_defaults]
     prepend!(b, extra_repl_keymap)
 
     shell_mode.keymap_dict = help_mode.keymap_dict = LineEdit.keymap(b)

@@ -6,6 +6,7 @@ const Bottom = Union()
 
 # constructors for Core types in boot.jl
 call(T::Type{BoundsError}) = Core.call(T)
+call(T::Type{BoundsError}, args...) = Core.call(T, args...)
 call(T::Type{DivideError}) = Core.call(T)
 call(T::Type{DomainError}) = Core.call(T)
 call(T::Type{OverflowError}) = Core.call(T)
@@ -116,6 +117,10 @@ type DimensionMismatch <: Exception
     msg::AbstractString
 end
 DimensionMismatch() = DimensionMismatch("")
+
+# For passing constants through type inference
+immutable Val{T}
+end
 
 type WeakRef
     value

@@ -3,22 +3,26 @@ include("fenv_constants.jl")
 
 export
     RoundingMode, RoundNearest, RoundToZero, RoundUp, RoundDown, RoundFromZero,
+    RoundNearestTiesAway, RoundNearestTiesUp,
     get_rounding, set_rounding, with_rounding
 
 ## rounding modes ##
 immutable RoundingMode{T} end
 
-const RoundNearest = RoundingMode{:TiesToEven}()
-# const RoundNearestTiesAway = RoundingMode{:TiesToAway}() # currently unsupported
-const RoundToZero = RoundingMode{:TowardZero}()
-const RoundUp = RoundingMode{:TowardPositive}()
-const RoundDown = RoundingMode{:TowardNegative}()
-const RoundFromZero = RoundingMode{:AwayFromZero}() # mpfr only
+const RoundNearest = RoundingMode{:Nearest}()
+const RoundToZero = RoundingMode{:ToZero}()
+const RoundUp = RoundingMode{:Up}()
+const RoundDown = RoundingMode{:Down}()
+const RoundFromZero = RoundingMode{:FromZero}() # mpfr only
+# C-style round behaviour
+const RoundNearestTiesAway = RoundingMode{:NearestTiesAway}()
+# Java-style round behaviour
+const RoundNearestTiesUp = RoundingMode{:NearestTiesUp}()
 
-to_fenv(::RoundingMode{:TiesToEven}) = JL_FE_TONEAREST
-to_fenv(::RoundingMode{:TowardZero}) = JL_FE_TOWARDZERO
-to_fenv(::RoundingMode{:TowardPositive}) = JL_FE_UPWARD
-to_fenv(::RoundingMode{:TowardNegative}) = JL_FE_DOWNWARD
+to_fenv(::RoundingMode{:Nearest}) = JL_FE_TONEAREST
+to_fenv(::RoundingMode{:ToZero}) = JL_FE_TOWARDZERO
+to_fenv(::RoundingMode{:Up}) = JL_FE_UPWARD
+to_fenv(::RoundingMode{:Down}) = JL_FE_DOWNWARD
 
 function from_fenv(r::Integer)
     if r == JL_FE_TONEAREST
@@ -61,16 +65,16 @@ end
 # To avoid ambiguous dispatch with methods in mpfr.jl:
 call{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode) = _convert_rounding(T,x,r)
 
-_convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TiesToEven}) = convert(T,x)
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardNegative})
+_convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Nearest}) = convert(T,x)
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Down})
     y = convert(T,x)
     y > x ? prevfloat(y) : y
 end
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardPositive})
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:Up})
     y = convert(T,x)
     y < x ? nextfloat(y) : y
 end
-function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:TowardZero})
+function _convert_rounding{T<:FloatingPoint}(::Type{T},x::Real,r::RoundingMode{:ToZero})
     y = convert(T,x)
     if x > 0.0
         y > x ? prevfloat(y) : y

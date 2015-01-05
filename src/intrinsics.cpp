@@ -29,7 +29,8 @@ namespace JL_I {
         nan_dom_err,
         // functions
         abs_float, copysign_float, flipsign_int, select_value,
-        ceil_llvm, floor_llvm, trunc_llvm, sqrt_llvm, powi_llvm,
+        ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
+        sqrt_llvm, powi_llvm,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1171,6 +1172,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                             ArrayRef<Type*>(x->getType())),
                                   x);
     }
+    HANDLE(rint_llvm,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::rint,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+    }
     HANDLE(sqrt_llvm,1) {
         x = FP(x);
         raise_exception_unless(builder.CreateFCmpUGE(x, ConstantFP::get(x->getType(),0.0)),
@@ -1269,8 +1276,9 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(uitofp); ADD_I(sitofp);
     ADD_I(fptrunc); ADD_I(fpext);
     ADD_I(abs_float); ADD_I(copysign_float);
-    ADD_I(flipsign_int); ADD_I(select_value); ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(sqrt_llvm);
-    ADD_I(powi_llvm);
+    ADD_I(flipsign_int); ADD_I(select_value);
+    ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
+    ADD_I(sqrt_llvm); ADD_I(powi_llvm);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);

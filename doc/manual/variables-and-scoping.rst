@@ -1,5 +1,7 @@
 .. _man-variables-and-scoping:
 
+.. currentmodule:: Base
+
 ********************
  Scope of Variables
 ********************
@@ -28,7 +30,7 @@ The constructs introducing such blocks are:
 -  ``type`` blocks.
 
 Notably missing from this list are
-:ref:`begin blocks <man-compound-expressions>`, which do
+:ref:`begin blocks <man-compound-expressions>` and :ref:`if blocks <man-conditional-evaluation>`, which do
 *not* introduce new scope blocks.
 
 Certain constructs introduce new variables into the current innermost
@@ -170,9 +172,9 @@ even or odd::
     julia> odd(3)
     true
 
-Julia provides built-in, efficient functions to test this called
-``iseven`` and ``isodd`` so the above definitions should only be taken
-as examples.
+Julia provides built-in, efficient functions to test for oddness and evenness
+called :func:`iseven` and :func:`isodd` so the above definitions should only be
+taken as examples.
 
 Since functions can be used before they are defined, as long as they are
 defined by the time they are actually called, no syntax for forward

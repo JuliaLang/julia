@@ -1,5 +1,21 @@
 // utility procedures used in code generation
 
+#if defined(USE_MCJIT) && defined(_OS_WINDOWS_)
+template<class T> // for GlobalObject's
+static T* addComdat(T *G)
+{
+    if (imaging_mode) {
+        Comdat *jl_Comdat = shadow_module->getOrInsertComdat(G->getName());
+        jl_Comdat->setSelectionKind(Comdat::NoDuplicates);
+        G->setComdat(jl_Comdat);
+    }
+    return G;
+}
+#else
+template<class T>
+static T* addComdat(T *G) { return G; }
+#endif
+
 // Fixing up references to other modules for MCJIT
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
@@ -39,9 +55,14 @@ static llvm::Value *prepare_call(llvm::Value* Callee)
     return Callee;
 }
 
+#ifdef LLVM35
+static inline void add_named_global(GlobalObject *gv, void *addr)
+#else
 static inline void add_named_global(GlobalValue *gv, void *addr)
+#endif
 {
 #ifdef USE_MCJIT
+    addComdat(gv);
     sys::DynamicLibrary::AddSymbol(gv->getName(),addr);
 #else
     jl_ExecutionEngine->addGlobalMapping(gv,addr);
@@ -74,7 +95,7 @@ static GlobalVariable *stringConst(const std::string &txt)
                                                        (const unsigned char*)txt.c_str(),
                                                        txt.length()+1)),
 #endif
-        vname);
+                                vname);
         stringConstants[txt] = gv;
         strno++;
     }
@@ -89,21 +110,68 @@ static std::map<void*, jl_value_llvm> jl_value_to_llvm;
 static std::map<Value *, void*> llvm_to_jl_value;
 
 #ifdef USE_MCJIT
-class FunctionMover;
-
-static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover);
-
 class FunctionMover : public ValueMaterializer
 {
 public:
     FunctionMover(llvm::Module *dest,llvm::Module *src) :
-        ValueMaterializer(), VMap(), destModule(dest), srcModule(src)
+        ValueMaterializer(), VMap(), destModule(dest), srcModule(src),
+        LazyFunctions(0)
     {
 
     }
     ValueToValueMapTy VMap;
     llvm::Module *destModule;
     llvm::Module *srcModule;
+    std::vector<Function *> LazyFunctions;
+
+    Function *CloneFunctionProto(Function *F)
+    {
+        Function *NewF = Function::Create(F->getFunctionType(),
+                                          Function::ExternalLinkage,
+                                          F->getName(),
+                                          destModule);
+        LazyFunctions.push_back(F);
+        VMap[F] = (Value*)NewF;
+        return NewF;
+    }
+
+    void CloneFunctionBody(Function *F)
+    {
+        Function *NewF = (Function*)(Value*)VMap[F];
+        assert(NewF != NULL);
+
+        Function::arg_iterator DestI = NewF->arg_begin();
+        for (Function::const_arg_iterator I = F->arg_begin(), E = F->arg_end(); I != E; ++I) {
+            DestI->setName(I->getName());    // Copy the name over...
+            VMap[I] = DestI++;        // Add mapping to VMap
+        }
+
+    #ifdef LLVM36
+        // Clone debug info - Not yet public API
+        // llvm::CloneDebugInfoMetadata(NewF,F,VMap);
+    #endif
+
+        SmallVector<ReturnInst*, 8> Returns;
+        llvm::CloneFunctionInto(NewF,F,VMap,true,Returns,"",NULL,NULL,this);
+    }
+
+    Function *CloneFunction(Function *F)
+    {
+        Function *NewF = (llvm::Function*)MapValue(F,VMap,RF_None,NULL,this);
+        ResolveLazyFunctions();
+        return NewF;
+    }
+
+    void ResolveLazyFunctions()
+    {
+        while (!LazyFunctions.empty()) {
+            Function *F = LazyFunctions.back();
+            LazyFunctions.pop_back();
+
+            CloneFunctionBody(F);
+        }
+    }
+
     virtual Value *materializeValueFor (Value *V)
     {
         Function *F = dyn_cast<Function>(V);
@@ -112,6 +180,8 @@ public:
                 return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
             }
             if (F->isDeclaration() || F->getParent() != destModule) {
+                if (F->getName().empty())
+                    return CloneFunctionProto(F);
                 Function *shadow = srcModule->getFunction(F->getName());
                 if (shadow != NULL && !shadow->isDeclaration()) {
                     // Not truly external
@@ -121,14 +191,14 @@ public:
                         Function *oldF = destModule->getFunction(F->getName());
                         if (oldF)
                             return oldF;
-                        return clone_llvm_function(shadow,this);
+                        return CloneFunctionProto(F);
                     }
                     else {
                         return destModule->getOrInsertFunction(F->getName(),F->getFunctionType());
                     }
                 }
                 else if (!F->isDeclaration()) {
-                    return clone_llvm_function(F,this);
+                    return CloneFunctionProto(F);
                 }
             }
             // Still a declaration and still in a different module
@@ -152,10 +222,12 @@ public:
             newGV->copyAttributesFrom(GV);
             if (GV->isDeclaration())
                 return newGV;
-            uint64_t addr = jl_mcjmm->getSymbolAddress(GV->getName());
-            if (addr != 0) {
-                newGV->setExternallyInitialized(true);
-                return newGV;
+            if (!GV->getName().empty()) {
+                uint64_t addr = jl_ExecutionEngine->getGlobalValueAddress(GV->getName());
+                if (addr != 0) {
+                    newGV->setExternallyInitialized(true);
+                    return newGV;
+                }
             }
             std::map<Value*, void *>::iterator it;
             it = llvm_to_jl_value.find(GV);
@@ -172,28 +244,6 @@ public:
         return NULL;
     };
 };
-
-static Function *clone_llvm_function(llvm::Function *toClone,FunctionMover *mover)
-{
-    Function *NewF = Function::Create(toClone->getFunctionType(),
-                                      Function::ExternalLinkage,
-                                      toClone->getName(),
-                                      mover->destModule);
-    ClonedCodeInfo info;
-    Function::arg_iterator DestI = NewF->arg_begin();
-    for (Function::const_arg_iterator I = toClone->arg_begin(), E = toClone->arg_end(); I != E; ++I) {
-        DestI->setName(I->getName());    // Copy the name over...
-        mover->VMap[I] = DestI++;        // Add mapping to VMap
-    }
-
-    // Necessary in case the function is self referential
-    mover->VMap[toClone] = NewF;
-
-    SmallVector<ReturnInst*, 8> Returns;
-    llvm::CloneFunctionInto(NewF,toClone,mover->VMap,true,Returns,"",NULL,NULL,mover);
-
-    return NewF;
-}
 #endif
 
 // --- emitting pointers directly into code ---
@@ -231,40 +281,42 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
     // emit the variable table into the code image. used just before dumping bitcode.
     // afterwards, call eraseFromParent on everything in globalvars to reset code generator.
     ArrayType *atype = ArrayType::get(T_psize,jl_sysimg_gvars.size());
-    globalvars.push_back(new GlobalVariable(
-            *mod,
-            atype,
-            true,
-            GlobalVariable::ExternalLinkage,
-            ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
-            "jl_sysimg_gvars"));
-    globalvars.push_back(new GlobalVariable(
-            *mod,
-            T_size,
-            true,
-            GlobalVariable::ExternalLinkage,
-            ConstantInt::get(T_size,globalUnique+1),
-            "jl_globalUnique"));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    atype,
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    ConstantArray::get(atype, ArrayRef<Constant*>(jl_sysimg_gvars)),
+                    "jl_sysimg_gvars")));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    T_size,
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    ConstantInt::get(T_size,globalUnique+1),
+                    "jl_globalUnique")));
 
     Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_compileropts.cpu_target);
-    globalvars.push_back(new GlobalVariable(*mod,
-                       feature_string->getType(),
-                       true,
-                       GlobalVariable::ExternalLinkage,
-                       feature_string,
-                       "jl_sysimg_cpu_target"));
+    globalvars.push_back(addComdat(new GlobalVariable(
+                    *mod,
+                    feature_string->getType(),
+                    true,
+                    GlobalVariable::ExternalLinkage,
+                    feature_string,
+                    "jl_sysimg_cpu_target")));
 
     // For native also store the cpuid
     if (strcmp(jl_compileropts.cpu_target,"native") == 0) {
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
-        globalvars.push_back(new GlobalVariable(*mod,
-                           T_int64,
-                           true,
-                           GlobalVariable::ExternalLinkage,
-                           ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
-                           "jl_sysimg_cpu_cpuid"));
+        globalvars.push_back(addComdat(new GlobalVariable(
+                        *mod,
+                        T_int64,
+                        true,
+                        GlobalVariable::ExternalLinkage,
+                        ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
+                        "jl_sysimg_cpu_cpuid")));
     }
 }
 
@@ -289,9 +341,10 @@ static Value *julia_gv(const char *cname, void *addr)
     std::stringstream gvname;
     gvname << cname << globalUnique++;
     // no existing GlobalVariable, create one and store it
-    GlobalValue *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
+    GlobalVariable *gv = new GlobalVariable(*jl_Module, jl_pvalue_llvmt,
                            false, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                            ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt), gvname.str());
+    addComdat(gv);
 
     // make the pointer valid for this session
 #ifdef USE_MCJIT
@@ -819,8 +872,7 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
 }
 
 #define CHECK_BOUNDS 1
-
-static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
+static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, jl_codectx_t *ctx)
 {
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
@@ -828,7 +880,30 @@ static Value *emit_bounds_check(Value *i, Value *len, jl_codectx_t *ctx)
          jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
         jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON) {
         Value *ok = builder.CreateICmpULT(im1, len);
-        raise_exception_unless(ok, prepare_global(jlboundserr_var), ctx);
+        BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
+        BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
+        builder.CreateCondBr(ok, passBB, failBB);
+        builder.SetInsertPoint(failBB);
+        if (ty == (jl_value_t*)jl_any_type) {
+            builder.CreateCall3(prepare_call(jlvboundserror_func), a, len, i);
+        }
+        else if (ty) {
+            if (!a->getType()->isPtrOrPtrVectorTy()) {
+                Value *tempSpace = builder.CreateAlloca(a->getType());
+                builder.CreateStore(a, tempSpace);
+                a = tempSpace;
+            }
+            builder.CreateCall3(prepare_call(jluboundserror_func),
+                                builder.CreatePointerCast(a, T_pint8),
+                                literal_pointer_val(ty),
+                                i);
+        }
+        else {
+            builder.CreateCall2(prepare_call(jlboundserror_func), a, i);
+        }
+        builder.CreateUnreachable();
+        ctx->f->getBasicBlockList().push_back(passBB);
+        builder.SetInsertPoint(passBB);
     }
 #endif
     return im1;
@@ -919,8 +994,8 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
 static Value *julia_bool(Value *cond)
 {
     return builder.CreateSelect(cond,
-                                literal_pointer_val(jl_true),
-                                literal_pointer_val(jl_false));
+                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var))),
+                                tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var))));
 }
 
 // --- get the inferred type of an AST node ---
@@ -1186,8 +1261,10 @@ static Value *emit_tupleref(Value *tuple, Value *ival, jl_value_t *jt, jl_codect
     SwitchInst *sw = builder.CreateSwitch(ival,deflt,n);
     // Anything else is a bounds error
     builder.SetInsertPoint(deflt);
-    builder.CreateCall2(prepare_call(jlthrow_line_func), builder.CreateLoad(prepare_global(jlboundserr_var)),
-                        ConstantInt::get(T_int32, ctx->lineno));
+    Value *tmp = builder.CreateAlloca(ty);
+    builder.CreateStore(tuple, tmp);
+    jl_add_linfo_root(ctx->linfo, jt);
+    builder.CreateCall3(prepare_call(jluboundserror_func), builder.CreatePointerCast(tmp, T_pint8), literal_pointer_val(jt), ival);
     builder.CreateUnreachable();
     size_t ntuple = jl_tuple_len(jt);
     PHINode *ret = PHINode::Create(jl_pvalue_llvmt, ntuple);
@@ -1358,9 +1435,12 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
         endBB = BasicBlock::Create(getGlobalContext(), "idxend");
     }
 #endif
+    Value **idxs = (Value**)alloca(sizeof(Value*)*nidxs);
     for(size_t k=0; k < nidxs; k++) {
-        Value *ii = emit_unbox(T_size, emit_unboxed(args[k], ctx), NULL);
-        ii = builder.CreateSub(ii, ConstantInt::get(T_size, 1));
+        idxs[k] = emit_unbox(T_size, emit_unboxed(args[k], ctx), NULL);
+    }
+    for(size_t k=0; k < nidxs; k++) {
+        Value *ii = builder.CreateSub(idxs[k], ConstantInt::get(T_size, 1));
         i = builder.CreateAdd(i, builder.CreateMul(ii, stride));
         if (k < nidxs-1) {
             Value *d =
@@ -1385,8 +1465,11 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
 
         ctx->f->getBasicBlockList().push_back(failBB);
         builder.SetInsertPoint(failBB);
-        builder.CreateCall2(prepare_call(jlthrow_line_func), tbaa_decorate(tbaa_const,builder.CreateLoad(prepare_global(jlboundserr_var))),
-                            ConstantInt::get(T_int32, ctx->lineno));
+        Value *tmp = builder.CreateAlloca(T_size, ConstantInt::get(T_size, nidxs));
+        for(size_t k=0; k < nidxs; k++) {
+            builder.CreateStore(idxs[k], builder.CreateGEP(tmp, ConstantInt::get(T_size, k)));
+        }
+        builder.CreateCall3(prepare_call(jlboundserrorv_func), a, tmp, ConstantInt::get(T_size, nidxs));
         builder.CreateUnreachable();
 
         ctx->f->getBasicBlockList().push_back(endBB);

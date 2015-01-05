@@ -481,6 +481,7 @@ const latex_symbols = Dict(
     "\\exists" => "∃",
     "\\nexists" => "∄",
     "\\varnothing" => "∅",
+    "\\emptyset" => "∅",
     "\\nabla" => "∇",
     "\\in" => "∈",
     "\\notin" => "∉",
@@ -924,10 +925,12 @@ const latex_symbols = Dict(
     "\\Dashv" => "⫤",
     "\\interleave" => "⫴",
     "\\Elztdcol" => "⫶",
-    "\\openbracketleft" => "〚",
-    "\\openbracketright" => "〛",
-    "\\overbrace" => "︷",
-    "\\underbrace" => "︸",
+    "\\openbracketleft" => "⟦",
+    "\\llbracket" => "⟦",
+    "\\openbracketright" => "⟧",
+    "\\rrbracket" => "⟧",
+    "\\overbrace" => "⏞",
+    "\\underbrace" => "⏟",
 
 # 1607 symbols generated from unicode-math-table.tex:
     "\\Zbar" => "Ƶ",  # impedance (latin capital letter z with stroke)

@@ -32,7 +32,10 @@ parent(a::AbstractArray) = a
 parentindexes(a::AbstractArray) = ntuple(ndims(a), i->1:size(a,i))
 
 ## SubArray creation
-stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
+# Drops singleton dimensions (those indexed with a scalar)
+slice(A::AbstractArray, I::ViewIndex...) = _slice(A, I)
+slice(A::AbstractArray, I::(ViewIndex...)) = _slice(A, I)
+stagedfunction _slice{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     for k = 1:length(I)
@@ -52,8 +55,11 @@ stagedfunction slice{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
     end
 end
 
-# Conventional style (drop trailing singleton dimensions, keep any other singletons)
-stagedfunction sub{T,NP}(A::AbstractArray{T,NP}, I::ViewIndex...)
+# Conventional style (drop trailing singleton dimensions, keep any
+# other singletons)
+sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
+sub(A::AbstractArray, I::(ViewIndex...)) = _sub(A, I)
+stagedfunction _sub{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
@@ -87,7 +93,7 @@ end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
+stagedfunction _slice{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
@@ -121,7 +127,7 @@ stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex..
                     N += 1
                     push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :V, :I))
                 end
-                push!(indexexprs, :(V.indexes[$j][I[$k]]))
+                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
                 push!(Itypes, rangetype(IV[j], I[k]))
             else
                 # We have a linear index that spans more than one dimension of the parent
@@ -157,7 +163,7 @@ stagedfunction slice{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex..
     end
 end
 
-stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
+stagedfunction _sub{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
     N = length(I)
     while N > 0 && I[N] <: Real
         N -= 1
@@ -183,12 +189,12 @@ stagedfunction sub{T,NV,PV,IV,PLD}(V::SubArray{T,NV,PV,IV,PLD}, I::ViewIndex...)
             if k < N && I[k] <: Real
                 # convert scalar to a range
                 sym = gensym()
-                push!(preexprs, :($sym = V.indexes[$j][int(I[$k])]))
+                push!(preexprs, :($sym = reindex(V.indexes[$j], int(I[$k]))))
                 push!(indexexprs, :($sym:$sym))
                 push!(Itypes, UnitRange{Int})
             elseif k < length(I) || k == NV || j == length(IV)
                 # simple indexing
-                push!(indexexprs, :(V.indexes[$j][I[$k]]))
+                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
                 push!(Itypes, rangetype(IV[j], I[k]))
             else
                 # We have a linear index that spans more than one dimension of the parent
@@ -238,6 +244,12 @@ function rangetype(T1, T2)
     length(rt) == 1 || error("Can't infer return type")
     rt[1]
 end
+
+reindex(a, b) = a[b]
+reindex(a::UnitRange, b::UnitRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), length(b))
+reindex(a::UnitRange, b::StepRange{Int}) = range(oftype(first(a), first(a)+first(b)-1), step(b), length(b))
+reindex(a::StepRange, b::Range{Int}) = range(oftype(first(a), first(a)+(first(b)-1)*step(a)), step(a)*step(b), length(b))
+reindex(a, b::Int) = unsafe_getindex(a, b)
 
 dimsizeexpr(Itype, d::Int, len::Int, Asym::Symbol, Isym::Symbol) = :(length($Isym[$d]))
 function dimsizeexpr(Itype::Type{Colon}, d::Int, len::Int, Asym::Symbol, Isym::Symbol)

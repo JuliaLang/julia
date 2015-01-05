@@ -67,7 +67,7 @@ release-candidate: release test
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
 
 	@# Check to see if the above make invocations changed anything important
-	@if [ -n "$(git status --porcelain)" ]; then \
+	@if [ -n "$$(git status --porcelain)" ]; then \
 		echo "Git repository dirty; Verify and commit changes to the repository, then retry"; \
 		exit 1; \
 	fi
@@ -267,7 +267,7 @@ ifeq ($(OS),WINNT)
 endif	
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
-	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
+	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
 	# Copy system image
 	$(INSTALL_F) $(build_private_libdir)/sys.ji $(DESTDIR)$(private_libdir)
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)

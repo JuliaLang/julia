@@ -208,11 +208,11 @@ let
     end
 end
 
-function pfw_wait_cb(pfw::PollingFileWatcher, prev, cur, status)
+function pfw_wait_cb(pfw::PollingFileWatcher, events, status)
     if status < 0
         notify_error(pfw.notify,UVError("PollingFileWatcher",status))
     else
-        notify(pfw.notify,(prev,cur))
+        notify(pfw.notify,events)
     end
 end
 
@@ -220,11 +220,13 @@ function wait(pfw::PollingFileWatcher; interval=2.0)
     if !pfw.open
         start_watching(pfw_wait_cb,pfw,interval)
     end
-    prev,curr = stream_wait(pfw,pfw.notify)
+    events = stream_wait(pfw,pfw.notify)
     if isempty(pfw.notify.waitq)
         stop_watching(pfw)
     end
-    (prev,curr)
+    # return basename for consistency with something libuv appears to do
+    # in the FileMonitor case.
+    basename(pfw.file), events
 end
 
 function wait(m::FileMonitor)
@@ -246,13 +248,13 @@ function start_watching(t::FDWatcher, events::FDEvent)
 end
 start_watching(f::Function, t::FDWatcher, events::FDEvent) = (t.cb = f; start_watching(t,events))
 
-function start_watching(t::PollingFileWatcher, interval)
+function start_watching(t::PollingFileWatcher, interval=2.0)
     associate_julia_struct(t.handle, t)
     uv_error("start_watching (File)",
              ccall(:jl_fs_poll_start, Int32, (Ptr{Void},Ptr{UInt8},UInt32),
                    t.handle, t.file, round(UInt32,interval*1000)))
 end
-start_watching(f::Function, t::PollingFileWatcher, interval) = (t.cb = f;start_watching(t,interval))
+start_watching(f::Function, t::PollingFileWatcher, interval=2.0) = (t.cb = f;start_watching(t,interval))
 
 function stop_watching(t::FDWatcher)
     disassociate_julia_struct(t.handle)
@@ -287,7 +289,8 @@ end
 
 function _uv_hook_fspollcb(t::PollingFileWatcher,status::Int32,prev::Ptr,cur::Ptr)
     if isa(t.cb,Function)
-        t.cb(t, StatStruct(convert(Ptr{UInt8},prev)), StatStruct(convert(Ptr{UInt8},cur)), status)
+        s = StatStruct(convert(Ptr{UInt8},cur))
+        t.cb(t, FDEvent(isreadable(s), iswritable(s), false), status)
     end
 end
 

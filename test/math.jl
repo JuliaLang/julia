@@ -362,3 +362,22 @@ end
 for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
     @test_approx_eq cis(z) exp(im*z)
 end
+
+# modf
+for elty in (Float32, Float64)
+    @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
+    @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
+    @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
+    @test_approx_eq modf( convert(elty,1.0) )[2] convert(elty,1.0)
+end
+
+# frexp
+for elty in (Float32, Float64)
+    @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
+    @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
+    @test_approx_eq frexp( convert(elty,10.5) )[1] convert(elty,0.65625)
+    @test frexp( convert(elty,10.5) )[2] == 4
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] convert(elty,0.5)
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
+    @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
+end
