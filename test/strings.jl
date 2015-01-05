@@ -658,12 +658,12 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
 
-# {begins,ends}with
-@test beginswith("abcd", 'a')
-@test beginswith("abcd", "a")
-@test beginswith("abcd", "ab")
-@test !beginswith("ab", "abcd")
-@test !beginswith("abcd", "bc")
+# {starts,ends}with
+@test startswith("abcd", 'a')
+@test startswith("abcd", "a")
+@test startswith("abcd", "ab")
+@test !startswith("ab", "abcd")
+@test !startswith("abcd", "bc")
 @test endswith("abcd", 'd')
 @test endswith("abcd", "d")
 @test endswith("abcd", "cd")
@@ -1014,6 +1014,14 @@ let
     @test expand(sym) === sym
     @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
 end
+
+@test symbol("asdf") === :asdf
+@test startswith(string(gensym("asdf")),"##asdf#")
+@test gensym("asdf") != gensym("asdf")
+@test gensym() != gensym()
+@test startswith(string(gensym()),"##")
+@test_throws ErrorException symbol("ab\0")
+@test_throws ErrorException gensym("ab\0")
 
 # issue #6949
 let f =IOBuffer(),

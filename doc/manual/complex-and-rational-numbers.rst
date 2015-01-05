@@ -1,5 +1,7 @@
 .. _man-complex-and-rational-numbers:
 
+.. currentmodule:: Base
+
 ******************************
  Complex and Rational Numbers  
 ******************************
@@ -16,7 +18,7 @@ expected.
 Complex Numbers
 ---------------
 
-The global constant ``im`` is bound to the complex number *i*,
+The global constant :const:`im` is bound to the complex number *i*,
 representing the principal square root of -1. It was deemed harmful to
 co-opt the name ``i`` for a global constant, since it is such a popular
 index variable name. Since Julia allows numeric literals to be
@@ -122,10 +124,10 @@ Standard functions to manipulate complex values are provided:
     julia> angle(1 + 2im)
     1.1071487177940904
 
-As usual, the absolute value (``abs``) of a complex number is its
-distance from zero. The ``abs2`` function gives the square of the
+As usual, the absolute value (:func:`abs`) of a complex number is its
+distance from zero. :func:`abs2` gives the square of the
 absolute value, and is of particular use for complex numbers where it
-avoids taking a square root. The ``angle`` function returns the phase
+avoids taking a square root. :func:`angle` returns the phase
 angle in radians (also known as the *argument* or *arg* function). The
 full gamut of other :ref:`man-elementary-functions` is also defined
 for complex numbers:
@@ -149,7 +151,7 @@ for complex numbers:
 
 Note that mathematical functions typically return real values when applied
 to real numbers and complex values when applied to complex numbers.
-For example, ``sqrt`` behaves differently when applied to ``-1``
+For example, :func:`sqrt` behaves differently when applied to ``-1``
 versus ``-1 + 0im`` even though ``-1 == -1 + 0im``:
 
 .. doctest::
@@ -172,7 +174,7 @@ multiplication must be explicitly written out:
     julia> a = 1; b = 2; a + b*im
     1 + 2im
 
-However, this is *not* recommended; Use the ``complex`` function instead to
+However, this is *not* recommended; Use the :func:`complex` function instead to
 construct a complex value directly from its real and imaginary parts.:
 
 .. doctest::
@@ -182,7 +184,7 @@ construct a complex value directly from its real and imaginary parts.:
 
 This construction avoids the multiplication and addition operations.
 
-``Inf`` and ``NaN`` propagate through complex numbers in the real
+:const:`Inf` and :const:`NaN` propagate through complex numbers in the real
 and imaginary parts of a complex number as described in the 
 :ref:`man-special-floats` section:
 
@@ -200,7 +202,7 @@ Rational Numbers
 ----------------
 
 Julia has a rational number type to represent exact ratios of integers.
-Rationals are constructed using the ``//`` operator:
+Rationals are constructed using the :obj:`//` operator:
 
 .. doctest::
 
@@ -227,7 +229,7 @@ are reduced to lowest terms such that the denominator is non-negative:
 This normalized form for a ratio of integers is unique, so equality of
 rational values can be tested by checking for equality of the numerator
 and denominator. The standardized numerator and denominator of a
-rational value can be extracted using the ``num`` and ``den`` functions:
+rational value can be extracted using the :func:`num` and :func:`den` functions:
 
 .. doctest::
 
@@ -296,7 +298,7 @@ Constructing infinite rational values is acceptable:
     julia> typeof(ans)
     Rational{Int64} (constructor with 1 method)
 
-Trying to construct a ``NaN`` rational value, however, is not:
+Trying to construct a :const:`NaN` rational value, however, is not:
 
 .. doctest::
 

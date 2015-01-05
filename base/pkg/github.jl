@@ -64,7 +64,7 @@ function token(user::AbstractString=user())
     tfa = false
 
     # Check for two-factor authentication
-    if status == 401 && get(header, "X-GitHub-OTP", "") |> x->beginswith(x, "required") && isinteractive()
+    if status == 401 && get(header, "X-GitHub-OTP", "") |> x->startswith(x, "required") && isinteractive()
         tfa = true
         info("Two-factor authentication in use.  Enter auth code.  (You may have to re-enter your password.)")
         print(STDERR, "Authentication code: ")

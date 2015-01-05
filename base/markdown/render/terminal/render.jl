@@ -22,7 +22,7 @@ function term(io::IO, md::Paragraph, columns)
 end
 
 function term(io::IO, md::BlockQuote, columns)
-  s = sprint(io->term(io, Block(md.content), columns - 10))
+  s = sprint(io->term(io, md.content, columns - 10))
   for line in split(rstrip(s), "\n")
     println(io, " "^margin, "|", line)
   end

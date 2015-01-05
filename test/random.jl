@@ -11,7 +11,7 @@ srand(0); rand(); x = rand(384);
 @test(typeof(rand(false:true)) == Bool)
 
 @test length(randn(4, 5)) == 20
-@test length(randbool(4, 5)) == 20
+@test length(bitrand(4, 5)) == 20
 
 @test rand(MersenneTwister()) == 0.8236475079774124
 @test rand(MersenneTwister(0)) == 0.8236475079774124
@@ -237,7 +237,7 @@ let mt = MersenneTwister(0)
                             -3482609696641744459568613291754091152,float16(0.03125),0.68733835f0][i]
 
         @test B[end] == Any[49,0x65,-3725,0x719d,814246081,0xdf61843a,-3010919637398300844,0x61b367cf8810985d,
-                            -33032345278809823492812856023466859769,float16(0.9346),0.5929704f0][i]
+                            -33032345278809823492812856023466859769,float16(0.95),0.51829386f0][i]
     end
 
     srand(mt,0)
@@ -276,9 +276,8 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
         f!(rng..., Array(Float64, 2, 3)) ::Array{Float64, 2}
     end
 
-    randbool(rng...)               ::Bool
-    randbool(rng..., 5)            ::BitArray{1}
-    randbool(rng..., 2, 3)         ::BitArray{2}
+    bitrand(rng..., 5)             ::BitArray{1}
+    bitrand(rng..., 2, 3)          ::BitArray{2}
     rand!(rng..., BitArray(5))     ::BitArray{1}
     rand!(rng..., BitArray(2, 3))  ::BitArray{2}
 
@@ -296,6 +295,20 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
             rand!(rng..., A, T[0,1,2])  ::typeof(A)
             rand!(rng..., sparse(A))            ::typeof(sparse(A))
             rand!(rng..., sparse(A), T[0,1,2])  ::typeof(sparse(A))
+        end
+    end
+end
+
+# test uniform distribution of floats
+let bins = [prevfloat(0.0):0.25:1.0]
+    for rng in [srand(MersenneTwister()), RandomDevice()]
+        for T in [Float16,Float32,Float64]
+            # array version
+            _, counts = hist(rand(rng, T, 2000), bins)
+            @test minimum(counts) > 300 # should fail with proba < 1e-26
+            # scalar version
+            _, counts = hist([rand(rng, T) for i in 1:2000], bins)
+            @test minimum(counts) > 300
         end
     end
 end

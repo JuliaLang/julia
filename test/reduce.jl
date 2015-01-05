@@ -6,6 +6,15 @@
 @test Base.mapfoldl(abs2, -, 2:5) == -46
 @test Base.mapfoldl(abs2, -, 10, 2:5) == -44
 
+@test_approx_eq Base.mapfoldl(abs2, /, 2:5 ) 1/900
+@test_approx_eq Base.mapfoldl(abs2, /, 10, 2:5 ) 1/1440
+
+@test Base.mapfoldl((x)-> x $ true, &, true, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x $ true, &, [true false true false false]) == false
+
+@test Base.mapfoldl((x)-> x $ true, |, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x $ true, |, false, [true false true false false]) == true
+
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
 
@@ -190,6 +199,11 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test in(0, 1:3) == false
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
+
+# contains
+
+@test contains("quick fox", "fox") == true
+@test contains("quick fox", "lazy dog") == false
 
 # count & countnz
 

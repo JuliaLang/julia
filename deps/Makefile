@@ -1706,11 +1706,11 @@ GIT_SOURCE = git-$(GIT_VER)/src/git
 GIT_TARGET = $(build_prefix)/git
 
 git-$(GIT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/git/git/archive/v$(GIT_VER).tar.gz
+	$(JLDOWNLOAD) $@ https://www.kernel.org/pub/software/scm/git/git-$(GIT_VER).tar.gz
 git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
-	$(MAKE) -C git-$(GIT_VER) configure
+	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
 	./configure $(CONFIGURE_COMMON) --bindir="$(build_libexecdir)"
@@ -1813,7 +1813,7 @@ distclean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER).tar.gz libgit2-$(LIBGIT2_VER).zip libgit2-$(LIBGIT2_VER)
 
 get-libgit2: libgit2-$(LIBGIT2_VER).tar.gz
-configure-libgit2: libgit2-$(LIBGIT2_VER)/Makefile
+configure-libgit2: libgit2-$(LIBGIT2_VER)/build/Makefile
 compile-libgit2: $(LIBGIT2_OBJ_SOURCE)
 check-libgit2: libgit2-$(LIBGIT2_VER)/build/checked
 install-libgit2: $(LIBGIT2_OBJ_TARGET)

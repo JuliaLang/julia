@@ -282,7 +282,7 @@ function process_options(args::Vector{UTF8String})
             startup = false
         elseif args[i] == "-i"
             global is_interactive = true
-        elseif beginswith(args[i], "--color")
+        elseif startswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
                 global have_color = true
@@ -405,6 +405,7 @@ function _start()
                 quiet || REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
+                    quiet || warn("Terminal not fully functional")
                 else
                     active_repl = REPL.LineEditREPL(term, true)
                     active_repl.no_history_file = no_history_file

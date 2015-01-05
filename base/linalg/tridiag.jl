@@ -1,6 +1,6 @@
 #### Specialized matrix types ####
 
-## Hermitian tridiagonal matrices
+## (complex) symmetric tridiagonal matrices
 immutable SymTridiagonal{T} <: AbstractMatrix{T}
     dv::Vector{T}                        # diagonal
     ev::Vector{T}                        # subdiagonal
@@ -21,11 +21,23 @@ SymTridiagonal(A::AbstractMatrix) = diag(A,1)==diag(A,-1)?SymTridiagonal(diag(A)
 full{T}(M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 convert{T}(::Type{SymTridiagonal{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
 convert{T}(::Type{AbstractMatrix{T}}, S::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, S.dv), convert(Vector{T}, S.ev))
-convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})=diagm(M.dv)+diagm(M.ev,-1)+conj(diagm(M.ev,1))
+function convert{T}(::Type{Matrix{T}}, M::SymTridiagonal{T})
+    n = size(M, 1)
+    Mf = zeros(T, n, n)
+    @inbounds begin
+        @simd for i = 1:n-1
+            Mf[i,i] = M.dv[i]
+            Mf[i+1,i] = M.ev[i]
+            Mf[i,i+1] = M.ev[i]
+        end
+        Mf[n,n] = M.dv[n]
+    end
+    return Mf
+end
 convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 
-size(m::SymTridiagonal) = (length(m.dv), length(m.dv))
-size(m::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(m.dv) : 1)
+size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
+size(A::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(A.dv) : 1)
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -75,21 +87,31 @@ end
 
 factorize(S::SymTridiagonal) = ldltfact(S)
 
-#Wrap LAPACK DSTE{GR,BZ} to compute eigenvalues
-eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', m.dv, m.ev)...)
-eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}, irange::UnitRange) = Eigen(LAPACK.stegr!('V', 'I', m.dv, m.ev, 0.0, 0.0, irange.start, irange.stop)...)
-eigfact!{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = Eigen(LAPACK.stegr!('V', m.dv, m.ev, convert(T, vl), convert(T, vu), 0, 0)...)
-eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}) = LAPACK.stegr!('N', 'A', m.dv, m.ev, 0.0, 0.0, 0, 0)[1]
-eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!('N', 'I', m.dv, m.ev, 0.0, 0.0, irange.start, irange.stop)[1]
-eigvals!{T<:BlasFloat}(m::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', m.dv, m.ev, vl, vu, 0, 0)[1]
+eigfact!{T<:BlasReal}(A::SymTridiagonal{T}) = Eigen(LAPACK.stegr!('V', A.dv, A.ev)...)
+eigfact{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
+
+eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = Eigen(LAPACK.stegr!('V', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)...)
+eigfact{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
+
+eigfact!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = Eigen(LAPACK.stegr!('V', A.dv, A.ev, convert(T, vl), convert(T, vu), 0, 0)...)
+eigfact{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigfact!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
+
+eigvals!{T<:BlasReal}(A::SymTridiagonal{T}) = LAPACK.stev!('N', A.dv, A.ev)[1]
+eigvals{T}(A::SymTridiagonal{T}) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A)))
+
+eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, irange::UnitRange) = LAPACK.stegr!('N', 'I', A.dv, A.ev, 0.0, 0.0, irange.start, irange.stop)[1]
+eigvals{T}(A::SymTridiagonal{T}, irange::UnitRange) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), irange))
+
+eigvals!{T<:BlasReal}(A::SymTridiagonal{T}, vl::Real, vu::Real) = LAPACK.stegr!('N', 'V', A.dv, A.ev, vl, vu, 0, 0)[1]
+eigvals{T}(A::SymTridiagonal{T}, vl::Real, vu::Real) = (S = promote_type(Float32, typeof(zero(T)/norm(one(T)))); eigvals!(S != T ? convert(SymTridiagonal{S}, A) : copy(A), vl, vu))
 
 #Computes largest and smallest eigenvalue
-eigmax(m::SymTridiagonal) = eigvals(m, size(m, 1):size(m, 1))[1]
-eigmin(m::SymTridiagonal) = eigvals(m, 1:1)[1]
+eigmax(A::SymTridiagonal) = eigvals(A, size(A, 1):size(A, 1))[1]
+eigmin(A::SymTridiagonal) = eigvals(A, 1:1)[1]
 
 #Compute selected eigenvectors only corresponding to particular eigenvalues
-eigvecs(m::SymTridiagonal) = eigfact(m)[:vectors]
-eigvecs{T<:BlasFloat,Eigenvalue<:Real}(m::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(m.dv, m.ev, eigvals)
+eigvecs(A::SymTridiagonal) = eigfact(A)[:vectors]
+eigvecs{T<:BlasFloat,Eigenvalue<:Real}(A::SymTridiagonal{T}, eigvals::Vector{Eigenvalue}) = LAPACK.stein!(A.dv, A.ev, eigvals)
 
 ###################
 # Generic methods #

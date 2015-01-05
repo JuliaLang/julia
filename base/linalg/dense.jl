@@ -436,7 +436,7 @@ function pinv{T}(A::StridedMatrix{T}, tol::Real)
                  B[i,i] = one(T)/A[i,i]
              end
           end
-	  return B;
+          return B;
        end
     end
     SVD         = svdfact(A, thin=true)

@@ -7,7 +7,7 @@ export srand,
        rand, rand!,
        randn, randn!,
        randexp, randexp!,
-       randbool,
+       bitrand,
        AbstractRNG, RNG, MersenneTwister, RandomDevice
 
 
@@ -207,6 +207,18 @@ rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert((Int...),
 # MersenneTwister & RandomDevice
 @inline rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float64}) = rand(r, CloseOpen)
 rand{T<:Union(Float16, Float32)}(r::Union(RandomDevice,MersenneTwister), ::Type{T}) = convert(T, rand(r, Float64))
+
+rand_ui10_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui23_raw(r::MersenneTwister) = rand_ui52_raw(r)
+rand_ui10_raw(r::AbstractRNG)    = rand(r, UInt16)
+rand_ui23_raw(r::AbstractRNG)    = rand(r, UInt32)
+
+rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float16}) =
+    Float16(reinterpret(Float32, (rand_ui10_raw(r) % UInt32 << 13) & 0x007fe000 | 0x3f800000) - 1)
+
+rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
+    reinterpret(Float32, rand_ui23_raw(r) % UInt32 & 0x007fffff | 0x3f800000) - 1
+
 
 ## random integers
 
@@ -540,16 +552,19 @@ rand(rng::AbstractRNG, r::AbstractArray, dims::Int...) = rand(rng, r, dims)
 
 ## random BitArrays (AbstractRNG)
 
-rand!(r::AbstractRNG, B::BitArray) = Base.bitarray_rand_fill!(r, B)
+function rand!(rng::AbstractRNG, B::BitArray)
+    length(B) == 0 && return B
+    Bc = B.chunks
+    rand!(rng, Bc)
+    Bc[end] &= Base._msk_end(B)
+    return B
+end
 
-randbool(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
-randbool(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
 
-randbool(dims::Dims)   = rand!(BitArray(dims))
-randbool(dims::Int...) = rand!(BitArray(dims))
-
-randbool(r::AbstractRNG=GLOBAL_RNG) = rand(r, Bool)
-
+bitrand(dims::Dims)   = rand!(BitArray(dims))
+bitrand(dims::Int...) = rand!(BitArray(dims))
 
 ## randn() - Normally distributed random numbers using Ziggurat algorithm
 

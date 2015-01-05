@@ -65,7 +65,7 @@ end
 @test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=false), reshape(Any[1.0,"",4.0,2.0,"",5.0], 3, 2), Any)
 @test isequaldlm(readcsv(IOBuffer("1,2\n\n4,5"), skipblanks=true), reshape([1.0,4.0,2.0,5.0], 2, 2), Float64)
 
-let x = randbool(5, 10), io = IOBuffer()
+let x = bitrand(5, 10), io = IOBuffer()
     writedlm(io, x)
     seek(io, 0)
     @test readdlm(io, Bool) == x
@@ -197,4 +197,3 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     writedlm(i18n_buff, i18n_arr, '\t')
     @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
-

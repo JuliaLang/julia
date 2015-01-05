@@ -1969,7 +1969,8 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->instance = NULL;
         ndt->uid = 0;
         ndt->struct_decl = NULL;
-        ndt->size = ndt->alignment = 0;
+        ndt->size = 0;
+        ndt->alignment = 1;
         ndt->super = (jl_datatype_t*)inst_type_w_((jl_value_t*)dt->super, env,n,stack, 1);
         ftypes = dt->types;
         if (ftypes != NULL) {
@@ -1977,7 +1978,8 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
             ndt->types = (jl_tuple_t*)inst_type_w_((jl_value_t*)ftypes, env, n, stack, 1);
             if (!isabstract) {
                 if (jl_tuple_len(ftypes) == 0) {
-                    ndt->alignment = ndt->size = dt->size;
+                    ndt->size = dt->size;
+                    ndt->alignment = dt->alignment;
                     ndt->pointerfree = dt->pointerfree;
                 }
                 else {

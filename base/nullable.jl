@@ -16,7 +16,7 @@ eltype{T}(::Type{Nullable{T}}) = T
 eltype{T}(x::Nullable{T}) = T
 
 function convert{T}(::Type{Nullable{T}}, x::Nullable)
-    return isnull(x) ? Nullable{T}() : Nullable(convert(T, get(x)))
+    return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
 
 convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)

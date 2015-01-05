@@ -338,17 +338,6 @@ static void jl_update_all_fptrs()
     delayed_fptrs = NULL;
 }
 
-static int is_submodule(jl_module_t *parent, jl_module_t *child)
-{
-    while (1) {
-        if (parent == child)
-            return 1;
-        if (child == NULL || child == child->parent)
-            return 0;
-        child = child->parent;
-    }
-}
-
 // --- serialize ---
 
 static void jl_serialize_fptr(ios_t *s, void *fptr)
@@ -367,7 +356,7 @@ static void jl_serialize_datatype(ios_t *s, jl_datatype_t *dt)
             tag = 6; // must use apply_type
     }
     else if (mode == MODE_MODULE) {
-        int internal = is_submodule(jl_current_module, dt->name->module);
+        int internal = jl_is_submodule(dt->name->module, jl_current_module);
         if (!internal && dt->name->primary == (jl_value_t*)dt) {
             tag = 6; // external primary type
         }
@@ -440,11 +429,11 @@ static void jl_serialize_module(ios_t *s, jl_module_t *m)
     jl_serialize_value(s, m->name);
     int ref_only = 0;
     if (mode == MODE_MODULE_LAMBDAS) {
-        assert(!is_submodule(jl_current_module, m));
+        assert(!jl_is_submodule(m, jl_current_module));
         ref_only = 1;
     }
     if (mode == MODE_MODULE) {
-        if (!is_submodule(jl_current_module, m))
+        if (!jl_is_submodule(m, jl_current_module))
             ref_only = 1;
         write_int8(s, ref_only);
     }
@@ -695,7 +684,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
                 writetag(s, (jl_value_t*)jl_datatype_type);
             jl_serialize_value(s, t);
             if ((mode == MODE_MODULE || mode == MODE_MODULE_LAMBDAS) && t == jl_typename_type) {
-                if (is_submodule(jl_current_module, ((jl_typename_t*)v)->module)) {
+                if (jl_is_submodule(((jl_typename_t*)v)->module, jl_current_module)) {
                     write_uint8(s, 0);
                 }
                 else {
@@ -759,7 +748,7 @@ void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, j
     } *chain = NULL;
     jl_methlist_t *ml = mt->defs;
     while (ml != JL_NULL) {
-        if (is_submodule(jl_current_module, ml->func->linfo->module)) {
+        if (jl_is_submodule(ml->func->linfo->module, jl_current_module)) {
             struct _chain *link = (struct _chain*)alloca(sizeof(struct _chain));
             link->ml = ml;
             link->next = chain;

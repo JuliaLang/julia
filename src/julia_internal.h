@@ -29,6 +29,8 @@ void jl_set_t_uid_ctr(int i);
 uint32_t jl_get_gs_ctr(void);
 void jl_set_gs_ctr(uint32_t ctr);
 
+void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na);
+void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx);
 
 #define JL_CALLABLE(name) \
     DLLEXPORT jl_value_t *name(jl_value_t *F, jl_value_t **args, uint32_t nargs)

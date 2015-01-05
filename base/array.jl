@@ -1035,7 +1035,7 @@ function findnext(A, start::Integer)
     end
     return 0
 end
-findfirst(A) = findnext(A,1)
+findfirst(A) = findnext(A, 1)
 
 # returns the index of the next matching element
 function findnext(A, v, start::Integer)
@@ -1046,7 +1046,7 @@ function findnext(A, v, start::Integer)
     end
     return 0
 end
-findfirst(A,v) = findnext(A,v,1)
+findfirst(A, v) = findnext(A, v, 1)
 
 # returns the index of the next element for which the function returns true
 function findnext(testf::Function, A, start::Integer)
@@ -1058,6 +1058,33 @@ function findnext(testf::Function, A, start::Integer)
     return 0
 end
 findfirst(testf::Function, A) = findnext(testf, A, 1)
+
+# returns the index of the previous non-zero element, or 0 if all zeros
+function findprev(A, start)
+    for i = start:-1:1
+        A[i] != 0 && return i
+    end
+    0
+end
+findlast(A) = findprev(A, length(A))
+
+# returns the index of the matching element, or 0 if no matching
+function findprev(A, v, start)
+    for i = start:-1:1
+        A[i] == v && return i
+    end
+    0
+end
+findlast(A, v) = findprev(A, v, length(A))
+
+# returns the index of the previous element for which the function returns true, or zero if it never does
+function findprev(testf::Function, A, start)
+    for i = start:-1:1
+        testf(A[i]) && return i
+    end
+    0
+end
+findlast(testf::Function, A) = findprev(testf, A, length(A))
 
 function find(testf::Function, A::AbstractArray)
     # use a dynamic-length array to store the indexes, then copy to a non-padded

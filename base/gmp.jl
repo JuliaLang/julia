@@ -436,7 +436,7 @@ function binomial(n::BigInt, k::UInt)
     ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
     return z
 end
-binomial(n::BigInt, k::Integer) = k < 0 ? throw(DomainError()) : binomial(n, uint(k))
+binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, uint(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0

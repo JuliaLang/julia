@@ -71,7 +71,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
+extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
@@ -756,7 +756,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (f->getParent() != jl_Module)
         {
             FunctionMover mover(jl_Module,f->getParent());
-            f = (llvm::Function*)MapValue(f,mover.VMap,RF_None,NULL,&mover);
+            f = mover.CloneFunction(f);
         }
 #endif
 

@@ -101,6 +101,7 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
                                       0,    // opt_level
                                       1,    // depwarn
+                                      1     // can_inline
 };
 
 int jl_boot_file_loaded = 0;
@@ -125,21 +126,55 @@ static void jl_find_stack_bottom(void)
 }
 
 #ifdef _OS_WINDOWS_
-void __cdecl fpe_handler(int arg, int num)
+static char *strsignal(int sig)
 {
-    (void)arg;
-    fpreset();
-    signal(SIGFPE, (void (__cdecl *)(int))fpe_handler);
-    switch(num) {
-    case _FPE_INVALID:
-    case _FPE_OVERFLOW:
-    case _FPE_UNDERFLOW:
-    default:
-        jl_errorf("Unexpected FPE Error 0x%X", num);
+    switch (sig) {
+    case SIGINT:         return "SIGINT"; break;
+    case SIGILL:         return "SIGILL"; break;
+    case SIGABRT_COMPAT: return "SIGABRT_COMPAT"; break;
+    case SIGFPE:         return "SIGFPE"; break;
+    case SIGSEGV:        return "SIGSEGV"; break;
+    case SIGTERM:        return "SIGTERM"; break;
+    case SIGBREAK:       return "SIGBREAK"; break;
+    case SIGABRT:        return "SIGABRT"; break;
+    }
+    return "?";
+}
+
+void __cdecl crt_sig_handler(int sig, int num)
+{
+    switch (sig) {
+    case SIGFPE:
+        fpreset();
+        signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler);
+        switch(num) {
+        case _FPE_INVALID:
+        case _FPE_OVERFLOW:
+        case _FPE_UNDERFLOW:
+        default:
+            jl_errorf("Unexpected FPE Error 0x%X", num);
+            break;
+        case _FPE_ZERODIVIDE:
+            jl_throw(jl_diverror_exception);
+            break;
+        }
         break;
-    case _FPE_ZERODIVIDE:
-        jl_throw(jl_diverror_exception);
+    case SIGINT:
+        signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler);
+        if (exit_on_sigint) jl_exit(0);
+        if (jl_defer_signal) {
+            jl_signal_pending = sig;
+        }
+        else {
+            jl_signal_pending = 0;
+            jl_throw(jl_interrupt_exception);
+        }
         break;
+    default: // SIGSEGV, (SSIGTERM, IGILL)
+        ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
+        bt_size = rec_backtrace(bt_data, MAX_BT_SIZE);
+        jlbacktrace();
+        raise(sig);
     }
 }
 #else
@@ -259,7 +294,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
 {
     if (exit_on_sigint) jl_exit(0);
     int sig;
-    //windows signals use different numbers from unix
+    //windows signals use different numbers from unix (raise)
     switch(wsig) {
         case CTRL_C_EVENT: sig = SIGINT; break;
         //case CTRL_BREAK_EVENT: sig = SIGTERM; break;
@@ -577,9 +612,9 @@ void *init_stdio_handle(uv_file fd,int readable)
 #if defined(_OS_WINDOWS_)
             _dup2(_open("NUL", O_RDWR | O_BINARY, _S_IREAD | _S_IWRITE), fd);
 #else
-	    dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
+            dup2(open("/dev/null", O_RDWR, S_IRUSR | S_IWUSR /* 0600 */ | S_IRGRP | S_IROTH /* 0644 */), fd);
 #endif
-	    // ...and continue on as in the UV_FILE case
+            // ...and continue on as in the UV_FILE case
         case UV_FILE:
             file = (jl_uv_file_t*)malloc(sizeof(jl_uv_file_t));
             file->loop = jl_io_loop;
@@ -877,6 +912,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     libsupport_init();
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),
                                     // best to call this first, since it also initializes libuv
+    restore_signals();
     jl_resolve_sysimg_location(rel);
 
     // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
@@ -1112,8 +1148,24 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_exit(1);
     }
 #else // defined(_OS_WINDOWS_)
-    if (signal(SIGFPE, (void (__cdecl *)(int))fpe_handler) == SIG_ERR) {
+    if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGFPE\n");
+        jl_exit(1);
+    }
+    if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGILL\n");
+        jl_exit(1);
+    }
+    if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGINT\n");
+        jl_exit(1);
+    }
+    if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGSEGV\n");
+        jl_exit(1);
+    }
+    if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGTERM\n");
         jl_exit(1);
     }
     SetUnhandledExceptionFilter(exception_handler);
@@ -1226,16 +1278,16 @@ void jl_get_builtin_hooks(void)
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
 
-    jl_stackovf_exception  = jl_new_struct((jl_datatype_t*)core("StackOverflowError"));
-    jl_diverror_exception  = jl_new_struct((jl_datatype_t*)core("DivideError"));
-    jl_domain_exception    = jl_new_struct((jl_datatype_t*)core("DomainError"));
-    jl_overflow_exception  = jl_new_struct((jl_datatype_t*)core("OverflowError"));
-    jl_inexact_exception   = jl_new_struct((jl_datatype_t*)core("InexactError"));
-    jl_undefref_exception  = jl_new_struct((jl_datatype_t*)core("UndefRefError"));
+    jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
+    jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
+    jl_domain_exception    = jl_new_struct_uninit((jl_datatype_t*)core("DomainError"));
+    jl_overflow_exception  = jl_new_struct_uninit((jl_datatype_t*)core("OverflowError"));
+    jl_inexact_exception   = jl_new_struct_uninit((jl_datatype_t*)core("InexactError"));
+    jl_undefref_exception  = jl_new_struct_uninit((jl_datatype_t*)core("UndefRefError"));
     jl_undefvarerror_type  = (jl_datatype_t*)core("UndefVarError");
-    jl_interrupt_exception = jl_new_struct((jl_datatype_t*)core("InterruptException"));
-    jl_bounds_exception    = jl_new_struct((jl_datatype_t*)core("BoundsError"));
-    jl_memory_exception    = jl_new_struct((jl_datatype_t*)core("MemoryError"));
+    jl_interrupt_exception = jl_new_struct_uninit((jl_datatype_t*)core("InterruptException"));
+    jl_boundserror_type    = (jl_datatype_t*)core("BoundsError");
+    jl_memory_exception    = jl_new_struct_uninit((jl_datatype_t*)core("MemoryError"));
 
     jl_ascii_string_type = (jl_datatype_t*)core("ASCIIString");
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");

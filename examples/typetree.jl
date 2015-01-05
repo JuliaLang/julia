@@ -120,3 +120,7 @@ end
 # print_tree(types_tree)
 
 end # module
+
+if !isinteractive()
+    TypeTrees.print_tree(TypeTrees.types_tree)
+end

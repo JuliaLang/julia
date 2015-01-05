@@ -345,7 +345,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 
     // Make the MemoryObject wrapper
 #ifdef LLVM36
-    ArrayRef<uint8_t> memoryObject((uint8_t*)Fptr,Fsize);
+    ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
 #else
     FuncMCView memoryObject(Fptr, Fsize);
 #endif

@@ -202,7 +202,7 @@ restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
         p = _x;
         if ((char*)&_x > _x) {
             p = (char*)alloca((char*)&_x - _x);
-    	}
+        }
         restore_stack(t, where, p);
     }
     jl_jmp_target = where;

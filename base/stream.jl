@@ -290,7 +290,7 @@ function isopen(x::Union(AsyncStream,UVServer))
 end
 
 function check_open(x)
-    if !isopen(x)
+    if !isopen(x) || x.status == StatusClosing
         error("stream is closed or unusable")
     end
 end
@@ -869,6 +869,7 @@ end
 const BACKLOG_DEFAULT = 511
 
 function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
+    check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Void}, Cint, Ptr{Void}),
                 sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
     sock.status = StatusActive

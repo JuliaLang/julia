@@ -63,6 +63,14 @@ debug && println("(Automatic) upper Cholesky factor")
     @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
     @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
+    apos = asym[1,1]            # test chol(x::Number), needs x>0
+    @test_approx_eq cholfact(apos).UL √apos
+
+    # test chol of 2x2 Strang matrix
+    S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
+    U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+    @test_approx_eq full(chol(S)) full(U)
+
 debug && println("lower Cholesky factor")
     lapd = cholfact(apd, :L)
     @test_approx_eq full(lapd) apd

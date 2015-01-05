@@ -297,8 +297,8 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[p,p]) == aa116[p,p]
 
     # bool indexing
-    li = randbool(size(aa116,1))
-    lj = randbool(size(aa116,2))
+    li = bitrand(size(aa116,1))
+    lj = bitrand(size(aa116,2))
     @test full(ss116[li,j]) == aa116[li,j]''
     @test full(ss116[li,:]) == aa116[li,:]
     @test full(ss116[i,lj]) == aa116[i,lj]
@@ -472,3 +472,30 @@ end
 # issue #8976
 @test conj(sparse([1im])) == sparse(conj([1im]))
 @test conj!(sparse([1im])) == sparse(conj!([1im]))
+
+# issue #9525
+@test_throws BoundsError sparse([3], [5], 1.0, 3, 3)
+
+#findn
+b = findn( speye(4) )
+@test (length(b[1]) == 4)
+@test (length(b[2]) == 4)
+
+#rotations
+a = sparse( [1,1,2,3], [1,3,4,1], [1,2,3,4] )
+
+@test rot180(a,2) == a
+@test rot180(a,1) == sparse( [3,3,2,1], [4,2,1,4], [1,2,3,4] )
+@test rotr90(a,1) == sparse( [1,3,4,1], [3,3,2,1], [1,2,3,4] )
+@test rotl90(a,1) == sparse( [4,2,1,4], [1,1,2,3], [1,2,3,4] )
+@test rotl90(a,2) == rot180(a)
+@test rotr90(a,2) == rot180(a)
+@test rotl90(a,3) == rotr90(a)
+@test rotr90(a,3) == rotl90(a)
+
+#ensure we have preserved the correct dimensions!
+
+a = speye(3,5)
+@test size(rot180(a)) == (3,5)
+@test size(rotr90(a)) == (5,3)
+@test size(rotl90(a)) == (5,3)

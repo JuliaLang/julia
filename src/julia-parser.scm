@@ -171,16 +171,19 @@
       (error "use \"^\" instead of \"**\""))
   (if (or (eof-object? (peek-char port)) (not (opchar? (peek-char port))))
       (symbol (string c)) ; 1-char operator
-      (let loop ((str (string c))
-		 (c   (peek-char port)))
-	(if (and (not (eof-object? c)) (opchar? c))
-	    (let* ((newop (string str c))
-		   (opsym (string->symbol newop)))
-	      (if (operator? opsym)
-		  (begin (read-char port)
-			 (loop newop (peek-char port)))
-		  (string->symbol str)))
-	    (string->symbol str)))))
+      (let ((str (let loop ((str (string c))
+			    (c   (peek-char port)))
+		   (if (and (not (eof-object? c)) (opchar? c))
+		       (let* ((newop (string str c))
+			      (opsym (string->symbol newop)))
+			 (if (operator? opsym)
+			     (begin (read-char port)
+				    (loop newop (peek-char port)))
+			     str))
+		       str))))
+	(if (equal? str "--")
+	    (syntax-deprecation-warning port str ""))
+	(string->symbol str))))
 
 (define (accum-digits c pred port lz)
   (if (and (not lz) (eqv? c #\_))
@@ -508,11 +511,12 @@
       #\newline "WARNING: deprecated syntax \"" what "\""
       (if (eq? current-filename 'none)
 	  ""
-	  (string " at " current-filename ":" (input-port-line (ts:port s))))
+	  (string " at " current-filename ":" (input-port-line (if (port? s) s (ts:port s)))))
       "."
       (if (equal? instead "")
 	  ""
-	  (string #\newline "Use \"" instead "\" instead." #\newline))))))
+	  (string #\newline "Use \"" instead "\" instead."))
+      #\newline))))
 
 ;; --- parser ---
 
