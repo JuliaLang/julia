@@ -160,22 +160,39 @@ code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
 code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
 code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
-function functionlocs(f::ANY, types=(Type...))
-    locs = Any[]
-    for m in methods(f, types)
-        lsd = m.func.code::LambdaStaticData
-        ln = lsd.line
-        if ln > 0
-            push!(locs, (find_source_file(string(lsd.file)), ln))
+function which(f::ANY, t::(Type...))
+    if isleaftype(t)
+        ms = methods(f, t)
+        isempty(ms) && error("no method found for the specified argument types")
+        length(ms)!=1 && error("no unique matching method for the specified argument types")
+        ms[1]
+    else
+        if !isa(f,Function)
+            t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
+            f = call
+        else
+            if !isgeneric(f)
+                error("argument is not a generic function")
+            end
         end
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
+        if m === nothing
+            error("no method found for the specified argument types")
+        end
+        m
     end
-    if length(locs) == 0
-       error("could not find function definition")
-    end
-    locs
 end
 
-functionloc(f::ANY, types=(Any...)) = functionlocs(f, types)[1]
+function functionloc(m::Method)
+    lsd = m.func.code::LambdaStaticData
+    ln = lsd.line
+    if ln <= 0
+        error("could not determine location of method definition")
+    end
+    (find_source_file(string(lsd.file)), ln)
+end
+
+functionloc(f::ANY, types=(Any...)) = functionloc(which(f,types))
 
 function function_module(f, types=(Any...))
     m = methods(f, types)

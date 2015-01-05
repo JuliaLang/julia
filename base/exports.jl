@@ -1080,7 +1080,6 @@ export
     code_native,
     fullname,
     functionloc,
-    functionlocs,
     help,
     isconst,
     isgeneric,
@@ -1092,6 +1091,7 @@ export
     module_parent,
     names,
     versioninfo,
+    which,
     whos,
     workspace,
 
