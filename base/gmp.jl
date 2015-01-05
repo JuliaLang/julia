@@ -373,7 +373,7 @@ function bigint_pow(x::BigInt, p::Integer)
     y < 0 && throw(DomainError("Cannot raise a BigInt to a negative power $y"))
     x == 1 && return x
     x == -1 && return isodd(y) ? x : -x
-    y > typemax(UInt) && throw(DomainError("Power must be ≤ $(typemax(UInt)), got $y"))
+    y > typemax(UInt) && throw(ArgumentError("Power must be ≤ $(typemax(UInt)), got $y"))
     return x^uint(y)
 end
 
