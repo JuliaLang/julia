@@ -3,7 +3,7 @@
 @test binomial(5,3) == 10
 @test binomial(2,1) == 2
 @test binomial(1,2) == 0
-@test binomial(-2,1) == -2
+@test binomial(-2,1) == -2 # let's agree
 @test binomial(2,-1) == 0
 
 #Issue 6154
