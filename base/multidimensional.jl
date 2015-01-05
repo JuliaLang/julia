@@ -57,6 +57,13 @@ end
 # indexing
 getindex(index::CartesianIndex, i::Integer) = getfield(index, i)
 
+stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->getfield(index,d))
+end
+stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->getfield(index,d))
+end
+
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
     :(@nref $N A d->getfield(index,d))
 end
