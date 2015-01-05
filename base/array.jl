@@ -295,19 +295,25 @@ end
 
 
 # logical indexing
+# (when the indexing is provided as an Array{Bool} or a BitArray we can be
+# sure about the behaviour and use unsafe_getindex; in the general case
+# we can't and must use getindex, otherwise silent corruption can happen)
 
-function getindex_bool_1d(A::Array, I::AbstractArray{Bool})
-    checkbounds(A, I)
-    n = sum(I)
-    out = similar(A, n)
-    c = 1
-    for i = 1:length(I)
-        if I[i]
-            out[c] = A[i]
-            c += 1
+stagedfunction getindex_bool_1d(A::Array, I::AbstractArray{Bool})
+    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
+    quote
+        checkbounds(A, I)
+        n = sum(I)
+        out = similar(A, n)
+        c = 1
+        for i = 1:length(I)
+            if $idxop(I, i)
+                @inbounds out[c] = A[i]
+                c += 1
+            end
         end
+        out
     end
-    out
 end
 
 getindex(A::Vector, I::AbstractVector{Bool}) = getindex_bool_1d(A, I)
@@ -365,30 +371,40 @@ end
 
 
 # logical indexing
+# (when the indexing is provided as an Array{Bool} or a BitArray we can be
+# sure about the behaviour and use unsafe_getindex; in the general case
+# we can't and must use getindex, otherwise silent corruption can happen)
 
-function assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
-    checkbounds(A, I)
-    for i = 1:length(I)
-        if I[i]
-            A[i] = x
+stagedfunction assign_bool_scalar_1d!(A::Array, x, I::AbstractArray{Bool})
+    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
+    quote
+        checkbounds(A, I)
+        for i = 1:length(I)
+            if $idxop(I, i)
+                @inbounds A[i] = x
+            end
         end
+        A
     end
-    A
 end
 
-function assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
-    checkbounds(A, I)
-    c = 1
-    for i = 1:length(I)
-        if I[i]
-            A[i] = X[c]
-            c += 1
+stagedfunction assign_bool_vector_1d!(A::Array, X::AbstractArray, I::AbstractArray{Bool})
+    idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
+    quote
+        checkbounds(A, I)
+        c = 1
+        for i = 1:length(I)
+            if $idxop(I, i)
+                x = X[c]
+                @inbounds A[i] = x
+                c += 1
+            end
         end
+        if length(X) != c-1
+            throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
+        end
+        A
     end
-    if length(X) != c-1
-        throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
-    end
-    A
 end
 
 setindex!(A::Array, X::AbstractArray, I::AbstractVector{Bool}) = assign_bool_vector_1d!(A, X, I)

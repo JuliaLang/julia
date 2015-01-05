@@ -48,7 +48,7 @@ const _msk64 = ~uint64(0)
 @inline _msk_end(B::BitArray) = _msk_end(length(B))
 num_bit_chunks(n::Int) = _div64(n+63)
 
-get_chunks_id(i::Integer) = _div64(int(i)-1)+1, _mod64(int(i)-1)
+@inline get_chunks_id(i::Integer) = _div64(int(i)-1)+1, _mod64(int(i)-1)
 
 function glue_src_bitchunks(src::Vector{UInt64}, k::Int, ks1::Int, msk_s0::UInt64, ls0::Int)
     @inbounds begin
@@ -282,7 +282,7 @@ convert{T,N}(::Type{Array{T}}, B::BitArray{N}) = convert(Array{T,N},B)
 function convert{T,N}(::Type{Array{T,N}}, B::BitArray{N})
     A = Array(T, size(B))
     Bc = B.chunks
-    for i = 1:length(A)
+    @inbounds for i = 1:length(A)
         A[i] = unsafe_bitgetindex(Bc, i)
     end
     return A
@@ -330,8 +330,11 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
 
 ## Indexing: getindex ##
 
-function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
-    return (Bc[_div64(i-1)+1] & (uint64(1)<<_mod64(i-1))) != 0
+@inline function unsafe_bitgetindex(Bc::Vector{UInt64}, i::Int)
+    i1, i2 = get_chunks_id(i)
+    u = uint64(1) << i2
+    @inbounds r = (Bc[i1] & u) != 0
+    return r
 end
 
 function getindex(B::BitArray, i::Int)
@@ -363,30 +366,35 @@ function getindex{T<:Real}(B::BitArray, I::AbstractVector{T})
 end
 
 # logical indexing
-
+# (when the indexing is provided as an Array{Bool} or a BitArray we can be
+# sure about the behaviour and use unsafe_getindex; in the general case
+# we can't and must use getindex, otherwise silent corruption can happen)
 # (multiple signatures for disambiguation)
 for IT in [AbstractVector{Bool}, AbstractArray{Bool}]
-    @eval function getindex(B::BitArray, I::$IT)
-        checkbounds(B, I)
-        n = sum(I)
-        X = BitArray(n)
-        Xc = X.chunks
-        Bc = B.chunks
-        ind = 1
-        for i = 1:length(I)
-            if I[i]
-                # faster X[ind] = B[i]
-                unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, i), ind)
-                ind += 1
+    @eval stagedfunction getindex(B::BitArray, I::$IT)
+        idxop = I <: Union(Array{Bool}, BitArray) ? :unsafe_getindex : :getindex
+        quote
+            checkbounds(B, I)
+            n = sum(I)
+            X = BitArray(n)
+            Xc = X.chunks
+            Bc = B.chunks
+            ind = 1
+            for i = 1:length(I)
+                if $idxop(I, i)
+                    # faster X[ind] = B[i]
+                    unsafe_bitsetindex!(Xc, unsafe_bitgetindex(Bc, i), ind)
+                    ind += 1
+                end
             end
+            return X
         end
-        return X
     end
 end
 
 ## Indexing: setindex! ##
 
-function unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i::Int)
+@inline function unsafe_bitsetindex!(Bc::Array{UInt64}, x::Bool, i::Int)
     i1, i2 = get_chunks_id(i)
     u = uint64(1) << i2
     @inbounds begin
@@ -407,33 +415,93 @@ function setindex!(B::BitArray, x::Bool, i::Int)
 end
 
 # logical indexing
+# (when the indexing is provided as an Array{Bool} or a BitArray we can be
+# sure about the behaviour and use unsafe_getindex; in the general case
+# we can't and must use getindex, otherwise silent corruption can happen)
 
-function setindex!(B::BitArray, x, I::AbstractArray{Bool})
+function setindex!(B::BitArray, x, I::BitArray)
     checkbounds(B, I)
     y = convert(Bool, x)
     Bc = B.chunks
-    @inbounds for i = 1:length(I)
-        # faster B[i] = y
-        I[i] && unsafe_bitsetindex!(Bc, y, i)
+    Ic = I.chunks
+    @assert length(Bc) == length(Ic)
+    @inbounds if y
+        for i = 1:length(Bc)
+            Bc[i] |= Ic[i]
+        end
+    else
+        for i = 1:length(Bc)
+            Bc[i] &= ~Ic[i]
+        end
     end
     return B
 end
 
-function setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+stagedfunction setindex!(B::BitArray, x, I::AbstractArray{Bool})
+    idxop = I <: Array{Bool} ? :unsafe_getindex : :getindex
+    quote
+        checkbounds(B, I)
+        y = convert(Bool, x)
+        Bc = B.chunks
+        for i = 1:length(I)
+            # faster I[i] && B[i] = y
+            $idxop(I, i) && unsafe_bitsetindex!(Bc, y, i)
+        end
+        return B
+    end
+end
+
+function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
     checkbounds(B, I)
     Bc = B.chunks
+    Ic = I.chunks
+    @assert length(Bc) == length(Ic)
+    lc = length(Bc)
+    last_chunk_len = Base._mod64(length(B)-1)+1
+
     c = 1
-    @inbounds for i = 1:length(I)
-        if I[i]
-            # faster B[i] = X[c]
-            unsafe_bitsetindex!(Bc, convert(Bool, X[c]), i)
-            c += 1
+    for i = 1:lc
+        @inbounds Imsk = Ic[i]
+        @inbounds C = Bc[i]
+        u = uint64(1)
+        for j = 1:(i < lc ? 64 : last_chunk_len)
+               if Imsk & u != 0
+                      x = convert(Bool, X[c])
+                      if x
+                             C |= u
+                      else
+                             C &= ~u
+                      end
+                      c += 1
+               end
+               u <<= 1
         end
+        @inbounds Bc[i] = C
     end
     if length(X) != c-1
         throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
     end
     return B
+end
+
+stagedfunction setindex!(B::BitArray, X::AbstractArray, I::AbstractArray{Bool})
+    idxop = I <: Array{Bool} ? :unsafe_getindex : :getindex
+    quote
+        checkbounds(B, I)
+        Bc = B.chunks
+        c = 1
+        for i = 1:length(I)
+            if $idxop(I, i)
+                # faster B[i] = X[c]
+                unsafe_bitsetindex!(Bc, convert(Bool, X[c]), i)
+                c += 1
+            end
+        end
+        if length(X) != c-1
+            throw(DimensionMismatch("assigned $(length(X)) elements to length $(c-1) destination"))
+        end
+        return B
+    end
 end
 
 ## Dequeue functionality ##
