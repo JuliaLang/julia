@@ -560,6 +560,8 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     char *name = (char*)alloca(len+1);
     memcpy(name, str, len);
     name[len] = '\0';
+    if (strlen(name) != len)
+        jl_error("Symbol name may not contain \\0");
     return jl_symbol(name);
 }
 
@@ -588,6 +590,8 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     memcpy(name+2, str, len);
     n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
     memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
+    if (strlen(name) != len+3+sizeof(gs_name)-(n-gs_name)-1)
+        jl_error("Symbol name may not contain \\0");
     gs_ctr++;
     return jl_symbol(name);
 }

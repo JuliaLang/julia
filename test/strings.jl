@@ -1015,6 +1015,14 @@ let
     @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
 end
 
+@test symbol("asdf") === :asdf
+@test startswith(string(gensym("asdf")),"##asdf#")
+@test gensym("asdf") != gensym("asdf")
+@test gensym() != gensym()
+@test startswith(string(gensym()),"##")
+@test_throws ErrorException symbol("ab\0")
+@test_throws ErrorException gensym("ab\0")
+
 # issue #6949
 let f =IOBuffer(),
     x = split("1 2 3")
