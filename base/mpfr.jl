@@ -462,7 +462,7 @@ end
 
 function factorial(x::BigFloat)
     if x < 0
-        throw(DomainError("factorial(n) is undefined for n ≤ 0"))
+        throw(DomainError("factorial(n) is undefined for n < 0"))
     end
     if !isinteger(x)
         throw(DomainError("factorial(n) is undefined for non-integer values"))
