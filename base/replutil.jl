@@ -94,11 +94,10 @@ function showerror(io::IO, e::LoadError, bt)
 end
 
 function showerror(io::IO, e::DomainError, bt)
+    println(io, "DomainError")
     if isdefined(e, :msg)
-        println(io, "DomainError")
         print(io, e.msg)
     else
-        println(io, "DomainError")
         for b in bt
             code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
             if length(code) == 5 && !code[4]  # code[4] == fromC
