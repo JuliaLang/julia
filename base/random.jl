@@ -226,7 +226,7 @@ rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
 
 # MersenneTwister
 
-rand{T<:Union(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
+@inline rand{T<:Union(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
