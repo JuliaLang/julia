@@ -1645,24 +1645,12 @@ JL_CALLABLE(jl_apply_generic)
     return res;
 }
 
-// invoke()
-// this does method dispatch with a set of types to match other than the
-// types of the actual arguments. this means it sometimes does NOT call the
-// most specific method for the argument types, so we need different logic.
-// first we use the given types to look up a definition, then we perform
-// caching and specialization within just that definition.
-// every definition has its own private method table for this purpose.
-//
-// NOTE: assumes argument type is a subtype of the lookup type.
-jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
-                         jl_value_t **args, size_t nargs)
+DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_tuple_t *types)
 {
     assert(jl_is_gf(gf));
     jl_methtable_t *mt = jl_gf_mtable(gf);
-
     jl_methlist_t *m = mt->defs;
     size_t typelen = jl_tuple_len(types);
-    size_t i;
     jl_value_t *env = (jl_value_t*)jl_false;
 
     while (m != JL_NULL) {
@@ -1678,7 +1666,29 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         m = m->next;
     }
 
-    if (m == JL_NULL) {
+    if (m == JL_NULL)
+        return jl_nothing;
+    return (jl_value_t*)m;
+}
+
+// invoke()
+// this does method dispatch with a set of types to match other than the
+// types of the actual arguments. this means it sometimes does NOT call the
+// most specific method for the argument types, so we need different logic.
+// first we use the given types to look up a definition, then we perform
+// caching and specialization within just that definition.
+// every definition has its own private method table for this purpose.
+//
+// NOTE: assumes argument type is a subtype of the lookup type.
+jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
+                         jl_value_t **args, size_t nargs)
+{
+    assert(jl_is_gf(gf));
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+    jl_methlist_t *m = (jl_methlist_t*)jl_gf_invoke_lookup(gf, types);
+    size_t i;
+
+    if ((jl_value_t*)m == jl_nothing) {
         jl_no_method_error(gf, args, nargs);
         // unreachable
     }

@@ -265,6 +265,6 @@ const base64 = base64encode
 @deprecate randbool(r::AbstractRNG, dims::Dims)    bitrand(r, dims)
 @deprecate randbool(r::AbstractRNG, dims::Int...)  bitrand(r, dims)
 
-@deprecate which(f, t::(Type...))  methods(f, t)[1]
-
 @deprecate beginswith startswith
+
+@deprecate functionlocs(f,t)  map(functionloc, methods(f,t))

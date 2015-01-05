@@ -101,17 +101,21 @@ Getting Around
 
 .. function:: which(f, types)
 
-   Return the method of ``f`` (a ``Method`` object) that will be called for arguments with the given types.
+   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
+
+   If ``types`` is an abstract type, then the method that would be called by ``invoke``
+   is returned.
 
 .. function:: @which
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``which`` function on the resulting expression
+   Evaluates the arguments to the specified function call, and returns the ``Method`` object
+   for the method that would be called for those arguments.
 
 .. function:: methods(f, [types])
 
-   Show all methods of ``f`` with their argument types.
+   Returns the method table for ``f``.
 
-   If ``types`` is specified, an array of methods whose types match is returned.
+   If ``types`` is specified, returns an array of methods whose types match.
 
 .. function:: methodswith(typ[, module or function][, showparents])
 
@@ -889,9 +893,9 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
-.. function:: functionlocs(f::Function, types)
+.. function:: functionloc(m::Method)
 
-   Returns an array of the results of ``functionloc`` for all matching definitions.
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
 Internals
 ---------
