@@ -310,7 +310,7 @@ for (fJ, fC) in ((:-, :neg), (:~, :com))
 end
 
 function <<(x::BigInt, c::Int32)
-    c < 0 && throw(DomainError())
+    c < 0 && throw(DomainError("<< argument must be ≥ 0, got $c"))
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
@@ -318,7 +318,7 @@ function <<(x::BigInt, c::Int32)
 end
 
 function >>(x::BigInt, c::Int32)
-    c < 0 && throw(DomainError())
+    c < 0 && throw(DomainError(">> argument must be ≥ 0, got $c"))
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
@@ -352,7 +352,7 @@ cmp(x::BigInt, y::Integer) = cmp(x,big(y))
 cmp(x::Integer, y::BigInt) = -cmp(y,x)
 
 function cmp(x::BigInt, y::CdoubleMax)
-    isnan(y) && throw(DomainError())
+    isnan(y) && throw(DomainError("cmp(BigInt, NAN) is undefined"))
     ccall((:__gmpz_cmp_d, :libgmp), Int32, (Ptr{BigInt}, Cdouble), &x, y)
 end
 cmp(x::CdoubleMax, y::BigInt) = -cmp(y,x)
@@ -369,11 +369,11 @@ function ^(x::BigInt, y::UInt)
     return z
 end
 
-function bigint_pow(x::BigInt, y::Integer)
-    if y<0; throw(DomainError()); end
-    if x== 1; return x; end
-    if x==-1; return isodd(y) ? x : -x; end
-    if y>typemax(UInt); throw(DomainError()); end
+function bigint_pow(x::BigInt, p::Integer)
+    y < 0 && throw(DomainError("Cannot raise a BigInt to a negative power $y"))
+    x == 1 && return x
+    x == -1 && return isodd(y) ? x : -x
+    y > typemax(UInt) && throw(DomainError("Power must be ≤ $(typemax(UInt)), got $y"))
     return x^uint(y)
 end
 
@@ -383,7 +383,7 @@ end
 ^(x::Integer, y::BigInt ) = bigint_pow(BigInt(x), y)
 
 function powermod(x::BigInt, p::BigInt, m::BigInt)
-    p < 0 && throw(DomainError())
+    p < 0 && throw(DomainError("Cannot raise a BigInt to a negative power $p"))
     r = BigInt()
     ccall((:__gmpz_powm, :libgmp), Void,
           (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}),
@@ -465,14 +465,14 @@ dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
-    2 <= b <= 62 || error("invalid base: $b")
+    2 <= b <= 62 || throw(ArgumentError("Base must be 2 ≤ n ≤ 62, got $n"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     len = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
-    b < 2 && throw(DomainError())
+    b < 2 && throw(ArgumentError("Base must be ≥ 2, got $b"))
     if ispow2(b)
         int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
     else
