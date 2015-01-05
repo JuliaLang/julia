@@ -461,8 +461,11 @@ function bessely(n::Integer, x::BigFloat)
 end
 
 function factorial(x::BigFloat)
-    if x < 0 || !isinteger(x)
-        throw(DomainError())
+    if x < 0
+        throw(DomainError("factorial(n) is undefined for n ≤ 0"))
+    end
+    if !isinteger(x)
+        throw(DomainError("factorial(n) is undefined for non-integer values"))
     end
     ui = convert(Culong, x)
     z = BigFloat()
