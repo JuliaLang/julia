@@ -165,6 +165,7 @@ end
 
 @test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
 @test binomial(BigInt(1), -1) == BigInt(0)
+@test binomial(BigInt(1), 2)  == BigInt(0)
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
 
