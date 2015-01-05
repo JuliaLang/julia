@@ -325,6 +325,53 @@ Once you do this, the package manager knows your GitHub user name and can config
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
+Guidelines for Naming a Package
+-------------------------------
+
+Package names should be sensible to most Julia users, *even to those who are
+not domain experts*.
+
+1. Avoid jargon. In particular, avoid acronyms unless there is minimal
+   possibility of confusion.
+
+  * It's ok to say ``USA`` if you're talking about the USA.
+
+  * It's not ok to say ``PMA``, even if you're talking about positive mental
+    attitude.
+
+2. Packages that provide most of their functionality in association with a new
+   type should have pluralized names.
+
+  * ``DataFrames`` provides the ``DataFrame`` type.
+
+  * ``BloomFilters`` provides the ``BloomFilter`` type.
+
+  * In contrast, ``JuliaParser`` provides no new type, but instead new
+    functionality in the ``JuliaParser.parse()`` function.
+
+3. Err on the side of clarity, even if clarity seems long-winded to you.
+
+  * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
+    even though the latter are shorter.
+
+4. A less systematic name may suit a package that implements one of several
+   possible approaches to its domain.
+
+  * Julia does not have a single comprehensive plotting package. Instead,
+    ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
+    unique approach based on a particular design philosophy.
+  
+  * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
+    many well-established sorting algorithms.
+
+5. Packages that wrap external libraries or programs should be named after
+   those libraries or programs.
+   
+  * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
+    a web search.
+
+  * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
+
 Generating a New Package
 ------------------------
 
