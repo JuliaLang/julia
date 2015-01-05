@@ -310,7 +310,7 @@ for (fJ, fC) in ((:-, :neg), (:~, :com))
 end
 
 function <<(x::BigInt, c::Int32)
-    c < 0 && throw(DomainError("<< argument must be ≥ 0, got $c"))
+    c < 0  && return BigInt(0)
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_mul_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
@@ -318,7 +318,7 @@ function <<(x::BigInt, c::Int32)
 end
 
 function >>(x::BigInt, c::Int32)
-    c < 0 && throw(DomainError(">> argument must be ≥ 0, got $c"))
+    c < 0  && return BigInt(0)
     c == 0 && return x
     z = BigInt()
     ccall((:__gmpz_fdiv_q_2exp, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &x, c)
