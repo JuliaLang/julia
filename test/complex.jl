@@ -197,6 +197,9 @@ end
 @test isequal(complex(-0.0,-0.0)^complex(-0.0, 0.0), complex(1.0, 0.0))
 @test isequal(complex(-0.0,-0.0)^complex(-0.0,-0.0), complex(1.0, 0.0))
 
+@test_approx_eq complex(0.0,1.0)^complex(2.0,0) complex(-1.0, 0.0)
+@test_approx_eq complex(1.0,2.0)^complex(3.0,0) complex(-11.0, -2.0)
+
 # sinh: has properties
 #  sinh(conj(z)) = conj(sinh(z))
 #  sinh(-z) = -sinh(z)
@@ -720,7 +723,26 @@ end
 
 # inv
 @test inv(1e300+0im) == 1e-300 - 0.0im
+@test inv(0+1e300im) == 0.0 - 1e-300im
 
 # issue #7904
 @test log10(10+0im) === 1.0 + 0.0im
 @test log2(2+0im) === 1.0 + 0.0im
+
+# cis
+@test_approx_eq cis(0.0+1.0im) 0.367879441171442321595523770161460867445811131031767834507836+0.0im
+@test_approx_eq cis(1.0+0.0im) 0.54030230586813971740093660744297660373231042061+0.84147098480789650665250232163029899962256306079im
+@test_approx_eq cis(pi) -1.0+0.0im
+@test_approx_eq cis(pi/2) 0.0+1.0im
+
+# exp2
+@test exp2(0.0+0.0im) == 1.0+0.0im
+@test exp2(1.0+0.0im) == 2.0+0.0im
+#wolframalpha
+@test_approx_eq exp2(1.0+3.0im) -0.9739888359315627962096198412+1.74681016354974281701922im
+
+# exp10
+@test exp10(0.0+0.0im) == 1.0+0.0im
+@test exp10(1.0+0.0im) == 10.0+0.0im
+#wolframalpha
+@test_approx_eq exp10(1.0+2.0im) -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
