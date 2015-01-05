@@ -9,16 +9,17 @@ ZSBzaG9ydCB2ZWhlbWVuY2Ugb2YgYW55IGNhcm5hbCBwbGVhc3VyZS4="""
 
 # Encode and decode
 fname = tempname()
-f = open(fname, "w")
-opipe = Base64EncodePipe(f)
-write(opipe,inputText)
-close(opipe)
-close(f)
-f = open(fname, "r")
-ipipe = Base64DecodePipe(f)
-@test  readall(ipipe) == inputText
-close(ipipe)
-close(f)
+open(fname, "w") do f
+    opipe = Base64EncodePipe(f)
+    write(opipe,inputText)
+    close(opipe)
+end
+
+open(fname, "r") do f
+    ipipe = Base64DecodePipe(f)
+    @test readall(ipipe) == inputText
+    close(ipipe)
+end
 rm(fname)
 
 # Encode to string and decode
