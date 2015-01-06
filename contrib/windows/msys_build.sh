@@ -159,7 +159,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-for lib in LLVM ARPACK BLAS LAPACK FFTW \
+for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
@@ -185,7 +185,6 @@ if [ -n "$USEMSVC" ]; then
 
   # Openlibm doesn't build well with MSVC right now
   echo 'USE_SYSTEM_OPENLIBM = 1' >> Make.user
-  echo 'USE_SYSTEM_SUITESPARSE = 1' >> Make.user
   # Since we don't have a static library for openlibm
   echo 'override UNTRUSTED_SYSTEM_LIBM = 0' >> Make.user
 
@@ -195,13 +194,6 @@ if [ -n "$USEMSVC" ]; then
   echo 'override CC += -TP' >> Make.user
 else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
-  echo 'override STAGE3_DEPS += suitesparse-wrapper' >> Make.user
-
-  # hack so all of suitesparse doesn't rebuild
-  echo 'override SUITESPARSE_VER = 4.4.1' >> Make.user
-  make -C deps SuiteSparse-4.4.1/Makefile
-  touch deps/SuiteSparse-4.4.1/UMFPACK/Lib/libumfpack.a
-  touch usr/bin/libspqr.dll
 fi
 
 make -j2
