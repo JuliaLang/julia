@@ -86,7 +86,8 @@ void parse_opts(int *argcp, char ***argvp)
 	opt_dump_bitcode,
 	opt_compile,
 	opt_depwarn,
-	opt_inline
+	opt_inline,
+        opt_math_mode
     };
     static const char shortopts[] = "+H:hJ:C:O";
     static const struct option longopts[] = {
@@ -105,6 +106,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "compile",       required_argument, 0, opt_compile },
         { "depwarn",       required_argument, 0, opt_depwarn },
         { "inline",        required_argument, 0, opt_inline },
+        { "math-mode",     required_argument, 0, opt_math_mode },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -215,6 +217,16 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_compileropts.can_inline = 0;
             else {
                 ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case opt_math_mode:
+            if (!strcmp(optarg, "ieee"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_OFF;
+            else if (!strcmp(optarg, "user"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_DEFAULT;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --math-mode (%s)\n", optarg);
                 exit(1);
             }
             break;
