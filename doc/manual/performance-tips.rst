@@ -546,6 +546,10 @@ properties.
 -  Use :obj:`@inbounds` to eliminate array bounds checking within expressions.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
+-  Use :obj:`@fastmath` to allow floating point optimizations that are
+   correct for real numbers, but lead to differences for IEEE numbers.
+   Be careful when doing this, as this may change numerical results.
+   This corresponds to the ``-ffast-math`` option of clang.
 -  Write :obj:`@simd` in front of ``for`` loops that are amenable to vectorization.
    **This feature is experimental** and could change or disappear in future
    versions of Julia.
