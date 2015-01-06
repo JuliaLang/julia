@@ -9,7 +9,7 @@ export
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
         bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
-        exp, exp2, exponent, factorial, floor, hypot, isinteger,
+        exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
@@ -304,6 +304,12 @@ function -(c::BigInt, x::BigFloat)
     z = BigFloat()
     ccall((:mpfr_z_sub, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigInt}, Ptr{BigFloat}, Int32), &z, &c, &x, ROUNDING_MODE[end])
     return z
+end
+
+function fma(x::BigFloat, y::BigFloat, z::BigFloat)
+    r = BigFloat()
+    ccall(("mpfr_fma",:libmpfr), Int32, (Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Ptr{BigFloat}, Int32), &r, &x, &y, &z, ROUNDING_MODE[end])
+    return r
 end
 
 

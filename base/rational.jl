@@ -176,6 +176,8 @@ end
 /(x::Rational, y::Rational) = x//y
 /(x::Rational, z::Complex ) = inv(z/x)
 
+fma(x::Rational, y::Rational, z::Rational) = x*y+z
+
 ==(x::Rational, y::Rational) = (x.den == y.den) & (x.num == y.num)
 ==(x::Rational, y::Integer ) = (x.den == 1) & (x.num == y)
 ==(x::Integer , y::Rational) = y == x
