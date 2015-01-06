@@ -32,7 +32,7 @@ Profiling
 .. function:: print([io::IO = STDOUT,] data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to ``io``. This variant is used to examine
-   results exported by a previous call to ``Profile.retrieve()``.
+   results exported by a previous call to :func:`.retrieve`.
    Supply the vector ``data`` of backtraces and a dictionary
    ``lidict`` of line information.
 
@@ -49,12 +49,12 @@ Profiling
 .. function:: fetch() -> data
 
    Returns a reference to the internal buffer of backtraces. Note that
-   subsequent operations, like ``Profile.clear()``, can affect
+   subsequent operations, like :func:`.clear`, can affect
    ``data`` unless you first make a copy. Note that the values in
    ``data`` have meaning only on this machine in the current session,
    because it depends on the exact memory addresses used in
    JIT-compiling. This function is primarily for internal use;
-   ``Profile.retrieve()`` may be a better choice for most users.
+   :func:`retrieve` may be a better choice for most users.
 
 .. function:: retrieve() -> data, lidict
 
@@ -69,6 +69,6 @@ Profiling
 
    Clears any stored memory allocation data when running julia with
    ``--track-allocation``.  Execute the command(s) you want to test
-   (to force JIT-compilation), then call ``clear_malloc_data()``.
+   (to force JIT-compilation), then call :func:`clear_malloc_data`.
    Then execute your command(s) again, quit julia, and examine the
    resulting ``*.mem`` files.
