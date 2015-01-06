@@ -77,10 +77,6 @@ void __cdecl fpreset (void);
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #endif
-#if defined(__linux__)
-//#define _GNU_SOURCE
-#include <sched.h>   // for setting CPU affinity
-#endif
 
 DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdbbacktrace();
@@ -971,18 +967,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         if (SIGSTKSZ < 1<<16)
             sig_stack_size = 1<<16;
 #endif
-    }
-#endif
-
-#if defined(__linux__)
-    int ncores = jl_cpu_cores();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
     }
 #endif
 
