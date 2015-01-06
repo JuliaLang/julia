@@ -6,7 +6,7 @@ const Bottom = Union()
 
 # constructors for Core types in boot.jl
 call(T::Type{BoundsError}) = Core.call(T)
-call(T::Type{BoundsError}, args...) = Core.call(T, args...)
+call(T::Type{BoundsError}, msg) = Core.call(T, msg)
 call(T::Type{DomainError}) = Core.call(T)
 call(T::Type{DomainError}, msg) = Core.call(T, msg)
 call(T::Type{DivideError}) = Core.call(T)
