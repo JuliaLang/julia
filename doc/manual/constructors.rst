@@ -1,5 +1,7 @@
 .. _man-constructors:
 
+.. currentmodule:: Base
+
 **************
  Constructors  
 **************
@@ -396,10 +398,10 @@ outer constructor method:
 
     julia> Point(x::Int64, y::Float64) = Point(convert(Float64,x),y);
 
-This method uses the ``convert`` function to explicitly convert ``x`` to
-``Float64`` and then delegates construction to the general constructor
-for the case where both arguments are ``Float64``. With this method
-definition what was previously a "no method" error now successfully
+This method uses the :func:`convert` function to explicitly convert ``x`` to
+:class:`Float64` and then delegates construction to the general constructor
+for the case where both arguments are :class:`Float64`. With this method
+definition what was previously a :exc:`MethodError` now successfully
 creates a point of type ``Point{Float64}``:
 
 .. doctest::
@@ -419,7 +421,7 @@ However, other similar calls still don't work:
 
 For a much more general way of making all such calls work sensibly, see
 :ref:`man-conversion-and-promotion`. At the risk
-of spoiling the suspense, we can reveal here that the all it takes is
+of spoiling the suspense, we can reveal here that all it takes is
 the following outer method definition to make all calls to the general
 ``Point`` constructor work as one would expect:
 
@@ -428,9 +430,9 @@ the following outer method definition to make all calls to the general
     julia> Point(x::Real, y::Real) = Point(promote(x,y)...);
 
 The ``promote`` function converts all its arguments to a common type
-— in this case ``Float64``. With this method definition, the ``Point``
+— in this case :class:`Float64`. With this method definition, the ``Point``
 constructor promotes its arguments the same way that numeric operators
-like ``+`` do, and works for all kinds of real numbers:
+like :obj:`+` do, and works for all kinds of real numbers:
 
 .. doctest::
 
@@ -489,13 +491,13 @@ which implements Julia's :ref:`man-rational-numbers`::
     end
 
 The first line — ``immutable Rational{T<:Int} <: Real`` — declares that
-``Rational`` takes one type parameter of an integer type, and is itself
+:class:`Rational` takes one type parameter of an integer type, and is itself
 a real type. The field declarations ``num::T`` and ``den::T`` indicate
 that the data held in a ``Rational{T}`` object are a pair of integers of
 type ``T``, one representing the rational value's numerator and the
 other representing its denominator.
 
-Now things get interesting. ``Rational`` has a single inner constructor
+Now things get interesting. :class:`Rational` has a single inner constructor
 method which checks that both of ``num`` and ``den`` aren't zero and
 ensures that every rational is constructed in "lowest terms" with a
 non-negative denominator. This is accomplished by dividing the given
@@ -504,10 +506,10 @@ computed using the ``gcd`` function. Since ``gcd`` returns the greatest
 common divisor of its arguments with sign matching the first argument
 (``den`` here), after this division the new value of ``den`` is
 guaranteed to be non-negative. Because this is the only inner
-constructor for ``Rational``, we can be certain that ``Rational``
+constructor for :class:`Rational`, we can be certain that :class:`Rational`
 objects are always constructed in this normalized form.
 
-``Rational`` also provides several outer constructor methods for
+:class:`Rational` also provides several outer constructor methods for
 convenience. The first is the "standard" general constructor that infers
 the type parameter ``T`` from the type of the numerator and denominator
 when they have the same type. The second applies when the given
@@ -518,17 +520,17 @@ turns integer values into rationals by supplying a value of ``1`` as the
 denominator.
 
 Following the outer constructor definitions, we have a number of methods
-for the ``//`` operator, which provides a syntax for writing rationals.
-Before these definitions, ``//`` is a completely undefined operator with
+for the :obj:`//` operator, which provides a syntax for writing rationals.
+Before these definitions, :obj:`//` is a completely undefined operator with
 only syntax and no meaning. Afterwards, it behaves just as described in
 :ref:`man-rational-numbers`
 — its entire behavior is defined in these few lines. The first and most
-basic definition just makes ``a//b`` construct a ``Rational`` by
-applying the ``Rational`` constructor to ``a`` and ``b`` when they are
-integers. When one of the operands of ``//`` is already a rational
+basic definition just makes ``a//b`` construct a :class:`Rational` by
+applying the :class:`Rational` constructor to ``a`` and ``b`` when they are
+integers. When one of the operands of :obj:`//` is already a rational
 number, we construct a new rational for the resulting ratio slightly
 differently; this behavior is actually identical to division of a
-rational with an integer. Finally, applying ``//`` to complex integral
+rational with an integer. Finally, applying :obj:`//` to complex integral
 values creates an instance of ``Complex{Rational}`` — a complex number
 whose real and imaginary parts are rationals:
 
@@ -543,8 +545,8 @@ whose real and imaginary parts are rationals:
     julia> ans <: Complex{Rational}
     false
 
-Thus, although the ``//`` operator usually returns an instance of
-``Rational``, if either of its arguments are complex integers, it will
+Thus, although the :obj:`//` operator usually returns an instance of
+:class:`Rational`, if either of its arguments are complex integers, it will
 return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:

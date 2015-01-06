@@ -37,3 +37,4 @@
    style-guide
    faq
    noteworthy-differences
+   unicode-input

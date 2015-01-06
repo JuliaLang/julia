@@ -432,3 +432,17 @@ end
 # issue #8225
 @test_throws BoundsError sparse([0],[-1],[1.0],2,2)
 
+# issue #8363
+@test_throws BoundsError sparsevec([-1=>1,1=>2])
+
+# issue #8976
+@test conj(sparse([1im])) == sparse(conj([1im]))
+@test conj!(sparse([1im])) == sparse(conj!([1im]))
+
+# issue #9525
+@test_throws BoundsError sparse([3], [5], 1.0, 3, 3)
+
+#findn
+b = findn( speye(4) )
+@test (length(b[1]) == 4)
+@test (length(b[2]) == 4)

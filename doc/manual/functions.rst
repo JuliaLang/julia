@@ -1,5 +1,7 @@
 .. _man-functions:
 
+.. currentmodule:: Base
+
 ***********
  Functions  
 ***********
@@ -53,7 +55,7 @@ and can be passed around like any value:
 
 There are two other ways that functions can be applied: using special
 operator syntax for certain function names (see `Operators Are
-Functions <#operators-are-functions>`_ below), or with the ``apply``
+Functions <#operators-are-functions>`_ below), or with the :func:`apply`
 function:
 
 .. doctest::
@@ -61,8 +63,14 @@ function:
     julia> apply(f,2,3)
     5
 
-The ``apply`` function applies its first argument — a function object —
+:func:`apply` applies its first argument — a function object —
 to its remaining arguments.
+
+As with variables, Unicode can also be used for function names::
+
+    julia> ∑(x,y) = x + y
+    ∑ (generic function with 1 method)
+
 
 Argument Passing Behavior
 -------------------------
@@ -158,7 +166,7 @@ just as you would any other function:
 The infix form is exactly equivalent to the function application form —
 in fact the former is parsed to produce the function call internally.
 This also means that you can assign and pass around operators such as
-``+`` and ``*`` just like you would with other function values:
+:func:`+` and :func:`*` just like you would with other function values:
 
 .. doctest:: f-plus
 
@@ -176,18 +184,18 @@ Operators With Special Names
 A few special expressions correspond to calls to functions with non-obvious
 names. These are:
 
-=================== ==============
+=================== ==================
 Expression          Calls
-=================== ==============
-``[A B C ...]``     ``hcat``
-``[A, B, C, ...]``  ``vcat``
-``[A B; C D; ...]`` ``hvcat``
-``A'``              ``ctranspose``
-``A.'``             ``transpose``
-``1:n``             ``colon``
-``A[i]``            ``getindex``
-``A[i]=x``          ``setindex!``
-=================== ==============
+=================== ==================
+``[A B C ...]``     :func:`hcat`
+``[A, B, C, ...]``  :func:`vcat`
+``[A B; C D; ...]`` :func:`hvcat`
+``A'``              :func:`ctranspose`
+``A.'``             :func:`transpose`
+``1:n``             :func:`colon`
+``A[i]``            :func:`getindex`
+``A[i]=x``          :func:`setindex!`
+=================== ==================
 
 These functions are included in the ``Base.Operators`` module even
 though they do not have operator-like names.
@@ -212,7 +220,7 @@ without being given a name:
 This creates an unnamed function taking one argument *x* and returning the
 value of the polynomial *x*\ ^2 + 2\ *x* - 1 at that value. The primary
 use for anonymous functions is passing them to functions which take
-other functions as arguments. A classic example is the ``map`` function,
+other functions as arguments. A classic example is :func:`map`,
 which applies a function to each value of an array and returns a new
 array containing the resulting values:
 
@@ -225,7 +233,7 @@ array containing the resulting values:
      2.0
 
 This is fine if a named function effecting the transform one wants
-already exists to pass as the first argument to ``map``. Often, however,
+already exists to pass as the first argument to :func:`map`. Often, however,
 a ready-to-use, named function does not exist. In these situations, the
 anonymous function construct allows easy creation of a single-use
 function object without needing a name:
@@ -410,7 +418,7 @@ Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore
 might not need to be passed explicitly in every call. For example, the
-library function ``parseint(num,base)`` interprets a string as a number
+library function :func:`parseint(num,base) <parseint>` interprets a string as a number
 in some base. The ``base`` argument defaults to ``10``. This behavior can be
 expressed concisely as::
 
@@ -465,14 +473,14 @@ signature::
 Extra keyword arguments can be collected using ``...``, as in varargs
 functions::
 
-    function f(x; args...)
+    function f(x; y=0, args...)
         ###
     end
 
 Inside ``f``, ``args`` will be a collection of ``(key,value)`` tuples,
 where each ``key`` is a symbol. Such collections can be passed as keyword
-arguments using a semicolon in a call, ``f(x; k...)``. Dictionaries
-can be used for this purpose.
+arguments using a semicolon in a call, e.g. ``f(x, z=1; args...)``.
+Dictionaries can be used for this purpose.
 
 Keyword argument default values are evaluated only when necessary
 (when a corresponding keyword argument is not passed), and in
@@ -485,19 +493,21 @@ Evaluation Scope of Default Values
 
 Optional and keyword arguments differ slightly in how their default
 values are evaluated. When optional argument default expressions are
-evaluated, only *previous* arguments are in scope. For example, given
-this definition::
+evaluated, only *previous* arguments are in scope. In contrast, *all*
+the arguments are in scope when keyword arguments default expressions
+are evaluated. For example, given this definition::
 
     function f(x, a=b, b=1)
         ###
     end
 
-the ``b`` in ``a=b`` refers to the ``b`` in an outer scope, not the
+the ``b`` in ``a=b`` refers to a ``b`` in an outer scope, not the
 subsequent argument ``b``. However, if ``a`` and ``b`` were keyword
 arguments instead, then both would be created in the same scope and
-``a=b`` would result in an undefined variable error (since the
-default expressions are evaluated left-to-right, and ``b`` has not
-been assigned yet).
+the ``b`` in ``a=b`` would refer the the subsequent argument ``b``
+(shadowing any ``b`` in an outer scope), which would result in an
+undefined variable error (since the default expressions are evaluated
+left-to-right, and ``b`` has not been assigned yet).
 
 
 Block Syntax for Function Arguments
@@ -506,7 +516,7 @@ Block Syntax for Function Arguments
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially
 awkward to write when the function argument requires multiple lines. As
-an example, consider calling ``map`` on a function with several cases::
+an example, consider calling :func:`map` on a function with several cases::
 
     map(x->begin
                if x < 0 && iseven(x)
@@ -532,20 +542,20 @@ Julia provides a reserved word ``do`` for rewriting this code more clearly::
     end
 
 The ``do x`` syntax creates an anonymous function with argument ``x``
-and passes it as the first argument to ``map``. Similarly, ``do a,b``
+and passes it as the first argument to :func:`map`. Similarly, ``do a,b``
 would create a two-argument anonymous function, and a plain ``do``
 would declare that what follows is an anonymous function of the form
 ``() -> ...``.
 
 How these arguments are initialized depends on the "outer" function;
-here, ``map`` will sequentially set ``x`` to ``A``, ``B``, ``C``,
+here, :func:`map` will sequentially set ``x`` to ``A``, ``B``, ``C``,
 calling the anonymous function on each, just as would happen in the
 syntax ``map(func, [A, B, C])``.
 
 This syntax makes it easier to use functions to effectively extend the
 language, since calls look like normal code blocks. There are many
-possible uses quite different from ``map``, such as managing system
-state. For example, there is a version of ``open`` that runs code
+possible uses quite different from :func:`map`, such as managing system
+state. For example, there is a version of :func:`open` that runs code
 ensuring that the opened file is eventually closed::
 
     open("outfile", "w") do io
@@ -563,10 +573,10 @@ This is accomplished by the following definition::
         end
     end
 
-In contrast to the ``map`` example, here ``io`` is initialized by the
+In contrast to the :func:`map` example, here ``io`` is initialized by the
 *result* of ``open("outfile", "w")``.  The stream is then passed to
 your anonymous function, which performs the writing; finally, the
-``open`` function ensures that the stream is closed after your
+:func:`open` function ensures that the stream is closed after your
 function exits.  The ``try/finally`` construct will be described in
 :ref:`man-control-flow`.
 

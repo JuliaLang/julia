@@ -165,7 +165,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
         prevempty = offset == ovec[2]
         if overlap
             if !prevempty
-                offset = int32(nextind(str, offset + 1) - 1)
+                offset = int32(ovec[1]+1)
             end
         else
             offset = ovec[2]

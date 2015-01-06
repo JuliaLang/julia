@@ -30,7 +30,7 @@ volatile int jl_in_stackwalk = 0;
 #include <dlfcn.h>   // for dladdr
 #endif
 
-jl_jmp_buf jl_base_ctx;
+DLLEXPORT jl_jmp_buf jl_base_ctx;
 
 /* This probing code is derived from Douglas Jones' user thread library */
 

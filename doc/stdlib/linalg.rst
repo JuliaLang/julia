@@ -1,7 +1,11 @@
 .. _stdlib-linalg:
 
-Linear Algebra
---------------
+*****************
+ Linear Algebra
+****************
+
+Standard Functions
+------------------
 
 .. module:: Base.LinAlg
 
@@ -20,10 +24,12 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor. For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
 
 .. function:: dot(x, y)
+              ⋅(x,y)
 
    Compute the dot product. For complex vectors, the first vector is conjugated.
 
 .. function:: cross(x, y)
+              ×(x,y)
 
    Compute the cross product of two 3-vectors.
 
@@ -52,7 +58,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ----------------------- ------------------------- ----------------------------------------
       :func:`Matrix`           ``LU``                   ``F[:L]*F[:U] == A[F[:p], :]``
       :func:`Tridiagonal`      ``LU{T,Tridiagonal{T}}``  N/A
-      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]``
+      :func:`SparseMatrixCSC`  ``UmfpackLU``            ``F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]``
       ======================= ========================= ========================================
 
    The individual components of the factorization ``F`` can be accessed by indexing:
@@ -184,14 +190,14 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
    details on the ``balance`` keyword argument.
    
-   **Example**::
-   
-    julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-    ([1.0,3.0,18.0],
-    3x3 Array{Float64,2}:
-     1.0  0.0  0.0
-     0.0  1.0  0.0
-     0.0  0.0  1.0)
+   .. doctest::
+
+      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      ([1.0,3.0,18.0],
+      3x3 Array{Float64,2}:
+       1.0  0.0  0.0
+       0.0  1.0  0.0
+       0.0  0.0  1.0)
    
    ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
    factorization to a tuple; where possible, using :func:`eigfact` is
@@ -207,9 +213,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: eigvals(A,[irange,][vl,][vu])
 
-   Returns the eigenvalues of ``A``. If ``A`` is :func:`Symmetric`,
-   :func:`Hermitian` or :func:`SymTridiagonal`, it is possible to calculate
-   only a subset of the eigenvalues by specifying either a :func:`UnitRange`
+   Returns the eigenvalues of ``A``. If ``A`` is :class:`Symmetric`,
+   :class:`Hermitian` or :class:`SymTridiagonal`, it is possible to calculate
+   only a subset of the eigenvalues by specifying either a :class:`UnitRange`
    ``irange`` covering indices of the sorted eigenvalues, or a pair ``vl`` and
    ``vu`` for the lower and upper boundaries of the eigenvalues.
 
@@ -233,7 +239,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    (The ``k``th eigenvector can be obtained from the slice ``M[:, k]``.)
    The ``permute`` and ``scale`` keywords are the same as for :func:`eigfact`.
 
-   For :func:`SymTridiagonal` matrices, if the optional vector of eigenvalues
+   For :class:`SymTridiagonal` matrices, if the optional vector of eigenvalues
    ``eigvals`` is specified, returns the specific corresponding eigenvectors.
 
 .. function:: eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
@@ -246,9 +252,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following functions are available for ``Eigen`` objects: ``inv``,
    ``det``.
 
-   If ``A`` is :func:`Symmetric`, :func:`Hermitian` or :func:`SymTridiagonal`,
+   If ``A`` is :class:`Symmetric`, :class:`Hermitian` or :class:`SymTridiagonal`,
    it is possible to calculate only a subset of the eigenvalues by specifying
-   either a :func:`UnitRange` ``irange`` covering indices of the sorted
+   either a :class:`UnitRange` ``irange`` covering indices of the sorted
    eigenvalues or a pair ``vl`` and ``vu`` for the lower and upper boundaries
    of the eigenvalues.
 
@@ -576,7 +582,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: peakflops(n; parallel=false)
 
-   ``peakflops`` computes the peak flop rate of the computer by using BLAS double precision :func:`gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
+   ``peakflops`` computes the peak flop rate of the computer by using double precision :func:`Base.LinAlg.BLAS.gemm!`. By default, if no arguments are specified, it multiplies a matrix of size ``n x n``, where ``n = 2000``. If the underlying BLAS is using multiple threads, higher flop rates are realized. The number of BLAS threads can be set with ``blas_set_num_threads(n)``.
 
    If the keyword argument ``parallel`` is set to ``true``, ``peakflops`` is run in parallel on all the worker processors. The flop rate of the entire parallel computer is returned. When running in parallel, only 1 BLAS thread is used. The argument ``n`` still refers to the size of the problem that is solved on each processor.
 

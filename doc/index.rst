@@ -45,6 +45,7 @@
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
+   manual/unicode-input
 
 .. _stdlib:
 
@@ -56,16 +57,23 @@
    :maxdepth: 1
 
    stdlib/base
-   stdlib/sparse
+   stdlib/collections
+   stdlib/math
+   stdlib/numbers
+   stdlib/strings
+   stdlib/arrays
+   stdlib/parallel
    stdlib/linalg
    stdlib/constants
    stdlib/file
+   stdlib/io-network
    stdlib/punctuation
    stdlib/sort
    stdlib/pkg
    stdlib/collections
    stdlib/graphics
    stdlib/test
+   stdlib/c
    stdlib/profile
 
 .. _devdocs:
@@ -77,5 +85,6 @@ Developer Documentation
 .. toctree::
    :maxdepth: 2
 
+   devdocs/reflection
    devdocs/julia
    devdocs/C

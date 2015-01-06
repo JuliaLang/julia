@@ -1,5 +1,7 @@
 .. _man-control-flow:
 
+.. currentmodule:: Base
+
 **************
  Control Flow
 **************
@@ -13,11 +15,11 @@ Julia provides a variety of control flow constructs:
    ``&&``, ``||`` and chained comparisons.
 -  :ref:`man-loops`: ``while`` and ``for``.
 -  :ref:`man-exception-handling`:
-   ``try``-``catch``, ``error`` and ``throw``.
--  :ref:`man-tasks`: ``yieldto``.
+   ``try``-``catch``, :func:`error` and :func:`throw`.
+-  :ref:`man-tasks`: :func:`yieldto`.
 
 The first five control flow mechanisms are standard to high-level
-programming languages. Tasks are not so standard: they provide non-local
+programming languages. :class:`Task`\ s are not so standard: they provide non-local
 control flow, making it possible to switch between temporarily-suspended
 computations. This is a powerful construct: both exception handling and
 cooperative multitasking are implemented in Julia using tasks. Everyday
@@ -118,6 +120,39 @@ blocks as desired can be used. The condition expressions in the
 ``if``-``elseif``-``else`` construct are evaluated until the first one
 evaluates to ``true``, after which the associated block is evaluated,
 and no further condition expressions or blocks are evaluated.
+
+``if`` blocks are "leaky", i.e. they do not introduce a local scope. 
+This means that new variables defined inside the ``ìf`` clauses can 
+be used after the ``if`` block, even if they weren't defined before.
+So, we could have defined the ``test`` function above as
+
+.. doctest::
+
+    julia> function test(x,y)
+             if x < y
+               relation = "less than"
+             elseif x == y
+               relation = "equal to"
+             else 
+               relation = "greater than"
+             end
+             println("x is ", relation, " than y.")
+           end
+    
+``if`` blocks also return a value, which may seem unintuitive to users
+coming from many other languages. This value is simply the return value
+of the last executed statement in the branch that was chosen, so
+
+.. doctest::
+
+    julia> x = 3
+    
+    julia> if x > 0
+             "positive!"
+          else
+             "negative..."
+          end
+    "positive!"
 
 Note that very short conditional statements (one-liners) are frequently expressed using
 Short-Circuit Evaluation in Julia, as outlined in the next section.
@@ -533,53 +568,54 @@ diagnostic error message, or if the programmer has provided code to
 handle such exceptional circumstances, allow that code to take the
 appropriate action.
 
-Built-in ``Exception``\ s
-~~~~~~~~~~~~~~~~~~~~~~~~~
+Built-in :exc:`Exception`\ s
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-``Exception``\ s are thrown when an unexpected condition has occurred. The
-built-in ``Exception``\ s listed below all interrupt the normal flow of control.
+:exc:`Exception`\ s are thrown when an unexpected condition has occurred. The
+built-in :exc:`Exception`\ s listed below all interrupt the normal flow of control.
 
-+------------------------+
-| ``Exception``          |
-+========================+
-| ``ArgumentError``      |
-+------------------------+
-| ``BoundsError``        |
-+------------------------+
-| ``DivideError``        |
-+------------------------+
-| ``DomainError``        |
-+------------------------+
-| ``EOFError``           |
-+------------------------+
-| ``ErrorException``     |
-+------------------------+
-| ``InexactError``       |
-+------------------------+
-| ``InterruptException`` |
-+------------------------+
-| ``KeyError``           |
-+------------------------+
-| ``LoadError``          |
-+------------------------+
-| ``MemoryError``        |
-+------------------------+
-| ``MethodError``        |
-+------------------------+
-| ``OverflowError``      |
-+------------------------+
-| ``ParseError``         |
-+------------------------+
-| ``SystemError``        |
-+------------------------+
-| ``TypeError``          |
-+------------------------+
-| ``UndefRefError``      |
-+------------------------+
-| ``UndefVarError``      |
-+------------------------+
++---------------------------+
+| :exc:`Exception`          |
++===========================+
+| :exc:`ArgumentError`      |
++---------------------------+
+| :exc:`BoundsError`        |
++---------------------------+
+| :exc:`DivideError`        |
++---------------------------+
+| :exc:`DomainError`        |
++---------------------------+
+| :exc:`EOFError`           |
++---------------------------+
+| :exc:`ErrorException`     |
++---------------------------+
+| :exc:`InexactError`       |
++---------------------------+
+| :exc:`InterruptException` |
++---------------------------+
+| :exc:`KeyError`           |
++---------------------------+
+| :exc:`LoadError`          |
++---------------------------+
+| :exc:`MemoryError`        |
++---------------------------+
+| :exc:`MethodError`        |
++---------------------------+
+| :exc:`OverflowError`      |
++---------------------------+
+| :exc:`ParseError`         |
++---------------------------+
+| :exc:`SystemError`        |
++---------------------------+
+| :exc:`TypeError`          |
++---------------------------+
+| :exc:`UndefRefError`      |
++---------------------------+
+| :exc:`UndefVarError`      |
++---------------------------+
 
-For example, the ``sqrt`` function throws a ``DomainError()`` if applied to a
+
+For example, the :func:`sqrt` function throws a :exc:`DomainError` if applied to a
 negative real value:
 
 .. doctest::
@@ -596,11 +632,11 @@ You may define your own exceptions in the following way:
 
     julia> type MyCustomException <: Exception end
 
-The ``throw`` function
-~~~~~~~~~~~~~~~~~~~~~~
+The :func:`throw` function
+~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Exceptions can be created explicitly with ``throw``. For example, a function
-defined only for nonnegative numbers could be written to ``throw`` a ``DomainError``
+Exceptions can be created explicitly with :func:`throw`. For example, a function
+defined only for nonnegative numbers could be written to :func:`throw` a :exc:`DomainError`
 if the argument is negative:
 
 .. doctest::
@@ -615,8 +651,8 @@ if the argument is negative:
     ERROR: DomainError
      in f at none:1
 
-Note that ``DomainError`` without parentheses is not an exception, but a type of
-exception. It needs to be called to obtain an ``Exception`` object:
+Note that :exc:`DomainError` without parentheses is not an exception, but a type of
+exception. It needs to be called to obtain an :exc:`Exception` object:
 
 .. doctest::
 
@@ -635,7 +671,7 @@ error reporting:
     ERROR: x not defined
 
 This mechanism can be implemented easily by custom exception types following
-the way ``UndefVarError`` is written:
+the way :exc:`UndefVarError` is written:
 
 .. doctest::
 
@@ -647,12 +683,12 @@ the way ``UndefVarError`` is written:
 Errors
 ~~~~~~
 
-The ``error`` function is used to produce an ``ErrorException`` that
+The :func:`error` function is used to produce an :exc:`ErrorException` that
 interrupts the normal flow of control.
 
 Suppose we want to stop execution immediately if the square root of a
 negative number is taken. To do this, we can define a fussy version of
-the ``sqrt`` function that raises an error if its argument is negative:
+the :func:`sqrt` function that raises an error if its argument is negative:
 
 .. doctest::
 
@@ -695,7 +731,7 @@ Warnings and informational messages
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Julia also provides other functions that write messages to the standard error
-I/O, but do not throw any ``Exception``\ s and hence do not interrupt
+I/O, but do not throw any :exc:`Exception`\ s and hence do not interrupt
 execution.:
 
 .. doctest::
@@ -716,10 +752,10 @@ execution.:
 The ``try/catch`` statement
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The ``try/catch`` statement allows for ``Exception``\ s to be tested for. For
+The ``try/catch`` statement allows for :exc:`Exception`\ s to be tested for. For
 example, a customized square root function can be written to automatically
 call either the real or complex square root method on demand using
-``Exception``\ s :
+:exc:`Exception`\ s :
 
 .. doctest::
 
@@ -740,7 +776,7 @@ It is important to note that in real code computing this function, one would
 compare ``x`` to zero instead of catching an exception. The exception is much
 slower than simply comparing and branching.
 
-``try/catch`` statements also allow the ``Exception`` to be saved in a
+``try/catch`` statements also allow the :exc:`Exception` to be saved in a
 variable. In this contrived example, the following example calculates the
 square root of the second element of ``x`` if ``x`` is indexable, otherwise
 assumes ``x`` is a real number and returns its square root:
@@ -791,7 +827,7 @@ The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
 unwind the stack and pass a value to a higher level is desirable. Julia
-provides the ``rethrow``, ``backtrace`` and ``catch_backtrace`` functions for
+provides the :func:`rethrow`, :func:`backtrace` and :func:`catch_backtrace` functions for
 more advanced error handling.
 
 finally Clauses
@@ -831,8 +867,8 @@ called by other names, such as symmetric coroutines, lightweight
 threads, cooperative multitasking, or one-shot continuations.
 
 When a piece of computing work (in practice, executing a particular
-function) is designated as a ``Task``, it becomes possible to interrupt
-it by switching to another ``Task``. The original ``Task`` can later be
+function) is designated as a :class:`Task`, it becomes possible to interrupt
+it by switching to another :class:`Task`. The original :class:`Task` can later be
 resumed, at which point it will pick up right where it left off. At
 first, this may seem similar to a function call. However there are two
 key differences. First, switching tasks does not use any space, so any
@@ -852,8 +888,8 @@ producer may have more values to generate and so might not yet be ready
 to return. With tasks, the producer and consumer can both run as long as
 they need to, passing values back and forth as necessary.
 
-Julia provides the functions ``produce`` and ``consume`` for solving
-this problem. A producer is a function that calls ``produce`` on each
+Julia provides the functions :func:`produce` and :func:`consume` for solving
+this problem. A producer is a function that calls :func:`produce` on each
 value it needs to produce:
 
 .. doctest::
@@ -866,8 +902,8 @@ value it needs to produce:
              produce("stop")
            end;
 
-To consume values, first the producer is wrapped in a ``Task``,
-then ``consume`` is called repeatedly on that object:
+To consume values, first the producer is wrapped in a :class:`Task`,
+then :func:`consume` is called repeatedly on that object:
 
 .. doctest::
 
@@ -892,7 +928,7 @@ then ``consume`` is called repeatedly on that object:
     "stop"
 
 One way to think of this behavior is that ``producer`` was able to
-return multiple times. Between calls to ``produce``, the producer's
+return multiple times. Between calls to :func:`produce`, the producer's
 execution is suspended and the consumer has control.
 
 A Task can be used as an iterable object in a ``for`` loop, in which
@@ -910,7 +946,7 @@ case the loop variable takes on all the produced values:
     8
     stop
 
-Note that the ``Task()`` constructor expects a 0-argument function. A
+Note that the :func:`Task` constructor expects a 0-argument function. A
 common pattern is for the producer to be parameterized, in which case a
 partial function application is needed to create a 0-argument :ref:`anonymous
 function <man-anonymous-functions>`. This can be done either
@@ -924,35 +960,36 @@ directly or by use of a convenience macro::
     # or, equivalently
     taskHdl = @task mytask(7)
 
-``produce`` and ``consume`` do not launch threads that can run on separate CPUs.
+:func:`produce` and :func:`consume` do not launch threads that can run on separate CPUs.
 True kernel threads are discussed under the topic of :ref:`man-parallel-computing`.
 
 Core task operations
 ~~~~~~~~~~~~~~~~~~~~
 
-While ``produce`` and ``consume`` illustrate the essential nature of tasks, they
+While :func:`produce` and :func:`consume` illustrate the essential nature of tasks, they
 are actually implemented as library functions using a more primitive function,
-``yieldto``. ``yieldto(task,value)`` suspends the current task, switches
-to the specified ``task``, and causes that task's last ``yieldto`` call to return
-the specified ``value``. Notice that ``yieldto`` is the only operation required
+:func:`yieldto`. ``yieldto(task,value)`` suspends the current task, switches
+to the specified ``task``, and causes that task's last :func:`yieldto` call to return
+the specified ``value``. Notice that :func:`yieldto` is the only operation required
 to use task-style control flow; instead of calling and returning we are always
 just switching to a different task. This is why this feature is also called
 "symmetric coroutines"; each task is switched to and from using the same mechanism.
 
-``yieldto`` is powerful, but most uses of tasks do not invoke it directly.
+:func:`yieldto` is powerful, but most uses of tasks do not invoke it directly.
 Consider why this might be. If you switch away from the current task, you will
 probably want to switch back to it at some point, but knowing when to switch
 back, and knowing which task has the responsibility of switching back, can
-require considerable coordination. For example, ``produce`` needs to maintain
+require considerable coordination. For example, :func:`produce` needs to maintain
 some state to remember who the consumer is. Not needing to manually keep track
-of the consuming task is what makes ``produce`` easier to use than ``yieldto``.
+of the consuming task is what makes :func:`produce` easier to use than :func:`yieldto`.
 
-In addition to ``yieldto``, a few other basic functions are needed to use tasks
+In addition to :func:`yieldto`, a few other basic functions are needed to use tasks
 effectively.
-``current_task()`` gets a reference to the currently-running task.
-``istaskdone(t)`` queries whether a task has exited.
-``istaskstarted(t)`` queries whether a task has run yet.
-``task_local_storage`` manipulates a key-value store specific to the current task.
+
+- :func:`current_task` gets a reference to the currently-running task.
+- :func:`istaskdone` queries whether a task has exited.
+- :func:`istaskstarted` queries whether a task has run yet.
+- :func:`task_local_storage` manipulates a key-value store specific to the current task.
 
 Tasks and events
 ~~~~~~~~~~~~~~~~
@@ -962,27 +999,27 @@ requests, and are performed by a scheduler included in the standard library.
 The scheduler maintains a queue of runnable tasks, and executes an event loop
 that restarts tasks based on external events such as message arrival.
 
-The basic function for waiting for an event is ``wait``. Several objects
-implement ``wait``; for example, given a ``Process`` object, ``wait`` will
-wait for it to exit. ``wait`` is often implicit; for example, a ``wait``
-can happen inside a call to ``read`` to wait for data to be available.
+The basic function for waiting for an event is :func:`wait`. Several objects
+implement :func:`wait`; for example, given a :class:`Process` object, :func:`wait` will
+wait for it to exit. :func:`wait` is often implicit; for example, a :func:`wait`
+can happen inside a call to :func:`read` to wait for data to be available.
 
-In all of these cases, ``wait`` ultimately operates on a ``Condition``
+In all of these cases, :func:`wait` ultimately operates on a :class:`Condition`
 object, which is in charge of queueing and restarting tasks. When a task
-calls ``wait`` on a ``Condition``, the task is marked as non-runnable, added
+calls :func:`wait` on a :class:`Condition`, the task is marked as non-runnable, added
 to the condition's queue, and switches to the scheduler. The scheduler will
 then pick another task to run, or block waiting for external events.
-If all goes well, eventually an event handler will call ``notify`` on the
+If all goes well, eventually an event handler will call :func:`notify` on the
 condition, which causes tasks waiting for that condition to become runnable
 again.
 
-A task created explicitly by calling ``Task`` is initially not known to the
-scheduler. This allows you to manage tasks manually using ``yieldto`` if
+A task created explicitly by calling :class:`Task` is initially not known to the
+scheduler. This allows you to manage tasks manually using :func:`yieldto` if
 you wish. However, when such a task waits for an event, it still gets restarted
 automatically when the event happens, as you would expect. It is also
 possible to make the scheduler run a task whenever it can, without necessarily
-waiting for any events. This is done by calling ``schedule(task)``, or using
-the ``@schedule`` or ``@async`` macros (see :ref:`man-parallel-computing` for
+waiting for any events. This is done by calling :func:`schedule`, or using
+the :obj:`@schedule` or :obj:`@async` macros (see :ref:`man-parallel-computing` for
 more details).
 
 Task states

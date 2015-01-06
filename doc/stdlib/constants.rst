@@ -2,7 +2,7 @@
 .. currentmodule:: Base
 
 Constants
----------
+=========
 
 .. data:: OS_NAME
 

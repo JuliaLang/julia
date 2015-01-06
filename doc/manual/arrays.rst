@@ -31,7 +31,7 @@ technical computing languages pass arrays by value, and this is
 convenient in many cases. In Julia, modifications made to input arrays
 within a function will be visible in the parent function. The entire
 Julia array library ensures that inputs are not modified by library
-functions. User code, if it needs to exhibit similar behaviour, should
+functions. User code, if it needs to exhibit similar behavior, should
 take care to create a copy of inputs that it may modify.
 
 Arrays
@@ -84,7 +84,7 @@ Function                                            Description
 :func:`reinterpret(type, A) <reinterpret>`          an array with the same binary data as the given array, but with the
                                                     specified element type
 :func:`rand(dims) <rand>`                           ``Array`` of ``Float64``\ s with random, iid[#]_ and uniformly
-                                                    distributed values in [0,1)
+                                                    distributed values in the half-open interval [0, 1)
 :func:`randn(dims) <randn>`                         ``Array`` of ``Float64``\ s with random, iid and standard normally
                                                     distributed random values
 :func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
@@ -145,6 +145,8 @@ Expression          Yields
 
 Note that this form does not do any concatenation; each argument becomes
 an element of the resulting array.
+
+.. _comprehensions:
 
 Comprehensions
 --------------
@@ -448,13 +450,17 @@ implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
 generally implement at least :func:`size(A) <size>` (returing an ``Int`` tuple),
-:func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>` (returning an element
-of type ``T``); mutable arrays should also implement :func:`setindex!`.  It
+:func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>`;
+mutable arrays should also implement :func:`setindex!`.  It
 is recommended that these operations have nearly constant time complexity,
 or technically Õ(1) complexity, as otherwise some array functions may
 be unexpectedly slow.   Concrete types should also typically provide
 a :func:`similar(A,T=eltype(A),dims=size(A)) <similar>` method, which is used to allocate
 a similar array for :func:`copy` and other out-of-place operations.
+No matter how an ``AbstractArray{T,N}`` is represented internally,
+``T`` is the type of object returned by *integer* indexing (``A[1,
+..., 1]``, when ``A`` is not empty) and ``N`` should be the length of
+the tuple returned by :func:`size`.
 
 ``DenseArray`` is an abstract subtype of ``AbstractArray`` intended
 to include all arrays that are laid out at regular offsets in memory,
@@ -694,7 +700,7 @@ reference.
 | :func:`sprand(m,n,d) <sprand>`         | :func:`rand(m,n) <rand>`         | Creates a *m*-by-*n* random matrix (of     |
 |                                        |                                  | density *d*) with iid non-zero elements    |
 |                                        |                                  | distributed uniformly on the               |
-|                                        |                                  | interval [0, 1].                           |
+|                                        |                                  | half-open interval [0, 1).                 |
 +----------------------------------------+----------------------------------+--------------------------------------------+
 | :func:`sprandn(m,n,d) <sprandn>`       | :func:`randn(m,n) <randn>`       | Creates a *m*-by-*n* random matrix (of     |
 |                                        |                                  | density *d*) with iid non-zero elements    |

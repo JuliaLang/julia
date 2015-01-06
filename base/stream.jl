@@ -868,6 +868,7 @@ end
 const BACKLOG_DEFAULT = 511
 
 function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
+    check_open(sock)
     err = ccall(:uv_listen, Cint, (Ptr{Void}, Cint, Ptr{Void}),
                 sock.handle, backlog, uv_jl_connectioncb::Ptr{Void})
     sock.status = StatusActive

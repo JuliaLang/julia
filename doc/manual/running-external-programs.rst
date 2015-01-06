@@ -1,5 +1,7 @@
 .. _man-running-external-programs:
 
+.. currentmodule:: Base
+
 ***************************
  Running External Programs  
 ***************************
@@ -16,12 +18,12 @@ differs in several aspects from the behavior in various shells, Perl,
 or Ruby:
 
 -  Instead of immediately running the command, backticks create a
-   ``Cmd`` object to represent the command. You can use this object to
+   :obj:`Cmd` object to represent the command. You can use this object to
    connect the command to others via pipes, run it, and read or write to
    it.
 -  When the command is run, Julia does not capture its output unless you
    specifically arrange for it to. Instead, the output of the command by
-   default goes to ``stdout`` as it would using ``libc``'s ``system``
+   default goes to :const:`STDOUT` as it would using ``libc``'s ``system``
    call.
 -  The command is never run with a shell. Instead, Julia parses the
    command syntax directly, appropriately interpolating variables and
@@ -34,11 +36,11 @@ Here's a simple example of running an external program::
     julia> run(`echo hello`)
     hello
 
-The ``hello`` is the output of the ``echo`` command, sent to stdout. 
-The run method itself returns ``nothing``, and throws an ``ErrorException``
+The ``hello`` is the output of the ``echo`` command, sent to :const:`STDOUT`. 
+The run method itself returns ``nothing``, and throws an :exc:`ErrorException`
 if the external command fails to run successfully. 
 
-If you want to read the output of the external command, the ``readall`` method
+If you want to read the output of the external command, :func:`readall`
 can be used instead::
 
     julia> a=readall(`echo hello`)
@@ -47,7 +49,7 @@ can be used instead::
     julia> (chomp(a)) == "hello"
     true
 
-More generally, you can use ``open`` to read from or write to an external
+More generally, you can use :func:`open` to read from or write to an external
 command.  For example::
 
     julia> open(`less`, "w", STDOUT) do io
@@ -155,7 +157,7 @@ Quoting
 -------
 
 Inevitably, one wants to write commands that aren't quite so simple, and
-it becomes necessary to use quotes. Here's a simple example of a perl
+it becomes necessary to use quotes. Here's a simple example of a Perl
 one-liner at a shell prompt::
 
     sh$ perl -le '$|=1; for (0..3) { print }'
@@ -224,8 +226,8 @@ This expression invokes the ``echo`` command with three words as
 arguments: "hello", "\|", and "sort". The result is that a single line
 is printed: "hello \| sort". Inside of backticks, a "\|" is just a
 literal pipe character. How, then, does one construct a pipeline?
-Instead of using "\|" inside of backticks, one uses Julia's ``|>``
-operator between ``Cmd`` objects::
+Instead of using "\|" inside of backticks, one uses Julia's :obj:`|>`
+operator between :obj:`Cmd` objects::
 
     julia> run(`echo hello` |> `sort`)
     hello
@@ -246,7 +248,9 @@ This prints the highest five user IDs on a UNIX system. The ``cut``,
 the current ``julia`` process, with no intervening shell process. Julia
 itself does the work to setup pipes and connect file descriptors that is
 normally done by the shell. Since Julia does this itself, it retains
-better control and can do some things that shells cannot.
+better control and can do some things that shells cannot. Note that :obj:`|>`
+only redirects :const:`STDOUT`. To redirect :const:`STDERR`, use :obj:`.>`.
+
 
 Julia can run multiple commands in parallel::
 
@@ -256,7 +260,7 @@ Julia can run multiple commands in parallel::
 
 The order of the output here is non-deterministic because the two
 ``echo`` processes are started nearly simultaneously, and race to make
-the first write to the ``stdout`` descriptor they share with each other
+the first write to the :const:`STDOUT` descriptor they share with each other
 and the ``julia`` parent process. Julia lets you pipe the output from
 both of these processes to another program::
 
@@ -295,7 +299,7 @@ prefixing lines with the letter "A", the other with the letter "B".
 Which consumer gets the first line is non-deterministic, but once that
 race has been won, the lines are consumed alternately by one process and
 then the other. (Setting ``$|=1`` in Perl causes each print statement to
-flush the ``stdout`` handle, which is necessary for this example to
+flush the :const:`STDOUT` handle, which is necessary for this example to
 work. Otherwise all the output is buffered and printed to the pipe at
 once, to be read by just one consumer process.)
 
