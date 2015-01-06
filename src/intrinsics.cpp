@@ -6,6 +6,9 @@ namespace JL_I {
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
+        // fast arithmetic
+        neg_float_fast, add_float_fast, sub_float_fast,
+        mul_float_fast, div_float_fast, rem_float_fast,
         // same-type comparisons
         eq_int,  ne_int,
         slt_int, ult_int,
@@ -718,6 +721,26 @@ static Value *emit_srem(Value *x, Value *den, jl_codectx_t *ctx)
     return ret;
 }
 
+// Temporarily switch the builder to fast-math mode if requested
+struct math_builder {
+    FastMathFlags old_fmf;
+    math_builder(jl_codectx_t *ctx, bool always_fast = false):
+        old_fmf(builder.getFastMathFlags())
+    {
+        if (jl_compileropts.fast_math != JL_COMPILEROPT_FAST_MATH_OFF &&
+            (always_fast ||
+             jl_compileropts.fast_math == JL_COMPILEROPT_FAST_MATH_ON)) {
+            FastMathFlags fmf;
+            fmf.setUnsafeAlgebra();
+            builder.SetFastMathFlags(fmf);
+        }
+    }
+    IRBuilder<>& operator()() const { return builder; }
+    ~math_builder() {
+        builder.SetFastMathFlags(old_fmf);
+    }
+};
+
 static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
 {
     Type *t = den->getType();
@@ -926,15 +949,24 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 // that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
 // See issue #7868
 #ifdef LLVM35
-    HANDLE(neg_float,1) return builder.CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
+    HANDLE(neg_float,1) return math_builder(ctx)().CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
+    HANDLE(neg_float_fast,1) return math_builder(ctx, true)().CreateFNeg(FP(x));
 #else
-    HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
+    HANDLE(neg_float,1)
+        return math_builder(ctx)().CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
+    HANDLE(neg_float_fast,1)
+        return math_builder(ctx, true)().CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
 #endif
-    HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
-    HANDLE(sub_float,2) return builder.CreateFSub(FP(x), FP(y));
-    HANDLE(mul_float,2) return builder.CreateFMul(FP(x), FP(y));
-    HANDLE(div_float,2) return builder.CreateFDiv(FP(x), FP(y));
-    HANDLE(rem_float,2) return builder.CreateFRem(FP(x), FP(y));
+    HANDLE(add_float,2) return math_builder(ctx)().CreateFAdd(FP(x), FP(y));
+    HANDLE(sub_float,2) return math_builder(ctx)().CreateFSub(FP(x), FP(y));
+    HANDLE(mul_float,2) return math_builder(ctx)().CreateFMul(FP(x), FP(y));
+    HANDLE(div_float,2) return math_builder(ctx)().CreateFDiv(FP(x), FP(y));
+    HANDLE(rem_float,2) return math_builder(ctx)().CreateFRem(FP(x), FP(y));
+    HANDLE(add_float_fast,2) return math_builder(ctx, true)().CreateFAdd(FP(x), FP(y));
+    HANDLE(sub_float_fast,2) return math_builder(ctx, true)().CreateFSub(FP(x), FP(y));
+    HANDLE(mul_float_fast,2) return math_builder(ctx, true)().CreateFMul(FP(x), FP(y));
+    HANDLE(div_float_fast,2) return math_builder(ctx, true)().CreateFDiv(FP(x), FP(y));
+    HANDLE(rem_float_fast,2) return math_builder(ctx, true)().CreateFRem(FP(x), FP(y));
 
     HANDLE(checked_sadd,2)
     HANDLE(checked_uadd,2)
@@ -1262,6 +1294,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(smod_int);
     ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
     ADD_I(div_float); ADD_I(rem_float);
+    ADD_I(neg_float_fast); ADD_I(add_float_fast); ADD_I(sub_float_fast);
+    ADD_I(mul_float_fast); ADD_I(div_float_fast); ADD_I(rem_float_fast);
     ADD_I(eq_int); ADD_I(ne_int);
     ADD_I(slt_int); ADD_I(ult_int);
     ADD_I(sle_int); ADD_I(ule_int);
