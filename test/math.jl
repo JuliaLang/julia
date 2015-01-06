@@ -277,22 +277,6 @@ end
 @test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
 
-# isqrt (issue #4884)
-@test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == int128("13043817825332782212")
-@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
-@test isqrt(0) == 0
-for i = 1:1000
-    n = rand(UInt128)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-    n = rand(UInt64)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-end
-
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)
 errc(z, x) = max(err(real(z),real(x)), err(imag(z),imag(x)))
