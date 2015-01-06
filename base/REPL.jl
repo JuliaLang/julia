@@ -82,7 +82,7 @@ end
 
 function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
     backend = REPLBackend(repl_channel, response_channel, nothing)
-    @async begin
+    global interactive_task = @schedule begin
         # include looks at this to determine the relative include path
         # nothing means cwd
         while true
