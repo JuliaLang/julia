@@ -7,7 +7,7 @@
 
 @test gcd(2, 4, 6) == 2
 
-@test typeof(gcd(int32(3), int32(15))) == Int32
+@test typeof(gcd(int32(3), int32(15))) == Int # this returns Int32 on 0.4
 
 @test lcm(2, 3) == 6
 @test lcm(4, 6) == 12
@@ -18,7 +18,7 @@
 
 @test lcm(2, 4, 6) == 12
 
-@test typeof(lcm(int32(2), int32(3))) == Int32
+@test typeof(lcm(int32(2), int32(3))) == Int # this returns Int32 on 0.4
 
 @test gcdx(5, 12) == (1, 5, -2)
 @test gcdx(5, -12) == (1, 5, 2)
