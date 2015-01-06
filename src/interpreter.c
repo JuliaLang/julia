@@ -449,6 +449,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == boundscheck_sym) {
         return (jl_value_t*)jl_nothing;
     }
+    else if (ex->head == fastmath_sym) {
+        return (jl_value_t*)jl_nothing;
+    }
     else if (ex->head == simdloop_sym) {
         return (jl_value_t*)jl_nothing;
     }
