@@ -347,6 +347,7 @@ struct jl_varinfo_t {
 
 // --- helpers for reloading IR image
 static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars);
+static void jl_sysimg_to_llvm(llvm::Module *mod, const char *sysimg_data, size_t sysimg_len);
 
 extern "C"
 void jl_dump_bitcode(char *fname)
@@ -376,7 +377,7 @@ void jl_dump_bitcode(char *fname)
 }
 
 extern "C"
-void jl_dump_objfile(char *fname, int jit_model)
+void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len)
 {
 #ifdef LLVM36
     std::error_code err;
@@ -432,9 +433,11 @@ void jl_dump_objfile(char *fname, int jit_model)
 
     SmallVector<GlobalVariable*, 8> globalvars;
 #ifdef USE_MCJIT
+    jl_sysimg_to_llvm(shadow_module, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(shadow_module, globalvars);
     PM.run(*shadow_module);
 #else
+    jl_sysimg_to_llvm(jl_Module, sysimg_data, sysimg_len);
     jl_gen_llvm_gv_array(jl_Module, globalvars);
     PM.run(*jl_Module);
 #endif

@@ -1017,7 +1017,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 
     if (jl_compileropts.image_file) {
         JL_TRY {
-            jl_restore_system_image(jl_compileropts.image_file);
+            jl_load_sysimg_so(jl_compileropts.image_file);
         }
         JL_CATCH {
             JL_PRINTF(JL_STDERR, "error during init:\n");
@@ -1209,32 +1209,26 @@ DLLEXPORT void julia_save()
     if (build_path) {
         if (jl_compileropts.compile_enabled == JL_COMPILEROPT_COMPILE_ALL)
             jl_compile_all();
-        char *build_ji;
-        if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
-            jl_save_system_image(build_ji);
-            free(build_ji);
-            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON) {
-                char *build_bc;
-                if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
-                    jl_dump_bitcode(build_bc);
-                    free(build_bc);
-                }
-                else {
-                    ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
-                }
-            }
-            char *build_o;
-            if (asprintf(&build_o, "%s.o",build_path) > 0) {
-                jl_dump_objfile(build_o,0);
-                free(build_o);
+        ios_t *s = jl_create_system_image();
+        if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON) {
+            char *build_bc;
+            if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
+                jl_dump_bitcode(build_bc);
+                free(build_bc);
             }
             else {
-                ios_printf(ios_stderr,"\nFATAL: failed to create string for .o build path\n");
+                ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
             }
         }
-        else {
-            ios_printf(ios_stderr,"\nFATAL: failed to create string for .ji build path\n");
+        char *build_o;
+        if (asprintf(&build_o, "%s.o",build_path) > 0) {
+            jl_dump_objfile(build_o, 0, (const char*)s->buf, s->size);
+            free(build_o);
         }
+        else {
+            ios_printf(ios_stderr,"\nFATAL: failed to create string for .o build path\n");
+        }
+        ios_close(s);
     }
 }
 

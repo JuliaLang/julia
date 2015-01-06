@@ -171,7 +171,7 @@ uint64_t jl_sysimage_base = 0;
 #include <dbghelp.h>
 #endif
 
-static void jl_load_sysimg_so(char *fname)
+DLLEXPORT void jl_load_sysimg_so(const char *fname)
 {
 #ifndef _OS_WINDOWS_
     Dl_info dlinfo;
@@ -205,14 +205,26 @@ static void jl_load_sysimg_so(char *fname)
 #else
         if (dladdr((void*)sysimg_gvars, &dlinfo) != 0) {
             jl_sysimage_base = (intptr_t)dlinfo.dli_fbase;
-        } else {
+        }
+        else {
             jl_sysimage_base = 0;
         }
 #endif
+        const char *sysimg_data = (const char*)jl_dlsym(jl_sysimg_handle, "jl_system_image_data");
+        size_t len = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_system_image_size");
+        jl_restore_system_image(sysimg_data, len);
     }
     else {
-        sysimg_gvars = 0;
+        jl_error("Could not load system image.");
     }
+    int build_mode = 0;
+#ifdef _OS_WINDOWS_
+    //XXX: the windows linker forces our system image to be
+    //     linked against only one dll, I picked libjulia-release
+    if (jl_is_debugbuild()) build_mode = 1;
+#endif
+    if (build_mode)
+        sysimg_gvars = 0;
 }
 
 static jl_value_t *jl_deserialize_gv(ios_t *s, jl_value_t *v)
@@ -1286,34 +1298,31 @@ void jl_deserialize_lambdas_from_mod(ios_t *s)
 
 extern jl_array_t *jl_module_init_order;
 
-DLLEXPORT void jl_save_system_image(const char *fname)
+DLLEXPORT void *jl_create_system_image()
 {
     jl_gc_collect();
     jl_gc_collect();
     int en = jl_gc_is_enabled();
     jl_gc_disable();
     htable_reset(&backref_table, 250000);
-    ios_t f;
-    if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        JL_PRINTF(JL_STDERR, "Cannot open system image file \"%s\" for writing.\n", fname);
-        exit(1);
-    }
+    ios_t *f; f = (ios_t*)malloc(sizeof(ios_t));
+    ios_mem(f, 1000000);
 
     // orphan old Base module if present
     jl_base_module = (jl_module_t*)jl_get_global(jl_main_module, jl_symbol("Base"));
 
     jl_idtable_type = jl_get_global(jl_base_module, jl_symbol("ObjectIdDict"));
 
-    jl_serialize_value(&f, jl_main_module);
+    jl_serialize_value(f, jl_main_module);
 
     // ensure everything in deser_tag is reassociated with its GlobalValue
     ptrint_t i=2;
     for (i=2; i < 255; i++) {
-        jl_serialize_gv(&f, deser_tag[i]);
+        jl_serialize_gv(f, deser_tag[i]);
     }
-    jl_serialize_globalvals(&f);
-    jl_serialize_gv_syms(&f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
-    jl_serialize_value(&f, NULL); // signal the end of the symbols list
+    jl_serialize_globalvals(f);
+    jl_serialize_gv_syms(f, jl_get_root_symbol()); // serialize symbols with GlobalValue references
+    jl_serialize_value(f, NULL); // signal the end of the symbols list
 
     // save module initialization order
     if (jl_module_init_order != NULL) {
@@ -1322,14 +1331,14 @@ DLLEXPORT void jl_save_system_image(const char *fname)
             assert(ptrhash_get(&backref_table, jl_cellref(jl_module_init_order, i)) != HT_NOTFOUND);
         }
     }
-    jl_serialize_value(&f, jl_module_init_order);
+    jl_serialize_value(f, jl_module_init_order);
 
-    write_int32(&f, jl_get_t_uid_ctr());
-    write_int32(&f, jl_get_gs_ctr());
+    write_int32(f, jl_get_t_uid_ctr());
+    write_int32(f, jl_get_gs_ctr());
     htable_reset(&backref_table, 0);
 
-    ios_close(&f);
     if (en) jl_gc_enable();
+    return f;
 }
 
 extern jl_function_t *jl_typeinf_func;
@@ -1339,8 +1348,7 @@ extern void jl_get_system_hooks(void);
 extern void jl_get_uv_hooks();
 
 // Takes in a path of the form "usr/lib/julia/sys.ji", such as passed in to jl_restore_system_image()
-DLLEXPORT
-const char * jl_get_system_image_cpu_target(const char *fname)
+DLLEXPORT const char *jl_get_system_image_cpu_target(const char *fname)
 {
     // If passed NULL, don't even bother
     if (!fname)
@@ -1364,27 +1372,11 @@ const char * jl_get_system_image_cpu_target(const char *fname)
     return NULL;
 }
 
-DLLEXPORT
-void jl_restore_system_image(const char *fname)
+DLLEXPORT void jl_restore_system_image(const char *buf, size_t len)
 {
     ios_t f;
-    if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
-        exit(1);
-    }
-    int build_mode = 0;
-#ifdef _OS_WINDOWS_
-    //XXX: the windows linker forces our system image to be
-    //     linked against only one dll, I picked libjulia-release
-    if (jl_is_debugbuild()) build_mode = 1;
-#endif
-    if (!build_mode) {
-        char *fname_shlib = (char*)alloca(strlen(fname));
-        strcpy(fname_shlib, fname);
-        char *fname_shlib_dot = strrchr(fname_shlib, '.');
-        if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
-        jl_load_sysimg_so(fname_shlib);
-    }
+    ios_static_buffer(&f, (char*)buf, len);
+
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
     jl_gc_disable();

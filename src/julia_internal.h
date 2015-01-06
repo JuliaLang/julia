@@ -95,7 +95,7 @@ extern void *jl_stackbase;
 #endif
 
 void jl_dump_bitcode(char *fname);
-void jl_dump_objfile(char *fname, int jit_model);
+void jl_dump_objfile(char *fname, int jit_model, const char *sysimg_data, size_t sysimg_len);
 int32_t jl_get_llvm_gv(jl_value_t *p);
 
 #ifdef _OS_LINUX_
