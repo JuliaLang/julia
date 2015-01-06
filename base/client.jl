@@ -370,6 +370,9 @@ end
 
 function early_init()
     global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
+                                    get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
     Sys.init_sysinfo()
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
         # Prevent openblas from stating to many threads, unless/until specifically requested
