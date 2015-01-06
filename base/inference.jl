@@ -895,6 +895,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         if !is(af,false) && (af=_ieval(af);isgeneric(af))
             sig = argtypes[2]
             if isa(sig,Tuple) && all(isType, sig)
+                e.head = :call1
                 sig = map(t->t.parameters[1], sig)
                 return invoke_tfunc(af, sig, argtypes[3:end])
             end
@@ -2249,13 +2250,139 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
     if isa(f,IntrinsicFunction)
         return NF
     end
+    if is(f, invoke)
+        return inlineable_invoke(f, e, atypes, sv, enclosing_ast, argexprs)
+    end
 
+    return inlineable_gf(f, e, atypes, sv, enclosing_ast, argexprs)
+end
+
+function get_invoke_types{T<:Top}(ts::Type{Type{T}})
+    return T
+end
+
+function get_invoke_types(ts::Tuple)
+    return tuple(Any[get_invoke_types(t) for t in ts]...)::Type
+end
+
+function inlineable_invoke(f::Function, e::Expr, atypes, sv,
+                           enclosing_ast, argexprs)
+    f = isconstantfunc(argexprs[1], sv)
+    if is(f, false)
+        return NF
+    end
+    f = _ieval(f)
+    local invoke_types
+    try
+        invoke_types = get_invoke_types(atypes[2])
+    catch err
+        return NF
+    end
+
+    argexprs = argexprs[3:end]
+    atypes = atypes[3:end]
+    if length(atypes) != length(invoke_types)
+        return NF
+    end
+    if isleaftype(invoke_types) && invoke_types == atypes
+        new_e = Expr(:call, f, argexprs...)
+        new_e.typ = e.typ
+        res = inlineable_gf(f, new_e, invoke_types, sv,
+                            enclosing_ast, argexprs)
+        return is(res, NF) ? (new_e, []) : res
+    end
+
+    local meth
+    try
+        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, invoke_types)
+    catch
+        return NF
+    end
+    if is(meth, nothing)
+        return NF
+    end
+
+    stmts = []
+    check_stmts = []
+    atypes_l = Type[atypes...]
+    err_label = genlabel(sv)
+    after_err_label = genlabel(sv)
+    for i in 1:length(atypes_l)
+        arg_name = unique_name(enclosing_ast)
+        tmp_ex = :($arg_name = $(argexprs[i]))
+        tmp_ex.typ = atypes_l[i]
+        add_variable(enclosing_ast, arg_name, atypes_l[i], true)
+        push!(stmts, tmp_ex)
+        if !issubtype(atypes_l[i], invoke_types[i])
+            atypes_l[i] = typeintersect(atypes_l[i], invoke_types[i])
+            check_type = :($isa($arg_name, $(invoke_types[i])))
+            check_type.typ = Bool
+            push!(check_stmts, Expr(:gotoifnot, check_type, err_label.label))
+        end
+        argexprs[i] = SymbolNode(arg_name, atypes_l[i])
+    end
+    if !isempty(check_stmts)
+        append!(stmts, check_stmts)
+        push!(stmts, gn(after_err_label))
+        push!(stmts, err_label)
+        check_error = :($error("invoke: argument type error"))
+        check_error.typ = None
+        push!(stmts, check_error)
+        push!(stmts, after_err_label)
+    end
+    atypes = tuple(atypes_l...)
+
+    match_meth = _match_method(meth, atypes)
+    new_e = Expr(:call, f, argexprs...)
+    new_e.typ = e.typ
+    if length(match_meth) == 1
+        match_meth = match_meth[1]::Tuple
+        # Try inlining
+        res = inlineable_meth(f, match_meth, new_e, atypes, sv, enclosing_ast,
+                              argexprs)
+        if isa(res, Tuple)
+            if isa(res[2], Array)
+                append!(stmts, res[2])
+            end
+            return (res[1], stmts)
+        end
+    end
+    return NF
+end
+
+_match_method(m::ANY, t::ANY) = _match_method(m, Any[(t::Tuple)...],
+                                              length(t::Tuple), [])
+function _match_method(m::ANY, t::Array, i, matching::Array{Any, 1})
+    if i == 0
+        res = ccall(:jl_match_method, Any, (Any, Any, Any),
+                    tuple(t...), m.sig, m.tvars)
+        push!(matching, tuple(res..., m))
+    else
+        ti = t[i]
+        if isa(ti, UnionType)
+            for ty in (ti::UnionType).types
+                t[i] = ty
+                _match_method(m, t, i - 1, matching)
+            end
+            t[i] = ti
+        else
+            return _match_method(m, t, i - 1, matching)
+        end
+    end
+    matching
+end
+
+function inlineable_gf(f::Function, e::Expr, atypes, sv, enclosing_ast,
+                       argexprs)
     meth = _methods(f, atypes, 1)
     if meth === false || length(meth) != 1
         return NF
     end
-    meth = meth[1]::Tuple
+    return inlineable_meth(f, meth[1], e, atypes, sv, enclosing_ast, argexprs)
+end
 
+function inlineable_meth(f::Function, meth::Tuple, e::Expr, atypes, sv,
+                         enclosing_ast, argexprs)
     local linfo
     try
         linfo = func_for_method(meth[3],atypes,meth[2])
@@ -2704,6 +2831,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
     end
     return (expr, stmts)
 end
+
 # The inlining incomplete matches optimization currently
 # doesn't work on Tuples of TypeVars
 const inline_incompletematch_allowed = false
