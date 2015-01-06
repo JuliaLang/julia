@@ -411,6 +411,7 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
+extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
 extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 
@@ -1327,6 +1328,8 @@ void show_execution_point(char *filename, int lno);
 
 // compiler options -----------------------------------------------------------
 
+// Note: need to keep this in sync with its initialization in
+// src/init.c, and with JLCompilerOpts in base/inference.jl
 typedef struct {
     const char *julia_home;
     const char *julia_bin;
@@ -1342,6 +1345,7 @@ typedef struct {
     int8_t opt_level;
     int8_t depwarn;
     int8_t can_inline;
+    int8_t fast_math;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
@@ -1354,6 +1358,9 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
 #define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
+#define JL_COMPILEROPT_FAST_MATH_DEFAULT 0
+#define JL_COMPILEROPT_FAST_MATH_ON 1
+#define JL_COMPILEROPT_FAST_MATH_OFF 2
 #define JL_COMPILEROPT_COMPILE_DEFAULT 1
 #define JL_COMPILEROPT_COMPILE_OFF 0
 #define JL_COMPILEROPT_COMPILE_ON  1
