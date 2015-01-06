@@ -10,7 +10,7 @@
 @test binomial(int32(34), int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
 @test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
 @test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
-@test_throws InexactError binomial(int64(67), int64(30))
+@test_throws OverflowError binomial(int64(67), int64(30))
 
 p = shuffle([1:1000])
 @test isperm(p)
