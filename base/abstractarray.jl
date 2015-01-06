@@ -75,13 +75,23 @@ linearindexing{A<:Array}(::Type{A}) = LinearFast()
 linearindexing{A<:Range}(::Type{A}) = LinearFast()
 
 ## Bounds checking ##
-_checkbounds(sz::Int, i::Int, A::AbstractArray, J...) = 1 <= i <= sz || throw(BoundsError(A, J))
-_checkbounds(sz::Int, i::Real, A::AbstractArray, J...) = _checkbounds(sz, to_index(i), A, J...)
-_checkbounds(sz::Int, I::AbstractVector{Bool}, A::AbstractArray, J...) = length(I) == sz || throw(BoundsError(A, J))
-_checkbounds(sz::Int, r::Range{Int}, A::AbstractArray, J...) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError(A, J))
-_checkbounds{T<:Real}(sz::Int, r::Range{T}, A::AbstractArray, J...) = _checkbounds(sz, to_index(r), A, J...)
+# note: we force inlining of all _checkbounds methods in order to force splatting
+#       of the arguments and avoid allocating tuples (unless a BoundsError is raised).
+#       we can't use @inline/@noinline at this stage in the build process, since it indirectly uses
+#       _checkbounds itself (see expr.jl), so we define a crude version
+macro _crude_meta(tag, f)
+    ex = Expr(:function, arrayref(f.args, 1), Expr(:block, Expr(:meta, tag), arrayref(f.args, 2)))
+    esc(ex)
+end
+@_crude_meta noinline boundserror(A, J) = throw(BoundsError(A, J))
 
-function _checkbounds{T <: Real}(sz::Int, I::AbstractArray{T}, A::AbstractArray, J...)
+@_crude_meta inline _checkbounds(sz::Int, i::Int, A::AbstractArray, J...) = 1 <= i <= sz || boundserror(A, J)
+@_crude_meta inline _checkbounds(sz::Int, i::Real, A::AbstractArray, J...) = _checkbounds(sz, to_index(i), A, J...)
+@_crude_meta inline _checkbounds(sz::Int, I::AbstractVector{Bool}, A::AbstractArray, J...) = length(I) == sz || boundserror(A, J)
+@_crude_meta inline _checkbounds(sz::Int, r::Range{Int}, A::AbstractArray, J...) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || boundserror(A, J)
+@_crude_meta inline _checkbounds{T<:Real}(sz::Int, r::Range{T}, A::AbstractArray, J...) = _checkbounds(sz, to_index(r), A, J...)
+
+@_crude_meta inline function _checkbounds{T <: Real}(sz::Int, I::AbstractArray{T}, A::AbstractArray, J...)
     for i in I
         _checkbounds(sz, i, A, J...)
     end
