@@ -2126,3 +2126,8 @@ end
 #Issue #5570
 @test map(x -> int(mod1(uint(x),uint(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
 
+# Issue #9618: errors thrown by large exponentiations
+@test_throws DomainError big(2)^-(big(typemax(UInt))+1)
+@test_throws OverflowError big(2)^(big(typemax(UInt))+1)
+@test 0==big(0)^(big(typemax(UInt))+1)
+
