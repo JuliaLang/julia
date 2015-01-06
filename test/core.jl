@@ -2083,3 +2083,9 @@ f9535() = (global counter9535; counter9535 += 1; counter9535)
 g9535() = (f9535(),f9535())
 @assert g9535() == (1,2)
 @assert g9535() == (3,4)
+
+# issue #9617
+let p = 15
+    @test 2p+1 == 31  # not a hex float literal
+end
+@test_throws ParseError parse("0x0.1")  # must have p or P
