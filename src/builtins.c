@@ -56,15 +56,27 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
+DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...)
+{
+    va_list args;
+    ios_t buf;
+    ios_mem(&buf, 0);
+    va_start(args, fmt);
+    ios_vprintf(&buf, fmt, args);
+    va_end(args);
+    jl_value_t *msg = jl_takebuf_string(&buf);
+    JL_GC_PUSH1(&msg);
+    jl_throw(jl_new_struct(exception_type, msg));
+}
+
 void NORETURN jl_too_few_args(const char *fname, int min)
 {
-    // TODO: ArgumentError
-    jl_errorf("%s: too few arguments (expected %d)", fname, min);
+    jl_exceptionf(jl_argumenterror_type, "%s: too few arguments (expected %d)", fname, min);
 }
 
 void NORETURN jl_too_many_args(const char *fname, int max)
 {
-    jl_errorf("%s: too many arguments (expected %d)", fname, max);
+    jl_exceptionf(jl_argumenterror_type, "%s: too many arguments (expected %d)", fname, max);
 }
 
 void NORETURN jl_type_error_rt(const char *fname, const char *context,
@@ -439,11 +451,11 @@ JL_CALLABLE(jl_f_kwcall)
     }
 
     if (!jl_is_gf(f))
-        jl_error("function does not accept keyword arguments");
+        jl_exceptionf(jl_argumenterror_type, "function does not accept keyword arguments");
     jl_function_t *sorter = ((jl_methtable_t*)f->env)->kwsorter;
     if (sorter == NULL) {
-        jl_errorf("function %s does not accept keyword arguments",
-                  jl_gf_name(f)->name);
+        jl_exceptionf(jl_argumenterror_type, "function %s does not accept keyword arguments",
+                      jl_gf_name(f)->name);
     }
 
     for(size_t i=0; i < nkeys*2; i+=2) {

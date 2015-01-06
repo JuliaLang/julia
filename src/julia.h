@@ -328,6 +328,7 @@ extern DLLEXPORT jl_datatype_t *jl_weakref_type;
 extern DLLEXPORT jl_datatype_t *jl_ascii_string_type;
 extern DLLEXPORT jl_datatype_t *jl_utf8_string_type;
 extern DLLEXPORT jl_datatype_t *jl_errorexception_type;
+extern DLLEXPORT jl_datatype_t *jl_argumenterror_type;
 extern DLLEXPORT jl_datatype_t *jl_loaderror_type;
 extern DLLEXPORT jl_datatype_t *jl_typeerror_type;
 extern DLLEXPORT jl_datatype_t *jl_methoderror_type;
@@ -827,6 +828,7 @@ DLLEXPORT jl_value_t *jl_environ(int i);
 // throwing common exceptions
 DLLEXPORT void NORETURN jl_error(const char *str);
 DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...);
+DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *ty, const char *fmt, ...);
 DLLEXPORT void NORETURN jl_too_few_args(const char *fname, int min);
 DLLEXPORT void NORETURN jl_too_many_args(const char *fname, int max);
 DLLEXPORT void NORETURN jl_type_error(const char *fname, jl_value_t *expected, jl_value_t *got);
