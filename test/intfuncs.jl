@@ -86,3 +86,19 @@
 
 @test isqrt(4) == 2
 @test isqrt(5) == 2
+# issue #4884
+@test isqrt(9223372030926249000) == 3037000498
+@test isqrt(typemax(Int128)) == int128("13043817825332782212")
+@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
+@test isqrt(0) == 0
+for i = 1:1000
+    n = rand(UInt128)
+    s = isqrt(n)
+    @test s*s <= n
+    @test (s+1)*(s+1) > n
+    n = rand(UInt64)
+    s = isqrt(n)
+    @test s*s <= n
+    @test (s+1)*(s+1) > n
+end
+
