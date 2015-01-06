@@ -59,6 +59,17 @@
 @test minmax(NaN, 3.) == (3., 3.)
 @test isequal(minmax(NaN, NaN), (NaN, NaN))
 
+# fma
+let eps = 1.0/2^30, one_eps = 1+eps
+    @test one_eps * one_eps - 1 != 2147483649/1152921504606846976
+    @test fma(one_eps, one_eps, -1) == 2147483649/1152921504606846976
+end
+
+let epsf = 1.0f0/2^15, one_epsf = 1+epsf
+    @test one_epsf * one_epsf - 1 != float32(65537/1073741824)
+    @test fma(one_epsf, one_epsf, -1) == float32(65537/1073741824)
+end
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
