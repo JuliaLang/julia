@@ -1020,8 +1020,8 @@ end
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()
 @test startswith(string(gensym()),"##")
-@test_throws ErrorException symbol("ab\0")
-@test_throws ErrorException gensym("ab\0")
+@test_throws ArgumentError symbol("ab\0")
+@test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
 let f =IOBuffer(),
