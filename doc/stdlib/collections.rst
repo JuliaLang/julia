@@ -70,10 +70,10 @@ General Collections
    .. doctest::
    
        julia> isempty([])
-   	true
+       true
 	
        julia> isempty([1 2 3])
-   	false
+       false
 
 .. function:: empty!(collection) -> collection
 

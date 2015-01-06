@@ -137,7 +137,7 @@ So, we could have defined the ``test`` function above as
                relation = "greater than"
              end
              println("x is ", relation, " than y.")
-           end
+           end;
     
 ``if`` blocks also return a value, which may seem unintuitive to users
 coming from many other languages. This value is simply the return value
@@ -146,12 +146,13 @@ of the last executed statement in the branch that was chosen, so
 .. doctest::
 
     julia> x = 3
+    3
     
     julia> if x > 0
              "positive!"
-          else
+           else
              "negative..."
-          end
+           end
     "positive!"
 
 Note that very short conditional statements (one-liners) are frequently expressed using

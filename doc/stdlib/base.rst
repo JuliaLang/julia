@@ -410,11 +410,11 @@ Generic Functions
    .. doctest::
 
        julia> function f(x, y) # Define a function f
-   	           x + y
+                x + y
               end;
    	
        julia> apply(f, [1 2]) # Apply f with 1 and 2 as arguments
-   	3
+       3
    
    ``apply`` is called to implement the ``...`` argument splicing syntax,
    and is usually not called directly: ``apply(f,x) === f(x...)``
@@ -435,8 +435,8 @@ Generic Functions
    .. doctest::
    
    	julia> function f(x, y)
-   	           x + y
-              end;
+                 x + y
+               end;
    	       
    	julia> applicable(f, 1)
    	false
