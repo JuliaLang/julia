@@ -145,6 +145,8 @@ Library improvements
 
   * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
 
+  * Added `recvfrom` to get source address of UDP packets ([#9418])
+
 Deprecated or removed
 ---------------------
 

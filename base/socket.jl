@@ -427,7 +427,7 @@ _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = uint32(0)) = cc
 
 function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
     @assert sock.status == StatusInit
-    err = _bind(sock,host,ipv6only ? UV_UDP_IPV6ONLY : 0)
+    err = _bind(sock,host,port, uint32(ipv6only ? UV_UDP_IPV6ONLY : 0))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
             error(UVError("bind",err))
@@ -470,22 +470,40 @@ end
 _recv_stop(sock::UDPSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
 
 function recv(sock::UDPSocket)
+    addr, data = recvfrom(sock)
+    data
+end
+
+function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
         error("Invalid socket state")
     end
     _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Vector{UInt8}
+    stream_wait(sock,sock.recvnotify)::(Union(IPv4, IPv6), Vector{UInt8})
 end
 
+
 function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
+    # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
         # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
         notify_error(sock.recvnotify,"Partial message received")
     end
+
+    # need to check the address type in order to convert to a Julia IPAddr
+    addrout = if (addr == C_NULL)
+                  IPv4(0)
+              elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
+                  IPv4(ntoh(ccall(:jl_sockaddr_host4, Uint32, (Ptr{Void},), addr)))
+              else
+                  tmp = [uint128(0)]
+                  ccall(:jl_sockaddr_host6, Uint32, (Ptr{Void}, Ptr{Uint8}), addr, pointer(tmp))
+                  IPv6(ntoh(tmp[1]))
+              end
     buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),int(buf_size),true)
-    notify(sock.recvnotify,buf[1:nread])
+    notify(sock.recvnotify,(addrout,buf[1:nread]))
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv4,port::UInt16,buf)
