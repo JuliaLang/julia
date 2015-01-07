@@ -217,7 +217,7 @@ debug && println("Reorder Schur")
 debug && println("Sorted Generalized (with selctg)")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         if eltya <: Complex
-            selctg(a, b) = abs(a) <= 1.0 ? 1 : 0
+            selctg(a, b) = abs(a) == 0.0 ? 1 : 0
         else
             selctg(a, b, c) = (a+b)/c <= 1 ? 1 : 0
         end
