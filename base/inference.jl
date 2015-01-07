@@ -2315,7 +2315,7 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         push!(stmts, tmp_ex)
         if !issubtype(atypes_l[i], invoke_types[i])
             atypes_l[i] = typeintersect(atypes_l[i], invoke_types[i])
-            check_type = :($isa($arg_name, $(invoke_types[i])))
+            check_type = :($(TopNode(:isa))($arg_name, $(invoke_types[i])))
             check_type.typ = Bool
             push!(check_stmts, Expr(:gotoifnot, check_type, err_label.label))
         end
@@ -2325,7 +2325,7 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         append!(stmts, check_stmts)
         push!(stmts, gn(after_err_label))
         push!(stmts, err_label)
-        check_error = :($error("invoke: argument type error"))
+        check_error = :($(TopNode(:error))("invoke: argument type error"))
         check_error.typ = None
         push!(stmts, check_error)
         push!(stmts, after_err_label)
