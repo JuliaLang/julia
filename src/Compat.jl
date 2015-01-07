@@ -134,6 +134,15 @@ if VERSION < v"0.4.0-dev+2056"
     end
 end
 
+if VERSION < v"0.4.0-dev+2440"
+    bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+    bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+    bitrand(dims::Dims)   = rand!(BitArray(dims))
+    bitrand(dims::Int...) = rand!(BitArray(dims))
+    export bitrand
+    Base.rand(::Type{Bool}) = randbool()
+end
+
 if VERSION < v"0.4.0-dev+2485"
     startswith = Base.beginswith
     export startswith
