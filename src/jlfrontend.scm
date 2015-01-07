@@ -18,10 +18,10 @@
 	       `(incomplete ,msg)
 	       e))
 	 (begin
-	   ;;(newline)
-	   ;;(display "unexpected error: ")
-	   ;;(prn e)
-	   ;;(print-stack-trace (stacktrace))
+	   (newline)
+	   (display "unexpected error: ")
+	   (prn e)
+	   (print-stack-trace (stacktrace))
 	   '(error "malformed expression"))))
    thk))
 

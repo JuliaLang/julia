@@ -421,6 +421,10 @@ static Value *literal_pointer_val(jl_value_t *p)
         // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }
+    if (jl_is_gensym(p)) {
+        // GenSyms are prefixed with jl_gensym#
+        return julia_gv("jl_gensym#", p);
+    }
     // something else gets just a generic name
     return julia_gv("jl_global#", p);
 }
@@ -1021,6 +1025,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return e;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
+    if (jl_is_gensym(e))
+        return (jl_value_t*)jl_any_type; //TODO
     if (jl_is_quotenode(e)) {
         e = jl_fieldref(e,0);
         goto type_of_constant;
@@ -1345,6 +1351,7 @@ static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
     if (aname && ctx->arrayvars->find(aname) != ctx->arrayvars->end()) {
         return &(*ctx->arrayvars)[aname];
     }
+    //TODO: gensym case
     return NULL;
 }
 

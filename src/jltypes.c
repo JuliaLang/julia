@@ -23,6 +23,7 @@ jl_datatype_t *jl_type_type;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
+jl_datatype_t *jl_gensym_type;
 jl_tuple_t *jl_tuple_type;
 jl_value_t *jl_tupletype_type;
 jl_datatype_t *jl_ntuple_type;
@@ -3129,6 +3130,10 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("GotoNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0, 1);
+
+    jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_null,
+                        jl_tuple1(jl_symbol("id")),
+                        jl_tuple1(jl_long_type), 0, 0, 0);
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_null,
