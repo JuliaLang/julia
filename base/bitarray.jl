@@ -337,7 +337,7 @@ bitpack{T,N}(A::AbstractArray{T,N}) = convert(BitArray{N}, A)
     return r
 end
 
-function getindex(B::BitArray, i::Int)
+@inline function getindex(B::BitArray, i::Int)
     1 <= i <= length(B) || throw(BoundsError(B, i))
     return unsafe_bitgetindex(B.chunks, i)
 end
