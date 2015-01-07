@@ -272,8 +272,10 @@ for T = (Float32, Float64,),# BigFloat),
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
+    vals  = T[a:s:a+(n-1)*s;]./den
     r = start:step:stop
-    @test [r;] == T[a:s:a+(n-1)*s;]./den
+    @test [r;] == vals
+    @test linspace(start, stop, n) == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]

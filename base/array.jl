@@ -258,12 +258,35 @@ function linspace(start::Real, stop::Real, n::Integer)
     end
     n -= 1
     S = promote_type(T, Float64)
-    for i=0:n
+    for i = 0:n
         a[i+1] = start*(convert(S, (n-i))/n) + stop*(convert(S, i)/n)
     end
     a
 end
 linspace(start::Real, stop::Real) = linspace(start, stop, 100)
+
+function linspace{T<:FloatingPoint}(start::T, stop::T, n::Int)
+    n == 1 && return [start]
+    n -= 1
+    a0, b = rat(start)
+    a = convert(T,a0)
+    if a/convert(T,b) == start
+        c0, d = rat(stop)
+        c = convert(T,c0)
+        if c/convert(T,d) == stop
+            e = lcm(b,d)
+            a *= div(e,b)
+            c *= div(e,d)
+            ne = convert(T,n*e)
+            if a*n/ne == start && c*n/ne == stop
+                return [ (a*(n-k) + c*k)/ne for k=0:n ]
+            end
+        end
+    end
+    return [ start*((n-k)/n) + stop*(k/n) for k=0:n ]
+end
+linspace(start::FloatingPoint, stop::FloatingPoint, n::Integer) =
+    linspace(promote(start, stop)..., Int(n))
 
 logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
 logspace(start::Real, stop::Real) = logspace(start, stop, 50)
