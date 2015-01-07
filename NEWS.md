@@ -79,7 +79,7 @@ Library improvements
   * Arithmetic is type-preserving for more types; e.g. `(x::Int8) + (y::Int8)` now
     yields an `Int8` ([#3759]).
 
-  * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).
+  * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).  Similarly for `cumsum` ([#9665]).
 
   * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
 
@@ -1149,5 +1149,8 @@ Too numerous to mention.
 [#9261]: https://github.com/JuliaLang/julia/issues/9261
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
-[#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9418]: https://github.com/JuliaLang/julia/issues/9418
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
+[#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9578]: https://github.com/JuliaLang/julia/issues/9578
+[#9665]: https://github.com/JuliaLang/julia/issues/9665
