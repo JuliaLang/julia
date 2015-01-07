@@ -45,11 +45,11 @@
 @test bool(1//2) == true
 
 # basic arithmetic
-@test 2+3 == 5
-@test 2.+3. == 5.
-@test 2*3 == 6
-@test 2.*3 == 6
-@test 2. * 3. == 6.
+@test 2 + 3 == 5
+@test 2.0 + 3.0 == 5.
+@test 2 * 3 == 6
+@test 2.0 * 3 == 6
+@test 2.0 * 3.0 == 6.
 @test min(1.0,1) == 1
 
 @test minmax(5, 3) == (3, 5)
