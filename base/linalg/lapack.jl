@@ -3364,7 +3364,7 @@ __selctg = C_NULL  # use global so we can compile cfunction dynamically
 
 function selctg2c{T}(a::T, b::T, c::T)
     global __selctg  # get current global for __selctg. Updated in gees/gges
-    return __selctg(a, b, c)::BlasInt
+    return convert(BlasInt, __selctg(a, b, c))::BlasInt
 end
 
 
@@ -3498,7 +3498,7 @@ end
 # Complex Schur forms
 function zselctg2c{T}(a::T, b::T)
     global __selctg  # get current __selctg. Updated in zgees/zgges
-    return __selctg(a, b)::BlasInt
+    return convert(BlasInt, __selctg(a, b))::BlasInt
 end
 
 for (gees, gges, elty, relty) in
