@@ -4836,7 +4836,7 @@ popdisplay(d::Display)
 
 ("Base","factorial","factorial(n, k)
 
-   Compute \"factorial(n)/factorial(k)\"
+   Compute \"factorial(n) ÷ factorial(k)\"
 
 "),
 
