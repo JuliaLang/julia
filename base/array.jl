@@ -1452,11 +1452,11 @@ symdiff(a) = a
 symdiff(a, b) = union(setdiff(a,b), setdiff(b,a))
 symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
 
-_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
-_cumsum_type(v) = typeof(v[1]+v[1])
+_cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(r_promote(AddFun, zero(T)::T))
+_cumsum_type(v) = typeof(r_promote(AddFun, v[1]))
 
-for (f, fp, op) = ((:cumsum, :cumsum_pairwise!, :+),
-                   (:cumprod, :cumprod_pairwise!, :*) )
+for (f, f!, fp, op) = ((:cumsum, :cumsum!, :cumsum_pairwise!, :+),
+                       (:cumprod, :cumprod!, :cumprod_pairwise!, :*) )
     # in-place cumsum of c = s+v[range(i1,n)], using pairwise summation
     @eval function ($fp){T}(v::AbstractVector, c::AbstractVector{T}, s, i1, n)
         local s_::T # for sum(v[range(i1,n)]), i.e. sum without s
@@ -1475,16 +1475,18 @@ for (f, fp, op) = ((:cumsum, :cumsum_pairwise!, :+),
         return s_
     end
 
-    @eval function ($f)(v::AbstractVector)
+    @eval function ($f!)(result::AbstractVector, v::AbstractVector)
         n = length(v)
-        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
-                        (:(similar(v))))
-        if n == 0; return c; end
-        ($fp)(v, c, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
-        return c
+        if n == 0; return result; end
+        ($fp)(v, result, $(op==:+ ? :(zero(v[1])) : :(one(v[1]))), 1, n)
+        return result
     end
 
-    @eval ($f)(A::AbstractArray) = ($f)(A, 1)
+    @eval function ($f)(v::AbstractVector)
+        c = $(op===:+ ? (:(similar(v,_cumsum_type(v)))) :
+                        (:(similar(v))))
+        return ($f!)(c, v)
+    end
 end
 
 for (f, op) = ((:cummin, :min), (:cummax, :max))
