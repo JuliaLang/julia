@@ -2189,8 +2189,8 @@ let
     end
 
     function g9642()
-        invoke(f, (get_type_9642(Any), get_type_9642(Any)),
+        invoke(f9642, (get_type_9642(Any), get_type_9642(Any)),
                get_next_9642(), get_next_9642())
     end
-    @test g_type() == 7
+    @test g9642() == 7
 end
