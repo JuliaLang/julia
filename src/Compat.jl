@@ -134,6 +134,11 @@ if VERSION < v"0.4.0-dev+2056"
     end
 end
 
+if VERSION < v"0.4.0-dev+2485"
+    startswith = Base.beginswith
+    export startswith
+end
+
 function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
