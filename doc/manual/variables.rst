@@ -143,7 +143,7 @@ adopt the following conventions:
 - Word separation can be indicated by underscores (``'_'``), but use of
   underscores is discouraged unless the name would be hard to read otherwise.
 - Names of ``Type``\ s begin with a capital letter and word separation is
-  shown with CamelCase instead of underscores.
+  shown with upper camel case instead of underscores.
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.
 - Functions that write to their arguments have names that end in ``!``. 
