@@ -8,6 +8,6 @@ function fact(acc::BigInt,n)
     end
 end
 
-function factorial(n)
+function factorialexample(n)
     fact(BigInt(1),n)
 end
