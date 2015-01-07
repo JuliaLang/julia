@@ -1,7 +1,8 @@
 .. _stdlib-linalg:
 
+**************
 Linear Algebra
-==============
+**************
 
 Standard Functions
 ------------------
