@@ -142,8 +142,8 @@ adopt the following conventions:
 - Names of variables are in lower case.
 - Word separation can be indicated by underscores (``'\_'``), but use of
   underscores is discouraged unless the name would be hard to read otherwise.
-- Names of ``Type``\ s begin with a capital letter and word separation is
-  shown with CamelCase instead of underscores.
+- Names of ``Type``\ s follow PascalCase conventions instead of using
+  underscores for word separation.
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.
 - Functions that modify their inputs have names that end in ``!``. These
