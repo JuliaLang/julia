@@ -787,30 +787,29 @@ function abstract_call_gf(f, fargs, argtypes, e)
 end
 
 function invoke_tfunc(f, types, argtypes)
-    argtypes = typeintersect(types,limit_tuple_type(argtypes))
-    if is(argtypes,Bottom)
+    argtypes = typeintersect(types, limit_tuple_type(argtypes))
+    if is(argtypes, Bottom)
         return Bottom
     end
-    applicable = _methods(f, types, -1)
-    if isempty(applicable)
+    local meth
+    try
+        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
+    catch
         return Any
     end
-    for (m::Tuple) in applicable
-        local linfo
-        try
-            linfo = func_for_method(m[3],types,m[2])
-        catch
-            return Any
-        end
-        if typeseq(m[1],types)
-            tvars = m[2][1:2:end]
-            (ti, env) = ccall(:jl_match_method, Any, (Any,Any,Any),
-                              argtypes, m[1], tvars)::(Any,Any)
-            (_tree,rt) = typeinf(linfo, ti, env, linfo)
-            return rt
-        end
+    if is(meth, nothing)
+        return Any
     end
-    return Any
+    (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                      argtypes, meth.sig, meth.tvars)::(Any, Any)
+    local linfo
+    try
+        linfo = func_for_method(meth, types, env)
+    catch
+        return Any
+    end
+    (_tree, rt) = typeinf(linfo, ti, env, linfo)
+    return rt
 end
 
 function to_tuple_of_Types(t::ANY)
@@ -2363,7 +2362,7 @@ _match_method(m::ANY, t::ANY) = _match_method(m, Any[(t::Tuple)...],
 function _match_method(m::ANY, t::Array, i, matching::Array{Any, 1})
     if i == 0
         res = ccall(:jl_match_method, Any, (Any, Any, Any),
-                    tuple(t...), m.sig, m.tvars)
+                    tuple(t...), m.sig, m.tvars)::(Any, Any)
         push!(matching, tuple(res..., m))
     else
         ti = t[i]
