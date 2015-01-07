@@ -334,7 +334,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
                 " push %%rbp;\n" // instead of RSP
                 " jmp %P1;\n" // call stack_task with fake stack frame
                 " ud2"
-                : : "r"(stackbase), "i"(start_task) : "memory" );
+                : : "r"(stackbase), "i"(&start_task) : "memory" );
 #elif defined(_CPU_X86_)
             asm(" movl %0, %%esp;\n"
                 " xorl %%ebp, %%ebp;\n"

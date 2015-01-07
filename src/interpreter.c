@@ -131,6 +131,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     if (jl_is_symbolnode(e)) {
         return eval((jl_value_t*)jl_symbolnode_sym(e), locals, nl);
     }
+    if (jl_is_gensym(e)) {
+        return NULL; //TODO: gensym
+    }
     if (jl_is_quotenode(e)) {
         return jl_fieldref(e,0);
     }
@@ -160,6 +163,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         if (jl_is_newvarnode(e)) {
             jl_value_t *var = jl_fieldref(e,0);
+            if (jl_is_gensym(var))
+                assert(0); //TODO: gensym
             assert(jl_is_symbol(var));
             for(size_t i=0; i < nl; i++) {
                 if (locals[i*2] == var) {
@@ -199,7 +204,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                         jl_error("wrong number of arguments");
                     }
                     for(int i=0; i < na; i++) {
-                        ar[i*2] = (jl_value_t*)jl_decl_var(jl_cellref(formals,i));
+                        jl_value_t *v = jl_cellref(formals, i);
+                        ar[i*2] = (jl_is_gensym(v)) ? v : (jl_value_t*)jl_decl_var(v);
                     }
                     jl_value_t *ret = jl_interpret_toplevel_thunk_with(li, ar, na);
                     JL_GC_POP();
@@ -215,6 +221,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
+        if (jl_is_gensym(sym))
+            assert(0); //TODO: gensym
         assert(jl_is_symbol(sym));
         size_t i;
         for (i=0; i < nl; i++) {

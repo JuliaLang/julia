@@ -479,10 +479,11 @@ static int is_ast_node(jl_value_t *v)
         }
         return 0;
     }
-    return jl_is_symbol(v) || jl_is_expr(v) || jl_is_newvarnode(v) ||
+    return jl_is_symbol(v) || jl_is_symbolnode(v) || jl_is_gensym(v) ||
+        jl_is_expr(v) || jl_is_newvarnode(v) ||
         jl_typeis(v, jl_array_any_type) || jl_is_tuple(v) ||
         jl_is_uniontype(v) || jl_is_int32(v) || jl_is_int64(v) ||
-        jl_is_symbolnode(v) || jl_is_bool(v) || jl_is_typevar(v) ||
+        jl_is_bool(v) || jl_is_typevar(v) ||
         jl_is_topnode(v) || jl_is_quotenode(v) || jl_is_gotonode(v) ||
         jl_is_labelnode(v) || jl_is_linenode(v) || jl_is_getfieldnode(v);
 }
@@ -1755,7 +1756,7 @@ void jl_init_serializer(void)
     htable_new(&fptr_to_id, sizeof(id_to_fptrs)/sizeof(*id_to_fptrs));
     htable_new(&backref_table, 0);
 
-    void *tags[] = { jl_symbol_type, jl_datatype_type,
+    void *tags[] = { jl_symbol_type, jl_gensym_type, jl_datatype_type,
                      jl_function_type, jl_tuple_type, jl_array_type,
                      jl_expr_type, (void*)LongSymbol_tag, (void*)LongTuple_tag,
                      (void*)LongExpr_tag, (void*)LiteralVal_tag,
@@ -1816,7 +1817,6 @@ void jl_init_serializer(void)
                      jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
                      jl_box_int32(51), jl_box_int32(52), jl_box_int32(53),
                      jl_box_int32(54), jl_box_int32(55), jl_box_int32(56),
-                     jl_box_int32(57), jl_box_int32(58), jl_box_int32(59),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -1838,7 +1838,6 @@ void jl_init_serializer(void)
                      jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
                      jl_box_int64(51), jl_box_int64(52), jl_box_int64(53),
                      jl_box_int64(54), jl_box_int64(55), jl_box_int64(56),
-                     jl_box_int64(57), jl_box_int64(58), jl_box_int64(59),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
@@ -1851,7 +1850,8 @@ void jl_init_serializer(void)
                      jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
                      jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
-                     jl_symbol_type->name, jl_pointer_type->name, jl_datatype_type->name,
+                     jl_symbol_type->name, jl_gensym_type->name,
+                     jl_pointer_type->name, jl_datatype_type->name,
                      jl_uniontype_type->name, jl_array_type->name, jl_expr_type->name,
                      jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
                      jl_method_type->name, jl_tvar_type->name, jl_vararg_type->name,

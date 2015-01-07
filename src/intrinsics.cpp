@@ -300,6 +300,8 @@ static Value *auto_unbox(jl_value_t *x, jl_codectx_t *ctx)
             if (it != ctx->vars.end())
                 bt = (*it).second.declType;
         }
+        if (jl_is_gensym(x))
+            assert(0); //TODO: gensym
         if (bt == NULL || !jl_is_bitstype(bt)) {
             // TODO: make sure this code is valid; hopefully it is
             // unreachable but it should still be well-formed.

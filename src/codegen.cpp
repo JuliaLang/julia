@@ -1064,6 +1064,8 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         }
         return NULL;
     }
+    if (jl_is_gensym(ex))
+        return NULL;
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(jl_base_relative_to(mod),
                                          (jl_sym_t*)jl_fieldref(ex,0));
@@ -1416,6 +1418,8 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
                 return true;
         }
     }
+    if (jl_is_gensym(ex))
+        return true;
     if (static_eval(ex, ctx, true, false) != NULL)
         return true;
     if (jl_is_expr(ex)) {
@@ -1443,7 +1447,7 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 // classify exprs that might need temporary rooting.
 static bool might_need_root(jl_value_t *ex)
 {
-    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) &&
+    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex));
 }
 
@@ -1738,8 +1742,8 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
 {
     if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
         !jl_is_typevar(jl_tparam0(rt1)) && !jl_is_typevar(jl_tparam0(rt2)) &&
-        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || is_constant(arg1, ctx)) &&
-        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || is_constant(arg2, ctx))) {
+        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || jl_is_gensym(arg1) || is_constant(arg1, ctx)) &&
+        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || jl_is_gensym(arg2) || is_constant(arg2, ctx))) {
         if (jl_tparam0(rt1) == jl_tparam0(rt2))
             return ConstantInt::get(T_int1, 1);
         return ConstantInt::get(T_int1, 0);
@@ -2838,6 +2842,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     else
         assert(false);
     jl_binding_t *bnd=NULL;
+    if (jl_is_gensym(s))
+        assert(0); //TODO: gensym
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
     Value *rval;
     if (bnd) {
@@ -2931,7 +2937,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (!valuepos) return NULL;
         return emit_var(jl_symbolnode_sym(expr), jl_symbolnode_type(expr), ctx, isboxed);
     }
-    else if (jl_is_labelnode(expr)) {
+    if (jl_is_gensym(expr)) {
+        if (!valuepos) return NULL;
+        return NULL; //TODO: gensym
+    }
+    if (jl_is_labelnode(expr)) {
         int labelname = jl_labelnode_label(expr);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
@@ -2942,12 +2952,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         builder.SetInsertPoint(bb);
         return NULL;
     }
-    else if (jl_is_linenode(expr)) {
+    if (jl_is_linenode(expr)) {
         if (valuepos)
             jl_error("Linenode in value position");
         return NULL;
     }
-    else if (jl_is_quotenode(expr)) {
+    if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
         if (jl_is_bitstype(jl_typeof(jv))) {
             return emit_expr(jv, ctx, isboxed, valuepos);
@@ -2957,7 +2967,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return literal_pointer_val(jv);
     }
-    else if (jl_is_gotonode(expr)) {
+    if (jl_is_gotonode(expr)) {
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             int labelname = jl_gotonode_label(expr);
             BasicBlock *bb = (*ctx->labels)[labelname];
@@ -2969,11 +2979,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return NULL;
     }
-    else if (jl_is_getfieldnode(expr)) {
+    if (jl_is_getfieldnode(expr)) {
         return emit_getfield(jl_fieldref(expr,0),
                              (jl_sym_t*)jl_fieldref(expr,1), ctx);
     }
-    else if (jl_is_topnode(expr)) {
+    if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_value_t *etype = expr_type(expr, ctx);
         jl_module_t *mod = topmod(ctx);
@@ -2988,9 +2998,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return emit_checked_var(bp, var, ctx);
     }
-    else if (jl_is_newvarnode(expr)) {
+    if (jl_is_newvarnode(expr)) {
         assert(!valuepos);
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        if (jl_is_gensym(var))
+            assert(0); //TODO: gensym
         assert(jl_is_symbol(var));
         jl_varinfo_t &vi = ctx->vars[var];
         Value *lv = vi.memvalue;
@@ -3051,11 +3063,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         builder.SetInsertPoint(ifso);
     }
-
     else if (head == call_sym || head == call1_sym) {
         return emit_call(args, jl_array_dim0(ex->args), ctx, (jl_value_t*)ex);
     }
-
     else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (valuepos) {
@@ -3965,6 +3975,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         maybe_alloc_arrayvar(s, &ctx);
     }
+    //TODO: gensym
 
     // fetch env out of function object if we need it
     if (hasCapt) {
