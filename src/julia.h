@@ -1344,7 +1344,7 @@ typedef struct {
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
 
-// Settings for code_coverage and mallog_log
+// Settings for code_coverage and malloc_log
 #define JL_LOG_NONE 0
 #define JL_LOG_USER 1
 #define JL_LOG_ALL  2
