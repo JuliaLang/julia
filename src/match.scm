@@ -157,7 +157,7 @@
 ; for example
 ; (pattern-lambda (/ 2 3) '(/ 3 2)), (pattern-lambda (/ 3 2) '(/ 2 3))
 (define (pattern-expand plist expr)
-  (if (or (not (pair? expr)) (eq? (car expr) 'quote) (eq? (car expr) 'varlist))
+  (if (or (not (pair? expr)) (memq (car expr) '(quote varlist inert)))
       expr
       (let ((enew (apply-patterns plist expr)))
         (if (eq? enew expr)
@@ -176,7 +176,7 @@
 
 ;; expand only outermost
 (define (pattern-expand1 plist expr)
-  (if (or (not (pair? expr)) (eq? (car expr) 'quote))
+  (if (or (not (pair? expr)) (memq (car expr) '(quote inert)))
       expr
       (let ((enew (apply-patterns plist expr)))
         (if (eq? enew expr)
@@ -187,7 +187,7 @@
 ;; finds and replaces pattern matches with their expansions
 ;; one pass, does not expand recursively
 (define (pattern-replace plist expr)
-  (if (or (not (pair? expr)) (eq? (car expr) 'quote))
+  (if (or (not (pair? expr)) (memq (car expr) '(quote inert)))
       expr
       (let ((enew (apply-patterns plist expr)))
         (if (eq? enew expr)
