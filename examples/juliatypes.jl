@@ -301,10 +301,14 @@ function issub(a::Var, b::Var, env)
     if aa.right
         # this is a bit odd, but seems necessary to make this case work:
         # (@UnionAll x<:T<:x RefT{RefT{T}}) == RefT{@UnionAll x<:T<:x RefT{T}}
-        bb.right && return issub(bb.ub, bb.lb, env) && issub(aa.ub, aa.lb, env)
+        bb.right && return issub(bb.ub, bb.lb, env)
         return var_lt(a, b, env)
     else
-        #!bb.right && return issub(aa.ub, bb.lb, env) # shortcut check ∀a,b . a<:b
+        if !bb.right   # check ∀a,b . a<:b
+            # the bounds of left-side variables never change, and can only lead
+            # to other left-side variables, so using || here is safe.
+            return issub(aa.ub, b, env) || issub(a, bb.lb, env)
+        end
         return var_gt(b, a, env)
     end
 end
@@ -627,6 +631,11 @@ function test_3()
                        (@UnionAll T @UnionAll S    inst(PairT,T,S)))
     @test issub_strict((@UnionAll T @UnionAll S>:T inst(PairT,T,S)),
                        (@UnionAll T @UnionAll S    inst(PairT,T,S)))
+
+    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
+    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll T<:S<:T tupletype(inst(RefT,T),S)))
 end
 
 # level 4: Union
