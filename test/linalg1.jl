@@ -188,6 +188,20 @@ debug && println("Schur")
         @test istriu(f[:Schur]) || iseltype(a,Real)
     end
 
+debug && println("Sorted Schur (with selctg)")
+    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+        if eltya <: Complex
+            selctg(a, b) = abs(a / b) <= 1 ? 1 : 0
+        else
+            selctg(a, b, c) = (a+b)/c <= 1 ? 1 : 0
+        end
+        f = schurfact(a, selctg)
+        @test_approx_eq f[:vectors]*f[:Schur]*f[:vectors]' a
+        @test_approx_eq sort(real(f[:values])) sort(real(d))
+        @test_approx_eq sort(imag(f[:values])) sort(imag(d))
+        @test istriu(f[:Schur]) || iseltype(a,Real)
+    end
+
 debug && println("Reorder Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         # use asym for real schur to enforce tridiag structure
@@ -198,6 +212,21 @@ debug && println("Reorder Schur")
         O = ordschur(S, select)
         bool(sum(select)) && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
         @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
+    end
+
+debug && println("Sorted Generalized (with selctg)")
+    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
+        if eltya <: Complex
+            selctg(a, b) = abs(a) <= 1.0 ? 1 : 0
+        else
+            selctg(a, b, c) = (a+b)/c <= 1 ? 1 : 0
+        end
+
+        f = schurfact(a[1:5,1:5], a[6:10,6:10], selctg)
+        @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
+        @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
+        @test istriu(f[:S]) || iseltype(a,Real)
+        @test istriu(f[:T]) || iseltype(a,Real)
     end
 
 debug && println("Generalized Schur")

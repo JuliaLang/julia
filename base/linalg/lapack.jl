@@ -3358,12 +3358,22 @@ for (orghr, elty) in
         end
     end
 end
+
 # Schur forms
+__selctg = C_NULL  # use global so we can compile cfunction dynamically
+
+function selctg2c{T}(a::T, b::T, c::T)
+    global __selctg  # get current global for __selctg. Updated in gees/gges
+    return __selctg(a, b, c)::BlasInt
+end
+
+
 for (gees, gges, elty) in
     ((:dgees_,:dgges_,:Float64),
      (:sgees_,:sgges_,:Float32))
     @eval begin
-        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
+        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty},
+                       selctg::Union(Function, Ptr{Void})=C_NULL)
 #     .. Scalar Arguments ..
 #     CHARACTER          JOBVS, SORT
 #     INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
@@ -3382,16 +3392,35 @@ for (gees, gges, elty) in
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
+            sort = selctg == C_NULL ? 'N' : 'S'
+
+            # NOTE: type of bwork in ccall type tuple is always Ptr{BlasInt}.
+            #       This works because if sort is 'N' (or selctg is C_NULL)
+            #       then LAPACK never touches this object so incorrect
+            #       type won't cause problems
+            bwork = selctg == C_NULL ? C_NULL : Array(BlasInt, n)
+
+            # create inner_selctg to be passed to function
+            if selctg == C_NULL
+                inner_selctg = C_NULL
+            else
+                # change __selctg global to our value
+                global __selctg
+                __selctg = selctg
+                inner_selctg = cfunction(selctg2c, BlasInt,
+                                         ($elty, $elty, $elty))
+            end
+
             for i = 1:2
                 ccall(($(blasfunc(gees)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                        Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &'N', C_NULL, &n,
+                        Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobvs, &sort, inner_selctg, &n,
                         A, &max(1, n), sdim, wr,
                         wi, vs, &ldvs, work,
-                        &lwork, C_NULL, info)
+                        &lwork, bwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -3400,7 +3429,9 @@ for (gees, gges, elty) in
             end
             A, vs, all(wi .== 0) ? wr : complex(wr, wi)
         end
-        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty},
+                       B::StridedMatrix{$elty},
+                       selctg::Union(Function, Ptr{Void})=C_NULL)
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBVSL, JOBVSR, SORT
 #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
@@ -3424,19 +3455,34 @@ for (gees, gges, elty) in
             work = Array($elty, 1)
             lwork = blas_int(-1)
             info = Array(BlasInt, 1)
+            sort = selctg == C_NULL ? 'N' : 'S'
+
+            # NOTE: See note above
+            bwork = selctg == C_NULL ? C_NULL : Array(BlasInt, n)
+
+            # create inner_selctg to be passed to blasfunc
+            if selctg == C_NULL
+                inner_selctg = C_NULL
+            else
+                # change __selctg global to our value
+                global __selctg
+                __selctg = selctg
+                inner_selctg = cfunction(selctg2c, BlasInt,
+                                         ($elty, $elty, $elty))
+            end
             for i = 1:2
                 ccall(($(blasfunc(gges)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
+                        Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', C_NULL,
+                    &jobvsl, &jobvsr, &sort, inner_selctg,
                     &n, A, &max(1,n), B,
                     &max(1,n), &sdim, alphar, alphai,
                     beta, vsl, &ldvsl, vsr,
-                    &ldvsr, work, &lwork, C_NULL,
+                    &ldvsr, work, &lwork, bwork,
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -3448,11 +3494,19 @@ for (gees, gges, elty) in
         end
     end
 end
+
+# Complex Schur forms
+function zselctg2c{T}(a::T, b::T)
+    global __selctg  # get current __selctg. Updated in zgees/zgges
+    return __selctg(a, b)::BlasInt
+end
+
 for (gees, gges, elty, relty) in
     ((:zgees_,:zgges_,:Complex128,:Float64),
      (:cgees_,:cgges_,:Complex64,:Float32))
     @eval begin
-        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty})
+        function gees!(jobvs::BlasChar, A::StridedMatrix{$elty},
+                       selctg::Union(Function, Ptr{Void})=C_NULL)
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBVS, SORT
 #       INTEGER            INFO, LDA, LDVS, LWORK, N, SDIM
@@ -3472,16 +3526,31 @@ for (gees, gges, elty, relty) in
             lwork = blas_int(-1)
             rwork = Array($relty, n)
             info = Array(BlasInt, 1)
+            sort = selctg == C_NULL ? 'N' : 'S'
+
+            # NOTE: See note above
+            bwork = selctg == C_NULL ? C_NULL : Array(BlasInt, n)
+
+            # create inner_selctg to be passed to blasfunc
+            if selctg == C_NULL
+                inner_selctg = C_NULL
+            else
+                # change __selctg global to our value
+                global __selctg
+                __selctg = selctg
+                inner_selctg = cfunction(zselctg2c, BlasInt,
+                                         ($elty, $elty))
+            end
             for i = 1:2
                 ccall(($(blasfunc(gees)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &sort, C_NULL, &n,
+                        Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                    &jobvs, &sort, inner_selctg, &n,
                         A, &max(1, n), &sdim, w,
                         vs, &ldvs, work, &lwork,
-                        rwork, C_NULL, info)
+                        rwork, bwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
@@ -3490,7 +3559,9 @@ for (gees, gges, elty, relty) in
             end
             A, vs, w
         end
-        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty}, B::StridedMatrix{$elty})
+        function gges!(jobvsl::Char, jobvsr::Char, A::StridedMatrix{$elty},
+                       B::StridedMatrix{$elty},
+                       selctg::Union(Function, Ptr{Void})=C_NULL)
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBVSL, JOBVSR, SORT
 #       INTEGER            INFO, LDA, LDB, LDVSL, LDVSR, LWORK, N, SDIM
@@ -3515,19 +3586,34 @@ for (gees, gges, elty, relty) in
             lwork = blas_int(-1)
             rwork = Array($relty, 8n)
             info = Array(BlasInt, 1)
+            sort = selctg == C_NULL ? 'N' : 'S'
+
+            # NOTE: See note above
+            bwork = selctg == C_NULL ? C_NULL : Array(BlasInt, n)
+
+            # create inner_selctg to be passed to blasfunc
+            if selctg == C_NULL
+                inner_selctg = C_NULL
+            else
+                # change __selctg global to our value
+                global __selctg
+                __selctg = selctg
+                inner_selctg = cfunction(zselctg2c, BlasInt,
+                                         ($elty, $elty))
+            end
             for i = 1:2
                 ccall(($(blasfunc(gges)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{Void},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', C_NULL,
+                    &jobvsl, &jobvsr, &sort, inner_selctg,
                     &n, A, &max(1,n), B,
                     &max(1,n), &sdim, alpha, beta,
                     vsl, &ldvsl, vsr, &ldvsr,
-                    work, &lwork, rwork, C_NULL,
+                    work, &lwork, rwork, bwork,
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
