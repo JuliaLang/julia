@@ -802,6 +802,9 @@ function invoke_tfunc(f, types, argtypes)
     end
     (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
                       argtypes, meth.sig, meth.tvars)::(Any, Any)
+    if !isa(ti, Tuple)
+        return Any
+    end
     local linfo
     try
         linfo = func_for_method(meth, types, env)
@@ -2361,9 +2364,11 @@ _match_method(m::ANY, t::ANY) = _match_method(m, Any[(t::Tuple)...],
                                               length(t::Tuple), [])
 function _match_method(m::ANY, t::Array, i, matching::Array{Any, 1})
     if i == 0
-        res = ccall(:jl_match_method, Any, (Any, Any, Any),
-                    tuple(t...), m.sig, m.tvars)::(Any, Any)
-        push!(matching, tuple(res..., m))
+        (ti, env) = ccall(:jl_match_method, Any, (Any, Any, Any),
+                          tuple(t...), m.sig, m.tvars)::(Any, Any)
+        if isa(ti, Tuple)
+            push!(matching, tuple(ti, env, m))
+        end
     else
         ti = t[i]
         if isa(ti, UnionType)
