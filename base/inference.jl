@@ -2278,18 +2278,27 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
     catch err
         return NF
     end
-
-    argexprs = argexprs[3:end]
-    atypes = atypes[3:end]
-    if length(atypes) != length(invoke_types)
+    if length(atypes) != (length(invoke_types) + 2)
         return NF
     end
+
+    stmts = Any[argexprs[2]]
+    argexprs = argexprs[3:end]
+    atypes = atypes[3:end]
+
     if isleaftype(invoke_types) && invoke_types == atypes
         new_e = Expr(:call, f, argexprs...)
         new_e.typ = e.typ
         res = inlineable_gf(f, new_e, invoke_types, sv,
                             enclosing_ast, argexprs)
-        return is(res, NF) ? (new_e, []) : res
+        if isa(res, Tuple)
+            if isa(res[2], Array)
+                append!(stmts, res[2])
+            end
+            return (res[1], stmts)
+        else
+            return (new_e, stmts)
+        end
     end
 
     local meth
@@ -2302,7 +2311,6 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         return NF
     end
 
-    stmts = []
     check_stmts = []
     atypes_l = Type[atypes...]
     err_label = genlabel(sv)
