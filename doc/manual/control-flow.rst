@@ -825,7 +825,8 @@ Instead, use a semicolon or insert a line break after ``catch``::
     end
 
 The ``catch`` clause is not strictly necessary; when omitted, the default
-return value is ``false``.
+return value is ``false``. Note that this behavior will change in Julia
+version 0.4, where the return value will instead be ``nothing``.
 
 .. doctest::
 
