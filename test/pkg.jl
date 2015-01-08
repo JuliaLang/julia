@@ -78,6 +78,7 @@ temp_pkg_dir() do
 end
 
 # Testing with code-coverage
+@unix_only begin                 # TODO: delete unix_only when #8911, #9654 are fixed
 temp_pkg_dir() do
   Pkg.generate("PackageWithCodeCoverage", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
 
@@ -117,4 +118,5 @@ end"""
       covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
       @test covlines[i] == covline
   end
+end
 end
