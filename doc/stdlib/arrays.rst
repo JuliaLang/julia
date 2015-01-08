@@ -397,8 +397,10 @@ Array functions
 
 .. function:: cumprod(A, [dim])
 
-   Cumulative product along a dimension.
-   The dimension defaults to 1.
+   Cumulative product along a dimension ``dim`` (defaults to 1).
+   See also :func:`cumprod!` to use a preallocated output array,
+   both for performance and to control the precision of the
+   output (e.g. to avoid overflow).
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -407,8 +409,10 @@ Array functions
 
 .. function:: cumsum(A, [dim])
 
-   Cumulative sum along a dimension.
-   The dimension defaults to 1.
+   Cumulative sum along a dimension ``dim`` (defaults to 1).
+   See also :func:`cumsum!` to use a preallocated output array,
+   both for performance and to control the precision of the
+   output (e.g. to avoid overflow).
 
 .. function:: cumsum!(B, A, [dim])
 

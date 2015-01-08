@@ -978,4 +978,5 @@ a = [ [ 1 0 0 ], [ 0 0 0 ] ]
 # issue #9648
 let x = fill(1.5f0, 10^7)
     @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
+    @test cumsum(x) == cumsum!(similar(x), x)
 end
