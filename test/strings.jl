@@ -220,6 +220,9 @@ parsehex(s) = parseint(s,16)
 @test_throws ArgumentError parseint("2x")
 @test_throws ArgumentError parseint("-")
 
+@test parseint('a') == 10
+@test_throws ArgumentError parseint(typemax(Char))
+
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
 @test parseint("0o1234") == 0o1234
