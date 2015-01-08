@@ -55,6 +55,9 @@ end
 
 @test factorial(7) == 5040
 @test factorial(7,3) == 7*6*5*4
+@test_throws DomainError factorial(3,7)
+@test_throws DomainError factorial(-3,-7)
+@test_throws DomainError factorial(-7,-3)
 @test factorial(0) == 1
 @test_throws DomainError factorial(-1)
 
