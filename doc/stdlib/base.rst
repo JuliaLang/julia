@@ -509,6 +509,12 @@ Generic Functions
       julia> [1:5] |> x->x.^2 |> sum |> inv
       0.01818181818181818
 
+.. function:: call(x, args...)
+
+   If ``x`` is not a ``Function``, then ``x(args...)`` is equivalent to
+   ``call(x, args...)``.  This means that function-like behavior can be
+   added to any type by defining new ``call`` methods.
+
 Syntax
 ------
 
