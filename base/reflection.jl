@@ -170,10 +170,8 @@ function which(f::ANY, t::(Type...))
         if !isa(f,Function)
             t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
             f = call
-        else
-            if !isgeneric(f)
-                error("argument is not a generic function")
-            end
+        elseif !isgeneric(f)
+            error("argument is not a generic function")
         end
         m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
         if m === nothing

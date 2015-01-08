@@ -395,6 +395,7 @@ The following distributions include julia, but the versions may be out of date d
 * openSUSE
   * Stable package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia)
   * Git package for openSUSE: [OBS page](https://build.opensuse.org/package/show/science/julia-unstable), [1 Click Install](http://software.opensuse.org/download.html?project=science&package=julia-unstable)
+* [NixOS](https://github.com/NixOS/nixpkgs/blob/master/pkgs/development/compilers/julia)
 * Ubuntu
   * [Ubuntu 13.04 (Raring Ringtail)](http://packages.ubuntu.com/raring/julia)
   * [Nightly builds PPA](https://launchpad.net/~staticfloat/+archive/julianightlies) (depends on the [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/))
