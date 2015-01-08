@@ -74,3 +74,9 @@ end
 
 @test startswith("abcdef","abc") == true
 @test startswith("abcdef","def") == false
+
+@test size(bitrand(3, 4)) == (3, 4)
+@test size(bitrand((3, 4))) == (3, 4)
+@test size(bitrand(MersenneTwister(), 3, 4)) == (3, 4)
+@test size(bitrand(MersenneTwister(), (3, 4))) == (3, 4)
+@test rand(Bool) in [false, true]
