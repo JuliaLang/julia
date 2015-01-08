@@ -53,6 +53,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 release-candidate: release test
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
+	@$(MAKE) -C doc unicode #Rebuild Unicode table if necessary
 	@./julia doc/DocCheck.jl > doc/UNDOCUMENTED.rst 2>&1 #Check for undocumented items
 	@if [ -z "$(cat doc/UNDOCUMENTED.rst)" ]; then \
 		rm doc/UNDOCUMENTED.rst; \
@@ -60,8 +61,8 @@ release-candidate: release test
 		echo "Undocumented functions found in doc/UNDOCUMENTED.rst; document them, then retry"; \
 		exit 1; \
 	fi
-	@$(MAKE) -C doc html  SPHINXOPTS="-W -n" #Rebuild Julia HTML docs pedantically
-	@$(MAKE) -C doc latex SPHINXOPTS="-W -n" #Rebuild Julia PDF docs pedantically
+	@$(MAKE) -C doc html  SPHINXOPTS="-n" #Rebuild Julia HTML docs pedantically
+	@$(MAKE) -C doc latex SPHINXOPTS="-n" #Rebuild Julia PDF docs pedantically
 	@$(MAKE) -C doc doctest #Run Julia doctests
 	@$(MAKE) -C doc linkcheck #Check all links
 	@$(MAKE) -C doc helpdb.jl #Rebuild Julia online documentation for help(), apropos(), etc...
