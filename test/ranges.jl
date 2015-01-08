@@ -378,3 +378,14 @@ end
 
 # issue #8584
 @test (0:1//2:2)[1:2:3] == 0:1//1:1
+
+# zip
+let i = 0
+x = 1:2:8
+y = 2:2:8
+xy = 1:8
+for (thisx, thisy) in zip(x, y)
+    @test thisx == xy[i+=1]
+    @test thisy == xy[i+=1]
+end
+end
