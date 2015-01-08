@@ -40,6 +40,9 @@ r = [5:-1:1]
 @test (1:2:13)[2:3:7] == 3:6:13
 @test typeof((1:2:13)[2:3:7]) == typeof(3:6:13)
 
+@test isempty((1:4)[5:4])
+@test_throws BoundsError (1:10)[8:-1:-2]
+
 let
     span = 5:20
     r = -7:3:42
