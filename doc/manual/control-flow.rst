@@ -830,7 +830,8 @@ version 0.4, where the return value will instead be ``nothing``.
 
 .. doctest::
 
-    julia> try error() end #Returns false
+    julia> try error() end
+    false
 
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
