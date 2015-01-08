@@ -2284,12 +2284,13 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         return NF
     end
 
+    fexpr = argexprs[1]
     stmts = Any[argexprs[2]]
     argexprs = argexprs[3:end]
     atypes = atypes[3:end]
 
     if isleaftype(invoke_types) && invoke_types == atypes
-        new_e = Expr(:call, f, argexprs...)
+        new_e = Expr(:call, fexpr, argexprs...)
         new_e.typ = e.typ
         res = inlineable_gf(f, new_e, invoke_types, sv,
                             enclosing_ast, argexprs)
@@ -2343,7 +2344,7 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
     atypes = tuple(atypes_l...)
 
     match_meth = _match_method(meth, atypes)
-    new_e = Expr(:call, f, argexprs...)
+    new_e = Expr(:call, fexpr, argexprs...)
     new_e.typ = e.typ
     if length(match_meth) == 1
         match_meth = match_meth[1]::Tuple
