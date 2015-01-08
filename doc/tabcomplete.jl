@@ -58,10 +58,11 @@ end
 isheader = true
 println(underline("=", maxlen))
 for entry in entries
+    thisline = ""
     for (i, col) in enumerate(entry)
-        print(rpad(col, maxlen[i], " "), " ")
+        thisline *= rpad(col, maxlen[i], " ") * " "
     end
-    println()
+    println(rstrip(thisline))
     if isheader
         println(underline("-", maxlen))
         isheader = false
