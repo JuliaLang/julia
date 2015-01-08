@@ -16,9 +16,9 @@ without extra build steps, and also allows true Lisp-style macros operating at
 the level of `abstract syntax trees <http://en.wikipedia.org/wiki/Abstract_syntax_tree>`_.
 In contrast, preprocessor "macro" systems, like that of C and C++, perform
 textual manipulation and substitution before any actual parsing or
-interpretation occurs. In addition, Because all data types and code in Julia
+interpretation occurs. Because all data types and code in Julia
 are represented by Julia data structures, powerful
-`reflection <http://en.wikipedia.org/wiki/Reflection_%28computer_programming%29`_
+`reflection <http://en.wikipedia.org/wiki/Reflection_%28computer_programming%29>`_
 capabilities are available to explore the internals of a program and its types
 just like any other data. 
 
@@ -46,29 +46,11 @@ each string into an object called an expression, represented by the Julia type
     julia> typeof(ex)
     Expr
 
-Expressions may also be constructed directly in
-`prefix notation <http://en.wikipedia.org/wiki/Polish_notation>`_:
-
-.. doctest::
-
-    julia> ex2 = Expr(:call, :+, 1, 1)
-    true
-
-The two expressions constructed above -- by parsing and by direct
-construction -- are equivalent:
-
-.. doctest::
-
-    julia> ex1 == ex2
-    true
-
-**The key point here is that Julia code is internally represented
-as a data structure that is accessible from the language itself.**
-
 :obj:`Expr` objects contain three parts:
 
-- a symbol identifying the action represented by the expression (see
-  below for more discussion of Symbols):
+- a ``Symbol`` identifying the kind of expression. A symbol is an
+  `interned string <http://en.wikipedia.org/wiki/String_interning>`_
+  identifier (more discussion below).
 
 .. doctest::
 
@@ -93,6 +75,25 @@ as a data structure that is accessible from the language itself.**
     julia> ex1.typ
     Any
 
+Expressions may also be constructed directly in
+`prefix notation <http://en.wikipedia.org/wiki/Polish_notation>`_:
+
+.. doctest::
+
+    julia> ex2 = Expr(:call, :+, 1, 1)
+    true
+
+The two expressions constructed above -- by parsing and by direct
+construction -- are equivalent:
+
+.. doctest::
+
+    julia> ex1 == ex2
+    true
+
+**The key point here is that Julia code is internally represented
+as a data structure that is accessible from the language itself.**
+
 The :func:`dump` function provides indented and annotated display of :obj:`Expr`
 objects:
 
@@ -102,9 +103,9 @@ objects:
     Expr
       head: Symbol call
       args: Array(Any,(3,))
-	1: Symbol +
-	2: Int64 1
-	3: Int64 1
+        1: Symbol +
+        2: Int64 1
+        3: Int64 1
       typ: Any
 
 :obj:`Expr` objects may also be nested:
@@ -116,8 +117,8 @@ objects:
 
 Another way to view expressions is with Meta.show_sexpr, which displays the
 `S-expression <http://en.wikipedia.org/wiki/S-expression>`_ form of a given
-:obj:Expr, which may look very familiar to users of Lisp. Here's an example
-illustrating the display on a nested :obj:Expr:
+:obj:`Expr`, which may look very familiar to users of Lisp. Here's an example
+illustrating the display on a nested :obj:`Expr`::
 
     julia> Meta.show_sexpr(ex3)
     (:call, :/, (:call, :+, 4, 4), 2)
@@ -126,8 +127,8 @@ Symbols
 ~~~~~~~
 
 The ``:`` character has two syntactic purposes in Julia. The first form creates a
-:obj:`Symbol`, a special kind of string-like identifier used as one building-block of
-expressions:
+:obj:`Symbol`, an `interned string <http://en.wikipedia.org/wiki/String_interning>`_
+used as one building-block of expressions:
 
 .. doctest::
 
@@ -172,9 +173,10 @@ Quoting
 
 The second syntactic purpose of the ``:`` character is to create expression
 objects without using the explicit :obj:`Expr` constructor. This is referred
-to as *quoting*. The ``:`` character, followed by a parenthesized Julia
-statement, generates an :obj:`Expr` object based on the enclosed code.
-Here is example of the short form used to quote an arithmetic expression:
+to as *quoting*. The ``:`` character, followed by paired parentheses around
+a single statement of Julia code, produces an :obj:`Expr` object based on the
+enclosed code. Here is example of the short form used to quote an arithmetic
+expression:
 
 .. doctest::
 
@@ -185,7 +187,7 @@ Here is example of the short form used to quote an arithmetic expression:
     Expr
 
 (to view the structure of this expression, try ``ex.head`` and ``ex.args``,
-or use :func:`dump` as above).
+or use :func:`dump` as above)
 
 Note that equivalent expressions may be constructed using :func:`parse` or
 the direct :obj:`Expr` form:
@@ -193,8 +195,8 @@ the direct :obj:`Expr` form:
 .. doctest::
 
    julia>      :(a + b*c + 1)  ==
-     parse("a + b*c + 1") ==
-	 Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
+          parse("a + b*c + 1") ==   
+          Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
    true
 
 Expressions provided by the parser generally only have symbols, other
@@ -214,14 +216,14 @@ and ``quote .. end`` blocks are treated identically.
 .. doctest::
 
     julia> ex = quote
-		    x = 1
-		    y = 2
-		    x + y
-		end
+            x = 1
+            y = 2
+            x + y
+        end
     quote  # none, line 2:
-	x = 1 # line 3:
-	y = 2 # line 4:
-	x + y
+    x = 1 # line 3:
+    y = 2 # line 4:
+    x + y
     end
 
     julia> typeof(ex)
@@ -254,7 +256,7 @@ expression into a conditional test:
     :($(Expr(:in, :a, :((1,2,3)))))
 
 Interpolating symbols into a nested expression requires enclosing each 
-symbol in an enclosing quote block:
+symbol in an enclosing quote block::
 
     julia> :( :a in $( :(:a + :b) ) )
                        ^^^^^^^^^^
@@ -345,8 +347,8 @@ the important distinction between the way ``a`` and ``b`` are used:
    the symbol ``:b`` is resolved by looking up the value of the variable
    ``b``.
 
-Functions on :obj:`Expr`\essions
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Functions on :obj:`Expr`\ essions
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 As hinted above, one extremely useful feature of Julia is the capability to
 generate and manipulate Julia code within Julia itself. We have already
@@ -355,10 +357,10 @@ function, which takes a string of Julia code and returns the corresponding
 :obj:`Expr`. A function can also take one or more :obj:`Expr` objects as
 arguments, and return another :obj:`Expr`. Here is a simple, motivating example::
 
-   julia>   function math_expr(op, op1, op2)
-		expr = Expr(:call, op, op1, op2)
-		return expr
-	    end
+   julia> function math_expr(op, op1, op2)
+            expr = Expr(:call, op, op1, op2)
+            return expr
+          end
 
     julia>  ex = math_expr(:+, 1, Expr(:call, :*, 4, 5))
     :(1 + 4*5)
@@ -370,11 +372,11 @@ As another example, here is a function that doubles any numeric argument,
 but leaves expressions alone::
 
     julia> function make_expr2(op, opr1, opr2)
-	       opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x,
-					   (opr1, opr2))
-	       retexpr = Expr(:call, op, opr1f, opr2f)
-	       return retexpr
-	   end
+             opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
+             retexpr = Expr(:call, op, opr1f, opr2f)
+             
+             return retexpr
+       end
     make_expr2 (generic function with 1 method)
 
     julia> make_expr2(:+, 1, 2)
@@ -390,27 +392,51 @@ but leaves expressions alone::
 Macros
 ------
 
-Macros are the analogue of functions for expression generation at
-compile time. Just as a function maps a tuple of argument values to a
-return value, a macro maps a tuple of arguments to a returned
-*expression*. Macro arguments may include expressions, literal values,
-and symbols.
+Macros provide a method to include generated code in the final body
+of a program. A macro maps a tuple of arguments to a returned
+*expression*, and the resulting expression is compiled directly rather
+than requiring a runtime :func:`eval` call. Macro arguments may include
+expressions, literal values, and symbols.
 
-Why macros
-~~~~~~~~~~
+Basics
+~~~~~~
 
 Here is an extraordinarily simple macro:
 
 .. doctest::
 
-    julia> macro sayhello(name)
-	       :( println("Hello, ", $name, "!") )
-	   end
+    julia> macro sayhello()
+               return :( println("Hello, world!") )
+           end
 
-The "return value" of this macro is the *interpolated* expression; that is,
-with the value of the variable ``name`` passed directly as an argument to
-:func:`println`. We can verify this with the **extremely
-important** function :func:`macroexpand`::
+Macros have a dedicated character in Julia's syntax: the ``@`` (at-sign),
+followed by the unique name declared in a ``macro NAME ... end`` block.
+In this example, the compiler will replace all instances of ``@sayhello``
+with::
+
+    :( println("Hello, world!") )
+
+When ``@sayhello`` is given at the REPL, the expression executes
+immediately, thus we only see the evaluation result::
+
+    julia> @sayhello()
+    "Hello, world!"
+
+Now, consider a slightly more complex macro::
+
+    julia> macro sayhello(name)
+               return :( println("Hello, ", $name) )
+           end
+
+This macro takes one argument: ``name``. When ``@sayhello`` is
+encountered, the quoted expression is *expanded* to interpolate
+the value of the argument into the final expression::
+
+    julia> @sayhello("human")
+    Hello, human
+
+We can view the quoted return expression using the function :func:`macroexpand`
+(**important note:** this is an extremely useful tool for debugging macros)::
 
     julia> ex = macroexpand( :(@sayhello("human")) )
     :(println("Hello, ","human","!"))
@@ -420,33 +446,38 @@ important** function :func:`macroexpand`::
     julia> typeof(ex)
     Expr
 
-:func:`macroexpand` takes a *quoted* macro and returns the resulting
-:obj:`Expr`\ession *after interpolation*.
+Hold up: why macros?
+~~~~~~~~~~~~~~~~~~~~
 
-**Hold up.**
+We have already seen a function ``f(::Expr...) -> Expr`` in a previous section.
+In fact, :func:`macroexpand` is also such a function. So, why do macros
+exist?
 
-We have already seen a function ``f(::Expr...) -> Expr`` in a previous
-section. In fact, :func:`macroexpand` is such a function itself;
-evaluating the result of :func:`macroexpand` will give the expected
-output:
+Macros are necessary because they execute when code is parsed, therefore,
+macros allow the programmer to generate and include fragments of customized
+code *before* the full program is run. To illustrate the difference,
+consider the following example::
 
-.. doctest::
+    julia> macro twostep(arg)
+               println("I execute at parse time. The argument is: ", arg)
+               
+               return :(println("I execute at runtime. The argument is: ", $arg))
+           end
 
-    julia> eval(macroexpand( quote @sayhello("human") end ))
-    Hello, human!
+    julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
+    I execute at parse time, and the argument is: :((1,2,3))
 
-So, why are macros even necessary? As a simplifying analogy, let's
-define ``The Full Julia Compiler`` as ``eval, but much faster``.
-We actually want to *avoid* calling the :func:`eval` directly in
-"real" code, because it will be exceptionally slow compared to using
-``The Full Julia Compiler``. But, if we are generating code, how
-how can execute our expression without calling :func:`eval`?
+The first call to :func:`println` is executed when :func:`macroexpand`
+is called. The resulting expression contains *only* the second ``println``::
 
-The answer is macros.
+    julia> typeof(ex)
+    Expr
 
-Macros are useful because they execute at when the code is parsed,
-not at the time it is run. Therefore, they allow the programmer to
-generate code *before* the full program is compiled and executed.
+    julia> ex
+    :(println("I execute at runtime, and the argument is: ",$(Expr(:copyast, :(:((1,2,3)))))))
+
+    julia> eval(ex)
+    I execute at runtime, and the argument is: (1,2,3)
 
 Macro invocation
 ~~~~~~~~~~~~~~~~
@@ -465,14 +496,25 @@ one argument to the macro::
 
     @name (expr1, expr2, ...)
 
-Before the program runs, this statement will be replaced with the
-returned result of calling an expander function for ``@name`` on the
-expression arguments. Expanders are defined with the ``macro`` keyword::
+It is important to emphasize that macros receive their arguments as
+expressions, literals, or symbols. One way to explore macro arguments
+is to call the :func:`show` function within the macro body::
 
-    macro name(expr1, expr2, ...)
-        ...
-        return resulting_expr
+    julia> macro show(x)
+       show(x)
+       # ... remainder of macro, returning an expression
     end
+
+
+    julia> @showarg(a)
+    (:a,)
+
+    julia> @showarg(1+1)
+    :(1 + 1)
+
+    julia> @showarg(println("Yo!")
+    :(println("Yo!"))
+    
 
 Building an advanced macro
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -685,7 +727,7 @@ is occasionally quite handy.
 .. _man-non-standard-string-literals2:
 
 Code Generation
-~~~~~~~~~~~~~~~
+---------------
 
 When a significant amount of repetitive boilerplate code is required, it
 is common to generate it programmatically to avoid redundancy. In most
@@ -697,7 +739,7 @@ operators on three arguments in terms of their 2-argument forms::
 
     for op = (:+, :*, :&, :|, :$)
       eval(quote
-	($op)(a,b,c) = ($op)(($op)(a,b),c)
+        ($op)(a,b,c) = ($op)(($op)(a,b),c)
       end)
     end
 
@@ -737,7 +779,7 @@ cause a compile-time error:
 .. _man-macros:
 
 Non-Standard AbstractString Literals
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+------------------------------------
 
 Recall from :ref:`Strings <man-non-standard-string-literals>` that
 string literals prefixed by an identifier are called non-standard string
