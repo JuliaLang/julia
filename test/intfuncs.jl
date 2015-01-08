@@ -84,6 +84,11 @@
 @test digits(4, 2) == [0, 0, 1]
 @test digits(5, 3) == [2, 1]
 
+@test leading_ones(uint32(int64(2) ^ 32 - 2)) == 31
+@test leading_ones(1) == 0
+@test leading_zeros(int32(1)) == 31
+@test leading_zeros(uint32(int64(2) ^ 32 - 2)) == 0
+
 @test isqrt(4) == 2
 @test isqrt(5) == 2
 # issue #4884
