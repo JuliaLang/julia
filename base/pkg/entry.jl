@@ -690,7 +690,7 @@ function test!(pkg::AbstractString, errs::Vector{AbstractString}, notests::Vecto
         cd(dirname(test_path)) do
             try
                 color = Base.have_color? "--color=yes" : "--color=no"
-                codecov = coverage? "--code-coverage=user --inline=no" : "--code-coverage=none"
+                codecov = coverage? ["--code-coverage=user", "--inline=no"] : ["--code-coverage=none"]
                 run(`$JULIA_HOME/julia --check-bounds=yes $codecov $color $test_path`)
                 info("$pkg tests passed")
             catch err
