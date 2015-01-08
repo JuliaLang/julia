@@ -1613,14 +1613,14 @@ begin
     global float64, float32
     function float64(s::AbstractString)
         if !float64_isvalid(s, tmp)
-            throw(ArgumentError("float64(AbstractString): invalid number format"))
+            throw(ArgumentError("float64(::AbstractString): invalid number format \"$s\""))
         end
         return tmp[1]
     end
 
     function float32(s::AbstractString)
         if !float32_isvalid(s, tmpf)
-            throw(ArgumentError("float32(AbstractString): invalid number format"))
+            throw(ArgumentError("float32(::AbstractString): invalid number format \"$s\""))
         end
         return tmpf[1]
     end
