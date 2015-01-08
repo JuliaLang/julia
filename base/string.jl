@@ -1481,7 +1481,7 @@ function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : ArgumentError("invalid digit: $(repr(c))")
+        'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
     d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
     d
 end
