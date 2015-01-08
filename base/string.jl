@@ -141,9 +141,9 @@ function nextind(s::AbstractString, i::Integer)
     next(s,e)[2] # out of range
 end
 
-checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError())
+checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
 checkbounds(s::AbstractString, i::Real) = checkbounds(s, to_index(i))
-checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError())
+checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
@@ -164,7 +164,7 @@ function ind2chr(s::AbstractString, i::Integer)
 end
 
 function chr2ind(s::AbstractString, i::Integer)
-    i < start(s) && throw(BoundsError())
+    i < start(s) && throw(BoundsError(s, i))
     j = 1
     k = start(s)
     while true
@@ -182,10 +182,10 @@ typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 function search(s::AbstractString, c::Chars, i::Integer)
     if isempty(c)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError())
+               throw(BoundsError(s, i))
     end
     if i < 1
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
     i = nextind(s,i-1)
     while !done(s,i)
@@ -204,7 +204,7 @@ in(c::Char, s::AbstractString) = (search(s,c)!=0)
 function _searchindex(s, t, i)
     if isempty(t)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError())
+               throw(BoundsError(s, i))
     end
     t1, j2 = next(t,start(t))
     while true
@@ -337,7 +337,7 @@ end
 function _rsearchindex(s, t, i)
     if isempty(t)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               throw(BoundsError())
+               throw(BoundsError(s, i))
     end
     t = RevString(t)
     rs = RevString(s)
@@ -604,7 +604,7 @@ end
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
     c, i = next(s.string, i+s.offset)
     c, i-s.offset
@@ -612,7 +612,7 @@ end
 
 function getindex(s::SubString, i::Int)
     if i < 1 || i > s.endof
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
     getindex(s.string, i+s.offset)
 end
@@ -642,7 +642,7 @@ end
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
-        throw(BoundsError())
+        throw(BoundsError(s, r))
     end
     SubString(s, first(r), last(r))
 end
@@ -692,7 +692,7 @@ sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
     e = endof(s.string)
     sz = next(s.string,e)[2]-1
@@ -701,7 +701,7 @@ function next(s::RepString, i::Int)
     j += 1
 
     if r >= s.repeat || j > e
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
 
     c, k = next(s.string, j)
@@ -1639,11 +1639,11 @@ typealias ByteArray Union(Array{UInt8,1},Array{Int8,1})
 
 function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     if i < 1
-        throw(BoundsError())
+        throw(BoundsError(a, i))
     end
     n = length(a)
     if i > n
-        return i == n+1 ? 0 : throw(BoundsError())
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
@@ -1660,11 +1660,11 @@ search(a::ByteArray, b::Union(Int8,UInt8,Char)) = search(a,b,1)
 
 function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i::Integer)
     if i < 1
-        return i == 0 ? 0 : throw(BoundsError())
+        return i == 0 ? 0 : throw(BoundsError(a, i))
     end
     n = length(a)
     if i > n
-        return i == n+1 ? 0 : throw(BoundsError())
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
     end
     p = pointer(a)
     q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
