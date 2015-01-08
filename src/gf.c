@@ -1733,6 +1733,67 @@ DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_tuple_t *types)
     return (jl_value_t*)m;
 }
 
+jl_function_t*
+jl_gf_invoke_get_specialization(jl_function_t *gf, jl_tuple_t *types,
+                                jl_tuple_t *tt)
+{
+    assert(jl_is_gf(gf));
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+    jl_methlist_t *m = (jl_methlist_t*)jl_gf_invoke_lookup(gf, types);
+
+    if ((jl_value_t*)m == jl_nothing) {
+        return NULL;
+    }
+
+    // now we have found the matching definition.
+    // next look for or create a specialization of this definition.
+
+    jl_function_t *mfunc;
+    if (m->invokes == JL_NULL) {
+        mfunc = jl_bottom_func;
+    } else {
+        mfunc = jl_method_table_assoc_exact_by_type(m->invokes, tt);
+    }
+    if (mfunc != jl_bottom_func) {
+        return mfunc;
+    }
+
+    jl_tuple_t *tpenv = jl_null;
+    jl_tuple_t *newsig = NULL;
+    JL_GC_PUSH2(&tpenv, &newsig);
+
+    if (m->invokes == JL_NULL) {
+        m->invokes = new_method_table(mt->name);
+        // this private method table has just this one definition
+        jl_method_list_insert(&m->invokes->defs, m->sig, m->func,
+                              m->tvars, 0, 0);
+    }
+    newsig = (jl_tuple_t*)m->sig;
+
+    if (m->tvars != jl_null) {
+        jl_value_t *ti =
+            lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
+        assert(ti != (jl_value_t*)jl_bottom_type);
+        (void)ti;
+        // don't bother computing this if no arguments are tuples
+        size_t i;
+        for (i = 0;i < jl_tuple_len(tt);i++) {
+            if (jl_is_tuple(jl_tupleref(tt,i))) {
+                break;
+            }
+        }
+        if (i < jl_tuple_len(tt)) {
+            newsig =
+                (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
+                                                      &jl_tupleref(tpenv, 0),
+                                                      jl_tuple_len(tpenv) / 2);
+        }
+    }
+    mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv);
+    JL_GC_POP();
+    return mfunc;
+}
+
 // invoke()
 // this does method dispatch with a set of types to match other than the
 // types of the actual arguments. this means it sometimes does NOT call the

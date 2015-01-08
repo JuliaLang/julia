@@ -543,7 +543,13 @@ static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
 static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, bool isvol=false);
 static bool might_need_root(jl_value_t *ex);
-static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codectx_t *ctx);
+static Value *emit_condition(jl_value_t *cond, const std::string &msg,
+                             jl_codectx_t *ctx);
+static Value *emit_call_function_object(jl_function_t *f, Value *theF,
+                                        Value *theFptr,
+                                        bool specialized,
+                                        jl_value_t **args, size_t nargs,
+                                        jl_codectx_t *ctx);
 
 // NoopType
 static Type *NoopType;
@@ -1878,6 +1884,39 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
     return answer;
 }
 
+static int
+get_invoke_types(jl_value_t *a, jl_value_t **ptemp)
+{
+    if (jl_is_type_type(a)) {
+        jl_value_t *types = jl_tparam0(a);
+        if (jl_is_tuple(types)) {
+            *ptemp = types;
+            return 1;
+        }
+        return 0;
+    } else if (jl_is_tuple(a)) {
+        jl_tuple_t *tt = (jl_tuple_t*)a;
+        int tlen = jl_tuple_len(tt);
+        jl_tuple_t *types = jl_alloc_tuple(tlen);
+        *ptemp = (jl_value_t*)types;
+        for(int i = 0;i < tlen;i++) {
+            jl_value_t *el = jl_tupleref(tt, i);
+            jl_value_t *var_type;
+            if (jl_is_type_type(el)) {
+                jl_tupleset(types, i, jl_tparam0(el));
+            } else if (i == tlen - 1 && jl_is_vararg_type(el) &&
+                       jl_is_type_type((var_type = jl_tparam0(el)))) {
+                jl_tupleset(types, i, jl_wrap_vararg(jl_tparam0(var_type)));
+            } else {
+                *ptemp = NULL;
+                return 0;
+            }
+        }
+        return 1;
+    }
+    return 0;
+}
+
 static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                               jl_codectx_t *ctx,
                               Value **theFptr, jl_function_t **theF,
@@ -2495,6 +2534,44 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 return ConstantInt::get(T_size, sty->size);
             }
         }
+    }
+    else if (f->fptr == &jl_f_invoke && nargs >= 2 &&
+             expr_type(args[1], ctx) == (jl_value_t*)jl_function_type) {
+        f = (jl_function_t*)static_eval(args[1], ctx, true);
+        rt1 = (jl_value_t*)f;
+        if (!f || !jl_is_gf(f)) {
+            JL_GC_POP();
+            return NULL;
+        }
+        jl_value_t *type_types = expr_type(args[2], ctx);
+        rt2 = type_types;
+        if (!get_invoke_types(type_types, &rt3)) {
+            JL_GC_POP();
+            return NULL;
+        }
+        rt2 = NULL;
+        jl_tuple_t *tt = call_arg_types(&args[3], nargs - 2, ctx);
+        if (tt == NULL) {
+            JL_GC_POP();
+            return NULL;
+        }
+        rt2 = (jl_value_t*)tt;
+        jl_function_t *mfunc =
+            jl_gf_invoke_get_specialization(f, (jl_tuple_t*)rt3, tt);
+        JL_GC_POP();
+        if (mfunc == NULL) {
+            return NULL;
+        }
+        assert(mfunc->linfo->functionObject != NULL);
+        emit_expr(args[2], ctx);
+        Value *_theF = literal_pointer_val((jl_value_t*)mfunc);
+        Value *_theFptr = (Value*)mfunc->linfo->functionObject;
+        if (mfunc->linfo->cFunctionObject == NULL) {
+            jl_cstyle_compile(mfunc);
+        }
+        Value *result = emit_call_function_object(mfunc, _theF, _theFptr, true,
+                                                  args + 2, nargs - 2, ctx);
+        return result;
     }
     // TODO: other known builtins
     JL_GC_POP();
