@@ -552,3 +552,37 @@ reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
 it is short, self-contained, and implements an entire basic Julia type
 in just a little over a hundred lines of code.
+
+Constructors, Call, and Conversion
+----------------------------------
+
+Technically, constructors ``T(args...)`` in Julia are implemented by
+defining new methods ``Base.call(::Type{T}, args...)`` for the
+:func:`call` function.  That is, Julia types are not functions, but
+they can be called as if they were functions (functors) via
+call overloading, just like any other Julia object.  This also means
+that you can declare more flexible constructors, e.g. constructors for
+abstract types, by instead explicitly defining ``Base.call`` methods
+using ``function`` syntax.
+
+However, in some cases you could consider adding methods to
+``Base.convert`` *instead* of defining a constructor, because defining
+a :func:`convert` method *automatically* defines a corresponding
+constructor, while the reverse is not true.  That is, defining
+``Base.convert(::Type{T}, args...) = ...`` automatically defines a
+constructor ``T(args...) = ...``.
+
+``convert`` is used extensively throughout Julia whenever one type
+needs to be converted to another (e.g. in assignment, ``ccall``,
+etcetera), and should generally only be defined (or successful) if the
+conversion is lossless.  For example, ``convert(Int, 3.0)`` produces
+``3``, but ``convert(Int, 3.2)`` throws an ``InexactError``.  If you
+want to define a constructor for a lossless conversion from one type
+to another, you should probably define a ``convert`` method instead.
+
+On the other hand, if your constructor does not represent a lossless
+conversion, or doesn't represent "conversion" at all, it is better
+to leave it as a constructor rather than a ``convert`` method.  For
+example, the ``Array(Int)`` constructor creates a zero-dimensional
+``Array`` of the type ``Int``, but is not really a "conversion" from
+``Int`` to an ``Array``.
