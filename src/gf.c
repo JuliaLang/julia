@@ -1791,6 +1791,7 @@ jl_gf_invoke_get_specialization(jl_function_t *gf, jl_tuple_t *types,
     }
     mfunc = cache_method(m->invokes, tt, m->func, newsig, tpenv);
     JL_GC_POP();
+    jl_compile(mfunc);
     return mfunc;
 }
 

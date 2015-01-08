@@ -2563,12 +2563,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             return NULL;
         }
         assert(mfunc->linfo->functionObject != NULL);
+        jl_cstyle_compile(mfunc);
         emit_expr(args[2], ctx);
         Value *_theF = literal_pointer_val((jl_value_t*)mfunc);
         Value *_theFptr = (Value*)mfunc->linfo->functionObject;
-        if (mfunc->linfo->cFunctionObject == NULL) {
-            jl_cstyle_compile(mfunc);
-        }
         Value *result = emit_call_function_object(mfunc, _theF, _theFptr, true,
                                                   args + 2, nargs - 2, ctx);
         return result;
