@@ -21,6 +21,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->type = (jl_value_t*)jl_module_type;
     assert(jl_is_symbol(name));
     m->name = name;
+    m->parent = NULL;
     m->constant_table = NULL;
     m->call_func = NULL;
     htable_new(&m->bindings, 0);

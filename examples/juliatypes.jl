@@ -219,9 +219,6 @@ function exists_issub(x, y, env, anyunions::Bool)
             push!(env.Runions.stack, false)
             found = exists_issub(x, y, env, true)
             pop!(env.Runions.stack)
-            if env.Lunions.more
-                return true  # return up to forall_exists_issub
-            end
         end
         found && return true
     end
@@ -230,7 +227,7 @@ end
 
 function issub_union(t, u::UnionT, env, R, state::UnionState)
     if state.depth > length(state.stack)
-        # at a new nesting depth, begin by just counting unions
+        # indicate that stack needs to grow
         state.more = true
         return true
     end
@@ -339,7 +336,7 @@ function rename(t::UnionAllT)
 end
 
 function issub_unionall(t::Ty, u::UnionAllT, env, R)
-    haskey(env.vars, u.var) && (u = rename(u))  # TODO: tests for this
+    haskey(env.vars, u.var) && (u = rename(u))
     env.vars[u.var] = Bounds(u.var.lb, u.var.ub, R)
     ans = R ? issub(t, u.T, env) : issub(u.T, t, env)
     delete!(env.vars, u.var)
@@ -635,7 +632,11 @@ function test_3()
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
+    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll T<:S<:T tupletype(inst(RefT,T),S)))
+    @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll S>:T tupletype(inst(RefT,T),S)))
 end
 
 # level 4: Union
@@ -684,6 +685,8 @@ end
 
 # level 5: union and UnionAll
 function test_5()
+    u = Ty(Union(Int8,Int))
+
     @test issub(Ty((String,Array{Int,1})),
                 (@UnionAll T UnionT(tupletype(T,inst(ArrayT,T,1)),
                                     tupletype(T,inst(ArrayT,Ty(Int),1)))))
@@ -697,12 +700,12 @@ function test_5()
     @test !issub(Ty((Union(Vector{Int},Vector{Int8}),Vector{Int8})),
                  @UnionAll T tupletype(inst(ArrayT,T,1), inst(ArrayT,T,1)))
 
-    @test !issub(Ty(Vector{Int}), @UnionAll T>:Ty(Union(Int,Int8)) inst(ArrayT,T,1))
-    @test  issub(Ty(Vector{Integer}), @UnionAll T>:Ty(Union(Int,Int8)) inst(ArrayT,T,1))
-    @test  issub(Ty(Vector{Union(Int,Int8)}), @UnionAll T>:Ty(Union(Int,Int8)) inst(ArrayT,T,1))
+    @test !issub(Ty(Vector{Int}), @UnionAll T>:u inst(ArrayT,T,1))
+    @test  issub(Ty(Vector{Integer}), @UnionAll T>:u inst(ArrayT,T,1))
+    @test  issub(Ty(Vector{Union(Int,Int8)}), @UnionAll T>:u inst(ArrayT,T,1))
 
-    @test issub((@UnionAll Ty(Int)<:T<:Ty(Union(Int,Int8)) inst(ArrayT,T,1)),
-                (@UnionAll Ty(Int)<:T<:Ty(Union(Int,Int8)) inst(ArrayT,T,1)))
+    @test issub((@UnionAll Ty(Int)<:T<:u inst(ArrayT,T,1)),
+                (@UnionAll Ty(Int)<:T<:u inst(ArrayT,T,1)))
 
     # with varargs
     @test !issub(inst(ArrayT,tupletype(inst(ArrayT,Ty(Int)),inst(ArrayT,Ty(Vector{Int16})),inst(ArrayT,Ty(Vector{Int})),inst(ArrayT,Ty(Int)))),
@@ -716,6 +719,11 @@ function test_5()
 
     @test issub(tupletype(inst(ArrayT,Ty(Int)),inst(ArrayT,Ty(Vector{Int})),inst(ArrayT,Ty(Vector{Int})),inst(ArrayT,Ty(Int))),
                 @UnionAll S vatype(UnionT(inst(ArrayT,S),inst(ArrayT,inst(ArrayT,S,1)))))
+
+    B = @UnionAll S<:u tupletype(S, tupletype(AnyT,AnyT,AnyT), inst(RefT,S))
+    # these tests require renaming in issub_unionall
+    @test  issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,Ty(Int8)))), B)
+    @test !issub((@UnionAll T<:B tupletype(Ty(Int8), T, inst(RefT,T))),        B)
 end
 
 # tricky type variable lower bounds
@@ -861,9 +869,13 @@ function test_properties()
             @test isequal_type(T, rename(T))
         end
 
+        # inequality under wrapping
+        @test !isequal_type(T, inst(RefT,T))
+
         for S in menagerie
+            issubTS = issub(T, S)
             # transitivity
-            if issub(T, S)
+            if issubTS
                 for R in menagerie
                     if issub(S, R)
                         @test issub(T, R)  # issub(S, R) → issub(T, R)
@@ -879,12 +891,12 @@ function test_properties()
             @test isequal_type(T, S) == isequal_type(inst(RefT,T), inst(RefT,S))
 
             # covariance
-            @test issub(T, S) == issub(tupletype(T), tupletype(S))
-            @test issub(T, S) == issub(vatype(T), vatype(S))
-            @test issub(T, S) == issub(tupletype(T), vatype(S))
+            @test issubTS == issub(tupletype(T), tupletype(S))
+            @test issubTS == issub(vatype(T), vatype(S))
+            @test issubTS == issub(tupletype(T), vatype(S))
 
             # contravariance
-            @test issub(T, S) == issub(¬S, ¬T)
+            @test issubTS == issub(¬S, ¬T)
         end
     end
 end

@@ -2086,3 +2086,9 @@ end
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
+
+# issue #9611
+@test factor(int128(2)^101+1) == Dict(3=>1,845100400152152934331135470251=>1)
+
+# test second branch, after all small primes in list have been searched
+@test factor(10009 * int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
