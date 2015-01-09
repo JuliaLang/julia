@@ -122,7 +122,7 @@ export
     AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Symbol, Task, Array,
+    Module, Symbol, Task, Array, GenSym,
     # numeric types
     Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
     Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
