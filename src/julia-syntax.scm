@@ -2637,7 +2637,7 @@ So far only the second case can actually occur.
 	       (list v))))
 	((=)
 	 (let ((v (decl-var (cadr e))))
-	   (if (memq v env)
+	   (if (or (jlgensym? v) (memq v env))
 	       '()
 	       (list v))))
 	(else
