@@ -11,7 +11,7 @@ testnames = [
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
     "lineedit", "replcompletions", "repl", "test", "goto",
     "llvmcall", "grisu", "nullable", "meta", "profile",
-    "libgit2", "docs", "base64"
+    "libgit2", "docs", "base64", "parser"
 ]
 
 if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
