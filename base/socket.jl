@@ -487,7 +487,6 @@ end
 function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
     # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
-        # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
         notify_error(sock.recvnotify,"Partial message received")
     end
