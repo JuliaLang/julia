@@ -165,7 +165,7 @@ end
         nslices = div(length(A), lsiz)
         ibase = 0
         for i = 1:nslices
-            @inbounds R[i] = mapreduce_impl(f, op, A, ibase+1, ibase+lsiz)
+            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
             ibase += lsiz
         end
     elseif size(R, 1) == 1 && sizA1 > 1
@@ -301,5 +301,3 @@ findmax!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init:
 findmax{T}(A::AbstractArray{T}, region) =
     isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
                   _findmax!(reducedim_initarray0(A, region, typemin(T)), zeros(Int,reduced_dims0(A,region)), A)
-
-
