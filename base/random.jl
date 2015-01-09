@@ -1152,7 +1152,7 @@ function Base.convert(::Type{UUID}, s::AbstractString)
     s = lowercase(s)
 
     if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
-        error(ArgumentError("Malformed UUID string"))
+        throw(ArgumentError("Malformed UUID string"))
     end
 
     u = uint128(0)
