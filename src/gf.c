@@ -123,7 +123,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tuple_t *sig,
         }
         else if (jl_is_type_type(decl) &&
                  (jl_is_nontuple_type(a) ||
-                  (jl_is_tuple(a)&&jl_is_type(a)))) {
+                  (jl_is_tuple(a) && jl_is_type(a)))) {
             jl_value_t *tp0 = jl_tparam0(decl);
             if (tp0 == (jl_value_t*)jl_typetype_tvar) {
                 // in the case of Type{T}, the types don't have

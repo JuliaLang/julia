@@ -956,7 +956,7 @@ JL_CALLABLE(jl_f_union)
     size_t i;
     jl_tuple_t *argt = jl_alloc_tuple_uninit(nargs);
     for(i=0; i < nargs; i++) {
-        if (!jl_is_type(args[i]) && !jl_is_typevar(args[i])) {
+        if (!jl_is_type(args[i])) {
             jl_error("invalid union type");
         }
         else {
