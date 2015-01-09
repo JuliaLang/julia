@@ -45,34 +45,34 @@ length{N}(::Type{CartesianIndex{N}})=N
 length{I<:CartesianIndex}(::Type{I})=length(super(I))
 
 # indexing
-getindex(index::CartesianIndex, i::Integer) = getfield(index, i)
+getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->getfield(index,d))
+    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
 end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->getfield(index,d))
+    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
-    :(@nref $N A d->getfield(index,d))
+    :(@nref $N A d->index[d])
 end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
-    :((@nref $N A d->getfield(index,d)) = v)
+    :((@nref $N A d->index[d]) = v)
 end
 
 # arithmetic, min/max
 for op in (:+, :-, :min, :max)
     @eval begin
-        stagedfunction ($op){N}(I1::CartesianIndex{N}, I2::CartesianIndex{N})
-            args = [:($($op)(getfield(I1, $d),getfield(I2, $d))) for d = 1:N]
+        stagedfunction ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
+            args = [:($($op)(index1[$d],index2[$d])) for d = 1:N]
             :(CartesianIndex{$N}($(args...)))
         end
     end
 end
 
 stagedfunction *{N}(a::Integer, index::CartesianIndex{N})
-    args = [:(a*getfield(index, $d)) for d = 1:N]
+    args = [:(a*index[$d]) for d = 1:N]
     :(CartesianIndex{$N}($(args...)))
 end
 *(index::CartesianIndex,a::Integer)=*(a,index)
@@ -107,25 +107,25 @@ done(R::StepRange, state::(Bool, CartesianIndex{1})) = state[1]
 done(R::UnitRange, state::(Bool, CartesianIndex{1})) = state[1]
 
 stagedfunction next{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
-    finishedex = (N==0 ? true : :(getfield(newindex, $N) > size(A, $N)))
+    finishedex = (N==0 ? true : :(newindex[$N] > size(A, $N)))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
         @inbounds v = A[index]
-        newindex=@nif $N d->(getfield(index,d) < size(A, d)) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : 1))
+        newindex=@nif $N d->(index[d] < size(A, d)) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? index[k] : k==d ? index[k]+1 : 1))
         finished=$finishedex
         v, (finished,newindex)
     end
 end
 stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I))
     N = length(I)
-    finishedex = (N==0 ? true : :(getfield(newindex, $N) > getfield(iter.stop, $N)))
+    finishedex = (N==0 ? true : :(newindex[$N] > iter.stop[$N]))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
-        newindex=@nif $N d->(getfield(index,d) < getfield(iter.stop, d)) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : getfield(iter.start,k)))
+        newindex=@nif $N d->(index[d] < iter.stop[d]) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? index[k] : k==d ? index[k]+1 : iter.start[k]))
         finished=$finishedex
         index, (finished,newindex)
     end
