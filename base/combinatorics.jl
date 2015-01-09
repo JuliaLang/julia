@@ -62,7 +62,7 @@ end
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
-        throw(DomainError)
+        throw(DomainError())
     end
     f = one(T)
     while n > k

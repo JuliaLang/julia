@@ -4837,7 +4837,7 @@ popdisplay(d::Display)
 ("Base","factorial","factorial(n, k)
 
    Compute \"factorial(n) ÷ factorial(k)\"
-
+   Throws DomainError when k > n
 "),
 
 ("Base","factor","factor(n) -> Dict
