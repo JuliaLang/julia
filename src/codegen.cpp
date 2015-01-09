@@ -2543,13 +2543,22 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             JL_GC_POP();
             return NULL;
         }
-        jl_value_t *type_types = expr_type(args[2], ctx);
-        rt2 = type_types;
-        if (!get_invoke_types(type_types, &rt3)) {
-            JL_GC_POP();
-            return NULL;
+        // Hack since expr_type doesn't support tuple types.
+        rt3 = static_eval(args[2], ctx, true);
+        if (rt3) {
+            if (!jl_is_tuple(rt3)) {
+                JL_GC_POP();
+                return NULL;
+            }
+        } else {
+            jl_value_t *type_types = expr_type(args[2], ctx);
+            rt2 = type_types;
+            if (!get_invoke_types(type_types, &rt3)) {
+                JL_GC_POP();
+                return NULL;
+            }
+            rt2 = NULL;
         }
-        rt2 = NULL;
         jl_tuple_t *tt = call_arg_types(&args[3], nargs - 2, ctx);
         if (tt == NULL) {
             JL_GC_POP();
