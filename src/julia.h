@@ -1387,6 +1387,7 @@ DLLEXPORT void jl_flush_cstdio(void);
 DLLEXPORT jl_value_t *jl_stdout_obj(void);
 DLLEXPORT jl_value_t *jl_stderr_obj(void);
 DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
+DLLEXPORT void jlbacktrace(void);
 
 #if defined(GC_FINAL_STATS) && defined(JL_GC_MARKSWEEP)
 void jl_print_gc_stats(JL_STREAM *s);

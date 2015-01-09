@@ -735,6 +735,7 @@ void NORETURN throw_internal(jl_value_t *e)
             JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
             jl_static_show(JL_STDERR, e);
             JL_PRINTF(JL_STDERR, "\n");
+            jlbacktrace();
             jl_exit(1);
         }
         jl_current_task->exception = e;
