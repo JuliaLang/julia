@@ -369,7 +369,7 @@ function ^(x::BigInt, y::UInt)
     return z
 end
 
-function bigint_pow(x::BigInt, p::Integer)
+function bigint_pow(x::BigInt, y::Integer)
     y < 0 && throw(DomainError("Cannot raise a BigInt to a negative power $y"))
     x == 1 && return x
     x == -1 && return isodd(y) ? x : -x
