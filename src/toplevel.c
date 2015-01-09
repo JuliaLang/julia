@@ -118,6 +118,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         // reinitialize global variables
         // to pick up new types from Base
         jl_errorexception_type = NULL;
+        jl_argumenterror_type = NULL;
         jl_typeerror_type = NULL;
         jl_methoderror_type = NULL;
         jl_loaderror_type = NULL;
@@ -722,8 +723,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
         jl_value_t *elt = jl_tupleref(argtypes,i);
         if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
             jl_lambda_info_t *li = f->linfo;
-            jl_errorf("invalid type for argument %s in method definition for %s at %s:%d",
-                      jl_lam_argname(li,i)->name, name->name, li->file->name, li->line);
+            jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
+                          jl_lam_argname(li,i)->name, name->name, li->file->name, li->line);
         }
     }
 
