@@ -217,6 +217,8 @@ periods moves up additional levels in the module hierarchy. For example
 ``using ..Utils`` would look for ``Utils`` in ``Parent``'s enclosing
 module rather than in ``Parent`` itself.
 
+Note that relative-import qualifiers are only valid in ``using`` and
+``import`` statements.
 
 Module file paths
 -----------------
