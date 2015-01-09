@@ -93,7 +93,7 @@ end
 chol{T}(A::AbstractMatrix{T}, uplo::Symbol=:U) = (S = promote_type(typeof(chol(one(T))),Float32); S != T ? chol!(convert(AbstractMatrix{S}, A), uplo) : chol!(copy(A), uplo))
 function chol!(x::Number, uplo::Symbol=:U)
     rx = real(x)
-    rx == abs(x) || throw(DomainError())
+    rx == abs(x) || throw(DomainError("chol!(::Number) argument must be a non-negative real number"))
     rxr = sqrt(rx)
     convert(promote_type(typeof(x), typeof(rxr)), rxr)
 end

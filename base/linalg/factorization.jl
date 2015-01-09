@@ -511,11 +511,11 @@ eigvals{T<:Number}(x::T; kwargs...) = (val = convert(promote_type(Float32,typeof
 #Computes maximum and minimum eigenvalue
 function eigmax(A::Union(Number, StridedMatrix); permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : maximum(v)
+    iseltype(v,Complex) ? throw(DomainError("complex eigenvalues cannot be ordered")) : maximum(v)
 end
 function eigmin(A::Union(Number, StridedMatrix); permute::Bool=true, scale::Bool=true)
     v = eigvals(A, permute = permute, scale = scale)
-    iseltype(v,Complex) ? error("DomainError: complex eigenvalues cannot be ordered") : minimum(v)
+    iseltype(v,Complex) ? throw(DomainError("complex eigenvalues cannot be ordered")) : minimum(v)
 end
 
 inv(A::Eigen) = A.vectors/Diagonal(A.values)*A.vectors'
