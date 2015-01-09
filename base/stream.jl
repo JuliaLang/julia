@@ -454,9 +454,10 @@ type Timer <: AsyncWork
         disassociate_julia_struct(this.handle)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0
+            #TODO: this codepath is currently not tested
             c_free(this.handle)
             this.handle = C_NULL
-            error(UVError("uv_make_timer",err))
+            throw(UVError("uv_make_timer",err))
         end
         finalizer(this,uvfinalize)
         this
@@ -882,7 +883,8 @@ function bind(server::PipeServer, name::ASCIIString)
                 server.handle, name)
     if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is currently not tested
+            throw(UVError("bind",err))
         else
             return false
         end

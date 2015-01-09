@@ -16,10 +16,8 @@
 
 ## native julia error handling ##
 
-error(e::Exception) = throw(e)
-error{E<:Exception}(::Type{E}) = throw(E())
 error(s::AbstractString) = throw(ErrorException(s))
-error(s...)      = throw(ErrorException(string(s...)))
+error(s...) = throw(ErrorException(string(s...)))
 
 macro unexpected()
     :(error("unexpected branch reached"))
