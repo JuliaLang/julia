@@ -35,12 +35,12 @@ bytestring(s::Array{UInt8,1}) = bytestring(pointer(s),length(s))
 bytestring(s::AbstractString...) = print_to_string(s...)
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}))
-    p == C_NULL ? error("cannot convert NULL to string") :
+    p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_cstr_to_string, ByteString, (Ptr{UInt8},), p)
 end
 
 function bytestring(p::Union(Ptr{UInt8},Ptr{Int8}),len::Integer)
-    p == C_NULL ? error("cannot convert NULL to string") :
+    p == C_NULL ? throw(ArgumentError("cannot convert NULL to string")) :
     ccall(:jl_pchar_to_string, ByteString, (Ptr{UInt8},Int), p, len)
 end
 
@@ -141,9 +141,9 @@ function nextind(s::AbstractString, i::Integer)
     next(s,e)[2] # out of range
 end
 
-checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError())
+checkbounds(s::AbstractString, i::Integer) = start(s) <= i <= endof(s) || throw(BoundsError(s, i))
 checkbounds(s::AbstractString, i::Real) = checkbounds(s, to_index(i))
-checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError())
+checkbounds{T<:Integer}(s::AbstractString, r::Range{T}) = isempty(r) || (minimum(r) >= start(s) && maximum(r) <= endof(s)) || throw(BoundsError(s, r))
 checkbounds{T<:Real}(s::AbstractString, I::AbstractArray{T}) = all(i -> checkbounds(s, i), I)
 
 ind2chr(s::DirectIndexString, i::Integer) = begin checkbounds(s,i); i end
@@ -164,7 +164,7 @@ function ind2chr(s::AbstractString, i::Integer)
 end
 
 function chr2ind(s::AbstractString, i::Integer)
-    i < start(s) && throw(BoundsError())
+    i < start(s) && throw(BoundsError(s, i))
     j = 1
     k = start(s)
     while true
@@ -182,10 +182,11 @@ typealias Chars Union(Char,AbstractVector{Char},Set{Char})
 function search(s::AbstractString, c::Chars, i::Integer)
     if isempty(c)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               error(BoundsError)
+               throw(BoundsError(s, i))
     end
-
-    if i < 1 error(BoundsError) end
+    if i < 1
+        throw(BoundsError(s, i))
+    end
     i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
@@ -203,7 +204,7 @@ in(c::Char, s::AbstractString) = (search(s,c)!=0)
 function _searchindex(s, t, i)
     if isempty(t)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               error(BoundsError)
+               throw(BoundsError(s, i))
     end
     t1, j2 = next(t,start(t))
     while true
@@ -336,7 +337,7 @@ end
 function _rsearchindex(s, t, i)
     if isempty(t)
         return 1 <= i <= nextind(s,endof(s)) ? i :
-               error(BoundsError)
+               throw(BoundsError(s, i))
     end
     t = RevString(t)
     rs = RevString(s)
@@ -566,7 +567,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
             return new(s, i-1, 0)
         else
             if !isvalid(s,i)
-                error("invalid SubString indexes")
+                throw(ArgumentError("invalid SubString index"))
             end
 
             while !isvalid(s,j) && j > i
@@ -603,7 +604,7 @@ end
 
 function next(s::SubString, i::Int)
     if i < 1 || i > s.endof
-        error(BoundsError)
+        throw(BoundsError(s, i))
     end
     c, i = next(s.string, i+s.offset)
     c, i-s.offset
@@ -611,7 +612,7 @@ end
 
 function getindex(s::SubString, i::Int)
     if i < 1 || i > s.endof
-        error(BoundsError)
+        throw(BoundsError(s, i))
     end
     getindex(s.string, i+s.offset)
 end
@@ -619,7 +620,7 @@ end
 endof(s::SubString) = s.endof
 
 function isvalid(s::SubString, i::Integer)
-    return (start(s) <= i <= endof(s)) &&  isvalid(s.string, s.offset+i)
+    return (start(s) <= i <= endof(s)) && isvalid(s.string, s.offset+i)
 end
 
 isvalid{T<:DirectIndexString}(s::SubString{T}, i::Integer) = (start(s) <= i <= endof(s))
@@ -641,14 +642,14 @@ end
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
-        error(BoundsError)
+        throw(BoundsError(s, r))
     end
     SubString(s, first(r), last(r))
 end
 
 function convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
     if s.offset+s.endof < endof(s.string)
-        error("a SubString must coincide with the end of the original string to be convertible to pointer")
+        throw(ArgumentError("a SubString must coincide with the end of the original string to be convertible to pointer"))
     end
     convert(Ptr{P}, s.string.data) + s.offset
 end
@@ -691,7 +692,7 @@ sizeof(s::RepString) = sizeof(s.string)*s.repeat
 
 function next(s::RepString, i::Int)
     if i < 1
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
     e = endof(s.string)
     sz = next(s.string,e)[2]-1
@@ -700,7 +701,7 @@ function next(s::RepString, i::Int)
     j += 1
 
     if r >= s.repeat || j > e
-        throw(BoundsError())
+        throw(BoundsError(s, i))
     end
 
     c, k = next(s.string, j)
@@ -708,7 +709,7 @@ function next(s::RepString, i::Int)
 end
 
 function repeat(s::AbstractString, r::Integer)
-    r <  0 ? error("can't repeat a string ",r," times") :
+    r <  0 ? throw(ArgumentError("can't repeat a string $r times")) :
     r == 0 ? "" :
     r == 1 ? s  :
     RepString(s,r)
@@ -717,9 +718,7 @@ end
 convert(::Type{RepString}, s::AbstractString) = RepString(s,1)
 
 function repeat(s::ByteString, r::Integer)
-    if r < 0
-        error("can't repeat a string ",r," times")
-    end
+    r < 0 && throw(ArgumentError("can't repeat a string $r times"))
     d = s.data; n = length(d)
     out = Array(UInt8, n*r)
     for i=1:r
@@ -934,7 +933,7 @@ function print_unescaped(io, s::AbstractString)
                     i = j
                 end
                 if k == 1
-                    error("\\x used with no following hex digits")
+                    throw(ArgumentError("\\x used with no following hex digits in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
                     write(io, uint8(n))
@@ -950,7 +949,7 @@ function print_unescaped(io, s::AbstractString)
                     i = j
                 end
                 if n > 255
-                    error("octal escape sequence out of range")
+                    throw(ArgumentError("octal escape sequence out of range"))
                 end
                 write(io, uint8(n))
             else
@@ -988,7 +987,7 @@ is_valid_utf8 (s::Union(Array{UInt8,1},ByteString)) = byte_string_classify(s) !=
 function blank_width(c::Char)
     c == ' '   ? 1 :
     c == '\t'  ? 8 :
-    error("not a blank character")
+    throw(ArgumentError("$(repr(c)) not a blank character"))
 end
 
 # width of leading blank space, also check if string is blank
@@ -1258,11 +1257,8 @@ function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=tru
         throw(ParseError(ex.args[1]))
     end
     if ex == ()
-        if raise
-            throw(ParseError("end of input"))
-        else
-            ex = Expr(:error, "end of input")
-        end
+        raise && throw(ParseError("end of input"))
+        ex = Expr(:error, "end of input")
     end
     ex, pos+1 # C is zero-based, Julia is 1-based
 end
@@ -1273,7 +1269,7 @@ function parse(str::AbstractString; raise::Bool=true)
         return ex
     end
     if !done(str, pos)
-        raise && error("extra token after end of expression")
+        raise && throw(ParseError("extra token after end of expression"))
         return Expr(:error, "extra token after end of expression")
     end
     return ex
@@ -1482,18 +1478,18 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 ## string to integer functions ##
 
 function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
-    2 <= base <= 62 || error("invalid base: $base")
+    2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
-        'a' <= c <= 'z' ? c-'a'+a  : error("invalid digit: $(repr(c))")
-    d < base || error("invalid base $base digit $(repr(c))")
+        'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
+    d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
     d
 end
 parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
 parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::AbstractString, i::Int=start(s))
-    done(s,i) && error("premature end of integer: $(repr(s))")
+    done(s,i) && throw(ArgumentError("premature end of integer: $(repr(s))"))
     j = i
     c, i = next(s,i)
     c, i, j
@@ -1539,7 +1535,7 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
+        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
         n *= base
         n += d
         if done(s,i)
@@ -1554,7 +1550,7 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || error("invalid base $base digit $(repr(c)) in $(repr(s))")
+        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
         (T <: Signed) && (d *= sgn)
         n = checked_mul(n,base)
         n = checked_add(n,d)
@@ -1563,7 +1559,7 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
     end
     while !done(s,i)
         c, i = next(s,i)
-        isspace(c) || error("extra characters after whitespace in $(repr(s))")
+        isspace(c) || throw(ArgumentError("extra characters after whitespace in $(repr(s))"))
     end
     return n
 end
@@ -1571,7 +1567,7 @@ parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
     parseint_nocheck(T, s, base, base <= 36 ? 10 : 36)
 
 parseint{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
-    2 <= base <= 62 ? parseint_nocheck(T,s,int(base)) : error("invalid base: $base")
+    2 <= base <= 62 ? parseint_nocheck(T,s,int(base)) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 parseint{T<:Integer}(::Type{T}, s::AbstractString) = parseint_nocheck(T,s,0)
 parseint(s::AbstractString, base::Integer) = parseint(Int,s,base)
 parseint(s::AbstractString) = parseint_nocheck(Int,s,0)
@@ -1613,14 +1609,14 @@ begin
     global float64, float32
     function float64(s::AbstractString)
         if !float64_isvalid(s, tmp)
-            throw(ArgumentError("float64(AbstractString): invalid number format"))
+            throw(ArgumentError("float64(::AbstractString): invalid number format $(repr(s))"))
         end
         return tmp[1]
     end
 
     function float32(s::AbstractString)
         if !float32_isvalid(s, tmpf)
-            throw(ArgumentError("float32(AbstractString): invalid number format"))
+            throw(ArgumentError("float32(::AbstractString): invalid number format $(repr(s))"))
         end
         return tmpf[1]
     end
@@ -1642,9 +1638,13 @@ end
 typealias ByteArray Union(Array{UInt8,1},Array{Int8,1})
 
 function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
-    if i < 1 error(BoundsError) end
+    if i < 1
+        throw(BoundsError(a, i))
+    end
     n = length(a)
-    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
     p = pointer(a)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
     q == C_NULL ? 0 : int(q-p+1)
@@ -1659,9 +1659,13 @@ end
 search(a::ByteArray, b::Union(Int8,UInt8,Char)) = search(a,b,1)
 
 function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i::Integer)
-    if i < 1 return i == 0 ? 0 : error(BoundsError) end
+    if i < 1
+        return i == 0 ? 0 : throw(BoundsError(a, i))
+    end
     n = length(a)
-    if i > n return i == n+1 ? 0 : error(BoundsError) end
+    if i > n
+        return i == n+1 ? 0 : throw(BoundsError(a, i))
+    end
     p = pointer(a)
     q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
     q == C_NULL ? 0 : int(q-p+1)
@@ -1676,16 +1680,15 @@ end
 rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
-let
+let b = uint8(['0':'9','A':'Z','a':'z'])
     global randstring
-    const b = uint8(['0':'9','A':'Z','a':'z'])
     randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
     randstring() = randstring(8)
 end
 
 function hex2bytes(s::ASCIIString)
     len = length(s)
-    iseven(len) || error("string length must be even: $(repr(s))")
+    iseven(len) || throw(ArgumentError("string length must be even: length($(repr(s))) == $len"))
     arr = zeros(UInt8, div(len,2))
     i = j = 0
     while i < len
@@ -1694,12 +1697,12 @@ function hex2bytes(s::ASCIIString)
         n = '0' <= c <= '9' ? c - '0' :
             'a' <= c <= 'f' ? c - 'a' + 10 :
             'A' <= c <= 'F' ? c - 'A' + 10 :
-                error("not a hexadecimal string: $(repr(s))")
+                throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
         c = s[i+=1]
         n = '0' <= c <= '9' ? n << 4 + c - '0' :
             'a' <= c <= 'f' ? n << 4 + c - 'a' + 10 :
             'A' <= c <= 'F' ? n << 4 + c - 'A' + 10 :
-                error("not a hexadecimal string: $(repr(s))")
+                throw(ArgumentError("not a hexadecimal string: $(repr(s))"))
         arr[j+=1] = n
     end
     return arr
