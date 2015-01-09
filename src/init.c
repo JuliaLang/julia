@@ -1288,6 +1288,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     if (jl_errorexception_type) return; // only do this once
 
     jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
+    jl_argumenterror_type = (jl_datatype_t*)basemod("ArgumentError");
     jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");

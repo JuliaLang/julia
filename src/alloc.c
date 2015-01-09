@@ -50,6 +50,7 @@ jl_datatype_t *jl_method_type;
 jl_datatype_t *jl_lambda_info_type;
 jl_datatype_t *jl_module_type;
 jl_datatype_t *jl_errorexception_type=NULL;
+jl_datatype_t *jl_argumenterror_type;
 jl_datatype_t *jl_typeerror_type;
 jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
@@ -488,7 +489,7 @@ static jl_sym_t *mk_symbol(const char *str)
     size_t nb = (sizeof(jl_sym_t)+len+1+7)&-8;
 
     if (nb >= SYM_POOL_SIZE) {
-        jl_error("Symbol length exceeds maximum length");
+        jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum length");
     }
 
 #ifdef MEMDEBUG
@@ -561,7 +562,7 @@ DLLEXPORT jl_sym_t *jl_symbol_n(const char *str, int32_t len)
     memcpy(name, str, len);
     name[len] = '\0';
     if (strlen(name) != len)
-        jl_error("Symbol name may not contain \\0");
+        jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
     return jl_symbol(name);
 }
 
@@ -591,7 +592,7 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
     n = uint2str(gs_name, sizeof(gs_name), gs_ctr, 10);
     memcpy(name+3+len, n, sizeof(gs_name)-(n-gs_name));
     if (strlen(name) != len+3+sizeof(gs_name)-(n-gs_name)-1)
-        jl_error("Symbol name may not contain \\0");
+        jl_exceptionf(jl_argumenterror_type, "Symbol name may not contain \\0");
     gs_ctr++;
     return jl_symbol(name);
 }
