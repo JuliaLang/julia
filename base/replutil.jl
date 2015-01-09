@@ -48,7 +48,11 @@ function showerror(io::IO, be::BoundsError)
         writemime(io, MIME"text/plain"(), be.a)
         if isdefined(be, :i)
             print(io, "\n  at index [")
-            print_joined(io, be.i, ',')
+            if isa(be.i, Range)
+                print(io, be.i)
+            else
+                print_joined(io, be.i, ',')
+            end
             print(io, ']')
         end
     end
