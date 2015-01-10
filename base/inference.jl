@@ -2148,7 +2148,7 @@ end
 # functions with closure environments or varargs are also excluded.
 # static parameters are ok if all the static parameter values are leaf types,
 # meaning they are fully known.
-function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
+function inlineable(f, e::Expr, atypes::Tuple, sv, enclosing_ast)
     if !(isa(f,Function) || isa(f,IntrinsicFunction))
         return NF
     end
