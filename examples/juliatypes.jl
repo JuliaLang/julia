@@ -131,7 +131,7 @@ inst(t::TagT) = t
 inst(t::UnionAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
 inst(t::UnionAllT, param, rest...) = inst(inst(t,param), rest...)
 
-super(t::TagT) = inst(t.name.super, t.params...)
+super(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
 
 extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 
@@ -249,36 +249,27 @@ function issub(a::TagT, b::TagT, env)
     b === AnyT && return true
     a === AnyT && return false
     if a.name !== b.name
-        a.name === TupleName && return false
         return issub(super(a), b, env)
     end
     if a.name === TupleName
         va, vb = a.vararg, b.vararg
         la, lb = length(a.params), length(b.params)
-        if va && (!vb || la < lb)
-            return false
-        end
         ai = bi = 1
-        while true
-            ai > la && return bi > lb || (bi==lb && vb)
+        while ai <= la
             bi > lb && return false
             !issub(a.params[ai], b.params[bi], env) && return false
-            ai==la && bi==lb && va && vb && return true
-            if ai < la || !va
-                ai += 1
-            end
+            ai += 1
             if bi < lb || !vb
                 bi += 1
             end
         end
-        @assert false
-    else
-        for i = 1:length(a.params)
-            ai, bi = a.params[i], b.params[i]
-            # use issub in both directions to test equality
-            if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
-                return false
-            end
+        return (la==lb && va==vb) || (vb && (la >= (va ? lb : lb-1)))
+    end
+    for i = 1:length(a.params)
+        ai, bi = a.params[i], b.params[i]
+        # use issub in both directions to test equality
+        if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
+            return false
         end
     end
     return true
