@@ -1104,6 +1104,11 @@ STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 #define allocobj(nb)  malloc(nb)
 #endif
 
+#define JL_GC_RETURN(expr...) do {              \
+        JL_GC_POP();                            \
+        return expr;                            \
+    } while (0)
+
 // async signal handling ------------------------------------------------------
 
 #include <signal.h>
