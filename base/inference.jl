@@ -1811,14 +1811,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
             vi[2] = get(decls, vi[1], vi[2])
         end
     end
-
-    if !isempty(sv.gensym_types)
-        if length(ast.args[2]) == 3
-            push!(ast.args[2], sv.gensym_types)
-        else
-            ast.args[2][4] = sv.gensym_types
-        end
-    end
+    ast.args[2][4] = sv.gensym_types
 
     for (li::LambdaStaticData) in closures
         if !li.inferred
@@ -2560,7 +2553,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     body = sym_replace(body, args, spnames, argexprs, spvals)
 
     # re-number the GenSyms and copy their type-info to the new ast
-    if length(ast.args[2]) > 3
+    if !isempty(ast.args[2][4])
         incr = length(sv.gensym_types)
         if incr != 0
             body = gensym_increment(body, incr)
