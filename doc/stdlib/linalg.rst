@@ -479,7 +479,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Moore-Penrose pseudoinverse
 
-.. function:: null(M)
+.. function:: nullspace(M)
 
    Basis for nullspace of ``M``.
 
