@@ -65,15 +65,17 @@ end
 for op in (:+, :-, :min, :max)
     @eval begin
         stagedfunction ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
+            I = index1
             args = [:($($op)(index1[$d],index2[$d])) for d = 1:N]
-            :(CartesianIndex{$N}($(args...)))
+            :($I($(args...)))
         end
     end
 end
 
 stagedfunction *{N}(a::Integer, index::CartesianIndex{N})
+    I = index
     args = [:(a*index[$d]) for d = 1:N]
-    :(CartesianIndex{$N}($(args...)))
+    :($I($(args...)))
 end
 *(index::CartesianIndex,a::Integer)=*(a,index)
 
@@ -107,13 +109,14 @@ done(R::StepRange, state::(Bool, CartesianIndex{1})) = state[1]
 done(R::UnitRange, state::(Bool, CartesianIndex{1})) = state[1]
 
 stagedfunction next{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
+    I = state[2]
     finishedex = (N==0 ? true : :(newindex[$N] > size(A, $N)))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
         @inbounds v = A[index]
-        newindex=@nif $N d->(index[d] < size(A, d)) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? index[k] : k==d ? index[k]+1 : 1))
+        newindex=@nif $N d->(index[d] < size(A, d)) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : 1))
         finished=$finishedex
         v, (finished,newindex)
     end
@@ -125,7 +128,7 @@ stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I)
     quote
         $meta
         index=state[2]
-        newindex=@nif $N d->(index[d] < iter.stop[d]) d->@ncall($N, CartesianIndex{$N}, k->(k>d ? index[k] : k==d ? index[k]+1 : iter.start[k]))
+        newindex=@nif $N d->(index[d] < iter.stop[d]) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : iter.start[k]))
         finished=$finishedex
         index, (finished,newindex)
     end
