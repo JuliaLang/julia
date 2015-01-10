@@ -350,7 +350,7 @@ skip_to_eol(ts::TokenStream) = skip_to_eol(ts.io)
 function read_operator(ts::TokenStream, c::Char)
     nc = peekchar(ts)
     if (c === '*') && (nc === '*')
-        error("use \"^\" instead of \"**\"")
+        throw(ParseError("use \"^\" instead of \"**\""))
     end
     # 1 char operator
     if eof(nc) || !is_opchar(nc) || (c === ':' && nc === '-')
@@ -432,7 +432,7 @@ end
 
 function string_to_number(str::AbstractString)
     len = length(str)
-    len > 0 || error("empty string")
+    len > 0 || throw(ArgumentError("empty string"))
     neg = str[1] === '-'
     # NaN and Infinity
     (str == "NaN" || str == "+NaN" || str == "-NaN") && return NaN
@@ -446,13 +446,13 @@ function string_to_number(str::AbstractString)
             if isfloat64 == false
                 didx, isfloat64 = i, true
             else
-                error("invalid float string \"$str\"")
+                throw(ParseError("invalid float string \"$str\""))
             end
         elseif c === 'f'
             if i > didx && i != len
                 fidx, isfloat32 = i, true
             else
-                error("invalid float32 string \"$str\"")
+                throw(ParseError("invalid float32 string \"$str\""))
             end
         elseif c === 'e' || c === 'E' || c === 'p' || c === 'P'
             isfloat64 = true
@@ -519,14 +519,14 @@ function disallow_dot!(ts::TokenStream, charr::Vector{Char})
         if is_dot_opchar(peekchar(ts))
             skip(ts, -1)
         else
-            error("invalid numeric constant \"$(utf32(charr)).\"")
+            throw(ParseError("invalid numeric constant \"$(utf32(charr)).\""))
         end
     end
 end
 
 function read_digits!(ts::TokenStream, pred::Function, charr::Vector{Char}, leading_zero::Bool)
     digits, ok = accum_digits(ts, pred, peekchar(ts), leading_zero)
-    ok || error("invalid numeric constant \"$digits\"")
+    ok || throw(ParseError("invalid numeric constant \"$digits\""))
     isempty(digits) && return false
     append!(charr, digits)
     return true
@@ -580,7 +580,7 @@ function read_number(ts::TokenStream, leading_dot::Bool, neg::Bool)
     end
     c = peekchar(ts)
     ispP = c === 'p' || c === 'P'
-    if (is_hexfloat_literal && (ispP || error("hex float literal must contain 'p' or 'P'"))) ||
+    if (is_hexfloat_literal && (ispP || throw(ParseError("hex float literal must contain 'p' or 'P'")))) ||
        (pred === is_char_hex && ispP) || (c === 'e' || c === 'E' || c === 'f')
         skip(ts, 1)
         nc = peekchar(ts)
@@ -598,7 +598,7 @@ function read_number(ts::TokenStream, leading_dot::Bool, neg::Bool)
     # disallow digits after binary or octal literals, e.g. 0b12
     elseif (pred == is_char_bin || pred == is_char_oct) && !eof(c) && isdigit(c)
         push!(charr, c)
-        error("invalid numeric constant \"$(utf32(charr))\"")
+        throw(ParseError("invalid numeric constant \"$(utf32(charr))\""))
     end
     str = utf32(charr)
     base = pred == is_char_hex ? 16 :
@@ -657,7 +657,7 @@ function skip_multiline_comment(ts::TokenStream, count::Int)
         end
     end
     if unterminated
-        error("incomplete: unterminated multi-line comment #= ... =#")
+        throw(ParseError("incomplete: unterminated multi-line comment #= ... =#"))
     end
     return ts
 end
@@ -739,7 +739,7 @@ function next_token(ts::TokenStream, whitespace_newline::Bool)
             elseif is_opchar(nc)
                 op = read_operator(ts, c)
                 if op === :(..) && is_opchar(peekchar(ts))
-                    error(string("invalid operator \"", op, peekchar(ts), "\""))
+                    throw(ParseError(string("invalid operator \"", op, peekchar(ts), "\"")))
                 end
                 return op
             end
@@ -751,9 +751,9 @@ function next_token(ts::TokenStream, whitespace_newline::Bool)
         else
             @assert readchar(ts) === c
             if is_ignorable_char(c)
-                error("invisible character \\u$(hex(c))")
+                throw(ParseError("invisible character \\u$(hex(c))"))
             else
-                error("invalid character \"$c\"")
+                throw(ParseError("invalid character \"$c\""))
             end
         end
     end
@@ -807,7 +807,7 @@ function require_token(ts::TokenStream, whitespace_newline::Bool)
     else
         t = next_token(ts, whitespace_newline)
     end
-    eof(t) && error("incomplete: premature end of input")
+    eof(t) && throw(ParseError("incomplete: premature end of input"))
     while isnewline(t)
         take_token(ts)
         t = next_token(ts, whitespace_newline)
