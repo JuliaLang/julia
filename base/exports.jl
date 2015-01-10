@@ -14,6 +14,8 @@ export
     LAPACK,
     Docs,
     Markdown,
+    Lexer,
+    Parser,
 
 # Types
     AbstractMatrix,
