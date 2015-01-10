@@ -857,7 +857,7 @@ function postprocess!(dict::Dict)
     if haskey(dict, '\0')
         add_specialisations(dict, dict, 1)
     else
-        dict['\0'] = (args...)->error("Unrecognized input")
+        dict['\0'] = (s, args...)->beep(terminal(s))
     end
     for (k,v) in dict
         k == '\0' && continue
