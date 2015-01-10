@@ -2880,6 +2880,28 @@ So far only the second case can actually occur.
 	 (relabel (pair-with-gensyms labels)))
     (rename-symbolic-labels- e relabel)))
 
+(define (max-jlgensym e)
+  (if (or (not (pair? e)) (quoted? e))
+      -1
+      (if (jlgensym? e) (cadr e)
+	  (foldl (lambda (x l) (max (max-jlgensym x) l)) -1 e))))
+
+(define (renumber-jlgensym- e tbl make-jlgensym)
+  (cond
+   ((or (not (pair? e)) (quoted? e)) e)
+   ((jlgensym? e)
+      (let ((n (get tbl (cadr e) #f)))
+        (if n n
+          (let ((n (make-jlgensym))) (put! tbl (cadr e) n) n))))
+   (else (map (lambda (x) (renumber-jlgensym- x tbl make-jlgensym)) e))))
+
+(define (renumber-jlgensym e)
+  (let ((jlgensym-counter 0))
+    (define (make-jlgensym)
+      (begin0 `(jlgensym ,jlgensym-counter)
+	      (set! jlgensym-counter (+ 1 jlgensym-counter))))
+    (renumber-jlgensym- e (table) make-jlgensym)))
+
 (define (make-var-info name) (list name 'Any 0))
 (define vinfo:name car)
 (define vinfo:type cadr)
@@ -3001,6 +3023,7 @@ So far only the second case can actually occur.
 						(not (memq
 						      (vinfo:name v) glo))))
 			       env))
+                (gensym_types (map-int (lambda (v) 'Any) (+ (max-jlgensym (lam:body e)) 1)))
 		(bod   (analyze-vars
 			(lam:body e)
 			(append vi
@@ -3015,7 +3038,7 @@ So far only the second case can actually occur.
 	   (for-each (lambda (v) (vinfo:set-capt! v #t))
 		     cv)
 	   `(lambda ,args
-	      (,(cdaddr e) ,vi ,cv)
+	      (,(cdaddr e) ,vi ,cv ,gensym_types)
 	      ,bod)))
 	((localize)
 	 ;; special feature for @spawn that wraps a piece of code in a "let"
@@ -3515,7 +3538,8 @@ So far only the second case can actually occur.
 (define (julia-expand01 ex)
   (to-LFF
    (expand-forms
-    (expand-binding-forms ex))))
+    (expand-binding-forms
+     (renumber-jlgensym ex)))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))
