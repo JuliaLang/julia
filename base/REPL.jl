@@ -67,19 +67,6 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
     end
 end
 
-function parse_input_line(s::AbstractString)
-    # s = bytestring(s)
-    # (expr, pos) = parse(s, 1)
-    # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{UInt8},Int32,Int32),
-    #                   s, int32(pos)-1, 1)
-    # if !is(ex,())
-    #     throw(ParseError("extra input after end of expression"))
-    # end
-    # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
-end
-
 function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
     backend = REPLBackend(repl_channel, response_channel, nothing)
     global interactive_task = @schedule begin
@@ -561,7 +548,7 @@ LineEdit.reset_state(hist::REPLHistoryProvider) = history_reset_state(hist)
 const julia_green = "\033[1m\033[32m"
 
 function return_callback(s)
-    ast = parse_input_line(bytestring(LineEdit.buffer(s)))
+    ast = Base.parse_input_line(bytestring(LineEdit.buffer(s)))
     if  !isa(ast, Expr) || (ast.head != :continue && ast.head != :incomplete)
         return true
     else
