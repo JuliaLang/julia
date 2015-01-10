@@ -2831,7 +2831,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     return emit_checked_var(bp, sym, ctx, vi.isVolatile);
 }
 
-static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, jl_codectx_t *ctx) {
+static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, bool used, jl_codectx_t *ctx) {
     Value *rval;
     jl_value_t *rt = expr_type(r,ctx);
     if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
@@ -2850,10 +2850,6 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
         }
         else {
             rval = boxed(emit_expr(r, ctx, true),ctx,rt);
-            // Make sure this is already boxed. If not, there was
-            // something wrong in the earlier analysis as this should
-            // have been alloca'd
-            assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
             if (!is_stack(bp)) {
                 Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
                 emit_write_barrier(ctx, box, rval);
@@ -2865,6 +2861,12 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
     }
     else {
         rval = emit_expr(r, ctx, true);
+        if (!used)
+            return NULL;
+        // Make sure this is already boxed. If not, there was
+        // something wrong in the earlier analysis as this should
+        // have been alloca'd
+        assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
     }
     return rval;
 }
@@ -2875,8 +2877,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         int id = ((jl_gensym_t*)l)->id;
         Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the memvalue (if isbits)
         jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
-        Value *rval = emit_assignment(bp, r, declType, false, ctx);
-        ctx->gensym_SAvalues[id] = rval; // now gensym_SAvalues[id] actually contains the SAvalue
+        Value *rval = emit_assignment(bp, r, declType, false, true, ctx);
+        ctx->gensym_SAvalues.at(id) = rval; // now gensym_SAvalues[id] actually contains the SAvalue
         return;
     }
     jl_sym_t *s = NULL;
@@ -2896,8 +2898,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     }
     else {
         jl_varinfo_t &vi = ctx->vars[s];
-        Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, ctx);
-        if (rval == NULL || !vi.used) return; // don't actually do the assignment if the var is never read
+        Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, vi.used, ctx);
+        if (rval == NULL) return; // don't actually do the assignment if the var is never read
 
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             jl_arrayvar_t *av = arrayvar_for(l, ctx);
@@ -2949,7 +2951,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
         int id = ((jl_gensym_t*)expr)->id;
-        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the memvalue (if applicable)
+        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the SAvalue
         if (bp == NULL || bp->getType() == T_void || bp->getType()->isEmptyTy() || bp->getType() == NoopType) {
             // assert(vi.isGhost);
             jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
@@ -3565,7 +3567,6 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     builder.SetCurrentDebugLocation(noDbg);
 
     jl_codectx_t ctx;
-    memset(&ctx, 0, sizeof(ctx));
     ctx.linfo = lam;
     allocate_gc_frame(0,&ctx);
     ctx.argSpaceInits = &b0->back();
@@ -3652,6 +3653,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.boundsCheck.push_back(true);
 
     // step 2. process var-info lists to see what vars are captured, need boxing
+    jl_array_t *gensym_types = jl_lam_gensyms(ast);
     jl_array_t *largs = jl_lam_args(ast);
     size_t largslen = jl_array_dim0(largs);
     jl_array_t *lvars = jl_lam_locals(ast);
@@ -3718,18 +3720,28 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     mark_volatile_vars(stmts, ctx.vars);
 
     // fetch init exprs of SSA vars for easy reference
+    std::vector<jl_value_t*> gensym_initExpr;
+    if (gensym_types) {
+        int n_gensyms = jl_array_len(gensym_types);
+        gensym_initExpr.assign(n_gensyms, NULL);
+    }
     for(i=0; i < jl_array_len(stmts); i++) {
         jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == assign_sym) {
             jl_value_t *lhs = jl_exprarg(st,0);
             if (jl_is_symbolnode(lhs))
                 lhs = (jl_value_t*)jl_symbolnode_sym(lhs);
-            std::map<jl_sym_t*,jl_varinfo_t>::iterator it = ctx.vars.find((jl_sym_t*)lhs);
-            if (it != ctx.vars.end()) {
-                jl_varinfo_t &vi = (*it).second;
-                if (vi.isSA) {
-                    vi.initExpr = jl_exprarg(st,1);
+            if (jl_is_symbol(lhs)) {
+                std::map<jl_sym_t*,jl_varinfo_t>::iterator it = ctx.vars.find((jl_sym_t*)lhs);
+                if (it != ctx.vars.end()) {
+                    jl_varinfo_t &vi = (*it).second;
+                    if (vi.isSA) {
+                        vi.initExpr = jl_exprarg(st,1);
+                    }
                 }
+            }
+            if (jl_is_gensym(lhs)) {
+                gensym_initExpr.at(((jl_gensym_t*)lhs)->id) = jl_exprarg(st,1);
             }
         }
     }
@@ -3997,22 +4009,26 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     // create SAvalue locations for GenSym objects
-    jl_array_t *gensym_types = jl_lam_gensyms(ast);
     if (gensym_types) {
         int n_gensyms = jl_array_len(gensym_types);
-        ctx.gensym_SAvalues.reserve(n_gensyms);
+        ctx.gensym_SAvalues.assign(n_gensyms, NULL);
         for(int i=0; i < n_gensyms; i++) {
             jl_value_t *jt = jl_cellref(gensym_types,i);
-            if (jt != (jl_value_t*)jl_bottom_type && store_unboxed_p(jt)) {
+            if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
+                // nothing
+            }
+            else if (store_unboxed_p(jt)) {
                 Type *vtype = julia_struct_to_llvm(jt);
                 assert(vtype != jl_pvalue_llvmt);
                 if (vtype != T_void && !vtype->isEmptyTy()) {
                     Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
-                    ctx.gensym_SAvalues.push_back(lv);
-                    continue;
+                    ctx.gensym_SAvalues.at(i) = lv;
                 }
+            } else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
+                gensym_initExpr.at(i) = NULL;
+            } else {
+                n_roots++;
             }
-            ctx.gensym_SAvalues.push_back(NULL);
         }
     }
 
@@ -4045,6 +4061,18 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             Value *lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
             varnum++;
             ctx.vars[s].memvalue = lv;
+        }
+    }
+    if (gensym_types) {
+        int n_gensyms = jl_array_len(gensym_types);
+        for(int i=0; i < n_gensyms; i++) {
+            jl_value_t *jt = jl_cellref(gensym_types,i);
+            Value *lv = ctx.gensym_SAvalues.at(i);
+            if (lv == NULL && jt != (jl_value_t*)jl_bottom_type && gensym_initExpr.at(i) != NULL) {
+                lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
+                varnum++;
+                ctx.gensym_SAvalues.at(i) = lv;
+            }
         }
     }
     assert(varnum == ctx.argSpaceOffs);
