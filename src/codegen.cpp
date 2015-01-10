@@ -476,6 +476,7 @@ typedef struct {
     // NOTE: you must be careful not to access vars[s] before you are sure "s" is
     // a local, since otherwise this will add it to the map.
     std::map<jl_sym_t*, jl_varinfo_t> vars;
+    std::vector<Value*> gensym_SAvalues;
     std::map<jl_sym_t*, jl_arrayvar_t> *arrayvars;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *handlers;
@@ -2832,8 +2833,54 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     return emit_checked_var(bp, sym, ctx, vi.isVolatile);
 }
 
+static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, jl_codectx_t *ctx) {
+    Value *rval;
+    jl_value_t *rt = expr_type(r,ctx);
+    if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
+        // sometimes x = y::Union() occurs
+        if (builder.GetInsertBlock()->getTerminator() != NULL)
+            return NULL;
+    }
+    if (bp != NULL) {
+        Type *vt = bp->getType();
+        if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
+            // TODO: `rt` is technically correct here, but sometimes we're not propagating type information
+            // properly, so `rt` is a union type, while LLVM know that it's not. However, in order for this to
+            // happen, we need to already be sure somewhere that we have the right type, so vi.declType is fine
+            // even if not technically correct.
+            rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), declType);
+        }
+        else {
+            rval = boxed(emit_expr(r, ctx, true),ctx,rt);
+            // Make sure this is already boxed. If not, there was
+            // something wrong in the earlier analysis as this should
+            // have been alloca'd
+            assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
+            if (!is_stack(bp)) {
+                Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
+                emit_write_barrier(ctx, box, rval);
+            }
+        }
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            builder.CreateStore(rval, bp, isVolatile);
+        }
+    }
+    else {
+        rval = emit_expr(r, ctx, true);
+    }
+    return rval;
+}
+
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
+    if (jl_is_gensym(l)) {
+        int id = ((jl_gensym_t*)l)->id;
+        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the memvalue (if isbits)
+        jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
+        Value *rval = emit_assignment(bp, r, declType, false, ctx);
+        ctx->gensym_SAvalues[id] = rval; // now gensym_SAvalues[id] actually contains the SAvalue
+        return;
+    }
     jl_sym_t *s = NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
@@ -2842,53 +2889,17 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     else
         assert(false);
     jl_binding_t *bnd=NULL;
-    if (jl_is_gensym(s))
-        assert(0); //TODO: gensym
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
-    Value *rval;
     if (bnd) {
-        rval = boxed(emit_expr(r, ctx, true),ctx);
+        Value *rval = boxed(emit_expr(r, ctx, true),ctx);
         builder.CreateCall2(prepare_call(jlcheckassign_func),
                             literal_pointer_val(bnd),
                             rval);
     }
     else {
         jl_varinfo_t &vi = ctx->vars[s];
-        jl_value_t *rt = expr_type(r,ctx);
-        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
-            // sometimes x = y::Union() occurs
-            if (builder.GetInsertBlock()->getTerminator() != NULL)
-                return;
-        }
-        if (bp != NULL) {
-            Type *vt = bp->getType();
-            if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
-                // TODO: `rt` is techincally correct here, but sometimes we're not propagating type information
-                // properly, so `rt` is a union type, while LLVM know that it's not. However, in order for this to
-                // happen, we need to already be sure somewhere that we have the right type, so vi.declType is fine
-                // even if not techincally correct.
-                rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), vi.declType);
-            }
-            else {
-                rval = boxed(emit_expr(r, ctx, true), ctx, rt);
-                if (!is_stack(bp)) {
-                    Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
-                    emit_write_barrier(ctx, box, rval);
-                }
-            }
-            if (builder.GetInsertBlock()->getTerminator() == NULL) {
-                builder.CreateStore(rval, bp, vi.isVolatile);
-            }
-        }
-        else {
-            rval = emit_expr(r, ctx, true);
-            if (!vi.used)  // don't actually do the assignment if the var is never read
-                return;
-            // Make sure this is already boxed. If not, there was
-            // something wrong in the earlier analysis as this should
-            // have been alloca'd
-            assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
-        }
+        Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, ctx);
+        if (rval == NULL || !vi.used) return; // don't actually do the assignment if the var is never read
 
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             jl_arrayvar_t *av = arrayvar_for(l, ctx);
@@ -2939,7 +2950,14 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
-        return NULL; //TODO: gensym
+        int id = ((jl_gensym_t*)expr)->id;
+        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the memvalue (if applicable)
+        if (bp == NULL || bp->getType() == T_void || bp->getType()->isEmptyTy() || bp->getType() == NoopType) {
+            // assert(vi.isGhost);
+            jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
+            return ghostValue(declType);
+        }
+        return bp;
     }
     if (jl_is_labelnode(expr)) {
         int labelname = jl_labelnode_label(expr);
@@ -3001,8 +3019,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (jl_is_newvarnode(expr)) {
         assert(!valuepos);
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
-        if (jl_is_gensym(var))
-            assert(0); //TODO: gensym
+        assert(!jl_is_gensym(var));
         assert(jl_is_symbol(var));
         jl_varinfo_t &vi = ctx->vars[var];
         Value *lv = vi.memvalue;
@@ -3352,18 +3369,22 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 
 // --- allocating local variables ---
 
+static bool store_unboxed_p(jl_value_t *jt)
+{
+    return (jltupleisbits(jt,false) &&
+        // don't unbox intrinsics, since inference depends on their having
+        // stable addresses for table lookup.
+        jt != (jl_value_t*)jl_intrinsic_type);
+}
+
 static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->vars[s];
-    jl_value_t *jt = vi.declType;
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && jltupleisbits(jt,false) &&
-            // don't unbox intrinsics, since inference depends on their having
-            // stable addresses for table lookup.
-            jt != (jl_value_t*)jl_intrinsic_type && !vi.isCaptured &&
+    return (ctx->linfo->inferred && !vi.isCaptured &&
             // don't unbox vararg tuples
-            s != ctx->vaName);
+            s != ctx->vaName && store_unboxed_p(vi.declType));
 }
 
 static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
@@ -3546,6 +3567,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     builder.SetCurrentDebugLocation(noDbg);
 
     jl_codectx_t ctx;
+    memset(&ctx, 0, sizeof(ctx));
     ctx.linfo = lam;
     allocate_gc_frame(0,&ctx);
     ctx.argSpaceInits = &b0->back();
@@ -3975,7 +3997,26 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         maybe_alloc_arrayvar(s, &ctx);
     }
-    //TODO: gensym
+
+    // create SAvalue locations for GenSym objects
+    jl_array_t *gensym_types = jl_lam_gensyms(ast);
+    if (gensym_types) {
+        int n_gensyms = jl_array_len(gensym_types);
+        ctx.gensym_SAvalues.reserve(n_gensyms);
+        for(int i=0; i < n_gensyms; i++) {
+            jl_value_t *jt = jl_cellref(gensym_types,i);
+            if (jt != (jl_value_t*)jl_bottom_type && store_unboxed_p(jt)) {
+                Type *vtype = julia_struct_to_llvm(jt);
+                assert(vtype != jl_pvalue_llvmt);
+                if (vtype != T_void && !vtype->isEmptyTy()) {
+                    Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
+                    ctx.gensym_SAvalues.push_back(lv);
+                    continue;
+                }
+            }
+            ctx.gensym_SAvalues.push_back(NULL);
+        }
+    }
 
     // fetch env out of function object if we need it
     if (hasCapt) {
@@ -4164,8 +4205,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     builder.CreateStore(restTuple, lv);
             }
             else {
-                // TODO: Perhaps allow this in the future, but for now sice varargs are always unspecialized
-                // we don't
+                // TODO: Perhaps allow this in the future, but for now since varargs
+                // are always unspecialized we don't
                 assert(false);
             }
         }

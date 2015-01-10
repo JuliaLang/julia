@@ -670,6 +670,20 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     return (jl_array_t*)ll;
 }
 
+// get array of types for GenSym vars
+jl_array_t *jl_lam_gensyms(jl_expr_t *l)
+{
+    assert(jl_is_expr(l));
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_array(le));
+    if (jl_array_len(le) == 3) {
+        return NULL;
+    }
+    jl_value_t *ll = jl_cellref(le, 3);
+    assert(jl_is_array(ll));
+    return (jl_array_t*)ll;
+}
+
 int jl_lam_vars_captured(jl_expr_t *ast)
 {
     jl_array_t *vinfos = jl_lam_vinfo(ast);
