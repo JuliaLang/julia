@@ -676,7 +676,7 @@ export
     lufact,
     lyap,
     norm,
-    null,
+    nullspace,
     ordschur!,
     ordschur,
     peakflops,
