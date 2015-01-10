@@ -309,12 +309,14 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 e = cdr_(e);
 
                 value_t ee = car_(e);
-                jl_array_t *vinf = jl_alloc_cell_1d(3);
+                jl_array_t *vinf = jl_alloc_cell_1d(4);
                 jl_cellset(vinf, 0, full_list(car_(ee),eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 1, full_list_of_lists(car_(ee),eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 2, full_list_of_lists(car_(ee),eo));
+                ee = cdr_(ee);
+                jl_cellset(vinf, 3, full_list(car_(ee),eo));
                 assert(!iscons(cdr_(ee)));
                 jl_cellset(ex->args, 1, vinf);
                 e = cdr_(e);
@@ -592,16 +594,17 @@ DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
-    // `(lambda () (() () ()) ,expr)
+    // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_cell;
     JL_GC_PUSH3(&le, &vi, &bo);
     le = jl_exprn(lambda_sym, 3);
     jl_cellset(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_cell_1d(3);
+    vi = (jl_value_t*)jl_alloc_cell_1d(4);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
     jl_cellset(vi, 2, mt);
+    jl_cellset(vi, 3, mt);
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
