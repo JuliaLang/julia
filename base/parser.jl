@@ -1755,7 +1755,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                     end
                 end
                 # Transpose to storage order
-                sizehint(ex.args, nr * nc + 2)
+                sizehint!(ex.args, nr * nc + 2)
                 for c = 1:nc, r = 1:nr
                     push!(ex.args, vex.args[r].args[c])
                 end
@@ -1804,7 +1804,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                 if isa(call, Expr) && call.head === :call
                     nargs = length(call.args)
                     ex = Expr(:macrocall, macroify_name(call.args[1]))
-                    sizehint(ex.args, nargs)
+                    sizehint!(ex.args, nargs)
                     for i = 2:nargs
                         push!(ex.args, call.args[i])
                     end
