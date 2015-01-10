@@ -126,7 +126,6 @@ precompile(Base.REPL.history_next, (Base.LineEdit.MIState,  Base.REPL.REPLHistor
 precompile(Base.REPL.history_next_prefix, (Base.LineEdit.MIState, Base.REPL.REPLHistoryProvider,))
 precompile(Base.REPL.history_prev_prefix, (Base.LineEdit.MIState, Base.REPL.REPLHistoryProvider,))
 precompile(Base.REPL.mode_idx, (Base.REPL.REPLHistoryProvider, Base.LineEdit.Prompt))
-precompile(Base.REPL.parse_input_line, (ASCIIString,))
 precompile(Base.REPL.reset, (Base.REPL.LineEditREPL,))
 precompile(Base.REPL.reset_state, (Base.REPL.REPLHistoryProvider,))
 precompile(Base.REPL.respond, (Function, Base.REPL.LineEditREPL, Base.LineEdit.Prompt))
