@@ -1274,7 +1274,7 @@ function find_gensym_uses(e::ANY, uses, line)
     end
 end
 
-function gensym(sv::StaticVarInfo, typ)
+function GenSym(sv::StaticVarInfo, typ)
     id = length(sv.gensym_types)
     push!(sv.gensym_types, typ)
     return GenSym(id)
@@ -1657,7 +1657,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             # inlining can add variables
             sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
         end
-        tuple_elim_pass(fulltree)
+        tuple_elim_pass(fulltree, sv)
         tupleref_elim_pass(fulltree.args[3], sv)
         linfo.inferred = true
         fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
@@ -1837,7 +1837,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
 end
 
 function sym_replace(e::ANY, from1, from2, to1, to2)
-    if isa(e,Symbol)
+    if isa(e,Symbol) || isa(e,GenSym)
         return _sym_repl(e::Union(Symbol,GenSym), from1, from2, to1, to2, e)
     end
     if isa(e,SymbolNode)
@@ -1933,7 +1933,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
         # remove_redundant_temp_vars can only handle Symbols
         # on the LHS of assignments, so we make sure not to put
         # something else there
-        e2 = resolve_globals(e.args[1]::Symbol, locals, args, from, to, env1, env2)
+        e2 = resolve_globals(e.args[1]::Union(Symbol,GenSym), locals, args, from, to, env1, env2)
         if isa(e2, GetfieldNode)
             # abort when trying to inline a function which assigns to a global
             # variable in a different module, since `Mod.X=V` isn't allowed
@@ -1943,7 +1943,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
 #                resolve_globals(e.args[2], locals, args, from, to, env1, env2))
 #            e.typ = e2.typ
         else
-            e.args[1] = e2::Symbol
+            e.args[1] = e2::Union(Symbol,GenSym)
             e.args[2] = resolve_globals(e.args[2], locals, args, from, to, env1, env2)
         end
     elseif !is(e.head,:line)
@@ -2341,19 +2341,19 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             args = vcat(args[1:na-1], newnames)
             na = length(args)
 
-            islocal = false # if the argument name is also used as a local variable,
-                            # we need to keep it around as a variable name
-            vnew = unique_name(enclosing_ast, ast)
+            # if the argument name is also used as a local variable,
+            # we need to keep it around as a variable name
             for vi in vinflist
-                if vi[1] === vaname && vi[2] != 0
-                    islocal = true
-                    push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
+                if vi[1] === vaname
+                    if vi[3] != 0
+                        vnew = unique_name(enclosing_ast, ast)
+                        push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
+                        push!(spnames, vaname)
+                        push!(spvals, vnew)
+                        push!(enc_locllist, vnew)
+                    end
+                    break
                 end
-            end
-            if islocal
-                push!(spnames, vaname)
-                push!(spvals, vnew)
-                push!(enc_locllist, vnew)
             end
         else
             # construct tuple-forming expression for argument tail
@@ -2379,13 +2379,14 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
     # avoid capturing free variables in enclosing function with the same name as in our function
     for localval in locllist
         localval = localval::Symbol
-        vnew = unique_name(enclosing_ast, ast)
+        vnew = gensym(localval)
         push!(spnames, localval)
         push!(spvals, vnew)
         push!(enc_locllist, vnew)
         for vi in vinflist
             if vi[1] === localval
                 push!(enc_vinflist, Any[vnew, vi[2], vi[3]])
+                break
             end
         end
     end
@@ -2528,10 +2529,15 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         if ((occ==0 && is(aeitype,Bottom)) || islocal || (occ > 1 && !inline_worthy(aei, occ*2)) ||
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied by occ!=0
-                vnew = unique_name(enclosing_ast, ast)
-                add_variable(enclosing_ast, vnew, aeitype, !islocal)
+                if !islocal
+                    vnew = GenSym(sv, aeitype)
+                    argexprs[i] = vnew
+                else
+                    vnew = unique_name(enclosing_ast, ast)
+                    add_variable(enclosing_ast, vnew, aeitype, #=SSA=#false)
+                    argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
+                end
                 unshift!(stmts, Expr(:(=), vnew, aei))
-                argexprs[i] = aeitype===Any ? vnew : SymbolNode(vnew,aeitype)
                 stmts_free &= free
             elseif !free && !isType(aeitype)
                 unshift!(stmts, aei)
@@ -2549,9 +2555,6 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         unshift!(argexprs2, top_tuple)
     end
 
-    # ok, substitute argument expressions for argument names in the body
-    body = sym_replace(body, args, spnames, argexprs, spvals)
-
     # re-number the GenSyms and copy their type-info to the new ast
     if !isempty(ast.args[2][4])
         incr = length(sv.gensym_types)
@@ -2560,6 +2563,9 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
         end
         append!(sv.gensym_types, ast.args[2][4])
     end
+
+    # ok, substitute argument expressions for argument names in the body
+    body = sym_replace(body, args, spnames, argexprs, spvals)
 
     # make labels / goto statements unique
     newlabels = zeros(Int,label_counter(body.args)+1)
@@ -2615,7 +2621,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     if multiret
         rettype = (ast.args[3]::Expr).typ
-        add_variable(enclosing_ast, retval, rettype, false)
+        add_variable(enclosing_ast, retval, rettype, #=SSA=#false)
         if lastexpr !== nothing
             unshift!(lastexpr.args, retval)
             lastexpr.head = :(=)
@@ -2657,18 +2663,14 @@ function inline_worthy(body::Expr, cost::Real=1.0) # precondition: 0<cost
     return false
 end
 
-function gensym_increment(body, incr)
-    if isa(b,GenSym)
-        return GenSym((b::GenSym).id + incr)
+gensym_increment(body, incr) = body
+gensym_increment(body::GenSym, incr) = GenSym(body.id + incr)
+function gensym_increment(body::Expr, incr)
+    if body.head === :line
+        return body
     end
-    if isa(b,Expr)
-        b = b::Expr
-        if b.head === :line
-            return body
-        end
-        for i in 1:length(b.args)
-            b.args[i] = gensym_increment(b.args[i], incr)
-        end
+    for i in 1:length(body.args)
+        body.args[i] = gensym_increment(body.args[i], incr)
     end
     return body
 end
@@ -2751,10 +2753,9 @@ function inlining_pass(e::Expr, sv, ast)
                 res1 = res[1]
                 if has_stmts && !effect_free(res1, sv, false)
                     restype = exprtype(res1,sv)
-                    vnew = unique_name(ast)
-                    add_variable(ast, vnew, restype, true)
+                    vnew = GenSym(sv, restype)
+                    argloc[i] = vnew
                     unshift!(stmts, Expr(:(=), vnew, res1))
-                    argloc[i] = restype===Any ? vnew : SymbolNode(vnew,restype)
                 else
                     argloc[i] = res1
                 end
@@ -2966,8 +2967,10 @@ function is_var_assigned(ast, v)
 end
 
 function delete_var!(ast, v)
-    filter!(vi->!symequal(vi[1],v), ast.args[2][2])
-    filter!(x->!symequal(x,v), ast.args[2][1])
+    if !isa(v, GenSym)
+        filter!(vi->!symequal(vi[1],v), ast.args[2][2])
+        filter!(x->!symequal(x,v), ast.args[2][1])
+    end
     filter!(x->!(isa(x,Expr) && (x.head === :(=) || x.head === :const) &&
                  symequal(x.args[1],v)),
             ast.args[3].args)
@@ -2979,23 +2982,23 @@ end
 # "sa" is the result of find_sa_vars
 function remove_redundant_temp_vars(ast, sa)
     varinfo = ast.args[2][2]
+    gensym_types = ast.args[2][4]
     for (v,init) in sa
         if ((isa(init,Symbol) || isa(init,SymbolNode)) &&
             any(vi->symequal(vi[1],init), varinfo) &&
             !is_var_assigned(ast, init))
 
+            # this transformation is not valid for vars used before def.
+            # we need to preserve the point of assignment to know where to
+            # throw errors (issue #4645).
             if !occurs_undef(v, ast.args[3])
-                # this transformation is not valid for vars used before def.
-                # we need to preserve the point of assignment to know where to
-                # throw errors (issue #4645).
 
-                if (isa(init,SymbolNode) ? (init.typ<:local_typeof(v, varinfo)) : true)
-                    # the transformation is not ideal if the assignment
-                    # is present for the auto-unbox functionality
-                    # (from inlining improved type inference information)
-                    # and this transformation would worsen the type information
-                    # everywhere later in the function
-
+                # the transformation is not ideal if the assignment
+                # is present for the auto-unbox functionality
+                # (from inlining improved type inference information)
+                # and this transformation would worsen the type information
+                # everywhere later in the function
+                if (isa(init,SymbolNode) ? (init.typ <: (isa(v,GenSym)?gensym_types[(v::GenSym).id+1]:local_typeof(v, varinfo))) : true)
                     delete_var!(ast, v)
                     sym_replace(ast.args[3], [v], [], [init], [])
                 end
@@ -3014,6 +3017,8 @@ function local_typeof(v, varinfo)
     @assert false "v not in varinfo"
 end
 
+occurs_undef(var::GenSym, expr) = false
+
 occurs_undef(var, expr) =
     occurs_more(expr,
                 e->(isa(e,SymbolNode) && symequal(var,e) && issubtype(Undef,e.typ)), 0)>0
@@ -3028,11 +3033,18 @@ function find_sa_vars(ast)
         e = body[i]
         if isa(e,Expr) && is(e.head,:(=))
             lhs = e.args[1]
-            if contains_is(vnames, lhs)  # exclude globals
-                if !haskey(av, lhs)
-                    av[lhs] = e.args[2]
-                else
-                    av2[lhs] = true
+            if isa(lhs,GenSym)
+                av[lhs] = e.args[2]
+            elseif isa(lhs,SymbolNode)
+                av2[(lhs::SymbolNode).name] = true
+            else
+                lhs = lhs::Symbol
+                if contains_is(vnames, lhs)  # exclude globals
+                    if !haskey(av, lhs)
+                        av[lhs] = e.args[2]
+                    else
+                        av2[lhs] = true
+                    end
                 end
             end
         end
@@ -3122,8 +3134,7 @@ function tupleref_elim_pass(e::Expr, sv)
 end
 
 # eliminate allocation of unnecessary tuples
-function tuple_elim_pass(ast::Expr)
-    sv = inference_stack.sv
+function tuple_elim_pass(ast::Expr, sv::StaticVarInfo)
     bexpr = ast.args[3]::Expr
     body = (ast.args[3].args)::Array{Any,1}
     vs = find_sa_vars(ast)
@@ -3155,11 +3166,10 @@ function tuple_elim_pass(ast::Expr)
                     vals[j] = tupelt
                 else
                     elty = exprtype(tupelt,sv)
-                    tmpv = unique_name(ast)
+                    tmpv = GenSym(sv, elty)
                     tmp = Expr(:(=), tmpv, tupelt)
-                    add_variable(ast, tmpv, elty, true)
                     insert!(body, i+n_ins, tmp)
-                    vals[j] = SymbolNode(tmpv, elty)
+                    vals[j] = tmpv
                     n_ins += 1
                 end
             end
@@ -3195,9 +3205,9 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
                 end
             elseif isa(val,GenSym)
                 val = val::GenSym
-                typ = sv.gensym_types[val.id]
-                if a.typ <: typ && !typeseq(a.typ,val.typ)
-                    sv.gensym_types[val.id] = a.typ
+                typ = sv.gensym_types[val.id+1]
+                if a.typ <: typ && !typeseq(a.typ,typ)
+                    sv.gensym_types[val.id+1] = a.typ
                 end
             end
             e.args[i] = val

@@ -1212,16 +1212,14 @@ static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l, int
         jl_value_t *st = jl_arrayref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == assign_sym) {
-                jl_sym_t *sy;
                 jl_value_t *ar = jl_exprarg(st, 0);
                 if (jl_is_symbolnode(ar)) {
-                    sy = jl_symbolnode_sym(ar);
+                    ar = (jl_value_t*)jl_symbolnode_sym(ar);
                 }
-                else {
+                if (!jl_is_gensym(ar)) {
                     assert(jl_is_symbol(ar));
-                    sy = (jl_sym_t*)ar;
+                    av.insert((jl_sym_t*)ar);
                 }
-                av.insert(sy);
             }
         }
         if (jl_is_labelnode(st)) {
