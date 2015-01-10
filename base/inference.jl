@@ -791,11 +791,8 @@ function invoke_tfunc(f, types, argtypes)
     if is(argtypes, Bottom)
         return Bottom
     end
-    local meth
-    try
-        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
-    catch
-        return Any
+    meth = try
+        ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, types)
     end
     if is(meth, nothing)
         return Any
@@ -2277,7 +2274,7 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
     local invoke_types
     try
         invoke_types = get_invoke_types(atypes[2])
-    catch err
+    catch
         return NF
     end
     if length(atypes) != (length(invoke_types) + 2)
@@ -2285,10 +2282,13 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
     end
 
     fexpr = argexprs[1]
+    # Always evaluate the types expression and letting codegen to eliminate
+    # unnecessary code for now.
     stmts = Any[argexprs[2]]
     argexprs = argexprs[3:end]
     atypes = atypes[3:end]
 
+    # Special case when invoke is equivalent with direct call.
     if isleaftype(invoke_types) && invoke_types == atypes
         new_e = Expr(:call, fexpr, argexprs...)
         new_e.typ = e.typ
@@ -2304,16 +2304,15 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         end
     end
 
-    local meth
-    try
-        meth = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, invoke_types)
-    catch
-        return NF
+    meth = try
+        ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, invoke_types)
     end
     if is(meth, nothing)
         return NF
     end
 
+    # TODO: pre-evaluation is only necessary when type check is needed and
+    # when the arguments have side-effect
     check_stmts = []
     atypes_l = Type[atypes...]
     err_label = genlabel(sv)
@@ -2350,7 +2349,7 @@ function inlineable_invoke(f::Function, e::Expr, atypes, sv,
         match_meth = match_meth[1]::Tuple
         # Try inlining
         res = inlineable_meth(f, match_meth, new_e, atypes, sv, enclosing_ast,
-                              argexprs)
+                              argexprs, true)
         if isa(res, Tuple)
             if isa(res[2], Array)
                 append!(stmts, res[2])
@@ -2395,7 +2394,10 @@ function inlineable_gf(f::Function, e::Expr, atypes, sv, enclosing_ast,
 end
 
 function inlineable_meth(f::Function, meth::Tuple, e::Expr, atypes, sv,
-                         enclosing_ast, argexprs)
+                         enclosing_ast, argexprs, is_invoke::Bool=false)
+    # NOTE: when is_invoke is true, this function shouldn't do or generate any
+    # code that does method lookup based on argument types. More specifically,
+    # arguments f and e (e.args[1]) must be used with care.
     local linfo
     try
         linfo = func_for_method(meth[3],atypes,meth[2])
@@ -2407,6 +2409,7 @@ function inlineable_meth(f::Function, meth::Tuple, e::Expr, atypes, sv,
     ## growing due to recursion.
     ## It might be helpful for some things, but turns out not to be
     ## necessary to get max performance from recursive varargs functions.
+    ## NOTE: Need to adapt with is_invoke if the following code is re-enabled.
     # if length(atypes) > MAX_TUPLETYPE_LEN
     #     # check call stack to see if this argument list is growing
     #     st = inference_stack
@@ -2486,7 +2489,10 @@ function inlineable_meth(f::Function, meth::Tuple, e::Expr, atypes, sv,
         cost /= 4
     end
     if !inline_worthy(body, cost)
-        if incompletematch
+        # incompletematch shouldn't happen for invoke because of the type check
+        # generated before entering inlineable_meth but just in case something
+        # changes in the future
+        if incompletematch && !is_invoke
             # inline a typeassert-based call-site, rather than a
             # full generic lookup, using the inliner to handle
             # all the fiddly details
