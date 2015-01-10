@@ -254,7 +254,7 @@ function parse_cond(ps::ParseState, ts::TokenStream)
         then = @without_range_colon ps begin
             parse_eqs(ps, ts)
         end
-        take_token(ts) === :(:) || error("colon expected in \"?\" expression")
+        take_token(ts) === :(:) || throw(ParseError("colon expected in \"?\" expression"))
         return Expr(:if, ex, then, parse_eqs(ps, ts))
     end
     return ex
@@ -264,7 +264,7 @@ end
 function parse_Nary{T1, T2}(ps::ParseState, ts::TokenStream, down::Function, ops::Set{T1},
                             head::Symbol, closers::Set{T2}, allow_empty::Bool)
     t = require_token(ps, ts)
-    is_invalid_initial_token(t) && error("unexpected \"$t\"")
+    is_invalid_initial_token(t) && throw(ParseError("unexpected \"$t\""))
     # empty block
     if isa(t, CharSymbol) && t in closers
         return Expr(head)
@@ -285,7 +285,7 @@ function parse_Nary{T1, T2}(ps::ParseState, ts::TokenStream, down::Function, ops
     while true
         if !(t in ops)
             if !(Lexer.eof(t) || t === '\n' || ',' in ops || t in closers)
-                error("extra token \"$t\" after end of expression")
+                throw(ParseError("extra token \"$t\" after end of expression"))
             end
             if isempty(args) || length(args) >= 2 || !isfirst
                 # [] => Expr(:head)
@@ -339,7 +339,7 @@ function parse_stmts(ps::ParseState, ts::TokenStream)
     # check for unparsed junk after an expression
     t = peek_token(ps, ts)
     if !(Lexer.eof(t) || t === '\n')
-        error("extra token \"$t\" after end of expression")
+        throw(ParseError("extra token \"$t\" after end of expression"))
     end
     return ex
 end
@@ -455,14 +455,14 @@ function parse_range(ps::ParseState, ts::TokenStream)
                     op = symbol(string(ex, t))
                     Lexer.is_operator(op) && return op
                 end
-                error("missing last argument in \"$(ex):\"range expression")
+                throw(ParseError("missing last argument in \"$(ex):\"range expression"))
             end
             if Lexer.isnewline(peek_token(ps, ts))
-                error("line break in \":\" expression")
+                throw(ParseError("line break in \":\" expression"))
             end
             arg = parse_expr(ps, ts)
             if !ts.isspace && (arg === :(<) || arg === :(>))
-                error("\":$argument\" found instead of \"$argument:\"")
+                throw(ParseError("\":$argument\" found instead of \"$argument:\""))
             end
             if isfirst
                 ex = Expr(t, ex, arg)
@@ -536,7 +536,7 @@ parse_factor(ps::ParseState, ts::TokenStream) = parse_factorh(ps, ts, parse_decl
 
 function parse_unary(ps::ParseState, ts::TokenStream)
     t = require_token(ps, ts)
-    is_closing_token(ps, t) && error("unexpected $t")
+    is_closing_token(ps, t) && throw(ParseError("unexpected $t"))
     if !(isa(t, Symbol) && t in Lexer.unary_ops)
         pf = parse_factor(ps, ts)
         return parse_juxtaposed(ps, ts, pf)
@@ -669,7 +669,7 @@ function parse_call_chain(ps::ParseState, ts::TokenStream, ex, one_call::Bool)
             elseif al.head === :dict_comprehension
                 ex = Expr(:typed_dict_comprehension, ex); append!(ex.args, al.args)
             else
-                error("unknown parse-cat result (internal error)")
+                throw(ParseError("unknown parse-cat result (internal error)"))
             end
             continue
 
@@ -816,20 +816,20 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                     return Expr(:if, test, then)
                 elseif nxt === SYM_ELSEIF
                     if Lexer.isnewline(peek_token(ps, ts))
-                        error("missing condition in elseif at {filename} : {line}")
+                        throw(ParseError("missing condition in elseif at {filename} : {line}"))
                     end
                     blk = Expr(:block, line_number_node(ts), parse_resword(ps, ts, :if))
                     return Expr(:if, test, then, blk)
                 elseif nxt === SYM_ELSE
                     if peek_token(ps, ts) === :if
-                        error("use elseif instead of else if")
+                        throw(ParseError("use elseif instead of else if"))
                     end
                     blk = parse_block(ps, ts)
                     ex = Expr(:if, test, then, blk)
                     expect_end(ps, ts, word)
                     return ex
                 else
-                    error("unexpected next token $nxt in if")
+                    throw(ParseError("unexpected next token $nxt in if"))
                 end
 
             elseif word === :let
@@ -837,7 +837,7 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                 binds = Lexer.isnewline(nt) || nt === ';' ? Any[] : parse_comma_sep_assigns(ps, ts)
                 nt = peek_token(ps, ts)
                 if !(Lexer.eof(nt) || (isa(nt, CharSymbol) && (nt === '\n' || nt ===  ';' || nt === SYM_END)))
-                    error("let variables should end in \";\" or newline")
+                    throw(ParseError("let variables should end in \";\" or newline"))
                 end
                 ex = parse_block(ps, ts)
                 expect_end(ps, ts, word)
@@ -870,13 +870,13 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                        def = Expr(:tuple, sig)
                     else
                        # function foo => syntax error
-                       error("expected \"(\" in $word definition")
+                       throw(ParseError("expected \"(\" in $word definition"))
                     end
                 else
                     if (isa(sig, Expr) && (sig.head === :call || sig.head === :tuple))
                         def = sig
                     else
-                        error("expected \"(\" in $word definition")
+                        throw(ParseError("expected \"(\" in $word definition"))
                     end
                 end
                 peek_token(ps, ts) !== SYM_END && Lexer.skipws_and_comments(ts)
@@ -960,7 +960,7 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                         t = require_token(ps, ts)
                         continue
                     else
-                        error("unexpected \"$t\"")
+                        throw(ParseError("unexpected \"$t\""))
                     end
                 end
 
@@ -976,7 +976,7 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                 if !(isa(assgn, Expr) && (assgn.head === :(=) ||
                                           assgn.head === :global ||
                                           assgn.head === :local))
-                    error("expected assignment after \"const\"")
+                    throw(ParseError("expected assignment after \"const\""))
                 end
                 return Expr(:const, assgn)
 
@@ -1004,7 +1004,7 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
 
             elseif word === :export
                 exports = map(macrocall_to_atsym, parse_comma_sep(ps, ts, parse_atom))
-                !all(x -> isa(x, Symbol), exports) && error("invalid \"export\" statement")
+                !all(x -> isa(x, Symbol), exports) && throw(ParseError("invalid \"export\" statement"))
                 ex = Expr(:export); ex.args = exports
                 return ex
 
@@ -1015,7 +1015,7 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                 return ex
 
             elseif word === :ccall
-                peek_token(ps, ts) != '(' && error("invalid \"ccall\" syntax")
+                peek_token(ps, ts) != '(' && throw(ParseError("invalid \"ccall\" syntax"))
                 take_token(ts)
                 al = parse_arglist(ps, ts, ')')
                 if length(al) > 1
@@ -1034,10 +1034,10 @@ function parse_resword(ps::ParseState, ts::TokenStream, word::Symbol)
                 return ex
 
             elseif word === :do
-                error("invalid \"do\" syntax")
+                throw(ParseError("invalid \"do\" syntax"))
 
             else
-                error("unhandled reserved word $word")
+                throw(ParseError("unhandled reserved word $word"))
             end
         end
     end
@@ -1146,7 +1146,7 @@ function parse_import(ps::ParseState, ts::TokenStream, word::Symbol)
             ex = Expr(word); ex.args = path
             return ex
         else
-            error("invalid \"$word\" statement")
+            throw(ParseError("invalid \"$word\" statement"))
         end
     end
 end
@@ -1178,7 +1178,7 @@ function parse_comma_sep_iters(ps::ParseState, ts::TokenStream)
         elseif isa(r, Expr) && r.head === :in
             tmp = r; r = Expr(:(=)); r.args = tmp.args
         else
-            error("invalid iteration spec")
+            throw(ParseError("invalid iteration spec"))
         end
         if peek_token(ps, ts) === ','
             take_token(ts)
@@ -1258,9 +1258,9 @@ function _parse_arglist(ps::ParseState, ts::TokenStream, closer)
             push!(lst, nxt)
             continue
         elseif nt in (']', '}')
-            error("unexpected \"$nt\" in argument list")
+            throw(ParseError("unexpected \"$nt\" in argument list"))
         else
-            error("missing comma or \"$closer\" in argument list")
+            throw(ParseError("missing comma or \"$closer\" in argument list"))
         end
     end
 end
@@ -1303,9 +1303,9 @@ function parse_vcat(ps::ParseState, ts::TokenStream, frst, closer)
             ex = Expr(:vcat); ex.args = reverse(push!(lst, next))
             return ex
         elseif t === ']' || t === '}'
-            error("unexpected \"$t\" in array expression")
+            throw(ParseError("unexpected \"$t\" in array expression"))
         else
-            error("missing separator in array expression")
+            throw(ParseError("missing separator in array expression"))
         end
     end
 end
@@ -1322,14 +1322,14 @@ function parse_dict(ps::ParseState, ts::TokenStream, frst, closer)
         ex = Expr(:dict); ex.args = v.args
         return ex
     else
-        error("invalid dict literal")
+        throw(ParseError("invalid dict literal"))
     end
 end
 
 function parse_comprehension(ps::ParseState, ts::TokenStream, frst, closer)
     itrs = parse_comma_sep_iters(ps, ts)
     t = require_token(ps, ts)
-    t === closer ? take_token(ts) : error("expected $closer")
+    t === closer ? take_token(ts) : throw(ParseError("expected $closer"))
     ex = Expr(:comprehension, frst); append!(ex.args, itrs)
     return ex
 end
@@ -1340,7 +1340,7 @@ function parse_dict_comprehension(ps::ParseState, ts::TokenStream, frst, closer)
         ex = Expr(:dict_comprehension); ex.args = c.args
         return ex
     else
-        error("invalid dict comprehension")
+        throw(ParseError("invalid dict comprehension"))
     end
 end
 
@@ -1380,15 +1380,15 @@ function parse_matrix(ps::ParseState, ts::TokenStream, frst, closer)
             vec   = Any[]
             continue
         elseif t === ','
-            error("unexpected comma in matrix expression")
+            throw(ParseError("unexpected comma in matrix expression"))
         elseif t === ']' || t === '}'
-            error("unexpected \"$t\"")
+            throw(ParseError("unexpected \"$t\""))
         elseif t === :for
             if !semicolon && length(outer) == 1 && isempty(vec)
                 take_token(ts)
                 return parse_comprehension(ps, ts, outer[1], closer)
             else
-                error("invalid comprehension syntax")
+                throw(ParseError("invalid comprehension syntax"))
             end
         else
             push!(vec, parse_eqs(ps, ts))
@@ -1418,7 +1418,7 @@ function parse_cat(ps::ParseState, ts::TokenStream, closer, isdict::Bool=false)
                 elseif closer === ']'
                     return Expr(:vcat)
                 else
-                    error("unknown closer $closer")
+                    throw(ParseError("unknown closer $closer"))
                 end
             end
             frst = parse_eqs(ps, ts)
@@ -1466,11 +1466,11 @@ function parse_tuple(ps::ParseState, ts::TokenStream, frst)
             nxt  = parse_eqs(ps, ts)
             continue
         elseif t === ';'
-            error("unexpected semicolon in tuple")
+            throw(ParseError("unexpected semicolon in tuple"))
         elseif t === ']' || t === '}'
-            error("unexpected \"$(peek_token(ps, ts))\" in tuple")
+            throw(ParseError("unexpected \"$(peek_token(ps, ts))\" in tuple"))
         else
-            error("missing separator in tuple")
+            throw(ParseError("missing separator in tuple"))
         end
     end
 end
@@ -1521,11 +1521,11 @@ function parse_interpolate(ps::ParseState, ts::TokenStream)
     elseif c === '('
         Lexer.readchar(ts)
         ex = parse_eqs(ps, ts)
-        require_token(ps, ts) === ')' || error("invalid interpolation syntax")
+        require_token(ps, ts) === ')' || throw(ParseError("invalid interpolation syntax"))
         take_token(ts)
         return ex
     else
-        error("invalid interpolation syntax: \"$c\"")
+        throw(ParseError("invalid interpolation syntax: \"$c\""))
     end
 end
 
@@ -1533,7 +1533,7 @@ function tostr(buf::IOBuffer, custom::Bool)
     str = bytestring(buf)
     custom && return str
     str = unescape_string(str)
-    !is_valid_utf8(str) && error("invalid UTF-8 sequence")
+    !is_valid_utf8(str) && throw(ParseError("invalid UTF-8 sequence"))
     return str
 end
 
@@ -1613,7 +1613,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
     elseif t === symbol("'")
         take_token(ts)
         fch = Lexer.readchar(ts)
-        fch === '\'' && error("invalid character literal")
+        fch === '\'' && ParseError("invalid character literal")
         if fch !== '\\' && !Lexer.eof(fch) && Lexer.peekchar(ts) === '\''
             # easy case 1 char no \
             Lexer.takechar(ts)
@@ -1634,7 +1634,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                 return str[1]
             else
                 if length(str) != 1  || !is_valid_utf8(str)
-                    error("invalid character literal, got \'$str\'")
+                    ParseError("invalid character literal, got \'$str\'")
                 end
                 return str[1]
             end
@@ -1651,7 +1651,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
 
     # misplaced =
     elseif t === :(=)
-        error("unexpected \"=\"")
+        throw(ParseError("unexpected \"=\""))
 
     # identifier
     elseif isa(t, Symbol)
@@ -1669,7 +1669,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                 elseif peek_token(ps, ts) in Lexer.syntactic_ops
                     # allow (=) etc.
                     t = take_token(ts)
-                    require_token(ps, ts) !== ')' && error("invalid identifier name \"$t\"")
+                    require_token(ps, ts) !== ')' && throw(ParseError("invalid identifier name \"$t\""))
                     take_token(ts)
                     return t
                 else
@@ -1701,17 +1701,17 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                             blk = parse_stmts_within_expr(ps, ts)
                             tok = require_token(ps, ts)
                             if tok === ','
-                                error("unexpected comma in statment block")
+                                throw(ParseError("unexpected comma in statment block"))
                             elseif tok != ')'
-                                error("missing separator in statement block")
+                                throw(ParseError("missing separator in statement block"))
                             end
                             take_token(ts)
                             return Expr(:block, ex, blk)
                         end
                     elseif t === ']' || t === '}'
-                        error("unexpected \"$t\" in tuple")
+                        throw(ParseError("unexpected \"$t\" in tuple"))
                     else
-                        error("missing separator in tuple")
+                        throw(ParseError("missing separator in tuple"))
                     end
                 end
             end
@@ -1751,7 +1751,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                 for i = 2:nr
                     row = vex.args[i]
                     if !(isa(row, Expr) && row.head === :row && length(row.args) == nc)
-                        error("inconsistent shape in cell expression")
+                        throw(ParseError("inconsistent shape in cell expression"))
                     end
                 end
                 # Transpose to storage order
@@ -1764,7 +1764,7 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
                 for i = 2:nr
                     row = vex.args[i]
                     if isa(row, Expr) && row.head === :row
-                        error("inconsistent shape in cell expression")
+                        throw(ParseError("inconsistent shape in cell expression"))
                     end
                 end
                 ex = Expr(:cell1d); ex.args = vex.args
@@ -1823,14 +1823,14 @@ function _parse_atom(ps::ParseState, ts::TokenStream)
         return parse_backquote(ps, ts)
 
     else
-        error("invalid syntax: \"$(take_token(ts))\"")
+        throw(ParseError("invalid syntax: \"$(take_token(ts))\""))
     end
 end
 
 function parse_atom(ps::ParseState, ts::TokenStream)
     ex = _parse_atom(ps, ts)
     if (ex !== :(=>) && (ex in Lexer.syntactic_ops)) || ex === :(...)
-        error("invalid identifier name \"$ex\"")
+        throw(ParseError("invalid identifier name \"$ex\""))
     end
     return ex
 end
@@ -1852,7 +1852,7 @@ function macroify_name(ex)
     elseif is_valid_modref(ex)
         return Expr(:(.), ex.args[1], Expr(:quote, macroify_name(ex.args[2].args[1])))
     else
-        error("invalid macro use \"@($ex)")
+        throw(ParseError("invalid macro use \"@($ex)"))
     end
 end
 
