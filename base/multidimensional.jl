@@ -1,146 +1,146 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: start, _start, done, next, getindex, setindex!, linearindexing, min, max
-import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow
+import Base: length, start, _start, done, next, getindex, setindex!, linearindexing, min, max
+import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
-export CartesianIndex, IndexIterator, eachindex
+export CartesianIndex, CartesianRange, eachindex
 
 # Traits for linear indexing
 linearindexing(::BitArray) = LinearFast()
 linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 
-# Iterator/state
-abstract CartesianIndex{N}       # the state for all multidimensional iterators
-abstract IndexIterator{N}        # Iterator that visits the index associated with each element
+# CartesianIndex
+abstract CartesianIndex{N}
 
-stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Int})
-    indextype, itertype = gen_cartesian(N)
-    return :($indextype(index))
+stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Real})
+    indextype = gen_cartesian(N)
+    return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-stagedfunction Base.call{N}(::Type{IndexIterator},index::NTuple{N,Int})
-    indextype, itertype = gen_cartesian(N)
-    return :($itertype(index))
-end
+Base.call{N}(::Type{CartesianIndex{N}},index::Real...) = CartesianIndex(index::NTuple{N,Real})
 
 let implemented = IntSet()
-global gen_cartesian
-function gen_cartesian(N::Int)
-    # Create the types
-    indextype = symbol("CartesianIndex_$N")
-    itertype = symbol("IndexIterator_$N")
-    if !in(N,implemented)
-        fieldnames = [symbol("I_$i") for i = 1:N]
-        fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
-        extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
-        exindices = Expr[:(index[$i]) for i = 1:N]
-        totalex = quote
-            # type definition of state
-            $extype
-            # constructor from tuple
-            $indextype(index::NTuple{$N,Int}) = $indextype($(exindices...))
-
-            # type definition of iterator
-            immutable $itertype <: IndexIterator{$N}
-                dims::$indextype
-            end
-            # constructor from tuple
-            $itertype(dims::NTuple{$N,Int})=$itertype($indextype(dims))
+    global gen_cartesian
+    function gen_cartesian(N::Int)
+        # Create the types
+        indextype = symbol("CartesianIndex_$N")
+        if !in(N,implemented)
+            fieldnames = [symbol("I_$i") for i = 1:N]
+            fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+            extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
+            eval(extype)
+            argsleft = [Expr(:(::), fieldnames[i], :Real) for i = 1:N]
+            argsright = [Expr(:call,:to_index,fieldnames[i]) for i=1:N]
+            exconstructor = Expr(:(=),Expr(:call,:(Base.call),:(::Type{CartesianIndex{$N}}),argsleft...),Expr(:call,indextype,argsright...))
+            eval(exconstructor)
+            push!(implemented,N)
         end
-        eval(totalex)
-        push!(implemented,N)
+        return indextype
     end
-    return indextype, itertype
 end
-end
+
+# length
+length{N}(::CartesianIndex{N})=N
+length{N}(::Type{CartesianIndex{N}})=N
+length{I<:CartesianIndex}(::Type{I})=length(super(I))
 
 # indexing
-getindex(index::CartesianIndex, i::Integer) = getfield(index, i)
+getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->getfield(index,d))
+    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
 end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->getfield(index,d))
+    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
-    :(@nref $N A d->getfield(index,d))
+    :(@nref $N A d->index[d])
 end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
-    :((@nref $N A d->getfield(index,d)) = v)
+    :((@nref $N A d->index[d]) = v)
 end
 
-# iteration
-eachindex(A::AbstractArray) = IndexIterator(size(A))
-
-stagedfunction start{N}(iter::IndexIterator{N})
-    indextype, _ = gen_cartesian(N)
-    args = fill(1, N)
-    fieldnames = [symbol("I_$i") for i = 1:N]
-    anyzero = Expr(:(||), [:(iter.dims.$(fieldnames[i]) == 0) for i = 1:N]...)
-    quote
-        z = $anyzero
-        return z, $indextype($(args...))
+# arithmetic, min/max
+for op in (:+, :-, :min, :max)
+    @eval begin
+        stagedfunction ($op){N}(index1::CartesianIndex{N}, index2::CartesianIndex{N})
+            I = index1
+            args = [:($($op)(index1[$d],index2[$d])) for d = 1:N]
+            :($I($(args...)))
+        end
     end
+end
+
+stagedfunction *{N}(a::Integer, index::CartesianIndex{N})
+    I = index
+    args = [:(a*index[$d]) for d = 1:N]
+    :($I($(args...)))
+end
+*(index::CartesianIndex,a::Integer)=*(a,index)
+
+# Iteration
+immutable CartesianRange{I<:CartesianIndex}
+    start::I
+    stop::I
+end
+
+stagedfunction eachindex{T,N}(A::AbstractArray{T,N})
+    startargs = fill(1, N)
+    stopargs = [:(size(A,$i)) for i=1:N]
+    :(CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
+end
+
+stagedfunction start{I}(iter::CartesianRange{I})
+    N=length(I)
+    finishedex = Expr(:(||), [:(iter.stop[$i] < iter.start[$i]) for i = 1:N]...)
+    :(return $finishedex, iter.start)
 end
 
 stagedfunction _start{T,N}(A::AbstractArray{T,N}, ::LinearSlow)
-    indextype, _ = gen_cartesian(N)
     args = fill(1, N)
-    quote
-        z = isempty(A)
-        return z, $indextype($(args...))
-    end
+    :(return isempty(A), CartesianIndex{$N}($(args...)))
 end
 
 # Prevent an ambiguity warning
-gen_cartesian(1) # to make sure the next two lines are valid
-next(R::StepRange, state::(Bool, CartesianIndex{1})) = R[state[2].I_1], (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
-next{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = R[state[2].I_1], (state[2].I_1==length(R), CartesianIndex_1(state[2].I_1+1))
+next(R::StepRange, state::(Bool, CartesianIndex{1})) = (index=state[2]; return R[index], (index[1]==length(R), CartesianIndex{1}(index[1]+1)))
+next{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = (index=state[2]; return R[index], (index[1]==length(R), CartesianIndex{1}(index[1]+1)))
+done(R::StepRange, state::(Bool, CartesianIndex{1})) = state[1]
+done(R::UnitRange, state::(Bool, CartesianIndex{1})) = state[1]
 
 stagedfunction next{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
-    indextype, _ = gen_cartesian(N)
-    finishedex = (N==0 ? true : :(getfield(newindex, $N) > size(A, $N)))
+    I = state[2]
+    finishedex = (N==0 ? true : :(newindex[$N] > size(A, $N)))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
         @inbounds v = A[index]
-        newindex=@nif $N d->(getfield(index,d) < size(A, d)) d->@ncall($N, $indextype, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : 1))
+        newindex=@nif $N d->(index[d] < size(A, d)) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : 1))
         finished=$finishedex
         v, (finished,newindex)
     end
 end
-stagedfunction next{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N}))
-    indextype, _ = gen_cartesian(N)
-    finishedex = (N==0 ? true : :(getfield(newindex, $N) > getfield(iter.dims, $N)))
+stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I))
+    N = length(I)
+    finishedex = (N==0 ? true : :(newindex[$N] > iter.stop[$N]))
     meta = Expr(:meta, :inline)
     quote
         $meta
         index=state[2]
-        newindex=@nif $N d->(getfield(index,d) < getfield(iter.dims, d)) d->@ncall($N, $indextype, k->(k>d ? getfield(index,k) : k==d ? getfield(index,k)+1 : 1))
+        newindex=@nif $N d->(index[d] < iter.stop[d]) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : iter.start[k]))
         finished=$finishedex
         index, (finished,newindex)
     end
 end
 
-done(R::StepRange, state::(Bool, CartesianIndex{1})) = state[1]
-done(R::UnitRange, state::(Bool, CartesianIndex{1})) = state[1]
-done(R::FloatRange, state::(Bool, CartesianIndex{1})) = state[1]
-
 done{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N})) = state[1]
-done{N}(iter::IndexIterator{N}, state::(Bool, CartesianIndex{N})) = state[1]
+done{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I)) = state[1]
 
-# arithmetic, min/max
-for op in (:+, :-, :min, :max)
-    @eval begin
-        stagedfunction ($op){N}(I1::CartesianIndex{N}, I2::CartesianIndex{N})
-            indextype, _ = gen_cartesian(N)
-            args = [:($($op)(getfield(I1, $d),getfield(I2, $d))) for d = 1:N]
-            :($indextype($(args...)))
-        end
-    end
+stagedfunction length{I<:CartesianIndex}(iter::CartesianRange{I})
+    N = length(I)
+    args = [:(iter.stop[$i]-iter.start[$i]+1) for i=1:N]
+    Expr(:call,:*,args...)
 end
 
 end  # IteratorsMD
