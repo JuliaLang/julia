@@ -1025,8 +1025,10 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return e;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
-    if (jl_is_gensym(e))
-        return (jl_value_t*)jl_any_type; //TODO
+    if (jl_is_gensym(e)) {
+        int id = ((jl_gensym_t*)e)->id;
+        return jl_cellref(jl_lam_gensyms(ctx->ast), id);
+    }
     if (jl_is_quotenode(e)) {
         e = jl_fieldref(e,0);
         goto type_of_constant;

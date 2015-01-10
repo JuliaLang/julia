@@ -1061,7 +1061,7 @@ function abstract_eval_global(M, s::Symbol)
 end
 
 function abstract_eval_gensym(s::GenSym, sv::StaticVarInfo)
-    return sv.gensym_types[s.id]
+    return sv.gensym_types[s.id+1]
 end
 
 function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo)
@@ -1247,7 +1247,7 @@ function find_gensym_uses(body)
 end
 function find_gensym_uses(e::ANY, uses, line)
     if isa(e,GenSym)
-        id = (e::GenSym).id
+        id = (e::GenSym).id+1
         while length(uses) < id
             push!(uses, Array(Int,0))
         end
@@ -1260,7 +1260,7 @@ function find_gensym_uses(e::ANY, uses, line)
         end
         if head === :(=)
             if isa(b.args[2],GenSym)
-                id = (e::GenSym).id
+                id = (e::GenSym).id+1
                 while length(uses) < id
                     push!(uses, Array(Int,0))
                 end
@@ -1474,7 +1474,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
 
     gensym_uses = find_gensym_uses(body)
-    gensym_types = Any[ Undef for i = 1:length(gensym_uses) ]
+    gensym_types = Any[ Union() for i = 1:length(gensym_uses) ]
 
     sv = StaticVarInfo(sparams, cenv, vars, gensym_types, length(labels))
     frame.sv = sv
@@ -1526,7 +1526,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             pc´ = pc+1
             if isa(changes,StateUpdate) && isa((changes::StateUpdate).var, GenSym)
                 changes = changes::StateUpdate
-                id = (changes.var::GenSym).id
+                id = (changes.var::GenSym).id+1
                 new = changes.vtype
                 old = gensym_types[id]
                 if !(new <: old)
@@ -1637,7 +1637,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     s[ll] = ()
                 end
                 empty!(W)
-                gensym_types[:] = Undef
+                gensym_types[:] = Union()
                 @goto typeinf_top
             end
         end
@@ -1845,7 +1845,7 @@ end
 
 function sym_replace(e::ANY, from1, from2, to1, to2)
     if isa(e,Symbol)
-        return _sym_repl(e::Symbol, from1, from2, to1, to2, e)
+        return _sym_repl(e::Union(Symbol,GenSym), from1, from2, to1, to2, e)
     end
     if isa(e,SymbolNode)
         e2 = _sym_repl(e.name, from1, from2, to1, to2, e)
@@ -1864,11 +1864,12 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
         # on the LHS of assignments, so we make sure not to put
         # something else there
         @assert length(e.args) == 2
-        e2 = _sym_repl(e.args[1]::Symbol, from1, from2, to1, to2, e.args[1]::Symbol)
+        s = e.args[1]::Union(Symbol,GenSym)
+        e2 = _sym_repl(s, from1, from2, to1, to2, s)
         if isa(e2, SymbolNode)
             e2 = e2.name
         end
-        e.args[1] = e2::Symbol
+        e.args[1] = e2::Union(Symbol,GenSym)
         e.args[2] = sym_replace(e.args[2], from1, from2, to1, to2)
     elseif e.head !== :line
         for i=1:length(e.args)
@@ -1878,7 +1879,7 @@ function sym_replace(e::ANY, from1, from2, to1, to2)
     return e
 end
 
-function _sym_repl(s::Symbol, from1, from2, to1, to2, deflt)
+function _sym_repl(s::Union(Symbol,GenSym), from1, from2, to1, to2, deflt)
     for i=1:length(from1)
         if is(from1[i],s)
             return to1[i]
@@ -1990,7 +1991,7 @@ function exprtype(x::ANY, sv::StaticVarInfo)
     elseif isa(x,SymbolNode)
         return x.typ
     elseif isa(x,GenSym)
-        return sv.gensym_types[x.id]
+        return sv.gensym_types[x.id+1]
     elseif isa(x,TopNode)
         return abstract_eval_global(_basemod(), x.name)
     elseif isa(x,Symbol)
@@ -2107,7 +2108,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                                 end
                             end
                             if isa(a,GenSym)
-                                typ = sv.gensym_types[(a::GenSym).id]
+                                typ = sv.gensym_types[(a::GenSym).id+1]
                                 if !isa(typ,Tuple)
                                     if !isa(typ,DataType) || typ.mutable
                                         return false
@@ -2560,7 +2561,10 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
 
     # re-number the GenSyms and copy their type-info to the new ast
     if length(ast.args[2]) > 3
-        body = gensym_increment(body, length(sv.gensym_types))
+        incr = length(sv.gensym_types)
+        if incr != 0
+            body = gensym_increment(body, incr)
+        end
         append!(sv.gensym_types, ast.args[2][4])
     end
 
