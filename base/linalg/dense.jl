@@ -455,14 +455,14 @@ pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 pinv(x::Number) = isfinite(one(x)/x) ? one(x)/x : zero(x)
 
 ## Basis for null space
-function null{T}(A::StridedMatrix{T})
+function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, thin=false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     return SVD[:V][:,indstart:end]
 end
-null(a::StridedVector) = null(reshape(a, length(a), 1))
+nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
 function cond(A::StridedMatrix, p::Real=2)
     if p == 2
