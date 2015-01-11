@@ -1382,6 +1382,11 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
 
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized)
 {
+    if (jl_is_type_type(jt)) {
+        jl_value_t *tp = jl_tparam0(jt);
+        if (jl_tuple_len(tp) == 0) // Type{()} is a bitstype
+            return true;
+    }
     if (!jl_is_tuple(jt))
         return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
             ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
@@ -2088,7 +2093,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         Type *ety = NULL;
                         if (tpl != NULL)
                             ety = jl_llvmtuple_eltype(tpl->getType(),rt1,i);
-                        if (tpl == NULL || ety == T_void || ety->isEmptyTy()) {
+                        if (tpl == NULL || type_is_ghost(ety)) {
                             emit_expr(args[i+1],ctx); //for side effects (if any)
                             continue;
                         }
@@ -2765,7 +2770,7 @@ static Value *ghostValue(jl_value_t *ty)
         Type *llvmty = julia_struct_to_llvm(ty);
         if (llvmty == T_void)
             return mark_julia_type(UndefValue::get(NoopType),ty);
-        return UndefValue::get(llvmty);
+        return mark_julia_type(UndefValue::get(llvmty), ty);
     }
     else {
         return mark_julia_type(UndefValue::get(NoopType),ty);
@@ -2841,12 +2846,12 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
     }
     if (bp != NULL) {
         Type *vt = bp->getType();
-        if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
-            // TODO: `rt` is technically correct here, but sometimes we're not propagating type information
+        if (vt != jl_ppvalue_llvmt) { // unboxed store (in an alloca)
+            // `rt` is technically correct here, but sometimes we're not propagating type information
             // properly, so `rt` is a union type, while LLVM know that it's not. However, in order for this to
             // happen, we need to already be sure somewhere that we have the right type, so vi.declType is fine
             // even if not technically correct.
-            rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), declType);
+            rval = mark_julia_type(emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), declType), declType);
         }
         else {
             rval = boxed(emit_expr(r, ctx, true),ctx,rt);
@@ -2868,17 +2873,18 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
         // have been alloca'd
         assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
     }
+    assert(rval);
     return rval;
 }
 
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(l)) {
-        int id = ((jl_gensym_t*)l)->id;
-        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the memvalue (if isbits)
-        jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
+        int idx = ((jl_gensym_t*)l)->id;
+        Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the memvalue (if isbits)
+        jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), idx);
         Value *rval = emit_assignment(bp, r, declType, false, true, ctx);
-        ctx->gensym_SAvalues.at(id) = rval; // now gensym_SAvalues[id] actually contains the SAvalue
+        ctx->gensym_SAvalues.at(idx) = rval; // now gensym_SAvalues[idx] actually contains the SAvalue
         return;
     }
     jl_sym_t *s = NULL;
@@ -2910,8 +2916,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 
         if (vi.isSA &&
             ((bp == NULL) ||
-             (!vi.isCaptured && !vi.isArgument && !vi.usedUndef &&
-              !vi.isVolatile && rval->getType() == jl_pvalue_llvmt))) {
+             (!vi.isCaptured && !vi.isArgument &&
+              !vi.usedUndef && !vi.isVolatile))) {
             // use SSA value instead of GC frame load for var access
             vi.SAvalue = rval;
         }
@@ -2950,11 +2956,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
-        int id = ((jl_gensym_t*)expr)->id;
-        Value *bp = ctx->gensym_SAvalues.at(id); // at this point, gensym_SAvalues[id] actually contains the SAvalue
-        if (bp == NULL || bp->getType() == T_void || bp->getType()->isEmptyTy() || bp->getType() == NoopType) {
+        int idx = ((jl_gensym_t*)expr)->id;
+        Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
+        if (bp == NULL || type_is_ghost(bp->getType())) {
             // assert(vi.isGhost);
-            jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), id);
+            jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), idx);
             return ghostValue(declType);
         }
         return bp;
@@ -3182,7 +3188,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     for(size_t i=0; i < na; i++) {
                         jl_value_t *jtype = jl_tupleref(sty->types,i);
                         Type *fty = julia_type_to_llvm(jtype);
-                        if (fty == T_void || fty->isEmptyTy())
+                        if (type_is_ghost(fty))
                             continue;
                         Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
                         if (fty == T_int1)
@@ -3395,7 +3401,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     assert(store_unboxed_p(s,ctx));
     Type *vtype = julia_struct_to_llvm(jt);
     assert(vtype != jl_pvalue_llvmt);
-    if (vtype != T_void && !vtype->isEmptyTy()) {
+    if (!type_is_ghost(vtype)) {
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)
             lv = mark_julia_type(lv, jt);
@@ -3574,29 +3580,18 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     size_t nargs = jl_tuple_len(lam->specTypes);
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
-    unsigned argIdx = 0;
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {
         jl_value_t *ty = jl_tupleref(lam->specTypes, i);
+        Type *lty = julia_type_to_llvm(ty);
+        if (lty != NULL && type_is_ghost(lty))
+            continue;
         Value *argPtr = builder.CreateGEP(argArray,
-                                          ConstantInt::get(T_size, argIdx));
+                                          ConstantInt::get(T_size, i));
         Value *theArg = builder.CreateLoad(argPtr, false);
         Value *theNewArg = theArg;
-        argIdx++;
-        if (jl_is_leaf_type(ty) && jl_isbits(ty)) {
-            Type *lty = julia_struct_to_llvm(ty);
-            assert(lty != NULL);
-            if (lty == T_void || lty->isEmptyTy())
-                continue;
+        if (lty != NULL && lty != jl_pvalue_llvmt) {
             theNewArg = emit_unbox(lty, theArg, ty);
-        }
-        else if (jl_is_tuple(ty)) {
-            Type *lty = julia_struct_to_llvm(ty);
-            if (lty != jl_pvalue_llvmt) {
-                if (lty == T_void || lty->isEmptyTy())
-                    continue;
-                theNewArg = emit_unbox(lty, theArg, ty);
-            }
         }
         assert(dyn_cast<UndefValue>(theNewArg) == NULL);
         args[idx] = theNewArg;
@@ -3755,7 +3750,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         specsig = true;
     }
     else {
-        if (!va && !hasCapt && lam->specTypes != NULL) {
+        if (!va && !hasCapt && lam->specTypes != NULL && lam->inferred) {
             // no captured vars and not vararg
             // consider specialized signature
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -3793,7 +3788,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty == T_void || ty->isEmptyTy()) {
+            if (type_is_ghost(ty)) {
+                // mark as a ghost for now, we'll revise this later if needed as a local
                 ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost = true;
             }
             else {
@@ -4143,11 +4139,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     unsigned argIdx = 0;
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_varinfo_t &vi = ctx.vars[s];
         Value *argPtr = NULL;
         jl_value_t *argType = NULL;
         if (specsig) {
             argType = jl_tupleref(lam->specTypes,i);
-            if (!ctx.vars[s].isGhost) {
+            if (!vi.isGhost) {
                 argPtr = AI++;
                 argPtr = mark_julia_type(argPtr, argType);
             }
@@ -4166,20 +4163,28 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             theArg = builder.CreateLoad(argPtr, false);
         }
 
-        Value *lv = ctx.vars[s].memvalue;
+        Value *lv = vi.memvalue;
         if (lv == NULL) {
-            if (ctx.vars[s].isGhost) {
-                ctx.vars[s].passedAs = NULL;
+            if (vi.isGhost) {
+                Type *ty = julia_type_to_llvm(vi.declType);
+                if (type_is_ghost(ty)) {
+                    vi.passedAs = NULL;
+                }
+                else {
+                    vi.isGhost = false;
+                    //vi.passedAs = ???; //XXX
+                    //builder.CreateStore(???,vi.memvalue); //XXX
+                }
             }
             else {
                 // if this argument hasn't been given space yet, we've decided
                 // to leave it in the input argument array.
-                ctx.vars[s].passedAs = theArg;
+                vi.passedAs = theArg;
             }
         }
         else {
             // keep track of original (boxed) value to avoid re-boxing
-            ctx.vars[s].passedAs = theArg;
+            vi.passedAs = theArg;
             if (isBoxed(s, &ctx)) {
                 if (specsig) {
                     theArg = boxed(theArg,&ctx,argType);
@@ -4427,7 +4432,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             std::vector<Type*> fsig(0);
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
                 Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-                if (ty != T_void && !ty->isEmptyTy())
+                if (!type_is_ghost(ty))
                     fsig.push_back(ty);
             }
             Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
