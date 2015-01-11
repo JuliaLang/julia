@@ -543,11 +543,6 @@ DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
         }
         return julia_struct_to_llvm(jt);
     }
-    if (jl_is_type_type(jt)) {
-        jl_value_t *tp = jl_tparam0(jt);
-        if (jl_tuple_len(tp) == 0) // Type{()} is a bitstype
-            return T_void;
-    }
     return jl_pvalue_llvmt;
 }
 }

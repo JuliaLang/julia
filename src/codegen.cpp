@@ -1382,11 +1382,6 @@ static bool is_getfield_nonallocating(jl_datatype_t *ty, jl_value_t *fld)
 
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized)
 {
-    if (jl_is_type_type(jt)) {
-        jl_value_t *tp = jl_tparam0(jt);
-        if (jl_tuple_len(tp) == 0) // Type{()} is a bitstype
-            return true;
-    }
     if (!jl_is_tuple(jt))
         return jl_isbits(jt) && jl_is_leaf_type(jt) && (allow_unsized ||
             ((jl_is_bitstype(jt) && jl_datatype_size(jt) > 0) ||
@@ -2839,12 +2834,11 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
 static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, bool used, jl_codectx_t *ctx) {
     Value *rval;
     jl_value_t *rt = expr_type(r,ctx);
-    if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
-        // sometimes x = y::Union() occurs
-        if (builder.GetInsertBlock()->getTerminator() != NULL)
-            return NULL;
-    }
     if (bp != NULL) {
+        if ((jl_is_symbol(r) || jl_is_symbolnode(r) || jl_is_gensym(r)) && rt == jl_bottom_type) {
+            // sometimes x = y::Union() occurs
+            return UndefValue::get(bp->getType()->getContainedType(0));
+        }
         Type *vt = bp->getType();
         if (vt != jl_ppvalue_llvmt) { // unboxed store (in an alloca)
             // `rt` is technically correct here, but sometimes we're not propagating type information
@@ -2866,8 +2860,12 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
     }
     else {
         rval = emit_expr(r, ctx, true);
-        if (!used)
-            return NULL;
+
+        // don't need to store this if it isn't used
+        // and sometimes we can get x::Union() = Expr(:tuple)::() in dead code
+        if (!used || declType == jl_bottom_type)
+            return UndefValue::get(rval->getType());
+
         // Make sure this is already boxed. If not, there was
         // something wrong in the earlier analysis as this should
         // have been alloca'd
@@ -2905,14 +2903,6 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
     else {
         jl_varinfo_t &vi = ctx->vars[s];
         Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, vi.used, ctx);
-        if (rval == NULL) return; // don't actually do the assignment if the var is never read
-
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
-            jl_arrayvar_t *av = arrayvar_for(l, ctx);
-            if (av != NULL) {
-                assign_arrayvar(*av, rval);
-            }
-        }
 
         if (vi.isSA &&
             ((bp == NULL) ||
@@ -2920,6 +2910,13 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
               !vi.usedUndef && !vi.isVolatile))) {
             // use SSA value instead of GC frame load for var access
             vi.SAvalue = rval;
+        }
+
+        if (!isa<UndefValue>(rval) && builder.GetInsertBlock()->getTerminator() == NULL) {
+            jl_arrayvar_t *av = arrayvar_for(l, ctx);
+            if (av != NULL) {
+                assign_arrayvar(*av, rval);
+            }
         }
     }
 }
@@ -4171,7 +4168,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     vi.passedAs = NULL;
                 }
                 else {
-                    vi.isGhost = false;
+                    // this might happen if the arg is also used as a local variable or
+                    // if the argument being passed is an empty tuple since ()::Type{()}
+                    //vi.isGhost = false;
                     //vi.passedAs = ???; //XXX
                     //builder.CreateStore(???,vi.memvalue); //XXX
                 }
