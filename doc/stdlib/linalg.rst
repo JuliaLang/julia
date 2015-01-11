@@ -604,22 +604,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       real or complex inverse with level shift ``sigma`` :math:`(A - \sigma I )^{-1}`
       =============== ================================== ==================================
 
-.. function:: svds(A; ritzvec=true, args...) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
+.. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
 
-   ``svds`` computes singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations. Uses ``eigs`` underneath so following keyword arguments are supported:
-    * ``nev``: Number of singular values.
-    * ``ncv``: Number of Krylov vectors used in the computation; see ``eigs`` manual.
+   ``svds`` computes largest singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations. Uses ``eigs`` underneath. Inputs are:
+    * ``A``: Linear operator. It can either subtype of AbstractArray (e.g., sparse matrix) or duck typed. For duck typing ``A`` has to support ``size(A)``, ``eltype(A)``, ``A * vector`` and ``A' * vector``.
+    * ``nsv``: Number of singular values.
     * ``ritzvec``: Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``, default is ``true``. If ``false`` the singular vectors are omitted from the output.
-    * ``which``: type of singular values (and vectors) to compute, default is largest values. See ``eigs`` manual.
     * ``tol``: tolerance, see ``eigs``.
     * ``maxiter``: Maximum number of iterations, see ``eigs``.
-    * ``sigma``: See ``eigs``.
-    * ``v0``: starting vector of right singular vector from which to start the iterations.
 
    **Example**::
 
       X = sprand(10, 5, 0.2)
-      svds(X, nev = 2)
+      svds(X, nsv = 2)
 
 .. function:: peakflops(n; parallel=false)
 
