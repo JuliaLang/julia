@@ -695,6 +695,7 @@ export
     svd,
     svdfact!,
     svdfact,
+    svds,
     svdvals!,
     svdvals,
     sylvester,
