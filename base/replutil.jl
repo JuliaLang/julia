@@ -39,73 +39,69 @@ writemime(io::IO, ::MIME"text/plain", t::Union(KeyIterator, ValueIterator)) =
 
 # showing exception objects as descriptive error messages
 
-showerror(io::IO, e) = show(io, e)
+showerror(io::IO, ex) = show(io, ex)
 
-function showerror(io::IO, be::BoundsError)
+function showerror(io::IO, ex::BoundsError)
     print(io, "BoundsError")
-    if isdefined(be, :a)
+    if isdefined(ex, :a)
         print(io, ": attempt to access ")
-        writemime(io, MIME"text/plain"(), be.a)
-        if isdefined(be, :i)
+        writemime(io, MIME"text/plain"(), ex.a)
+        if isdefined(ex, :i)
             print(io, "\n  at index [")
-            if isa(be.i, Range)
-                print(io, be.i)
+            if isa(ex.i, Range)
+                print(io, ex.i)
             else
-                print_joined(io, be.i, ',')
+                print_joined(io, ex.i, ',')
             end
             print(io, ']')
         end
     end
 end
 
-function showerror(io::IO, e::TypeError)
-    ctx = isempty(e.context) ? "" : "in $(e.context), "
-    if e.expected === Bool
-        print(io, "type: non-boolean ($(typeof(e.got))) ",
-                  "used in boolean context")
+function showerror(io::IO, ex::TypeError)
+    print(io, "TypeError: ")
+    ctx = isempty(ex.context) ? "" : "in $(ex.context), "
+    if ex.expected === Bool
+        print(io, "non-boolean ($(typeof(ex.got))) used in boolean context")
     else
-        if isa(e.got, Type)
-            tstr = "Type{$(e.got)}"
+        if isa(ex.got, Type)
+            tstr = "Type{$(ex.got)}"
         else
-            tstr = string(typeof(e.got))
+            tstr = string(typeof(ex.got))
         end
-        print(io, "type: $(e.func): ",
-                  "$(ctx)expected $(e.expected), ",
-                  "got $tstr")
-        if e.func === :apply && e.expected <: Function && isa(e.got, AbstractArray)
-            println(io)
-            print(io, "Use square brackets [] for indexing.")
+        print(io, "$(ex.func): $(ctx)expected $(ex.expected), got $tstr")
+        if ex.func === :apply && ex.expected <: Function && isa(ex.got, AbstractArray)
+            print(io, "\nUse square brackets [] for indexing.")
         end
     end
 end
 
-function showerror(io::IO, e, bt)
+function showerror(io::IO, ex, bt)
     try
-        showerror(io, e)
+        showerror(io, ex)
     finally
         show_backtrace(io, bt)
     end
 end
 
-showerror(io::IO, e::LoadError) = showerror(io, e, [])
-function showerror(io::IO, e::LoadError, bt)
-    showerror(io, e.error, bt)
-    print(io, "\nwhile loading $(e.file), in expression starting on line $(e.line)")
+function showerror(io::IO, ex::LoadError, bt)
+    print(io, "LoadError: ")
+    showerror(io, ex.error, bt)
+    print(io, "\nwhile loading $(ex.file), in expression starting on line $(ex.line)")
 end
+showerror(io::IO, ex::LoadError) = showerror(io, ex, [])
 
-function showerror(io::IO, e::DomainError, bt)
-    print(io, "DomainError")
+function showerror(io::IO, ex::DomainError, bt)
+    println(io, "DomainError:")
     for b in bt
         code = ccall(:jl_lookup_code_address, Any, (Ptr{Void}, Cint), b, true)
         if length(code) == 5 && !code[4]  # code[4] == fromC
             if code[1] in (:log, :log2, :log10, :sqrt) # TODO add :besselj, :besseli, :bessely, :besselk
-                print(io, "\n", code[1],
-                      " will only return a complex result if called with a complex argument.",
-                      "\ntry ", code[1], "(complex(x))")
-            elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) ||
-                   code[1] == :power_by_squaring
-                print(io, "\nCannot raise an integer x to a negative power -n. Make x a float by adding")
-                print(io, "\na zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
+                println(io,"$(code[1]) will only return a complex result if called with a complex argument.")
+                print(io, "try $(code[1]) (complex(x))")
+            elseif (code[1] == :^ && code[2] == symbol("intfuncs.jl")) || code[1] == :power_by_squaring
+                println(io, "Cannot raise an integer x to a negative power -n. Make x a float by adding")
+                print(io, "a zero decimal (e.g. 2.0^-n instead of 2^-n), or write 1/x^n, float(x)^-n, or (x//1)^-n")
             end
             break
         end
@@ -113,36 +109,37 @@ function showerror(io::IO, e::DomainError, bt)
     show_backtrace(io, bt)
 end
 
-showerror(io::IO, e::SystemError) = print(io, "$(e.prefix): $(strerror(e.errnum))")
-showerror(io::IO, ::DivideError) = print(io, "integer division error")
-showerror(io::IO, ::StackOverflowError) = print(io, "stack overflow")
-showerror(io::IO, ::UndefRefError) = print(io, "access to undefined reference")
-showerror(io::IO, e::UndefVarError) = print(io, e.var, " not defined")
-showerror(io::IO, ::EOFError) = print(io, "read: end of file")
-showerror(io::IO, e::ErrorException) = print(io, e.msg)
-showerror(io::IO, e::KeyError) = (print(io, "key not found: "); show(io, e.key))
-showerror(io::IO, e::InterruptException) = print(io, "interrupt")
+showerror(io::IO, ex::SystemError) = print(io, "SystemError: $(ex.prefix): $(strerror(ex.errnum))")
+showerror(io::IO, ::DivideError) = print(io, "DivideError: integer division error")
+showerror(io::IO, ::StackOverflowError) = print(io, "StackOverflowError:")
+showerror(io::IO, ::UndefRefError) = print(io, "UndefRefError: access to undefined reference")
+showerror(io::IO, ex::UndefVarError) = print(io, "UndefVarError: $(ex.var) not defined")
+showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
+showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
+showerror(io::IO, ex::KeyError) = print(io, "KeyError: $(ex.key) not found")
+showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 
-function showerror(io::IO, e::MethodError)
-    name = isgeneric(e.f) ? e.f.env.name : :anonymous
-    if isa(e.f, DataType)
-        print(io, "`$(e.f)` has no method matching $(e.f)(")
+function showerror(io::IO, ex::MethodError)
+    print(io, "MethodError: ")
+    name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
+    if isa(ex.f, DataType)
+        print(io, "`$(ex.f)` has no method matching $(ex.f)(")
     else
         print(io, "`$(name)` has no method matching $(name)(")
     end
-    for (i, arg) in enumerate(e.args)
+    for (i, arg) in enumerate(ex.args)
         if isa(arg, Type) && arg != typeof(arg)
             print(io, "::Type{$(arg)}")
         else
             print(io, "::$(typeof(arg))")
         end
-        i == length(e.args) || print(io, ", ")
+        i == length(ex.args) || print(io, ", ")
     end
     print(io, ")")
     # Check for local functions that shaddow methods in Base
     if isdefined(Base, name)
         f = eval(Base, name)
-        if f !== e.f && isgeneric(f) && applicable(f, e.args...)
+        if f !== ex.f && isgeneric(f) && applicable(f, ex.args...)
             println(io)
             print(io, "you may have intended to import Base.$(name)")
         end
@@ -150,36 +147,36 @@ function showerror(io::IO, e::MethodError)
     # Check for row vectors used where a column vector is intended.
     vec_args = []
     hasrows = false
-    for arg in e.args
+    for arg in ex.args
         isrow = isa(arg,Array) && ndims(arg)==2 && size(arg,1)==1
         hasrows |= isrow
         push!(vec_args, isrow ? vec(arg) : arg)
     end
-    if hasrows && applicable(e.f, vec_args...)
+    if hasrows && applicable(ex.f, vec_args...)
         print(io, "\n\nYou might have used a 2d row vector where a 1d column vector was required.")
         print(io, "\nNote the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].")
         print(io, "\nYou can convert to a column vector with the vec() function.")
     end
     # Give a helpful error message if the user likely called a type constructor
     # and sees a no method error for convert
-    if e.f == Base.convert && !isempty(e.args) && isa(e.args[1], Type)
+    if ex.f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
         println(io)
-        print(io, "This may have arisen from a call to the constructor $(e.args[1])(...), ")
+        print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...), ")
         print(io, "since type constructors fall back to convert methods in julia v0.4.")
     end
 
     # Display up to three closest candidates
     lines = Array((IOBuffer, Int), 0)
-    for method in methods(e.f)
-        n = length(e.args)
+    for method in methods(ex.f)
+        n = length(ex.args)
         if n != length(method.sig)
             continue
         end
         buf = IOBuffer()
-        print(buf, "  $(e.f.env.name)(")
+        print(buf, "  $(ex.f.env.name)(")
         first = true
         right_matches = 0
-        for (arg, sigtype) in Zip2{Any,Any}(e.args, method.sig)
+        for (arg, sigtype) in Zip2{Any,Any}(ex.args, method.sig)
             if first
                 first = false
             else
