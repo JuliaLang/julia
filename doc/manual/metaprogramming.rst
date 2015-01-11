@@ -81,7 +81,7 @@ Expressions may also be constructed directly in
 .. doctest::
 
     julia> ex2 = Expr(:call, :+, 1, 1)
-    true
+    :(1 + 1)
 
 The two expressions constructed above -- by parsing and by direct
 construction -- are equivalent:
@@ -465,7 +465,7 @@ consider the following example::
            end
 
     julia> ex = macroexpand( :(@twostep :(1, 2, 3)) );
-    I execute at parse time, and the argument is: :((1,2,3))
+    I execute at parse time. The argument is: :((1,2,3))
 
 The first call to :func:`println` is executed when :func:`macroexpand`
 is called. The resulting expression contains *only* the second ``println``::
@@ -474,10 +474,10 @@ is called. The resulting expression contains *only* the second ``println``::
     Expr
 
     julia> ex
-    :(println("I execute at runtime, and the argument is: ",$(Expr(:copyast, :(:((1,2,3)))))))
+    :(println("I execute at runtime. The argument is: ",$(Expr(:copyast, :(:((1,2,3)))))))
 
     julia> eval(ex)
-    I execute at runtime, and the argument is: (1,2,3)
+    I execute at runtime. The argument is: (1,2,3)
 
 Macro invocation
 ~~~~~~~~~~~~~~~~
