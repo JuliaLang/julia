@@ -91,6 +91,9 @@ let
     @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
 end
 
+@test_throws ErrorException first(Dict())
+@test first(Dict(:f=>2)) == (:f,2)
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
@@ -499,6 +502,10 @@ s3 = Set{ASCIIString}(["baz"])
 
 @test !isequal(Set{Any}([1,2,3,4]), Set{Int}([1,2,3]))
 @test !isequal(Set{Int}([1,2,3,4]), Set{Any}([1,2,3]))
+
+@test_throws ErrorException first(Set())
+@test first(Set(2)) == 2
+
 
 # ########## end of set tests ##########
 
