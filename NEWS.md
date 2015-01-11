@@ -30,6 +30,9 @@ New language features
 Language changes
 ----------------
 
+  * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
+     in favor of using an explicit `throw` ([#9690]).
+
   * `Uint` et al. are now spelled `UInt` ([#8905]).
 
   * `String` has been renamed to `AbstractString` ([#8872]).
