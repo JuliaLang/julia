@@ -18,5 +18,6 @@
 *.dSYM
 *.jl.cov
 *.jl.mem
+*.ji
 
 .DS_Store
