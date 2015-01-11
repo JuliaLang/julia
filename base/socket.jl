@@ -276,9 +276,10 @@ function TCPSocket()
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create tcp socket",err))
+        throw(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
     this
@@ -306,9 +307,10 @@ function TCPServer()
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create tcp server",err))
+        throw(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
     this
@@ -374,9 +376,10 @@ function UDPSocket()
                   eventloop(),this.handle)
     finalizer(this, uvfinalize)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create udp socket",err))
+        throw(UVError("failed to create udp socket",err))
     end
     this.status = StatusInit
     this
@@ -410,7 +413,8 @@ function bind(sock::Union(TCPServer,UDPSocket), host::IPv4, port::Integer)
     err = _bind(sock,host,uint16(port))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is not currently tested
+            throw(UVError("bind",err))
         else
             return false
         end
@@ -430,7 +434,8 @@ function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
     err = _bind(sock,host,port, uint32(ipv6only ? UV_UDP_IPV6ONLY : 0))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is not currently tested
+            throw(UVError("bind",err))
         else
             return false
         end
