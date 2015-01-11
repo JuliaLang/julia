@@ -623,7 +623,7 @@ show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p),
 @unix_only function set_signal_act_die(sig)
     err = ccall(:jl_set_signal_act_die, Int, (Int,), sig)
     if err != 0
-        error("Couldn't set signal handler for $sig: $(strerror(err))")
+        throw(SystemError("Couldn't set signal handler for $sig", err))
     end
 end
 
