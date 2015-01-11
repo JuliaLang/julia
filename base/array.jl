@@ -48,9 +48,8 @@ function unsafe_copy!{T}(dest::Array{T}, doffs, src::Array{T}, soffs, n)
 end
 
 function copy!{T}(dest::Array{T}, doffs::Integer, src::Array{T}, soffs::Integer, n::Integer)
-    n < 0 && throw(BoundsError())
     n == 0 && return dest
-    if soffs+n-1 > length(src) || doffs+n-1 > length(dest) || doffs < 1 || soffs < 1
+    if n < 0 || soffs < 1 || doffs < 1 || soffs+n-1 > length(src) || doffs+n-1 > length(dest)
         throw(BoundsError())
     end
     unsafe_copy!(dest, doffs, src, soffs, n)
@@ -66,17 +65,17 @@ end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S})
     if sizeof(S) != sizeof(T)
-        error("result shape not specified")
+        throw(ArgumentError("result shape not specified"))
     end
     reinterpret(T, a, size(a))
 end
 
 function reinterpret{T,S,N}(::Type{T}, a::Array{S}, dims::NTuple{N,Int})
     if !isbits(T)
-        error("cannot reinterpret to type ", T)
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(T) is not a bitstype"))
     end
     if !isbits(S)
-        error("cannot reinterpret Array of type ", S)
+        throw(ArgumentError("cannot reinterpret Array{$(S)} to ::Type{Array{$(T)}}, type $(S) is not a bitstype"))
     end
     nel = div(length(a)*sizeof(S),sizeof(T))
     if prod(dims) != nel
@@ -515,7 +514,7 @@ function resize!(a::Vector, nl::Integer)
         ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
     else
         if nl < 0
-            throw(BoundsError())
+            throw(ArgumentError("new length must be ≥ 0, got $(nl)"))
         end
         ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
     end
@@ -529,7 +528,7 @@ end
 
 function pop!(a::Vector)
     if isempty(a)
-        error("array must be non-empty")
+        throw(ArgumentError("array must be non-empty"))
     end
     item = a[end]
     ccall(:jl_array_del_end, Void, (Any, UInt), a, 1)
@@ -545,7 +544,7 @@ end
 
 function shift!(a::Vector)
     if isempty(a)
-        error("array must be non-empty")
+        throw(ArgumentError("array must be non-empty"))
     end
     item = a[1]
     ccall(:jl_array_del_beg, Void, (Any, UInt), a, 1)
@@ -553,9 +552,12 @@ function shift!(a::Vector)
 end
 
 function insert!{T}(a::Array{T,1}, i::Integer, item)
-    1 <= i <= length(a)+1 || throw(BoundsError())
-    i == length(a)+1 && return push!(a, item)
-
+    if !(1 <= i <= length(a)+1)
+        throw(BoundsError())
+    end
+    if i == length(a)+1
+        return push!(a, item)
+    end
     item = convert(T, item)
     _growat!(a, i, 1)
     a[i] = item
@@ -588,8 +590,11 @@ function deleteat!(a::Vector, inds)
     while !done(inds, s)
         (i,s) = next(inds, s)
         if !(q <= i <= n)
-            i < q && error("indices must be unique and sorted")
-            throw(BoundsError())
+            if i < q
+                throw(ArgumentError("indices must be unique and sorted"))
+            else
+                throw(BoundsError())
+            end
         end
         while q < i
             @inbounds a[p] = a[q]
@@ -860,6 +865,9 @@ end
 ## data movement ##
 
 function slicedim(A::Array, d::Integer, i::Integer)
+    if d < 1
+        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+    end
     d_in = size(A)
     leading = d_in[1:(d-1)]
     d_out = tuple(leading..., 1, d_in[(d+1):end]...)
@@ -891,6 +899,9 @@ function slicedim(A::Array, d::Integer, i::Integer)
 end
 
 function flipdim{T}(A::Array{T}, d::Integer)
+    if d < 1
+        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+    end
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
     if sd == 1 || isempty(A)
@@ -1035,7 +1046,7 @@ end
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; error("vector must have same lengths"); end
+        if length(V[j]) != height; throw(ArgumentError("vector must have same lengths")); end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
@@ -1171,7 +1182,7 @@ end
 
 function findmax(a)
     if isempty(a)
-        error("array must be non-empty")
+        throw(ArgumentError("collection must be non-empty"))
     end
     m = a[1]
     mi = 1
@@ -1187,7 +1198,7 @@ end
 
 function findmin(a)
     if isempty(a)
-        error("array must be non-empty")
+        throw(ArgumentError("collection must be non-empty"))
     end
     m = a[1]
     mi = 1
