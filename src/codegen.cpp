@@ -4162,24 +4162,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
         Value *lv = vi.memvalue;
         if (lv == NULL) {
-            if (vi.isGhost) {
-                Type *ty = julia_type_to_llvm(vi.declType);
-                if (type_is_ghost(ty)) {
-                    vi.passedAs = NULL;
-                }
-                else {
-                    // this might happen if the arg is also used as a local variable or
-                    // if the argument being passed is an empty tuple since ()::Type{()}
-                    //vi.isGhost = false;
-                    //vi.passedAs = ???; //XXX
-                    //builder.CreateStore(???,vi.memvalue); //XXX
-                }
-            }
-            else {
-                // if this argument hasn't been given space yet, we've decided
-                // to leave it in the input argument array.
-                vi.passedAs = theArg;
-            }
+            // if this argument hasn't been given space yet, we've decided
+            // to leave it in the input argument array.
+            vi.passedAs = theArg;
         }
         else {
             // keep track of original (boxed) value to avoid re-boxing
