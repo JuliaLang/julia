@@ -173,6 +173,8 @@ Deprecated or removed
 
   * `beginswith` is renamed to `startswith` ([#9578]).
 
+  * `null` is renamed to `nullspace`.
+
 Julia v0.3.0 Release Notes
 ==========================
 

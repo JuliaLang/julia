@@ -229,13 +229,13 @@ debug && println("Solve square general system of equations")
     @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
 
-debug && println("Test null")
+debug && println("Test nullspace")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        a15null = null(a[:,1:5]')
+        a15null = nullspace(a[:,1:5]')
         @test rank([a[:,1:5] a15null]) == 10
         @test_approx_eq_eps norm(a[:,1:5]'a15null, Inf) zero(eltya) 300ε
         @test_approx_eq_eps norm(a15null'a[:,1:5], Inf) zero(eltya) 400ε
-        @test size(null(b), 2) == 0
+        @test size(nullspace(b), 2) == 0
     end
 
     end # for eltyb
