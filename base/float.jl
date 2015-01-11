@@ -1,6 +1,6 @@
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
-for t in (Bool,Char,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
+for t in (Bool,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
 
@@ -11,7 +11,7 @@ for t1 in (Float32,Float64)
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end
     end
-    for ut in (Bool,Char,UInt8,UInt16,UInt32,UInt64)
+    for ut in (Bool,UInt8,UInt16,UInt32,UInt64)
         @eval begin
             convert(::Type{$t1},x::($ut)) = box($t1,uitofp($t1,unbox($ut,x)))
             promote_rule(::Type{$t1}, ::Type{$ut}  ) = $t1
@@ -93,7 +93,6 @@ convert(::Type{Float64}, x::Float16) = convert(Float64, convert(Float32,x))
 convert(::Type{Float64}, x::Float32) = box(Float64,fpext(Float64,x))
 
 convert(::Type{FloatingPoint}, x::Bool)    = convert(Float64, x)
-convert(::Type{FloatingPoint}, x::Char)    = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int8)    = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int16)   = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::Int32)   = convert(Float64, x)
