@@ -2,6 +2,7 @@ using Base.Test
 
 function runtests(name)
     println("     \033[1m*\033[0m \033[31m$(name)\033[0m")
+    @unix_only Base.set_sigpipe_act_die()
     Core.include("$name.jl")
     nothing
 end

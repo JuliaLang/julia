@@ -619,3 +619,14 @@ wait(x::Process)      = if !process_exited(x); stream_wait(x, x.exitnotify); end
 wait(x::ProcessChain) = for p in x.processes; wait(p); end
 
 show(io::IO, p::Process) = print(io, "Process(", p.cmd, ", ", process_status(p), ")")
+
+@unix_only function set_signal_act_die(sig)
+    err = ccall(:jl_set_signal_act_die, Int, (Int,), sig)
+    if err != 0
+        error("Couldn't set signal handler for $sig: $(strerror(err))")
+    end
+end
+
+@unix_only function set_sigpipe_act_die()
+    set_signal_act_die(SIGPIPE)
+end

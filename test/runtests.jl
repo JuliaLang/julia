@@ -50,6 +50,7 @@ cd(dirname(@__FILE__)) do
     end
 
     @everywhere include("testdefs.jl")
+    @unix_only Base.set_sigpipe_act_die()
 
     reduce(propagate_errors, nothing, pmap(runtests, tests; err_retry=false, err_stop=true))
 
