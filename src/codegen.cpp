@@ -3646,6 +3646,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // step 2. process var-info lists to see what vars are captured, need boxing
     jl_array_t *gensym_types = jl_lam_gensyms(ast);
+    int n_gensyms = jl_array_len(gensym_types);
     jl_array_t *largs = jl_lam_args(ast);
     size_t largslen = jl_array_dim0(largs);
     jl_array_t *lvars = jl_lam_locals(ast);
@@ -3713,10 +3714,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // fetch init exprs of SSA vars for easy reference
     std::vector<jl_value_t*> gensym_initExpr;
-    if (gensym_types) {
-        int n_gensyms = jl_array_len(gensym_types);
-        gensym_initExpr.assign(n_gensyms, NULL);
-    }
+    gensym_initExpr.assign(n_gensyms, NULL);
     for(i=0; i < jl_array_len(stmts); i++) {
         jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == assign_sym) {
@@ -4002,26 +4000,23 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     // create SAvalue locations for GenSym objects
-    if (gensym_types) {
-        int n_gensyms = jl_array_len(gensym_types);
-        ctx.gensym_SAvalues.assign(n_gensyms, NULL);
-        for(int i=0; i < n_gensyms; i++) {
-            jl_value_t *jt = jl_cellref(gensym_types,i);
-            if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
-                // nothing
+    ctx.gensym_SAvalues.assign(n_gensyms, NULL);
+    for(int i=0; i < n_gensyms; i++) {
+        jl_value_t *jt = jl_cellref(gensym_types,i);
+        if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
+            // nothing
+        }
+        else if (store_unboxed_p(jt)) {
+            Type *vtype = julia_struct_to_llvm(jt);
+            assert(vtype != jl_pvalue_llvmt);
+            if (vtype != T_void && !vtype->isEmptyTy()) {
+                Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
+                ctx.gensym_SAvalues.at(i) = lv;
             }
-            else if (store_unboxed_p(jt)) {
-                Type *vtype = julia_struct_to_llvm(jt);
-                assert(vtype != jl_pvalue_llvmt);
-                if (vtype != T_void && !vtype->isEmptyTy()) {
-                    Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
-                    ctx.gensym_SAvalues.at(i) = lv;
-                }
-            } else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
-                gensym_initExpr.at(i) = NULL;
-            } else {
-                n_roots++;
-            }
+        } else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
+            gensym_initExpr.at(i) = NULL;
+        } else {
+            n_roots++;
         }
     }
 
@@ -4039,6 +4034,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         if (store_unboxed_p(s, &ctx)) {
+            // nothing
         }
         else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
             Value *av = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
@@ -4049,6 +4045,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
         if (store_unboxed_p(s, &ctx)) {
+            // nothing
         }
         else if (ctx.vars[s].hasGCRoot) {
             Value *lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
@@ -4056,16 +4053,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             ctx.vars[s].memvalue = lv;
         }
     }
-    if (gensym_types) {
-        int n_gensyms = jl_array_len(gensym_types);
-        for(int i=0; i < n_gensyms; i++) {
-            jl_value_t *jt = jl_cellref(gensym_types,i);
-            Value *lv = ctx.gensym_SAvalues.at(i);
-            if (lv == NULL && jt != (jl_value_t*)jl_bottom_type && gensym_initExpr.at(i) != NULL) {
-                lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
-                varnum++;
-                ctx.gensym_SAvalues.at(i) = lv;
-            }
+    for(int i=0; i < n_gensyms; i++) {
+        jl_value_t *jt = jl_cellref(gensym_types,i);
+        Value *lv = ctx.gensym_SAvalues.at(i);
+        if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
+            // nothing
+        }
+        else if (store_unboxed_p(jt)) {
+            // nothing
+        }
+        else {
+            lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
+            varnum++;
+            ctx.gensym_SAvalues.at(i) = lv;
         }
     }
     assert(varnum == ctx.argSpaceOffs);
