@@ -87,7 +87,15 @@ Library improvements
 
   * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
 
+  * Add `svds` for sparse truncated SVD. ([#9425])
+
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
+
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+
+  * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
+
+  * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * New `sortperm!` function for pre-allocated index arrays ([#8792]).
 
@@ -114,15 +122,9 @@ Library improvements
 
   * New `Nullable` type for missing data ([#8152]).
 
-  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
-
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
   * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
-
-  * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
-
-  * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * The `machinefile` now supports a host count ([#7616]).
 
@@ -1152,6 +1154,7 @@ Too numerous to mention.
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
 [#9418]: https://github.com/JuliaLang/julia/issues/9418
+[#9425]: https://github.com/JuliaLang/julia/issues/9425
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
