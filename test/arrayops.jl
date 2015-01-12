@@ -63,13 +63,13 @@ a = rand(1, 1, 8, 8, 1)
 @test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
 @test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
 @test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
-@test_throws ErrorException squeeze(a, 0)
-@test_throws ErrorException squeeze(a, (1, 1))
-@test_throws ErrorException squeeze(a, (1, 2, 1))
-@test_throws ErrorException squeeze(a, (1, 1, 2))
-@test_throws ErrorException squeeze(a, 3)
-@test_throws ErrorException squeeze(a, 4)
-@test_throws ErrorException squeeze(a, 6)
+@test_throws ArgumentError squeeze(a, 0)
+@test_throws ArgumentError squeeze(a, (1, 1))
+@test_throws ArgumentError squeeze(a, (1, 2, 1))
+@test_throws ArgumentError squeeze(a, (1, 1, 2))
+@test_throws ArgumentError squeeze(a, 3)
+@test_throws ArgumentError squeeze(a, 4)
+@test_throws ArgumentError squeeze(a, 6)
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
@@ -155,8 +155,8 @@ v = pop!(l)
 @test v == 3
 @test length(l)==2
 m = Any[]
-@test_throws ErrorException pop!(m)
-@test_throws ErrorException shift!(m)
+@test_throws ArgumentError pop!(m)
+@test_throws ArgumentError shift!(m)
 unshift!(l,4,7,5)
 @test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
 v = shift!(l)
@@ -732,7 +732,7 @@ a = [1:10]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
-@test_throws ErrorException deleteat!(a, [5,3])
+@test_throws ArgumentError deleteat!(a, [5,3])
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -769,10 +769,10 @@ end
 @test isequal(flipdim([2,3,1], 2), [2,3,1])
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
-@test_throws ErrorException flipdim([2,3,1], -1)
+@test_throws ArgumentError flipdim([2,3,1], -1)
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
-@test_throws ErrorException flipdim(1:10, -1)
+@test_throws ArgumentError flipdim(1:10, -1)
 @test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
 
 # issue 4228
