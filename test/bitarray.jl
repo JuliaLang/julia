@@ -939,15 +939,15 @@ B′ = ~B
 @test_throws BoundsError Base.findnextnot(B′, -1)
 @test_throws BoundsError findnext(!, B′, -1)
 @test_throws BoundsError findnext(identity, B, -1)
-# @test_throws BoundsError findnext(x->false, B, -1)
-# @test_throws BoundsError findnext(x->true, B, -1)
+@test_throws BoundsError findnext(x->false, B, -1)
+@test_throws BoundsError findnext(x->true, B, -1)
 @test findnext(B, 1)    == Base.findnextnot(B′, 1)    == findnext(!, B′, 1)    == 77
 @test findnext(B, 77)   == Base.findnextnot(B′, 77)   == findnext(!, B′, 77)   == 77
 @test findnext(B, 78)   == Base.findnextnot(B′, 78)   == findnext(!, B′, 78)   == 777
 @test findnext(B, 777)  == Base.findnextnot(B′, 777)  == findnext(!, B′, 777)  == 777
 @test findnext(B, 778)  == Base.findnextnot(B′, 778)  == findnext(!, B′, 778)  == 0
 @test findnext(B, 1001) == Base.findnextnot(B′, 1001) == findnext(!, B′, 1001) == 0
-# @test findnext(identity, B, 1001) == findnext(x->false, B, 1001) == findnext(x->true, B, 1001) == 0
+@test findnext(identity, B, 1001) == findnext(x->false, B, 1001) == findnext(x->true, B, 1001) == 0
 
 @test findlast(B) == Base.findlastnot(B′) == 777
 @test findfirst(B) == Base.findfirstnot(B′) == 77
@@ -955,20 +955,20 @@ B′ = ~B
 emptyvec = BitVector(0)
 @test findprev(x->true, emptyvec, -1) == 0
 @test_throws BoundsError findprev(x->true, emptyvec, 1)
-# @test_throws BoundsError findnext(x->true, emptyvec, -1)
+@test_throws BoundsError findnext(x->true, emptyvec, -1)
 @test findnext(x->true, emptyvec, 1) == 0
 
 B = falses(10)
 @test findprev(x->true, B, 5) == 5
-# @test findnext(x->true, B, 5) == 5
+@test findnext(x->true, B, 5) == 5
 @test findprev(x->true, B, -1) == 0
-# @test findnext(x->true, B, 11) == 0
+@test findnext(x->true, B, 11) == 0
 @test findprev(x->false, B, 5) == 0
 @test findnext(x->false, B, 5) == 0
 @test findprev(x->false, B, -1) == 0
 @test findnext(x->false, B, 11) == 0
 @test_throws BoundsError findprev(x->true, B, 11)
-# @test_throws BoundsError findnext(x->true, B, -1)
+@test_throws BoundsError findnext(x->true, B, -1)
 
 for l = [1,63,64,65,127,128,129]
     f = falses(l)
