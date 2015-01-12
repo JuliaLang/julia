@@ -205,12 +205,27 @@ static int bits_equal(void *a, void *b, int sz)
     }
 }
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static int __declspec(noinline)
-#else
-static int __attribute__((noinline))
-#endif
-compare_tuple(jl_value_t *a, jl_value_t *b)
+// jl_egal
+// The frequently used jl_egal function deserves special attention when it
+// comes to performance which is made challenging by the fact that the
+// function has to handle quite a few different cases and because it is
+// called recursively.  To optimize performance many special cases are
+// handle with separate comparisons which can dramatically reduce the run
+// time of the function.  The compiler can translate these simple tests
+// with little effort, e.g., few registers are used.
+//
+// The complex cases require more effort and more registers to be translated
+// efficiently.  The effected cases include comparing tuples and fields.  If
+// the code to perform these operation would be inlined in the jl_egal
+// function then the compiler would generate at the or close to the top of
+// the function a prologue which saves all the callee-save registers and at
+// the end the respective epilogue.  The result is that even the fast cases
+// are slowed down.
+//
+// The solution is to keep the code in jl_egal simple and split out the
+// (more) complex cases into their own functions which are marked with
+// NOINLINE.
+static int NOINLINE compare_tuple(jl_value_t *a, jl_value_t *b)
 {
     size_t l = jl_tuple_len(a);
     if (l != jl_tuple_len(b))
@@ -222,12 +237,9 @@ compare_tuple(jl_value_t *a, jl_value_t *b)
     return 1;
 }
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static int __declspec(noinline)
-#else
-static int __attribute__((noinline))
-#endif
-compare_fields(jl_value_t *a, jl_value_t *b, jl_datatype_t *dt, size_t nf)
+// See comment above for an explanation of NOINLINE.
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
+                                   jl_datatype_t *dt, size_t nf)
 {
     for (size_t f=0; f < nf; f++) {
         size_t offs = dt->fields[f].offset;
