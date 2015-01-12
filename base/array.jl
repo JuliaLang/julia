@@ -514,7 +514,7 @@ function resize!(a::Vector, nl::Integer)
         ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
     else
         if nl < 0
-            throw(ArgumentError("new length must be ≥ 0, got $(nl)"))
+            throw(ArgumentError("new length must be ≥ 0"))
         end
         ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
     end
@@ -866,7 +866,7 @@ end
 
 function slicedim(A::Array, d::Integer, i::Integer)
     if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+        throw(ArgumentError("dimension must be ≥ 1"))
     end
     d_in = size(A)
     leading = d_in[1:(d-1)]
@@ -900,7 +900,7 @@ end
 
 function flipdim{T}(A::Array{T}, d::Integer)
     if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+        throw(ArgumentError("dimension d must be ≥ 1"))
     end
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
