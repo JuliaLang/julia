@@ -264,7 +264,6 @@ debug && println("Test nullspace")
         @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
         @test size(nullspace(b), 2) == 0
     end
-
     end # for eltyb
 
 debug && println("\ntype of a: ", eltya, "\n")

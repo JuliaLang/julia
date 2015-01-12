@@ -1245,8 +1245,8 @@ for (geevx, ggev, elty) in
             chkstride1(A,B)
             n, m = chksquare(A,B)
             n==m || throw(DimensionMismatch("matrices must have same size"))
-            lda = max(1, n)
-            ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             alphar = similar(A, $elty, n)
             alphai = similar(A, $elty, n)
             beta = similar(A, $elty, n)
@@ -1351,7 +1351,8 @@ for (geevx, ggev, elty, relty) in
             chkstride1(A, B)
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("matrices must have same size"))
-            lda = ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             alpha = similar(A, $elty, n)
             beta = similar(A, $elty, n)
             ldvl = jobvl == 'V' ? n : 1
@@ -2920,7 +2921,8 @@ for (syev, syevr, sygvd, elty) in
             chkstride1(A, B)
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("Matrices must have same size"))
-            lda = ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             w = similar(A, $elty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
@@ -3071,7 +3073,8 @@ for (syev, syevr, sygvd, elty, relty) in
             chkstride1(A, B)
             n, m = chksquare(A, B)
             n==m || throw(DimensionMismatch("Matrices must have same size"))
-            lda = ldb = max(1, n)
+            lda = max(1, stride(A, 2))
+            ldb = max(1, stride(B, 2))
             w = similar(A, $relty, n)
             work = Array($elty, 1)
             lwork = -one(BlasInt)
@@ -3307,7 +3310,7 @@ for (gehrd, elty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
                     &n, &ilo, &ihi, A,
-                    &max(1,n), tau, work, &lwork,
+                    &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
                 @lapackerror
                 if lwork < 0
@@ -3346,7 +3349,7 @@ for (orghr, elty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
                     &n, &ilo, &ihi, A,
-                    &max(1,n), tau, work, &lwork,
+                    &max(1, stride(A, 2)), tau, work, &lwork,
                     info)
                 @lapackerror
                 if lwork < 0
@@ -3389,7 +3392,7 @@ for (gees, gges, elty) in
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
                     &jobvs, &'N', C_NULL, &n,
-                        A, &max(1, n), sdim, wr,
+                        A, &max(1, stride(A, 2)), sdim, wr,
                         wi, vs, &ldvs, work,
                         &lwork, C_NULL, info)
                 @lapackerror
@@ -3433,8 +3436,8 @@ for (gees, gges, elty) in
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
                         Ptr{BlasInt}),
                     &jobvsl, &jobvsr, &'N', C_NULL,
-                    &n, A, &max(1,n), B,
-                    &max(1,n), &sdim, alphar, alphai,
+                    &n, A, &max(1,stride(A, 2)), B,
+                    &max(1,stride(B, 2)), &sdim, alphar, alphai,
                     beta, vsl, &ldvsl, vsr,
                     &ldvsr, work, &lwork, C_NULL,
                     info)
@@ -3479,7 +3482,7 @@ for (gees, gges, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
                     &jobvs, &sort, C_NULL, &n,
-                        A, &max(1, n), &sdim, w,
+                        A, &max(1, stride(A, 2)), &sdim, w,
                         vs, &ldvs, work, &lwork,
                         rwork, C_NULL, info)
                 @lapackerror
@@ -3524,8 +3527,8 @@ for (gees, gges, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{Void},
                         Ptr{BlasInt}),
                     &jobvsl, &jobvsr, &'N', C_NULL,
-                    &n, A, &max(1,n), B,
-                    &max(1,n), &sdim, alpha, beta,
+                    &n, A, &max(1, stride(A, 2)), B,
+                    &max(1, stride(B, 2)), &sdim, alpha, beta,
                     vsl, &ldvsl, vsr, &ldvsr,
                     work, &lwork, rwork, C_NULL,
                     info)
