@@ -10,6 +10,7 @@ b = BigInt("123456789012345678901234567891")
 @test b >= a
 @test !(b < a)
 @test !(b <= a)
+@test_throws DomainError cmp(b, NaN)
 
 c = BigInt("246913578024691357802469135780")
 @test typeof(a * 2) == BigInt
@@ -150,10 +151,27 @@ end
 
 @test a+BigInt(1) == b
 
+@test BigInt(5) << -1 == 0
+@test BigInt(5) >> -1 == 0
+@test BigInt(5) << 0 == 5
+@test BigInt(5) >> 0 == 5
 @test BigInt(5) << 3 == 40
 @test BigInt(5) >> 1 == 2
 @test BigInt(-5) << 3 == -40
 @test BigInt(-5) >> 1 == -3
+
+@test BigInt(5) ^ 1 == 5
+@test_throws DomainError BigInt(5) ^ -1
+@test_throws ArgumentError BigInt(5) ^ (UInt128(typemax(UInt)) + 1)
+
+@test base(2, BigInt(1024)) == "10000000000"
+@test_throws ArgumentError base(1, BigInt(5))
+@test_throws ArgumentError base(63, BigInt(5))
+
+@test ndigits(BigInt(10)) == 2
+@test ndigits(BigInt(10), 2) == 4
+@test_throws ArgumentError ndigits(BigInt(10), 1)
+@test_throws DomainError powermod(BigInt(100), -1, 10)
 
 @test ~BigInt(123) == -124
 @test BigInt(123) & BigInt(234) == 106
