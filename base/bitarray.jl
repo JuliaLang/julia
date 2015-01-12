@@ -1311,11 +1311,13 @@ end
 function findnext(testf::Function, B::BitArray, start::Integer)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
-    length(B) == 0 && return 0
-    f0 || f1 || return 0
-    f0 && f1 && return 1
     !f0 && f1 && return findnext(B, start)
-    return findnextnot(B, start)
+    f0 && !f1 && return findnextnot(B, start)
+
+    start > 0 || throw(BoundsError())
+    start > length(B) && return 0
+    f0 && f1 && return int(start)
+    return 0 # last case: !f0 && !f1
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
 
