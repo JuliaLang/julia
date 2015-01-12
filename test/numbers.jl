@@ -2504,3 +2504,16 @@ end
 
 # fix 0x2^big(9) = big(512), while 0x2^9 = 0x0
 @test 0x2^9 === 0x2^big(9) === 0x0
+
+# issue #3274
+let
+    realtypes = [Int8,  Int16,  Int32,  Int64,  Int128,
+                 UInt8, UInt16, UInt32, UInt64, UInt128,
+                 Float32, Float64, BigInt, BigFloat]
+    alltypes = [realtypes; [Complex{T} for T in realtypes]]
+
+    for T in alltypes, S in alltypes
+        a,b = T(2),S(3)
+        @test typeof(a^b) === eltype([a].^[b])
+    end
+end
