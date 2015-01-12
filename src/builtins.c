@@ -205,37 +205,42 @@ static int bits_equal(void *a, void *b, int sz)
     }
 }
 
-int jl_egal(jl_value_t *a, jl_value_t *b)
+// jl_egal
+// The frequently used jl_egal function deserves special attention when it
+// comes to performance which is made challenging by the fact that the
+// function has to handle quite a few different cases and because it is
+// called recursively.  To optimize performance many special cases are
+// handle with separate comparisons which can dramatically reduce the run
+// time of the function.  The compiler can translate these simple tests
+// with little effort, e.g., few registers are used.
+//
+// The complex cases require more effort and more registers to be translated
+// efficiently.  The effected cases include comparing tuples and fields.  If
+// the code to perform these operation would be inlined in the jl_egal
+// function then the compiler would generate at the or close to the top of
+// the function a prologue which saves all the callee-save registers and at
+// the end the respective epilogue.  The result is that even the fast cases
+// are slowed down.
+//
+// The solution is to keep the code in jl_egal simple and split out the
+// (more) complex cases into their own functions which are marked with
+// NOINLINE.
+static int NOINLINE compare_tuple(jl_value_t *a, jl_value_t *b)
 {
-    if (a == b)
-        return 1;
-    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
-    if (ta != (jl_value_t*)jl_typeof(b))
+    size_t l = jl_tuple_len(a);
+    if (l != jl_tuple_len(b))
         return 0;
-    if (jl_is_tuple(a)) {
-        size_t l = jl_tuple_len(a);
-        if (l != jl_tuple_len(b))
+    for(size_t i=0; i < l; i++) {
+        if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
             return 0;
-        for(size_t i=0; i < l; i++) {
-            if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
-                return 0;
-        }
-        return 1;
     }
-    jl_datatype_t *dt = (jl_datatype_t*)ta;
-    if (dt == jl_datatype_type) {
-        jl_datatype_t *dta = (jl_datatype_t*)a;
-        jl_datatype_t *dtb = (jl_datatype_t*)b;
-        return dta->name == dtb->name &&
-            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
-    }
-    if (dt->mutabl) return 0;
-    size_t sz = dt->size;
-    if (sz == 0) return 1;
-    size_t nf = jl_tuple_len(dt->names);
-    if (nf == 0) {
-        return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
-    }
+    return 1;
+}
+
+// See comment above for an explanation of NOINLINE.
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
+                                   jl_datatype_t *dt, size_t nf)
+{
     for (size_t f=0; f < nf; f++) {
         size_t offs = dt->fields[f].offset;
         char *ao = (char*)jl_data_ptr(a) + offs;
@@ -254,6 +259,32 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         if (!eq) return 0;
     }
     return 1;
+}
+
+int jl_egal(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b)
+        return 1;
+    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
+    if (ta != (jl_value_t*)jl_typeof(b))
+        return 0;
+    if (jl_is_tuple(a))
+        return compare_tuple(a, b);
+    jl_datatype_t *dt = (jl_datatype_t*)ta;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        return dta->name == dtb->name &&
+            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+    }
+    if (dt->mutabl) return 0;
+    size_t sz = dt->size;
+    if (sz == 0) return 1;
+    size_t nf = jl_tuple_len(dt->names);
+    if (nf == 0) {
+        return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
+    }
+    return compare_fields(a, b, dt, nf);
 }
 
 JL_CALLABLE(jl_f_is)
