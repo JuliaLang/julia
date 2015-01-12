@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 *****************
- Metaprogramming  
+ Metaprogramming
 *****************
 
 The strongest legacy of Lisp in the Julia language is its metaprogramming
@@ -20,7 +20,7 @@ interpretation occurs. Because all data types and code in Julia
 are represented by Julia data structures, powerful
 `reflection <http://en.wikipedia.org/wiki/Reflection_%28computer_programming%29>`_
 capabilities are available to explore the internals of a program and its types
-just like any other data. 
+just like any other data.
 
 Program representation
 ----------------------
@@ -43,7 +43,7 @@ each string into an object called an expression, represented by the Julia type
     julia> ex1 = parse(prog)
     :(1 + 1)
 
-    julia> typeof(ex)
+    julia> typeof(ex1)
     Expr
 
 :obj:`Expr` objects contain three parts:
@@ -195,7 +195,7 @@ the direct :obj:`Expr` form:
 .. doctest::
 
    julia>      :(a + b*c + 1)  ==
-          parse("a + b*c + 1") ==   
+          parse("a + b*c + 1") ==
           Expr(:call, :+, :a, Expr(:call, :*, :b, :c), 1)
    true
 
@@ -255,7 +255,7 @@ expression into a conditional test:
     julia> ex = :(a in $:((1,2,3)) )
     :($(Expr(:in, :a, :((1,2,3)))))
 
-Interpolating symbols into a nested expression requires enclosing each 
+Interpolating symbols into a nested expression requires enclosing each
 symbol in an enclosing quote block::
 
     julia> :( :a in $( :(:a + :b) ) )
@@ -374,7 +374,7 @@ but leaves expressions alone::
     julia> function make_expr2(op, opr1, opr2)
              opr1f, opr2f = map(x -> isa(x, Number) ? 2*x : x, (opr1, opr2))
              retexpr = Expr(:call, op, opr1f, opr2f)
-             
+
              return retexpr
        end
     make_expr2 (generic function with 1 method)
@@ -460,7 +460,7 @@ consider the following example::
 
     julia> macro twostep(arg)
                println("I execute at parse time. The argument is: ", arg)
-               
+
                return :(println("I execute at runtime. The argument is: ", $arg))
            end
 
@@ -500,7 +500,7 @@ It is important to emphasize that macros receive their arguments as
 expressions, literals, or symbols. One way to explore macro arguments
 is to call the :func:`show` function within the macro body::
 
-    julia> macro show(x)
+    julia> macro showarg(x)
        show(x)
        # ... remainder of macro, returning an expression
     end
@@ -514,7 +514,7 @@ is to call the :func:`show` function within the macro body::
 
     julia> @showarg(println("Yo!")
     :(println("Yo!"))
-    
+
 
 Building an advanced macro
 ~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -546,9 +546,9 @@ the test condition slot, while the value of ``string(:(1==1.0))`` is
 spliced into the assertion message slot. The entire expression, thus
 constructed, is placed into the syntax tree where the :obj:`@assert` macro
 call occurs. Then at execution time, if the test expression evaluates to
-true, then ``nothing`` is returned, whereas if the test is false, an error 
-is raised indicating the asserted expression that was false. Notice that 
-it would not be possible to write this as a function, since only the 
+true, then ``nothing`` is returned, whereas if the test is false, an error
+is raised indicating the asserted expression that was false. Notice that
+it would not be possible to write this as a function, since only the
 *value* of the condition is available and it would be impossible to
 display the expression that computed it in the error message.
 
@@ -591,9 +591,9 @@ function:
 There is yet another case that the actual :obj:`@assert` macro handles: what
 if, in addition to printing "a should equal b," we wanted to print their
 values? One might naively try to use string interpolation in the custom
-message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this 
+message, e.g., ``@assert a==b "a ($a) should equal b ($b)!"``, but this
 won't work as expected with the above macro. Can you see why? Recall
-from :ref:`string interpolation <man-string-interpolation>` that an 
+from :ref:`string interpolation <man-string-interpolation>` that an
 interpolated string is rewritten to a call to :func:`string`.
 Compare:
 
