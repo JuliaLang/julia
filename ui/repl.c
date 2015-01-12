@@ -73,6 +73,8 @@ static const char opts[] =
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
     " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
+    " --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),\n"
+    "                          or adhere to declarations in source code\n"
     " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
