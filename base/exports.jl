@@ -779,6 +779,8 @@ export
     length,
     map!,
     map,
+    mapfoldl,
+    mapfoldr,
     mapreduce,
     merge!,
     merge,
