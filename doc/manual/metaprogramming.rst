@@ -43,7 +43,7 @@ each string into an object called an expression, represented by the Julia type
     julia> ex1 = parse(prog)
     :(1 + 1)
 
-    julia> typeof(ex)
+    julia> typeof(ex1)
     Expr
 
 :obj:`Expr` objects contain three parts:
@@ -500,7 +500,7 @@ It is important to emphasize that macros receive their arguments as
 expressions, literals, or symbols. One way to explore macro arguments
 is to call the :func:`show` function within the macro body::
 
-    julia> macro show(x)
+    julia> macro showarg(x)
        show(x)
        # ... remainder of macro, returning an expression
     end
