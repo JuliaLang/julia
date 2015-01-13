@@ -155,6 +155,16 @@ for i = 1:5
     @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
+# scale and scale!
+sA = sprandn(3, 7, 0.5)
+dA = full(sA)
+b = randn(7)
+@test scale(dA, b) == scale(sA, b)
+@test scale(dA, b) == scale!(copy(sA), b)
+b = randn(3)
+@test scale(b, dA) == scale(b, sA)
+@test scale(b, dA) == scale!(b, copy(sA))
+
 # reductions
 @test sum(se33)[1] == 3.0
 @test sum(se33, 1) == [1.0 1.0 1.0]

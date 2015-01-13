@@ -598,9 +598,11 @@ function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     numnz = nnz(A)
-    C.colptr = convert(Array{Ti}, A.colptr)
-    C.rowval = convert(Array{Ti}, A.rowval)
-    C.nzval = Array(Tv, numnz)
+    if C !== A
+        C.colptr = convert(Array{Ti}, A.colptr)
+        C.rowval = convert(Array{Ti}, A.rowval)
+        C.nzval = Array(Tv, numnz)
+    end
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[col]
     end
@@ -609,11 +611,13 @@ end
 
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
-    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
+    (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
     numnz = nnz(A)
-    C.colptr = convert(Array{Ti}, A.colptr)
-    C.rowval = convert(Array{Ti}, A.rowval)
-    C.nzval = Array(Tv, numnz)
+    if C !== A
+        C.colptr = convert(Array{Ti}, A.colptr)
+        C.rowval = convert(Array{Ti}, A.rowval)
+        C.nzval = Array(Tv, numnz)
+    end
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[A.rowval[p]]
     end
