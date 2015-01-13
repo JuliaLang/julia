@@ -266,12 +266,13 @@ TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any
 
 Expr(args::ANY...) = _expr(args...)
 
-LineNumberNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LineNumberNode, n)::LineNumberNode
-LabelNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LabelNode, n)::LabelNode
-GotoNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), GotoNode, n)::GotoNode
-QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::QuoteNode
-NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
-TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
+_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::$(Expr(:call, :(Core.apply_type), :Type, typ)), n::$argty) = $(Expr(:new, typ, :n))))
+_new(:LineNumberNode, :Int)
+_new(:LabelNode, :Int)
+_new(:GotoNode, :Int)
+_new(:TopNode, :Symbol)
+_new(:NewvarNode, :Symbol)
+_new(:QuoteNode, :ANY)
 
 Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
 Module() = Module(:anonymous)
