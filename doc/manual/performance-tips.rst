@@ -546,11 +546,15 @@ properties.
 -  Use :obj:`@inbounds` to eliminate array bounds checking within expressions.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
+-  Use :obj:`@fastmath` to allow floating point optimizations that are
+   correct for real numbers, but lead to differences for IEEE numbers.
+   Be careful when doing this, as this may change numerical results.
+   This corresponds to the ``-ffast-math`` option of clang.
 -  Write :obj:`@simd` in front of ``for`` loops that are amenable to vectorization.
    **This feature is experimental** and could change or disappear in future
    versions of Julia.
 
-Here is an example with both forms of markup::
+Here is an example with both :obj:`@inbounds` and :obj:`@simd` markup::
 
     function inner( x, y )
         s = zero(eltype(x))
@@ -620,6 +624,95 @@ properties:
 -  In some simple cases, for example with 2-3 arrays accessed in a loop, the
    LLVM auto-vectorization may kick in automatically, leading to no further
    speedup with :obj:`@simd`.
+
+Here is an example with all three kinds of markup. This program first
+calculates the finite difference of a one-dimensional array, and then
+evaluates the L2-norm of the result::
+
+    function init!(u)
+        n = length(u)
+        dx = 1.0 / (n-1)
+        @fastmath @inbounds @simd for i in 1:n
+            u[i] = sin(2pi*dx*i)
+        end
+    end
+     
+    function deriv!(u, du)
+        n = length(u)
+        dx = 1.0 / (n-1)
+        @fastmath @inbounds du[1] = (u[2] - u[1]) / dx
+        @fastmath @inbounds @simd for i in 2:n-1
+            du[i] = (u[i+1] - u[i-1]) / (2*dx)
+        end
+        @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
+    end
+     
+    function norm(u)
+        n = length(u)
+        T = eltype(u)
+        s = zero(T)
+        @fastmath @inbounds @simd for i in 1:n
+            s += u[i]^2
+        end
+        @fastmath @inbounds return sqrt(s/n)
+    end
+     
+    function main()
+        n = 2000
+        u = Array(Float64, n)
+        init!(u)
+        du = similar(u)
+        
+        deriv!(u, du)
+        nu = norm(du)
+        
+        @time for i in 1:10^6
+            deriv!(u, du)
+            nu = norm(du)
+        end
+        
+        println(nu)
+    end
+     
+    main()
+
+On a computer with a 2.7 GHz Intel Core i7 processor, this produces::
+
+    $ julia wave.jl
+    elapsed time: 1.207814709 seconds (0 bytes allocated)
+    4.443986180758243
+
+    $ julia --math-mode=ieee wave.jl
+    elapsed time: 4.487083643 seconds (0 bytes allocated)
+    4.443986180758243
+
+Here, the option ``--math-mode=ieee`` disables the :opt:`@fastmath`
+macro, so that we can compare results.
+
+In this case, the speedup due to :opt:`@fastmath` is a factor of about
+3.7. This is unusually large -- in general, the speedup will be
+smaller. (In this particular example, the working set of the benchmark
+is small enough to fit into the L1 cache of the processor, so that
+memory access latency does not play a role, and computing time is
+dominated by CPU usage. In many real world programs this is not the
+case.) Also, in this case this optimization does not change the result
+-- in general, the result will be slightly different. In some cases,
+especially for numerically unstable algorithms, the result can be very
+different.
+
+The annotation :opt:`@fastmath` re-arranges floating point
+expressions, e.g. changing the order of evaluation, or assuming that
+certain special cases (inf, nan) cannot occur. In this case (and on
+this particular computer), the main difference is that the expression
+``1 / (2*dx)`` in the function ``deriv`` is hoisted out of the loop
+(i.e. calculated outside the loop), as if one had written ``idx = 1 /
+(2*dx)``. In the loop, the expression ``... / (2*dx)`` then becomes
+``... * idx``, which is much faster to evaluate. Of course, both the
+actual optimization that is applied by the compiler as well as the
+resulting speedup depend very much on the hardware. You can examine
+the change in generated code by using Julia's :obj:`code_native`
+function.
+
 
 .. _man-code-warntype:
 
