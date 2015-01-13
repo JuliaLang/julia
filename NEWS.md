@@ -152,6 +152,8 @@ Library improvements
 
   * Added `recvfrom` to get source address of UDP packets ([#9418])
 
+  * copy(DArray) will now make a copy of the DArray ([#9745])
+
 Deprecated or removed
 ---------------------
 
