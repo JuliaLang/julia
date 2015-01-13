@@ -789,7 +789,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
-static int isabspath(const char *in)
+int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
