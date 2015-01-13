@@ -6,8 +6,6 @@
 # They are not exported.
 # When function arguments can be inlined, the use of functors can be removed.
 
-abstract Func{N}
-
 immutable IdFun <: Func{1} end
 call(::IdFun, x)  = x
 

@@ -1545,6 +1545,107 @@ maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 
 ## map over bitarrays ##
 
+# Specializing map is even more important for bitarrays than it is for generic
+# arrays since there can be a 64x speedup by working at the level of Int64
+# instead of looping bit-by-bit.
+
+# Note that there are 16 possible pure two-argument logical functions,
+# of which six are trivial and two don't exist as a single function in Base:
+##############################################################################
+##  p = TTFF                          ##  p = TTFF                          ##
+##  q = TFTF    function  name        ##  q = TFTF    function  name        ##
+##  --------------------------------  ##  --------------------------------- ##
+##      TTTT    (true)    -           ##      FFFF    (false)   -           ##
+##      TTTF    |, max    or          ##      FFFT    ???       (nor)       ##
+##      TTFT    >=, ^     ???         ##      FFTF    <         ???         ##
+##      TTFF    (A)       -           ##      FFTT    (~A)      -           ##
+##      TFTT    <=        implies     ##      FTFF    >         notimplies  ##
+##      TFTF    (B)       -           ##      FTFT    (~B)      -           ##
+##      TFFT    ==        xnor        ##      FTTF    $, !=     xor         ##
+##      TFFF    &, *, min and         ##      FTTT    ???       (nand)      ##
+##############################################################################
+
+abstract Func{N}
+
+immutable NotFun <: Func{1} end
+call(::NotFun, x) = ~x
+
+# Use IdFun, AndFun, and OrFun from reduce.jl
+
+immutable POrNotQFun <: Func{2} end
+call(::POrNotQFun, x, y) = x | ~y
+
+immutable ImpliesFun <: Func{2} end
+call(::ImpliesFun, x, y) = ~x | y
+
+immutable XNorFun <: Func{2} end
+call(::XNorFun, x, y) = ~(x $ y)
+
+immutable NotPAndQFun <: Func{2} end
+call(::NotPAndQFun, x, y) = ~x & y
+
+immutable NotImpliesFun <: Func{2} end
+call(::NotImpliesFun, x, y) = x & ~y
+
+immutable XOrFun <: Func{2} end
+call(::XOrFun, x, y) = x $ y
+
+function specialized_unary(f::Callable)
+    is(f, !) | is(f, ~) && return NotFun()
+    is(f, identity)     && return IdFun()
+    nothing
+end
+function specialized_binary(f::Callable)
+    is(f, |)  | is(f, max) && return OrFun()
+    is(f, &)  | is(f, *)   | is(f, min) && return AndFun()
+    is(f, $)  | is(f, !=)  && return XOrFun()
+    is(f, >=) | is(f, ^)   && return POrNotQFun()
+    is(f, <=) && return ImpliesFun()
+    is(f, ==) && return XNorFun()
+    is(f, <)  && return NotPAndQFun()
+    is(f, >)  && return NotImpliesFun()
+    nothing
+end
+
+function map(f::Callable, A::BitArray)
+    t = specialized_unary(f)
+    t != nothing ? map(t, A) : invoke(map, (Callable, AbstractArray), f, A)
+end
+function map(f::Callable, A::BitArray, B::BitArray)
+    t = specialized_binary(f)
+    t != nothing ? map(t, A, B) : invoke(map, (Callable, AbstractArray, AbstractArray), f, A, B)
+end
+map(f, A::BitArray) = map!(f, similar(A), A)
+map(f, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
+
+map!(f::Callable, A::BitArray) = map!(f, A, A)
+function map!(f::Callable, dest::BitArray, A::BitArray)
+    t = specialized_unary(f)
+    t != nothing ? map!(t, dest, A) : invoke(map!, (Callable, AbstractArray, AbstractArray), f, dest, A)
+end
+function map!(f::Callable, dest::BitArray, A::BitArray, B::BitArray)
+    t = specialized_binary(f)
+    t != nothing ? map!(t, dest, A, B) : invoke(map!, (Callable, AbstractArray, AbstractArray, AbstractArray), f, dest, A, B)
+end
+
+function map!(f, dest::BitArray, A::BitArray)
+    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    length(A) == 0 && return dest
+    for i=1:length(A.chunks)-1
+        dest.chunks[i] = f(A.chunks[i])
+    end
+    dest.chunks[end] = f(A.chunks[end]) & _msk_end(A)
+    dest
+end
+function map!(f, dest::BitArray, A::BitArray, B::BitArray)
+    size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
+    length(A) == 0 && return dest
+    for i=1:length(A.chunks)-1
+        dest.chunks[i] = f(A.chunks[i], B.chunks[i])
+    end
+    dest.chunks[end] = f(A.chunks[end], B.chunks[end]) & _msk_end(A)
+    dest
+end
 
 ## Filter ##
 

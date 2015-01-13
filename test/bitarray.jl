@@ -1013,7 +1013,69 @@ timesofar("reductions")
 
 ## map over bitarrays ##
 
-# TODO (not implemented)
+p = falses(4)
+q = falses(4)
+p[1:2] = true
+q[[1,3]] = true
+
+@test map(~, p) == map(x->~x, p) == ~p
+@test map(identity, p) == map(x->x, p) == p
+
+@test map(&, p, q) == map((x,y)->x&y, p, q) == p & q
+@test map(|, p, q) == map((x,y)->x|y, p, q) == p | q
+@test map($, p, q) == map((x,y)->x$y, p, q) == p $ q
+
+@test map(^, p, q) == map((x,y)->x^y, p, q) == p .^ q
+@test map(*, p, q) == map((x,y)->x*y, p, q) == p .* q
+
+@test map(min, p, q) == map((x,y)->min(x,y), p, q) == min(p, q)
+@test map(max, p, q) == map((x,y)->max(x,y), p, q) == max(p, q)
+
+@test map(<, p, q)  == map((x,y)->x<y, p, q)  == (p .< q)
+@test map(<=, p, q) == map((x,y)->x<=y, p, q) == (p .<= q)
+@test map(==, p, q) == map((x,y)->x==y, p, q) == (p .== q)
+@test map(>=, p, q) == map((x,y)->x>=y, p, q) == (p .>= q)
+@test map(>, p, q)  == map((x,y)->x>y, p, q)  == (p .> q)
+@test map(!=, p, q) == map((x,y)->x!=y, p, q) == (p .!= q)
+
+# map!
+r = falses(4)
+@test map!(~, r, p) == map!(x->~x, r, p) == ~p == r
+@test map!(identity, r, p) == map!(x->x, r, p) == p == r
+
+@test map!(&, r, p, q) == map!((x,y)->x&y, r, p, q) == p & q == r
+@test map!(|, r, p, q) == map!((x,y)->x|y, r, p, q) == p | q == r
+@test map!($, r, p, q) == map!((x,y)->x$y, r, p, q) == p $ q == r
+
+@test map!(^, r, p, q) == map!((x,y)->x^y, r, p, q) == p .^ q == r
+@test map!(*, r, p, q) == map!((x,y)->x*y, r, p, q) == p .* q == r
+
+@test map!(min, r, p, q) == map!((x,y)->min(x,y), r, p, q) == min(p, q) == r
+@test map!(max, r, p, q) == map!((x,y)->max(x,y), r, p, q) == max(p, q) == r
+
+@test map!(<, r, p, q)  == map!((x,y)->x<y, r, p, q)  == (p .< q)  == r
+@test map!(<=, r, p, q) == map!((x,y)->x<=y, r, p, q) == (p .<= q) == r
+@test map!(==, r, p, q) == map!((x,y)->x==y, r, p, q) == (p .== q) == r
+@test map!(>=, r, p, q) == map!((x,y)->x>=y, r, p, q) == (p .>= q) == r
+@test map!(>, r, p, q)  == map!((x,y)->x>y, r, p, q)  == (p .> q)  == r
+@test map!(!=, r, p, q) == map!((x,y)->x!=y, r, p, q) == (p .!= q) == r
+
+for l=[0,1,63,64,65,127,128,129,255,256,257,6399,6400,6401]
+    p = bitrand(l)
+    q = bitrand(l)
+    @test map(~, p) == ~p
+    @test map(identity, p) == p
+    @test map(&, p, q) == p & q
+    @test map(|, p, q) == p | q
+    @test map($, p, q) == p $ q
+    r = BitVector(l)
+    @test map!(~, r, p) == ~p == r
+    @test map!(identity, r, p) == p == r
+    @test map!(~, r) == ~p == r
+    @test map!(&, r, p, q) == p & q == r
+    @test map!(|, r, p, q) == p | q == r
+    @test map!($, r, p, q) == p $ q == r
+end
 
 ## Filter ##
 
