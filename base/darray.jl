@@ -245,7 +245,13 @@ end
 getindex(d::DArray) = d[1]
 getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I...)
 
-copy(d::SubOrDArray) = d
+function copy!(dest::SubOrDArray, src::SubOrDArray)
+    dest.dims == src.dims && dest.pmap == src.pmap && dest.indexes == src.indexes && dest.cuts == src.cuts || throw(ArgumentError("destination array doesn't fit to source array"))
+    for p in dest.pmap
+        @spawnat p copy!(localpart(dest), localpart(src))
+    end
+    dest
+end
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
