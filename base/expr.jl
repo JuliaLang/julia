@@ -5,7 +5,7 @@ symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
-symbol(x::Char) = symbol(string(x))
+symbol(x...) = symbol(string(x...))
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 

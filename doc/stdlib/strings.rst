@@ -335,9 +335,9 @@
    Tests whether a character is a valid hexadecimal digit, or whether this
    is true for all elements of a string.
 
-.. function:: symbol(str) -> Symbol
+.. function:: symbol(x...) -> Symbol
 
-   Convert a string to a ``Symbol``.
+   Create a ``Symbol`` by concatenating the string representations of the arguments together.
 
 .. function:: escape_string(str::AbstractString) -> AbstractString
 
