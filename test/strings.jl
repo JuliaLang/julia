@@ -1019,6 +1019,7 @@ let
 end
 
 @test symbol("asdf") === :asdf
+@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
 @test startswith(string(gensym("asdf")),"##asdf#")
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()

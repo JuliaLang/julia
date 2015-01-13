@@ -138,16 +138,20 @@ used as one building-block of expressions:
     julia> typeof(ans)
     Symbol
 
-:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes
-a character or string as its argument:
+:obj:`Symbol`\ s can also be created using :func:`symbol`, which takes any
+number of arguments and creates a new symbol by concatenating their string
+representations together:
 
 .. doctest::
 
     julia> :foo == symbol("foo")
     true
 
-    julia> symbol("'")
-    :'
+    julia> symbol("func",10)
+    :func10
+
+    julia> symbol(:var,'_',"sym")
+    :var_sym
 
 In the context of an expression, symbols are used to indicate access to
 variables; when an expression is evaluated, a symbol is replaced with
