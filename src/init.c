@@ -97,7 +97,8 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
                                       0,    // opt_level
                                       1,    // depwarn
-                                      1     // can_inline
+                                      1,    // can_inline
+                                      JL_COMPILEROPT_FAST_MATH_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;

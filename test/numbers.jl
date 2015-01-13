@@ -59,6 +59,36 @@
 @test minmax(NaN, 3.) == (3., 3.)
 @test isequal(minmax(NaN, NaN), (NaN, NaN))
 
+# fast math
+const one32 = one(Float32)
+const eps32 = eps(Float32)
+const eps32_2 = eps32/2
+# Note: Cannot use local functions since these are not yet optimized
+fm_ieee_32(x) = x + eps32_2 + eps32_2
+fm_fast_32(x) = @fastmath x + eps32_2 + eps32_2
+@test fm_ieee_32(one32) == one32
+@test (fm_fast_32(one32) == one32 ||
+       fm_fast_32(one32) == one32 + eps32 > one32)
+
+const one64 = one(Float64)
+const eps64 = eps(Float64)
+const eps64_2 = eps64/2
+# Note: Cannot use local functions since these are not yet optimized
+fm_ieee_64(x) = x + eps64_2 + eps64_2
+fm_fast_64(x) = @fastmath x + eps64_2 + eps64_2
+@test fm_ieee_64(one64) == one64
+@test (fm_fast_64(one64) == one64 ||
+       fm_fast_64(one64) == one64 + eps64 > one64)
+
+let epsf = 1.0f0/2^15, one_epsf = 1+epsf
+    @test isapprox((@fastmath one_epsf * one_epsf - 1),
+                   float32(65537/1073741824))
+end
+let eps = 1.0/2^30, one_eps = 1+eps
+    @test isapprox((@fastmath one_eps * one_eps - 1),
+                   2147483649/1152921504606846976)
+end
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]

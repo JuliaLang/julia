@@ -73,6 +73,8 @@ static const char opts[] =
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
     " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
+    " --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),\n"
+    "                          or adhere to declarations in source code\n"
     " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
@@ -86,7 +88,8 @@ void parse_opts(int *argcp, char ***argvp)
 	opt_dump_bitcode,
 	opt_compile,
 	opt_depwarn,
-	opt_inline
+	opt_inline,
+        opt_math_mode
     };
     static const char shortopts[] = "+H:hJ:C:O";
     static const struct option longopts[] = {
@@ -105,6 +108,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "compile",       required_argument, 0, opt_compile },
         { "depwarn",       required_argument, 0, opt_depwarn },
         { "inline",        required_argument, 0, opt_inline },
+        { "math-mode",     required_argument, 0, opt_math_mode },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -215,6 +219,16 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_compileropts.can_inline = 0;
             else {
                 ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case opt_math_mode:
+            if (!strcmp(optarg, "ieee"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_OFF;
+            else if (!strcmp(optarg, "user"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_DEFAULT;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --math-mode (%s)\n", optarg);
                 exit(1);
             }
             break;

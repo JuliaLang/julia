@@ -50,6 +50,7 @@ immutable JLCompilerOpts
     opt_level::Int8
     depwarn::Int8
     can_inline::Int8
+    fast_math::Int8
 end
 
 compileropts() = unsafe_load(cglobal(:jl_compileropts, JLCompilerOpts))

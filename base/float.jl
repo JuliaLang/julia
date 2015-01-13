@@ -204,6 +204,35 @@ widen(::Type{Float32}) = Float64
 rem(x::Float32, y::Float32) = box(Float32,rem_float(unbox(Float32,x),unbox(Float32,y)))
 rem(x::Float64, y::Float64) = box(Float64,rem_float(unbox(Float64,x),unbox(Float64,y)))
 
+# fast versions that may violate strict IEEE semantics
+# TODO: provide isnan_fast and friends
+for (op_fast, op) in ((:add_fast, :+), (:sub_fast, :-),
+                      (:mul_fast, :*), (:div_fast, :/),
+                      (:rem_fast, :rem), (:mod_fast, :mod),
+                      (:cmp_fast, :cmp))
+    @eval begin
+        # fall-back implementation for non-numeric types
+        ($op_fast)(xs...) = ($op)(xs...)
+        # type promotion
+        ($op_fast)(x::Number, y::Number, zs::Number...) =
+            ($op_fast)(promote(x,y,zs...)...)
+        # fall-back implementation that applies after promotion
+        ($op_fast){T<:Number}(x::T,ys::T...) = ($op)(x,ys...)
+    end
+end
+for T in (Float32, Float64)
+    @eval begin
+        sub_fast(x::$T) = box($T,neg_float_fast(unbox($T,x)))
+        add_fast(x::$T, y::$T) = box($T,add_float_fast(unbox($T,x),unbox($T,y)))
+        sub_fast(x::$T, y::$T) = box($T,sub_float_fast(unbox($T,x),unbox($T,y)))
+        mul_fast(x::$T, y::$T) = box($T,mul_float_fast(unbox($T,x),unbox($T,y)))
+        div_fast(x::$T, y::$T) = box($T,div_float_fast(unbox($T,x),unbox($T,y)))
+        rem_fast(x::$T, y::$T) = box($T,rem_float_fast(unbox($T,x),unbox($T,y)))
+        add_fast(x::$T, y::$T, zs::$T...) = add_fast(add_fast(x, y), zs...)
+        mul_fast(x::$T, y::$T, zs::$T...) = mul_fast(mul_fast(x, y), zs...)
+    end
+end
+
 cld{T<:FloatingPoint}(x::T, y::T) = -fld(-x,y)
 
 function mod{T<:FloatingPoint}(x::T, y::T)
@@ -217,6 +246,16 @@ function mod{T<:FloatingPoint}(x::T, y::T)
     end
 end
 
+function mod_fast{T<:FloatingPoint}(x::T, y::T)
+    r = rem_fast(x,y)
+    if r == 0
+        copysign(r,y)
+    elseif (r > 0) $ (y > 0)
+        r+y
+    else
+        r
+    end
+end
 
 ## floating point comparisons ##
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
@@ -247,6 +286,9 @@ function cmp(x::FloatingPoint, y::Real)
     isnan(x) && throw(DomainError())
     ifelse(x<y, -1, ifelse(x>y, 1, 0))
 end
+
+cmp_fast(x::Float32, y::Float32) = ifelse(x<y, -1, ifelse(x>y, 1, 0))
+cmp_fast(x::Float64, y::Float64) = ifelse(x<y, -1, ifelse(x>y, 1, 0))
 
 for Ti in (Int64,UInt64,Int128,UInt128)
     for Tf in (Float32,Float64)
