@@ -1545,36 +1545,6 @@ maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 
 ## map over bitarrays ##
 
-function map!(f::Callable, A::StridedArray)
-    for i = 1:length(A)
-        A[i] = f(A[i])
-    end
-    return A
-end
-
-function map!(f::Callable, dest::StridedArray, A::StridedArray)
-    for i = 1:length(A)
-        dest[i] = f(A[i])
-    end
-    return dest
-end
-
-function map!(f::Callable, dest::StridedArray, A::StridedArray, B::StridedArray)
-    for i = 1:length(A)
-        dest[i] = f(A[i], B[i])
-    end
-    return dest
-end
-
-function map!(f::Callable, dest::StridedArray, As::StridedArray...)
-    n = length(As[1])
-    i = 1
-    ith = a->a[i]
-    for i = 1:n
-        dest[i] = f(map(ith, As)...)
-    end
-    return dest
-end
 
 ## Filter ##
 

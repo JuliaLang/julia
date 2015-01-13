@@ -1330,6 +1330,14 @@ function map_promote(f::Callable, A::AbstractArray)
 end
 
 ## 1 argument
+map!(f::Callable, A::AbstractArray) = map!(f, A, A)
+function map!(f::Callable, dest::AbstractArray, A::AbstractArray)
+    for i = 1:length(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+
 function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
@@ -1358,6 +1366,13 @@ function map(f::Callable, A::AbstractArray)
 end
 
 ## 2 argument
+function map!(f::Callable, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+    for i = 1:length(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
 function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
     @inbounds for i = offs:length(A)
         el = f(A[i], B[i])
@@ -1386,6 +1401,16 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
+function map!(f::Callable, dest::AbstractArray, As::AbstractArray...)
+    n = length(As[1])
+    i = 1
+    ith = a->a[i]
+    for i = 1:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
 function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray...)
     local i
     ith = a->a[i]
