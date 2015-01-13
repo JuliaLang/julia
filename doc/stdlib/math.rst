@@ -885,7 +885,9 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of absolute value of ``gamma(x)``
+   Compute the logarithm of the absolute value of ``gamma(x)`` for
+   :func:`Real` ``x``, while for :func:`Complex` ``x`` it computes the
+   logarithm of ``gamma(x)``.
 
 .. function:: lfact(x)
 
