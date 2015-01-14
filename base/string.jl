@@ -442,10 +442,11 @@ function rsearchindex(s::ByteString, t::ByteString)
 end
 
 function rsearchindex(s::ByteString, t::ByteString, i::Integer)
-    if length(t) == 1
+    l = length(t)
+    if l == 1
         rsearch(s, t[1], i)
     else
-        rsearchindex(s.data, t.data, i)
+        rsearchindex(s.data, t.data, l==0 ? i : nextind(s, i)-1)
     end
 end
 

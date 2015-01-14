@@ -745,6 +745,12 @@ u = SubString(str, 1, 5)
 @test rsearch(u, 'z') == 0
 @test rsearch(u, "ll") == 3:4
 
+# rsearch with a two utf8-characters query (issue #9365)
+@test rsearch("ééé", "éé") == 3:5
+@test rsearchindex("ééé", "éé", endof("ééé")) == 3
+@test rsearch("€€€", "€€") == 4:7
+@test rsearchindex("€€€", "€€", endof("€€€")) == 4
+
 # quotes + interpolation (issue #455)
 @test "$("string")" == "string"
 arr = ["a","b","c"]
