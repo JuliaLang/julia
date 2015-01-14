@@ -103,9 +103,9 @@ function CTPlan{Tr<:FloatingPoint}(::Type{Complex{Tr}}, forward::Bool, n::Int)
 end
 
 plan_fft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
-    CTPlan(Complex{Tr}, true, length(x))
+    CTPlan(Complex{Tr}, true, length(x))::CTPlan{Complex{Tr},true}
 plan_bfft{Tr<:FloatingPoint}(x::AbstractVector{Complex{Tr}}) =
-    CTPlan(Complex{Tr}, false, length(x))
+    CTPlan(Complex{Tr}, false, length(x))::CTPlan{Complex{Tr},false}
 
 function applystep{T}(p::CTPlan{T},
                       x::AbstractArray{T}, x0, xs,

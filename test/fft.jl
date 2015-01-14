@@ -308,3 +308,18 @@ for T in (Complex128, Complex{BigFloat})
         end
     end
 end
+
+# issue #9772
+for x in (randn(10),randn(10,12))
+    z = complex(x)
+    y = rfft(x)
+    @inferred rfft(x)
+    @inferred brfft(x,18)
+    @inferred brfft(y,10)
+    for f in (fft,plan_fft,bfft,plan_bfft,fft_)
+        @inferred f(x)
+        @inferred f(z)
+    end
+    # note: inference doesn't work for plan_fft_ since the
+    #       algorithm steps are included in the CTPlan type
+end

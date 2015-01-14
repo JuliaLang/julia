@@ -49,9 +49,9 @@ function MultiDimPlan{T<:Complex}(::Type{T}, forward::Bool, region, sz)
 end
 
 plan_fft{Tr<:FloatingPoint}(x::AbstractArray{Complex{Tr}}, region) =
-    MultiDimPlan(Complex{Tr}, true, region, size(x))
+    MultiDimPlan(Complex{Tr}, true, region, size(x))::MultiDimPlan{Complex{Tr}, true}
 plan_bfft{Tr<:FloatingPoint}(x::AbstractArray{Complex{Tr}}, region) =
-    MultiDimPlan(Complex{Tr}, false, region, size(x))
+    MultiDimPlan(Complex{Tr}, false, region, size(x))::MultiDimPlan{Complex{Tr}, false}
 
 # recursive execution of a MultiDim plan, starting at dimension d, for
 # strided arrays (so that we can use linear indexing):
