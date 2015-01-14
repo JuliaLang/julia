@@ -46,16 +46,18 @@ wait(c)
 
 socketname = @windows ? "\\\\.\\pipe\\uv-test" : "testsocket"
 @unix_only isfile(socketname) && Base.FS.unlink(socketname)
-@async begin
-    s = listen(socketname)
-    Base.notify(c)
-    sock = accept(s)
-    write(sock,"Hello World\n")
-    close(s)
-    close(sock)
+for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
+    @async begin
+        s = listen(T(socketname))
+        Base.notify(c)
+        sock = accept(s)
+        write(sock,"Hello World\n")
+        close(s)
+        close(sock)
+    end
+    wait(c)
+    @test readall(connect(socketname)) == "Hello World\n"
 end
-wait(c)
-@test readall(connect(socketname)) == "Hello World\n"
 
 @test_throws Base.UVError getaddrinfo(".invalid")
 @test_throws Base.UVError connect("localhost", 21452)
