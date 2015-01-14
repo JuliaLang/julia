@@ -19,7 +19,7 @@ end
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
-size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
+size(D::Diagonal,d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(D.diag) : 1)
 
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 

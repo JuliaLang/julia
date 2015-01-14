@@ -37,7 +37,7 @@ end
 iswritable(s::IOStream) = bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
 isreadable(s::IOStream) = bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
-modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : error("Neither readable nor writable"))
+modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)
@@ -128,7 +128,7 @@ function open(fname::AbstractString, mode::AbstractString)
     mode == "w+" ? open(fname, true , true , true , true , false) :
     mode == "a"  ? open(fname, false, true , true , false, true ) :
     mode == "a+" ? open(fname, true , true , true , false, true ) :
-    error("invalid open mode: ", mode)
+    throw(ArgumentError("invalid open mode: $mode"))
 end
 
 function open(f::Function, args...)
@@ -147,7 +147,7 @@ write(s::IOStream, b::UInt8) = int(ccall(:ios_putc, Int32, (UInt8, Ptr{Void}), b
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
         if !iswritable(s)
-            error("attempt to write to a read-only IOStream")
+            throw(ArgumentError("write failed, IOStream is not writeable"))
         end
         int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                   s.ios, a, length(a)*sizeof(T)))
@@ -158,7 +158,7 @@ end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
     if !iswritable(s)
-        error("attempt to write to a read-only IOStream")
+        throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt), s.ios, p, nb))
 end
@@ -205,7 +205,7 @@ end
 
 function write(s::IOStream, c::Char)
     if !iswritable(s)
-        error("attempt to write to a read-only IOStream")
+        throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
 end

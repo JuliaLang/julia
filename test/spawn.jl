@@ -146,7 +146,7 @@ mark(sock)
 @test readline(sock) == "Hello, world!\n"
 unmark(sock)
 @test !ismarked(sock)
-@test_throws ErrorException reset(sock)
+@test_throws ArgumentError reset(sock)
 @test !unmark(sock)
 @test readline(sock) == "Goodbye, world...\n"
 #@test eof(sock) ## doesn't work...

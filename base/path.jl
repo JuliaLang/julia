@@ -61,7 +61,7 @@ function joinpath(a::AbstractString, b::AbstractString)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && error("drive mismatch: $A$a $B$b")
+    !isempty(B) && A != B && throw(ArgumentError("drive mismatch: $A$a $B$b"))
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
@@ -139,5 +139,5 @@ end
     if done(path,i) return homedir() end
     c, j = next(path,i)
     if c == '/' return homedir()*path[i:end] end
-    error("~user tilde expansion not yet implemented")
+    throw(ArgumentError("~user tilde expansion not yet implemented"))
 end
