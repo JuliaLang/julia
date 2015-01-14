@@ -243,7 +243,8 @@ setdiff!(s2, IntSet([2, 4, 5, 6]))
 @test_throws ArgumentError IntSet(-1)
 @test !(-1 in IntSet(0:10))
 
-# issue #8570
-s = IntSet(2^32)
-@test length(s) == 1
-for b in s; b; end
+# # issue #8570
+# This requires 2^29 bytes of storage, which is too much for a simple test
+# s = IntSet(2^32)
+# @test length(s) == 1
+# for b in s; b; end
