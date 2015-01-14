@@ -624,7 +624,10 @@ Any[
 
 ("Base","cumprod","cumprod(A[, dim])
 
-   Cumulative product along a dimension. The dimension defaults to 1.
+   Cumulative product along a dimension \"dim\" (defaults to 1). See
+   also \"cumprod!()\" to use a preallocated output array, both for
+   performance and to control the precision of the output (e.g. to
+   avoid overflow).
 
 "),
 
@@ -637,7 +640,10 @@ Any[
 
 ("Base","cumsum","cumsum(A[, dim])
 
-   Cumulative sum along a dimension. The dimension defaults to 1.
+   Cumulative sum along a dimension \"dim\" (defaults to 1). See also
+   \"cumsum!()\" to use a preallocated output array, both for
+   performance and to control the precision of the output (e.g. to
+   avoid overflow).
 
 "),
 
@@ -950,7 +956,7 @@ Any[
 
 "),
 
-("Sparse","sparse","sparse(I, J, V[, m, n, combine])
+("Base","sparse","sparse(I, J, V[, m, n, combine])
 
    Create a sparse matrix \"S\" of dimensions \"m x n\" such that
    \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
@@ -960,7 +966,7 @@ Any[
 
 "),
 
-("Sparse","sparsevec","sparsevec(I, V[, m, combine])
+("Base","sparsevec","sparsevec(I, V[, m, combine])
 
    Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
    = V[k]\". Duplicates are combined using the \"combine\" function,
@@ -972,7 +978,7 @@ Any[
 
 "),
 
-("Sparse","sparsevec","sparsevec(D::Dict[, m])
+("Base","sparsevec","sparsevec(D::Dict[, m])
 
    Create a sparse matrix of size \"m x 1\" where the row values are
    keys from the dictionary, and the nonzero values are the values
@@ -980,19 +986,19 @@ Any[
 
 "),
 
-("Sparse","issparse","issparse(S)
+("Base","issparse","issparse(S)
 
    Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
 
 "),
 
-("Sparse","sparse","sparse(A)
+("Base","sparse","sparse(A)
 
    Convert a dense matrix \"A\" into a sparse matrix.
 
 "),
 
-("Sparse","sparsevec","sparsevec(A)
+("Base","sparsevec","sparsevec(A)
 
    Convert a dense vector \"A\" into a sparse matrix of size \"m x
    1\". In julia, sparse vectors are really just sparse matrices with
@@ -1000,32 +1006,32 @@ Any[
 
 "),
 
-("Sparse","full","full(S)
+("Base","full","full(S)
 
    Convert a sparse matrix \"S\" into a dense matrix.
 
 "),
 
-("Sparse","nnz","nnz(A)
+("Base","nnz","nnz(A)
 
    Returns the number of stored (filled) elements in a sparse matrix.
 
 "),
 
-("Sparse","spzeros","spzeros(m, n)
+("Base","spzeros","spzeros(m, n)
 
    Create an empty sparse matrix of size \"m x n\".
 
 "),
 
-("Sparse","spones","spones(S)
+("Base","spones","spones(S)
 
    Create a sparse matrix with the same structure as that of \"S\",
    but with every nonzero element having the value \"1.0\".
 
 "),
 
-("Sparse","speye","speye(type, m[, n])
+("Base","speye","speye(type, m[, n])
 
    Create a sparse identity matrix of specified type of size \"m x
    m\". In case \"n\" is supplied, create a sparse identity matrix of
@@ -1033,7 +1039,7 @@ Any[
 
 "),
 
-("Sparse","spdiagm","spdiagm(B, d[, m, n])
+("Base","spdiagm","spdiagm(B, d[, m, n])
 
    Construct a sparse diagonal matrix. \"B\" is a tuple of vectors
    containing the diagonals and \"d\" is a tuple containing the
@@ -1045,7 +1051,7 @@ Any[
 
 "),
 
-("Sparse","sprand","sprand(m, n, p[, rng])
+("Base","sprand","sprand(m, n, p[, rng])
 
    Create a random \"m\" by \"n\" sparse matrix, in which the
    probability of any element being nonzero is independently given by
@@ -1056,7 +1062,7 @@ Any[
 
 "),
 
-("Sparse","sprandn","sprandn(m, n, p)
+("Base","sprandn","sprandn(m, n, p)
 
    Create a random \"m\" by \"n\" sparse matrix with the specified
    (independent) probability \"p\" of any entry being nonzero, where
@@ -1064,7 +1070,7 @@ Any[
 
 "),
 
-("Sparse","sprandbool","sprandbool(m, n, p)
+("Base","sprandbool","sprandbool(m, n, p)
 
    Create a random \"m\" by \"n\" sparse boolean matrix with the
    specified (independent) probability \"p\" of any entry being
@@ -1072,14 +1078,14 @@ Any[
 
 "),
 
-("Sparse","etree","etree(A[, post])
+("Base","etree","etree(A[, post])
 
    Compute the elimination tree of a symmetric sparse matrix \"A\"
    from \"triu(A)\" and, optionally, its post-ordering permutation.
 
 "),
 
-("Sparse","symperm","symperm(A, p)
+("Base","symperm","symperm(A, p)
 
    Return the symmetric permutation of A, which is \"A[p,p]\". A
    should be symmetric and sparse, where only the upper triangular
@@ -1089,7 +1095,7 @@ Any[
 
 "),
 
-("Sparse","nonzeros","nonzeros(A)
+("Base","nonzeros","nonzeros(A)
 
    Return a vector of the structural nonzero values in sparse matrix
    \"A\". This includes zeros that are explicitly stored in the sparse
@@ -1099,7 +1105,7 @@ Any[
 
 "),
 
-("Sparse","rowvals","rowvals(A)
+("Base","rowvals","rowvals(A)
 
    Return a vector of the row indices of \"A\", and any modifications
    to the returned vector will mutate \"A\" as well. Given the
@@ -1110,7 +1116,7 @@ Any[
 
 "),
 
-("Sparse","nzrange","nzrange(A, col)
+("Base","nzrange","nzrange(A, col)
 
    Return the range of indices to the structural nonzero values of a
    sparse matrix column. In conjunction with \"nonzeros(A)\" and
@@ -1869,6 +1875,14 @@ Any[
 
 "),
 
+("Base","call","call(x, args...)
+
+   If \"x\" is not a \"Function\", then \"x(args...)\" is equivalent
+   to \"call(x, args...)\".  This means that function-like behavior
+   can be added to any type by defining new \"call\" methods.
+
+"),
+
 ("Base","eval","eval([m::Module], expr::Expr)
 
    Evaluate an expression in the given module and return the result.
@@ -1896,9 +1910,9 @@ Any[
 
    Only valid in the context of an Expr returned from a macro.
    Prevents the macro hygiene pass from turning embedded variables
-   into gensym variables. See the *Macros* section of the
-   Metaprogramming chapter of the manual for more details and
-   examples.
+   into gensym variables. See the *Non-Standard AbstractString
+   Literals* section of the Metaprogramming chapter of the manual for
+   more details and examples.
 
 "),
 
@@ -7195,7 +7209,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","null","null(M)
+("Base","nullspace","nullspace(M)
 
    Basis for nullspace of \"M\".
 
@@ -7348,7 +7362,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
+("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
 
    \"eigs\" computes eigenvalues \"d\" of \"A\" using Lanczos or
    Arnoldi iterations for real symmetric or general nonsymmetric
@@ -7416,6 +7430,33 @@ popdisplay(d::Display)
      +-----------------+------------------------------------+------------------------------------+
      | real or complex | inverse with level shift \\\"sigma\\\" | (A - \\\\sigma I )^{-1}              |
      +-----------------+------------------------------------+------------------------------------+
+
+"),
+
+("Base","svds","svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
+
+   \"svds\" computes largest singular values \"s\" of \"A\" using
+   Lanczos or Arnoldi iterations. Uses \"eigs\" underneath. Inputs
+   are:
+      * \"A\": Linear operator. It can either subtype of
+        AbstractArray (e.g., sparse matrix) or duck typed. For duck
+        typing \"A\" has to support \"size(A)\", \"eltype(A)\", \"A *
+        vector\" and \"A' * vector\".
+
+      * \"nsv\": Number of singular values.
+
+      * \"ritzvec\": Whether to return the left and right singular
+        vectors \"left_sv\" and \"right_sv\", default is \"true\". If
+        \"false\" the singular vectors are omitted from the output.
+
+      * \"tol\": tolerance, see \"eigs\".
+
+      * \"maxiter\": Maximum number of iterations, see \"eigs\".
+
+   **Example**:
+
+      X = sprand(10, 5, 0.2)
+      svds(X, nsv = 2)
 
 "),
 
@@ -8897,7 +8938,12 @@ popdisplay(d::Display)
 
 ("Base","factorial","factorial(n)
 
-   Factorial of n
+   Factorial of \"n\".  If \"n\" is an \"Integer()\", the factorial is
+   computed as an integer (promoted to at least 32 bits).  Note that
+   this may overflow if \"n\" is not small, but you can use
+   \"factorial(big(n))\" to compute the result exactly in arbitrary
+   precision.  If \"n\" is not an \"Integer\", \"factorial(n)\" is
+   equivalent to \"gamma(n+1)\".
 
 "),
 
@@ -9028,7 +9074,9 @@ popdisplay(d::Display)
 
 ("Base","lgamma","lgamma(x)
 
-   Compute the logarithm of absolute value of \"gamma(x)\"
+   Compute the logarithm of the absolute value of \"gamma(x)\" for
+   \"Real()\" \"x\", while for \"Complex()\" \"x\" it computes the
+   logarithm of \"gamma(x)\".
 
 "),
 
