@@ -405,10 +405,6 @@ JL_CALLABLE(jl_f_apply)
             return jl_apply(f, &jl_tupleref(args[1],0), jl_tuple_len(args[1]));
         }
     }
-    jl_value_t *argarr = NULL;
-    JL_GC_PUSH1(&argarr);
-    jl_value_t *result;
-    jl_value_t **newargs;
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
         if (jl_is_tuple(args[i])) {
@@ -426,20 +422,23 @@ JL_CALLABLE(jl_f_apply)
                     JL_TYPECHK(apply, tuple, args[i]);
                 }
             }
-            argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
+            jl_value_t *argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
             assert(jl_typeis(argarr, jl_array_any_type));
-            result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
+            JL_GC_PUSH1(&argarr);
+            jl_value_t *result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
             JL_GC_POP();
             return result;
         }
     }
+    jl_value_t **newargs;
     if (n > jl_page_size/sizeof(jl_value_t*)) {
         // put arguments on the heap if there are too many
-        argarr = (jl_value_t*)jl_alloc_cell_1d(n);
+        jl_value_t *argarr = (jl_value_t*)jl_alloc_cell_1d(n);
+        JL_GC_PUSH1(&argarr);
         newargs = jl_cell_data(argarr);
     }
     else {
-        newargs = (jl_value_t**)alloca(n * sizeof(jl_value_t*));
+        JL_GC_PUSHARGS(newargs, n);
     }
     n = 0;
     for(i=1; i < nargs; i++) {
@@ -455,7 +454,7 @@ JL_CALLABLE(jl_f_apply)
                 newargs[n++] = jl_cellref(args[i], j);
         }
     }
-    result = jl_apply(f, newargs, n);
+    jl_value_t *result = jl_apply(f, newargs, n);
     JL_GC_POP();
     return result;
 }

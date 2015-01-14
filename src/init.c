@@ -806,7 +806,7 @@ int isabspath(const char *in)
         }
     }
 #else
-    if (jl_compileropts.image_file[0] == '/') return 1; // absolute path
+    if (in[0] == '/') return 1; // absolute path
 #endif
     return 0; // relative path
 }
@@ -834,6 +834,7 @@ static char *abspath(const char *in)
             path[path_size-1] = PATHSEPSTRING[0];
             memcpy(path+path_size, in, len+1);
             out = strdup(path);
+            free(path);
         }
     }
 #else

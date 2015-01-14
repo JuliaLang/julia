@@ -372,11 +372,10 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     int i;
     for (i=0; i<argc; i++) { // write the command line to UTF8
         wchar_t *warg = argv[i];
-        size_t wlen = wcslen(warg)+1;
-        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
         if (!len) return 1;
         char *arg = (char*)alloca(len);
-        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
 #endif
