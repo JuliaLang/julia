@@ -877,7 +877,7 @@ function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err
 end
 
-function bind(server::PipeServer, name::ASCIIString)
+function bind(server::PipeServer, name::AbstractString)
     @assert server.status == StatusInit
     err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{UInt8}),
                 server.handle, name)
@@ -894,14 +894,14 @@ function bind(server::PipeServer, name::ASCIIString)
 end
 
 
-function listen(path::ByteString)
+function listen(path::AbstractString)
     sock = PipeServer()
     bind(sock, path) || error("could not listen on path $path")
     uv_error("listen", _listen(sock))
     sock
 end
 
-function connect!(sock::Pipe, path::ByteString)
+function connect!(sock::Pipe, path::AbstractString)
     @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
     uv_req_set_data(req,C_NULL)
@@ -909,7 +909,6 @@ function connect!(sock::Pipe, path::ByteString)
     sock.status = StatusConnecting
     sock
 end
-connect!(sock::Pipe, path::AbstractString) = connect(sock,bytestring(path))
 
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)
