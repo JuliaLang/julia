@@ -1217,7 +1217,7 @@ end
 
 ##
 # generic map on any iterator
-function map(f::Callable, iters...)
+function map(f, iters...)
     result = []
     len = length(iters)
     states = [start(iters[idx]) for idx in 1:len]
@@ -1299,7 +1299,7 @@ end
 
 
 # using promote_type
-function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+function promote_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, do a type promotion and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1321,7 +1321,7 @@ function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractAr
     return dest
 end
 
-function map_promote(f::Callable, A::AbstractArray)
+function map_promote(f, A::AbstractArray)
     if isempty(A); return similar(A, Bottom); end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1330,15 +1330,15 @@ function map_promote(f::Callable, A::AbstractArray)
 end
 
 ## 1 argument
-map!(f::Callable, A::AbstractArray) = map!(f, A, A)
-function map!(f::Callable, dest::AbstractArray, A::AbstractArray)
+map!(f, A::AbstractArray) = map!(f, A, A)
+function map!(f, dest::AbstractArray, A::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1357,7 +1357,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
     return dest
 end
 
-function map(f::Callable, A::AbstractArray)
+function map(f, A::AbstractArray)
     if isempty(A); return similar(A); end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1366,14 +1366,14 @@ function map(f::Callable, A::AbstractArray)
 end
 
 ## 2 argument
-function map!(f::Callable, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map!(f, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
+function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
     @inbounds for i = offs:length(A)
         el = f(A[i], B[i])
         S = typeof(el)
@@ -1389,7 +1389,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray,
     return dest
 end
 
-function map(f::Callable, A::AbstractArray, B::AbstractArray)
+function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
         return similar(A, promote_type(eltype(A),eltype(B)), shp)
@@ -1401,7 +1401,7 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map!(f::Callable, dest::AbstractArray, As::AbstractArray...)
+function map!(f, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1411,7 +1411,7 @@ function map!(f::Callable, dest::AbstractArray, As::AbstractArray...)
     return dest
 end
 
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray...)
+function map_to!{T}(f, offs, dest::AbstractArray{T}, As::AbstractArray...)
     local i
     ith = a->a[i]
     @inbounds for i = offs:length(As[1])
@@ -1429,7 +1429,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray
     return dest
 end
 
-function map(f::Callable, As::AbstractArray...)
+function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], promote_eltype(As...), shape)
