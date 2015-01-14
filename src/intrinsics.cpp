@@ -620,14 +620,15 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
             return NULL;
         }
         assert(jl_is_datatype(ety));
-        uint64_t size = ((jl_datatype_t*)ety)->size;
+        uint64_t size = jl_datatype_size(ety);
         Value *strct =
             builder.CreateCall(prepare_call(jlallocobj_func),
                                ConstantInt::get(T_size,
                                     sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_nthptr_addr(strct, (size_t)0));
-        im1 = builder.CreateMul(im1, ConstantInt::get(T_size, size));
+        im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
         builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
                             thePtr, size, 1);
@@ -682,8 +683,10 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
+        im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
-                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8), size, 1);
+                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1), T_pint8), size, 1);
     }
     else {
         if (val == NULL) {

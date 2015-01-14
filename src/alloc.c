@@ -186,11 +186,17 @@ DLLEXPORT jl_value_t *jl_pointerref(jl_value_t *p, jl_value_t *i)
     JL_TYPECHK(pointerref, pointer, p);
     JL_TYPECHK(pointerref, long, i);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
-    if (!jl_is_datatype(ety))
-        jl_error("pointerref: invalid pointer");
-    size_t nb = jl_datatype_size(ety);
-    char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
-    return jl_new_bits(ety, pp);
+    if (ety == (jl_value_t*)jl_any_type) {
+        jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
+        return *pp;
+    }
+    else {
+        if (!jl_is_datatype(ety))
+            jl_error("pointerref: invalid pointer");
+        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->alignment);
+        char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
+        return jl_new_bits(ety, pp);
+    }
 }
 
 void jl_assign_bits(void *dest, jl_value_t *bits)
@@ -213,13 +219,18 @@ DLLEXPORT void jl_pointerset(jl_value_t *p, jl_value_t *x, jl_value_t *i)
     JL_TYPECHK(pointerset, pointer, p);
     JL_TYPECHK(pointerset, long, i);
     jl_value_t *ety = jl_tparam0(jl_typeof(p));
-    if (!jl_is_datatype(ety))
-        jl_error("pointerset: invalid pointer");
-    size_t nb = jl_datatype_size(ety);
-    char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
-    if (jl_typeof(x) != ety)
-        jl_error("pointerset: type mismatch in assign");
-    jl_assign_bits(pp, x);
+    if (ety == (jl_value_t*)jl_any_type) {
+        jl_value_t **pp = (jl_value_t**)(jl_unbox_long(p) + (jl_unbox_long(i)-1)*sizeof(void*));
+        *pp = x;
+    } else {
+        if (!jl_is_datatype(ety))
+            jl_error("pointerset: invalid pointer");
+        size_t nb = LLT_ALIGN(jl_datatype_size(ety), ((jl_datatype_t*)ety)->alignment);
+        char *pp = (char*)jl_unbox_long(p) + (jl_unbox_long(i)-1)*nb;
+        if (jl_typeof(x) != ety)
+            jl_error("pointerset: type mismatch in assign");
+        jl_assign_bits(pp, x);
+    }
 }
 
 int jl_field_index(jl_datatype_t *t, jl_sym_t *fld, int err)

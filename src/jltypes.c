@@ -2684,8 +2684,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (jl_is_uniontype(child)) {
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
         if (morespecific) {
-            cenv_t tenv;
-            tenv.data = (jl_value_t**)alloca(MAX_CENV_SIZE*sizeof(void*));
+            jl_value_t **rts;
+            JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
+            cenv_t tenv; tenv.data = rts;
+            memset(tenv.data, 0, MAX_CENV_SIZE*sizeof(void*));
             for(i=0; i < jl_tuple_len(t); i++) {
                 int n = env->n;
                 tmp = type_match_(jl_tupleref(t,i), parent, env, 1, invariant);
@@ -2703,9 +2705,11 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                 type_match_(jl_tupleref(t,j), parent,
                                             env, 1, invariant) == jl_false) {
                                 env->n = n;
+                                JL_GC_POP();
                                 return jl_false;
                             }
                         }
+                        JL_GC_POP();
                         return jl_true;
                     }
                 }
@@ -2713,6 +2717,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                     env->n = n;
                 }
             }
+            JL_GC_POP();
             return jl_false;
         }
         else {
