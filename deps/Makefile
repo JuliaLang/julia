@@ -1783,12 +1783,7 @@ libgit2-$(LIBGIT2_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
 libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
 	$(JLCHECKSUM) $<
-ifeq ($(BUILD_OS),WINNT)
-	$(TAR) --exclude=libgit2-$(LIBGIT2_VER)/tests/resources/template/hooks/link.sample -zxf $<
-else
 	$(TAR) zxf $<
-endif
-	cd libgit2-$(LIBGIT2_VER) && patch -p1 < ../libgit2-0.21.3-mingw.patch
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
