@@ -438,6 +438,7 @@ test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
 
 testall: release
+	cp $(build_prefix)/lib/julia/sys.ji local.ji && $(JULIA_EXECUTABLE) -J local.ji -e 'true' && rm local.ji
 	@$(MAKE) $(QUIET_MAKE) -C test all
 
 testall1: release
