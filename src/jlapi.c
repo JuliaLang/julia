@@ -17,7 +17,6 @@ extern "C" {
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 DLLEXPORT char * __cdecl dirname(char *);
-DLLEXPORT char * __cdecl basename(char *);
 #else
 #include <libgen.h>
 #endif
