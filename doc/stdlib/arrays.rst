@@ -645,8 +645,6 @@ BitArrays
 
    Right rotation operator.
 
-
-.. module:: Sparse
 .. _stdlib-sparse:
 
 Sparse Matrices
