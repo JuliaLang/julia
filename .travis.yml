@@ -58,6 +58,7 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
+    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."
