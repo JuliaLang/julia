@@ -25,9 +25,8 @@ end
 
 #Check that upper/lower (for special matrices) is correctly specified
 macro chkuplo()
-    :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-
-Valid choices are 'U' (upper) or 'L' (lower).""")))
+    :((uplo=='U' || uplo=='L') ||
+      throw(ArgumentError(string("uplo argument must be 'U' (upper) or 'L' (lower), got ", repr(uplo)))))
 end
 
 subsetrows(X::AbstractVector, Y::AbstractArray, k) = Y[1:k]
@@ -3193,7 +3192,7 @@ for (bdsdc, elty) in
                 ldvt=ldu=max(1, n)
                 lwork=3*n^2 + 4n
             else
-                error(string("COMPQ argument must be 'N', 'P' or 'I' but you said '",compq,"'"))
+                throw(ArgumentError("COMPQ argument must be 'N', 'P' or 'I', got $(repr(compq))"))
             end
             u = similar(d, $elty, (ldu,  n))
             vt= similar(d, $elty, (ldvt, n))

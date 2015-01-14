@@ -138,7 +138,7 @@ end
 
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
-    k < 0 && error("permutation must be a positive number")
+    k < 0 && throw(ArgumentError("permutation k must be ≥ 0, got $k"))
     n = length(a)
     n == 0 && return a
     f = factorial(oftype(k, n-1))
@@ -159,7 +159,7 @@ end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
 function nthperm{T<:Integer}(p::AbstractVector{T})
-    isperm(p) || error("argument is not a permutation")
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
     k, n = 1, length(p)
     for i = 1:n-1
         f = factorial(n-i)
@@ -176,7 +176,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("argument is not a permutation")
+            throw(ArgumentError("argument is not a permutation"))
         b[j] = i
     end
     b
@@ -596,7 +596,7 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter
@@ -637,7 +637,7 @@ end
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter

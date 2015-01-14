@@ -48,8 +48,8 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
     mkdir(path, mode)
 end
 
-mkdir(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
-mkpath(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
+mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
 function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)

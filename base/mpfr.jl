@@ -80,7 +80,7 @@ end
 function BigFloat(x::AbstractString, base::Int)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    if err != 0; error("incorrectly formatted number"); end
+    err == 0 || throw("incorrectly formatted number \"$x\"")
     return z
 end
 BigFloat(x::AbstractString) = BigFloat(x, 10)
@@ -652,7 +652,7 @@ function from_mpfr(c::Integer)
     elseif c == 4
         return RoundFromZero
     else
-        error("invalid MPFR rounding mode code")
+        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
     end
     RoundingMode(c)
 end

@@ -16,7 +16,7 @@ type Regex
         pattern = bytestring(pattern)
         options = int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
-            error("invalid regex options: $options")
+            throw(ArgumentError("invalid regex options: $options"))
         end
         re = compile(new(pattern, options, C_NULL, C_NULL, Array(Int32, 0)))
         finalizer(re,
@@ -35,7 +35,7 @@ function Regex(pattern::AbstractString, flags::AbstractString)
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
-                   error("unknown regex flag: $f")
+                   throw(ArgumentError("unknown regex flag: $f"))
     end
     Regex(pattern, options)
 end
