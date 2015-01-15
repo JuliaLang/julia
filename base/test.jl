@@ -158,8 +158,8 @@ macro inferred(ex)
         inftypes = Base.return_types($(esc(ex.args[1])), Base.typesof(vals...))
         @assert length(inftypes) == 1
         result = $(esc(ex.args[1]))(vals...)
-        rettype = typeof(result)
-        is(rettype, inftypes[1]) || error("return type $rettype does not match inferred return type $(inftypes[1])")
+        rettype = isa(result, Type) ? Type{result} : typeof(result)
+        rettype == inftypes[1] || error("return type $rettype does not match inferred return type $(inftypes[1])")
         result
     end
 end
