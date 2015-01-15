@@ -3,7 +3,7 @@
 .. currentmodule:: Base.Dates
 
 *************************************
- Date and DateTime  
+ Date and DateTime
 *************************************
 
 The :mod:`Dates` module provides two types for working with dates: :class:`Date` and :class:`DateTime`, representing day and millisecond precision, respectively; both are subtypes of the abstract :class:`TimeType`. The motivation for distinct types is simple: some operations are much simpler, both in terms of code and mental reasoning, when the complexities of greater precision don't have to be dealt with. For example, since the :class:`Date` type only resolves to the precision of a single date (i.e. no hours, minutes, or seconds), normal considerations for time zones, daylight savings/summer time, and leap seconds are unnecessary and avoided.
@@ -52,11 +52,11 @@ Constructors
   julia> Date(Dates.Month(7),Dates.Year(2013))
   2013-07-01
 
-:class:`Date` or :class:`DateTime` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and pass to a :class:`Date` or :class:`DateTime` constructor. 
+:class:`Date` or :class:`DateTime` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and pass to a :class:`Date` or :class:`DateTime` constructor.
 
-Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so ``"y-m-d"`` lets the parser know that between the first and second slots in a date string like ``"2014-07-16"``, it should find the ``-`` character. The ``y``, ``m``, and ``d`` characters let the parser know which periods to parse in each slot. 
+Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so ``"y-m-d"`` lets the parser know that between the first and second slots in a date string like ``"2014-07-16"``, it should find the ``-`` character. The ``y``, ``m``, and ``d`` characters let the parser know which periods to parse in each slot.
 
-Fixed-width slots are specified by repeating the period character the number of times corresponding to the width. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next. 
+Fixed-width slots are specified by repeating the period character the number of times corresponding to the width. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next.
 
 Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
@@ -160,9 +160,9 @@ Compound methods are provided, as they provide a measure of efficiency if multip
 One may also access the underlying ``UTInstant`` or integer value::
 
   julia> dump(t)
-  Date 
-  instant: UTInstant{Day} 
-    periods: Day 
+  Date
+  instant: UTInstant{Day}
+    periods: Day
       value: Int64 735264
 
   julia> t.instant
@@ -259,7 +259,7 @@ The :mod:`Dates` module provides the *adjuster* API through several convenient m
 
   # Adjusts the input to the Monday of the input's week
   julia> Dates.firstdayofweek(Date(2014,7,16))
-  2014-07-14 
+  2014-07-14
 
   # Adjusts to the last day of the input's month
   julia> Dates.lastdayofmonth(Date(2014,7,16))
@@ -269,7 +269,7 @@ The :mod:`Dates` module provides the *adjuster* API through several convenient m
   julia> Dates.lastdayofquarter(Date(2014,7,16))
   2014-09-30
 
-The next two higher-order methods, :func:`tonext`, and :func:`toprev`, generalize working with temporal expressions by taking a :class:`DateFunction` as first argument, along with a starting :class:`TimeType`. A :class:`DateFunction` is just a function, usually anonymous, that takes a single :class:`TimeType` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion. 
+The next two higher-order methods, :func:`tonext`, and :func:`toprev`, generalize working with temporal expressions by taking a :class:`DateFunction` as first argument, along with a starting :class:`TimeType`. A :class:`DateFunction` is just a function, usually anonymous, that takes a single :class:`TimeType` as input and returns a ``Bool``, ``true`` indicating a satisfied adjustment criterion.
 For example::
 
   julia> istuesday = x->Dates.dayofweek(x) == Dates.Tuesday  # Returns true if the day of the week of x is Tuesday
@@ -300,7 +300,7 @@ The final method in the adjuster API is the :func:`recur` function. :func:`recur
   # Date range from January 1st, 2014 to January 1st, 2015
   julia> dr = Dates.Date(2014):Dates.Date(2015);
   julia> recur(dr) do x
-             Dates.dayofweek(x) == Dates.Tue && 
+             Dates.dayofweek(x) == Dates.Tue &&
              Dates.April <= Dates.month(x) <= Dates.Nov &&
              Dates.dayofweekofmonth(x) == 2
          end

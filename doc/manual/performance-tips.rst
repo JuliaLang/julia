@@ -654,7 +654,7 @@ evaluates the L2-norm of the result::
             u[i] = sin(2pi*dx*i)
         end
     end
-     
+
     function deriv!(u, du)
         n = length(u)
         dx = 1.0 / (n-1)
@@ -664,7 +664,7 @@ evaluates the L2-norm of the result::
         end
         @fastmath @inbounds du[n] = (u[n] - u[n-1]) / dx
     end
-     
+
     function norm(u)
         n = length(u)
         T = eltype(u)
@@ -674,24 +674,24 @@ evaluates the L2-norm of the result::
         end
         @fastmath @inbounds return sqrt(s/n)
     end
-     
+
     function main()
         n = 2000
         u = Array(Float64, n)
         init!(u)
         du = similar(u)
-        
+
         deriv!(u, du)
         nu = norm(du)
-        
+
         @time for i in 1:10^6
             deriv!(u, du)
             nu = norm(du)
         end
-        
+
         println(nu)
     end
-     
+
     main()
 
 On a computer with a 2.7 GHz Intel Core i7 processor, this produces::

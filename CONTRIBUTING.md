@@ -50,24 +50,24 @@ For developers who need to wrap C libraries so that they can be called from Juli
 
 Julia's documentation is stored in the `doc` directory, and like everything else can be modified using `git`. However, for small changes one can also use GitHub's web interface:
 
-- Navigate to https://github.com/JuliaLang/julia 
-- Click `doc` 
+- Navigate to https://github.com/JuliaLang/julia
+- Click `doc`
 - If you want to modify an entry in the help for Julia's standard library, click `stdlib`
 - Pick the file you want to edit (for example, `base.rst`)
 - Select the `master` branch (if not browsing it already)
-- Click "Edit" 
-- Click on the icon that looks like a fullscreen symbol ("Zen" mode) 
+- Click "Edit"
+- Click on the icon that looks like a fullscreen symbol ("Zen" mode)
 - Search for the function you want to change
-- Make your changes 
-- Exit Zen mode 
-- Provide a title, and optionally a longer description of your change 
+- Make your changes
+- Exit Zen mode
+- Provide a title, and optionally a longer description of your change
 - Submit your change
 
 Julia's documentation is built with [Sphinx](http://sphinx-doc.org/contents.html), which supports (and Julia's docs rely heavily on) [ReST directives](http://docutils.sourceforge.net/docs/ref/rst/directives.html). To build the documentation locally, run
 
     make -C doc html
 
-or 
+or
 
     make -C doc latex
 
@@ -86,7 +86,7 @@ Add new code to Julia's base libraries as follows:
  1. Edit the appropriate file in the `base/` directory, or add new files if necessary. Create tests for your functionality and add them to files in the `test/` directory. If you're editing C or Scheme code, most likely it lives in `src/` or one of its subdirectories, although some aspects of Julia's REPL initialization live in `ui/`.
 
  2. Add any new files to `sysimg.jl` in order to build them into the Julia system image.
- 
+
  3. Add any necessary export symbols in `exports.jl`.
 
  4. Include your tests in `test/Makefile` and `test/runtests.jl`.

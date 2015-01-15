@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 *************************************
- Integers and Floating-Point Numbers  
+ Integers and Floating-Point Numbers
 *************************************
 
 Integers and floating-point values are the basic building blocks of
@@ -97,7 +97,7 @@ is 32-bit or 64-bit.::
     # 64-bit system:
     julia> WORD_SIZE
     64
- 
+
 Julia also defines the types :class:`Int` and :class:`UInt`, which are aliases for the
 system's signed and unsigned native integer types respectively.::
 
@@ -217,7 +217,7 @@ a wraparound behavior:
 
     julia> x = typemax(Int64)
     9223372036854775807
-    
+
     julia> x + 1
     -9223372036854775808
 
@@ -338,10 +338,10 @@ be seen using the ``bits`` function: :
 
     julia> 0.0 == -0.0
     true
-    
+
     julia> bits(0.0)
     "0000000000000000000000000000000000000000000000000000000000000000"
-    
+
     julia> bits(-0.0)
     "1000000000000000000000000000000000000000000000000000000000000000"
 
@@ -354,7 +354,7 @@ There are three specified standard floating-point values that do not
 correspond to any point on the real number line:
 
 =========== =========== ===========  ================= =================================================================
-Special value                        Name              Description 
+Special value                        Name              Description
 -----------------------------------  ----------------- -----------------------------------------------------------------
 ``Float16`` ``Float32`` ``Float64``
 =========== =========== ===========  ================= =================================================================
@@ -481,19 +481,19 @@ argument respectively: :
 
     julia> x = 1.25f0
     1.25f0
-    
+
     julia> nextfloat(x)
     1.2500001f0
-    
+
     julia> prevfloat(x)
     1.2499999f0
-    
+
     julia> bits(prevfloat(x))
     "00111111100111111111111111111111"
-    
+
     julia> bits(x)
     "00111111101000000000000000000000"
-    
+
     julia> bits(nextfloat(x))
     "00111111101000000000000000000001"
 
@@ -507,7 +507,7 @@ If a number doesn't have an exact floating-point representation, it must be
 rounded to an appropriate representable value, however, if wanted, the manner
 in which this rounding is done can be changed according to the rounding modes
 presented in the `IEEE 754 standard <http://en.wikipedia.org/wiki/IEEE_754-2008>`_::
-    
+
 
     julia> 1.1 + 0.1
     1.2000000000000002
@@ -560,13 +560,13 @@ computation, and also in the following references:
 Arbitrary Precision Arithmetic
 ------------------------------
 
-To allow computations with arbitrary-precision integers and floating point numbers, 
-Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively. 
-The :class:`BigInt` and :class:`BigFloat` types are available in Julia for arbitrary precision 
-integer and floating point numbers respectively. 
+To allow computations with arbitrary-precision integers and floating point numbers,
+Julia wraps the `GNU Multiple Precision Arithmetic Library (GMP) <https://gmplib.org>`_ and the `GNU MPFR Library <http://www.mpfr.org>`_, respectively.
+The :class:`BigInt` and :class:`BigFloat` types are available in Julia for arbitrary precision
+integer and floating point numbers respectively.
 
-Constructors exist to create these types from primitive numerical types, or from :class:`AbstractString`. 
-Once created, they participate in arithmetic with all other numeric types thanks to Julia's 
+Constructors exist to create these types from primitive numerical types, or from :class:`AbstractString`.
+Once created, they participate in arithmetic with all other numeric types thanks to Julia's
 :ref:`type promotion and conversion mechanism <man-conversion-and-promotion>`. :
 
 .. doctest::
@@ -593,19 +593,19 @@ However, type promotion between the primitive types above and
 
     julia> x = typemin(Int64)
     -9223372036854775808
-    
+
     julia> x = x - 1
     9223372036854775807
-    
+
     julia> typeof(x)
     Int64
 
     julia> y = BigInt(typemin(Int64))
     -9223372036854775808
-    
+
     julia> y = y - 1
     -9223372036854775809
-    
+
     julia> typeof(y)
     BigInt (constructor with 10 methods)
 
@@ -751,7 +751,7 @@ Examples:
 
     julia> zero(Float32)
     0.0f0
-    
+
     julia> zero(1.0)
     0.0
 

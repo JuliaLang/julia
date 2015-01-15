@@ -138,18 +138,18 @@ Alternatively, if you have already allocated the array you can generate a thin w
 
     double *existingArray = (double*)malloc(sizeof(double)*10);
     jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
-    
+
 The last argument is a boolean indicating whether Julia should take ownership of the data. If this argument is non-zero, the GC will call ``free`` on the data pointer when the array is no longer referenced.
 
 In order to access the data of x, we can use ``jl_array_data``::
 
     double *xData = (double*)jl_array_data(x);
-    
+
 Now we can fill the array::
 
     for(size_t i=0; i<jl_array_len(x); i++)
         xData[i] = i;
-      
+
 Now let us call a Julia function that performs an in-place operation on ``x``::
 
     jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");

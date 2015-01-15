@@ -12,17 +12,14 @@ file_patterns='
 *.jl
 *.lsp
 *.scm
+*.inc
+*.make
+*.md
+*.rst
+*.sh
+*.yml
+*Makefile
 '
-
-# These patterns are disabled until the respective source files are
-# corrected:
-# *.inc
-# *.make
-# *.md
-# *.rst
-# *.sh
-# *.yml
-# *Makefile
 
 # TODO: Look also for trailing empty lines, and missing '\n' after the
 # last line

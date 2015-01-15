@@ -1,7 +1,7 @@
 .. _man-calling-c-and-fortran-code:
 
 ****************************
- Calling C and Fortran Code  
+ Calling C and Fortran Code
 ****************************
 
 Though most code can be written in Julia, there are many high-quality,
@@ -26,7 +26,7 @@ possible to perform whole-program optimizations that can even optimize
 across this boundary, but Julia does not yet support that. In the
 future, however, it may do so, yielding even greater performance gains.)
 
-Shared libraries and functions are referenced by a tuple of the 
+Shared libraries and functions are referenced by a tuple of the
 form ``(:function, "library")`` or ``("function", "library")`` where ``function``
 is the C-exported function name. ``library`` refers to the shared library
 name: shared libraries available in the (platform-specific) load path
@@ -304,7 +304,7 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 
 For string arguments (``char*``) the Julia type should be ``Ptr{UInt8}``,
 not ``ASCIIString``. C functions that take an argument of the type ``char**``
-can be called by using a ``Ptr{Ptr{UInt8}}`` type within Julia. For example, 
+can be called by using a ``Ptr{Ptr{UInt8}}`` type within Julia. For example,
 C functions of the form::
 
     int main(int argc, char **argv);
@@ -394,7 +394,7 @@ the ccall. ccall automatically arranges that all of its arguments will be
 preserved from garbage collection until the call returns. If a C API will
 store a reference to memory allocated by Julia, after the ccall returns, you
 must arrange that the object remains visible to the garbage collector. The
-suggested way to handle this is to make a global variable of type 
+suggested way to handle this is to make a global variable of type
 ``Array{Any,1}`` to hold these values, until C interface notifies you that
 it is finished with them.
 
@@ -405,10 +405,10 @@ of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
-The garbage collector does not guarantee any order of finalization. That is, if ``a`` 
-contained a reference to ``b`` and both ``a`` and ``b`` are due for garbage 
+The garbage collector does not guarantee any order of finalization. That is, if ``a``
+contained a reference to ``b`` and both ``a`` and ``b`` are due for garbage
 collection, there is no guarantee that ``b`` would be finalized after ``a``. If
-proper finalization of ``a`` depends on ``b`` being valid, it must be handled in 
+proper finalization of ``a`` depends on ``b`` being valid, it must be handled in
 other ways.
 
 
@@ -443,7 +443,7 @@ Calling Convention
 
 The second argument to ``ccall`` can optionally be a calling convention
 specifier (immediately preceding return type). Without any specifier,
-the platform-default C calling convention is used. Other supported 
+the platform-default C calling convention is used. Other supported
 conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
 For example (from base/libc.jl)::
 
@@ -543,7 +543,7 @@ For more details on how to pass callbacks to C libraries, see this
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_ 
+Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_
 and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
 
 Handling Platform Variations
@@ -552,7 +552,7 @@ Handling Platform Variations
 When dealing with platform libraries, it is often necessary to provide special cases
 for various platforms. The variable ``OS_NAME`` can be used to write these special
 cases. Additionally, there are several macros intended to make this easier:
-``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that linux and osx are mutually 
+``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that linux and osx are mutually
 exclusive subsets of unix. Their usage takes the form of a ternary conditional
 operator, as demonstrated in the following examples.
 

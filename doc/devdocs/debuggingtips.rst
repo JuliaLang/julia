@@ -51,7 +51,7 @@ Another useful frame is ``to_function(jl_lambda_info_t *li, bool cstyle)``. The 
    #2  0x00007ffff7928bf7 in to_function (li=0x2812060, cstyle=false) at codegen.cpp:584
    584	        abort();
    (gdb) p jl_(jl_uncompress_ast(li,li.ast))
-   
+
 Inserting breakpoints upon certain conditions
 ---------------------------------------------
 

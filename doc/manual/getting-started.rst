@@ -1,7 +1,7 @@
 .. _man-getting-started:
 
 *****************
- Getting Started  
+ Getting Started
 *****************
 
 Julia installation is straightforward, whether using precompiled
@@ -75,11 +75,11 @@ passwordless ``ssh`` login, with Julia installed at the same location as the
 current host. Each machine definition takes the form
 ``[count*][user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user,
 ``port`` to the standard ssh port. ``count`` is the number of workers to spawn
-on the node, and defaults to 1. The optional ``bind-to bind_addr[:port]`` 
-specifies the ip-address and port that other workers should use to 
+on the node, and defaults to 1. The optional ``bind-to bind_addr[:port]``
+specifies the ip-address and port that other workers should use to
 connect to this worker.
-    
-    
+
+
 If you have code that you want executed whenever julia is run, you can
 put it in ``~/.juliarc.jl``:
 
@@ -92,7 +92,7 @@ put it in ``~/.juliarc.jl``:
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
-    
+
     ...
 
 .. raw:: latex
@@ -116,7 +116,7 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -p <n>                   Run n local processes
      --machinefile <file>     Run processes on hosts listed in <file>
-               
+
      -i                       Force isinteractive() to be true
      --no-history-file        Don't load or save history
      -f, --no-startup         Don't load ~/.juliarc.jl
@@ -124,7 +124,7 @@ those available for the ``perl`` and ``ruby`` programs::
      --color={yes|no}         Enable or disable color text
 
      --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation
-                     
+
      --code-coverage={none|user|all}, --code-coverage
                               Count executions of source lines (omitting setting is equivalent to 'user')
      --track-allocation={none|user|all}

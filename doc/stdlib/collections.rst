@@ -418,7 +418,7 @@ Iterable Collections
       14
 
    The associativity of the reduction is implementation-dependent. Use
-   :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed left or 
+   :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed left or
    right associativity.
 
 .. function:: mapreduce(f, op, itr)

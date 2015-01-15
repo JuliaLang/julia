@@ -8,17 +8,17 @@ A variable, in Julia, is a name associated (or bound) to a value. It's useful wh
 .. doctest::
 
     # Assign the value 10 to the variable x
-    julia> x = 10 
+    julia> x = 10
     10
-    
+
     # Doing math with x's value
     julia> x + 1
     11
-    
+
     # Reassign x's value
-    julia> x = 1 + 1 
+    julia> x = 1 + 1
     2
-    
+
     # You can assign values of other types, like strings of text
     julia> x = "Hello World!"
     "Hello World!"
@@ -63,7 +63,7 @@ Unicode names (in UTF-8 encoding) are allowed:
     julia> δ = 0.00001
     1.0e-5
 
-    julia> 안녕하세요 = "Hello" 
+    julia> 안녕하세요 = "Hello"
     "Hello"
 
 In the Julia REPL and several other Julia editing environments, you
@@ -82,21 +82,21 @@ Julia will even let you redefine built-in constants and functions if needed:
 
     julia> pi
     π = 3.1415926535897...
-    
+
     julia> pi = 3
     Warning: imported binding for pi overwritten in module Main
     3
-    
+
     julia> pi
     3
-    
+
     julia> sqrt(100)
     10.0
-    
+
     julia> sqrt = 4
     Warning: imported binding for sqrt overwritten in module Main
     4
-    
+
 However, this is obviously not recommended to avoid potential confusion.
 
 Allowed Variable Names
@@ -128,7 +128,7 @@ statements:
 
     julia> else = false
     ERROR: syntax: unexpected "else"
-    
+
     julia> try = "No"
     ERROR: syntax: unexpected "="
 
@@ -146,7 +146,7 @@ adopt the following conventions:
   shown with upper camel case instead of underscores.
 - Names of ``function``\ s and ``macro``\s are in lower case, without
   underscores.
-- Functions that write to their arguments have names that end in ``!``. 
+- Functions that write to their arguments have names that end in ``!``.
   These are sometimes called "mutating" or "in-place" functions because
   they are intended to produce changes in their arguments after the
   function is called, not just return a value.

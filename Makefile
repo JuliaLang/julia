@@ -275,7 +275,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-endif	
+endif
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
 	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
@@ -295,7 +295,7 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
-	# Copy in beautiful new man page 
+	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/
