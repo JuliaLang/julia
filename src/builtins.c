@@ -402,7 +402,7 @@ JL_CALLABLE(jl_f_apply)
             }
         }
         if (jl_is_tuple(args[1])) {
-            return jl_apply(f, &jl_tupleref(args[1],0), jl_tuple_len(args[1]));
+            return jl_apply(f, jl_tuple_data(args[1]), jl_tuple_len(args[1]));
         }
     }
     size_t n=0, i, j;
@@ -986,7 +986,7 @@ JL_CALLABLE(jl_f_invoke)
         jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
     jl_check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]), "invoke");
-    if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
+    if (!jl_tuple_subtype(&args[2], nargs-2, jl_tuple_data(args[1]),
                           jl_tuple_len(args[1]), 1))
         jl_error("invoke: argument type error");
     return jl_gf_invoke((jl_function_t*)args[0],

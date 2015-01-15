@@ -1441,7 +1441,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
     else {
         assert(jl_is_tuple(tvars));
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     for(int tk=0; tk < tvarslen; tk++) {
@@ -1710,7 +1710,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
     // NOTE: callers are supposed to root these arguments, but there are
     // several uses that don't, so root here just to be safe.
     JL_GC_PUSH1(&params);
-    jl_value_t *t = jl_apply_type_(tc, &jl_tupleref(params,0), jl_tuple_len(params));
+    jl_value_t *t = jl_apply_type_(tc, jl_tuple_data(params), jl_tuple_len(params));
     JL_GC_POP();
     return t;
 }
@@ -2147,8 +2147,8 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             }
         }
         if (jl_is_tuple(b)) {
-            return jl_tuple_subtype_(&jl_tupleref(a,0),jl_tuple_len(a),
-                                     &jl_tupleref(b,0),jl_tuple_len(b),
+            return jl_tuple_subtype_(jl_tuple_data(a),jl_tuple_len(a),
+                                     jl_tuple_data(b),jl_tuple_len(b),
                                      ta, invariant);
         }
     }
@@ -2400,8 +2400,8 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
             return tuple_all_morespecific((jl_tuple_t*)a, jl_tupleref(tp,1), invariant);
         }
         if (jl_is_tuple(b)) {
-            return jl_tuple_morespecific_(&jl_tupleref(a,0),jl_tuple_len(a),
-                                          &jl_tupleref(b,0),jl_tuple_len(b),
+            return jl_tuple_morespecific_(jl_tuple_data(a),jl_tuple_len(a),
+                                          jl_tuple_data(b),jl_tuple_len(b),
                                           invariant);
         }
     }

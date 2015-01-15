@@ -351,7 +351,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *bt=NULL;
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -381,7 +381,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     else {
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -464,7 +464,7 @@ static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx
 {
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
+                                      jl_tuple_data(ctx->sp),
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bitstype(bt))
         jl_errorf("%s: expected bits type as first argument", fname);
