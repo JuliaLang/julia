@@ -35,6 +35,19 @@ Writing functions is better style. It leads to more reusable code and
 clarifies what steps are being done, and what their inputs and outputs
 are.
 
+**NOTE:**  All code in the REPL is evaluated in global scope, so a variable
+defined and assigned at toplevel will be a **global** variable.
+
+In the following REPL session::
+
+    julia> x = 1.0
+
+is equivalent to::
+
+    julia> global y = 1.0
+
+so all the performance issues discussed previously apply.
+
 Measure performance with :obj:`@time` and pay attention to memory allocation
 ----------------------------------------------------------------------------
 
