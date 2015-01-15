@@ -1114,3 +1114,14 @@ Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
 Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
 Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
 @test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
+
+# issue #9781
+# float(SubString) wasn't tolerant of trailing whitespace, which was different
+# to "normal" strings. This also checks we aren't being too tolerant and allowing
+# any arbitrary trailing characters.
+@test float64("1\n") == 1.0
+@test float64(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float64(split("0,1 X\n",","))[2]
+@test float32("1\n") == 1.0
+@test float32(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float32(split("0,1 X\n",","))[2]
