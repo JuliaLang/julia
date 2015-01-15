@@ -982,8 +982,8 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     alg = ((nI - avgM) > 2^8) ? 1 :
           ((avgM - nI) > 2^10) ? 0 : 2
 
-    (alg == 0) ? getindex_I_sorted_binary_A(A, I, J) :
-    (alg == 1) ? getindex_I_sorted_binary_I(A, I, J) :
+    (alg == 0) ? getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? getindex_I_sorted_bsearch_I(A, I, J) :
     getindex_I_sorted_linear(A, I, J)
 end
 
