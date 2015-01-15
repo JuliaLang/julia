@@ -50,6 +50,9 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
+check-whitespace:
+	bin/check-whitespace.sh
+
 release-candidate: release test
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
@@ -429,7 +432,8 @@ distcleanall: cleanall
 	@$(MAKE) -C doc cleanall
 	rm -fr $(build_prefix)
 
-.PHONY: default debug release julia-debug julia-release \
+.PHONY: default debug release check-whitespace release-candidate \
+	julia-debug julia-release \
 	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules
