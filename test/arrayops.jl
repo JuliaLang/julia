@@ -29,6 +29,21 @@ b = a+a
 @test isequal([1,2,5].<<[1,2,5], [2,8,160])
 @test isequal([10,20,50].>>[1,2,5], [5,5,1])
 
+a = ones(2)
+b = ones(2,2)
+c = ones(2,2,2)
+d = ones(2,2,2,2)
+for T in (Int32, Int64, Int128, UInt16, UInt32, UInt64, UInt128, Float16, Float32, Float64, BigInt, BigFloat, Rational)
+    @test ones(T(2)) == a
+    @test ones(T(2),T(2)) == b
+    @test ones(T(2),T(2),T(2)) == c
+    @test ones(T(2),T(2),T(2),T(2)) == d
+
+    @test_throws InexactError ones(T(2.5))
+    @test_throws InexactError ones(T(2.5),T(2.5))
+    @test_throws InexactError ones(T(2.5),T(2.5),T(2.5))
+    @test_throws InexactError ones(T(2.5),T(2.5),T(2.5),T(2.5))
+end
 
 a = ones(2,2)
 a[1,1] = 1
