@@ -403,7 +403,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = LowerTriangular(randn(3,3))
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)

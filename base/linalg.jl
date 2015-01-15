@@ -30,7 +30,8 @@ export
     SVD,
     Hermitian,
     Symmetric,
-    Triangular,
+    LowerTriangular,
+    UpperTriangular,
     Diagonal,
     UniformScaling,
 

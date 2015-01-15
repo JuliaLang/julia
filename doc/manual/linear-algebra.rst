@@ -46,7 +46,8 @@ for them in LAPACK are available.
 
 ======================= ==================================================================================
 :class:`Hermitian`      `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
-:class:`Triangular`     Upper/lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`UpperTriangular Upper `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`LowerTriangular Lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
 :class:`Tridiagonal`    `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
 :class:`SymTridiagonal` Symmetric tridiagonal matrix
 :class:`Bidiagonal`     Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
@@ -64,7 +65,9 @@ Elementary operations
 | :class:`Hermitian`      |       |       |       |   MV  | :func:`inv`,                   |
 |                         |       |       |       |       | :func:`sqrtm`, :func:`expm`    |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
-| :class:`Triangular`     |       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
+| :class:`UpperTriangular`|       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
++-------------------------+-------+-------+-------+-------+--------------------------------+
+| :class:`LowerTriangular`|       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
 | :class:`SymTridiagonal` |   M   |   M   |  MS   |   MV  | :func:`eigmax`, :func:`eigmin` |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
@@ -96,7 +99,9 @@ Matrix factorizations
 +=========================+========+=============+=================+=================+=============+=================+
 | :class:`Hermitian`      |   HE   |             |       ARI       |                 |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
-| :class:`Triangular`     |   TR   |             |                 |                 |             |                 |
+| :class:`UpperTriangular`|   TR   |      A      |        A        |       A         |             |                 |
++-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
+| :class:`LowerTriangular`|   TR   |      A      |        A        |       A         |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
 | :class:`SymTridiagonal` |   ST   |      A      |       ARI       |       AV        |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
