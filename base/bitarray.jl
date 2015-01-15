@@ -1551,8 +1551,8 @@ maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 
 map(f::Callable, A::BitArray) = map(specialized_bitwise_unary(f), A)
 map(f::Callable, A::BitArray, B::BitArray) = map(specialized_bitwise_binary(f), A, B)
-map(f::BitFunc{1}, A::BitArray) = map!(f, similar(A), A)
-map(f::BitFunc{2}, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
+map(f::BitFunctorUnary, A::BitArray) = map!(f, similar(A), A)
+map(f::BitFunctorBinary, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
 
 map!(f::Callable, A::BitArray) = map!(f, A, A)
 map!(f::Callable, dest::BitArray, A::BitArray) = map!(specialized_bitwise_unary(f), dest, A)
@@ -1561,7 +1561,7 @@ map!(f::Callable, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_b
 # If we were able to specialize the function to a known bitwise operation,
 # map across the chunks. Otherwise, fall-back to the AbstractArray method that
 # iterates bit-by-bit.
-function map!(f::BitFunc{1}, dest::BitArray, A::BitArray)
+function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
     size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
     length(A) == 0 && return dest
     for i=1:length(A.chunks)-1
@@ -1570,7 +1570,7 @@ function map!(f::BitFunc{1}, dest::BitArray, A::BitArray)
     dest.chunks[end] = f(A.chunks[end]) & _msk_end(A)
     dest
 end
-function map!(f::BitFunc{2}, dest::BitArray, A::BitArray, B::BitArray)
+function map!(f::BitFunctorBinary, dest::BitArray, A::BitArray, B::BitArray)
     size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
     length(A) == 0 && return dest
     for i=1:length(A.chunks)-1

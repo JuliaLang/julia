@@ -7,6 +7,9 @@
 
 abstract Func{N}
 
+immutable IdFun <: Func{1} end
+call(::IdFun, x) = x
+
 immutable AbsFun <: Func{1} end
 call(::AbsFun, x) = abs(x)
 
@@ -18,6 +21,12 @@ call(::ExpFun, x) = exp(x)
 
 immutable LogFun <: Func{1} end
 call(::LogFun, x) = log(x)
+
+immutable AndFun <: Func{2} end
+call(::AndFun, x, y) = x & y
+
+immutable OrFun <: Func{2} end
+call(::OrFun, x, y) = x | y
 
 immutable AddFun <: Func{2} end
 call(::AddFun, x, y) = x + y
@@ -43,61 +52,55 @@ call(f::UnspecializedFun{2}, x, y) = f.f(x,y)
 
 #### Bitwise operators ####
 
-# A BitFunc is a function that behaves in the same bit-wise manner when applied
+# BitFunctors are functions that behave in the same bit-wise manner when applied
 # to individual bits as well as integers, allowing them to be used in BitArrays
-abstract BitFunc{N} <: Func{N}
 
 # Note that there are 16 possible pure two-argument logical functions,
-# of which six are trivial and two don't exist as a single function in Base:
+# of which eight don't exist as a single function in Base (but six of those are trivial):
 ##############################################################################
 ##  p = TTFF                          ##  p = TTFF                          ##
-##  q = TFTF    function  name        ##  q = TFTF    function  name        ##
+##  q = TFTF    function    bit-op    ##  q = TFTF    function    bit-op    ##
 ##  --------------------------------  ##  --------------------------------- ##
-##      TTTT    (true)    -           ##      FFFF    (false)   -           ##
-##      TTTF    |, max    or          ##      FFFT    ???       (nor)       ##
-##      TTFT    >=, ^     ???         ##      FFTF    <         ???         ##
-##      TTFF    (A)       -           ##      FFTT    (~A)      -           ##
-##      TFTT    <=        implies     ##      FTFF    >         notimplies  ##
-##      TFTF    (B)       -           ##      FTFT    (~B)      -           ##
-##      TFFT    ==        xnor        ##      FTTF    $, !=     xor         ##
-##      TFFF    &, *, min and         ##      FTTT    ???       (nand)      ##
+##      TTTT    (true)      p | ~p    ##      FFFF    (false)    p & ~p     ##
+##      TTTF    |, max      p | q     ##      FFFT    ???        ~(p | q)   ##
+##      TTFT    >=, ^       p | ~q    ##      FFTF    <          ~p & q     ##
+##      TTFF    (p)         p         ##      FFTT    (~p)       ~p         ##
+##      TFTT    <=          ~p | q    ##      FTFF    >          p & ~q     ##
+##      TFTF    (q)         q         ##      FTFT    (~q)       ~q         ##
+##      TFFT    ==          ~(p $ q)  ##      FTTF    $, !=      p $ q      ##
+##      TFFF    &, *, min   p & q     ##      FTTT    ???        ~(p & q)   ##
 ##############################################################################
 
-immutable IdFun <: BitFunc{1} end
-call(::IdFun, x) = x
 
-immutable NotFun <: BitFunc{1} end
-call(::NotFun, x) = ~x
+immutable BitFunctorUnary{T,F} <: Func{1} end
+call(::BitFunctorUnary{true,  true},  p) = p | ~p # Must work for bits and ints
+call(::BitFunctorUnary{false, false}, p) = p & ~p # LLVM figures them out nicely
+call(::BitFunctorUnary{true,  false}, p) =  p
+call(::BitFunctorUnary{false, true},  p) = ~p
 
-immutable AndFun <: BitFunc{2} end
-call(::AndFun, x, y) = x & y
+immutable BitFunctorBinary{TT,TF,FT,FF} <: Func{2} end
+call(::BitFunctorBinary{true,  true,  true,  true }, p, q) = p | ~p
+call(::BitFunctorBinary{true,  true,  true,  false}, p, q) = p | q
+call(::BitFunctorBinary{true,  true,  false, true }, p, q) = p | ~q
+call(::BitFunctorBinary{true,  true,  false, false}, p, q) = p
+call(::BitFunctorBinary{true,  false, true,  true }, p, q) = ~p | q
+call(::BitFunctorBinary{true,  false, true,  false}, p, q) = q
+call(::BitFunctorBinary{true,  false, false, true }, p, q) = ~(p $ q)
+call(::BitFunctorBinary{true,  false, false, false}, p, q) = p & q
 
-immutable OrFun <: BitFunc{2} end
-call(::OrFun, x, y) =  x | y
-
-immutable POrNotQFun <: BitFunc{2} end
-call(::POrNotQFun, x, y) = x | ~y
-
-immutable ImpliesFun <: BitFunc{2} end
-call(::ImpliesFun, x, y) = ~x | y
-
-immutable XNorFun <: BitFunc{2} end
-call(::XNorFun, x, y) = ~(x $ y)
-
-immutable NotPAndQFun <: BitFunc{2} end
-call(::NotPAndQFun, x, y) = ~x & y
-
-immutable NotImpliesFun <: BitFunc{2} end
-call(::NotImpliesFun, x, y) = x & ~y
-
-immutable XOrFun <: BitFunc{2} end
-call(::XOrFun, x, y) = x $ y
+call(::BitFunctorBinary{false, false, false, false}, p, q) = p & ~p
+call(::BitFunctorBinary{false, false, false, true }, p, q) = ~(p | q)
+call(::BitFunctorBinary{false, false, true,  false}, p, q) = ~p & q
+call(::BitFunctorBinary{false, false, true,  true }, p, q) = ~p
+call(::BitFunctorBinary{false, true,  false, false}, p, q) = p & ~q
+call(::BitFunctorBinary{false, true,  false, true }, p, q) = ~q
+call(::BitFunctorBinary{false, true,  true,  false}, p, q) = p $ q
+call(::BitFunctorBinary{false, true,  true,  true }, p, q) = ~(p & q)
 
 # Specializations by value
 
 function specialized_unary(f::Callable)
     is(f, identity) ? IdFun()   :
-    is(f, ~)        ? NotFun()  :
     is(f, abs)      ? AbsFun()  :
     is(f, abs2)     ? Abs2Fun() :
     is(f, exp)      ? ExpFun()  :
@@ -113,18 +116,20 @@ function specialized_binary(f::Callable)
 end
 
 function specialized_bitwise_unary(f::Callable)
-    is(f, !) | is(f, ~) ? NotFun() :
-    is(f, identity)     ? IdFun()  :
+    is(f, identity)     ? BitFunctorUnary{true,  false}() :
+    is(f, !) | is(f, ~) ? BitFunctorUnary{false, true }() :
+    is(f, one)          ? BitFunctorUnary{true,  true }() :
+    is(f, zero)         ? BitFunctorUnary{false, false}() :
     UnspecializedFun{1}(f)
 end
 function specialized_bitwise_binary(f::Callable)
-    is(f, &)  | is(f, *) | is(f, min) ? AndFun()        :
-    is(f, |)  | is(f, max)            ? OrFun()         :
-    is(f, $)  | is(f, !=)             ? XOrFun()        :
-    is(f, >=) | is(f, ^)              ? POrNotQFun()    :
-    is(f, <=)                         ? ImpliesFun()    :
-    is(f, ==)                         ? XNorFun()       :
-    is(f, <)                          ? NotPAndQFun()   :
-    is(f, >)                          ? NotImpliesFun() :
+    is(f, &)  | is(f, *) | is(f, min) ? BitFunctorBinary{true,  false, false, false}() :
+    is(f, |)  | is(f, max)            ? BitFunctorBinary{true,  true,  true,  false}() :
+    is(f, $)  | is(f, !=)             ? BitFunctorBinary{false, true,  true,  false}() :
+    is(f, >=) | is(f, ^)              ? BitFunctorBinary{true,  true,  false, true }() :
+    is(f, <=)                         ? BitFunctorBinary{true,  false, true,  true }() :
+    is(f, ==)                         ? BitFunctorBinary{true,  false, false, true }() :
+    is(f, <)                          ? BitFunctorBinary{false, false, true,  false}() :
+    is(f, >)                          ? BitFunctorBinary{false, true,  false, false}() :
     UnspecializedFun{2}(f)
 end
