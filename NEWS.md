@@ -154,6 +154,8 @@ Library improvements
 
   * copy(DArray) will now make a copy of the DArray ([#9745])
 
+  * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
+
 Deprecated or removed
 ---------------------
 
