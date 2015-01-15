@@ -171,7 +171,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return e;
     }
     jl_expr_t *ex = (jl_expr_t*)e;
-    jl_value_t **args = &jl_cellref(ex->args,0);
+    jl_value_t **args = jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym ||  ex->head == call1_sym) {
         if (jl_is_lambda_info(args[0])) {

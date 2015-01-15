@@ -182,7 +182,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
     uptrint_t uid;
     if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         while (1) {
-            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
+            jl_methlist_t **pml = &((jl_methlist_t**)jl_array_data(*pa))[uid & ((*pa)->nrows-1)];
             if (*pml == NULL || *pml == JL_NULL) {
                 *pml = (jl_methlist_t*)JL_NULL;
                 return pml;
@@ -225,7 +225,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
         ml = mt->cache;
  mt_assoc_bt_lkup:
     while (ml != JL_NULL) {
-        if (cache_match_by_type(&jl_tupleref(types,0), jl_tuple_len(types),
+        if (cache_match_by_type(jl_tuple_data(types), jl_tuple_len(types),
                                 (jl_tuple_t*)ml->sig, ml->va)) {
             return ml->func;
         }
@@ -907,7 +907,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
         tvarslen = 1;
     }
     else {
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     int l = jl_tuple_len(*penv);
@@ -1015,8 +1015,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
                 ti = (jl_value_t*)jl_bottom_type;
             }
         }
-        else if (jl_tuple_subtype(&jl_tupleref(tt,0), nargs,
-                                  &jl_tupleref(m->sig,0),
+        else if (jl_tuple_subtype(jl_tuple_data(tt), nargs,
+                                  jl_tuple_data(m->sig),
                                   jl_tuple_len(m->sig), 0)) {
             break;
         }
@@ -1050,7 +1050,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     }
     if (i < jl_tuple_len(tt)) {
         newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                       &jl_tupleref(env,0),
+                                                       jl_tuple_data(env),
                                                        jl_tuple_len(env)/2);
     }
     else {
@@ -1321,14 +1321,14 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     remove_conflicting(&mt->cache, (jl_value_t*)type);
     if (mt->cache_arg1 != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_arg1); i++) {
-            jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_arg1,i);
+            jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_arg1))[i];
             if (*pl && *pl != JL_NULL)
                 remove_conflicting(pl, (jl_value_t*)type);
         }
     }
     if (mt->cache_targ != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_targ); i++) {
-            jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_targ,i);
+            jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_targ))[i];
             if (*pl && *pl != JL_NULL)
                 remove_conflicting(pl, (jl_value_t*)type);
         }
@@ -1369,7 +1369,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
             a = jl_typeof(ai);
         }
         else {
-            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(ai,0), jl_tuple_len(ai));
+            a = (jl_value_t*)arg_type_tuple(jl_tuple_data(ai), jl_tuple_len(ai));
         }
         jl_tupleset(tt, i, a);
     }
@@ -1458,7 +1458,7 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_tuple_t *tvars)
         tvarslen = 1;
     }
     else {
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     size_t i;
@@ -1658,8 +1658,8 @@ DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_tuple_t *types)
             env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
             if (env != (jl_value_t*)jl_false) break;
         }
-        else if (jl_tuple_subtype(&jl_tupleref(types,0), typelen,
-                                  &jl_tupleref(m->sig,0),
+        else if (jl_tuple_subtype(jl_tuple_data(types), typelen,
+                                  jl_tuple_data(m->sig),
                                   jl_tuple_len(m->sig), 0)) {
             break;
         }
@@ -1742,7 +1742,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
             if (i < jl_tuple_len(tt)) {
                 newsig =
                     (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                          &jl_tupleref(tpenv,0),
+                                                          jl_tuple_data(tpenv),
                                                           jl_tuple_len(tpenv)/2);
             }
         }
@@ -1902,7 +1902,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 }
                 if (len == 1) {
                     t = jl_alloc_cell_1d(1);
-                    jl_cellref(t,0) = (jl_value_t*)matc;
+                    jl_cellset(t, 0, (jl_value_t*)matc);
                 }
                 else {
                     jl_cell_1d_push(t, (jl_value_t*)matc);

@@ -2943,7 +2943,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return literal_pointer_val(expr);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
-    jl_value_t **args = &jl_cellref(ex->args,0);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy
