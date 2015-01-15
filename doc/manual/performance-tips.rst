@@ -44,7 +44,7 @@ In the following REPL session::
 
 is equivalent to::
 
-    julia> global y = 1.0
+    julia> global x = 1.0
 
 so all the performance issues discussed previously apply.
 
