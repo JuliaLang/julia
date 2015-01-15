@@ -464,6 +464,15 @@ export
     √,
     ∛,
 
+# fast math
+    add_fast,
+    sub_fast,
+    mul_fast,
+    div_fast,
+    rem_fast,
+    mod_fast,
+    cmp_fast,
+
 # specfun
     airy,
     airyai,
@@ -1417,6 +1426,7 @@ export
     @deprecate,
     @boundscheck,
     @inbounds,
+    @fastmath,
     @simd,
     @label,
     @goto,

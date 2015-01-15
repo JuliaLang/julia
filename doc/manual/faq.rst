@@ -779,6 +779,59 @@ which is quite different. It is the empty (or "bottom") type, a type with no val
 and no subtypes (except itself). This is now written as ``Union()`` (an empty union
 type). You will generally not need to use this type.
 
+Memory
+------
+
+Why does ``x += y`` allocate memory when ``x`` and ``y`` are arrays?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+In julia, ``x += y`` gets replaced during parsing by ``x = x + y``.
+For arrays, this has the consequence that, rather than storing the
+result in the same location in memory as ``x``, it allocates a new
+array to store the result.
+
+While this behavior might surprise some, the choice is deliberate. The
+main reason is the presence of ``immutable`` objects within julia,
+which cannot change their value once created.  Indeed, a number is an
+immutable object; the statements ``x = 5; x += 1`` do not modify the
+meaning of ``5``, they modify the value bound to ``x``. For an
+immutable, the only way to change the value is to reassign it.
+
+To amplify a bit further, consider the following function::
+
+   function power_by_squaring(x, n::Int)
+       ispow2(n) || error("This implementation only works for powers of 2")
+       while n >= 2
+           x *= x
+           n >>= 1
+       end
+       x
+   end
+
+After a call like ``x = 5; y = power_by_squaring(x, 4)``, you would
+get the expected result: ``x == 5 && y == 625``.  However, now suppose
+that ``*=``, when used with matrices, instead mutated the left hand
+side.  There would be two problems:
+
+- For general square matrices, ``A = A*B`` cannot be implemented
+  without temporary storage: ``A[1,1]`` gets computed and stored on
+  the left hand side before you're done using it on the right hand
+  side.
+
+- Suppose you were willing to allocate a temporary for the computation
+  (which would eliminate most of the point of making ``*=`` work
+  in-place); if you took advantage of the mutability of ``x``, then
+  this function would behave differently for mutable vs. immutable
+  inputs. In particular, for immutable ``x``, after the call you'd
+  have (in general) ``y != x``, but for mutable ``x`` you'd have ``y
+  == x``.
+
+Because supporting generic programming is deemed more important than
+potential performance optimizations that can be achieved by other
+means (e.g., using explicit loops), operators like ``+=`` and ``*=``
+work by rebinding new values.
+
+
 Julia Releases
 ----------------
 
@@ -801,75 +854,3 @@ When are deprecated functions removed?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Deprecated functions are removed after the subsequent release. For example, functions marked as deprecated in the 0.1 release will not be available starting with the 0.2 release.
-
-Developing Julia
-----------------
-
-How do I debug julia's C code? (running the julia REPL from within a debugger like gdb)
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-First, you should build the debug version of julia with ``make
-debug``.  Below, lines starting with ``(gdb)`` mean things you should
-type at the gdb prompt.
-
-From the shell
-^^^^^^^^^^^^^^
-
-The main challenge is that Julia and gdb each need to have their own
-terminal, to allow you to interact with them both.  One approach is to
-use gdb's ``attach`` functionality to debug an already-running julia
-session.  However, on many systems you'll need root access to get this
-to work. What follows is a method that can be implemented with just
-user-level permissions.
-
-The first time you do this, you'll need to define a script, here
-called ``oterm``, containing the following lines::
-
-    ps
-    sleep 600000
-
-Make it executable with ``chmod +x oterm``.
-
-Now:
-
-- From a shell (called shell 1), type ``xterm -e oterm &``. You'll see
-  a new window pop up; this will be called terminal 2.
-
-- From within shell 1, ``gdb julia-debug``. You can find this
-  executable within ``julia/usr/bin``.
-
-- From within shell 1, ``(gdb) tty /dev/pts/#`` where ``#`` is the
-  number shown after ``pts/`` in terminal 2.
-
-- From within shell 1, ``(gdb) run``
-
-- From within terminal 2, issue any preparatory commands in Julia that
-  you need to get to the step you want to debug
-
-- From within shell 1, hit Ctrl-C
-
-- From within shell 1, insert your breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-- From within shell 1, ``(gdb) c`` to resume execution of julia
-
-- From within terminal 2, issue the command that you want to
-  debug. Shell 1 will stop at your breakpoint.
-
-
-Within emacs
-^^^^^^^^^^^^
-
-- ``M-x gdb``, then enter ``julia-debug`` (this is easiest from
-  within julia/usr/bin, or you can specify the full path)
-
-- ``(gdb) run``
-
-- Now you'll see the Julia prompt. Run any commands in Julia you need
-  to get to the step you want to debug.
-
-- Under emacs' "Signals" menu choose BREAK---this will return you to the ``(gdb)`` prompt
-
-- Set a breakpoint, e.g., ``(gdb) b codegen.cpp:2244``
-
-- Go back to the Julia prompt via ``(gdb) c``
-
-- Execute the Julia command you want to see running.

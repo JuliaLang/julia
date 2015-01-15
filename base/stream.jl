@@ -454,9 +454,10 @@ type Timer <: AsyncWork
         disassociate_julia_struct(this.handle)
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0
+            #TODO: this codepath is currently not tested
             c_free(this.handle)
             this.handle = C_NULL
-            error(UVError("uv_make_timer",err))
+            throw(UVError("uv_make_timer",err))
         end
         finalizer(this,uvfinalize)
         this
@@ -876,13 +877,14 @@ function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err
 end
 
-function bind(server::PipeServer, name::ASCIIString)
+function bind(server::PipeServer, name::AbstractString)
     @assert server.status == StatusInit
     err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{UInt8}),
                 server.handle, name)
     if err != 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is currently not tested
+            throw(UVError("bind",err))
         else
             return false
         end
@@ -892,14 +894,14 @@ function bind(server::PipeServer, name::ASCIIString)
 end
 
 
-function listen(path::ByteString)
+function listen(path::AbstractString)
     sock = PipeServer()
     bind(sock, path) || error("could not listen on path $path")
     uv_error("listen", _listen(sock))
     sock
 end
 
-function connect!(sock::Pipe, path::ByteString)
+function connect!(sock::Pipe, path::AbstractString)
     @assert sock.status == StatusInit
     req = c_malloc(_sizeof_uv_connect)
     uv_req_set_data(req,C_NULL)
@@ -907,7 +909,6 @@ function connect!(sock::Pipe, path::ByteString)
     sock.status = StatusConnecting
     sock
 end
-connect!(sock::Pipe, path::AbstractString) = connect(sock,bytestring(path))
 
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)

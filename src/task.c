@@ -74,11 +74,7 @@ static void boundlow(struct _probe_data *p)
 }
 
 // we need this function to exist so we can measure its stack frame!
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static void __declspec(noinline) fill(struct _probe_data *p);
-#else
-static void fill(struct _probe_data *p) __attribute__ ((noinline));
-#endif
+static void NOINLINE_DECL(fill(struct _probe_data *p));
 
 static void fill(struct _probe_data *p)
 {
@@ -166,12 +162,7 @@ void *jl_stackbase;
 static jl_jmp_buf jl_base_ctx; // base context of stack
 #endif
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static void __declspec(noinline)
-#else
-static void __attribute__((noinline))
-#endif
-save_stack(jl_task_t *t)
+static void NOINLINE save_stack(jl_task_t *t)
 {
     if (t->state == done_sym || t->state == failed_sym)
         return;
@@ -190,12 +181,7 @@ save_stack(jl_task_t *t)
     memcpy(buf, (char*)&_x, nb);
 }
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-void __declspec(noinline)
-#else
-void __attribute__((noinline))
-#endif
-restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
+void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
 {
     char *_x = (char*)jl_stackbase - t->ssize;
     if (!p) {
@@ -235,12 +221,7 @@ static void NORETURN finish_task(jl_task_t *t, jl_value_t *resultval)
     abort();
 }
 
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static void __declspec(noinline)
-#else
-static void __attribute__((noinline))
-#endif
-NORETURN start_task()
+static void NOINLINE NORETURN start_task()
 {
     // this runs the first time we switch to a task
     jl_task_t *t = jl_current_task;
@@ -251,12 +232,7 @@ NORETURN start_task()
 }
 
 #ifndef ASM_COPY_STACKS
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-static void __declspec(noinline)
-#else
-static void __attribute__((noinline))
-#endif
-set_base_ctx(char *__stk)
+static void NOINLINE set_base_ctx(char *__stk)
 {
     if (jl_setjmp(jl_base_ctx, 1)) {
         start_task();

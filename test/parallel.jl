@@ -13,6 +13,12 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @fetch begin myid() end
 
 d = drand((200,200), [id_me, id_other])
+dc = copy(d)
+
+@test d == dc                                           # Should be identical
+@spawnat id_other localpart(dc)[1] = 0
+@test fetch(@spawnat id_other localpart(d)[1] != 0) # but not point to the same memory
+
 s = convert(Matrix{Float64}, d[1:150, 1:150])
 a = convert(Matrix{Float64}, d)
 @test a[1:150,1:150] == s

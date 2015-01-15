@@ -311,7 +311,9 @@ such an invalid byte index, an error is thrown:
     ' '
 
 In this case, the character ``∀`` is a three-byte character, so the
-indices 2 and 3 are invalid and the next character's index is 4.
+indices 2 and 3 are invalid and the next character's index is 4; this
+next valid index can be computed by :func:`nextind(s,1) <nextind>`,
+and the next index after that by ``nextind(s,4)`` and so on.
 
 Because of variable-length encodings, the number of characters in a
 string (given by :func:`length(s) <length>`) is not always the same as the last index.

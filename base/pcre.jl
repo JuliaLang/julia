@@ -136,16 +136,14 @@ function exec(regex::Ptr{Void}, extra::Ptr{Void},
               len::Integer, options::Integer,
               ovec::Vector{Int32})
     if offset < 0 || len < offset || len+shift > sizeof(str)
-        error(BoundsError)
+        throw(BoundsError())
     end
     n = ccall((:pcre_exec, :libpcre), Int32,
               (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
               regex, extra, pointer(str.data,shift+1), len,
               offset, options, ovec, length(ovec))
-    if n < -1
-        error("error $n")
-    end
+    n < -1 && error("PCRE.exec error code $n")
     return n > -1
 end
 

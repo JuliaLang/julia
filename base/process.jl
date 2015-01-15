@@ -482,7 +482,8 @@ const SIGPIPE = 13
 function test_success(proc::Process)
     assert(process_exited(proc))
     if proc.exitcode < 0
-        error(UVError("could not start process "*string(proc.cmd), proc.exitcode))
+        #TODO: this codepath is not currently tested
+        throw(UVError("could not start process $(string(proc.cmd))", proc.exitcode))
     end
     proc.exitcode == 0 && (proc.termsignal == 0 || proc.termsignal == SIGPIPE)
 end

@@ -136,7 +136,7 @@ similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
 function reshape(a::AbstractArray, dims::Dims)
     if prod(dims) != length(a)
-        error("dimensions must be consistent with array size")
+        throw(ArgumentError("dimensions must be consistent with array size"))
     end
     copy!(similar(a, dims), a)
 end
@@ -151,10 +151,10 @@ _sub(t::Tuple, s::Tuple) = _sub(tail(t), tail(s))
 
 function squeeze(A::AbstractArray, dims::Dims)
     for i in 1:length(dims)
-        1 <= dims[i] <= ndims(A) || error("squeezed dims must be in range 1:ndims(A)")
-        size(A, dims[i]) == 1 || error("squeezed dims must all be size 1")
+        1 <= dims[i] <= ndims(A) || throw(ArgumentError("squeezed dims must be in range 1:ndims(A)"))
+        size(A, dims[i]) == 1 || throw(ArgumentError("squeezed dims must all be size 1"))
         for j = 1:i-1
-            dims[j] == dims[i] && error("squeezed dims must be unique")
+            dims[j] == dims[i] && throw(ArgumentError("squeezed dims must be unique"))
         end
     end
     d = ()
@@ -261,7 +261,7 @@ copy(a::AbstractArray) = copy!(similar(a), a)
 
 function copy!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(ir_src) || length(jr_dest) != length(jr_src)
-        error("source and destination must have same size")
+        throw(ArgumentError("source and destination must have same size"))
     end
     checkbounds(B, ir_dest, jr_dest)
     checkbounds(A, ir_src, jr_src)
@@ -279,7 +279,7 @@ end
 
 function copy_transpose!{R,S}(B::AbstractVecOrMat{R}, ir_dest::Range{Int}, jr_dest::Range{Int}, A::AbstractVecOrMat{S}, ir_src::Range{Int}, jr_src::Range{Int})
     if length(ir_dest) != length(jr_src) || length(jr_dest) != length(ir_src)
-        error("source and destination must have same size")
+        throw(ArgumentError("source and destination must have same size"))
     end
     checkbounds(B, ir_dest, jr_dest)
     checkbounds(A, ir_src, jr_src)
@@ -448,7 +448,7 @@ slicedim(A::AbstractArray, d::Integer, i) =
     A[[ n==d ? i : (1:size(A,n)) for n in 1:ndims(A) ]...]
 
 function flipdim(A::AbstractVector, d::Integer)
-    d > 0 || error("dimension to flip must be positive")
+    d > 0 || throw(ArgumentError("dimension to flip must be positive"))
     d == 1 || return copy(A)
     reverse(A)
 end
@@ -614,10 +614,12 @@ function hcat{T}(A::AbstractVecOrMat{T}...)
     dense = true
     for j = 1:nargs
         Aj = A[j]
+        if size(Aj, 1) != nrows
+            throw(ArgumentError("number of rows must match"))
+        end
         dense &= isa(Aj,Array)
         nd = ndims(Aj)
         ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows; error("number of rows must match"); end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -644,7 +646,9 @@ function vcat{T}(A::AbstractMatrix{T}...)
     nrows = sum(a->size(a, 1), A)::Int
     ncols = size(A[1], 2)
     for j = 2:nargs
-        if size(A[j], 2) != ncols; error("number of columns must match"); end
+        if size(A[j], 2) != ncols
+            throw(ArgumentError("number of columns must match"))
+        end
     end
     B = similar(full(A[1]), nrows, ncols)
     pos = 1
@@ -679,7 +683,7 @@ function cat(catdims, X...)
         for d = 1:ndimsC
             currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
             if dims2cat[d]==0
-                dimsC[d] == currentdim || error("mismatch in dimension ", d)
+                dimsC[d] == currentdim || throw(DimensionMismatch("mismatch in dimension $(d)"))
             else
                 dimsC[d] += currentdim
                 catsizes[i,dims2cat[d]] = currentdim
@@ -730,7 +734,7 @@ function cat_t(catdims, typeC, A::AbstractArray...)
         for d = 1:ndimsC
             currentdim = (d <= ndimsA[i] ? size(A[i],d) : 1)
             if dims2cat[d]==0
-                dimsC[d] == currentdim || error("mismatch in dimension ", d)
+                dimsC[d] == currentdim || throw(DimensionMismatch("mismatch in dimension $(d)"))
             else
                 dimsC[d] += currentdim
                 catsizes[i,dims2cat[d]] = currentdim
@@ -763,7 +767,7 @@ function hvcat(nbc::Integer, as...)
     # nbc = # of block columns
     n = length(as)
     if mod(n,nbc) != 0
-        error("all rows must have the same number of block columns")
+        throw(ArgumentError("all rows must have the same number of block columns"))
     end
     nbr = div(n,nbc)
     hvcat(ntuple(nbr, i->nbc), as...)
@@ -795,16 +799,16 @@ function hvcat{T}(rows::(Int...), as::AbstractMatrix{T}...)
             Aj = as[a+j-1]
             szj = size(Aj,2)
             if size(Aj,1) != szi
-                error("mismatched height in block row ", i)
+                throw(ArgumentError("mismatched height in block row $(i)"))
             end
             if c-1+szj > nc
-                error("block row ", i, " has mismatched number of columns")
+                throw(ArgumentError("block row $(i) has mismatched number of columns"))
             end
             out[r:r-1+szi, c:c-1+szj] = Aj
             c += szj
         end
         if c != nc+1
-            error("block row ", i, " has mismatched number of columns")
+            throw(ArgumentError("block row $(i) has mismatched number of columns"))
         end
         r += szi
         a += rows[i]
@@ -820,12 +824,12 @@ function hvcat{T<:Number}(rows::(Int...), xs::T...)
 
     a = Array(T, nr, nc)
     if length(a) != length(xs)
-        error("argument count does not match specified shape")
+        throw(ArgumentError("argument count does not match specified shape"))
     end
     k = 1
     @inbounds for i=1:nr
         if nc != rows[i]
-            error("row ", i, " has mismatched number of columns")
+            throw(ArgumentError("row $(i) has mismatched number of columns"))
         end
         for j=1:nc
             a[i,j] = xs[k]
@@ -853,15 +857,16 @@ function hvcat(rows::(Int...), xs::Number...)
     #error check
     for i = 2:nr
         if nc != rows[i]
-            error("row ", i, " has mismatched number of columns")
+            throw(ArgumentError("row $(i) has mismatched number of columns"))
         end
     end
+    len = length(xs)
     T = typeof(xs[1])
-    for i=2:length(xs)
+    for i=2:len
         T = promote_type(T,typeof(xs[i]))
     end
-    if nr*nc != length(xs)
-        error("argument count does not match specified shape")
+    if nr*nc != len
+        throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
     hvcat_fill(Array(T, nr, nc), xs)
 end
@@ -1117,8 +1122,7 @@ function repeat{T}(A::Array{T};
     ndims_out = max(ndims_in, length_inner, length_outer)
 
     if length_inner < ndims_in || length_outer < ndims_in
-        msg = "inner/outer repetitions must be set for all input dimensions"
-        throw(ArgumentError(msg))
+        throw(ArgumentError("inner/outer repetitions must be set for all input dimensions"))
     end
 
     size_in = Array(Int, ndims_in)
@@ -1181,7 +1185,7 @@ function cartesianmap(body, t::(Int...), it...)
             end
         end
     else
-        throw(ArgumentError("cartesianmap"))
+        throw(ArgumentError("cartesianmap length(t) - length(it) ≤ 0"))
     end
 end
 
