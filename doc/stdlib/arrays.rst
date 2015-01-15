@@ -368,13 +368,28 @@ Array functions
 
    Rotate matrix ``A`` 180 degrees.
 
+.. function:: rot180(A, k)
+
+   Rotate matrix ``A`` 180 degrees an integer ``k`` number of times.
+   If ``k`` is even, this is equivalent to a ``copy``.
+
 .. function:: rotl90(A)
 
    Rotate matrix ``A`` left 90 degrees.
 
+.. function:: rotl90(A, k)
+
+   Rotate matrix ``A`` left 90 degrees an integer ``k`` number of times. If ``k``
+   is zero or a multiple of four, this is equivalent to a ``copy``.
+
 .. function:: rotr90(A)
 
    Rotate matrix ``A`` right 90 degrees.
+
+.. function:: rotr90(A, k)
+
+   Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k``
+   is zero or a multiple of four, this is equivalent to a ``copy``.
 
 .. function:: reducedim(f, A, dims, initial)
 

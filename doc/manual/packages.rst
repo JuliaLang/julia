@@ -305,6 +305,53 @@ Once you do this, the package manager knows your GitHub user name and can config
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
+Guidelines for Naming a Package
+-------------------------------
+
+Package names should be sensible to most Julia users, *even to those who are
+not domain experts*.
+
+1. Avoid jargon. In particular, avoid acronyms unless there is minimal
+   possibility of confusion.
+
+  * It's ok to say ``USA`` if you're talking about the USA.
+
+  * It's not ok to say ``PMA``, even if you're talking about positive mental
+    attitude.
+
+2. Packages that provide most of their functionality in association with a new
+   type should have pluralized names.
+
+  * ``DataFrames`` provides the ``DataFrame`` type.
+
+  * ``BloomFilters`` provides the ``BloomFilter`` type.
+
+  * In contrast, ``JuliaParser`` provides no new type, but instead new
+    functionality in the ``JuliaParser.parse()`` function.
+
+3. Err on the side of clarity, even if clarity seems long-winded to you.
+
+  * ``RandomMatrices`` is a less ambiguous name than ``RndMat`` or ``RMT``,
+    even though the latter are shorter.
+
+4. A less systematic name may suit a package that implements one of several
+   possible approaches to its domain.
+
+  * Julia does not have a single comprehensive plotting package. Instead,
+    ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
+    unique approach based on a particular design philosophy.
+  
+  * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
+    many well-established sorting algorithms.
+
+5. Packages that wrap external libraries or programs should be named after
+   those libraries or programs.
+   
+  * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
+    a web search.
+
+  * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
+
 Generating a New Package
 ------------------------
 
@@ -427,12 +474,45 @@ GitHub, push your changes to your fork, and open a pull request::
     Other failures may require you to circumvent :func:`Pkg.publish` by
     `creating a pull request on GitHub
     <https://help.github.com/articles/creating-a-pull-request>`_.
+    See: :ref:`man-manual-publish` below.
 
 Once the package URL for ``FooBar`` is registered in the official ``METADATA`` repo, people know where to clone the package from, but there still aren't any registered versions available.
 This means that :func:`Pkg.add("FooBar") <Pkg.add>` won't work yet since it only installs official versions.
 :func:`Pkg.clone("FooBar") <Pkg.clone>` without having to specify a URL for it.
 Moreover, when they run :func:`Pkg.update`, they will get the latest version of ``FooBar`` that you've pushed to the repo.
 This is a good way to have people test out your packages as you work on them, before they're ready for an official release.
+
+.. _man-manual-publish:
+
+Publishing METADATA manually
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+If :func:`Pkg.publish` fails you can follow these instructions to
+manually publish your package.
+
+By "forking" the main METADATA repository, you can create a
+personal copy (of METADATA.jl) under your GitHub account. Once
+that copy exists, you can push your local changes to your copy
+(just like any other GitHub project).
+
+
+1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
+fork.
+
+2. add your fork as a remote repository for the METADATA
+repository on your local computer (in the terminal where USERNAME is
+your github username)::
+
+    cd ~/.julia/METADATA
+    git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
+
+3. push your changes to your fork::
+
+    git push USERNAME metadata-v2
+
+4. If all of that works, then go back to the GitHub page for your
+fork, and click the "pull request" link.
+
 
 Tagging Package Versions
 ------------------------

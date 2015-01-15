@@ -3,7 +3,7 @@ testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings",
     "collections", "hashing", "remote", "iobuffer", "arrayops", "reduce", "reducedim",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "random", "math",
-    "functional", "bigint", "sorting", "statistics", "spawn",
+    "functional", "bigint", "sorting", "statistics", "spawn", "intfuncs",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
