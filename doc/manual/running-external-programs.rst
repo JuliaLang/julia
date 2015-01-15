@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ***************************
- Running External Programs  
+ Running External Programs
 ***************************
 
 Julia borrows backtick notation for commands from the shell, Perl, and
@@ -36,9 +36,9 @@ Here's a simple example of running an external program::
     julia> run(`echo hello`)
     hello
 
-The ``hello`` is the output of the ``echo`` command, sent to :const:`STDOUT`. 
+The ``hello`` is the output of the ``echo`` command, sent to :const:`STDOUT`.
 The run method itself returns ``nothing``, and throws an :exc:`ErrorException`
-if the external command fails to run successfully. 
+if the external command fails to run successfully.
 
 If you want to read the output of the external command, :func:`readall`
 can be used instead::
@@ -111,7 +111,7 @@ case, just use an array (or any other iterable container)::
 
     julia> files = ["/etc/passwd","/Volumes/External HD/data.csv"]
     2-element ASCIIString Array:
-     "/etc/passwd"                  
+     "/etc/passwd"
      "/Volumes/External HD/data.csv"
 
 

@@ -213,16 +213,16 @@ Multiple variables can be declared global using the following syntax::
     function foo()
         global x=1, y="bar", z=3
     end
-    
+
     julia> foo()
     3
-    
+
     julia> x
     1
-    
+
     julia> y
     "bar"
-    
+
     julia> z
     3
 

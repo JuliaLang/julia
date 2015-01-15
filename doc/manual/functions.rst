@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ***********
- Functions  
+ Functions
 ***********
 
 In Julia, a function is an object that maps a tuple of argument values
