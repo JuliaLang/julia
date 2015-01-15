@@ -1076,7 +1076,7 @@ end
 
 ## core string macros ##
 
-macro b_str(s); :($(unescape_string(s)).data); end
+macro b_str(s,args...); :($(unescape_string(s)).data); end
 
 macro mstr(s...); triplequoted(s...); end
 

@@ -134,9 +134,9 @@ namify(sy::Symbol) = sy
 
 function mdify(ex)
   if isa(ex, AbstractString)
-    :(@doc_str $(esc(ex)))
+    Markdown.docexpr(ex)
   elseif isexpr(ex, :macrocall) && namify(ex) == symbol("@mstr")
-    :(@doc_mstr $(esc(ex.args[2])))
+    Markdown.docexpr(ex.args[2])
   else
     esc(ex)
   end
@@ -268,12 +268,12 @@ writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
 @doc "Create an `HTML` object from a literal string." ->
-macro html_str (s)
+macro html_str (s,args...)
   :(HTML($s))
 end
 
 @doc (@doc html"") ->
-macro html_mstr (s)
+macro html_mstr (s,args...)
   :(HTML($(Base.triplequoted(s))))
 end
 
@@ -307,12 +307,12 @@ print(io::IO, t::Text{Function}) = t.content(io)
 writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 
 @doc "Create a `Text` object from a literal string." ->
-macro text_str (s)
+macro text_str (s,args...)
   :(Text($s))
 end
 
 @doc (@doc text"") ->
-macro text_mstr (s)
+macro text_mstr (s,args...)
   :(Text($(Base.triplequoted(s))))
 end
 

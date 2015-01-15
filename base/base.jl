@@ -217,7 +217,7 @@ end
 map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
-macro L_str(s); s; end
+macro L_str(s,args...); s; end
 
 function precompile(f::ANY, args::Tuple)
     if isa(f,DataType)

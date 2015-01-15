@@ -227,7 +227,7 @@ function parseip(str)
     end
 end
 
-macro ip_str(str)
+macro ip_str(str, args...)
     return parseip(str)
 end
 

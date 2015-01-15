@@ -45,20 +45,20 @@ function docexpr(s, flavor = :julia)
   end
 end
 
-macro md_str(s, t...)
+macro md_str(s, filename, line, col, t...)
   mdexpr(s, t...)
 end
 
-macro md_mstr(s, t...)
+macro md_mstr(s, filename, line, col, t...)
   s = Base.triplequoted(s)
   mdexpr(s, t...)
 end
 
-macro doc_str(s, t...)
+macro doc_str(s, filename, line, col, t...)
   docexpr(s, t...)
 end
 
-macro doc_mstr(s, t...)
+macro doc_mstr(s, filename, line, col, t...)
   s = Base.triplequoted(s)
   docexpr(s, t...)
 end

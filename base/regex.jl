@@ -52,8 +52,8 @@ function compile(regex::Regex)
     regex
 end
 
-macro r_str(pattern, flags...) Regex(pattern, flags...) end
-macro r_mstr(pattern, flags...) Regex(pattern, flags...) end
+macro r_str(pattern, filename, line, col, flags...) Regex(pattern, flags...) end
+macro r_mstr(pattern, filename, line, col, flags...) Regex(pattern, flags...) end
 
 copy(r::Regex) = r
 
