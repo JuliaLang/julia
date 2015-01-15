@@ -549,7 +549,7 @@ Call overloading and function-like objects
 ------------------------------------------
 
 For any arbitrary Julia object ``x`` other than ``Function`` objects
-(defined via the syntax above), ``x(args...)`` is equivalent to
+(defined via ``function`` syntax), ``x(args...)`` is equivalent to
 ``call(x, args...)``, where :func:`call` is a generic function in
 the Julia ``Base`` module.   By adding new methods to ``call``, you
 can add a function-call syntax to arbitrary Julia types.   (Such
