@@ -514,8 +514,11 @@ function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector,
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
-    minj, maxj = extrema(J)
-    ((I[1] < 1) || (I[end] > m) || (minj < 1) || (maxj > n)) && BoundsError()
+    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && BoundsError()
+    end
 
     (alg == 0) ? Base.SparseMatrix.getindex_I_sorted_bsearch_A(A, I, J) :
     (alg == 1) ? Base.SparseMatrix.getindex_I_sorted_bsearch_I(A, I, J) :
@@ -525,8 +528,8 @@ end
 let M=2^14, N=2^4
     Irand = randperm(M);
     Jrand = randperm(N);
-    SA = [sprand(M, N, d) for d in [1, 0.1, 0.01, 0.001, 0.0001]];
-    IA = [sort(Irand[1:int(n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001]];
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    IA = [sort(Irand[1:int(n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
     debug = false
 
     if debug
@@ -555,7 +558,29 @@ let M=2^14, N=2^4
                 @printf(" %7d | %7d | %4.2e | %4.2e | %4.2e | %s\n", int(nnz(S)/S.n), length(I), times[1], times[2], times[3],
                             (0 == best[2]) ? "binary S" : (1 == best[2]) ? "binary I" : "linear")
             end
+            if res[1] != res[2]
+                println("1 and 2")
+            elseif res[2] != res[3]
+                println("2, 3")
+            end
             @assert res[1] == res[2] == res[3]
         end
+    end
+end
+
+let M = 2^8, N=2^3
+    Irand = randperm(M)
+    Jrand = randperm(N)
+    I = sort([Irand, Irand, Irand])
+    J = [Jrand, Jrand]
+
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    for S in SA
+        res = Any[1,2,3]
+        for searchtype in [0, 1, 2]
+            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+        end
+
+        @assert res[1] == res[2] == res[3]
     end
 end
