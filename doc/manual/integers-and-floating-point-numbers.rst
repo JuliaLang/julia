@@ -609,9 +609,14 @@ However, type promotion between the primitive types above and
     julia> typeof(y)
     BigInt (constructor with 10 methods)
 
-The default precision (in number of bits of the significand) and rounding
-mode of :class:`BigFloat` operations can be changed, and all further calculations 
-will take these changes in account:
+The default precision (in number of bits of the significand) and
+rounding mode of :class:`BigFloat` operations can be changed globally
+by calling :func:`set_bigfloat_precision` and
+:func:`set_rounding`, and all further calculations will take
+these changes in account.  Alternatively, the precision or the
+rounding can be changed only within the execution of a particular
+block of code by :func:`with_bigfloat_precision` or
+:func:`with_rounding`:
 
 .. doctest::
 

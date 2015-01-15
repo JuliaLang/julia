@@ -813,7 +813,12 @@ Mathematical Functions
 
 .. function:: factorial(n)
 
-   Factorial of n
+   Factorial of ``n``.  If ``n`` is an :func:`Integer`, the factorial
+   is computed as an integer (promoted to at least 64 bits).  Note
+   that this may overflow if ``n`` is not small, but you can use
+   ``factorial(big(n))`` to compute the result exactly in arbitrary
+   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
+   equivalent to :func:`gamma(n+1) <gamma>`.
 
 .. function:: factorial(n,k)
 
@@ -902,7 +907,9 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of absolute value of ``gamma(x)``
+   Compute the logarithm of the absolute value of ``gamma(x)`` for
+   :func:`Real` ``x``, while for :func:`Complex` ``x`` it computes the
+   logarithm of ``gamma(x)``.
 
 .. function:: lfact(x)
 

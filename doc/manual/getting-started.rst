@@ -130,6 +130,8 @@ those available for the ``perl`` and ``ruby`` programs::
      --track-allocation={none|user|all}
                               Count bytes allocated by each source line
      --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)
+     --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),
+                              or adhere to declarations in source code
      -O, --optimize           Run time-intensive code optimizations
      --int-literals={32|64}   Select integer literal size independent of platform
      --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)

@@ -208,6 +208,11 @@ end
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
+@test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
+@test factorial(3.0) == gamma(4.0) == factorial(3)
+for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
+    @test factorial(x) == gamma(1+x)
+end
 
 # digamma
 for elty in (Float32, Float64)

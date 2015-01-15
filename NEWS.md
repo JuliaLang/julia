@@ -30,6 +30,9 @@ New language features
 Language changes
 ----------------
 
+  * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
+     in favor of using an explicit `throw` ([#9690]).
+
   * `Uint` et al. are now spelled `UInt` ([#8905]).
 
   * `String` has been renamed to `AbstractString` ([#8872]).
@@ -148,6 +151,8 @@ Library improvements
   * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
 
   * Added `recvfrom` to get source address of UDP packets ([#9418])
+
+  * copy(DArray) will now make a copy of the DArray ([#9745])
 
 Deprecated or removed
 ---------------------

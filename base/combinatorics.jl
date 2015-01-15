@@ -59,6 +59,8 @@ function factorial(n::Integer)
     return f
 end
 
+factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
+
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n

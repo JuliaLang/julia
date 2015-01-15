@@ -891,6 +891,8 @@ static void coverageVisitLine(std::string filename, int line)
                         v);
 }
 
+extern "C" int isabspath(const char *in);
+
 void write_log_data(logdata_t logData, const char *extension)
 {
     std::string base = std::string(jl_compileropts.julia_home);
@@ -900,7 +902,7 @@ void write_log_data(logdata_t logData, const char *extension)
         std::string filename = (*it).first;
         std::vector<GlobalVariable*> &values = (*it).second;
         if (values.size() > 1) {
-            if (filename[0] != '/')
+            if (!isabspath(filename.c_str()))
                 filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {
@@ -2941,7 +2943,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         return literal_pointer_val(expr);
     }
     jl_expr_t *ex = (jl_expr_t*)expr;
-    jl_value_t **args = &jl_cellref(ex->args,0);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     jl_sym_t *head = ex->head;
     // this is object-disoriented.
     // however, this is a good way to do it because it should *not* be easy

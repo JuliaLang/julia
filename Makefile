@@ -274,6 +274,8 @@ endif
 	$(INSTALL_M) $(build_private_libdir)/sys.$(SHLIB_EXT) $(DESTDIR)$(private_libdir)
 	# Copy in system image build script
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
+	# Copy in standalone executable build script
+	$(INSTALL_M) contrib/build_executable.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
@@ -436,6 +438,7 @@ test: release
 	@$(MAKE) $(QUIET_MAKE) -C test default
 
 testall: release
+	cp $(build_prefix)/lib/julia/sys.ji local.ji && $(JULIA_EXECUTABLE) -J local.ji -e 'true' && rm local.ji
 	@$(MAKE) $(QUIET_MAKE) -C test all
 
 testall1: release

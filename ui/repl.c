@@ -42,8 +42,8 @@ static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
 static int imagepathspecified = 0;
 
-static const char *usage = "julia [options] [program] [args...]\n";
-static const char *opts =
+static const char usage[] = "julia [options] [program] [args...]\n";
+static const char opts[] =
     " -v, --version            Display version information\n"
     " -h, --help               Print this message\n"
     " -q, --quiet              Quiet startup without banner\n"
@@ -73,6 +73,8 @@ static const char *opts =
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
     " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
+    " --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),\n"
+    "                          or adhere to declarations in source code\n"
     " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
@@ -80,8 +82,17 @@ static const char *opts =
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:hJ:C:O";
-    static struct option longopts[] = {
+    enum {
+	opt_check_bounds = 300,
+	opt_int_literals,
+	opt_dump_bitcode,
+	opt_compile,
+	opt_depwarn,
+	opt_inline,
+        opt_math_mode
+    };
+    static const char shortopts[] = "+H:hJ:C:O";
+    static const struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
         { "build",         required_argument, 0, 'b' },
         { "lisp",          no_argument,       &lisp_prompt, 1 },
@@ -90,13 +101,14 @@ void parse_opts(int *argcp, char ***argvp)
         { "code-coverage", optional_argument, 0, 'c' },
         { "cpu-target",    required_argument, 0, 'C' },
         { "track-allocation",required_argument, 0, 'm' },
-        { "check-bounds",  required_argument, 0, 300 },
+        { "check-bounds",  required_argument, 0, opt_check_bounds },
         { "optimize",      no_argument,       0, 'O' },
-        { "int-literals",  required_argument, 0, 301 },
-        { "dump-bitcode",  required_argument, 0, 302 },
-        { "compile",       required_argument, 0, 303 },
-        { "depwarn",       required_argument, 0, 304 },
-        { "inline",        required_argument, 0, 305 },
+        { "int-literals",  required_argument, 0, opt_int_literals },
+        { "dump-bitcode",  required_argument, 0, opt_dump_bitcode },
+        { "compile",       required_argument, 0, opt_compile },
+        { "depwarn",       required_argument, 0, opt_depwarn },
+        { "inline",        required_argument, 0, opt_inline },
+        { "math-mode",     required_argument, 0, opt_math_mode },
         { 0, 0, 0, 0 }
     };
     int c;
@@ -156,13 +168,13 @@ void parse_opts(int *argcp, char ***argvp)
                     malloclog = JL_LOG_NONE;
                 break;
             }
-        case 300:
+        case opt_check_bounds:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_OFF;
             break;
-        case 301:
+        case opt_int_literals:
             if (!strcmp(optarg,"32"))
                 jl_compileropts.int_literals = 32;
             else if (!strcmp(optarg,"64"))
@@ -172,13 +184,13 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
-        case 302:
+        case opt_dump_bitcode:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_ON;
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_OFF;
             break;
-        case 303:
+        case opt_compile:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.compile_enabled = 1;
             else if (!strcmp(optarg,"no"))
@@ -190,7 +202,7 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
-        case 304:
+        case opt_depwarn:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.depwarn = 1;
             else if (!strcmp(optarg,"no"))
@@ -200,13 +212,23 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
-        case 305:      /* inline */
+        case opt_inline:      /* inline */
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.can_inline = 1;
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.can_inline = 0;
             else {
                 ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case opt_math_mode:
+            if (!strcmp(optarg, "ieee"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_OFF;
+            else if (!strcmp(optarg, "user"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_DEFAULT;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --math-mode (%s)\n", optarg);
                 exit(1);
             }
             break;
@@ -350,11 +372,10 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     int i;
     for (i=0; i<argc; i++) { // write the command line to UTF8
         wchar_t *warg = argv[i];
-        size_t wlen = wcslen(warg)+1;
-        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
         if (!len) return 1;
         char *arg = (char*)alloca(len);
-        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
 #endif

@@ -97,7 +97,8 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
                                       0,    // opt_level
                                       1,    // depwarn
-                                      1     // can_inline
+                                      1,    // can_inline
+                                      JL_COMPILEROPT_FAST_MATH_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;
@@ -789,7 +790,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
-static int isabspath(const char *in)
+int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -805,7 +806,7 @@ static int isabspath(const char *in)
         }
     }
 #else
-    if (jl_compileropts.image_file[0] == '/') return 1; // absolute path
+    if (in[0] == '/') return 1; // absolute path
 #endif
     return 0; // relative path
 }
@@ -833,6 +834,7 @@ static char *abspath(const char *in)
             path[path_size-1] = PATHSEPSTRING[0];
             memcpy(path+path_size, in, len+1);
             out = strdup(path);
+            free(path);
         }
     }
 #else

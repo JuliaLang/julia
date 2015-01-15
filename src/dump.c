@@ -1379,7 +1379,7 @@ void jl_restore_system_image(const char *fname)
     if (jl_is_debugbuild()) build_mode = 1;
 #endif
     if (!build_mode) {
-        char *fname_shlib = (char*)alloca(strlen(fname));
+        char *fname_shlib = (char*)alloca(strlen(fname)+1);
         strcpy(fname_shlib, fname);
         char *fname_shlib_dot = strrchr(fname_shlib, '.');
         if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;

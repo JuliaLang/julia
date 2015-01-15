@@ -1377,13 +1377,85 @@ end
 function findnext(testf::Function, B::BitArray, start::Integer)
     f0::Bool = testf(false)
     f1::Bool = testf(true)
-    length(B) == 0 && return 0
-    f0 || f1 || return 0
-    f0 && f1 && return 1
     !f0 && f1 && return findnext(B, start)
-    return findnextnot(B, start)
+    f0 && !f1 && return findnextnot(B, start)
+
+    start > 0 || throw(BoundsError(B, start))
+    start > length(B) && return 0
+    f0 && f1 && return Int(start)
+    return 0 # last case: !f0 && !f1
 end
 #findfirst(testf::Function, B::BitArray) = findnext(testf, B, 1)  ## defined in array.jl
+
+# returns the index of the previous non-zero element, or 0 if all zeros
+function findprev(B::BitArray, start::Integer)
+    start > 0 || return 0
+    start > length(B) && throw(BoundsError(B, start))
+
+    Bc = B.chunks
+
+    chunk_start = _div64(start-1)+1
+    mask = _msk_end(start)
+
+    @inbounds begin
+        if Bc[chunk_start] & mask != 0
+            return (chunk_start-1) << 6 + (64 - leading_zeros(Bc[chunk_start] & mask))
+        end
+
+        for i = chunk_start-1:-1:1
+            if Bc[i] != 0
+                return (i-1) << 6 + (64 - leading_zeros(Bc[i]))
+            end
+        end
+    end
+    return 0
+end
+
+function findprevnot(B::BitArray, start::Integer)
+    start > 0 || return 0
+    start > length(B) && throw(BoundsError(B, start))
+
+    Bc = B.chunks
+
+    chunk_start = _div64(start-1)+1
+    mask = ~_msk_end(start)
+
+    @inbounds begin
+        if Bc[chunk_start] | mask != _msk64
+            return (chunk_start-1) << 6 + (64 - leading_ones(Bc[chunk_start] | mask))
+        end
+
+        for i = chunk_start-1:-1:1
+            if Bc[i] != _msk64
+                return (i-1) << 6 + (64 - leading_ones(Bc[i]))
+            end
+        end
+    end
+    return 0
+end
+findlastnot(B::BitArray) = findprevnot(B, length(B))
+
+# returns the index of the previous matching element
+function findprev(B::BitArray, v, start::Integer)
+    v == false && return findprevnot(B, start)
+    v == true && return findprev(B, start)
+    return 0
+end
+#findlast(B::BitArray, v) = findprev(B, 1, v)  ## defined in array.jl
+
+# returns the index of the previous element for which the function returns true
+function findprev(testf::Function, B::BitArray, start::Integer)
+    f0::Bool = testf(false)
+    f1::Bool = testf(true)
+    !f0 && f1 && return findprev(B, start)
+    f0 && !f1 && return findprevnot(B, start)
+
+    start > 0 || return 0
+    start > length(B) && throw(BoundsError(B, start))
+    f0 && f1 && return Int(start)
+    return 0 # last case: !f0 && !f1
+end
+#findlast(testf::Function, B::BitArray) = findprev(testf, B, 1)  ## defined in array.jl
 
 function find(B::BitArray)
     l = length(B)

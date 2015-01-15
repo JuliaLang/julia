@@ -528,7 +528,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -593,7 +593,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -603,7 +603,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -613,7 +613,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -842,7 +842,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_data(ctx->sp),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -883,7 +883,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_data(ctx->sp),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {

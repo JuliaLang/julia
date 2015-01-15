@@ -205,37 +205,42 @@ static int bits_equal(void *a, void *b, int sz)
     }
 }
 
-int jl_egal(jl_value_t *a, jl_value_t *b)
+// jl_egal
+// The frequently used jl_egal function deserves special attention when it
+// comes to performance which is made challenging by the fact that the
+// function has to handle quite a few different cases and because it is
+// called recursively.  To optimize performance many special cases are
+// handle with separate comparisons which can dramatically reduce the run
+// time of the function.  The compiler can translate these simple tests
+// with little effort, e.g., few registers are used.
+//
+// The complex cases require more effort and more registers to be translated
+// efficiently.  The effected cases include comparing tuples and fields.  If
+// the code to perform these operation would be inlined in the jl_egal
+// function then the compiler would generate at the or close to the top of
+// the function a prologue which saves all the callee-save registers and at
+// the end the respective epilogue.  The result is that even the fast cases
+// are slowed down.
+//
+// The solution is to keep the code in jl_egal simple and split out the
+// (more) complex cases into their own functions which are marked with
+// NOINLINE.
+static int NOINLINE compare_tuple(jl_value_t *a, jl_value_t *b)
 {
-    if (a == b)
-        return 1;
-    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
-    if (ta != (jl_value_t*)jl_typeof(b))
+    size_t l = jl_tuple_len(a);
+    if (l != jl_tuple_len(b))
         return 0;
-    if (jl_is_tuple(a)) {
-        size_t l = jl_tuple_len(a);
-        if (l != jl_tuple_len(b))
+    for(size_t i=0; i < l; i++) {
+        if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
             return 0;
-        for(size_t i=0; i < l; i++) {
-            if (!jl_egal(jl_tupleref(a,i),jl_tupleref(b,i)))
-                return 0;
-        }
-        return 1;
     }
-    jl_datatype_t *dt = (jl_datatype_t*)ta;
-    if (dt == jl_datatype_type) {
-        jl_datatype_t *dta = (jl_datatype_t*)a;
-        jl_datatype_t *dtb = (jl_datatype_t*)b;
-        return dta->name == dtb->name &&
-            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
-    }
-    if (dt->mutabl) return 0;
-    size_t sz = dt->size;
-    if (sz == 0) return 1;
-    size_t nf = jl_tuple_len(dt->names);
-    if (nf == 0) {
-        return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
-    }
+    return 1;
+}
+
+// See comment above for an explanation of NOINLINE.
+static int NOINLINE compare_fields(jl_value_t *a, jl_value_t *b,
+                                   jl_datatype_t *dt, size_t nf)
+{
     for (size_t f=0; f < nf; f++) {
         size_t offs = dt->fields[f].offset;
         char *ao = (char*)jl_data_ptr(a) + offs;
@@ -254,6 +259,32 @@ int jl_egal(jl_value_t *a, jl_value_t *b)
         if (!eq) return 0;
     }
     return 1;
+}
+
+int jl_egal(jl_value_t *a, jl_value_t *b)
+{
+    if (a == b)
+        return 1;
+    jl_value_t *ta = (jl_value_t*)jl_typeof(a);
+    if (ta != (jl_value_t*)jl_typeof(b))
+        return 0;
+    if (jl_is_tuple(a))
+        return compare_tuple(a, b);
+    jl_datatype_t *dt = (jl_datatype_t*)ta;
+    if (dt == jl_datatype_type) {
+        jl_datatype_t *dta = (jl_datatype_t*)a;
+        jl_datatype_t *dtb = (jl_datatype_t*)b;
+        return dta->name == dtb->name &&
+            jl_egal((jl_value_t*)dta->parameters, (jl_value_t*)dtb->parameters);
+    }
+    if (dt->mutabl) return 0;
+    size_t sz = dt->size;
+    if (sz == 0) return 1;
+    size_t nf = jl_tuple_len(dt->names);
+    if (nf == 0) {
+        return bits_equal(jl_data_ptr(a), jl_data_ptr(b), sz);
+    }
+    return compare_fields(a, b, dt, nf);
 }
 
 JL_CALLABLE(jl_f_is)
@@ -371,13 +402,9 @@ JL_CALLABLE(jl_f_apply)
             }
         }
         if (jl_is_tuple(args[1])) {
-            return jl_apply(f, &jl_tupleref(args[1],0), jl_tuple_len(args[1]));
+            return jl_apply(f, jl_tuple_data(args[1]), jl_tuple_len(args[1]));
         }
     }
-    jl_value_t *argarr = NULL;
-    JL_GC_PUSH1(&argarr);
-    jl_value_t *result;
-    jl_value_t **newargs;
     size_t n=0, i, j;
     for(i=1; i < nargs; i++) {
         if (jl_is_tuple(args[i])) {
@@ -395,20 +422,23 @@ JL_CALLABLE(jl_f_apply)
                     JL_TYPECHK(apply, tuple, args[i]);
                 }
             }
-            argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
+            jl_value_t *argarr = jl_apply(jl_append_any_func, &args[1], nargs-1);
             assert(jl_typeis(argarr, jl_array_any_type));
-            result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
+            JL_GC_PUSH1(&argarr);
+            jl_value_t *result = jl_apply(f, jl_cell_data(argarr), jl_array_len(argarr));
             JL_GC_POP();
             return result;
         }
     }
+    jl_value_t **newargs;
     if (n > jl_page_size/sizeof(jl_value_t*)) {
         // put arguments on the heap if there are too many
-        argarr = (jl_value_t*)jl_alloc_cell_1d(n);
+        jl_value_t *argarr = (jl_value_t*)jl_alloc_cell_1d(n);
+        JL_GC_PUSH1(&argarr);
         newargs = jl_cell_data(argarr);
     }
     else {
-        newargs = (jl_value_t**)alloca(n * sizeof(jl_value_t*));
+        JL_GC_PUSHARGS(newargs, n);
     }
     n = 0;
     for(i=1; i < nargs; i++) {
@@ -424,7 +454,7 @@ JL_CALLABLE(jl_f_apply)
                 newargs[n++] = jl_cellref(args[i], j);
         }
     }
-    result = jl_apply(f, newargs, n);
+    jl_value_t *result = jl_apply(f, newargs, n);
     JL_GC_POP();
     return result;
 }
@@ -956,7 +986,7 @@ JL_CALLABLE(jl_f_invoke)
         jl_error("invoke: not a generic function");
     JL_TYPECHK(invoke, tuple, args[1]);
     jl_check_type_tuple((jl_tuple_t*)args[1], jl_gf_name(args[0]), "invoke");
-    if (!jl_tuple_subtype(&args[2], nargs-2, &jl_tupleref(args[1],0),
+    if (!jl_tuple_subtype(&args[2], nargs-2, jl_tuple_data(args[1]),
                           jl_tuple_len(args[1]), 1))
         jl_error("invoke: argument type error");
     return jl_gf_invoke((jl_function_t*)args[0],

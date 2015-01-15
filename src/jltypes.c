@@ -1441,7 +1441,7 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
     }
     else {
         assert(jl_is_tuple(tvars));
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     for(int tk=0; tk < tvarslen; tk++) {
@@ -1710,7 +1710,7 @@ jl_value_t *jl_apply_type(jl_value_t *tc, jl_tuple_t *params)
     // NOTE: callers are supposed to root these arguments, but there are
     // several uses that don't, so root here just to be safe.
     JL_GC_PUSH1(&params);
-    jl_value_t *t = jl_apply_type_(tc, &jl_tupleref(params,0), jl_tuple_len(params));
+    jl_value_t *t = jl_apply_type_(tc, jl_tuple_data(params), jl_tuple_len(params));
     JL_GC_POP();
     return t;
 }
@@ -2147,8 +2147,8 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
             }
         }
         if (jl_is_tuple(b)) {
-            return jl_tuple_subtype_(&jl_tupleref(a,0),jl_tuple_len(a),
-                                     &jl_tupleref(b,0),jl_tuple_len(b),
+            return jl_tuple_subtype_(jl_tuple_data(a),jl_tuple_len(a),
+                                     jl_tuple_data(b),jl_tuple_len(b),
                                      ta, invariant);
         }
     }
@@ -2400,8 +2400,8 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
             return tuple_all_morespecific((jl_tuple_t*)a, jl_tupleref(tp,1), invariant);
         }
         if (jl_is_tuple(b)) {
-            return jl_tuple_morespecific_(&jl_tupleref(a,0),jl_tuple_len(a),
-                                          &jl_tupleref(b,0),jl_tuple_len(b),
+            return jl_tuple_morespecific_(jl_tuple_data(a),jl_tuple_len(a),
+                                          jl_tuple_data(b),jl_tuple_len(b),
                                           invariant);
         }
     }
@@ -2684,8 +2684,10 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
     if (jl_is_uniontype(child)) {
         jl_tuple_t *t = ((jl_uniontype_t*)child)->types;
         if (morespecific) {
-            cenv_t tenv;
-            tenv.data = (jl_value_t**)alloca(MAX_CENV_SIZE*sizeof(void*));
+            jl_value_t **rts;
+            JL_GC_PUSHARGS(rts, MAX_CENV_SIZE);
+            cenv_t tenv; tenv.data = rts;
+            memset(tenv.data, 0, MAX_CENV_SIZE*sizeof(void*));
             for(i=0; i < jl_tuple_len(t); i++) {
                 int n = env->n;
                 tmp = type_match_(jl_tupleref(t,i), parent, env, 1, invariant);
@@ -2703,9 +2705,11 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                                 type_match_(jl_tupleref(t,j), parent,
                                             env, 1, invariant) == jl_false) {
                                 env->n = n;
+                                JL_GC_POP();
                                 return jl_false;
                             }
                         }
+                        JL_GC_POP();
                         return jl_true;
                     }
                 }
@@ -2713,6 +2717,7 @@ static jl_value_t *type_match_(jl_value_t *child, jl_value_t *parent,
                     env->n = n;
                 }
             }
+            JL_GC_POP();
             return jl_false;
         }
         else {
@@ -3279,6 +3284,7 @@ void jl_init_types(void)
     kw_sym = jl_symbol("kw");
     dot_sym = jl_symbol(".");
     boundscheck_sym = jl_symbol("boundscheck");
+    fastmath_sym = jl_symbol("fastmath");
     newvar_sym = jl_symbol("newvar");
     copyast_sym = jl_symbol("copyast");
     simdloop_sym = jl_symbol("simdloop");

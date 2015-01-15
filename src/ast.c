@@ -847,10 +847,10 @@ static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_tuple_t *spenv)
         jl_value_t *ty = jl_static_eval(jl_cellref(v,1), NULL, jl_current_module,
                                         (jl_value_t*)spenv, (jl_expr_t*)ast, 1, 1);
         if (ty != NULL && (jl_is_type(ty) || jl_is_typevar(ty))) {
-            jl_cellref(v, 1) = ty;
+            jl_cellset(v, 1, ty);
         }
         else {
-            jl_cellref(v, 1) = (jl_value_t*)jl_any_type;
+            jl_cellset(v, 1, (jl_value_t*)jl_any_type);
         }
     }
 }

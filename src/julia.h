@@ -411,6 +411,7 @@ extern jl_sym_t *abstracttype_sym; extern jl_sym_t *bitstype_sym;
 extern jl_sym_t *compositetype_sym; extern jl_sym_t *type_goto_sym;
 extern jl_sym_t *global_sym;  extern jl_sym_t *tuple_sym;
 extern jl_sym_t *boundscheck_sym; extern jl_sym_t *copyast_sym;
+extern jl_sym_t *fastmath_sym;
 extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
 extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 
@@ -423,23 +424,51 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #endif
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
-#ifdef OVERLAP_TUPLE_LEN
-#define jl_tupleref(t,i) (((jl_value_t**)(t))[1+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[1+(i)])=(jl_value_t*)(x))
-#else
-#define jl_tupleref(t,i) (((jl_value_t**)(t))[2+(i)])
-#define jl_tupleset(t,i,x) ((((jl_value_t**)(t))[2+(i)])=(jl_value_t*)(x))
-#endif
-#define jl_t0(t) jl_tupleref(t,0)
-#define jl_t1(t) jl_tupleref(t,1)
-
 #define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
+#define jl_tuple_data(t)   (((jl_tuple_t*)(t))->data)
+#define TUPLE_DATA_OFFSET offsetof(jl_tuple_t,data)/sizeof(void*)
 
-#define jl_cellref(a,i) (((jl_value_t**)((jl_array_t*)a)->data)[(i)])
-#define jl_cellset(a,i,x) ((((jl_value_t**)((jl_array_t*)a)->data)[(i)])=((jl_value_t*)(x)))
+#ifdef STORE_ARRAY_LEN
+#define jl_array_len(a)   (((jl_array_t*)(a))->length)
+#else
+DLLEXPORT size_t jl_array_len_(jl_array_t *a);
+#define jl_array_len(a)   jl_array_len_((jl_array_t*)(a))
+#endif
+#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
+#define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
+#define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
+#define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
+#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
+#define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
-#define jl_exprarg(e,n) jl_cellref(((jl_expr_t*)(e))->args,n)
+STATIC_INLINE jl_value_t *jl_tupleref(void *t, size_t i)
+{
+    assert(i < jl_tuple_len(t) && i >= 0);
+    return jl_tuple_data(t)[i];
+}
+STATIC_INLINE jl_value_t *jl_tupleset(void *t, size_t i, void *x)
+{
+    assert(i < jl_tuple_len(t) && i >= 0);
+    jl_tuple_data(t)[i] = (jl_value_t*)x;
+    return (jl_value_t*)x;
+}
+STATIC_INLINE jl_value_t *jl_cellref(void *a, size_t i)
+{
+    assert(i < jl_array_len(a) && i >= 0);
+    return ((jl_value_t**)(jl_array_data(a)))[i];
+}
+STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
+{
+    assert(i < jl_array_len(a) && i >= 0);
+    ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
+    return (jl_value_t*)x;
+}
+
+# define jl_t0(t) jl_tupleref(t,0)
+# define jl_t1(t) jl_tupleref(t,1)
+
+#define jl_exprarg(e,n) (((jl_value_t**)jl_array_data(((jl_expr_t*)(e))->args))[n])
 
 #define jl_fieldref(s,i) jl_get_nth_field(((jl_value_t*)s),i)
 
@@ -721,18 +750,6 @@ DLLEXPORT jl_value_t *jl_get_field(jl_value_t *o, char *fld);
 DLLEXPORT void       *jl_value_ptr(jl_value_t *a);
 
 // arrays
-#ifdef STORE_ARRAY_LEN
-#define jl_array_len(a)   (((jl_array_t*)(a))->length)
-#else
-DLLEXPORT size_t jl_array_len_(jl_array_t *a);
-#define jl_array_len(a)   jl_array_len_((jl_array_t*)(a))
-#endif
-#define jl_array_data(a)  ((void*)((jl_array_t*)(a))->data)
-#define jl_array_dim(a,i) ((&((jl_array_t*)(a))->nrows)[i])
-#define jl_array_dim0(a)  (((jl_array_t*)(a))->nrows)
-#define jl_array_nrows(a) (((jl_array_t*)(a))->nrows)
-#define jl_array_ndims(a) ((int32_t)(((jl_array_t*)a)->ndims))
-#define jl_array_data_owner(a) (*((jl_value_t**)(&a->ncols+1+jl_array_ndimwords(jl_array_ndims(a)))))
 
 DLLEXPORT jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims);
 DLLEXPORT jl_array_t *jl_new_arrayv(jl_value_t *atype, ...);
@@ -1327,6 +1344,8 @@ void show_execution_point(char *filename, int lno);
 
 // compiler options -----------------------------------------------------------
 
+// Note: need to keep this in sync with its initialization in
+// src/init.c, and with JLCompilerOpts in base/inference.jl
 typedef struct {
     const char *julia_home;
     const char *julia_bin;
@@ -1342,6 +1361,7 @@ typedef struct {
     int8_t opt_level;
     int8_t depwarn;
     int8_t can_inline;
+    int8_t fast_math;
 } jl_compileropts_t;
 
 extern DLLEXPORT jl_compileropts_t jl_compileropts;
@@ -1354,6 +1374,9 @@ extern DLLEXPORT jl_compileropts_t jl_compileropts;
 #define JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT 0
 #define JL_COMPILEROPT_CHECK_BOUNDS_ON 1
 #define JL_COMPILEROPT_CHECK_BOUNDS_OFF 2
+#define JL_COMPILEROPT_FAST_MATH_DEFAULT 0
+#define JL_COMPILEROPT_FAST_MATH_ON 1
+#define JL_COMPILEROPT_FAST_MATH_OFF 2
 #define JL_COMPILEROPT_COMPILE_DEFAULT 1
 #define JL_COMPILEROPT_COMPILE_OFF 0
 #define JL_COMPILEROPT_COMPILE_ON  1
