@@ -6161,9 +6161,11 @@ promote_shape
 doc"""
     methodswith(typ[, module or function][, showparents])
 
-Return an array of methods with an argument of type `typ`. If optional `showparents` is `true`, also return arguments with a parent type of `typ`, excluding type `Any`.
+Return an array of methods with an argument of type `typ`.
 
-The optional second argument restricts the search to a particular module or function.
+The optional second argument restricts the search to a particular module or function (default is Main).
+
+If the optional `showparents` argument is `true`, also return arguments with a parent type of `typ`, excluding type `Any`.
 """
 methodswith
 

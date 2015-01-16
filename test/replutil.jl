@@ -99,8 +99,8 @@ let
     f11007(::MethodType11007) = nothing
     err_str = @except_str(invoke(f11007, Tuple{InvokeType11007},
                                  InstanceType11007()), MethodError)
-    @test !contains(err_str, "::InstanceType11007")
-    @test contains(err_str, "::InvokeType11007")
+    @test !contains(err_str, "::__anon__.InstanceType11007")
+    @test contains(err_str, "::__anon__.InvokeType11007")
 end
 
 let

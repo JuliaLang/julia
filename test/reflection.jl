@@ -133,6 +133,7 @@ not_const = 1
 @test ccall(:jl_get_module_of_binding, Any, (Any, Any), Base, :sin)==Base
 
 module TestMod7648
+import ..__anon__
 using Base.Test
 export a9475, c7648, foo7648
 
@@ -151,7 +152,7 @@ foo7648(x) = x
         @test Base.binding_module(:a9475)==current_module()
         @test Base.binding_module(:c7648)==TestMod7648
         @test Base.module_name(current_module())==:TestModSub9475
-        @test Base.fullname(current_module())==(:TestMod7648, :TestModSub9475)
+        @test Base.fullname(current_module())==(:__anon__, :TestMod7648, :TestModSub9475)
         @test Base.module_parent(current_module())==TestMod7648
     end
     end # module TestModSub9475
@@ -162,7 +163,8 @@ let
     @test Base.binding_module(:d7648)==current_module()
     @test Base.binding_module(:a9475)==TestModSub9475
     @test Base.module_name(current_module())==:TestMod7648
-    @test Base.module_parent(current_module())==Main
+    @test Base.module_parent(current_module())==__anon__
+    @test Base.module_parent(Base.module_parent(current_module()))==Main
 end
 end # module TestMod7648
 
@@ -177,7 +179,7 @@ let
 end
 
 let
-    using TestMod7648
+    using .TestMod7648
     @test Base.binding_module(:a9475)==TestMod7648.TestModSub9475
     @test Base.binding_module(:c7648)==TestMod7648
     @test isgeneric(foo7648)
@@ -190,3 +192,5 @@ let
 end
 
 @test_throws ArgumentError which(is, Tuple{Int, Int})
+
+assert(!isdefined(Main, :__anon__))
