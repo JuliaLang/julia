@@ -108,6 +108,11 @@ getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data
 getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
 getindex{T,S}(A::UpperTriangular{T,S}, i::Integer, j::Integer) = i <= j ? A.data[i,j] : zero(A.data[i,j])
 
+setindex!(A::UpperTriangular, x, i::Integer, j::Integer) = i <= j ? (A.data[i,j] = x; A) : throw(BoundsError())
+setindex!(A::UnitUpperTriangular, x, i::Integer, j::Integer) = i < j ? (A.data[i,j] = x; A) : throw(BoundsError())
+setindex!(A::LowerTriangular, x, i::Integer, j::Integer) = i >= j ? (A.data[i,j] = x; A) : throw(BoundsError())
+setindex!(A::UnitLowerTriangular, x, i::Integer, j::Integer) = i > j ? (A.data[i,j] = x; A) : throw(BoundsError())
+
 istril{T,S}(A::LowerTriangular{T,S}) = true
 istril{T,S}(A::UnitLowerTriangular{T,S}) = true
 istril{T,S}(A::UpperTriangular{T,S}) = false
