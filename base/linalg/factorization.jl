@@ -585,7 +585,7 @@ eigfact(x::Number) = Eigen([x], fill(one(x), 1, 1))
 #     F[:values], F[:vectors]
 # end
 function eig(A::Union(Number, AbstractMatrix), args...; kwargs...)
-    F = eigfact(A, args..., kwargs...)
+    F = eigfact(A, args...; kwargs...)
     F[:values], F[:vectors]
 end
 #Calculates eigenvectors

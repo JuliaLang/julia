@@ -147,7 +147,9 @@ debug && println("symmetric eigen-decomposition")
         @test_approx_eq v*Diagonal(d)*v' asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
         @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), 1:2) # same result, but checks that method works
         @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
         @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
     end
@@ -162,6 +164,7 @@ debug && println("symmetric generalized eigenproblem")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         a610 = a[:,6:10]
         f = eigfact(asym[1:5,1:5], a610'a610)
+        eig(asym[1:5,1:5], a610'a610) # same result, but checks that method works
         @test_approx_eq asym[1:5,1:5]*f[:vectors] scale(a610'a610*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610))) 200ε
@@ -170,6 +173,7 @@ debug && println("symmetric generalized eigenproblem")
 debug && println("Non-symmetric generalized eigenproblem")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         f = eigfact(a[1:5,1:5], a[6:10,6:10])
+        eig(a[1:5,1:5], a[6:10,6:10]) # same result, but checks that method works
         @test_approx_eq a[1:5,1:5]*f[:vectors] scale(a[6:10,6:10]*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(a[1:5,1:5], a[6:10,6:10])
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(a[1:5,1:5]/a[6:10,6:10])) 50000ε
