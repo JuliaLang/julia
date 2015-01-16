@@ -545,6 +545,7 @@ let M=2^14, N=2^4
             times = Float64[0,0,0]
             best = [typemax(Float64), 0]
             for searchtype in [0, 1, 2]
+                gc()
                 tres = @timed test_getindex_algs(S, I, J, searchtype)
                 res[searchtype+1] = tres[1]
                 times[searchtype+1] = tres[2]
@@ -583,4 +584,37 @@ let M = 2^8, N=2^3
 
         @assert res[1] == res[2] == res[3]
     end
+end
+
+let M = 2^14, N=2^4
+    I = randperm(M)
+    J = randperm(N)
+    Jsorted = sort(J)
+
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    IA = [I[1:int(n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    debug = false
+    if debug
+        @printf("         |         |         |        times        |        memory       |\n")
+        @printf("    S    |    I    |    J    |  sorted  | unsorted |  sorted  | unsorted |\n")
+    end
+    for I in IA
+        Isorted = sort(I)
+        for S in SA
+            gc()
+            ru = @timed S[I, J]
+            gc()
+            rs = @timed S[Isorted, Jsorted]
+            if debug
+                @printf(" %7d | %7d | %7d | %4.2e | %4.2e | %4.2e | %4.2e |\n", int(nnz(S)/S.n), length(I), length(J), rs[2], ru[2], rs[3], ru[3])
+            end
+        end
+    end
+end
+
+let S = sprand(10, 10, 0.1)
+    @test_throws BoundsError S[[0,1,2], [1,2]]
+    @test_throws BoundsError S[[1,2], [0,1,2]]
+    @test_throws BoundsError S[[0,2,1], [1,2]]
+    @test_throws BoundsError S[[2,1], [0,1,2]]
 end
