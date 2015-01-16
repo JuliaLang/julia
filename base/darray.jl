@@ -310,6 +310,9 @@ reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, localpart(d)) for p in procs(d) ])
 
+mapreduce(f :: Function, opt :: Function, d :: DArray) =
+    mapreduce(fetch, opt,
+              Any[ @spawnat p mapreduce(f, opt, localpart(d)) for p in procs(d) ])
 
 function map!(f::Callable, d::DArray)
     @sync begin
