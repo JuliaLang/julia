@@ -191,12 +191,12 @@ function show_method_candidates(io::IO, ex::MethodError)
             i != 1 && print(buf, ", ")
             # If isvarargtype then it checks wether the rest of the input arguements matches
             # the varargtype
-			j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
+            j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
             # checks if the type of arg 1:i of the input intersects with the current method
             t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
             if t_in == None
                 # If there is no typeintersect then the type signature from the method is
-                # inserted in t_i this insures if the type at the next i matches the type
+                # inserted in t_i this ensures if the type at the next i matches the type
                 # signature then there will be a type intersect
                 t_i[i] = method.sig[i]
                 Base.with_output_color(:red, buf) do buf
@@ -208,7 +208,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             end
         end
         if length(t_i) > length(method.sig) && Base.isvarargtype(method.sig[end])
-            # It insures that methods like f(a::AbstractString...) gets the correct
+            # It ensures that methods like f(a::AbstractString...) gets the correct
             # number of right_matches
             for t in typeof(ex.args)[length(method.sig):end]
                 if t <: method.sig[end].parameters[1]
