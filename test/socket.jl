@@ -31,10 +31,12 @@
 @test repr(ip"2001:db8:0:0:1:0:0:1") == "ip\"2001:db8::1:0:0:1\""
 @test repr(ip"2001:0:0:1:0:0:0:1") == "ip\"2001:0:0:1::1\""
 
+port = RemoteRef()
 c = Base.Condition()
-port = rand(2000:4000)
-@async begin
-    s = listen(port)
+defaultport = rand(2000:4000)
+tsk = @async begin
+    p, s = listenany(defaultport)
+    put!(port, p)
     Base.notify(c)
     sock = accept(s)
     write(sock,"Hello World\n")
@@ -42,12 +44,13 @@ port = rand(2000:4000)
     close(sock)
 end
 wait(c)
-@test readall(connect(port)) == "Hello World\n"
+@test readall(connect(fetch(port))) == "Hello World\n"
+wait(tsk)
 
-socketname = @windows ? "\\\\.\\pipe\\uv-test" : "testsocket"
+socketname = (@windows ? "\\\\.\\pipe\\uv-test" : "testsocket") * "-" * randstring(6)
 @unix_only isfile(socketname) && Base.FS.unlink(socketname)
 for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
-    @async begin
+    tsk = @async begin
         s = listen(T(socketname))
         Base.notify(c)
         sock = accept(s)
@@ -57,21 +60,31 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
     end
     wait(c)
     @test readall(connect(socketname)) == "Hello World\n"
+    wait(tsk)
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
 @test_throws Base.UVError connect("localhost", 21452)
 
-server = listen(port)
-@async @test_throws ErrorException accept(server)
-sleep(0.1)
+p, server = listenany(defaultport)
+r = RemoteRef()
+tsk = @async begin
+    put!(r, :start)
+    @test_throws Base.UVError accept(server)
+end
+@test fetch(r) === :start
 close(server)
+wait(tsk)
 
-server = listen(port)
+port, server = listenany(defaultport)
 @async connect("localhost",port)
 s1 = accept(server)
 @test_throws ErrorException accept(server,s1)
+@test_throws Base.UVError listen(port)
+port2, server2 = listenany(port)
+@test port != port2
 close(server)
+close(server2)
 
 @test_throws Base.UVError connect(".invalid",80)
 
@@ -82,7 +95,7 @@ begin
     bind(b,ip"127.0.0.1",port+1)
 
     c = Condition()
-    @async begin
+    tsk = @async begin
         @test bytestring(recv(a)) == "Hello World"
     # Issue 6505
         @async begin
@@ -93,14 +106,16 @@ begin
     end
     send(b,ip"127.0.0.1",port,"Hello World")
     wait(c)
+    wait(tsk)
 
-    @async begin
+    tsk = @async begin
         @test begin
             (addr,data) = recvfrom(a)
             addr == ip"127.0.0.1" && bytestring(data) == "Hello World"
         end
     end
     send(b, ip"127.0.0.1",port,"Hello World")
+    wait(tsk)
 
     @test_throws MethodError bind(UDPSocket(),port)
 
@@ -113,11 +128,12 @@ begin
     bind(a, ip"::1", uint16(port))
     bind(b, ip"::1", uint16(port+1))
 
-    @async begin
+    tsk = @async begin
         @test begin
             (addr, data) = recvfrom(a)
             addr == ip"::1" && bytestring(data) == "Hello World"
         end
     end
     send(b, ip"::1", port, "Hello World")
+    wait(tsk)
 end
