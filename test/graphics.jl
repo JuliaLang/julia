@@ -55,7 +55,7 @@ BBT_2 = BoundingBox(6, 7, 8, 9)
 
 #### shift()
 @test shift(BBT_1, -1, 2) == BoundingBox(1, 2, 6, 7)
- 
+
 #### scale()
 @test BBT_1 * 3 == BoundingBox(1, 4, 3, 6)
 
@@ -74,5 +74,3 @@ BBT_3 = rotate(BBT_1, π, Point(0, 1))
 @test isinside(BBT_1, Point(2.5, 4.5))
 @test isinside(BBT_1, Point(2, 4))
 @test isinside(BBT_1, Point(1, 3)) == false
-
-
