@@ -3,12 +3,12 @@ mainres = ([4, 5, 3],
 bitres = ([true, true, false],
           [false, true, false])
 
-tsk(x) = @task for i in x; produce(i); end
+tskprod(x) = @task for i in x; produce(i); end
 
 for (dest, src, bigsrc, emptysrc, res) in [
     ([1, 2, 3], () -> [4, 5], () -> [1, 2, 3, 4, 5], () -> Int[], mainres),
     ([1, 2, 3], () -> 4:5, () -> 1:5, () -> 1:0, mainres),
-    ([1, 2, 3], () -> tsk(4:5), () -> tsk(1:5), () -> tsk(1:0), mainres),
+    ([1, 2, 3], () -> tskprod(4:5), () -> tskprod(1:5), () -> tskprod(1:0), mainres),
     (falses(3), () -> trues(2), () -> trues(5), () -> trues(0), bitres)]
 
     @test copy!(copy(dest), src()) == res[1]
