@@ -434,7 +434,7 @@ end
 full(A::HessenbergQ) = LAPACK.orghr!(1, size(A.factors, 1), copy(A.factors), A.τ)
 
 # Also printing of QRQs
-print_matrix(io::IO, A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), sz::(Integer, Integer), punct...) = print_matrix(io, full(A), sz, punct...)
+getindex(A::Union(QRPackedQ,QRCompactWYQ,HessenbergQ), i::Integer, j::Integer) = (x = zeros(eltype(A), size(A, 1)); x[i] = 1; y = zeros(eltype(A), size(A, 2)); y[j] = 1; dot(x, A*y))
 
 
 #######################
