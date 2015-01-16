@@ -3,11 +3,12 @@
 const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
-convert(::Type{UInt}, x::Ptr) = box(UInt, unbox(Ptr,x))
+convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
 convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,uint(x)))
+convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,int(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p

@@ -102,3 +102,12 @@ for i = 1:1000
     @test (s+1)*(s+1) > n
 end
 
+# issue #9786
+let ptr = Ptr{Void}(typemax(UInt))
+    for T in (Int, Cssize_t)
+        @test T(ptr) == -1
+        @test ptr == Ptr{Void}(T(ptr))
+        @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
+    end
+    @test ptr == Ptr{Void}(Int8(-1)) # signed values are sign-extended to Int
+end
