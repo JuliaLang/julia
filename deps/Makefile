@@ -1629,7 +1629,7 @@ mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
 	$(JLCHECKSUM) $<
 	$(TAR) jxf $<
 	touch -c $@
-mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure $(MPFR_DEPS)
+mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure | $(MPFR_DEPS)
 	cd mpfr-$(MPFR_VER) && \
 	./configure $(CONFIGURE_COMMON) $(MPFR_OPTS) F77= --enable-shared --disable-static
 	touch -c $@
