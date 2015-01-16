@@ -1801,6 +1801,15 @@ endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
+ifeq ($(OS),Linux)
+	# If we're on linux, copy over libssl and libcrypto for libgit2
+	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
+	for LIB in libssl libcrypto; do \
+		LIB_PATH=$$(echo "$$LIBGIT_LIBS" | grep "$$LIB"); \
+		echo "LIB_PATH for $$LIB: $$LIB_PATH"; \
+		[ ! -z "$$LIB_PATH" ] && cp -v "$$LIB_PATH" $(build_shlibdir); \
+	done
+endif
 
 clean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER)/build/
