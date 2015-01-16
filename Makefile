@@ -194,6 +194,9 @@ JL_PRIVATE_LIBS += mpfr
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
+ifeq ($(OS),Linux)
+JL_PRIVATE_LIBS += ssl crypto
+endif
 endif
 ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
