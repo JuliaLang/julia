@@ -48,9 +48,39 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                     # similar
                     @test isa(similar(A1), t1)
 
-                    # Linear indexing
+                    # getindex
+                    ## Linear indexing
                     for i = 1:length(A1)
                         @test A1[i] == full(A1)[i]
+                    end
+
+                    ## Cartesian indexing
+                    for i = 1:size(A1, 1)
+                        for j = 1:size(A1, 2)
+                            @test A1[i,j] == full(A1)[i,j]
+                        end
+                    end
+
+                    # setindex! (and copy)
+                    A1c = copy(A1)
+                    for i = 1:size(A1, 1)
+                        for j = 1:size(A1, 2)
+                            if uplo1 == :U
+                                if i > j || (i == j && t1 == UnitUpperTriangular)
+                                    @test_throws BoundsError A1c[i,j] = 0
+                                else
+                                    A1c[i,j] = 0
+                                    @test A1c[i,j] == 0
+                                end
+                            else
+                                if i < j || (i == j && t1 == UnitLowerTriangular)
+                                    @test_throws BoundsError A1c[i,j] = 0
+                                else
+                                    A1c[i,j] = 0
+                                    @test A1c[i,j] == 0
+                                end
+                            end
+                        end
                     end
 
                     # istril/istriu
