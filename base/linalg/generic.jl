@@ -327,8 +327,6 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 #findmax(a::AbstractArray)
 #findmin(a::AbstractArray)
 
-#rref{T}(A::AbstractMatrix{T})
-
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = rand(100,100)
     t = @elapsed a*a
