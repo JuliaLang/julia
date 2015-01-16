@@ -974,12 +974,6 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
 
-    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
-    if !isempty(J)
-        minj, maxj = extrema(J)
-        ((minj < 1) || (maxj > n)) && BoundsError()
-    end
-
     nI = length(I)
     avgM = div(nnz(A),m)
     # heuristics based on experiments
@@ -1191,6 +1185,7 @@ function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J
     nnzS = 0
     pI = sortperm(I)
     @inbounds I = I[pI]
+
     fI = find(I)
     W = zeros(Ti, nI + 1) # Keep row counts
     W[1] = 1               # For cumsum later
@@ -1216,7 +1211,6 @@ function getindex_general{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J
                 ptrI += 1
             end
         end
-
     end
 
     colptrS_T = cumsum(W)
@@ -1260,6 +1254,18 @@ end
 
 # the general case:
 function getindex{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector)
+    (m, n) = size(A)
+
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && throw(BoundsError())
+    end
+
+    if !isempty(I)
+        mini, maxi = extrema(I)
+        ((mini < 1) || (maxi > m)) && throw(BoundsError())
+    end
+
     if issorted(I)
         return getindex_I_sorted(A, I, J)
     else
