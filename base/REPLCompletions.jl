@@ -182,10 +182,25 @@ function latex_completions(string, pos)
     return (false, (UTF8String[], 0:-1, false))
 end
 
+# detect the reason which caused an :incomplete expression
+# from the error message
+# NOTE: the error messages are defined in src/julia-parser.scm
+incomplete_tag(ex) = :none
+function incomplete_tag(ex::Expr)
+    Meta.isexpr(ex, :incomplete) || return :none
+    msg = ex.args[1]
+    contains(msg, "string") && return :string
+    contains(msg, "comment") && return :comment
+    contains(msg, "requires end") && return :block
+    contains(msg, "\"`\"") && return :cmd
+    contains(msg, "character") && return :char
+    return :other
+end
+
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = Base.incomplete_tag(parse(partial , raise=false))
+    inc_tag = incomplete_tag(Parser.parse(partial, raise=false))
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))

@@ -88,6 +88,10 @@ type ParseError <: Exception
     msg::AbstractString
 end
 
+immutable IncompleteParseError <: Exception
+    msg::AbstractString
+end
+
 type ArgumentError <: Exception
     msg::AbstractString
 end

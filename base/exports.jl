@@ -158,6 +158,7 @@ export
     MethodError,
     NullException,
     ParseError,
+    IncompleteParseError,
     ProcessExitedException,
     SystemError,
     TypeError,

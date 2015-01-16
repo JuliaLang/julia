@@ -657,7 +657,7 @@ function skip_multiline_comment(ts::TokenStream, count::Int)
         end
     end
     if unterminated
-        throw(ParseError("incomplete: unterminated multi-line comment #= ... =#"))
+        throw(IncompleteParseError("unterminated multi-line comment #= ... =#"))
     end
     return ts
 end
@@ -807,7 +807,7 @@ function require_token(ts::TokenStream, whitespace_newline::Bool)
     else
         t = next_token(ts, whitespace_newline)
     end
-    eof(t) && throw(ParseError("incomplete: premature end of input"))
+    eof(t) && throw(IncompleteParseError("premature end of input"))
     while isnewline(t)
         take_token(ts)
         t = next_token(ts, whitespace_newline)

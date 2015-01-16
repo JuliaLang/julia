@@ -142,22 +142,27 @@ syntax_deprecation_warnings(warn::Bool) =
     bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
 
 parse_input_line(s::AbstractString) = Parser.parse(s)
-
-function parse_input_line(io::IO)
+parse_input_line(io::IO) = begin
+    expr = nothing
     while !eof(io)
-        ex = Parser.parse(io)
-        if !(isa(ex, Expr) && ex.head === :incomplete)
-            return ex
+        try
+            expr = Parser.parse(io)
+        catch err
+            if isa(err, IncompleteParseError)
+                continue
+            end
+            rethrow(err)
         end
+        return expr
     end
 end
+
 # detect the reason which caused an :incomplete expression
 # from the error message
 # NOTE: the error messages are defined in src/julia-parser.scm
 incomplete_tag(ex) = :none
-function incomplete_tag(ex::Expr)
-    Meta.isexpr(ex, :incomplete) || return :none
-    msg = ex.args[1]
+function incomplete_tag(err::IncompleteParseError)
+    msg = err.msg
     contains(msg, "string") && return :string
     contains(msg, "comment") && return :comment
     contains(msg, "requires end") && return :block

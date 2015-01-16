@@ -1249,18 +1249,24 @@ shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
 ## interface to parser ##
 
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
-    # returns (expr, end_pos). expr is () in case of parse error.
-    ex, pos = ccall(:jl_parse_string, Any,
-                    (Ptr{UInt8}, Int32, Int32),
-                    str, pos-1, greedy ? 1:0)
-    if raise && isa(ex,Expr) && is(ex.head,:error)
-        throw(ParseError(ex.args[1]))
+    buf = IOBuffer(str)
+    pos = 1
+    local ex::Expr
+    try
+        ex = Parser.parse(buf)
+        pos = position(buf)
+    catch err
+        if raise && isa(err, ParseError)
+            rethrow(err)
+        elseif isa(err, IncompleteParseError)
+            ex = Expr(:incomplete, err.msg)
+        end
     end
-    if ex == ()
+    if ex == nothing
         raise && throw(ParseError("end of input"))
         ex = Expr(:error, "end of input")
     end
-    ex, pos+1 # C is zero-based, Julia is 1-based
+    return ex, pos
 end
 
 function parse(str::AbstractString; raise::Bool=true)
@@ -1274,6 +1280,7 @@ function parse(str::AbstractString; raise::Bool=true)
     end
     return ex
 end
+
 
 ## miscellaneous string functions ##
 
