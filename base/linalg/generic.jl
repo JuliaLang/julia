@@ -1,5 +1,9 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
+# Fall back arithmetic
++(A::AbstractMatrix, B::AbstractMatrix) = full(A) + full(B)
+-(A::AbstractMatrix, B::AbstractMatrix) = full(A) - full(B)
+
 scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
 scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
 
@@ -424,7 +428,7 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
 end
 
 function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
     return det(lufact(A))
 end
 det(x::Number) = x
