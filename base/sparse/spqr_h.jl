@@ -28,4 +28,3 @@ const SPQR_RX_EQUALS_B    = int32(0)    # solve R*X=B      or X = R\B
 const SPQR_RETX_EQUALS_B  = int32(1)    # solve R*E'*X=B   or X = E*(R\B)
 const SPQR_RTX_EQUALS_B   = int32(2)    # solve R'*X=B     or X = R'\B
 const SPQR_RTX_EQUALS_ETB = int32(3)    # solve R'*X=E'*B  or X = R'\(E'*B)
-
