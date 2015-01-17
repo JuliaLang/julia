@@ -148,7 +148,6 @@ $(build_private_libdir)/sys0.o:
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
-,:=,
 $(build_private_libdir)/sys.o: VERSION $(BASE_SRCS) $(build_docdir)/helpdb.jl $(build_private_libdir)/sys0.$(SHLIB_EXT)
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys) \
