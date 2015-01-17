@@ -69,8 +69,6 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(bitunpack(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, bitunpack(B))
-*(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
-*{Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
 *(A::AbstractMatrix, J::UniformScaling) = J.λ == 1 ? A : J.λ*A
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 1 ? A : J.λ*A
 

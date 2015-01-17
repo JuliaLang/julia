@@ -239,15 +239,17 @@ using .Markdown
 # misc useful functions & macros
 include("util.jl")
 
-# sparse matrices and linear algebra
-include("sparse.jl")
-importall .SparseMatrix
+# dense linear algebra
 include("linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# sparse matrices and sparse linear algebra
+include("sparse.jl")
+importall .SparseMatrix
 
 # statistics
 include("statistics.jl")
