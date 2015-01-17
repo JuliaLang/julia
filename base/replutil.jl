@@ -195,13 +195,15 @@ function show_method_candidates(io::IO, ex::MethodError)
             # checks if the type of arg 1:i of the input intersects with the current method
             t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
             if t_in == None
+                if Base.have_color
+                    print(buf, "\e[1m\e[31m::$(method.sig[i])\e[0m")
+                else
+                    print(buf, "!Matched::$(method.sig[i])")
+                end
                 # If there is no typeintersect then the type signature from the method is
                 # inserted in t_i this ensures if the type at the next i matches the type
                 # signature then there will be a type intersect
                 t_i[i] = method.sig[i]
-                Base.with_output_color(:red, buf) do buf
-                    print(buf, "::$(method.sig[i])")
-                end
             else
                 right_matches += j==i ? 1 : 0
                 print(buf, "::$(method.sig[i])")
@@ -221,8 +223,10 @@ function show_method_candidates(io::IO, ex::MethodError)
             # arguments is printed as not a match
             for sigtype in method.sig[length(t_i)+1:end]
                 print(buf, ", ")
-                Base.with_output_color(:red, buf) do buf
-                    print(buf, "::$(sigtype)")
+                if Base.have_color
+                    print(buf, "\e[1m\e[31m::$sigtype\e[0m")
+                else
+                    print(buf, "!Matched::$sigtype")
                 end
             end
         end
