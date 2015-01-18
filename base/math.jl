@@ -132,7 +132,6 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-
 for f in (:significand,)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
@@ -178,6 +177,7 @@ max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 
 min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
 @vectorize_2arg Real min
+
 
 minmax{T<:FloatingPoint}(x::T, y::T) =  x <= y ? (x, y) :
                                         x >  y ? (y, x) :

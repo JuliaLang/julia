@@ -157,6 +157,7 @@ export
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,
+    #sqrt_llvm_fast,
     #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
     #fptrunc, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
