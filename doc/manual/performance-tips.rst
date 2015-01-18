@@ -567,6 +567,11 @@ properties.
    **This feature is experimental** and could change or disappear in future
    versions of Julia.
 
+Note: While :obj:`@simd` needs to be placed directly in front of a
+loop, both :obj:`@inbounds` and :obj:`@fastmath` can be applied to
+several statements at once, e.g. using ``begin`` ... ``end``, or even
+to a whole function.
+
 Here is an example with both :obj:`@inbounds` and :obj:`@simd` markup::
 
     function inner( x, y )
