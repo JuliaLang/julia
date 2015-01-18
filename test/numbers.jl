@@ -2122,3 +2122,7 @@ end
 
 # test second branch, after all small primes in list have been searched
 @test factor(10009 * int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
+
+#Issue #5570
+@test map(x -> int(mod1(uint(x),uint(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
+
