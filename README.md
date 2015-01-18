@@ -259,33 +259,33 @@ Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
 - **[gcc & g++][gcc]** (>= 4.4) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
-- **[gfortran][gcc]**           — compiling and linking fortran libraries
+- **[gfortran][gcc]**           — compiling and linking Fortran libraries
 - **[git]**                     — version control and package management (version 1.7.3+ required)
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build libgit2.
+- **[cmake]**                   — needed to build `libgit2`.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
 - **[LLVM]** (3.3)           — compiler infrastructure. (3.4 not supported; 3.5+ mostly supported, [with caveats](https://github.com/JuliaLang/julia/issues/9336)) 
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
-- **[OpenLibm]**             — a portable libm library containing elementary math functions.
-- **[OpenSpecFun]** (>= 0.4) — a library containing Bessel and error functions of complex arguments.
-- **[DSFMT]**                — a fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
-- **[LAPACK]** (>= 3.4)      — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[OpenLibm]**             — portable libm library containing elementary math functions.
+- **[OpenSpecFun]** (>= 0.4) — library containing Bessel and error functions of complex arguments.
+- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
+- **[LAPACK]** (>= 3.4)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
-- **[SuiteSparse]**          — a library of linear algebra routines for sparse matrices.
-- **[ARPACK]**               — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+- **[SuiteSparse]**          — library of linear algebra routines for sparse matrices.
+- **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]** (>= 8.31)       — Perl-compatible regular expressions library.
-- **[GMP]** (>= 5.0)         — the GNU multiple precision arithmetic library, needed for bigint support.
-- **[MPFR]** (>= 3.0)        — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
-- **[libgit2]** (>= 0.21)    — the Git linkable library, used by Julia's package manager
+- **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
+- **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
+- **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
