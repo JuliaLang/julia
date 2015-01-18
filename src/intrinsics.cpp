@@ -15,6 +15,8 @@ namespace JL_I {
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        eq_float_fast, ne_float_fast,
+        lt_float_fast, le_float_fast,
         fpiseq, fpislt,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
@@ -34,6 +36,7 @@ namespace JL_I {
         abs_float, copysign_float, flipsign_int, select_value,
         ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
         sqrt_llvm, powi_llvm,
+        sqrt_llvm_fast,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -1016,10 +1019,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(sle_int,2) return builder.CreateICmpSLE(JL_INT(x), JL_INT(y));
     HANDLE(ule_int,2) return builder.CreateICmpULE(JL_INT(x), JL_INT(y));
 
-    HANDLE(eq_float,2) return builder.CreateFCmpOEQ(FP(x), FP(y));
-    HANDLE(ne_float,2) return builder.CreateFCmpUNE(FP(x), FP(y));
-    HANDLE(lt_float,2) return builder.CreateFCmpOLT(FP(x), FP(y));
-    HANDLE(le_float,2) return builder.CreateFCmpOLE(FP(x), FP(y));
+    HANDLE(eq_float,2) return math_builder(ctx)().CreateFCmpOEQ(FP(x), FP(y));
+    HANDLE(ne_float,2) return math_builder(ctx)().CreateFCmpUNE(FP(x), FP(y));
+    HANDLE(lt_float,2) return math_builder(ctx)().CreateFCmpOLT(FP(x), FP(y));
+    HANDLE(le_float,2) return math_builder(ctx)().CreateFCmpOLE(FP(x), FP(y));
+
+    HANDLE(eq_float_fast,2) return math_builder(ctx, true)().CreateFCmpOEQ(FP(x), FP(y));
+    HANDLE(ne_float_fast,2) return math_builder(ctx, true)().CreateFCmpUNE(FP(x), FP(y));
+    HANDLE(lt_float_fast,2) return math_builder(ctx, true)().CreateFCmpOLT(FP(x), FP(y));
+    HANDLE(le_float_fast,2) return math_builder(ctx, true)().CreateFCmpOLE(FP(x), FP(y));
 
     HANDLE(fpiseq,2) {
         Value *xi = JL_INT(x);
@@ -1239,6 +1247,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                         x, builder.CreateSIToFP(y, tx));
 #endif
     }
+    HANDLE(sqrt_llvm_fast,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+    }
     default:
         assert(false);
     }
@@ -1304,6 +1318,8 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sle_int); ADD_I(ule_int);
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
+    ADD_I(eq_float_fast); ADD_I(ne_float_fast);
+    ADD_I(lt_float_fast); ADD_I(le_float_fast);
     ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
@@ -1316,6 +1332,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(flipsign_int); ADD_I(select_value);
     ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
     ADD_I(sqrt_llvm); ADD_I(powi_llvm);
+    ADD_I(sqrt_llvm_fast);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
