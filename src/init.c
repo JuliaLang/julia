@@ -905,6 +905,22 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         jl_compileropts.build_path = abspath(jl_compileropts.build_path);
 }
 
+#ifndef _OS_WINDOWS_
+DLLEXPORT int
+jl_set_signal_act_die(int sig)
+{
+    struct sigaction act_die;
+    memset(&act_die, 0, sizeof(struct sigaction));
+    sigemptyset(&act_die.sa_mask);
+    act_die.sa_sigaction = sigdie_handler;
+    act_die.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
+        return errno;
+    }
+    return 0;
+}
+#endif
+
 void _julia_init(JL_IMAGE_SEARCH rel)
 {
     libsupport_init();
@@ -1048,10 +1064,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-    if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGPIPE\n");
-        jl_exit(1);
-    }
 #if defined (_OS_DARWIN_)
     kern_return_t ret;
     mach_port_t self = mach_task_self();
@@ -1126,10 +1138,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_exit(1);
     }
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
-    }
-    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
         JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
