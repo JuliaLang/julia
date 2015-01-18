@@ -200,7 +200,7 @@ end
 function completions(string, pos)
     # First parse everything up to the current position
     partial = string[1:pos]
-    inc_tag = incomplete_tag(Parser.parse(partial, raise=false))
+    inc_tag = incomplete_tag(parse(partial, raise=false))
     if inc_tag in [:cmd, :string]
         m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))

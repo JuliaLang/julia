@@ -1146,7 +1146,7 @@ function shell_parse(raw::AbstractString, interp::Bool)
                 error("space not allowed right after \$")
             end
             stpos = j
-            ex, j = parse(s,j,greedy=false)
+            ex, j = jl_parse(s,j,greedy=false)
             last_parse = stpos:j
             update_arg(esc(ex)); i = j
         else
@@ -1248,30 +1248,56 @@ shell_escape(args::AbstractString...) = sprint(print_shell_escaped, args...)
 
 ## interface to parser ##
 
+function jl_parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
+    # returns (expr, end_pos). expr is () in case of parse error.
+    ex, pos = ccall(:jl_parse_string, Any, (Ptr{UInt8}, Int32, Int32),
+                     str, pos-1, greedy ? 1:0)
+    if raise && isa(ex,Expr) && is(ex.head,:error)
+        throw(ParseError(ex.args[1]))
+    end
+    if ex == ()
+        raise && throw(ParseError("end of input"))
+        ex = Expr(:error, "end of input")
+    end
+    ex, pos+1 # C is zero-based, Julia is 1-based
+end
+
+function jl_parse(str::AbstractString; raise::Bool=true)
+    ex, pos = parse(str, start(str), greedy=true, raise=raise)
+    if isa(ex,Expr) && ex.head === :error
+        return ex
+    end
+    if !done(str, pos)
+        raise && throw(ParseError("extra token after end of expression"))
+        return Expr(:error, "extra token after end of expression")
+    end
+    return ex
+end
+
 function parse(str::AbstractString, pos::Int; greedy::Bool=true, raise::Bool=true)
-    buf = IOBuffer(str)
-    pos = 1
-    local ex::Expr
+    buf  = IOBuffer(str)
+    pos  = 1
+    expr = nothing
     try
-        ex = Parser.parse(buf)
+        expr = Parser.parse(buf)
         pos = position(buf)
     catch err
         if raise && isa(err, ParseError)
             rethrow(err)
         elseif isa(err, IncompleteParseError)
-            ex = Expr(:incomplete, err.msg)
+            expr = Expr(:incomplete, err.msg)
         end
     end
-    if ex == nothing
+    if expr == nothing
         raise && throw(ParseError("end of input"))
-        ex = Expr(:error, "end of input")
+        expr = Expr(:error, "end of input")
     end
-    return ex, pos
+    return expr, pos
 end
 
 function parse(str::AbstractString; raise::Bool=true)
-    ex, pos = parse(str, start(str), greedy=true, raise=raise)
-    if isa(ex,Expr) && ex.head === :error
+    expr, pos = parse(str, start(str), greedy=true, raise=raise)
+    if isa(expr,Expr) && expr.head === :error
         return ex
     end
     if !done(str, pos)

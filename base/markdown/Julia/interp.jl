@@ -1,4 +1,4 @@
-function Base.parse(stream::IOBuffer; greedy::Bool = true, raise::Bool = true)
+function Base.jl_parse(stream::IOBuffer; greedy::Bool = true, raise::Bool = true)
   pos = position(stream)
   ex, Δ = Base.parse(readall(stream), 1, greedy = greedy, raise = raise)
   seek(stream, pos + Δ - 1)
