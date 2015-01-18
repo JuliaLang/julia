@@ -4,7 +4,7 @@ testnames = [
     "dict", "hashing", "remote", "iobuffer", "staged", "arrayops",
     "subarray", "reduce", "reducedim", "random", "intfuncs",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "copy", "math",
-    "functional", "bigint", "sorting", "statistics", "spawn",
+    "fastmath", "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
