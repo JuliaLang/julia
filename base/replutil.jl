@@ -118,6 +118,7 @@ showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: $(ex.key) not found")
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
     print(io, "MethodError: ")
