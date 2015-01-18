@@ -292,33 +292,33 @@ Julia uses the following external libraries, which are automatically downloaded 
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
-[GNU make]:     http://www.gnu.org/software/make/
-[patch]:        http://www.gnu.org/software/patch/
-[wget]:         http://www.gnu.org/software/wget/
-[m4]:           http://www.gnu.org/software/m4/
-[gcc]:          http://gcc.gnu.org/
-[clang]:        http://clang.llvm.org/
-[curl]:         http://curl.haxx.se/
+[GNU make]:     http://www.gnu.org/software/make
+[patch]:        http://www.gnu.org/software/patch
+[wget]:         http://www.gnu.org/software/wget
+[m4]:           http://www.gnu.org/software/m4
+[gcc]:          http://gcc.gnu.org
+[clang]:        http://clang.llvm.org
+[curl]:         http://curl.haxx.se
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
-[git]:          http://git-scm.com/
-[perl]:         http://www.perl.org/
-[cmake]:        http://www.cmake.org/
+[git]:          http://git-scm.com
+[perl]:         http://www.perl.org
+[cmake]:        http://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       http://www.netlib.org/lapack/
-[MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
+[LAPACK]:       http://www.netlib.org/lapack
+[MKL]:          http://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [AMOS]:         http://netlib.org/amos
-[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/
-[FFTW]:         http://www.fftw.org/
-[PCRE]:         http://www.pcre.org/
-[LLVM]:         http://www.llvm.org/
+[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
+[FFTW]:         http://www.fftw.org
+[PCRE]:         http://www.pcre.org
+[LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          http://gmplib.org/
-[MPFR]:         http://www.mpfr.org/
-[double-conversion]: http://double-conversion.googlecode.com/
+[GMP]:          http://gmplib.org
+[MPFR]:         http://www.mpfr.org
+[double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
 [utf8proc]:     http://www.public-software-group.org/utf8proc
