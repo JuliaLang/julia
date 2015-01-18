@@ -93,15 +93,15 @@ course be overridden for custom types.
 Advanced Usage
 --------------
 
-The `@doc` macro associates its first argument with its second in a
-per-module dictionary called `META`. By default, documentation is
-expected to be written in Markdown, and the `doc""` string macro simply
+The ``@doc`` macro associates its first argument with its second in a
+per-module dictionary called ``META``. By default, documentation is
+expected to be written in Markdown, and the ``doc""`` string macro simply
 creates an object representing the Markdown content. In the future it is
 likely to do more advanced things such as allowing for relative image or
 link paths.
 
-When used for retreiving documentation, the `@doc` macro (or equally,
-the `doc` function) will search all `META` dictionaries for metadata
+When used for retreiving documentation, the ``@doc`` macro (or equally,
+the ``doc`` function) will search all ``META`` dictionaries for metadata
 relevant to the given object and return it. The returned object (some
 Markdown content, for example) will by default display itself
 intelligently. This design also makes it easy to use the doc system in a
@@ -136,7 +136,7 @@ like tables is in the works.
 Markdown.jl supports interpolation in a very similar way to basic string
 literals, with the difference that it will store the object itself in
 the Markdown tree (as opposed to converting it to a string). When the
-Markdown content is rendered the usual `writemime` methods will be
+Markdown content is rendered the usual ``writemime`` methods will be
 called, and these can be overridden as usual. This design allows the
 Markdown to be extended with arbitrarily complex features (such as
 references) without cluttering the basic syntax.
