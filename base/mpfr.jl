@@ -26,6 +26,12 @@ import Base.GMP: ClongMax, CulongMax, CdoubleMax
 
 import Base.Math.lgamma_r
 
+function __init__()
+    # set exponent to full range by default
+    set_emin!(get_emin_min())
+    set_emax!(get_emax_max())
+end
+
 const ROUNDING_MODE = Cint[0]
 const DEFAULT_PRECISION = [256]
 
@@ -769,5 +775,17 @@ end
 print(io::IO, b::BigFloat) = print(io, string(b))
 show(io::IO, b::BigFloat) = print(io, string(b), " with $(precision(b)) bits of precision")
 showcompact(io::IO, b::BigFloat) = print(io, string(b))
+
+# get/set exponent min/max
+get_emax() = ccall((:mpfr_get_emax, :libmpfr), Clong, ())
+get_emax_min() = ccall((:mpfr_get_emax_min, :libmpfr), Clong, ())
+get_emax_max() = ccall((:mpfr_get_emax_max, :libmpfr), Clong, ())
+
+get_emin() = ccall((:mpfr_get_emin, :libmpfr), Clong, ())
+get_emin_min() = ccall((:mpfr_get_emin_min, :libmpfr), Clong, ())
+get_emin_max() = ccall((:mpfr_get_emin_max, :libmpfr), Clong, ())
+
+set_emax!(x) = ccall((:mpfr_set_emax, :libmpfr), Void, (Clong,), x)
+set_emin!(x) = ccall((:mpfr_set_emin, :libmpfr), Void, (Clong,), x)
 
 end #module
