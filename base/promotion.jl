@@ -160,6 +160,8 @@ promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 /(x::Number, y::Number) = /(promote(x,y)...)
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
+fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
+
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
@@ -190,6 +192,9 @@ no_op_err(name, T) = error(name," not defined for ",T)
 -{T<:Number}(x::T, y::T) = no_op_err("-", T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)
 ^{T<:Number}(x::T, y::T) = no_op_err("^", T)
+
+fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
+fma(x::Integer, y::Integer, z::Integer) = x*y+z
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
