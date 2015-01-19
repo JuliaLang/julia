@@ -7,7 +7,7 @@ importall Base.LinAlg
 
 import Base.NonTupleType, Base.float, Base.Order, Base.Sort.Forward
 import Base.transpose!, Base.ctranspose!
-import Base.LinAlg.TriangularUnion
+import Base.LinAlg.AbstractTriangular
 
 export SparseMatrixCSC,
        blkdiag, dense, diag, diagm, droptol!, dropzeros!, etree, full,
