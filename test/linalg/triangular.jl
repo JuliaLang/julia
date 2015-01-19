@@ -13,173 +13,188 @@ debug && println("Test basic type functionality")
 
 # The following test block tries to call all methods in base/linalg/triangular.jl in order for a combination of input element types. Keep the ordering when adding code.
 for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-    for elty2 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
-        for (t1, uplo1) in ((UpperTriangular, :U),
-                            (UnitUpperTriangular, :U),
-                            (LowerTriangular, :L),
-                            (UnitLowerTriangular, :L))
+    # Begin loop for first Triangular matrix
+    for (t1, uplo1) in ((UpperTriangular, :U),
+                        (UnitUpperTriangular, :U),
+                        (LowerTriangular, :L),
+                        (UnitLowerTriangular, :L))
+
+        # Construct test matrix
+        A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't, uplo1)))
+
+        debug && println("elty1: $elty1, A1: $t1")
+
+        # Convert
+        @test convert(AbstractMatrix{elty1}, A1) == A1
+        @test convert(Matrix, A1) == full(A1)
+
+        # full!
+        @test full!(copy(A1)) == full(A1)
+
+        # fill!
+        @test full!(fill!(copy(A1), 1)) == full(t1(ones(size(A1)...)))
+
+        # similar
+        @test isa(similar(A1), t1)
+
+        # getindex
+        ## Linear indexing
+        for i = 1:length(A1)
+            @test A1[i] == full(A1)[i]
+        end
+
+        ## Cartesian indexing
+        for i = 1:size(A1, 1)
+            for j = 1:size(A1, 2)
+                @test A1[i,j] == full(A1)[i,j]
+            end
+        end
+
+        # setindex! (and copy)
+        A1c = copy(A1)
+        for i = 1:size(A1, 1)
+            for j = 1:size(A1, 2)
+                if uplo1 == :U
+                    if i > j || (i == j && t1 == UnitUpperTriangular)
+                        @test_throws BoundsError A1c[i,j] = 0
+                    else
+                        A1c[i,j] = 0
+                        @test A1c[i,j] == 0
+                    end
+                else
+                    if i < j || (i == j && t1 == UnitLowerTriangular)
+                        @test_throws BoundsError A1c[i,j] = 0
+                    else
+                        A1c[i,j] = 0
+                        @test A1c[i,j] == 0
+                    end
+                end
+            end
+        end
+
+        # istril/istriu
+        if uplo1 == :L
+            @test istril(A1)
+            @test !istriu(A1)
+        else
+            @test istriu(A1)
+            @test !istril(A1)
+        end
+
+        # (c)transpose
+        @test full(A1') == full(A1)'
+        @test full(A1.') == full(A1).'
+        @test transpose!(copy(A1)) == A1.'
+
+        # diag
+        @test diag(A1) == diag(full(A1))
+
+        # real
+        @test full(real(A1)) == real(full(A1))
+
+        # Unary operations
+        @test full(-A1) == -full(A1)
+
+        # Binary operations
+        @test A1*0.5 == full(A1*0.5)
+        @test 0.5*A1 == full(0.5*A1)
+        @test A1/0.5 == full(A1/0.5)
+        @test 0.5\A1 == full(0.5\A1)
+
+        # inversion
+        @test_approx_eq inv(A1) inv(lufact(full(A1)))
+
+        # Determinant
+        @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
+
+        # Matrix square root
+        @test_approx_eq sqrtm(A1) |> t->t*t A1
+
+        # eigenproblems
+        if elty1 != BigFloat # Not handled yet
+            vals, vecs = eig(A1)
+            if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
+                @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
+            end
+        end
+
+        # Condition number tests - can be VERY approximate
+        if elty1 <:BlasFloat
+            for p in (1.0, Inf)
+                @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
+            end
+        end
+
+        if elty1 != BigFloat # Not implemented yet
+            svd(A1)
+            svdfact(A1)
+            elty1 <: BlasFloat && svdfact!(copy(A1))
+            svdvals(A1)
+        end
+
+        # Begin loop for second Triangular matrix
+        for elty2 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
             for (t2, uplo2) in ((UpperTriangular, :U),
                                 (UnitUpperTriangular, :U),
                                 (LowerTriangular, :L),
                                 (UnitLowerTriangular, :L))
-                A1 = t1(elty1 == Int ? rand(1:7, n, n) : convert(Matrix{elty1}, (elty1 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t -> chol(t't, uplo1)))
+
+                debug && println("elty1: $elty1, A1: $t1, elty2: $elty2")
+
                 A2 = t2(elty2 == Int ? rand(1:7, n, n) : convert(Matrix{elty2}, (elty2 <: Complex ? complex(randn(n, n), randn(n, n)) : randn(n, n)) |> t-> chol(t't, uplo2)))
 
-                for eltyB in (Float32, Float64, Complex64, Complex128)
-                    B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
-
-                    debug && println("elty1: $elty1, A1: $t1, elty2: $elty2, A2: $t2, B: $eltyB")
-
-                    # Convert
-                    @test convert(AbstractMatrix{elty1}, A1) == A1
-                    if elty1 <: Real && !(elty2 <: Integer)
-                        @test convert(AbstractMatrix{elty2}, A1) == t1(convert(Matrix{elty2}, A1.data))
-                    elseif elty2 <: Real && !(elty1 <: Integer)
-                        @test_throws InexactError convert(AbstractMatrix{elty2}, A1) == t1(convert(Matrix{elty2}, A1.data))
-                    end
-                    @test convert(Matrix, A1) == full(A1)
-
-                    # full!
-                    @test full!(copy(A1)) == full(A1)
-
-                    # fill!
-                    @test full!(fill!(copy(A1), 1)) == full(t1(ones(size(A1)...)))
-
-                    # similar
-                    @test isa(similar(A1), t1)
-
-                    # getindex
-                    ## Linear indexing
-                    for i = 1:length(A1)
-                        @test A1[i] == full(A1)[i]
-                    end
-
-                    ## Cartesian indexing
-                    for i = 1:size(A1, 1)
-                        for j = 1:size(A1, 2)
-                            @test A1[i,j] == full(A1)[i,j]
-                        end
-                    end
-
-                    # setindex! (and copy)
-                    A1c = copy(A1)
-                    for i = 1:size(A1, 1)
-                        for j = 1:size(A1, 2)
-                            if uplo1 == :U
-                                if i > j || (i == j && t1 == UnitUpperTriangular)
-                                    @test_throws BoundsError A1c[i,j] = 0
-                                else
-                                    A1c[i,j] = 0
-                                    @test A1c[i,j] == 0
-                                end
-                            else
-                                if i < j || (i == j && t1 == UnitLowerTriangular)
-                                    @test_throws BoundsError A1c[i,j] = 0
-                                else
-                                    A1c[i,j] = 0
-                                    @test A1c[i,j] == 0
-                                end
-                            end
-                        end
-                    end
-
-                    # istril/istriu
-                    if uplo1 == :L
-                        @test istril(A1)
-                        @test !istriu(A1)
-                    else
-                        @test istriu(A1)
-                        @test !istril(A1)
-                    end
-
-                    # (c)transpose
-                    @test full(A1') == full(A1)'
-                    @test full(A1.') == full(A1).'
-                    @test transpose!(copy(A1)) == A1.'
-
-                    # diag
-                    @test diag(A1) == diag(full(A1))
-
-                    # real
-                    @test full(real(A1)) == real(full(A1))
-
-                    # Unary operations
-                    @test full(-A1) == -full(A1)
-
-                    # Binary operations
-                    @test full(A1 + A2) == full(A1) + full(A2)
-                    @test full(A1 - A2) == full(A1) - full(A2)
-                    @test A1*0.5 == full(A1*0.5)
-                    @test 0.5*A1 == full(0.5*A1)
-                    @test A1/0.5 == full(A1/0.5)
-                    @test 0.5\A1 == full(0.5\A1)
-
-                    # Triangular-Triangular multiplication and division
-                    elty1 != BigFloat && elty2 != BigFloat && @test_approx_eq full(A1*A2) full(A1)*full(A2)
-                    @test_approx_eq full(A1'A2) full(A1)'full(A2)
-                    @test_approx_eq full(A1*A2') full(A1)*full(A2)'
-                    @test_approx_eq full(A1'A2') full(A1)'full(A2)'
-                    @test_approx_eq full(A1/A2) full(A1)/full(A2)
-
-                    # Triangular-dense Matrix/vector multiplication
-                    @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
-                    @test_approx_eq A1*B full(A1)*B
-                    @test_approx_eq A1'B[:,1] full(A1)'B[:,1]
-                    @test_approx_eq A1'B full(A1)'B
-                    @test_approx_eq A1*B' full(A1)*B'
-                    @test_approx_eq B*A1 B*full(A1)
-                    @test_approx_eq B[:,1]'A1 B[:,1]'full(A1)
-                    @test_approx_eq B'A1 B'full(A1)
-                    @test_approx_eq B*A1' B*full(A1)'
-                    @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
-                    @test_approx_eq B'A1' B'full(A1)'
-
-                    # ... and division
-                    @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
-                    @test_approx_eq A1\B full(A1)\B
-                    @test_approx_eq A1'\B[:,1] full(A1)'\B[:,1]
-                    @test_approx_eq A1'\B full(A1)'\B
-                    @test_approx_eq A1\B' full(A1)\B'
-                    @test_approx_eq A1'\B' full(A1)'\B'
-                    @test_approx_eq B/A1 B/full(A1)
-                    @test_approx_eq B/A1' B/full(A1)'
-                    @test_approx_eq B'/A1 B'/full(A1)
-                    @test_approx_eq B'/A1' B'/full(A1)'
-
-                    # inversion
-                    @test_approx_eq inv(A1) inv(lufact(full(A1)))
-
-                    # Error bounds
-                    elty1 != BigFloat && errorbounds(A1, A1\B, B)
-
-                    # Determinant
-                    @test_approx_eq_eps det(A1) det(lufact(full(A1))) sqrt(eps(real(float(one(elty1)))))*n*n
-
-                    # Matrix square root
-                    @test_approx_eq sqrtm(A1) |> t->t*t A1
-
-                    # eigenproblems
-                    if elty1 != BigFloat # Not handled yet
-                        vals, vecs = eig(A1)
-                        if (t1 == UpperTriangular || t1 == LowerTriangular) && elty1 != Int # Cannot really handle degenerate eigen space and Int matrices will probably have repeated eigenvalues.
-                            @test_approx_eq_eps vecs*diagm(vals)/vecs full(A1) sqrt(eps(float(real(one(vals[1])))))*(norm(A1, Inf)*n)^2
-                        end
-                    end
-
-                    # Condition number tests - can be VERY approximate
-                    if elty1 <:BlasFloat
-                        for p in (1.0, Inf)
-                            @test_approx_eq_eps cond(A1, p) cond(A1, p) (cond(A1, p) + cond(A1, p))
-                        end
-                    end
-
-                    if elty1 != BigFloat # Not implemented yet
-                        svd(A1)
-                        svdfact(A1)
-                        elty1 <: BlasFloat && svdfact!(copy(A1))
-                        svdvals(A1)
-                    end
+                # Convert
+                if elty1 <: Real && !(elty2 <: Integer)
+                    @test convert(AbstractMatrix{elty2}, A1) == t1(convert(Matrix{elty2}, A1.data))
+                elseif elty2 <: Real && !(elty1 <: Integer)
+                    @test_throws InexactError convert(AbstractMatrix{elty2}, A1) == t1(convert(Matrix{elty2}, A1.data))
                 end
+
+                # Binary operations
+                @test full(A1 + A2) == full(A1) + full(A2)
+                @test full(A1 - A2) == full(A1) - full(A2)
+
+                # Triangular-Triangular multiplication and division
+                elty1 != BigFloat && elty2 != BigFloat && @test_approx_eq full(A1*A2) full(A1)*full(A2)
+                @test_approx_eq full(A1'A2) full(A1)'full(A2)
+                @test_approx_eq full(A1*A2') full(A1)*full(A2)'
+                @test_approx_eq full(A1'A2') full(A1)'full(A2)'
+                @test_approx_eq full(A1/A2) full(A1)/full(A2)
+
+            end
+
+            for eltyB in (Float32, Float64, Complex64, Complex128)
+                B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
+
+                debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
+
+                # Triangular-dense Matrix/vector multiplication
+                @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
+                @test_approx_eq A1*B full(A1)*B
+                @test_approx_eq A1'B[:,1] full(A1)'B[:,1]
+                @test_approx_eq A1'B full(A1)'B
+                @test_approx_eq A1*B' full(A1)*B'
+                @test_approx_eq B*A1 B*full(A1)
+                @test_approx_eq B[:,1]'A1 B[:,1]'full(A1)
+                @test_approx_eq B'A1 B'full(A1)
+                @test_approx_eq B*A1' B*full(A1)'
+                @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
+                @test_approx_eq B'A1' B'full(A1)'
+
+                # ... and division
+                @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
+                @test_approx_eq A1\B full(A1)\B
+                @test_approx_eq A1'\B[:,1] full(A1)'\B[:,1]
+                @test_approx_eq A1'\B full(A1)'\B
+                @test_approx_eq A1\B' full(A1)\B'
+                @test_approx_eq A1'\B' full(A1)'\B'
+                @test_approx_eq B/A1 B/full(A1)
+                @test_approx_eq B/A1' B/full(A1)'
+                @test_approx_eq B'/A1 B'/full(A1)
+                @test_approx_eq B'/A1' B'/full(A1)'
+
+                # Error bounds
+                elty1 != BigFloat && errorbounds(A1, A1\B, B)
             end
         end
     end
