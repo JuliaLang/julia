@@ -15,7 +15,7 @@ branches:
 
 skip_commits:
 # Add [av skip] to commit messages for docfixes, etc to reduce load on queue
-  message: /\[av skip\]/ 
+  message: /\[av skip\]/
 
 notifications:
   - provider: Email

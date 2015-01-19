@@ -411,7 +411,7 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call 
+Both concatenation and string interpolation call
 :func:`string` to convert objects into string form. Most
 non-:obj:`AbstractString` objects are converted to strings closely
 corresponding to how they are entered as literal expressions:

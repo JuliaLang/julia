@@ -1,7 +1,7 @@
 .. _man-conversion-and-promotion:
 
 **************************
- Conversion and Promotion  
+ Conversion and Promotion
 **************************
 
 Julia has a system for promoting arguments of mathematical operators to
@@ -146,7 +146,7 @@ to zero:
     false
 
 The method signatures for conversion methods are often quite a bit more
-involved than this example, especially for parametric types. The example 
+involved than this example, especially for parametric types. The example
 above is meant to be pedagogical, and is not the actual julia behaviour.
 This is the actual implementation in julia::
 
