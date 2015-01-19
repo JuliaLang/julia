@@ -360,13 +360,13 @@ not domain experts*.
   * Julia does not have a single comprehensive plotting package. Instead,
     ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
     unique approach based on a particular design philosophy.
-  
+
   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
     many well-established sorting algorithms.
 
 5. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
-   
+
   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
     a web search.
 
@@ -518,11 +518,11 @@ that copy exists, you can push your local changes to your copy
 
 1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
 fork.
- 
+
 2. add your fork as a remote repository for the METADATA
 repository on your local computer (in the terminal where USERNAME is
 your github username)::
-    
+
     cd ~/.julia/METADATA
     git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
 

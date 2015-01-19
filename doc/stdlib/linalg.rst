@@ -169,7 +169,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ``
    object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
-   
+
    Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the
    columns that span the rows of ``R`` in the QR factorization that are zero.
    The resulting matrix is the ``Q`` in a thin QR factorization (sometimes
