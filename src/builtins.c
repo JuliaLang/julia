@@ -755,9 +755,18 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
         pend = bstr+len;
     }
     *out = strtod_c(bstr, &p);
-    if ((p == bstr) || (p != pend) ||
+    if (p == bstr ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
         err = 1;
+    // Deal with case where the substring might be something like "1 ",
+    // which is OK, and "1 X", which we don't allow.
+    while (p != pend) {
+        if (!isspace((unsigned char)*p)) {
+            err = 1;
+            break;
+        }
+        p++;
+    }
     if (bstr != str+offset)
         free(bstr);
     return err;
@@ -805,9 +814,18 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
     *out = strtof_c(bstr, &p);
 #endif
 
-    if ((p == bstr) || (p != pend) ||
+    if (p == bstr ||
         (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
         err = 1;
+    // Deal with case where the substring might be something like "1 ",
+    // which is OK, and "1 X", which we don't allow.
+    while (p != pend) {
+        if (!isspace((unsigned char)*p)) {
+            err = 1;
+            break;
+        }
+        p++;
+    }
     if (bstr != str+offset)
         free(bstr);
     return err;

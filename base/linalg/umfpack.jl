@@ -8,7 +8,7 @@ export UmfpackLU,
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 
-import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!
+import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -122,18 +122,6 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
                     copy(S.nzval))
-    finalizer(res, umfpack_free_symbolic)
-    umfpack_numeric!(res)
-end
-
-function lufact!{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
-
-    zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                    zerobased ? S.colptr : decrement!(S.colptr),
-                    zerobased ? S.rowval : decrement!(S.rowval),
-                    S.nzval)
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end

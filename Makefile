@@ -50,6 +50,13 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 	@export private_libdir=$(private_libdir) && \
 	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
+check-whitespace:
+ifneq ($(NO_GIT), 1)
+	contrib/check-whitespace.sh
+else
+	$(warn "Skipping whitespace check because git is unavailable")
+endif
+
 release-candidate: release test
 	@#Check documentation
 	@./julia doc/NEWS-update.jl #Add missing cross-references to NEWS.md
@@ -83,8 +90,8 @@ release-candidate: release test
 
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
-	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
-	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work
+	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
+	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
 	@echo 5. Replace github release tarball with tarball created from make source-dist
 	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
@@ -191,6 +198,9 @@ JL_PRIVATE_LIBS += mpfr
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
+ifeq ($(OS),Linux)
+JL_PRIVATE_LIBS += ssl crypto
+endif
 endif
 ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
@@ -429,7 +439,8 @@ distcleanall: cleanall
 	@$(MAKE) -C doc cleanall
 	rm -fr $(build_prefix)
 
-.PHONY: default debug release julia-debug julia-release \
+.PHONY: default debug release check-whitespace release-candidate \
+	julia-debug julia-release \
 	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules

@@ -154,7 +154,7 @@ end
 debug && println("Test interconversion between special matrix types")
 a=[1.0:n]
 A=Diagonal(a)
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
     debug && println("newtype is $(newtype)")
     @test full(convert(newtype, A)) == full(A)
 end
@@ -162,29 +162,29 @@ end
 for isupper in (true, false)
     debug && println("isupper is $(isupper)")
     A=Bidiagonal(a, [1.0:n-1], isupper)
-    for newtype in [Bidiagonal, Tridiagonal, Triangular, Matrix]
+    for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
     end
     A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
-    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
     end
 end
 
-A=SymTridiagonal(a, [1.0:n-1])
+A = SymTridiagonal(a, [1.0:n-1])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
+A = Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
@@ -218,7 +218,7 @@ C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
 
 # Issues #8057 and #8058
-for f in (eigfact, eigvals)
+for f in (eigfact, eigvals, eig)
     for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
         @test_throws ArgumentError f(A, 3, 2)
         @test_throws ArgumentError f(A, 1:4)
