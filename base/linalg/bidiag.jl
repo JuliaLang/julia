@@ -114,7 +114,7 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, TriangularUnion)
+SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular)
 *(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 #Generic multiplication
@@ -126,11 +126,11 @@ end
 
 
 #Linear solvers
-A_ldiv_B!(A::Union(Bidiagonal, TriangularUnion), b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Union(Bidiagonal, TriangularUnion), b::AbstractVector) = naivesub!(transpose(A), b)
-Ac_ldiv_B!(A::Union(Bidiagonal, TriangularUnion), b::AbstractVector) = naivesub!(ctranspose(A), b)
+A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(A, b)
+At_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(transpose(A), b)
+Ac_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
 for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
-    function ($func)(A::Union(Bidiagonal, TriangularUnion), B::AbstractMatrix)
+    function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:,1])
         n = size(B, 1)
         for i = 1:size(B,2)
@@ -142,7 +142,7 @@ for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
     end
 end end
 for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
-    function ($func)(A::Union(Bidiagonal, TriangularUnion), B::AbstractMatrix)
+    function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:, 2])
         m, n = size(B)
         nm = n*m

@@ -46,12 +46,12 @@ function convert(::Type{SymTridiagonal}, A::Tridiagonal)
     SymTridiagonal(A.d, A.dl)
 end
 
-function convert(::Type{Diagonal}, A::TriangularUnion)
+function convert(::Type{Diagonal}, A::AbstractTriangular)
     full(A) == diagm(diag(A)) || throw(ArgumentError("Matrix cannot be represented as Diagonal"))
     Diagonal(diag(A))
 end
 
-function convert(::Type{Bidiagonal}, A::TriangularUnion)
+function convert(::Type{Bidiagonal}, A::AbstractTriangular)
     fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1)
         return Bidiagonal(diag(A), diag(fA,1), true)
@@ -62,9 +62,9 @@ function convert(::Type{Bidiagonal}, A::TriangularUnion)
     end
 end
 
-convert(::Type{SymTridiagonal}, A::TriangularUnion) = convert(SymTridiagonal, convert(Tridiagonal, A))
+convert(::Type{SymTridiagonal}, A::AbstractTriangular) = convert(SymTridiagonal, convert(Tridiagonal, A))
 
-function convert(::Type{Tridiagonal}, A::TriangularUnion)
+function convert(::Type{Tridiagonal}, A::AbstractTriangular)
     fA = full(A)
     if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
         return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
@@ -115,7 +115,7 @@ for op in (:+, :-)
     end
 end
 
-A_mul_Bc!(A::TriangularUnion, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc!(A::TriangularUnion, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
-A_mul_Bc(A::TriangularUnion, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
+A_mul_Bc!(A::AbstractTriangular, B::QRCompactWYQ) = A_mul_Bc!(full!(A),B)
+A_mul_Bc!(A::AbstractTriangular, B::QRPackedQ) = A_mul_Bc!(full!(A),B)
+A_mul_Bc(A::AbstractTriangular, B::Union(QRCompactWYQ,QRPackedQ)) = A_mul_Bc(full(A), B)
 
