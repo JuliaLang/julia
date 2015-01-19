@@ -147,10 +147,13 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. If you've moved the source directory, you might get errors such as
+3. If you've upgraded OS X recently and you get an error that looks like
+    ```ld: library not found for -lcrt1.10.6.o```, run `xcode-select --install`.
+
+4. If you've moved the source directory, you might get errors such as
     ```CMake Error: The current CMakeCache.txt directory ... is different than the directory ... where     CMakeCache.txt was created.```, in which case you may delete the offending dependency under `deps`
 
-4. In extreme cases, you may wish to reset the source tree to a pristine state.
+5. In extreme cases, you may wish to reset the source tree to a pristine state.
    The following git commands may be helpful:
 
    ```sh
