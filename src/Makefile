@@ -10,7 +10,8 @@ BUILDDIR ?= .
 
 SRCS = \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
+	alloc dlload sys init task array dump toplevel jl_uv jlapi profile \
+	llvm-simdloop threadgroup threading
 
 HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 
@@ -59,9 +60,9 @@ $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 $(BUILDDIR)/%.o: %.cpp $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@) -std=c++0x
 $(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) | $(BUILDDIR)
-	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
+	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@) -std=c++0x
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/flisp/libflisp.a
 	@$(call PRINT_FLISP, $(call spawn,$(BUILDDIR)/flisp/flisp) ./bin2hex.scm < $< > $@)

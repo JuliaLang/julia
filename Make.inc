@@ -281,7 +281,7 @@ CC = $(CC_BASE)
 CXX = $(CXX_BASE)
 JCFLAGS = -std=gnu99 -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
-JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti -std=gnu++11
 DEBUGFLAGS = -O0 -ggdb3 -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -ggdb3 -falign-functions
 endif
@@ -293,7 +293,7 @@ CC = $(CC_BASE)
 CXX = $(CXX_BASE)
 JCFLAGS = -pipe $(fPIC) -fno-strict-aliasing -D_FILE_OFFSET_BITS=64
 JCPPFLAGS =
-JCXXFLAGS = -pipe $(fPIC) -fno-rtti
+JCXXFLAGS = -pipe $(fPIC) -fno-rtti -std=gnu++11
 DEBUGFLAGS = -O0 -g -DJL_DEBUG_BUILD -fstack-protector-all
 SHIPFLAGS = -O3 -g
 ifeq ($(OS), Darwin)

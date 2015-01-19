@@ -902,9 +902,9 @@ jl_value_t *jl_prepare_ast(jl_lambda_info_t *li, jl_tuple_t *sparams)
     return ast;
 }
 
-DLLEXPORT int jl_is_operator(char *sym) {
-     return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym))
-             == FL_T;
+DLLEXPORT int jl_is_operator(char *sym)
+{
+    return fl_applyn(1, symbol_value(symbol("operator?")), symbol(sym)) == FL_T;
 }
 
 DLLEXPORT int jl_operator_precedence(char *sym) {
