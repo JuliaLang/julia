@@ -95,6 +95,7 @@ function doc(f::Function)
       fd = mod.META[f]
       if isa(fd, FuncDoc)
         for m in fd.order
+          push!(docs, Base.Markdown.MD(m))
           push!(docs, fd.meta[m])
         end
       elseif length(docs) == 0
