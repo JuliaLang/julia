@@ -50,17 +50,17 @@ For developers who need to wrap C libraries so that they can be called from Juli
 
 Julia's documentation is stored in the `doc` directory, and like everything else can be modified using `git`. However, for small changes one can also use GitHub's web interface:
 
-- Navigate to https://github.com/JuliaLang/julia 
-- Click `doc` 
+- Navigate to https://github.com/JuliaLang/julia
+- Click `doc`
 - If you want to modify an entry in the help for Julia's standard library, click `stdlib`
 - Pick the file you want to edit (for example, `base.rst`)
 - Select the `master` branch (if not browsing it already)
-- Click "Edit" 
-- Click on the icon that looks like a fullscreen symbol ("Zen" mode) 
+- Click "Edit"
+- Click on the icon that looks like a fullscreen symbol ("Zen" mode)
 - Search for the function you want to change
-- Make your changes 
-- Exit Zen mode 
-- Provide a title, and optionally a longer description of your change 
+- Make your changes
+- Exit Zen mode
+- Provide a title, and optionally a longer description of your change
 - Submit your change
 
 

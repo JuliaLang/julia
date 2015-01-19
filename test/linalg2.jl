@@ -32,7 +32,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         U = rand(1:100, n, 2)
         V = rand(1:100, 2, n)
         C = rand(1:100, 2, 2)
-    else 
+    else
         d = convert(Vector{elty}, d)
         dl = convert(Vector{elty}, dl)
         du = convert(Vector{elty}, du)
@@ -110,7 +110,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
     #  axiomatic definition of determinants.
     # If all axioms are satisfied and all the composition rules work,
     #  all determinants will be correct except for floating point errors.
-    
+
     # The determinant of the identity matrix should always be 1.
     for i = 1:10
         A = eye(elty, i)
@@ -152,7 +152,7 @@ for elty in (Float32, Float64, Complex64, Complex128)
     @test_approx_eq tril(LinAlg.BLAS.syr2k('L','N',U,V)) tril(U*V.' + V*U.')
     @test_approx_eq triu(LinAlg.BLAS.syr2k('U','N',U,V)) triu(U*V.' + V*U.')
     @test_approx_eq tril(LinAlg.BLAS.syr2k('L','T',U,V)) tril(U.'*V + V.'*U)
-    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)        
+    @test_approx_eq triu(LinAlg.BLAS.syr2k('U','T',U,V)) triu(U.'*V + V.'*U)
 end
 
 for elty in (Complex64, Complex128)
@@ -167,7 +167,7 @@ for elty in (Complex64, Complex128)
     @test_approx_eq tril(LinAlg.BLAS.her2k('L','N',U,V)) tril(U*V' + V*U')
     @test_approx_eq triu(LinAlg.BLAS.her2k('U','N',U,V)) triu(U*V' + V*U')
     @test_approx_eq tril(LinAlg.BLAS.her2k('L','C',U,V)) tril(U'*V + V'*U)
-    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)        
+    @test_approx_eq triu(LinAlg.BLAS.her2k('U','C',U,V)) triu(U'*V + V'*U)
 end
 
 # LAPACK tests
@@ -247,9 +247,9 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
             @test_approx_eq FJulia.ipiv FLAPACK[2]
             @test_approx_eq FJulia.info FLAPACK[3]
         end
-        
+
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A)) 
+        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A))
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
@@ -321,17 +321,17 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
     norm(x[1:1]) === norm(x[1], 2)
     norm(x[1:1]) === norm(x[1], Inf)
 
-    for i = 1:10    
-        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
+    for i = 1:10
+        x = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
             convert(Vector{elty}, randn(nnorm))
         xs = sub(x,1:2:nnorm)
-        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) : 
-            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) : 
-            convert(Vector{elty}, randn(nnorm))        
+        y = elty <: Integer ? convert(Vector{elty}, rand(1:10, nnorm)) :
+            elty <: Complex ? convert(Vector{elty}, complex(randn(nnorm), randn(nnorm))) :
+            convert(Vector{elty}, randn(nnorm))
         ys = sub(y,1:2:nnorm)
-        α = elty <: Integer ? randn() : 
-            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+        α = elty <: Integer ? randn() :
+            elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
         # Absolute homogeneity
         @test_approx_eq norm(α*x,-Inf) abs(α)*norm(x,-Inf)
@@ -340,7 +340,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test_approx_eq norm(α*x) abs(α)*norm(x) # two is default
         @test_approx_eq norm(α*x,3) abs(α)*norm(x,3)
         @test_approx_eq norm(α*x,Inf) abs(α)*norm(x,Inf)
-        
+
         @test_approx_eq norm(α*xs,-Inf) abs(α)*norm(xs,-Inf)
         @test_approx_eq norm(α*xs,-1) abs(α)*norm(xs,-1)
         @test_approx_eq norm(α*xs,1) abs(α)*norm(xs,1)
@@ -353,7 +353,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(x + y) <= norm(x) + norm(y) # two is default
         @test norm(x + y,3) <= norm(x,3) + norm(y,3)
         @test norm(x + y,Inf) <= norm(x,Inf) + norm(y,Inf)
-        
+
         @test norm(xs + ys,1) <= norm(xs,1) + norm(ys,1)
         @test norm(xs + ys) <= norm(xs) + norm(ys) # two is default
         @test norm(xs + ys,3) <= norm(xs,3) + norm(ys,3)
@@ -379,23 +379,23 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test_approx_eq norm(As, Inf) 5
 
     for i = 1:10
-        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
+        A = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
             convert(Matrix{elty}, randn(mmat, nmat))
         As = sub(A,1:nmat,1:nmat)
-        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) : 
-            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) : 
-            convert(Matrix{elty}, randn(mmat, nmat))        
+        B = elty <: Integer ? convert(Matrix{elty}, rand(1:10, mmat, nmat)) :
+            elty <: Complex ? convert(Matrix{elty}, complex(randn(mmat, nmat), randn(mmat, nmat))) :
+            convert(Matrix{elty}, randn(mmat, nmat))
         Bs = sub(B,1:nmat,1:nmat)
         α = elty <: Integer ? randn() :
-            elty <: Complex ? convert(elty, complex(randn(),randn())) : 
+            elty <: Complex ? convert(elty, complex(randn(),randn())) :
             convert(elty, randn())
 
         # Absolute homogeneity
         @test_approx_eq norm(α*A,1) abs(α)*norm(A,1)
         elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*A) abs(α)*norm(A) # two is default
         @test_approx_eq norm(α*A,Inf) abs(α)*norm(A,Inf)
-        
+
         @test_approx_eq norm(α*As,1) abs(α)*norm(As,1)
         elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test_approx_eq norm(α*As) abs(α)*norm(As) # two is default
         @test_approx_eq norm(α*As,Inf) abs(α)*norm(As,Inf)
@@ -404,7 +404,7 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         @test norm(A + B,1) <= norm(A,1) + norm(B,1)
         elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(A + B) <= norm(A) + norm(B) # two is default
         @test norm(A + B,Inf) <= norm(A,Inf) + norm(B,Inf)
-        
+
         @test norm(As + Bs,1) <= norm(As,1) + norm(Bs,1)
         elty <: Union(BigFloat,Complex{BigFloat},BigInt) || @test norm(As + Bs) <= norm(As) + norm(Bs) # two is default
         @test norm(As + Bs,Inf) <= norm(As,Inf) + norm(Bs,Inf)
@@ -487,16 +487,16 @@ let
   a = [1, 2, 3]
   b = [4, 5, 6]
   @test kron(eye(2),eye(2)) == eye(4)
-  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]             
-  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]           
-  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]         
-  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]         
-  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]  
-  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3] 
-  @test kron(eye(2),2) == 2*eye(2)                        
-  @test kron(3,eye(3)) == 3*eye(3)                        
-  @test kron(a,2) == [2, 4, 6]                            
-  @test kron(b',2) == [8 10 12]                              
+  @test kron(a,b) == [4,5,6,8,10,12,12,15,18]
+  @test kron(a',b') == [4 5 6 8 10 12 12 15 18]
+  @test kron(a,b')  == [4 5 6; 8 10 12; 12 15 18]
+  @test kron(a',b)  == [4 8 12; 5 10 15; 6 12 18]
+  @test kron(a,eye(2)) == [1 0; 0 1; 2 0; 0 2; 3 0; 0 3]
+  @test kron(eye(2),a) == [ 1 0; 2 0; 3 0; 0 1; 0 2; 0 3]
+  @test kron(eye(2),2) == 2*eye(2)
+  @test kron(3,eye(3)) == 3*eye(3)
+  @test kron(a,2) == [2, 4, 6]
+  @test kron(b',2) == [8 10 12]
 end
 
 # issue #4796

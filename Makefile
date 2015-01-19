@@ -67,7 +67,7 @@ release-candidate: release test
 	@echo
 	@echo To complete the release candidate checklist:
 	@echo
-	
+
 	@echo 1. Remove deprecations in base/deprecated.jl
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"
@@ -251,7 +251,7 @@ endif
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-endif	
+endif
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
 	$(INSTALL_F) src/julia.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia

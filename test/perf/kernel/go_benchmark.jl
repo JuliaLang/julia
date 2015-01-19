@@ -43,22 +43,22 @@ neighbor(i::Int, j::Int, k::Int) = (i + deltai[k], j + deltaj[k])
 type Board
   size::Int
   komi::Float64
-  
+
   # Board represented by a 1D array. The first board_size*board_size
   # elements are used. Vertices are indexed row by row, starting with 0
   # in the upper left corner.
   board::Matrix{Int}
-  
+
   # Stones are linked together in a circular list for each string.
   next_stone::Matrix{Int}
-  
+
   # Storage for final status computations.
   final_status::Matrix{Int}
-  
+
   # Point which would be an illegal ko recapture.
   ko_i::Int
   ko_j::Int
-  
+
   # xor-shift random number generator.
   rand::XorRand
 
@@ -350,28 +350,28 @@ end
 # Compute final status. This function is only valid to call in a
 # position where generate_move() would return pass for at least one
 # color.
-# 
+#
 # Due to the nature of the move generation algorithm, the final
 # status of stones can be determined by a very simple algorithm:
-# 
+#
 # 1. Stones with two or more liberties are alive with territory.
 # 2. Stones in atari are dead.
-# 
+#
 # Moreover alive stones are unconditionally alive even if the
 # opponent is allowed an arbitrary number of consecutive moves.
 # Similarly dead stones cannot be brought alive even by an arbitrary
 # number of consecutive moves.
-# 
+#
 # Seki is not an option. The move generation algorithm would never
 # leave a seki on the board.
-# 
+#
 # Comment: This algorithm doesn't work properly if the game ends with
 #          an unfilled ko. If three passes are required for game end,
 #          that will not happen.
-# 
+#
 function compute_final_status(board::Board)
   board.final_status[:] = UNKNOWN
-  
+
   for i = 1:board.size, j = 1:board.size
     if board[i, j] == EMPTY
       for k = 1:4
@@ -384,7 +384,7 @@ function compute_final_status(board::Board)
         # never leave two adjacent empty vertices. Check the number
         # of liberties to decide its status, unless it's known
         # already.
-        # 
+        #
         # If we should be called in a non-final position, just make
         # sure we don't call set_final_status_string() on an empty
         # vertex.

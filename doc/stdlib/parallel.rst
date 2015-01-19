@@ -100,34 +100,34 @@ General Parallel Computing Support
 
 .. function:: addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
 
-   ``addprocs(4)`` will add 4 processes on the local machine. This can be used to take 
+   ``addprocs(4)`` will add 4 processes on the local machine. This can be used to take
    advantage of multiple cores.
-   
-   Keyword argument ``cman`` can be used to provide a custom cluster manager to start workers. 
-   For example Beowulf clusters are  supported via a custom cluster manager implemented 
+
+   Keyword argument ``cman`` can be used to provide a custom cluster manager to start workers.
+   For example Beowulf clusters are  supported via a custom cluster manager implemented
    in  package ``ClusterManagers``.
-   
-   See the documentation for package ``ClusterManagers`` for more information on how to 
+
+   See the documentation for package ``ClusterManagers`` for more information on how to
    write a custom cluster manager.
 
 .. function:: addprocs(machines; tunnel=false, dir=JULIA_HOME, sshflags::Cmd=``) -> List of process identifiers
 
-   Add processes on remote machines via SSH. 
+   Add processes on remote machines via SSH.
    Requires julia to be installed in the same location on each node, or to be available via a shared file system.
-   
-   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr]``. ``user`` defaults 
-   to current user, ``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, ``bind_addr`` 
+
+   ``machines`` is a vector of host definitions of the form ``[user@]host[:port] [bind_addr]``. ``user`` defaults
+   to current user, ``port`` to the standard ssh port. Optionally, in case of multi-homed hosts, ``bind_addr``
    may be used to explicitly specify an interface.
-   
+
    Keyword arguments:
 
-   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker. 
+   ``tunnel`` : if ``true`` then SSH tunneling will be used to connect to the worker.
 
-   ``dir`` :  specifies the location of the julia binaries on the worker nodes. 
+   ``dir`` :  specifies the location of the julia binaries on the worker nodes.
 
    ``sshflags`` : specifies additional ssh options, e.g. :literal:`sshflags=\`-i /home/foo/bar.pem\`` .
 
-   
+
 .. function:: nprocs()
 
    Get the number of available processes.
@@ -146,7 +146,7 @@ General Parallel Computing Support
 
 .. function:: rmprocs(pids...)
 
-   Removes the specified workers. 
+   Removes the specified workers.
 
 .. function:: interrupt([pids...])
 
@@ -160,13 +160,13 @@ General Parallel Computing Support
 
 .. function:: pmap(f, lsts...; err_retry=true, err_stop=false)
 
-   Transform collections ``lsts`` by applying ``f`` to each element in parallel. 
-   If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks. 
+   Transform collections ``lsts`` by applying ``f`` to each element in parallel.
+   If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
    All other available processes will be used as parallel workers.
-   
+
    If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
    If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
-   
+
 
 .. function:: remotecall(id, func, args...)
 
@@ -242,7 +242,7 @@ General Parallel Computing Support
 
    Waits till ``testcb`` returns ``true`` or for ``secs``` seconds, whichever is earlier.
    ``testcb`` is polled every ``pollint`` seconds.
-   
+
 .. function:: @spawn
 
    Execute an expression on an automatically-chosen process, returning a
@@ -268,41 +268,41 @@ General Parallel Computing Support
 
 .. function:: @sync
 
-   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``, 
+   Wait until all dynamically-enclosed uses of ``@async``, ``@spawn``,
    ``@spawnat`` and ``@parallel`` are complete.
 
-.. function:: @parallel 
+.. function:: @parallel
 
    A parallel for loop of the form ::
 
         @parallel [reducer] for var = range
             body
         end
-   
-   The specified range is partitioned and locally executed across all workers. 
+
+   The specified range is partitioned and locally executed across all workers.
    In case an optional reducer function is specified, @parallel performs local
    reductions on each worker with a final reduction on the calling process.
-   
-   Note that without a reducer function, @parallel executes asynchronously, 
-   i.e. it spawns independent tasks on all available workers and returns 
-   immediately without waiting for completion. To wait for completion, prefix 
+
+   Note that without a reducer function, @parallel executes asynchronously,
+   i.e. it spawns independent tasks on all available workers and returns
+   immediately without waiting for completion. To wait for completion, prefix
    the call with ``@sync``, like ::
-   
+
         @sync @parallel for var = range
             body
         end
 
-    
+
 Distributed Arrays
 ------------------
 
 .. function:: DArray(init, dims, [procs, dist])
 
-   Construct a distributed array. The parameter ``init`` is a function that accepts a tuple of index ranges. 
-   This function should allocate a local chunk of the distributed array and initialize it for the specified indices. 
-   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use. 
+   Construct a distributed array. The parameter ``init`` is a function that accepts a tuple of index ranges.
+   This function should allocate a local chunk of the distributed array and initialize it for the specified indices.
+   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use.
    If unspecified, the array is distributed over all worker processes only. Typically, when runnning in distributed mode,
-   i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the 
+   i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the
    interactive julia prompt.
    ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
 
@@ -340,36 +340,36 @@ Distributed Arrays
 
 .. function:: localindexes(d)
 
-   A tuple describing the indexes owned by the local process. Returns a tuple with empty ranges 
+   A tuple describing the indexes owned by the local process. Returns a tuple with empty ranges
    if no local part exists on the calling process.
 
 .. function:: procs(d)
 
    Get the vector of processes storing pieces of ``d``.
 
-   
+
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
 
 .. function:: SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
     Construct a SharedArray of a bitstype ``T``  and size ``dims`` across the processes
-    specified by ``pids`` - all of which have to be on the same host. 
-    
+    specified by ``pids`` - all of which have to be on the same host.
+
     If ``pids`` is left unspecified, the shared array will be mapped across all workers
     on the current host.
 
-    If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified, 
-    it is called on all the participating workers. 
+    If an ``init`` function of the type ``initfn(S::SharedArray)`` is specified,
+    it is called on all the participating workers.
 
 .. function:: procs(S::SharedArray)
 
-   Get the vector of processes that have mapped the shared array 
-   
+   Get the vector of processes that have mapped the shared array
+
 .. function:: sdata(S::SharedArray)
 
    Returns the actual ``Array`` object backing ``S``
-   
+
 .. function:: indexpids(S::SharedArray)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping

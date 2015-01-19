@@ -34,7 +34,7 @@ public:
 
     uint64_t getBase() const { return 0; }
     uint64_t getExtent() const { return Fsize; }
-    
+
     int readByte(uint64_t Addr, uint8_t *Byte) const {
         if (Addr >= getExtent())
             return -1;
@@ -60,7 +60,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     // Avoids hard-coded targets - will generally be only host CPU anyway.
     llvm::InitializeNativeTargetAsmParser();
     llvm::InitializeNativeTargetDisassembler();
-  
+
     // Get the host information
     std::string TripleName;
     if (TripleName.empty())
@@ -74,7 +74,7 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
     std::string err;
     const Target* TheTarget = TargetRegistry::lookupTarget(TripleName, err);
 
-    // Set up required helpers and streamer 
+    // Set up required helpers and streamer
 #ifdef LLVM35
     std::unique_ptr<MCStreamer> Streamer;
 #else
@@ -179,11 +179,11 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
         stream << "Filename: " << debugscope.getFilename() << "\n";
         stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
     }
-    
+
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += Size, absAddr += Size) {
-        
+
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             stream << "Source line: " << (*lineIter).Loc.getLine() << "\n";
             nextLineAddr = (*++lineIter).Address;
@@ -247,12 +247,12 @@ void jl_dump_function_asm(void *Fptr, size_t Fsize,
 
     uint64_t Index = 0;
     uint64_t absAddr = 0;
-    uint64_t insSize = 0; 
+    uint64_t insSize = 0;
 
     // Do the disassembly
     for (Index = 0, absAddr = (uint64_t)Fptr;
          Index < memoryObject.getExtent(); Index += insSize, absAddr += insSize) {
-        
+
         if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
             #ifdef LLVM35
             stream << "Source line: " << lines_iter->second.Line << "\n";

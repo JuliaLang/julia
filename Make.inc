@@ -233,7 +233,7 @@ else
 FC = $(CROSS_COMPILE)gfortran
 endif
 
-STDLIBCPP_FLAG = 
+STDLIBCPP_FLAG =
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
@@ -249,7 +249,7 @@ else
 ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
-else 
+else
 USE_LIBCPP = 0
 endif
 USEGCC = 0

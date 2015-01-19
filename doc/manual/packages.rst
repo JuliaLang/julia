@@ -340,13 +340,13 @@ not domain experts*.
   * Julia does not have a single comprehensive plotting package. Instead,
     ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
     unique approach based on a particular design philosophy.
-  
+
   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
     many well-established sorting algorithms.
 
 5. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
-   
+
   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
     a web search.
 

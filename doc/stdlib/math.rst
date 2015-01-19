@@ -93,7 +93,7 @@ Mathematical Operators
 .. function:: mod2pi(x)
 
    Modulus after division by 2pi, returning in the range [0,2pi).
-  
+
    This function computes a floating point representation of the modulus after
    division by numerically exact 2pi, and is therefore not exactly the same as
    mod(x,2pi), which would compute the modulus of x relative to division by the
@@ -686,7 +686,7 @@ Mathematical Functions
 .. function:: minmax(x, y)
 
    Return ``(min(x,y), max(x,y))``.
-   See also: :func:`extrema` that returns ``(minimum(x), maximum(x))`` 
+   See also: :func:`extrema` that returns ``(minimum(x), maximum(x))``
 
 .. function:: clamp(x, lo, hi)
 
@@ -807,12 +807,12 @@ Mathematical Functions
    Compute the prime factorization of an integer ``n``. Returns a dictionary. The keys of the dictionary correspond to the factors, and hence are of the same type as ``n``. The value associated with each key indicates the number of times the factor appears in the factorization.
 
    .. doctest::
-   
+
       julia> factor(100) # == 2*2*5*5
       Dict{Int64,Int64} with 2 entries:
         2 => 2
         5 => 2
-	
+
 .. function:: gcd(x,y)
 
    Greatest common (positive) divisor (or zero if x and y are both zero).
@@ -1130,7 +1130,7 @@ Statistics
 
 .. function:: hist!(counts, v, e) -> e, counts
 
-   Compute the histogram of ``v``, using a vector/range ``e`` as the edges for the bins. 
+   Compute the histogram of ``v``, using a vector/range ``e`` as the edges for the bins.
    This function writes the resultant counts to a pre-allocated array ``counts``.
 
 .. function:: hist2d(M, e1, e2) -> (edge1, edge2, counts)
@@ -1145,9 +1145,9 @@ Statistics
 
 .. function:: hist2d!(counts, M, e1, e2) -> (e1, e2, counts)
 
-   Compute a "2d histogram" with respect to the bins delimited by the edges given 
+   Compute a "2d histogram" with respect to the bins delimited by the edges given
    in ``e1`` and ``e2``. This function writes the results to a pre-allocated
-   array ``counts``. 
+   array ``counts``.
 
 .. function:: histrange(v, n)
 
@@ -1178,17 +1178,17 @@ Statistics
 
 .. function:: cov(v1[, v2][, vardim=1, corrected=true, mean=nothing])
 
-   Compute the Pearson covariance between the vector(s) in ``v1`` and ``v2``. 
-   Here, ``v1`` and ``v2`` can be either vectors or matrices. 
+   Compute the Pearson covariance between the vector(s) in ``v1`` and ``v2``.
+   Here, ``v1`` and ``v2`` can be either vectors or matrices.
 
    This function accepts three keyword arguments:
 
-   - ``vardim``: the dimension of variables. When ``vardim = 1``, variables 
-     are considered in columns while observations in rows; when ``vardim = 2``, 
+   - ``vardim``: the dimension of variables. When ``vardim = 1``, variables
+     are considered in columns while observations in rows; when ``vardim = 2``,
      variables are in rows while observations in columns. By default, it is
      set to ``1``.
 
-   - ``corrected``: whether to apply Bessel's correction (divide by ``n-1`` 
+   - ``corrected``: whether to apply Bessel's correction (divide by ``n-1``
      instead of ``n``). By default, it is set to ``true``.
 
    - ``mean``: allow users to supply mean values that are known. By default,
@@ -1197,20 +1197,20 @@ Statistics
      indicate that the input data are centered, and hence there's no need to
      subtract the mean.
 
-   The size of the result depends on the size of ``v1`` and ``v2``. When both 
-   ``v1`` and ``v2`` are vectors, it returns the covariance between them as a 
+   The size of the result depends on the size of ``v1`` and ``v2``. When both
+   ``v1`` and ``v2`` are vectors, it returns the covariance between them as a
    scalar. When either one is a matrix, it returns a covariance matrix of size
    ``(n1, n2)``, where ``n1`` and ``n2`` are the numbers of slices in ``v1`` and
-   ``v2``, which depend on the setting of ``vardim``. 
+   ``v2``, which depend on the setting of ``vardim``.
 
-   Note: ``v2`` can be omitted, which indicates ``v2 = v1``. 
+   Note: ``v2`` can be omitted, which indicates ``v2 = v1``.
 
 
 .. function:: cor(v1[, v2][, vardim=1, mean=nothing])
 
-   Compute the Pearson correlation between the vector(s) in ``v1`` and ``v2``. 
+   Compute the Pearson correlation between the vector(s) in ``v1`` and ``v2``.
 
-   Users can use the keyword argument ``vardim`` to specify the variable 
+   Users can use the keyword argument ``vardim`` to specify the variable
    dimension, and ``mean`` to supply pre-computed mean values.
 
 
@@ -1234,13 +1234,13 @@ multi-threading. Use `FFTW.set_num_threads(np)` to use `np` threads.
 
    A one-dimensional FFT computes the one-dimensional discrete Fourier
    transform (DFT) as defined by
-   
+
    .. math::
 
       \operatorname{DFT}(A)[k] = \sum_{n=1}^{\operatorname{length}(A)}
       \exp\left(-i\frac{2\pi (n-1)(k-1)}{\operatorname{length}(A)} \right)
       A[n].
-   
+
    A multidimensional FFT simply performs this operation along each transformed
    dimension of ``A``.
 
@@ -1556,7 +1556,7 @@ some built-in integration support in Julia.
 
    The integrand ``f(x)`` can return any numeric scalar, vector, or matrix
    type, or in fact any type supporting ``+``, ``-``, multiplication
-   by real values, and a ``norm`` (i.e., any normed vector space). 
+   by real values, and a ``norm`` (i.e., any normed vector space).
    Alternatively, a different norm can be specified by passing a `norm`-like
    function as the `norm` keyword argument (which defaults to `vecnorm`).
 

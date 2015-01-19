@@ -311,7 +311,7 @@ Indexing, Assignment, and Concatenation
    Throw an error if the specified indexes are not in bounds for the given array.
 
 .. function:: randsubseq(A, p) -> Vector
-   
+
    Return a vector consisting of a random subsequence of the given array ``A``,
    where each element of ``A`` is included (in order) with independent
    probability ``p``.   (Complexity is linear in ``p*length(A)``, so this
@@ -322,7 +322,7 @@ Indexing, Assignment, and Concatenation
 
    Like ``randsubseq``, but the results are stored in ``S`` (which is
    resized as needed).
-   
+
 
 Array functions
 ---------------
@@ -418,7 +418,7 @@ Array functions
 
    Given a ``dims`` tuple of integers ``(m, n, ...)``, call ``f`` on all combinations of
    integers in the ranges ``1:m``, ``1:n``, etc.
-   
+
    .. doctest::
 
       julia> cartesianmap(println, (2,2))

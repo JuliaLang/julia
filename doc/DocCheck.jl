@@ -6,7 +6,7 @@
 # isdocumented(v)         :  true if v is documented
 # undefined_exports(m)    :  returns a list of undefined exports in module m
 # undocumented(m)         :  returns a list of undocumented exports in module m
-# undocumented_by_file(m) :  returns a dictionary of undocumented exports, 
+# undocumented_by_file(m) :  returns a dictionary of undocumented exports,
 #                            with file, function, and line number information
 # undocumented_rst(m)     :  produce a list of undocumented function suitable for
 #                            pasting into github issue #2242

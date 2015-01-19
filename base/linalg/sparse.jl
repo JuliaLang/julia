@@ -199,12 +199,12 @@ end
 function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
     if iseltype(b, Complex); A = complex(A); end
 
-    if istril(A) 
-        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle 
+    if istril(A)
+        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
         # the case where there are zeros on the diagonal and error out.
         # It also does not work in the complex case. VBS.
         #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
-        return fwdTriSolve!(A, b) 
+        return fwdTriSolve!(A, b)
     end
     if istriu(A); return bwdTriSolve!(A, b); end
     return A_ldiv_B!(lufact(A),b)
@@ -223,11 +223,11 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
     end
-   
+
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
-   
+
     joff = 0
     for k = 1:ncolB
         for j = 1:(nrowB-1)
@@ -261,7 +261,7 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
-    
+
     joff = 0
     for k = 1:ncolB
         for j = nrowB:-1:2

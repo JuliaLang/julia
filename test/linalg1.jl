@@ -28,7 +28,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
-    
+
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
@@ -278,7 +278,7 @@ debug && println("Matrix square root")
 
 debug && println("Lyapunov/Sylvester")
     if eltya != BigFloat
-        let 
+        let
             x = lyap(a, a2)
             @test_approx_eq -a2 a*x + x*a'
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])

@@ -223,7 +223,7 @@ function intersect!(s::IntSet, s2::IntSet)
     for n = 1:lim
         s.bits[n] &= s2.bits[n]
     end
-    if !s2.fill1s   
+    if !s2.fill1s
         for n=lim+1:length(s.bits)
             s.bits[n] = uint32(0)
         end

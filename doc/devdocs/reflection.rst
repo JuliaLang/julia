@@ -24,7 +24,7 @@ elements representing the field names:
             x::Int
 	        y
 	       end
-    
+
     julia> names(Point)
     2-element Array{Symbol,1}:
      :x

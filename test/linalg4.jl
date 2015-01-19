@@ -36,7 +36,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     end
 
     for (M, TM) in ((triu(A), Triangular(A, :U)), (tril(A), Triangular(A, :L)))
-        
+
         ##Idempotent tests #XXX - not implemented
         #for func in (conj, transpose, ctranspose)
         #    @test full(func(func(TM))) == M
@@ -243,7 +243,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Binary operations")
-        for isupper2 in (true, false) 
+        for isupper2 in (true, false)
             dv = convert(Vector{elty}, randn(n))
             ev = convert(Vector{elty}, randn(n-1))
             T2 = Bidiagonal(dv, ev, isupper2)

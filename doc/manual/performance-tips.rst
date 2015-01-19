@@ -488,7 +488,7 @@ with
         end
         y
     end
-    
+
 Timing results::
 
     julia> @time loopinc()
@@ -564,8 +564,8 @@ properties.
    Be certain before doing this. If the subscripts are ever out of bounds,
    you may suffer crashes or silent corruption.
 -  Write :obj:`@simd` in front of ``for`` loops that are amenable to vectorization.
-   **This feature is experimental** and could change or disappear in future 
-   versions of Julia.  
+   **This feature is experimental** and could change or disappear in future
+   versions of Julia.
 
 Here is an example with both forms of markup::
 
@@ -584,7 +584,7 @@ Here is an example with both forms of markup::
         end
         s
     end
- 
+
     function timeit( n, reps )
         x = rand(Float32,n)
         y = rand(Float32,n)
@@ -620,21 +620,21 @@ properties of the loop:
 A ``break``, ``continue``, or :obj`@goto` in an :obj:`@simd` loop may cause
 wrong results.
 
-Using :obj:`@simd` merely gives the compiler license to vectorize. Whether 
-it actually does so depends on the compiler. To actually benefit from the 
-current implementation, your loop should have the following additional 
+Using :obj:`@simd` merely gives the compiler license to vectorize. Whether
+it actually does so depends on the compiler. To actually benefit from the
+current implementation, your loop should have the following additional
 properties:
 
 -  The loop must be an innermost loop.
--  The loop body must be straight-line code. This is why :obj:`@inbounds` is 
+-  The loop body must be straight-line code. This is why :obj:`@inbounds` is
    currently needed for all array accesses. The compiler can sometimes turn
-   short ``&&``, ``||``, and ``?:`` expressions into straight-line code, 
-   if it is safe to evaluate all operands unconditionally. Consider using 
+   short ``&&``, ``||``, and ``?:`` expressions into straight-line code,
+   if it is safe to evaluate all operands unconditionally. Consider using
    :func:`ifelse` instead of ``?:`` in the loop if it is safe to do so.
--  Accesses must have a stride pattern and cannot be "gathers" (random-index reads) 
+-  Accesses must have a stride pattern and cannot be "gathers" (random-index reads)
    or "scatters" (random-index writes).
 -  The stride should be unit stride.
--  In some simple cases, for example with 2-3 arrays accessed in a loop, the 
-   LLVM auto-vectorization may kick in automatically, leading to no further 
-   speedup with :obj:`@simd`. 
+-  In some simple cases, for example with 2-3 arrays accessed in a loop, the
+   LLVM auto-vectorization may kick in automatically, leading to no further
+   speedup with :obj:`@simd`.
 

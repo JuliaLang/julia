@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ********************
- Parallel Computing  
+ Parallel Computing
 ********************
 
 Most modern computers possess more than one CPU, and several computers
@@ -139,7 +139,7 @@ type the following into the Julia prompt::
     julia> @spawn rand2(2,2)
     RemoteRef(2,1,2)
 
-    julia> exception on 2: in anonymous: rand2 not defined 
+    julia> exception on 2: in anonymous: rand2 not defined
 
 Process 1 knew about the function ``rand2``, but process 2 did not.
 
@@ -196,11 +196,11 @@ The processes used by default for parallel operations are referred to as "worker
 When there is only one process, process 1 is considered a worker. Otherwise, workers are
 considered to be all processes other than process 1.
 
-The base Julia installation has in-built support for two types of clusters: 
+The base Julia installation has in-built support for two types of clusters:
 
-    - A local cluster specified with the ``-p`` option as shown above.  
-    
-    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless 
+    - A local cluster specified with the ``-p`` option as shown above.
+
+    - A cluster spanning machines using the ``--machinefile`` option. This uses a passwordless
       ``ssh`` login to start julia worker processes (from the same path as the current host)
       on the specified machines.
 
@@ -405,7 +405,7 @@ it completes its current task. This can be seen in the implementation of
         nextidx() = (idx=i; i+=1; idx)
         @sync begin
             for p=1:np
-                if p != myid() || np == 1 
+                if p != myid() || np == 1
                     @async begin
                         while true
                             idx = nextidx()
@@ -575,7 +575,7 @@ is :class:`DArray`\ -specific, but we list it here for completeness::
     end
 
 
-    
+
 Shared Arrays (Experimental)
 -----------------------------------------------
 
@@ -606,7 +606,7 @@ across the processes specified by ``pids``.  Unlike distributed
 arrays, a shared array is accessible only from those participating
 workers specified by the ``pids`` named argument (and the creating
 process too, if it is on the same host).
-  
+
 If an ``init`` function, of signature ``initfn(S::SharedArray)``, is
 specified, it is called on all the participating workers.  You can
 arrange it so that each worker runs the ``init`` function on a

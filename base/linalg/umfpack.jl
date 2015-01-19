@@ -189,7 +189,7 @@ for itype in UmfpackIndexTypes
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Array(Ptr{Void}, 1)
             status = ccall(($num_r, :libumfpack), $itype,
-                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
+                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, U.nzval, U.symbolic, tmp,
                            umf_ctrl, umf_info)
@@ -203,7 +203,7 @@ for itype in UmfpackIndexTypes
             if U.symbolic == C_NULL umfpack_symbolic!(U) end
             tmp = Array(Ptr{Void}, 1)
             status = ccall(($num_c, :libumfpack), $itype,
-                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void}, 
+                           (Ptr{$itype}, Ptr{$itype}, Ptr{Float64}, Ptr{Float64}, Ptr{Void}, Ptr{Void},
                             Ptr{Float64}, Ptr{Float64}),
                            U.colptr, U.rowval, real(U.nzval), imag(U.nzval), U.symbolic, tmp,
                            umf_ctrl, umf_info)
@@ -446,4 +446,4 @@ end
 umfpack_report_numeric(lu::UmfpackLU) = umfpack_report_numeric(lu,4.)
 
 end # UMFPACK module
- 
+

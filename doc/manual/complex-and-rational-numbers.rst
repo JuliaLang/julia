@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ******************************
- Complex and Rational Numbers  
+ Complex and Rational Numbers
 ******************************
 
 Julia ships with predefined types representing both complex and rational
@@ -185,7 +185,7 @@ construct a complex value directly from its real and imaginary parts.:
 This construction avoids the multiplication and addition operations.
 
 :const:`Inf` and :const:`NaN` propagate through complex numbers in the real
-and imaginary parts of a complex number as described in the 
+and imaginary parts of a complex number as described in the
 :ref:`man-special-floats` section:
 
 .. doctest::

@@ -45,7 +45,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
 #endif
 #if defined(RTLD_GLOBAL) && defined(RTLD_LAZY) /* POSIX flags available */
     dlerror(); /* Reset error status. */
-    lib->handle = dlopen(filename, 
+    lib->handle = dlopen(filename,
                          (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                          | JL_RTLD(flags, GLOBAL) | JL_RTLD(flags, LOCAL)
 #ifdef RTLD_NODELETE

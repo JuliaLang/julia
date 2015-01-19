@@ -589,7 +589,7 @@ static size_t limit_overallocation(jl_array_t *a, size_t alen, size_t newlen, si
     size_t xtra_elems_mem = (newlen - a->offset - alen - inc) * es;
     if (xtra_elems_mem > jl_arr_xtralloc_limit) {
         // prune down
-        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es); 
+        return alen + inc + a->offset + (jl_arr_xtralloc_limit / es);
     }
     return newlen;
 }
@@ -603,7 +603,7 @@ void jl_array_grow_end(jl_array_t *a, size_t inc)
         size_t newlen = a->maxsize==0 ? (inc<4?4:inc) : a->maxsize*2;
         while ((alen + inc) > newlen - a->offset)
             newlen *= 2;
-        
+
         newlen = limit_overallocation(a, alen, newlen, inc);
         array_resize_buffer(a, newlen, alen, a->offset);
     }
@@ -663,7 +663,7 @@ void jl_array_grow_beg(jl_array_t *a, size_t inc)
             size_t newlen = a->maxsize==0 ? inc*2 : a->maxsize*2;
             while (alen+2*inc > newlen-a->offset)
                 newlen *= 2;
-            
+
             newlen = limit_overallocation(a, alen, newlen, 2*inc);
             size_t center = (newlen - (alen + inc))/2;
             array_resize_buffer(a, newlen, alen, center+inc);

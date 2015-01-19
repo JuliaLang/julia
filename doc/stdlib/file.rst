@@ -29,10 +29,10 @@
 
 .. function:: symlink(target, link)
 
-   Creates a symbolic link to ``target`` with the name ``link``. 
-   
+   Creates a symbolic link to ``target`` with the name ``link``.
+
    .. note::
-   
+
       This function raises an error under operating systems that do not support
       soft symbolic links, such as Windows XP.
 
@@ -47,13 +47,13 @@
 
    ========= ======================================================================
     size      The size (in bytes) of the file
-    device    ID of the device that contains the file 
+    device    ID of the device that contains the file
     inode     The inode number of the file
     mode      The protection mode of the file
     nlink     The number of hard links to the file
     uid       The user id of the owner of the file
     gid       The group id of the file owner
-    rdev      If this file refers to a device, the ID of the device it refers to 
+    rdev      If this file refers to a device, the ID of the device it refers to
     blksize   The file-system preffered block size for the file
     blocks    The number of such blocks allocated
     mtime     Unix timestamp of when the file was last modified
@@ -62,7 +62,7 @@
 
 .. function:: lstat(file)
 
-   Like stat, but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor. 
+   Like stat, but for symbolic links gets the info for the link itself rather than the file it refers to. This function must be called on a file path rather than a file object or a file descriptor.
 
 .. function:: ctime(file)
 
@@ -98,7 +98,7 @@
 
 .. function:: operm(file)
 
-   Like uperm but gets the permissions for people who neither own the file nor are a 
+   Like uperm but gets the permissions for people who neither own the file nor are a
    member of the group owning the file
 
 .. function:: cp(src::String,dst::String)
@@ -108,10 +108,10 @@
 .. function:: download(url,[localfile])
 
    Download a file from the given url, optionally renaming it to the given local file name.
-   Note that this function relies on the availability of external tools such as ``curl``, 
+   Note that this function relies on the availability of external tools such as ``curl``,
    ``wget`` or ``fetch`` to download the file and is provided for convenience. For production
    use or situations in which more options are need, please use a package that provides the
-   desired functionality instead. 
+   desired functionality instead.
 
 .. function:: mv(src::String,dst::String)
 

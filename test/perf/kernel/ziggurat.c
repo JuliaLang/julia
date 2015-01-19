@@ -152,16 +152,16 @@ double randn_zig()
 {
     unsigned long  U, sign, i, j;
     double  x, y;
-    
+
     while (1) {
         U = dsfmt_gv_genrand_uint32();
         i = U & 0x0000007F;	/* 7 bit to choose the step */
         sign = U & 0x00000080;	/* 1 bit for the sign */
         j = U>>8;		/* 24 bit for the x-value */
-        
+
         x = j*wtab[i];
         if (j < ktab[i])  break;
-        
+
         if (i<127) {
             double  y0, y1;
             y0 = ytab[i];

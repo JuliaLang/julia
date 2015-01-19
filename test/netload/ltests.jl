@@ -7,7 +7,7 @@ print("Testing repeated 10^$exp connect/disconnects....")
 
 (port, server) = listenany(8000)
 
-@spawnat(1, 
+@spawnat(1,
     begin
         while (true)
             close(accept(server))
@@ -16,9 +16,9 @@ print("Testing repeated 10^$exp connect/disconnects....")
     )
 
 @sync begin
-    @async begin 
+    @async begin
         for i in 1:10^exp
-            close(connect("localhost", port)); 
+            close(connect("localhost", port));
 #            println("finished $i")
         end
     end
@@ -39,7 +39,7 @@ print("Testing open, send of 10^$exp bytes and closing. Other side should recv c
 rr_rcd = RemoteRef()
 rr_sent = RemoteRef()
 
-@spawnat(1, 
+@spawnat(1,
     begin
         while (true)
             s=accept(server)
@@ -56,10 +56,10 @@ rr_sent = RemoteRef()
     end)
 
 
-@spawnat(2, 
+@spawnat(2,
     begin
-        s = connect("localhost", port)    
-        data = fill!(zeros(Uint8, block), int8(65))    
+        s = connect("localhost", port)
+        data = fill!(zeros(Uint8, block), int8(65))
         bwritten = 0
         while bwritten < size
             write(s, data)
@@ -76,8 +76,8 @@ wait(rr_sent)
 close(server)
 
 println(": OK")
-    
-    
+
+
 require("sockxfer.jl")
 xfer_exp = 9
 print("Testing 10^$(xfer_exp) bytes of concurrent bidirectional transfers over a single socket connection...")
@@ -89,10 +89,10 @@ rr_server = RemoteRef()
 rr_client = RemoteRef()
 
 
-@spawnat(1, 
+@spawnat(1,
     begin
         while (true)
-            s=accept(server) 
+            s=accept(server)
             @async begin xfer(s, xfer_exp); put!(rr_server, true); take!(rr_client); close(s); put!(rr_server, true);   end
         end
     end)

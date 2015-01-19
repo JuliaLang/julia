@@ -1,8 +1,8 @@
 function is_unix(os::Symbol)
-    if (os==:Windows) return false; 
-    elseif (os==:Linux) return true; 
-    elseif (os==:FreeBSD) return true; 
-    elseif (os==:Darwin) return true; 
+    if (os==:Windows) return false;
+    elseif (os==:Linux) return true;
+    elseif (os==:FreeBSD) return true;
+    elseif (os==:Darwin) return true;
     else error("unknown operating system")
     end
 end

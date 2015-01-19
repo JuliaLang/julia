@@ -5,7 +5,7 @@ New language features
 ---------------------
 
   * Type parameters now permit any arbitrary `isbits` type, not just
-    `Int` and `Bool` ([#9161]). 
+    `Int` and `Bool` ([#9161]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -620,8 +620,8 @@ Library improvements
 
   * Improved backtraces on Windows and OS X.
 
-  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`, 
-    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability, 
+  * Implementation of reduction functions (including `reduce`, `mapreduce`, `sum`, `prod`,
+    `maximum`, `minimum`, `all`, and `any`) are refactored, with improved type stability,
     efficiency, and consistency. ([#6116], [#7035], [#7061], [#7106])
 
 Deprecated or removed

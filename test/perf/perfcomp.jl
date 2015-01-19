@@ -13,12 +13,12 @@ function main()
     torun = length(ARGS) > 1 ? ARGS[2] : "all"
     io,p = readsfrom(`make -s $torun`)
     newp = readperf(io)
-    
+
     names = sort(intersect(keys(baseline),keys(newp)))
-    
+
     means0 = [ baseline[n][3] for n in names ]
     means1 = [ newp[n][3] for n in names ]
-    
+
     change = (means0 - means1) ./ means0
 
     println("test name            old       new     % speedup  % st. dev")

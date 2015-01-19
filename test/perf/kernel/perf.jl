@@ -117,7 +117,7 @@ rm("random.csv")
 include("json.jl")
 
 _json_data = "{\"web-app\": {
-  \"servlet\": [   
+  \"servlet\": [
     {
       \"servlet-name\": \"cofaxCDS\",
       \"servlet-class\": \"org.cofax.cds.CDSServlet\",
@@ -173,7 +173,7 @@ _json_data = "{\"web-app\": {
     {
       \"servlet-name\": \"cofaxAdmin\",
       \"servlet-class\": \"org.cofax.cds.AdminServlet\"},
- 
+
     {
       \"servlet-name\": \"fileServlet\",
       \"servlet-class\": \"org.cofax.cds.FileServlet\"},
@@ -200,7 +200,7 @@ _json_data = "{\"web-app\": {
     \"cofaxAdmin\": \"/admin/*\",
     \"fileServlet\": \"/static/*\",
     \"cofaxTools\": \"/tools/*\"},
- 
+
   \"taglib\": {
     \"taglib-uri\": \"cofax.tld\",
     \"taglib-location\": \"/WEB-INF/tlds/cofax.tld\"}}}"

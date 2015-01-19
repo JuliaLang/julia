@@ -700,7 +700,7 @@ function fix_dec(x::SmallFloatingPoint, n::Int)
     @grisu_ccall x Grisu.FIXED n
     if LEN[1] == 0
         DIGITS[1] = '0'
-        return (int32(1), int32(1), NEG[1]) 
+        return (int32(1), int32(1), NEG[1])
     end
     return LEN[1], POINT[1], NEG[1]
 end
@@ -841,7 +841,7 @@ end
 
 macro sprintf(args...)
     !isempty(args) || error("@sprintf: called with zero arguments")
-    isa(args[1], String) || is_str_expr(args[1]) || 
+    isa(args[1], String) || is_str_expr(args[1]) ||
         error("@sprintf: first argument must be a format string")
     blk = _printf("@sprintf", :(IOBuffer()), args[1], args[2:end])
     push!(blk.args, :(takebuf_string(out)))
