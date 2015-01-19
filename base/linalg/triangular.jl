@@ -1,9 +1,11 @@
 ## Triangular
 
+abstract AbstractTriangular{T,S<:AbstractMatrix} <: AbstractMatrix{T} # could be renamed to Triangular when than name has been fully deprecated
+
 # First loop through all methods that don't need special care for upper/lower and unit diagonal
 for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTriangular)
     @eval begin
-        immutable $t{T,S<:AbstractMatrix} <: AbstractMatrix{T}
+        immutable $t{T,S<:AbstractMatrix} <: AbstractTriangular{T,S}
             data::S
         end
         function $t(A::AbstractMatrix)
@@ -35,12 +37,9 @@ for t in (:LowerTriangular, :UnitLowerTriangular, :UpperTriangular, :UnitUpperTr
     end
 end
 
-# some cases can be handled with a union
-typealias TriangularUnion{T,S} Union(UpperTriangular{T,S}, UnitUpperTriangular{T,S}, LowerTriangular{T,S}, UnitLowerTriangular{T,S})
+full(A::AbstractTriangular) = convert(Matrix, A)
 
-full{T,S}(A::TriangularUnion{T,S}) = convert(Matrix, A)
-
-fill!(A::TriangularUnion, x) = (fill!(A.data, x); A)
+fill!(A::AbstractTriangular, x) = (fill!(A.data, x); A)
 
 # then handle all methods that requires specific handling of upper/lower and unit diagonal
 
@@ -102,7 +101,7 @@ function full!{T,S}(A::UnitUpperTriangular{T,S})
     B
 end
 
-getindex(A::TriangularUnion, i::Integer) = ((m, n) = divrem(i - 1, size(A, 1)); A[n + 1, m + 1])
+getindex(A::AbstractTriangular, i::Integer) = ((m, n) = divrem(i - 1, size(A, 1)); A[n + 1, m + 1])
 getindex{T,S}(A::UnitLowerTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i > j ? A.data[i,j] : zero(A.data[i,j]))
 getindex{T,S}(A::LowerTriangular{T,S}, i::Integer, j::Integer) = i >= j ? A.data[i,j] : zero(A.data[i,j])
 getindex{T,S}(A::UnitUpperTriangular{T,S}, i::Integer, j::Integer) = i == j ? one(T) : (i < j ? A.data[i,j] : zero(A.data[i,j]))
@@ -172,6 +171,7 @@ end
 +(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) + B.data + I)
 +(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) + triu(B.data, 1) + 2I)
 +(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) + tril(B.data, -1) + 2I)
++(A::AbstractTriangular, B::AbstractTriangular) = full(A) + full(B)
 
 -(A::UpperTriangular, B::UpperTriangular) = UpperTriangular(A.data - B.data)
 -(A::LowerTriangular, B::LowerTriangular) = LowerTriangular(A.data - B.data)
@@ -181,14 +181,15 @@ end
 -(A::UnitLowerTriangular, B::LowerTriangular) = LowerTriangular(tril(A.data, -1) - B.data + I)
 -(A::UnitUpperTriangular, B::UnitUpperTriangular) = UpperTriangular(triu(A.data, 1) - triu(B.data, 1))
 -(A::UnitLowerTriangular, B::UnitLowerTriangular) = LowerTriangular(tril(A.data, -1) - tril(B.data, -1))
+-(A::AbstractTriangular, B::AbstractTriangular) = full(A) - full(B)
 
 ######################
 # BlasFloat routines #
 ######################
 
-A_mul_B!(A::Tridiagonal, B::TriangularUnion) = A*full!(B)
-A_mul_B!(C::AbstractVecOrMat, A::TriangularUnion, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
-A_mul_Bc!(C::AbstractVecOrMat, A::TriangularUnion, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
+A_mul_B!(A::Tridiagonal, B::AbstractTriangular) = A*full!(B)
+A_mul_B!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_B!(A, copy!(C, B))
+A_mul_Bc!(C::AbstractVecOrMat, A::AbstractTriangular, B::AbstractVecOrMat) = A_mul_Bc!(A, copy!(C, B))
 
 for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
                             (:UnitLowerTriangular, 'L', 'U'),
@@ -238,8 +239,8 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
     end
 end
 
-errorbounds{T<:Union(BigFloat, Complex{BigFloat}),S<:StridedMatrix}(A::TriangularUnion{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = error("not implemented yet! Please submit a pull request.")
-function errorbounds{TA<:Number,S<:StridedMatrix,TX<:Number,TB<:Number}(A::TriangularUnion{TA,S}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB})
+errorbounds{T<:Union(BigFloat, Complex{BigFloat}),S<:StridedMatrix}(A::AbstractTriangular{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = error("not implemented yet! Please submit a pull request.")
+function errorbounds{TA<:Number,S<:StridedMatrix,TX<:Number,TB<:Number}(A::AbstractTriangular{TA,S}, X::StridedVecOrMat{TX}, B::StridedVecOrMat{TB})
     TAXB = promote_type(TA, TB, TX, Float32)
     errorbounds(convert(AbstractMatrix{TAXB}, A), convert(AbstractArray{TAXB}, X), convert(AbstractArray{TAXB}, B))
 end
@@ -733,12 +734,12 @@ end
 
 for f in (:*, :Ac_mul_B, :At_mul_B, :A_mul_Bc, :A_mul_Bt, :Ac_mul_Bc, :At_mul_Bt, :\, :Ac_ldiv_B, :At_ldiv_B)
     @eval begin
-        ($f)(A::TriangularUnion, B::TriangularUnion) = ($f)(A, full(B))
+        ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(A, full(B))
     end
 end
 for f in (:A_mul_Bc, :A_mul_Bt, :Ac_mul_Bc, :At_mul_Bt, :/, :A_rdiv_Bc, :A_rdiv_Bt)
     @eval begin
-        ($f)(A::TriangularUnion, B::TriangularUnion) = ($f)(full(A), B)
+        ($f)(A::AbstractTriangular, B::AbstractTriangular) = ($f)(full(A), B)
     end
 end
 
@@ -746,7 +747,7 @@ end
 ### Multiplication with triangle to the left and hence rhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:Ac_mul_B, :Ac_mul_B!), (:At_mul_B, :At_mul_B!))
     @eval begin
-        function ($f){TA,TB}(A::TriangularUnion{TA}, B::StridedVecOrMat{TB})
+        function ($f){TA,TB}(A::AbstractTriangular{TA}, B::StridedVecOrMat{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
             ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
         end
@@ -789,7 +790,7 @@ end
 ### Multiplication with triangle to the rigth and hence lhs cannot be transposed.
 for (f, g) in ((:*, :A_mul_B!), (:A_mul_Bc, :A_mul_Bc!), (:A_mul_Bt, :A_mul_Bt!))
     @eval begin
-        function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::TriangularUnion{TB})
+        function ($f){TA,TB}(A::StridedVecOrMat{TA}, B::AbstractTriangular{TB})
             TAB = typeof(zero(TA)*zero(TB) + zero(TA)*zero(TB))
             ($g)(TA == TAB ? copy(A) : convert(AbstractArray{TAB}, A), TB == TAB ? copy(B) : convert(AbstractArray{TAB}, B))
         end
@@ -866,8 +867,8 @@ sqrtm(A::LowerTriangular) = sqrtm(A.').'
 sqrtm(A::UnitLowerTriangular) = sqrtm(A.').'
 
 #Generic eigensystems
-eigvals(A::TriangularUnion) = diag(A)
-function eigvecs{T}(A::TriangularUnion{T})
+eigvals(A::AbstractTriangular) = diag(A)
+function eigvecs{T}(A::AbstractTriangular{T})
     TT = promote_type(T, Float32)
     TT <: BlasFloat && return eigvecs(convert(AbstractMatrix{TT}, A))
     error("type not handled yet. Please submit a pull request.")
@@ -877,14 +878,14 @@ det{T}(A::UnitLowerTriangular{T}) = one(T)*one(T)
 det{T}(A::UpperTriangular{T}) = prod(diag(A.data))
 det{T}(A::LowerTriangular{T}) = prod(diag(A.data))
 
-eigfact(A::TriangularUnion) = Eigen(eigvals(A), eigvecs(A))
+eigfact(A::AbstractTriangular) = Eigen(eigvals(A), eigvecs(A))
 
 #Generic singular systems
 for func in (:svd, :svdfact, :svdfact!, :svdvals)
     @eval begin
-        ($func)(A::TriangularUnion) = ($func)(full(A))
+        ($func)(A::AbstractTriangular) = ($func)(full(A))
     end
 end
 
-factorize(A::TriangularUnion) = A
+factorize(A::AbstractTriangular) = A
 
