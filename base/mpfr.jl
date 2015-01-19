@@ -174,11 +174,16 @@ convert(::Type{Float64}, x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
 convert(::Type{Float32}, x::BigFloat) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
+# TODO: avoid double rounding
+convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 
 call(::Type{Float64}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
 call(::Type{Float32}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
+# TODO: avoid double rounding
+call(::Type{Float16}, x::BigFloat, r::RoundingMode) =
+    convert(Float16, call(Float32, x, r))
 
 promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
