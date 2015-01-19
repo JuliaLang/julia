@@ -44,16 +44,16 @@ The following tables summarize the types of special matrices that have been
 implemented in Julia, as well as whether hooks to various optimized methods
 for them in LAPACK are available.
 
-======================= ==================================================================================
-:class:`Hermitian`      `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
-:class:`UpperTriangular Upper `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
-:class:`LowerTriangular Lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
-:class:`Tridiagonal`    `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
-:class:`SymTridiagonal` Symmetric tridiagonal matrix
-:class:`Bidiagonal`     Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
-:class:`Diagonal`       `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_
-:class:`UniformScaling` `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_
-======================= ==================================================================================
+======================== ==================================================================================
+:class:`Hermitian`       `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
+:class:`UpperTriangular` Upper `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`LowerTriangular` Lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`Tridiagonal`     `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
+:class:`SymTridiagonal`  Symmetric tridiagonal matrix
+:class:`Bidiagonal`      Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
+:class:`Diagonal`        `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_
+:class:`UniformScaling`  `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_
+======================== ==================================================================================
 
 Elementary operations
 ---------------------

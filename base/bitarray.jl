@@ -1545,49 +1545,39 @@ maximum(B::BitArray) = isempty(B) ? error("argument must be non-empty") : any(B)
 
 ## map over bitarrays ##
 
-function map!(f::Callable, A::Union(StridedArray,BitArray))
-    for i = 1:length(A)
-        A[i] = f(A[i])
-    end
-    return A
-end
+# Specializing map is even more important for bitarrays than it is for generic
+# arrays since there can be a 64x speedup by working at the level of Int64
+# instead of looping bit-by-bit.
 
-function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray))
-    for i = 1:length(A)
-        dest[i] = f(A[i])
-    end
-    return dest
-end
+map(f::Callable, A::BitArray) = map(specialized_bitwise_unary(f), A)
+map(f::Callable, A::BitArray, B::BitArray) = map(specialized_bitwise_binary(f), A, B)
+map(f::BitFunctorUnary, A::BitArray) = map!(f, similar(A), A)
+map(f::BitFunctorBinary, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
 
-function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Union(StridedArray,BitArray))
-    for i = 1:length(A)
-        dest[i] = f(A[i], B[i])
-    end
-    return dest
-end
+map!(f::Callable, A::BitArray) = map!(f, A, A)
+map!(f::Callable, dest::BitArray, A::BitArray) = map!(specialized_bitwise_unary(f), dest, A)
+map!(f::Callable, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_bitwise_binary(f), dest, A, B)
 
-function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Union(StridedArray,BitArray), B::Number)
-    for i = 1:length(A)
-        dest[i] = f(A[i], B)
+# If we were able to specialize the function to a known bitwise operation,
+# map across the chunks. Otherwise, fall-back to the AbstractArray method that
+# iterates bit-by-bit.
+function map!(f::BitFunctorUnary, dest::BitArray, A::BitArray)
+    size(A) == size(dest) || throw(DimensionMismatch("sizes of dest and A must match"))
+    length(A) == 0 && return dest
+    for i=1:length(A.chunks)-1
+        dest.chunks[i] = f(A.chunks[i])
     end
-    return dest
+    dest.chunks[end] = f(A.chunks[end]) & _msk_end(A)
+    dest
 end
-
-function map!(f::Callable, dest::Union(StridedArray,BitArray), A::Number, B::Union(StridedArray,BitArray))
-    for i = 1:length(B)
-        dest[i] = f(A, B[i])
+function map!(f::BitFunctorBinary, dest::BitArray, A::BitArray, B::BitArray)
+    size(A) == size(B) == size(dest) || throw(DimensionMismatch("sizes of dest, A, and B must all match"))
+    length(A) == 0 && return dest
+    for i=1:length(A.chunks)-1
+        dest.chunks[i] = f(A.chunks[i], B.chunks[i])
     end
-    return dest
-end
-
-function map!(f::Callable, dest::Union(StridedArray,BitArray), As::Union(StridedArray,BitArray)...)
-    n = length(As[1])
-    i = 1
-    ith = a->a[i]
-    for i = 1:n
-        dest[i] = f(map(ith, As)...)
-    end
-    return dest
+    dest.chunks[end] = f(A.chunks[end], B.chunks[end]) & _msk_end(A)
+    dest
 end
 
 ## Filter ##

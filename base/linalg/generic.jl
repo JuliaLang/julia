@@ -1,9 +1,5 @@
 ## linalg.jl: Some generic Linear Algebra definitions
 
-# Fall back arithmetic
-+(A::AbstractMatrix, B::AbstractMatrix) = full(A) + full(B)
--(A::AbstractMatrix, B::AbstractMatrix) = full(A) - full(B)
-
 scale(X::AbstractArray, s::Number) = scale!(copy(X), s)
 scale(s::Number, X::AbstractArray) = scale!(copy(X), s)
 

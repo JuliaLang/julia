@@ -96,10 +96,10 @@ if run_ref
     println("Small arrays:")
     function randind(len)
         i = rand(1:6)
-        indchoices = {1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1}
+        indchoices = [1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1]
         return indchoices[i]
     end
-    #indsmall = {1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1}
+    #indsmall = [1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1]
     for n_dims in 1:10
         sz = ntuple(n_dims,i->lensmall)
         A = randn(sz)
@@ -225,10 +225,10 @@ if run_assign
     println("Small arrays:")
     function randind(len)
         i = rand(1:6)
-        indchoices = {1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1}
+        indchoices = [1:len,1:ceil(Int,len/2),1:ceil(Int,3*len/4),2:2:len,1:ceil(Int,len/2):len,len:-1:1]
         return indchoices[i]
     end
-    #indsmall = {1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1}
+    #indsmall = [1:4,1:2,1:3,2:2:4,1:3:4,4:-1:1]
     for n_dims in 1:10
         sz = ntuple(n_dims,i->lensmall)
         B = zeros(sz)
