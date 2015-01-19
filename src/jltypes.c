@@ -1264,11 +1264,11 @@ void print_env(cenv_t *soln)
     for(int i=0; i < soln->n; i+=2) {
         jl_value_t *T, *S;
         T = soln->data[i]; S = soln->data[i+1];
-        JL_PRINTF(JL_STDOUT, "%s@%x=", ((jl_tvar_t*)T)->name->name, T);
+        jl_printf(JL_STDOUT, "%s@%x=", ((jl_tvar_t*)T)->name->name, T);
         jl_static_show(JL_STDOUT, S);
-        JL_PRINTF(JL_STDOUT, " ");
+        jl_printf(JL_STDOUT, " ");
     }
-    JL_PRINTF(JL_STDOUT, "\n");
+    jl_printf(JL_STDOUT, "\n");
 }
 */
 
@@ -1458,8 +1458,8 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
         JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
-    //JL_PRINTF(JL_STDOUT, "env: "); print_env(&env);
-    //JL_PRINTF(JL_STDOUT, "sol: "); print_env(&eqc);
+    //jl_printf(JL_STDOUT, "env: "); print_env(&env);
+    //jl_printf(JL_STDOUT, "sol: "); print_env(&eqc);
 
     int env0 = eqc.n;
     jl_value_t **tvs;

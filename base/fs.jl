@@ -177,14 +177,7 @@ function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     len
 end
 
-function write(f::File, c::UInt8)
-    if !f.open
-        throw(ArgumentError("file \"$(f.path)\" is not open"))
-    end
-    err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
-    uv_error("write",err)
-    1
-end
+write(f::File, c::UInt8) = write(f,[c])
 
 function write{T}(f::File, a::Array{T})
     if isbits(T)

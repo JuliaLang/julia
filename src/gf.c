@@ -408,9 +408,9 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
         fargs[2] = (jl_value_t*)jl_null;
         fargs[3] = (jl_value_t*)def;
 #ifdef TRACE_INFERENCE
-        JL_PRINTF(JL_STDERR,"inference on %s", li->name->name);
+        jl_printf(JL_STDERR,"inference on %s", li->name->name);
         jl_static_show(JL_STDERR, (jl_value_t*)argtypes);
-        JL_PRINTF(JL_STDERR, "\n");
+        jl_printf(JL_STDERR, "\n");
 #endif
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
@@ -829,9 +829,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     else {
         if (jl_compileropts.compile_enabled == 0) {
             if (method->linfo->unspecialized == NULL) {
-                JL_PRINTF(JL_STDERR,"code missing for %s", method->linfo->name->name);
+                jl_printf(JL_STDERR,"code missing for %s", method->linfo->name->name);
                 jl_static_show(JL_STDERR, (jl_value_t*)type);
-                JL_PRINTF(JL_STDERR, "\n");
+                jl_printf(JL_STDERR, "\n");
                 exit(1);
             }
             jl_function_t *unspec = method->linfo->unspecialized;
@@ -1185,15 +1185,15 @@ static void check_ambiguous(jl_methlist_t *ml, jl_tuple_t *type,
         n = fname->name;
         errstream = jl_stderr_obj();
         s = JL_STDERR;
-        JL_PRINTF(s, "Warning: New definition \n    %s", n);
+        jl_printf(s, "Warning: New definition \n    %s", n);
         jl_show(errstream, (jl_value_t*)type);
         print_func_loc(s, linfo);
-        JL_PRINTF(s, "\nis ambiguous with: \n    %s", n);
+        jl_printf(s, "\nis ambiguous with: \n    %s", n);
         jl_show(errstream, (jl_value_t*)sig);
         print_func_loc(s, oldmeth->func->linfo);
-        JL_PRINTF(s, ".\nTo fix, define \n    %s", n);
+        jl_printf(s, ".\nTo fix, define \n    %s", n);
         jl_show(errstream, isect);
-        JL_PRINTF(s, "\nbefore the new definition.\n");
+        jl_printf(s, "\nbefore the new definition.\n");
     done_chk_amb:
         JL_GC_POP();
     }
@@ -1229,13 +1229,13 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                 jl_module_t *newmod = method->linfo->module;
                 jl_value_t *errstream = jl_stderr_obj();
                 JL_STREAM *s = JL_STDERR;
-                JL_PRINTF(s, "Warning: Method definition %s", method->linfo->name->name);
+                jl_printf(s, "Warning: Method definition %s", method->linfo->name->name);
                 jl_show(errstream, (jl_value_t*)type);
-                JL_PRINTF(s, " in module %s", l->func->linfo->module->name->name);
+                jl_printf(s, " in module %s", l->func->linfo->module->name->name);
                 print_func_loc(s, l->func->linfo);
-                JL_PRINTF(s, " overwritten in module %s", newmod->name->name);
+                jl_printf(s, " overwritten in module %s", newmod->name->name);
                 print_func_loc(s, method->linfo);
-                JL_PRINTF(s, ".\n");
+                jl_printf(s, ".\n");
             }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
@@ -1618,12 +1618,12 @@ static int error_en = 1;
 static void __attribute__ ((unused)) enable_trace(int x) { trace_en=x; }
 static void show_call(jl_value_t *F, jl_value_t **args, uint32_t nargs)
 {
-    JL_PRINTF(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
+    jl_printf(JL_STDOUT, "%s(",  jl_gf_name(F)->name);
     for(size_t i=0; i < nargs; i++) {
-        if (i > 0) JL_PRINTF(JL_STDOUT, ", ");
+        if (i > 0) jl_printf(JL_STDOUT, ", ");
         jl_static_show(JL_STDOUT, jl_typeof(args[i]));
     }
-    JL_PRINTF(JL_STDOUT, ")\n");
+    jl_printf(JL_STDOUT, ")\n");
 }
 #endif
 
@@ -1802,7 +1802,7 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li)
     long lno = li->line;
     if (lno > 0) {
         char *fname = ((jl_sym_t*)li->file)->name;
-        JL_PRINTF(s, " at %s:%d", fname, lno);
+        jl_printf(s, " at %s:%d", fname, lno);
     }
 }
 
