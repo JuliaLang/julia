@@ -10,7 +10,7 @@ const AUTH_DATA = Dict{Any,Any}(
 )
 
 function user()
-    if !success(`git config --global github.user`)
+    if !success(`git config --global --includes github.user`)
         error("""
         no GitHub user name configured; please configure it with:
 
@@ -19,7 +19,7 @@ function user()
         where USERNAME is replaced with your GitHub user name.
         """)
     end
-    readchomp(`git config --global github.user`)
+    readchomp(`git config --global --includes github.user`)
 end
 
 function json()
