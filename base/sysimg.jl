@@ -289,6 +289,9 @@ import .Dates: Date, DateTime, now
 # Some basic documentation
 include("basedocs.jl")
 
+# threading
+include("threading.jl")
+
 function __init__()
     # Base library init
     reinit_stdio()

@@ -413,7 +413,8 @@ void jl_dump_objfile(char *fname, int jit_model)
 #else
         jit_model ? Reloc::PIC_ : Reloc::Default,
 #endif
-        jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        // jit_model ? CodeModel::JITDefault : CodeModel::Default,
+        CodeModel::Default,
         CodeGenOpt::Aggressive // -O3
         ));
 
@@ -538,12 +539,15 @@ static void jl_rethrow_with_add(const char *fmt, ...)
     jl_rethrow();
 }
 
+JL_DEFINE_MUTEX_EXT(codegen)
+
 // --- entry point ---
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
 //static int n_compile=0;
 static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 {
+    JL_LOCK(codegen)
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
     BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
@@ -565,6 +569,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
             builder.SetCurrentDebugLocation(olddl);
         }
         JL_SIGATOMIC_END();
+        JL_UNLOCK(codegen)
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
@@ -598,6 +603,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         builder.SetCurrentDebugLocation(olddl);
     }
     JL_SIGATOMIC_END();
+    JL_UNLOCK(codegen)
     return f;
 }
 
@@ -632,6 +638,7 @@ static void jl_setup_module(Module *m, bool add)
 
 extern "C" void jl_generate_fptr(jl_function_t *f)
 {
+    JL_LOCK(codegen)
     // objective: assign li->fptr
     jl_lambda_info_t *li = f->linfo;
     assert(li->functionObject);
@@ -672,6 +679,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         }
     }
     f->fptr = li->fptr;
+    JL_UNLOCK(codegen)
 }
 
 extern "C" void jl_compile(jl_function_t *f)
@@ -795,6 +803,8 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
     llvm::formatted_raw_ostream fstream(stream);
     Function *llvmf = (Function*)f;
     if (dumpasm == false) {
+        // To print whole module
+        //llvmf->getParent()->print(stream, NULL);
         llvmf->print(stream);
     }
     else {
@@ -4400,9 +4410,17 @@ static void init_julia_llvm_env(Module *m)
     jlpgcstack_var =
         new GlobalVariable(*m, jl_ppvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack");
+                           NULL, "jl_pgcstack", NULL,
+                           GlobalValue::GeneralDynamicTLSModel);
     add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
 #endif
+
+    jlexc_var =
+        new GlobalVariable(*m, jl_pvalue_llvmt,
+                           false, GlobalVariable::ExternalLinkage,
+                           NULL, "jl_exception_in_transit", NULL,
+                           GlobalValue::GeneralDynamicTLSModel);
+    add_named_global(jlexc_var, (void*)&jl_exception_in_transit);
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
     Function *jl__stack_chk_fail =
@@ -4415,8 +4433,6 @@ static void init_julia_llvm_env(Module *m)
     jltrue_var = global_to_llvm("jl_true", (void*)&jl_true, m);
     jlfalse_var = global_to_llvm("jl_false", (void*)&jl_false, m);
     jlnull_var = global_to_llvm("jl_null", (void*)&jl_null, m);
-    jlexc_var = global_to_llvm("jl_exception_in_transit",
-                               (void*)&jl_exception_in_transit, m);
     jldiverr_var = global_to_llvm("jl_diverror_exception",
                                   (void*)&jl_diverror_exception, m);
     jlundeferr_var = global_to_llvm("jl_undefref_exception",
@@ -4991,6 +5007,8 @@ extern "C" void jl_init_codegen(void)
 #endif
         .setTargetOptions(options)
 #if defined(USE_MCJIT) && !defined(LLVM36)
+        .setCodeModel(CodeModel::Default)
+        .setRelocationModel(Reloc::PIC_)
         .setUseMCJIT(true)
 #endif
     ;
