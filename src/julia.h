@@ -444,23 +444,23 @@ DLLEXPORT size_t jl_array_len_(jl_array_t *a);
 
 STATIC_INLINE jl_value_t *jl_tupleref(void *t, size_t i)
 {
-    assert(i < jl_tuple_len(t) && i >= 0);
+    assert(i < jl_tuple_len(t));
     return jl_tuple_data(t)[i];
 }
 STATIC_INLINE jl_value_t *jl_tupleset(void *t, size_t i, void *x)
 {
-    assert(i < jl_tuple_len(t) && i >= 0);
+    assert(i < jl_tuple_len(t));
     jl_tuple_data(t)[i] = (jl_value_t*)x;
     return (jl_value_t*)x;
 }
 STATIC_INLINE jl_value_t *jl_cellref(void *a, size_t i)
 {
-    assert(i < jl_array_len(a) && i >= 0);
+    assert(i < jl_array_len(a));
     return ((jl_value_t**)(jl_array_data(a)))[i];
 }
 STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 {
-    assert(i < jl_array_len(a) && i >= 0);
+    assert(i < jl_array_len(a));
     ((jl_value_t**)(jl_array_data(a)))[i] = (jl_value_t*)x;
     return (jl_value_t*)x;
 }

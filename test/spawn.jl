@@ -70,14 +70,16 @@ rm(file)
 
 # Stream Redirection
 @unix_only begin
+    r = RemoteRef()
     @async begin
-        server = listen(2326)
+        port, server = listenany(2326)
+        put!(r,port)
         client = accept(server)
         @test readall(client |> `cat`) == "hello world\n"
         close(server)
     end
     @async begin
-        sock = connect(2326)
+        sock = connect(fetch(r))
         run(`echo hello world` |> sock)
         close(sock)
     end
@@ -123,15 +125,16 @@ yield()
 
 # Test marking of AsyncStream
 
+r = RemoteRef()
 @async begin
-    server = listen(2327)
+    port, server = listenany(2327)
+    put!(r, port)
     client = accept(server)
     write(client, "Hello, world!\n")
     write(client, "Goodbye, world...\n")
     close(server)
 end
-sleep(0.1)
-sock = connect(2327)
+sock = connect(fetch(r))
 mark(sock)
 @test ismarked(sock)
 @test readline(sock) == "Hello, world!\n"

@@ -156,7 +156,9 @@ debug && println("symmetric eigen-decomposition")
         @test_approx_eq v*Diagonal(d)*v' asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
         @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), 1:2) # same result, but checks that method works
         @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
         @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
     end
@@ -172,6 +174,7 @@ debug && println("symmetric generalized eigenproblem")
         asym_sg = asym[1:n1, 1:n1]
         a_sg = a[:,n1+1:n2]
         f = eigfact(asym_sg, a_sg'a_sg)
+        eig(asym_sg, a_sg'a_sg) # same result, but checks that method works
         @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
@@ -182,6 +185,7 @@ debug && println("Non-symmetric generalized eigenproblem")
         a1_nsg = a[1:n1, 1:n1]
         a2_nsg = a[n1+1:n2, n1+1:n2]
         f = eigfact(a1_nsg, a2_nsg)
+        eig(a1_nsg, a2_nsg) # same result, but checks that method works
         @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
         @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
         @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε

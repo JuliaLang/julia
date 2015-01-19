@@ -6,7 +6,6 @@ export                                  # types
  CholmodSparse,
  CholmodTriplet,
 
- CholmodSparse!,                        # destructive constructors
  CholmodDense!,
 
  etree
@@ -404,7 +403,7 @@ function norm{Tv<:CHMVTypes}(D::CholmodDense{Tv},p::Real=1)
           &D.c, p == 1 ? 1 :(p == Inf ? 1 : throw(ArgumentError("p must be 1 or Inf"))),cmn(Int32))
 end
 
-function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
+function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                      rowval::Vector{Ti},
                                                      nzval::Vector{Tv},
                                                      m::Integer,
@@ -415,24 +414,27 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
     if any(diff(colpt) .< 0) throw(ArgumentError("elements of colpt must be non-decreasing")) end
     if length(colpt) != n + 1 throw(DimensionMismatch("length(colptr) = $(length(colpt)), should be $(n+1)")) end
     if bool(bb)                         # one-based
-        decrement!(colpt)
-        decrement!(rowval)
+        colpt0 = decrement(colpt)
+        rowval0 = decrement(rowval)
+    else
+        colpt0 = colpt
+        rowval0 = rowval
     end
-    nz = colpt[end]
-    if length(rowval) != nz || length(nzval) != nz
+    nz = colpt0[end]
+    if length(rowval0) != nz || length(nzval) != nz
         throw(DimensionMismatch("length(rowval) = $(length(rowval)) and length(nzval) = $(length(nzval)) should be $nz"))
     end
-    if any(rowval .< 0) || any(rowval .>= m)
-        throw(ArgumentError("all elements of rowval must be in the range [0,$(m-1)]"))
+    if any(rowval0 .< 0) || any(rowval0 .>= m)
+        throw(ArgumentError("all elements of rowval0 must be in the range [0,$(m-1)]"))
     end
     it = ityp(Ti)
-    cs = CholmodSparse(c_CholmodSparse{Tv,Ti}(m,n,int(nz),convert(Ptr{Ti},colpt),
-                                               convert(Ptr{Ti},rowval), C_NULL,
-                                               convert(Ptr{Tv},nzval), C_NULL,
+    cs = CholmodSparse(c_CholmodSparse{Tv,Ti}(m, n, int(nz), convert(Ptr{Ti}, colpt0),
+                                               convert(Ptr{Ti}, rowval0), C_NULL,
+                                               convert(Ptr{Tv}, nzval), C_NULL,
                                                int32(stype), ityp(Ti),
-                                               xtyp(Tv),dtyp(Tv),
-                                               CHOLMOD_FALSE,CHOLMOD_TRUE),
-                        colpt,rowval,nzval)
+                                               xtyp(Tv), dtyp(Tv),
+                                               CHOLMOD_FALSE, CHOLMOD_TRUE),
+                                               colpt0, rowval, nzval)
 
     @isok isvalid(cs)
 
@@ -440,19 +442,8 @@ function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
 
     return cs
 end
-function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
-                                                    rowval::Vector{Ti},
-                                                    nzval::Vector{Tv},
-                                                    m::Integer,
-                                                    n::Integer,
-                                                    stype::Signed)
-    CholmodSparse!(copy(colpt),copy(rowval),copy(nzval),m,n,stype)
-end
-function CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti}, stype::Signed)
-    CholmodSparse!(A.colptr,A.rowval,A.nzval,size(A,1),size(A,2),stype)
-end
 function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(A::SparseMatrixCSC{Tv,Ti}, stype::Signed)
-    CholmodSparse!(copy(A.colptr),copy(A.rowval),copy(A.nzval),size(A,1),size(A,2),stype)
+    CholmodSparse(A.colptr, A.rowval, A.nzval, size(A,1), size(A,2), stype)
 end
 function CholmodSparse(A::SparseMatrixCSC)
     stype = ishermitian(A) ? 1 : 0
@@ -468,7 +459,6 @@ function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,T
     c_free(cp)
     cms
 end
-CholmodSparse!{Tv<:CHMVTypes,Ti<:CHMITypes}(cp::Ptr{c_CholmodSparse{Tv,Ti}}) = CholmodSparse(cp)
 CholmodSparse{Tv<:CHMVTypes}(D::CholmodDense{Tv}) = CholmodSparse(D,1) # default Ti is Int
 
 function CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}(tp::Ptr{c_CholmodTriplet{Tv,Ti}})

@@ -131,7 +131,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Returns a DateTime corresponding to the user's system
    time including the system timezone locale.
 
-.. function:: nowutc() -> DateTime
+.. function:: now(::Type{UTC}) -> DateTime
   
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.

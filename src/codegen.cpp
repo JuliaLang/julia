@@ -9,11 +9,15 @@
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
 #include <llvm/PassManager.h>
-#include <llvm/Target/TargetLibraryInfo.h>
 #include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
 #include <llvm/Bitcode/ReaderWriter.h>
+#ifdef LLVM37
+#include <llvm/Analysis/TargetLibraryInfo.h>
+#else
+#include <llvm/Target/TargetLibraryInfo.h>
+#endif
 #ifdef LLVM35
 #include <llvm/IR/Verifier.h>
 #include <llvm/Object/ObjectFile.h>
@@ -418,7 +422,11 @@ void jl_dump_objfile(char *fname, int jit_model)
         ));
 
     PassManager PM;
+#ifndef LLVM37
     PM.add(new TargetLibraryInfo(Triple(jl_TargetMachine->getTargetTriple())));
+#else
+    PM.add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
+#endif
 #ifdef LLVM36
     PM.add(new DataLayoutPass());
 #elif LLVM35

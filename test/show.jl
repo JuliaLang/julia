@@ -200,3 +200,15 @@ end
 # parametric type instantiation printing
 immutable TParametricPrint{a}; end
 @test sprint(show, :(TParametricPrint{false}())) == ":(TParametricPrint{false}())"
+
+# issue #9797
+let q1 = parse(repr(:("$(a)b"))),
+    q2 = parse(repr(:("$ab")))
+    @test isa(q1, QuoteNode)
+    @test q1.value.head === :string
+    @test q1.value.args == [:a, "b"]
+
+    @test isa(q2, QuoteNode)
+    @test q2.value.head == :string
+    @test q2.value.args == [:ab,]
+end

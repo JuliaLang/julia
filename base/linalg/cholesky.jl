@@ -18,12 +18,35 @@ immutable CholeskyPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 CholeskyPivoted{T}(UL::AbstractMatrix{T}, uplo::Char, piv::Vector{BlasInt}, rank::BlasInt, tol::Real, info::BlasInt) = CholeskyPivoted{T,typeof(UL)}(UL, uplo, piv, rank, tol, info)
 
-function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U)
+function chol!{T<:BlasFloat}(A::StridedMatrix{T})
+    C, info = LAPACK.potrf!('U', A)
+    return @assertposdef UpperTriangular(C) info
+end
+function chol!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol)
     C, info = LAPACK.potrf!(char_uplo(uplo), A)
-    return @assertposdef Triangular{eltype(C),typeof(C),uplo,false}(C) info
+    return @assertposdef uplo == :U ? UpperTriangular(C) : LowerTriangular(C) info
 end
 
-function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
+function chol!{T}(A::AbstractMatrix{T})
+    n = chksquare(A)
+    @inbounds begin
+        for k = 1:n
+            for i = 1:k - 1
+                A[k,k] -= A[i,k]'A[i,k]
+            end
+            A[k,k] = chol!(A[k,k], uplo)
+            AkkInv = inv(A[k,k])
+            for j = k + 1:n
+                for i = 1:k - 1
+                    A[k,j] -= A[i,k]'A[i,j]
+                end
+                A[k,j] = A[k,k]'\A[k,j]
+            end
+        end
+    end
+    return UpperTriangular(A)
+end
+function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
     n = chksquare(A)
     @inbounds begin
         if uplo == :L
@@ -58,7 +81,7 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol=:U)
             throw(ArgumentError("uplo must be either :U or :L but was $(uplo)"))
         end
     end
-    return Triangular(A, uplo, false)
+    return uplo == :U ? UpperTriangular(A) : LowerTriangular(A)
 end
 
 function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
@@ -118,14 +141,14 @@ size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)
 
 function getindex{T,S,UpLo}(C::Cholesky{T,S,UpLo}, d::Symbol)
-    d == :U && return Triangular(UpLo == d ? C.UL : C.UL',:U)
-    d == :L && return Triangular(UpLo == d ? C.UL : C.UL',:L)
-    d == :UL && return Triangular(C.UL, UpLo)
+    d == :U && return UpperTriangular(UpLo == d ? C.UL : C.UL')
+    d == :L && return LowerTriangular(UpLo == d ? C.UL : C.UL')
+    d == :UL && return UpLo == :U ? UpperTriangular(C.UL) : LowerTriangular(C.UL)
     throw(KeyError(d))
 end
 function getindex{T<:BlasFloat}(C::CholeskyPivoted{T}, d::Symbol)
-    d == :U && return Triangular(symbol(C.uplo) == d ? C.UL : C.UL', :U)
-    d == :L && return Triangular(symbol(C.uplo) == d ? C.UL : C.UL', :L)
+    d == :U && return UpperTriangular(symbol(C.uplo) == d ? C.UL : C.UL')
+    d == :L && return LowerTriangular(symbol(C.uplo) == d ? C.UL : C.UL')
     d == :p && return C.piv
     if d == :P
         n = size(C, 1)
@@ -142,8 +165,8 @@ show{T,S<:AbstractMatrix,UpLo}(io::IO, C::Cholesky{T,S,UpLo}) = (println("$(type
 
 A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat{T}) = LAPACK.potrs!('U', C.UL, B)
 A_ldiv_B!{T<:BlasFloat,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat{T}) = LAPACK.potrs!('L', C.UL, B)
-A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat) = Ac_ldiv_B!(Triangular(C.UL, :L, false), A_ldiv_B!(Triangular(C.UL, :L, false), B))
-A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat) = A_ldiv_B!(Triangular(C.UL, :U, false), Ac_ldiv_B!(Triangular(C.UL, :U, false), B))
+A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:L}, B::StridedVecOrMat) = Ac_ldiv_B!(LowerTriangular(C.UL), A_ldiv_B!(LowerTriangular(C.UL), B))
+A_ldiv_B!{T,S<:AbstractMatrix}(C::Cholesky{T,S,:U}, B::StridedVecOrMat) = A_ldiv_B!(UpperTriangular(C.UL), Ac_ldiv_B!(UpperTriangular(C.UL), B))
 
 function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedVector{T})
     chkfullrank(C)
@@ -161,8 +184,8 @@ function A_ldiv_B!{T<:BlasFloat}(C::CholeskyPivoted{T}, B::StridedMatrix{T})
     end
     B
 end
-A_ldiv_B!(C::CholeskyPivoted, B::StridedVector) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv]))[invperm(C.piv)] : A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv]))[invperm(C.piv)]
-A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = C.uplo=='L' ? Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv,:]))[invperm(C.piv),:] : A_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), Ac_ldiv_B!(Triangular(C.UL, symbol(C.uplo), false), B[C.piv,:]))[invperm(C.piv),:]
+A_ldiv_B!(C::CholeskyPivoted, B::StridedVector) = C.uplo=='L' ? Ac_ldiv_B!(LowerTriangular(C.UL), A_ldiv_B!(LowerTriangular(C.UL), B[C.piv]))[invperm(C.piv)] : A_ldiv_B!(UpperTriangular(C.UL), Ac_ldiv_B!(UpperTriangular(C.UL), B[C.piv]))[invperm(C.piv)]
+A_ldiv_B!(C::CholeskyPivoted, B::StridedMatrix) = C.uplo=='L' ? Ac_ldiv_B!(LowerTriangular(C.UL), A_ldiv_B!(LowerTriangular(C.UL), B[C.piv,:]))[invperm(C.piv),:] : A_ldiv_B!(UpperTriangular(C.UL), Ac_ldiv_B!(UpperTriangular(C.UL), B[C.piv,:]))[invperm(C.piv),:]
 
 function det{T,S,UpLo}(C::Cholesky{T,S,UpLo})
     dd = one(T)

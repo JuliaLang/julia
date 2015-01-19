@@ -973,8 +973,12 @@ function getindex_I_sorted{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, 
     # Sorted vectors for indexing rows.
     # Similar to getindex_general but without the transpose trick.
     (m, n) = size(A)
-    minj, maxj = extrema(J)
-    ((I[1] < 1) || (I[end] > m) || (minj < 1) || (maxj > n)) && BoundsError()
+
+    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && BoundsError()
+    end
 
     nI = length(I)
     avgM = div(nnz(A),m)
@@ -994,8 +998,6 @@ function getindex_I_sorted_bsearch_A{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Abstra
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Array(Ti, nJ+1)
     colptrS[1] = 1
-
-    offI = I[1]-1
 
     ptrS = 1
     # determine result size
@@ -1117,11 +1119,15 @@ function getindex_I_sorted_bsearch_I{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Abstra
     colptrS[1] = 1
 
     m = A.m
+
+    # cacheI is used first to store num occurrences of each row in columns of interest
+    # and later to store position of first occurrence of each row in I
     cacheI = zeros(Int, m)
+
     # count rows
     @inbounds for j = 1:nJ
         col = J[j]
-        @simd for ptrA in colptrA[col]:(colptrA[col+1]-1)
+        for ptrA in colptrA[col]:(colptrA[col+1]-1)
             cacheI[rowvalA[ptrA]] += 1
         end
     end
@@ -1129,19 +1135,23 @@ function getindex_I_sorted_bsearch_I{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Abstra
     # fill cache and count nnz
     ptrS::Int = 0
     ptrI::Int = 1
-    @inbounds for j in 1:m
+    @inbounds for j = 1:m
         cval = cacheI[j]
         (cval == 0) && continue
         ptrI = searchsortedfirst(I, j, ptrI, nI, Base.Order.Forward)
+        cacheI[j] = ptrI
+        while ptrI <= nI && I[ptrI] == j
+            ptrS += cval
+            ptrI += 1
+        end
         if ptrI > nI
-            @simd for i=j:m; @inbounds cacheI[i] = ptrI; end
+            @simd for i=(j+1):m; @inbounds cacheI[i]=ptrI; end
             break
         end
-        ptrS += cval
-        cacheI[j] = ptrI
     end
     rowvalS = Array(Ti, ptrS)
     nzvalS  = Array(Tv, ptrS)
+    colptrS[nJ+1] = ptrS+1
 
     # fill the values
     ptrS = 1
@@ -1153,10 +1163,14 @@ function getindex_I_sorted_bsearch_I{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::Abstra
             rowA = rowvalA[ptrA]
             ptrI = cacheI[rowA]
             (ptrI > nI) && break
-            if (ptrI > 0) && (I[ptrI] == rowA)
-                rowvalS[ptrS] = ptrI
-                nzvalS[ptrS] = nzvalA[ptrA]
-                ptrS += 1
+            if ptrI > 0
+                while I[ptrI] == rowA
+                    rowvalS[ptrS] = ptrI
+                    nzvalS[ptrS] = nzvalA[ptrA]
+                    ptrS += 1
+                    ptrI += 1
+                    (ptrI > nI) && break
+                end
             end
             ptrA += 1
         end

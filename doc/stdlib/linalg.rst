@@ -39,7 +39,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: factorize(A)
 
-   Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, Triangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\\b; y=A\\C``.
+   Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\\b; y=A\\C``.
 
 .. function:: factorize!(A)
 
@@ -168,6 +168,17 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: qrfact!(A,[pivot=false])
 
    ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
+
+.. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
+
+   Converts an orthogonal or unitary matrix stored as a ``QRCompactWYQ``
+   object, i.e. in the compact WY format [Bischof1987]_, to a dense matrix.
+   
+   Optionally takes a ``thin`` Boolean argument, which if ``true`` omits the
+   columns that span the rows of ``R`` in the QR factorization that are zero.
+   The resulting matrix is the ``Q`` in a thin QR factorization (sometimes
+   called the reduced QR factorization).  If ``false``, returns a ``Q`` that
+   spans all rows of ``R`` in its corresponding QR factorization.
 
 .. function:: bkfact(A) -> BunchKaufman
 

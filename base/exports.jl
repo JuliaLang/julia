@@ -62,6 +62,7 @@ export
     IOBuffer,
     IOStream,
     LocalProcess,
+    LowerTriangular,
     MathConst,
     Matrix,
     MergeSort,
@@ -108,9 +109,9 @@ export
     SymTridiagonal,
     Timer,
     TmStruct,
-    Triangular,
     Tridiagonal,
     UnitRange,
+    UpperTriangular,
     UTF16String,
     UTF32String,
     Val,
@@ -464,15 +465,6 @@ export
     √,
     ∛,
 
-# fast math
-    add_fast,
-    sub_fast,
-    mul_fast,
-    div_fast,
-    rem_fast,
-    mod_fast,
-    cmp_fast,
-
 # specfun
     airy,
     airyai,
@@ -788,6 +780,8 @@ export
     length,
     map!,
     map,
+    mapfoldl,
+    mapfoldr,
     mapreduce,
     merge!,
     merge,

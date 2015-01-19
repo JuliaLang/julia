@@ -307,7 +307,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     issym(A) && return sqrtm(Symmetric(A))
     n = chksquare(A)
     SchurF = schurfact(complex(A))
-    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
+    R = full(sqrtm(UpperTriangular(SchurF[:T])))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
@@ -315,7 +315,7 @@ function sqrtm{T<:Complex}(A::StridedMatrix{T})
     ishermitian(A) && return sqrtm(Hermitian(A))
     n = chksquare(A)
     SchurF = schurfact(A)
-    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
+    R = full(sqrtm(UpperTriangular(SchurF[:T])))
     SchurF[:vectors]*R*SchurF[:vectors]'
 end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
@@ -325,9 +325,9 @@ function inv{S}(A::StridedMatrix{S})
     T = typeof(one(S)/one(S))
     Ac = convert(AbstractMatrix{T}, A)
     if istriu(Ac)
-        Ai = inv(Triangular(A, :U, false))
+        Ai = inv(UpperTriangular(A))
     elseif istril(Ac)
-        Ai = inv(Triangular(A, :L, false))
+        Ai = inv(LowerTriangular(A))
     else
         Ai = inv(lufact(Ac))
     end
@@ -377,7 +377,7 @@ function factorize{T}(A::Matrix{T})
                 if utri1
                     return Bidiagonal(diag(A), diag(A, -1), false)
                 end
-                return Triangular(A, :L)
+                return LowerTriangular(A)
             end
             if utri
                 return Bidiagonal(diag(A), diag(A, 1), true)
@@ -392,7 +392,7 @@ function factorize{T}(A::Matrix{T})
             end
         end
         if utri
-            return Triangular(A, :U)
+            return UpperTriangular(A)
         end
         if herm
             try
@@ -413,9 +413,9 @@ function (\)(A::StridedMatrix, B::StridedVecOrMat)
     m, n = size(A)
     if m == n
         if istril(A)
-            return istriu(A) ? \(Diagonal(A),B) : \(Triangular(A, :L),B)
+            return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
         end
-        istriu(A) && return \(Triangular(A, :U),B)
+        istriu(A) && return \(UpperTriangular(A),B)
         return \(lufact(A),B)
     end
     return qrfact(A,pivot=eltype(A)<:BlasFloat)\B

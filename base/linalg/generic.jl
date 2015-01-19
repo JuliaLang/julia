@@ -424,7 +424,7 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
 end
 
 function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
     return det(lufact(A))
 end
 det(x::Number) = x

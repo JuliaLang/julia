@@ -140,28 +140,30 @@ workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
 @test @parallel(+, for i=1:2; i; end) == 3
 
 # Testing timedwait on multiple RemoteRefs
-rr1 = RemoteRef()
-rr2 = RemoteRef()
-rr3 = RemoteRef()
+@sync begin
+    rr1 = RemoteRef()
+    rr2 = RemoteRef()
+    rr3 = RemoteRef()
 
-@async begin sleep(0.5); put!(rr1, :ok) end
-@async begin sleep(1.0); put!(rr2, :ok) end
-@async begin sleep(2.0); put!(rr3, :ok) end
+    @async begin sleep(0.5); put!(rr1, :ok) end
+    @async begin sleep(1.0); put!(rr2, :ok) end
+    @async begin sleep(2.0); put!(rr3, :ok) end
 
-tic()
-timedwait(1.0) do
-    all(map(isready, [rr1, rr2, rr3]))
+    tic()
+    timedwait(1.0) do
+        all(map(isready, [rr1, rr2, rr3]))
+    end
+    et=toq()
+    # assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
+    try
+        @test (et >= 1.0) && (et <= 1.5)
+        @test !isready(rr3)
+    catch
+        warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
+    end
+    @test isready(rr1)
 end
-et=toq()
 
-# assuming that 0.5 seconds is a good enough buffer on a typical modern CPU
-try
-    @test (et >= 1.0) && (et <= 1.5)
-    @test !isready(rr3)
-catch
-    warn("timedwait tests delayed. et=$et, isready(rr3)=$(isready(rr3))")
-end
-@test isready(rr1)
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 

@@ -639,7 +639,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         a = map(args) do x
             if !isa(x,AbstractString)
                 if isa(x,Symbol) && !(x in quoted_syms)
-                    string("\$", x)
+                    string("\$(", x, ")")
                 else
                     string("\$(", sprint(show_unquoted,x), ")")
                 end
