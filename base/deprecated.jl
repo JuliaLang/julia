@@ -273,3 +273,12 @@ const base64 = base64encode
 
 @deprecate error(ex::Exception) throw(ex)
 @deprecate error{E<:Exception}(::Type{E}) throw(E())
+
+@deprecate CholmodSparse!(colpt, rowval, nzval, m) CholmodSparse(colpt, rowval, nzval, m)
+@deprecate lufact!(S::SparseMatrixCSC) lufact(S)
+
+@deprecate Triangular TriangularUnion
+@deprecate Triangular{T,S,:U,true} Base.LinAlg.UnitUpperTriangular
+@deprecate Triangular{T,S,:L,true} Base.LinAlg.UnitLowerTriangular
+@deprecate Triangular{T,S,:U,false} UpperTriangular
+@deprecate Triangular{T,S,:L,false} LowerTriangular
