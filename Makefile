@@ -198,9 +198,6 @@ JL_PRIVATE_LIBS += mpfr
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
-ifeq ($(OS),Linux)
-JL_PRIVATE_LIBS += ssl crypto
-endif
 endif
 ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
@@ -270,6 +267,12 @@ endif
 			fi \
 		done \
 	done
+
+	# Copy in libssl and libcrypto if they exist
+ifeq ($(OS),Linux)
+	-$(INSTALL_M) $(build_libdir)/libssl*.so* $(DESTDIR)$(private_libdir)
+	-$(INSTALL_M) $(build_libdir)/libcrypto*.so* $(DESTDIR)$(private_libdir)
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV),0)
