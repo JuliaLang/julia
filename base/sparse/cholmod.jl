@@ -286,11 +286,26 @@ type c_CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
     packed::Cint
 end
 
-type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}
+type CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes} <: AbstractSparseMatrix{Tv,Ti}
     c::c_CholmodSparse{Tv,Ti}
     colptr0::Vector{Ti}
     rowval0::Vector{Ti}
     nzval::Vector{Tv}
+end
+
+import Base: getindex, size
+
+size(A::CholmodSparse, i::Integer) = i > 0 ? (i == 1 ? A.c.m : (i == 2 ? A.c.n : 1)) : error("")
+size(A::CholmodSparse) = (size(A, 1), size(A, 2))
+
+getindex(A::CholmodSparse, i::Integer) = getindex(A, ind2sub(size(A),i)...)
+function getindex{T}(A::CholmodSparse{T}, i0::Integer, i1::Integer)
+    if !(1 <= i0 <= A.c.m && 1 <= i1 <= A.c.n); throw(BoundsError()); end
+    r1 = int(A.colptr0[i1]);println("r1: $r1")
+    r2 = int(A.colptr0[i1 + 1] - 1);println("r2: $r2")
+    (r1 > r2) && return zero(T)
+    r1 = int(searchsortedfirst(A.rowval0, i0 - 1, r1, r2, Base.Order.Forward));println("r1: $r1")
+    ((r1 > r2) || (A.rowval0[r1 + 1] + 1 != i0)) ? zero(T) : A.nzval[r1 + 1]
 end
 
 type c_CholmodTriplet{Tv<:CHMVTypes,Ti<:CHMITypes}
@@ -433,7 +448,7 @@ function CholmodSparse{Tv<:CHMVTypes,Ti<:CHMITypes}(colpt::Vector{Ti},
                                                int32(stype), ityp(Ti),
                                                xtyp(Tv), dtyp(Tv),
                                                CHOLMOD_FALSE, CHOLMOD_TRUE),
-                                               colpt0, rowval, nzval)
+                                               colpt0, rowval0, nzval)
 
     @isok isvalid(cs)
 

@@ -881,10 +881,10 @@ getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
-    r1 = int(A.colptr[i1])
-    r2 = int(A.colptr[i1+1]-1)
+    r1 = int(A.colptr[i1]);println("r1: $r1")
+    r2 = int(A.colptr[i1+1]-1);println("r2: $r2")
     (r1 > r2) && return zero(T)
-    r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
+    r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward);println("r1: $r1")
     ((r1 > r2) || (A.rowval[r1] != i0)) ? zero(T) : A.nzval[r1]
 end
 
