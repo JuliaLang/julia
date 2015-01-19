@@ -268,6 +268,10 @@ include("constants.jl")
 include("quadgk.jl")
 importall .QuadGK
 
+# Fast math
+include("fastmath.jl")
+importall .FastMath
+
 # deprecated functions
 include("deprecated.jl")
 

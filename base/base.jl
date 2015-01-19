@@ -242,24 +242,6 @@ macro inbounds(blk)
     :(@boundscheck false $(esc(blk)))
 end
 
-function make_fastmath(expr)
-    if isa(expr, Expr)
-        Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
-    elseif expr==:+; :add_fast
-    elseif expr==:-; :sub_fast
-    elseif expr==:*; :mul_fast
-    elseif expr==:/; :div_fast
-    elseif expr==:rem; :rem_fast
-    elseif expr==:mod; :mod_fast
-    elseif expr==:cmp; :cmp_fast
-    else expr
-    end
-end
-
-macro fastmath(expr)
-    make_fastmath(esc(expr))
-end
-
 macro label(name::Symbol)
     Expr(:symboliclabel, name)
 end
