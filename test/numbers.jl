@@ -88,6 +88,15 @@ let eps = 1//BigInt(2)^15, one_eps = 1+eps,
     @test fma(one_eps32, one_eps32, -1) == float32(one_eps * one_eps - 1)
 end
 
+let eps = 1//BigInt(2)^7, one_eps = 1+eps,
+    eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
+    @test eps16 == float16(float32(eps))
+    @test one_eps16 == float16(float32(one_eps))
+    @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
+    @test (fma(one_eps16, one_eps16, -1) ==
+           float16(float32(one_eps * one_eps - 1)))
+end
+
 let eps = 1//BigInt(2)^200, one_eps = 1+eps,
     eps256 = BigFloat(eps), one_eps256 = BigFloat(one_eps)
     @test eps256 == BigFloat(eps)
