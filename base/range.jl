@@ -551,12 +551,6 @@ end
 
 median{T<:Real}(r::Range{T}) = mean(r)
 
-function map!(f::Callable, dest, r::Range)
-    i = 1
-    for ri in r dest[i] = f(ri); i+=1; end
-    dest
-end
-
 function in(x, r::Range)
     n = step(r) == 0 ? 1 : round(Integer,(x-first(r))/step(r))+1
     n >= 1 && n <= length(r) && r[n] == x

@@ -59,6 +59,7 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 include("subarray2.jl")
+include("functors.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
@@ -269,6 +270,10 @@ include("constants.jl")
 # Numerical integration
 include("quadgk.jl")
 importall .QuadGK
+
+# Fast math
+include("fastmath.jl")
+importall .FastMath
 
 # deprecated functions
 include("deprecated.jl")

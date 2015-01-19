@@ -1,46 +1,5 @@
 ## reductions ##
 
-###### Functors ######
-
-# Note that functors are merely used as internal machinery to enhance code reuse.
-# They are not exported.
-# When function arguments can be inlined, the use of functors can be removed.
-
-abstract Func{N}
-
-immutable IdFun <: Func{1} end
-call(::IdFun, x)  = x
-
-immutable AbsFun <: Func{1} end
-call(::AbsFun, x) = abs(x)
-
-immutable Abs2Fun <: Func{1} end
-call(::Abs2Fun, x) = abs2(x)
-
-immutable ExpFun <: Func{1} end
-call(::ExpFun, x) = exp(x)
-
-immutable LogFun <: Func{1} end
-call(::LogFun, x) = log(x)
-
-immutable AddFun <: Func{2} end
-call(::AddFun, x, y) = x + y
-
-immutable MulFun <: Func{2} end
-call(::MulFun, x, y) = x * y
-
-immutable AndFun <: Func{2} end
-call(::AndFun, x, y) = x & y
-
-immutable OrFun <: Func{2} end
-call(::OrFun, x, y) =  x | y
-
-immutable MaxFun <: Func{2} end
-call(::MaxFun, x, y) = scalarmax(x,y)
-
-immutable MinFun <: Func{2} end
-call(::MinFun, x, y) = scalarmin(x, y)
-
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
@@ -85,13 +44,7 @@ end
 
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
-function mapfoldl(f, op::Function, v0, itr)
-    is(op, +) ? mapfoldl(f, AddFun(), v0, itr) :
-    is(op, *) ? mapfoldl(f, MulFun(), v0, itr) :
-    is(op, &) ? mapfoldl(f, AndFun(), v0, itr) :
-    is(op, |) ? mapfoldl(f, OrFun(), v0, itr) :
-    mapfoldl_impl(f, op, v0, itr, start(itr))
-end
+mapfoldl(f, op::Function, v0, itr) = mapfoldl_impl(f, specialized_binary(op), v0, itr, start(itr))
 
 function mapfoldl(f, op, itr)
     i = start(itr)
@@ -196,13 +149,7 @@ end
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 mapreduce(f, op, a::Number) = f(a)
 
-function mapreduce(f, op::Function, A::AbstractArray)
-    is(op, +) ? _mapreduce(f, AddFun(), A) :
-    is(op, *) ? _mapreduce(f, MulFun(), A) :
-    is(op, &) ? _mapreduce(f, AndFun(), A) :
-    is(op, |) ? _mapreduce(f, OrFun(), A) :
-    _mapreduce(f, op, A)
-end
+mapreduce(f, op::Function, A::AbstractArray) = _mapreduce(f, specialized_binary(op), A)
 
 reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
 reduce(op, itr) = mapreduce(IdFun(), op, itr)

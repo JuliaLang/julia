@@ -567,6 +567,11 @@ properties.
    **This feature is experimental** and could change or disappear in future
    versions of Julia.
 
+Note: While :obj:`@simd` needs to be placed directly in front of a
+loop, both :obj:`@inbounds` and :obj:`@fastmath` can be applied to
+several statements at once, e.g. using ``begin`` ... ``end``, or even
+to a whole function.
+
 Here is an example with both :obj:`@inbounds` and :obj:`@simd` markup::
 
     function inner( x, y )
@@ -699,10 +704,10 @@ On a computer with a 2.7 GHz Intel Core i7 processor, this produces::
     elapsed time: 4.487083643 seconds (0 bytes allocated)
     4.443986180758243
 
-Here, the option ``--math-mode=ieee`` disables the :opt:`@fastmath`
+Here, the option ``--math-mode=ieee`` disables the :obj:`@fastmath`
 macro, so that we can compare results.
 
-In this case, the speedup due to :opt:`@fastmath` is a factor of about
+In this case, the speedup due to :obj:`@fastmath` is a factor of about
 3.7. This is unusually large -- in general, the speedup will be
 smaller. (In this particular example, the working set of the benchmark
 is small enough to fit into the L1 cache of the processor, so that
@@ -713,7 +718,7 @@ case.) Also, in this case this optimization does not change the result
 especially for numerically unstable algorithms, the result can be very
 different.
 
-The annotation :opt:`@fastmath` re-arranges floating point
+The annotation :obj:`@fastmath` re-arranges floating point
 expressions, e.g. changing the order of evaluation, or assuming that
 certain special cases (inf, nan) cannot occur. In this case (and on
 this particular computer), the main difference is that the expression
@@ -723,7 +728,7 @@ this particular computer), the main difference is that the expression
 ``... * idx``, which is much faster to evaluate. Of course, both the
 actual optimization that is applied by the compiler as well as the
 resulting speedup depend very much on the hardware. You can examine
-the change in generated code by using Julia's :obj:`code_native`
+the change in generated code by using Julia's :func:`code_native`
 function.
 
 

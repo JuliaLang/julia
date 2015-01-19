@@ -118,6 +118,7 @@ showerror(io::IO, ::EOFError) = print(io, "EOFError: read end of file")
 showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: $(ex.key) not found")
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
+showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
     print(io, "MethodError: ")
@@ -165,29 +166,68 @@ function showerror(io::IO, ex::MethodError)
         print(io, "since type constructors fall back to convert methods in julia v0.4.")
     end
 
-    # Display up to three closest candidates
+    show_method_candidates(io, ex)
+end
+
+function show_method_candidates(io::IO, ex::MethodError)
+    # Displays the closest candidates of the given function by looping over the
+    # functions methods and counting the number of matching arguments.
     lines = Array((IOBuffer, Int), 0)
+    name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
     for method in methods(ex.f)
-        n = length(ex.args)
-        if n != length(method.sig)
-            continue
-        end
         buf = IOBuffer()
-        print(buf, "  $(ex.f.env.name)(")
-        first = true
+        print(buf, "  $name")
         right_matches = 0
-        for (arg, sigtype) in Zip2{Any,Any}(ex.args, method.sig)
-            if first
-                first = false
+        tv = method.tvars
+        if !isa(tv,Tuple)
+            tv = (tv,)
+        end
+        if !isempty(tv)
+            show_delim_array(buf, tv, '{', ',', '}', false)
+        end
+        print(buf, "(")
+        t_i = Any[typeof(ex.args)...]
+        right_matches = 0
+        for i = 1 : min(length(t_i), length(method.sig))
+            i != 1 && print(buf, ", ")
+            # If isvarargtype then it checks wether the rest of the input arguements matches
+            # the varargtype
+            j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
+            # checks if the type of arg 1:i of the input intersects with the current method
+            t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
+            if t_in == None
+                if Base.have_color
+                    print(buf, "\e[1m\e[31m::$(method.sig[i])\e[0m")
+                else
+                    print(buf, "!Matched::$(method.sig[i])")
+                end
+                # If there is no typeintersect then the type signature from the method is
+                # inserted in t_i this ensures if the type at the next i matches the type
+                # signature then there will be a type intersect
+                t_i[i] = method.sig[i]
             else
-                print(buf, ", ")
+                right_matches += j==i ? 1 : 0
+                print(buf, "::$(method.sig[i])")
             end
-            if typeof(arg) <: sigtype
-                right_matches += 1
-                print(buf, "::$(sigtype)")
-            else
-                Base.with_output_color(:red, buf) do buf
-                    print(buf, "::$(sigtype)")
+        end
+        if length(t_i) > length(method.sig) && Base.isvarargtype(method.sig[end])
+            # It ensures that methods like f(a::AbstractString...) gets the correct
+            # number of right_matches
+            for t in typeof(ex.args)[length(method.sig):end]
+                if t <: method.sig[end].parameters[1]
+                    right_matches += 1
+                end
+            end
+        end
+        if length(t_i) < length(method.sig)
+            # If the methods args is longer than input then the method
+            # arguments is printed as not a match
+            for sigtype in method.sig[length(t_i)+1:end]
+                print(buf, ", ")
+                if Base.have_color
+                    print(buf, "\e[1m\e[31m::$sigtype\e[0m")
+                else
+                    print(buf, "!Matched::$sigtype")
                 end
             end
         end
@@ -196,7 +236,7 @@ function showerror(io::IO, ex::MethodError)
             push!(lines, (buf, right_matches))
         end
     end
-    if length(lines) != 0
+    if length(lines) != 0 # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             println(io, "\nClosest candidates are:")
             sort!(lines, by = x -> -x[2])
