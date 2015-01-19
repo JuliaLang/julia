@@ -45,7 +45,7 @@ A_mul_B!{T<:BlasComplex,S<:AbstractMatrix}(y::StridedMatrix{T}, A::Hermitian{T,S
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
 
 factorize(A::HermOrSym) = bkfact(A.data, symbol(A.uplo), issym(A))
-\(A::HermOrSym, B::StridedVecOrMat) = \(bkfact(A.data, symbol(A.uplo), issym(A)), B)
+\{T,S<:StridedMatrix}(A::HermOrSym{T,S}, B::StridedVecOrMat) = \(bkfact(A.data, symbol(A.uplo), issym(A)), B)
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Hermitian{T,S}) = Hermitian{T,S}(inv(bkfact(A.data, symbol(A.uplo))), A.uplo)
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Symmetric{T,S}) = Symmetric{T,S}(inv(bkfact(A.data, symbol(A.uplo), true)), A.uplo)
 
