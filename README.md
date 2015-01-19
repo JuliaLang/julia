@@ -288,7 +288,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
 - **[libmojibake]**          - fork of [utf8proc], a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         - clone of [libunwind], a library that determines the call-chain of a program
-- **[Rmath]**                - library for commonly used special functions 
+- **[Rmath]**                - library for commonly used special functions
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 

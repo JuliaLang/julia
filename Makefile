@@ -52,7 +52,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	contrib/check-whitespace.sh
+	@contrib/check-whitespace.sh
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
