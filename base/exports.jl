@@ -408,6 +408,7 @@ export
     mod1,
     modf,
     mod2pi,
+    muladd,
     nextfloat,
     nextpow,
     nextpow2,

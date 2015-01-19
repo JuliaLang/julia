@@ -83,6 +83,10 @@ Mathematical Operators
    ``x*y``. On some systems this is significantly more expensive than
    ``x*y+z``.
 
+.. function:: muladd(x, y, z)
+
+   Combined multiply-add, computes ``x*y+z`` in an efficient manner.
+
 .. function:: div(x, y)
               ÷(x, y)
 
