@@ -362,6 +362,7 @@ export
     float32,
     float64,
     floor,
+    fma,
     frexp,
     gamma,
     gcd,

@@ -6,6 +6,7 @@ namespace JL_I {
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
+        fma_float,
         // fast arithmetic
         neg_float_fast, add_float_fast, sub_float_fast,
         mul_float_fast, div_float_fast, rem_float_fast,
@@ -900,9 +901,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs>1) {
         y = auto_unbox(args[2], ctx);
     }
+    Value *z = NULL;
+    if (nargs>2) {
+        z = auto_unbox(args[3], ctx);
+    }
     Type *t = x->getType();
-    if (t == T_void || (y && y->getType() == T_void))
-        return t == T_void ? x : y;
+    if (t == T_void || (y && y->getType() == T_void) || (z && z->getType() == T_void))
+        return t == T_void ? x : y->getType() == T_void ? y : z;
 
     Value *fy;
     Value *den;
@@ -973,6 +978,14 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(mul_float_fast,2) return math_builder(ctx, true)().CreateFMul(FP(x), FP(y));
     HANDLE(div_float_fast,2) return math_builder(ctx, true)().CreateFDiv(FP(x), FP(y));
     HANDLE(rem_float_fast,2) return math_builder(ctx, true)().CreateFRem(FP(x), FP(y));
+    HANDLE(fma_float,3) {
+      assert(y->getType() == x->getType());
+      assert(z->getType() == y->getType());
+      return builder.CreateCall3
+        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
+                                   ArrayRef<Type*>(x->getType())),
+         FP(x), FP(y), FP(z));
+    }
 
     HANDLE(checked_sadd,2)
     HANDLE(checked_uadd,2)
@@ -1310,7 +1323,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);
     ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
-    ADD_I(div_float); ADD_I(rem_float);
+    ADD_I(div_float); ADD_I(rem_float); ADD_I(fma_float);
     ADD_I(neg_float_fast); ADD_I(add_float_fast); ADD_I(sub_float_fast);
     ADD_I(mul_float_fast); ADD_I(div_float_fast); ADD_I(rem_float_fast);
     ADD_I(eq_int); ADD_I(ne_int);

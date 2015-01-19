@@ -198,6 +198,9 @@ widen(::Type{Float32}) = Float64
 /(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x),unbox(Float32,y)))
 /(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x),unbox(Float64,y)))
 
+fma(x::Float32, y::Float32, z::Float32) = box(Float32,fma_float(unbox(Float32,x),unbox(Float32,y),unbox(Float32,z)))
+fma(x::Float64, y::Float64, z::Float64) = box(Float64,fma_float(unbox(Float64,x),unbox(Float64,y),unbox(Float64,z)))
+
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
