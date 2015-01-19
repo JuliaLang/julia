@@ -42,7 +42,7 @@ QRPivoted{T}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) =
 
 qrfact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = pivot ? QRPivoted(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
 function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
-    pivot && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
+    pivot && throw(ArgumentError("pivoting only implemented for Float32, Float64, Complex64 and Complex128 types, got $T"))
     m, n = size(A)
     τ = zeros(T, min(m,n))
     @inbounds begin
