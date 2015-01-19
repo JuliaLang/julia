@@ -845,6 +845,37 @@ b1 = randbool(n1, n2)
 
 timesofar("nnz&find")
 
+## Findnext (backported from #9735) ##
+B = falses(1000)
+B[77] = true
+B[777] = true
+B′ = ~B
+@test_throws BoundsError findnext(B, -1)
+@test_throws BoundsError Base.findnextnot(B′, -1)
+@test_throws BoundsError findnext(!, B′, -1)
+@test_throws BoundsError findnext(identity, B, -1)
+@test_throws BoundsError findnext(x->false, B, -1)
+@test_throws BoundsError findnext(x->true, B, -1)
+@test findnext(B, 1)    == Base.findnextnot(B′, 1)    == findnext(!, B′, 1)    == 77
+@test findnext(B, 77)   == Base.findnextnot(B′, 77)   == findnext(!, B′, 77)   == 77
+@test findnext(B, 78)   == Base.findnextnot(B′, 78)   == findnext(!, B′, 78)   == 777
+@test findnext(B, 777)  == Base.findnextnot(B′, 777)  == findnext(!, B′, 777)  == 777
+@test findnext(B, 778)  == Base.findnextnot(B′, 778)  == findnext(!, B′, 778)  == 0
+@test findnext(B, 1001) == Base.findnextnot(B′, 1001) == findnext(!, B′, 1001) == 0
+@test findnext(identity, B, 1001) == findnext(x->false, B, 1001) == findnext(x->true, B, 1001) == 0
+@test findfirst(B) == Base.findfirstnot(B′) == 77
+
+emptyvec = BitVector(0)
+@test_throws BoundsError findnext(x->true, emptyvec, -1)
+@test findnext(x->true, emptyvec, 1) == 0
+
+B = falses(10)
+@test findnext(x->true, B, 5) == 5
+@test findnext(x->true, B, 11) == 0
+@test findnext(x->false, B, 5) == 0
+@test findnext(x->false, B, 11) == 0
+@test_throws BoundsError findnext(x->true, B, -1)
+
 ## Reductions ##
 
 b1 = randbool(s1, s2, s3, s4)
