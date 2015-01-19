@@ -94,7 +94,6 @@ export
     qrfact!,
     qrfact,
     rank,
-    rref,
     scale,
     scale!,
     schur,
