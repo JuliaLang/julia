@@ -100,7 +100,7 @@ creates an object representing the Markdown content. In the future it is
 likely to do more advanced things such as allowing for relative image or
 link paths.
 
-When used for retreiving documentation, the ``@doc`` macro (or equally,
+When used for retrieving documentation, the ``@doc`` macro (or equally,
 the ``doc`` function) will search all ``META`` dictionaries for metadata
 relevant to the given object and return it. The returned object (some
 Markdown content, for example) will by default display itself
