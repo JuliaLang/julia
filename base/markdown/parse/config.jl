@@ -1,9 +1,9 @@
 typealias InnerConfig Dict{Char, Vector{Function}}
 
 type Config
-  breaking::Vector{Function}
-  regular::Vector{Function}
-  inner::InnerConfig
+    breaking::Vector{Function}
+    regular::Vector{Function}
+    inner::InnerConfig
 end
 
 Config() = Config(Function[], Function[], InnerConfig())
@@ -26,46 +26,46 @@ isexpr(x::Expr, ts...) = x.head in ts
 isexpr{T}(x::T, ts...) = T in ts
 
 macro breaking (ex)
-  isexpr(ex, :->) || error("invalid @breaking form, use ->")
-  b, def = ex.args
-  if b
-    quote
-      f = $(esc(def))
-      breaking!(f)
-      f
+    isexpr(ex, :->) || error("invalid @breaking form, use ->")
+    b, def = ex.args
+    if b
+        quote
+            f = $(esc(def))
+            breaking!(f)
+            f
+        end
+    else
+        esc(def)
     end
-  else
-    esc(def)
-  end
 end
 
 macro trigger (ex)
-  isexpr(ex, :->) || error("invalid @triggers form, use ->")
-  ts, def = ex.args
-  quote
-    f = $(esc(def))
-    triggers!(f, $ts)
-    f
-  end
+    isexpr(ex, :->) || error("invalid @triggers form, use ->")
+    ts, def = ex.args
+    quote
+        f = $(esc(def))
+        triggers!(f, $ts)
+        f
+    end
 end
 
 # Construction
 
 function config(parsers::Function...)
-  c = Config()
-  for parser in parsers
-    ts = triggers(parser)
-    if breaking(parser)
-      push!(c.breaking, parser)
-    elseif !isempty(ts)
-      for t in ts
-        push!(getset(c.inner, t, Function[]), parser)
-      end
-    else
-      push!(c.regular, parser)
+    c = Config()
+    for parser in parsers
+        ts = triggers(parser)
+        if breaking(parser)
+            push!(c.breaking, parser)
+        elseif !isempty(ts)
+            for t in ts
+                push!(getset(c.inner, t, Function[]), parser)
+            end
+        else
+            push!(c.regular, parser)
+        end
     end
-  end
-  return c
+    return c
 end
 
 # Flavour definitions
@@ -73,10 +73,10 @@ end
 const flavors = Dict{Symbol, Config}()
 
 macro flavor (name, features)
-  quote
-    const $(esc(name)) = config($(map(esc,features.args)...))
-    flavors[$(Expr(:quote, name))] = $(esc(name))
-  end
+    quote
+        const $(esc(name)) = config($(map(esc,features.args)...))
+        flavors[$(Expr(:quote, name))] = $(esc(name))
+    end
 end
 
 # Dynamic scoping of current config
@@ -84,12 +84,12 @@ end
 _config_ = nothing
 
 function withconfig(f, config)
-  global _config_
-  old = _config_
-  _config_ = config
-  try
-    f()
-  finally
-    _config_ = old
-  end
+    global _config_
+    old = _config_
+    _config_ = config
+    try
+        f()
+    finally
+        _config_ = old
+    end
 end
