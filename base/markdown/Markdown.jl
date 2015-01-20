@@ -31,42 +31,42 @@ license(pkg::String; flavor = github) = parse_file(Pkg.dir(pkg, "LICENSE.md"), f
 license(pkg::Module; flavor = github) = license(string(pkg), flavor = flavor)
 
 function mdexpr(s, flavor = :julia)
-  md = parse(s, flavor = symbol(flavor))
-  esc(toexpr(md))
+    md = parse(s, flavor = symbol(flavor))
+    esc(toexpr(md))
 end
 
 function docexpr(s, flavor = :julia)
-  quote
-    let md = $(mdexpr(s, flavor))
-      md.meta[:path] = @__FILE__
-      md.meta[:module] = current_module()
-      md
+    quote
+        let md = $(mdexpr(s, flavor))
+            md.meta[:path] = @__FILE__
+            md.meta[:module] = current_module()
+            md
+        end
     end
-  end
 end
 
 macro md_str(s, t...)
-  mdexpr(s, t...)
+    mdexpr(s, t...)
 end
 
 macro md_mstr(s, t...)
-  s = Base.triplequoted(s)
-  mdexpr(s, t...)
+    s = Base.triplequoted(s)
+    mdexpr(s, t...)
 end
 
 macro doc_str(s, t...)
-  docexpr(s, t...)
+    docexpr(s, t...)
 end
 
 macro doc_mstr(s, t...)
-  s = Base.triplequoted(s)
-  docexpr(s, t...)
+    s = Base.triplequoted(s)
+    docexpr(s, t...)
 end
 
 function Base.display(d::Base.REPL.REPLDisplay, md::Vector{MD})
-  for md in md
-    display(d, md)
-  end
+    for md in md
+        display(d, md)
+    end
 end
 
 end
