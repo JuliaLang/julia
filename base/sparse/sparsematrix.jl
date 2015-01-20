@@ -895,7 +895,6 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     # for indexing whole columns
     (m, n) = size(A)
     nJ = length(J)
-    nJ == 0 || maximum(J) <= n || throw(BoundsError())
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
@@ -905,6 +904,7 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
 
     @inbounds for j = 1:nJ
         col = J[j]
+        1 <= col <= n || throw(BoundsError())
         nnzS += colptrA[col+1] - colptrA[col]
         colptrS[j+1] = nnzS + 1
     end
@@ -933,6 +933,7 @@ function getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::Abstra
     end
 
     nI = length(I)
+    nI == 0 || (minimum(I) >= 1 && maximum(I) <= m) || throw(BoundsError())
     nJ = length(J)
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
     colptrS = Array(Ti, nJ+1)
@@ -940,12 +941,13 @@ function getindex{Tv,Ti<:Integer}(A::SparseMatrixCSC{Tv,Ti}, I::Range, J::Abstra
     nnzS = 0
 
     # Form the structure of the result and compute space
-    for j = 1:nJ
-        @inbounds col = J[j]
+    @inbounds for j = 1:nJ
+        col = J[j]
+        1 <= col <= n || throw(BoundsError())
         @simd for k in colptrA[col]:colptrA[col+1]-1
-            if rowvalA[k] in I; nnzS += 1 end # `in` is fast for ranges
+            nnzS += rowvalA[k] in I # `in` is fast for ranges
         end
-        @inbounds colptrS[j+1] = nnzS+1
+        colptrS[j+1] = nnzS+1
     end
 
     # Populate the values in the result
