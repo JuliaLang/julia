@@ -39,17 +39,38 @@ function term(io::IO, md::List, columns)
 end
 
 function term(io::IO, md::Header{1}, columns)
-    text = terminline(md.text)
-    with_output_format(:bold, io) do io
-        print_centred(io, text, width = columns - 4margin, columns = columns)
-    end
-    print_centred(io, "-"*"–"^min(length(text), div(columns, 2))*"-", columns = columns)
+    _term_header(io, md, '=', columns)
 end
 
+function term(io::IO, md::Header{2}, columns)
+    _term_header(io, md, '–', columns)
+end
+
+function term(io::IO, md::Header{3}, columns)
+    _term_header(io, md, '-', columns)
+end
+
+function _term_header(io::IO, md, char, columns)
+    text = terminline(md.text)
+    with_output_format(:bold, io) do io
+        print(io, " ")
+        line_no, lastline_width = print_wrapped(io, text,
+                                                width=columns - 4margin; pre=" ")
+        line_width = min(1 + lastline_width, columns)
+        if line_no > 1
+            line_width = max(line_width, div(columns, 3))
+        end
+        println(io, string(char) ^ line_width)
+    end
+end
+
+
 function term{l}(io::IO, md::Header{l}, columns)
-    print(io, "#"^l, " ")
-    terminline(io, md.text)
-    println(io)
+    with_output_format(:bold, io) do io
+        print(io, "#"^l, " ")
+        terminline(io, md.text)
+        println(io)
+    end
 end
 
 function term(io::IO, md::Code, columns)
