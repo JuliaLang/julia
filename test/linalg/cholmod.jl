@@ -1,7 +1,7 @@
 using Base.Test
 
 let # Issue 9160
-    const CHOLMOD = Base.LinAlg.CHOLMOD
+    const CHOLMOD = Base.SparseMatrix.CHOLMOD
 
     for Ti in CHOLMOD.CHMITypes.types
         for elty in CHOLMOD.CHMVRealTypes.types

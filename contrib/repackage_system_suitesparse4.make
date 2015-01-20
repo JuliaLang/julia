@@ -1,4 +1,4 @@
-#!/usr/bin/make -f 
+#!/usr/bin/make -f
 
 JULIAHOME = $(abspath ..)
 include $(JULIAHOME)/Make.inc
@@ -35,4 +35,4 @@ default:
 	$(INSTALL_NAME_CMD)libumfpack.$(SHLIB_EXT) $(build_libdir)/libumfpack.$(SHLIB_EXT)
 	$(CXX) -shared $(WHOLE_ARCHIVE) $(SS_LIB)/libsuitesparseconfig.a $(SS_LIB)/libspqr.a $(NO_WHOLE_ARCHIVE) -o $(build_libdir)/libspqr.$(SHLIB_EXT) $(LDFLAGS) $(LIBBLAS) -L$(build_libdir) -lcolamd -lccolamd -lcamd -lamd -lcholmod $(RPATH_ORIGIN)
 	$(INSTALL_NAME_CMD)libspqr.$(SHLIB_EXT) $(build_libdir)/libspqr.$(SHLIB_EXT)
-	
+

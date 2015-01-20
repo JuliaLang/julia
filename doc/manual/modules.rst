@@ -1,7 +1,7 @@
 .. _man-modules:
 
 *********
- Modules  
+ Modules
 *********
 
 .. index:: module, baremodule, using, import, export, importall
@@ -13,27 +13,27 @@ when your code is used together with somebody else's. Within a module, you
 can control which names from other modules are visible (via importing),
 and specify which of your names are intended to be public (via exporting).
 
-The following example demonstrates the major features of modules. It is 
+The following example demonstrates the major features of modules. It is
 not meant to be run, but is shown for illustrative purposes::
 
     module MyModule
     using Lib
-    
+
     using BigLib: thing1, thing2
 
     import Base.show
 
     importall OtherLib
-    
+
     export MyType, foo
-    
+
     type MyType
         x
     end
-    
+
     bar(x) = 2x
     foo(a::MyType) = bar(a.x) + 1
-    
+
     show(io, a::MyType) = print(io, "MyType $(a.x)")
     end
 
@@ -80,13 +80,13 @@ Summary of module usage
 To load a module, two main keywords can be used: ``using`` and ``import``. To understand their differences, consider the following example::
 
     module MyModule
-    
+
     export x, y
 
     x() = "x"
     y() = "y"
     p() = "p"
-    
+
     end
 
 In this module we export the ``x`` and ``y`` functions (with the keyword ``export``), and also have the non-exported function ``p``. There are several different ways to load the Module and its inner functions into the current workspace:
@@ -281,7 +281,7 @@ functions of external C libraries and initializing global constants
 that involve pointers returned by external libraries.  For example,
 suppose that we are calling a C library ``libfoo`` that requires us
 to call a ``foo_init()`` initialization function at runtime.   Suppose
-that we also want to define a global constant ``foo_data_ptr`` that 
+that we also want to define a global constant ``foo_data_ptr`` that
 holds the return value of a ``void *foo_data()`` function defined by
 ``libfoo`` — this constant must be initialized at runtime (not at compile
 time) because the pointer address will change from run to run.  You

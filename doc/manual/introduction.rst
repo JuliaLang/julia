@@ -1,7 +1,7 @@
 .. _man-introduction:
 
 **************
- Introduction  
+ Introduction
 **************
 
 Scientific computing has traditionally required the highest performance,
@@ -20,7 +20,7 @@ Because Julia's compiler is different from the interpreters used
 for languages like Python or R, you may find that Julia's performance
 is unintuitive at first. If you find that something is slow, we highly
 recommend reading through the :ref:`man-performance-tips`
-section before trying anything else. Once you understand how Julia 
+section before trying anything else. Once you understand how Julia
 works, it's easy to write code that's nearly as fast as C.
 
 Julia features optional typing, multiple dispatch, and good

@@ -1,4 +1,4 @@
-using Base.LinAlg.CHOLMOD
+using Base.SparseMatrix.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
