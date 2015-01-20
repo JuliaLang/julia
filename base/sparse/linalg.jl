@@ -1,3 +1,24 @@
+## Functions to switch to 0-based indexing to call external sparse solvers
+
+# Convert from 1-based to 0-based indices
+function decrement!{T<:Integer}(A::AbstractArray{T})
+    for i in 1:length(A) A[i] -= one(T) end
+    A
+end
+decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
+
+# Convert from 0-based to 1-based indices
+function increment!{T<:Integer}(A::AbstractArray{T})
+    for i in 1:length(A) A[i] += one(T) end
+    A
+end
+increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
+
+## Multiplication with UniformScaling (scaled identity matrices)
+
+*(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
+*{Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
+
 ## sparse matrix multiplication
 
 function (*){TvA,TiA,TvB,TiB}(A::SparseMatrixCSC{TvA,TiA}, B::SparseMatrixCSC{TvB,TiB})

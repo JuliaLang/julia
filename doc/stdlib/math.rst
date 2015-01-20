@@ -77,6 +77,12 @@ Mathematical Operators
 
    Element-wise exponentiation operator.
 
+.. function:: fma(x, y, z)
+
+   Computes ``x*y+z`` without rounding the intermediate result
+   ``x*y``. On some systems this is significantly more expensive than
+   ``x*y+z``.
+
 .. function:: div(x, y)
               ÷(x, y)
 

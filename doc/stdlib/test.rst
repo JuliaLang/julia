@@ -30,7 +30,7 @@ provided by the user by using the :func:`registerhandler` function.
 To use the default handler, the macro :func:`@test` can be used directly::
 
   julia> using Base.Test
-  
+
   julia> @test 1 == 1
 
   julia> @test 1 == 0

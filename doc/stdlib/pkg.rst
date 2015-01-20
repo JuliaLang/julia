@@ -21,7 +21,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.  
+   Initialize ``Pkg.dir()`` as a package directory.
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
    As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
    are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.

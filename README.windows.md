@@ -37,9 +37,9 @@ Julia uses binary-mode files exclusively. Unlike many other Windows programs, if
 
     git config --global core.eol lf
     git config --global core.autocrlf input
-    
+
 or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
-    
+
     [core] eol = lf
            autocrlf = input
 
@@ -289,7 +289,7 @@ If you are building for 64-bit windows, the steps are essentially the same. Just
 
 ### Build process is slow/eats memory/hangs my computer
 
-- Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and 
+- Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and
   [Program Compatibility Assistant](http://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx) services, as they are known to have
   [spurious interactions]((https://cygwin.com/ml/cygwin/2011-12/msg00058.html)) with MinGW/Cygwin.
 

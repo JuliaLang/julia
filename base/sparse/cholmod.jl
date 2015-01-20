@@ -5,19 +5,18 @@ export                                  # types
  CholmodFactor,
  CholmodSparse,
  CholmodTriplet,
-
  CholmodDense!,
-
  etree
 
-using Base.LinAlg.UMFPACK               # for decrement, increment, etc.
-
 import Base: (*), convert, copy, ctranspose, eltype, findnz, getindex, hcat,
-             isvalid, nnz, show, size, sort!, transpose, vcat
+             isvalid, show, size, sort!, transpose, vcat
 
-import ..LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
+import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
                  A_ldiv_B!, cholfact, cholfact!, copy, det, diag,
-                 full, isposdef!, logdet, norm, scale, scale!, sparse
+                 full, isposdef!, logdet, norm, scale, scale!
+
+importall Base.SparseMatrix
+import Base.SparseMatrix: increment, increment!, decrement, decrement!
 
 include("cholmod_h.jl")
 

@@ -52,7 +52,7 @@ debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/ju
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
-	contrib/check-whitespace.sh
+	@contrib/check-whitespace.sh
 else
 	$(warn "Skipping whitespace check because git is unavailable")
 endif
@@ -198,9 +198,6 @@ JL_PRIVATE_LIBS += mpfr
 endif
 ifeq ($(USE_SYSTEM_LIBGIT2),0)
 JL_PRIVATE_LIBS += git2
-ifeq ($(OS),Linux)
-JL_PRIVATE_LIBS += ssl crypto
-endif
 endif
 ifeq ($(USE_SYSTEM_ARPACK),0)
 JL_PRIVATE_LIBS += arpack
@@ -270,12 +267,18 @@ endif
 			fi \
 		done \
 	done
+
+	# Copy in libssl and libcrypto if they exist
+ifeq ($(OS),Linux)
+	-$(INSTALL_M) $(build_libdir)/libssl*.so* $(DESTDIR)$(private_libdir)
+	-$(INSTALL_M) $(build_libdir)/libcrypto*.so* $(DESTDIR)$(private_libdir)
+endif
 endif
 
 ifeq ($(USE_SYSTEM_LIBUV),0)
 ifeq ($(OS),WINNT)
 	$(INSTALL_F) $(build_includedir)/tree.h $(DESTDIR)$(includedir)/julia
-endif	
+endif
 	$(INSTALL_F) $(build_includedir)/uv* $(DESTDIR)$(includedir)/julia
 endif
 	$(INSTALL_F) src/julia.h src/julia_version.h src/options.h src/support/*.h $(DESTDIR)$(includedir)/julia
@@ -295,7 +298,7 @@ endif
 	# Remove various files which should not be installed
 	-rm -f $(DESTDIR)$(datarootdir)/julia/base/version_git.sh
 	-rm -f $(DESTDIR)$(datarootdir)/julia/test/Makefile
-	# Copy in beautiful new man page 
+	# Copy in beautiful new man page
 	$(INSTALL_F) $(build_man1dir)/julia.1 $(DESTDIR)$(man1dir)/
 	# Copy icon and .desktop file
 	mkdir -p $(DESTDIR)$(datarootdir)/icons/hicolor/scalable/apps/

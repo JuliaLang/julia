@@ -1,14 +1,12 @@
 module UMFPACK
 
-export UmfpackLU,
-       decrement,
-       decrement!,
-       increment,
-       increment!
+export UmfpackLU
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
+import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
-import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
+importall Base.SparseMatrix
+import Base.SparseMatrix: increment, increment!, decrement, decrement!
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -56,17 +54,6 @@ end
 macro isok(A)
     :(umferror($A))
 end
-
-function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] -= one(T) end
-    A
-end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
-function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] += one(T) end
-    A
-end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
 
 # check the size of SuiteSparse_long
 if int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
@@ -434,4 +421,3 @@ end
 umfpack_report_numeric(lu::UmfpackLU) = umfpack_report_numeric(lu,4.)
 
 end # UMFPACK module
-

@@ -59,6 +59,52 @@
 @test minmax(NaN, 3.) == (3., 3.)
 @test isequal(minmax(NaN, NaN), (NaN, NaN))
 
+# fma
+let x = int64(7)^7
+    @test fma(x-1, x-2, x-3) == (x-1) * (x-2) + (x-3)
+    @test (fma((x-1)//(x-2), (x-3)//(x-4), (x-5)//(x-6)) ==
+           (x-1)//(x-2) * (x-3)//(x-4) + (x-5)//(x-6))
+end
+
+let x = BigInt(7)^77
+    @test fma(x-1, x-2, x-3) == (x-1) * (x-2) + (x-3)
+    @test (fma((x-1)//(x-2), (x-3)//(x-4), (x-5)//(x-6)) ==
+           (x-1)//(x-2) * (x-3)//(x-4) + (x-5)//(x-6))
+end
+
+let eps = 1//BigInt(2)^30, one_eps = 1+eps,
+    eps64 = float64(eps), one_eps64 = float64(one_eps)
+    @test eps64 == float64(eps)
+    @test one_eps64 == float64(one_eps)
+    @test one_eps64 * one_eps64 - 1 != float64(one_eps * one_eps - 1)
+    @test fma(one_eps64, one_eps64, -1) == float64(one_eps * one_eps - 1)
+end
+
+let eps = 1//BigInt(2)^15, one_eps = 1+eps,
+    eps32 = float32(eps), one_eps32 = float32(one_eps)
+    @test eps32 == float32(eps)
+    @test one_eps32 == float32(one_eps)
+    @test one_eps32 * one_eps32 - 1 != float32(one_eps * one_eps - 1)
+    @test fma(one_eps32, one_eps32, -1) == float32(one_eps * one_eps - 1)
+end
+
+let eps = 1//BigInt(2)^7, one_eps = 1+eps,
+    eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
+    @test eps16 == float16(float32(eps))
+    @test one_eps16 == float16(float32(one_eps))
+    @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
+    @test (fma(one_eps16, one_eps16, -1) ==
+           float16(float32(one_eps * one_eps - 1)))
+end
+
+let eps = 1//BigInt(2)^200, one_eps = 1+eps,
+    eps256 = BigFloat(eps), one_eps256 = BigFloat(one_eps)
+    @test eps256 == BigFloat(eps)
+    @test one_eps256 == BigFloat(one_eps)
+    @test one_eps256 * one_eps256 - 1 != BigFloat(one_eps * one_eps - 1)
+    @test fma(one_eps256, one_eps256, -1) == BigFloat(one_eps * one_eps - 1)
+end
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]

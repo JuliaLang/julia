@@ -94,7 +94,6 @@ export
     qrfact!,
     qrfact,
     rank,
-    rref,
     scale,
     scale!,
     schur,
@@ -221,10 +220,6 @@ include("linalg/givens.jl")
 include("linalg/special.jl")
 include("linalg/bitarray.jl")
 include("linalg/ldlt.jl")
-
-include("linalg/sparse.jl")
-include("linalg/umfpack.jl")
-include("linalg/cholmod.jl")
 
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")
