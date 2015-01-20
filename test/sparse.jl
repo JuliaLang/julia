@@ -314,6 +314,15 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[i,lj]) == aa116[i,lj]
     @test full(ss116[:,lj]) == aa116[:,lj]
     @test full(ss116[li,lj]) == aa116[li,lj]
+
+    # empty indices
+    for empty in (1:0, Int[])
+        @test full(ss116[empty,:]) == aa116[empty,:]
+        @test full(ss116[:,empty]) == aa116[:,empty]''
+        @test full(ss116[empty,lj]) == aa116[empty,lj]
+        @test full(ss116[li,empty]) == aa116[li,empty]
+        @test full(ss116[empty,empty]) == aa116[empty,empty]
+    end
 end
 
 # workaround issue #7197: comment out let-block
