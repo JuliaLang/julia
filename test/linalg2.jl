@@ -199,7 +199,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         end
 
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A))
+        FJulia  = invoke(qrfact!, (AbstractMatrix,Type{Val{false}}), copy(A), Val{false})
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
