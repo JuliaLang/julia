@@ -85,6 +85,7 @@ function print_wrapped(io::IO, s...; width = 80, pre = "", i = 0)
     for line in lines[2:end]
         println(io, pre, line)
     end
+    length(lines), length(pre) + ansi_length(lines[end])
 end
 
 print_wrapped(f::Function, io::IO, args...; kws...) = print_wrapped(io, f, args...; kws...)
@@ -95,6 +96,7 @@ function print_centred(io::IO, s...; columns = 80, width = columns)
         print(io, " "^(div(columns-ansi_length(line), 2)))
         println(io, line)
     end
+    length(lines), length(pre) + length(lines[end])
 end
 
 function centred(s, columns)
