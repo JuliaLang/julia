@@ -108,6 +108,8 @@ jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 
+jl_value_t* skip_meta(jl_array_t *body);
+
 // backtraces
 #ifdef _OS_WINDOWS_
 extern volatile HANDLE hMainThread;
