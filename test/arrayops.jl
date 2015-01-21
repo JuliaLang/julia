@@ -914,7 +914,9 @@ end
 a = [1:5]
 @test isa(Base.linearindexing(a), Base.LinearFast)
 b = sub(a, :)
-@test isa(Base.linearindexing(b), Base.IteratorsMD.LinearFast)
+@test isa(Base.linearindexing(b), Base.LinearFast)
+@test isa(Base.linearindexing(trues(2)), Base.LinearFast)
+@test isa(Base.linearindexing(BitArray{2}), Base.LinearFast)
 aa = fill(99, 10)
 aa[1:2:9] = a
 shp = [5]
@@ -962,6 +964,48 @@ I2 = CartesianIndex((-1,5,2))
 
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
+
+@test length(I1) == 3
+
+a = zeros(2,3)
+@test CartesianRange(size(a)) == eachindex(a)
+a[CartesianIndex{2}(2,3)] = 5
+@test a[2,3] == 5
+b = sub(a, 1:2, 2:3)
+b[CartesianIndex{2}(1,1)] = 7
+@test a[1,2] == 7
+@test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
+
+R = CartesianRange(CartesianIndex{2}(2,3),CartesianIndex{2}(5,5))
+@test eltype(R) <: CartesianIndex{2}
+@test eltype(typeof(R)) <: CartesianIndex{2}
+indexes = collect(R)
+@test indexes[1] == CartesianIndex{2}(2,3)
+@test indexes[2] == CartesianIndex{2}(3,3)
+@test indexes[4] == CartesianIndex{2}(5,3)
+@test indexes[5] == CartesianIndex{2}(2,4)
+@test indexes[12] == CartesianIndex{2}(5,5)
+@test length(indexes) == 12
+@test length(R) == 12
+
+r = 2:3
+state = start(eachindex(r))
+@test !done(r, state)
+_, state = next(r, state)
+@test !done(r, state)
+val, state = next(r, state)
+@test done(r, state)
+@test val == 3
+r = 2:3:8
+state = start(eachindex(r))
+@test !done(r, state)
+_, state = next(r, state)
+_, state = next(r, state)
+@test !done(r, state)
+val, state = next(r, state)
+@test val == 8
+@test done(r, state)
+
 
 #rotates
 

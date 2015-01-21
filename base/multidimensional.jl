@@ -1,7 +1,7 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: length, start, _start, done, next, getindex, setindex!, linearindexing, min, max
+import Base: eltype, length, start, _start, done, next, getindex, setindex!, linearindexing, min, max
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
 export CartesianIndex, CartesianRange, eachindex
@@ -85,11 +85,20 @@ immutable CartesianRange{I<:CartesianIndex}
     stop::I
 end
 
+stagedfunction CartesianRange{N}(I::CartesianIndex{N})
+    startargs = fill(1, N)
+    :(CartesianRange($I($(startargs...)), I))
+end
+CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
+
 stagedfunction eachindex{T,N}(A::AbstractArray{T,N})
     startargs = fill(1, N)
     stopargs = [:(size(A,$i)) for i=1:N]
     :(CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
+
+eltype{I}(::Type{CartesianRange{I}}) = I
+eltype{I}(::CartesianRange{I}) = I
 
 stagedfunction start{I}(iter::CartesianRange{I})
     N=length(I)

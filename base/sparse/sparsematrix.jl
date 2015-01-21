@@ -895,7 +895,7 @@ function getindex_cols{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, J::AbstractVector)
     # for indexing whole columns
     (m, n) = size(A)
     nJ = length(J)
-    (maximum(J) <= n) || throw(BoundsError())
+    nJ == 0 || maximum(J) <= n || throw(BoundsError())
 
     colptrA = A.colptr; rowvalA = A.rowval; nzvalA = A.nzval
 
