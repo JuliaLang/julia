@@ -139,7 +139,7 @@ void parse_opts(int *argcp, char ***argvp)
             jl_compileropts.cpu_target = strdup(optarg);
             break;
         case 'h':
-            jl_printf(JL_STDERR, "%s%s", usage, opts);
+            jl_printf(JL_STDOUT, "%s%s", usage, opts);
             jl_exit(0);
         case 'O':
             jl_compileropts.opt_level = 1;
