@@ -34,7 +34,7 @@ end
 check_body!(x::QuoteNode) = check_body!(x.value)
 check_body!(x) = true
 
-# @simd splits a for loop into two loops: an outer scalar loop and 
+# @simd splits a for loop into two loops: an outer scalar loop and
 # an inner loop marked with :simdloop. The simd_... functions define
 # the splitting.
 
