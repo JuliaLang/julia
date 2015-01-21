@@ -59,7 +59,7 @@ macro evalpoly(z, p...)
     b = :($(esc(p[end-1])))
     as = []
     for i = length(p)-2:-1:1
-        ai = symbol(string("a", i))
+        ai = symbol("a", i)
         push!(as, :($ai = $a))
         a = :($b + r*$ai)
         b = :($(esc(p[i])) - s * $ai)

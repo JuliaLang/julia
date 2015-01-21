@@ -417,9 +417,9 @@ complexfloat{T<:Complex}(X::StridedArray{T}) = complex128(X)
 # along with in-place variants fft! and plan_fft! if feasible.
 
 for (f,direction) in ((:fft,:FORWARD), (:bfft,:BACKWARD))
-    f! = symbol(string(f,"!"))
-    plan_f = symbol(string("plan_",f))
-    plan_f! = symbol(string("plan_",f,"!"))
+    f! = symbol(f,"!")
+    plan_f = symbol("plan_",f)
+    plan_f! = symbol("plan_",f,"!")
     @eval begin
         function $f{T<:fftwComplex}(X::StridedArray{T}, region)
             Y = similar(X, T)
@@ -503,8 +503,8 @@ normalization(X::StridedArray) = 1 / length(X)
 # Normalized ifft inverse transforms:
 
 for (f,fb) in ((:ifft,:bfft), (:ifft!,:bfft!))
-    pf = symbol(string("plan_", f))
-    pfb = symbol(string("plan_", fb))
+    pf = symbol("plan_", f)
+    pfb = symbol("plan_", fb)
     @eval begin
         $f(X, region) = scale!($fb(X, region), normalization(X, region))
         $f(X) = scale!($fb(X), normalization(X))
