@@ -4,7 +4,7 @@ import ..Git, ..Read
 
 copyright_year() = readchomp(`date +%Y`)
 copyright_name(dir::AbstractString) = readchomp(Git.cmd(`config --get user.name`, dir=dir))
-github_user() = readchomp(ignorestatus(`git config --global --get github.user`))
+github_user() = readchomp(ignorestatus(`git config --global --includes --get github.user`))
 
 function git_contributors(dir::AbstractString, n::Int=typemax(Int))
     contrib = Dict()
