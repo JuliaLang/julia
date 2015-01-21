@@ -218,7 +218,7 @@ void *mach_profile_listener(void *arg)
                 bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
             }
             else if (forceDwarf == -1) {
-                jl_printf(JL_STDERR, "Warning: Profiler attempt to access an invalid memory location\n");
+                jl_safe_printf("Warning: Profiler attempt to access an invalid memory location\n");
             }
 
             forceDwarf = -2;

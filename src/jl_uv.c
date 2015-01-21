@@ -605,6 +605,7 @@ int jl_printf(uv_stream_t *s, const char *format, ...)
 DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
     static char buf[1000];
+    buf[0] = '\0';
 
     va_list args;
     va_start(args, fmt);
@@ -612,6 +613,7 @@ DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
 
+    buf[999] = '\0';
     write(STDERR_FILENO, buf, strlen(buf));
 }
 

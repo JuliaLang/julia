@@ -739,7 +739,7 @@ DLLEXPORT void gdblookup(ptrint_t ip)
         if (line_num == ip)
             jl_safe_printf("unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
-            jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
         else
             jl_safe_printf("%s at %s:%d\n", func_name, file_name, line_num);
     }

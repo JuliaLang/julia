@@ -725,26 +725,27 @@ end
 #    finish_read(state...)
 #end
 
-macro uv_write(stream, data, len)
-    esc(quote
-        check_open(s)
-        uvw = c_malloc(_sizeof_uv_write)
+function uv_write(s::AsyncStream, p, n::Integer)
+    check_open(s)
+    uvw = c_malloc(_sizeof_uv_write)
+    try
         uv_req_set_data(uvw,C_NULL)
         err = ccall(:jl_uv_write,
                     Int32,
                     (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
-                    handle($(stream)), $(data), $(len), uvw,
+                    handle(s), p, n, uvw,
                     uv_jl_writecb_task::Ptr{Void})
         if err < 0
-            c_free(uvw)
             uv_error("write", err)
         end
         ct = current_task()
         uv_req_set_data(uvw,ct)
         ct.state = :waiting
         stream_wait(ct)
+    finally
         c_free(uvw)
-    end)
+    end
+    return n
 end
 
 ## low-level calls ##
@@ -754,17 +755,14 @@ write(s::AsyncStream, c::Char) = write(s, string(c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
         n = uint(length(a)*sizeof(T))
-        @uv_write s a n
-        return int(n)
+        return uv_write(s, a, n);
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
     end
 end
-function write(s::AsyncStream, p::Ptr, n::Integer)
-    @uv_write s p n
-    return int(n)
-end
+
+write(s::AsyncStream, p::Ptr, n::Integer) = uv_write(s, p, n)
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
