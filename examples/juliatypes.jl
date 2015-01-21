@@ -4,12 +4,13 @@ abstract Ty
 
 type TypeName
     name::Symbol
+    abs::Bool
     super::Ty    # actually TagT
     # arity
     # representation
-    # abstract, mutable
-    TypeName(name, super) = new(name, super)
-    TypeName(name) = new(name)
+    # mutable
+    TypeName(name, abs, super) = new(name, abs, super)
+    TypeName(name, abs) = new(name, abs)
 end
 
 show(io::IO, x::TypeName) = print(io, x.name)
@@ -111,12 +112,12 @@ end
 
 # Any, Bottom, and Tuple
 
-const AnyT = TagT(TypeName(:Any), ())
+const AnyT = TagT(TypeName(:Any,true), ())
 AnyT.name.super = AnyT
 
 const BottomT = BottomTy()
 
-const TupleName = TypeName(:Tuple, AnyT)
+const TupleName = TypeName(:Tuple,false,AnyT)
 const TupleT = TagT(TupleName, (AnyT,), true)
 tupletype(xs...) = inst(TupleName, xs...)
 vatype(xs...) = (t = inst(TupleName, xs...); t.vararg = true; t)
@@ -244,6 +245,43 @@ issub(a::Ty, b::UnionT, env) =
 issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
 issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
 
+function isconcrete(t::TagT, env)
+    if t.name === TupleName
+        t.vararg && return false
+        for x in t.params
+            !isconcrete(x, env) && return false
+        end
+    end
+    return !t.name.abs
+end
+
+isconcrete(t::BottomTy, env) = true
+isconcrete(x, env) = true
+
+function isconcrete(t::UnionT, env)
+    t.a === BottomT && return isconcrete(t.b, env)
+    return isconcrete(t.a, env) && issub(t.b, t.a, env)
+end
+
+function isconcrete(v::Var, env)
+    b = env.vars[v]
+    #return issub(b.ub, b.lb, env)
+    return isconcrete(b.ub, env)  # ???
+end
+
+function isconcrete(t::UnionAllT, env)
+    #if isconcrete(t.var.ub, env)
+    # TODO: maybe true if var is only in covariant position
+    #    return isconcrete(inst(t, t.var.ub), env)
+    #end
+
+    #if issub(t.var.ub, t.var.lb, env)
+    # TODO this seems to require more nondeterminism
+    #    return isconcrete(inst(t, t.var.ub), env)
+    #end
+    return false
+end
+
 function issub(a::TagT, b::TagT, env)
     a === b && return true
     b === AnyT && return true
@@ -254,13 +292,23 @@ function issub(a::TagT, b::TagT, env)
     if a.name === TupleName
         va, vb = a.vararg, b.vararg
         la, lb = length(a.params), length(b.params)
-        ai = bi = 1
-        while ai <= la
-            bi > lb && return false
-            !issub(a.params[ai], b.params[bi], env) && return false
+        ai = bi = 0
+        while ai < la
             ai += 1
+            ap = a.params[ai]
             if bi < lb || !vb
                 bi += 1
+                bi > lb && return false
+                bp = b.params[bi]
+            end
+            if isa(bp,Var) && env.vars[bp].right
+                if !isconcrete(ap, env)
+                    ap = Var(:_,BottomT,ap)
+                    env.vars[ap] = Bounds(BottomT, ap.ub, false)
+                end
+                !(issub(ap,bp,env) && issub(bp,ap,env)) && return false
+            else
+                !issub(ap, bp, env) && return false
             end
         end
         return (la==lb && va==vb) || (vb && (la >= (va ? lb : lb-1)))
@@ -425,7 +473,7 @@ function xlate(t::DataType, env)
         for i = length(para):-1:1
             sup = UnionAllT(para[i], sup)
         end
-        tn = TypeName(t.name.name, sup)
+        tn = TypeName(t.name.name, t.abstract, sup)
         tndict[t.name] = tn
     else
         tn = tndict[t.name]
@@ -444,20 +492,20 @@ issub(a::Type, b::Ty  ) = issub(xlate(a), b)
 # tests
 
 AbstractArrayT =
-    let AbstractArrayName = TypeName(:AbstractArray, @UnionAll T @UnionAll N AnyT)
+    let AbstractArrayName = TypeName(:AbstractArray, true, @UnionAll T @UnionAll N AnyT)
         @UnionAll T @UnionAll N inst(AbstractArrayName, T, N)
     end
 
 ArrayT =
-    let ArrayName = TypeName(:Array, @UnionAll T @UnionAll N inst(AbstractArrayT, T, N))
+    let ArrayName = TypeName(:Array, false, @UnionAll T @UnionAll N inst(AbstractArrayT, T, N))
         @UnionAll T @UnionAll N inst(ArrayName, T, N)
     end
 
-PairT = let PairName = TypeName(:Pair, @UnionAll A @UnionAll B AnyT)
+PairT = let PairName = TypeName(:Pair, false, @UnionAll A @UnionAll B AnyT)
     @UnionAll A @UnionAll B inst(PairName, A, B)
 end
 
-RefT = let RefName = TypeName(:Ref, @UnionAll T AnyT)
+RefT = let RefName = TypeName(:Ref, false, @UnionAll T AnyT)
     @UnionAll T inst(RefName, T)
 end
 
@@ -903,10 +951,10 @@ end
 # attempt to implement non-terminating example from
 # "On the Decidability of Subtyping with Bounded Existential Types"
 function non_terminating_2()
-    C = let CName = TypeName(:C, @UnionAll T AnyT)
+    C = let CName = TypeName(:C, false, @UnionAll T AnyT)
         @UnionAll T inst(CName, T)
     end
-    D = let DName = TypeName(:D, @UnionAll T AnyT)
+    D = let DName = TypeName(:D, false, @UnionAll T AnyT)
         @UnionAll T inst(DName, T)
     end
     ¬T = @UnionAll X>:T inst(D,X)
@@ -916,3 +964,46 @@ function non_terminating_2()
     e.vars[X] = Bounds(BottomT, ¬U, false)
     issub(X, ¬inst(C,X), e)
 end
+
+#=
+Replacing type S with a union over var T(ᶜ)<:S can affect the subtype
+relation in all possible ways:
+
+    (C{Real},C{Real}) < @U T<:Real (C{T},C{T})
+    (Real,Real)       = @U T<:Real (T,T)
+
+    (C{Real},C{Real}) ! @U Tᶜ<:Real (C{T},C{T})  (*)  # neither <= nor >=
+    (Real,Real)       > @U Tᶜ<:Real (T,T)
+
+    (C{Real},) < @U T<:Real (C{T},)
+    (Real,)    = @U T<:Real (T,)
+    (C{Real},) ! @U Tᶜ<:Real (C{T},)  (*)
+    (Real,)    = @U Tᶜ<:Real (T,)
+
+cases (*) are probably not needed in practice.
+
+
+transform all covariant occurrences of non-concrete types to
+vars: (Real,Real) => @U T<:Real @U S<:Real (T,S)
+and then treat all vars as invariant.
+this can maybe even be done on the fly without actually making the
+UnionAll types up-front.
+in fact this may only need to be done on the left.
+which implies right away that the algorithm works as-is if the left
+side is a concrete type.
+
+possible explanation:
+
+1. match all tvars with invariant rule
+2. imagine left side is concrete
+3. therefore all (right-) vars will have to equal concrete types
+   (this completes the base case)
+4. inductive hypothesis: tvars match concrete types
+5. "build up" an abstract type on the left over the initial concrete type
+6. handle all abstract types T in covariant position on the left by treating
+   them as variables V<:T instead
+7. by the inductive hypothesis tvars continue to match concrete types
+
+it seems you need to plug in the isconcrete predicate in step 6.
+
+=#
