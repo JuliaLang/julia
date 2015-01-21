@@ -912,6 +912,14 @@ DLLEXPORT int jl_operator_precedence(char *sym) {
                              symbol(sym)));
 }
 
+jl_value_t* skip_meta(jl_array_t *body) {
+    jl_value_t *body1 = jl_cellref(body,0);
+    if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == meta_sym
+        && jl_array_len(body) > 1)
+        body1 = jl_cellref(body,1);
+    return body1;
+}
+
 #ifdef __cplusplus
 }
 #endif
