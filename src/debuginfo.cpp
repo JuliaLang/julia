@@ -34,7 +34,7 @@
 #endif
 
 #if defined(USE_MCJIT) && !defined(LLVM36) && defined(_OS_DARWIN_)
-#include "../deps/llvm-3.5.0/lib/ExecutionEngine/MCJIT/MCJIT.h"
+#include <llvm/ExecutionEngine/MCJIT/MCJIT.h>
 #endif
 
 #include "julia.h"
