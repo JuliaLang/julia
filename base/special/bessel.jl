@@ -1,7 +1,7 @@
 for jy in ("j","y"), nu in (0,1)
-    jynu = Expr(:quote, symbol(string(jy,nu)))
-    jynuf = Expr(:quote, symbol(string(jy,nu,"f")))
-    bjynu = symbol(string("bessel",jy,nu))
+    jynu = Expr(:quote, symbol(jy,nu))
+    jynuf = Expr(:quote, symbol(jy,nu,"f"))
+    bjynu = symbol("bessel",jy,nu)
     if jy == "y"
         @eval begin
             $bjynu(x::Float64) = nan_dom_err(ccall(($jynu,libm),  Float64, (Float64,), x), x)
@@ -15,7 +15,7 @@ for jy in ("j","y"), nu in (0,1)
     end
     @eval begin
         $bjynu(x::Real) = $bjynu(float(x))
-        $bjynu(x::Complex) = $(symbol(string("bessel",jy)))($nu,x)
+        $bjynu(x::Complex) = $(symbol("bessel",jy))($nu,x)
         @vectorize_1arg Number $bjynu
     end
 end
@@ -365,7 +365,7 @@ function besselyx(nu::Real, x::FloatingPoint)
 end
 
 for f in ("i", "ix", "j", "jx", "k", "kx", "y", "yx")
-    bfn = symbol(string("bessel", f))
+    bfn = symbol("bessel", f)
     @eval begin
         $bfn(nu::Real, z::Complex64) = complex64($bfn(float64(nu), complex128(z)))
         $bfn(nu::Real, z::Complex) = $bfn(float64(nu), complex128(z))

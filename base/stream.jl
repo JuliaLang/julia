@@ -930,7 +930,7 @@ _fd(x::IOStream) = RawFD(fd(x))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
-    _f = symbol(string("_",f))
+    _f = symbol("_",f)
     @eval begin
         function ($_f)(stream)
             global $x
