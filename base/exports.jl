@@ -1147,6 +1147,7 @@ export
     getipaddr,
     htol,
     hton,
+    input,
     ismarked,
     isopen,
     isreadonly,

@@ -40,18 +40,19 @@ close(io)
 @test eof(io)
 end
 
-let io = IOBuffer("hamster\nguinea pig\nturtle")
+let io = IOBuffer("hamster\nguinea pig\nturtle\nlion")
 @test position(io) == 0
 @test readline(io) == "hamster\n"
-@test readall(io) == "guinea pig\nturtle"
+@test input("Test: ", io_in = io) == "guinea pig"
+@test readall(io) == "turtle\nlion"
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
 @test_throws ArgumentError truncate(io,0)
 @test_throws ArgumentError write(io,uint8(0))
 @test_throws ArgumentError write(io,UInt8[0])
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle"
-@test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
+@test takebuf_string(io) == "hamster\nguinea pig\nturtle\nlion"
+@test takebuf_string(io) == "hamster\nguinea pig\nturtle\nlion" #should be unchanged
 close(io)
 end
 

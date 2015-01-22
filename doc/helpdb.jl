@@ -5780,6 +5780,15 @@ Millisecond(v)
 
 "),
 
+("Base","input","input(prompt::AbstractString=\"\"; io_in::IO=STDIN, io_out::IO=STDOUT)
+
+   If the \"prompt\" argument is present, it is written to \"STDOUT\"
+   by default without a trailing newline. The function then reads a
+   single line of text from \"STDIN\" by default (stripping a trailing
+   newline), and returns that.
+
+"),
+
 ("Base","readuntil","readuntil(stream, delim)
 
    Read a string, up to and including the given delimiter byte.
