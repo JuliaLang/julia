@@ -323,6 +323,24 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
         @test full(ss116[li,empty]) == aa116[li,empty]
         @test full(ss116[empty,empty]) == aa116[empty,empty]
     end
+
+    # out of bounds indexing
+    @test_throws BoundsError ss116[0, 1]
+    @test_throws BoundsError ss116[end+1, 1]
+    @test_throws BoundsError ss116[1, 0]
+    @test_throws BoundsError ss116[1, end+1]
+    for j in (1, 1:size(s116,2), 1:1, Int[1], trues(size(s116, 2)), 1:0, Int[])
+        @test_throws BoundsError ss116[0:1, j]
+        @test_throws BoundsError ss116[[0, 1], j]
+        @test_throws BoundsError ss116[end:end+1, j]
+        @test_throws BoundsError ss116[[end, end+1], j]
+    end
+    for i in (1, 1:size(s116,1), 1:1, Int[1], trues(size(s116, 1)), 1:0, Int[])
+        @test_throws BoundsError ss116[i, 0:1]
+        @test_throws BoundsError ss116[i, [0, 1]]
+        @test_throws BoundsError ss116[i, end:end+1]
+        @test_throws BoundsError ss116[i, [end, end+1]]
+    end
 end
 
 # workaround issue #7197: comment out let-block
