@@ -77,7 +77,7 @@ function config{T}(what::Integer, ::Type{T})
                 what, buf)
 
     if ret != 0
-        error("error $n")
+        error("PCRE.config error code $n")
     end
     reinterpret(T,buf)[1]
 end

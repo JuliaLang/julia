@@ -358,7 +358,7 @@ mod2pi(x::Float32) = float32(mod2pi(float64(x)))
 mod2pi(x::Int32) = mod2pi(float64(x))
 function mod2pi(x::Int64)
   fx = float64(x)
-  fx == x || error("Integer argument to mod2pi is too large: $x")
+  fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end
 

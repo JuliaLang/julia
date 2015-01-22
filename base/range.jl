@@ -15,11 +15,11 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
 
     function StepRange(start::T, step::S, stop::T)
         if T<:FloatingPoint || S<:FloatingPoint
-            error("StepRange should not be used with floating point")
+            throw(ArgumentError("StepRange should not be used with floating point"))
         end
         z = zero(S)
-        step == z && error("step cannot be zero")
-        step != step && error("step cannot be NaN")
+        step == z && throw(ArgumentError("step cannot be zero"))
+        step != step && throw(ArgumentError("step cannot be NaN"))
 
         if stop == start
             last = stop
@@ -118,8 +118,8 @@ function rat(x)
 end
 
 function colon{T<:FloatingPoint}(start::T, step::T, stop::T)
-    step == 0                    && error("range step cannot be zero")
-    start == stop                && return FloatRange{T}(start,step,1,1)
+    step == 0 && throw(ArgumentError("range step cannot be zero"))
+    start == stop && return FloatRange{T}(start,step,1,1)
     (0 < step) != (start < stop) && return FloatRange{T}(start,step,0,1)
 
     # float range "lifting"
@@ -161,7 +161,7 @@ range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, 
 linrange(a::Real, b::Real, len::Integer) =
     len >= 2           ? range(a, (b-a)/(len-1), len) :
     len == 1 && a == b ? range(a, zero((b-a)/(len-1)), 1) :
-                         error("invalid range length")
+                         throw(ArgumentError("invalid range length"))
 
 ## interface implementations
 
@@ -221,10 +221,10 @@ last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
 last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
 
-minimum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : first(r)
-maximum(r::UnitRange) = isempty(r) ? error("range must be non-empty") : last(r)
-minimum(r::Range)  = isempty(r) ? error("range must be non-empty") : min(first(r), last(r))
-maximum(r::Range)  = isempty(r) ? error("range must be non-empty") : max(first(r), last(r))
+minimum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
+maximum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
+minimum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : min(first(r), last(r))
+maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")) : max(first(r), last(r))
 
 ctranspose(r::Range) = [x for _=1, x=r]
 transpose(r::Range) = r'
@@ -545,7 +545,7 @@ function sum{T<:Real}(r::Range{T})
 end
 
 function mean{T<:Real}(r::Range{T})
-    isempty(r) && error("mean of an empty range is undefined")
+    isempty(r) && throw(ArgumentError("mean of an empty range is undefined"))
     (first(r) + last(r)) / 2
 end
 

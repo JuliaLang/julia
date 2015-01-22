@@ -288,8 +288,8 @@ function unmark(io::IO)
     return true
 end
 
-function reset(io::IO)
-    !ismarked(io) && error(io, " not marked")
+function reset{T<:IO}(io::T)
+    ismarked(io) || throw(ArgumentError("$(T) not marked"))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

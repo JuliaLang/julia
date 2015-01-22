@@ -21,9 +21,9 @@ end
 
 function IPv4(host::Integer)
     if host < 0
-        error("IP address must not be negative")
+        throw(ArgumentError("IPv4 address must not be positive"))
     elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
-        error("IPv4 address must fit within 32 bits")
+        throw(ArgumentError("IPv4 address must fit within 32 bits"))
     else
         return IPv4(uint32(host))
     end
@@ -63,11 +63,11 @@ end
 
 function IPv6(host::Integer)
     if host < 0
-        error("IP address must not be negative")
+        throw(ArgumentError("IPv6 address must be positive"))
         # We allow passing bigger integer types, but need to be careful to avoid overflow
         # Let's hope promotion rules are sensible
     elseif typemax(typeof(host)) > typemax(UInt128) && host > typemax(UInt128)
-        error("IPv6 address must fit within 128 bits")
+        throw(ArgumentError("IPv6 address must fit within 128 bits"))
     else
         return IPv6(uint128(host))
     end
@@ -142,17 +142,17 @@ function parseipv4(str)
     ret = 0
     for f in fields
         if length(f) == 0
-            error("empty field in IPv4 address")
+            throw(ArgumentError("empty field in IPv4 address"))
         end
         if f[1] == '0'
             if length(f) >= 2 && f[2] == 'x'
                 if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    error("IPv4 field too large")
+                    throw(ArgumentError("IPv4 field too large"))
                 end
                 r = parseint(f[3:end],16)
             else
                 if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    error("IPv4 field too large")
+                    throw(ArgumentError("IPv4 field too large"))
                 end
                 r = parseint(f,8)
             end
@@ -161,12 +161,12 @@ function parseipv4(str)
         end
         if i != length(fields)
             if r < 0 || r > 255
-                error("IPv4 field out of range (must be 0-255)")
+                throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
             end
             ret |= uint32(r) << ((4-i)*8)
         else
             if r > ((uint64(1)<<((5-length(fields))*8))-1)
-                error("IPv4 field too large")
+                throw(ArgumentError("IPv4 field too large"))
             end
             ret |= r
         end
@@ -177,7 +177,7 @@ end
 
 function parseipv6fields(fields,num_fields)
     if length(fields) > num_fields
-        error("too many fields in IPv6 address")
+        throw(ArgumentError("too many fields in IPv6 address"))
     end
     cf = 7
     ret = uint128(0)
@@ -200,7 +200,7 @@ parseipv6fields(fields) = parseipv6fields(fields,8)
 function parseipv6(str)
     fields = split(str,':')
     if length(fields) > 8
-        error("too many fields in IPv6 address")
+        throw(ArgumentError("too many fields in IPv6 address"))
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
     elseif in('.',fields[end])

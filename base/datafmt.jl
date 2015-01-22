@@ -19,7 +19,7 @@ function countlines(filename::AbstractString, eol::Char)
 end
 function countlines(io::IO, eol::Char)
     if !isascii(eol)
-        error("only ASCII line terminators are supported")
+        throw(ArgumentError("only ASCII line terminators are supported"))
     end
     a = Array(UInt8, 8192)
     nl = 0
@@ -142,8 +142,8 @@ end
 
 function DLMStore{T,S<:AbstractString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
     (nrows,ncols) = dims
-    ((nrows == 0) || (ncols == 0)) && error("Empty input")
-    ((nrows < 0) || (ncols < 0)) && error("Invalid dimensions")
+    nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
+    ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
     DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
 end
@@ -239,10 +239,10 @@ function readdlm_string(sbuff::AbstractString, dlm::Char, T::Type, eol::Char, au
     dims = get(optsd, :dims, nothing)
 
     has_header = get(optsd, :header, get(optsd, :has_header, false))
-    haskey(optsd, :has_header) && (optsd[:has_header] != has_header) && error("conflicting values for header and has_header")
+    haskey(optsd, :has_header) && (optsd[:has_header] != has_header) && throw(ArgumentError("conflicting values for header and has_header"))
 
     skipstart = get(optsd, :skipstart, 0)
-    (skipstart >= 0) || error("invalid value for skipstart")
+    (skipstart >= 0) || throw(ArgumentError("skipstart must be ≥ 0, got $skipstart"))
 
     skipblanks = get(optsd, :skipblanks, true)
 
@@ -279,9 +279,9 @@ const deprecated_opts = Dict(:has_header => :header)
 function val_opts(opts)
     d = Dict{Symbol,Union(Bool,NTuple{2,Integer},Char,Integer)}()
     for (opt_name, opt_val) in opts
-        !in(opt_name, valid_opts) && error("unknown option $opt_name")
+        !in(opt_name, valid_opts) && throw(ArgumentError("unknown option $opt_name"))
         opt_typ = valid_opt_types[findfirst(valid_opts, opt_name)]
-        !isa(opt_val, opt_typ) && error("$opt_name should be of type $opt_typ")
+        !isa(opt_val, opt_typ) && throw(ArgumentError("$opt_name should be of type $opt_typ, got $(typeof(opt_val))"))
         d[opt_name] = opt_val
         haskey(deprecated_opts, opt_name) && warn("$opt_name is deprecated, use $(deprecated_opts[opt_name]) instead")
     end

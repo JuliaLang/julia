@@ -48,11 +48,11 @@ function repl_cmd(cmd, out)
     end
 
     if isempty(cmd.exec)
-        error("no cmd to execute")
+        throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
         new_oldpwd = pwd()
         if length(cmd.exec) > 2
-            error("cd method only takes one argument")
+            throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"

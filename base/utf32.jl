@@ -106,7 +106,7 @@ function map(f::Function, s::UTF32String)
     for i = 1:(length(d)-1)
         c2 = f(d[i])
         if !isa(c2, Char)
-            error("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
+            throw(ArgumentError("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead"))
         end
         out[i] = (c2::Char)
     end

@@ -50,7 +50,7 @@ for arr in (identity, as_sub)
 
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_throws ErrorException broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws DimensionMismatch broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
     A = arr([1  0]); @test broadcast!(+, A, A, 2) == arr([3 2])
 

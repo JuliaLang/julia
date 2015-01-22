@@ -55,7 +55,8 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     # exposed in the API.
     # tm.isdst = -1
     if r == C_NULL
-        error("invalid arguments")
+        #TODO: better error message
+        throw(ArgumentError("invalid arguments"))
     end
     @osx_only begin
         # if we didn't explicitly parse the weekday or year day, use mktime
