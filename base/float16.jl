@@ -136,6 +136,9 @@ end
 function fma(a::Float16, b::Float16, c::Float16)
     float16(fma(float32(a), float32(b), float32(c)))
 end
+function muladd(a::Float16, b::Float16, c::Float16)
+    float16(muladd(float32(a), float32(b), float32(c)))
+end
 for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
 end

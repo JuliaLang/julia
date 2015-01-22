@@ -674,21 +674,46 @@ retained.
 ClusterManagers
 ---------------
 
-Julia worker processes can also be spawned on arbitrary machines,
-enabling Julia's natural parallelism to function quite transparently
-in a cluster environment. The :class:`ClusterManager` interface provides a
-way to specify a means to launch and manage worker processes.
+The launching, management and networking of julia processes into a logical
+cluster is done via cluster managers. A ``ClusterManager`` is responsible for
 
-Thus, a custom cluster manager would need to:
+- launching worker processes in a cluster environment
+- managing events during the lifetime of each worker
+- optionally, a cluster manager can also provide data transport
+
+A julia cluster has the following characteristics:
+- The initial julia process, also called the ``master`` is special and has a julia id of 1.
+- Only the ``master`` process can add or remove worker processes.
+- All processes can directly communicate with each other.
+
+Connections between workers (using the in-built TCP/IP transport) is established in the following manner:
+- ``addprocs`` is called on the master process with a ``ClusterManager`` object
+- ``addprocs`` calls the appropriate ``launch`` method which spawns required
+  number of worker processes on appropriate machines
+- Each worker starts listening on a free port and writes out its host, port information to STDOUT
+- The cluster manager captures the stdout's of each worker and makes it available to the master process
+- The master process parses this information and sets up TCP/IP connections to each worker
+- Every worker is also notified of other workers in the cluster
+- Each worker connects to all workers whose julia id is less than its own id
+- In this way a mesh network is established, wherein every worker is directly connected with every other worker
+
+
+While the default transport layer uses plain TCP sockets, it is possible for a julia cluster to provide
+its own transport.
+
+Julia provides two in-built cluster managers:
+
+- ``LocalManager``, used when :func:`addprocs` or :func:`addprocs(np::Integer) <addprocs>` are called
+- ``SSHManager``, used when :func:`addprocs(hostnames::Array) <addprocs>` is called with a list of hostnames
+
+:class:`LocalManager` is used to launch additional workers on the same host, thereby leveraging multi-core
+and multi-processor hardware.
+
+Thus, a minimal cluster manager would need to:
 
 - be a subtype of the abstract :class:`ClusterManager`
 - implement :func:`launch`, a method responsible for launching new workers
 - implement :func:`manage`, which is called at various events during a worker's lifetime
-
-Julia provides two in-built cluster managers:
-
-- :class:`LocalManager`, used when :func:`addprocs` or :func:`addprocs(::Integer) <addprocs>` are called
-- :class:`SSHManager`, used when :func:`addprocs(::Array) <addprocs>` is called with a list of hostnames
 
 :func:`addprocs(manager::FooManager) <addprocs>` requires ``FooManager`` to implement::
 
@@ -730,8 +755,8 @@ argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to ena
 to connect to it at the specified ``bind_addr`` and ``port``. Useful for multi-homed hosts.
 
 
-For every worker launched, the :func:`launch` method must add a :clas`WorkerConfig`
-object with appropriate fields initialized to ``launched`` ::
+For every worker launched, the :func:`launch` method must add a :class:`WorkerConfig`
+object (with appropriate fields initialized) to ``launched`` ::
 
  type WorkerConfig
      # Common fields relevant to all cluster managers
@@ -752,6 +777,8 @@ object with appropriate fields initialized to ``launched`` ::
      bind_addr::Nullable{AbstractString}
      sshflags::Nullable{Cmd}
      max_parallel::Nullable{Integer}
+
+     connect_at::Nullable{Any}
 
      .....
  end
@@ -778,7 +805,6 @@ required to connect to the workers from the master process.
 ``userdata`` is provided for custom cluster managers to store their own worker specific information.
 
 
-
 :func:`manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol) <manage>` is called at different
 times during the worker's lifetime with different ``op`` values:
 
@@ -788,6 +814,59 @@ times during the worker's lifetime with different ``op`` values:
         :class:`ClusterManager` should signal the appropriate worker with an
         interrupt signal.
       - with ``:finalize`` for cleanup purposes.
+
+
+Cluster Managers with custom transports
+---------------------------------------
+
+Replacing the default TCP/IP all-to-all socket connections with a custom transport layer is a little more involved.
+Each julia process has as many communication tasks as the workers it is connected to. For example, consider a julia cluster of
+32 processes in a all-to-all mesh network:
+
+    - Each julia process thus has 31 communication tasks
+    - Each task handles all incoming messages from a single remote worker in a message processing loop
+    - The message processing loop waits on an ``AsyncStream`` object - for example, a TCP socket in the default implementation, reads an entire
+      message, processes it and waits for the next one
+    - Sending messages to a process is done directly from any julia task - not just communication tasks - again, via the appropriate
+      ``AsyncStream`` object
+
+Replacing the default transport involves the new implementation to setup connections to remote workers, and to provide appropriate
+``AsyncStream`` objects that the message processing loops can wait on. The manager specific callbacks to be implemented are::
+
+    connect(manager::FooManager, pid::Integer, config::WorkerConfig)
+    kill(manager::FooManager, pid::Int, config::WorkerConfig)
+
+The default implementation (which uses TCP/IP sockets) is implemented as ``connect(manager::ClusterManager, pid::Integer, config::WorkerConfig)``.
+
+``connect`` should return a pair of ``AsyncStream`` objects, one for reading data sent from worker ``pid``,
+and the other to write data that needs to be sent to worker ``pid``. Custom cluster managers can use an in-memory ``BufferStream``
+as the plumbing to proxy data between the custom, possibly non-AsyncStream transport and julia's in-built parallel infrastructure.
+
+A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``AsyncStream``.
+
+Folder ``examples/clustermanager/0mq`` is an example of using ZeroMQ is connect julia workers in a star network with a 0MQ broker in the middle.
+Note: The julia processes are still all *logically* connected to each other - any worker can message any other worker directly without any
+awareness of 0MQ being used as the transport layer.
+
+When using custom transports:
+    - julia workers must be started with arguments ``--worker custom``. Just ``--worker`` will result in the newly launched
+      workers defaulting to the socket transport implementation
+    - For every logical connection with a worker, :func:`process_messages(rd::AsyncStream, wr::AsyncStream)` must be called
+      This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
+    - :func:`init_worker(manager::FooManager)` must be called as part of worker process initializaton
+    - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
+      this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
+      the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
+
+
+``kill(manager, pid, config)`` is called to remove a worker from the cluster.
+On the master process, the corresponding ``AsyncStream`` objects must be closed by the implementation to ensure proper cleanup. The default
+implementation simply executes an ``exit()`` call on the specified remote worker.
+
+``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
+
+
+
 
 .. rubric:: Footnotes
 

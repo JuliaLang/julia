@@ -33,7 +33,7 @@ macro ngenerate(itersym, returntypeexpr, funcexpr)
     if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
         funcexpr = Base._inline(funcexpr.args[2])
     end
-    isfuncexpr(funcexpr) || error("Requires a function expression")
+    isfuncexpr(funcexpr) || throw(ArgumentError("requires a function expression"))
     esc(ngenerate(itersym, returntypeexpr, funcexpr.args[1], N->sreplace!(copy(funcexpr.args[2]), itersym, N)))
 end
 
@@ -54,20 +54,20 @@ macro nsplat(itersym, args...)
         rangeexpr = args[1]
         funcexpr = args[2]
         if !isa(rangeexpr, Expr) || rangeexpr.head != :(:) || length(rangeexpr.args) != 2
-            error("First argument must be a from:to expression")
+            throw(ArgumentError("first argument must be a from:to expression"))
         end
         rng = rangeexpr.args[1]:rangeexpr.args[2]
     else
-        error("Wrong number of arguments")
+        throw(ArgumentError("wrong number of arguments"))
     end
     if isa(funcexpr, Expr) && funcexpr.head == :macrocall && funcexpr.args[1] == symbol("@inline")
         funcexpr = Base._inline(funcexpr.args[2])
     end
-    isfuncexpr(funcexpr) || error("Second argument must be a function expression")
+    isfuncexpr(funcexpr) || throw(ArgumentError("second argument must be a function expression"))
     prototype = funcexpr.args[1]
     body = funcexpr.args[2]
     varname, T = get_splatinfo(prototype, itersym)
-    isempty(varname) && error("Last argument must be a splat")
+    isempty(varname) && throw(ArgumentError("last argument must be a splat"))
     explicit = [Expr(:function, resolvesplat!(copy(prototype), varname, T, N),
                      resolvesplats!(copy(body), varname, N)) for N in rng]
     protosplat = resolvesplat!(copy(prototype), varname, T, 0)
@@ -96,7 +96,7 @@ function ngenerate(itersym, returntypeexpr, prototype, bodyfunc, dims=1:CARTESIA
         extractvarargs = N -> Expr(:block, map(popescape, _nextract(N, s, s).args)...)
     end
     fsym = funcsym(prototype)
-    dictname = symbol(string(fsym)*"_cache")
+    dictname = symbol(fsym,"_cache")
     fargs = funcargs(prototype)
     if !isempty(varname)
         fargs[end] = Expr(:..., fargs[end].args[1])
@@ -158,10 +158,10 @@ end
 # Replace splatted with desplatted for a specific number of arguments
 function resolvesplat!(prototype, varname, T::Union(Type,Symbol,Expr), N::Int)
     if !isempty(varname)
-        prototype.args[end] = N > 0 ? Expr(:(::), symbol(string(varname, "_1")), T) :
+        prototype.args[end] = N > 0 ? Expr(:(::), symbol(varname, "_1"), T) :
                                       Expr(:(::), symbol(varname), T)
         for i = 2:N
-            push!(prototype.args, Expr(:(::), symbol(string(varname, "_", i)), T))
+            push!(prototype.args, Expr(:(::), symbol(varname, "_", i), T))
         end
     end
     prototype
@@ -186,9 +186,9 @@ function resolvesplats!(ex::Expr, varname, N::Int)
         end
         a = ex.args[end]
         if isa(a, Expr) && a.head == :... && a.args[1] == symbol(varname)
-            ex.args[end] = symbol(string(varname, "_1"))
+            ex.args[end] = symbol(varname, "_1")
             for i = 2:N
-                push!(ex.args, symbol(string(varname, "_", i)))
+                push!(ex.args, symbol(varname, "_", i))
             end
         else
             resolvesplats!(a, varname, N)
@@ -206,7 +206,7 @@ function spliceint!(ex::Expr)
     if ex.head == :escape
         return esc(spliceint!(ex.args[1]))
     end
-    ex.head == :call || error(string(ex, " must be a call"))
+    ex.head == :call || throw(ArgumentError("$ex must be a call"))
     if isa(ex.args[1], Expr) && ex.args[1].head == :curly
         args = ex.args[1].args
         for i = length(args):-1:1
@@ -228,7 +228,7 @@ end
 # Extract the "function name"
 function funcsym(prototype::Expr)
     prototype = popescape(prototype)
-    prototype.head == :call || error(string(prototype, " must be a call"))
+    prototype.head == :call || throw(ArgumentError("$prototype must be a call"))
     tmp = prototype.args[1]
     if isa(tmp, Expr) && tmp.head == :curly
         tmp = tmp.args[1]
@@ -238,7 +238,7 @@ end
 
 function funcrename(prototype::Expr, name::Symbol)
     prototype = popescape(prototype)
-    prototype.head == :call || error(string(prototype, " must be a call"))
+    prototype.head == :call || throw(ArgumentError("$prototype must be a call"))
     tmp = prototype.args[1]
     if isa(tmp, Expr) && tmp.head == :curly
         tmp.args[1] = name
@@ -250,7 +250,7 @@ end
 
 function hasparameter(prototype::Expr, sym::Symbol)
     prototype = popescape(prototype)
-    prototype.head == :call || error(string(prototype, " must be a call"))
+    prototype.head == :call || throw(ArgumentError("$prototype must be a call"))
     tmp = prototype.args[1]
     if isa(tmp, Expr) && tmp.head == :curly
         for i = 2:length(tmp.args)
@@ -267,7 +267,7 @@ funcarg(s::Symbol) = s
 funcarg(ex::Expr) = ex.args[1]
 function funcargs(prototype::Expr)
     prototype = popescape(prototype)
-    prototype.head == :call || error(string(prototype, " must be a call"))
+    prototype.head == :call || throw(ArgumentError("$prototype must be a call"))
     map(a->funcarg(a), prototype.args[2:end])
 end
 
@@ -282,10 +282,10 @@ _nloops(N::Int, itersym::Symbol, arraysym::Symbol, args::Expr...) = _nloops(N, i
 
 function _nloops(N::Int, itersym::Symbol, rangeexpr::Expr, args::Expr...)
     if rangeexpr.head != :->
-        error("Second argument must be an anonymous function expression to compute the range")
+        throw(ArgumentError("second argument must be an anonymous function expression to compute the range"))
     end
     if !(1 <= length(args) <= 3)
-        error("Too many arguments")
+        throw(ArgumentError("number of arguments must be 1 ≤ length(args) ≤ 3, got $nargs"))
     end
     body = args[end]
     ex = Expr(:escape, body)
@@ -359,7 +359,7 @@ end
 
 function _nall(N::Int, criterion::Expr)
     if criterion.head != :->
-        error("Second argument must be an anonymous function expression yielding the criterion")
+        throw(ArgumentError("second argument must be an anonymous function expression yielding the criterion"))
     end
     conds = [Expr(:escape, inlineanonymous(criterion, i)) for i = 1:N]
     Expr(:&&, conds...)
@@ -391,10 +391,10 @@ end
 # Simplify expressions like :(d->3:size(A,d)-3) given an explicit value for d
 function inlineanonymous(ex::Expr, val)
     if ex.head != :->
-        error("Not an anonymous function")
+        throw(ArgumentError("not an anonymous function"))
     end
     if !isa(ex.args[1], Symbol)
-        error("Not a single-argument anonymous function")
+        throw(ArgumentError("not a single-argument anonymous function"))
     end
     sym = ex.args[1]
     ex = ex.args[2]
@@ -404,7 +404,7 @@ function inlineanonymous(ex::Expr, val)
 end
 
 # Given :i and 3, this generates :i_3
-inlineanonymous(base::Symbol, ext) = symbol(string(base)*"_"*string(ext))
+inlineanonymous(base::Symbol, ext) = symbol(base,"_",string(ext))
 
 # Replace a symbol by a value or a "coded" symbol
 # E.g., for d = 3,
@@ -425,7 +425,7 @@ function lreplace!(ex::Expr, sym::Symbol, val, r)
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
         excurly = exprresolve(lreplace!(ex.args[2], sym, val, r))
         if isa(excurly, Number)
-            return symbol(string(ex.args[1])*string(excurly))
+            return symbol(ex.args[1],excurly)
         else
             ex.args[2] = excurly
             return ex

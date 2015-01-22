@@ -156,6 +156,8 @@ Library improvements
 
   * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
+  * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
+
 Deprecated or removed
 ---------------------
 
