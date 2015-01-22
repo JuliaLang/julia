@@ -81,7 +81,15 @@ Mathematical Operators
 
    Computes ``x*y+z`` without rounding the intermediate result
    ``x*y``. On some systems this is significantly more expensive than
-   ``x*y+z``.
+   ``x*y+z``. ``fma`` is used to improve accuracy in certain
+   algorithms. See ``muladd``.
+
+.. function:: muladd(x, y, z)
+
+   Combined multiply-add, computes ``x*y+z`` in an efficient manner.
+   This may on some systems be equivalent to ``x*y+z``, or to
+   ``fma(x,y,z)``. ``muladd`` is used to improve performance. See
+   ``fma``.
 
 .. function:: div(x, y)
               ÷(x, y)

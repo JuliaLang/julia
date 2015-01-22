@@ -161,6 +161,7 @@ promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
 fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
+muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
 
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
@@ -195,6 +196,7 @@ no_op_err(name, T) = error(name," not defined for ",T)
 
 fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
+muladd{T<:Number}(x::T, y::T, z::T) = no_op_err("muladd", T)
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
