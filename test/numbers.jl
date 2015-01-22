@@ -134,6 +134,14 @@ let eps = 1//BigInt(2)^7, one_eps = 1+eps,
                    float16(float32(one_eps * one_eps - 1)))
 end
 
+@test muladd(1,2,3) == 1*2+3
+@test muladd(big(1),2,3) == big(1)*2+3
+@test muladd(uint(1),2,3) == uint(1)*2+3
+@test muladd(1//1,2,3) == (1//1)*2+3
+@test muladd(big(1//1),2,3) == big(1//1)*2+3
+@test muladd(1.0,2,3) == 1.0*2+3
+@test muladd(big(1.0),2,3) == big(1.0)*2+3
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]
