@@ -3044,6 +3044,11 @@ void jl_init_types(void)
     jl_int64_type = NULL;
     jl_int64_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int64"),
                                     jl_any_type, jl_null, 64);
+
+    jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_null,
+                        jl_tuple1(jl_symbol("id")),
+                        jl_tuple1(jl_long_type), 0, 0, 0);
+
     jl_init_int32_int64_cache();
 
     jl_bool_type = NULL;
@@ -3130,10 +3135,6 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("GotoNode"), jl_any_type, jl_null,
                         jl_tuple(1, jl_symbol("label")),
                         jl_tuple(1, jl_long_type), 0, 0, 1);
-
-    jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_null,
-                        jl_tuple1(jl_symbol("id")),
-                        jl_tuple1(jl_long_type), 0, 0, 0);
 
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_null,

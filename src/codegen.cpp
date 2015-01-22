@@ -301,6 +301,7 @@ static Function *box_int64_func;
 static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
+static Function *box_gensym_func;
 static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
@@ -5220,6 +5221,7 @@ extern "C" void jl_init_codegen(void)
     BOX_F(int64,int64); BOX_F(uint64,uint64);
     BOX_F(float32,float32); BOX_F(float64,float64);
     BOX_F(char,char);
+    BOX_F(gensym,size);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)&jl_box8, m);
