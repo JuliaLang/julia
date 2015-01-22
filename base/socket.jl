@@ -21,7 +21,7 @@ end
 
 function IPv4(host::Integer)
     if host < 0
-        throw(ArgumentError("IPv4 address must not be positive"))
+        throw(ArgumentError("IPv4 address must be positive"))
     elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
         throw(ArgumentError("IPv4 address must fit within 32 bits"))
     else
