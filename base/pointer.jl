@@ -7,8 +7,8 @@ convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,uint(x)))
-convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,int(x)))
+convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,UInt(x)))
+convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,Int(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
@@ -45,10 +45,10 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=fal
     end
     pointer_to_array(p, convert((Int...), dims), own)
 end
-unsafe_load(p::Ptr,i::Integer) = pointerref(p, int(i))
+unsafe_load(p::Ptr,i::Integer) = pointerref(p, Int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)
-unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, int(i))
-unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), int(i))
+unsafe_store!(p::Ptr{Any}, x::ANY, i::Integer) = pointerset(p, x, Int(i))
+unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), Int(i))
 unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
