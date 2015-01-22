@@ -196,7 +196,7 @@ no_op_err(name, T) = error(name," not defined for ",T)
 
 fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
 fma(x::Integer, y::Integer, z::Integer) = x*y+z
-muladd{T<:Number}(x::T, y::T, z::T) = no_op_err("muladd", T)
+muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
