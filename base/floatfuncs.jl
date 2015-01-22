@@ -106,12 +106,12 @@ end
 function _signif_og(x, digits, base)
     if base == 10
         e = floor(log10(abs(x)) - digits + 1.)
-        og = oftype(x, 10. ^ abs(e))
+        og = oftype(x, exp10(abs(e)))
     elseif base == 2
         e = floor(log2(abs(x)) - digits + 1.)
-        og = oftype(x, 2. ^ abs(e))
+        og = oftype(x, exp2(abs(e)))
     else
-        e = floor(log2(abs(x))/log2(base) - digits + 1.)
+        e = floor(log(base, abs(x)) - digits + 1.)
         og = oftype(x, float(base) ^ abs(e))
     end
     return og, e
