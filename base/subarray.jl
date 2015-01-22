@@ -287,7 +287,7 @@ first(::Colon) = 1
 
 ## Strides
 stagedfunction strides{T,N,P,I}(V::SubArray{T,N,P,I})
-    all(map(x->x<:Union(RangeIndex,Colon), I)) || error("strides valid only for RangeIndex indexing")
+    all(map(x->x<:Union(RangeIndex,Colon), I)) || throw(ArgumentError("strides valid only for RangeIndex indexing"))
     strideexprs = Array(Any, N+1)
     strideexprs[1] = 1
     i = 1

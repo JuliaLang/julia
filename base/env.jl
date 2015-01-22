@@ -33,7 +33,7 @@ function _jl_win_getenv(s::UTF16String,len::UInt32)
     val=zeros(UInt16,len)
     ret=ccall(:GetEnvironmentVariableW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32),s,val,len)
     if ret==0 || ret != len-1 || val[end] != 0
-        error(string("system error getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
+        error(string("getenv: ", s, ' ', len, "-1 != ", ret, ": ", FormatMessage()))
     end
     val
 end
@@ -120,7 +120,7 @@ done(::EnvHash, i) = (ccall(:jl_environ, Any, (Int32,), i) == nothing)
 function next(::EnvHash, i)
     env = ccall(:jl_environ, Any, (Int32,), i)
     if env == nothing
-        error(BoundsError)
+        throw(BoundsError())
     end
     env::ByteString
     m = match(r"^(.*?)=(.*)$"s, env)

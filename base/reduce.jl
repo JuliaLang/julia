@@ -114,7 +114,7 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
-mr_empty(f, op, T) = error("Reducing over an empty array is not allowed.")
+mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
 # use zero(T)::T to improve type information when zero(T) is not defined
 mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T)::T)
 mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)::T))
@@ -271,7 +271,7 @@ extrema(x::Real) = (x, x)
 
 function extrema(itr)
     s = start(itr)
-    done(itr, s) && error("argument is empty")
+    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
     (v, s) = next(itr, s)
     while v != v && !done(itr, s)
         (x, s) = next(itr, s)

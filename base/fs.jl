@@ -84,7 +84,7 @@ open(f::AbstractString,flags) = open(f,flags,0)
 
 function close(f::File)
     if !f.open
-        error("file is already closed")
+        throw(ArgumentError("file \"$(f.path)\" is already closed"))
     end
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
     uv_error("close",err)
@@ -99,7 +99,7 @@ function unlink(p::AbstractString)
 end
 function unlink(f::File)
     if isempty(f.path)
-      error("no path associated with this file")
+      throw(ArgumentError("no path associated with this file"))
     end
     if f.open
         close(f)
@@ -127,13 +127,13 @@ end
 function sendfile(src::AbstractString, dst::AbstractString)
     src_file = open(src, JL_O_RDONLY)
     if !src_file.open
-        error("Src file is not open")
+        throw(ArgumentError("source file \"$(src.path)\" is not open"))
     end
 
     dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
                     S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
     if !dst_file.open
-        error("Dst file is not open")
+        throw(ArgumentError("destination file \"$(dst.path)\" is not open"))
     end
 
     src_stat = stat(src_file)
@@ -169,7 +169,7 @@ end
 
 function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     if !f.open
-        error("file is not open")
+        throw(ArgumentError("file \"$(f.path)\" is not open"))
     end
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{UInt8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
@@ -179,7 +179,7 @@ end
 
 function write(f::File, c::UInt8)
     if !f.open
-        error("file is not open")
+        throw(ArgumentError("file \"$(f.path)\" is not open"))
     end
     err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
     uv_error("write",err)
@@ -214,7 +214,7 @@ end
 
 function read(f::File, ::Type{UInt8})
     if !f.open
-        error("file is not open")
+        throw(ArgumentError("file \"$(f.path)\" is not open"))
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)

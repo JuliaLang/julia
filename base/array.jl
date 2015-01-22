@@ -1046,7 +1046,9 @@ end
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; throw(ArgumentError("vector must have same lengths")); end
+        if length(V[j]) != height
+            throw(DimensionMismatch("vectors must have same lengths"))
+        end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end

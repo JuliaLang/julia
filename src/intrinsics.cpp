@@ -6,7 +6,7 @@ namespace JL_I {
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
-        fma_float,
+        fma_float, muladd_float,
         // fast arithmetic
         neg_float_fast, add_float_fast, sub_float_fast,
         mul_float_fast, div_float_fast, rem_float_fast,
@@ -986,6 +986,20 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                    ArrayRef<Type*>(x->getType())),
          FP(x), FP(y), FP(z));
     }
+    HANDLE(muladd_float,3)
+#ifdef LLVM34
+    {
+      assert(y->getType() == x->getType());
+      assert(z->getType() == y->getType());
+      return builder.CreateCall3
+        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+                                   ArrayRef<Type*>(x->getType())),
+         FP(x), FP(y), FP(z));
+    }
+#else
+      return math_builder(ctx, true)().
+        CreateFAdd(builder.CreateFMul(FP(x), FP(y)), FP(z));
+#endif
 
     HANDLE(checked_sadd,2)
     HANDLE(checked_uadd,2)
@@ -1323,7 +1337,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);
     ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
-    ADD_I(div_float); ADD_I(rem_float); ADD_I(fma_float);
+    ADD_I(div_float); ADD_I(rem_float); ADD_I(fma_float); ADD_I(muladd_float);
     ADD_I(neg_float_fast); ADD_I(add_float_fast); ADD_I(sub_float_fast);
     ADD_I(mul_float_fast); ADD_I(div_float_fast); ADD_I(rem_float_fast);
     ADD_I(eq_int); ADD_I(ne_int);

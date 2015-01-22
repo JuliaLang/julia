@@ -26,7 +26,7 @@ function primesmask(s::AbstractVector{Bool})
 end
 primesmask(n::Int) = primesmask(falses(n))
 primesmask(n::Integer) = n <= typemax(Int) ? primesmask(int(n)) :
-    error("you want WAY too many primes ($n)")
+    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
 primes(n::Union(Integer,AbstractVector{Bool})) = find(primesmask(n))
 
@@ -76,7 +76,7 @@ isprime(n::Int128) = n < 2 ? false :
 const PRIMES = primes(10000)
 
 function factor{T<:Integer}(n::T)
-    0 < n || error("number to be factored must be positive")
+    0 < n || throw(ArgumentError("number to be factored must be ≥ 0, got $n"))
     h = Dict{T,Int}()
     n == 1 && return h
     n <= 3 && (h[n] = 1; return h)

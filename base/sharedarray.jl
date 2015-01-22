@@ -25,7 +25,7 @@ end
 function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
-    isbits(T) || error("Type of Shared Array elements must be bits types")
+    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     if isempty(pids)
         # only use workers on the current host
@@ -37,7 +37,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         onlocalhost = true
     else
         if !check_same_host(pids)
-            error("SharedArray requires all requested processes to be on the same machine.")
+            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
         end
 
         onlocalhost = myid() in procs(pids[1])
@@ -119,7 +119,7 @@ length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
-    (length(a) != prod(dims)) && error("dimensions must be consistent with array size")
+    (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
     refs = Array(RemoteRef, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
@@ -294,7 +294,7 @@ copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
 function copy!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
     ps = intersect(procs(S), procs(R))
-    isempty(ps) && error("source and destination arrays don't share any process")
+    isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))
     l = length(S)
     length(ps) > l && (ps = ps[1:l])
     nw = length(ps)

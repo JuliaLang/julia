@@ -48,7 +48,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws ErrorException sum(sin, Int[])
+@test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -92,7 +92,7 @@ for f in (sum2, sum5, sum6, sum9, sum10)
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
-    @test_throws ErrorException f(Int[])
+    @test_throws ArgumentError f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
@@ -125,8 +125,8 @@ prod2(itr) = invoke(prod, (Any,), itr)
 
 # maximum & minimum & extrema
 
-@test_throws ErrorException maximum(Int[])
-@test_throws ErrorException minimum(Int[])
+@test_throws ArgumentError maximum(Int[])
+@test_throws ArgumentError minimum(Int[])
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -149,7 +149,7 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
 @test maxabs(Int[]) == 0
-@test_throws ErrorException Base.minabs(Int[])
+@test_throws ArgumentError Base.minabs(Int[])
 
 @test maxabs(-2) == 2
 @test minabs(-2) == 2

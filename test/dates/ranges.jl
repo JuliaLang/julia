@@ -14,8 +14,8 @@ function test_all_combos()
                 @test first(dr) == f1
                 @test last(dr) == f1-one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
                 @test [dr] == T[]
@@ -66,8 +66,8 @@ function test_all_combos()
                 @test first(dr) == l1
                 @test last(dr) == l1+one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
                 @test [dr] == T[]
@@ -119,8 +119,8 @@ function test_all_combos()
                     @test first(dr) == f1
                     @test last(dr) == f1-one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
                     @test [dr] == T[]
@@ -171,8 +171,8 @@ function test_all_combos()
                     @test first(dr) == l1
                     @test last(dr) == l1+one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
                     @test [dr] == T[]

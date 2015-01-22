@@ -565,9 +565,7 @@ end
 # spawn function below so that we can exec more efficiently.
 #
 function _jl_pre_exec(args::Vector{ByteString})
-    if length(args) < 1
-        error("too few arguments to exec")
-    end
+    isempty(args) && throw(ArgumentError("exec called with no arguments"))
     ptrs = Array(Ptr{UInt8}, length(args)+1)
     for i = 1:length(args)
         ptrs[i] = args[i].data

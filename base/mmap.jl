@@ -22,10 +22,10 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
     # Check that none of the computations will overflow
     if len < 0
-        error("requested size is negative")
+        throw(ArgumentError("requested size must be ≥ 0, got $len"))
     end
     if len > typemax(Int)-pagesize
-        error("requested size is too large")
+        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
     end
     # Set the offset to a page boundary
     offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
@@ -91,7 +91,7 @@ function mmap_stream_settings(s::IO)
         prot = PROT_READ | PROT_WRITE
     end
     if prot & PROT_READ == 0
-        error("mmap requires read permissions on the file (choose r+)")
+        throw(ArgumentError("mmap requires read permissions on the file (choose r+)"))
     end
     flags = MAP_SHARED
     return prot, flags, (prot & PROT_WRITE) > 0
@@ -102,7 +102,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     prot, flags, iswrite = mmap_stream_settings(s)
     len = prod(dims)*sizeof(T)
     if len > typemax(Int)
-        error("file is too large to memory-map on this platform")
+        throw(ArgumentError("file is too large to memory-map on this platform"))
     end
     if iswrite && grow
         pmap, delta = mmap_grow(len, prot, flags, fd(s), offset)
@@ -145,10 +145,10 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedM
     len = prod(dims)*sizeof(T)
     const granularity::Int = ccall(:jl_getallocationgranularity, Clong, ())
     if len < 0
-        error("requested size is negative")
+        throw(ArgumentError("requested size must be ≥ 0, got $len"))
     end
     if len > typemax(Int)-granularity
-        error("file is too large to memory-map on this platform")
+        throw(ArgumentError("file is too large ot memory-map on this platform"))
     end
     # Set the offset to a page boundary
     offset_page::FileOffset = div(offset, granularity)*granularity
@@ -197,22 +197,22 @@ end
 function mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset)
     iswrite = !isreadonly(s)
     n = 1
-    for d in dims
+    for (i, d) in enumerate(dims)
         if d < 0
-            error("invalid dimension size")
+            throw(ArgumentError("dimension size must be ≥ 0, got $d size for dimension $i"))
         end
         n *= d
     end
     nc = num_bit_chunks(n)
     if nc > typemax(Int)
-        error("file is too large to memory-map on this platform")
+        throw(ArgumentError("file is too large to memory-map on this platform"))
     end
     chunks = mmap_array(UInt64, (nc,), s, offset)
     if iswrite
         chunks[end] &= _msk_end(n)
     else
         if chunks[end] != chunks[end] & _msk_end(n)
-            error("the given file does not contain a valid BitArray of size ", join(dims, 'x'), " (open with \"r+\" mode to override)")
+            throw(ArgumentError("the given file does not contain a valid BitArray of size $(join(dims, 'x')) (open with \"r+\" mode to override)"))
         end
     end
     B = BitArray{N}(ntuple(N,i->0)...)

@@ -2,7 +2,7 @@
 
 length(t::Tuple) = tuplelen(t)
 endof(t::Tuple) = tuplelen(t)
-size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension $(d)")
+size(t::Tuple, d) = d==1 ? tuplelen(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = tupleref(t, i)
 getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
