@@ -247,7 +247,7 @@ function init_stdio(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
-            error("FATAL: stdio type ($t) invalid")
+            throw(ArgumentError("invalid stdio type: $t"))
         end
         ret.status = StatusOpen
         ret.line_buffered = false
@@ -282,16 +282,16 @@ end
 
 flush(::AsyncStream) = nothing
 
-function isopen(x::Union(AsyncStream,UVServer))
+function isopen{T<:Union(AsyncStream,UVServer)}(x::T)
     if !(x.status != StatusUninit && x.status != StatusInit)
-        error("I/O object not initialized")
+        throw(ArgumentError("$T object not initialized"))
     end
     x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x)
     if !isopen(x) || x.status == StatusClosing
-        error("stream is closed or unusable")
+        throw(ArgumentError("stream is closed or unusable"))
     end
 end
 
@@ -655,7 +655,7 @@ function readall(stream::AsyncStream)
 end
 
 function read!{T}(s::AsyncStream, a::Array{T})
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = length(a) * sizeof(T)
     read!(s, reshape(reinterpret(UInt8, a), nb))
     return a
@@ -687,7 +687,7 @@ function read!(s::AsyncStream, a::Vector{UInt8})
 end
 
 function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = prod(dims)*sizeof(T)
     a = read!(s, Array(UInt8, nb))
     reshape(reinterpret(T, a), dims)
@@ -853,7 +853,7 @@ end
 
 function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive
-        throw(ArgumentError("server not connected; make sure \"listen\" has been called"))
+        throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
     end
     while isopen(server)
         err = accept_nonblock(server,client)
@@ -896,7 +896,7 @@ end
 
 function listen(path::AbstractString)
     sock = PipeServer()
-    bind(sock, path) || error("could not listen on path $path")
+    bind(sock, path) || throw(ArgumentError("could not listen on path $path"))
     uv_error("listen", _listen(sock))
     sock
 end

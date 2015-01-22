@@ -206,13 +206,13 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
 end
 
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    i1 < i2 || error("second index must be larger than the first")
+    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
     c, s, r = givensAlgorithm(f, g)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    i1 < i2 || error("second index must be larger than the first")
+    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
     c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end

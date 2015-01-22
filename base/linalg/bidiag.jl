@@ -7,13 +7,20 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch())
     end
 end
-
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = error("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument.")
 
 #Convert from BLAS uplo flag to boolean internal
-Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::BlasChar) = Bidiagonal(copy(dv), copy(ev), uplo=='U' ? true : uplo=='L' ? false : error("Bidiagonal can only be upper 'U' or lower 'L' but you said '$uplo''"))
-
+Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::BlasChar) = begin
+    if uplo === 'U'
+        isupper = true
+    elseif uplo === 'L'
+        isupper = false
+    else
+        throw(ArgumentError("Bidiagonal uplo argument must be upper 'U' or lower 'L', got $(repr(uplo))"))
+    end
+    Bidiagonal(copy(dv), copy(ev), isupper)
+end
 function Bidiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te}, isupper::Bool)
     T = promote_type(Td,Te)
     Bidiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev), isupper)
@@ -61,7 +68,7 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-size(M::Bidiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.dv) : 1)
+size(M::Bidiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(M.dv) : 1)
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -119,18 +126,15 @@ SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Abstrac
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval begin
-        ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
-    end
+    @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
 end
-
 
 #Linear solvers
 A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(A, b)
 At_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(transpose(A), b)
 Ac_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
-for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
-    function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
+for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:,1])
         n = size(B, 1)
         for i = 1:size(B,2)
@@ -140,9 +144,9 @@ for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
         end
         B
     end
-end end
-for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
-    function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
+end
+for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!)
+    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:, 2])
         m, n = size(B)
         nm = n*m
@@ -153,7 +157,7 @@ for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
         end
         B
     end
-end end
+end
 
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)

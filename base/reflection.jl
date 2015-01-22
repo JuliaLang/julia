@@ -34,7 +34,7 @@ function names(v)
     if isa(t,DataType)
         return names(t)
     else
-        error("cannot call names() on a non-composite type")
+        throw(ArgumentError("cannot call names() on a non-composite type"))
     end
 end
 
@@ -122,7 +122,7 @@ end
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("not a generic function")
+        throw(ArgumentError("argument is not a generic function"))
     end
     f.env
 end
@@ -171,7 +171,7 @@ function which(f::ANY, t::(Type...))
             t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
             f = call
         elseif !isgeneric(f)
-            error("argument is not a generic function")
+            throw(ArgumentError("argument is not a generic function"))
         end
         m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
         if m === nothing

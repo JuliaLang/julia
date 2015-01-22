@@ -36,10 +36,12 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Int}, own::Bool=false)
           Array{T,N}, p, dims, own)
 end
 function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=false)
+    i = 1
     for d in dims
         if !(0 <= d <= typemax(Int))
-            error("invalid Array dimensions")
+            throw(ArgumentError("Array dimension must be 0 ≤ dim ≤ $(typemax(Int)), got $d for dimension $i"))
         end
+        i += 1
     end
     pointer_to_array(p, convert((Int...), dims), own)
 end

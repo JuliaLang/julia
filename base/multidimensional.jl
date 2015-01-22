@@ -321,7 +321,7 @@ end
 # is desired, in which case we fall back to the div-based algorithm.
 stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange{Int})
     N = length(indexes)
-    N > 0 || error("Cannot merge empty indexes")
+    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     quote
         n = length(linindex)
         Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
@@ -354,7 +354,7 @@ merge_indexes(V, indexes::NTuple, dims::Dims, linindex) = merge_indexes_div(V, i
 # an extra loop.
 stagedfunction merge_indexes_div(V, indexes::NTuple, dims::Dims, linindex)
     N = length(indexes)
-    N > 0 || error("Cannot merge empty indexes")
+    N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     Istride_N = symbol("Istride_$N")
     quote
         Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
@@ -395,7 +395,7 @@ for (f, op) in ((:cumsum!, :+),
             if size(B, axis) < 1
                 return B
             end
-            size(B) == size(A) || throw(DimensionMismatch("Size of B must match A"))
+            size(B) == size(A) || throw(DimensionMismatch("size of B must match A"))
             if axis == 1
                 # We can accumulate to a temporary variable, which allows register usage and will be slightly faster
                 @inbounds @nloops N i d->(d > 1 ? (1:size(A,d)) : (1:1)) begin
@@ -730,8 +730,8 @@ end
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
     @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
         dimsB = size(B)
-        length(perm) == N || error("expected permutation of size $N, but length(perm)=$(length(perm))")
-        isperm(perm) || error("input is not a permutation")
+        length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
+        isperm(perm) || throw(ArgumentError("input is not a permutation"))
         dimsP = size(P)
         for i = 1:length(perm)
             dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))

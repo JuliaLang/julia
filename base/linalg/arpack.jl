@@ -94,7 +94,7 @@ function aupd_wrapper(T, matvecA::Function, matvecB::Function, solveSI::Function
                 error("Internal ARPACK error")
             end
         else
-            error("ARPACK mode not yet supported")
+            throw(ArgumentError("ARPACK mode ($mode) not yet supported"))
         end
     end
 
@@ -179,7 +179,7 @@ function eupd_wrapper(T, n::Integer, sym::Bool, cmplx::Bool, bmat::ASCIIString,
                 evec[:,j] = v[:,j]
                 j += 1
             else
-                error("Arpack unexpected behavior")
+                error("ARPACK unexpected behavior")
             end
         end
 
