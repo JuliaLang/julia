@@ -41,26 +41,26 @@ function plaininline(io::IO, br::LineBreak)
 end
 
 function plain(io::IO, md::Table)
-    println("asdsa")
     col_widths = reduce(max, map(cell -> map(ansi_length, cell), md.rows))
 
     for (n, row) in enumerate(md.rows)
         for (i, h) in enumerate(row)
-            a = typeof(md.align) == Symbol ? md.align : md.align[i]
             # TODO use not terminal version of print_align
-            error("NotImplemented")
-            print_align(io, h, col_widths[i], a)
-            print(io, " ")
+            if i != 1
+                print(io, " | ")
+            end
+            print(io, " " ^ (col_widths[i] - ansi_length(h)))
+            plaininline(io, h)
         end
         println(io, "")
 
         if n == 1
             for (j, w) in enumerate(col_widths)
                 if j != 1
-                    print(io, "|")
+                    print(io, " | ")
                 end
                 a = typeof(md.align) == Symbol ? md.align : md.align[j]
-                print(io, _dash(w, a) * " ")
+                print(io, _dash(w, a))
             end
             println(io, "")
         end
@@ -73,7 +73,7 @@ function _dash(width, align)
     elseif align == :r
         return "-" ^ max(1, width - 1) * ":"
     elseif align == :c
-        return "-" ^ width
+        return ":" * "-" ^ max(1, width - 2) * ":"
     else
         throw(ArgumentError("Unrecognized alignment $align"))
     end

@@ -111,7 +111,7 @@ _full{T}(s::SubString{T}) = convert(T, s)
 _full(s::AbstractString) = s
 
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
-                github_paragraph, github_table,
+                github_table, github_paragraph,
                 linebreak, espaces, en_dash, inline_code, asterisk_bold,
                 asterisk_italic, image, link]
 
