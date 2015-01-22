@@ -7,7 +7,7 @@ We start by borrowing GitHub's `fencedcode` extension – more to follow.
 
 include("interp.jl")
 
-@flavor julia [blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
+@flavor julia [github_table, blocktex, blockinterp, hashheader, list, indentcode, fencedcode,
                blockquote, paragraph,
 
                linebreak, escapes, latex, interp, en_dash, inline_code, asterisk_bold,

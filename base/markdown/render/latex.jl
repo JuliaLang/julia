@@ -66,6 +66,30 @@ function writemime(io::IO, ::MIME"text/latex", md::List)
     end
 end
 
+function writemime(io::IO, ::MIME"text/latex", md::Table)
+    wrapblock(io, "tabular") do
+        if typeof(md.align) == Symbol
+            align = string(md.align) ^ length(md.rows[1])
+        else
+            align = md.align
+        end
+        println(io, "{$(join(align, " | "))}")
+        for (i, row) in enumerate(md.rows)
+            for (j, cell) in enumerate(row)
+                if j != 1
+                    print(io, " & ")
+                end
+                latex_inline(io, cell)
+            end
+            println(io, " \\\\")
+            if i == 1
+                println("\\hline")
+            end
+        end
+    end
+end
+
+
 # Inline elements
 
 function writemime(io::IO, ::MIME"text/latex", md::Plain)

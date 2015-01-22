@@ -65,6 +65,36 @@ function term(io::IO, br::LineBreak, columns)
    println(io)
 end
 
+function term(io::IO, md::Table, columns)
+    col_widths = reduce(max, map(cell -> map(ansi_length, cell), md.rows))
+
+    for (n, row) in enumerate(md.rows)
+        for (i, h) in enumerate(row)
+            a = typeof(md.align) == Symbol ? md.align : md.align[i]
+            print_align(io, h, col_widths[i], a)
+            print(io, " ")
+        end
+        println(io, "")
+
+        if n == 1
+            for w in col_widths
+                print(io, ("-" ^ w) * " ")
+            end
+            println(io, "")
+        end
+    end
+end
+
+function ansi_length(md::Vector{Any})
+   total = 0
+   for c in md
+       total += ansi_length(c)
+   end
+   total
+end
+ansi_length(c::Code) = ansi_length(c.code)
+ansi_length(l::Link) = ansi_length(l.text)
+
 term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
 
 # Inline Content

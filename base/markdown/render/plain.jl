@@ -40,6 +40,45 @@ function plaininline(io::IO, br::LineBreak)
    println(io)
 end
 
+function plain(io::IO, md::Table)
+    println("asdsa")
+    col_widths = reduce(max, map(cell -> map(ansi_length, cell), md.rows))
+
+    for (n, row) in enumerate(md.rows)
+        for (i, h) in enumerate(row)
+            a = typeof(md.align) == Symbol ? md.align : md.align[i]
+            # TODO use not terminal version of print_align
+            error("NotImplemented")
+            print_align(io, h, col_widths[i], a)
+            print(io, " ")
+        end
+        println(io, "")
+
+        if n == 1
+            for (j, w) in enumerate(col_widths)
+                if j != 1
+                    print(io, "|")
+                end
+                a = typeof(md.align) == Symbol ? md.align : md.align[j]
+                print(io, _dash(w, a) * " ")
+            end
+            println(io, "")
+        end
+    end
+end
+
+function _dash(width, align)
+    if align == :l
+        return ":" * "-" ^ max(1, width - 1)
+    elseif align == :r
+        return "-" ^ max(1, width - 1) * ":"
+    elseif align == :c
+        return "-" ^ width
+    else
+        throw(ArgumentError("Unrecognized alignment $align"))
+    end
+end
+
 plain(io::IO, x) = tohtml(io, x)
 
 # Inline elements
