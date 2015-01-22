@@ -960,3 +960,47 @@ mark(x::AsyncStream)     = mark(x.buffer)
 unmark(x::AsyncStream)   = unmark(x.buffer)
 reset(x::AsyncStream)    = reset(x.buffer)
 ismarked(x::AsyncStream) = ismarked(x.buffer)
+
+# BufferStream's are non-OS streams, backed by a regular IOBuffer
+type BufferStream <: AsyncStream
+    buffer::IOBuffer
+    r_c::Condition
+    close_c::Condition
+    is_open::Bool
+
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true)
+end
+
+isopen(s::BufferStream) = s.is_open
+close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
+
+function wait_readnb(s::BufferStream, nb::Int)
+    while isopen(s) && nb_available(s.buffer) < nb
+        wait(s.r_c)
+    end
+
+    (nb_available(s.buffer) < nb) && error("closed BufferStream")
+end
+
+function eof(s::BufferStream)
+    wait_readnb(s,1)
+    !isopen(s) && nb_available(s.buffer)<=0
+end
+
+show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nb_available(s.buffer),", isopen:", s.is_open)
+
+nb_available(s::BufferStream) = nb_available(s.buffer)
+
+function wait_readbyte(s::BufferStream, c::UInt8)
+    while isopen(s) && search(s.buffer,c) <= 0
+        wait(s.r_c)
+    end
+end
+
+wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
+start_reading(s::BufferStream) = nothing
+
+write(s::BufferStream, b::UInt8) = (rv=write(s.buffer, b); notify(s.r_c; all=true);rv)
+write{T}(s::BufferStream, a::Array{T}) = (rv=write(s.buffer, a); notify(s.r_c; all=true);rv)
+write(s::BufferStream, p::Ptr, nb::Integer) = (rv=write(s.buffer, p, nb); notify(s.r_c; all=true);rv)
+
