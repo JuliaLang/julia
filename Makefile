@@ -449,17 +449,17 @@ distcleanall: cleanall
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules
 
-test: release
+test: check-whitespace release
 	@$(MAKE) $(QUIET_MAKE) -C test default
 
-testall: release
+testall: check-whitespace release
 	cp $(build_prefix)/lib/julia/sys.ji local.ji && $(JULIA_EXECUTABLE) -J local.ji -e 'true' && rm local.ji
 	@$(MAKE) $(QUIET_MAKE) -C test all
 
-testall1: release
+testall1: check-whitespace release
 	@env JULIA_CPU_CORES=1 $(MAKE) $(QUIET_MAKE) -C test all
 
-test-%: release
+test-%: check-whitespace release
 	@$(MAKE) $(QUIET_MAKE) -C test $*
 
 perf: release
