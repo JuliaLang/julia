@@ -76,7 +76,7 @@ typedef struct _jl_sym_t {
 
 typedef struct _jl_gensym_t {
     JL_DATA_TYPE
-    size_t id;
+    ssize_t id;
 } jl_gensym_t;
 
 typedef struct {
@@ -759,6 +759,7 @@ DLLEXPORT jl_value_t *jl_box_uint64(uint64_t x);
 DLLEXPORT jl_value_t *jl_box_float32(float x);
 DLLEXPORT jl_value_t *jl_box_float64(double x);
 DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
+DLLEXPORT jl_value_t *jl_box_gensym(ssize_t x);
 DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
 DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
 DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
@@ -775,6 +776,7 @@ DLLEXPORT uint64_t jl_unbox_uint64(jl_value_t *v);
 DLLEXPORT float jl_unbox_float32(jl_value_t *v);
 DLLEXPORT double jl_unbox_float64(jl_value_t *v);
 DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
+DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 
 #ifdef _P64
 #define jl_box_long(x)   jl_box_int64(x)

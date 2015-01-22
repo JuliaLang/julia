@@ -127,6 +127,9 @@
 (define (jlgensym? e)
   (and (pair? e) (eq? (car e) 'jlgensym)))
 
+(define (symbol-like? e)
+  (or (symbol? e) (jlgensym? e)))
+
 ; get the variable name part of a declaration, x::int => x
 (define (decl-var v)
   (if (decl? v) (cadr v) v))
@@ -136,7 +139,7 @@
 
 (define (sym-dot? e)
   (and (length= e 3) (eq? (car e) '|.|)
-       (or (symbol? (cadr e)) (jlgensym? (cadr e)))))
+       (symbol-like? (cadr e))))
 
 (define (effect-free? e)
   (or (not (pair? e)) (jlgensym? e) (sym-dot? e) (quoted? e) (equal? e '(null))))
@@ -145,6 +148,12 @@
   (if (symbol? e)
       e
       (cadr (caddr e))))
+
+(define make-jlgensym
+  (let ((jlgensym-counter 0))
+    (lambda ()
+      (begin0 `(jlgensym ,jlgensym-counter)
+              (set! jlgensym-counter (+ 1 jlgensym-counter))))))
 
 ; make an expression safe for multiple evaluation
 ; for example a[f(x)] => (temp=f(x); a[temp])
@@ -358,7 +367,7 @@
 	(let ((idx  (car lst))
 	      (last (null? (cdr lst))))
 	  (if (and (pair? idx) (eq? (car idx) '...))
-	      (if (or (symbol? (cadr idx)) (jlgensym? (cadr idx)))
+	      (if (symbol-like? (cadr idx))
 		  (loop (cdr lst) (+ n 1)
 			stmts
 			(cons (cadr idx) tuples)
@@ -997,7 +1006,7 @@
 	   (argument-root (cadr a)))
 	  ((and (pair? a) (sym-dot? a))
 	   (cadr a))
-	  ((or (symbol? a) (jlgensym? a)) a)
+	  ((symbol-like? a) a)
 	  (else         0)))
   (let loop ((F atypes)  ;; formals
 	     (A args)    ;; actuals
@@ -1106,7 +1115,7 @@
 	     (if (null? binds)
 		 blk
 		 (cond
-		  ((or (symbol? (car binds)) (jlgensym? (car binds)) (decl? (car binds)))
+		  ((or (symbol-like? (car binds)) (decl? (car binds)))
 		   ;; just symbol -> add local
 		   (loop (cdr binds)
 			 `(scope-block
@@ -1118,8 +1127,7 @@
 			(eq? (caar binds) '=))
 		   ;; some kind of assignment
 		   (cond
-		    ((or (symbol? (cadar binds))
-                         (jlgensym? (cadar binds))
+		    ((or (symbol-like? (cadar binds))
 			 (decl?   (cadar binds)))
 		     (let ((vname (decl-var (cadar binds))))
 		       (loop (cdr binds)
@@ -1228,7 +1236,7 @@
 		     (var  (caddr e))
 		     (catchb (cadddr e)))
 		 (expand-binding-forms
-		  (if (or (symbol? var) (jlgensym? var))
+		  (if (symbol-like? var)
 		      `(trycatch (scope-block ,tryb)
 				 (scope-block
 				  (block (= ,var (the_exception))
@@ -1333,7 +1341,7 @@
 		     (if (null? binds)
 			 (cons 'varlist vars)
 			 (cond
-			  ((or (symbol? (car binds)) (jlgensym? (car binds)) (decl? (car binds)))
+			  ((or (symbol-like? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
 			   (loop (cdr binds)
 				 (cons (decl-var (car binds)) vars)))
@@ -1341,8 +1349,7 @@
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
 			   (cond
-			    ((or (symbol? (cadar binds))
-                                 (jlgensym? (cadar binds))
+			    ((or (symbol-like? (cadar binds))
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
@@ -1467,7 +1474,7 @@
 		(unnecessary-tuple (tuple ,@(reverse elts))))
 	(let ((L (car lhss))
 	      (R (car rhss)))
-	  (if (and (or (symbol? L) (jlgensym? L))
+	  (if (and (symbol-like? L)
 		   (or (not (pair? R)) (quoted? R) (equal? R '(null)))
 		   ;; overwrite var immediately if it doesn't occur elsewhere
 		   (not (contains (lambda (e) (eq-sym? e L)) (cdr rhss)))
@@ -1899,7 +1906,7 @@
    (lambda (e)
      (if (length= e 2)
 	 (error "invalid \"::\" syntax"))
-     (if (and (length= e 3) (not (symbol? (cadr e))) (not (jlgensym? (cadr e))))
+     (if (and (length= e 3) (not (symbol-like? (cadr e))))
 	 `(call (top typeassert)
 		,(expand-forms (cadr e)) ,(expand-forms (caddr e)))
 	 (map expand-forms e)))
@@ -2280,7 +2287,7 @@
 	  'false
 	  (if (null? (cdr tail))
 	      (car tail)
-	      (if (or (symbol? (car tail)) (jlgensym? (car tail)))
+	      (if (symbol-like? (car tail))
 		  `(if ,(car tail) ,(car tail)
 		       ,(loop (cdr tail)))
 		  (let ((g (gensy)))
@@ -2345,7 +2352,7 @@
 (define (map-to-lff e dest tail)
   (let ((r (map (lambda (arg) (to-lff arg #t #f))
 		(cdr e))))
-    (cond ((or (symbol? dest) (jlgensym? dest))
+    (cond ((symbol-like? dest)
 	   (cons `(= ,dest ,(cons (car e) (map car r)))
 		 (apply append (map cdr (reverse r)))))
 	  (else
@@ -2369,7 +2376,7 @@
 ;; case expression. Everything else deals with special forms.
 (define (to-lff e dest tail)
   (if (effect-free? e)
-      (cond ((or (symbol? dest) (jlgensym? dest))
+      (cond ((symbol-like? dest)
 	     (if (and (pair? e) (eq? (car e) 'break))
 		 ;; odd corner case: sometimes try/finally generates
 		 ;; a (break ) as an assignment RHS
@@ -2417,7 +2424,7 @@
 				   (cons (car args) newa))))))))
 
 	((=)
-	 (if (or (not (or (symbol? (cadr e)) (jlgensym? (cadr e))))
+	 (if (or (not (symbol-like? (cadr e)))
 		 (eq? (cadr e) 'true)
 		 (eq? (cadr e) 'false))
 	     (error (string "invalid assignment location \"" (deparse (cadr e)) "\"")))
@@ -2433,7 +2440,7 @@
 		 ((and (effect-free? RHS)
 		       ;; need temp var for `x::Int = x` (issue #6896)
 		       (not (eq? RHS (decl-var LHS))))
-		  (cond ((or (symbol? dest) (jlgensym? dest))
+		  (cond ((symbol-like? dest)
                             (list `(= ,LHS ,RHS)
 				  `(= ,dest ,RHS)))
 			(dest  (list (if tail `(return ,RHS) RHS)
@@ -2448,7 +2455,7 @@
 			  dest tail)))))
 
 	((if)
-	 (cond ((or tail (eq? dest #f) (symbol? dest) (jlgensym? dest))
+	 (cond ((or tail (eq? dest #f) (symbol-like? dest))
 		(let ((r (to-lff (cadr e) #t #f)))
 		  (cons `(if
 			  ,(car r)
@@ -2490,7 +2497,7 @@
 		     (let loop ((tl (cdr e)))
 		       (if (null? tl) '()
 			   (if (null? (cdr tl))
-			       (cond ((or tail (eq? dest #f) (symbol? dest) (jlgensym? dest))
+			       (cond ((or tail (eq? dest #f) (symbol-like? dest))
 				      (blk-tail (to-lff (car tl) dest tail)))
 				     (else
 				      (blk-tail (to-lff (car tl) g tail))))
@@ -2519,7 +2526,7 @@
 						  ,(to-blk
 						    (to-lff (caddr e) #f #f)))
 					 '())))
-			   (if (or (symbol? dest) (jlgensym? dest))
+			   (if (symbol-like? dest)
 			       (cons `(= ,dest (null)) w)
 			       w)))))
 
@@ -2553,7 +2560,7 @@
 	((lambda)
 	 (let ((l `(lambda ,(cadr e)
 		     ,(to-blk (to-lff (caddr e) #t #t)))))
-	   (if (or (symbol? dest) (jlgensym? dest))
+	   (if (symbol-like? dest)
 	       (cons `(= ,dest ,l) '())
 	       (cons (if tail `(return ,l) l) '()))))
 
@@ -2886,21 +2893,21 @@ So far only the second case can actually occur.
       (if (jlgensym? e) (cadr e)
 	  (foldl (lambda (x l) (max (max-jlgensym x) l)) -1 e))))
 
-(define (renumber-jlgensym- e tbl make-jlgensym)
+(define (renumber-jlgensym- e tbl next-jlgensym)
   (cond
    ((or (not (pair? e)) (quoted? e)) e)
    ((jlgensym? e)
       (let ((n (get tbl (cadr e) #f)))
         (if n n
-          (let ((n (make-jlgensym))) (put! tbl (cadr e) n) n))))
-   (else (map (lambda (x) (renumber-jlgensym- x tbl make-jlgensym)) e))))
+          (let ((n (next-jlgensym))) (put! tbl (cadr e) n) n))))
+   (else (map (lambda (x) (renumber-jlgensym- x tbl next-jlgensym)) e))))
 
 (define (renumber-jlgensym e)
   (let ((jlgensym-counter 0))
-    (define (make-jlgensym)
+    (define (next-jlgensym)
       (begin0 `(jlgensym ,jlgensym-counter)
 	      (set! jlgensym-counter (+ 1 jlgensym-counter))))
-    (renumber-jlgensym- e (table) make-jlgensym)))
+    (renumber-jlgensym- e (table) next-jlgensym)))
 
 (define (make-var-info name) (list name 'Any 0))
 (define vinfo:name car)
@@ -3530,16 +3537,16 @@ So far only the second case can actually occur.
 ;; expander entry point
 
 (define (julia-expand1 ex)
+ (renumber-jlgensym
   (to-goto-form
    (analyze-variables
     (flatten-scopes
-     (identify-locals ex)))))
+     (identify-locals ex))))))
 
 (define (julia-expand01 ex)
   (to-LFF
    (expand-forms
-    (expand-binding-forms
-     (renumber-jlgensym ex)))))
+    (expand-binding-forms ex))))
 
 (define (julia-expand0 ex)
   (let ((e (julia-expand-macros ex)))

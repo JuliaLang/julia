@@ -284,9 +284,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
     if (iscons(e)) {
         value_t hd = car_(e);
         if (hd == fl_jlgensym_sym) {
-            jl_gensym_t *gensym = (jl_gensym_t*)jl_new_struct_uninit(jl_gensym_type);
-            gensym->id = numval(car_(cdr_(e)));
-            return (jl_value_t*)gensym;
+            size_t genid = numval(car_(cdr_(e)));
+            return jl_box_gensym(genid);
         }
         if (hd == fl_null_sym && llength(e) == 1)
             return jl_nothing;
