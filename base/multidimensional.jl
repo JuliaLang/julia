@@ -1,7 +1,8 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, start, _start, done, next, getindex, setindex!, linearindexing, min, max
+import Base: eltype, length, start, _start, done, next, last, getindex, setindex!, linearindexing, min, max
+import Base: simd_outer_range, simd_inner_length, simd_index
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
 export CartesianIndex, CartesianRange, eachindex
@@ -148,8 +149,29 @@ done{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I)) = state[1]
 
 stagedfunction length{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
+    N == 0 && return 1
     args = [:(iter.stop[$i]-iter.start[$i]+1) for i=1:N]
     Expr(:call,:*,args...)
+end
+
+last(iter::CartesianRange) = iter.stop
+
+stagedfunction simd_outer_range{I}(iter::CartesianRange{I})
+    N = length(I)
+    N == 0 && return :(CartesianRange(CartesianIndex{0}(),CartesianIndex{0}()))
+    startargs = [:(iter.start[$i]) for i=2:N]
+    stopargs  = [:(iter.stop[$i]) for i=2:N]
+    :(CartesianRange(CartesianIndex{$(N-1)}($(startargs...)), CartesianIndex{$(N-1)}($(stopargs...))))
+end
+
+simd_inner_length{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex) = 1
+simd_inner_length(iter::CartesianRange, I::CartesianIndex) = iter.stop[1]-iter.start[1]+1
+
+simd_index{I<:CartesianIndex{0}}(iter::CartesianRange{I}, ::CartesianIndex, I1::Int) = iter.start
+stagedfunction simd_index{N}(iter::CartesianRange, Ilast::CartesianIndex{N}, I1::Int)
+    args = [d == 1 ? :(I1+iter.start[1]) : :(Ilast[$(d-1)]) for d = 1:N+1]
+    meta = Expr(:meta, :inline)
+    :($meta; CartesianIndex{$(N+1)}($(args...)))
 end
 
 end  # IteratorsMD
