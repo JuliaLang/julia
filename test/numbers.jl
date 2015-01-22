@@ -1681,6 +1681,8 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test signif(-0.0, 1) === -0.0
 @test signif(1.2, 2) === 1.2
 @test signif(1.0, 6) === 1.0
+@test signif(0.6, 1) === 0.6
+@test signif(7.262839104539736, 2) === 7.3
 @test isinf(signif(Inf, 3))
 
 # issue #1308
