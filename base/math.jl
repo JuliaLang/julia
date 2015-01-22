@@ -61,8 +61,8 @@ macro evalpoly(z, p...)
     for i = length(p)-2:-1:1
         ai = symbol("a", i)
         push!(as, :($ai = $a))
-        a = :($b + r*$ai)
-        b = :($(esc(p[i])) - s * $ai)
+        a = :(muladd(r, $ai, $b))
+        b = :(muladd(-s, $ai, $(esc(p[i]))))
     end
     ai = :a0
     push!(as, :($ai = $a))
@@ -72,7 +72,7 @@ macro evalpoly(z, p...)
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * tt + $b))
+             :(muladd($ai, tt, $b)))
     R = Expr(:macrocall, symbol("@horner"), :tt, p...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
