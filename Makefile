@@ -37,6 +37,7 @@ $(build_docdir):
 	@mkdir -p $@/examples
 	@cp -R doc/devdocs doc/manual doc/stdlib $@
 	@cp -R examples/*.jl $@/examples/
+	@cp -R examples/clustermanager $@/examples/
 
 git-submodules:
 ifneq ($(NO_GIT), 1)
