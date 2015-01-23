@@ -30,7 +30,7 @@
   (cond ((atom? e)   tab)
 	((quoted? e) tab)
 	(else (case (car e)
-		((=)            (put! tab (decl-var (cadr e)) #t))
+		((=)            (if (not (jlgensym? (cadr e))) (put! tab (decl-var (cadr e)) #t)))
 		((method)       (let ((n (method-expr-name e)))
 				  (if (symbol? n)
 				      (put! tab n #t)

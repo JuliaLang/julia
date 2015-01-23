@@ -1037,7 +1037,8 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return jl_symbolnode_type(e);
     if (jl_is_gensym(e)) {
         int idx = ((jl_gensym_t*)e)->id;
-        return jl_cellref(jl_lam_gensyms(ctx->ast), idx);
+        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+        return (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
     }
     if (jl_is_quotenode(e)) {
         e = jl_fieldref(e,0);

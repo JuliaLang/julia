@@ -478,6 +478,7 @@ typedef struct {
     // a local, since otherwise this will add it to the map.
     std::map<jl_sym_t*, jl_varinfo_t> vars;
     std::vector<Value*> gensym_SAvalues;
+    std::vector<bool> gensym_assigned;
     std::map<jl_sym_t*, jl_arrayvar_t> *arrayvars;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *handlers;
@@ -2879,11 +2880,14 @@ static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(l)) {
-        int idx = ((jl_gensym_t*)l)->id;
+        ssize_t idx = ((jl_gensym_t*)l)->id;
+        assert(!ctx->gensym_assigned.at(idx));
         Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the memvalue (if isbits)
-        jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), idx);
+        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+        jl_value_t *declType = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
         Value *rval = emit_assignment(bp, r, declType, false, true, ctx);
         ctx->gensym_SAvalues.at(idx) = rval; // now gensym_SAvalues[idx] actually contains the SAvalue
+        assert(ctx->gensym_assigned.at(idx) = true);
         return;
     }
     jl_sym_t *s = NULL;
@@ -2954,11 +2958,13 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
-        int idx = ((jl_gensym_t*)expr)->id;
+        ssize_t idx = ((jl_gensym_t*)expr)->id;
+        assert(ctx->gensym_assigned.at(idx));
         Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
         if (bp == NULL || type_is_ghost(bp->getType())) {
             // assert(vi.isGhost);
-            jl_value_t *declType = jl_cellref(jl_lam_gensyms(ctx->ast), idx);
+            jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+            jl_value_t *declType = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
             return ghostValue(declType);
         }
         return bp;
@@ -3646,8 +3652,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.boundsCheck.push_back(true);
 
     // step 2. process var-info lists to see what vars are captured, need boxing
-    jl_array_t *gensym_types = jl_lam_gensyms(ast);
-    int n_gensyms = jl_array_len(gensym_types);
+    jl_value_t *gensym_types = jl_lam_gensyms(ast);
+    int n_gensyms = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_gensym(gensym_types));
     jl_array_t *largs = jl_lam_args(ast);
     size_t largslen = jl_array_dim0(largs);
     jl_array_t *lvars = jl_lam_locals(ast);
@@ -4001,9 +4007,10 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     // create SAvalue locations for GenSym objects
+    ctx.gensym_assigned.assign(n_gensyms, false);
     ctx.gensym_SAvalues.assign(n_gensyms, NULL);
     for(int i=0; i < n_gensyms; i++) {
-        jl_value_t *jt = jl_cellref(gensym_types,i);
+        jl_value_t *jt = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, i) : (jl_value_t*)jl_any_type);
         if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
             // nothing
         }
@@ -4055,7 +4062,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
     }
     for(int i=0; i < n_gensyms; i++) {
-        jl_value_t *jt = jl_cellref(gensym_types,i);
+        jl_value_t *jt = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, i) : (jl_value_t*)jl_any_type);
         Value *lv = ctx.gensym_SAvalues.at(i);
         if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
             // nothing

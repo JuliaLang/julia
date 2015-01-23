@@ -1000,8 +1000,6 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
-jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
-                                            jl_value_t **locals, size_t nl);
 DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                     jl_value_t **locals, size_t nl);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
@@ -1022,7 +1020,7 @@ jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
-jl_array_t *jl_lam_gensyms(jl_expr_t *l);
+jl_value_t *jl_lam_gensyms(jl_expr_t *l);
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);

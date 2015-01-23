@@ -1238,14 +1238,14 @@ function label_counter(body)
 end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
-function find_gensym_uses(body)
+function find_gensym_uses(body, labels)
     uses = Vector{Int}[]
     for line = 1:length(body)
-        find_gensym_uses(body[line], uses, line)
+        find_gensym_uses(body[line], uses, line, labels)
     end
     return uses
 end
-function find_gensym_uses(e::ANY, uses, line)
+function find_gensym_uses(e::ANY, uses, line, labels)
     if isa(e,GenSym)
         id = (e::GenSym).id+1
         while length(uses) < id
@@ -1259,17 +1259,25 @@ function find_gensym_uses(e::ANY, uses, line)
             return
         end
         if head === :(=)
-            if isa(b.args[2],GenSym)
-                id = (e::GenSym).id+1
+            if isa(b.args[1],GenSym)
+                id = (b.args[1]::GenSym).id+1
                 while length(uses) < id
                     push!(uses, Array(Int,0))
                 end
             end
-            find_gensym_uses(b.args[2], uses, line)
+            find_gensym_uses(b.args[2], uses, line, labels)
             return
         end
+        if head == :type_goto
+            for i = 2:length(b.args)
+                var = b.args[i]
+                if isa(var,GenSym)
+                    find_gensym_uses(var, uses, findlabel(labels,b.args[1]), labels)
+                end
+            end
+        end
         for a in b.args
-            find_gensym_uses(a, uses, line)
+            find_gensym_uses(a, uses, line, labels)
         end
     end
 end
@@ -1473,7 +1481,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
 
-    gensym_uses = find_gensym_uses(body)
+    gensym_uses = find_gensym_uses(body, labels)
     gensym_types = Any[ Union() for i = 1:length(gensym_uses) ]
 
     sv = StaticVarInfo(sparams, cenv, vars, gensym_types, length(labels))
@@ -1560,19 +1568,21 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                         if isa(var,SymbolNode)
                             var = var.name
                         end
-                        # Store types that need to be fed back via type_goto
-                        # in position s[1]. After finishing inference, if any
-                        # of these types changed, start over with the fed-back
-                        # types known from the beginning.
-                        # See issue #3821 (using !typeseq instead of !subtype),
-                        # and issue #7810.
-                        vt = changes[var]
-                        ot = s[1][var]
-                        if !typeseq(vt,ot)
-                            if old_s1 === nothing
-                                old_s1 = copy(s[1])
+                        if isa(var,Symbol)
+                            # Store types that need to be fed back via type_goto
+                            # in position s[1]. After finishing inference, if any
+                            # of these types changed, start over with the fed-back
+                            # types known from the beginning.
+                            # See issue #3821 (using !typeseq instead of !subtype),
+                            # and issue #7810.
+                            vt = changes[var]
+                            ot = s[1][var]
+                            if !typeseq(vt,ot)
+                                if old_s1 === nothing
+                                    old_s1 = copy(s[1])
+                                end
+                                s[1][var] = vt
                             end
-                            s[1][var] = vt
                         end
                     end
                 elseif is(hd,:return)
@@ -2556,12 +2566,18 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
     end
 
     # re-number the GenSyms and copy their type-info to the new ast
-    if !isempty(ast.args[2][4])
-        incr = length(sv.gensym_types)
-        if incr != 0
-            body = gensym_increment(body, incr)
+    gensym_types = ast.args[2][4]
+    if gensym_types != 0
+        if (isa(gensym_types,Integer))
+            gensym_types = Any[Any for i = 1:ast.args[2][4]]
         end
-        append!(sv.gensym_types, ast.args[2][4])
+        if !isempty(gensym_types)
+            incr = length(sv.gensym_types)
+            if incr != 0
+                body = gensym_increment(body, incr)
+            end
+            append!(sv.gensym_types, ast.args[2][4])
+        end
     end
 
     # ok, substitute argument expressions for argument names in the body
