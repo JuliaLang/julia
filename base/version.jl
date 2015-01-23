@@ -8,26 +8,26 @@ immutable VersionNumber
     build::(Union(Int,ASCIIString)...)
 
     function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
-        major >= 0 || error("invalid negative major version: $major")
-        minor >= 0 || error("invalid negative minor version: $minor")
-        patch >= 0 || error("invalid negative patch version: $patch")
+        major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
+        minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
+        patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
         for ident in pre
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative pre-release identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    error("invalid pre-release identifier: ", repr(ident))
+                    throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
             end
         end
         for ident in bld
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative build identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
-                    error("invalid build identifier: ", repr(ident))
+                    throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
             end
         end
@@ -81,7 +81,7 @@ end
 
 VersionNumber(v::AbstractString) = begin
     m = match(VERSION_REGEX, v)
-    if m == nothing error("invalid version string: $v") end
+    m == nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = int(major)
     minor = minor != nothing ? int(minor) : 0

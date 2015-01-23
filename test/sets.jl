@@ -189,7 +189,7 @@ filter!(isodd, s)
 @test isequal(s, Set([1,3]))
 
 # first
-@test_throws ErrorException first(Set())
+@test_throws ArgumentError first(Set())
 @test first(Set(2)) == 2
 
 # ########## end of set tests ##########
@@ -224,8 +224,8 @@ s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 @test !in(0,s)
 @test !in(10002,s)
 @test in(10000,s)
-@test_throws ErrorException first(IntSet())
-@test_throws ErrorException last(IntSet())
+@test_throws ArgumentError first(IntSet())
+@test_throws ArgumentError last(IntSet())
 t = copy(s)
 sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
 @test hash(s) == hash(t)

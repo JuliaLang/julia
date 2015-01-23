@@ -48,11 +48,11 @@ function repl_cmd(cmd, out)
     end
 
     if isempty(cmd.exec)
-        error("no cmd to execute")
+        throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
         new_oldpwd = pwd()
         if length(cmd.exec) > 2
-            error("cd method only takes one argument")
+            throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
             if dir == "-"
@@ -222,8 +222,15 @@ function process_options(args::Vector{UTF8String})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
-            # doesn't return
+            worker_arg = (i == length(args)) ? "" : args[i+1]
+
+            if worker_arg == "custom"
+                i += 1
+            else
+                start_worker()
+                # doesn't return
+            end
+
         elseif args[i]=="--bind-to"
             i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"

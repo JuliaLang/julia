@@ -31,8 +31,7 @@ end
 @test all(median([2 3 1 -1; 7 4 5 -4], 2) .== [1.5, 4.5])
 @test all(median([2 3 1 -1; 7 4 5 -4], 1) .== [4.5 3.5 3.0 -2.5])
 
-
-@test_throws ErrorException median([])
+@test_throws ArgumentError median([])
 @test isnan(median([NaN]))
 @test isnan(median([0.0,NaN]))
 @test isnan(median([NaN,0.0]))
@@ -46,10 +45,10 @@ end
 
 # edge case: empty vector
 # iterable; this has to throw for type stability
-@test_throws ErrorException var(())
-@test_throws ErrorException var((); corrected=false)
-@test_throws ErrorException var((); mean=2)
-@test_throws ErrorException var((); mean=2, corrected=false)
+@test_throws ArgumentError var(())
+@test_throws ArgumentError var((); corrected=false)
+@test_throws ArgumentError var((); mean=2)
+@test_throws ArgumentError var((); mean=2, corrected=false)
 # reduction
 @test isnan(var(Int[]))
 @test isnan(var(Int[]; corrected=false))

@@ -63,7 +63,7 @@ end
 #Returns the first decoded byte and stores up to two more in cache
 function b64decode!(encvec::Vector{UInt8}, cache::Vector{UInt8})
     if length(encvec) < 2
-        error("Incorrect base64 format")
+        throw(ArgumentError("incorrect base64 format, block must be at least 2 and at most 4 bytes"))
     end
     @inbounds u = revb64chars[encvec[1]]
     @inbounds v = revb64chars[encvec[2]]

@@ -149,6 +149,7 @@ y = BigFloat(1)
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
 @test convert(Float32, BigFloat(0.5)) == float32(0.5)
+@test convert(Float16, BigFloat(0.5)) == float16(0.5)
 
 # exponent
 x = BigFloat(0)

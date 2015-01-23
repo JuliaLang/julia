@@ -81,7 +81,7 @@ function Base.parseint_nocheck(::Type{BigInt}, s::AbstractString, base::Int)
     err = ccall((:__gmpz_set_str, :libgmp),
                Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
                &z, convert(Ptr{UInt8},SubString(s,i)), base)
-    err == 0 || error("invalid big integer: $(repr(s))")
+    err == 0 || throw(ArgumentError("invalid BigInt: $(repr(s))"))
     return sgn < 0 ? -z : z
 end
 
@@ -477,7 +477,7 @@ dec(n::BigInt) = base(10, n)
 hex(n::BigInt) = base(16, n)
 
 function base(b::Integer, n::BigInt)
-    2 <= b <= 62 || error("invalid base: $b")
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
     len = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
     ASCIIString(pointer_to_array(p,len,true))

@@ -105,6 +105,43 @@ let eps = 1//BigInt(2)^200, one_eps = 1+eps,
     @test fma(one_eps256, one_eps256, -1) == BigFloat(one_eps * one_eps - 1)
 end
 
+# muladd
+
+let eps = 1//BigInt(2)^30, one_eps = 1+eps,
+    eps64 = float64(eps), one_eps64 = float64(one_eps)
+    @test eps64 == float64(eps)
+    @test one_eps64 == float64(one_eps)
+    @test one_eps64 * one_eps64 - 1 != float64(one_eps * one_eps - 1)
+    @test isapprox(muladd(one_eps64, one_eps64, -1),
+                   float64(one_eps * one_eps - 1))
+end
+
+let eps = 1//BigInt(2)^15, one_eps = 1+eps,
+    eps32 = float32(eps), one_eps32 = float32(one_eps)
+    @test eps32 == float32(eps)
+    @test one_eps32 == float32(one_eps)
+    @test one_eps32 * one_eps32 - 1 != float32(one_eps * one_eps - 1)
+    @test isapprox(muladd(one_eps32, one_eps32, -1),
+                   float32(one_eps * one_eps - 1))
+end
+
+let eps = 1//BigInt(2)^7, one_eps = 1+eps,
+    eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
+    @test eps16 == float16(float32(eps))
+    @test one_eps16 == float16(float32(one_eps))
+    @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
+    @test isapprox(muladd(one_eps16, one_eps16, -1),
+                   float16(float32(one_eps * one_eps - 1)))
+end
+
+@test muladd(1,2,3) == 1*2+3
+@test muladd(big(1),2,3) == big(1)*2+3
+@test muladd(uint(1),2,3) == uint(1)*2+3
+@test muladd(1//1,2,3) == (1//1)*2+3
+@test muladd(big(1//1),2,3) == big(1//1)*2+3
+@test muladd(1.0,2,3) == 1.0*2+3
+@test muladd(big(1.0),2,3) == big(1.0)*2+3
+
 # lexing typemin(Int64)
 @test (-9223372036854775808)^1 == -9223372036854775808
 @test [1 -1 -9223372036854775808] == [1 -1 typemin(Int64)]

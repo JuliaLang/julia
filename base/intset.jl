@@ -168,7 +168,7 @@ isempty(s::IntSet) =
 function first(s::IntSet)
     n = next(s,0)[1]
     if n >= s.limit
-        error("set must be non-empty")
+        throw(ArgumentError("set must be non-empty"))
     end
     return n
 end
@@ -184,7 +184,7 @@ function last(s::IntSet)
             end
         end
     end
-    error("set has no last element")
+    throw(ArgumentError("set has no last element"))
 end
 
 length(s::IntSet) = int(ccall(:bitvector_count, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)) +
