@@ -739,14 +739,21 @@ static void run_finalizers(void)
     JL_GC_POP();
 }
 
-void jl_gc_run_all_finalizers(void)
+void schedule_all_finalizers(arraylist_t* flist)
 {
-    for(size_t i=0; i < finalizer_list.len; i+=2) {
-        jl_value_t *f = (jl_value_t*)finalizer_list.items[i+1];
+    for(size_t i=0; i < flist->len; i+=2) {
+        jl_value_t *f = (jl_value_t*)flist->items[i+1];
         if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
-            schedule_finalization(finalizer_list.items[i], finalizer_list.items[i+1]);
+            schedule_finalization(flist->items[i], flist->items[i+1]);
         }
     }
+    flist->len = 0;
+}
+
+void jl_gc_run_all_finalizers(void)
+{
+    schedule_all_finalizers(&finalizer_list);
+    schedule_all_finalizers(&finalizer_list_marked);
     run_finalizers();
 }
 
