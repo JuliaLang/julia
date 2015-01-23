@@ -614,42 +614,64 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
+# Copy colptr and rowval from one SparseMatrix to another
+function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
+    if C.colptr !== A.colptr
+        resize!(C.colptr, length(A.colptr))
+        copy!(C.colptr, A.colptr)
+    end
+    if C.rowval !== A.rowval
+        resize!(C.rowval, length(A.rowval))
+        copy!(C.rowval, A.rowval)
+    end
+end
+
 # multiply by diagonal matrix as vector
-function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
+function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
-    numnz = nnz(A)
-    if C !== A
-        C.colptr = convert(Array{Ti}, A.colptr)
-        C.rowval = convert(Array{Ti}, A.rowval)
-        C.nzval = Array(Tv, numnz)
-    end
+    copyinds!(C, A)
+    Cnzval = C.nzval
+    Anzval = A.nzval
+    resize!(Cnzval, length(Anzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        C.nzval[p] = A.nzval[p] * b[col]
+        @inbounds Cnzval[p] = Anzval[p] * b[col]
     end
     C
 end
 
-function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
+function scale!(C::SparseMatrixCSC, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch())
-    numnz = nnz(A)
-    if C !== A
-        C.colptr = convert(Array{Ti}, A.colptr)
-        C.rowval = convert(Array{Ti}, A.rowval)
-        C.nzval = Array(Tv, numnz)
-    end
+    copyinds!(C, A)
+    Cnzval = C.nzval
+    Anzval = A.nzval
+    Arowval = A.rowval
+    resize!(Cnzval, length(Anzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
-        C.nzval[p] = A.nzval[p] * b[A.rowval[p]]
+        @inbounds Cnzval[p] = Anzval[p] * b[Arowval[p]]
     end
     C
 end
 
+function scale!(C::SparseMatrixCSC, A::SparseMatrixCSC, b::Number)
+    size(A)==size(C) || throw(DimensionMismatch())
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
+    scale!(C.nzval, A.nzval, b)
+    C
+end
+
+scale!(C::SparseMatrixCSC, b::Number, A::SparseMatrixCSC) = scale!(C, A, b)
+
+scale!(A::SparseMatrixCSC, b::Number) = (scale!(A.nzval, b); A)
+scale!(b::Number, A::SparseMatrixCSC) = (scale!(b, A.nzval); A)
+
 scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
-    scale!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), A, b)
+    scale!(similar(A, promote_type(Tv,T)), A, b)
 
 scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
-    scale!(SparseMatrixCSC(size(A,1),size(A,2),Ti[],Ti[],promote_type(Tv,T)[]), b, A)
+    scale!(similar(A, promote_type(Tv,T)), b, A)
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
