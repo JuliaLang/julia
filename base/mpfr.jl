@@ -80,7 +80,7 @@ end
 function BigFloat(x::AbstractString, base::Int)
     z = BigFloat()
     err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    if err != 0; error("incorrectly formatted number"); end
+    err == 0 || throw("incorrectly formatted number \"$x\"")
     return z
 end
 BigFloat(x::AbstractString) = BigFloat(x, 10)
@@ -174,11 +174,16 @@ convert(::Type{Float64}, x::BigFloat) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
 convert(::Type{Float32}, x::BigFloat) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, ROUNDING_MODE[end])
+# TODO: avoid double rounding
+convert(::Type{Float16}, x::BigFloat) = convert(Float16, convert(Float32, x))
 
 call(::Type{Float64}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_d,:libmpfr), Float64, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
 call(::Type{Float32}, x::BigFloat, r::RoundingMode) =
     ccall((:mpfr_get_flt,:libmpfr), Float32, (Ptr{BigFloat},Int32), &x, to_mpfr(r))
+# TODO: avoid double rounding
+call(::Type{Float16}, x::BigFloat, r::RoundingMode) =
+    convert(Float16, call(Float32, x, r))
 
 promote_rule{T<:Real}(::Type{BigFloat}, ::Type{T}) = BigFloat
 promote_rule{T<:FloatingPoint}(::Type{BigInt},::Type{T}) = BigFloat
@@ -658,7 +663,7 @@ function from_mpfr(c::Integer)
     elseif c == 4
         return RoundFromZero
     else
-        error("invalid MPFR rounding mode code")
+        throw(ArgumentError("invalid MPFR rounding mode code: $c"))
     end
     RoundingMode(c)
 end

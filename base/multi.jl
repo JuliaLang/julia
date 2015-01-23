@@ -303,7 +303,8 @@ function rmprocs(args...; waitfor = 0.0)
         else
             if haskey(map_pid_wrkr, i)
                 push!(rmprocset, i)
-                remote_do(i, exit)
+                w = map_pid_wrkr[i]
+                kill(w.manager, i, w.config)
             end
         end
     end
@@ -1284,6 +1285,12 @@ function connect(manager::ClusterManager, pid::Int, config::WorkerConfig)
     end
 
     (s, s)
+end
+
+function kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
+    remote_do(pid, exit) # For TCP based transports this will result in a close of the socket
+                       # at our end, which will result in a cleanup of the worker.
+    nothing
 end
 
 function connect_w2w(pid::Int, config::WorkerConfig)

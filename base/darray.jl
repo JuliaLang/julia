@@ -198,7 +198,7 @@ end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
     if prod(d) != length(A)
-        error("dimensions must be consistent with array size")
+        throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
     DArray(d) do I
         sz = map(length,I)
@@ -246,7 +246,7 @@ getindex(d::DArray) = d[1]
 getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I...)
 
 function copy!(dest::SubOrDArray, src::SubOrDArray)
-    dest.dims == src.dims && dest.pmap == src.pmap && dest.indexes == src.indexes && dest.cuts == src.cuts || throw(ArgumentError("destination array doesn't fit to source array"))
+    dest.dims == src.dims && dest.pmap == src.pmap && dest.indexes == src.indexes && dest.cuts == src.cuts || throw(DimensionMismatch("destination array doesn't fit to source array"))
     for p in dest.pmap
         @spawnat p copy!(localpart(dest), localpart(src))
     end

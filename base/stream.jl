@@ -247,7 +247,7 @@ function init_stdio(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
-            error("FATAL: stdio type ($t) invalid")
+            throw(ArgumentError("invalid stdio type: $t"))
         end
         ret.status = StatusOpen
         ret.line_buffered = false
@@ -282,16 +282,16 @@ end
 
 flush(::AsyncStream) = nothing
 
-function isopen(x::Union(AsyncStream,UVServer))
+function isopen{T<:Union(AsyncStream,UVServer)}(x::T)
     if !(x.status != StatusUninit && x.status != StatusInit)
-        error("I/O object not initialized")
+        throw(ArgumentError("$T object not initialized"))
     end
     x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x)
     if !isopen(x) || x.status == StatusClosing
-        error("stream is closed or unusable")
+        throw(ArgumentError("stream is closed or unusable"))
     end
 end
 
@@ -655,7 +655,7 @@ function readall(stream::AsyncStream)
 end
 
 function read!{T}(s::AsyncStream, a::Array{T})
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = length(a) * sizeof(T)
     read!(s, reshape(reinterpret(UInt8, a), nb))
     return a
@@ -687,7 +687,7 @@ function read!(s::AsyncStream, a::Vector{UInt8})
 end
 
 function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = prod(dims)*sizeof(T)
     a = read!(s, Array(UInt8, nb))
     reshape(reinterpret(T, a), dims)
@@ -853,7 +853,7 @@ end
 
 function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive
-        throw(ArgumentError("server not connected; make sure \"listen\" has been called"))
+        throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
     end
     while isopen(server)
         err = accept_nonblock(server,client)
@@ -896,7 +896,7 @@ end
 
 function listen(path::AbstractString)
     sock = PipeServer()
-    bind(sock, path) || error("could not listen on path $path")
+    bind(sock, path) || throw(ArgumentError("could not listen on path $path"))
     uv_error("listen", _listen(sock))
     sock
 end
@@ -930,7 +930,7 @@ _fd(x::IOStream) = RawFD(fd(x))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
-    _f = symbol(string("_",f))
+    _f = symbol("_",f)
     @eval begin
         function ($_f)(stream)
             global $x
@@ -960,3 +960,47 @@ mark(x::AsyncStream)     = mark(x.buffer)
 unmark(x::AsyncStream)   = unmark(x.buffer)
 reset(x::AsyncStream)    = reset(x.buffer)
 ismarked(x::AsyncStream) = ismarked(x.buffer)
+
+# BufferStream's are non-OS streams, backed by a regular IOBuffer
+type BufferStream <: AsyncStream
+    buffer::IOBuffer
+    r_c::Condition
+    close_c::Condition
+    is_open::Bool
+
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true)
+end
+
+isopen(s::BufferStream) = s.is_open
+close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
+
+function wait_readnb(s::BufferStream, nb::Int)
+    while isopen(s) && nb_available(s.buffer) < nb
+        wait(s.r_c)
+    end
+
+    (nb_available(s.buffer) < nb) && error("closed BufferStream")
+end
+
+function eof(s::BufferStream)
+    wait_readnb(s,1)
+    !isopen(s) && nb_available(s.buffer)<=0
+end
+
+show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nb_available(s.buffer),", isopen:", s.is_open)
+
+nb_available(s::BufferStream) = nb_available(s.buffer)
+
+function wait_readbyte(s::BufferStream, c::UInt8)
+    while isopen(s) && search(s.buffer,c) <= 0
+        wait(s.r_c)
+    end
+end
+
+wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
+start_reading(s::BufferStream) = nothing
+
+write(s::BufferStream, b::UInt8) = (rv=write(s.buffer, b); notify(s.r_c; all=true);rv)
+write{T}(s::BufferStream, a::Array{T}) = (rv=write(s.buffer, a); notify(s.r_c; all=true);rv)
+write(s::BufferStream, p::Ptr, nb::Integer) = (rv=write(s.buffer, p, nb); notify(s.r_c; all=true);rv)
+

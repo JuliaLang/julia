@@ -54,7 +54,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
-    lo <= k <= hi || error("select index $k is out of range $lo:$hi")
+    lo <= k <= hi || throw(ArgumentError("select index $k is out of range $lo:$hi"))
     @inbounds while lo < hi
         if hi-lo == 1
             if lt(o, v[hi], v[lo])
@@ -85,7 +85,7 @@ end
 function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Ordering)
     isempty(r) && (return v[r])
     a, b = extrema(r)
-    lo <= a <= b <= hi || error("selection $r is out of range $lo:$hi")
+    lo <= a <= b <= hi || throw(ArgumentError("selection $r is out of range $lo:$hi"))
     @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)

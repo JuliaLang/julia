@@ -573,7 +573,7 @@ end
 function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
     v = convert(V,  v0)
 
@@ -592,7 +592,7 @@ end
 function get!{K,V}(h::Dict{K,V}, key0, default)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
 
     index = ht_keyindex2(h, key)
@@ -607,7 +607,7 @@ end
 function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
 
     index = ht_keyindex2(h, key)
@@ -625,7 +625,9 @@ macro get!(h, key0, default)
     quote
         K, V = eltype($(esc(h)))
         key = convert(K, $(esc(key0)))
-        isequal(key, $(esc(key0))) || error($(esc(key0)), " is not a valid key for type ", K)
+        if !isequal(key, $(esc(key0)))
+            throw(ArgumentError(string($(esc(key0)), " is not a valid key for type ", K)))
+        end
         idx = ht_keyindex2($(esc(h)), key)
         if idx < 0
             idx = -idx

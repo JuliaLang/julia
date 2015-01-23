@@ -90,7 +90,7 @@ let
     @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
 end
 
-@test_throws ErrorException first(Dict())
+@test_throws ArgumentError first(Dict())
 @test first(Dict(:f=>2)) == (:f,2)
 
 # issue #1821

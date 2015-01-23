@@ -155,6 +155,8 @@ type Bounds
     lb
     ub
     right::Bool
+    concrete::Bool
+    Bounds(l,u,r) = new(l,u,r,false)
 end
 
 type UnionState
@@ -266,7 +268,7 @@ end
 function isconcrete(v::Var, env)
     b = env.vars[v]
     #return issub(b.ub, b.lb, env)
-    return isconcrete(b.ub, env)  # ???
+    return b.concrete || isconcrete(b.ub, env)  # ???
 end
 
 function isconcrete(t::UnionAllT, env)
@@ -302,14 +304,15 @@ function issub(a::TagT, b::TagT, env)
                 bp = b.params[bi]
             end
             if isa(bp,Var) && env.vars[bp].right
-                if !isconcrete(ap, env)
-                    ap = Var(:_,BottomT,ap)
-                    env.vars[ap] = Bounds(BottomT, ap.ub, false)
+                if !isconcrete(env.vars[bp].lb, env)
+                    return false
                 end
-                !(issub(ap,bp,env) && issub(bp,ap,env)) && return false
-            else
-                !issub(ap, bp, env) && return false
+                env.vars[bp].concrete = true
+                if isa(ap, Var)
+                    env.vars[ap].concrete = true
+                end
             end
+            !issub(ap, bp, env) && return false
         end
         return (la==lb && va==vb) || (vb && (la >= (va ? lb : lb-1)))
     end
@@ -354,6 +357,9 @@ function var_lt(b::Var, a::Union(Ty,Var), env)
     #println("$b($(bb.lb),$(bb.ub)) <: $a")
     !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
     !issub(bb.lb, a, env) && return false
+    if bb.concrete
+        !issub(a, bb.ub, env) && return false
+    end
     # for contravariance we would need to compute a meet here, but
     # because of invariance bb.ub ⊓ a == a here always. however for this
     # to work we need to compute issub(left,right) before issub(right,left),
@@ -367,6 +373,9 @@ function var_gt(b::Var, a::Union(Ty,Var), env)
     #println("$b($(bb.lb),$(bb.ub)) >: $a")
     !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
     !issub(a, bb.ub, env) && return false
+    if bb.concrete
+        !issub(bb.lb, a, env) && return false
+    end
     bb.lb = join(bb.lb, a, env)
     return true
 end
@@ -518,6 +527,32 @@ tndict[Pair.name] = PairT.T.T.name
 using Base.Test
 
 issub_strict(x,y) = issub(x,y) && !issub(y,x)
+
+function test_diagonal()
+    @test !issub(Ty((Integer,Integer)), @UnionAll T tupletype(T,T))
+    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll S<:T tupletype(T,S)))
+    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)))
+
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S<:T tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S>:T tupletype(T,S)) )
+
+    @test !issub((@UnionAll T @UnionAll S tupletype(T,S)),
+                 (@UnionAll R tupletype(R,R)))
+
+    @test issub((@UnionAll T @UnionAll S<:T tupletype(T,S)),
+                (@UnionAll R tupletype(R,R)))
+
+    @test issub((@UnionAll T @UnionAll T<:S<:T tupletype(T,S)),
+                (@UnionAll R tupletype(R,R)))
+
+end
+
 
 # level 1: no varags, union, UnionAll
 function test_1()

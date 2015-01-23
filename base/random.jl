@@ -420,17 +420,25 @@ end
 RangeGeneratorInt{T, U<:Union(UInt32, UInt128)}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
 RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
-
-
 # generator for ranges
-RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = begin
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    end
+    RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+end
 
 # specialized versions
 for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
                (Int8, UInt32), (Int16, UInt32), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128),
                (Bool, UInt32)]
 
-    @eval RangeGenerator(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    @eval RangeGenerator(r::UnitRange{$T}) = begin
+        if isempty(r)
+            throw(ArgumentError("range must be non-empty"))
+        end
+        RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    end
 end
 
 if GMP_VERSION.major >= 6
@@ -456,7 +464,7 @@ end
 
 function RangeGenerator(r::UnitRange{BigInt})
     m = last(r) - first(r)
-    m < 0 && error("range must be non-empty")
+    m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)

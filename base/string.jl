@@ -829,7 +829,7 @@ function map(f::Function, s::AbstractString)
     for c in s
         c2 = f(c)
         if !isa(c2,Char)
-            error("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead")
+            throw(ArgumentError("map(f,s::AbstractString) requires f to return Char; try map(f,collect(s)) or a comprehension instead"))
         end
         write(out, c2::Char)
     end

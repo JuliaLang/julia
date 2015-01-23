@@ -59,7 +59,7 @@ function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
         throw(BoundsError())
     end
     if !isbits(T)
-        error("read from IOBuffer only supports bits types or arrays of bits types; got "*string(T))
+        throw(ArgumentError("read from IOBuffer only supports bits types or arrays of bits types; got "*string(T)))
     end
     read!(from, pointer(a, offs), nel*sizeof(T))
     return a
@@ -67,7 +67,7 @@ end
 
 read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, int(nb))
 function read!(from::IOBuffer, p::Ptr, nb::Int)
-    if !from.readable error("read failed") end
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
     adv = min(avail,nb)
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), p, pointer(from.data,from.ptr), adv)
@@ -79,7 +79,7 @@ function read!(from::IOBuffer, p::Ptr, nb::Int)
 end
 
 function read(from::IOBuffer, ::Type{UInt8})
-    if !from.readable error("read failed") end
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if from.ptr > from.size
         throw(EOFError())
     end
@@ -89,7 +89,7 @@ function read(from::IOBuffer, ::Type{UInt8})
 end
 
 function peek(from::IOBuffer)
-    if !from.readable error("read failed") end
+    from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     if from.ptr > from.size
         throw(EOFError())
     end
@@ -113,7 +113,10 @@ function skip(io::IOBuffer, n::Integer)
 end
 
 function seek(io::IOBuffer, n::Integer)
-    !io.seekable && (!ismarked(io) || n!=io.mark) && error("seek failed")
+    if !io.seekable
+        ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
+        n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
+    end
     io.ptr = min(n+1, io.size+1)
     return io
 end
@@ -124,9 +127,10 @@ function seekend(io::IOBuffer)
 end
 
 function truncate(io::IOBuffer, n::Integer)
-    if !io.writable error("truncate failed") end
-    if !io.seekable error("truncate failed") end #because absolute offsets are meaningless
-    if n > io.maxsize || n < 0 error("truncate failed") end
+    io.writable || throw(ArgumentError("truncate failed, IOBuffer is not writeable"))
+    io.seekable || throw(ArgumentError("truncate failed, IOBuffer is not seekable"))
+    n < 0 && throw(ArgumentError("truncate failed, n bytes must be ≥ 0, got $n"))
+    n > io.maxsize && throw(ArgumentError("truncate failed, $(n) bytes is exceeds IOBuffer maxsize $(io.maxsize)"))
     if n > length(io.data)
         resize!(io.data, n)
     end
@@ -138,8 +142,8 @@ function truncate(io::IOBuffer, n::Integer)
 end
 
 function compact(io::IOBuffer)
-    if !io.writable error("compact failed") end
-    if io.seekable error("compact failed") end
+    io.writable || throw(ArgumentError("compact failed, IOBuffer is not writeable"))
+    io.seekable && throw(ArgumentError("compact failed, IOBuffer is seekable"))
     local ptr::Int, bytes_to_move::Int
     if ismarked(io) && io.mark < io.ptr
         if io.mark == 0 return end
@@ -158,9 +162,9 @@ function compact(io::IOBuffer)
 end
 
 function ensureroom(io::IOBuffer, nshort::Int)
-    if !io.writable error("ensureroom failed") end
+    io.writable || throw(ArgumentError("ensureroom failed, IOBuffer is not writeable"))
     if !io.seekable
-        if nshort < 0 error("ensureroom failed") end
+        nshort >= 0 || throw(ArgumentError("ensureroom failed, requested number of bytes must be ≥ 0, got $nshort"))
         if !ismarked(io) && io.ptr > 1 && io.size <= io.ptr - 1
             io.ptr = 1
             io.size = 0
@@ -199,8 +203,8 @@ function close(io::IOBuffer)
 end
 isopen(io::IOBuffer) = io.readable || io.writable || io.seekable || nb_available(io) > 0
 function bytestring(io::IOBuffer)
-    if !io.readable error("bytestring read failed") end
-    if !io.seekable error("bytestring read failed") end
+    io.readable || throw(ArgumentError("bytestring read failed, IOBuffer is not readable"))
+    io.seekable || throw(ArgumentError("bytestring read failed, IOBuffer is not seekable"))
     bytestring(pointer(io.data), io.size)
 end
 function takebuf_array(io::IOBuffer)
@@ -234,7 +238,7 @@ end
 
 write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
 function write(to::IOBuffer, p::Ptr, nb::Int)
-    !to.writable && error("write failed")
+    to.writable || throw(ArgumentError("write failed, IOBuffer is not writeable"))
     ensureroom(to, nb)
     ptr = (to.append ? to.size+1 : to.ptr)
     nb = min(nb, length(to.data) - ptr + 1)
@@ -262,7 +266,7 @@ end
 write(to::IOBuffer, a::Array) = write_sub(to, a, 1, length(a))
 
 function write(to::IOBuffer, a::UInt8)
-    if !to.writable error("write failed") end
+    to.writable || throw(ArgumentError("write failed, IOBuffer is not writeable"))
     ensureroom(to, 1)
     ptr = (to.append ? to.size+1 : to.ptr)
     if ptr > to.maxsize

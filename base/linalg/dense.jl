@@ -437,7 +437,7 @@ function cond(A::StridedMatrix, p::Real=2)
         chksquare(A)
         return cond(lufact(A), p)
     end
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2 or Inf"))
+    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation
