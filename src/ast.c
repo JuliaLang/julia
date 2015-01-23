@@ -315,7 +315,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                 ee = cdr_(ee);
                 jl_cellset(vinf, 2, full_list_of_lists(car_(ee),eo));
                 ee = cdr_(ee);
-                jl_cellset(vinf, 3, full_list(car_(ee),eo));
+                jl_cellset(vinf, 3, isfixnum(car_(ee)) ?
+                        jl_box_long(numval(car_(ee))) :
+                        full_list(car_(ee),eo));
                 assert(!iscons(cdr_(ee)));
                 jl_cellset(ex->args, 1, vinf);
                 e = cdr_(e);
@@ -590,6 +592,23 @@ DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     return result;
 }
 
+ssize_t jl_max_jlgensym_in(jl_value_t *v)
+{
+    ssize_t genid = -1;
+    if (jl_is_gensym(v)) {
+        genid = ((jl_gensym_t*)v)->id;
+    } else if (jl_is_expr(v)) {
+        jl_expr_t *e = (jl_expr_t*)v;
+        size_t i, l = jl_array_len(e->args);
+        for (i = 0; i < l; i++) {
+            ssize_t maxid = jl_max_jlgensym_in(jl_exprarg(e, i));
+            if (maxid > genid)
+                genid = maxid;
+        }
+    }
+    return genid;
+}
+
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
@@ -603,7 +622,7 @@ jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
     jl_cellset(vi, 2, mt);
-    jl_cellset(vi, 3, mt);
+    jl_cellset(vi, 3, jl_box_long(jl_max_jlgensym_in(expr)+1));
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -672,18 +691,14 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     return (jl_array_t*)ll;
 }
 
-// get array of types for GenSym vars
-jl_array_t *jl_lam_gensyms(jl_expr_t *l)
+// get array of types for GenSym vars, or it's length (if not type-inferred)
+jl_value_t *jl_lam_gensyms(jl_expr_t *l)
 {
     assert(jl_is_expr(l));
     jl_value_t *le = jl_exprarg(l, 1);
     assert(jl_is_array(le));
-    if (jl_array_len(le) == 3) {
-        return NULL;
-    }
-    jl_value_t *ll = jl_cellref(le, 3);
-    assert(jl_is_array(ll));
-    return (jl_array_t*)ll;
+    assert(jl_array_len(le) == 4);
+    return jl_cellref(le, 3);
 }
 
 int jl_lam_vars_captured(jl_expr_t *ast)

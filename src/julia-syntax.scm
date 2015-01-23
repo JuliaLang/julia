@@ -173,7 +173,7 @@
 		     (set! a (cons x a))
 		     (cadr x))
 		    ((not (effect-free? x))
-		     (let ((g (gensy)))
+		     (let ((g (make-jlgensym)))
 		       (if (or (eq? (car x) '...) (eq? (car x) '&))
 			   (if (and (pair? (cadr x))
 				    (not (quoted? (cadr x))))
@@ -224,7 +224,7 @@
 				       (and (pair? x)
 					    (eq? (car x) ':))))
 				 idxs)))
-	   (arr   (if reuse (gensy) a))
+	   (arr   (if reuse (make-jlgensym) a))
 	   (stmts (if reuse `((= ,arr ,a)) '())))
       (receive
        (new-idxs stuff) (process-indexes arr idxs)
@@ -255,7 +255,7 @@
   (let* ((arg   (caddr e))
 	 (arg2  (if (and (pair? arg)
 			 (pair? (cdddr e)))
-		    (gensy) arg)))
+		    (make-jlgensym) arg)))
     (if (and (not (dotop? (cadr e)))
 	     (length> e 5)
 	     (pair? (cadddr (cdr e)))
@@ -263,7 +263,7 @@
 	;; look ahead: if the 2nd argument of the next comparison is also
 	;; an argument to an eager (dot) op, make sure we don't skip the
 	;; initialization of its variable by short-circuiting
-	(let ((s (gensy)))
+	(let ((s (make-jlgensym)))
 	  (cons `(block
 		  ,@(if (eq? arg arg2) '() `((= ,arg2 ,arg)))
 		  (= ,s ,(cadddr (cdr e)))
@@ -373,7 +373,7 @@
 			(cons (cadr idx) tuples)
 			(cons `(... ,(replace-end (cadr idx) a n tuples last))
 			      ret))
-		  (let ((g (gensy)))
+		  (let ((g (make-jlgensym)))
 		    (loop (cdr lst) (+ n 1)
 			  (cons `(= ,g ,(replace-end (cadr idx) a n tuples last))
 				stmts)
@@ -1027,13 +1027,13 @@
 			  a)
 			 ((and (pair? a) (eq? (car a) '&))
 			  (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
-			      (let ((g (gensy)))
+			      (let ((g (make-jlgensym)))
 				(begin
 				  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
 				  `(& ,g)))
 			      a))
 			 ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
-			  (let ((g (gensy)))
+			  (let ((g (make-jlgensym)))
 			    (begin
 			      (set! stmts (cons `(= ,g ,a) stmts))
 			      g)))
@@ -1115,7 +1115,7 @@
 	     (if (null? binds)
 		 blk
 		 (cond
-		  ((or (symbol-like? (car binds)) (decl? (car binds)))
+		  ((or (symbol? (car binds)) (decl? (car binds)))
 		   ;; just symbol -> add local
 		   (loop (cdr binds)
 			 `(scope-block
@@ -1127,16 +1127,15 @@
 			(eq? (caar binds) '=))
 		   ;; some kind of assignment
 		   (cond
-		    ((or (symbol-like? (cadar binds))
+		    ((or (symbol? (cadar binds))
 			 (decl?   (cadar binds)))
 		     (let ((vname (decl-var (cadar binds))))
 		       (loop (cdr binds)
 			     (if (contains (lambda (x) (eq? x vname))
 					   (caddar binds))
-				 (let ((tmp (gensy)))
+				 (let ((tmp (make-jlgensym)))
 				   `(scope-block
-				     (block
-				      (local (= ,tmp ,(caddar binds)))
+				     (block (= ,tmp ,(caddar binds))
 				      (scope-block
 				       (block
 					(local ,(cadar binds))
@@ -1198,7 +1197,7 @@
 		 (error "goto from a try/finally block is not permitted"))
 	     (let ((hasret (or (contains return? tryb)
 			       (contains return? catchb))))
-	       (let ((err (gensy))
+	       (let ((err (gensym))
 		     (ret (and hasret
 			       (or (not (block-returns? tryb))
 				   (and catchb
@@ -1206,14 +1205,14 @@
 			       (gensy)))
 		     (retval (gensy))
 		     (bb  (gensy))
-		     (val (gensy)))
+		     (val (gensy))) ;; this is jlgensym, but llvm has trouble determining that it dominates all uses
 		 (let ((tryb   (replace-return tryb bb ret retval))
 		       (catchb (replace-return catchb bb ret retval)))
 		   (expand-binding-forms
 		    `(scope-block
 		      (block
-		       (local ,retval)
-		       (local ,val)
+                       (local ,retval)
+                       (local ,val)
 		       (= ,err false)
 		       ,@(if ret `((= ,ret false)) '())
 		       (break-block
@@ -1341,7 +1340,7 @@
 		     (if (null? binds)
 			 (cons 'varlist vars)
 			 (cond
-			  ((or (symbol-like? (car binds)) (decl? (car binds)))
+			  ((or (symbol? (car binds)) (decl? (car binds)))
 			   ;; just symbol -> add local
 			   (loop (cdr binds)
 				 (cons (decl-var (car binds)) vars)))
@@ -1349,7 +1348,7 @@
 				(eq? (caar binds) '=))
 			   ;; some kind of assignment
 			   (cond
-			    ((or (symbol-like? (cadar binds))
+			    ((or (symbol? (cadar binds))
 				 (decl?   (cadar binds)))
 			     ;; a=b -> add argument
 			     (loop (cdr binds)
@@ -1485,7 +1484,7 @@
 		    (cons (make-assignment L R) stmts)
 		    after
 		    (cons R elts))
-	      (let ((temp (gensy)))
+	      (let ((temp (make-jlgensym)))
 		(loop (cdr lhss)
 		      (cons L assigned)
 		      (cdr rhss)
@@ -1495,7 +1494,7 @@
 
 ;; convert (lhss...) = x to tuple indexing, handling the general case
 (define (lower-tuple-assignment lhss x)
-  (let ((t (gensy)))
+  (let ((t (make-jlgensym)))
     `(block
       (= ,t ,x)
       ,@(let loop ((lhs lhss)
@@ -1540,23 +1539,23 @@
 	 `(call (top kwcall) call ,(length keys) ,@keyargs
 		,f (call (top Array) (top Any) ,(* 2 (length keys)))
 		,@pa)
-	 (let ((container (gensy)))
+	 (let ((container (make-jlgensym)))
 	   `(block
 	     (= ,container (call (top Array) (top Any) ,(* 2 (length keys))))
-	     ,@(let ((k (gensy))
-		     (v (gensy)))
-		 (map (lambda (rk)
-			(let ((push-expr `(ccall 'jl_cell_1d_push2 Void
-						 (tuple Any Any Any)
-						 ,container
-						 (|::| ,k (top Symbol))
-						 ,v)))
-			  (if (vararg? rk)
-			      `(for (= (tuple ,k ,v) ,(cadr rk))
-				    ,push-expr)
-			      `(block (= (tuple ,k ,v) ,rk)
-				      ,push-expr))))
-		      restkeys))
+             ,@(map (lambda (rk)
+                    (let* ((k (make-jlgensym))
+                           (v (make-jlgensym))
+                           (push-expr `(ccall 'jl_cell_1d_push2 Void
+                                             (tuple Any Any Any)
+                                             ,container
+                                             (|::| ,k (top Symbol))
+                                             ,v)))
+                      (if (vararg? rk)
+                          `(for (= (tuple ,k ,v) ,(cadr rk))
+                                ,push-expr)
+                          `(block (= (tuple ,k ,v) ,rk)
+                                  ,push-expr))))
+                  restkeys)
 	     ,(let ((kw-call `(call (top kwcall) call ,(length keys) ,@keyargs
 				    ,f ,container ,@pa)))
 		(if (not (null? keys))
@@ -1599,7 +1598,7 @@
 
 (define (expand-for while lhs X body)
   ;; (for (= lhs X) body)
-  (let ((coll  (gensy))
+  (let ((coll  (make-jlgensym))
 	(state (gensy)))
     `(scope-block
       (block (= ,coll ,(expand-forms X))
@@ -1655,8 +1654,8 @@
 	    (let ((a (cadr (cadr e)))
 		  (b (caddr (cadr e)))
 		  (rhs (caddr e)))
-	      (let ((aa (if (atom? a) a (gensy)))
-		    (bb (if (or (atom? b) (quoted? b)) b (gensy))))
+	      (let ((aa (if (atom? a) a (make-jlgensym)))
+		    (bb (if (or (atom? b) (quoted? b)) b (make-jlgensym))))
 		`(block
 		  ,.(if (eq? aa a) '() `((= ,aa ,(expand-forms a))))
 		  ,.(if (eq? bb b) '() `((= ,bb ,(expand-forms b))))
@@ -1677,9 +1676,9 @@
 		  ;; (a, b, ...) = other
 		  (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
                                       (and (jlgensym? x) (not (mem-jlgensym x lhss))))
-				  x (gensy)))
+				  x (make-jlgensym)))
 			 (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
-			 (st  (gensy)))
+			 (st  (gensym)))
 		    `(block
 		      ,@ini
 		      (= ,st (call (top start) ,xx))
@@ -1709,10 +1708,10 @@
 						 (and (pair? x)
 						      (eq? (car x) ':))))
 					   idxs)))
-		     (arr   (if reuse (gensy) a))
+		     (arr   (if reuse (make-jlgensym) a))
 		     (stmts (if reuse `((= ,arr ,(expand-forms a))) '())))
 		(let* ((rrhs (and (pair? rhs) (not (jlgensym? rhs)) (not (quoted? rhs))))
-		       (r    (if rrhs (gensy) rhs))
+		       (r    (if rrhs (make-jlgensym) rhs))
 		       (rini (if rrhs `((= ,r ,(expand-forms rhs))) '())))
 		  (receive
 		   (new-idxs stuff) (process-indexes arr idxs)
@@ -1871,7 +1870,7 @@
 	      (expand-forms
 	       `(call (top cell_1d) ,@args)))
 	     (else
-	      (let ((name (gensy)))
+	      (let ((name (make-jlgensym)))
 		`(block (= ,name (call (top Array) (top Any)
 				       ,(length args)))
 			,.(map (lambda (i elt)
@@ -1889,7 +1888,7 @@
        (if (any vararg? args)
 	   (expand-forms
 	    `(call (top cell_2d) ,nr ,nc ,@args))
-	   (let ((name (gensy)))
+	   (let ((name (make-jlgensym)))
 	     `(block (= ,name (call (top Array) (top Any)
 				    ,nr ,nc))
 		     ,.(map (lambda (i elt)
@@ -2009,7 +2008,7 @@
    (lambda (e)
      (let ((t (cadr e))
 	   (a (cddr e)))
-       (let ((result (gensy))
+       (let ((result (make-jlgensym))
 	     (ncols (length a)))
 	 `(block
 	   #;(if (call (top !) (call (top isa) ,t Type))
@@ -2026,7 +2025,7 @@
 	   (rows (cddr e)))
        (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
 	   (error "invalid array literal")
-	   (let ((result (gensy))
+	   (let ((result (make-jlgensym))
 		 (nrows (length rows))
 		 (ncols (length (cdar rows))))
 	     (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
@@ -2083,14 +2082,15 @@
      (expand-forms (lower-typed-dict-comprehension (cadr e) (caddr e) (cdddr e))))))
 
 (define (lower-nd-comprehension atype expr ranges)
-  (let ((result    (gensy))
-        (ri        (gensy))
-	(oneresult (gensy)))
+  (let ((result      (make-jlgensym))
+        (ri          (make-jlgensym))
+        (firstresult (make-jlgensym))
+	(oneresult   (make-jlgensym)))
     ;; evaluate one expression to figure out type and size
     ;; compute just one value by inserting a break inside loops
     (define (evaluate-one ranges)
       (if (null? ranges)
-	  `(= ,oneresult ,expr)
+	  `(= ,firstresult ,expr)
 	  (if (eq? (car ranges) `:)
 	      (evaluate-one (cdr ranges))
 	      `(for ,(car ranges)
@@ -2102,7 +2102,7 @@
       (if (null? ranges)
 	  (list)
 	  (if (eq? (car ranges) `:)
-	      (cons `(call (top size) ,oneresult ,oneresult-dim)
+	      (cons `(call (top size) ,firstresult ,oneresult-dim)
 		    (compute-dims (cdr ranges) (+ oneresult-dim 1)))
 	      (cons `(call (top length) ,(caddr (car ranges)))
 		    (compute-dims (cdr ranges) oneresult-dim)) )))
@@ -2116,8 +2116,8 @@
 	      `(block (call (top setindex!) ,result (ref ,expr ,@(reverse iters)) ,ri)
 		      (= ,ri (call (top +) ,ri 1))) )
 	  (if (eq? (car ranges) `:)
-	      (let ((i (gensy)))
-		`(for (= ,i (: 1 (call (top size) ,oneresult ,oneresult-dim)))
+	      (let ((i (make-jlgensym)))
+		`(for (= ,i (: 1 (call (top size) ,firstresult ,oneresult-dim)))
 		      ,(construct-loops (cdr ranges) (cons i iters) (+ oneresult-dim 1)) ))
 	      `(for ,(car ranges)
 		    ,(construct-loops (cdr ranges) iters oneresult-dim) ))))
@@ -2136,14 +2136,14 @@
 (define (lower-comprehension atype expr ranges)
   (if (any (lambda (x) (eq? x ':)) ranges)
       (lower-nd-comprehension atype expr ranges)
-  (let ((result    (gensy))
-	(ri        (gensy))
-	(initlabl  (if atype #f (gensy)))
-	(oneresult (gensy))
-	(lengths   (map (lambda (x) (gensy)) ranges))
-	(states    (map (lambda (x) (gensy)) ranges))
-	(is        (map (lambda (x) (gensy)) ranges))
-	(rv        (map (lambda (x) (gensy)) ranges)))
+  (let ((result    (make-jlgensym))
+	(ri        (gensym))
+	(initlabl  (if atype #f (make-jlgensym)))
+	(oneresult (make-jlgensym))
+	(lengths   (map (lambda (x) (make-jlgensym)) ranges))
+	(states    (map (lambda (x) (gensym)) ranges))
+	(is        (map (lambda (x) (gensym)) ranges))
+	(rv        (map (lambda (x) (make-jlgensym)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
     (define (construct-loops ranges rv is states lengths)
@@ -2175,7 +2175,6 @@
       ,.(map (lambda (v r) `(= ,v (call (top length) ,r))) lengths rv)
       (scope-block
        (block
-	(local ,oneresult)
 	,@(if atype '() `((label ,initlabl)))
 	(= ,result (call (top Array)
 			 ,(if atype atype `(static_typeof ,oneresult))
@@ -2185,11 +2184,11 @@
 	,result))))))
 
 (define (lower-dict-comprehension expr ranges)
-  (let ((result   (gensy))
-	(initlabl (gensy))
-	(onekey   (gensy))
-	(oneval   (gensy))
-	(rv         (map (lambda (x) (gensy)) ranges)))
+  (let ((result   (make-jlgensym))
+	(initlabl (make-jlgensym))
+	(onekey   (make-jlgensym))
+	(oneval   (make-jlgensym))
+	(rv         (map (lambda (x) (make-jlgensym)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
     (define (construct-loops ranges)
@@ -2212,8 +2211,6 @@
 	,.(map (lambda (v r) `(= ,v ,(caddr r))) rv ranges)
 	(scope-block
 	 (block
-	  (local ,onekey)
-	  (local ,oneval)
 	  #;,@(map (lambda (r) `(local ,r))
 	  (apply append (map (lambda (r) (lhs-vars (cadr r))) ranges)))
 	  (label ,initlabl)
@@ -2227,8 +2224,8 @@
   (if (not (and (length= atypes 3)
 		(eq? (car atypes) '=>)))
       (error "invalid \"typed_dict_comprehension\" syntax")
-      (let ( (result (gensy))
-	     (rs (map (lambda (x) (gensy)) ranges)) )
+      (let ( (result (make-jlgensym))
+	     (rs (map (lambda (x) (make-jlgensym)) ranges)) )
 
 	;; construct loops to cycle over all dimensions of an n-d comprehension
 	(define (construct-loops ranges rs)
@@ -2244,7 +2241,6 @@
 	;; Evaluate the comprehension
 	`(block
 	  ,.(map make-assignment rs (map caddr ranges))
-	  (local ,result)
 	  (= ,result (call (curly (top Dict) ,(cadr atypes) ,(caddr atypes))))
 	  (scope-block
 	   (block
@@ -2301,9 +2297,8 @@
 (define (fix-try-block-returns e)
   (cond ((or (atom? e) (jlgensym? e) (quoted? e))  e)
 	((and (eq? (car e) 'return) (or (symbol? (cadr e)) (pair? (cadr e))))
-	 (let ((sym (gensy)))
-	   `(block (local! ,sym)
-		   (= ,sym ,(cadr e))
+	 (let ((sym (make-jlgensym)))
+	   `(block (= ,sym ,(cadr e))
 		   (return ,sym))))
 	((eq? (car e) 'lambda) e)
 	(else
@@ -2407,7 +2402,6 @@
 		     (if (null? tmp)
 			 (map-to-lff e dest tail)
 			 (to-lff `(block
-				   ,.(map (lambda (a) `(local! ,(cadr a))) tmp)
 				   ,.(reverse tmp)
 				   (call ,.(reverse newa) ,(car args)))
 				 dest tail))
@@ -2415,7 +2409,7 @@
                                             (any (lambda (vlist) (mem-jlgensym v vlist)) ass)
                                             (any (lambda (vlist) (memq v vlist)) ass)))
 					  (car args))
-			 (let ((g (gensy)))
+			 (let ((g (make-jlgensym)))
 			   (each-arg (cdr ass) (cdr args)
 				     (cons `(= ,g ,(car args)) tmp)
 				     (cons g newa)))
@@ -2447,15 +2441,14 @@
 				     `(= ,LHS ,RHS)))
 			(else  (list e))))
 		 (else
-		  (to-lff (let ((val (gensy)))
-			    `(block (local! ,val)
-				    (= ,val ,RHS)
+		  (to-lff (let ((val (make-jlgensym)))
+			    `(block (= ,val ,RHS)
 				    (= ,LHS ,val)
 				    ,val))
 			  dest tail)))))
 
 	((if)
-	 (cond ((or tail (eq? dest #f) (symbol-like? dest))
+	 (cond ((or (and tail (not (jlgensym? dest))) (eq? dest #f) (symbol? dest))
 		(let ((r (to-lff (cadr e) #t #f)))
 		  (cons `(if
 			  ,(car r)
@@ -2464,9 +2457,10 @@
 			       (to-blk (to-lff (cadddr e) dest tail))
 			       (to-blk (to-lff '(null)  dest tail))))
 			(cdr r))))
-	       (else (let ((g (gensy)))
-		       (cons g
-			     (cons `(local! ,g) (to-lff e g #f)))))))
+	       (else (let* ((g (gensym))
+                            (stmts (cons g
+                                         (cons `(local! ,g) (to-lff e g tail)))))
+                       (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
 
 	((line)
 	 (set! *lff-line* (cadr e))
@@ -2474,15 +2468,16 @@
 
 	((trycatch)
 	 (cond ((and (eq? dest #t) (not tail))
-		(let ((g (gensy)))
-		  (list* g
-			 `(local! ,g)
-			 (to-lff e g #f))))
-	       (else
-		(cons `(trycatch ,(fix-try-block-returns
-				   (to-blk (to-lff (cadr e) dest tail)))
-				 ,(to-blk (to-lff (caddr e) dest tail)))
-		      ()))))
+                (let ((g (gensy)))
+                  (list* g
+                         `(local! ,g)
+                         (to-lff e g #f))))
+	       (else (let* ((g (if (jlgensym? dest) (gensym) dest))
+                            (stmts (cons `(trycatch ,(fix-try-block-returns
+                                                      (to-blk (to-lff (cadr e) g tail)))
+                                                     ,(to-blk (to-lff (caddr e) g tail)))
+                                          ())))
+                       (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
 
 	((&&)
 	 (to-lff (expand-and e) dest tail))
@@ -2492,7 +2487,7 @@
 	((block)
 	 (if (length= e 2)
 	     (to-lff (cadr e) dest tail)
-	     (let* ((g (gensy))
+	     (let* ((g (make-jlgensym))
 		    (stmts
 		     (let loop ((tl (cdr e)))
 		       (if (null? tl) '()
@@ -2539,16 +2534,12 @@
 		     (cdr r)))))
 
 	((scope-block)
-	 (if (and dest (not tail))
-	     (let* ((g (gensy))
+	 (if (and dest (not tail) (not (jlgensym? dest)))
+	     (let* ((g (make-jlgensym))
 		    (r (to-lff (cadr e) g tail)))
-	       (cons (car (to-lff g dest tail))
-		     ;; tricky: need to introduce a new local outside the
-		     ;; scope-block so the scope-block's value can propagate
-		     ;; out. otherwise the value could be inaccessible due
-		     ;; to being wrapped inside a scope.
-		     `((scope-block ,(to-blk r))
-		       (local! ,g))))
+	       (cons `(= ,dest ,g)
+                   (cons `(scope-block ,(to-blk r))
+                         '())))
 	     (let ((r (to-lff (cadr e) dest tail)))
 	       (cons `(scope-block ,(to-blk r))
 		     '()))))
@@ -3030,7 +3021,8 @@ So far only the second case can actually occur.
 						(not (memq
 						      (vinfo:name v) glo))))
 			       env))
-                (gensym_types (map-int (lambda (v) 'Any) (+ (max-jlgensym (lam:body e)) 1)))
+                ;; count of GenSym references in this function (or an array of their types)
+                (gensym_types (+ (max-jlgensym (lam:body e)) 1))
 		(bod   (analyze-vars
 			(lam:body e)
 			(append vi
@@ -3255,12 +3247,12 @@ So far only the second case can actually occur.
 		    (vinf  (var-info-for vname vi)))
 	       (if (and vinf
 			(not (and (pair? code)
-				  (equal? (car code) `(newvar ,(cadr e)))))
+				  (equal? (car code) `(newvar ,vname))))
 			;; TODO: remove the following expression to re-null
 			;; all variables when they are allocated. see issue #1571
 			(vinfo:capt vinf)
 			)
-		   (emit `(newvar ,(cadr e)))
+		   (emit `(newvar ,vname))
 		   #f)))
 	    ((newvar)
 	     ;; avoid duplicate newvar nodes
@@ -3537,11 +3529,11 @@ So far only the second case can actually occur.
 ;; expander entry point
 
 (define (julia-expand1 ex)
- (renumber-jlgensym
   (to-goto-form
-   (analyze-variables
-    (flatten-scopes
-     (identify-locals ex))))))
+    (analyze-variables
+     (renumber-jlgensym
+      (flatten-scopes
+       (identify-locals ex))))))
 
 (define (julia-expand01 ex)
   (to-LFF
