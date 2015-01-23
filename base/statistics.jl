@@ -517,7 +517,7 @@ end
 
 ## nice-valued ranges for histograms
 
-function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:FloatingPoint}(v::AbstractArray{T}, n::Integer)
     if length(v) == 0
         return 0.0:1.0:0.0
     end
@@ -541,7 +541,7 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
     start:step:(start + nm1*step)
 end
 
-function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+function histrange{T<:Integer}(v::AbstractArray{T}, n::Integer)
     if length(v) == 0
         return 0:1:0
     end
@@ -567,6 +567,17 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     start:step:(start + nm1*step)
 end
 
+function histrange{T}(v::AbstractArray{T}, n::Integer)
+    if isempty(v)
+        return range(zero(T), one(T)/1, 0)
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        return range(lo, one(T)/1, 1)
+    end
+    range(lo, (hi-lo)/n, n+1)
+end
+
 ## midpoints of intervals
 midpoints(r::Range) = r[1:length(r)-1] + 0.5*step(r)
 midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
@@ -584,9 +595,25 @@ function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector;
         fill!(h, zero(HT))
     end
     for x in v
-        i = searchsortedfirst(edg, x)-1
+        i = searchsortedfirst(edg, x, Order.Forward)-1
         if 1 <= i <= n
             h[i] += 1
+        end
+    end
+    edg, h
+end
+
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::Range; init::Bool=true)
+    n = length(edg) - 1
+    length(h) == n || error("length(h) must equal length(edg) - 1.")
+    if init
+        fill!(h, zero(HT))
+    end
+    step(edg) <= 0 && error("step(edg) must be positive")
+    for x in v
+        f = (x-first(edg))/step(edg)
+        if 0 < f <= n
+            h[iceil(f)] += 1
         end
     end
     edg, h
@@ -644,4 +671,3 @@ hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))
-
