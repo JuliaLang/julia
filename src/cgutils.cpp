@@ -750,6 +750,8 @@ static Value *emit_typeof(Value *p)
         tt = builder.
             CreateLoad(builder.CreateGEP(tt,ConstantInt::get(T_size,0)),
                        false);
+        tt = builder.
+            CreateIntToPtr(builder. CreateAnd(builder.CreatePtrToInt(tt, T_int64), ConstantInt::get(T_int64,~(uptrint_t)3)),  jl_pvalue_llvmt);
 #ifdef OVERLAP_TUPLE_LEN
         tt = builder.
             CreateIntToPtr(builder.
@@ -970,7 +972,8 @@ static Value *typed_load(Value *ptr, Value *idx_0based, jl_value_t *jltype,
 static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt);
 
 static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
-                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode* tbaa)
+                        jl_value_t *jltype, jl_codectx_t *ctx, MDNode* tbaa,
+                        Value* parent)  // for the write barrier, NULL if no barrier needed
 {
     Type *elty = julia_type_to_llvm(jltype);
     assert(elty != NULL);
@@ -979,8 +982,10 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
     if (elty==T_int1) { elty = T_int8; }
     if (jl_isbits(jltype) && ((jl_datatype_t*)jltype)->size > 0)
         rhs = emit_unbox(elty, rhs, jltype);
-    else
+    else {
         rhs = boxed(rhs,ctx);
+        if(parent != NULL) emit_write_barrier(ctx, parent, rhs);
+    }
     Value *data;
     if (ptr->getType()->getContainedType(0) != elty)
         data = builder.CreateBitCast(ptr, PointerType::get(elty, 0));
@@ -1721,4 +1726,18 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
     builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
+}
+
+// allocation for known size object
+static Value* emit_allocobj(size_t static_size)
+{
+    if (static_size == sizeof(void*)*2)
+        return builder.CreateCall(prepare_call(jlalloc2w_func));
+    else if (static_size == sizeof(void*)*3)
+        return builder.CreateCall(prepare_call(jlalloc3w_func));
+    else if (static_size == sizeof(void*)*4)
+        return builder.CreateCall(prepare_call(jlalloc4w_func));
+    else
+        return builder.CreateCall(prepare_call(jlallocobj_func),
+                       ConstantInt::get(T_size, static_size));
 }

@@ -199,8 +199,4 @@ macro help_(ex)
     end
 end
 
-macro help (ex)
-  Base.Docs.replhelp(ex)
-end
-
 end # module
