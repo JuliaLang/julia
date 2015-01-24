@@ -3721,7 +3721,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // fetch init exprs of SSA vars for easy reference
     std::vector<jl_value_t*> gensym_initExpr;
-    gensym_initExpr.assign(n_gensyms, NULL);
+    gensym_initExpr.assign(n_gensyms, (jl_value_t*)NULL);
     for(i=0; i < jl_array_len(stmts); i++) {
         jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == assign_sym) {
@@ -4008,7 +4008,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // create SAvalue locations for GenSym objects
     ctx.gensym_assigned.assign(n_gensyms, false);
-    ctx.gensym_SAvalues.assign(n_gensyms, NULL);
+    ctx.gensym_SAvalues.assign(n_gensyms, (Value*)NULL);
     for(int i=0; i < n_gensyms; i++) {
         jl_value_t *jt = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, i) : (jl_value_t*)jl_any_type);
         if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
