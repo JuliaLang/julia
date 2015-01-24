@@ -937,15 +937,15 @@ end
 
 function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     if isa(e,QuoteNode)
-        return typeof(e.value)
+        return typeof((e::QuoteNode).value)
     elseif isa(e,TopNode)
-        return abstract_eval_global(_basemod(), e.name)
+        return abstract_eval_global(_basemod(), (e::TopNode).name)
     elseif isa(e,Symbol)
-        return abstract_eval_symbol(e, vtypes, sv)
+        return abstract_eval_symbol(e::Symbol, vtypes, sv)
     elseif isa(e,SymbolNode)
-        return abstract_eval_symbol(e.name, vtypes, sv)
+        return abstract_eval_symbol((e::SymbolNode).name, vtypes, sv)
     elseif isa(e,GenSym)
-        return abstract_eval_gensym(e, sv)
+        return abstract_eval_gensym(e::GenSym, sv)
     elseif isa(e,LambdaStaticData)
         return Function
     elseif isa(e,GetfieldNode)
@@ -1061,7 +1061,11 @@ function abstract_eval_global(M, s::Symbol)
 end
 
 function abstract_eval_gensym(s::GenSym, sv::StaticVarInfo)
-    return sv.gensym_types[s.id+1]
+    typ = sv.gensym_types[s.id+1]
+    if typ === NF
+        return Undef
+    end
+    return typ
 end
 
 function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo)
@@ -1238,14 +1242,14 @@ function label_counter(body)
 end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
-function find_gensym_uses(body, labels)
+function find_gensym_uses(body)
     uses = Vector{Int}[]
     for line = 1:length(body)
-        find_gensym_uses(body[line], uses, line, labels)
+        find_gensym_uses(body[line], uses, line)
     end
     return uses
 end
-function find_gensym_uses(e::ANY, uses, line, labels)
+function find_gensym_uses(e::ANY, uses, line)
     if isa(e,GenSym)
         id = (e::GenSym).id+1
         while length(uses) < id
@@ -1265,19 +1269,11 @@ function find_gensym_uses(e::ANY, uses, line, labels)
                     push!(uses, Array(Int,0))
                 end
             end
-            find_gensym_uses(b.args[2], uses, line, labels)
+            find_gensym_uses(b.args[2], uses, line)
             return
         end
-        if head == :type_goto
-            for i = 2:length(b.args)
-                var = b.args[i]
-                if isa(var,GenSym)
-                    find_gensym_uses(var, uses, findlabel(labels,b.args[1]), labels)
-                end
-            end
-        end
         for a in b.args
-            find_gensym_uses(a, uses, line, labels)
+            find_gensym_uses(a, uses, line)
         end
     end
 end
@@ -1481,8 +1477,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
 
-    gensym_uses = find_gensym_uses(body, labels)
-    gensym_types = Any[ Union() for i = 1:length(gensym_uses) ]
+    gensym_uses = find_gensym_uses(body)
+    gensym_init = Any[ NF for i = 1:length(gensym_uses) ]
+    gensym_types = copy(gensym_init)
 
     sv = StaticVarInfo(sparams, cenv, vars, gensym_types, length(labels))
     frame.sv = sv
@@ -1492,7 +1489,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     @label typeinf_top
 
-    old_s1 = nothing
+    typegotoredo = false
 
     # exception handlers
     cur_hand = ()
@@ -1511,7 +1508,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 cur_hand = handler_at[pc]
             end
             stmt = body[pc]
-            changes = abstract_interpret(stmt, s[pc], sv)
+            changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, sv)
             if frame.recurred
                 rec = true
                 if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
@@ -1537,10 +1534,12 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 id = (changes.var::GenSym).id+1
                 new = changes.vtype
                 old = gensym_types[id]
-                if !(new <: old)
+                if old===NF || !(new <: old)
                     gensym_types[id] = tmerge(old, new)
                     for r in gensym_uses[id]
-                        push!(W, r)
+                        if !is(s[r],()) # s[r] === () => unreached statement
+                            push!(W, r)
+                        end
                     end
                 end
             elseif isa(stmt,GotoNode)
@@ -1564,25 +1563,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     end
                 elseif is(hd,:type_goto)
                     for i = 2:length(stmt.args)
-                        var = stmt.args[i]
-                        if isa(var,SymbolNode)
-                            var = var.name
-                        end
-                        if isa(var,Symbol)
-                            # Store types that need to be fed back via type_goto
-                            # in position s[1]. After finishing inference, if any
-                            # of these types changed, start over with the fed-back
-                            # types known from the beginning.
-                            # See issue #3821 (using !typeseq instead of !subtype),
-                            # and issue #7810.
-                            vt = changes[var]
-                            ot = s[1][var]
-                            if !typeseq(vt,ot)
-                                if old_s1 === nothing
-                                    old_s1 = copy(s[1])
-                                end
-                                s[1][var] = vt
-                            end
+                        var = stmt.args[i]::GenSym
+                        # Store types that need to be fed back via type_goto
+                        # in gensym_init. After finishing inference, if any
+                        # of these types changed, start over with the fed-back
+                        # types known from the beginning.
+                        # See issue #3821 (using !typeseq instead of !subtype),
+                        # and issue #7810.
+                        id = var.id+1
+                        vt = gensym_types[id]
+                        ot = gensym_init[id]
+                        if ot===NF || !typeseq(vt,ot)
+                            gensym_init[id] = vt
+                            typegotoredo = true
                         end
                     end
                 elseif is(hd,:return)
@@ -1639,17 +1632,19 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         end
     end
 
-    if old_s1 !== nothing
+    if typegotoredo
         # if any type_gotos changed, clear state and restart.
-        for (v_,t_) in s[1]
-            if !typeseq(t_, old_s1[v_])
-                for ll = 2:length(s)
-                    s[ll] = ()
-                end
-                empty!(W)
-                gensym_types[:] = Union()
-                @goto typeinf_top
-            end
+        for ll = 2:length(s)
+            s[ll] = ()
+        end
+        empty!(W)
+        gensym_types[:] = gensym_init
+        frame.result = curtype
+        @goto typeinf_top
+    end
+    for i = 1:length(gensym_types)
+        if gensym_types[i] === NF
+            gensym_types[i] = Union()
         end
     end
 
@@ -1990,21 +1985,21 @@ const emptydict = ObjectIdDict()
 
 function exprtype(x::ANY, sv::StaticVarInfo)
     if isa(x,Expr)
-        return x.typ
+        return (x::Expr).typ
     elseif isa(x,SymbolNode)
-        return x.typ
+        return (x::SymbolNode).typ
     elseif isa(x,GenSym)
-        return sv.gensym_types[x.id+1]
+        return abstract_eval_gensym(x::GenSym, sv)
     elseif isa(x,TopNode)
-        return abstract_eval_global(_basemod(), x.name)
+        return abstract_eval_global(_basemod(), (x::TopNode).name)
     elseif isa(x,Symbol)
         sv = inference_stack.sv
-        if is_local(sv, x)
+        if is_local(sv, x::Symbol)
             return Any
         end
-        return abstract_eval(x, emptydict, sv)
+        return abstract_eval(x::Symbol, emptydict, sv)
     elseif isa(x,QuoteNode)
-        v = x.value
+        v = (x::QuoteNode).value
         if isa(v,Type)
             return Type{v}
         end
@@ -2014,7 +2009,7 @@ function exprtype(x::ANY, sv::StaticVarInfo)
     elseif isa(x,LambdaStaticData)
         return Function
     elseif isa(x,GetfieldNode)
-        return x.typ
+        return (x::GetfieldNode).typ
     else
         return typeof(x)
     end
@@ -2111,7 +2106,7 @@ function effect_free(e::ANY, sv, allow_volatile::Bool)
                                 end
                             end
                             if isa(a,GenSym)
-                                typ = sv.gensym_types[(a::GenSym).id+1]
+                                typ = exprtype(a,sv)
                                 if !isa(typ,Tuple)
                                     if !isa(typ,DataType) || typ.mutable
                                         return false
@@ -3221,7 +3216,7 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
                 end
             elseif isa(val,GenSym)
                 val = val::GenSym
-                typ = sv.gensym_types[val.id+1]
+                typ = exprtype(val, sv)
                 if a.typ <: typ && !typeseq(a.typ,typ)
                     sv.gensym_types[val.id+1] = a.typ
                 end
