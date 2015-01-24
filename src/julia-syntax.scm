@@ -1197,7 +1197,7 @@
 		 (error "goto from a try/finally block is not permitted"))
 	     (let ((hasret (or (contains return? tryb)
 			       (contains return? catchb))))
-	       (let ((err (gensym))
+	       (let ((err (gensy))
 		     (ret (and hasret
 			       (or (not (block-returns? tryb))
 				   (and catchb
@@ -1674,11 +1674,10 @@
 		  (expand-forms
 		   (tuple-to-assignments lhss x))
 		  ;; (a, b, ...) = other
-		  (let* ((xx  (if (or (and (symbol? x) (not (memq x lhss)))
-                                      (and (jlgensym? x) (not (mem-jlgensym x lhss))))
+		  (let* ((xx  (if (and (symbol? x) (not (memq x lhss)))
 				  x (make-jlgensym)))
 			 (ini (if (eq? x xx) '() `((= ,xx ,(expand-forms x)))))
-			 (st  (gensym)))
+			 (st  (gensy)))
 		    `(block
 		      ,@ini
 		      (= ,st (call (top start) ,xx))
@@ -2136,12 +2135,12 @@
   (if (any (lambda (x) (eq? x ':)) ranges)
       (lower-nd-comprehension atype expr ranges)
   (let ((result    (make-jlgensym))
-	(ri        (gensym))
+	(ri        (gensy))
 	(initlabl  (if atype #f (make-jlgensym)))
 	(oneresult (make-jlgensym))
 	(lengths   (map (lambda (x) (make-jlgensym)) ranges))
-	(states    (map (lambda (x) (gensym)) ranges))
-	(is        (map (lambda (x) (gensym)) ranges))
+	(states    (map (lambda (x) (gensy)) ranges))
+	(is        (map (lambda (x) (gensy)) ranges))
 	(rv        (map (lambda (x) (make-jlgensym)) ranges)))
 
     ;; construct loops to cycle over all dimensions of an n-d comprehension
@@ -2456,7 +2455,7 @@
 			       (to-blk (to-lff (cadddr e) dest tail))
 			       (to-blk (to-lff '(null)  dest tail))))
 			(cdr r))))
-	       (else (let* ((g (gensym))
+	       (else (let* ((g (gensy))
                             (stmts (cons g
                                          (cons `(local! ,g) (to-lff e g tail)))))
                        (if (jlgensym? dest) (cons `(= ,dest ,g) stmts) stmts)))))
@@ -2471,7 +2470,7 @@
                   (list* g
                          `(local! ,g)
                          (to-lff e g #f))))
-	       (else (let* ((g (if (jlgensym? dest) (gensym) dest))
+	       (else (let* ((g (if (jlgensym? dest) (gensy) dest))
                             (stmts (cons `(trycatch ,(fix-try-block-returns
                                                       (to-blk (to-lff (cadr e) g tail)))
                                                      ,(to-blk (to-lff (caddr e) g tail)))
@@ -3240,6 +3239,7 @@ So far only the second case can actually occur.
 
 	    ((global) #f)  ; remove global declarations
 	    ((local!) #f)
+	    ((jlgensym) #f)
 	    ((local)
 	     ;; emit (newvar x) where captured locals are introduced.
 	     (let* ((vname (cadr e))
