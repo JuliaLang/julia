@@ -387,10 +387,15 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
 }
 
 static value_t julia_to_scm_(jl_value_t *v);
+static arraylist_t jlgensym_to_flisp;
 
 static value_t julia_to_scm(jl_value_t *v)
 {
     value_t temp;
+    if (jlgensym_to_flisp.len)
+        jlgensym_to_flisp.len = 0; // in case we didn't free it last time we got here (for example, if we threw an error)
+    else
+        arraylist_new(&jlgensym_to_flisp, 0);
     // need try/catch to reset GC handle stack in case of error
     FL_TRY_EXTERN {
         temp = julia_to_scm_(v);
@@ -398,6 +403,7 @@ static value_t julia_to_scm(jl_value_t *v)
     FL_CATCH_EXTERN {
         temp = fl_list2(fl_error_sym, cvalue_static_cstring("expression too large"));
     }
+    arraylist_free(&jlgensym_to_flisp);
     return temp;
 }
 
@@ -430,7 +436,17 @@ static value_t julia_to_scm_(jl_value_t *v)
         return symbol(((jl_sym_t*)v)->name);
     }
     if (jl_is_gensym(v)) {
-        return fl_list2(fl_jlgensym_sym, fixnum(((jl_gensym_t*)v)->id));
+        size_t idx = ((jl_gensym_t*)v)->id;
+        size_t i;
+        for (i = 0; i < jlgensym_to_flisp.len; i+=2) {
+            if ((ssize_t)jlgensym_to_flisp.items[i] == idx)
+                return fl_list2(fl_jlgensym_sym, fixnum((size_t)jlgensym_to_flisp.items[i+1]));
+        }
+        arraylist_push(&jlgensym_to_flisp, (void*)idx);
+        value_t flv = fl_applyn(0, symbol_value(symbol("make-jlgensym")));
+        assert(iscons(flv) && car_(flv) == fl_jlgensym_sym);
+        arraylist_push(&jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
+        return flv;
     }
     if (v == jl_true) {
         return FL_T;
