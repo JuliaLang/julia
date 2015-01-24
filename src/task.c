@@ -7,7 +7,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
-//#include <sys/mman.h>
 #include <signal.h>
 #include <errno.h>
 #include "julia.h"
@@ -39,16 +38,16 @@ static int _stack_grows_up;
 static size_t _frame_offset;
 
 struct _probe_data {
-    intptr_t low_bound;		/* below probe on stack */
-    intptr_t probe_local;	/* local to probe on stack */
-    intptr_t high_bound;	/* above probe on stack */
-    intptr_t prior_local;	/* value of probe_local from earlier call */
+    intptr_t low_bound;         /* below probe on stack */
+    intptr_t probe_local;       /* local to probe on stack */
+    intptr_t high_bound;        /* above probe on stack */
+    intptr_t prior_local;       /* value of probe_local from earlier call */
 
-    jl_jmp_buf probe_env;	/* saved environment of probe */
-    jl_jmp_buf probe_sameAR;	/* second environment saved by same call */
-    jl_jmp_buf probe_samePC;	/* environment saved on previous call */
+    jl_jmp_buf probe_env;       /* saved environment of probe */
+    jl_jmp_buf probe_sameAR;    /* second environment saved by same call */
+    jl_jmp_buf probe_samePC;    /* environment saved on previous call */
 
-    jl_jmp_buf * ref_probe;	/* switches between probes */
+    jl_jmp_buf * ref_probe;     /* switches between probes */
 };
 
 static void boundhigh(struct _probe_data *p)
@@ -179,6 +178,10 @@ static void NOINLINE save_stack(jl_task_t *t)
     }
     t->ssize = nb;
     memcpy(buf, (char*)&_x, nb);
+    // this task's stack could have been modified after
+    // it was marked by an incremental collection
+    // move the barrier back instead of walking it again here
+    gc_wb_back(t);
 }
 
 void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
@@ -313,6 +316,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         }
 
         t->last = jl_current_task;
+        gc_wb(t, t->last);
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -794,6 +798,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     char *stk = allocb(ssize+pagesz+(pagesz-1));
     t->stkbuf = stk;
+    gc_wb_buf(t, t->stkbuf);
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes
