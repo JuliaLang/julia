@@ -17,8 +17,8 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
-    JL_GC_PUSH1(&m);
     m->type = (jl_value_t*)jl_module_type;
+    JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
     m->parent = NULL;
@@ -40,6 +40,7 @@ DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name)
 {
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
+    gc_wb(m, m->parent);
     jl_add_standard_imports(m);
     return (jl_value_t*)m;
 }
@@ -82,6 +83,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
+    gc_wb_buf(m, b);
     return *bp;
 }
 
@@ -109,6 +111,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
+    gc_wb_buf(m, b);
     return *bp;
 }
 
@@ -225,6 +228,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             nb->owner = b->owner;
             nb->imported = (explici!=0);
             *bp = nb;
+            gc_wb_buf(to, nb);
         }
     }
 }
@@ -293,6 +297,7 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
         // don't yet know who the owner is
         b->owner = NULL;
         *bp = b;
+        gc_wb_buf(from, b);
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
@@ -330,6 +335,7 @@ void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
         bp->value = val;
+        gc_wb(m, val);
     }
 }
 
@@ -339,6 +345,7 @@ void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     if (!bp->constp) {
         bp->value = val;
         bp->constp = 1;
+        gc_wb(m, val);
     }
 }
 
@@ -361,6 +368,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         }
     }
     b->value = rhs;
+    gc_wb_binding(((void**)b)-1, rhs);
 }
 
 DLLEXPORT void jl_declare_constant(jl_binding_t *b)

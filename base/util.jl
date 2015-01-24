@@ -12,6 +12,9 @@ gc_time_ns() = ccall(:jl_gc_total_hrtime, UInt64, ())
 # total number of bytes allocated so far
 gc_bytes() = ccall(:jl_gc_total_bytes, Int64, ())
 
+gc_num_pause() = ccall(:jl_gc_num_pause, Int64, ())
+gc_num_full_sweep() = ccall(:jl_gc_num_full_sweep, Int64, ())
+
 function tic()
     t0 = time_ns()
     task_local_storage(:TIMERS, (t0, get(task_local_storage(), :TIMERS, ())))
@@ -36,12 +39,17 @@ function toc()
 end
 
 # print elapsed time, return expression value
-
-function time_print(t, b, g)
+const _units = ["bytes", "kB", "MB"]
+function time_print(t, b, g, np, nfs)
+    i = 1
+    while b > 1024 && i < length(_units)
+        b = div(b, 1024)
+        i += 1
+    end
     if 0 < g
-        @printf("elapsed time: %s seconds (%d bytes allocated, %.2f%% gc time)\n", t/1e9, b, 100*g/t)
+        @printf("elapsed time: %s seconds (%d %s allocated, %.2f%% gc time in %d pauses with %d full sweep)\n", t/1e9, b, _units[i], 100*g/t, np, nfs)
     else
-        @printf("elapsed time: %s seconds (%d bytes allocated)\n", t/1e9, b)
+        @printf("elapsed time: %s seconds (%d %s allocated)\n", t/1e9, b, _units[i])
     end
 end
 
@@ -50,11 +58,15 @@ macro time(ex)
         local b0 = gc_bytes()
         local t0 = time_ns()
         local g0 = gc_time_ns()
+        local n0 = gc_num_pause()
+        local nfs0 = gc_num_full_sweep()
         local val = $(esc(ex))
+        local nfs1 = gc_num_full_sweep()
+        local n1 = gc_num_pause()
         local g1 = gc_time_ns()
         local t1 = time_ns()
         local b1 = gc_bytes()
-        time_print(t1-t0, b1-b0, g1-g0)
+        time_print(t1-t0, b1-b0, g1-g0, n1-n0, nfs1-nfs0)
         val
     end
 end

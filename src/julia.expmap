@@ -33,6 +33,8 @@
     uv_*;
     add_library_mapping;
     utf8proc_*;
+    gc_queue_root;
+    gc_wb_slow;
 
     /* freebsd */
     environ;
