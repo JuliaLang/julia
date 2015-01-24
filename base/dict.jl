@@ -247,6 +247,8 @@ getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
 push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
+push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
+push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # hashing objects by identity
 
