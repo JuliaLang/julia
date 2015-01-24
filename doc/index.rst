@@ -45,6 +45,7 @@
    manual/packages
    manual/profile
    manual/performance-tips
+   manual/workflow-tips
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
