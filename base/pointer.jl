@@ -19,15 +19,12 @@ convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any
 convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
 convert(::Type{Ptr{UInt8}}, s::ByteString) = convert(Ptr{UInt8}, s.data)
 convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
+# convert strings to ByteString to pass as pointers
+cconvert_gcroot(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
+cconvert_gcroot(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
 convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
 convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
-
-# note: these definitions don't mean any AbstractArray is convertible to
-# pointer. they just map the array element type to the pointer type for
-# convenience in cases that work.
-pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x) + (i-1)*elsize(x)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
@@ -53,7 +50,8 @@ unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
 unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
-pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}+Core.sizeof(Int)
 
 integer(x::Ptr) = convert(UInt, x)
 unsigned(x::Ptr) = convert(UInt, x)

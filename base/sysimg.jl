@@ -67,6 +67,7 @@ include("dict.jl")
 include("set.jl")
 include("hashing.jl")
 include("iterator.jl")
+include("refpointer.jl") #XXX: move this earlier when we don't need @inline annotations anymore
 
 # SIMD loops
 include("simdloop.jl")

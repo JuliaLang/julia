@@ -593,7 +593,8 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 
 function getipaddr()
     addr = Array(Ptr{UInt8},1)
-    count = Array(Int32,1)
+    addr[1] = C_NULL
+    count = zeros(Int32,1)
     lo_present = false
     err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{UInt8}},Ptr{Int32}),addr,count)
     addr, count = addr[1],count[1]

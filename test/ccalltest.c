@@ -2,7 +2,7 @@
 
 int xs[300] = {0,0,0,1,0};
 
-int __attribute((noinline)) testUcharX(unsigned char x) {
+int __attribute__((noinline)) testUcharX(unsigned char x) {
     return xs[x];
 }
 
@@ -22,3 +22,6 @@ int main() {
         xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX(b), fptr(a), fptr(b));
 }
 
+void *test_echo_p(void *p) {
+    return p;
+}
