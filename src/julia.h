@@ -367,6 +367,7 @@ extern DLLEXPORT jl_datatype_t *jl_number_type;
 extern DLLEXPORT jl_datatype_t *jl_void_type;
 extern DLLEXPORT jl_datatype_t *jl_voidpointer_type;
 extern DLLEXPORT jl_datatype_t *jl_pointer_type;
+extern DLLEXPORT jl_datatype_t *jl_ref_type;
 
 extern DLLEXPORT jl_value_t *jl_array_uint8_type;
 extern DLLEXPORT jl_value_t *jl_array_any_type;
@@ -646,10 +647,28 @@ STATIC_INLINE int jl_is_array(void *v)
     return jl_is_array_type(t);
 }
 
-STATIC_INLINE int jl_is_cpointer_type(void *t)
+STATIC_INLINE int jl_is_cpointer_type(jl_value_t *t)
 {
     return (jl_is_datatype(t) &&
             ((jl_datatype_t*)(t))->name == jl_pointer_type->name);
+}
+
+STATIC_INLINE int jl_is_abstract_ref_type(jl_value_t *t)
+{
+    return (jl_is_datatype(t) &&
+            ((jl_datatype_t*)(t))->name == jl_ref_type->name);
+}
+
+STATIC_INLINE jl_value_t *jl_is_ref_type(jl_value_t *t)
+{
+    if (!jl_is_datatype(t)) return 0;
+    jl_datatype_t *dt = (jl_datatype_t*)t;
+    while (dt != jl_any_type && dt->name != dt->super->name) {
+        if (dt->name == jl_ref_type->name)
+            return (jl_value_t*)dt;
+        dt = dt->super;
+    }
+    return 0;
 }
 
 STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)

@@ -73,7 +73,8 @@
 #    contents::T
 #end
 
-#bitstype {32|64} Ptr{T}
+#abstract Ref{T}
+#bitstype {32|64} Ptr{T} <: Ref{T}
 
 # types for the front end
 
@@ -125,7 +126,7 @@ export
     Module, Symbol, Task, Array, GenSym,
     # numeric types
     Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
-    Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
+    Int32, Int64, Int128, Ref, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
     UInt64, UInt128, Unsigned,
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,

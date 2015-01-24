@@ -904,9 +904,9 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     gc_wb(dt, dt->super);
     if (datatype_list) {
-        if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
-            dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
-            dt->name == jl_abstractarray_type->name ||
+        if (dt->name == jl_array_type->name || dt->name == jl_ref_type->name ||
+            dt->name == jl_pointer_type->name || dt->name == jl_type_type->name ||
+            dt->name == jl_vararg_type->name || dt->name == jl_abstractarray_type->name ||
             dt->name == jl_densearray_type->name) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
@@ -1843,17 +1843,19 @@ void jl_init_serializer(void)
                      jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
                      jl_box_int64(51), jl_box_int64(52), jl_box_int64(53),
 #endif
-                     jl_labelnode_type, jl_linenumbernode_type, jl_gotonode_type,
-                     jl_quotenode_type, jl_topnode_type, jl_type_type, jl_bottom_type,
-                     jl_pointer_type, jl_vararg_type, jl_ntuple_type,
-                     jl_abstractarray_type, jl_densearray_type, jl_box_type, jl_void_type,
-                     jl_typector_type, jl_typename_type, jl_task_type, jl_uniontype_type,
-                     jl_typetype_type, jl_typetype_tvar, jl_ANY_flag, jl_array_any_type,
-                     jl_intrinsic_type, jl_method_type, jl_methtable_type,
-                     jl_voidpointer_type, jl_newvarnode_type, jl_array_symbol_type,
-                     jl_tupleref(jl_tuple_type,0),
+                     jl_labelnode_type, jl_linenumbernode_type,
+                     jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
+                     jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
+                     jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
+                     jl_densearray_type, jl_box_type, jl_void_type,
+                     jl_typector_type, jl_typename_type,
+                     jl_task_type, jl_uniontype_type, jl_typetype_type, jl_typetype_tvar,
+                     jl_ANY_flag, jl_array_any_type, jl_intrinsic_type, jl_method_type,
+                     jl_methtable_type, jl_voidpointer_type, jl_newvarnode_type,
+                     jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
-                     jl_symbol_type->name, jl_gensym_type->name, jl_pointer_type->name,
+                     jl_symbol_type->name, jl_gensym_type->name,
+                     jl_ref_type->name, jl_pointer_type->name,
                      jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
                      jl_expr_type->name, jl_typename_type->name, jl_type_type->name,
                      jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,

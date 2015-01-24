@@ -217,141 +217,21 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     llvmf = builder.CreateLoad(llvmgv);
     return builder.CreatePointerCast(llvmf,funcptype);
 }
-// --- argument passing and scratch space utilities ---
-
-static Function *value_to_pointer_func;
-
-// TODO: per-thread
-static char *temp_arg_area;
-static const uint32_t arg_area_sz = 4196;
-static uint32_t arg_area_loc;
-#define N_TEMP_ARG_BLOCKS 1024
-static void *temp_arg_blocks[N_TEMP_ARG_BLOCKS];
-static uint32_t arg_block_n = 0;
-static Function *save_arg_area_loc_func;
-static Function *restore_arg_area_loc_func;
-
-extern "C" DLLEXPORT uint64_t save_arg_area_loc()
-{
-    return (((uint64_t)arg_block_n)<<32) | ((uint64_t)arg_area_loc);
-}
-
-extern "C" DLLEXPORT void restore_arg_area_loc(uint64_t l)
-{
-    arg_area_loc = l&0xffffffff;
-    uint32_t ab = l>>32;
-    while (arg_block_n > ab) {
-        arg_block_n--;
-        free(temp_arg_blocks[arg_block_n]);
-    }
-}
-
-static void *alloc_temp_arg_space(uint32_t sz)
-{
-    void *p;
-    if (arg_area_loc+sz > arg_area_sz) {
-#ifdef JL_GC_MARKSWEEP
-        if (arg_block_n >= N_TEMP_ARG_BLOCKS)
-            jl_error("internal compiler error: out of temporary argument space in ccall");
-        p = malloc(sz);
-        temp_arg_blocks[arg_block_n++] = p;
-#else
-#error "fixme"
-#endif
-    }
-    else {
-        p = &temp_arg_area[arg_area_loc];
-        arg_area_loc += sz;
-    }
-    return p;
-}
-
-static void *alloc_temp_arg_copy(void *obj, uint32_t sz)
-{
-    void *p = alloc_temp_arg_space(sz);
-    memcpy(p, obj, sz);
-    return p;
-}
-
-// this is a run-time function
-// warning: cannot allocate memory except using alloc_temp_arg_space
-extern "C" DLLEXPORT void *jl_value_to_pointer(jl_value_t *jt, jl_value_t *v, int argn,
-                                               int addressof)
-{
-    jl_value_t *jvt = (jl_value_t*)jl_typeof(v);
-    if (addressof) {
-        if (jvt == jt) {
-            if (jl_is_bitstype(jvt)) {
-                size_t osz = jl_datatype_size(jt);
-                return alloc_temp_arg_copy(jl_data_ptr(v), osz);
-            }
-            else if (!jl_is_tuple(jvt) && jl_is_leaf_type(jvt) && !jl_is_array_type(jvt)) {
-                return v + 1;
-            }
-        }
-        goto value_to_pointer_error;
-    }
-    else {
-        if (jl_is_cpointer_type(jvt) && jl_tparam0(jvt) == jt) {
-            return (void*)jl_unbox_voidpointer(v);
-        }
-    }
-
-    if (((jl_value_t*)jl_uint8_type == jt ||
-         (jl_value_t*)jl_int8_type == jt) && jl_is_byte_string(v)) {
-        return jl_string_data(v);
-    }
-    if (jl_is_array_type(jvt)) {
-        if (jl_tparam0(jl_typeof(v)) == jt || jt == (jl_value_t*)jl_bottom_type ||
-            jt == (jl_value_t*)jl_void_type) {
-            return ((jl_array_t*)v)->data;
-        }
-        if (jl_is_cpointer_type(jt)) {
-            jl_array_t *ar = (jl_array_t*)v;
-            void **temp=(void**)alloc_temp_arg_space((1+jl_array_len(ar))*sizeof(void*));
-            size_t i;
-            for(i=0; i < jl_array_len(ar); i++) {
-                temp[i] = jl_value_to_pointer(jl_tparam0(jt),
-                                              jl_arrayref(ar, i), argn, 0);
-            }
-            temp[i] = 0;
-            return temp;
-        }
-    }
-
- value_to_pointer_error:
-    std::map<int, std::string>::iterator it = argNumberStrings.find(argn);
-    if (it == argNumberStrings.end()) {
-        std::stringstream msg;
-        msg << "argument ";
-        msg << argn;
-        argNumberStrings[argn] = msg.str();
-        it = argNumberStrings.find(argn);
-    }
-    jl_value_t *targ=NULL, *pty=NULL;
-    JL_GC_PUSH2(&targ, &pty);
-    targ = (jl_value_t*)jl_tuple1(jt);
-    pty = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type,
-                                     (jl_tuple_t*)targ);
-    jl_type_error_rt("ccall", (*it).second.c_str(), pty, v);
-    // doesn't return
-    return (jl_value_t*)jl_null;
-}
 
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                               jl_value_t *argex, bool addressOf,
                               int argn, jl_codectx_t *ctx,
-                              bool *mightNeedTempSpace, bool *needStackRestore)
+                              bool *needStackRestore)
 {
     Type *vt = jv->getType();
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv,ctx);
     }
-    else if (ty == vt && !addressOf) {
+    if (ty == vt && !addressOf) {
         return jv;
     }
-    else if (vt != jl_pvalue_llvmt) {
-        // argument value is unboxed
+    if (vt != jl_pvalue_llvmt) {
+        // argument value is passed unboxed
         if (addressOf) {
             if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
                 // pass the address of an alloca'd thing, not a box
@@ -370,62 +250,83 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                 return builder.CreateBitCast(jv, ty);
             }
         }
-        // error. box for error handling.
-        jv = boxed(jv,ctx);
+        emit_error("ccall: argument type did not match declaration", ctx);
     }
-    else if (jl_is_cpointer_type(jt)) {
+    if (jl_is_tuple(jt)) {
+        return emit_unbox(ty,jv,jt);
+    }
+    if (jl_is_cpointer_type(jt) && addressOf) {
         assert(ty->isPointerTy());
+        jl_value_t *ety = jl_tparam0(jt);
         jl_value_t *aty = expr_type(argex, ctx);
-        if (jl_is_array_type(aty) &&
-            (jl_tparam0(jt) == jl_tparam0(aty) || jl_tparam0(jt) == (jl_value_t*)jl_bottom_type ||
-             jl_tparam0(jt) == (jl_value_t*)jl_void_type)) {
-            // array to pointer
-            return builder.CreateBitCast(emit_arrayptr(jv), ty);
-        }
-        if (aty == (jl_value_t*)jl_ascii_string_type || aty == (jl_value_t*)jl_utf8_string_type) {
-            return builder.CreateBitCast(emit_arrayptr(emit_nthptr(jv,1,tbaa_const)), ty);
-        }
-        if (jl_is_structtype(aty) && jl_is_leaf_type(aty) && !jl_is_array_type(aty)) {
-            if (!addressOf) {
-                emit_error("ccall: expected & on argument", ctx);
-                return literal_pointer_val(jl_nothing);
-            }
-            return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
-        }
-        *mightNeedTempSpace = true;
-        Value *p = builder.CreateCall4(prepare_call(value_to_pointer_func),
-                                       literal_pointer_val(jl_tparam0(jt)), jv,
-                                       ConstantInt::get(T_int32, argn),
-                                       ConstantInt::get(T_int32, (int)addressOf));
-        return builder.CreateBitCast(p, ty);
-    }
-    else if (jl_is_structtype(jt)) {
-        if (addressOf)
-            jl_error("ccall: unexpected & on argument"); // the only "safe" thing to emit here is the expected struct
-        assert (ty->isStructTy() && (Type*)((jl_datatype_t*)jt)->struct_decl == ty);
-        jl_value_t *aty = expr_type(argex, ctx);
-        if (aty != jt) {
+        if (aty != ety && ety != (jl_value_t*)jl_any_type && jt != (jl_value_t*)jl_voidpointer_type) {
             std::stringstream msg;
             msg << "ccall argument ";
             msg << argn;
-            emit_typecheck(jv, jt, msg.str(), ctx);
+            emit_typecheck(jv, ety, msg.str(), ctx);
         }
-        //TODO: check instead that prefix matches
-        //if (!jl_is_structtype(aty))
-        //    emit_typecheck(emit_typeof(jv), (jl_value_t*)jl_struct_kind, "ccall: Struct argument called with something that isn't a struct", ctx);
-        // //safe thing would be to also check that jl_typeof(aty)->size > sizeof(ty) here and/or at runtime
-        Value *pjv = builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), PointerType::get(ty,0));
-        return builder.CreateLoad(pjv, false);
+        if (jl_is_mutable_datatype(ety)) {
+            // no copy, just reference the data field
+            return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
+        }
+        else if (jl_is_immutable_datatype(ety) && jt != (jl_value_t*)jl_voidpointer_type) {
+            // yes copy
+            Value *nbytes;
+            if (jl_is_leaf_type(ety))
+                nbytes = ConstantInt::get(T_int32, jl_datatype_size(ety));
+            else
+                nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
+                                builder.CreateGEP(builder.CreatePointerCast(emit_typeof(jv), T_pint32),
+                                    ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/4)),
+                                false));
+            *needStackRestore = true;
+            AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
+            ai->setAlignment(16);
+            builder.CreateMemCpy(ai, builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), T_pint8), nbytes, 1);
+            return builder.CreateBitCast(ai, ty);
+        }
+        // emit maybe copy
+        *needStackRestore = true;
+        Value *jvt = emit_typeof(jv);
+        BasicBlock *mutableBB = BasicBlock::Create(getGlobalContext(),"is-mutable",ctx->f);
+        BasicBlock *immutableBB = BasicBlock::Create(getGlobalContext(),"is-immutable",ctx->f);
+        BasicBlock *afterBB = BasicBlock::Create(getGlobalContext(),"after",ctx->f);
+        Value *ismutable = builder.CreateTrunc(
+                tbaa_decorate(tbaa_datatype, builder.CreateLoad(
+                        builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint8),
+                            ConstantInt::get(T_size, offsetof(jl_datatype_t,mutabl))),
+                        false)),
+                T_int1);
+        builder.CreateCondBr(ismutable, mutableBB, immutableBB);
+        builder.SetInsertPoint(mutableBB);
+        Value *p1 = builder.CreatePointerCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
+        builder.CreateBr(afterBB);
+        builder.SetInsertPoint(immutableBB);
+        Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
+                    builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint32),
+                        ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/4)),
+                    false));
+        AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
+        ai->setAlignment(16);
+        builder.CreateMemCpy(ai, builder.CreatePointerCast(emit_nthptr_addr(jv, (size_t)1), T_pint8), nbytes, 1);
+        Value *p2 = builder.CreatePointerCast(ai, ty);
+        builder.CreateBr(afterBB);
+        builder.SetInsertPoint(afterBB);
+        PHINode *p = builder.CreatePHI(ty, 2);
+        p->addIncoming(p1, mutableBB);
+        p->addIncoming(p2, immutableBB);
+        return p;
     }
-    else if (jl_is_tuple(jt)) {
-        return emit_unbox(ty,jv,jt);
+    if (addressOf)
+        jl_error("ccall: unexpected & on argument"); // the only "safe" thing to emit here is the expected struct
+    assert(jl_is_datatype(jt));
+    jl_value_t *aty = expr_type(argex, ctx);
+    if (aty != jt) {
+        std::stringstream msg;
+        msg << "ccall argument ";
+        msg << argn;
+        emit_typecheck(jv, jt, msg.str(), ctx);
     }
-    // TODO: error for & with non-pointer argument type
-    assert(jl_is_bitstype(jt));
-    std::stringstream msg;
-    msg << "ccall argument ";
-    msg << argn;
-    emit_typecheck(jv, jt, msg.str(), ctx);
     Value *p = data_pointer(jv);
     return builder.CreateLoad(builder.CreateBitCast(p,
                                                     PointerType::get(ty,0)),
@@ -691,7 +592,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 #endif
         bool mightNeedTempSpace = false;
-        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace,&mightNeedTempSpace);
+        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace);
     }
 
     Function *f;
@@ -869,8 +770,14 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ": ccall: missing return type";
         jl_error(msg.c_str());
     }
-    if (rt == (jl_value_t*)jl_pointer_type)
-        jl_error("ccall: return type Ptr should have an element type, Ptr{T}");
+    if (jl_is_cpointer_type(rt) && jl_is_typevar(jl_tparam0(rt)))
+        jl_error("ccall: return type Ptr should have an element type, not Ptr{_<:T}");
+
+    if (jl_is_abstract_ref_type(rt)) {
+        if (jl_tparam0(rt) == (jl_value_t*)jl_any_type)
+            jl_error("ccall: return type Box{Any} is invalid. use Ptr{Any} instead.");
+        rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
+    }
 
     JL_TYPECHK(ccall, type, rt);
     Type *lrt = julia_struct_to_llvm(rt);
@@ -916,54 +823,65 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         paramattrs.push_back(AttrBuilder());
 #endif
         jl_value_t *tti = jl_tupleref(tt,i);
-        if (tti == (jl_value_t*)jl_pointer_type)
-            jl_error("ccall: argument type Ptr should have an element type, Ptr{T}");
+
         if (jl_is_vararg_type(tti)) {
             isVa = true;
             tti = jl_tparam0(tti);
         }
-        if (jl_is_bitstype(tti)) {
-            // see pull req #978. need to annotate signext/zeroext for
-            // small integer arguments.
-            jl_datatype_t *bt = (jl_datatype_t*)tti;
-            if (bt->size < 4) {
-                if (jl_signed_type == NULL) {
-                    jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
-                }
+
+        Type *t = NULL;
+        if (jl_is_abstract_ref_type(tti)) {
+            tti = jl_tparam0(tti);
+            if (jl_is_typevar(tti))
+                jl_error("ccall: argument type Ref should have an element type, not Ref{_<:T}");
+            t = T_pint8;
+        }
+        else {
+            if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti)))
+                jl_error("ccall: argument type Ptr should have an element type, not Ptr{_<:T}");
+            if (jl_is_bitstype(tti)) {
+                // see pull req #978. need to annotate signext/zeroext for
+                // small integer arguments.
+                jl_datatype_t *bt = (jl_datatype_t*)tti;
+                if (bt->size < 4) {
+                    if (jl_signed_type == NULL) {
+                        jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
+                    }
 #if LLVM33
-                Attribute::AttrKind av;
+                    Attribute::AttrKind av;
 #elif LLVM32
-                Attributes::AttrVal av;
+                    Attributes::AttrVal av;
 #else
-                Attribute::AttrConst av;
+                    Attribute::AttrConst av;
 #endif
 #if LLVM32 && !LLVM33
-                if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                    av = Attributes::SExt;
-                else
-                    av = Attributes::ZExt;
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attributes::SExt;
+                    else
+                        av = Attributes::ZExt;
 #else
-                if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                    av = Attribute::SExt;
-                else
-                    av = Attribute::ZExt;
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attribute::SExt;
+                    else
+                        av = Attribute::ZExt;
 #endif
 #if LLVM32 || LLVM33
-                paramattrs[i+sret].addAttribute(av);
+                    paramattrs[i+sret].addAttribute(av);
 #else
-                attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
+                    attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
 #endif
+                }
             }
-        }
-        Type *t = julia_struct_to_llvm(tti);
-        if (t == NULL || t == T_void) {
-            JL_GC_POP();
-            std::stringstream msg;
-            msg << "ccall: the type of argument ";
-            msg << i+1;
-            msg << " doesn't correspond to a C type";
-            emit_error(msg.str(), ctx);
-            return literal_pointer_val(jl_nothing);
+            t = julia_struct_to_llvm(tti);
+            if (t == NULL || t == T_void) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: the type of argument ";
+                msg << i+1;
+                msg << " doesn't correspond to a C type";
+                emit_error(msg.str(), ctx);
+                return literal_pointer_val(jl_nothing);
+            }
         }
         fargt.push_back(t);
         if (!isVa)
@@ -1019,6 +937,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
+        } else if (jl_is_abstract_ref_type(jl_tupleref(tt,0))) {
+            if (!jl_is_cpointer_type(expr_type(argi, 0)))
+                addressOf = true;
         }
         Value *ary;
         Type *largty = fargt[0];
@@ -1045,7 +966,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // save place before arguments, for possible insertion of temp arg
     // area saving code.
-    Value *saveloc=NULL;
     Value *stacksave=NULL;
     BasicBlock::InstListType &instList = builder.GetInsertBlock()->getInstList();
     Instruction *savespot;
@@ -1076,8 +996,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 fargt_sig[0]);
     }
     int last_depth = ctx->argDepth;
-    int nargty = jl_tuple_len(tt);
-    bool needTempSpace = false;
     bool needStackRestore = false;
     for(i=4; i < nargs+1; i+=2) {
         size_t ai = (i-4)/2;
@@ -1099,7 +1017,17 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
         Value *arg;
         bool needroot = false;
-        if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
+        if (jl_is_abstract_ref_type(jargty)) {
+            arg = emit_unboxed((jl_value_t*)argi, ctx);
+            if (arg->getType() == jl_pvalue_llvmt) {
+                emit_cpointercheck(arg, "ccall: argument to Ref{T} is not a pointer", ctx);
+                arg = emit_unbox(largty, arg, (jl_value_t*)jl_voidpointer_type);
+            }
+            if (arg->getType() != T_pint8)
+                arg = builder.CreatePointerCast(arg, T_pint8);
+            jargty = (jl_value_t*)jl_voidpointer_type;
+        }
+        else if (largty == jl_pvalue_llvmt || largty->isStructTy()) {
             arg = emit_expr(argi, ctx, true);
             if (largty == jl_pvalue_llvmt && arg->getType() != jl_pvalue_llvmt) {
                 arg = boxed(arg,ctx);
@@ -1129,11 +1057,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
 #endif
 
-        bool mightNeed=false;
         bool nSR=false;
         argvals[ai+sret] = julia_to_native(largty, jargty, arg, argi, addressOf,
-                                           ai+1, ctx, &mightNeed, &nSR);
-        needTempSpace |= mightNeed;
+                                           ai+1, ctx, &nSR);
         needStackRestore |= nSR;
     }
 
@@ -1185,16 +1111,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
     }
 
-    if (needTempSpace) {
-        // save temp argument area stack pointer
-        // TODO: inline this
-        saveloc = CallInst::Create(prepare_call(save_arg_area_loc_func));
-        if (savespot)
-            instList.insertAfter(savespot, (Instruction*)saveloc);
-        else
-            instList.push_front((Instruction*)saveloc);
-        savespot = (Instruction*)saveloc;
-    }
     if (needStackRestore) {
         stacksave = CallInst::Create(Intrinsic::getDeclaration(jl_Module,
                                                                Intrinsic::stacksave));
@@ -1233,11 +1149,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,
                                                      Intrinsic::stackrestore),
                            stacksave);
-    }
-    if (needTempSpace) {
-        // restore temp argument area stack pointer
-        assert(saveloc != NULL);
-        builder.CreateCall(prepare_call(restore_arg_area_loc_func), saveloc);
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
