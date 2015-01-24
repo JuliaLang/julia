@@ -10,7 +10,17 @@ extern "C" {
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
-    jl_value_t *jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
+    jl_value_t *jv = NULL;
+    switch (nfields) {
+    case 1:
+        jv = (jl_value_t*)alloc_2w(); break;
+    case 2:
+        jv = (jl_value_t*)alloc_3w(); break;
+    case 3:
+        jv = (jl_value_t*)alloc_4w(); break;
+    default:
+        jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
+    }
     jv->type = type;
     return jv;
 }

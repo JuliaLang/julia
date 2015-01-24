@@ -21,7 +21,7 @@ function generic_scale!(X::AbstractArray, s::Number)
 end
 
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
-    length(C) == length(X) | throw(DimensionMismatch("first array argument must be the same length as the second array argument"))
+    length(C) == length(X) || throw(DimensionMismatch("first array argument must be the same length as the second array argument"))
     for i = 1:length(X)
         @inbounds C[i] = X[i]*s
     end

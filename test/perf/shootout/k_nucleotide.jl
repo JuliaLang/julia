@@ -81,7 +81,7 @@ function k_nucleotide(infile="knucleotide-input.txt")
 
     arr1 = sorted_array(count(str, 1))
     arr2 = sorted_array(count(str, 2))
-
+    close(input)
 #    print_knucs(arr1)
 #    print_knucs(arr2)
 #    for s in ["GGT", "GGTA", "GGTATT", "GGTATTTTAATT", "GGTATTTTAATTTATAGT"]

@@ -111,6 +111,9 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
     b->value = (jl_value_t*)newm;
+
+    gc_wb(parent_module, newm);
+
     if (parent_module == jl_main_module && name == jl_symbol("Base")) {
         // pick up Base module during bootstrap
         jl_old_base_module = jl_base_module;
@@ -618,6 +621,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
         jl_errorf("invalid subtyping in definition of %s",tt->name->name->name);
     }
     tt->super = (jl_datatype_t*)super;
+    gc_wb(tt, tt->super);
     if (jl_tuple_len(tt->parameters) > 0) {
         tt->name->cache = (jl_value_t*)jl_null;
         jl_reinstantiate_inner_types(tt);
@@ -648,7 +652,8 @@ static int type_contains(jl_value_t *ty, jl_value_t *x)
 
 void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
-DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_t *bnd,
+DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t *bp_owner,
+                                    jl_binding_t *bnd,
                                     jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged,
                                     jl_value_t *call_func, int iskw)
 {
@@ -690,12 +695,14 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 gf = call_func;
                 name = call_sym;
                 // edit args, insert type first
-                if (!jl_is_expr(f->linfo->ast))
+                if (!jl_is_expr(f->linfo->ast)) {
                     f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
+                    gc_wb(f->linfo, f->linfo->ast);
+                }
                 jl_array_t *al = jl_lam_args((jl_expr_t*)f->linfo->ast);
                 if (jl_array_len(al) == 0) {
                     al = jl_alloc_cell_1d(1);
-                    jl_exprarg(f->linfo->ast, 0) = (jl_value_t*)al;
+                    jl_exprargset(f->linfo->ast, 0, (jl_value_t*)al);
                 }
                 else {
                     jl_array_grow_beg(al, 1);
@@ -714,6 +721,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
         }
         if (iskw) {
             bp = (jl_value_t**)&((jl_methtable_t*)((jl_function_t*)gf)->env)->kwsorter;
+            bp_owner = (jl_value_t*)((jl_function_t*)gf)->env;
             gf = *bp;
         }
     }
@@ -747,6 +755,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     if (*bp == NULL) {
         gf = (jl_value_t*)jl_new_generic_function(name);
         *bp = gf;
+        if (bp_owner) gc_wb(bp_owner, gf);
     }
     assert(jl_is_function(f));
     assert(jl_is_tuple(argtypes));
@@ -757,6 +766,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
         f->linfo && f->linfo->ast && jl_is_expr(f->linfo->ast)) {
         jl_lambda_info_t *li = f->linfo;
         li->ast = jl_compress_ast(li, li->ast);
+        gc_wb(li, li->ast);
     }
     JL_GC_POP();
     return gf;

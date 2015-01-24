@@ -115,7 +115,22 @@ end
 catdoc() = nothing
 catdoc(xs...) = [xs...]
 
-# Macros
+# Modules
+
+function doc(m::Module)
+  md = invoke(doc, (Any,), m)
+  md == nothing || return md
+  readme = Pkg.dir(string(m), "README.md")
+  if isfile(readme)
+    return Markdown.parse_file(readme)
+  end
+end
+
+# Keywords
+
+const keywords = Dict{Symbol,Any}()
+
+# Usage macros
 
 isexpr(x::Expr, ts...) = x.head in ts
 isexpr{T}(x::T, ts...) = T in ts
@@ -182,6 +197,7 @@ function docm(meta, def)
 end
 
 function docm(ex)
+  haskey(keywords, ex) && return keywords[ex]
   isexpr(ex, :->) && return docm(ex.args...)
   isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
   isexpr(ex, :macrocall) && (ex = namify(ex))
@@ -193,6 +209,12 @@ macro doc (args...)
 end
 
 # Metametadata
+
+@doc """
+  The Docs module provides the `@doc` macro which can be used
+  to set and retreive documentation metadata for Julia objects.
+  Please see docs for the `@doc` macro for more info.
+  """ Docs
 
 @doc """
   # Documentation
@@ -289,7 +311,7 @@ export Text, @text_str, @text_mstr
 # @doc """
 # `Text(s)`: Create an object that renders `s` as plain text.
 
-#     HTML("foo")
+#     Text("foo")
 
 # You can also use a stream for large amounts of data:
 
@@ -329,31 +351,11 @@ catdoc(md::MD...) = MD(md...)
 
 # REPL help
 
-const intro = doc"""
-  **Welcome to Julia $(string(VERSION)).** The full manual is available at
-
-      http://docs.julialang.org/
-
-  as well many great tutorials and learning resources:
-
-      http://julialang.org/learning/
-
-  For help on a specific function or macro, type `?` followed
-  by its name, e.g. `?fft`, `?@time` or `?html""`, and press
-  enter.
-
-  You can also use `apropos("...")` to search the documentation.
-  """
-
-function replhelp(ex)
-  if ex === :? || ex === :help
-    return intro
-  else
-    quote
-      # Backwards-compatible with the previous help system, for now
-      let doc = @doc $(esc(ex))
-        doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
-      end
+macro repl (ex)
+  quote
+    # Backwards-compatible with the previous help system, for now
+    let doc = @doc $(esc(ex))
+      doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
     end
   end
 end

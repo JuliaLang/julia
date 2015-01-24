@@ -41,3 +41,5 @@ include("revcomp.jl")
 
 include("spectralnorm.jl")
 @timeit spectralnorm() "spectralnorm" "Eigenvalue using the power method"
+
+maxrss("shootout")
