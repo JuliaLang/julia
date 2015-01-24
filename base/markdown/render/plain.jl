@@ -41,39 +41,38 @@ function plaininline(io::IO, br::LineBreak)
 end
 
 function plain(io::IO, md::Table)
-    col_widths = reduce(max, map(cell -> map(ansi_length, cell), md.rows))
+    col_widths = reduce(max, map(row -> int(map(x -> length(plaininline(x)), row)), md.rows))
+    col_widths = max(col_widths, 3)
 
     for (n, row) in enumerate(md.rows)
         for (i, h) in enumerate(row)
             # TODO use not terminal version of print_align
-            if i != 1
-                print(io, " | ")
-            end
-            print(io, " " ^ (col_widths[i] - ansi_length(h)))
-            plaininline(io, h)
+            (i != 1) && print(io, "  | ")
+            print(io, " " ^ (col_widths[i] - length(plaininline(h))))
+            print(io, plaininline(h))
         end
-        println(io, "")
+        println(io)
 
         if n == 1
             for (j, w) in enumerate(col_widths)
                 if j != 1
-                    print(io, " | ")
+                    print(io, "  | ")
                 end
                 a = typeof(md.align) == Symbol ? md.align : md.align[j]
                 print(io, _dash(w, a))
             end
-            println(io, "")
+            println(io)
         end
     end
 end
 
 function _dash(width, align)
     if align == :l
-        return ":" * "-" ^ max(1, width - 1)
+        return ":" * "-" ^ max(3, width - 1)
     elseif align == :r
-        return "-" ^ max(1, width - 1) * ":"
+        return "-" ^ max(3, width - 1) * ":"
     elseif align == :c
-        return ":" * "-" ^ max(1, width - 2) * ":"
+        return ":" * "-" ^ max(3, width - 2) * ":"
     else
         throw(ArgumentError("Unrecognized alignment $align"))
     end
@@ -90,18 +89,18 @@ function plaininline(io::IO, md...)
 end
 
 plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
-
-plaininline(io::IO, md::Image) = print(io, "![$(md.alt)]($(md.url))")
-
-plaininline(io::IO, s::String) = print(io, s)
-
-plaininline(io::IO, md::Bold) = plaininline(io, "**", md.text, "**")
-
-plaininline(io::IO, md::Italic) = plaininline(io, "*", md.text, "*")
-
+plaininline(io::IO, md::Image) = print(io, "![", plaininline(md.alt), "](",
+                                       md.url, ")")
+plaininline(io::IO, md::Link) = print(io "[", plaininline(md.text), "](",
+                                      md.url, ")")
+plaininline(io::IO, md::Bold) = print(io, "**", plaininline(md.text), "**")
+plaininline(io::IO, md::Italic) = print(io, "*", plaininline(md.text), "*")
 plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
-
+plaininline(io::IO, s::String) = s
 plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
+
+plaininline(s::String) = s
+plaininline(x) = sprint(plaininline, x)
 
 # writemime
 

@@ -33,16 +33,14 @@ function github_paragraph(stream::IO, md::MD, config::Config)
     return true
 end
 
-typealias Row Vector
-
 type Table
-    rows::Vector{Row}
+    rows::Vector{Vector{Any}}
     align
 end
 
 function github_table(stream::IO, md::MD, config::Config)
     withstream(stream) do
-        rows = Row[]
+        rows = Any[]
         n = 0
         align = :r # default is to align right
         while !eof(stream)
@@ -89,17 +87,15 @@ function github_table(stream::IO, md::MD, config::Config)
                 end
 
             elseif n == 1 || length(rows[1]) == length(row)
-                push!(rows, Row(map(x -> parseinline(IOBuffer(_full(x)), config), row)))
+                push!(rows, map(x -> parseinline(x, config), row))
             elseif length(row) > 1
                 seek(stream, pos)
                 break
             else
-                seek(stream, 0)
                 return false
             end
         end
         if length(rows) < 2
-            seek(stream, 0)
             return false
         end
         push!(md, Table(rows, align))
@@ -107,8 +103,6 @@ function github_table(stream::IO, md::MD, config::Config)
     end
 end
 
-_full{T}(s::SubString{T}) = convert(T, s)
-_full(s::AbstractString) = s
 
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
                 github_table, github_paragraph,

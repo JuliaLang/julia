@@ -61,7 +61,7 @@ function html(io::IO, md::Table)
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
                 for c in md.rows[i]
-                    t = i == 1 ? :th : :td
+                    t = (i == 1) ? :th : :td
                     withtag(io, t) do
                         htmlinline(io, c)
                     end
