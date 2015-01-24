@@ -675,7 +675,7 @@ ClusterManagers
 ---------------
 
 The launching, management and networking of julia processes into a logical
-cluster is done via cluster managers. A ``ClusterManager`` is responsible for
+cluster is done via cluster managers. A :obj:`ClusterManager` is responsible for
 
 - launching worker processes in a cluster environment
 - managing events during the lifetime of each worker
@@ -687,10 +687,10 @@ A julia cluster has the following characteristics:
 - All processes can directly communicate with each other.
 
 Connections between workers (using the in-built TCP/IP transport) is established in the following manner:
-- ``addprocs`` is called on the master process with a ``ClusterManager`` object
-- ``addprocs`` calls the appropriate ``launch`` method which spawns required
-  number of worker processes on appropriate machines
-- Each worker starts listening on a free port and writes out its host, port information to STDOUT
+- :func:`addprocs` is called on the master process with a :obj:`ClusterManager` object
+- :func:`addprocs` calls the appropriate :func:`launch` method which spawns
+required number of worker processes on appropriate machines
+- Each worker starts listening on a free port and writes out its host, port information to :const:`STDOUT`
 - The cluster manager captures the stdout's of each worker and makes it available to the master process
 - The master process parses this information and sets up TCP/IP connections to each worker
 - Every worker is also notified of other workers in the cluster
