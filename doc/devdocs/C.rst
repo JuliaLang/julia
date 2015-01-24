@@ -11,3 +11,4 @@
 
    backtraces
    debuggingtips
+   valgrind
