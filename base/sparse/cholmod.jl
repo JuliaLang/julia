@@ -13,7 +13,6 @@ export
     Dense,
     Factor,
     Sparse,
-    Triplet,
     etree,
     sparse!
 
@@ -32,22 +31,6 @@ else
     ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), cholmod_ver)
 end
 const cholmod_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
-const cholmod_com    = fill(0xff, cholmod_com_sz)
-const cholmod_l_com  = fill(0xff, cholmod_com_sz)
-## cholmod_com and cholmod_l_com must be initialized at runtime because they contain pointers
-## to functions in libc.so, whose addresses can change
-function common(::Type{Int32})
-    if isnan(reinterpret(Float64,cholmod_com[1:8])[1])
-        @isok ccall((:cholmod_start, :libcholmod), Cint, (Ptr{UInt8},), cholmod_com)
-    end
-    cholmod_com
-end
-function common(::Type{Int64})
-    if isnan(reinterpret(Float64,cholmod_l_com[1:8])[1])
-        @isok ccall((:cholmod_l_start, :libcholmod), Cint, (Ptr{UInt8},), cholmod_l_com)
-    end
-    cholmod_l_com
-end
 
 type CHOLMODException <: Exception
     msg::AbstractString
@@ -55,6 +38,18 @@ end
 
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == Int64 ? "l_" : "", nm) end
+
+for Ti in IndexTypes
+    @eval begin
+        function common(::Type{$Ti})
+            a = fill(0xff, cholmod_com_sz)
+            @isok ccall((@cholmod_name "start" $Ti
+                , :libcholmod), Cint, (Ptr{UInt8},), a)
+            set_print_level(a, 0) # no printing from CHOLMOD by default
+            a
+        end
+    end
+end
 
 ### A way of examining some of the fields in cholmod_com
 ### Probably better to make this a Dict{ASCIIString,Tuple} and
@@ -85,20 +80,20 @@ end
 const cholmod_com_offsets = Array(Int, length(Common.types))
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
       Void, (Ptr{Int},), cholmod_com_offsets)
-const cholmod_final_ll_inds = (1:4) + cholmod_com_offsets[7]
-const cholmod_prt_inds = (1:4) + cholmod_com_offsets[13]
-const cholmod_ityp_inds = (1:4) + cholmod_com_offsets[18]
+const common_final_ll = (1:4) + cholmod_com_offsets[7]
+const common_print = (1:4) + cholmod_com_offsets[13]
+const common_itype = (1:4) + cholmod_com_offsets[18]
 
 ### there must be an easier way but at least this works.
-function Common(aa::Array{UInt8,1})
-    typs = Common.types
-    sz = map(sizeof, typs)
-    args = map(i->reinterpret(typs[i], aa[cholmod_com_offsets[i] + (1:sz[i])])[1], 1:length(sz))
-    eval(Expr(:call, unshift!(args, :Common), Any))
-end
+# function Common(aa::Array{UInt8,1})
+#     typs = Common.types
+#     sz = map(sizeof, typs)
+#     args = map(i->reinterpret(typs[i], aa[cholmod_com_offsets[i] + (1:sz[i])])[1], 1:length(sz))
+#     eval(Expr(:call, unshift!(args, :Common), Any))
+# end
 
-function set_cholmod_prt_lev(cm::Array{UInt8}, lev::Integer) # can probably be removed
-    cm[(1:4) + cholmod_com_offsets[13]] = reinterpret(UInt8, [int32(lev)])
+function set_print_level(cm::Array{UInt8}, lev::Integer)
+    cm[common_print] = reinterpret(UInt8, [int32(lev)])
 end
 
 ## cholmod_dense pointers passed to or returned from C functions are of Julia type
@@ -276,7 +271,7 @@ type c_Sparse{Tv<:VTypes,Ti<:ITypes}
     packed::Cint
 end
 
-# Corresponds to the exact definition of cholmod_sparse_void in the library. Useful when reading files of unknown type.
+# Corresponds to the exact definition of cholmod_sparse_struct in the library. Useful when reading matrices of unknown type from files as in cholmod_read_sparse
 type c_SparseVoid
     m::Csize_t
     n::Csize_t
@@ -301,32 +296,9 @@ type Sparse{Tv<:VTypes,Ti<:ITypes} <: AbstractSparseMatrix{Tv,Ti}
     nzval::Vector{Tv}
 end
 
-type c_Triplet{Tv<:VTypes,Ti<:ITypes}
-    m::Int
-    n::Int
-    nzmax::Int
-    nnz::Int
-    i::Ptr{Ti}
-    j::Ptr{Ti}
-    x::Ptr{Tv}
-    z::Ptr{Void}
-    stype::Cint
-    itype::Cint
-    xtype::Cint
-    dtype::Cint
-end
-
-type Triplet{Tv<:VTypes,Ti<:ITypes}
-    c::c_Triplet{Tv,Ti}
-    i::Vector{Ti}
-    j::Vector{Ti}
-    x::Vector{Tv}
-end
-
-
-eltype{T<:VTypes}(::Type{Dense{T}}) = T
-eltype{T<:VTypes}(::Type{Factor{T}}) = T
-eltype{T<:VTypes}(::Type{Sparse{T}}) = T
+eltype{T<:VTypes}(A::Dense{T}) = T
+eltype{T<:VTypes}(A::Factor{T}) = T
+eltype{T<:VTypes}(A::Sparse{T}) = T
 
 ## The Dense constructor does not copy the contents, which is generally what you
 ## want as most uses of Dense objects are read-only.
@@ -485,20 +457,6 @@ end
 
 Sparse{Tv<:VTypes}(D::Dense{Tv}) = Sparse(D,1) # default Ti is Int
 
-
-# Constructs a Triplet object from a pointer to a cholmod_triplet_struct created by CHOLMOD. Julia takes ownership of the memory allocated by CHOLMOD and the pointer can therefore be freed without memory leek.
-function Triplet{Tv<:VTypes,Ti<:ITypes}(tp::Ptr{c_Triplet{Tv,Ti}})
-    ctp = unsafe_load(tp)
-    i = pointer_to_array(ctp.i, (ctp.nnz,), true)
-    j = pointer_to_array(ctp.j, (ctp.nnz,), true)
-    x = pointer_to_array(ctp.x, (ctp.x == C_NULL ? 0 : ctp.nnz), true)
-    ct = Triplet{Tv,Ti}(ctp, i, j, x)
-
-    csp.packed == 1 && c_free(csp.nzpt) # Julia's Sparse is not using unpacked storage
-    c_free(tp)
-    ct
-end
-
 # Dense wrappers
 ### cholmod_core_h ###
 function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
@@ -629,20 +587,6 @@ for Ti in IndexTypes
             L
         end
 
-        function triplet_to_sparse{Tv<:VTypes,Ti<:$Ti}(T::Triplet{Tv,Ti})
-            Sparse(ccall((@cholmod_name "triplet_to_sparse" $Ti
-                ,:libcholmod), Ptr{c_Sparse{Tv,Ti}},
-                    (Ptr{c_Triplet{Tv,Ti}}, Ptr{UInt8}),
-                        &T.c, common($Ti)))
-        end
-
-        function sparse_to_triplet{Tv<:VTypes,Ti<:$Ti}(A::Sparse{Tv,Ti})
-            Triplet(ccall((@cholmod_name "sparse_to_triplet" $Ti
-                ,:libcholmod), Ptr{c_Triplet{Tv,Ti}},
-                    (Ptr{c_Sparse{Tv,Ti}}, Ptr{UInt8}),
-                        &A.c, common($Ti)))
-        end
-
         function check_sparse{Tv<:VTypes}(A::Sparse{Tv,$Ti})
             bool(ccall((@cholmod_name "check_sparse" $Ti
                 ,:libcholmod), Cint,
@@ -655,13 +599,6 @@ for Ti in IndexTypes
                 ,:libcholmod), Cint,
                     (Ptr{c_Factor{Tv,$Ti}}, Ptr{UInt8}),
                         &L.c, common($Ti)))
-        end
-
-        function check_triplet{Tv<:VTypes}(T::Triplet{Tv,$Ti})
-            bool(ccall((@cholmod_name "check_triplet" $Ti
-                ,:libcholmod), Cint,
-                    (Ptr{c_Triplet{Tv,$Ti}}, Ptr{UInt8}),
-                        &T.c, common($Ti)))
         end
 
         function analyze{Tv<:VTypes}(A::Sparse{Tv,$Ti}, C::Vector{UInt8} = common($Ti))
@@ -731,12 +668,6 @@ for Ti in IndexTypes
                     (Ptr{c_Sparse{Tv,$Ti}}, Ptr{UInt8}),
                         &A.c, common($Ti)))
         end
-        function copy_triplet{Tv<:VTypes}(T::Triplet{Tv,$Ti})
-            Triplet(ccall((@cholmod_name "copy_triplet" $Ti
-                ,:libcholmod), Ptr{c_Triplet{Tv,$Ti}},
-                    (Ptr{c_Triplet{Tv,$Ti}}, Ptr{UInt8}),
-                        &T.c, common($Ti)))
-        end
         function copy{Tv<:VTypes}(A::Sparse{Tv,$Ti}, stype::Integer, mode::Integer)
             Sparse(ccall((@cholmod_name "copy" $Ti
                 ,:libcholmod), Ptr{c_Sparse{Tv,$Ti}},
@@ -746,17 +677,21 @@ for Ti in IndexTypes
 
         ### cholmod_check.h ###
         function print_sparse{Tv<:VTypes}(A::Sparse{Tv,$Ti}, name::ASCIIString)
+            cm = common($Ti)
+            set_print_level(cm, 3)
             @isok ccall((@cholmod_name "print_sparse" $Ti
                 ,:libcholmod), Cint,
                     (Ptr{c_Sparse{Tv,$Ti}}, Ptr{UInt8}, Ptr{UInt8}),
-                         &A.c, name, common($Ti))
+                         &A.c, name, cm)
             nothing
         end
         function print_factor{Tv<:VTypes}(L::Factor{Tv,$Ti}, name::ASCIIString)
+            cm = common($Ti)
+            set_print_level(cm, 3)
             @isok ccall((@cholmod_name "print_factor" $Ti
                 ,:libcholmod), Cint,
                     (Ptr{c_Factor{Tv,$Ti}}, Ptr{UInt8}, Ptr{UInt8}),
-                        &L.c, name, common($Ti))
+                        &L.c, name, cm)
             nothing
         end
 
@@ -864,7 +799,6 @@ end
 Dense(A::Sparse) = sparse_to_dense(A)
 
 Sparse(A::Dense) = dense_to_sparse(A)
-Sparse(A::Triplet) = triplet_to_sparse(A)
 function Sparse(L::Factor)
     if bool(L.c.is_ll)
         return factor_to_sparse(L)
@@ -881,18 +815,14 @@ function Sparse(filename::ASCIIString)
     A
 end
 
-Triplet(A::Sparse) = sparse_to_triplet(A)
-
 show(io::IO, L::Factor) = print_factor(L, "")
 
 isvalid(A::Dense) = check_dense(A)
 isvalid(A::Sparse) = check_sparse(A)
-isvalid(A::Triplet) = check_triplet(A)
 isvalid(A::Factor) = check_factor(A)
 
 copy(A::Dense) = copy_dense(A)
 copy(A::Sparse) = copy_sparse(A)
-copy(A::Triplet) = copy_triplet(A)
 copy(A::Factor) = copy_factor(A)
 
 size(B::Dense) = size(B.mat)
@@ -914,18 +844,26 @@ function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
     ((r1 > r2) || (A.rowval0[r1] + 1 != i0)) ? zero(T) : A.nzval[r1]
 end
 
-full(A::Sparse) = Dense(A).mat
+# Convert invalidates the input matrix
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, A::Sparse{Tv,Ti})
+    B = SparseMatrixCSC(A.c.m, A.c.n, increment!(A.colptr0), increment!(A.rowval0), A.nzval)
+    if A.c.stype != 0
+        return isreal(A) ? Symmetric(B, A.c.stype < 0 ? :L : :U) : Hermitian(B, A.c.stype < 0 ? :L : :U)
+    end
+    return B
+end
+sparse!{Tv,Ti}(A::Sparse{Tv,Ti}) = convert(SparseMatrixCSC{Tv,Ti}, A)
+sparse(A::Sparse)   = sparse!(copy(A))
+sparse(L::Factor)   = sparse!(Sparse(L))
+sparse(D::Dense)    = sparse!(Sparse(D))
+function full(A::Sparse)
+    B = Dense(A).mat
+    if A.c.stype != 0
+        return isreal(A) ? Symmetric(AA.c.stype < 0 ? :L : :U) : Hermitian(B, A.c.stype < 0 ? :L : :U)
+    end
+    return B
+end
 full(A::Dense) = A.mat
-function sparse(A::Sparse)
-    if bool(A.c.stype) return sparse!(copysym(A)) end
-    SparseMatrixCSC(A.c.m, A.c.n, increment(A.colptr0), increment(A.rowval0), copy(A.nzval))
-end
-function sparse!(A::Sparse)
-    SparseMatrixCSC(A.c.m, A.c.n, increment!(A.colptr0), increment!(A.rowval0), A.nzval)
-end
-sparse(L::Factor) = sparse!(Sparse(L))
-sparse(D::Dense) = sparse!(Sparse(D))
-sparse(T::Triplet) = sparse!(Sparse(T))
 
 ## Multiplication
 
@@ -976,7 +914,7 @@ analyze(A::SparseMatrixCSC) = analyze(Sparse(A))
 function cholfact(A::Sparse)
     cm = common(indtype(A))
     ## may need to change final_asis as well as final_ll
-    cm[cholmod_final_ll_inds] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
     F = analyze(A, cm)
     factorize(A, F, cm)
     F.c.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(F.c.minor))
@@ -986,7 +924,7 @@ end
 function ldltfact(A::Sparse)
     cm = common(indtype(A))
     ## may need to change final_asis as well as final_ll
-    cm[cholmod_final_ll_inds] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
     F = analyze(A, cm)
     factorize(A, F, cm)
     return F
@@ -995,7 +933,7 @@ end
 function cholfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
     cm = common(Ti)
     ## may need to change final_asis as well as final_ll
-    cm[cholmod_final_ll_inds] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
     F = analyze(A, cm)
     factorize_p(A, β, Ti[], F, cm)
     F.c.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(F.c.minor))
@@ -1005,7 +943,7 @@ end
 function ldltfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
     cm = common(Ti)
     ## may need to change final_asis as well as final_ll
-    cm[cholmod_final_ll_inds] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
     F = analyze(A, cm)
     factorize_p(A, β, Ti[], F, cm)
     F.c.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(F.c.minor))
