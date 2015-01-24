@@ -115,6 +115,17 @@ end
 catdoc() = nothing
 catdoc(xs...) = [xs...]
 
+# Modules
+
+function doc(m::Module)
+  md = invoke(doc, (Any,), m)
+  md == nothing || return md
+  readme = Pkg.dir(string(m), "README.md")
+  if isfile(readme)
+    return Markdown.parse_file(readme)
+  end
+end
+
 # Macros
 
 isexpr(x::Expr, ts...) = x.head in ts
@@ -193,6 +204,12 @@ macro doc (args...)
 end
 
 # Metametadata
+
+@doc """
+  The Docs module provides the `@doc` macro which can be used
+  to set and retreive documentation metadata for Julia objects.
+  Please see docs for the `@doc` macro for more info.
+  """ Docs
 
 @doc """
   # Documentation
