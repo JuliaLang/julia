@@ -269,3 +269,18 @@ let
     b = Dict("フー" => 17, "バー" => 4711)
     @test is(typeof(merge(a, b)), Dict{UTF8String,Float64})
 end
+
+# issue 9295
+let
+    d = Dict()
+    @test is(push!(d, 'a' => 1), d)
+    @test d['a'] == 1
+    @test is(push!(d, 'b' => 2, 'c' => 3), d)
+    @test d['b'] == 2
+    @test d['c'] == 3
+    @test is(push!(d, 'd' => 4, 'e' => 5, 'f' => 6), d)
+    @test d['d'] == 4
+    @test d['e'] == 5
+    @test d['f'] == 6
+    @test length(d) == 6
+end
