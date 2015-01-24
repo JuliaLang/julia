@@ -3215,21 +3215,26 @@ void jl_init_types(void)
                                         jl_any_type, jl_null, 32);
 
     tv = jl_tuple1(tvar("T"));
+    jl_ref_type =
+        jl_new_abstracttype((jl_value_t*)jl_symbol("Ref"), jl_any_type, tv);
+
+    tv = jl_tuple1(tvar("T"));
     jl_pointer_type =
-        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"), jl_any_type, tv,
+        jl_new_bitstype((jl_value_t*)jl_symbol("Ptr"),
+                        (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_ref_type, tv), tv,
                         sizeof(void*)*8);
 
     // Type{T}
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),
                                       (jl_value_t*)jl_bottom_type,jl_top_type);
     jl_typetype_type = (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_type_type,
-                                                     jl_tuple(1,jl_typetype_tvar));
+                                                     jl_tuple1(jl_typetype_tvar));
 
     jl_ANY_flag = (jl_value_t*)tvar("ANY");
 
     // complete builtin type metadata
     jl_value_t *pointer_void = jl_apply_type((jl_value_t*)jl_pointer_type,
-                                             jl_tuple(1,jl_void_type));
+                                             jl_tuple1(jl_void_type));
     jl_voidpointer_type = (jl_datatype_t*)pointer_void;
     jl_tupleset(jl_datatype_type->types, 6, jl_int32_type);
     jl_tupleset(jl_datatype_type->types, 7, (jl_value_t*)jl_bool_type);

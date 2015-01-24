@@ -4113,7 +4113,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
                                                       sizeof(jl_handler_t)));
-            handlr->setAlignment(128); // bits == 16 bytes
+            handlr->setAlignment(16);
             handlers[labl] = handlr;
         }
     }
@@ -5255,36 +5255,6 @@ extern "C" void jl_init_codegen(void)
                               "jl_box32", (void*)&jl_box32, m);
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
                               "jl_box64", (void*)&jl_box64, m);
-
-    std::vector<Type*> toptrargs(0);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(T_int32);
-    toptrargs.push_back(T_int32);
-    value_to_pointer_func =
-        Function::Create(FunctionType::get(T_pint8, toptrargs, false),
-                         Function::ExternalLinkage, "jl_value_to_pointer",
-                         m);
-    add_named_global(value_to_pointer_func,
-                                         (void*)&jl_value_to_pointer);
-
-    temp_arg_area = (char*)malloc(arg_area_sz);
-    arg_area_loc = 0;
-
-    std::vector<Type*> noargs(0);
-    save_arg_area_loc_func =
-        Function::Create(FunctionType::get(T_uint64, noargs, false),
-                         Function::ExternalLinkage, "save_arg_area_loc",
-                         m);
-    add_named_global(save_arg_area_loc_func,
-                                         (void*)&save_arg_area_loc);
-
-    restore_arg_area_loc_func =
-        Function::Create(ft1arg(T_void, T_uint64),
-                         Function::ExternalLinkage, "restore_arg_area_loc",
-                         m);
-    add_named_global(restore_arg_area_loc_func,
-                                         (void*)&restore_arg_area_loc);
 
     typeToTypeId = jl_alloc_cell_1d(16);
 }

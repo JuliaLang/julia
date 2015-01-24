@@ -162,7 +162,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
         }
         Constant *asInt = ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
-        if (jl_is_cpointer_type(bt)) {
+        if (jl_is_cpointer_type(jt)) {
             return ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt));
         }
         return asInt;

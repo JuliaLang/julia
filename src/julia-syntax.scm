@@ -994,20 +994,6 @@
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
 (define (lower-ccall name RT atypes args)
-  (define (ccall-conversion T x)
-    (cond ((eq? T 'Any)  x)
-          ((and (pair? x) (eq? (car x) '&))
-           `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
-          (else
-           `(call (top cconvert) ,T ,x))))
-  (define (argument-root a)
-    ;; something to keep rooted for this argument
-    (cond ((and (pair? a) (eq? (car a) '&))
-           (argument-root (cadr a)))
-          ((and (pair? a) (sym-dot? a))
-           (cadr a))
-          ((symbol-like? a) a)
-          (else         0)))
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
@@ -1019,28 +1005,16 @@
                 ,@A))
         (let* ((a     (car A))
                (isseq (and (pair? (car F)) (eq? (caar F) '...)))
-               (ty    (if isseq (cadar F) (car F)))
-               (rt (if (eq? ty 'Any)
-                       0
-                       (argument-root a)))
-               (ca (cond ((eq? ty 'Any)
-                          a)
-                         ((and (pair? a) (eq? (car a) '&))
-                          (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
-                              (let ((g (make-jlgensym)))
-                                (begin
-                                  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
-                                  `(& ,g)))
-                              a))
-                         ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
-                          (let ((g (make-jlgensym)))
-                            (begin
-                              (set! stmts (cons `(= ,g ,a) stmts))
-                              g)))
-                         (else
-                          a))))
-          (loop (if isseq F (cdr F)) (cdr A) stmts
-                (list* rt (ccall-conversion ty ca) C))))))
+               (ty    (if isseq (cadar F) (car F))))
+          (if (eq? ty 'Any)
+            (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
+            (let* ((g (make-jlgensym))
+                   (isamp (and (pair? a) (eq? (car a) '&)))
+                   (a (if isamp (cadr a) a))
+                   (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert_gcroot 'cconvert_gcroot)) ,ty ,a)) stmts))
+                   (ca `(call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,g)))
+              (loop (if isseq F (cdr F)) (cdr A) stmts
+                    (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (block-returns? e)
   (if (assignment? e)
