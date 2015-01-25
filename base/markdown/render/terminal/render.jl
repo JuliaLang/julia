@@ -65,28 +65,6 @@ function term(io::IO, br::LineBreak, columns)
    println(io)
 end
 
-function term(io::IO, md::Table, columns)
-    col_widths = reduce(max, map(cell -> int(map(ansi_length, cell)),
-                                 md.rows))
-    col_widths = max(col_widths, 3)
-    for (n, row) in enumerate(md.rows)
-        for (i, h) in enumerate(row)
-            (i != 1) && print(io, "  ")
-            a = typeof(md.align) == Symbol ? md.align : md.align[i]
-            print_align(io, h, col_widths[i], a)
-        end
-        println(io)
-
-        if n == 1
-            for (j, w) in enumerate(col_widths)
-                (j != 1) && print(io, "  ")
-                print(io, "-" ^ w)
-            end
-            println(io)
-        end
-    end
-end
-
 function ansi_length(md::Vector{Any})
    total = 0
    for c in md

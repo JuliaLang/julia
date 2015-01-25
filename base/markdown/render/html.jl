@@ -56,21 +56,6 @@ function html(io::IO, md::List)
     end
 end
 
-function html(io::IO, md::Table)
-    withtag(io, :table) do
-        for (i, row) in enumerate(md.rows)
-            withtag(io, :tr) do
-                for c in md.rows[i]
-                    t = (i == 1) ? :th : :td
-                    withtag(io, t) do
-                        htmlinline(io, c)
-                    end
-                end
-            end
-        end
-    end
-end
-
 html(io::IO, x) = tohtml(io, x)
 
 # Inline elements
