@@ -855,7 +855,7 @@ sparse(D::Dense)    = sparse!(Sparse(D))
 function full(A::Sparse)
     B = Dense(A).mat
     if A.c.stype != 0
-        return isreal(A) ? Symmetric(AA.c.stype < 0 ? :L : :U) : Hermitian(B, A.c.stype < 0 ? :L : :U)
+        return isreal(A) ? Symmetric(B, A.c.stype < 0 ? :L : :U) : Hermitian(B, A.c.stype < 0 ? :L : :U)
     end
     return B
 end

@@ -177,5 +177,6 @@ B = Sparse(SparseMatrixCSC{Float64,Int32}(sprandn(48, 48, 0.1))) # A has Int32 i
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
 writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-@test Sparse("tmp.mtx") == [1 0 0;0 1 0;0 0.5 1]
+@test full(Sparse("tmp.mtx")) == [1 0 0;0 1 0.5;0 0.5 1]
+run(`rm tmp.mtx`)
 
