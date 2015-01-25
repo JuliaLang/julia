@@ -41,3 +41,9 @@ Base.show_method_candidates(buf, Base.MethodError(method_c2,(1., 1., 2)))
 color = "\e[0m\nClosest candidates are:\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Float64, ::Any...)\n  method_c2(\e[1m\e[31m::Int32\e[0m, ::Any...)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, \e[1m\e[31m::T<:Real\e[0m)\n  ...\n\e[0m"
 no_color = no_color = "\nClosest candidates are:\n  method_c2(!Matched::Int32, ::Float64, ::Any...)\n  method_c2(!Matched::Int32, ::Any...)\n  method_c2{T<:Real}(::T<:Real, ::T<:Real, !Matched::T<:Real)\n  ...\n"
 test_have_color(buf, color, no_color)
+
+method_c3(x::Float64, y::Float64) = true
+Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
+color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)\n\e[0m"
+no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)\n"
+test_have_color(buf, color, no_color)
