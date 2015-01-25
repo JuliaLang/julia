@@ -356,3 +356,8 @@ for f in (eigfact, eigvals, eig)
         @test_throws ArgumentError f(A, 1:4)
     end
 end
+
+# test diag
+A = eye(4)
+@test diag(A) == ones(4)
+@test diag(sub(A, 1:3, 1:3)) == ones(3)
