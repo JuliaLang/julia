@@ -30,8 +30,8 @@ the following elements:
 
        end
 
- - **Put tests of your code in another file.** Create another file, say
-   ``test_tmp.jl``, which begins with ::
+ - **Put your test code in another file.** Create another file, say
+   ``tst.jl``, which begins with ::
 
        import Tmp
 
@@ -42,14 +42,27 @@ the following elements:
    ``Tmp.`` to uses of names defined in your module. (You can lower that
    cost by keeping your module name short.)
 
+   Alternatively, you can wrap the contents of your test file in a
+   module, as ::
+
+       module Tst
+           using Tmp
+
+           <scratch work>
+
+       end
+
+   The advantage is that you can now do :obj:`using` ``Tmp`` in your
+   test code and can therefore avoid prepending ``Tmp.`` everywhere.
+   The disadvantage is that code can no longer be selectively copied
+   to the REPL without some tweaking.
+
  - **Lather. Rinse. Repeat.** Explore ideas at the ``julia`` command
-   prompt. Save good ideas in your ``test_tmp.jl`` file. Occasionally
+   prompt. Save good ideas in ``tst.jl``. Occasionally
    restart the REPL, issuing ::
 
        reload("Tmp")
-       include("test_tmp.jl")
-
-   editing these two files as you go.
+       include("tst.jl")
 
 Simplify initialization
 ~~~~~~~~~~~~~~~~~~~~~~~
