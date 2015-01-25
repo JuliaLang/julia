@@ -43,7 +43,7 @@ begin
     # Test that it is functionally equivalent to the standard method
     for _ = 1:25, f = [x -> 2x, x -> x^2, sin], opt = [+, *]
         n = rand(2:50)
-        arr = randn(n)
+        arr = rand(1:100, n)
         darr = distribute(arr)
 
         @test mapreduce(f, opt, arr) == mapreduce(f, opt, darr)
