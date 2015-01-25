@@ -80,7 +80,7 @@ function startswith(stream::IO, s::String; eat = true, padding = false, newlines
 end
 
 function startswith(stream::IO, c::Char; eat = true)
-    if peek(stream) == c
+    if !eof(stream) && peek(stream) == c
         eat && read(stream, Char)
         return true
     else
