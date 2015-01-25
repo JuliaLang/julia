@@ -197,7 +197,9 @@ function show_method_candidates(io::IO, ex::MethodError)
             t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
             if t_in == None
                 if Base.have_color
-                    print(buf, "\e[1m\e[31m::$(method.sig[i])\e[0m")
+                    Base.with_output_color(:red, buf) do buf
+                        print(buf, "::$(method.sig[i])")
+                    end
                 else
                     print(buf, "!Matched::$(method.sig[i])")
                 end
@@ -225,7 +227,9 @@ function show_method_candidates(io::IO, ex::MethodError)
             for sigtype in method.sig[length(t_i)+1:end]
                 print(buf, ", ")
                 if Base.have_color
-                    print(buf, "\e[1m\e[31m::$sigtype\e[0m")
+                    Base.with_output_color(:red, buf) do buf
+                        print(buf, "::$sigtype")
+                    end
                 else
                     print(buf, "!Matched::$sigtype")
                 end
