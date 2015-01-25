@@ -36,4 +36,6 @@ end
 # TODO: tables
 
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader, github_paragraph,
-                 en_dash, inline_code, asterisk_bold, asterisk_italic, image, link]
+
+                linebreak, escapes, en_dash, inline_code, asterisk_bold, asterisk_italic,
+                image, link]

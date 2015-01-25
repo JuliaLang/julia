@@ -36,6 +36,10 @@ function plain(io::IO, list::List)
     end
 end
 
+function plaininline(io::IO, br::LineBreak)
+   println(io)
+end
+
 plain(io::IO, x) = tohtml(io, x)
 
 # Inline elements

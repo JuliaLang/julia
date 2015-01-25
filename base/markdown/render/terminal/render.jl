@@ -61,6 +61,10 @@ function term(io::IO, md::Code, columns)
     end
 end
 
+function term(io::IO, br::LineBreak, columns)
+   println(io)
+end
+
 term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
 
 # Inline Content
