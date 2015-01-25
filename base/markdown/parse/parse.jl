@@ -17,6 +17,8 @@ Base.endof(md::MD) = endof(md.content)
 Base.length(md::MD) = length(md.content)
 Base.isempty(md::MD) = isempty(md.content)
 
+==(a::MD, b::MD) = plain(a) == plain(b)
+
 # Parser functions:
 #   md – should be modified appropriately
 #   return – basically, true if parse was successful
