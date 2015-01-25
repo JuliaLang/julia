@@ -80,10 +80,11 @@ end
 
 type LineBreak end
 
-@trigger "\\\n" ->
+@trigger '\\' ->
 function linebreak(stream::IO)
-    skip(stream, 2)
-    return LineBreak()
+    if startswith(stream, "\\\n")
+        return LineBreak()
+    end
 end
 
 @trigger '-' ->
