@@ -106,6 +106,6 @@ end
 
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
                 github_table, github_paragraph,
-                linebreak, espaces, en_dash, inline_code, asterisk_bold,
+                linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 asterisk_italic, image, link]
 

@@ -91,12 +91,12 @@ end
 plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 plaininline(io::IO, md::Image) = print(io, "![", plaininline(md.alt), "](",
                                        md.url, ")")
-plaininline(io::IO, md::Link) = print(io "[", plaininline(md.text), "](",
+plaininline(io::IO, md::Link) = print(io, "[", plaininline(md.text), "](",
                                       md.url, ")")
 plaininline(io::IO, md::Bold) = print(io, "**", plaininline(md.text), "**")
 plaininline(io::IO, md::Italic) = print(io, "*", plaininline(md.text), "*")
 plaininline(io::IO, md::Code) = print(io, "`", md.code, "`")
-plaininline(io::IO, s::String) = s
+plaininline(io::IO, s::String) = print(io, s)
 plaininline(io::IO, x) = writemime(io, MIME"text/plain"(), x)
 
 plaininline(s::String) = s
