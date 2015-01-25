@@ -1243,7 +1243,7 @@ end
 genlabel(sv) = LabelNode(sv.label_counter += 1)
 
 function find_gensym_uses(body)
-    uses = Vector{Int}[]
+    uses = IntSet[]
     for line = 1:length(body)
         find_gensym_uses(body[line], uses, line)
     end
@@ -1253,7 +1253,7 @@ function find_gensym_uses(e::ANY, uses, line)
     if isa(e,GenSym)
         id = (e::GenSym).id+1
         while length(uses) < id
-            push!(uses, Array(Int,0))
+            push!(uses, IntSet())
         end
         push!(uses[id], line)
     elseif isa(e,Expr)
@@ -1266,7 +1266,7 @@ function find_gensym_uses(e::ANY, uses, line)
             if isa(b.args[1],GenSym)
                 id = (b.args[1]::GenSym).id+1
                 while length(uses) < id
-                    push!(uses, Array(Int,0))
+                    push!(uses, IntSet())
                 end
             end
             find_gensym_uses(b.args[2], uses, line)
@@ -1278,7 +1278,7 @@ function find_gensym_uses(e::ANY, uses, line)
     end
 end
 
-function GenSym(sv::StaticVarInfo, typ)
+function newvar!(sv::StaticVarInfo, typ)
     id = length(sv.gensym_types)
     push!(sv.gensym_types, typ)
     return GenSym(id)
@@ -2535,7 +2535,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
                 (affect_free && !free) || (!affect_free && !effect_free(aei,sv,false)))
             if occ != 0 # islocal=true is implied by occ!=0
                 if !islocal
-                    vnew = GenSym(sv, aeitype)
+                    vnew = newvar!(sv, aeitype)
                     argexprs[i] = vnew
                 else
                     vnew = unique_name(enclosing_ast, ast)
@@ -2764,7 +2764,7 @@ function inlining_pass(e::Expr, sv, ast)
                 res1 = res[1]
                 if has_stmts && !effect_free(res1, sv, false)
                     restype = exprtype(res1,sv)
-                    vnew = GenSym(sv, restype)
+                    vnew = newvar!(sv, restype)
                     argloc[i] = vnew
                     unshift!(stmts, Expr(:(=), vnew, res1))
                 else
@@ -3177,7 +3177,7 @@ function tuple_elim_pass(ast::Expr, sv::StaticVarInfo)
                     vals[j] = tupelt
                 else
                     elty = exprtype(tupelt,sv)
-                    tmpv = GenSym(sv, elty)
+                    tmpv = newvar!(sv, elty)
                     tmp = Expr(:(=), tmpv, tupelt)
                     insert!(body, i+n_ins, tmp)
                     vals[j] = tmpv
