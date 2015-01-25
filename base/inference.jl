@@ -65,12 +65,13 @@ type CallStack
     ast
     types::Type
     recurred::Bool
-    cycleid::Int
+    rec::Bool
+    toprec::Bool
     result
     prev::Union{EmptyCallStack,CallStack}
     sv::StaticVarInfo
 
-    CallStack(ast, types::ANY, prev) = new(ast, types, false, 0, Bottom, prev)
+    CallStack(ast, types::ANY, prev) = new(ast, types, false, false, false, Bottom, prev)
 end
 
 inference_stack = EmptyCallStack()
@@ -1458,16 +1459,15 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
     #dotrace = true
     local ast::Expr, tfunc_idx = -1
     curtype = Bottom
-    redo = false
     # check cached t-functions
     tf = def.tfunc
+    tfunc_idx = 0 # because we skip type-inference on typeinf, we fail to detect the usedUndef on this variable (without this statement)
     if !is(tf,nothing)
         tfarr = tf::Array{Any,1}
         for i = 1:3:length(tfarr)
             if typeseq(tfarr[i],atypes)
                 code = tfarr[i+1]
                 if tfarr[i+2]
-                    redo = true
                     tfunc_idx = i+1
                     curtype = code
                     break
@@ -1486,7 +1486,7 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
         end
     end
     # TODO: typeinf currently gets stuck without this
-    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
+    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf || linfo.name === :typeinf
         return (linfo.ast, Any)
     end
 
@@ -1495,7 +1495,7 @@ function typeinf(linfo::LambdaStaticData,atypes::ANY,sparams::SimpleVector, def,
         return (fulltree, result::Type)
     end
 
-    if !redo
+    if tfunc_idx == 0
         if is(def.tfunc,nothing)
             def.tfunc = Any[]
         end
@@ -1564,13 +1564,16 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     while !isa(f,EmptyCallStack)
         if (is(f.ast,ast0) || f.ast==ast0) && typeseq(f.types, atypes)
             # return best guess so far
-            (f::CallStack).recurred = true
-            (f::CallStack).cycleid = CYCLE_ID
+            f = f::CallStack
+            f.recurred = true
+            f.toprec = f.toprec || !f.rec
+            f.rec = true
             r = inference_stack
             while !is(r, f)
                 # mark all frames that are part of the cycle
                 r.recurred = true
-                r.cycleid = CYCLE_ID
+                r.toprec = false
+                r.rec = true
                 r = r.prev
             end
             CYCLE_ID += 1
@@ -1617,9 +1620,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     frame.sv = sv
     inference_stack = frame
     frame.result = curtype
-
-    rec = false
-    toprec = false
 
     s = Any[ () for i=1:n ]
     # initial types
@@ -1712,10 +1712,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
             stmt = body[pc]
             changes = abstract_interpret(stmt, s[pc]::ObjectIdDict, sv)
             if frame.recurred
-                rec = true
-                if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
-                    toprec = true
-                end
                 push!(recpts, pc)
                 #if dbg
                 #    show(pc); print(" recurred\n")
@@ -1785,10 +1781,6 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
                     pc´ = n+1
                     rt = abstract_eval(stmt.args[1], s[pc], sv)
                     if frame.recurred
-                        rec = true
-                        if !(isa(frame.prev,CallStack) && frame.prev.cycleid == frame.cycleid)
-                            toprec = true
-                        end
                         push!(recpts, pc)
                         #if dbg
                         #    show(pc); print(" recurred\n")
@@ -1863,12 +1855,12 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
 
     #print("\n",ast,"\n")
     #if dbg print("==> ", frame.result,"\n") end
-    if (toprec && typeseq(curtype, frame.result)) || !isa(frame.prev,CallStack)
-        rec = false
+    if (frame.toprec && typeseq(curtype, frame.result))
+        frame.rec = false
     end
     fulltree = type_annotate(ast, s, sv, frame.result, args)
 
-    if !rec
+    if !frame.rec
         @assert fulltree.args[3].head === :body
         if optimize
             if JLOptions().can_inline == 1
@@ -1888,7 +1880,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::ANY, sparams::SimpleV
     end
 
     inference_stack = (inference_stack::CallStack).prev
-    return (fulltree, frame.result, rec)
+    return (fulltree, frame.result, frame.rec)
 end
 
 function record_var_type(e::Symbol, t::ANY, decls)
