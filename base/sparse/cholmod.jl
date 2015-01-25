@@ -310,9 +310,6 @@ function Dense{T<:VTypes}(A::VecOrMat{T}) # uses the memory from Julia
 end
 function Dense{T<:VTypes}(c::Ptr{c_Dense{T}})
     cp = unsafe_load(c)
-    if cp.lda != cp.m || cp.nzmax != cp.m * cp.n
-        throw(DimensionMismatch("overallocated cholmod_dense returned object of size $(cp.m) by $(cp.n) with leading dim $(cp.lda) and nzmax $(cp.nzmax)"))
-    end
     ## the true in the call to pointer_to_array means Julia will free the memory
     val = Dense(cp, pointer_to_array(cp.xpt, (cp.m,cp.n), true))
     c_free(c)
@@ -326,15 +323,7 @@ function Sparse{Tv<:VTypes,Ti<:ITypes}(colpt::Vector{Ti},
                                                      n::Integer,
                                                      stype::Signed)
     bb = colpt[1]
-    # if bb != 0 && bb != 1
-    #     throw(DimensionMismatch("colpt[1] is $bb, must be 0 or 1"))
-    # end
-    # if any(diff(colpt) .< 0)
-    #     throw(ArgumentError("elements of colpt must be non-decreasing"))
-    # end
-    # if length(colpt) != n + 1
-    #     throw(DimensionMismatch("length(colptr) = $(length(colpt)), should be $(n+1)"))
-    # end
+
     if bool(bb)                         # one-based
         colpt0 = decrement(colpt)
         rowval0 = decrement(rowval)
@@ -343,24 +332,27 @@ function Sparse{Tv<:VTypes,Ti<:ITypes}(colpt::Vector{Ti},
         rowval0 = rowval
     end
     nz = colpt0[end]
-    # if length(rowval0) != nz || length(nzval) != nz
-    #     throw(DimensionMismatch("length(rowval) = $(length(rowval)) and length(nzval) = $(length(nzval)) should be $nz"))
-    # end
-    # if any(rowval0 .< 0) || any(rowval0 .>= m)
-    #     throw(ArgumentError("all elements of rowval0 must be in the range [0,$(m-1)]"))
-    # end
+
     it = ityp(Ti)
-    cs = Sparse(c_Sparse{Tv,Ti}(m, n, int(nz), convert(Ptr{Ti}, colpt0),
-                                               convert(Ptr{Ti}, rowval0), C_NULL,
-                                               convert(Ptr{Tv}, nzval), C_NULL,
-                                               int32(stype), ityp(Ti),
-                                               xtyp(Tv), dtyp(Tv),
-                                               TRUE, TRUE),
-                                               colpt0, rowval0, nzval)
+    cs = Sparse(c_Sparse{Tv,Ti}(m,
+                                n,
+                                int(nz),
+                                convert(Ptr{Ti}, colpt0),
+                                convert(Ptr{Ti}, rowval0),
+                                C_NULL,
+                                convert(Ptr{Tv}, nzval),
+                                C_NULL,
+                                int32(stype),
+                                ityp(Ti),
+                                xtyp(Tv),
+                                dtyp(Tv),
+                                TRUE,
+                                TRUE),
+                colpt0,
+                rowval0,
+                nzval)
 
     @isok isvalid(cs)
-
-    # cs = sort!(cs)
 
     return cs
 end
@@ -837,7 +829,10 @@ getindex(A::Dense, i::Integer) = A.mat[i]
 getindex(A::Dense, i::Integer, j::Integer) = A.mat[i, j]
 getindex(A::Sparse, i::Integer) = getindex(A, ind2sub(size(A),i)...)
 function getindex{T}(A::Sparse{T}, i0::Integer, i1::Integer)
-    if !(1 <= i0 <= A.c.m && 1 <= i1 <= A.c.n); throw(BoundsError()); end
+    !(1 <= i0 <= A.c.m && 1 <= i1 <= A.c.n) && throw(BoundsError())
+    A.c.stype < 0 && i0 < i1 && return conj(A[i1,i0])
+    A.c.stype > 0 && i0 > i1 && return conj(A[i1,i0])
+
     r1 = int(A.colptr0[i1] + 1)
     r2 = int(A.colptr0[i1 + 1])
     (r1 > r2) && return zero(T)
@@ -972,7 +967,8 @@ ldltfact{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}
 (\)(L::Factor, b::Vector) = reshape(solve(CHOLMOD_A, L, Dense(b)).mat, length(b))
 (\)(L::Factor, B::Matrix) = solve(CHOLMOD_A, L, Dense(B)).mat
 (\)(L::Factor, B::Sparse) = spsolve(CHOLMOD_A, L, B)
-(\)(L::Factor, B::SparseMatrixCSC) = sparse!(spsolve(CHOLMOD_A, L, Sparse(B)))
+# When right hand side is sparse, we have to ensure that the rhs is not marked as symmetric.
+(\)(L::Factor, B::SparseMatrixCSC) = sparse!(spsolve(CHOLMOD_A, L, Sparse(B, 0)))
 
 Ac_ldiv_B(L::Factor, B::Dense) = solve(CHOLMOD_A, L, B)
 Ac_ldiv_B(L::Factor, B::VecOrMat) = solve(CHOLMOD_A, L, Dense(B)).mat

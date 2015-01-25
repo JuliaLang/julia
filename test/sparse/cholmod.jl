@@ -2,8 +2,6 @@ using Base.Test
 
 using Base.SparseMatrix.CHOLMOD
 
-using Base.SparseMatrix.CHOLMOD
-
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
 # chm_rdsp(joinpath(JULIA_HOME, "../../deps/SuiteSparse-4.0.2/CHOLMOD/Demo/Matrix/bcsstk01.tri"))
@@ -158,5 +156,26 @@ let # Issue 9160
     end
 end
 
-# 9915
+# Issue #9915
 @test speye(2)\speye(2) == eye(2)
+
+# test eltype
+@test eltype(Dense(ones(3))) == Float64
+@test eltype(A) == Float64
+@test eltype(chma) == Float64
+
+# test Sparse constructor Symmetric and Hermitian input (and issym and ishermitian)
+ACSC = sprandn(10, 10, 0.3) + I
+@test issym(Sparse(Symmetric(ACSC, :L)))
+@test issym(Sparse(Symmetric(ACSC, :U)))
+@test ishermitian(Sparse(Hermitian(complex(ACSC), :L)))
+@test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
+
+# test Sparse constructor for c_Sparse{Tv,Ti} input( and Sparse*Sparse)
+B = Sparse(SparseMatrixCSC{Float64,Int32}(sprandn(48, 48, 0.1))) # A has Int32 indeces
+@test_approx_eq A*B sparse(A)*sparse(B)
+
+# test Sparse constructor for c_SparseVoid (and read_sparse)
+writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+@test Sparse("tmp.mtx") == [1 0 0;0 1 0;0 0.5 1]
+
