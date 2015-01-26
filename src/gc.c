@@ -2149,6 +2149,7 @@ void jl_gc_collect(int full)
                 perm_scanned_bytes = 0;
             scanned_bytes = 0;
             // 5. start sweeping
+            sweep_weak_refs();
             gc_sweep_once(sweep_mask);
             sweeping = 1;
         }
@@ -2171,7 +2172,6 @@ void jl_gc_collect(int full)
                 n_full_sweep++;
             }
 
-            sweep_weak_refs();
             sweeping = 0;
             if (sweep_mask == GC_MARKED) {
                 tasks.len = 0;
