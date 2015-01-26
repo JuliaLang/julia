@@ -70,7 +70,7 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Developer tips
 
-If you're adding additional compatibility code to this package, the following shell script is a useful for extracting the version number from a git commit SHA:
+If you're adding additional compatibility code to this package, the following shell script is useful for extracting the version number from a git commit SHA:
 
 ```sh
 #! /bin/bash
