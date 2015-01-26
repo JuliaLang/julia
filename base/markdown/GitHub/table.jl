@@ -84,19 +84,19 @@ function html(io::IO, md::Table)
 end
 
 function plain(io::IO, md::Table)
-    col_widths = reduce(max, map(row -> int(map(x -> length(plaininline(x)), row)), md.rows))
-    col_widths = max(col_widths, 3)
+    plain_cells = map(row -> map(Markdown.plaininline, row), md.rows)
+    plain_lengths = map(row -> int(map(length, row)), plain_cells)
+    col_widths = reduce(max, plain_lengths)
 
-    for (n, row) in enumerate(md.rows)
-        for (i, h) in enumerate(row)
-            # TODO use not terminal version of print_align
-            (i != 1) && print(io, "  | ")
-            print(io, " " ^ (col_widths[i] - length(plaininline(h))))
-            print(io, plaininline(h))
+    for i in 1:length(md.rows)
+        for (j, text) in enumerate(plain_cells[i])
+            (j != 1) && print(io, "  | ")
+            print(io, " " ^ (col_widths[j] - plain_lengths[i][j]))
+            print(io, text)
         end
         println(io)
 
-        if n == 1
+        if i == 1
             for (j, w) in enumerate(col_widths)
                 if j != 1
                     print(io, "  | ")
