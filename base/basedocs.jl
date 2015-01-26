@@ -264,3 +264,16 @@ keywords[:...] = doc"""
   `FFTW.set_num_threads(np)` to use `np` threads, if you have `np`
   processors.
   """ fft
+
+@doc doc"""
+      include("file.jl")
+
+  Evaluate the contents of a source file in the current context.
+  During including, a task-local include path is set to the directory
+  containing the file. Nested calls to "include" will search
+  relative to that path. All paths refer to files on node 1 when
+  running in parallel, and files will be fetched from node 1. This
+  function is typically used to load source interactively, or to
+  combine files in packages that are broken into multiple source
+  files.
+  """ include_from_node1
