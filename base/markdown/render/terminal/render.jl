@@ -65,16 +65,6 @@ function term(io::IO, br::LineBreak, columns)
    println(io)
 end
 
-function ansi_length(md::Vector{Any})
-   total = 0
-   for c in md
-       total += ansi_length(c)
-   end
-   total
-end
-ansi_length(c::Code) = ansi_length(c.code)
-ansi_length(l::Union(Link, Italic, Bold)) = ansi_length(l.text)
-
 term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
 
 # Inline Content

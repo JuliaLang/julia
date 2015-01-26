@@ -84,7 +84,7 @@ function html(io::IO, md::Table)
 end
 
 function plain(io::IO, md::Table)
-    plain_cells = map(row -> map(Markdown.plaininline, row), md.rows)
+    plain_cells = map(row -> map(plaininline, row), md.rows)
     plain_lengths = map(row -> int(map(length, row)), plain_cells)
     col_widths = reduce(max, plain_lengths)
 
@@ -146,18 +146,20 @@ function writemime(io::IO, ::MIME"text/latex", md::Table)
 end
 
 function term(io::IO, md::Table, columns)
-    col_widths = reduce(max, map(cell -> int(map(ansi_length, cell)),
-                                 md.rows))
+    plain_lengths = map(row -> int(map(x -> ansi_length(terminline(x)), row)),
+                        md.rows)
+    col_widths = reduce(max, plain_lengths)
+
     col_widths = max(col_widths, 3)
-    for (n, row) in enumerate(md.rows)
-        for (i, h) in enumerate(row)
-            (i != 1) && print(io, "  ")
-            a = typeof(md.align) == Symbol ? md.align : md.align[i]
-            print_align(io, h, col_widths[i], a)
+    for (i, row) in enumerate(md.rows)
+        for (j, h) in enumerate(row)
+            (j != 1) && print(io, "  ")
+            a = typeof(md.align) == Symbol ? md.align : md.align[j]
+            print_align(io, h, plain_lengths[i][j], col_widths[j], a)
         end
         println(io)
 
-        if n == 1
+        if i == 1
             for (j, w) in enumerate(col_widths)
                 (j != 1) && print(io, "  ")
                 print(io, "-" ^ w)
