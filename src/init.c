@@ -16,6 +16,7 @@
 #include <sys/resource.h>
 #include <sys/mman.h>
 #include <unistd.h>
+#include <dlfcn.h>
 #endif
 
 #if defined(__APPLE__)
@@ -872,6 +873,31 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
         exit(1);
     }
     jl_compileropts.julia_bin = strdup(free_path);
+#ifdef _OS_WINDOWS_
+    HMODULE hModule = NULL;
+    if (!GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS,
+                           (LPCTSTR)jl_resolve_sysimg_location,
+                           &hModule)) {
+        ios_printf(ios_stderr, "fatal error: unexpected error while retrieving library handle\n");
+        exit(1);
+    }
+    GetModuleFileNameA(hModule, free_path, PATH_MAX);
+    if(GetLastError() != ERROR_SUCCESS) {
+        ios_printf(ios_stderr, "fatal error: unexpected error while retrieving libpath\n");
+        exit(1);
+    }
+#else /* POSIX */
+    Dl_info ifo;
+    if(!dladdr((void*)jl_resolve_sysimg_location, &ifo)) {
+        ios_printf(ios_stderr, "fatal error: unexpected error while retrieving libpath\n");
+        exit(1);
+    }
+    if(strlen(ifo.dli_fname) >= PATH_MAX) {
+        ios_printf(ios_stderr, "fatal error: libpath too long\n");
+        exit(1);
+    }
+    strcpy(free_path, ifo.dli_fname);
+#endif
     if (!jl_compileropts.julia_home) {
         jl_compileropts.julia_home = getenv("JULIA_HOME");
         if (!jl_compileropts.julia_home) {
