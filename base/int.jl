@@ -151,7 +151,11 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
     if !(to === from)
         if to.size < from.size
             if issubtype(to, Signed)
-                @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,unbox($from,x)))
+                if issubtype(from, Unsigned)
+                    @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,check_top_bit(unbox($from,x))))
+                else
+                    @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,unbox($from,x)))
+                end
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_uint($to,unbox($from,x)))
             end

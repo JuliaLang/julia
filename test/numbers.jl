@@ -2166,6 +2166,11 @@ end
 @test_throws InexactError convert(Int16, big(2)^100)
 @test_throws InexactError convert(Int, typemax(UInt))
 
+# issue #9789
+@test_throws InexactError convert(Int8, typemax(UInt64))
+@test_throws InexactError convert(Int16, typemax(UInt64))
+@test_throws InexactError convert(Int, typemax(UInt64))
+
 let x = big(-0.0)
     @test signbit(x) && !signbit(abs(x))
 end
