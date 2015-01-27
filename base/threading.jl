@@ -16,7 +16,7 @@ function _threadsfor(forexpr)
 	function $fun()
 	    tid = threadid()
 	    # divide loop iterations among threads
-	    len, rem = divrem($ll-$lf+1, nthreads())
+	    len, rem = divrem($(esc(ll))-$(esc(lf))+1, nthreads())
             # not enough iterations for all the threads?
             if len == 0
                 if tid > rem
@@ -25,7 +25,7 @@ function _threadsfor(forexpr)
                 len, rem = 1, 0
             end
             # compute this thread's range
-	    f = $lf + ((tid-1) * len)
+	    f = $(esc(lf)) + ((tid-1) * len)
 	    l = f + len - 1
             # distribute remaining iterations evenly
 	    if rem > 0
