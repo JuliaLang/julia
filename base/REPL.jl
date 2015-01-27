@@ -672,6 +672,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
         complete = replc,
         # When we're done transform the entered line into a call to help("$line")
         on_done = respond(repl, julia_prompt) do line
+            line = strip(line)
             haskey(Docs.keywords, symbol(line)) ? # Special-case keywords, which won't parse
                 :(Base.Docs.@repl $(symbol(line))) :
                 parse("Base.Docs.@repl $line", raise=false)
