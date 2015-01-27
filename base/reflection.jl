@@ -190,9 +190,17 @@ function functionloc(m::Method)
     (find_source_file(string(lsd.file)), ln)
 end
 
-functionloc(f::ANY, types=(Any...)) = functionloc(which(f,types))
+functionloc(f::ANY, types) = functionloc(which(f,types))
 
-function function_module(f, types=(Any...))
+function functionloc(f)
+    m = methods(f)
+    if length(m) > 1
+        error("function has multiple methods; please specify a type signature")
+    end
+    functionloc(m.defs)
+end
+
+function function_module(f, types)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
