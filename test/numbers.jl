@@ -75,7 +75,9 @@ end
 let eps = 1//BigInt(2)^30, one_eps = 1+eps,
     eps64 = float64(eps), one_eps64 = float64(one_eps)
     @test eps64 == float64(eps)
+    @test rationalize(BigInt, eps64, tol=0) == eps
     @test one_eps64 == float64(one_eps)
+    @test rationalize(BigInt, one_eps64, tol=0) == one_eps
     @test one_eps64 * one_eps64 - 1 != float64(one_eps * one_eps - 1)
     @test fma(one_eps64, one_eps64, -1) == float64(one_eps * one_eps - 1)
 end
@@ -83,7 +85,9 @@ end
 let eps = 1//BigInt(2)^15, one_eps = 1+eps,
     eps32 = float32(eps), one_eps32 = float32(one_eps)
     @test eps32 == float32(eps)
+    @test rationalize(BigInt, eps32, tol=0) == eps
     @test one_eps32 == float32(one_eps)
+    @test rationalize(BigInt, one_eps32, tol=0) == one_eps
     @test one_eps32 * one_eps32 - 1 != float32(one_eps * one_eps - 1)
     @test fma(one_eps32, one_eps32, -1) == float32(one_eps * one_eps - 1)
 end
@@ -91,7 +95,11 @@ end
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
     eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
     @test eps16 == float16(float32(eps))
+    # Currently broken in Julia -- enable when "rationalize" is fixed;
+    # see <https://github.com/JuliaLang/julia/issues/9897>
+    # @test rationalize(BigInt, eps16, tol=0) == eps
     @test one_eps16 == float16(float32(one_eps))
+    # @test rationalize(BigInt, one_eps16, tol=0) == one_eps
     @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
     @test (fma(one_eps16, one_eps16, -1) ==
            float16(float32(one_eps * one_eps - 1)))
@@ -100,7 +108,9 @@ end
 let eps = 1//BigInt(2)^200, one_eps = 1+eps,
     eps256 = BigFloat(eps), one_eps256 = BigFloat(one_eps)
     @test eps256 == BigFloat(eps)
+    @test rationalize(BigInt, eps256, tol=0) == eps
     @test one_eps256 == BigFloat(one_eps)
+    @test rationalize(BigInt, one_eps256, tol=0) == one_eps
     @test one_eps256 * one_eps256 - 1 != BigFloat(one_eps * one_eps - 1)
     @test fma(one_eps256, one_eps256, -1) == BigFloat(one_eps * one_eps - 1)
 end
