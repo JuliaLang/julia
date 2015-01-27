@@ -704,6 +704,11 @@ readline(this::AsyncStream) = readuntil(this, '\n')
 
 readline() = readline(STDIN)
 
+function input(prompt::AbstractString = ""; io_in::IO = STDIN, io_out::IO = STDOUT)
+    print(io_out, prompt)
+    chomp(readline(io_in))
+end
+
 function readavailable(this::AsyncStream)
     buf = this.buffer
     @assert buf.seekable == false
