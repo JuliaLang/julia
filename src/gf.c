@@ -886,6 +886,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
         newmeth->linfo->specTypes = type;
+        gc_wb(newmeth->linfo, type);
         jl_array_t *spe = method->linfo->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);
@@ -1553,6 +1554,7 @@ void jl_compile_all_defs(jl_function_t *gf)
         else if (m->func->linfo->unspecialized == NULL) {
             jl_function_t *func = jl_instantiate_method(m->func, jl_null);
             m->func->linfo->unspecialized = func;
+            gc_wb(m->func->linfo, func);
             precompile_unspecialized(func, m->sig, m->tvars);
         }
         m = m->next;
@@ -1591,6 +1593,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
                 jl_lambda_info_t *li = (jl_lambda_info_t*)el;
                 jl_function_t *func = jl_new_closure(li->fptr, (jl_value_t*)jl_null, li);
                 li->unspecialized = func;
+                gc_wb(li, func);
                 precompile_unspecialized(func, NULL, jl_null);
             }
         }

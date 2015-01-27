@@ -34,6 +34,21 @@ d2 = map(x->1, d)
 map!(x->1, d)
 @test reduce(+, d) == 100
 
+# Test mapreduce on DArrays
+begin
+    # Test that the proper method exists on DArrays
+    sig = methods(mapreduce, (Function, Function, DArray))[1].sig
+    @test sig[3] == DArray
+
+    # Test that it is functionally equivalent to the standard method
+    for _ = 1:25, f = [x -> 2x, x -> x^2, x -> x^2 + 2x - 1], opt = [+, *]
+        n = rand(2:50)
+        arr = rand(1:100, n)
+        darr = distribute(arr)
+
+        @test mapreduce(f, opt, arr) == mapreduce(f, opt, darr)
+    end
+end
 
 dims = (20,20,20)
 

@@ -386,12 +386,14 @@ end
 # julia> is 6 characters + 1 character for space,
 # so the rest of the terminal is 73 characters
 #########################################################################
-buf = IOBuffer(
-"begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
-seek(buf,4)
-outbuf = IOBuffer()
-termbuf = Base.Terminals.TerminalBuffer(outbuf)
-term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
-s = LineEdit.refresh_multi_line(termbuf, term, buf,
-    Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
-@test s == Base.LineEdit.InputAreaState(3,1)
+let
+    buf = IOBuffer(
+    "begin\nprint(\"A very very very very very very very very very very very very ve\")\nend")
+    seek(buf,4)
+    outbuf = IOBuffer()
+    termbuf = Base.Terminals.TerminalBuffer(outbuf)
+    term = TestHelpers.FakeTerminal(IOBuffer(), IOBuffer(), IOBuffer())
+    s = LineEdit.refresh_multi_line(termbuf, term, buf,
+        Base.LineEdit.InputAreaState(0,0), "julia> ", indent = 7)
+    @test s == Base.LineEdit.InputAreaState(3,1)
+end

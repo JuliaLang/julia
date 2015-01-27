@@ -98,6 +98,10 @@ function htmlinline(io::IO, link::Link)
     print(io,"""</a>""")
 end
 
+function htmlinline(io::IO, br::LineBreak)
+   print(io, "<br />")
+end
+
 htmlinline(io::IO, x) = tohtml(io, x)
 
 # API

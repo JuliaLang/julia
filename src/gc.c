@@ -1753,9 +1753,9 @@ static void post_mark(arraylist_t *list, int dryrun)
         }
         if (isfreed) {
             // schedule finalizer or execute right away if it is not julia code
-            if (!dryrun && gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
+            if (gc_typeof(fin) == (jl_value_t*)jl_voidpointer_type) {
                 void *p = jl_unbox_voidpointer(fin);
-                if (p)
+                if (!dryrun && p)
                     ((void (*)(void*))p)(jl_data_ptr(v));
                 continue;
             }
@@ -1856,17 +1856,17 @@ static void restore(void)
     }
 }
 
-static void gc_verify_track()
+static void gc_verify_track(void)
 {
     do {
         arraylist_push(&lostval_parents_done, lostval);
-        JL_PRINTF(JL_STDOUT, "Now looking for 0x%lx =======\n", lostval);
+        jl_printf(JL_STDERR, "Now looking for 0x%lx =======\n", lostval);
         clear_mark(GC_CLEAN);
         pre_mark();
         post_mark(&finalizer_list, 1);
         post_mark(&finalizer_list_marked, 1);
         if (lostval_parents.len == 0) {
-            JL_PRINTF(JL_STDOUT, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
+            jl_printf(JL_STDERR, "Could not find the missing link. We missed a toplevel root. This is odd.\n");
             break;
         }
         jl_value_t* lostval_parent = NULL;
@@ -1886,9 +1886,9 @@ static void gc_verify_track()
             lostval = arraylist_pop(&lostval_parents);
         }
         else {
-            JL_PRINTF(JL_STDOUT, "Missing write barrier found !\n");
-            JL_PRINTF(JL_STDOUT, "0x%lx was written a reference to 0x%lx that was not recorded\n", lostval_parent, lostval);
-            JL_PRINTF(JL_STDOUT, "(details above)\n");
+            jl_printf(JL_STDERR, "Missing write barrier found !\n");
+            jl_printf(JL_STDERR, "0x%lx was written a reference to 0x%lx that was not recorded\n", lostval_parent, lostval);
+            jl_printf(JL_STDERR, "(details above)\n");
             lostval = NULL;
         }
         restore();
@@ -1910,11 +1910,11 @@ static void gc_verify(void)
     for(int i = 0; i < clean_len + bits_save[GC_QUEUED].len; i++) {
         gcval_t* v = (gcval_t*)bits_save[i >= clean_len ? GC_QUEUED : GC_CLEAN].items[i >= clean_len ? i - clean_len : i];
         if (gc_marked(v)) {
-            JL_PRINTF(JL_STDOUT, "Error. Early free of 0x%lx type :", (uptrint_t)v);
+            jl_printf(JL_STDERR, "Error. Early free of 0x%lx type :", (uptrint_t)v);
             jl_(jl_typeof(v));
-            JL_PRINTF(JL_STDOUT, "val : ");
+            jl_printf(JL_STDERR, "val : ");
             jl_(v);
-            JL_PRINTF(JL_STDOUT, "Let's try to backtrack the missing write barrier :\n");
+            jl_printf(JL_STDERR, "Let's try to backtrack the missing write barrier :\n");
             lostval = v;
             break;
         }
@@ -2149,6 +2149,7 @@ void jl_gc_collect(int full)
                 perm_scanned_bytes = 0;
             scanned_bytes = 0;
             // 5. start sweeping
+            sweep_weak_refs();
             gc_sweep_once(sweep_mask);
             sweeping = 1;
         }
@@ -2171,7 +2172,6 @@ void jl_gc_collect(int full)
                 n_full_sweep++;
             }
 
-            sweep_weak_refs();
             sweeping = 0;
             if (sweep_mask == GC_MARKED) {
                 tasks.len = 0;
