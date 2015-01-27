@@ -471,15 +471,21 @@ Array functions
    Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k``
    is zero or a multiple of four, this is equivalent to a ``copy``.
 
-.. function:: reducedim(f, A, dims, initial)
+.. function:: reducedim(f, A, dims[, initial])
 
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
-   value to use in the reductions.
+   value to use in the reductions. For `+`, `*`, `max` and `min` the `initial`
+   argument is optional.
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
    your own loop. See documentation for ``reduce``.
+
+.. function:: mapreducedim(f, op, A, dims[, initial])
+
+   Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but
+   is generally faster because the intermediate array is avoided.
 
 .. function:: mapslices(f, A, dims)
 
