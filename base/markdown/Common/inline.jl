@@ -78,6 +78,15 @@ end
 # Punctuation
 # –––––––––––
 
+type LineBreak end
+
+@trigger '\\' ->
+function linebreak(stream::IO)
+    if startswith(stream, "\\\n")
+        return LineBreak()
+    end
+end
+
 @trigger '-' ->
 function en_dash(stream::IO)
     if startswith(stream, "--")
@@ -85,7 +94,7 @@ function en_dash(stream::IO)
     end
 end
 
-const escape_chars = "\\`*_#+-.!{[("
+const escape_chars = "\\`*_#+-.!{[(\$"
 
 @trigger '\\' ->
 function escapes(stream::IO)

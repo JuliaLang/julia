@@ -1,6 +1,7 @@
 plain(x) = sprint(plain, x)
 
 function plain(io::IO, content::Vector)
+    isempty(content) && return
     for md in content[1:end-1]
         plain(io, md)
         println(io)
@@ -23,9 +24,7 @@ function plain(io::IO, code::Code)
 end
 
 function plain(io::IO, p::Paragraph)
-    for md in p.content
-        plaininline(io, md)
-    end
+    plaininline(io, p.content)
     println(io)
 end
 
@@ -35,6 +34,10 @@ function plain(io::IO, list::List)
         plaininline(io, item)
         println(io)
     end
+end
+
+function plaininline(io::IO, br::LineBreak)
+   println(io)
 end
 
 plain(io::IO, x) = tohtml(io, x)
@@ -47,7 +50,7 @@ function plaininline(io::IO, md...)
     end
 end
 
-plaininline(io::IO, md::Vector) = plaininline(io, md...)
+plaininline(io::IO, md::Vector) = !isempty(md) && plaininline(io, md...)
 
 plaininline(io::IO, md::Image) = print(io, "![$(md.alt)]($(md.url))")
 

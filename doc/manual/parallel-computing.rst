@@ -646,7 +646,7 @@ Here's a brief example::
 and is sometimes convenient for splitting up tasks among processes.
 You can, of course, divide the work any way you wish::
 
-  julia> S = SharedArray(Int, (3,4), init = S -> S[myid()-1:nworkers():length(S)] = myid())
+  julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
   3x4 SharedArray{Int64,2}:
    2  2  2  2
    3  3  3  3
@@ -656,7 +656,7 @@ Since all processes have access to the underlying data, you do have to
 be careful not to set up conflicts.  For example::
 
   @sync begin
-      for p in workers()
+      for p in procs(S)
           @async begin
               remotecall_wait(p, fill!, S, p)
           end

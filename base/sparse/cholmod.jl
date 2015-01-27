@@ -875,7 +875,7 @@ function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::CholmodSpar
     solve(L,B,CHOLMOD_A)
 end
 function (\){Tv<:CHMVTypes,Ti<:CHMITypes}(L::CholmodFactor{Tv,Ti},B::SparseMatrixCSC{Tv,Ti})
-    sparse!(solve(L,CholmodSparse(B),CHOLMOD_A))
+    sparse!(solve(L,CholmodSparse(B, 0),CHOLMOD_A))
 end
 
 Ac_ldiv_B{T<:CHMVTypes}(L::CholmodFactor{T},B::CholmodDense{T}) = solve(L,B,CHOLMOD_A)

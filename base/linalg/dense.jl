@@ -118,7 +118,7 @@ end
 
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
-diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     n = length(v) + abs(k)

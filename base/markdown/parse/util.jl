@@ -80,7 +80,7 @@ function startswith(stream::IO, s::String; eat = true, padding = false, newlines
 end
 
 function startswith(stream::IO, c::Char; eat = true)
-    if peek(stream) == c
+    if !eof(stream) && peek(stream) == c
         eat && read(stream, Char)
         return true
     else
@@ -157,11 +157,10 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
         buffer = IOBuffer()
         while !eof(stream)
             char = read(stream, Char)
+            write(buffer, char)
             if !(char in whitespace || char == '\n') && startswith(stream, delimiter^n)
-                write(buffer, char)
                 return takebuf_string(buffer)
             end
-            write(buffer, char)
         end
     end
 end
