@@ -299,6 +299,10 @@ public:
 #if defined(LLVM36)
             Section->getName(sName);
             Addr += L.getSectionLoadAddress(sName);
+            sym_iter.getName(sName);
+            if (sName[0] == '_') {
+                sName = sName.substr(1);
+            }
 #else
             sym_iter.getName(sName);
             Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
