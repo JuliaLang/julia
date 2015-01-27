@@ -66,7 +66,11 @@ function do_test_throws(body, qex, bt, extype)
             if isa(err, extype)
                 Success(qex)
             else
-                Failure(qex, "$err was thrown instead of $extype")
+                if isa(err,Type)
+                    Failure(qex, "the type $err was thrown instead of an instance of $extype")
+                else
+                    Failure(qex, "$err was thrown instead of $extype")
+                end
             end
         end
     end)
