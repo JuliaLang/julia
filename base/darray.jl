@@ -302,6 +302,14 @@ setindex!(a::Array{Any}, d::SubOrDArray, i::Int) = arrayset(a, d, i)
 setindex!(a::Array, d::SubOrDArray, I::Union(Int,UnitRange{Int})...) =
     setindex!(a, d, [isa(i,Int) ? (i:i) : i for i in I ]...)
 
+
+function fill!(A::DArray, x)
+    @sync for p in procs(A)
+        @spawnat p fill!(localpart(A), x)
+    end
+    A
+end
+
 ## higher-order functions ##
 
 map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
@@ -322,3 +330,48 @@ function map!(f::Callable, d::DArray)
     end
 end
 
+# mapreducedim
+function reducedim_initarray{R}(A::DArray, region, v0, ::Type{R})
+    procsgrid = reshape(procs(A), size(A.indexes))
+    gridsize = reduced_dims(size(A.indexes), region)
+    procsgrid = procsgrid[UnitRange{Int}[1:n for n = gridsize]...]
+    return dfill(convert(R, v0), reduced_dims(A, region), procsgrid, gridsize)
+end
+reducedim_initarray{T}(A::DArray, region, v0::T) = reducedim_initarray(A, region, v0, T)
+
+function reducedim_initarray0{R}(A::DArray, region, v0, ::Type{R})
+    procsgrid = reshape(procs(A), size(A.indexes))
+    gridsize = reduced_dims0(size(A.indexes), region)
+    procsgrid = procsgrid[UnitRange{Int}[1:n for n = gridsize]...]
+    return dfill(convert(R, v0), reduced_dims0(A, region), procsgrid, gridsize)
+end
+reducedim_initarray0{T}(A::DArray, region, v0::T) = reducedim_initarray0(A, region, v0, T)
+
+function mapreducedim_within(f, op, A::DArray, region)
+    arraysize = [size(A)...]
+    gridsize = [size(A.indexes)...]
+    arraysize[[region...]] = gridsize[[region...]]
+    DArray(tuple(arraysize...), procs(A), tuple(gridsize...)) do I
+        mapreducedim(f, op, localpart(A), region)
+    end
+end
+
+function mapreducedim_between!(f, op, R::DArray, A::DArray, region)
+    for p in procs(R)
+        @sync @spawnat p begin
+            localind = [r for r = localindexes(A)]
+            localind[[region...]] = [1:n for n = size(A)[[region...]]]
+            B = convert(Array, A[localind...])
+            mapreducedim!(f, op, localpart(R), B)
+        end
+    end
+    R
+end
+
+function mapreducedim!(f, op, R::DArray, A::DArray)
+    nd = ndims(A)
+    nd == ndims(R) || throw(ArgumentError("input and output arrays must have the same number of dimensions"))
+    region = tuple([1:ndims(A)][[size(R)...] .!= [size(A)...]]...)
+    B = mapreducedim_within(f, op, A, region)
+    return mapreducedim_between!(identity, op, R, B, region)
+end

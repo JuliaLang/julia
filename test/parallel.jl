@@ -26,7 +26,7 @@ a = convert(Matrix{Float64}, d)
 @test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
 @test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
 
-d=DArray(I->fill(myid(), map(length,I)), (10,10), [id_me, id_other])
+d = DArray(I->fill(myid(), map(length,I)), (10,10), [id_me, id_other])
 d2 = map(x->1, d)
 @test reduce(+, d2) == 100
 
@@ -50,7 +50,26 @@ begin
     end
 end
 
+# Test mapreducedim on DArrays
+@test mapreducedim(t -> t*t, +, d2, 1) == mapreducedim(t -> t*t, +, convert(Array, d2), 1)
+@test mapreducedim(t -> t*t, +, d2, 2) == mapreducedim(t -> t*t, +, convert(Array, d2), 2)
+@test mapreducedim(t -> t*t, +, d2, (1,2)) == mapreducedim(t -> t*t, +, convert(Array, d2), (1,2))
+
 dims = (20,20,20)
+
+d = drandn(dims)
+da = convert(Array, d)
+for dms in (1, 2, 3, (1,2), (1,3), (2,3), (1,2,3))
+    @test_approx_eq mapreducedim(t -> t*t, +, d, dms) mapreducedim(t -> t*t, +, da, dms)
+    @test_approx_eq mapreducedim(t -> t*t, +, d, dms, 1.0) mapreducedim(t -> t*t, +, da, dms, 1.0)
+
+    @test_approx_eq reducedim(*, d, dms) reducedim(*, da, dms)
+    @test_approx_eq reducedim(*, d, dms, 2.0) reducedim(*, da, dms, 2.0)
+
+    # statistical function (works generically through calls to mapreducedim!, i.e. not implemented specifically for DArrays)
+    @test_approx_eq mean(d, dms) mean(da, dms)
+    # @test_approx_eq std(d, dms) std(da, dms) Requires centralize_sumabs2! for DArrays
+end
 
 @linux_only begin
     S = SharedArray(Int64, dims)
