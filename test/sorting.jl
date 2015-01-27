@@ -18,16 +18,27 @@ end
 @test sum(randperm(6)) == 21
 @test nthperm([0,1,2],3) == [1,0,2]
 
-@test searchsorted([1, 1, 2, 2, 3, 3], 0) == 1:0
-@test searchsorted([1, 1, 2, 2, 3, 3], 1) == 1:2
-@test searchsorted([1, 1, 2, 2, 3, 3], 2) == 3:4
-@test searchsorted([1, 1, 2, 2, 3, 3], 4) == 7:6
-@test searchsorted([1.0, 1, 2, 2, 3, 3], 2.5) == 5:4
+numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
+            UInt8, UInt16, UInt32, UInt64, UInt128,
+            Float16, Float32, Float64, BigInt, BigFloat]
 
-@test searchsorted([1:10], 1, by=(x -> x >= 5)) == 1:4
-@test searchsorted([1:10], 10, by=(x -> x >= 5)) == 5:10
-@test searchsorted([1:5, 1:5, 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
-@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
+for R in numTypes, T in numTypes
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(1)) == 1:2
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(2)) == 3:4
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], T(4)) == 7:6
+    @test searchsorted(R[1, 1, 2, 2, 3, 3], 2.5) == 5:4
+
+    @test searchsorted(1:3, T(0)) == 1:0
+    @test searchsorted(1:3, T(1)) == 1:1
+    @test searchsorted(1:3, T(2)) == 2:2
+    @test searchsorted(1:3, T(4)) == 4:3
+
+    @test searchsorted(R[1:10], T(1), by=(x -> x >= 5)) == 1:4
+    @test searchsorted(R[1:10], T(10), by=(x -> x >= 5)) == 5:10
+    @test searchsorted(R[1:5, 1:5, 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
+    @test searchsorted(ones(R, 15), T(1), 6, 10, Base.Order.Forward) == 6:10
+end
 
 for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
