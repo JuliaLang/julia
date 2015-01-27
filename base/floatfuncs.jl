@@ -108,7 +108,7 @@ function _signif_og(x, digits, base)
         e = floor(log10(abs(x)) - digits + 1.)
         og = oftype(x, exp10(abs(e)))
     elseif base == 2
-        e = floor(log2(abs(x)) - digits + 1.)
+        e = exponent(abs(x)) - digits + 1.
         og = oftype(x, exp2(abs(e)))
     else
         e = floor(log(base, abs(x)) - digits + 1.)
@@ -118,16 +118,17 @@ function _signif_og(x, digits, base)
 end
 
 function signif(x::Real, digits::Integer, base::Integer=10)
-    digits < 0 && throw(DomainError())
+    digits < 1 && throw(DomainError())
 
     x = float(x)
-    (x == 0 || !isfinite(x)) && return x
+    x == 0 && return x
     og, e = _signif_og(x, digits, base)
     if e >= 0 # for numeric stability
-        round(x/og)*og
+        r = round(x/og)*og
     else
-        round(x*og)/og
+        r = round(x*og)/og
     end
+    !isfinite(r) ? x : r
 end
 
 for f in (:round, :ceil, :floor, :trunc)
