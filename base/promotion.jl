@@ -205,6 +205,16 @@ muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
 =={T<:Number}(x::T, y::T) = x === y
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
 
+div{T<:Real}(x::T, y::T) = no_op_err("div", T)
+fld{T<:Real}(x::T, y::T) = no_op_err("fld", T)
+cld{T<:Real}(x::T, y::T) = no_op_err("cld", T)
+rem{T<:Real}(x::T, y::T) = no_op_err("rem", T)
+mod{T<:Real}(x::T, y::T) = no_op_err("mod", T)
+
+mod1{T<:Real}(x::T, y::T) = no_op_err("mod1", T)
+rem1{T<:Real}(x::T, y::T) = no_op_err("rem1", T)
+fld1{T<:Real}(x::T, y::T) = no_op_err("fld1", T)
+
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
