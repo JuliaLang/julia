@@ -1980,7 +1980,7 @@
 			     a)))
 	       `(call hvcat
 		   (tuple ,.(map length rows))
-		     ,.(apply nconc rows)))
+		     ,.(apply append rows)))
 	     `(call vcat ,@a))))))
 
    'typed_hcat
@@ -2103,7 +2103,7 @@
     ;; Evaluate the comprehension
     `(scope-block
       (block
-       (= ,oneresult (tuple))
+       (local ,oneresult)
        ,(evaluate-one ranges)
        (= ,result (call (top Array) ,(if atype atype `(call (top eltype) ,oneresult))
 			,@(compute-dims ranges 1)))
