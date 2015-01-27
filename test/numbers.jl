@@ -1716,6 +1716,19 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test approx_eq(signif(123.456,8,2), 123.5)
 @test signif(0.0, 1) === 0.0
 @test signif(-0.0, 1) === -0.0
+@test signif(1.2, 2) === 1.2
+@test signif(1.0, 6) === 1.0
+@test signif(0.6, 1) === 0.6
+@test signif(7.262839104539736, 2) === 7.3
+@test isinf(signif(Inf, 3))
+@test isnan(signif(NaN, 3))
+@test signif(1.12312, 1000) === 1.12312
+@test signif(float32(7.262839104539736), 3) === float32(7.26)
+@test signif(float32(7.262839104539736), 4) === float32(7.263)
+@test signif(float32(1.2), 3) === float32(1.2)
+@test signif(float32(1.2), 5) === float32(1.2)
+@test signif(float16(0.6), 2) === float16(0.6)
+@test signif(float16(1.1), 70) === float16(1.1)
 
 # issue #1308
 @test hex(~uint128(0)) == "f"^32
