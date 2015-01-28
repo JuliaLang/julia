@@ -361,9 +361,14 @@ macro repl (ex)
                 printmatches($n, completions($n), cols=Base.tty_size()[2]-$(length(pre)));
                 println("\n"))
           end)
-        # Backwards-compatible with the previous help system, for now
-        let doc = @doc $(esc(ex))
-            doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+        if $(isa(ex, Symbol)) && !isdefined($(current_module()), $(Expr(:quote, ex)))
+            println($"Couldn't find $ex")
+            print_correction($(string(ex)))
+        else
+            # Backwards-compatible with the previous help system, for now
+            let doc = @doc $(esc(ex))
+                doc ≠ nothing ? doc : Base.Help.@help_ $(esc(ex))
+            end
         end
     end
 end
