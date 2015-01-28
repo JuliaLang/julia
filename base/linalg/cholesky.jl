@@ -84,13 +84,16 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
     return uplo == :U ? UpperTriangular(A) : LowerTriangular(A)
 end
 
-function cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
+cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+    _cholfact!(A, pivot, uplo, tol=tol)
+function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U; tol=0.0)
     uplochar = char_uplo(uplo)
-    if pivot
-        A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
-        return CholeskyPivoted{T,typeof(A)}(A, uplochar, piv, rank, tol, info)
-    end
     return Cholesky(chol!(A, uplo).data, uplo)
+end
+function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0)
+    uplochar = char_uplo(uplo)
+    A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
+    return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
 cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
 
@@ -100,14 +103,25 @@ function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     C
 end
 
-cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0) = cholfact!(copy(A), uplo, pivot=pivot, tol=tol)
-function cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U; pivot=false, tol=0.0)
-    S = promote_type(typeof(chol(one(T))),Float32)
-    S <: BlasFloat && return cholfact!(convert(AbstractMatrix{S}, A), uplo, pivot = pivot, tol = tol)
-    pivot && throw(ArgumentError("pivot only supported for Float32, Float64, Complex{Float32} and Complex{Float64}"))
-    S != T && return cholfact!(convert(AbstractMatrix{S}, A), uplo)
-    return cholfact!(copy(A), uplo)
-end
+cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+    cholfact!(copy(A), uplo, pivot, tol=tol)
+
+
+copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
+copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
+cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
+    _cholfact(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), pivot, uplo, tol=tol)
+_cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
+    cholfact!(A, uplo, pivot, tol = tol)
+_cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{false}}, uplo::Symbol=:U; tol=0.0) =
+    cholfact!(A, uplo, pivot, tol = tol)
+
+_cholfact{T}(A::StridedMatrix{T}, ::Type{Val{false}}, uplo::Symbol=:U; tol=0.0) =
+    cholfact!(A, uplo)
+_cholfact{T}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
+    throw(ArgumentError("pivot only supported for Float32, Float64, Complex{Float32} and Complex{Float64}"))
+
+
 function cholfact(x::Number, uplo::Symbol=:U)
     xf = fill(chol!(x, uplo), 1, 1)
     Cholesky(xf, uplo)

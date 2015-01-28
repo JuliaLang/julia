@@ -6459,7 +6459,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","lufact","lufact(A[, pivot=true]) -> F
+("Base","lufact","lufact(A[, pivot=Val{true}]) -> F
 
    Compute the LU factorization of \"A\". The return type of \"F\"
    depends on the type of \"A\". In most cases, if \"A\" is a subtype
@@ -6536,18 +6536,18 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cholfact","cholfact(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
+("Base","cholfact","cholfact(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    Compute the Cholesky factorization of a dense symmetric positive
    (semi)definite matrix \"A\" and return either a \"Cholesky\" if
-   \"pivot=false\" or \"CholeskyPivoted\" if \"pivot=true\". \"LU\"
+   \"pivot==Val{false}\" or \"CholeskyPivoted\" if \"pivot==Val{true}\". \"LU\"
    may be \":L\" for using the lower part or \":U\" for the upper
    part. The default is to use \":U\". The triangular matrix can be
    obtained from the factorization \"F\" with: \"F[:L]\" and
    \"F[:U]\". The following functions are available for \"Cholesky\"
    objects: \"size\", \"\\\", \"inv\", \"det\". For
    \"CholeskyPivoted\" there is also defined a \"rank\". If
-   \"pivot=false\" a \"PosDefException\" exception is thrown in case
+   \"pivot==Val{false}\" a \"PosDefException\" exception is thrown in case
    the matrix is not positive definite. The argument \"tol\"
    determines the tolerance for determining the rank. For negative
    values, the tolerance is the machine precision.
@@ -6574,7 +6574,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cholfact!","cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
+("Base","cholfact!","cholfact!(A [,LU=:U,[pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
    \"cholfact!\" is the same as \"cholfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
@@ -6592,7 +6592,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","qr","qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
+("Base","qr","qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
    Compute the (pivoted) QR factorization of \"A\" such that either
    \"A = Q*R\" or \"A[:,p] = Q*R\". Also see \"qrfact\". The default
@@ -6601,20 +6601,20 @@ popdisplay(d::Display)
 
 "),
 
-("Base","qrfact","qrfact(A[, pivot=false]) -> F
+("Base","qrfact","qrfact(A[, pivot=Val{false}]) -> F
 
    Computes the QR factorization of \"A\". The return type of \"F\"
    depends on the element type of \"A\" and whether pivoting is
-   specified (with \"pivot=true\").
+   specified (with \"pivot==Val{true}\").
 
       +------------------+-------------------+-----------+---------------------------------------+
       | Return type      | \\\"eltype(A)\\\"     | \\\"pivot\\\" | Relationship between \\\"F\\\" and \\\"A\\\"  |
       +------------------+-------------------+-----------+---------------------------------------+
       | \\\"QR\\\"           | not \\\"BlasFloat\\\" | either    | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
+      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"Val{false}\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
       +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
+      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"Val{true}\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
       +------------------+-------------------+-----------+---------------------------------------+
 
    \"BlasFloat\" refers to any of: \"Float32\", \"Float64\",
@@ -6681,7 +6681,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base","qrfact!","qrfact!(A[, pivot=false])
+("Base","qrfact!","qrfact!(A[, pivot=Val{false}])
 
    \"qrfact!\" is the same as \"qrfact()\", but saves space by
    overwriting the input \"A\", instead of creating a copy.
