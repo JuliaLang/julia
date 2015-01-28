@@ -66,9 +66,14 @@ function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
         throw(DomainError())
     end
+    lastf = zero(T)
     f = one(T)
     while n > k
         f *= n
+        if f < lastf
+            throw(OverflowError())
+        end
+        lastf = f
         n -= 1
     end
     return f
