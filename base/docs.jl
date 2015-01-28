@@ -355,11 +355,11 @@ macro repl (ex)
     quote
         # Fuzzy Searching
         $(if isexpr(ex, Symbol)
-            n = string(ex)
-            pre = "search:"
-            :(print($pre);
-              printmatches($n, completions($n), cols=Base.tty_size()[2]-$(length(pre)));
-              println("\n"))
+              n = string(ex)
+              pre = "search:"
+              :(print($pre);
+                printmatches($n, completions($n), cols=Base.tty_size()[2]-$(length(pre)));
+                println("\n"))
           end)
         # Backwards-compatible with the previous help system, for now
         let doc = @doc $(esc(ex))
@@ -375,119 +375,120 @@ end
 # Fuzzy Search Algorithm
 
 function matchinds(needle, haystack; acronym = false)
-  chars = collect(needle)
-  is = Int[]
-  lastc = '\0'
-  for (i, char) in enumerate(haystack)
-    isempty(chars) && break
-    while chars[1] == ' ' shift!(chars) end # skip spaces
-    if lowercase(char) == lowercase(chars[1]) && (!acronym || !isalpha(lastc))
-      push!(is, i)
-      shift!(chars)
+    chars = collect(needle)
+    is = Int[]
+    lastc = '\0'
+    for (i, char) in enumerate(haystack)
+        isempty(chars) && break
+        while chars[1] == ' ' shift!(chars) end # skip spaces
+        if lowercase(char) == lowercase(chars[1]) && (!acronym || !isalpha(lastc))
+            push!(is, i)
+            shift!(chars)
+        end
+        lastc = char
     end
-    lastc = char
-  end
-  return is
+    return is
 end
 
 longer(x, y) = length(x) ≥ length(y) ? (x, true) : (y, false)
 
 bestmatch(needle, haystack) =
-  longer(matchinds(needle, haystack, acronym = true),
-         matchinds(needle, haystack))
+    longer(matchinds(needle, haystack, acronym = true),
+           matchinds(needle, haystack))
 
 avgdistance(xs) =
-  isempty(xs) ? 0 :
-  (xs[end] - xs[1] - length(xs)+1)/length(xs)
+    isempty(xs) ? 0 :
+    (xs[end] - xs[1] - length(xs)+1)/length(xs)
 
 function fuzzyscore(needle, haystack; shorter = true)
-  score = 0.
-  is, acro = bestmatch(needle, haystack)
-  score += (acro?2:1)length(is) # Matched characters
-  score -= 2(length(needle)-length(is)) # Missing characters
-  !acro && (score -= avgdistance(is)/10) # Contiguous
-  !isempty(is) && (score -= mean(is)/100) # Closer to beginning
-  score += (shorter ? -1 : 1)length(haystack)/1000 # Shorter/longer words
+    score = 0.
+    is, acro = bestmatch(needle, haystack)
+    score += (acro?2:1)length(is) # Matched characters
+    score -= 2(length(needle)-length(is)) # Missing characters
+    !acro && (score -= avgdistance(is)/10) # Contiguous
+    !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    score += (shorter ? -1 : 1)length(haystack)/1000 # Shorter/longer words
 end
 
 function fuzzysort(search, candidates; shorter = true)
-  scores = map(cand -> fuzzyscore(search, cand, shorter=shorter), candidates)
-  candidates[sortperm(scores)] |> reverse
+    scores = map(cand -> fuzzyscore(search, cand, shorter=shorter), candidates)
+    candidates[sortperm(scores)] |> reverse
 end
 
 # Levenshtein Distance
 
 function levenshtein(s1, s2)
-  a, b = collect(s1), collect(s2)
-  m = length(a)
-  n = length(b)
-  d = Array(Int, m+1, n+1)
+    a, b = collect(s1), collect(s2)
+    m = length(a)
+    n = length(b)
+    d = Array(Int, m+1, n+1)
 
-  d[1:m+1, 1] = 0:m
-  d[1, 1:n+1] = 0:n
+    d[1:m+1, 1] = 0:m
+    d[1, 1:n+1] = 0:n
 
-  for i = 1:m, j = 1:n
-    d[i+1,j+1] = min(d[i  , j+1] + 1,
-                     d[i+1, j  ] + 1,
-                     d[i  , j  ] + (a[i] != b[j]))
-  end
+    for i = 1:m, j = 1:n
+        d[i+1,j+1] = min(d[i  , j+1] + 1,
+                         d[i+1, j  ] + 1,
+                         d[i  , j  ] + (a[i] != b[j]))
+    end
 
-  return d[m+1, n+1]
+    return d[m+1, n+1]
 end
 
 function levsort(search, candidates)
-  scores = map(cand -> levenshtein(search, cand), candidates)
-  candidates[sortperm(scores)]
+    scores = map(cand -> levenshtein(search, cand), candidates)
+    candidates[sortperm(scores)]
 end
 
 # Result printing
 
 function printmatch(io::IO, word, match)
-  is, _ = bestmatch(word, match)
-  Markdown.with_output_format(:fade, io) do io
-    for (i, char) = enumerate(match)
-      if i in is
-        Markdown.with_output_format(print, :bold, io, char)
-      else
-        print(io, char)
-      end
+    is, _ = bestmatch(word, match)
+    Markdown.with_output_format(:fade, io) do io
+        for (i, char) = enumerate(match)
+            if i in is
+                Markdown.with_output_format(print, :bold, io, char)
+            else
+                print(io, char)
+            end
+        end
     end
-  end
 end
 
 printmatch(args...) = printfuzzy(STDOUT, args...)
 
 function printmatches(io::IO, word, matches; cols = Base.tty_size()[2])
-  total = 0
-  for match in matches
-    total + length(match) + 1 > cols && break
-    fuzzyscore(word, match) < 0 && break
-    print(io, " ")
-    printmatch(io, word, match)
-    total += length(match) + 1
-  end
+    total = 0
+    for match in matches
+        total + length(match) + 1 > cols && break
+        fuzzyscore(word, match) < 0 && break
+        print(io, " ")
+        printmatch(io, word, match)
+        total += length(match) + 1
+    end
 end
 
 printmatches(args...; cols = Base.tty_size()[2]) = printmatches(STDOUT, args..., cols = cols)
 
 function print_joined_cols(io::IO, ss, delim = "", last = delim; cols = Base.tty_size()[2])
-  i = 0
-  total = 0
-  for i = 1:length(ss)
-    total += length(ss[i])
-    total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
-  end
-  print_joined(io, ss[1:i], delim, last)
+    i = 0
+    total = 0
+    for i = 1:length(ss)
+        total += length(ss[i])
+        total + max(i-2,0)*length(delim) + (i>1?1:0)*length(last) > cols && (i-=1; break)
+    end
+    print_joined(io, ss[1:i], delim, last)
 end
 
 print_joined_cols(args...; cols = Base.tty_size()[2]) = print_joined_cols(STDOUT, args...; cols=cols)
 
 function print_correction(word)
-  cors = levsort(word, accessible(current_module()))
-  pre = "Perhaps you meant "
-  print(pre)
-  print_joined_cols(cors, ", ", " or "; cols = Base.tty_size()[2]-length(pre))
-  return
+    cors = levsort(word, accessible(current_module()))
+    pre = "Perhaps you meant "
+    print(pre)
+    print_joined_cols(cors, ", ", " or "; cols = Base.tty_size()[2]-length(pre))
+    println()
+    return
 end
 
 # Completion data
@@ -504,9 +505,9 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-  [names(mod, true, true),
-   map(names, moduleusings(mod))...,
-   builtins] |> unique |> filtervalid
+    [names(mod, true, true),
+     map(names, moduleusings(mod))...,
+     builtins] |> unique |> filtervalid
 
 completions(name) = fuzzysort(name, accessible(current_module()))
 completions(name::Symbol) = completions(string(name))
