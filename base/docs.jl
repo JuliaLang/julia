@@ -351,19 +351,27 @@ catdoc(md::MD...) = MD(md...)
 
 # REPL help
 
+function repl_search(s)
+    pre = "search:"
+    print(pre)
+    printmatches(s, completions(s), cols=Base.tty_size()[2]-length(pre))
+    println("\n")
+end
+
+function repl_corrections(s)
+    print("Couldn't find ")
+    Markdown.with_output_format(:cyan, STDOUT) do io
+        println(io, s)
+    end
+    print_correction(s)
+end
+
 macro repl (ex)
     quote
         # Fuzzy Searching
-        $(if isexpr(ex, Symbol)
-              n = string(ex)
-              pre = "search:"
-              :(print($pre);
-                printmatches($n, completions($n), cols=Base.tty_size()[2]-$(length(pre)));
-                println("\n"))
-          end)
+        $(isexpr(ex, Symbol)) && repl_search($(string(ex)))
         if $(isa(ex, Symbol)) && !isdefined($(current_module()), $(Expr(:quote, ex)))
-            println($"Couldn't find $ex")
-            print_correction($(string(ex)))
+            repl_corrections($(string(ex)))
         else
             # Backwards-compatible with the previous help system, for now
             let doc = @doc $(esc(ex))
