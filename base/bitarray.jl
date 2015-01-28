@@ -1272,29 +1272,45 @@ end
 (>>)(B::BitVector, i::Int32) = B >>> i
 (>>)(B::BitVector, i::Integer) = B >>> i
 
-function rol(B::BitVector, i::Integer)
-    n = length(B)
+function rol!(dest::BitVector, src::BitVector, i::Integer)
+    length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
+    n = length(dest)
     i %= n
-    i == 0 && return copy(B)
-    i < 0 && return ror(B, -i)
-    A = BitArray(n)
-    copy_chunks!(A.chunks, 1, B.chunks, i+1, n-i)
-    copy_chunks!(A.chunks, n-i+1, B.chunks, 1, i)
-    return A
+    i == 0 && return (src === dest ? src : copy!(dest, src))
+    i < 0 && return ror!(dest, src, -i)
+    Bc = (src === dest ? copy(src.chunks) : src.chunks)
+    copy_chunks!(dest.chunks, 1, Bc, i+1, n-i)
+    copy_chunks!(dest.chunks, n-i+1, Bc, 1, i)
+    return dest
+end
+
+function rol!(B::BitVector, i::Integer)
+    return rol!(B, B, i)
+end
+
+function rol(B::BitVector, i::Integer)
+    return rol!(similar(B), B, i)
+end
+
+function ror!(dest::BitVector, src::BitVector, i::Integer)
+    length(dest) == length(src) || throw(ArgumentError("destination and source should be of same size"))
+    n = length(dest)
+    i %= n
+    i == 0 && return (src === dest ? src : copy!(dest, src))
+    i < 0 && return rol!(dest, src, -i)
+    Bc = (src === dest ? copy(src.chunks) : src.chunks)
+    copy_chunks!(dest.chunks, i+1, Bc, 1, n-i)
+    copy_chunks!(dest.chunks, 1, Bc, n-i+1, i)
+    return dest
+end
+
+function ror!(B::BitVector, i::Integer)
+    return ror!(B, B, i)
 end
 
 function ror(B::BitVector, i::Integer)
-    n = length(B)
-    i %= n
-    i == 0 && return copy(B)
-    i < 0 && return rol(B, -i)
-    A = BitArray(n)
-    copy_chunks!(A.chunks, i+1, B.chunks, 1, n-i)
-    copy_chunks!(A.chunks, 1, B.chunks, n-i+1, i)
-    return A
+    return ror!(similar(B), B, i)
 end
-
-#TODO: rol!, ror!
 
 ## countnz & find ##
 
