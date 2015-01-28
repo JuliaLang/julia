@@ -4232,11 +4232,15 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
-        if (do_malloc_log && lno != prevlno) {
-            // Check memory allocation only after finishing a line
-            if (prevlno != -1)
-                mallocVisitLine(filename, prevlno);
-            prevlno = lno;
+        if (do_malloc_log) {
+            // Check memory allocation after finishing a line or hitting the next branch
+            if (lno != prevlno ||
+                (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == goto_ifnot_sym) ||
+                jl_is_gotonode(stmt)) {
+                if (prevlno != -1)
+                    mallocVisitLine(filename, prevlno);
+                prevlno = lno;
+            }
         }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
