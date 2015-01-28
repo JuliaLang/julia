@@ -637,13 +637,29 @@ BitArrays
 
    Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
 
-.. function:: rol(B::BitArray{1},i::Integer) -> BitArray{1}
+.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Left rotation operator.
+   Performs a left rotation operation on ``src`` and put the result into ``dest``.
 
-.. function:: ror(B::BitArray{1},i::Integer) -> BitArray{1}
+.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Right rotation operator.
+   Performs a left rotation operation on B.
+
+.. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation.
+
+.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on ``src`` and put the result into ``dest``.
+
+.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on B.
+
+.. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation.
 
 .. _stdlib-sparse:
 
