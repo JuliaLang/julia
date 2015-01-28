@@ -204,8 +204,8 @@ end
 # Because transpose(x) == x
 @test_throws ErrorException transpose(qrfact(randn(3,3)))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
-@test_throws ErrorException transpose(qrfact(randn(3,3), pivot = false))
-@test_throws ErrorException ctranspose(qrfact(randn(3,3), pivot = false))
+@test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
 @test_throws ErrorException transpose(qrfact(big(randn(3,3))))
 @test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
