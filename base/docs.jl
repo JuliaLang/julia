@@ -442,7 +442,12 @@ end
 
 function levsort(search, candidates)
     scores = map(cand -> levenshtein(search, cand), candidates)
-    candidates[sortperm(scores)]
+    candidates = candidates[sortperm(scores)]
+    i = 0
+    for i = 1:length(candidates)
+        levenshtein(search, candidates[i]) > length(search)÷2 && break
+    end
+    return candidates[1:i]
 end
 
 # Result printing
