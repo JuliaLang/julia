@@ -405,18 +405,17 @@ avgdistance(xs) =
     isempty(xs) ? 0 :
     (xs[end] - xs[1] - length(xs)+1)/length(xs)
 
-function fuzzyscore(needle, haystack; shorter = true)
+function fuzzyscore(needle, haystack)
     score = 0.
     is, acro = bestmatch(needle, haystack)
     score += (acro?2:1)length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
-    score += (shorter ? -1 : 1)length(haystack)/1000 # Shorter/longer words
 end
 
-function fuzzysort(search, candidates; shorter = true)
-    scores = map(cand -> fuzzyscore(search, cand, shorter=shorter), candidates)
+function fuzzysort(search, candidates)
+    scores = map(cand -> (fuzzyscore(search, cand), -levenshtein(search, cand)), candidates)
     candidates[sortperm(scores)] |> reverse
 end
 
@@ -441,11 +440,11 @@ function levenshtein(s1, s2)
 end
 
 function levsort(search, candidates)
-    scores = map(cand -> levenshtein(search, cand), candidates)
+    scores = map(cand -> (levenshtein(search, cand), -fuzzyscore(search, cand)), candidates)
     candidates = candidates[sortperm(scores)]
     i = 0
     for i = 1:length(candidates)
-        levenshtein(search, candidates[i]) > length(search)÷2 && break
+        levenshtein(search, candidates[i]) > 3 && break
     end
     return candidates[1:i]
 end
