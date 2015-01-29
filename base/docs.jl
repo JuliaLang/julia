@@ -370,7 +370,9 @@ macro repl (ex)
     quote
         # Fuzzy Searching
         $(isexpr(ex, Symbol)) && repl_search($(string(ex)))
-        if $(isa(ex, Symbol)) && !isdefined($(current_module()), $(Expr(:quote, ex)))
+        if $(isa(ex, Symbol)) &&
+                !(isdefined($(current_module()), $(Expr(:quote, ex))) ||
+                  haskey(keywords, $(Expr(:quote, ex))))
             repl_corrections($(string(ex)))
         else
             # Backwards-compatible with the previous help system, for now
@@ -420,6 +422,7 @@ function fuzzyscore(needle, haystack)
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
+    return score
 end
 
 function fuzzysort(search, candidates)
