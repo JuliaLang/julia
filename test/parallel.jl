@@ -233,11 +233,20 @@ if haskey(ENV, "PTEST_FULL")
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(p, workers))
-            @test intersect(new_pids, w_in_remote) == new_pids
+            try
+                @test intersect(new_pids, w_in_remote) == new_pids
+            catch e
+                print("p       :     $p\n")
+                print("newpids :     $new_pids\n")
+                print("w_in_remote : $w_in_remote\n")
+                rethrow(e)
+            end
         end
 
         remotecall_fetch(1, rmprocs, new_pids)
     end
+
+    test_n_remove_pids(new_pids)
 
     #Other addprocs/rmprocs tests
     new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
