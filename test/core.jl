@@ -1891,3 +1891,13 @@ module M9835
     f() = (isa(A(), A) ? A : B)()
     @test isa(f(), A)
 end
+
+# issue #9947
+function f9947()
+    if 1 == 0
+        1
+    else
+        min(convert(Uint128,2),1)
+    end
+end
+@test f9947() == convert(Uint128,1)
