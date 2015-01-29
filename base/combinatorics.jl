@@ -66,14 +66,9 @@ function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
         throw(DomainError())
     end
-    lastf = zero(T)
     f = one(T)
     while n > k
-        f *= n
-        if f < lastf
-            throw(OverflowError())
-        end
-        lastf = f
+        f = Base.checked_mul(f,n)
         n -= 1
     end
     return f
