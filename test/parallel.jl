@@ -187,7 +187,7 @@ end
 # executed successfully before committing/merging
 
 if haskey(ENV, "PTEST_FULL")
-    println("START of parallel tests that print errors")
+    print("\n\nSTART of parallel tests that print errors\n")
 
     # make sure exceptions propagate when waiting on Tasks
     @test_throws ErrorException (@sync (@async error("oops")))
@@ -219,7 +219,34 @@ if haskey(ENV, "PTEST_FULL")
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
 
-    println("END of parallel tests that print errors")
+    print("\n\nEND of parallel tests that print errors\n")
+
+    #Issue #9951
+    hosts=[]
+    for i in 1:10
+    push!(hosts, "localhost")
+    push!(hosts, string(getipaddr()))
+    push!(hosts, "127.0.0.1")
+    end
+
+    new_pids = remotecall_fetch(1, addprocs, hosts)
+    function test_n_remove_pids(new_pids)
+        for p in new_pids
+            w_in_remote = sort(remotecall_fetch(p, workers))
+            @test intersect(new_pids, w_in_remote) == new_pids
+        end
+
+        remotecall_fetch(1, rmprocs, new_pids)
+    end
+
+    #Other addprocs/rmprocs tests
+    new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
+    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    test_n_remove_pids(new_pids)
+
+    new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
+    @test length(new_pids) == 5
+    test_n_remove_pids(new_pids)
 end
 
 # issue #7727
