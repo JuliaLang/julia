@@ -160,6 +160,11 @@ Library improvements
 
   * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
 
+  * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
+  across all numeric types ([#9133], [#9198]).
+
+  * Rational arithmetic throws errors on overflow ([#8672]).
+
 Deprecated or removed
 ---------------------
 

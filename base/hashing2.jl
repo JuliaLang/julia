@@ -94,26 +94,37 @@ Special values:
 decompose(x::Integer) = x, 0, 1
 decompose(x::Rational) = num(x), 0, den(x)
 
+function decompose(x::Float16)
+    isnan(x) && return 0, 0, 0
+    isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
+    n = reinterpret(UInt16, x)
+    s = (n & 0x03ff) % Int16
+    e = (n & 0x7c00 >> 10) % Int
+    s |= int16(e != 0) << 10
+    d = ifelse(signbit(x), -1, 1)
+    int(s), int(e - 25 + (e == 0)), d
+end
+
 function decompose(x::Float32)
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
-    n = reinterpret(Int32, x)
-    s = int32(n & 0x007fffff)
-    e = int32(n & 0x7f800000 >> 23)
+    n = reinterpret(UInt32, x)
+    s = (n & 0x007fffff) % Int32
+    e = (n & 0x7f800000 >> 23) % Int
     s |= int32(e != 0) << 23
-    d = ifelse(signbit(n), -1, 1)
+    d = ifelse(signbit(x), -1, 1)
     int(s), int(e - 150 + (e == 0)), d
 end
 
 function decompose(x::Float64)
     isnan(x) && return 0, 0, 0
     isinf(x) && return ifelse(x < 0, -1, 1), 0, 0
-    n = reinterpret(Int64, x)
-    s = int64(n & 0x000fffffffffffff)
-    e = int64(n & 0x7ff0000000000000 >> 52)
+    n = reinterpret(UInt64, x)
+    s = (n & 0x000fffffffffffff) % Int64
+    e = (n & 0x7ff0000000000000 >> 52) % Int
     s |= int64(e != 0) << 52
-    d = ifelse(signbit(n), -1, 1)
-    int(s), int(e - 1075 + (e == 0)), d
+    d = ifelse(signbit(x), -1, 1)
+    s, int(e - 1075 + (e == 0)), d
 end
 
 function decompose(x::BigFloat)
