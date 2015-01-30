@@ -1492,8 +1492,17 @@ end
 immutable DefaultClusterManager <: ClusterManager
 end
 
+function check_addprocs_args(kwargs)
+    for keyname in kwargs
+        !(keyname[1] in [:dir, :exename, :exeflags]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+    end
+end
+
 addprocs(; kwargs...) = addprocs(Sys.CPU_CORES; kwargs...)
-addprocs(np::Integer; kwargs...) = addprocs(LocalManager(np); kwargs...)
+function addprocs(np::Integer; kwargs...)
+    check_addprocs_args(kwargs)
+    addprocs(LocalManager(np); kwargs...)
+end
 
 # start and connect to processes via SSH, optionally through an SSH tunnel.
 # the tunnel is only used from the head (process 1); the nodes are assumed
@@ -1501,7 +1510,8 @@ addprocs(np::Integer; kwargs...) = addprocs(LocalManager(np); kwargs...)
 # Default value of kw arg max_parallel is the default value of MaxStartups in sshd_config
 # A machine is either a <hostname> or a tuple of (<hostname>, count)
 function addprocs(machines::AbstractVector; tunnel=false, sshflags=``, max_parallel=10, kwargs...)
-   addprocs(SSHManager(machines); tunnel=tunnel, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
+    check_addprocs_args(kwargs)
+    addprocs(SSHManager(machines); tunnel=tunnel, sshflags=sshflags, max_parallel=max_parallel, kwargs...)
 end
 
 default_addprocs_params() = AnyDict(
