@@ -23,6 +23,7 @@ jl_datatype_t *jl_type_type;
 jl_datatype_t *jl_typename_type;
 jl_datatype_t *jl_sym_type;
 jl_datatype_t *jl_symbol_type;
+jl_datatype_t *jl_gensym_type;
 jl_tuple_t *jl_tuple_type;
 jl_value_t *jl_tupletype_type;
 jl_datatype_t *jl_ntuple_type;
@@ -3043,6 +3044,11 @@ void jl_init_types(void)
     jl_int64_type = NULL;
     jl_int64_type = jl_new_bitstype((jl_value_t*)jl_symbol("Int64"),
                                     jl_any_type, jl_null, 64);
+
+    jl_gensym_type = jl_new_datatype(jl_symbol("GenSym"), jl_any_type, jl_null,
+                        jl_tuple1(jl_symbol("id")),
+                        jl_tuple1(jl_long_type), 0, 0, 0);
+
     jl_init_int32_int64_cache();
 
     jl_bool_type = NULL;

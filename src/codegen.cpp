@@ -301,6 +301,7 @@ static Function *box_int64_func;
 static Function *box_uint64_func;
 static Function *box_float32_func;
 static Function *box_float64_func;
+static Function *box_gensym_func;
 static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
@@ -476,6 +477,8 @@ typedef struct {
     // NOTE: you must be careful not to access vars[s] before you are sure "s" is
     // a local, since otherwise this will add it to the map.
     std::map<jl_sym_t*, jl_varinfo_t> vars;
+    std::vector<Value*> gensym_SAvalues;
+    std::vector<bool> gensym_assigned;
     std::map<jl_sym_t*, jl_arrayvar_t> *arrayvars;
     std::map<int, BasicBlock*> *labels;
     std::map<int, Value*> *handlers;
@@ -1064,6 +1067,8 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         }
         return NULL;
     }
+    if (jl_is_gensym(ex))
+        return NULL;
     if (jl_is_topnode(ex)) {
         jl_binding_t *b = jl_get_binding(jl_base_relative_to(mod),
                                          (jl_sym_t*)jl_fieldref(ex,0));
@@ -1209,16 +1214,14 @@ static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l, int
         jl_value_t *st = jl_arrayref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == assign_sym) {
-                jl_sym_t *sy;
                 jl_value_t *ar = jl_exprarg(st, 0);
                 if (jl_is_symbolnode(ar)) {
-                    sy = jl_symbolnode_sym(ar);
+                    ar = (jl_value_t*)jl_symbolnode_sym(ar);
                 }
-                else {
+                if (!jl_is_gensym(ar)) {
                     assert(jl_is_symbol(ar));
-                    sy = (jl_sym_t*)ar;
+                    av.insert((jl_sym_t*)ar);
                 }
-                av.insert(sy);
             }
         }
         if (jl_is_labelnode(st)) {
@@ -1416,6 +1419,8 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
                 return true;
         }
     }
+    if (jl_is_gensym(ex))
+        return true;
     if (static_eval(ex, ctx, true, false) != NULL)
         return true;
     if (jl_is_expr(ex)) {
@@ -1443,7 +1448,7 @@ static bool is_stable_expr(jl_value_t *ex, jl_codectx_t *ctx)
 // classify exprs that might need temporary rooting.
 static bool might_need_root(jl_value_t *ex)
 {
-    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) &&
+    return (!jl_is_symbol(ex) && !jl_is_symbolnode(ex) && !jl_is_gensym(ex) &&
             !jl_is_bool(ex) && !jl_is_quotenode(ex) && !jl_is_byte_string(ex));
 }
 
@@ -1738,8 +1743,8 @@ static Value *emit_f_is(jl_value_t *rt1, jl_value_t *rt2,
 {
     if (jl_is_type_type(rt1) && jl_is_type_type(rt2) &&
         !jl_is_typevar(jl_tparam0(rt1)) && !jl_is_typevar(jl_tparam0(rt2)) &&
-        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || is_constant(arg1, ctx)) &&
-        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || is_constant(arg2, ctx))) {
+        (!arg1 || jl_is_symbol(arg1) || jl_is_symbolnode(arg1) || jl_is_gensym(arg1) || is_constant(arg1, ctx)) &&
+        (!arg2 || jl_is_symbol(arg2) || jl_is_symbolnode(arg2) || jl_is_gensym(arg2) || is_constant(arg2, ctx))) {
         if (jl_tparam0(rt1) == jl_tparam0(rt2))
             return ConstantInt::get(T_int1, 1);
         return ConstantInt::get(T_int1, 0);
@@ -2085,7 +2090,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         Type *ety = NULL;
                         if (tpl != NULL)
                             ety = jl_llvmtuple_eltype(tpl->getType(),rt1,i);
-                        if (tpl == NULL || ety == T_void || ety->isEmptyTy()) {
+                        if (tpl == NULL || type_is_ghost(ety)) {
                             emit_expr(args[i+1],ctx); //for side effects (if any)
                             continue;
                         }
@@ -2762,7 +2767,7 @@ static Value *ghostValue(jl_value_t *ty)
         Type *llvmty = julia_struct_to_llvm(ty);
         if (llvmty == T_void)
             return mark_julia_type(UndefValue::get(NoopType),ty);
-        return UndefValue::get(llvmty);
+        return mark_julia_type(UndefValue::get(llvmty), ty);
     }
     else {
         return mark_julia_type(UndefValue::get(NoopType),ty);
@@ -2828,8 +2833,63 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     return emit_checked_var(bp, sym, ctx, vi.isVolatile);
 }
 
+static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, bool used, jl_codectx_t *ctx) {
+    Value *rval;
+    jl_value_t *rt = expr_type(r,ctx);
+    if (bp != NULL) {
+        if ((jl_is_symbol(r) || jl_is_symbolnode(r) || jl_is_gensym(r)) && rt == jl_bottom_type) {
+            // sometimes x = y::Union() occurs
+            return UndefValue::get(bp->getType()->getContainedType(0));
+        }
+        Type *vt = bp->getType();
+        if (vt != jl_ppvalue_llvmt) { // unboxed store (in an alloca)
+            // `rt` is technically correct here, but sometimes we're not propagating type information
+            // properly, so `rt` is a union type, while LLVM know that it's not. However, in order for this to
+            // happen, we need to already be sure somewhere that we have the right type, so vi.declType is fine
+            // even if not technically correct.
+            rval = mark_julia_type(emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), declType), declType);
+        }
+        else {
+            rval = boxed(emit_expr(r, ctx, true),ctx,rt);
+            if (!is_stack(bp)) {
+                Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
+                emit_write_barrier(ctx, box, rval);
+            }
+        }
+        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+            builder.CreateStore(rval, bp, isVolatile);
+        }
+    }
+    else {
+        rval = emit_expr(r, ctx, true);
+
+        // don't need to store this if it isn't used
+        // and sometimes we can get x::Union() = Expr(:tuple)::() in dead code
+        if (!used || declType == jl_bottom_type)
+            return UndefValue::get(rval->getType());
+
+        // Make sure this is already boxed. If not, there was
+        // something wrong in the earlier analysis as this should
+        // have been alloca'd
+        assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
+    }
+    assert(rval);
+    return rval;
+}
+
 static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
+    if (jl_is_gensym(l)) {
+        ssize_t idx = ((jl_gensym_t*)l)->id;
+        assert(!ctx->gensym_assigned.at(idx));
+        Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the memvalue (if isbits)
+        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+        jl_value_t *declType = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+        Value *rval = emit_assignment(bp, r, declType, false, true, ctx);
+        ctx->gensym_SAvalues.at(idx) = rval; // now gensym_SAvalues[idx] actually contains the SAvalue
+        assert(ctx->gensym_assigned.at(idx) = true);
+        return;
+    }
     jl_sym_t *s = NULL;
     if (jl_is_symbol(l))
         s = (jl_sym_t*)l;
@@ -2839,64 +2899,29 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         assert(false);
     jl_binding_t *bnd=NULL;
     Value *bp = var_binding_pointer(s, &bnd, true, ctx);
-    Value *rval;
     if (bnd) {
-        rval = boxed(emit_expr(r, ctx, true),ctx);
+        Value *rval = boxed(emit_expr(r, ctx, true),ctx);
         builder.CreateCall2(prepare_call(jlcheckassign_func),
                             literal_pointer_val(bnd),
                             rval);
     }
     else {
         jl_varinfo_t &vi = ctx->vars[s];
-        jl_value_t *rt = expr_type(r,ctx);
-        if ((jl_is_symbol(r) || jl_is_symbolnode(r)) && rt == jl_bottom_type) {
-            // sometimes x = y::Union() occurs
-            if (builder.GetInsertBlock()->getTerminator() != NULL)
-                return;
-        }
-        if (bp != NULL) {
-            Type *vt = bp->getType();
-            if (vt->isPointerTy() && vt->getContainedType(0)!=jl_pvalue_llvmt) {
-                // TODO: `rt` is techincally correct here, but sometimes we're not propagating type information
-                // properly, so `rt` is a union type, while LLVM know that it's not. However, in order for this to
-                // happen, we need to already be sure somewhere that we have the right type, so vi.declType is fine
-                // even if not techincally correct.
-                rval = emit_unbox(vt->getContainedType(0), emit_unboxed(r, ctx), vi.declType);
-            }
-            else {
-                rval = boxed(emit_expr(r, ctx, true), ctx, rt);
-                if (!is_stack(bp)) {
-                    Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
-                    emit_write_barrier(ctx, box, rval);
-                }
-            }
-            if (builder.GetInsertBlock()->getTerminator() == NULL) {
-                builder.CreateStore(rval, bp, vi.isVolatile);
-            }
-        }
-        else {
-            rval = emit_expr(r, ctx, true);
-            if (!vi.used)  // don't actually do the assignment if the var is never read
-                return;
-            // Make sure this is already boxed. If not, there was
-            // something wrong in the earlier analysis as this should
-            // have been alloca'd
-            assert(rval->getType() == jl_pvalue_llvmt || rval->getType() == NoopType);
+        Value *rval = emit_assignment(bp, r, vi.declType, vi.isVolatile, vi.used, ctx);
+
+        if (vi.isSA &&
+            ((bp == NULL) ||
+             (!vi.isCaptured && !vi.isArgument &&
+              !vi.usedUndef && !vi.isVolatile))) {
+            // use SSA value instead of GC frame load for var access
+            vi.SAvalue = rval;
         }
 
-        if (builder.GetInsertBlock()->getTerminator() == NULL) {
+        if (!isa<UndefValue>(rval) && builder.GetInsertBlock()->getTerminator() == NULL) {
             jl_arrayvar_t *av = arrayvar_for(l, ctx);
             if (av != NULL) {
                 assign_arrayvar(*av, rval);
             }
-        }
-
-        if (vi.isSA &&
-            ((bp == NULL) ||
-             (!vi.isCaptured && !vi.isArgument && !vi.usedUndef &&
-              !vi.isVolatile && rval->getType() == jl_pvalue_llvmt))) {
-            // use SSA value instead of GC frame load for var access
-            vi.SAvalue = rval;
         }
     }
 }
@@ -2931,7 +2956,20 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (!valuepos) return NULL;
         return emit_var(jl_symbolnode_sym(expr), jl_symbolnode_type(expr), ctx, isboxed);
     }
-    else if (jl_is_labelnode(expr)) {
+    if (jl_is_gensym(expr)) {
+        if (!valuepos) return NULL;
+        ssize_t idx = ((jl_gensym_t*)expr)->id;
+        assert(ctx->gensym_assigned.at(idx));
+        Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
+        if (bp == NULL || type_is_ghost(bp->getType())) {
+            // assert(vi.isGhost);
+            jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+            jl_value_t *declType = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+            return ghostValue(declType);
+        }
+        return bp;
+    }
+    if (jl_is_labelnode(expr)) {
         int labelname = jl_labelnode_label(expr);
         BasicBlock *bb = (*ctx->labels)[labelname];
         assert(bb);
@@ -2942,12 +2980,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         builder.SetInsertPoint(bb);
         return NULL;
     }
-    else if (jl_is_linenode(expr)) {
+    if (jl_is_linenode(expr)) {
         if (valuepos)
             jl_error("Linenode in value position");
         return NULL;
     }
-    else if (jl_is_quotenode(expr)) {
+    if (jl_is_quotenode(expr)) {
         jl_value_t *jv = jl_fieldref(expr,0);
         if (jl_is_bitstype(jl_typeof(jv))) {
             return emit_expr(jv, ctx, isboxed, valuepos);
@@ -2957,7 +2995,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return literal_pointer_val(jv);
     }
-    else if (jl_is_gotonode(expr)) {
+    if (jl_is_gotonode(expr)) {
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
             int labelname = jl_gotonode_label(expr);
             BasicBlock *bb = (*ctx->labels)[labelname];
@@ -2969,11 +3007,11 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return NULL;
     }
-    else if (jl_is_getfieldnode(expr)) {
+    if (jl_is_getfieldnode(expr)) {
         return emit_getfield(jl_fieldref(expr,0),
                              (jl_sym_t*)jl_fieldref(expr,1), ctx);
     }
-    else if (jl_is_topnode(expr)) {
+    if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
         jl_value_t *etype = expr_type(expr, ctx);
         jl_module_t *mod = topmod(ctx);
@@ -2988,9 +3026,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return emit_checked_var(bp, var, ctx);
     }
-    else if (jl_is_newvarnode(expr)) {
+    if (jl_is_newvarnode(expr)) {
         assert(!valuepos);
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        assert(!jl_is_gensym(var));
         assert(jl_is_symbol(var));
         jl_varinfo_t &vi = ctx->vars[var];
         Value *lv = vi.memvalue;
@@ -3051,11 +3090,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         builder.SetInsertPoint(ifso);
     }
-
     else if (head == call_sym || head == call1_sym) {
         return emit_call(args, jl_array_dim0(ex->args), ctx, (jl_value_t*)ex);
     }
-
     else if (head == assign_sym) {
         emit_assignment(args[0], args[1], ctx);
         if (valuepos) {
@@ -3155,7 +3192,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
                     for(size_t i=0; i < na; i++) {
                         jl_value_t *jtype = jl_tupleref(sty->types,i);
                         Type *fty = julia_type_to_llvm(jtype);
-                        if (fty == T_void || fty->isEmptyTy())
+                        if (type_is_ghost(fty))
                             continue;
                         Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
                         if (fty == T_int1)
@@ -3342,18 +3379,22 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
 
 // --- allocating local variables ---
 
+static bool store_unboxed_p(jl_value_t *jt)
+{
+    return (jltupleisbits(jt,false) &&
+        // don't unbox intrinsics, since inference depends on their having
+        // stable addresses for table lookup.
+        jt != (jl_value_t*)jl_intrinsic_type);
+}
+
 static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
 {
     jl_varinfo_t &vi = ctx->vars[s];
-    jl_value_t *jt = vi.declType;
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && jltupleisbits(jt,false) &&
-            // don't unbox intrinsics, since inference depends on their having
-            // stable addresses for table lookup.
-            jt != (jl_value_t*)jl_intrinsic_type && !vi.isCaptured &&
+    return (ctx->linfo->inferred && !vi.isCaptured &&
             // don't unbox vararg tuples
-            s != ctx->vaName);
+            s != ctx->vaName && store_unboxed_p(vi.declType));
 }
 
 static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
@@ -3364,7 +3405,7 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
     assert(store_unboxed_p(s,ctx));
     Type *vtype = julia_struct_to_llvm(jt);
     assert(vtype != jl_pvalue_llvmt);
-    if (vtype != T_void && !vtype->isEmptyTy()) {
+    if (!type_is_ghost(vtype)) {
         lv = builder.CreateAlloca(vtype, 0, s->name);
         if (vtype != jl_pvalue_llvmt)
             lv = mark_julia_type(lv, jt);
@@ -3543,29 +3584,18 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     size_t nargs = jl_tuple_len(lam->specTypes);
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
-    unsigned argIdx = 0;
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {
         jl_value_t *ty = jl_tupleref(lam->specTypes, i);
+        Type *lty = julia_type_to_llvm(ty);
+        if (lty != NULL && type_is_ghost(lty))
+            continue;
         Value *argPtr = builder.CreateGEP(argArray,
-                                          ConstantInt::get(T_size, argIdx));
+                                          ConstantInt::get(T_size, i));
         Value *theArg = builder.CreateLoad(argPtr, false);
         Value *theNewArg = theArg;
-        argIdx++;
-        if (jl_is_leaf_type(ty) && jl_isbits(ty)) {
-            Type *lty = julia_struct_to_llvm(ty);
-            assert(lty != NULL);
-            if (lty == T_void || lty->isEmptyTy())
-                continue;
+        if (lty != NULL && lty != jl_pvalue_llvmt) {
             theNewArg = emit_unbox(lty, theArg, ty);
-        }
-        else if (jl_is_tuple(ty)) {
-            Type *lty = julia_struct_to_llvm(ty);
-            if (lty != jl_pvalue_llvmt) {
-                if (lty == T_void || lty->isEmptyTy())
-                    continue;
-                theNewArg = emit_unbox(lty, theArg, ty);
-            }
         }
         assert(dyn_cast<UndefValue>(theNewArg) == NULL);
         args[idx] = theNewArg;
@@ -3622,6 +3652,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     ctx.boundsCheck.push_back(true);
 
     // step 2. process var-info lists to see what vars are captured, need boxing
+    jl_value_t *gensym_types = jl_lam_gensyms(ast);
+    int n_gensyms = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_gensym(gensym_types));
     jl_array_t *largs = jl_lam_args(ast);
     size_t largslen = jl_array_dim0(largs);
     jl_array_t *lvars = jl_lam_locals(ast);
@@ -3688,18 +3720,25 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     mark_volatile_vars(stmts, ctx.vars);
 
     // fetch init exprs of SSA vars for easy reference
+    std::vector<jl_value_t*> gensym_initExpr;
+    gensym_initExpr.assign(n_gensyms, (jl_value_t*)NULL);
     for(i=0; i < jl_array_len(stmts); i++) {
         jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st) && ((jl_expr_t*)st)->head == assign_sym) {
             jl_value_t *lhs = jl_exprarg(st,0);
             if (jl_is_symbolnode(lhs))
                 lhs = (jl_value_t*)jl_symbolnode_sym(lhs);
-            std::map<jl_sym_t*,jl_varinfo_t>::iterator it = ctx.vars.find((jl_sym_t*)lhs);
-            if (it != ctx.vars.end()) {
-                jl_varinfo_t &vi = (*it).second;
-                if (vi.isSA) {
-                    vi.initExpr = jl_exprarg(st,1);
+            if (jl_is_symbol(lhs)) {
+                std::map<jl_sym_t*,jl_varinfo_t>::iterator it = ctx.vars.find((jl_sym_t*)lhs);
+                if (it != ctx.vars.end()) {
+                    jl_varinfo_t &vi = (*it).second;
+                    if (vi.isSA) {
+                        vi.initExpr = jl_exprarg(st,1);
+                    }
                 }
+            }
+            if (jl_is_gensym(lhs)) {
+                gensym_initExpr.at(((jl_gensym_t*)lhs)->id) = jl_exprarg(st,1);
             }
         }
     }
@@ -3713,7 +3752,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         specsig = true;
     }
     else {
-        if (!va && !hasCapt && lam->specTypes != NULL) {
+        if (!va && !hasCapt && lam->specTypes != NULL && lam->inferred) {
             // no captured vars and not vararg
             // consider specialized signature
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -3751,7 +3790,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-            if (ty == T_void || ty->isEmptyTy()) {
+            if (type_is_ghost(ty)) {
+                // mark as a ghost for now, we'll revise this later if needed as a local
                 ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost = true;
             }
             else {
@@ -3966,6 +4006,28 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         maybe_alloc_arrayvar(s, &ctx);
     }
 
+    // create SAvalue locations for GenSym objects
+    ctx.gensym_assigned.assign(n_gensyms, false);
+    ctx.gensym_SAvalues.assign(n_gensyms, (Value*)NULL);
+    for(int i=0; i < n_gensyms; i++) {
+        jl_value_t *jt = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, i) : (jl_value_t*)jl_any_type);
+        if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
+            // nothing
+        }
+        else if (store_unboxed_p(jt)) {
+            Type *vtype = julia_struct_to_llvm(jt);
+            assert(vtype != jl_pvalue_llvmt);
+            if (vtype != T_void && !vtype->isEmptyTy()) {
+                Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
+                ctx.gensym_SAvalues.at(i) = lv;
+            }
+        } else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
+            gensym_initExpr.at(i) = NULL;
+        } else {
+            n_roots++;
+        }
+    }
+
     // fetch env out of function object if we need it
     if (hasCapt) {
         ctx.envArg = emit_nthptr(fArg, 2, tbaa_func);
@@ -3980,6 +4042,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     for(i=0; i < largslen; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         if (store_unboxed_p(s, &ctx)) {
+            // nothing
         }
         else if (ctx.vars[s].isAssigned || (va && i==largslen-1)) {
             Value *av = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
@@ -3990,11 +4053,27 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     for(i=0; i < lvarslen; i++) {
         jl_sym_t *s = ((jl_sym_t*)jl_cellref(lvars,i));
         if (store_unboxed_p(s, &ctx)) {
+            // nothing
         }
         else if (ctx.vars[s].hasGCRoot) {
             Value *lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
             varnum++;
             ctx.vars[s].memvalue = lv;
+        }
+    }
+    for(int i=0; i < n_gensyms; i++) {
+        jl_value_t *jt = (jl_is_array(gensym_types) ? jl_cellref(gensym_types, i) : (jl_value_t*)jl_any_type);
+        Value *lv = ctx.gensym_SAvalues.at(i);
+        if (jt == (jl_value_t*)jl_bottom_type || gensym_initExpr.at(i) == NULL) {
+            // nothing
+        }
+        else if (store_unboxed_p(jt)) {
+            // nothing
+        }
+        else {
+            lv = builder.CreateConstGEP1_32(ctx.argTemp,varnum);
+            varnum++;
+            ctx.gensym_SAvalues.at(i) = lv;
         }
     }
     assert(varnum == ctx.argSpaceOffs);
@@ -4065,11 +4144,12 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     unsigned argIdx = 0;
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+        jl_varinfo_t &vi = ctx.vars[s];
         Value *argPtr = NULL;
         jl_value_t *argType = NULL;
         if (specsig) {
             argType = jl_tupleref(lam->specTypes,i);
-            if (!ctx.vars[s].isGhost) {
+            if (!vi.isGhost) {
                 argPtr = AI++;
                 argPtr = mark_julia_type(argPtr, argType);
             }
@@ -4088,20 +4168,15 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             theArg = builder.CreateLoad(argPtr, false);
         }
 
-        Value *lv = ctx.vars[s].memvalue;
+        Value *lv = vi.memvalue;
         if (lv == NULL) {
-            if (ctx.vars[s].isGhost) {
-                ctx.vars[s].passedAs = NULL;
-            }
-            else {
-                // if this argument hasn't been given space yet, we've decided
-                // to leave it in the input argument array.
-                ctx.vars[s].passedAs = theArg;
-            }
+            // if this argument hasn't been given space yet, we've decided
+            // to leave it in the input argument array.
+            vi.passedAs = theArg;
         }
         else {
             // keep track of original (boxed) value to avoid re-boxing
-            ctx.vars[s].passedAs = theArg;
+            vi.passedAs = theArg;
             if (isBoxed(s, &ctx)) {
                 if (specsig) {
                     theArg = boxed(theArg,&ctx,argType);
@@ -4153,8 +4228,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     builder.CreateStore(restTuple, lv);
             }
             else {
-                // TODO: Perhaps allow this in the future, but for now sice varargs are always unspecialized
-                // we don't
+                // TODO: Perhaps allow this in the future, but for now since varargs
+                // are always unspecialized we don't
                 assert(false);
             }
         }
@@ -4353,7 +4428,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
             std::vector<Type*> fsig(0);
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
                 Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
-                if (ty != T_void && !ty->isEmptyTy())
+                if (!type_is_ghost(ty))
                     fsig.push_back(ty);
             }
             Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
@@ -5157,6 +5232,7 @@ extern "C" void jl_init_codegen(void)
     BOX_F(int64,int64); BOX_F(uint64,uint64);
     BOX_F(float32,float32); BOX_F(float64,float64);
     BOX_F(char,char);
+    BOX_F(gensym,size);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)&jl_box8, m);

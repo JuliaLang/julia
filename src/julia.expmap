@@ -35,6 +35,7 @@
     utf8proc_*;
     gc_queue_root;
     gc_wb_slow;
+    jlbacktrace;
 
     /* freebsd */
     environ;

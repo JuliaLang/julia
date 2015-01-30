@@ -14,21 +14,15 @@ extern "C" {
 
 extern int jl_lineno;
 
-static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl);
-static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
+static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym);
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
                              int start, int toplevel);
 jl_value_t *jl_eval_module_expr(jl_expr_t *ex);
 int jl_is_toplevel_only_expr(jl_value_t *e);
 
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e)
 {
-    return eval(e, NULL, 0);
-}
-
-jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
-                                            jl_value_t **locals, size_t nl)
-{
-    return eval(e, locals, nl);
+    return eval(e, NULL, 0, 0);
 }
 
 DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
@@ -39,7 +33,7 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
     jl_module_t *task_last_m = jl_current_task->current_module;
     JL_TRY {
         jl_current_task->current_module = jl_current_module = m;
-        v = eval(e, locals, nl);
+        v = eval(e, locals, nl, 0);
     }
     JL_CATCH {
         jl_current_module = last_m;
@@ -53,7 +47,7 @@ DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *
 }
 
 static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
-                           jl_value_t *eval0, jl_value_t **locals, size_t nl)
+                           jl_value_t *eval0, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     jl_value_t **argv;
     JL_GC_PUSHARGS(argv, nargs+1);
@@ -65,7 +59,7 @@ static jl_value_t *do_call(jl_function_t *f, jl_value_t **args, size_t nargs,
         argv[1] = eval0; i++;
     }
     for(; i < nargs; i++) {
-        argv[i+1] = eval(args[i], locals, nl);
+        argv[i+1] = eval(args[i], locals, nl, ngensym);
     }
     jl_value_t *result = jl_apply(f, &argv[1], nargs);
     JL_GC_POP();
@@ -109,7 +103,7 @@ static void check_can_assign_type(jl_binding_t *b)
         jl_errorf("invalid redefinition of constant %s", b->name->name);
 }
 
-static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
+static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     if (jl_is_symbol(e)) {
         jl_value_t *v;
@@ -129,7 +123,14 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return v;
     }
     if (jl_is_symbolnode(e)) {
-        return eval((jl_value_t*)jl_symbolnode_sym(e), locals, nl);
+        return eval((jl_value_t*)jl_symbolnode_sym(e), locals, nl, ngensym);
+    }
+    if (jl_is_gensym(e)) {
+        ssize_t genid = ((jl_gensym_t*)e)->id;
+        if (genid > ngensym || genid < 0)
+            return NULL;
+        else
+            return locals[nl*2 + genid];
     }
     if (jl_is_quotenode(e)) {
         return jl_fieldref(e,0);
@@ -143,7 +144,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     if (!jl_is_expr(e)) {
         if (jl_is_getfieldnode(e)) {
-            jl_value_t *v = eval(jl_getfieldnode_val(e), locals, nl);
+            jl_value_t *v = eval(jl_getfieldnode_val(e), locals, nl, ngensym);
             jl_value_t *gfargs[2] = {v, (jl_value_t*)jl_getfieldnode_name(e)};
             return jl_f_get_field(NULL, gfargs, 2);
         }
@@ -160,6 +161,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         if (jl_is_newvarnode(e)) {
             jl_value_t *var = jl_fieldref(e,0);
+            assert(!jl_is_gensym(var));
             assert(jl_is_symbol(var));
             for(size_t i=0; i < nl; i++) {
                 if (locals[i*2] == var) {
@@ -192,14 +194,15 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                         ar[i] = NULL;
                     }
                     for(int i=0; i < na; i++) {
-                        ar[i*2+1] = eval(args[i+1], locals, nl);
+                        ar[i*2+1] = eval(args[i+1], locals, nl, ngensym);
                         gc_wb(ex->args, ar[i*2+1]);
                     }
                     if (na != nreq) {
                         jl_error("wrong number of arguments");
                     }
                     for(int i=0; i < na; i++) {
-                        ar[i*2] = (jl_value_t*)jl_decl_var(jl_cellref(formals,i));
+                        jl_value_t *v = jl_cellref(formals, i);
+                        ar[i*2] = (jl_is_gensym(v)) ? v : (jl_value_t*)jl_decl_var(v);
                     }
                     jl_value_t *ret = jl_interpret_toplevel_thunk_with(li, ar, na);
                     JL_GC_POP();
@@ -207,36 +210,44 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 }
             }
         }
-        jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl);
+        jl_function_t *f = (jl_function_t*)eval(args[0], locals, nl, ngensym);
         if (jl_is_func(f))
-            return do_call(f, &args[1], nargs-1, NULL, locals, nl);
+            return do_call(f, &args[1], nargs-1, NULL, locals, nl, ngensym);
         else
-            return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl);
+            return do_call(jl_module_call_func(jl_current_module), args, nargs, (jl_value_t*)f, locals, nl, ngensym);
     }
     else if (ex->head == assign_sym) {
         jl_value_t *sym = args[0];
+        jl_value_t *rhs = eval(args[1], locals, nl, ngensym);
+        if (jl_is_gensym(sym)) {
+            ssize_t genid = ((jl_gensym_t*)sym)->id;
+            if (genid > ngensym || genid < 0)
+                jl_errorf("illegal attempt to assign to non-existent GenSym location");
+            locals[nl*2 + genid] = rhs;
+            gc_wb(jl_current_module, rhs); // not sure about jl_current_module
+            return rhs;
+        }
         assert(jl_is_symbol(sym));
         size_t i;
         for (i=0; i < nl; i++) {
             if (locals[i*2] == sym) {
-                locals[i*2+1] = eval(args[1], locals, nl);
-                gc_wb(jl_current_module, locals[i*2+1]); // not sure about jl_current_module
-                return locals[i*2+1];
+                locals[i*2+1] = rhs;
+                gc_wb(jl_current_module, rhs); // not sure about jl_current_module
+                return rhs;
             }
         }
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)sym);
-        jl_value_t *rhs = eval(args[1], locals, nl);
         jl_checked_assignment(b, rhs);
         return rhs;
     }
     else if (ex->head == new_sym) {
-        jl_value_t *thetype = eval(args[0], locals, nl);
+        jl_value_t *thetype = eval(args[0], locals, nl, ngensym);
         jl_value_t *v=NULL;
         JL_GC_PUSH2(&thetype, &v);
         assert(jl_is_structtype(thetype));
         v = jl_new_struct_uninit((jl_datatype_t*)thetype);
         for(size_t i=1; i < nargs; i++) {
-            jl_set_nth_field(v, i-1, eval(args[i], locals, nl));
+            jl_set_nth_field(v, i-1, eval(args[i], locals, nl, ngensym));
         }
         JL_GC_POP();
         return v;
@@ -245,7 +256,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         return (jl_value_t*)jl_nothing;
     }
     else if (ex->head == body_sym) {
-        return eval_body(ex->args, locals, nl, 0, 0);
+        return eval_body(ex->args, locals, nl, ngensym, 0, 0);
     }
     else if (ex->head == exc_sym) {
         return jl_exception_in_transit;
@@ -265,7 +276,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
                 kw = 1;
                 fname = (jl_sym_t*)jl_exprarg(fname, 0);
             }
-            gf = eval((jl_value_t*)fname, locals, nl);
+            gf = eval((jl_value_t*)fname, locals, nl, ngensym);
             if (jl_is_expr(fname))
                 fname = (jl_sym_t*)jl_fieldref(jl_exprarg(fname, 2), 0);
             bp = &gf;
@@ -286,17 +297,17 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         }
         jl_value_t *atypes=NULL, *meth=NULL;
         JL_GC_PUSH2(&atypes, &meth);
-        atypes = eval(args[1], locals, nl);
+        atypes = eval(args[1], locals, nl, ngensym);
         if (jl_is_lambda_info(args[2])) {
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
         }
-        meth = eval(args[2], locals, nl);
+        meth = eval(args[2], locals, nl, ngensym);
         jl_method_def(fname, bp, bp_owner, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
         JL_GC_POP();
         return *bp;
     }
     else if (ex->head == copyast_sym) {
-        return jl_copy_ast(eval(args[0], locals, nl));
+        return jl_copy_ast(eval(args[0], locals, nl, ngensym));
     }
     else if (ex->head == const_sym) {
         jl_value_t *sym = args[0];
@@ -321,7 +332,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     }
     else if (ex->head == abstracttype_sym) {
         jl_value_t *name = args[0];
-        jl_value_t *para = eval(args[1], locals, nl);
+        jl_value_t *para = eval(args[1], locals, nl, ngensym);
         jl_value_t *super = NULL;
         jl_value_t *temp = NULL;
         JL_GC_PUSH3(&para, &super, &temp);
@@ -334,7 +345,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
         gc_wb_binding(((void**)b)-1, dt);
-        super = eval(args[2], locals, nl);
+        super = eval(args[2], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
@@ -348,9 +359,9 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
         JL_GC_PUSH3(&para, &super, &temp);
         assert(jl_is_symbol(name));
-        para = eval(args[1], locals, nl);
+        para = eval(args[1], locals, nl, ngensym);
         assert(jl_is_tuple(para));
-        vnb  = eval(args[2], locals, nl);
+        vnb  = eval(args[2], locals, nl, ngensym);
         if (!jl_is_long(vnb))
             jl_errorf("invalid declaration of bits type %s", ((jl_sym_t*)name)->name);
         int32_t nb = jl_unbox_long(vnb);
@@ -363,7 +374,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        super = eval(args[3], locals, nl);
+        super = eval(args[3], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
         if (temp==NULL || !equiv_type(dt, (jl_datatype_t*)temp)) {
@@ -375,13 +386,13 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == compositetype_sym) {
         jl_value_t *name = args[0];
         assert(jl_is_symbol(name));
-        jl_value_t *para = eval(args[1], locals, nl);
+        jl_value_t *para = eval(args[1], locals, nl, ngensym);
         assert(jl_is_tuple(para));
         jl_value_t *temp = NULL;
         jl_value_t *super = NULL;
         jl_datatype_t *dt = NULL;
         JL_GC_PUSH4(&para, &super, &temp, &dt);
-        temp = eval(args[2], locals, nl);  // field names
+        temp = eval(args[2], locals, nl, ngensym);  // field names
         dt = jl_new_datatype((jl_sym_t*)name, jl_any_type, (jl_tuple_t*)para,
                              (jl_tuple_t*)temp, NULL,
                              0, args[5]==jl_true ? 1 : 0, jl_unbox_long(args[6]));
@@ -396,11 +407,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
         JL_TRY {
             // operations that can fail
             inside_typedef = 1;
-            dt->types = (jl_tuple_t*)eval(args[4], locals, nl);
+            dt->types = (jl_tuple_t*)eval(args[4], locals, nl, ngensym);
             gc_wb(dt, dt->types);
             inside_typedef = 0;
             jl_check_type_tuple(dt->types, dt->name->name, "type definition");
-            super = eval(args[3], locals, nl);
+            super = eval(args[3], locals, nl, ngensym);
             jl_set_datatype_super(dt, super);
         }
         JL_CATCH {
@@ -428,7 +439,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl)
     else if (ex->head == macro_sym) {
         jl_sym_t *nm = (jl_sym_t*)args[0];
         assert(jl_is_symbol(nm));
-        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl);
+        jl_function_t *f = (jl_function_t*)eval(args[1], locals, nl, ngensym);
         JL_GC_PUSH1(&f);
         assert(jl_is_function(f));
         if (jl_boot_file_loaded &&
@@ -487,10 +498,27 @@ static int label_idx(jl_value_t *tgt, jl_array_t *stmts)
 
 jl_value_t *jl_toplevel_eval_body(jl_array_t *stmts)
 {
-    return eval_body(stmts, NULL, 0, 0, 1);
+    ssize_t ngensym = 0;
+    size_t i, l = jl_array_len(stmts);
+    for (i = 0; i < l; i++) {
+        ssize_t maxid = jl_max_jlgensym_in(jl_cellref(stmts, i))+1;
+        if (maxid > ngensym)
+            ngensym = maxid;
+    }
+    jl_value_t **locals = NULL;
+    if (ngensym > 0) {
+        JL_GC_PUSHARGS(locals, ngensym);
+    }
+    for (i = 0; i < ngensym; i++) {
+        locals[i] = NULL;
+    }
+    jl_value_t *ret = eval_body(stmts, locals, 0, ngensym, 0, 1);
+    if (ngensym > 0)
+        JL_GC_POP();
+    return ret;
 }
 
-static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
+static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl, size_t ngensym,
                              int start, int toplevel)
 {
     jl_handler_t __eh;
@@ -505,7 +533,7 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
         if (jl_is_expr(stmt)) {
             jl_sym_t *head = ((jl_expr_t*)stmt)->head;
             if (head == goto_ifnot_sym) {
-                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl);
+                jl_value_t *cond = eval(jl_exprarg(stmt,0), locals, nl, ngensym);
                 if (cond == jl_false) {
                     i = label_idx(jl_exprarg(stmt,1), stmts);
                     continue;
@@ -520,12 +548,12 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 if (toplevel && jl_is_toplevel_only_expr(ex))
                     return jl_toplevel_eval(ex);
                 else
-                    return eval(ex, locals, nl);
+                    return eval(ex, locals, nl, ngensym);
             }
             else if (head == enter_sym) {
                 jl_enter_handler(&__eh);
                 if (!jl_setjmp(__eh.eh_ctx,1)) {
-                    return eval_body(stmts, locals, nl, i+1, toplevel);
+                    return eval_body(stmts, locals, nl, ngensym, i+1, toplevel);
                 }
                 else {
 #ifdef _OS_WINDOWS_
@@ -544,14 +572,14 @@ static jl_value_t *eval_body(jl_array_t *stmts, jl_value_t **locals, size_t nl,
                 if (toplevel && jl_is_toplevel_only_expr(stmt))
                     jl_toplevel_eval(stmt);
                 else
-                    eval(stmt, locals, nl);
+                    eval(stmt, locals, nl, ngensym);
             }
         }
         else {
             if (toplevel && jl_is_toplevel_only_expr(stmt))
                 jl_toplevel_eval(stmt);
             else
-                eval(stmt, locals, nl);
+                eval(stmt, locals, nl, ngensym);
         }
         i++;
     }
@@ -569,7 +597,9 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
     jl_value_t **names = &((jl_value_t**)l->data)[0];
     nl += llength;
     jl_value_t **locals;
-    JL_GC_PUSHARGS(locals, nl*2);
+    jl_value_t *gensym_types = jl_lam_gensyms(ast);
+    size_t ngensym = (jl_is_array(gensym_types) ? jl_array_len(gensym_types) : jl_unbox_gensym(gensym_types));
+    JL_GC_PUSHARGS(locals, nl*2+ngensym);
     jl_value_t *r = (jl_value_t*)jl_null;
     size_t i=0;
     for(i=0; i < llength; i++) {
@@ -580,7 +610,11 @@ jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
         locals[i*2]   = loc[(i-llength)*2];
         locals[i*2+1] = loc[(i-llength)*2+1];
     }
-    r = eval_body(stmts, locals, nl, 0, 1);
+    i *= 2;
+    for(; i < nl*2 + ngensym; i++) {
+        locals[i] = NULL;
+    }
+    r = eval_body(stmts, locals, nl, ngensym, 0, 1);
     JL_GC_POP();
     return r;
 }
