@@ -3571,7 +3571,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     else
         funcName << fname;
 
-    Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+    Function *w = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                                    funcName.str(), f->getParent());
     addComdat(w);
     Function::arg_iterator AI = w->arg_begin();
@@ -3808,7 +3808,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, funcName.str(), m);
+                             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+                             funcName.str(), m);
         addComdat(f);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
@@ -3821,7 +3822,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
     }
     else {
-        f = Function::Create(jl_func_sig, Function::ExternalLinkage,
+        f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), m);
         addComdat(f);
         if (lam->functionObject == NULL) {
