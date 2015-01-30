@@ -674,7 +674,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         Function *llvmf = (Function*)li->functionObject;
 
 #ifdef USE_MCJIT
-        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+        li->fptr = (jl_fptr_t)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
@@ -770,7 +770,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     Function *llvmf = jl_cfunction_object(f, rt, argt);
     assert(llvmf);
 #ifdef USE_MCJIT
-    return (void*)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    return (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
     return jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
@@ -943,7 +943,11 @@ void write_log_data(logdata_t logData, const char *extension)
                     if ((size_t)l < values.size()) {
                         GlobalVariable *gv = values[l];
                         if (gv) {
+#ifdef USE_MCJIT
+                            int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress(gv->getName());
+#else
                             int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
+#endif
                             value = *p;
                         }
                     }
@@ -1006,7 +1010,11 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
         std::vector<GlobalVariable*>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
-                int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+#ifdef USE_MCJIT
+                int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress((*itb)->getName());
+#else
+                int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(*itb);
+#endif
                 *p = 0;
             }
         }
