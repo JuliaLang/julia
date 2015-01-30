@@ -2083,7 +2083,7 @@
 (define (lower-nd-comprehension atype expr ranges)
   (let ((result      (make-jlgensym))
         (ri          (gensy))
-        (oneresult   (make-jlgensym)))
+        (oneresult   (gensy)))
     ;; evaluate one expression to figure out type and size
     ;; compute just one value by inserting a break inside loops
     (define (evaluate-one ranges)
@@ -2123,6 +2123,7 @@
     ;; Evaluate the comprehension
     `(scope-block
       (block
+       (local ,oneresult)
        ,(evaluate-one ranges)
        (= ,result (call (top Array) ,(if atype atype `(call (top eltype) ,oneresult))
                         ,@(compute-dims ranges 1)))
