@@ -1129,10 +1129,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
-    }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGFPE\n");
