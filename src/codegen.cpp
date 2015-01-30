@@ -2754,7 +2754,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, boo
         builder.CreateCondBr(ok, ifok, err);
         builder.SetInsertPoint(err);
         builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
-        builder.CreateBr(ifok);
+        builder.CreateUnreachable();
         ctx->f->getBasicBlockList().push_back(ifok);
         builder.SetInsertPoint(ifok);
     }
