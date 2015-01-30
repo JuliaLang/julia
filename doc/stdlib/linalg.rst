@@ -113,13 +113,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes the QR factorization of ``A``. The return type of ``F`` depends on the element type of ``A`` and whether pivoting is specified (with ``pivot==Val{true}``).
 
-      ================ ================= ========= =====================================
-      Return type      ``eltype(A)``     ``pivot``  Relationship between ``F`` and ``A``
-      ---------------- ----------------- --------- -------------------------------------
-      ``QR``           not ``BlasFloat`` either     ``A==F[:Q]*F[:R]``
+      ================ ================= ============== =====================================
+      Return type      ``eltype(A)``     ``pivot``      Relationship between ``F`` and ``A``
+      ---------------- ----------------- -------------- -------------------------------------
+      ``QR``           not ``BlasFloat`` either          ``A==F[:Q]*F[:R]``
       ``QRCompactWY``  ``BlasFloat``     ``Val{false}``  ``A==F[:Q]*F[:R]``
       ``QRPivoted``    ``BlasFloat``     ``Val{true}``   ``A[:,F[:p]]==F[:Q]*F[:R]``
-      ================ ================= ========= =====================================
+      ================ ================= ============== =====================================
 
    ``BlasFloat`` refers to any of: ``Float32``, ``Float64``, ``Complex64`` or ``Complex128``.
 
