@@ -212,7 +212,7 @@ function show_method_candidates(io::IO, ex::MethodError)
                 print(buf, "::$(method.sig[i])")
             end
         end
-        if length(t_i) > length(method.sig) && Base.isvarargtype(method.sig[end])
+        if length(t_i) > length(method.sig) && !isempty(method.sig) && Base.isvarargtype(method.sig[end])
             # It ensures that methods like f(a::AbstractString...) gets the correct
             # number of right_matches
             for t in typeof(ex.args)[length(method.sig):end]
