@@ -621,6 +621,14 @@ System
    and waits for the process to complete.  Returns the value returned
    by ``f``.
 
+.. function:: Base.set_process_title(title::AbstractString)
+
+   Set the process title. No-op on some operating systems. (not exported)
+
+.. function:: Base.get_process_title()
+
+   Get the process title. On some systems, will always return empty string. (not exported)
+
 .. function:: readandwrite(command)
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
