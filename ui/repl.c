@@ -262,8 +262,10 @@ static int exec_program(void)
                 jl_show(jl_stderr_obj(), e);
             }
             else {
-                jl_printf(JL_STDERR, "error during bootstrap: ");
+                jl_printf(JL_STDERR, "error during bootstrap:\n");
                 jl_static_show(JL_STDERR, e);
+                JL_PUTS("\n",JL_STDERR);
+                jlbacktrace();
             }
             jl_printf(JL_STDERR, "\n");
             JL_EH_POP();
@@ -355,7 +357,8 @@ static int true_main(int argc, char *argv[])
         iserr = 1;
         JL_PUTS("error during run:\n",JL_STDERR);
         jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        JL_PUTS("\n",JL_STDOUT);
+        JL_PUTS("\n",JL_STDERR);
+        jlbacktrace();
         goto again;
     }
     return iserr;

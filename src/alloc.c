@@ -784,7 +784,7 @@ jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_value_t *body)
 #define BOXN_FUNC(nb,nw)                                       \
 jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x)        \
 {                                                              \
-    assert(jl_is_bitstype(t));                                 \
+    assert(jl_isbits(t));                                      \
     assert(jl_datatype_size(t) == sizeof(x));                  \
     jl_value_t *v = (jl_value_t*)alloc_##nw##w();              \
     v->type = (jl_value_t*)t;                                  \
@@ -819,6 +819,7 @@ UNBOX_FUNC(bool,   int8_t)
 UNBOX_FUNC(float32, float)
 UNBOX_FUNC(float64, double)
 UNBOX_FUNC(voidpointer, void*)
+UNBOX_FUNC(gensym, ssize_t)
 
 #define BOX_FUNC(typ,c_type,pfx,nw)               \
 jl_value_t *pfx##_##typ(c_type x)                 \
@@ -866,6 +867,7 @@ SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
 UIBOX_FUNC(uint32, uint32_t, 2)
 UIBOX_FUNC(char,   uint32_t, 2)
+UIBOX_FUNC(gensym, ssize_t, 2)
 #ifdef _P64
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
@@ -891,6 +893,11 @@ void jl_init_int32_int64_cache(void)
     for(i=0; i < NBOX_C; i++) {
         boxed_int32_cache[i]  = jl_box32(jl_int32_type, i-NBOX_C/2);
         boxed_int64_cache[i]  = jl_box64(jl_int64_type, i-NBOX_C/2);
+#ifdef _P64
+        boxed_gensym_cache[i] = jl_box64(jl_gensym_type, i);
+#else
+        boxed_gensym_cache[i] = jl_box32(jl_gensym_type, i);
+#endif
     }
 }
 
@@ -926,6 +933,7 @@ void jl_mark_box_caches(void)
         jl_gc_setmark(boxed_uint32_cache[i]);
         jl_gc_setmark(boxed_char_cache[i]);
         jl_gc_setmark(boxed_uint64_cache[i]);
+        jl_gc_setmark(boxed_gensym_cache[i]);
     }
 }
 #endif

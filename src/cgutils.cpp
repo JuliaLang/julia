@@ -421,6 +421,10 @@ static Value *literal_pointer_val(jl_value_t *p)
         // Symbols are prefixed with jl_sym#
         return julia_gv("jl_sym#", addr, NULL, p);
     }
+    if (jl_is_gensym(p)) {
+        // GenSyms are prefixed with jl_gensym#
+        return julia_gv("jl_gensym#", p);
+    }
     // something else gets just a generic name
     return julia_gv("jl_global#", p);
 }
@@ -449,6 +453,11 @@ static Value *julia_binding_gv(jl_binding_t *b)
 
 // --- mapping between julia and llvm types ---
 
+static bool type_is_ghost(Type *ty)
+{
+    return (ty == T_void || ty->isEmptyTy());
+}
+
 static Type *julia_struct_to_llvm(jl_value_t *jt);
 
 static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true);
@@ -456,6 +465,7 @@ static bool jltupleisbits(jl_value_t *jt, bool allow_unsized = true);
 extern "C" {
 DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
 {
+    // this function converts a Julia Type into the equivalent LLVM type
     if (jt == (jl_value_t*)jl_bool_type) return T_int1;
     if (jt == (jl_value_t*)jl_bottom_type) return T_void;
     if (jl_is_tuple(jt)) {
@@ -539,6 +549,9 @@ DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
 
 static Type *julia_struct_to_llvm(jl_value_t *jt)
 {
+    // this function converts a Julia Type into the equivalent LLVM struct
+    // use this where C-compatible (unboxed) structs are desired
+    // use julia_type_to_llvm directly when you want to preserve Julia's type semantics
     if (jl_is_structtype(jt) && !jl_is_array_type(jt)) {
         if (!jl_is_leaf_type(jt))
             return NULL;
@@ -636,19 +649,19 @@ static int cur_type_id = 1;
 
 static int jl_type_to_typeid(jl_value_t *t)
 {
-    jl_value_t *id = jl_eqtable_get(typeToTypeId, t, NULL);
-    if (id == NULL) {
+    jl_value_t *idx = jl_eqtable_get(typeToTypeId, t, NULL);
+    if (idx == NULL) {
         int mine = cur_type_id++;
         if (mine > 65025)
             jl_error("internal compiler error: too many bits types");
-        JL_GC_PUSH1(&id);
-        id = jl_box_long(mine);
-        typeToTypeId = jl_eqtable_put(typeToTypeId, t, id);
+        JL_GC_PUSH1(&idx);
+        idx = jl_box_long(mine);
+        typeToTypeId = jl_eqtable_put(typeToTypeId, t, idx);
         typeIdToType[mine] = t;
         JL_GC_POP();
         return mine;
     }
-    return jl_unbox_long(id);
+    return jl_unbox_long(idx);
 }
 
 static jl_value_t *jl_typeid_to_type(int i)
@@ -692,8 +705,8 @@ static jl_value_t *julia_type_of(Value *v)
 #endif
     assert(md != NULL);
     const unsigned char *vts = (const unsigned char*)md->getString().data();
-    int id = (vts[0]-1) + (vts[1]-1)*255;
-    return jl_typeid_to_type(id);
+    int idx = (vts[0]-1) + (vts[1]-1)*255;
+    return jl_typeid_to_type(idx);
 }
 
 static Value *NoOpInst(Value *v)
@@ -710,6 +723,7 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
     if (has_julia_type(v)) {
         if (julia_type_of(v) == jt)
             return v;
+        v = NoOpInst(v);
     }
     else if (julia_type_of_without_metadata(v,false) == jt) {
         return v;
@@ -718,10 +732,10 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
         v = NoOpInst(v);
     assert(dyn_cast<Instruction>(v));
     char name[3];
-    int id = jl_type_to_typeid(jt);
-    // store id as base-255 to avoid NUL
-    name[0] = (id%255)+1;
-    name[1] = (id/255)+1;
+    int idx = jl_type_to_typeid(jt);
+    // store idx as base-255 to avoid NUL
+    name[0] = (idx%255)+1;
+    name[1] = (idx/255)+1;
     name[2] = '\0';
     MDString *md = MDString::get(jl_LLVMContext, name);
 #ifdef LLVM36
@@ -1021,6 +1035,11 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         return e;
     if (jl_is_symbolnode(e))
         return jl_symbolnode_type(e);
+    if (jl_is_gensym(e)) {
+        int idx = ((jl_gensym_t*)e)->id;
+        jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
+        return (jl_is_array(gensym_types) ? jl_cellref(gensym_types, idx) : (jl_value_t*)jl_any_type);
+    }
     if (jl_is_quotenode(e)) {
         e = jl_fieldref(e,0);
         goto type_of_constant;
@@ -1345,6 +1364,7 @@ static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
     if (aname && ctx->arrayvars->find(aname) != ctx->arrayvars->end()) {
         return &(*ctx->arrayvars)[aname];
     }
+    //TODO: gensym case
     return NULL;
 }
 
@@ -1694,6 +1714,11 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     if (jb == jl_uint32_type) return builder.CreateCall(prepare_call(box_uint32_func), v);
     if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
     if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
+    if (jb == jl_gensym_type) {
+        unsigned zero = 0;
+        v = builder.CreateExtractValue(v, ArrayRef<unsigned>(&zero,1));
+        return builder.CreateCall(prepare_call(box_gensym_func), v);
+    }
 
     if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {
         assert("Don't know how to box this type" && false);

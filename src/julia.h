@@ -74,6 +74,11 @@ typedef struct _jl_sym_t {
     JL_ATTRIBUTE_ALIGN_PTRSIZE(char name[]);
 } jl_sym_t;
 
+typedef struct _jl_gensym_t {
+    JL_DATA_TYPE
+    ssize_t id;
+} jl_gensym_t;
+
 typedef struct {
 #ifdef OVERLAP_TUPLE_LEN
     size_t type : 52;
@@ -305,6 +310,7 @@ extern DLLEXPORT jl_datatype_t *jl_typename_type;
 extern DLLEXPORT jl_datatype_t *jl_typector_type;
 extern DLLEXPORT jl_datatype_t *jl_sym_type;
 extern DLLEXPORT jl_datatype_t *jl_symbol_type;
+extern DLLEXPORT jl_datatype_t *jl_gensym_type;
 extern DLLEXPORT jl_tuple_t *jl_tuple_type;
 extern DLLEXPORT jl_value_t *jl_tupletype_type;
 extern DLLEXPORT jl_datatype_t *jl_ntuple_type;
@@ -572,6 +578,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_is_float64(v)     jl_typeis(v,jl_float64_type)
 #define jl_is_bool(v)        jl_typeis(v,jl_bool_type)
 #define jl_is_symbol(v)      jl_typeis(v,jl_sym_type)
+#define jl_is_gensym(v)      jl_typeis(v,jl_gensym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
 #define jl_is_getfieldnode(v)  jl_typeis(v,jl_getfieldnode_type)
@@ -752,6 +759,7 @@ DLLEXPORT jl_value_t *jl_box_uint64(uint64_t x);
 DLLEXPORT jl_value_t *jl_box_float32(float x);
 DLLEXPORT jl_value_t *jl_box_float64(double x);
 DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
+DLLEXPORT jl_value_t *jl_box_gensym(ssize_t x);
 DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
 DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
 DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);
@@ -768,6 +776,7 @@ DLLEXPORT uint64_t jl_unbox_uint64(jl_value_t *v);
 DLLEXPORT float jl_unbox_float32(jl_value_t *v);
 DLLEXPORT double jl_unbox_float64(jl_value_t *v);
 DLLEXPORT void *jl_unbox_voidpointer(jl_value_t *v);
+DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 
 #ifdef _P64
 #define jl_box_long(x)   jl_box_int64(x)
@@ -991,8 +1000,6 @@ jl_value_t *jl_interpret_toplevel_thunk(jl_lambda_info_t *lam);
 jl_value_t *jl_interpret_toplevel_thunk_with(jl_lambda_info_t *lam,
                                              jl_value_t **loc, size_t nl);
 jl_value_t *jl_interpret_toplevel_expr(jl_value_t *e);
-jl_value_t *jl_interpret_toplevel_expr_with(jl_value_t *e,
-                                            jl_value_t **locals, size_t nl);
 DLLEXPORT jl_value_t *jl_interpret_toplevel_expr_in(jl_module_t *m, jl_value_t *e,
                                                     jl_value_t **locals, size_t nl);
 jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
@@ -1013,6 +1020,7 @@ jl_array_t *jl_lam_args(jl_expr_t *l);
 jl_array_t *jl_lam_locals(jl_expr_t *l);
 jl_array_t *jl_lam_vinfo(jl_expr_t *l);
 jl_array_t *jl_lam_capt(jl_expr_t *l);
+jl_value_t *jl_lam_gensyms(jl_expr_t *l);
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i);
 int jl_lam_vars_captured(jl_expr_t *ast);
 jl_expr_t *jl_lam_body(jl_expr_t *l);
@@ -1380,6 +1388,7 @@ DLLEXPORT void jl_flush_cstdio(void);
 DLLEXPORT jl_value_t *jl_stdout_obj(void);
 DLLEXPORT jl_value_t *jl_stderr_obj(void);
 DLLEXPORT size_t jl_static_show(JL_STREAM *out, jl_value_t *v);
+DLLEXPORT void jlbacktrace(void);
 
 #if defined(GC_FINAL_STATS) && defined(JL_GC_MARKSWEEP)
 void jl_print_gc_stats(JL_STREAM *s);
