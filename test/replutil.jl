@@ -47,3 +47,7 @@ Base.show_method_candidates(buf, Base.MethodError(method_c3,(1.,)))
 color = "\e[0m\nClosest candidates are:\n  method_c3(::Float64, \e[1m\e[31m::Float64\e[0m)\n\e[0m"
 no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matched::Float64)\n"
 test_have_color(buf, color, no_color)
+
+# Test for the method error in issue #8651
+Base.show_method_candidates(buf, MethodError(readline,(ASCIIString,)))
+test_have_color(buf, "", "")
