@@ -700,33 +700,140 @@ Dequeues
 
 .. function:: push!(collection, items...) -> collection
 
-   Insert items at the end of a collection.
+   Insert zero or more ``items`` at the end of ``collection``.
+
+   .. doctest::
+
+     julia> push!([1, 2, 3], 4, 5, 6)
+     6-element Array{Int64,1}:
+      1
+      2
+      3
+      4
+      5
+      6
+
+   Use :func:`append!` to add all the elements of another collection to
+   ``collection``.
+   The result of the preceding example is equivalent to
+   ``append!([1, 2, 3], [4, 5, 6])``.
 
 .. function:: pop!(collection) -> item
 
-   Remove the last item in a collection and return it.
+   Remove the last item in ``collection`` and return it.
+
+   .. doctest::
+
+     julia> A=[1, 2, 3, 4, 5, 6]
+     6-element Array{Int64,1}:
+      1
+      2
+      3
+      4
+      5
+      6
+     
+     julia> pop!(A)
+     6
+     
+     julia> A
+     5-element Array{Int64,1}:
+      1
+      2
+      3
+      4
+      5
 
 .. function:: unshift!(collection, items...) -> collection
 
-   Insert items at the beginning of a collection.
+   Insert zero or more ``items`` at the beginning of ``collection``.
+
+   .. doctest::
+
+     julia> unshift!([1, 2, 3, 4], 5, 6)
+     6-element Array{Int64,1}:
+      5
+      6
+      1
+      2
+      3
+      4
 
 .. function:: shift!(collection) -> item
 
-   Remove the first item in a collection.
+   Remove the first ``item`` from ``collection``.
+
+   .. doctest::
+
+     julia> A = [1, 2, 3, 4, 5, 6]
+     6-element Array{Int64,1}:
+      1
+      2
+      3
+      4
+      5
+      6
+     
+     julia> shift!(A)
+     1
+     
+     julia> A
+     5-element Array{Int64,1}:
+      2
+      3
+      4
+      5
+      6
 
 .. function:: insert!(collection, index, item)
 
-   Insert an item at the given index.
+   Insert an ``item`` into ``collection`` at the given ``index``.
+   ``index`` is the index of ``item`` in the resulting ``collection``.
+
+   .. doctest::
+
+      julia> insert!([6, 5, 4, 2, 1], 4, 3)
+      6-element Array{Int64,1}:
+       6
+       5
+       4
+       3
+       2
+       1
 
 .. function:: deleteat!(collection, index)
 
-   Remove the item at the given index, and return the modified collection. Subsequent items
-   are shifted to fill the resulting gap.
+   Remove the item at the given ``index`` and return the modified ``collection``.
+   Subsequent items are shifted to fill the resulting gap.
+
+   .. doctest::
+
+     julia> deleteat!([6, 5, 4, 3, 2, 1], 2)
+     5-element Array{Int64,1}:
+      6
+      4
+      3
+      2
+      1
 
 .. function:: deleteat!(collection, itr)
 
-   Remove the items at the indices given by ``itr``, and return the modified collection. Subsequent
-   items are shifted to fill the resulting gap.  ``itr`` must be sorted and unique.
+   Remove the items at the indices given by ``itr``, and return the modified ``collection``.
+   Subsequent items are shifted to fill the resulting gap. ``itr`` must be sorted and unique.
+
+   .. doctest::
+
+     julia> deleteat!([6, 5, 4, 3, 2, 1], 1:2:5)
+     3-element Array{Int64,1}:
+      5
+      3
+      1
+
+   .. doctest::
+
+     julia> deleteat!([6, 5, 4, 3, 2, 1], (2, 2))
+     ERROR: ArgumentError: indices must be unique and sorted
+      in deleteat! at array.jl:594
 
 .. function:: splice!(collection, index, [replacement]) -> item
 
@@ -734,7 +841,45 @@ Dequeues
    are shifted down to fill the resulting gap. If specified, replacement values from
    an ordered collection will be spliced in place of the removed item.
 
-   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
+   .. doctest::
+
+     julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
+     2
+     
+     julia> A
+     5-element Array{Int64,1}:
+      6
+      5
+      4
+      3
+      1
+     
+     julia> splice!(A, 5, -1)
+     1
+     
+     julia> A
+     5-element Array{Int64,1}:
+       6
+       5
+       4
+       3
+      -1
+     
+     julia> splice!(A, 1, [-1, -2, -3])
+     6
+     
+     julia> A
+     7-element Array{Int64,1}:
+      -1
+      -2
+      -3
+       5
+       4
+       3
+      -1
+
+   To insert ``replacement`` before an index ``n`` without removing any items, use
+   ``splice!(collection, n:n-1, replacement)``.
 
 .. function:: splice!(collection, range, [replacement]) -> items
 
@@ -743,17 +888,56 @@ Dequeues
    If specified, replacement values from an ordered collection will be spliced in place
    of the removed items.
 
-   To insert ``replacement`` before an index ``n`` without removing any items, use ``splice!(collection, n:n-1, replacement)``.
+   To insert ``replacement`` before an index ``n`` without removing any items, use
+   ``splice!(collection, n:n-1, replacement)``.
+
+   .. doctest::
+
+     julia> splice!(A, 4:3, 2)
+     0-element Array{Int64,1}
+     
+     julia> A
+     8-element Array{Int64,1}:
+      -1
+      -2
+      -3
+       2
+       5
+       4
+       3
+      -1
 
 .. function:: resize!(collection, n) -> collection
 
-   Resize collection to contain ``n`` elements. If ``n`` is smaller than the current
-   collection length, the first ``n`` elements will be retained. If ``n`` is larger,
-   the new elements will not be initialized.
+   Resize ``collection`` to contain ``n`` elements.
+   If ``n`` is smaller than the current collection length, the first ``n``
+   elements will be retained. If ``n`` is larger, the new elements are not
+   guaranteed to be initialized.
 
-.. function:: append!(collection, items) -> collection.
+   .. doctest::
 
-   Add the elements of ``items`` to the end of a collection.
+     julia> resize!([6, 5, 4, 3, 2, 1], 3)
+     3-element Array{Int64,1}:
+      6
+      5
+      4
+     
+   .. doctest::
+
+     julia> resize!([6, 5, 4, 3, 2, 1], 8)
+     8-element Array{Int64,1}:
+      6
+      5
+      4
+      3
+      2
+      1
+      0
+      0
+
+.. function:: append!(collection, collection2) -> collection.
+
+   Add the elements of ``collection2`` to the end of ``collection``.
 
    .. doctest::
 
@@ -763,9 +947,25 @@ Dequeues
        2
        3
 
+   .. doctest::
+
+      julia> append!([1, 2, 3], [4, 5, 6])
+      6-element Array{Int64,1}:
+       1
+       2
+       3
+       4
+       5
+       6
+
+   Use :func:`push!` to add individual items to ``collection`` which are not
+   already themselves in another collection.
+   The result is of the preceding example is equivalent to
+   ``push!([1, 2, 3], 4, 5, 6)``.
+
 .. function:: prepend!(collection, items) -> collection
 
-   Insert the elements of ``items`` to the beginning of a collection.
+   Insert the elements of ``items`` to the beginning of ``collection``.
 
    .. doctest::
 
@@ -775,7 +975,10 @@ Dequeues
        2
        3
 
-Fully implemented by: ``Vector`` (aka 1-d ``Array``), ``BitVector`` (aka 1-d ``BitArray``).
+   Fully implemented by:
+
+   - :obj:`Vector` (a.k.a. 1-dimensional :obj:`Array`)
+   - :obj:`BitVector`` (a.k.a. 1-dimensional :obj:`BitArray`)
 
 .. module:: Base.Collections
 
