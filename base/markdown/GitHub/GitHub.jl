@@ -37,6 +37,6 @@ end
 
 @flavor github [list, indentcode, blockquote, fencedcode, hashheader,
                 github_table, github_paragraph,
+
                 linebreak, escapes, en_dash, inline_code, asterisk_bold,
                 asterisk_italic, image, link]
-
