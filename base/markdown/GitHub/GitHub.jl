@@ -1,3 +1,5 @@
+include("table.jl")
+
 @breaking true ->
 function fencedcode(stream::IO, block::MD, config::Config)
     startswith(stream, "```", padding = true) || return false
@@ -33,9 +35,8 @@ function github_paragraph(stream::IO, md::MD, config::Config)
     return true
 end
 
-# TODO: tables
+@flavor github [list, indentcode, blockquote, fencedcode, hashheader,
+                github_table, github_paragraph,
 
-@flavor github [list, indentcode, blockquote, fencedcode, hashheader, github_paragraph,
-
-                linebreak, escapes, en_dash, inline_code, asterisk_bold, asterisk_italic,
-                image, link]
+                linebreak, escapes, en_dash, inline_code, asterisk_bold,
+                asterisk_italic, image, link]
