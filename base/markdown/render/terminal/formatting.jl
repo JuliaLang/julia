@@ -97,22 +97,6 @@ function print_centred(io::IO, s...; columns = 80, width = columns)
     end
 end
 
-function print_align(io::IO, text, text_width, width, align=:r)
-    if align == :c # center
-        lpad = div(width - text_width, 2)
-    elseif align == :r # right
-        lpad = width - text_width
-    elseif align == :l # left
-        lpad = 0
-    else
-        throw(ArgumentError("Alignment $align not recognised"))
-    end
-    print(io, " " ^ lpad)
-    terminline(io, text)
-    print(io, " " ^ (width - lpad - text_width))
-end
-
-
 function centred(s, columns)
     pad = div(columns - ansi_length(s), 2)
     " "^pad * s

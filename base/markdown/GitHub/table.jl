@@ -1,68 +1,59 @@
 type Table
     rows::Vector{Vector{Any}}
-    align
+    align::Vector{Symbol}
+end
+
+function parserow(stream::IO)
+    withstream(stream) do
+        line = readline(stream) |> chomp
+        row = split(line, "|")
+        length(row) == 1 && return
+        row[1] == "" && shift!(row)
+        map!(strip, row)
+        row[end] == "" && pop!(row)
+        return row
+    end
+end
+
+function rowlength!(row, len)
+    while length(row) < len push!(row, "") end
+    while length(row) > len pop!(row) end
+    return row
+end
+
+const default_align = :r
+
+function parsealign(row)
+    align = Symbol[]
+    for s in row
+        (length(s) ≥ 3 && s ⊆ Set("-:")) || return
+        push!(align,
+              s[1] == ':' ? (s[end] == ':' ? :c : :l) :
+              s[end] == ':' ? :r :
+              default_align)
+    end
+    return align
 end
 
 function github_table(stream::IO, md::MD, config::Config)
     withstream(stream) do
-        rows = Any[]
-        n = 0
-        align = :r # default is to align right
-        while !eof(stream)
-            n += 1
-            pos = position(stream)
-            skipwhitespace(stream)
-            line = readline(stream) |> chomp
-
-            if n == 1
-                pipe_border = line[1] == '|'
-                if !('|' in line)
-                    return false
-                end
+        skipblank(stream)
+        rows = []
+        cols = 0
+        align = nothing
+        while (row = parserow(stream)) != nothing
+            if length(rows) == 0
+                row[1] == "" && return false
+                cols = length(row)
             end
-
-            row = map(strip, split(line, "|"))
-            if pipe_border
-                if row[1] == row[end] == ""
-                    row = row[2:end-1]
-                else
-                    return false
-                end
-            end
-
-            if n == 2 && all(['-' in r && issubset(Set(r), Set(" -:"))
-                             for r in row])
-                # handle possible --- line
-                align = Symbol[]
-                for r in row
-                    if r[1] == ':'
-                        if r[end] == ':'
-                            push!(align, :c)
-                        else
-                            push!(align, :l)
-                        end
-                    else
-                        if r[end] == ':'
-                            push!(align, :r)
-                        else
-                            # default is align right
-                            push!(align, :r)
-                        end
-                    end
-                end
-
-            elseif n == 1 || length(rows[1]) == length(row)
-                push!(rows, map(x -> parseinline(x, config), row))
-            elseif length(row) > 1
-                seek(stream, pos)
-                break
+            if align == nothing && length(rows) == 1 # Must have a --- row
+                align = parsealign(row)
+                (align == nothing || length(align) != cols) && return false
             else
-                return false
+                push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
             end
         end
-        if length(rows) < 2
-            return false
-        end
+        length(rows) == 0 && return false
         push!(md, Table(rows, align))
         return true
     end
@@ -73,8 +64,7 @@ function html(io::IO, md::Table)
         for (i, row) in enumerate(md.rows)
             withtag(io, :tr) do
                 for c in md.rows[i]
-                    t = (i == 1) ? :th : :td
-                    withtag(io, t) do
+                    withtag(io, i == 1 ? :th : :td) do
                         htmlinline(io, c)
                     end
                 end
@@ -83,88 +73,72 @@ function html(io::IO, md::Table)
     end
 end
 
+mapmap(f, xss) = map(xs->map(f, xs), xss)
+
+colwidths(rows; len = length, min = 0) =
+    max(min, convert(Vector{Vector{Int}}, mapmap(len, rows))...)
+
+padding(width, twidth, a) =
+    a == :l ? (0, twidth - width) :
+    a == :r ? (twidth - width, 0) :
+    a == :c ? (floor(Int, (twidth-width)/2), ceil(Int, (twidth-width)/2)) :
+    error("Invalid alignment $a")
+
+function padcells!(rows, align; len = length, min = 0)
+    widths = colwidths(rows, len = len, min = min)
+    for i = 1:length(rows), j = 1:length(rows[1])
+        cell = rows[i][j]
+        lpad, rpad = padding(len(cell), widths[j], align[j])
+        rows[i][j] = " "^lpad * cell * " "^rpad
+    end
+    return rows
+end
+
+_dash(width, align) =
+    align == :l ? ":" * "-"^(width-1) :
+    align == :r ? "-"^(width-1) * ":" :
+    align == :c ? ":" * "-"^(width-2) * ":" :
+    throw(ArgumentError("Invalid alignment $align"))
+
 function plain(io::IO, md::Table)
-    plain_cells = map(row -> map(plaininline, row), md.rows)
-    plain_lengths = map(row -> int(map(length, row)), plain_cells)
-    col_widths = reduce(max, plain_lengths)
-
-    for i in 1:length(md.rows)
-        for (j, text) in enumerate(plain_cells[i])
-            (j != 1) && print(io, "  | ")
-            print(io, " " ^ (col_widths[j] - plain_lengths[i][j]))
-            print(io, text)
-        end
-        println(io)
-
+    cells = mapmap(plaininline, md.rows)
+    padcells!(cells, md.align, len = length, min = 3)
+    for i = 1:length(cells)
+        print_joined(STDOUT, cells[i], " | ")
+        println()
         if i == 1
-            for (j, w) in enumerate(col_widths)
-                if j != 1
-                    print(io, "  | ")
-                end
-                a = typeof(md.align) == Symbol ? md.align : md.align[j]
-                print(io, _dash(w, a))
-            end
-            println(io)
+            print_joined(STDOUT, [_dash(length(cells[i][j]), md.align[j]) for j = 1:length(cells[1])], " | ")
+            println()
         end
     end
 end
 
-function _dash(width, align)
-    if align == :l
-        return ":" * "-" ^ max(3, width - 1)
-    elseif align == :r
-        return "-" ^ max(3, width - 1) * ":"
-    elseif align == :c
-        return ":" * "-" ^ max(3, width - 2) * ":"
-    else
-        throw(ArgumentError("Unrecognized alignment $align"))
+function term(io::IO, md::Table, columns)
+    cells = mapmap(terminline, md.rows)
+    padcells!(cells, md.align, len = ansi_length)
+    for i = 1:length(cells)
+        print_joined(STDOUT, cells[i], " ")
+        println()
+        if i == 1
+            print_joined(STDOUT, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
+            println()
+        end
     end
 end
-
 
 function writemime(io::IO, ::MIME"text/latex", md::Table)
     wrapblock(io, "tabular") do
-        if typeof(md.align) == Symbol
-            align = string(md.align) ^ length(md.rows[1])
-        else
-            align = md.align
-        end
+        align = md.align
         println(io, "{$(join(align, " | "))}")
         for (i, row) in enumerate(md.rows)
             for (j, cell) in enumerate(row)
-                if j != 1
-                    print(io, " & ")
-                end
+                j != 1 && print(io, " & ")
                 latex_inline(io, cell)
             end
             println(io, " \\\\")
             if i == 1
                 println("\\hline")
             end
-        end
-    end
-end
-
-function term(io::IO, md::Table, columns)
-    plain_lengths = map(row -> int(map(x -> ansi_length(terminline(x)), row)),
-                        md.rows)
-    col_widths = reduce(max, plain_lengths)
-
-    col_widths = max(col_widths, 3)
-    for (i, row) in enumerate(md.rows)
-        for (j, h) in enumerate(row)
-            (j != 1) && print(io, "  ")
-            a = typeof(md.align) == Symbol ? md.align : md.align[j]
-            print_align(io, h, plain_lengths[i][j], col_widths[j], a)
-        end
-        println(io)
-
-        if i == 1
-            for (j, w) in enumerate(col_widths)
-                (j != 1) && print(io, "  ")
-                print(io, "-" ^ w)
-            end
-            println(io)
         end
     end
 end

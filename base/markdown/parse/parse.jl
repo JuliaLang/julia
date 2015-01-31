@@ -63,7 +63,8 @@ parseinline(s::String, c::Config) = parseinline(IOBuffer(s), c)
 # TODO remove once GH #9888 is fixed
 parseinline{T}(s::SubString{T}, c::Config) = parseinline(convert(T, s), c)
 
-parseinline(s) = parseinline(s, _config_)
+# TODO: store _config_ in the MD and pass it through
+parseinline(s) = parseinline(s, _config_ == nothing ? julia : _config_)
 
 # Block parsing
 

@@ -41,15 +41,19 @@ writemime(io::IO, m::MIME"text/plain", r::Reference) =
 @test md"Behaves like $(ref(fft))" == md"Behaves like fft (see Julia docs)"
 
 # GH tables
-@test md"""a|b
-1|2""" == MD(Table(Any[Any[Any["a"],Any["b"]];Any[Any["1"],Any["2"]]], :r))
+using Base.Test
 
-table = md"""| a  |  b | c |
-             | :- | -: | - |
-             | d`gh`hg | hgh**jhj**ge | f |"""
-@test table == MD(Table(Any[Any[Any["a"],Any["b"],Any["c"]],
-                            Any[Any["d",Markdown.Code("","gh"),"hg"],
-                                Any["hgh",Markdown.Bold(Any["jhj"]),"ge"],
-                                Any["f"]]],
-                        [:l, :r, :r]))
+@test md"""
+    a  | b
+    ---|---
+    1  | 2""" == MD(Table(Any[["a","b"],
+                              ["1","2"]], [:r, :r]))
 
+@test md"""
+    | a  |  b | c |
+    | :-- | --: | --- |
+    | d`gh`hg | hgh**jhj**ge | f |""" == MD(Table(Any[["a","b","c"],
+                                                      Any[["d",Code("gh"),"hg"],
+                                                          ["hgh",Bold("jhj"),"ge"],
+                                                          "f"]],
+                                                  [:l, :r, :r]))
