@@ -60,6 +60,7 @@ end
 @test_throws DomainError factorial(-7,-3)
 @test factorial(0) == 1
 @test_throws DomainError factorial(-1)
+@test_throws OverflowError factorial(1000,80)
 
 @test factorial(int64(20)) == 2432902008176640000
 # issue #6579
