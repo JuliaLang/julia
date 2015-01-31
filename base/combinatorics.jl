@@ -68,7 +68,7 @@ function factorial{T<:Integer}(n::T, k::T)
     end
     f = one(T)
     while n > k
-        f *= n
+        f = Base.checked_mul(f,n)
         n -= 1
     end
     return f
