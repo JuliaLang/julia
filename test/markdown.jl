@@ -1,5 +1,5 @@
 using Base.Markdown
-import Base.Markdown: MD, Paragraph, Italic, Bold, plain, term, html, Table, Code
+import Base.Markdown: MD, Paragraph, Header, Italic, Bold, plain, term, html, Table, Code
 import Base: writemime
 
 # Basics
@@ -9,10 +9,10 @@ import Base: writemime
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
 
-@test md"#title" == Markdown.MD(Markdown.Header{1}("title"))
-@test md"## section" == Markdown.MD(Markdown.Header{2}("section"))
-@test md"# title *foo* `bar` **baz**" == Markdown.MD(Markdown.Header{1}(["title ",
-    Markdown.Italic("foo")," ",Markdown.Code("bar")," ",Markdown.Bold("baz")]))
+@test md"#title" == MD(Header{1}("title"))
+@test md"## section" == MD(Header{2}("section"))
+@test md"# title *foo* `bar` **baz**" ==
+    MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")]))
 
 @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
 # @test md"**foo *bar* baz**" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
@@ -51,8 +51,6 @@ writemime(io::IO, m::MIME"text/plain", r::Reference) =
 @test md"Behaves like $(ref(fft))" == md"Behaves like fft (see Julia docs)"
 
 # GH tables
-using Base.Test
-
 @test md"""
     a  | b
     ---|---
