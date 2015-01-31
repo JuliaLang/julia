@@ -804,10 +804,10 @@ Dequeues
       4
       5
       6
-     
+
      julia> pop!(A)
      6
-     
+
      julia> A
      5-element Array{Int64,1}:
       1
@@ -845,10 +845,10 @@ Dequeues
       4
       5
       6
-     
+
      julia> shift!(A)
      1
-     
+
      julia> A
      5-element Array{Int64,1}:
       2
@@ -917,7 +917,7 @@ Dequeues
 
      julia> A = [6, 5, 4, 3, 2, 1]; splice!(A, 5)
      2
-     
+
      julia> A
      5-element Array{Int64,1}:
       6
@@ -925,10 +925,10 @@ Dequeues
       4
       3
       1
-     
+
      julia> splice!(A, 5, -1)
      1
-     
+
      julia> A
      5-element Array{Int64,1}:
        6
@@ -936,10 +936,10 @@ Dequeues
        4
        3
       -1
-     
+
      julia> splice!(A, 1, [-1, -2, -3])
      6
-     
+
      julia> A
      7-element Array{Int64,1}:
       -1
@@ -967,7 +967,7 @@ Dequeues
 
      julia> splice!(A, 4:3, 2)
      0-element Array{Int64,1}
-     
+
      julia> A
      8-element Array{Int64,1}:
       -1
@@ -993,7 +993,7 @@ Dequeues
       6
       5
       4
-     
+
    .. doctest::
 
      julia> resize!([6, 5, 4, 3, 2, 1], 8)
@@ -1087,14 +1087,14 @@ inserted and priorities accessed or changed using indexing notation.
 
     julia> # Julia code
            pq = Collections.PriorityQueue();
-    
+
     julia> # Insert keys with associated priorities
            pq["a"] = 10; pq["b"] = 5; pq["c"] = 15; pq
     Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
       "c" => 15
       "b" => 5
       "a" => 10
-    
+
     julia> # Change the priority of an existing key
            pq["a"] = 0; pq
     Base.Collections.PriorityQueue{Any,Any,Base.Order.ForwardOrdering} with 3 entries:
