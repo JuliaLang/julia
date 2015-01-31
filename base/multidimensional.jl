@@ -423,8 +423,9 @@ end
 ### from abstractarray.jl
 
 @ngenerate N typeof(A) function fill!{T,N}(A::AbstractArray{T,N}, x)
+    xT = convert(T, x)
     @nloops N i A begin
-        @inbounds (@nref N A i) = x
+        @inbounds (@nref N A i) = xT
     end
     A
 end
