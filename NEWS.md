@@ -76,6 +76,8 @@ Compiler improvements
 Library improvements
 --------------------
 
+  * Factorization api is now type-stable, functions dispatch on `Val{false}` or `Val{true}` instead of a boolean value ([#9575]).
+
   * `convert` now checks for overflow when truncating integers or converting between
     signed and unsigned ([#5413]).
 
@@ -157,6 +159,13 @@ Library improvements
   * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
 
   * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
+
+  * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
+  across all numeric types ([#9133], [#9198]).
+
+  * Rational arithmetic throws errors on overflow ([#8672]).
+
+  * Added Base.get_process_title / Base.set_process_title. ([#9957])
 
 Deprecated or removed
 ---------------------

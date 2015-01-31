@@ -896,9 +896,9 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->super = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&dt->super);
     gc_wb(dt, dt->super);
     if (datatype_list) {
-        if (dt->name == jl_array_type->name || dt->name == jl_pointer_type->name ||
-            dt->name == jl_type_type->name || dt->name == jl_vararg_type->name ||
-            dt->name == jl_abstractarray_type->name ||
+        if (dt->name == jl_array_type->name || dt->name == jl_ref_type->name ||
+            dt->name == jl_pointer_type->name || dt->name == jl_type_type->name ||
+            dt->name == jl_vararg_type->name || dt->name == jl_abstractarray_type->name ||
             dt->name == jl_densearray_type->name) {
             // builtin types are not serialized, so their caches aren't
             // explicitly saved. so we reconstruct the caches of builtin
@@ -1816,7 +1816,6 @@ void jl_init_serializer(void)
                      jl_box_int32(45), jl_box_int32(46), jl_box_int32(47),
                      jl_box_int32(48), jl_box_int32(49), jl_box_int32(50),
                      jl_box_int32(51), jl_box_int32(52), jl_box_int32(53),
-                     jl_box_int32(54), jl_box_int32(55), jl_box_int32(56),
 #endif
                      jl_box_int64(0), jl_box_int64(1), jl_box_int64(2),
                      jl_box_int64(3), jl_box_int64(4), jl_box_int64(5),
@@ -1837,11 +1836,10 @@ void jl_init_serializer(void)
                      jl_box_int64(45), jl_box_int64(46), jl_box_int64(47),
                      jl_box_int64(48), jl_box_int64(49), jl_box_int64(50),
                      jl_box_int64(51), jl_box_int64(52), jl_box_int64(53),
-                     jl_box_int64(54), jl_box_int64(55), jl_box_int64(56),
 #endif
                      jl_labelnode_type, jl_linenumbernode_type,
                      jl_gotonode_type, jl_quotenode_type, jl_topnode_type,
-                     jl_type_type, jl_bottom_type, jl_pointer_type,
+                     jl_type_type, jl_bottom_type, jl_ref_type, jl_pointer_type,
                      jl_vararg_type, jl_ntuple_type, jl_abstractarray_type,
                      jl_densearray_type, jl_box_type, jl_void_type,
                      jl_typector_type, jl_undef_type, jl_top_type, jl_typename_type,
@@ -1851,11 +1849,11 @@ void jl_init_serializer(void)
                      jl_array_symbol_type, jl_tupleref(jl_tuple_type,0),
 
                      jl_symbol_type->name, jl_gensym_type->name,
-                     jl_pointer_type->name, jl_datatype_type->name,
-                     jl_uniontype_type->name, jl_array_type->name, jl_expr_type->name,
-                     jl_typename_type->name, jl_type_type->name, jl_methtable_type->name,
-                     jl_method_type->name, jl_tvar_type->name, jl_vararg_type->name,
-                     jl_ntuple_type->name, jl_abstractarray_type->name,
+                     jl_ref_type->name, jl_pointer_type->name,
+                     jl_datatype_type->name, jl_uniontype_type->name, jl_array_type->name,
+                     jl_expr_type->name, jl_typename_type->name, jl_type_type->name,
+                     jl_methtable_type->name, jl_method_type->name, jl_tvar_type->name,
+                     jl_vararg_type->name, jl_ntuple_type->name, jl_abstractarray_type->name,
                      jl_densearray_type->name, jl_void_type->name,
                      jl_lambda_info_type->name, jl_module_type->name, jl_box_type->name,
                      jl_function_type->name, jl_typector_type->name,

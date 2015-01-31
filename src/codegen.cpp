@@ -28,7 +28,11 @@
 #include <llvm/Assembly/Parser.h>
 #include <llvm/Analysis/Verifier.h>
 #endif
+#ifdef LLVM37
+#include <llvm/DebugInfo/DWARF/DIContext.h>
+#else
 #include <llvm/DebugInfo/DIContext.h>
+#endif
 #ifdef USE_MCJIT
 #include <llvm/ExecutionEngine/MCJIT.h>
 #include <llvm/ExecutionEngine/SectionMemoryManager.h>
@@ -674,7 +678,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         Function *llvmf = (Function*)li->functionObject;
 
 #ifdef USE_MCJIT
-        li->fptr = (jl_fptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+        li->fptr = (jl_fptr_t)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
@@ -770,7 +774,7 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
     Function *llvmf = jl_cfunction_object(f, rt, argt);
     assert(llvmf);
 #ifdef USE_MCJIT
-    return (void*)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    return (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
     return jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
@@ -943,7 +947,11 @@ void write_log_data(logdata_t logData, const char *extension)
                     if ((size_t)l < values.size()) {
                         GlobalVariable *gv = values[l];
                         if (gv) {
+#ifdef USE_MCJIT
+                            int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress(gv->getName());
+#else
                             int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(gv);
+#endif
                             value = *p;
                         }
                     }
@@ -1006,7 +1014,11 @@ extern "C" DLLEXPORT void jl_clear_malloc_data(void)
         std::vector<GlobalVariable*>::iterator itb;
         for (itb = bytes.begin(); itb != bytes.end(); itb++) {
             if (*itb) {
-                int64_t *p = (int64_t*) jl_ExecutionEngine->getPointerToGlobal(*itb);
+#ifdef USE_MCJIT
+                int *p = (int*)(intptr_t)jl_ExecutionEngine->getGlobalValueAddress((*itb)->getName());
+#else
+                int *p = (int*)jl_ExecutionEngine->getPointerToGlobal(*itb);
+#endif
                 *p = 0;
             }
         }
@@ -2754,7 +2766,7 @@ static Value *emit_checked_var(Value *bp, jl_sym_t *name, jl_codectx_t *ctx, boo
         builder.CreateCondBr(ok, ifok, err);
         builder.SetInsertPoint(err);
         builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)name));
-        builder.CreateBr(ifok);
+        builder.CreateUnreachable();
         ctx->f->getBasicBlockList().push_back(ifok);
         builder.SetInsertPoint(ifok);
     }
@@ -3563,7 +3575,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     else
         funcName << fname;
 
-    Function *w = Function::Create(jl_func_sig, Function::ExternalLinkage,
+    Function *w = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                                    funcName.str(), f->getParent());
     addComdat(w);
     Function::arg_iterator AI = w->arg_begin();
@@ -3800,7 +3812,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
         Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
         f = Function::Create(FunctionType::get(rt, fsig, false),
-                             Function::ExternalLinkage, funcName.str(), m);
+                             imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+                             funcName.str(), m);
         addComdat(f);
         if (lam->cFunctionObject == NULL) {
             lam->cFunctionObject = (void*)f;
@@ -3813,7 +3826,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         }
     }
     else {
-        f = Function::Create(jl_func_sig, Function::ExternalLinkage,
+        f = Function::Create(jl_func_sig, imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), m);
         addComdat(f);
         if (lam->functionObject == NULL) {
@@ -4100,7 +4113,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 builder.CreateAlloca(T_int8,
                                      ConstantInt::get(T_int32,
                                                       sizeof(jl_handler_t)));
-            handlr->setAlignment(128); // bits == 16 bytes
+            handlr->setAlignment(16);
             handlers[labl] = handlr;
         }
     }
@@ -4307,11 +4320,15 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         else {
             prevlabel = false;
         }
-        if (do_malloc_log && lno != prevlno) {
-            // Check memory allocation only after finishing a line
-            if (prevlno != -1)
-                mallocVisitLine(filename, prevlno);
-            prevlno = lno;
+        if (do_malloc_log) {
+            // Check memory allocation after finishing a line or hitting the next branch
+            if (lno != prevlno ||
+                (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == goto_ifnot_sym) ||
+                jl_is_gotonode(stmt)) {
+                if (prevlno != -1)
+                    mallocVisitLine(filename, prevlno);
+                prevlno = lno;
+            }
         }
         if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == return_sym) {
             jl_expr_t *ex = (jl_expr_t*)stmt;
@@ -5188,7 +5205,7 @@ extern "C" void jl_init_codegen(void)
 #endif
             MAttrs);
     assert(jl_TargetMachine);
-#ifdef LLVM36
+#if defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
 #elif defined(LLVM35)
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout());
@@ -5238,36 +5255,6 @@ extern "C" void jl_init_codegen(void)
                               "jl_box32", (void*)&jl_box32, m);
     box64_func = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int64),
                               "jl_box64", (void*)&jl_box64, m);
-
-    std::vector<Type*> toptrargs(0);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(jl_pvalue_llvmt);
-    toptrargs.push_back(T_int32);
-    toptrargs.push_back(T_int32);
-    value_to_pointer_func =
-        Function::Create(FunctionType::get(T_pint8, toptrargs, false),
-                         Function::ExternalLinkage, "jl_value_to_pointer",
-                         m);
-    add_named_global(value_to_pointer_func,
-                                         (void*)&jl_value_to_pointer);
-
-    temp_arg_area = (char*)malloc(arg_area_sz);
-    arg_area_loc = 0;
-
-    std::vector<Type*> noargs(0);
-    save_arg_area_loc_func =
-        Function::Create(FunctionType::get(T_uint64, noargs, false),
-                         Function::ExternalLinkage, "save_arg_area_loc",
-                         m);
-    add_named_global(save_arg_area_loc_func,
-                                         (void*)&save_arg_area_loc);
-
-    restore_arg_area_loc_func =
-        Function::Create(ft1arg(T_void, T_uint64),
-                         Function::ExternalLinkage, "restore_arg_area_loc",
-                         m);
-    add_named_global(restore_arg_area_loc_func,
-                                         (void*)&restore_arg_area_loc);
 
     typeToTypeId = jl_alloc_cell_1d(16);
 }

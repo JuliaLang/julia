@@ -372,6 +372,10 @@ endif
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 
+ifeq ($(USEICC),1)
+LIBCXX_EXTRA_FLAGS = -Bstatic -lirc -Bdynamic
+endif
+
 llvm-$(LLVM_VER)/projects/libcxx: $(LLVM_LIBCXX_TAR) | llvm-svn/configure
 	([ ! -d llvm-$(LLVM_VER)/projects/libcxx ] && \
 	git clone $(LLVM_GIT_URL_LIBCXX) llvm-$(LLVM_VER)/projects/libcxx  ) || \
@@ -386,14 +390,14 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) -Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 libcxxabi-build:
 	mkdir -p libcxxabi-build
-libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | libcxxabi-build
+libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx libcxxabi-build
 	cd libcxxabi-build && \
-        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLLVM_MAIN_SRC_DIR=../llvm-svn ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="-Bstatic -lirc -Bdynamic" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLLVM_PATH="../llvm-$(LLVM_VER)" ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
-libcxxabi-build/libc++abi.so.1.0: | libcxxabi-build/Makefile
+libcxxabi-build/lib/libc++abi.so.1.0: | libcxxabi-build/Makefile
 	cd libcxxabi-build && $(MAKE)
 $(build_libdir)/libc++abi.so.1.0: libcxxabi-build/lib/libc++abi.so.1.0
 	cd libcxxabi-build && $(MAKE) install

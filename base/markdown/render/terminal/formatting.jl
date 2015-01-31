@@ -1,27 +1,31 @@
 # Styles
 
 const text_formats = Dict(
-    :black   => "\e[30m",
-    :red     => "\e[31m",
-    :green   => "\e[32m",
-    :yellow  => "\e[33m",
-    :blue    => "\e[34m",
-    :magenta => "\e[35m",
-    :cyan    => "\e[36m",
-    :white   => "\e[37m",
-    :reset   => "\e[0m",
-    :bold    => "\e[1m",
-    :underline => "\e[4m",
-    :blink     => "\e[5m",
-    :negative  => "\e[7m")
+    :black   => ("\e[30m", "\e[39m"),
+    :red     => ("\e[31m", "\e[39m"),
+    :green   => ("\e[32m", "\e[39m"),
+    :yellow  => ("\e[33m", "\e[39m"),
+    :blue    => ("\e[34m", "\e[39m"),
+    :magenta => ("\e[35m", "\e[39m"),
+    :cyan    => ("\e[36m", "\e[39m"),
+    :white   => ("\e[37m", "\e[39m"),
+    :reset   => ("\e[0m", "\e[0m"),
+    :bold    => ("\e[1m", "\e[22m"),
+    :underline => ("\e[4m", "\e[24m"),
+    :blink     => ("\e[5m", "\e[25m"),
+    :negative  => ("\e[7m", "\e[27m"))
 
 function with_output_format(f::Function, formats::Vector{Symbol}, io::IO, args...)
     Base.have_color && for format in formats
-        print(io, get(text_formats, format, ""))
+        haskey(text_formats, format) &&
+            print(io, text_formats[format][1])
     end
     try f(io, args...)
     finally
-        Base.have_color && print(io, text_formats[:reset])
+        Base.have_color && for format in formats
+            haskey(text_formats, format) &&
+                print(io, text_formats[format][2])
+        end
     end
 end
 

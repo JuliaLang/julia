@@ -204,8 +204,8 @@ end
 # Because transpose(x) == x
 @test_throws ErrorException transpose(qrfact(randn(3,3)))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
-@test_throws ErrorException transpose(qrfact(randn(3,3), pivot = false))
-@test_throws ErrorException ctranspose(qrfact(randn(3,3), pivot = false))
+@test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
 @test_throws ErrorException transpose(qrfact(big(randn(3,3))))
 @test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
@@ -224,3 +224,8 @@ for f in (eigfact, eigvals, eig)
         @test_throws ArgumentError f(A, 1:4)
     end
 end
+
+# test diag
+A = eye(4)
+@test diag(A) == ones(4)
+@test diag(sub(A, 1:3, 1:3)) == ones(3)

@@ -40,9 +40,8 @@ immutable QRPivoted{T,S<:AbstractMatrix} <: Factorization{T}
 end
 QRPivoted{T}(factors::AbstractMatrix{T}, τ::Vector{T}, jpvt::Vector{BlasInt}) = QRPivoted{T,typeof(factors)}(factors, τ, jpvt)
 
-qrfact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = pivot ? QRPivoted(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
-function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
-    pivot && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
+function qrfact!{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false})
+    pivot==Val{true} && warn("pivoting only implemented for Float32, Float64, Complex64 and Complex128")
     m, n = size(A)
     τ = zeros(T, min(m,n))
     @inbounds begin
@@ -64,17 +63,22 @@ function qrfact!{T}(A::AbstractMatrix{T}; pivot=false)
     end
     QR(A, τ)
 end
-qrfact{T<:BlasFloat}(A::StridedMatrix{T}; pivot=false) = qrfact!(copy(A),pivot=pivot)
-qrfact{T}(A::StridedMatrix{T}; pivot=false) = (S = typeof(one(T)/norm(one(T)));S != T ? qrfact!(convert(AbstractMatrix{S},A), pivot=pivot) : qrfact!(copy(A),pivot=pivot))
+qrfact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = pivot==Val{true} ? QRPivoted(LAPACK.geqp3!(A)...) : QRCompactWY(LAPACK.geqrt!(A, min(minimum(size(A)), 36))...)
+qrfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = qrfact!(copy(A), pivot)
+copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
+copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
+qrfact{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}) = qrfact!(copy_oftype(A, typeof(one(T)/norm(one(T)))), pivot)
 qrfact(x::Number) = qrfact(fill(x,1,1))
 
-function qr(A::Union(Number, AbstractMatrix); pivot::Bool=false, thin::Bool=true)
-    F = qrfact(A, pivot=pivot)
-    if pivot
-        full(F[:Q], thin=thin), F[:R], F[:p]
-    else
-        full(F[:Q], thin=thin), F[:R]
-    end
+qr(A::Union(Number, AbstractMatrix), pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; thin::Bool=true) =
+    _qr(A, pivot, thin=thin)
+function _qr(A::Union(Number, AbstractMatrix), ::Type{Val{false}}; thin::Bool=true)
+    F = qrfact(A, Val{false})
+    full(F[:Q], thin=thin), F[:R]
+end
+function _qr(A::Union(Number, AbstractMatrix), ::Type{Val{true}}; thin::Bool=true)
+    F = qrfact(A, Val{true})
+    full(F[:Q], thin=thin), F[:R], F[:p]
 end
 
 convert{T}(::Type{QR{T}},A::QR) = QR(convert(AbstractMatrix{T}, A.factors), convert(Vector{T}, A.τ))

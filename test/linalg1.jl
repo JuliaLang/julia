@@ -84,7 +84,7 @@ debug && println("lower Cholesky factor")
 
 debug && println("pivoted Choleksy decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
-        cpapd = cholfact(apd, pivot=true)
+        cpapd = cholfact(apd, :U, Val{true})
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
@@ -123,7 +123,7 @@ debug && println("Fat LU")
     @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[1:n1,:]
 
 debug && println("QR decomposition (without pivoting)")
-    qra   = qrfact(a, pivot=false)
+    qra   = qrfact(a, Val{false})
     q,r   = qra[:Q], qra[:R]
     @test_approx_eq q'*full(q, thin=false) eye(n)
     @test_approx_eq q*full(q, thin=false)' eye(n)

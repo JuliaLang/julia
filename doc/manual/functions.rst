@@ -210,11 +210,16 @@ Functions in Julia are `first-class objects
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without being given a name:
+without being given a name, using either of these syntaxes:
 
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
+    (anonymous function)
+
+    julia> function (x)
+               x^2 + 2x - 1
+           end
     (anonymous function)
 
 This creates an unnamed function taking one argument *x* and returning the
@@ -522,8 +527,8 @@ undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
 
 
-Block Syntax for Function Arguments
------------------------------------
+Do-Block Syntax for Function Arguments
+--------------------------------------
 
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially

@@ -118,7 +118,7 @@ end
 
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
-diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     n = length(v) + abs(k)
@@ -369,20 +369,23 @@ function factorize{T}(A::Matrix{T})
         end
         return lufact(A)
     end
-    qrfact(A,pivot=typeof(zero(T)/sqrt(zero(T) + zero(T)))<:BlasFloat) # Generic pivoted QR not implemented yet
+    qrfact(A,typeof(zero(T)/sqrt(zero(T) + zero(T)))<:BlasFloat?Val{true}:Val{false}) # Generic pivoted QR not implemented yet
 end
 
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
-function (\)(A::StridedMatrix, B::StridedVecOrMat)
-    m, n = size(A)
-    if m == n
-        if istril(A)
-            return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
+
+for (T1,PIVOT) in ((BlasFloat,Val{true}),(Any,Val{false}))
+    @eval function (\){T<:$T1}(A::StridedMatrix{T}, B::StridedVecOrMat)
+        m, n = size(A)
+        if m == n
+            if istril(A)
+                return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
+            end
+            istriu(A) && return \(UpperTriangular(A),B)
+            return \(lufact(A),B)
         end
-        istriu(A) && return \(UpperTriangular(A),B)
-        return \(lufact(A),B)
+        return qrfact(A,$PIVOT)\B
     end
-    return qrfact(A,pivot=eltype(A)<:BlasFloat)\B
 end
 
 ## Moore-Penrose inverse

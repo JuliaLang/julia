@@ -262,3 +262,14 @@ function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+
+function get_process_title()
+    buf = zeros(Uint8, 512)
+    err = ccall(:uv_get_process_title, Cint, (Ptr{Uint8}, Cint), buf, 512)
+    uv_error("get_process_title", err)
+    bytestring(pointer(buf))
+end
+function set_process_title(title::AbstractString)
+    err = ccall(:uv_set_process_title, Cint, (Ptr{UInt8},), bytestring(title))
+    uv_error("set_process_title", err)
+end

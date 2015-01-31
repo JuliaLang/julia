@@ -34,6 +34,21 @@ d2 = map(x->1, d)
 map!(x->1, d)
 @test reduce(+, d) == 100
 
+# Test mapreduce on DArrays
+begin
+    # Test that the proper method exists on DArrays
+    sig = methods(mapreduce, (Function, Function, DArray))[1].sig
+    @test sig[3] == DArray
+
+    # Test that it is functionally equivalent to the standard method
+    for _ = 1:25, f = [x -> 2x, x -> x^2, x -> x^2 + 2x - 1], opt = [+, *]
+        n = rand(2:50)
+        arr = rand(1:100, n)
+        darr = distribute(arr)
+
+        @test mapreduce(f, opt, arr) == mapreduce(f, opt, darr)
+    end
+end
 
 dims = (20,20,20)
 
@@ -172,7 +187,7 @@ end
 # executed successfully before committing/merging
 
 if haskey(ENV, "PTEST_FULL")
-    println("START of parallel tests that print errors")
+    print("\n\nSTART of parallel tests that print errors\n")
 
     # make sure exceptions propagate when waiting on Tasks
     @test_throws ErrorException (@sync (@async error("oops")))
@@ -204,7 +219,49 @@ if haskey(ENV, "PTEST_FULL")
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
 
-    println("END of parallel tests that print errors")
+    print("\n\nEND of parallel tests that print errors\n")
+
+@unix_only begin
+    #Issue #9951
+    hosts=[]
+    for i in 1:30
+        push!(hosts, "localhost")
+        push!(hosts, string(getipaddr()))
+        push!(hosts, "127.0.0.1")
+    end
+
+    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
+    new_pids = remotecall_fetch(1, addprocs, hosts)
+#    print("Added workers $new_pids\n\n")
+    function test_n_remove_pids(new_pids)
+        for p in new_pids
+            w_in_remote = sort(remotecall_fetch(p, workers))
+            try
+                @test intersect(new_pids, w_in_remote) == new_pids
+            catch e
+                print("p       :     $p\n")
+                print("newpids :     $new_pids\n")
+                print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
+                rethrow(e)
+            end
+        end
+
+        @test :ok == remotecall_fetch(1, (p)->rmprocs(p; waitfor=5.0), new_pids)
+    end
+
+    test_n_remove_pids(new_pids)
+
+    print("\nMore addprocs tests...\n")
+
+    #Other addprocs/rmprocs tests
+    new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
+    @test length(new_pids) == (2 + Sys.CPU_CORES)
+    test_n_remove_pids(new_pids)
+
+    new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
+    @test length(new_pids) == 5
+    test_n_remove_pids(new_pids)
+end
 end
 
 # issue #7727

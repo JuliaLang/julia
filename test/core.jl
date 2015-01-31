@@ -2092,3 +2092,34 @@ let p = 15
     @test 2p+1 == 31  # not a hex float literal
 end
 @test_throws ParseError parse("0x0.1")  # must have p or P
+
+# weak references
+type Obj; x; end
+function mk_wr(r, wr)
+    x = Obj(1)
+    push!(r, x)
+    push!(wr, WeakRef(x))
+end
+test_wr(r,wr) = @test r[1] == wr[1].value
+function test_wr()
+    ref = []
+    wref = []
+    mk_wr(ref, wref)
+    test_wr(ref, wref)
+    gc()
+    test_wr(ref, wref)
+    pop!(ref)
+    gc()
+    @test wref[1].value == nothing
+end
+test_wr()
+
+# issue #9947
+function f9947()
+    if 1 == 0
+        1
+    else
+        min(UInt128(2),1)
+    end
+end
+@test f9947() == UInt128(1)

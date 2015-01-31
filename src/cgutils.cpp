@@ -517,7 +517,7 @@ DLLEXPORT Type *julia_type_to_llvm(jl_value_t *jt)
         if (lt == NULL)
             return NULL;
         if (lt == T_void)
-            lt = T_int8;
+            return T_pint8;
         return PointerType::get(lt, 0);
     }
     if (jl_is_bitstype(jt)) {
@@ -881,8 +881,8 @@ static void emit_typecheck(Value *x, jl_value_t *type, const std::string &msg,
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, type, msg, ctx);
+    builder.CreateUnreachable();
 
-    builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
 }
@@ -1527,6 +1527,7 @@ static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 // allocate a box where the type might not be known at compile time
 static Value *allocate_box_dynamic(Value *jlty, Value *nb, Value *v)
 {
+    // TODO: allocate on the stack if !envescapes
     if (v->getType()->isPointerTy()) {
         v = builder.CreatePtrToInt(v, T_size);
     }
@@ -1747,8 +1748,8 @@ static void emit_cpointercheck(Value *x, const std::string &msg,
     builder.SetInsertPoint(failBB);
 
     emit_type_error(x, (jl_value_t*)jl_pointer_type, msg, ctx);
+    builder.CreateUnreachable();
 
-    builder.CreateBr(passBB);
     ctx->f->getBasicBlockList().push_back(passBB);
     builder.SetInsertPoint(passBB);
 }

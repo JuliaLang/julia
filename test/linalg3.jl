@@ -200,9 +200,44 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq norm(Ai,Inf)   norm(full(Ai),Inf)
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
+# 2-argument version of scale
+a = reshape([1.:6], (2,3))
+@test scale(a, 5.) == a*5
+@test scale(5., a) == a*5
+@test scale(a, [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale([1.; 2.], a) == a.*[1; 2]
+@test scale(a, [1; 2; 3]) == a.*[1 2 3]
+@test scale([1; 2], a) == a.*[1; 2]
+@test_throws DimensionMismatch scale(a, ones(2))
+@test_throws DimensionMismatch scale(ones(3), a)
+
+# 2-argument version of scale!
+@test scale!(copy(a), 5.) == a*5
+@test scale!(5., copy(a)) == a*5
+b = randn(Base.LinAlg.SCAL_CUTOFF) # make sure we try BLAS path
+@test scale!(copy(b), 5.) == b*5
+@test scale!(copy(a), [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale!([1.; 2.], copy(a)) == a.*[1; 2]
+@test scale!(copy(a), [1; 2; 3]) == a.*[1 2 3]
+@test scale!([1; 2], copy(a)) == a.*[1; 2]
+@test_throws DimensionMismatch scale!(a, ones(2))
+@test_throws DimensionMismatch scale!(ones(3), a)
+
+# 3-argument version of scale!
+@test scale!(similar(a), 5., a) == a*5
+@test scale!(similar(a), a, 5.) == a*5
+@test scale!(similar(a), a, [1.; 2.; 3.]) == a.*[1 2 3]
+@test scale!(similar(a), [1.; 2.], a) == a.*[1; 2]
+@test scale!(similar(a), a, [1; 2; 3]) == a.*[1 2 3]
+@test scale!(similar(a), [1; 2], a) == a.*[1; 2]
+@test_throws DimensionMismatch scale!(similar(a), a, ones(2))
+@test_throws DimensionMismatch scale!(similar(a), ones(3), a)
+@test_throws DimensionMismatch scale!(Array(Float64, 3, 2), a, ones(3))
+
 # scale real matrix by complex type
 @test_throws ErrorException scale!([1.0], 2.0im)
 @test isequal(scale([1.0], 2.0im),             Complex{Float64}[2.0im])
+@test isequal(scale(2.0im, [1.0]),             Complex{Float64}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0f0im),    Complex{Float32}[2.0im])
 @test isequal(scale(Float32[1.0], 2.0im),      Complex{Float64}[2.0im])
 @test isequal(scale(Float64[1.0], 2.0f0im),    Complex{Float64}[2.0im])
@@ -210,9 +245,6 @@ Ai = int(ceil(Ar*100))
 @test isequal(scale(Float64[1.0], big(2.0)im), Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0im),     Complex{BigFloat}[2.0im])
 @test isequal(scale(BigFloat[1.0], 2.0f0im),   Complex{BigFloat}[2.0im])
-
-# test 3-argument version of scale!
-@test_throws DimensionMismatch scale!(Array(Float64,(3,2)),reshape([1.:6],(2,3)), ones(3))
 
 # issue #6450
 @test dot(Any[1.0,2.0], Any[3.5,4.5]) === 12.5

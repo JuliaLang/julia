@@ -151,7 +151,11 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
     if !(to === from)
         if to.size < from.size
             if issubtype(to, Signed)
-                @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,unbox($from,x)))
+                if issubtype(from, Unsigned)
+                    @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,check_top_bit(unbox($from,x))))
+                else
+                    @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_sint($to,unbox($from,x)))
+                end
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,checked_trunc_uint($to,unbox($from,x)))
             end
@@ -362,6 +366,17 @@ widen(::Type{UInt8}) = UInt
 widen(::Type{UInt16}) = UInt
 widen(::Type{UInt32}) = UInt64
 widen(::Type{UInt64}) = UInt128
+
+# a few special cases,
+# Int64*UInt64 => Int128
+# |x|<=2^(k-1), |y|<=2^k-1   =>   |x*y|<=2^(2k-1)-1
+widemul(x::Signed,y::Unsigned) = widen(x)*signed(widen(y))
+widemul(x::Unsigned,y::Signed) = signed(widen(x))*widen(y)
+# multplication by Bool doesn't require widening
+widemul(x::Bool,y::Bool) = x*y
+widemul(x::Bool,y::Number) = x*y
+widemul(x::Number,y::Bool) = x*y
+
 
 ## float to integer coercion ##
 
