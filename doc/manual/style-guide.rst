@@ -302,35 +302,35 @@ For example,
 
     julia> f(x) = 2.0 * x
     f (generic function with 1 method)
-    
+
     julia> f(1//2)
     1.0
-    
+
     julia> f(1/2)
     1.0
-    
+
     julia> f(1)
     2.0
-    
+
 while
 
 .. doctest::
 
     julia> g(x) = 2 * x
     g (generic function with 1 method)
-    
+
     julia> g(1//2)
     1//1
-    
+
     julia> g(1/2)
     1.0
-    
+
     julia> g(2)
     4
-    
+
 As you can see, the second version, where we used an :obj:`Int` literal, preserved
-the type of the input argument, while the first didn't. This is because e.g. 
-``promote_type(Int, Float64) == Float64``, and promotion happens with the 
+the type of the input argument, while the first didn't. This is because e.g.
+``promote_type(Int, Float64) == Float64``, and promotion happens with the
 multiplication. Similarly, :obj:`Rational` literals are less type disruptive than
 :obj:`Float64` literals, but more disruptive than :obj:`Int`\ s:
 
@@ -338,13 +338,13 @@ multiplication. Similarly, :obj:`Rational` literals are less type disruptive tha
 
     julia> h(x) = 2//1 * x
     h (generic function with 1 method)
-    
+
     julia> h(1//2)
     1//1
-    
+
     julia> h(1/2)
     1.0
-    
+
     julia> h(1)
     2//1
 
