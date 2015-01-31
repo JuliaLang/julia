@@ -221,15 +221,18 @@ if haskey(ENV, "PTEST_FULL")
 
     print("\n\nEND of parallel tests that print errors\n")
 
+@unix_only begin
     #Issue #9951
     hosts=[]
-    for i in 1:10
-    push!(hosts, "localhost")
-    push!(hosts, string(getipaddr()))
-    push!(hosts, "127.0.0.1")
+    for i in 1:30
+        push!(hosts, "localhost")
+        push!(hosts, string(getipaddr()))
+        push!(hosts, "127.0.0.1")
     end
 
+    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
     new_pids = remotecall_fetch(1, addprocs, hosts)
+#    print("Added workers $new_pids\n\n")
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(p, workers))
@@ -238,15 +241,17 @@ if haskey(ENV, "PTEST_FULL")
             catch e
                 print("p       :     $p\n")
                 print("newpids :     $new_pids\n")
-                print("w_in_remote : $w_in_remote\n")
+                print("intersect   : $(intersect(new_pids, w_in_remote))\n\n\n")
                 rethrow(e)
             end
         end
 
-        remotecall_fetch(1, rmprocs, new_pids)
+        @test :ok == remotecall_fetch(1, (p)->rmprocs(p; waitfor=5.0), new_pids)
     end
 
     test_n_remove_pids(new_pids)
+
+    print("\nMore addprocs tests...\n")
 
     #Other addprocs/rmprocs tests
     new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
@@ -256,6 +261,7 @@ if haskey(ENV, "PTEST_FULL")
     new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
+end
 end
 
 # issue #7727

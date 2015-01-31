@@ -1017,44 +1017,49 @@ function start_cluster_workers(manager, params, resp_arr, launched_ntfy)
             print(STDERR, "Error launching workers with $T : $e\n")
         end
 
-    @sync begin
-        additional_workers = []
-        while true
-            if length(launched) == 0
-                if istaskdone(t)
-                    break
-                end
-                @schedule (sleep(1); notify(instances_ntfy))
-                wait(instances_ntfy)
+    workers_with_additional = []
+    while true
+        if length(launched) == 0
+            if istaskdone(t)
+                break
+            end
+            @schedule (sleep(1); notify(instances_ntfy))
+            wait(instances_ntfy)
+        end
+
+        if length(launched) > 0
+            wconfig = shift!(launched)
+            w = connect_n_create_worker(manager, get_next_pid(), wconfig)
+            rr = add_worker(PGRP, w)
+            cnt = get(w.config.count, 1)
+            if (cnt == :auto) || (cnt > 1)
+                push!(workers_with_additional, (w, rr))
             end
 
-            if length(launched) > 0
-                wconfig = shift!(launched)
-                w = connect_n_create_worker(manager, get_next_pid(), wconfig)
-                rr = add_worker(PGRP, w)
+            push!(resp_arr, rr)
+            notify(launched_ntfy)
+        end
+    end
 
-                let additional_workers=additional_workers, rr=rr, exename = params[:exename]
-                    @async begin
-                        w = worker_from_id(fetch(rr))
-                        cnt = get(w.config.count, 1)
-                        if cnt == :auto
-                            cnt = get(w.config.environ)[:cpu_cores]
-                        end
-                        cnt = cnt - 1   # Removing self from the requested number
-
-                        if cnt > 0
-                            exeflags = get(w.config.exeflags, ``)
-                            cmd = `$exename $exeflags`
-
-                            npids = [get_next_pid() for x in 1:cnt]
-                            new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, cmd)
-                            push!(additional_workers, (w, new_workers))
-                        end
+    additional_workers = []
+    @sync begin
+        for (w, rr) in workers_with_additional
+            let w=w, rr=rr, exename=params[:exename]
+                @async begin
+                    wait(rr)
+                    cnt = get(w.config.count)
+                    if cnt == :auto
+                        cnt = get(w.config.environ)[:cpu_cores]
                     end
-                end
+                    cnt = cnt - 1   # Removing self from the requested number
 
-                push!(resp_arr, rr)
-                notify(launched_ntfy)
+                    exeflags = get(w.config.exeflags, ``)
+                    cmd = `$exename $exeflags`
+
+                    npids = [get_next_pid() for x in 1:cnt]
+                    new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, cmd)
+                    push!(additional_workers, (w, new_workers))
+                end
             end
         end
     end
@@ -1466,6 +1471,7 @@ function addprocs(manager::ClusterManager; kwargs...)
             start_cluster_workers(manager, params, resp_arr, c)
         catch e
             print(STDERR, "Error starting cluster workers : $(e)\n")
+            display_error(e,catch_backtrace())
         end
 
     while true
