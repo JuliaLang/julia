@@ -5,7 +5,7 @@
 #include <string.h>
 #include <assert.h>
 
-#include <valgrind/valgrind.h>
+#include "valgrind.h"
 
 #include "julia.h"
 #include "julia_internal.h"
