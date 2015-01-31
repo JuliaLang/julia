@@ -218,7 +218,8 @@ setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
 @nsplat N 1:5 setindex!(S::SharedArray, x, I::NTuple{N,Union(Real,AbstractVector)}...) = setindex!(S.s, x, I...)
 
 function fill!(S::SharedArray, v)
-    f = S->fill!(S.loc_subarr_1d, v)
+    vT = convert(eltype(S), v)
+    f = S->fill!(S.loc_subarr_1d, vT)
     @sync for p in procs(S)
         @async remotecall_wait(p, f, S)
     end
