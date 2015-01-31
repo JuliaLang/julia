@@ -400,7 +400,39 @@ end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
 
-valid_tparam(x::ANY) = isa(x,Int) || isa(x,Symbol) || isa(x,Bool)
+function valid_tparam(x::ANY)
+    if isa(x,Int) || isa(x,Symbol) || isa(x,Bool)
+        return true
+    elseif isa(x,Tuple)
+        for t in x
+            if !valid_tparam(t)
+                return false
+            end
+        end
+        return true
+    end
+    return false
+end
+
+function extract_simple_tparam(Ai)
+    if (isa(Ai,Int) || isa(Ai,Bool))
+        return Ai
+    elseif isa(Ai,QuoteNode) && valid_tparam(Ai.value)
+        return Ai.value
+    elseif isa(inference_stack,CallStack) && isa(Ai,Expr) &&
+            is_known_call(Ai,tuple,inference_stack.sv)
+        tup = ()
+        for arg in Ai.args[2:end]
+            val = extract_simple_tparam(arg)
+            if val === Bottom
+                return val
+            end
+            tup = tuple(tup...,val)
+        end
+        return tup
+    end
+    return Bottom
+end
 
 # TODO: handle e.g. apply_type(T, R::Union(Type{Int32},Type{Float64}))
 const apply_type_tfunc = function (A, args...)
@@ -421,28 +453,30 @@ const apply_type_tfunc = function (A, args...)
             tparams = tuple(tparams..., ai.parameters[1])
         elseif isa(ai,Tuple) && all(isType,ai)
             tparams = tuple(tparams..., map(t->t.parameters[1], ai))
-        elseif i<=lA && (isa(A[i],Int) || isa(A[i],Bool))
-            tparams = tuple(tparams..., A[i])
-        elseif i<=lA && isa(A[i],QuoteNode) && valid_tparam(A[i].value)
-            tparams = tuple(tparams..., A[i].value)
         else
-            if i<=lA && isa(A[i],Symbol) && isa(inference_stack,CallStack)
-                sp = inference_stack.sv.sp
-                s = A[i]
-                found = false
-                for j=1:2:length(sp)
-                    if is(sp[j].name,s)
-                        # static parameter
-                        val = sp[j+1]
-                        if valid_tparam(val)
-                            tparams = tuple(tparams..., val)
-                            found = true
-                            break
+            if i<=lA
+                val = extract_simple_tparam(A[i])
+                if val !== Bottom
+                    tparams = tuple(tparams..., val)
+                    continue
+                elseif isa(inference_stack,CallStack) && isa(A[i],Symbol)
+                    sp = inference_stack.sv.sp
+                    s = A[i]
+                    found = false
+                    for j=1:2:length(sp)
+                        if is(sp[j].name,s)
+                            # static parameter
+                            val = sp[j+1]
+                            if valid_tparam(val)
+                                tparams = tuple(tparams..., val)
+                                found = true
+                                break
+                            end
                         end
                     end
-                end
-                if found
-                    continue
+                    if found
+                        continue
+                    end
                 end
             end
             if i-1 > length(headtype.parameters)
