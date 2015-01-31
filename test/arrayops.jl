@@ -711,6 +711,14 @@ fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
 rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+A = Array(Union(UInt8,Int8), 3)
+fill!(A, uint8(3))
+@test A == [0x03, 0x03, 0x03]
+# Issue #9964
+A = Array(Vector{Float64}, 2)
+fill!(A, [1, 2])
+@test A[1] == [1, 2]
+@test A[1] === A[2]
 
 # splice!
 for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
