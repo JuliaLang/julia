@@ -66,6 +66,7 @@ function writemime(io::IO, ::MIME"text/latex", md::List)
     end
 end
 
+
 # Inline elements
 
 function writemime(io::IO, ::MIME"text/latex", md::Plain)

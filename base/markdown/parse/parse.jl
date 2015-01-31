@@ -59,8 +59,9 @@ function parseinline(stream::IO, config::Config)
     return content
 end
 
-parseinline(s::String, c::Config) =
-    parseinline(IOBuffer(s), c)
+parseinline(s::String, c::Config) = parseinline(IOBuffer(s), c)
+# TODO remove once GH #9888 is fixed
+parseinline{T}(s::SubString{T}, c::Config) = parseinline(convert(T, s), c)
 
 parseinline(s) = parseinline(s, _config_)
 
