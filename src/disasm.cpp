@@ -69,7 +69,11 @@
 #else
 #include <llvm/LLVMContext.h>
 #endif
+#ifdef LLVM37
+#include <llvm/DebugInfo/DWARF/DIContext.h>
+#else
 #include <llvm/DebugInfo/DIContext.h>
+#endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
