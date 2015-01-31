@@ -32,16 +32,16 @@ end
 copy(s::IntSet) = union!(IntSet(), s)
 
 
-function sizehint!(s::IntSet, top::Integer)
-    if top >= s.limit
-        lim = ((top+31) & -32)>>>5
+function sizehint!(s::IntSet, n::Integer)
+    if n >= s.limit
+        lim = ((n+31) & -32)>>>5
         olsz = length(s.bits)
         if olsz < lim
             resize!(s.bits, lim)
             fill = s.fill1s ? uint32(-1) : uint32(0)
             for i=(olsz+1):lim; s.bits[i] = fill; end
         end
-        s.limit = top
+        s.limit = n
     end
     s
 end

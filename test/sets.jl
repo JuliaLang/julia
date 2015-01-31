@@ -81,11 +81,35 @@ push!(c,200)
 @test !in(100,c)
 @test !in(200,s)
 
-# sizehint, empty
-s = Set([1])
-@test isequal(sizehint!(s, 10), Set([1]))
-@test isequal(empty!(s), Set())
-# TODO: rehash
+# sizehint!, empty!
+a = Set([1, 2])
+sizehint!(a, 1000)
+@test length(a) == 2
+sizehint!(a, 0)
+sizehint!(a, -1)
+@test length(a) == 2
+
+let
+    local hint
+    min_a = typemax(Int)
+    min_b = typemax(Int)
+    for hint in 32:100
+        a = Set{Int}()
+        b = Set{Int}()
+        sizehint!(b, hint)
+        min_a = min(min_a, @allocated(for i = 1:hint; push!(a, i); end))
+        min_b = min(min_b, @allocated(for i = 1:hint; push!(b, i); end))
+    end
+    @test min_a > 0
+    @test min_b == 0
+
+    s = Set([1])
+    @test isequal(sizehint!(s, 32), Set([1]))
+    @test isequal(empty!(s), Set())
+    @test length(s) == 0
+    bytes_s = @allocated for i = 1:32; push!(s, i); end
+    @test bytes_s == 0
+end
 
 # start, done, next
 for data_in in ((7,8,4,5),
@@ -211,6 +235,28 @@ data_out = collect(s)
 @test sprint(show, IntSet()) == "IntSet([])"
 @test sprint(show, IntSet([1,2,3])) == "IntSet([1, 2, 3])"
 @test contains(sprint(show, complement(IntSet())), "...,")
+
+# sizehint!, empty!
+a = IntSet([1, 2])
+sizehint!(a, 1000)
+@test length(a) == 2
+sizehint!(a, 0)
+sizehint!(a, -1)
+@test length(a) == 2
+
+s = IntSet([1])
+bytes_s = @allocated for i = 0:511; push!(s, i); end
+@test bytes_s > 0
+
+s = IntSet([1])
+@test isequal(sizehint!(s, 512), IntSet([1]))
+@test isequal(empty!(s), IntSet())
+@test length(s) == 0
+bytes_s = @allocated for i = 0:511; push!(s, i); end
+@test bytes_s == 0
+
+bytes_s513 = @allocated push!(s, 512)
+@test bytes_s513 > 0
 
 
 s = IntSet([0,1,10,20,200,300,1000,10000,10002])

@@ -508,21 +508,23 @@ function prepend!{T}(a::Array{T,1}, items::AbstractVector)
     return a
 end
 
-function resize!(a::Vector, nl::Integer)
+function resize!(a::Vector, n::Integer)
     l = length(a)
-    if nl > l
-        ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
+    if n > l
+        ccall(:jl_array_grow_end, Void, (Any, UInt), a, n-l)
     else
-        if nl < 0
+        if n < 0
             throw(ArgumentError("new length must be ≥ 0"))
         end
-        ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
+        ccall(:jl_array_del_end, Void, (Any, UInt), a, l-n)
     end
     return a
 end
 
-function sizehint!(a::Vector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), a, sz)
+function sizehint!(a::Vector, n::Integer)
+    if n > length(a)
+        ccall(:jl_array_sizehint, Void, (Any, UInt), a, n)
+    end
     a
 end
 

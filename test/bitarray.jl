@@ -545,6 +545,37 @@ empty!(b1)
 empty!(i1)
 @test isequal(bitunpack(b1), i1)
 
+## sizehint!, resize!, empty!
+b = bitrand(2)
+
+resize!(b, 4)
+@test length(b) == 4
+resize!(b, 3)
+@test length(b) == 3
+@test_throws ArgumentError resize!(b, -1)
+
+sizehint!(b, 1000)
+@test length(b) == 3
+sizehint!(b, 0)
+sizehint!(b, -1)
+@test length(b) == 3
+
+b1= BitArray(0)
+b2 = BitArray(0)
+sizehint!(b2, 256)
+sizehint!(b2, 512)
+bytes_b1 = @allocated for _ = 1:512; push!(b1, true); end
+bytes_b2 = @allocated for _ = 1:512; push!(b2, true); end
+@test bytes_b1> 0
+@test bytes_b2 == 0
+bytes_b2_513 = @allocated push!(b2, true)
+@test bytes_b2_513 > 0
+
+empty!(b1)
+@test length(b1) == 0
+bytes_b1 = @allocated for _ = 1:512; push!(b1, true); end
+@test bytes_b1 == 0
+
 timesofar("dequeue")
 
 ## Unary operators ##
