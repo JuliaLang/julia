@@ -151,7 +151,7 @@ function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
     return a
 end
 
-function fill!{T<:Union(Int8,UInt8)}(a::Array{T}, x::Integer)
+function fill!(a::Union(Array{UInt8}, Array{Int8}), x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
     return a
 end
