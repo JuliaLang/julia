@@ -17,6 +17,11 @@ import Base: writemime
 @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
 # @test md"**foo *bar* baz**" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
 
+@test md"""```julia
+foo
+```
+""" == MD(Code("julia", "foo"))
+
 @test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
 @test md"Foo [bar](baz)" != MD(Paragraph("Foo [bar](baz)"))
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
