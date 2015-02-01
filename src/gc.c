@@ -594,6 +594,15 @@ void *jl_gc_managed_malloc(size_t sz)
 void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner)
 {
     maybe_collect();
+
+    if (gc_bits(owner) == GC_MARKED) {
+        perm_scanned_bytes += sz - oldsz;
+        live_bytes += sz - oldsz;
+    }
+    else {
+        allocd_bytes += sz - oldsz;
+    }
+
     sz = (sz+15) & -16;
     void *b;
 #ifdef _P64
@@ -615,10 +624,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_
 #endif
     if (b == NULL)
         jl_throw(jl_memory_exception);
-    if (gc_bits(owner) == GC_MARKED)
-        perm_scanned_bytes += (sz - oldsz);
-    else
-        allocd_bytes += (sz - oldsz);
+
     return b;
 }
 
@@ -1741,7 +1747,8 @@ static void post_mark(arraylist_t *list, int dryrun)
         jl_value_t *v = (jl_value_t*)list->items[i];
         jl_value_t *fin = (jl_value_t*)list->items[i+1];
         int isfreed = !gc_marked(v);
-        int isold = list == &finalizer_list && gc_bits(v) == GC_MARKED;
+        gc_push_root(fin, 0);
+        int isold = list == &finalizer_list && gc_bits(v) == GC_MARKED && gc_bits(fin) == GC_MARKED;
         if (!dryrun && (isfreed || isold)) {
             // remove from this list
             if (i < list->len - 2) {
@@ -1766,9 +1773,7 @@ static void post_mark(arraylist_t *list, int dryrun)
         if (!dryrun && isold) {
             arraylist_push(&finalizer_list_marked, v);
             arraylist_push(&finalizer_list_marked, fin);
-            gc_bits(fin) = GC_QUEUED;
         }
-        gc_push_root(fin, 0);
     }
     visit_mark_stack(GC_MARKED_NOESC);
 }
@@ -2127,7 +2132,7 @@ void jl_gc_collect(int full)
                 promoted_bytes += perm_scanned_bytes - last_perm_scanned_bytes;
             // 5. next collection decision
             int not_freed_enough = estimate_freed < (7*(actual_allocd/10));
-            if ((full || (not_freed_enough && (promoted_bytes >= default_collect_interval || prev_sweep_mask == GC_MARKED))) && n_pause > 1) {
+            if ((full || ((not_freed_enough || promoted_bytes >= collect_interval) && (promoted_bytes >= default_collect_interval || prev_sweep_mask == GC_MARKED))) && n_pause > 1) {
                 if (prev_sweep_mask != GC_MARKED || full) {
                     if (full) recollect = 1; // TODO enable this?
                 }
