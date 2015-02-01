@@ -657,16 +657,21 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b);
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
 {
+    JL_GC_PUSH1(&b);
     if (var == covariant) {
         // matching T to Type{S} in covariant context
         b = type_to_static_parameter_value(b);
     }
     if (jl_subtype(b, (jl_value_t*)a, 0)) {
-        if (!a->bound) return b;
+        if (!a->bound) {
+            JL_GC_POP();
+            return b;
+        }
     }
     else if (var==invariant && !jl_has_typevars_(b,0)) {
         // for typevar a and non-typevar type b, b must be within a's bounds
         // in invariant contexts.
+        JL_GC_POP();
         return (jl_value_t*)jl_bottom_type;
     }
     else if (jl_subtype((jl_value_t*)a, b, 0)) {
@@ -677,19 +682,29 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
           should give Type{_<:Vector}
         */
         if (jl_is_typevar(b)) {
-            if (!((jl_tvar_t*)b)->bound) return (jl_value_t*)a;
+            if (!((jl_tvar_t*)b)->bound){
+                JL_GC_POP();
+                return (jl_value_t*)a;
+            }
         }
         else {
-            if (!a->bound) return (jl_value_t*)a;
+            if (!a->bound) {
+                JL_GC_POP();
+                return (jl_value_t*)a;
+            }
         }
     }
     else {
         b = jl_type_intersect(a->ub, b, penv, eqc, covariant);
-        if (b == jl_bottom_type)
+        if (b == jl_bottom_type) {
+            JL_GC_POP();
             return b;
+        }
     }
-    if ((jl_value_t*)a == b)
+    if ((jl_value_t*)a == b) {
+        JL_GC_POP();
         return b;
+    }
     if (var == invariant) {
         if (!jl_has_typevars_(b,0) && !jl_is_typevar(b)) {
             int i;
@@ -698,19 +713,24 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                     jl_value_t *v = eqc->data[i+1];
                     if (jl_is_typevar(v))
                         continue;
-                    if (!jl_types_equal(v, b))
+                    if (!jl_types_equal(v, b)) {
+                        JL_GC_POP();
                         return (jl_value_t*)jl_bottom_type;
+                    }
                     break;
                 }
             }
             if (i >= eqc->n)
                 extend((jl_value_t*)a, b, eqc);
+            JL_GC_POP();
             return (jl_value_t*)a;
         }
         if (jl_is_typevar(b)) {
             jl_value_t *both = meet_tvars(a, (jl_tvar_t*)b);
-            if (both == jl_bottom_type)
+            if (both == jl_bottom_type) {
+                JL_GC_POP();
                 return both;
+            }
             if (!jl_is_typevar(both))
                 both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
             extend((jl_value_t*)a, both, penv);
@@ -722,25 +742,32 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
         int i;
         for(i=0; i < penv->n; i+=2) {
             if (penv->data[i] == (jl_value_t*)a && !jl_is_typevar(penv->data[i+1])) {
-                if (jl_types_equal(b, penv->data[i+1]))
+                if (jl_types_equal(b, penv->data[i+1])) {
+                    JL_GC_POP();
                     return (jl_value_t*)a;
+                }
                 jl_value_t *ti = jl_type_intersection(b, penv->data[i+1]);
-                if (ti == (jl_value_t*)jl_bottom_type)
+                if (ti == (jl_value_t*)jl_bottom_type) {
+                    JL_GC_POP();
                     return ti;
+                }
                 break;
             }
         }
         extend((jl_value_t*)a, b, penv);
         if (jl_is_typevar(b)) {
+            JL_GC_POP();
             return (jl_value_t*)a;
         }
         else {
             jl_tvar_t *new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
             extend((jl_value_t*)new_b, b, penv);
             extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
+            JL_GC_POP();
             return (jl_value_t*)new_b;
         }
     }
+    JL_GC_POP();
     return (jl_value_t*)a;
 }
 
