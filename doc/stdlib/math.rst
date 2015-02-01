@@ -729,6 +729,18 @@ Mathematical Functions
 	 julia> round(x, 1)
 	 1.2
 
+.. function:: round(x, RoundingMode)
+
+   Returns the nearest integral value of the same type as ``x`` to ``x``,
+   breaking ties using the specified :obj:`RoundingMode`.
+
+.. function:: round(z, RoundingMode1, RoundingMode2)
+
+   Returns the nearest integral value of the same type as the complex-valued
+   ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
+   The first :obj:`RoundingMode` is used for rounding the real components while
+   the second is used for rounding the imaginary components.
+
 .. function:: ceil([T,] x, [digits, [base]])
 
    ``ceil(x)`` returns the nearest integral value of the same type as ``x``
