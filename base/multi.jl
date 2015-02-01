@@ -1774,7 +1774,10 @@ end
 
 function check_master_connect(timeout)
     # If we do not have at least process 1 connect to us within timeout
-    # we log an error and exit
+    # we log an error and exit, unless we're running on valgrind
+    if ccall(:jl_running_on_valgrind,Cint,()) != 0
+        return
+    end
     @schedule begin
         start = time()
         while !haskey(map_pid_wrkr, 1) && (time() - start) < timeout
