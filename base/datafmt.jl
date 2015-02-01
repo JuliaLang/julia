@@ -84,7 +84,7 @@ type DLMOffsets <: DLMHandler
     function DLMOffsets(sbuff::AbstractString)
         offsets = Array(Array{Int,1}, 1)
         offsets[1] = Array(Int, offs_chunk_size)
-        thresh = int(Base.Sys.total_memory() / sizeof(Int) / 5)
+        thresh = ceil(min(typemax(UInt),Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, length(sbuff.data))
     end
 end
