@@ -756,3 +756,11 @@ end
 # float #8291
 @test float(Complex(1, 2)) == Complex(1.0, 2.0)
 @test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
+
+# Complex32 arithmetic #10003
+@test float16(1)+float16(1)im === Complex32(1, 1)
+@test float16(1)-float16(1)im === float16(1)+float16(-1)im === Complex32(1, -1)
+@test float16(1)*im === Complex32(im)
+@test float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+@test float16(1)^im === Complex32(1) === float16(1)+float16(0)im
+
