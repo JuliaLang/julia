@@ -753,3 +753,6 @@ end
 @test round([1:5] + im) == [1:5] + im
 @test round([1:5] + 0.5im) == [1.0:5.0]
 
+# float #8291
+@test float(Complex(1, 2)) == Complex(1.0, 2.0)
+@test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
