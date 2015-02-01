@@ -12,12 +12,12 @@ SRCS = \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
 	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
 
-HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
+HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h $(VALGRIND_INC)/valgrind.h
 
 FLAGS = \
 	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
-	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
+	-I$(LIBUV_INC) -I$(VALGRIND_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
 	-I$(BUILDDIR)
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common

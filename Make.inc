@@ -604,6 +604,8 @@ else
   endif
 endif
 
+VALGRIND_INC = $(JULIAHOME)/deps/valgrind/include
+
 # OS specific stuff
 
 # install_name_tool
