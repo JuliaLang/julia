@@ -73,40 +73,46 @@ struct Classification {
 /*else if (ty == jl_float80_type) { //if this is ever added
         accum.addField(offset, X87);
         accum.addField(offset+8, X87Up);
-    } else if (ty->ty == Tcomplex80) {
+    } else if (ty->ty == jl_complex80_type) {
         accum.addField(offset, ComplexX87);
         // make sure other half knows about it too:
         accum.addField(offset+16, ComplexX87);
     } */
 void classifyType(Classification& accum, jl_value_t* ty, uint64_t offset) {
-    if (jl_is_cpointer_type(ty) || jl_is_array_type(ty)) {
-        accum.addField(offset, Integer);
-    } else if (jl_is_bitstype(ty) && jl_datatype_size(ty) == 16) {
-        // Int128 or other 128bit wide INTEGER types
-        accum.addField(offset, Integer);
-        accum.addField(offset+8, Integer);
-    }
     // Floating point types
-    else if (ty == (jl_value_t*)jl_float64_type || ty == (jl_value_t*)jl_float32_type) {
+    if (ty == (jl_value_t*)jl_float64_type || ty == (jl_value_t*)jl_float32_type) {
         accum.addField(offset, Sse);
     }
-    // Other integer types
-    else if (jl_is_bitstype(ty))
-    {
-        if(jl_datatype_size(ty) > 8)
-            jl_error("Bitstype of this size not supported in the C ABI");
-        accum.addField(offset,Integer);
-    } else if (jl_datatype_size(ty) > 16) {
-        // This isn't creal, yet is > 16 bytes, so pass in memory.
-        // Must be after creal case but before arrays and structs,
-        // the other types that can get bigger than 16 bytes
-        accum.addField(offset, Memory);
-    } else if (jl_is_structtype(ty)) {
-        for (int i = 0; i < jl_tuple_len(((jl_datatype_t*)ty)->types); ++i) {
+    // Misc types
+    else if (!jl_is_datatype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty) || jl_is_abstracttype(ty)) {
+        accum.addField(offset, Integer); // passed as a pointer
+    }
+    // Ghost
+    else if (jl_datatype_size(ty) == 0) {
+    }
+    // BitsTypes and not float, write as Integers
+    else if (jl_is_bitstype(ty)) {
+        if (jl_datatype_size(ty) <= 8) {
+            accum.addField(offset,Integer);
+        }
+        else if (jl_datatype_size(ty) <= 16) {
+            // Int128 or other 128bit wide INTEGER types
+            accum.addField(offset, Integer);
+            accum.addField(offset+8, Integer);
+        }
+        else {
+            accum.addField(offset, Memory);
+        }
+    }
+    // Other struct types
+    else if (jl_datatype_size(ty) <= 16) {
+        size_t i;
+        for (i = 0; i < jl_tuple_len(((jl_datatype_t*)ty)->types); ++i) {
             classifyType(accum, jl_tupleref(((jl_datatype_t*)ty)->types,i), offset + jl_field_offset(ty,i));
         }
-    } else {
-        jl_error("Unsupported type in C ABI");
+    }
+    else {
+        accum.addField(offset, Memory);
     }
 }
 
@@ -119,21 +125,20 @@ Classification classify(jl_value_t* ty) {
 bool use_sret(AbiState *state,jl_value_t *ty)
 {
     int sret = classify(ty).isMemory;
-    if(sret) {
-        assert(state->int_regs>0 && "WTF? No int regs available?");
+    if (sret) {
+        assert(state->int_regs>0 && "No int regs available when determining sret-ness?");
         state->int_regs--;
     }
     return sret;
 }
 
-void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
+void needPassByRef(AbiState *state, jl_value_t *ty, bool *byRef, bool *inReg, bool *byRefAttr)
 {
     Classification cl = classify(ty);
     if (cl.isMemory) {
         *byRefAttr = *byRef = true;
         return;
     }
-
 
     // Figure out how many registers we want for this arg:
     AbiState wanted = { 0, 0 };
@@ -149,41 +154,61 @@ void needPassByRef(AbiState *state,jl_value_t *ty, bool *byRef, bool *inReg, boo
         state->sse_regs -= wanted.sse_regs;
         *inReg = true;
     }
-    else if (jl_is_structtype(ty))
-    {
+    else if (jl_is_structtype(ty)) {
         // spill to memory even though we would ordinarily pass
         // it in registers
-        *byRef = true;
+        *byRefAttr = *byRef = true;
     }
-    *byRefAttr = *byRef;
 }
 
 Type *preferred_llvm_type(jl_value_t *ty, bool isret)
 {
     (void) isret;
-    // no need to rewrite bitstypes or pointers (really only agregates are the problem)
-    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_bitstype(ty) ||  jl_is_cpointer_type(ty))
+    // no need to rewrite these types (they are returned as pointers anyways)
+    if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return NULL;
 
     int size = jl_datatype_size(ty);
-    if(!(size == 1 || size == 2 || size == 4 || size == 8))
+    if (size > 16 || size == 0)
         return NULL;
 
     Classification cl = classify(ty);
     if (cl.isMemory)
         return NULL;
-    ArgClass c = Classification::merge(cl.classes[0],cl.classes[1]);
-    Type *target_type = NULL;
 
-    // Make into an aggregate of
-    if (c == Sse)
-        target_type = Type::getDoubleTy(jl_LLVMContext);
-    else if (c == Integer)
-        target_type = T_int64;
-    else
-        assert("Don't know how to rewrite type");
-
-    return target_type;
+    Type *types[2];
+    switch (cl.classes[0]) {
+        case Integer:
+            if (size >= 8)
+                types[0] = T_int64;
+            else
+                types[0] = Type::getIntNTy(getGlobalContext(), size*8);
+            break;
+        case Sse:
+            if (size <= 4)
+                types[0] = T_float32;
+            else
+                types[0] = T_float64;
+            break;
+        default:
+            assert(0 && "Unexpected cl.classes[0]");
+    }
+    switch (cl.classes[1]) {
+        case NoClass:
+            return types[0];
+        case Integer:
+            assert(size > 8);
+            types[1] = Type::getIntNTy(getGlobalContext(), (size-8)*8);
+            return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
+        case Sse:
+            if (size <= 12)
+                types[1] = T_float32;
+            else
+                types[1] = T_float64;
+            return StructType::get(jl_LLVMContext,ArrayRef<Type*>(&types[0],2));
+        default:
+            assert(0 && "Unexpected cl.classes[0]");
+    }
 }
 
 bool need_private_copy(jl_value_t *ty, bool isRef)

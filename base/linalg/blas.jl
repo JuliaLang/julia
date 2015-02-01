@@ -118,7 +118,7 @@ for (fname, elty) in ((:cblas_zdotc_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotc(n::Integer, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},DenseArray{$elty}), incy::Integer)
             result = Array($elty, 1)
-            ccall(($(blasfunc(fname)), libblas), $elty,
+            ccall(($(blasfunc(fname)), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[1]
@@ -136,7 +136,7 @@ for (fname, elty) in ((:cblas_zdotu_sub,:Complex128),
                 #       DOUBLE PRECISION DX(*),DY(*)
         function dotu(n::Integer, DX::Union(Ptr{$elty},DenseArray{$elty}), incx::Integer, DY::Union(Ptr{$elty},DenseArray{$elty}), incy::Integer)
             result = Array($elty, 1)
-            ccall(($(blasfunc(fname)), libblas), $elty,
+            ccall(($(blasfunc(fname)), libblas), Void,
                 (BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}, BlasInt, Ptr{$elty}),
                  n, DX, incx, DY, incy, result)
             result[1]
