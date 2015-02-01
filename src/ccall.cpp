@@ -398,8 +398,6 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     }
 }
 
-static jl_value_t *jl_signed_type=NULL;
-
 typedef struct {
     Value *jl_ptr;  // if the argument is a run-time computed pointer
     void *fptr;     // if the argument is a constant pointer
@@ -857,9 +855,6 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
                 // small integer arguments.
                 jl_datatype_t *bt = (jl_datatype_t*)tti;
                 if (bt->size < 4) {
-                    if (jl_signed_type == NULL) {
-                        jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
-                    }
 #ifdef LLVM33
                     Attribute::AttrKind av;
 #elif defined(LLVM32)
@@ -868,12 +863,12 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
                     Attribute::AttrConst av;
 #endif
 #if defined(LLVM32) && !defined(LLVM33)
-                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                    if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0))
                         av = Attributes::SExt;
                     else
                         av = Attributes::ZExt;
 #else
-                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                    if (jl_signed_type && jl_subtype(tti, (jl_value_t*)jl_signed_type, 0))
                         av = Attribute::SExt;
                     else
                         av = Attribute::ZExt;
@@ -1417,7 +1412,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 result = builder.CreateBitCast(result,lrt);
             }
             else {
-                assert(0 && "Unimplemented"); //XXX: ?
+                Value *rloc = builder.CreateAlloca(prt);
+                builder.CreateStore(result, rloc);
+                result = builder.CreateLoad(builder.CreatePointerCast(rloc, PointerType::get(lrt,0)));
             }
         }
     } else {

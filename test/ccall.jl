@@ -17,7 +17,10 @@ end
 @test unsafe_load(ccall_echo_func(IntLike(993), Ptr{Int}, Ref{IntLike})) === 993
 @test unsafe_load(ccall_echo_func(IntLike(881), Ptr{IntLike}, Ref{IntLike})).x === 881
 @test ccall_echo_func(532, Int, Int) === 532
-@test ccall_echo_func(164, IntLike, Int).x === 164
+if WORD_SIZE == 64
+    # this test is valid only for x86_64 and win64
+    @test ccall_echo_func(164, IntLike, Int).x === 164
+end
 @test ccall_echo_func(IntLike(828), Int, IntLike) === 828
 @test ccall_echo_func(913, Any, Any) === 913
 @test unsafe_pointer_to_objref(ccall_echo_func(553, Ptr{Any}, Any)) === 553
@@ -132,7 +135,7 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
         end
         b = ccall(cfunction($(symbol("foo"*string(v))),$t,($t,)),$t,($t,),$v)
         verbose && println("C: ",b)
-        if($(t).mutable)
+        if ($(t).mutable)
             @test !(b === a)
         end
         @test a == b
