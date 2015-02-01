@@ -711,7 +711,7 @@ function getindex(F::Schur, d::Symbol)
     throw(KeyError(d))
 end
 
-function schur(A::AbstractMatrix)
+function schur(A::StridedMatrix)
     SchurF = schurfact(A)
     SchurF[:T], SchurF[:Z], SchurF[:values]
 end
@@ -752,7 +752,7 @@ function getindex(F::GeneralizedSchur, d::Symbol)
     throw(KeyError(d))
 end
 
-function schur(A::AbstractMatrix, B::AbstractMatrix)
+function schur(A::StridedMatrix, B::StridedMatrix)
     SchurF = schurfact(A, B)
     SchurF[:S], SchurF[:T], SchurF[:Q], SchurF[:Z]
 end
