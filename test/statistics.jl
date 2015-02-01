@@ -264,3 +264,12 @@ end
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile([0.:100.],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
+
+
+# test invalid hist nbins argument (#9999)
+@test_throws ArgumentError hist(Int[], -1)
+@test hist(Int[], 0)[2] == Int[]
+@test_throws ArgumentError hist([1,2,3], -1)
+@test_throws ArgumentError hist([1,2,3], 0)
+@test_throws ArgumentError hist([1.0,2.0,3.0], -1)
+@test_throws ArgumentError hist([1.0,2.0,3.0], 0)
