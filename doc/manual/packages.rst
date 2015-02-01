@@ -129,13 +129,13 @@ While :func:`Pkg.add` and :func:`Pkg.rm` are convenient for adding and removing 
 Because the package manager uses git internally to manage the package git repositories, users may run into protocol issues (if behind a firewall, for example), when running :func:`Pkg.add`. The following command can be run from the command line to tell git to use 'https' instead of the 'git' protocol when cloning repositories::
 
     git config --global url."https://".insteadOf git://
-    
+
 Offline Installation of Packages
 --------------------------------
 
 For machines with no internet connection, installing packages just requires that the packages be copied to ~/.julia/v0.X/.
 
-This is sufficient, since the Pkg.add() command does 4 things:
+This is sufficient, since the Pkg.add() command just does these 4 things:
 
 1. It adds the name of the package to ~/.julia/INSTALLED
 2. Downloads the package to ~/.julia/.cache and makes a copy in ~/.julia/
