@@ -110,30 +110,23 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
 
     gcc = find_system_gcc()
     # This argument is needed for the gcc, see issue #9973
-    win_arg = @windows ? "-D_WIN32_WINNT=0x0600" : ""
-    @windowsxp_only win_arg = "-D_WINVER=0x0502"
+    win_arg = @windows ? "-D_WIN32_WINNT=0x0502" : ""
     incs = get_includes()
+    ENV2 = deepcopy(ENV)
     @windows_only begin
         if contains(gcc, "WinRPM")
             # This should not bee necessary, it is done due to WinRPM's gcc's
             # include paths is not correct see WinRPM.jl issue #38
-            old_path = ENV["path"]
-            ENV["path"] = old_path*";"*dirname(gcc)
+            ENV2["PATH"] *= ";" * dirname(gcc)
             push!(incs, "-I"*abspath(joinpath(dirname(gcc),"..","include")))
-        else
-            gcc = Base.shell_split(gcc)
         end
     end
 
     for exe in [exe_release, exe_debug]
         println("running: $gcc -g -Wl,--no-as-needed $win_arg $(join(incs, " ")) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)")
-        run(`$gcc -g -Wl,--no-as-needed $win_arg $(incs) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)`)
+        cmd = setenv(`$gcc -g -Wl,--no-as-needed $win_arg $(incs) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)`, ENV2)
+        run(cmd)
         println()
-    end
-    @windows_only begin
-        if contains(gcc, "WinRPM")
-            ENV["path"] = old_path
-        end
     end
 
     println("running: rm -rf $(tmpdir) $(sys.buildfile).o $(sys.buildfile0).o $(sys.buildfile0).ji")
@@ -253,9 +246,9 @@ function find_system_gcc()
     end
 
     # See if `gcc` exists
-    try
-        if success(@windows ? `cmd /c gcc -v` : `gcc -v`)
-            return @windows ? "cmd /c gcc" : "gcc"
+    @unix_only try
+        if success(`gcc -v`)
+            return "gcc"
         end
     end
 
