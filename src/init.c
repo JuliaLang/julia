@@ -922,7 +922,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     }
 
     jl_page_size = jl_getpagesize();
-    jl_arr_xtralloc_limit = uv_get_total_memory() / 100;  // Extra allocation limited to 1% of total RAM
+    uint64_t total_mem = uv_get_total_memory();
+    if (total_mem >= (size_t)-1) {
+        total_mem = (size_t)-1;
+    }
+    jl_arr_xtralloc_limit = total_mem / 100;  // Extra allocation limited to 1% of total RAM
     jl_find_stack_bottom();
     jl_dl_handle = (uv_lib_t *) jl_load_dynamic_library(NULL, JL_RTLD_DEFAULT);
 #ifdef RTLD_DEFAULT
