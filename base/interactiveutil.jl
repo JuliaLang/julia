@@ -24,10 +24,10 @@ function edit(file::AbstractString, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
-    no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim" || edname == "nvim" || edname == "nano"
+    elseif edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
