@@ -7,7 +7,9 @@ type FileMonitor
         handle = c_malloc(_sizeof_uv_fs_event)
         err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32), eventloop(),handle,file,0)
         if err < 0
-            c_free(handle)
+            ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
+            disassociate_julia_struct(handle)
+            ccall(:jl_forceclose_uv, Void, (Ptr{Void},), handle)
             throw(UVError("FileMonitor",err))
         end
         this = new(handle,cb,false,Condition())
