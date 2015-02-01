@@ -388,10 +388,8 @@ for (T1,PIVOT) in ((BlasFloat,Val{true}),(Any,Val{false}))
     end
 end
 
-## Moore-Penrose inverse
+## Moore-Penrose pseudoinverse
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
-## for __dense__ ill-conditioned matrices, please use
-## the threshold tol = sqrt(eps(real(float(one(T)))))
     m, n        = size(A)
     (m == 0 || n == 0) && return Array(T, n, m)
     if istril(A)
