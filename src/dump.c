@@ -173,6 +173,10 @@ uint64_t jl_sysimage_base = 0;
 #include <dbghelp.h>
 #endif
 
+DLLEXPORT int jl_running_on_valgrind() {
+    return RUNNING_ON_VALGRIND;
+}
+
 static void jl_load_sysimg_so(char *fname)
 {
 #ifndef _OS_WINDOWS_
