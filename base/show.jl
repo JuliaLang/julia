@@ -686,9 +686,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "))")
     end
 
-    if ex.head == :(=)
-        show_type = show_type_assignment(ex.args[2])
-    elseif in(ex.head, (:boundscheck, :gotoifnot, :return))
+    if ex.head in (:(=), :boundscheck, :gotoifnot, :return)
         show_type = false
     end
 
@@ -698,13 +696,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     show_expr_type_emphasize::Bool = state
 end
-
-show_type_assignment(::Number) = false
-show_type_assignment(::(Number...)) = false
-show_type_assignment(::Expr) = false
-show_type_assignment(::SymbolNode) = false
-show_type_assignment(::LambdaStaticData) = false
-show_type_assignment(a) = true
 
 function ismodulecall(ex::Expr)
     ex.head == :call && ex.args[1] == TopNode(:getfield) &&
