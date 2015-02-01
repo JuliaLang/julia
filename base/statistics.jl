@@ -518,7 +518,13 @@ end
 ## nice-valued ranges for histograms
 
 function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
-    if length(v) == 0
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
         return 0.0:1.0:0.0
     end
     lo, hi = extrema(v)
@@ -542,7 +548,13 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
 end
 
 function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
-    if length(v) == 0
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
         return 0:1:0
     end
     lo, hi = extrema(v)
