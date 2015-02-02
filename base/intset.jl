@@ -281,7 +281,7 @@ function ==(s1::IntSet, s2::IntSet)
             end
         end
     else
-        for i = lim1:lim2
+        for i = lim1+1:lim2
             if s2.bits[i] != filln
                 return false
             end

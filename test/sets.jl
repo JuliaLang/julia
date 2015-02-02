@@ -239,6 +239,10 @@ setdiff!(s2, IntSet([2, 4, 5, 6]))
 
 @test s2 == IntSet([1, 3])
 
+# == with last-bit set (groups.google.com/forum/#!topic/julia-users/vZNjiIEG_sY)
+s = IntSet(255)
+@test s == s
+
 # issue #7851
 @test_throws ArgumentError IntSet(-1)
 @test !(-1 in IntSet(0:10))
