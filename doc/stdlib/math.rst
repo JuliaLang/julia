@@ -660,7 +660,7 @@ Mathematical Functions
 
    ``round(x)`` rounds ``x`` to an integer value according to the default
    rounding mode (see :func:`get_rounding`), returning a value of the same type as
-   ``x``. By default (``RoundNearest``), this will round to the nearest
+   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
    integer, with ties (fractional values of 0.5) being rounded to the even
    integer.
 
@@ -675,28 +675,10 @@ Mathematical Functions
       julia> round(2.5)
       2.0
 
-   The optional ``RoundingMode`` argument will change this
-   behaviour. Currently supported are
-
-      ``RoundNearestTiesAway``
-         rounds to nearest integer, with ties rounded away from zero (C/C++
-	 ``round`` behaviour).
-
-      ``RoundNearestTiesUp``
-         rounds to nearest integer, with ties rounded toward positive infinity
-	 (Java/JavaScript ``round`` behaviour).
-
-      ``RoundToZero``
-         an alias for :func:`trunc`.
-
-      ``RoundUp``
-         an alias for :func:`ceil`.
-
-      ``RoundDown``
-         an alias for :func:`floor`.
+   The optional :obj:`RoundingMode` argument will change how the number gets rounded.
 
    ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
+   :exc:`InexactError` if the value is not representable.
 
    ``round(x, digits)`` rounds to the specified number of digits after the
    decimal place (or before if negative). ``round(x, digits, base)`` rounds
@@ -710,10 +692,12 @@ Mathematical Functions
 	 julia> round(pi, 3, 2)
 	 3.125
 
-   Note: rounding to specified digits in bases other than 2 can be inexact
-   when operating on binary floating point numbers. For example, the
-   ``Float64`` value represented by ``1.15`` is actually *less* than 1.15, yet
-   will be rounded to 1.2.
+   .. note::
+
+      Rounding to specified digits in bases other than 2 can be inexact when
+      operating on binary floating point numbers. For example, the ``Float64``
+      value represented by ``1.15`` is actually *less* than 1.15, yet will be
+      rounded to 1.2.
 
       .. doctest::
 
@@ -729,12 +713,45 @@ Mathematical Functions
 	 julia> round(x, 1)
 	 1.2
 
-.. function:: round(x, RoundingMode)
+.. data:: RoundingMode
 
-   Returns the nearest integral value of the same type as ``x`` to ``x``,
-   breaking ties using the specified :obj:`RoundingMode`.
+   A type which controls rounding behavior. Currently supported rounding modes are:
 
-.. function:: round(z, RoundingMode1, RoundingMode2)
+   - :obj:`RoundNearest` (default)
+   - :obj:`RoundNearestTiesAway`
+   - :obj:`RoundNearestTiesUp`
+   - :obj:`RoundToZero`
+   - :obj:`RoundUp`
+   - :obj:`RoundDown`
+
+.. data:: RoundNearest
+
+   The default rounding mode. Rounds to the nearest integer, with ties
+   (fractional values of 0.5) being rounded to the nearest even integer.
+
+.. data:: RoundNearestTiesAway
+
+   Rounds to nearest integer, with ties rounded away from zero (C/C++
+   :func:`round` behaviour).
+
+.. data:: RoundNearestTiesUp
+
+   Rounds to nearest integer, with ties rounded toward positive infinity
+   (Java/JavaScript :func:`round` behaviour).
+
+.. data:: RoundToZero
+
+   :func:`round` using this rounding mode is an alias for :func:`trunc`.
+
+.. data:: RoundUp
+
+   :func:`round` using this rounding mode is an alias for :func:`ceil`.
+
+.. data:: RoundDown
+
+   :func:`round` using this rounding mode is an alias for :func:`floor`.
+
+.. function:: round(z, RoundingModeReal, RoundingModeImaginary)
 
    Returns the nearest integral value of the same type as the complex-valued
    ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
