@@ -145,7 +145,7 @@ complex float* cfptest(complex float *a) {
 
 complex_t* cptest(complex_t *a) {
     //Unpack a ComplexPair{Int} struct pointer
-    if (verbose) printf("%lld + %lld i\n", a->real, a->imag);
+    if (verbose) printf("%lld + %lld i\n", (long long)a->real, (long long)a->imag);
     a->real += 1;
     a->imag -= 2;
     return a;
@@ -402,7 +402,7 @@ int128_t test_128(int128_t a) {
 
 struct_big test_big(struct_big a) {
     //Unpack a "big" struct { int, int, char }
-    if (verbose) printf("%lld %lld %c\n", a.x, a.y, a.z);
+    if (verbose) printf("%lld %lld %c\n", (long long)a.x, (long long)a.y, a.z);
     a.x += 1;
     a.y -= 2;
     a.z -= 'A';
@@ -410,13 +410,14 @@ struct_big test_big(struct_big a) {
 }
 
 int main() {
-    printf("all of the following should be 1 except xs[259] = 0");
+    printf("all of the following should be 1 except xs[259] = 0\n");
     a = 3;
     b = 259;
     fptr = (volatile int (*)(unsigned char x))&testUcharX;
-    if ((((long)fptr)&((long)1)<<32) == 1) fptr = NULL;
+    if (((size_t)fptr)&((size_t)1) == 1) fptr = NULL;
     printf("compiled with: '%s'\nxs[3] = %d\nxs[259] = %d\ntestUcharX(3) = %d\ntestUcharX(%d) = %d\nfptr(3) = %d\nfptr(259) = %d\n",
            xstr(CC), xs[a], xs[b], testUcharX(a), b, testUcharX((unsigned char)b), fptr(a), fptr(b));
+    printf("misc tests:\n");
     struct1 a = {352.39422e23, 19.287577};
     a = test_1(a);
 }

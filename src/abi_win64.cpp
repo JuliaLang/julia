@@ -43,7 +43,7 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
     if (!jl_is_datatype(ty) || jl_is_abstracttype(ty) || jl_is_cpointer_type(ty) || jl_is_array_type(ty))
         return NULL;
     size_t size = jl_datatype_size(ty);
-    if (size > 0 && size <= 8)
+    if (size > 0 && size <= 8 && !jl_is_bitstype(ty))
         return Type::getIntNTy(getGlobalContext(), size*8);
     return NULL;
 }
