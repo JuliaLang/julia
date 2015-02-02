@@ -900,7 +900,7 @@
         (begin (take-token s)
                (cond ((closing-token? (peek-token s))  op)
                      ((memq op '(& |::|))  (list op (parse-call s)))
-                     (else                 (list op (parse-atom s)))))
+                     (else                 (list op (parse-unary-prefix s)))))
         (parse-atom s))))
 
 ;; parse function call, indexing, dot, and transpose expressions

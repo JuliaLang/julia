@@ -3287,6 +3287,7 @@ void jl_init_types(void)
     call_sym = jl_symbol("call");
     call1_sym = jl_symbol("call1");
     quote_sym = jl_symbol("quote");
+    inert_sym = jl_symbol("inert");
     top_sym = jl_symbol("top");
     dots_sym = jl_symbol("Vararg");
     line_sym = jl_symbol("line");

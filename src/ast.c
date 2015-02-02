@@ -345,7 +345,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return jl_new_struct(jl_gotonode_type,
                                          scm_to_julia_(car_(e),0));
                 }
-                if (sym == quote_sym) {
+                if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)) ||
+                                                              !iscons(cdr_(car_(e)))))) {
                     return jl_new_struct(jl_quotenode_type,
                                          scm_to_julia_(car_(e),0));
                 }
@@ -477,7 +478,7 @@ static value_t julia_to_scm_(jl_value_t *v)
         return julia_to_list2((jl_value_t*)goto_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_quotenode_type)) {
-        return julia_to_list2((jl_value_t*)quote_sym, jl_fieldref(v,0));
+        return julia_to_list2((jl_value_t*)inert_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_newvarnode_type)) {
         return julia_to_list2((jl_value_t*)newvar_sym, jl_fieldref(v,0));
