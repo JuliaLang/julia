@@ -162,7 +162,7 @@ function convert{Tv,TvS,TiS}(::Type{SparseMatrixCSC{Tv}}, S::SparseMatrixCSC{TvS
     end
 end
 
-function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::Matrix)
+function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, M::AbstractMatrix)
     m, n = size(M)
     (I, J, V) = findnz(M)
     return sparse_IJ_sorted!(convert(Vector{Ti},I),
@@ -231,7 +231,7 @@ sparse(a::Vector) = sparsevec(a)
 
 ## Construct a sparse matrix
 
-sparse{Tv}(A::Matrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
+sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
 

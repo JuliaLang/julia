@@ -1162,7 +1162,7 @@ function findn(A::StridedMatrix)
     return (I, J)
 end
 
-function findnz{T}(A::StridedMatrix{T})
+function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
