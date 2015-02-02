@@ -1050,7 +1050,7 @@ Dequeues
 Fully implemented by:
 
 - :obj:`Vector` (a.k.a. 1-dimensional :obj:`Array`)
-- :obj:`BitVector`` (a.k.a. 1-dimensional :obj:`BitArray`)
+- :obj:`BitVector` (a.k.a. 1-dimensional :obj:`BitArray`)
 
 .. module:: Base.Collections
 
