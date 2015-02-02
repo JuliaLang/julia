@@ -8,6 +8,9 @@ default: all
 $(TESTS) ::
 	@$(call PRINT_JULIA, $(call spawn,$(JULIA_EXECUTABLE)) --check-bounds=yes -f ./runtests.jl $@)
 
+valgrind-all:
+	valgrind --suppressions=../contrib/valgrind-julia.supp $(JULIA_EXECUTABLE) ./runtests.jl all
+
 perf:
 	@$(MAKE) -C perf all
 

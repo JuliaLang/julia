@@ -40,14 +40,16 @@ catch
     net_on = false
 end
 
+valgrind_on = (ccall(:jl_running_on_valgrind,Cint,()) != 0)
+
 cd(dirname(@__FILE__)) do
     n = 1
-    if net_on
+    if !net_on
+        filter!(x -> !(x in net_required_for), tests)
+    elseif !valgrind_on
         n = min(8, CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)
-    else
-        filter!(x -> !(x in net_required_for), tests)
     end
 
     @everywhere include("testdefs.jl")
