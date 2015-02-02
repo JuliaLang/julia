@@ -1095,14 +1095,14 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-function randn!(rng::AbstractRNG, A::Array{Float64})
+function randn!(rng::AbstractRNG, A::AbstractArray{Float64})
     for i = 1:length(A)
         @inbounds A[i] = randn(rng)
     end
     A
 end
 
-randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
+randn!(A::AbstractArray{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Integer...) = randn!(Array(Float64, dims...))
 randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array(Float64, dims))
