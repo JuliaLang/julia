@@ -355,3 +355,31 @@ end
 @test length(map(identity, 0x0001:0x0005)) == 5
 @test length(map(identity, uint64(1):uint64(5))) == 5
 @test length(map(identity, uint128(1):uint128(5))) == 5
+
+# issue #8531
+let smallint = (Int === Int64 ?
+                (Int8,Uint8,Int16,Uint16,Int32,Uint32) :
+                (Int8,Uint8,Int16,Uint16))
+    for T in smallint
+        @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
+    end
+end
+
+# issue #8584
+@test (0:1//2:2)[1:2:3] == 0:1//1:1
+
+# zip
+let i = 0
+x = 1:2:8
+y = 2:2:8
+xy = 1:8
+for (thisx, thisy) in zip(x, y)
+    @test thisx == xy[i+=1]
+    @test thisy == xy[i+=1]
+end
+end
+
+# issue #9962
+@test eltype(0:1//3:10) <: Rational
+@test (0:1//3:10)[1] == 0
+@test (0:1//3:10)[2] == 1//3
