@@ -656,15 +656,78 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round([T,] x, [digits, [base]])
+.. function:: round([T,] x, [digits, [base]], [r::RoundingMode])
 
-   ``round(x)`` returns the nearest integral value of the same type as ``x``
-   to ``x``, breaking ties by rounding away from zero.
+   ``round(x)`` rounds ``x`` to an integer value according to the default
+   rounding mode (see :func:`get_rounding`), returning a value of the same type as
+   ``x``. By default (``RoundNearest``), this will round to the nearest
+   integer, with ties (fractional values of 0.5) being rounded to the even
+   integer.
 
-   ``round(T, x)`` converts the result to type ``T``, throwing an
+   .. doctest::
+
+      julia> round(1.7)
+      2.0
+
+      julia> round(1.5)
+      2.0
+
+      julia> round(2.5)
+      2.0
+
+   The optional ``RoundingMode`` argument will change this
+   behaviour. Currently supported are
+
+      ``RoundNearestTiesAway``
+         rounds to nearest integer, with ties rounded away from zero (C/C++
+	 ``round`` behaviour).
+
+      ``RoundNearestTiesUp``
+         rounds to nearest integer, with ties rounded toward positive infinity
+	 (Java/JavaScript ``round`` behaviour).
+
+      ``RoundToZero``
+         an alias for :func:`trunc`.
+
+      ``RoundUp``
+         an alias for :func:`ceil`.
+
+      ``RoundDown``
+         an alias for :func:`floor`.
+
+   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 1, 8)`` is ``3.125``.
+   ``round(x, digits)`` rounds to the specified number of digits after the
+   decimal place (or before if negative). ``round(x, digits, base)`` rounds
+   using a base other than 10.
+
+      .. doctest::
+
+	 julia> round(pi, 2)
+	 3.14
+
+	 julia> round(pi, 3, 2)
+	 3.125
+
+   Note: rounding to specified digits in bases other than 2 can be inexact
+   when operating on binary floating point numbers. For example, the
+   ``Float64`` value represented by ``1.15`` is actually *less* than 1.15, yet
+   will be rounded to 1.2.
+
+      .. doctest::
+
+	 julia> x = 1.15
+	 1.15
+
+	 julia> @sprintf "%.20f" x
+	 "1.14999999999999991118"
+
+	 julia> x < 115//100
+	 true
+
+	 julia> round(x, 1)
+	 1.2
 
 .. function:: ceil([T,] x, [digits, [base]])
 
@@ -674,7 +737,7 @@ Mathematical Functions
    ``ceil(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as for ``round``.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: floor([T,] x, [digits, [base]])
 
@@ -684,7 +747,7 @@ Mathematical Functions
    ``floor(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as above.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: trunc([T,] x, [digits, [base]])
 
@@ -694,7 +757,7 @@ Mathematical Functions
    ``trunc(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as above.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: unsafe_trunc(T, x)
 
