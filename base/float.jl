@@ -1,8 +1,9 @@
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
-for t in (Bool,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
+for t in (Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
+promote_rule(::Type{Float16}, ::Type{Bool}) = Float16
 
 for t1 in (Float32,Float64)
     for st in (Int8,Int16,Int32,Int64)
