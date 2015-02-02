@@ -294,3 +294,12 @@ end # for eltya
 #6941
 #@test (ones(10^7,4)*ones(4))[3] == 4.0
 
+# test diff, throw ArgumentError for invalid dimension argument
+let X = [3  9   5;
+         7  4   2;
+         2  1  10]
+    @test diff(X,1) == [4  -5 -3; -5  -3  8]
+    @test diff(X,2) == [6 -4; -3 -2; -1 9]
+    @test_throws ArgumentError diff(X,3)
+    @test_throws ArgumentError diff(X,-1)
+end
