@@ -443,10 +443,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Construct a real symmetric tridiagonal matrix from the diagonal and upper diagonal, respectively. The result is of type ``SymTridiagonal`` and provides efficient specialized eigensolvers, but may be converted into a regular matrix with :func:`full`.
 
-.. function:: Woodbury(A, U, C, V)
-
-   Construct a matrix in a form suitable for applying the Woodbury matrix identity.
-
 .. function:: rank(M)
 
    Compute the rank of a matrix.

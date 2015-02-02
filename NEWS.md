@@ -170,6 +170,8 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * Woodbury special matrix type has been removed from LinAlg ([#10023]).
+
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
   * `inf` and `nan` are now deprecated in favor of `T(Inf)` and `NaN`, respectively ([#8776]).
