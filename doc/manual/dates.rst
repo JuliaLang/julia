@@ -60,7 +60,7 @@ Fixed-width slots are specified by repeating the period character the number of 
 
 Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
-A full suite of parsing and formatting tests and examples is available in `tests/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
+A full suite of parsing and formatting tests and examples is available in `test/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
 
 Durations/Comparisons
 ---------------------
