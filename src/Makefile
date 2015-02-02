@@ -18,7 +18,7 @@ FLAGS = \
 	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
-	-I$(BUILDDIR)
+	-I$(BUILDDIR) -I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif

@@ -5,6 +5,8 @@
 #include <string.h>
 #include <assert.h>
 
+#include "valgrind.h"
+
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
@@ -171,6 +173,10 @@ uint64_t jl_sysimage_base = 0;
 #include <dbghelp.h>
 #endif
 
+DLLEXPORT int jl_running_on_valgrind() {
+    return RUNNING_ON_VALGRIND;
+}
+
 static void jl_load_sysimg_so(char *fname)
 {
 #ifndef _OS_WINDOWS_
@@ -190,9 +196,11 @@ static void jl_load_sysimg_so(char *fname)
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target, "native") == 0) {
-            uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
-            if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
-                jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.\n");
+            if (!RUNNING_ON_VALGRIND) {
+                uint64_t saved_cpuid = *(uint64_t*)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_cpuid");
+                if (saved_cpuid != (((uint64_t)info[2])|(((uint64_t)info[3])<<32)))
+                    jl_error("Target architecture mismatch. Please delete or regenerate sys.{so,dll,dylib}.\n");
+            }
         }
         else if (strcmp(cpu_target,"core2") == 0) {
             int HasSSSE3 = (info[2] & 1<<9);
