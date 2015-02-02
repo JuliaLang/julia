@@ -204,11 +204,11 @@ immutable TParametricPrint{a}; end
 # issue #9797
 let q1 = parse(repr(:("$(a)b"))),
     q2 = parse(repr(:("$ab")))
-    @test isa(q1, QuoteNode)
-    @test q1.value.head === :string
-    @test q1.value.args == [:a, "b"]
+    @test isa(q1, Expr)
+    @test q1.args[1].head === :string
+    @test q1.args[1].args == [:a, "b"]
 
-    @test isa(q2, QuoteNode)
-    @test q2.value.head == :string
-    @test q2.value.args == [:ab,]
+    @test isa(q2, Expr)
+    @test q2.args[1].head == :string
+    @test q2.args[1].args == [:ab,]
 end
