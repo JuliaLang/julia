@@ -16,111 +16,111 @@ function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedV
     end
 end
 
-n = 12 #Size of matrix problem to test
+let n = 12 #Size of matrix problem to test
+    debug && println("SymTridiagonal (symmetric tridiagonal) matrices")
+    for relty in (Float32, Float64), elty in (relty, Complex{relty})
+        debug && println("elty is $(elty), relty is $(relty)")
+        a = convert(Vector{elty}, randn(n))
+        b = convert(Vector{elty}, randn(n-1))
+        if elty <: Complex
+            a += im*convert(Vector{elty}, randn(n))
+            b += im*convert(Vector{elty}, randn(n-1))
+        end
 
-debug && println("SymTridiagonal (symmetric tridiagonal) matrices")
-for relty in (Float32, Float64), elty in (relty, Complex{relty})
-    debug && println("elty is $(elty), relty is $(relty)")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n-1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n))
-        b += im*convert(Vector{elty}, randn(n-1))
+        A = SymTridiagonal(a, b)
+        fA = (elty <: Complex ? complex128:float64)(full(A))
+
+        debug && println("Idempotent tests")
+        for func in (conj, transpose, ctranspose)
+            @test func(func(A)) == A
+        end
+
+        debug && println("Simple unary functions")
+        for func in (det, inv)
+            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+        end
+
+        debug && println("Multiplication with strided vector")
+        @test_approx_eq A*ones(n) full(A)*ones(n)
+
+        debug && println("Multiplication with strided matrix")
+        @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
+
+        debug && println("Eigensystems")
+        if elty <: Real
+            zero, infinity = convert(elty, 0), convert(elty, Inf)
+            debug && println("This tests eigenvalue and eigenvector computations using stebz! and stein!")
+            w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
+            evecs = LAPACK.stein!(a, b, w)
+
+            (e, v) = eig(SymTridiagonal(a, b))
+            @test_approx_eq e w
+            test_approx_eq_vecs(v, evecs)
+
+            debug && println("stein! call using iblock and isplit")
+            w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
+            evecs = LAPACK.stein!(a, b, w, iblock, isplit)
+            test_approx_eq_vecs(v, evecs)
+        end
+
+        debug && println("Binary operations")
+        a = convert(Vector{elty}, randn(n))
+        b = convert(Vector{elty}, randn(n - 1))
+        if elty <: Complex
+            a += im*convert(Vector{elty}, randn(n))
+            b += im*convert(Vector{elty}, randn(n - 1))
+        end
+
+        B = SymTridiagonal(a, b)
+        fB = (elty <: Complex ? complex128 : float64)(full(B))
+
+        for op in (+, -, *)
+            @test_approx_eq full(op(A, B)) op(fA, fB)
+        end
     end
 
-    A = SymTridiagonal(a, b)
-    fA = (elty <: Complex ? complex128:float64)(full(A))
+    debug && println("Tridiagonal matrices")
+    for relty in (Float32, Float64), elty in (relty, Complex{relty})
+        debug && println("relty is $(relty), elty is $(elty)")
+        a = convert(Vector{elty}, randn(n - 1))
+        b = convert(Vector{elty}, randn(n))
+        c = convert(Vector{elty}, randn(n - 1))
+        if elty <: Complex
+            a += im*convert(Vector{elty}, randn(n - 1))
+            b += im*convert(Vector{elty}, randn(n))
+            c += im*convert(Vector{elty}, randn(n - 1))
+        end
 
-    debug && println("Idempotent tests")
-    for func in (conj, transpose, ctranspose)
-        @test func(func(A)) == A
-    end
+        A = Tridiagonal(a, b, c)
+        fA = (elty <: Complex ? complex128:float64)(full(A))
 
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
+        debug && println("Simple unary functions")
+        for func in (det, inv)
+            @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
+        end
 
-    debug && println("Multiplication with strided vector")
-    @test_approx_eq A*ones(n) full(A)*ones(n)
+        debug && println("Binary operations")
+        a = convert(Vector{elty}, randn(n - 1))
+        b = convert(Vector{elty}, randn(n))
+        c = convert(Vector{elty}, randn(n - 1))
+        if elty <: Complex
+            a += im*convert(Vector{elty}, randn(n - 1))
+            b += im*convert(Vector{elty}, randn(n))
+            c += im*convert(Vector{elty}, randn(n - 1))
+        end
 
-    debug && println("Multiplication with strided matrix")
-    @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
+        debug && println("Multiplication with strided vector")
+        @test_approx_eq A*ones(n) full(A)*ones(n)
 
-    debug && println("Eigensystems")
-    if elty <: Real
-        zero, infinity = convert(elty, 0), convert(elty, Inf)
-        debug && println("This tests eigenvalue and eigenvector computations using stebz! and stein!")
-        w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
-        evecs = LAPACK.stein!(a, b, w)
-
-        (e, v) = eig(SymTridiagonal(a, b))
-        @test_approx_eq e w
-        test_approx_eq_vecs(v, evecs)
-
-        debug && println("stein! call using iblock and isplit")
-        w, iblock, isplit = LAPACK.stebz!('V', 'B', -infinity, infinity, 0, 0, zero, a, b)
-        evecs = LAPACK.stein!(a, b, w, iblock, isplit)
-        test_approx_eq_vecs(v, evecs)
-    end
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n))
-    b = convert(Vector{elty}, randn(n - 1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n))
-        b += im*convert(Vector{elty}, randn(n - 1))
-    end
-
-    B = SymTridiagonal(a, b)
-    fB = (elty <: Complex ? complex128 : float64)(full(B))
-
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
-    end
-end
-
-debug && println("Tridiagonal matrices")
-for relty in (Float32, Float64), elty in (relty, Complex{relty})
-    debug && println("relty is $(relty), elty is $(elty)")
-    a = convert(Vector{elty}, randn(n - 1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n - 1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n - 1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n - 1))
-    end
-
-    A = Tridiagonal(a, b, c)
-    fA = (elty <: Complex ? complex128:float64)(full(A))
-
-    debug && println("Simple unary functions")
-    for func in (det, inv)
-        @test_approx_eq_eps func(A) func(fA) n^2*sqrt(eps(relty))
-    end
-
-    debug && println("Binary operations")
-    a = convert(Vector{elty}, randn(n - 1))
-    b = convert(Vector{elty}, randn(n))
-    c = convert(Vector{elty}, randn(n - 1))
-    if elty <: Complex
-        a += im*convert(Vector{elty}, randn(n - 1))
-        b += im*convert(Vector{elty}, randn(n))
-        c += im*convert(Vector{elty}, randn(n - 1))
-    end
-
-    debug && println("Multiplication with strided vector")
-    @test_approx_eq A*ones(n) full(A)*ones(n)
-
-    debug && println("Multiplication with strided matrix")
-    @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
+        debug && println("Multiplication with strided matrix")
+        @test_approx_eq A*ones(n, 2) full(A)*ones(n, 2)
 
 
-    B = Tridiagonal(a, b, c)
-    fB = (elty <: Complex ? complex128:float64)(full(B))
+        B = Tridiagonal(a, b, c)
+        fB = (elty <: Complex ? complex128:float64)(full(B))
 
-    for op in (+, -, *)
-        @test_approx_eq full(op(A, B)) op(fA, fB)
+        for op in (+, -, *)
+            @test_approx_eq full(op(A, B)) op(fA, fB)
+        end
     end
 end
