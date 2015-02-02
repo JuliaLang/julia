@@ -83,6 +83,8 @@ range{T}(a::T, len::Integer) =
 colon{A<:Real,C<:Real}(a::A, b, c::C) = colon(convert(promote_type(A,C),a), b, convert(promote_type(A,C),c))
 
 colon{T<:Real}(start::T, step, stop::T) = StepRange(start, step, stop)
+colon{T<:Real}(start::T, step::T, stop::T) = StepRange(start, step, stop)
+colon{T<:Real}(start::T, step::Real, stop::T) = StepRange(promote(start, step, stop)...)
 
 colon{T}(start::T, step, stop::T) = StepRange(start, step, stop)
 

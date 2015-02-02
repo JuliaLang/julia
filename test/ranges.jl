@@ -389,3 +389,8 @@ for (thisx, thisy) in zip(x, y)
     @test thisy == xy[i+=1]
 end
 end
+
+# issue #9962
+@test eltype(0:1//3:10) <: Rational
+@test (0:1//3:10)[1] == 0
+@test (0:1//3:10)[2] == 1//3
