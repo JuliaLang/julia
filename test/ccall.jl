@@ -113,6 +113,7 @@ b = ccall((:test_big, "./libccalltest"), Struct_Big, (Struct_Big,), a)
 @test b.y == sbig.y - 2
 @test b.z == sbig.z - int('A')
 
+verbose && flush_cstdio()
 verbose && println("Testing cfunction roundtrip: ")
 # cfunction roundtrip
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),

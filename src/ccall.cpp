@@ -230,7 +230,11 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #    include "abi_x86_64.cpp"
 #  endif
 #else
-#  include "abi_x86.cpp"
+#  if defined _OS_WINDOWS_
+#    include "abi_win32.cpp"
+#  else
+#    include "abi_x86.cpp"
+#  endif
 #endif
 
 Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)
@@ -1107,7 +1111,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // some special functions
     if (fptr == (void *) &jl_array_ptr ||
-        (f_lib==NULL && f_name && !strcmp(f_name,"jl_array_ptr"))) {
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name,"jl_array_ptr"))) {
         assert(lrt->isPointerTy());
         assert(!isVa);
         assert(nargt==1);
@@ -1119,7 +1124,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_value_ptr ||
-        (f_lib==NULL && f_name && !strcmp(f_name,"jl_value_ptr"))) {
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name,"jl_value_ptr"))) {
         assert(lrt->isPointerTy());
         assert(!isVa);
         assert(nargt==1);
@@ -1149,7 +1155,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_is_leaf_type ||
-        (f_lib==NULL && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
+        ((f_lib==NULL || (intptr_t)f_lib==2)
+         && f_name && !strcmp(f_name, "jl_is_leaf_type"))) {
         jl_value_t *arg = args[4];
         jl_value_t *ty = expr_type(arg, ctx);
         if (jl_is_type_type(ty) && !jl_is_typevar(jl_tparam0(ty))) {
