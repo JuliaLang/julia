@@ -211,7 +211,6 @@ include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
 include("linalg/symmetric.jl")
-include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/uniformscaling.jl")
