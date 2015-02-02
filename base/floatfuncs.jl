@@ -121,7 +121,7 @@ function signif(x::Real, digits::Integer, base::Integer=10)
     digits < 1 && throw(DomainError())
 
     x = float(x)
-    x == 0 && return x
+    (x == 0 || !isfinite(x)) && return x
     og, e = _signif_og(x, digits, base)
     if e >= 0 # for numeric stability
         r = round(x/og)*og
