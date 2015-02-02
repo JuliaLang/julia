@@ -1,4 +1,6 @@
 language: cpp
+notifications:
+    email: false
 script:
     - set
     - echo $ENV
