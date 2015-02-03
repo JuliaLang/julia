@@ -454,9 +454,10 @@ end
 
 ### from abstractarray.jl
 
-function fill!(A::AbstractArray, x)
+function fill!{T}(A::AbstractArray{T}, x)
+    xT = convert(T, x)
     for I in eachindex(A)
-        @inbounds A[I] = x
+        @inbounds A[I] = xT
     end
     A
 end
@@ -474,8 +475,11 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
             @inbounds dest[I] = src[I]
         end
     else
-        length(dest) == length(src) || throw(DimensionMismatch("Inconsistent lengths"))
-        for (Idest, Isrc) in zip(eachindex(dest),eachindex(src))
+        length(dest) >= length(src) || throw(BoundsError())
+        iterdest = eachindex(dest)
+        sdest = start(iterdest)
+        for Isrc in eachindex(src)
+            Idest, sdest = next(iterdest, sdest)
             @inbounds dest[Idest] = src[Isrc]
         end
     end
