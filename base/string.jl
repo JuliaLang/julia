@@ -586,7 +586,6 @@ SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
     s.endof==0 ? 0 : write_sub(to, s.string.data, s.offset+1, next(s,s.endof)[2]-1)
-print(io::IOBuffer, s::SubString) = write(io, s)
 
 sizeof(s::SubString{ASCIIString}) = s.endof
 sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : next(s,s.endof)[2]-1
@@ -799,7 +798,6 @@ end
 
 endof(s::RopeString) = s.endof
 length(s::RopeString) = length(s.head) + length(s.tail)
-print(io::IO, s::RopeString) = print(io, s.head, s.tail)
 write(io::IO, s::RopeString) = (write(io, s.head); write(io, s.tail))
 sizeof(s::RopeString) = sizeof(s.head) + sizeof(s.tail)
 
