@@ -655,3 +655,15 @@ let S = sprand(10, 10, 0.1)
     @test_throws BoundsError S[[0,2,1], [1,2]]
     @test_throws BoundsError S[[2,1], [0,1,2]]
 end
+
+# Test that sparse / sparsevec constructors work for AbstractMatrix subtypes
+let D = Diagonal(ones(10,10)),
+    sm = sparse(D),
+    sv = sparsevec(D)
+
+    @test countnz(sm) == 10
+    @test countnz(sv) == 10
+
+    @test countnz(sparse(Diagonal(Int[]))) == 0
+    @test countnz(sparsevec(Diagonal(Int[]))) == 0
+end

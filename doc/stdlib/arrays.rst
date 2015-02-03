@@ -670,7 +670,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sparse(A)
 
-   Convert a dense matrix ``A`` into a sparse matrix.
+   Convert an AbstractMatrix ``A`` into a sparse matrix.
 
 .. function:: sparsevec(A)
 
