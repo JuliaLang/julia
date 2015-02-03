@@ -5006,7 +5006,7 @@ static void init_julia_llvm_env(Module *m)
     FPM->add(createAddressSanitizerFunctionPass());
 #   endif
 #endif
-#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3 && LLVM_VERSION_MINOR <= 6
     jl_TargetMachine->addAnalysisPasses(*FPM);
 #endif
     FPM->add(createTypeBasedAliasAnalysisPass());
