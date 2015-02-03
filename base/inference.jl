@@ -2626,6 +2626,8 @@ function inlining_pass(e::Expr, sv, ast)
             ET = exprtype(arg1)
             if isType(ET)
                 f = ET.parameters[1]
+            elseif isconstantfunc(arg1,sv) === false
+                f = abstract_eval(arg1, emptydict, sv)
             else
                 f = _ieval(arg1)
             end
