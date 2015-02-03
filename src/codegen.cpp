@@ -1381,6 +1381,7 @@ static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
     Value *froot = builder.CreateGEP(ctx->argTemp,
                                      ConstantInt::get(T_size,slot));
     builder.CreateStore(v, froot);
+#ifdef LLVM36
     if (var != NULL)
     {
         std::map<jl_sym_t *, jl_varinfo_t>::iterator it = ctx->vars.find(var);
@@ -1396,6 +1397,7 @@ static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
             }
         }
     }
+#endif
     ctx->argDepth++;
     if (ctx->argDepth > ctx->maxDepth)
         ctx->maxDepth = ctx->argDepth;
@@ -3464,8 +3466,10 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
         vi.isGhost = true;
     }
     vi.memvalue = lv;
+#ifdef LLVM36
     if (!vi.isGhost && ctx->debug_enabled)
         ctx->dbuilder->insertDeclare(lv,vi.dinfo,ctx->dbuilder->createExpression(),builder.GetInsertBlock());
+#endif
     return lv;
 }
 
@@ -4268,6 +4272,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
             }
         }
         else {
+#ifdef LLVM36
             if (ctx.vars[s].dinfo != NULL) {
                 SmallVector<int64_t, 9> addr;
                 addr.push_back(llvm::dwarf::DW_OP_plus);
@@ -4276,6 +4281,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
                 ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
             }
+#endif
             argPtr = builder.CreateGEP(argArray, ConstantInt::get(T_size, argIdx));
             argIdx++;
         }
