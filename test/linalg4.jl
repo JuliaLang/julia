@@ -175,11 +175,13 @@ for isupper in (true, false)
     for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
     A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
 end
 
