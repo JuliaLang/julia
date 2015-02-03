@@ -26,7 +26,6 @@ eltype{T}(x::(T...)) = T
 
 ## mapping ##
 
-ntuple(n::Integer, f::Function) = ntuple(f, n) # TODO: deprecate this?
 ntuple(f::Function, n::Integer) =
     n<=0 ? () :
     n==1 ? (f(1),) :

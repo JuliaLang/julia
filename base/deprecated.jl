@@ -279,3 +279,5 @@ const base64 = base64encode
 
 #9295
 @deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
+
+@deprecate ntuple(n::Integer, f::Function) ntuple(f,n)
