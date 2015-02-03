@@ -718,6 +718,7 @@ jl_datatype_t *jl_new_datatype(jl_sym_t *name, jl_datatype_t *super,
     t->ninitialized = ninitialized;
     t->instance = NULL;
     t->struct_decl = NULL;
+    t->ditype = NULL;
     t->size = 0;
     t->alignment = 1;
 

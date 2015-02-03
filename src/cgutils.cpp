@@ -246,6 +246,23 @@ public:
 };
 #endif
 
+static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed = false)
+{
+    if (jl_is_abstracttype(jt) || !jl_is_datatype(jt) || !jl_isbits(jt) || isboxed)
+        return jl_pvalue_dillvmt;
+    jl_datatype_t *jdt = (jl_datatype_t*)jt;
+    if (jdt->ditype != NULL)
+        return DIType((llvm::MDNode*)jdt->ditype);
+    if (jl_is_bitstype(jt)) {
+        DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
+        MDNode *M = t;
+        jdt->ditype = M;
+        return t;
+    }
+    // TODO: Fixme
+    return jl_pvalue_dillvmt;
+}
+
 // --- emitting pointers directly into code ---
 
 static Value *literal_static_pointer_val(void *p, Type *t)
