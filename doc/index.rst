@@ -74,7 +74,6 @@
    stdlib/punctuation
    stdlib/sort
    stdlib/pkg
-   stdlib/collections
    stdlib/graphics
    stdlib/dates
    stdlib/test
