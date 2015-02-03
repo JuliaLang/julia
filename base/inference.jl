@@ -653,11 +653,19 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
     return t
 end
 
-function func_for_method(m::Method, tt, env)
-    if !m.isstaged
-        return m.func.code
+let stagedcache=Dict{Any,Any}()
+    global func_for_method
+    function func_for_method(m::Method, tt, env)
+        if !m.isstaged
+            return m.func.code
+        elseif haskey(stagedcache,(m,tt,env))
+            return stagedcache[(m,tt,env)].code
+        else
+            f=ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
+            stagedcache[(m,tt,env)]=f
+            return f.code
+        end
     end
-    (ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)).code
 end
 
 function abstract_call_gf(f, fargs, argtypes, e)
