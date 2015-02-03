@@ -729,20 +729,28 @@ end
 
 # general multidimensional non-scalar indexing
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
-    refind = 1
-    @nloops N i d->I_d @inbounds begin
-        @ncall N unsafe_setindex! B convert(Bool,X[refind]) i
-        refind += 1
+stagedfunction unsafe_setindex!(B::BitArray, X::AbstractArray, I::Union(Int,AbstractArray{Int})...)
+    N = length(I)
+    quote
+        refind = 1
+        @nexprs $N d->(I_d = I[d])
+        @nloops $N i d->I_d @inbounds begin
+            @ncall $N unsafe_setindex! B convert(Bool,X[refind]) i
+            refind += 1
+        end
+        return B
     end
-    return B
 end
 
-@ngenerate N typeof(B) function unsafe_setindex!(B::BitArray, x::Bool, I::NTuple{N,Union(Int,AbstractArray{Int})}...)
-    @nloops N i d->I_d begin
-        @ncall N unsafe_setindex! B x i
+stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I::Union(Int,AbstractArray{Int})...)
+    N = length(I)
+    quote
+        @nexprs $N d->(I_d = I[d])
+        @nloops $N i d->I_d begin
+            @ncall $N unsafe_setindex! B x i
+        end
+        return B
     end
-    return B
 end
 
 # general versions with Real (or logical) indexing which dispatch on the appropriate method
@@ -753,11 +761,14 @@ function setindex!(B::BitArray, x, i::Real)
     return unsafe_setindex!(B, convert(Bool,x), to_index(i))
 end
 
-@ngenerate N typeof(B) function setindex!(B::BitArray, x, I::NTuple{N,Union(Real,AbstractArray)}...)
-    checkbounds(B, I...)
-    #return unsafe_setindex!(B, convert(Bool,x), to_index(I...)...) # segfaults! (???)
-    @nexprs N d->(J_d = to_index(I_d))
-    return @ncall N unsafe_setindex! B convert(Bool,x) J
+stagedfunction setindex!(B::BitArray, x, I::Union(Real,AbstractArray)...)
+    N = length(I)
+    quote
+        checkbounds(B, I...)
+        #return unsafe_setindex!(B, convert(Bool,x), to_index(I...)...) # segfaults! (???)
+        @nexprs $N d->(J_d = to_index(I[d]))
+        return @ncall $N unsafe_setindex! B convert(Bool,x) J
+    end
 end
 
 
@@ -769,11 +780,14 @@ function setindex!(B::BitArray, X::AbstractArray, i::Real)
     return unsafe_setindex!(B, X, j)
 end
 
-@ngenerate N typeof(B) function setindex!(B::BitArray, X::AbstractArray, I::NTuple{N,Union(Real,AbstractArray)}...)
-    checkbounds(B, I...)
-    @nexprs N d->(J_d = to_index(I_d))
-    @ncall N setindex_shape_check X J
-    return @ncall N unsafe_setindex! B X J
+stagedfunction setindex!(B::BitArray, X::AbstractArray, I::Union(Real,AbstractArray)...)
+    N = length(I)
+    quote
+        checkbounds(B, I...)
+        @nexprs $N d->(J_d = to_index(I[d]))
+        @ncall $N setindex_shape_check X J
+        return @ncall $N unsafe_setindex! B X J
+    end
 end
 
 
@@ -799,54 +813,60 @@ end
 
 ## isassigned
 
-@ngenerate N Bool function isassigned(B::BitArray, I_0::Int, I::NTuple{N,Int}...)
-    stride = 1
-    index = I_0
-    @nexprs N d->begin
-        l = size(B,d)
-        stride *= l
-        1 <= I_{d-1} <= l || return false
-        index += (I_d - 1) * stride
+stagedfunction isassigned(B::BitArray, I_0::Int, I::Int...)
+    N = length(I)
+    quote
+        @nexprs $N d->(I_d = I[d])
+        stride = 1
+        index = I_0
+        @nexprs N d->begin
+            l = size(B,d)
+            stride *= l
+            1 <= I_{d-1} <= l || return false
+            index += (I_d - 1) * stride
+        end
+        return isassigned(B, index)
     end
-    return isassigned(B, index)
 end
 
 ## permutedims
 
 for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
-    @eval @ngenerate N typeof(P) function permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
-        dimsB = size(B)
-        length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
-        isperm(perm) || throw(ArgumentError("input is not a permutation"))
-        dimsP = size(P)
-        for i = 1:length(perm)
-            dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+    @eval stagedfunction permutedims!{$(V...)}(P::$PT{$(V...)}, B::$BT{$(V...)}, perm)
+        quote
+            dimsB = size(B)
+            length(perm) == N || throw(ArgumentError("expected permutation of size $N, but length(perm)=$(length(perm))"))
+            isperm(perm) || throw(ArgumentError("input is not a permutation"))
+            dimsP = size(P)
+            for i = 1:length(perm)
+                dimsP[i] == dimsB[perm[i]] || throw(DimensionMismatch("destination tensor of incorrect size"))
+            end
+
+            #calculates all the strides
+            strides_1 = 0
+            @nexprs $N d->(strides_{d+1} = stride(B, perm[d]))
+
+            #Creates offset, because indexing starts at 1
+            offset = 1 - sum(@ntuple $N d->strides_{d+1})
+
+            if isa(B, SubArray)
+                offset += first_index(B::SubArray) - 1
+                B = B.parent
+            end
+
+            ind = 1
+            @nexprs 1 d->(counts_{$N+1} = strides_{$N+1}) # a trick to set counts_($N+1)
+            @nloops($N, i, P,
+                    d->(counts_d = strides_d), # PRE
+                    d->(counts_{d+1} += strides_{d+1}), # POST
+                    begin # BODY
+                    sumc = sum(@ntuple $N d->counts_{d+1})
+                    @inbounds P[ind] = B[sumc+offset]
+                    ind += 1
+                    end)
+
+            return P
         end
-
-        #calculates all the strides
-        strides_1 = 0
-        @nexprs N d->(strides_{d+1} = stride(B, perm[d]))
-
-        #Creates offset, because indexing starts at 1
-        offset = 1 - sum(@ntuple N d->strides_{d+1})
-
-        if isa(B, SubArray)
-            offset += first_index(B::SubArray) - 1
-            B = B.parent
-        end
-
-        ind = 1
-        @nexprs 1 d->(counts_{N+1} = strides_{N+1}) # a trick to set counts_($N+1)
-        @nloops(N, i, P,
-            d->(counts_d = strides_d), # PRE
-            d->(counts_{d+1} += strides_{d+1}), # POST
-            begin # BODY
-                sumc = sum(@ntuple N d->counts_{d+1})
-                @inbounds P[ind] = B[sumc+offset]
-                ind += 1
-            end)
-
-        return P
     end
 end
 
