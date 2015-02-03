@@ -210,6 +210,22 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     end
 end
 
+function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+    if step(a) == 0
+        lt(o, first(a), x) ? length(a)+1 : 1
+    else
+        max(min(-fld(first(a)-signed(x),step(a))+1,length(a)+1),1)
+    end
+end
+
+function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+    if step(a) == 0
+        lt(o, x, first(a)) ? 0 : length(a)
+    else
+        max(min(fld(signed(x)-first(a),step(a))+1,length(a)),0)
+    end
+end
+
 searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a,x,o):searchsortedlast(a,x,o)
 
