@@ -33,7 +33,8 @@ function getindex(D::Diagonal, i::Integer)
     zero(eltype(D.diag))
 end
 
-ishermitian(D::Diagonal) = true
+ishermitian{T<:Real}(D::Diagonal{T}) = true
+ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
 
