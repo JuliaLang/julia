@@ -12,7 +12,6 @@ export
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
-    Woodbury,
     Factorization,
     BunchKaufman,
     Cholesky,

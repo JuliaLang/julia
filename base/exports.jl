@@ -121,7 +121,6 @@ export
     VersionNumber,
     WeakKeyDict,
     WeakRef,
-    Woodbury,
     WorkerConfig,
     WString,
     Zip,
