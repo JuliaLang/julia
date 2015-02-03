@@ -664,8 +664,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     JL_GC_PUSH3(&gf, &argtypes, &t);
 
     if (bnd && bnd->value != NULL && !bnd->constp) {
-        jl_errorf("cannot define function %s; it already has a value",
-                  bnd->name->name);
+        jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
     }
 
     if (*bp != NULL) {
@@ -716,7 +715,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                 }
             }
             if (!jl_is_gf(gf)) {
-                jl_error("invalid method definition: not a generic function");
+                jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
             }
         }
         if (iskw) {
