@@ -163,7 +163,6 @@ end
 
 ## outputing UTF-8 strings ##
 
-print(io::IO, s::UTF8String) = (write(io, s.data); nothing)
 write(io::IO, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
