@@ -197,6 +197,7 @@ include("nullable.jl")
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
+include("managers.jl")
 
 # code loading
 include("loading.jl")
