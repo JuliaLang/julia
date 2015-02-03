@@ -1206,7 +1206,7 @@
            (error "expected assignment after \"const\"")
            `(const ,assgn))))
     ((module baremodule)
-     (let* ((name (parse-atom s))
+     (let* ((name (parse-unary-prefix s))
             (body (parse-block s)))
        (expect-end s)
        (list 'module (eq? word 'module) name
