@@ -907,7 +907,7 @@ Mathematical Functions
 
 .. function:: angle(z)
 
-   Compute the phase angle of a complex number ``z``
+   Compute the phase angle in radians of a complex number ``z``
 
 .. function:: cis(z)
 
