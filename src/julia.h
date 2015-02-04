@@ -164,7 +164,7 @@ typedef struct _jl_lambda_info_t {
     int8_t inCompile : 1;
     jl_fptr_t fptr;             // jlcall entry point
     void *functionObject;       // jlcall llvm Function
-    void *cFunctionObject;      // c callable llvm Function
+    void *cFunctionList;        // c callable llvm Functions
 
     // specialized llvm Function (common core for the other two)
     void *specFunctionObject;
