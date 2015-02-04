@@ -148,6 +148,16 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     for op in (+, -, *)
         @test_approx_eq full(op(D, D2)) op(DM, DM2)
     end
+
+    #10036
+    @test issym(D2)
+    @test ishermitian(D2)
+    if elty <: Complex
+        dc = d + im*convert(Vector{elty}, ones(n))
+        D3 = Diagonal(dc)
+        @test issym(D3)
+        @test !ishermitian(D3)
+    end
 end
 
 
@@ -165,11 +175,13 @@ for isupper in (true, false)
     for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
     A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
     for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
 end
 
