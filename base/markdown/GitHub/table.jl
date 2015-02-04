@@ -48,10 +48,14 @@ function github_table(stream::IO, md::MD, config::Config)
             end
             if align == nothing && length(rows) == 1 # Must have a --- row
                 align = parsealign(row)
-                (align == nothing || length(align) != cols) && return false
-            else
-                push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
+                if align != nothing
+                    length(align) != cols && return false
+                    continue
+                else
+                    align = [default_align for i in 1:cols]
+                end
             end
+            push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
         end
         length(rows) == 0 && return false
         push!(md, Table(rows, align))

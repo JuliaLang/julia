@@ -63,6 +63,11 @@ writemime(io::IO, m::MIME"text/plain", r::Reference) =
                               ["1","2"]], [:r, :r]))
 
 @test md"""
+    a|b
+    1|2""" == MD(Table(Any[["a", "b"],
+                           ["1", "2"]], [:r, :r]))
+
+@test md"""
     | a  |  b | c |
     | :-- | --: | --- |
     | d`gh`hg | hgh**jhj**ge | f |""" == MD(Table(Any[["a","b","c"],
