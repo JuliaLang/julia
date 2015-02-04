@@ -224,17 +224,20 @@ println_with_color(color::Symbol, msg::AbstractString...) =
 
 ## warnings and messages ##
 
-function info(msg::AbstractString...; prefix="INFO: ")
-    println_with_color(:blue, STDERR, prefix, chomp(string(msg...)))
+function info(io::IO, msg...; prefix="INFO: ")
+    println_with_color(:blue, io, prefix, chomp(string(msg...)))
 end
+info(msg...; prefix="INFO: ") = info(STDERR, msg..., prefix=prefix)
 
 # print a warning only once
 
 const have_warned = Set()
-warn_once(msg::AbstractString...) = warn(msg..., once=true)
 
-function warn(msg::AbstractString...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
-    str = chomp(bytestring(msg...))
+warn_once(io::IO, msg...) = warn(io, msg..., once=true)
+warn_once(msg...) = warn(STDERR, msg..., once=true)
+
+function warn(io::IO, msg...; prefix="WARNING: ", once=false, key=nothing, bt=nothing)
+    str = chomp(string(msg...))
     if once
         if key === nothing
             key = str
@@ -242,17 +245,20 @@ function warn(msg::AbstractString...; prefix="WARNING: ", once=false, key=nothin
         (key in have_warned) && return
         push!(have_warned, key)
     end
-    with_output_color(:red, STDERR) do io
-        print(io, prefix, str)
-        if bt !== nothing
-            show_backtrace(io, bt)
-        end
-        println(io)
+    print_with_color(:red, io, prefix, str)
+    if bt !== nothing
+        show_backtrace(io, bt)
     end
+    println(io)
+    return
 end
+warn(msg...; kw...) = warn(STDERR, msg...; kw...)
+
+warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
+    warn(io, sprint(buf->showerror(buf, err)), prefix=prefix; kw...)
 
 warn(err::Exception; prefix="ERROR: ", kw...) =
-    warn(sprint(io->showerror(io,err)), prefix=prefix; kw...)
+    warn(STDERR, err, prefix=prefix; kw...)
 
 function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
     opts = compileropts()
