@@ -230,6 +230,16 @@ namespace llvm {
     extern bool annotateSimdLoop( BasicBlock* latch );
 }
 
+// Basic DITypes
+static DICompositeType jl_value_dillvmt;
+static DIDerivedType jl_pvalue_dillvmt;
+static DIDerivedType jl_ppvalue_dillvmt;
+#ifdef LLVM36
+DISubroutineType jl_di_func_sig;
+#else
+DICompositeType jl_di_func_sig;
+#endif
+
 // constants
 static Value *V_null;
 
@@ -340,6 +350,7 @@ struct jl_varinfo_t {
     Value *memvalue;  // an address, if the var is alloca'd
     Value *SAvalue;   // register, if the var is SSA
     Value *passedAs;  // if an argument, the original passed value
+    DIVariable dinfo;
     int closureidx;   // index in closure env, or -1
     bool isAssigned;
     bool isCaptured;
@@ -354,10 +365,10 @@ struct jl_varinfo_t {
     jl_value_t *declType;
     jl_value_t *initExpr;  // initializing expression for SSA variables
 
-    jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL), closureidx(-1),
-                     isAssigned(true), isCaptured(false), isSA(false), isVolatile(false),
-                     isArgument(false), isGhost(false), hasGCRoot(false), escapes(true),
-                     usedUndef(false), used(false),
+    jl_varinfo_t() : memvalue(NULL), SAvalue(NULL), passedAs(NULL), dinfo(DIVariable()),
+                     closureidx(-1), isAssigned(true), isCaptured(false), isSA(false),
+                     isVolatile(false), isArgument(false), isGhost(false), hasGCRoot(false),
+                     escapes(true), usedUndef(false), used(false),
                      declType((jl_value_t*)jl_any_type), initExpr(NULL)
     {
     }
@@ -511,15 +522,17 @@ typedef struct {
     BasicBlock::iterator first_gcframe_inst;
     BasicBlock::iterator last_gcframe_inst;
     llvm::DIBuilder *dbuilder;
+    bool debug_enabled;
     std::vector<Instruction*> gc_frame_pops;
     std::vector<CallInst*> to_inline;
 } jl_codectx_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
-                        bool valuepos=true);
+                        bool valuepos=true, jl_sym_t **valuevar=NULL);
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
 static int is_global(jl_sym_t *s, jl_codectx_t *ctx);
-static Value *make_gcroot(Value *v, jl_codectx_t *ctx);
+
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var = NULL);
 static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx);
 static Value *global_binding_pointer(jl_module_t *m, jl_sym_t *s,
                                      jl_binding_t **pbnd, bool assign);
@@ -629,7 +642,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
 
 static void jl_setup_module(Module *m, bool add)
 {
-    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",3);
+    m->addModuleFlag(llvm::Module::Warning, "Dwarf Version",2);
 #ifdef LLVM34
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
@@ -1362,13 +1375,29 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
 
 // --- gc root utils ---
 
-static Value *make_gcroot(Value *v, jl_codectx_t *ctx)
+static Value *make_gcroot(Value *v, jl_codectx_t *ctx, jl_sym_t *var)
 {
+    uint64_t slot = ctx->argSpaceOffs + ctx->argDepth;
     Value *froot = builder.CreateGEP(ctx->argTemp,
-                                     ConstantInt::get(T_size,
-                                                      ctx->argSpaceOffs +
-                                                      ctx->argDepth));
+                                     ConstantInt::get(T_size,slot));
     builder.CreateStore(v, froot);
+#ifdef LLVM36
+    if (var != NULL)
+    {
+        std::map<jl_sym_t *, jl_varinfo_t>::iterator it = ctx->vars.find(var);
+        if (it != ctx->vars.end() && ((llvm::MDNode*)it->second.dinfo) != NULL)
+        {
+            if (ctx->debug_enabled) {
+                SmallVector<int64_t, 9> addr;
+                addr.push_back(llvm::dwarf::DW_OP_plus);
+                addr.push_back(slot * sizeof(void*));
+                addr.push_back(llvm::dwarf::DW_OP_deref);
+                ctx->dbuilder->insertDeclare(ctx->argTemp, it->second.dinfo,
+                    ctx->dbuilder->createExpression(addr), builder.GetInsertBlock());
+            }
+        }
+    }
+#endif
     ctx->argDepth++;
     if (ctx->argDepth > ctx->maxDepth)
         ctx->maxDepth = ctx->argDepth;
@@ -2473,9 +2502,10 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
     // emit arguments
     int argStart = ctx->argDepth;
     for(size_t i=0; i < nargs; i++) {
-        Value *anArg = emit_expr(args[i], ctx);
+        jl_sym_t *sym = NULL;
+        Value *anArg = emit_expr(args[i], ctx, true, true, &sym);
         // put into argument space
-        make_gcroot(boxed(anArg, ctx, expr_type(args[i],ctx)), ctx);
+        make_gcroot(boxed(anArg, ctx, expr_type(args[i],ctx)), ctx, sym);
     }
 
     // call
@@ -2916,6 +2946,8 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
         builder.CreateCall2(prepare_call(jlcheckassign_func),
                             literal_pointer_val(bnd),
                             rval);
+        // Global variable. Does not need debug info because the debugger knows about
+        // it's memory location.
     }
     else {
         jl_varinfo_t &vi = ctx->vars[s];
@@ -2958,15 +2990,21 @@ static Value *emit_condition(jl_value_t *cond, const std::string &msg, jl_codect
 }
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
-                        bool valuepos)
+                        bool valuepos, jl_sym_t **valuevar)
 {
     if (jl_is_symbol(expr)) {
         if (!valuepos) return NULL;
-        return emit_var((jl_sym_t*)expr, (jl_value_t*)jl_undef_type, ctx, isboxed);
+        jl_sym_t *sym = (jl_sym_t*)expr;
+        if (valuevar != NULL)
+            *valuevar = sym;
+        return emit_var(sym, (jl_value_t*)jl_undef_type, ctx, isboxed);
     }
     if (jl_is_symbolnode(expr)) {
         if (!valuepos) return NULL;
-        return emit_var(jl_symbolnode_sym(expr), jl_symbolnode_type(expr), ctx, isboxed);
+        jl_sym_t *sym = jl_symbolnode_sym(expr);
+        if (valuevar != NULL)
+            *valuevar = sym;
+        return emit_var(sym, jl_symbolnode_type(expr), ctx, isboxed);
     }
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
@@ -3428,6 +3466,10 @@ static Value *alloc_local(jl_sym_t *s, jl_codectx_t *ctx)
         vi.isGhost = true;
     }
     vi.memvalue = lv;
+#ifdef LLVM36
+    if (!vi.isGhost && ctx->debug_enabled)
+        ctx->dbuilder->insertDeclare(lv,vi.dinfo,ctx->dbuilder->createExpression(),builder.GetInsertBlock());
+#endif
     return lv;
 }
 
@@ -3904,20 +3946,15 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
-#ifdef LLVM36
-    llvm::DITypeArray EltTypeArray = dbuilder.getOrCreateTypeArray(None);
-#else
-    llvm::DIArray EltTypeArray = dbuilder.getOrCreateArray(ArrayRef<Value*>());
-#endif
     //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
     //           lam->name->name, filename.c_str(), lno);
 
     DebugLoc noDbg;
-    bool debug_enabled = true;
+    ctx.debug_enabled = true;
     if (dbgFuncName[0] == 0) {
         // special value: if function name is empty, disable debug info
         builder.SetCurrentDebugLocation(noDbg);
-        debug_enabled = false;
+        ctx.debug_enabled = false;
         do_coverage = false;
         do_malloc_log = false;
     }
@@ -3930,11 +3967,33 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(CU.Verify());
         #endif
 
+
 #ifdef LLVM36
-        DISubroutineType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
+        DISubroutineType subrty;
 #else
-        DICompositeType subrty = dbuilder.createSubroutineType(fil,EltTypeArray);
+        DICompositeType subrty;
 #endif
+
+        if (!specsig) {
+            subrty = jl_di_func_sig;
+        } else {
+            llvm::DIArray EltTypeArray;
+#ifdef LLVM36
+            std::vector<Metadata*> ditypes(0);
+#else
+            std::vector<Value*> ditypes(0);
+#endif
+            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+                if(ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost)
+                    continue;
+               ditypes.push_back(julia_type_to_di(jl_tupleref(lam->specTypes,i),ctx.dbuilder,false));
+            }
+#ifdef LLVM36
+            subrty = ctx.dbuilder->createSubroutineType(fil,ctx.dbuilder->getOrCreateTypeArray(ditypes));
+#else
+            subrty = ctx.dbuilder->createSubroutineType(fil,ctx.dbuilder->getOrCreateArray(ditypes));
+#endif
+        }
 
         fil = dbuilder.createFile(filename, ".");
         #ifndef LLVM34
@@ -3958,9 +4017,74 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
     }
 
+    if (ctx.debug_enabled) {
+        // Go over all arguments and local variables and initialize their debug information
+        for(i=0; i < nreq; i++) {
+            jl_sym_t *argname = jl_decl_var(jl_cellref(largs,i));
+            jl_varinfo_t &varinfo = ctx.vars[argname];
+            varinfo.dinfo = ctx.dbuilder->createLocalVariable(
+                llvm::dwarf::DW_TAG_arg_variable,    // Tag
+                SP,         // Scope (current function will be fill in later)
+                argname->name,    // Variable name
+                fil,                    // File
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
+                julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
+                false,                  // May be optimized out
+                0,                      // Flags (TODO: Do we need any)
+                i+1);                   // Argument number (1-based)
+
+        }
+        if (va) {
+            ctx.vars[ctx.vaName].dinfo = ctx.dbuilder->createLocalVariable(
+                llvm::dwarf::DW_TAG_arg_variable,    // Tag
+                SP,         // Scope (current function will be fill in later)
+                ctx.vaName->name, // Variable name
+                fil,                    // File
+                ctx.lineno == -1 ? 0 : ctx.lineno,             // Line (for now, use lineno of the function)
+                julia_type_to_di(ctx.vars[ctx.vaName].declType,ctx.dbuilder,false),      // Variable type
+                false,                  // May be optimized out
+                0,                      // Flags (TODO: Do we need any)
+                nreq + 1);              // Argument number (1-based)
+        }
+        for(i=0; i < lvarslen; i++) {
+            jl_sym_t *s = (jl_sym_t*)jl_cellref(lvars,i);
+            jl_varinfo_t &varinfo = ctx.vars[s];
+            varinfo.dinfo = ctx.dbuilder->createLocalVariable(
+                llvm::dwarf::DW_TAG_auto_variable,    // Tag
+                SP,                     // Scope (current function will be fill in later)
+                s->name,                // Variable name
+                fil,                    // File
+                ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
+                julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
+                false,                  // May be optimized out
+                0,                      // Flags (TODO: Do we need any)
+                0);                   // Argument number (1-based)
+        }
+        vinfos = jl_lam_capt(ast);
+        vinfoslen = jl_array_dim0(vinfos);
+        for(i=0; i < vinfoslen; i++) {
+            jl_array_t *vi = (jl_array_t*)jl_cellref(vinfos, i);
+            assert(jl_is_array(vi));
+            jl_sym_t *vname = ((jl_sym_t*)jl_cellref(vi,0));
+            assert(jl_is_symbol(vname));
+            jl_varinfo_t &varinfo = ctx.vars[vname];
+            varinfo.dinfo = ctx.dbuilder->createLocalVariable(
+                llvm::dwarf::DW_TAG_auto_variable,    // Tag
+                SP,                     // Scope (current function will be filled in later)
+                vname->name,            // Variable name
+                fil,                    // File
+                ctx.lineno == -1 ? 0 : ctx.lineno, // Line (for now, use lineno of the function)
+                julia_type_to_di(varinfo.declType,ctx.dbuilder,specsig), // Variable type
+                false,                  // May be optimized out
+                0,                      // Flags (TODO: Do we need any)
+                0);                   // Argument number (1-based)
+        }
+    }
+
     std::map<jl_sym_t *, MDNode *> filescopes;
 
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
+    unsigned argIdx = 0;
     if (!specsig) {
         Function::arg_iterator AI = f->arg_begin();
         fArg = AI++;
@@ -3968,6 +4092,23 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         argCount = AI++;
         ctx.argArray = argArray;
         ctx.argCount = argCount;
+
+#ifdef LLVM36
+        // Declare arguments early so llvm in case any of the below emits basic blocks
+        // before we get to loading local variables
+        for(i=0; i < nreq; i++) {
+            jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
+            if (ctx.vars[s].dinfo != NULL) {
+                SmallVector<int64_t, 9> addr;
+                addr.push_back(llvm::dwarf::DW_OP_plus);
+                addr.push_back(argIdx * sizeof(void*));
+                //addr.push_back(llvm::dwarf::DW_OP_deref);
+                ctx.dbuilder->insertDbgValueIntrinsic(argArray, 0, ctx.vars[s].dinfo,
+                ctx.dbuilder->createExpression(addr), builder.GetInsertBlock());
+            }
+            argIdx++;
+        }
+#endif
     }
 
     /*
@@ -4154,7 +4295,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
 
     // step 12. move args into local variables
     Function::arg_iterator AI = f->arg_begin();
-    unsigned argIdx = 0;
+    argIdx = 0;
     for(i=0; i < nreq; i++) {
         jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
         jl_varinfo_t &vi = ctx.vars[s];
@@ -4276,7 +4417,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         jl_value_t *stmt = jl_cellref(stmts,i);
         if (jl_is_linenode(stmt)) {
             lno = jl_linenode_line(stmt);
-            if (debug_enabled)
+            if (ctx.debug_enabled)
                 builder.SetCurrentDebugLocation(DebugLoc::get(lno, 1, (MDNode*)SP, NULL));
             if (do_coverage)
                 coverageVisitLine(filename, lno);
@@ -4301,7 +4442,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                     }
                 }
             }
-            if (debug_enabled) {
+            if (ctx.debug_enabled) {
                 MDNode *scope;
                 if (dfil == NULL)
                     scope = SP;
@@ -4385,7 +4526,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
 
     // step 18. Perform any delayed instantiations
-    if (debug_enabled)
+    if (ctx.debug_enabled)
         ctx.dbuilder->finalize();
 
     JL_GC_POP();
@@ -4542,6 +4683,54 @@ static void init_julia_llvm_env(Module *m)
     ArrayRef<Type*> vselts(valueStructElts);
     valueSt->setBody(vselts);
     jl_value_llvmt = valueSt;
+
+
+    DIBuilder dbuilder(*m);
+    DIFile julia_h = dbuilder.createFile("julia.h","");
+
+    jl_value_dillvmt = dbuilder.createStructType(DIDescriptor(),
+        "jl_value_t",
+        julia_h,
+        71, // At the time of this writing. Not sure if it's worth it to keep this in sync
+        sizeof(jl_value_t)*8,
+        __alignof__(jl_value_t)*8,
+        0, // Flags
+        DIType(), // Derived from
+        DIArray()); // Elements - will be corrected later
+
+    jl_pvalue_dillvmt = dbuilder.createPointerType(jl_value_dillvmt,sizeof(jl_value_t*)*8,
+                                                __alignof__(jl_value_t*)*8);
+
+    DIArray types;
+#ifdef LLVM36
+    SmallVector<llvm::Metadata *, 1> Elts;
+    std::vector<Metadata*> diargs(0);
+    Elts.push_back(jl_pvalue_dillvmt);
+    dbuilder.replaceArrays(jl_value_dillvmt,
+       dbuilder.getOrCreateArray(Elts));
+#else
+    SmallVector<llvm::Value *, 1> Elts;
+    std::vector<Value*> diargs(0);
+    Elts.push_back(jl_pvalue_dillvmt);
+    jl_value_dillvmt.setTypeArray(dbuilder.getOrCreateArray(Elts));
+#endif
+
+    jl_ppvalue_dillvmt = dbuilder.createPointerType(jl_pvalue_dillvmt,sizeof(jl_value_t**)*8,
+                                                __alignof__(jl_value_t**)*8);
+
+    diargs.push_back(jl_pvalue_dillvmt);    // Return Type (ret value)
+    diargs.push_back(jl_pvalue_dillvmt);    // First Argument (function)
+    diargs.push_back(jl_ppvalue_dillvmt);   // Second Argument (argv)
+    // Third argument (length(argv))
+    diargs.push_back(julia_type_to_di((jl_value_t*)jl_int32_type,&dbuilder,false));
+
+#ifdef LLVM36
+    jl_di_func_sig = dbuilder.createSubroutineType(julia_h,
+        dbuilder.getOrCreateTypeArray(diargs));
+#else
+    jl_di_func_sig = dbuilder.createSubroutineType(julia_h,
+        dbuilder.getOrCreateArray(diargs));
+#endif
 
     jl_pvalue_llvmt = PointerType::get(jl_value_llvmt, 0);
     jl_ppvalue_llvmt = PointerType::get(jl_pvalue_llvmt, 0);
@@ -5007,7 +5196,9 @@ static void init_julia_llvm_env(Module *m)
 #   endif
 #endif
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
+#ifndef LLVM37
     jl_TargetMachine->addAnalysisPasses(*FPM);
+#endif
 #endif
     FPM->add(createTypeBasedAliasAnalysisPass());
     if (jl_compileropts.opt_level>=1)
@@ -5204,6 +5395,19 @@ extern "C" void jl_init_codegen(void)
             strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : "",
 #endif
             MAttrs);
+    jl_TargetMachine = jl_TargetMachine->getTarget().createTargetMachine(
+            TheTriple.getTriple(),
+            jl_TargetMachine->getTargetCPU(),
+            jl_TargetMachine->getTargetFeatureString(),
+            jl_TargetMachine->Options,
+            Reloc::Default,
+            CodeModel::JITDefault,
+#ifdef DISABLE_OPT
+            CodeGenOpt::None // -O3
+#else
+            CodeGenOpt::Aggressive
+#endif
+            );
     assert(jl_TargetMachine);
 #if defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());

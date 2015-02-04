@@ -224,6 +224,7 @@ typedef struct _jl_datatype_t {
     uint32_t alignment;  // strictest alignment over all fields
     uint32_t uid;
     void *struct_decl;  //llvm::Value*
+    void *ditype; // llvm::MDNode* to be used as llvm::DIType(ditype)
     jl_fielddesc_t fields[];
 } jl_datatype_t;
 

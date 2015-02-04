@@ -854,6 +854,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     dt->size = size;
     dt->struct_decl = NULL;
     dt->instance = NULL;
+    dt->ditype = NULL;
     dt->abstract = flags&1;
     dt->mutabl = (flags>>1)&1;
     dt->pointerfree = (flags>>2)&1;
