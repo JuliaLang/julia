@@ -120,8 +120,8 @@ General Parallel Computing Support
    to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
    workers will connect to this worker at the specified ``bind_addr`` and ``port``.
 
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``"auto"``
-   or ``:auto`` it will launch as many workers as the number of cores on the specific host.
+   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
+   it will launch as many workers as the number of cores on the specific host.
 
 
    Keyword arguments:
@@ -145,9 +145,6 @@ General Parallel Computing Support
 
    For example Beowulf clusters are  supported via a custom cluster manager implemented
    in  package ``ClusterManagers``.
-
-   See the documentation for package ``ClusterManagers`` for more information on how to
-   write a custom cluster manager.
 
 
 .. function:: nprocs()
