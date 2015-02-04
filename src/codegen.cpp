@@ -536,6 +536,14 @@ typedef struct {
     std::vector<CallInst*> to_inline;
 } jl_codectx_t;
 
+typedef struct {
+    size_t len;
+    struct {
+        int64_t isref;
+        Function *f;
+    } data[];
+} simple_list;
+
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
                         bool valuepos=true, jl_sym_t **valuevar=NULL);
 static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx);
@@ -592,9 +600,9 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 
 // --- entry point ---
 //static int n_emit=0;
-static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bool cstyle);
+static Function *emit_function(jl_lambda_info_t *lam);
 //static int n_compile=0;
-static Function *to_function(jl_lambda_info_t *li, bool force_specialized, bool cstyle)
+static Function *to_function(jl_lambda_info_t *li)
 {
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
@@ -604,15 +612,14 @@ static Function *to_function(jl_lambda_info_t *li, bool force_specialized, bool 
     nested_compile = true;
     Function *f = NULL;
     JL_TRY {
-        f = emit_function(li, force_specialized, cstyle);
+        f = emit_function(li);
         //jl_printf(JL_STDOUT, "emit %s\n", li->name->name);
         //n_emit++;
     }
     JL_CATCH {
         li->functionObject = NULL;
-        li->cFunctionObject = NULL;
         li->specFunctionObject = NULL;
-        li->cFunctionObject = NULL;
+        li->cFunctionList = NULL;
         nested_compile = last_n_c;
         if (old != NULL) {
             builder.SetInsertPoint(old);
@@ -701,41 +708,53 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
             jl_setup_module(m,true);
             FunctionMover mover(m,shadow_module);
             li->functionObject = mover.CloneFunction((Function*)li->functionObject);
-            if (li->cFunctionObject != NULL)
-                li->cFunctionObject = mover.CloneFunction((Function*)li->cFunctionObject);
+            if (li->specFunctionObject != NULL)
+                li->specFunctionObject = mover.CloneFunction((Function*)li->specFunctionObject);
+            if (li->cFunctionList != NULL) {
+                size_t i;
+                simple_list *list = (simple_list*)li->cFunctionList;
+                for (i = 0; i < list->len; i++) {
+                    list->data[i].f = mover.CloneFunction(list->data[i].f);
+                }
+            }
         }
         #endif
 
         Function *llvmf = (Function*)li->functionObject;
-
 #ifdef USE_MCJIT
         li->fptr = (jl_fptr_t)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
         assert(li->fptr != NULL);
-        if (li->cFunctionObject != NULL) {
+        if (!imaging_mode)
+            llvmf->deleteBody();
+
+        if (li->cFunctionList != NULL) {
+            size_t i;
+            simple_list *list = (simple_list*)li->cFunctionList;
+            for (i = 0; i < list->len; i++) {
 #ifdef USE_MCJIT
-            (void)jl_ExecutionEngine->getFunctionAddress(((Function*)li->cFunctionObject)->getName());
+                (void)jl_ExecutionEngine->getFunctionAddress(list->data[i].f->getName());
 #else
-            (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
+                (void)jl_ExecutionEngine->getPointerToFunction(list->data[i].f);
 #endif
+                if (!imaging_mode) {
+                    list->data[i].f->deleteBody();
+                }
+            }
         }
+
         if (li->specFunctionObject != NULL) {
 #ifdef USE_MCJIT
             (void)jl_ExecutionEngine->getFunctionAddress(((Function*)li->specFunctionObject)->getName());
 #else
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->specFunctionObject);
 #endif
+            if (!imaging_mode)
+                ((Function*)li->specFunctionObject)->deleteBody();
         }
         JL_SIGATOMIC_END();
-        if (!imaging_mode) {
-            llvmf->deleteBody();
-            if (li->cFunctionObject != NULL)
-                ((Function*)li->cFunctionObject)->deleteBody();
-          if (li->specFunctionObject != NULL)
-            ((Function*)li->specFunctionObject)->deleteBody();
-        }
     }
     f->fptr = li->fptr;
 }
@@ -746,18 +765,7 @@ extern "C" void jl_compile(jl_function_t *f)
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
-        (void)to_function(li, false, false);
-        li->inCompile = 0;
-    }
-}
-
-void jl_cstyle_compile(jl_function_t *f)
-{
-    jl_lambda_info_t *li = f->linfo;
-    if (li->cFunctionObject == NULL) {
-        // objective: assign li->cFunctionObject
-        li->inCompile = 1;
-        (void)to_function(li, true, true);
+        (void)to_function(li);
         li->inCompile = 0;
     }
 }
@@ -765,46 +773,68 @@ void jl_cstyle_compile(jl_function_t *f)
 // Get the LLVM Function* for the C-callable entry point for a certain function
 // and argument types. If rt is NULL then whatever return type is present is
 // accepted.
+static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tuple_t *argt, int64_t isref);
 static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
     if (rt) {
-        JL_TYPECHK(jl_function_ptr, type, rt);
+        JL_TYPECHK(cfunction, type, rt);
     }
-    JL_TYPECHK(jl_function_ptr, tuple, argt);
-    JL_TYPECHK(jl_function_ptr, type, argt);
-    if (jl_is_gf(f) && (rt == NULL || jl_is_leaf_type(rt)) && jl_is_leaf_type(argt)) {
-        jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
+    JL_TYPECHK(cfunction, tuple, argt);
+    JL_TYPECHK(cfunction, type, argt);
+    JL_TYPECHK(cfunction, function, (jl_value_t*)f);
+    size_t i, nargs = jl_tuple_len(argt);
+    uint64_t isref = 0; // bit vector of which argument types are a subtype of Type{Ref{T}}
+    jl_value_t *sigt; // type signature with Ref{} annotations removed
+    JL_GC_PUSH(&sigt);
+    sigt = (jl_value_t*)jl_alloc_tuple(nargs);
+    for (i = 0; i < nargs; i++) {
+        jl_value_t *ati = jl_tupleref(argt, i);
+        if (jl_is_abstract_ref_type(ati)) {
+            ati = jl_tparam0(ati);
+            if (jl_is_typevar(ati))
+                jl_error("cfunction: argument type Ref should have an element type, not Ref{T}");
+            isref |= (2<<i);
+        }
+        jl_tupleset(sigt, i, ati);
+    }
+    if (rt != NULL) {
+        if (jl_is_abstract_ref_type(rt)) {
+            rt = jl_tparam0(rt);
+            if (jl_is_typevar(rt))
+                jl_error("cfunction: return type Ref should have an element type, not Ref{T}");
+            isref |= 1;
+        }
+        else if (!jl_is_leaf_type(rt)) {
+            isref |= 1;
+        }
+    }
+
+    if (jl_is_gf(f) && jl_is_leaf_type(sigt) && nargs < 64) {
+        jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)sigt);
         if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
-            if (ff->linfo->cFunctionObject == NULL) {
-                jl_cstyle_compile(ff);
+            jl_lambda_info_t *li = ff->linfo;
+            if (!jl_types_equal((jl_value_t*)li->specTypes, sigt)) {
+                jl_errorf("cfunction: type signature of %s does not match",
+                          li->name->name);
             }
-            if (ff->linfo->cFunctionObject != NULL) {
-                jl_lambda_info_t *li = ff->linfo;
-                if (!jl_types_equal((jl_value_t*)li->specTypes, argt)) {
-                    jl_errorf("cfunction: type signature of %s does not match",
-                              li->name->name);
-                }
-                if (rt != NULL) {
-                    jl_value_t *astrt = jl_ast_rettype(li, li->ast);
-                    if (!jl_types_equal(astrt, rt)) {
-                        if (astrt == (jl_value_t*)jl_bottom_type) {
-                            if (rt != (jl_value_t*)jl_void_type) {
-                                // a function that doesn't return can be passed to C as void
-                                jl_errorf("cfunction: %s does not return", li->name->name);
-                            }
-                        }
-                        else {
-                            jl_errorf("cfunction: return type of %s does not match",
-                                      li->name->name);
-                        }
+            jl_value_t *astrt = jl_ast_rettype(li, li->ast);
+            if (rt != NULL) {
+                if (astrt == (jl_value_t*)jl_bottom_type) {
+                    if (rt != (jl_value_t*)jl_void_type) {
+                        // a function that doesn't return can be passed to C as void
+                        jl_errorf("cfunction: %s does not return", li->name->name);
                     }
                 }
-                return (Function*)ff->linfo->cFunctionObject;
+                else if (!jl_subtype(astrt, rt, 0)) {
+                    jl_errorf("cfunction: return type of %s does not match",
+                              li->name->name);
+                }
             }
+            JL_GC_POP(); // kill list: sigt
+            return gen_cfun_wrapper(ff, astrt, (jl_tuple_t*)argt, isref);
         }
     }
     jl_error("function is not yet c-callable");
-    return NULL;
 }
 
 // get the address of a C-callable entry point for a function
@@ -906,8 +936,8 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
         }
     }
     else {
-        if (sf->linfo->cFunctionObject == NULL) {
-            jl_cstyle_compile(sf);
+        if (sf->linfo->specFunctionObject == NULL) {
+            jl_compile(sf);
         }
     }
     if (sf->fptr == &jl_trampoline) {
@@ -917,7 +947,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
             llvmf = (Function*)sf->linfo->functionObject;
     }
     else {
-        llvmf = to_function(sf->linfo, false, false);
+        llvmf = to_function(sf->linfo);
     }
     return llvmf;
 }
@@ -2447,6 +2477,21 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     return NULL;
 }
 
+static Value *emit_jlcall(Value *theFptr, Value *theF, int argStart,
+                          size_t nargs, jl_codectx_t *ctx)
+{
+    // call
+    Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
+    if (ctx->argTemp != NULL && nargs > 0) {
+        myargs = builder.CreateGEP(ctx->argTemp,
+                                   ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
+    }
+    Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
+                                        ConstantInt::get(T_int32,nargs));
+    ctx->argDepth = argStart;
+    return result;
+}
+
 static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
                           size_t nargs, jl_codectx_t *ctx)
 {
@@ -2458,17 +2503,7 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
         // put into argument space
         make_gcroot(boxed(anArg, ctx, expr_type(args[i],ctx)), ctx, sym);
     }
-
-    // call
-    Value *myargs = Constant::getNullValue(jl_ppvalue_llvmt);
-    if (ctx->argTemp != NULL && nargs > 0) {
-        myargs = builder.CreateGEP(ctx->argTemp,
-                                   ConstantInt::get(T_size, argStart+ctx->argSpaceOffs));
-    }
-    Value *result = builder.CreateCall3(prepare_call(theFptr), theF, myargs,
-                                        ConstantInt::get(T_int32,nargs));
-    ctx->argDepth = argStart;
-    return result;
+    return emit_jlcall(theFptr, theF, argStart, nargs, ctx);
 }
 
 static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *theFptr,
@@ -3485,12 +3520,248 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
     }
 }
 
+static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tuple_t *argt, int64_t isref)
+{
+    jl_lambda_info_t *lam = ff->linfo;
+    simple_list *list = (simple_list*)lam->cFunctionList;
+    if (list != NULL) {
+        size_t i;
+        for (i = 0; i < list->len; i++) {
+            if (list->data[i].isref == isref) {
+                return list->data[i].f;
+            }
+        }
+    }
+    // Generate a c-callable wrapper
+    Type *crt = ((isref&1) ? jl_pvalue_llvmt : julia_struct_to_llvm(jlrettype));
+    if (crt == NULL)
+        jl_error("cfunction: return type doesn't correspond to a C type");
+    size_t i;
+    size_t nargs = jl_tuple_len(lam->specTypes);
+    assert(nargs == jl_tuple_len(argt));
+    for(i=0; i < nargs; i++) {
+        jl_value_t *tti = jl_tupleref(lam->specTypes,i);
+        if (tti == (jl_value_t*)jl_pointer_type) {
+            jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
+        }
+    }
+
+    std::vector<Type*> fargt(0);
+    std::vector<Type*> fargt_sig(0);
+    std::vector<bool> inRegList(0);
+    std::vector<bool> byRefList(0);
+    attr_type attrs;
+    Type *prt = NULL;
+    int sret = 0;
+    std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_sig, inRegList, byRefList, attrs,
+                                            ((isref&1) ? (jl_value_t*)jl_any_type : jlrettype), argt);
+    if (!err_msg.empty())
+        jl_error(err_msg.c_str());
+    if (fargt.size() != fargt_sig.size())
+        jl_error("va_arg syntax not allowed for cfunction argument list");
+
+    std::stringstream funcName;
+    funcName << "jlcapi_" << lam->name->name << "_" << globalUnique++;
+
+    // Create the Function stub
+    Module *m;
+#ifdef USE_MCJIT
+    if (!imaging_mode) {
+        m = new Module(funcName.str(), jl_LLVMContext);
+        jl_setup_module(m,true);
+    }
+    else {
+        m = shadow_module;
+    }
+#else
+    m = jl_Module;
+#endif
+
+    Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
+            imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+            funcName.str(), m);
+    cw->setAttributes(attrs);
+    BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
+    builder.SetInsertPoint(b0);
+    DebugLoc noDbg;
+    builder.SetCurrentDebugLocation(noDbg);
+
+    jl_codectx_t ctx;
+    ctx.linfo = lam;
+    allocate_gc_frame(0, &ctx);
+    ctx.argSpaceInits = &b0->back();
+
+    // Save the Function object reference
+    int len = (list ? list->len : 0) + 1;
+    simple_list *list2 = (simple_list*)realloc(list, sizeof(*list)+sizeof(list->data[0])*len);
+    if (!list2)
+        jl_throw(jl_memory_exception);
+    list2->len = len;
+    list2->data[len-1].isref = isref;
+    list2->data[len-1].f = cw;
+    lam->cFunctionList = list2;
+
+    // See whether this function is specsig or jlcall
+    jl_compile(ff);
+    bool specsig;
+    Function *theFptr;
+    if (lam->specFunctionObject != NULL) {
+        theFptr = (Function*)lam->specFunctionObject;
+        specsig = true;
+    }
+    else {
+        theFptr = (Function*)lam->functionObject;
+        specsig = false;
+        if (!theFptr) {
+            jl_errorf("error compiling %s while creating cfunction", lam->name->name);
+        }
+    }
+
+
+    // Alright, let's do this!
+    // let's first emit the arguments
+    std::vector<Value*> args;
+    Function::arg_iterator AI = cw->arg_begin();
+    Value *sretPtr = NULL;
+    if (sret)
+        sretPtr = AI++; //const Argument &fArg = *AI++;
+
+    for (size_t i=0; i < nargs; i++) {
+        Value *v = AI++;
+        if (isref & (2<<i)) {
+            jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
+            Value *val = builder.CreatePointerCast(v, jl_pvalue_llvmt);
+            val = builder.CreateConstGEP1_32(val, (unsigned)-1); // rewind to type-tag
+            if (specsig) {
+                Type *at = theFptr->getFunctionType()->getParamType(i);
+                if (at != jl_pvalue_llvmt) {
+                    val = emit_unbox(at, val, jargty);
+                    assert(dyn_cast<UndefValue>(val) == 0);
+                }
+                args.push_back(val);
+            }
+            else {
+                make_gcroot(val, &ctx);
+            }
+        }
+        else {
+            jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
+            Value *val = NULL;
+            if (fargt[i+sret] == fargt_sig[i+sret]) {
+                val = v;
+            }
+            else {
+                // undo whatever we did to this poor argument
+                val = llvm_type_rewrite(v, fargt[i+sret], jargty, false);
+            }
+            // and perhaps box it if necessary
+            if (byRefList[i]) {
+                val = builder.CreateLoad(val,false);
+            }
+            Type *t = julia_type_to_llvm(jargty);
+            if (t != fargt[i+sret]) {
+                if (t == jl_pvalue_llvmt) {
+                    Value *mem = emit_newsym(jargty, 1, NULL, &ctx);
+                    if (!mem->getType()->isPointerTy()) {
+                       assert(type_is_ghost(t) && mem->getType() == t);
+                    }
+                    else {
+                        builder.CreateStore(val, builder.CreateBitCast(
+                            emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
+                        if (specsig)
+                            make_gcroot(val, &ctx);
+                    }
+                    val = builder.CreateBitCast(mem, jl_pvalue_llvmt);
+                }
+                else {
+                    assert(0);
+                }
+            }
+            if (specsig) {
+                args.push_back(val);
+            }
+            else {
+                if (val->getType() != jl_pvalue_llvmt)
+                    val = boxed(val, &ctx, jargty);
+                make_gcroot(val, &ctx);
+            }
+        }
+    }
+
+    // Create the call
+    Value *r;
+    if (specsig) {
+        r = builder.CreateCall(prepare_call(theFptr), ArrayRef<Value*>(args));
+    }
+    else {
+        r = emit_jlcall(theFptr, literal_pointer_val((jl_value_t*)ff), 0, nargs, &ctx);
+    }
+
+    // Prepare the return value
+    if (isref&1) {
+        // return a jl_value_t*
+        if (r->getType() != jl_pvalue_llvmt) {
+            r = boxed(r, &ctx, jlrettype);
+        }
+    }
+
+    // gc pop. Usually this is done when we encounter the return statement
+    // but here we have to do it manually
+    Instruction *gcpop = (Instruction*)builder.CreateConstGEP1_32(ctx.gcframe, 1);
+    ctx.gc_frame_pops.push_back(gcpop);
+    builder.CreateStore(builder.CreateBitCast(builder.CreateLoad(gcpop, false), jl_ppvalue_llvmt),
+                        prepare_global(jlpgcstack_var));
+
+    finalize_gc_frame(&ctx);
+
+    if (isref&1) {
+        r = builder.CreateConstGEP1_32(r, 1); // skip type-tag
+        builder.CreateRet(r);
+    }
+    else {
+        // return an unboxed value
+        if (type_is_ghost(crt)) {
+            assert(type_is_ghost(prt));
+            builder.CreateRetVoid();
+        }
+        else {
+            Value *v = julia_to_native(crt, jlrettype, r, jlrettype, 0, false, false, false, 0, &ctx, NULL);
+            if (!sret) {
+                builder.CreateRet(llvm_type_rewrite(v, prt, jlrettype, true));
+            }
+            else {
+                Value *sretVal = llvm_type_rewrite(v, fargt_sig[0], jlrettype, true);
+                builder.CreateStore(sretVal, sretPtr);
+                builder.CreateRetVoid();
+            }
+        }
+    }
+
+#ifdef JL_DEBUG_BUILD
+#ifdef LLVM35
+    llvm::raw_fd_ostream out(1,false);
+#endif
+    if (
+#ifdef LLVM35
+        verifyFunction(*cw,&out)
+#else
+        verifyFunction(*cw,PrintMessageAction)
+#endif
+    ) {
+        cw->dump();
+        abort();
+    }
+#endif
+
+    return cw;
+}
+
 // generate a julia-callable function that calls f (AKA lam)
 static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Function *f)
 {
     std::stringstream funcName;
     const std::string &fname = f->getName().str();
-    funcName << "jlapi_";
+    funcName << "jlcall_";
     if (fname.compare(0, 6, "julia_") == 0)
         funcName << fname.substr(6);
     else
@@ -3555,7 +3826,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 }
 
 // cstyle = compile with c-callable signature, not jlcall
-static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bool cstyle)
+static Function *emit_function(jl_lambda_info_t *lam)
 {
     // step 1. unpack AST and allocate codegen context for this function
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -3684,24 +3955,19 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
     Function *f = NULL;
 
     bool specsig = false;
-    if (force_specialized && !va && !hasCapt) {
-        specsig = true;
-    }
-    else {
-        if (!va && !hasCapt && lam->specTypes != NULL && lam->inferred) {
-            // no captured vars and not vararg
-            // consider specialized signature
-            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-                if (jltupleisbits(jl_tupleref(lam->specTypes, i))) {
-                    specsig = true;
-                    break;
-                }
+    if (!va && !hasCapt && lam->specTypes != NULL && lam->inferred) {
+        // no captured vars and not vararg
+        // consider specialized signature
+        for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+            if (jltupleisbits(jl_tupleref(lam->specTypes, i))) {
+                specsig = true;
+                break;
             }
-            if (jl_tuple_len(lam->specTypes) == 0)
-                specsig = true;
-            if (jltupleisbits(jlrettype))
-                specsig = true;
         }
+        if (jl_tuple_len(lam->specTypes) == 0)
+            specsig = true;
+        if (jltupleisbits(jlrettype))
+            specsig = true;
     }
 
     std::stringstream funcName;
@@ -3747,126 +4013,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bo
             Function *fwrap = gen_jlcall_wrapper(lam, ast, f);
             lam->functionObject = (void*)fwrap;
             lam->functionID = jl_assign_functionID(fwrap);
-        }
-        if (cstyle && lam->cFunctionObject == NULL) {
-            // Generate a c-callable wrapper
-            Type *crt = julia_struct_to_llvm(jlrettype);
-            if (crt == NULL)
-                jl_error("cfunction: return type doesn't correspond to a C type");
-            size_t i;
-            size_t nargt = jl_tuple_len(lam->specTypes);
-            for(i=0; i < nargt; i++) {
-                jl_value_t *tti = jl_tupleref(lam->specTypes,i);
-                if (tti == (jl_value_t*)jl_pointer_type) {
-                    jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
-                }
-            }
-
-            std::vector<Type*> fargt(0);
-            std::vector<Type*> fargt_sig(0);
-            std::vector<bool> inRegList(0);
-            std::vector<bool> byRefList(0);
-            attr_type attrs;
-            Type *prt = NULL;
-            int sret = 0;
-            std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_sig, inRegList, byRefList, attrs, jlrettype, lam->specTypes);
-            if (!err_msg.empty())
-                jl_error(err_msg.c_str());
-
-            funcName.str("");
-            funcName << "jlcapi_" << lam->name->name << "_" << globalUnique;
-            Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
-                    imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
-                    funcName.str(), m);
-            cw->setAttributes(attrs);
-
-            BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
-
-            builder.SetInsertPoint(b0);
-            DebugLoc noDbg;
-            builder.SetCurrentDebugLocation(noDbg);
-
-            // Alright, let's do this!
-            // let's first emit the arguments
-            size_t nargs = jl_tuple_len(lam->specTypes);
-            std::vector<Value*> args;
-            Function::arg_iterator AI = cw->arg_begin();
-            Value *sretPtr = NULL;
-            if (sret)
-                sretPtr = AI++; //const Argument &fArg = *AI++;
-
-            for (size_t i=0; i < nargs; i++) {
-                jl_value_t *jty = jl_tupleref(lam->specTypes,i);
-                Value *v = AI++;
-                Value *val = NULL;
-                if (fargt[i+sret] == fargt_sig[i+sret]) {
-                    val = v;
-                }
-                else {
-                    // undo whatever we did to this poor argument
-                    val = llvm_type_rewrite(v, fargt[i+sret], jl_tupleref(lam->specTypes,i), false);
-                }
-                // and perhaps box it if necessary
-                Type *t = julia_type_to_llvm(jty);
-                if (byRefList[i]) {
-                    val = builder.CreateLoad(val,false);
-                }
-                if (t != fargt[i+sret]) {
-                    if (t == jl_pvalue_llvmt) {
-                        if (byRefList[i])
-                            v = builder.CreateLoad(v,false);
-                        Value *mem = emit_newsym(jty, 1, NULL, &ctx);
-                        if (!mem->getType()->isPointerTy()) {
-                           assert(type_is_ghost(t) && mem->getType() == t);
-                        }
-                        else {
-                            builder.CreateStore(val, builder.CreateBitCast(
-                                emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
-                        }
-                        val = builder.CreateBitCast(mem, jl_pvalue_llvmt);
-                    }
-                    else {
-                        assert(0);
-                    }
-                }
-
-                args.push_back(val);
-            }
-
-            Value *r = builder.CreateCall(f, ArrayRef<Value*>(args));
-
-            if (type_is_ghost(crt)) {
-                assert(type_is_ghost(prt));
-                builder.CreateRetVoid();
-            }
-            else {
-                Value *v = julia_to_native(crt, jlrettype, r, jlrettype, 0, false, false, false, 0, &ctx, NULL);
-                if (!sret) {
-                    builder.CreateRet(llvm_type_rewrite(v, prt, jlrettype, true));
-                }
-                else {
-                    Value *sretVal = llvm_type_rewrite(v, fargt_sig[0], jlrettype, true);
-                    builder.CreateStore(sretVal, sretPtr);
-                    builder.CreateRetVoid();
-                }
-            }
-
-#ifdef JL_DEBUG_BUILD
-#ifdef LLVM35
-            llvm::raw_fd_ostream out(1,false);
-#endif
-            if (
-#ifdef LLVM35
-                verifyFunction(*cw,&out)
-#else
-                verifyFunction(*cw,PrintMessageAction)
-#endif
-            ) {
-                cw->dump();
-                abort();
-            }
-#endif
-            lam->cFunctionObject = (void*)cw;
         }
     }
     else {

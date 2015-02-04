@@ -464,7 +464,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->roots = NULL;
     li->functionObject = NULL;
     li->specFunctionObject = NULL;
-    li->cFunctionObject = NULL;
+    li->cFunctionList = NULL;
     li->functionID = 0;
     li->specFunctionID = 0;
     li->specTypes = NULL;

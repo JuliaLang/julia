@@ -135,6 +135,9 @@ for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             s
         end
         b = ccall(cfunction($(symbol("foo"*string(v))),$t,($t,)),$t,($t,),$v)
+        b = ccall(cfunction($(symbol("foo"*string(v))),Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),$v)
+        b = ccall(cfunction($(symbol("foo"*string(v))),$t,(Ref{$t},)),$t,(Ref{$t},),$v)
+        #b = ccall(cfunction($(symbol("foo"*string(v))),Any,(Ref{$t},)),Any,(Ref{$t},),$v) # broken due to #2818
         verbose && println("C: ",b)
         if ($(t).mutable)
             @test !(b === a)

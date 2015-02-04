@@ -239,7 +239,7 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 
 Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)
 {
-    if(preferred_llvm_type(ty,isret) == NULL || target_type == NULL || target_type == v->getType())
+    if (preferred_llvm_type(ty,isret) == NULL || target_type == NULL || target_type == v->getType())
         return v;
 
     assert(!v->getType()->isPointerTy());
