@@ -2003,6 +2003,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         ndt->instance = NULL;
         ndt->uid = 0;
         ndt->struct_decl = NULL;
+        ndt->ditype = NULL;
         ndt->size = 0;
         ndt->alignment = 1;
 
