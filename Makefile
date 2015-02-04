@@ -355,6 +355,9 @@ endif
 ifneq ($(OS), WINNT)
 	-./contrib/fixup-libgfortran.sh $(DESTDIR)$(private_libdir)
 endif
+ifeq ($(OS), Linux)
+	-./contrib/fixup-libstdc++.sh $(DESTDIR)$(private_libdir)
+endif
 	# Copy in juliarc.jl files per-platform for binary distributions as well
 	# Note that we don't install to sysconfdir: we always install to $(DESTDIR)$(prefix)/etc.
 	# If you want to make a distribution with a hardcoded path, you take care of installation

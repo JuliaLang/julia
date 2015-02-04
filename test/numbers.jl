@@ -2256,3 +2256,10 @@ end
 @test_throws OverflowError big(2)^(big(typemax(UInt))+1)
 @test 0==big(0)^(big(typemax(UInt))+1)
 
+# bswap (issue #9726)
+@test bswap(0x0002) === 0x0200
+@test bswap(0x01020304) === 0x04030201
+@test reinterpret(Float64,bswap(0x000000000000f03f)) === 1.0
+@test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
+@test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
+@test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0

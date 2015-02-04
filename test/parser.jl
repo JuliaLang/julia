@@ -10,3 +10,15 @@ let
         @test ex1.args[3] === :x && (ex1.args[3] === ex2.args[3])
     end
 end
+
+# issue #9704
+let a = :a
+    @test :(try
+            catch $a
+            end) == :(try
+                      catch a
+                      end)
+    @test :(module $a
+            end) == :(module a
+                      end)
+end

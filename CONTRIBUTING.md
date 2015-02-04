@@ -91,7 +91,17 @@ Add new code to Julia's base libraries as follows:
 
  4. Include your tests in `test/Makefile` and `test/runtests.jl`.
 
-Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
+Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
+
+Note: You can run specific test files with `make`:
+
+    make test-bitarray
+
+or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
+
+    ./usr/bin/julia test/runtests.jl bitarray math
+
+Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome/).
 
 ##### General Formatting Guidelines For Julia code contributions
 

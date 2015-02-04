@@ -334,7 +334,7 @@ Periods
    Construct a ``Period`` type with the given ``v`` value.
    Input must be losslessly convertible to an ``Int64``.
 
-.. function:: default(p::Period) => Period
+.. function:: default(p::Period) -> Period
 
     Returns a sensible "default" value for the input Period by returning
     ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute,
