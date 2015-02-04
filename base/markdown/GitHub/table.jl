@@ -104,11 +104,11 @@ function plain(io::IO, md::Table)
     cells = mapmap(plaininline, md.rows)
     padcells!(cells, md.align, len = length, min = 3)
     for i = 1:length(cells)
-        print_joined(STDOUT, cells[i], " | ")
-        println()
+        print_joined(io, cells[i], " | ")
+        println(io)
         if i == 1
-            print_joined(STDOUT, [_dash(length(cells[i][j]), md.align[j]) for j = 1:length(cells[1])], " | ")
-            println()
+            print_joined(io, [_dash(length(cells[i][j]), md.align[j]) for j = 1:length(cells[1])], " | ")
+            println(io)
         end
     end
 end
@@ -117,11 +117,11 @@ function term(io::IO, md::Table, columns)
     cells = mapmap(terminline, md.rows)
     padcells!(cells, md.align, len = ansi_length)
     for i = 1:length(cells)
-        print_joined(STDOUT, cells[i], " ")
-        println()
+        print_joined(io, cells[i], " ")
+        println(io)
         if i == 1
-            print_joined(STDOUT, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
-            println()
+            print_joined(io, ["–"^ansi_length(cells[i][j]) for j = 1:length(cells[1])], " ")
+            println(io)
         end
     end
 end

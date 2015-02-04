@@ -70,3 +70,9 @@ writemime(io::IO, m::MIME"text/plain", r::Reference) =
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
                                                   [:l, :r, :r]))
+t = """a   |   b
+:-- | --:
+1   |   2
+"""
+@test plain(Markdown.parse(t)) == t
+
