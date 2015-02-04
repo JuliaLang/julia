@@ -228,9 +228,7 @@ if haskey(ENV, "PTEST_FULL")
     #Issue #9951
     hosts=[]
     for i in 1:30
-        push!(hosts, "localhost")
-        push!(hosts, string(getipaddr()))
-        push!(hosts, "127.0.0.1")
+        push!(hosts, "localhost", string(getipaddr()), "127.0.0.1")
     end
 
     print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
@@ -254,16 +252,21 @@ if haskey(ENV, "PTEST_FULL")
 
     test_n_remove_pids(new_pids)
 
-    print("\nMore addprocs tests...\n")
-
-    #Other addprocs/rmprocs tests
+    print("\nMixed ssh addprocs with :auto\n")
     new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
+    print("\nMixed ssh addprocs with numbers\n")
     new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
+
+    print("\nssh addprocs with tunnel\n")
+    new_pids = sort(remotecall_fetch(1, ()->addprocs([("localhost", 2)]; tunnel=true)))
+    @test length(new_pids) == 2
+    test_n_remove_pids(new_pids)
+
 end
 end
 
