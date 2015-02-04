@@ -15,7 +15,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
    Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors.
+   string or an array of strings, using ``numcores`` processors. (not exported)
 
 
 .. module:: Base.Test

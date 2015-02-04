@@ -37,10 +37,6 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\\b; y=A\\C``.
 
-.. function:: factorize!(A)
-
-   ``factorize!`` is the same as :func:`factorize`, but saves space by overwriting the input ``A``, instead of creating a copy.
-
 .. function:: lu(A) -> L, U, p
 
    Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.
@@ -675,7 +671,7 @@ BLAS Functions
 
 .. module:: Base.LinAlg.BLAS
 
-This module provides wrappers for some of the BLAS functions for
+:mod:`Base.LinAlg.BLAS` provides wrappers for some of the BLAS functions for
 linear algebra.  Those BLAS functions that overwrite one of the input
 arrays have names ending in ``'!'``.
 
