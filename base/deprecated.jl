@@ -279,3 +279,10 @@ const base64 = base64encode
 
 #9295
 @deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
+
+# 0.4 discontinued functions
+
+function subtypetree(x::DataType, level=-1)
+    depwarn("`subtypetree` is discontinued", :subtypetree)
+    (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
+end

@@ -7,6 +7,7 @@ export
 # Level 1
     asum,
     axpy!,
+    blascopy!,
     dot,
     dotc,
     dotu,
