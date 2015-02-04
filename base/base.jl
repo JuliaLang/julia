@@ -184,23 +184,6 @@ function append_any(xs...)
     out
 end
 
-# used by { } syntax
-function cell_1d(xs::ANY...)
-    n = length(xs)
-    a = Array(Any,n)
-    for i=1:n
-        arrayset(a,xs[i],i)
-    end
-    a
-end
-
-function cell_2d(nr, nc, xs::ANY...)
-    a = Array(Any,nr,nc)
-    for i=1:(nr*nc)
-        arrayset(a,xs[i],i)
-    end
-    a
-end
 
 # simple Array{Any} operations needed for bootstrap
 setindex!(A::Array{Any}, x::ANY, i::Real) = arrayset(A, x, to_index(i))
