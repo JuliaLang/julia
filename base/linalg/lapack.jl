@@ -1745,7 +1745,7 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             @assertargsok
             #info[1]>0 means the leading minor of order info[i] is not positive definite
             #ordinarily, throw Exception here, but return error code here
-            #this simplifies isposdef! and factorize!
+            #this simplifies isposdef! and factorize
             return A, info[1]
         end
         #       SUBROUTINE DPOTRI( UPLO, N, A, LDA, INFO )
