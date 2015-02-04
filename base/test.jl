@@ -1,6 +1,6 @@
 module Test
 
-export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred, with_handler
 
 abstract Result
 type Success <: Result
