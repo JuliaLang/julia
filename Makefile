@@ -304,6 +304,8 @@ endif
 	$(INSTALL_M) contrib/build_sysimg.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in standalone executable build script
 	$(INSTALL_M) contrib/build_executable.jl $(DESTDIR)$(datarootdir)/julia/
+	# Copy in standalone julia-config script
+	$(INSTALL_M) contrib/julia-config.jl $(DESTDIR)$(datarootdir)/julia/
 	# Copy in all .jl sources as well
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
