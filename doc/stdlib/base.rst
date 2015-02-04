@@ -326,10 +326,6 @@ Types
 
    Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
-.. function:: subtypetree(T::DataType)
-
-   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
-
 .. function:: typemin(type)
 
    The lowest value representable by the given (real) numeric type.

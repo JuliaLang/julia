@@ -84,8 +84,6 @@ end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
-subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
-
 # function reflection
 isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
