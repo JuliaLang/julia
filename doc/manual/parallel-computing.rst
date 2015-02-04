@@ -766,6 +766,7 @@ object (with appropriate fields initialized) to ``launched`` ::
 
      # Used when launching additional workers at a host
      count::Nullable{Union(Int, Symbol)}
+     exename::Nullable{AbstractString}
      exeflags::Nullable{Cmd}
 
      # External cluster managers can use this to store information at a per-worker level
@@ -793,11 +794,12 @@ to be configured manually.
 
 If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 
-``count`` and ``exeflags`` are relevant for launching additional workers from a worker.
+``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
 For example, a cluster manager may launch a single worker per node, and use that to launch
 additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
-while a value of ``:auto`` will launch as many workers as cores on that machine. ``exeflags``
-should be set to the required command line arguments for new workers.
+while a value of ``:auto`` will launch as many workers as cores on that machine.
+``exename`` is the name of the julia executable including the full path.
+``exeflags`` should be set to the required command line arguments for new workers.
 
 ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
 required to connect to the workers from the master process.
@@ -805,8 +807,8 @@ required to connect to the workers from the master process.
 ``userdata`` is provided for custom cluster managers to store their own worker specific information.
 
 
-:func:`manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol) <manage>` is called at different
-times during the worker's lifetime with different ``op`` values:
+``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
+times during the worker's lifetime with appropriate ``op`` values:
 
       - with ``:register``/``:deregister`` when a worker is added / removed
         from the Julia worker pool.
@@ -851,9 +853,9 @@ awareness of 0MQ being used as the transport layer.
 When using custom transports:
     - julia workers must be started with arguments ``--worker custom``. Just ``--worker`` will result in the newly launched
       workers defaulting to the socket transport implementation
-    - For every logical connection with a worker, :func:`process_messages(rd::AsyncStream, wr::AsyncStream)` must be called
+    - For every logical connection with a worker, ``process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
       This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
-    - :func:`init_worker(manager::FooManager)` must be called as part of worker process initializaton
+    - ``init_worker(manager::FooManager)`` must be called as part of worker process initializaton
     - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
       this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
       the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
