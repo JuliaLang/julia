@@ -185,6 +185,38 @@ end
 # specify pids for pmap
 @test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
 
+# Testing buffered  and unbuffered reads
+# This large array should write directly to the socket
+a = ones(10^6)
+@test a == remotecall_fetch(id_other, (x)->x, a)
+
+# Not a bitstype, should be buffered
+s = [randstring() for x in 1:10^5]
+@test s == remotecall_fetch(id_other, (x)->x, s)
+
+#large number of small requests
+[remotecall_fetch(id_other, myid) for i in 1:100000]
+
+# test parallel sends of large arrays from multiple tasks to the same remote worker
+ntasks = 10
+rr_list = [RemoteRef() for x in 1:ntasks]
+for rr in rr_list
+    @async let rr=rr
+        a=ones(10^6);
+        try
+            for i in 1:10
+                @test a == remotecall_fetch(id_other, (x)->x, a)
+                yield()
+            end
+            put!(rr, :OK)
+        catch
+            put!(rr, :ERROR)
+        end
+    end
+end
+
+@test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
+
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
 # Hence in the event of any relevant changes to the parallel codebase,
