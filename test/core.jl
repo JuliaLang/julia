@@ -2130,3 +2130,11 @@ barTuple1() = fooTuple{(:y,)}()
 barTuple2() = fooTuple{tuple(:y)}()
 
 @test Base.return_types(barTuple1,())[1] == Base.return_types(barTuple2,())[1] == fooTuple{(:y,)}
+
+#issue #9835
+module M9835
+    using Base.Test
+    type A end; type B end
+    f() = (isa(A(), A) ? A : B)()
+    @test isa(f(), A)
+end
