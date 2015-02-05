@@ -13,7 +13,7 @@ immutable IPv4 <: IPAddr
                                                     d)
     function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
         if !(0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255)
-            throw(DomainError())
+            throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
         end
         IPv4(uint8(a),uint8(b),uint8(c),uint8(d))
     end
@@ -52,12 +52,12 @@ immutable IPv6 <: IPAddr
                             h)
     function IPv6(a::Integer,b::Integer,c::Integer,d::Integer,
           e::Integer,f::Integer,g::Integer,h::Integer)
-    if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
-         0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
-        throw(DomainError())
-    end
-    IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
-         uint16(e),uint16(f),uint16(g),uint16(h))
+        if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
+             0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
+            throw(ArgumentError("IPv6 field out of range (must be 0-65535)"))
+        end
+        IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
+             uint16(e),uint16(f),uint16(g),uint16(h))
     end
 end
 
@@ -234,9 +234,10 @@ end
 type InetAddr
     host::IPAddr
     port::UInt16
-    function InetAddr(host,port)
+
+    function InetAddr(host, port::Integer)
         if !(0 <= port <= typemax(UInt16))
-            throw(DomainError())
+            throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
         end
         new(host,uint16(port))
     end
@@ -409,7 +410,9 @@ const UV_UDP_IPV6ONLY = 1
 const UV_UDP_PARTIAL = 2
 
 function bind(sock::Union(TCPServer,UDPSocket), host::IPv4, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("$(typeof(sock)) is not initialized")
+    end
     err = _bind(sock,host,uint16(port))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
@@ -430,7 +433,9 @@ _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = uint32(0)) = cc
             sock.handle, hton(port), &hton(host.host), flags)
 
 function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("UDPSocket is not initialized")
+    end
     err = _bind(sock,host,port, uint32(ipv6only ? UV_UDP_IPV6ONLY : 0))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
@@ -482,7 +487,7 @@ end
 function recvfrom(sock::UDPSocket)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
-        error("Invalid socket state")
+        error("UDPSocket is not initialized and open")
     end
     _recv_start(sock)
     stream_wait(sock,sock.recvnotify)::(Union(IPv4, IPv6), Vector{UInt8})
@@ -521,7 +526,7 @@ end
 function send(sock::UDPSocket,ipaddr,port,msg)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
-        error("Invalid socket state")
+        error("UDPSocket is not initialized and open")
     end
     uv_error("send",_send(sock,ipaddr,uint16(port),msg))
     stream_wait(sock,sock.sendnotify)
@@ -615,9 +620,11 @@ end
 ##
 
 function connect!(sock::TCPSocket, host::IPv4, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     if !(0 <= port <= typemax(UInt16))
-        throw(DomainError())
+        throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16),
                  sock.handle,hton(host.host),hton(uint16(port))))
@@ -625,9 +632,11 @@ function connect!(sock::TCPSocket, host::IPv4, port::Integer)
 end
 
 function connect!(sock::TCPSocket, host::IPv6, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     if !(0 <= port <= typemax(UInt16))
-        throw(DomainError())
+        throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16),
                  sock.handle,&hton(host.host),hton(uint16(port))))
@@ -646,7 +655,9 @@ connect(addr::InetAddr) = connect(TCPSocket(),addr)
 default_connectcb(sock,status) = nothing
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     ipaddr = getaddrinfo(host)
     sock.status = StatusInit
     connect!(sock,ipaddr,port)
@@ -673,7 +684,9 @@ listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=
 ##
 
 function accept_nonblock(server::TCPServer,client::TCPSocket)
-    @assert client.status == StatusInit
+    if client.status != StatusInit
+        error("client TCPSocket is not initialized")
+    end
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen
