@@ -59,13 +59,15 @@ const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
     global bigintpool
     global BIGINTPOOL_MAXSIZE
+    global _gmp_clear_func
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
         push!(bigintpool, b)
     else
-        ccall((:__gmpz_clear,:libgmp), Void, (Ptr{BigInt},), &b)
+        ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
     end
 end
 
+_gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
 
 function __init__()
@@ -75,6 +77,7 @@ function __init__()
                      "Please rebuild Julia."))
     end
 
+    global _gmp_clear_func = cglobal((:__gmpz_clear, :libgmp))
     global _mpfr_clear_func = cglobal((:mpfr_clear, :libmpfr))
     ccall((:__gmp_set_memory_functions, :libgmp), Void,
           (Ptr{Void},Ptr{Void},Ptr{Void}),
