@@ -18,12 +18,12 @@ function eigs(A, B;
     nevmax=sym ? n-1 : n-2
     if nev > nevmax
         nev = nevmax
-        warn("nev should be at most $nevmax")
+        isinteractive() && warn("nev should be at most $nevmax")
     end
     nev > 0 || throw(ArgumentError("requested number of eigen values (nev) must be ≥ 1, got $nev"))
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("ncv should be at least $ncvmin")
+        isinteractive() && warn("ncv should be at least $ncvmin")
         ncv = ncvmin
     end
     ncv = blas_int(min(ncv, n))
@@ -32,7 +32,7 @@ function eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        isinteractive() && warn("Use symbols instead of strings for specifying which eigenvalues to compute")
         which=symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -40,8 +40,11 @@ function eigs(A, B;
        throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
     end
     which != :BE || sym || throw(ArgumentError("which=:BE only possible for real symmetric problem"))
-    isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
-
+    if isshift && which == :SM
+        if isinteractive()
+            warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
+        end
+    end
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
         isshift=true
         sigma=zero(T)
