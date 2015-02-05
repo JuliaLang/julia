@@ -41,37 +41,28 @@ type BigInt <: Integer
     size::Cint
     d::Ptr{Limb}
     function BigInt()
-        # global bigintpool
-        # if length(bigintpool) > 0
-        #     b = pop!(bigintpool)
-        #     finalizer(b, poolingfinalizer)
-        #     return b
-        # end
+        if length(bigintpool) > 0
+            b = pop!(bigintpool)
+            finalizer(b, poolingfinalizer)
+            return b
+        end
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
         finalizer(b, poolingfinalizer)
-        #finalizer(b, _gmp_clear_func)
         return b
     end
 end
 
+const bigintpool = BigInt[]
+const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
-    ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
+    if length(bigintpool) < BIGINTPOOL_MAXSIZE
+        push!(bigintpool, deepcopy(b))
+    else
+        ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
+    end
+    nothing
 end
-
-
-# const bigintpool = BigInt[]
-# const BIGINTPOOL_MAXSIZE = 100000
-# function poolingfinalizer(b::BigInt)
-#     global bigintpool
-#     global BIGINTPOOL_MAXSIZE
-#     global _gmp_clear_func
-#     #if length(bigintpool) < BIGINTPOOL_MAXSIZE
-#         #push!(bigintpool, b)
-#     #else
-#         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
-#     #end
-# end
 
 _gmp_clear_func = C_NULL
 _mpfr_clear_func = C_NULL
