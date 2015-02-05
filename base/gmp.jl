@@ -41,25 +41,24 @@ type BigInt <: Integer
     size::Cint
     d::Ptr{Limb}
     function BigInt()
+        b::BigInt
         if length(bigintpool) > 0
             b = pop!(bigintpool)
-            finalizer(b, poolingfinalizer)
-            return b
+            x= string(b) #########   <------- segfaulting!
+        else
+            b = new(zero(Cint), zero(Cint), C_NULL)
+            ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
         end
-        b = new(zero(Cint), zero(Cint), C_NULL)
-        ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
         finalizer(b, poolingfinalizer)
         return b
     end
-    BigInt(alloc, size, d) = new(alloc, size, d)
 end
 
 const bigintpool = BigInt[]
 const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
-    x = string(b)
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
-        push!(bigintpool, BigInt(b.alloc, b.size, b.d))
+        push!(bigintpool, b)
     else
         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
     end
