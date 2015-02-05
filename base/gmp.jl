@@ -60,11 +60,11 @@ function poolingfinalizer(b::BigInt)
     global bigintpool
     global BIGINTPOOL_MAXSIZE
     global _gmp_clear_func
-    if length(bigintpool) < BIGINTPOOL_MAXSIZE
+    #if length(bigintpool) < BIGINTPOOL_MAXSIZE
         #push!(bigintpool, b)
-    else
+    #else
         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
-    end
+    #end
 end
 
 _gmp_clear_func = C_NULL
