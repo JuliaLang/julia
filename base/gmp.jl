@@ -44,6 +44,7 @@ type BigInt <: Integer
         if length(bigintpool) > 0
             b = pop!(bigintpool)
             finalizer(b, poolingfinalizer)
+            warn("\n\nREUSING!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
             return b
         end
         b = new(zero(Cint), zero(Cint), C_NULL)
