@@ -44,8 +44,6 @@ type BigInt <: Integer
         if length(bigintpool) > 0
             b = pop!(bigintpool)
             finalizer(b, poolingfinalizer)
-            #warn("\n\nREUSING!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!\n\n")
-            #@show b
             return b
         end
         b = new(zero(Cint), zero(Cint), C_NULL)
@@ -59,6 +57,7 @@ end
 const bigintpool = BigInt[]
 const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
+    @show(b)
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
         push!(bigintpool, BigInt(b.alloc, b.size, b.d))
     else
