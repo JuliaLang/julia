@@ -286,3 +286,7 @@ function subtypetree(x::DataType, level=-1)
     depwarn("`subtypetree` is discontinued", :subtypetree)
     (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 end
+
+# 8898
+@deprecate precision(x::DateTime) eps(x)
+@deprecate precision(x::Date) eps(x)

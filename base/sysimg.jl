@@ -276,9 +276,6 @@ importall .QuadGK
 include("fastmath.jl")
 importall .FastMath
 
-# deprecated functions
-include("deprecated.jl")
-
 # package manager
 include("pkg.jl")
 const Git = Pkg.Git
@@ -293,6 +290,9 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# deprecated functions
+include("deprecated.jl")
 
 # Some basic documentation
 include("basedocs.jl")
