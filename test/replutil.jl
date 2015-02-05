@@ -49,5 +49,20 @@ no_color = no_color = "\nClosest candidates are:\n  method_c3(::Float64, !Matche
 test_have_color(buf, color, no_color)
 
 # Test for the method error in issue #8651
-Base.show_method_candidates(buf, MethodError(readline,(ASCIIString,)))
+Base.show_method_candidates(buf, MethodError(readline,("",)))
 test_have_color(buf, "", "")
+
+method_c4(::Type{Float64}) = true
+Base.show_method_candidates(buf, MethodError(method_c4,(Float64,)))
+test_have_color(buf, "\e[0m\nClosest candidates are:\n  method_c4(::Type{Float64})\n\e[0m",
+                "\nClosest candidates are:\n  method_c4(::Type{Float64})\n")
+
+Base.show_method_candidates(buf, MethodError(method_c4,(Int32,)))
+test_have_color(buf, "", "")
+
+type Test_type end
+test_type = Test_type()
+for f in [getindex, setindex!]
+    Base.show_method_candidates(buf, MethodError(f,(test_type, 1,1)))
+    test_have_color(buf, "", "")
+end
