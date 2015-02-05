@@ -2263,3 +2263,56 @@ end
 @test reinterpret(Float32,bswap(0x0000c03f)) === 1.5f0
 @test bswap(reinterpret(Float64,0x000000000000f03f)) === 1.0
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
+
+#isreal(x::Real) = true
+for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+    @test isreal(x) == true
+end
+
+#eltype{T<:Number}(::Type{T}) = T
+for T in [subtypes(Complex), subtypes(Real)]
+    @test eltype(T) == T
+end
+
+#ndims{T<:Number}(::Type{T}) = 0
+for x in [subtypes(Complex), subtypes(Real)]
+    @test ndims(x) == 0
+end
+
+#getindex(x::Number) = x
+for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+    @test getindex(x) == x
+end
+
+#copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
+#same sign
+for x in [1.23, 7, e, 4//5]
+    for y in [1.23, 7, e, 4//5]
+        @test copysign(x,y) == x
+    end
+end
+#different sign
+for x in [1.23, 7, e, 4//5]
+    for y in [1.23, 7, e, 4//5]
+        @test copysign(x, -y) == -x
+    end
+end
+
+#angle(z::Real) = atan2(zero(z), z)
+#function only returns two values, depending on sign
+@test angle(10) == 0.0
+@test angle(-10) == 3.141592653589793
+
+#in(x::Number, y::Number) = x == y
+@test in(3,3) == true #Int
+@test in(2.0,2.0) == true #FP
+@test in(e,e) == true #Const
+@test in(4//5,4//5) == true #Rat
+@test in(1+2im, 1+2im) == true #Imag
+@test in(3, 3.0) == true #mixed
+
+#map(f::Callable, x::Number) = f(x)
+@test map(sin, 3) == sin(3)
+@test map(cos, 3) == cos(3)
+@test map(tan, 3) == tan(3)
+@test map(log, 3) == log(3)
