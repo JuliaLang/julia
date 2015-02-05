@@ -4,8 +4,16 @@
 @test ip"192.0xFFFF" == IPv4(192,0,255,255)
 @test ip"192.0xFFFFF" == IPv4(192,15,255,255)
 @test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
-@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFF")
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
+
+let ipv = parseip("127.0.0.1")
+    @test isa(ipv, IPv4)
+    @test ipv == ip"127.0.0.1"
+end
+
+@test_throws ArgumentError Base.parseipv4("192.0xFFFFFFF")
+@test_throws ArgumentError IPv4(192,255,255,-1)
+@test_throws ArgumentError IPv4(192,255,255,256)
 
 @test_throws ArgumentError Base.parseipv4("192.0xFFFFFFFFF")
 @test_throws ArgumentError Base.parseipv4("192.")
@@ -16,6 +24,23 @@
 @test ip"2001:db8:0:0:0:0:2:1" == ip"2001:db8::2:1" == ip"2001:db8::0:2:1"
 
 @test ip"0:0:0:0:0:ffff:127.0.0.1" == IPv6(0xffff7f000001)
+
+let ipv = parseip("0:0:0:0:0:ffff:127.0.0.1")
+    @test isa(ipv, IPv6)
+    @test ipv == ip"0:0:0:0:0:ffff:127.0.0.1"
+end
+
+@test_throws ArgumentError IPv6(1,1,1,1,1,1,1,-1)
+@test_throws ArgumentError IPv6(1,1,1,1,1,1,1,typemax(UInt16)+1)
+
+# test InetAddr constructor
+let inet = Base.InetAddr(IPv4(127,0,0,1), 1024)
+    @test inet.host == ip"127.0.0.1"
+    @test inet.port == 1024
+end
+# test InetAddr invalid port
+@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), -1)
+@test_throws ArgumentError Base.InetAddr(IPv4(127,0,0,1), typemax(UInt16)+1)
 
 # isless and comparisons
 @test ip"1.2.3.4" < ip"1.2.3.7" < ip"2.3.4.5"
@@ -65,6 +90,12 @@ end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
 @test_throws Base.UVError connect("localhost", 21452)
+
+# test invalid port
+@test_throws ArgumentError connect(ip"127.0.0.1",-1)
+@test_throws ArgumentError connect(ip"127.0.0.1", typemax(Uint16)+1)
+@test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", -1)
+@test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(Uint16)+1)
 
 p, server = listenany(defaultport)
 r = RemoteRef()
