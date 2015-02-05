@@ -44,7 +44,7 @@ type BigInt <: Integer
         global bigintpool
         if length(bigintpool) > 0
             b = pop!(bigintpool)
-            finalizer(b, poolingfinalizer)
+            #finalizer(b, poolingfinalizer)
             return b
         end
         b = new(zero(Cint), zero(Cint), C_NULL)
