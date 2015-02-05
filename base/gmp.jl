@@ -57,7 +57,7 @@ end
 const bigintpool = BigInt[]
 const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
-    @show(b)
+    x = string(b)
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
         push!(bigintpool, BigInt(b.alloc, b.size, b.d))
     else
