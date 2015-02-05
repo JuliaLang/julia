@@ -178,6 +178,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
         write(repl.terminal, "julia> ")
         line = ""
         ast = nothing
+        interrupted = false
         while true
             try
                 line *= readline(repl.terminal)
@@ -187,7 +188,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
                         ccall(:jl_raise_debugger, Int, ())
                     end
                     line = ""
-                    write(repl.terminal, "^C\n")
+                    interrupted = true
                     break
                 elseif isa(e,EOFError)
                     hit_eof = true
@@ -207,7 +208,7 @@ function run_frontend(repl::BasicREPL, backend::REPLBackendRef)
             end
         end
         write(repl.terminal, '\n')
-        (isempty(line) || hit_eof) && break
+        ((!interrupted && isempty(line)) || hit_eof) && break
     end
     # terminate backend
     put!(repl_channel, (nothing, -1))
