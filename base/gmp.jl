@@ -44,7 +44,7 @@ type BigInt <: Integer
         global bigintpool
         if length(bigintpool) > 0
             b = pop!(bigintpool)
-            #finalizer(b, poolingfinalizer)
+            finalizer(b, poolingfinalizer)
             return b
         end
         b = new(zero(Cint), zero(Cint), C_NULL)
@@ -61,7 +61,7 @@ function poolingfinalizer(b::BigInt)
     global BIGINTPOOL_MAXSIZE
     global _gmp_clear_func
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
-        push!(bigintpool, b)
+        #push!(bigintpool, b)
     else
         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
     end
