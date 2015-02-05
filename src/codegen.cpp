@@ -552,7 +552,11 @@ extern "C" {
 extern "C" DLLEXPORT
 jl_value_t *jl_get_cpu_name(void)
 {
+#if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR < 5
+    std::string HostCPUName = llvm::sys::getHostCPUName();
+#else
     StringRef HostCPUName = llvm::sys::getHostCPUName();
+#endif
     return jl_pchar_to_string(HostCPUName.data(), HostCPUName.size());
 }
 
