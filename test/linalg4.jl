@@ -102,6 +102,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test_approx_eq full(op(T, T2)) op(Tfull, Tfull2)
             end
         end
+
+        debug && println("Inverse")
+        @test_approx_eq inv(T)*Tfull eye(n)
     end
 end
 
