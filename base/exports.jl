@@ -10,6 +10,7 @@ export
     Dates,
     Sys,
     Test,
+    LinAlg,
     BLAS,
     LAPACK,
     Docs,
