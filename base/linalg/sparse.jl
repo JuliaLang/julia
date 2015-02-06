@@ -589,16 +589,25 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
+# Copy colptr and rowval from one SparseMatrix to another
+function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
+    if C.colptr !== A.colptr
+        resize!(C.colptr, length(A.colptr))
+        copy!(C.colptr, A.colptr)
+    end
+    if C.rowval !== A.rowval
+        resize!(C.rowval, length(A.rowval))
+        copy!(C.rowval, A.rowval)
+    end
+end
+
 # multiply by diagonal matrix as vector
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
     numnz = nnz(A)
-    if C !== A
-        C.colptr = convert(Array{Ti}, A.colptr)
-        C.rowval = convert(Array{Ti}, A.rowval)
-        C.nzval = Array(Tv, numnz)
-    end
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[col]
     end
@@ -609,11 +618,8 @@ function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
     (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
     numnz = nnz(A)
-    if C !== A
-        C.colptr = convert(Array{Ti}, A.colptr)
-        C.rowval = convert(Array{Ti}, A.rowval)
-        C.nzval = Array(Tv, numnz)
-    end
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[A.rowval[p]]
     end
