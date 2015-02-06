@@ -1334,3 +1334,10 @@ end
 @test lcfirst("")==""
 @test lcfirst("*")=="*"
 
+#more UTF8String tests
+@test convert(UTF8String, UInt8[32,107,75], "*") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "*") == "*kK"
+@test convert(UTF8String, UInt8[32,107,75], "αβ") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
+@test convert(UTF8String, UInt8[], "*") == ""
+@test convert(UTF8String, UInt8[255], "αβ") == "αβ"
