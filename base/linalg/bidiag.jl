@@ -185,6 +185,8 @@ function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
     TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
 end
 
+factorize(A::Bidiagonal) = A
+
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv
 function eigvecs{T}(M::Bidiagonal{T})
