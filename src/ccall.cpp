@@ -732,7 +732,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!failed)
             m = jl_Module;
 #else
-        Module *m = ParseAssemblyString(ir_string.data(),jl_Module,Err,jl_LLVMContext);
+        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
 #endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
