@@ -159,6 +159,10 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9
 
+@test maximum(Int16[1]) === Int16(1)
+@test maximum(collect(Int16(1):Int16(100))) === Int16(100)
+@test maximum(Int32[1,2]) === Int32(2)
+
 # any & all
 
 @test any(Bool[]) == false
