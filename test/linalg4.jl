@@ -254,10 +254,8 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Conversion from Bidiagonal to Tridiagonal")
-        for isupper in (true, false)
-            C = Bidiagonal(dv, ev, isupper)
-            @test full(C) == full(Tridiagonal(C))
-        end
+        C = Bidiagonal(dv, ev, isupper)
+        @test full(C) == full(Tridiagonal(C))
     end
 end
 
