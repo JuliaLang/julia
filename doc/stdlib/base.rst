@@ -41,10 +41,16 @@ Getting Around
 
    Determine whether Julia is running an interactive session.
 
-.. function:: whos([Module,] [pattern::Regex])
+.. function:: whos([Module,] [pattern::Regex]; [filter=Module])
 
-   Print information about exported global variables in a module, optionally restricted
-   to those matching ``pattern``.
+   Print information about exported global variables in a module (defaults to
+   the current module), optionally restricted to those matching ``pattern``.
+
+   The ``filter`` keyword is either a single type or iterable object of types.
+   Variables who are of type or subtype of an element in ``filter`` will not be
+   displayed. E.g., ``filter=Any`` will prevent any output. If the function is
+   called with an explicit Module argument, nothing will be filtered.
+   Otherwise, submodules in the current module will not be displayed.
 
 .. function:: edit(file::AbstractString, [line])
 
