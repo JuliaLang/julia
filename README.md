@@ -198,17 +198,11 @@ The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) co
 
 For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
 
-#### RHEL/CentOS 5
+#### RHEL/CentOS 6
 
-On RHEL/CentOS 5 systems, the default compiler (`gcc` 4.1) is too old to build Julia.
+On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
 
-If the `gcc44` and `gfortran44` packages are installed, you can specify their use by adding the following to Make.user
-
-    FC = gfortran44
-    CC = gcc44
-    CXX = g++44
-
-Otherwise, install or contact your systems administrator to install a more recent version of `gcc`.
+Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
 
 #### Google Compute Engine
 
@@ -261,7 +255,7 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.4) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
 - **[gfortran][gcc]**           — compiling and linking Fortran libraries
 - **[git]**                     — version control and package management (version 1.7.3+ required)
 - **[perl]**                    — preprocessing of header files of libraries.
