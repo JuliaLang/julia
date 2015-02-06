@@ -22,6 +22,8 @@ r_promote(::AddFun, x::Number) = x + zero(x)
 r_promote(::MulFun, x::Number) = x * one(x)
 r_promote(::AddFun, x) = x
 r_promote(::MulFun, x) = x
+r_promote(::MaxFun, x::WidenReduceResult) = x
+r_promote(::MinFun, x::WidenReduceResult) = x
 r_promote(::MaxFun, x) = x
 r_promote(::MinFun, x) = x
 
