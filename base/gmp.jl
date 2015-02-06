@@ -35,11 +35,17 @@ else
     error("GMP: cannot determine the type mp_limb_t (__gmp_bits_per_limb == $GMP_BITS_PER_LIMB)")
 end
 
+immutable NotFromPool end
 
 type BigInt <: Integer
     alloc::Cint
     size::Cint
     d::Ptr{Limb}
+    function BigInt(::Type{NotFromPool})
+        b = new(zero(Cint), zero(Cint), C_NULL)
+        ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
+        finalizer(b, poolingfinalizer)
+    end
     function BigInt()
         b::BigInt
         if length(bigintpool) > 0
@@ -48,8 +54,8 @@ type BigInt <: Integer
         else
             b = new(zero(Cint), zero(Cint), C_NULL)
             ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
-            finalizer(b, poolingfinalizer)
         end
+        finalizer(b, poolingfinalizer)
         return b
     end
 end
@@ -58,7 +64,7 @@ const bigintpool = BigInt[]
 const BIGINTPOOL_MAXSIZE = 100000
 function poolingfinalizer(b::BigInt)
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
-        push!(bigintpool, b)
+        push!(bigintpool, BigInt(NotFromPool))
     else
         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
     end
