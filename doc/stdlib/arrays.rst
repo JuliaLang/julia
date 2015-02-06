@@ -145,7 +145,7 @@ Constructors
 
 .. function:: similar(array, element_type, dims)
 
-   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments.
+   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments. For some special ``AbstractArray`` objects which are not real containers (like ranges), this function returns a standard ``Array`` to allow operating on elements.
 
 .. function:: reinterpret(type, A)
 
