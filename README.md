@@ -235,9 +235,9 @@ If you see build failures in OpenBLAS or if you prefer to experiment, you can us
 
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the `gcc46`, `git`, and `gmake` packages/ports, and compile Julia with the command:
+On *FreeBSD Release 9.0*, install the `gcc47`, `git`, and `gmake` packages/ports, and compile Julia with the command:
 
-    $ gmake FC=gfortran46
+    $ gmake FC=gfortran47
 
 You must use the `gmake` command on FreeBSD instead of `make`.
 
