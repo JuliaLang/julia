@@ -136,8 +136,8 @@ Date(y,m=1,d=1) = Date(_c(y),_c(m),_c(d))
 Base.isfinite{T<:TimeType}(::Union(Type{T},T)) = true
 calendar(dt::DateTime) = ISOCalendar
 calendar(dt::Date) = ISOCalendar
-Base.precision(dt::DateTime) = Millisecond
-Base.precision(dt::Date) = Day
+Base.eps(dt::DateTime) = Millisecond(1)
+Base.eps(dt::Date) = Day(1)
 Base.typemax(::Union(DateTime,Type{DateTime})) = DateTime(146138512,12,31,23,59,59)
 Base.typemin(::Union(DateTime,Type{DateTime})) = DateTime(-146138511,1,1,0,0,0)
 Base.typemax(::Union(Date,Type{Date})) = Date(252522163911149,12,31)
