@@ -182,6 +182,8 @@ workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
     @test isready(rr1)
 end
 
+# specify pids for pmap
+@test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
 
 # TODO: The below block should be always enabled but the error is printed by the event loop
 
