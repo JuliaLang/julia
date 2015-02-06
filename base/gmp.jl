@@ -48,8 +48,8 @@ type BigInt <: Integer
         else
             b = new(zero(Cint), zero(Cint), C_NULL)
             ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
+            finalizer(b, poolingfinalizer)
         end
-        finalizer(b, poolingfinalizer)
         return b
     end
 end
