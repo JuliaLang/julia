@@ -5394,7 +5394,7 @@ extern "C" void jl_init_codegen(void)
             TheTriple,
             "",
 #if LLVM35
-            strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : sys::getHostCPUName().data(),
+            strcmp(jl_compileropts.cpu_target,"native") ? StringRef(jl_compileropts.cpu_target) : sys::getHostCPUName(),
 #else
             strcmp(jl_compileropts.cpu_target,"native") ? jl_compileropts.cpu_target : "",
 #endif
