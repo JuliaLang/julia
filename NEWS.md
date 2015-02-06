@@ -76,6 +76,8 @@ Compiler improvements
 Library improvements
 --------------------
 
+  * The `LinAlg` module is now exported.
+
   * `sparse(A)` now takes any `AbstractMatrix` A as an argument. ([#10031])
 
   * Factorization api is now type-stable, functions dispatch on `Val{false}` or `Val{true}` instead of a boolean value ([#9575]).
