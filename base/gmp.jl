@@ -45,6 +45,7 @@ type BigInt <: Integer
         b = new(zero(Cint), zero(Cint), C_NULL)
         ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
         finalizer(b, poolingfinalizer)
+        b
     end
     function BigInt()
         b::BigInt
