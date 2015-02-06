@@ -70,3 +70,13 @@ Calling a particular method
    (gdb) break jl_apply_generic if strcmp(F->name->name, "method_to_break")==0
 
 Since this function is used for every call, you will make everything 1000x slower if you do this.
+
+Mozilla's Record and Replay Framework (rr)
+---------------------------------------------
+
+Julia now works out of the box with `rr, <http://rr-project.org/>`_ the lightweight recording and
+deterministic debugging framework from Mozilla. This allows you to replay the trace of an execution
+deterministically.  The replayed execution's address spaces, register contents, syscall data etc
+are exactly the same in every run.
+
+A recent build of ``rr`` (from after 4 Feb 2015) is required.
