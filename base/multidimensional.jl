@@ -564,9 +564,9 @@ stagedfunction unsafe_getindex(B::BitArray, I0::UnitRange{Int}, I::Union(Int,Uni
         @nloops($N, i, d->I_d,
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
-        begin # BODY
-            copy_chunks!(X.chunks, storeind, B.chunks, ind, l0)
-            storeind += l0
+                begin # BODY
+                    copy_chunks!(X.chunks, storeind, B.chunks, ind, l0)
+                    storeind += l0
                 end)
         return X
     end
@@ -589,8 +589,8 @@ stagedfunction unsafe_getindex(B::BitArray, I::Union(Int,AbstractVector{Int})...
         @nloops($N, i, d->I_d,
                 d->(offset_{d-1} = offset_d + (i_d-1)*stride_d), # PRE
                 begin
-            unsafe_bitsetindex!(Xc, B[offset_0], ind)
-            ind += 1
+                    unsafe_bitsetindex!(Xc, B[offset_0], ind)
+                    ind += 1
                 end)
         return X
     end
@@ -687,9 +687,9 @@ stagedfunction unsafe_setindex!(B::BitArray, X::BitArray, I0::UnitRange{Int}, I:
         @nloops($N, i, d->I[d],
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
-        begin # BODY
-            copy_chunks!(B.chunks, ind, X.chunks, refind, l0)
-            refind += l0
+                begin # BODY
+                    copy_chunks!(B.chunks, ind, X.chunks, refind, l0)
+                    refind += l0
                 end)
 
         return B
@@ -718,9 +718,8 @@ stagedfunction unsafe_setindex!(B::BitArray, x::Bool, I0::UnitRange{Int}, I::Uni
         @nloops($N, i, d->I[d],
                 d->nothing, # PRE
                 d->(ind += stride_lst_d - gap_lst_d), # POST
-        begin # BODY
-            fill_chunks!(B.chunks, x, ind, l0)
-                end)
+                fill_chunks!(B.chunks, x, ind, l0) # BODY
+                )
 
         return B
     end
@@ -860,9 +859,9 @@ for (V, PT, BT) in [((:N,), BitArray, BitArray), ((:T,:N), Array, StridedArray)]
                     d->(counts_d = strides_d), # PRE
                     d->(counts_{d+1} += strides_{d+1}), # POST
                     begin # BODY
-                    sumc = sum(@ntuple $N d->counts_{d+1})
-                    @inbounds P[ind] = B[sumc+offset]
-                    ind += 1
+                        sumc = sum(@ntuple $N d->counts_{d+1})
+                        @inbounds P[ind] = B[sumc+offset]
+                        ind += 1
                     end)
 
             return P
@@ -901,16 +900,16 @@ stagedfunction unique{T,N}(A::AbstractArray{T,N}, dim::Int)
         # Check for collisions
         collided = falses(size(A, dim))
         @inbounds begin
-                          @nloops $N i A d->(if d == dim
-                              k = i_d
-                              j_d = uniquerow[k]
-                          else
-                              j_d = i_d
-                          end) begin
-                              if (@nref $N A j) != (@nref $N A i)
-                                  collided[k] = true
-                              end
-                          end
+            @nloops $N i A d->(if d == dim
+                k = i_d
+                j_d = uniquerow[k]
+            else
+                j_d = i_d
+            end) begin
+                if (@nref $N A j) != (@nref $N A i)
+                    collided[k] = true
+                end
+            end
         end
 
         if any(collided)

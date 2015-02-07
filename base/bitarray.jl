@@ -474,16 +474,16 @@ function setindex!(B::BitArray, X::AbstractArray, I::BitArray)
         @inbounds C = Bc[i]
         u = uint64(1)
         for j = 1:(i < lc ? 64 : last_chunk_len)
-               if Imsk & u != 0
-                      x = convert(Bool, X[c])
-                      if x
-                             C |= u
-                      else
-                             C &= ~u
-                      end
-                      c += 1
-               end
-               u <<= 1
+            if Imsk & u != 0
+                x = convert(Bool, X[c])
+                if x
+                    C |= u
+                else
+                    C &= ~u
+                end
+                c += 1
+            end
+            u <<= 1
         end
         @inbounds Bc[i] = C
     end
