@@ -48,6 +48,7 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
     ios_vprintf(&buf, fmt, args);
     va_end(args);
     if (jl_errorexception_type == NULL) {
+        ios_write(&buf, "", 1); // null terminate the buffer
         JL_PRINTF(JL_STDERR, "%s", buf.buf);
         jl_exit(1);
     }
