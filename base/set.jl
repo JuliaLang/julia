@@ -53,6 +53,7 @@ function union(s::Set, sets::Set...)
 end
 const ∪ = union
 union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
+union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs));for x=xs; push!(s,x); end; s)
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
