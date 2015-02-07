@@ -576,15 +576,15 @@ end
 prepend!(B::BitVector, items::AbstractVector{Bool}) = prepend!(B, bitpack(items))
 prepend!(A::Vector{Bool}, items::BitVector) = prepend!(A, bitunpack(items))
 
-function sizehint!(B::BitVector, sz::Integer)
-    ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(sz))
+function sizehint!(B::BitVector, n::Integer)
+    ccall(:jl_array_sizehint, Void, (Any, UInt), B.chunks, num_bit_chunks(n))
     return B
 end
 
 function resize!(B::BitVector, n::Integer)
     n0 = length(B)
     n == n0 && return B
-    n >= 0 || throw(BoundsError(B, n))
+    n >= 0 || throw(ArgumentError("new length must be ≥ 0"))
     if n < n0
         deleteat!(B, n+1:n0)
         return B

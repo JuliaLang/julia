@@ -172,6 +172,37 @@ for i = 1:4
 end
 @test_throws BoundsError insert!(v, 5, 5)
 
+## sizehint!, resize!, empty!
+a = [1,2]
+
+resize!(a, 4)
+@test length(a) == 4
+resize!(a, 3)
+@test length(a) == 3
+@test_throws ArgumentError resize!(a, -1)
+
+sizehint!(a, 1000)
+@test length(a) == 3
+sizehint!(a, 0)
+sizehint!(a, -1)
+@test length(a) == 3
+
+a = Int[]
+b = Int[]
+sizehint!(a, 99)
+sizehint!(b, 100)
+bytes_a = @allocated for _ = 1:100; push!(a, 1); end
+bytes_b = @allocated for _ = 1:100; push!(b, 1); end
+@test bytes_a > 0
+@test bytes_b == 0
+bytes_b101 = @allocated push!(b, 1)
+@test bytes_b101 > 0
+
+empty!(a)
+@test length(a) == 0
+bytes_a = @allocated for _ = 1:100; push!(a, 1); end
+@test bytes_a == 0
+
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
 @test isequal([ones(2,2), 2*ones(1,2)], [1. 1; 1 1; 2 2])

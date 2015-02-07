@@ -470,8 +470,9 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     return h
 end
 
-function sizehint!(d::Dict, newsz)
+function sizehint!(d::Dict, n::Integer)
     oldsz = length(d.slots)
+    newsz = ceil(Int, 1.5*n) # _setindex! currently rehashes when 2/3 full
     if newsz <= oldsz
         # todo: shrink
         # be careful: rehash!() assumes everything fits. it was only designed

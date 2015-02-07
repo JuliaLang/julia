@@ -32,7 +32,7 @@ delete!(s::Set, x) = (delete!(s.dict, x); s)
 
 copy(s::Set) = union!(similar(s), s)
 
-sizehint!(s::Set, newsz) = (sizehint!(s.dict, newsz); s)
+sizehint!(s::Set, n::Integer) = (sizehint!(s.dict, n); s)
 empty!{T}(s::Set{T}) = (empty!(s.dict); s)
 rehash!(s::Set) = (rehash!(s.dict); s)
 

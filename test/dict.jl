@@ -93,6 +93,37 @@ end
 @test_throws ArgumentError first(Dict())
 @test first(Dict(:f=>2)) == (:f,2)
 
+# sizehint!, empty!
+a = Dict(1 => true, 2 => false)
+sizehint!(a, 1000)
+@test length(a) == 2
+sizehint!(a, 0)
+sizehint!(a, -1)
+@test length(a) == 2
+
+let
+    local hint
+    min_a = typemax(Int)
+    min_b = typemax(Int)
+    for hint in 32:100
+        a = Dict{Int, Bool}()
+        b = Dict{Int, Bool}()
+        sizehint!(b, hint)
+        min_a = min(min_a, @allocated(for i = 1:hint; a[i] = true; end))
+        min_b = min(min_b, @allocated(for i = 1:hint; b[i] = true; end))
+    end
+    @test min_a > 0
+    @test min_b == 0
+
+    a = Dict{Int, Bool}()
+    bytes_new_a = @allocated for i = 1:100; a[i] = true; end
+    @test bytes_new_a > 0
+    empty!(a)
+    @test length(a) == 0
+    bytes_empty_a = @allocated for i = 1:100; a[i] = true; end
+    @test bytes_empty_a == 0
+end
+
 # issue #1821
 let
     d = Dict{UTF8String, Vector{Int}}()
