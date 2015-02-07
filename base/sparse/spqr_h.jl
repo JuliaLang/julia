@@ -17,6 +17,10 @@ const SPQR_ORDERING_BESTAMD = int32(9) # try COLAMD and AMD; pick best
 # tried.  If there is a high fill-in with AMD then try METIS(A'A) and take
 # the best of AMD and METIS.  METIS is not tried if it isn't installed.
 
+## tol options
+const SPQR_DEFAULT_TOL = -2.       # if tol <= -2, the default tol is used
+const SPQR_NO_TOL = -1.            # if -2 < tol < 0, then no tol is used
+
 ## Operations in qmult
 const SPQR_QTX = int32(0)        # Y = Q'*X
 const SPQR_QX  = int32(1)        # Y = Q*X

@@ -125,3 +125,20 @@ pred = afiro'*sol
 a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0])
 @test_approx_eq lufact(a)\[2.0,3.0] [2.0,3.0]
 @test_approx_eq cholfact(a)\[2.0,3.0] [2.0,3.0]
+
+# spqr
+A = sprand(20, 10, 0.5)
+y = randn(20)
+for thin = (false, true)
+    (Qs, Rs) = qr(A, Val{false}; thin=thin)
+    @test_approx_eq Qs'Qs eye(size(Qs, 2))
+    @test_approx_eq A Qs*Rs
+
+    (Qs, Rs, p) = qr(A, Val{true}; thin=thin)
+    @test_approx_eq Qs'Qs eye(size(Qs, 2))
+    @test_approx_eq A[:, p] Qs*Rs
+end
+
+qrs = qrfact(A)
+qrf = qrfact(full(A))
+@test_approx_eq qrs\y qrf\y
