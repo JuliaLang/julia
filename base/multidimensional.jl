@@ -819,7 +819,7 @@ stagedfunction isassigned(B::BitArray, I_0::Int, I::Int...)
         @nexprs $N d->(I_d = I[d])
         stride = 1
         index = I_0
-        @nexprs N d->begin
+        @nexprs $N d->begin
             l = size(B,d)
             stride *= l
             1 <= I_{d-1} <= l || return false
