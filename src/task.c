@@ -515,8 +515,16 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn) return fn;
-#endif
+    if (jl_in_stackwalk) {
+        return 0;
+    }
+    jl_in_stackwalk = 1;
+    PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
+    jl_in_stackwalk = 0;
+    return ftable;
+#else
     return SymFunctionTableAccess64(hProcess, AddrBase);
+#endif
 }
 static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
@@ -527,6 +535,13 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn) return ImageBase;
+    if (jl_in_stackwalk) {
+        return 0;
+    }
+    jl_in_stackwalk = 1;
+    DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
+    jl_in_stackwalk = 0;
+    return fbase;
 #else
     if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
@@ -535,8 +550,8 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         HistoryTable.ImageBase = ImageBase;
         return ImageBase;
     }
-#endif
     return SymGetModuleBase64(hProcess, dwAddr);
+#endif
 }
 
 int needsSymRefreshModuleList;
@@ -545,52 +560,74 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
-    jl_in_stackwalk = 1;
     RtlCaptureContext(&Context);
-    jl_in_stackwalk = 0;
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context)
 {
-    if (jl_in_stackwalk) {
-        return 0;
-    }
-    STACKFRAME64 stk;
-    memset(&stk, 0, sizeof(stk));
-
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0) {
+    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
         jl_in_stackwalk = 1;
         hSymRefreshModuleList(GetCurrentProcess());
         jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
-#if defined(_CPU_X86_64_)
-    DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
-    stk.AddrPC.Offset = Context->Rip;
-    stk.AddrStack.Offset = Context->Rsp;
-    stk.AddrFrame.Offset = Context->Rbp;
-#elif defined(_CPU_X86_)
+#if !defined(_CPU_X86_64_)
+    if (jl_in_stackwalk) {
+        return 0;
+    }
     DWORD MachineType = IMAGE_FILE_MACHINE_I386;
+    STACKFRAME64 stk;
+    memset(&stk, 0, sizeof(stk));
     stk.AddrPC.Offset = Context->Eip;
     stk.AddrStack.Offset = Context->Esp;
     stk.AddrFrame.Offset = Context->Ebp;
-#else
-#error WIN16 not supported :P
-#endif
     stk.AddrPC.Mode = AddrModeFlat;
     stk.AddrStack.Mode = AddrModeFlat;
     stk.AddrFrame.Mode = AddrModeFlat;
+    jl_in_stackwalk = 1;
+#endif
 
     size_t n = 0;
-    jl_in_stackwalk = 1;
     while (n < maxsize) {
+#ifndef _CPU_X86_64_
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
-        data[n++] = (intptr_t)stk.AddrPC.Offset;
         if (!result)
             break;
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
+#else
+        DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), Context->Rip);
+        if (!ImageBase)
+            break;
+        PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(GetCurrentProcess(), Context->Rip);
+        if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
+            Context->Rsp = Context->Rbp;                 // MOV RSP, RBP
+            Context->Rbp = *(DWORD64*)Context->Rsp;      // POP RBP
+            Context->Rsp = Context->Rsp + sizeof(void*);
+            Context->Rip = *(DWORD64*)Context->Rsp;      // POP RIP (aka RET)
+            Context->Rsp = Context->Rsp + sizeof(void*);
+        }
+        else {
+            PVOID HandlerData;
+            DWORD64 EstablisherFrame;
+            (void)RtlVirtualUnwind(
+                    0 /*UNW_FLAG_NHANDLER*/,
+                    ImageBase,
+                    Context->Rip,
+                    FunctionEntry,
+                    Context,
+                    &HandlerData,
+                    &EstablisherFrame,
+                    NULL);
+        }
+        if (!Context->Rip)
+            break;
+        data[n++] = (intptr_t)Context->Rip;
+#endif
     }
+#if !defined(_CPU_X86_64_)
     jl_in_stackwalk = 0;
+#endif
     return n;
 }
 #else
