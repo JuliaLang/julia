@@ -37,6 +37,9 @@ typedef struct {
             uintptr_t pooled:1;
         };
     };
+    // Work around a bug affecting gcc up to (at least) version 4.4.7
+    // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
+    int _dummy[0];
     char data[];
 } buff_t;
 
