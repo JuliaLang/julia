@@ -737,7 +737,9 @@ export
     falses,
     flipbits!,
     rol,
+    rol!,
     ror,
+    ror!,
     trues,
 
 # dequeues
