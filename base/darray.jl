@@ -166,9 +166,15 @@ function distribute(a::AbstractArray)
     owner = myid()
     rr = RemoteRef()
     put!(rr, a)
-    DArray(size(a)) do I
+    d = DArray(size(a)) do I
         remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
+    # Ensure that all workers have fetched their localparts.
+    # Else a gc in between can recover the RemoteRef rr
+    for chunk in d.chunks
+        wait(chunk)
+    end
+    d
 end
 
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
