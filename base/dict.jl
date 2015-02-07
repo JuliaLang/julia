@@ -354,16 +354,14 @@ copy(o::ObjectIdDict) = ObjectIdDict(o)
 # dict
 
 type Dict{K,V} <: Associative{K,V}
-    slots::Array{UInt8,1}
+    slots::Array{Int32,1}
     keys::Array{K,1}
     vals::Array{V,1}
     ndel::Int
-    count::Int
     dirty::Bool
 
     function Dict()
-        n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, false)
+        new(zeros(Int32,16), Array(K,0), Array(V,0), 0, false)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -386,7 +384,7 @@ type Dict{K,V} <: Associative{K,V}
             rehash!(d)
         end
         @assert d.ndel == 0
-        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count)
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0)
     end
 end
 Dict() = Dict{Any,Any}()
@@ -420,6 +418,9 @@ dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
 
 similar{K,V}(d::Dict{K,V}) = Dict{K,V}()
 
+length(d::Dict) = length(d.keys) - d.ndel
+isempty(d::Dict) = (length(d)==0)
+
 # conversion between Dict types
 function convert{K,V}(::Type{Dict{K,V}},d::Associative)
     h = Dict{K,V}()
@@ -437,46 +438,80 @@ convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 hashindex(key, sz) = ((hash(key)%Int) & (sz-1)) + 1
 
-isslotempty(h::Dict, i::Int) = h.slots[i] == 0x0
-isslotfilled(h::Dict, i::Int) = h.slots[i] == 0x1
-isslotmissing(h::Dict, i::Int) = h.slots[i] == 0x2
-
-function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
+function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.slots))
     olds = h.slots
-    oldk = h.keys
-    oldv = h.vals
+    keys = h.keys
+    vals = h.vals
     sz = length(olds)
     newsz = _tablesz(newsz)
     h.dirty = true
-    if h.count == 0
+    count0 = length(h)
+    if count0 == 0
         resize!(h.slots, newsz)
         fill!(h.slots, 0)
-        resize!(h.keys, newsz)
-        resize!(h.vals, newsz)
+        resize!(h.keys, 0)
+        resize!(h.vals, 0)
         h.ndel = 0
         return h
     end
 
-    slots = zeros(UInt8,newsz)
-    keys = Array(K, newsz)
-    vals = Array(V, newsz)
-    count0 = h.count
-    count = 0
+    slots = zeros(Int32,newsz)
 
-    for i = 1:sz
-        if olds[i] == 0x1
-            k = oldk[i]
-            v = oldv[i]
+    if h.ndel > 0
+        ndel0 = h.ndel
+        ptrs = !isbits(K)
+        to = 1
+        # TODO: to get the best performance we need to avoid reallocating these.
+        # This algorithm actually works in place, unless the dict is modified
+        # due to GC during this process.
+        newkeys = similar(keys, count0)
+        newvals = similar(vals, count0)
+        @inbounds for from = 1:length(keys)
+            if !ptrs || isdefined(keys, from)
+                k = keys[from]
+                hashk = hash(k)%Int
+                isdeleted = false
+                if !ptrs
+                    iter = 0
+                    maxprobe = max(16, sz>>6)
+                    index = (hashk & (sz-1)) + 1
+                    while iter <= maxprobe
+                        si = olds[index]
+                        #si == 0 && break  # shouldn't happen
+                        si == from && break
+                        si == -from && (isdeleted=true; break)
+                        index = (index & (sz-1)) + 1
+                        iter += 1
+                    end
+                end
+                if !isdeleted
+                    index = (hashk & (newsz-1)) + 1
+                    while slots[index] != 0
+                        index = (index & (newsz-1)) + 1
+                    end
+                    slots[index] = to
+                    newkeys[to] = k
+                    newvals[to] = vals[from]
+                    to += 1
+                end
+                if h.ndel != ndel0
+                    # if items are removed by finalizers, retry
+                    return rehash!(h, newsz)
+                end
+            end
+        end
+        h.keys = newkeys
+        h.vals = newvals
+        h.ndel = 0
+    else
+        @inbounds for i = 1:count0
+            k = keys[i]
             index = hashindex(k, newsz)
             while slots[index] != 0
                 index = (index & (newsz-1)) + 1
             end
-            slots[index] = 0x1
-            keys[index] = k
-            vals[index] = v
-            count += 1
-
-            if h.count != count0
+            slots[index] = i
+            if h.ndel > 0
                 # if items are removed by finalizers, retry
                 return rehash!(h, newsz)
             end
@@ -484,59 +519,50 @@ function rehash!{K,V}(h::Dict{K,V}, newsz = length(h.keys))
     end
 
     h.slots = slots
-    h.keys = keys
-    h.vals = vals
-    h.count = count
-    h.ndel = 0
-
     return h
 end
 
 function sizehint!(d::Dict, newsz)
+    slotsz = (newsz*3)>>1
     oldsz = length(d.slots)
-    if newsz <= oldsz
+    if slotsz <= oldsz
         # todo: shrink
         # be careful: rehash!() assumes everything fits. it was only designed
         # for growing.
         return d
     end
     # grow at least 25%
-    newsz = max(newsz, (oldsz*5)>>2)
-    rehash!(d, newsz)
+    slotsz = max(slotsz, (oldsz*5)>>2)
+    rehash!(d, slotsz)
 end
 
 function empty!{K,V}(h::Dict{K,V})
-    fill!(h.slots, 0x0)
-    sz = length(h.slots)
+    fill!(h.slots, 0)
     empty!(h.keys)
     empty!(h.vals)
-    resize!(h.keys, sz)
-    resize!(h.vals, sz)
     h.ndel = 0
-    h.count = 0
     h.dirty = true
     return h
 end
 
 # get the index where a key is stored, or -1 if not present
-function ht_keyindex{K,V}(h::Dict{K,V}, key)
-    sz = length(h.keys)
+function ht_keyindex{K,V}(h::Dict{K,V}, key, direct)
+    slots = h.slots
+    sz = length(slots)
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
     keys = h.keys
 
-    while true
-        if isslotempty(h,index)
-            break
-        end
-        if !isslotmissing(h,index) && isequal(key,keys[index])
-            return index
+    @inbounds while iter <= maxprobe
+        si = slots[index]
+        si == 0 && break
+        if si > 0 && isequal(key, keys[si])
+            return ifelse(direct, oftype(index, si), index)
         end
 
         index = (index & (sz-1)) + 1
         iter+=1
-        iter > maxprobe && break
     end
 
     return -1
@@ -546,53 +572,48 @@ end
 # and the key would be inserted at pos
 # This version is for use by setindex! and get!
 function ht_keyindex2{K,V}(h::Dict{K,V}, key)
-    sz = length(h.keys)
+    slots = h.slots
+    sz = length(slots)
     iter = 0
     maxprobe = max(16, sz>>6)
     index = hashindex(key, sz)
-    avail = 0
     keys = h.keys
 
-    while true
-        if isslotempty(h,index)
-            avail < 0 && return avail
+    @inbounds while iter <= maxprobe
+        si = slots[index]
+        if si == 0
             return -index
-        end
-
-        if isslotmissing(h,index)
-            if avail == 0
-                # found an available slot, but need to keep scanning
-                # in case "key" already exists in a later collided slot.
-                avail = -index
-            end
-        elseif isequal(key, keys[index])
-            return index
+        elseif si > 0 && isequal(key, keys[si])
+            return oftype(index, si)
         end
 
         index = (index & (sz-1)) + 1
         iter+=1
-        iter > maxprobe && break
     end
 
-    avail < 0 && return avail
-
-    rehash!(h, h.count > 64000 ? sz*2 : sz*4)
+    rehash!(h, length(h) > 64000 ? sz*2 : sz*4)
 
     return ht_keyindex2(h, key)
 end
 
 function _setindex!(h::Dict, v, key, index)
-    h.slots[index] = 0x1
-    h.keys[index] = key
-    h.vals[index] = v
-    h.count += 1
+    hk, hv = h.keys, h.vals
+    #push!(h.keys, key)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), hk, 1)
+    nk = length(hk)
+    @inbounds hk[nk] = key
+    #push!(h.vals, v)
+    ccall(:jl_array_grow_end, Void, (Any, UInt), hv, 1)
+    @inbounds hv[nk] = v
+    @inbounds h.slots[index] = nk
     h.dirty = true
 
-    sz = length(h.keys)
+    sz = length(h.slots)
+    cnt = nk - h.ndel
     # Rehash now if necessary
-    if h.ndel >= ((3*sz)>>2) || h.count*3 > sz*2
+    if h.ndel >= ((3*nk)>>2) || cnt*3 > sz*2
         # > 3/4 deleted or > 2/3 full
-        rehash!(h, h.count > 64000 ? h.count*2 : h.count*4)
+        rehash!(h, cnt > 64000 ? cnt*2 : cnt*4)
     end
 end
 
@@ -606,8 +627,8 @@ function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     index = ht_keyindex2(h, key)
 
     if index > 0
-        h.keys[index] = key
-        h.vals[index] = v
+        @inbounds h.keys[index] = key
+        @inbounds h.vals[index] = v
     else
         _setindex!(h, v, key, -index)
     end
@@ -665,9 +686,8 @@ macro get!(h, key0, default)
         end
         idx = ht_keyindex2($(esc(h)), key)
         if idx < 0
-            idx = -idx
             v = convert(V, $(esc(default)))
-            _setindex!($(esc(h)), v, key, idx)
+            _setindex!($(esc(h)), v, key, -idx)
         else
             @inbounds v = $(esc(h)).vals[idx]
         end
@@ -677,77 +697,69 @@ end
 
 
 function getindex{K,V}(h::Dict{K,V}, key)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, true)
     return (index<0) ? throw(KeyError(key)) : h.vals[index]::V
 end
 
 function get{K,V}(h::Dict{K,V}, key, default)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, true)
     return (index<0) ? default : h.vals[index]::V
 end
 
 function get{K,V}(default::Callable, h::Dict{K,V}, key)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, true)
     return (index<0) ? default() : h.vals[index]::V
 end
 
-haskey(h::Dict, key) = (ht_keyindex(h, key) >= 0)
-in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key) >= 0)
+haskey(h::Dict, key) = (ht_keyindex(h, key, true) >= 0)
+in{T<:Dict}(key, v::KeyIterator{T}) = (ht_keyindex(v.dict, key, true) >= 0)
 
 function getkey{K,V}(h::Dict{K,V}, key, default)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, true)
     return (index<0) ? default : h.keys[index]::K
 end
 
 function _pop!(h::Dict, index)
-    val = h.vals[index]
+    @inbounds val = h.vals[h.slots[index]]
     _delete!(h, index)
     return val
 end
 
 function pop!(h::Dict, key)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, false)
     index > 0 ? _pop!(h, index) : throw(KeyError(key))
 end
 
 function pop!(h::Dict, key, default)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, false)
     index > 0 ? _pop!(h, index) : default
 end
 
 function _delete!(h::Dict, index)
-    h.slots[index] = 0x2
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, index-1)
-    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, index-1)
+    @inbounds ki = h.slots[index]
+    @inbounds h.slots[index] = -ki
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.keys, ki-1)
+    ccall(:jl_arrayunset, Void, (Any, UInt), h.vals, ki-1)
     h.ndel += 1
-    h.count -= 1
     h.dirty = true
     h
 end
 
 function delete!(h::Dict, key)
-    index = ht_keyindex(h, key)
+    index = ht_keyindex(h, key, false)
     if index > 0; _delete!(h, index); end
     h
 end
 
-function skip_deleted(h::Dict, i)
-    L = length(h.slots)
-    while i<=L && !isslotfilled(h,i)
-        i += 1
-    end
-    return i
+function start(t::Dict)
+    t.ndel > 0 && rehash!(t)
+    1
 end
+done(t::Dict, i) = done(t.keys, i)
+next(t::Dict, i) = ((t.keys[i],t.vals[i]), i+1)
 
-start(t::Dict) = skip_deleted(t, 1)
-done(t::Dict, i) = i > length(t.vals)
-next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
-
-isempty(t::Dict) = (t.count == 0)
-length(t::Dict) = t.count
-
-next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], skip_deleted(v.dict,i+1))
-next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1))
+next{T<:Dict}(v::KeyIterator{T}, i) = (v.dict.keys[i], i+1)
+next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], i+1)
 
 # weak key dictionaries
 

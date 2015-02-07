@@ -1458,15 +1458,11 @@ end
 function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
-    ret = Array(args_type,0)
-    seen = Set{eltype(a)}()
+    seen = Set{args_type}()
     for a_elem in a
-        if !in(a_elem, seen) && !in(a_elem, bset)
-            push!(ret, a_elem)
-            push!(seen, a_elem)
-        end
+        !in(a_elem, bset) && push!(seen, a_elem)
     end
-    ret
+    collect(seen)
 end
 # symdiff is associative, so a relatively clean
 # way to implement this is by using setdiff and union, and
