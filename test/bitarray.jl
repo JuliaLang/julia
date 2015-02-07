@@ -833,6 +833,18 @@ for m = [rand(1:v1)-1 0 1 63 64 65 191 192 193 v1-1]
     @test isequal(rol(b1, m), ror(b1, -m))
 end
 
+b = bitrand(v1)
+i = bitrand(v1)
+for m = [rand(1:v1) 63 64 65 191 192 193 v1-1]
+    j = rand(1:m)
+    b1 = ror!(i, b, j)
+    i1 = ror!(b, j)
+    @test b1 == i1
+    b2 = rol!(i1, b1, j)
+    i2 = rol!(b1, j)
+    @test b2 == i2
+end
+
 timesofar("datamove")
 
 ## countnz & find ##
