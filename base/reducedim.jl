@@ -154,38 +154,40 @@ function check_reducdims(R, A)
     return lsiz
 end
 
-@ngenerate N typeof(R) function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
-    lsiz = check_reducdims(R, A)
-    isempty(A) && return R
-    @nextract N sizeR d->size(R,d)
-    sizA1 = size(A, 1)
+stagedfunction _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
+    quote
+        lsiz = check_reducdims(R, A)
+        isempty(A) && return R
+        @nextract $N sizeR d->size(R,d)
+        sizA1 = size(A, 1)
 
-    if has_fast_linear_indexing(A) && lsiz > 16
-        # use mapreduce_impl, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
-        ibase = 0
-        for i = 1:nslices
-            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
-            ibase += lsiz
-        end
-    elseif size(R, 1) == 1 && sizA1 > 1
-        # keep the accumulator as a local variable when reducing along the first dimension
-        @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds r = (@nref N R j)
-            for i_1 = 1:sizA1
-                @inbounds v = f(@nref N A i)
-                r = op(r, v)
+        if has_fast_linear_indexing(A) && lsiz > 16
+            # use mapreduce_impl, which is probably better tuned to achieve higher performance
+            nslices = div(length(A), lsiz)
+            ibase = 0
+            for i = 1:nslices
+                @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+                ibase += lsiz
             end
-            @inbounds (@nref N R j) = r
+        elseif size(R, 1) == 1 && sizA1 > 1
+            # keep the accumulator as a local variable when reducing along the first dimension
+            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds r = (@nref $N R j)
+                for i_1 = 1:sizA1
+                    @inbounds v = f(@nref $N A i)
+                    r = op(r, v)
+                end
+                @inbounds (@nref $N R j) = r
+            end
+        else
+            # general implementation
+            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds v = f(@nref $N A i)
+                @inbounds (@nref $N R j) = op((@nref $N R j), v)
+            end
         end
-    else
-        # general implementation
-        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds v = f(@nref N A i)
-            @inbounds (@nref N R j) = op((@nref N R j), v)
-        end
+        return R
     end
-    return R
 end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
@@ -290,13 +292,17 @@ function gen_findreduction_body(N, f::Function)
     end
 end
 
-eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmin!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, <)))
+stagedfunction _findmin!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})
+    gen_findreduction_body(N, <)
+end
 findmin!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmin!(initarray!(rval, typemax(R), init), rind, A)
 findmin{T}(A::AbstractArray{T}, region) =
     isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
                   _findmin!(reducedim_initarray0(A, region, typemax(T)), zeros(Int,reduced_dims0(A,region)), A)
 
-eval(ngenerate(:N, :(typeof((Rval,Rind))), :(_findmax!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})), N->gen_findreduction_body(N, >)))
+stagedfunction _findmax!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})
+    gen_findreduction_body(N, >)
+end
 findmax!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmax!(initarray!(rval, typemin(R), init), rind, A)
 findmax{T}(A::AbstractArray{T}, region) =
     isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
