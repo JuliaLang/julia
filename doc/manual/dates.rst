@@ -52,15 +52,27 @@ Constructors
   julia> Date(Dates.Month(7),Dates.Year(2013))
   2013-07-01
 
-:class:`Date` or :class:`DateTime` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and pass to a :class:`Date` or :class:`DateTime` constructor.
+:class:`Date` or :class:`DateTime` parsing is accomplished by the use of format strings. Format strings work by the notion of defining *delimited* or *fixed-width* "slots" that contain a period to parse and passing the text to parse and format string to a :class:`Date` or :class:`DateTime` constructor, of the form ``Date("2015-01-01","y-m-d")`` or ``DateTime("20150101","yyyymmdd")``.
 
 Delimited slots are marked by specifying the delimiter the parser should expect between two subsequent periods; so ``"y-m-d"`` lets the parser know that between the first and second slots in a date string like ``"2014-07-16"``, it should find the ``-`` character. The ``y``, ``m``, and ``d`` characters let the parser know which periods to parse in each slot.
 
-Fixed-width slots are specified by repeating the period character the number of times corresponding to the width. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next.
+Fixed-width slots are specified by repeating the period character the number of times corresponding to the width with no delimiter between characters. So ``"yyyymmdd"`` would correspond to a date string like ``"20140716"``. The parser distinguishes a fixed-width slot by the absence of a delimiter, noting the transition ``"yyyymm"`` from one period character to the next.
 
 Support for text-form month parsing is also supported through the ``u`` and ``U`` characters, for abbreviated and full-length month names, respectively. By default, only English month names are supported, so ``u`` corresponds to "Jan", "Feb", "Mar", etc. And ``U`` corresponds to "January", "February", "March", etc. Similar to other name=>value mapping functions :func:`dayname` and :func:`monthname`, custom locales can be loaded by passing in the ``locale=>Dict{UTF8String,Int}`` mapping to the :const:`MONTHTOVALUEABBR` and :const:`MONTHTOVALUE` dicts for abbreviated and full-name month names, respectively.
 
-A full suite of parsing and formatting tests and examples is available in `test/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
+One note on parsing performance: using the ``Date(date_string,format_string)`` function is fine if only called a few times. If there are many similarly formatted date strings to parse however, it is much more efficient to first create a :class:`Dates.DateFormat`, and pass it instead of a raw format string.
+
+::
+  julia> df = Dates.DateFormat("y-m-d");
+
+  julia> dt = Date("2015-01-01",df)
+  2015-01-01
+
+  julia> dt2 = Date("2015-01-02",df)
+  2015-01-02
+
+
+A full suite of parsing and formatting tests and examples is available in `tests/dates/io.jl <https://github.com/JuliaLang/julia/blob/master/test/dates/io.jl>`_.
 
 Durations/Comparisons
 ---------------------
