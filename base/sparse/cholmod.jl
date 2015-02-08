@@ -21,23 +21,6 @@ using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, incre
 
 include("cholmod_h.jl")
 
-macro isok(A)
-    :($A == TRUE || throw(CHOLMODException("")))
-end
-
-const version_array = Array(Cint, 3)
-if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
-    ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
-else
-    ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
-end
-const version = VersionNumber(version_array...)
-const cholmod_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
-
-type CHOLMODException <: Exception
-    msg::AbstractString
-end
-
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == Int64 ? "l_" : "", nm) end
 
@@ -53,35 +36,10 @@ for Ti in IndexTypes
     end
 end
 
-### A way of examining some of the fields in cholmod_com
-### Probably better to make this a Dict{ASCIIString,Tuple} and
-### save the offsets and the lengths and the types.  Then the names can be checked.
-type Common
-    dbound::Float64
-    maxrank::Int
-    supernodal_switch::Float64
-    supernodal::Int32
-    final_asis::Int32
-    final_super::Int32
-    final_ll::Int32
-    final_pack::Int32
-    final_monotonic::Int32
-    final_resymbol::Int32
-    prefer_zomplex::Int32               # should always be false
-    prefer_upper::Int32
-    print::Int32                        # print level. Default: 3
-    precise::Int32                      # print 16 digits, otherwise 5
-    nmethods::Int32                     # number of ordering methods
-    selected::Int32
-    postorder::Int32
-    itype::Int32
-    dtype::Int32
-end
-
-### These offsets should be reconfigured to be less error-prone in matches
-const cholmod_com_offsets = Array(Int, length(Common.types))
+### These offsets are defined in SuiteSparse_wrapper.c
+const cholmod_com_offsets = Array(Csize_t, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
-      Void, (Ptr{Int},), cholmod_com_offsets)
+      Void, (Ptr{Csize_t},), cholmod_com_offsets)
 const common_final_ll = (1:4) + cholmod_com_offsets[7]
 const common_print = (1:4) + cholmod_com_offsets[13]
 const common_itype = (1:4) + cholmod_com_offsets[18]
