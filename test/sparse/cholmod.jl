@@ -32,7 +32,7 @@ using Base.SparseMatrix.CHOLMOD
 ## residual  2.5e-19 (|Ax-b|/(|A||x|+|b|))
 ## residual  1.3e-19 (|Ax-b|/(|A||x|+|b|)) after iterative refinement
 ## rcond     9.5e-06
-println("version: ", Base.SparseMatrix.CHOLMOD.version)
+
 A = CHOLMOD.Sparse(48, 48,
             int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,67,71,77,84,90,93,95,
                   98,103,106,110,115,119,123,130,136,142,146,150,155,161,167,174,182,189,197,
@@ -382,15 +382,15 @@ for elty in (Float64, Complex{Float64})
 
     F = cholfact(A1pdSparse, 2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
-    @test CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) == CHOLMOD.Sparse(F)
+    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
-    @test CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) == CHOLMOD.Sparse(F)
+    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pdSparse, 2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
-    @test CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) == CHOLMOD.Sparse(F)
+    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)
