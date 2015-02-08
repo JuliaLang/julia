@@ -67,3 +67,16 @@ end
 
 typealias VTypes Union(Complex128, Float64)
 typealias VRealTypes Union(Float64)
+
+type CHOLMODException <: Exception
+    msg::AbstractString
+end
+
+macro isok(A)
+    :($A == TRUE || throw(CHOLMODException("")))
+end
+
+const version_array = Array(Cint, 3)
+ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
+const version = VersionNumber(version_array...)
+const cholmod_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
