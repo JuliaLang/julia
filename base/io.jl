@@ -96,7 +96,7 @@ function write(s::IO, p::Ptr, n::Integer)
 end
 
 function write(io::IO, s::Symbol)
-    pname = convert(Ptr{UInt8}, s)
+    pname = cconvert(Ptr{UInt8}, s)
     write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 

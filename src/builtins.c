@@ -1201,13 +1201,15 @@ static size_t jl_show_tuple(JL_STREAM *out, jl_tuple_t *t, char *opn, char *cls,
     return n;
 }
 
-#define MAX_DEPTH 5
+#define MAX_DEPTH 25
 
 size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
 {
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
-    if(depth > MAX_DEPTH) return 0; // cheap way of bailing out of cycles
+    if(depth > MAX_DEPTH) { // cheap way of bailing out of cycles
+        return jl_printf(out, "•");
+    }
     depth++;
     if (v == NULL) {
         n += jl_printf(out, "#<null>");

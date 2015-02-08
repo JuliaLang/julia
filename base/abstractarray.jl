@@ -47,17 +47,6 @@ else
     end
 end
 
-# convert Arrays to pointer arrays for ccall
-cconvert_gcroot{P<:Ptr}(::Type{Ptr{P}}, a::Array{P}) = a
-function cconvert_gcroot{P<:Ptr}(::Type{Ptr{P}}, a::Array)
-    ptrs = Array(P, length(a)+1)
-    for i = 1:length(a)
-        ptrs[i] = convert(P, a[i])
-    end
-    ptrs[length(a)+1] = C_NULL
-    return ptrs
-end
-
 size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
 eltype{T}(::Type{AbstractArray{T}}) = T

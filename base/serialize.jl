@@ -84,7 +84,7 @@ function serialize(s, x::Symbol)
     if haskey(ser_tag, x)
         return write_as_tag(s, x)
     end
-    pname = convert(Ptr{UInt8}, x)
+    pname = cconvert(Ptr{UInt8}, x)
     ln = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
     if ln <= 255
         writetag(s, Symbol)

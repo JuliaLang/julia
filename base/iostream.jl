@@ -22,7 +22,7 @@ function IOStream(name::AbstractString, finalize::Bool)
 end
 IOStream(name::AbstractString) = IOStream(name, true)
 
-convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
+convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
 fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 stat(s::IOStream) = stat(fd(s))
