@@ -148,6 +148,11 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
 
+.. function:: eps(::DateTime) -> Millisecond   
+              eps(::Date) -> Day   
+   
+   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.    
+
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -346,7 +351,7 @@ Periods
    Construct a ``Period`` type with the given ``v`` value.
    Input must be losslessly convertible to an ``Int64``.
 
-.. function:: default(p::Period) => Period
+.. function:: default(p::Period) -> Period
 
     Returns a sensible "default" value for the input Period by returning
     ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute,
@@ -396,7 +401,7 @@ Constants
 Days of the Week:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int64)
+Variable        Abbr.     Value (Int)
 --------------- --------- -------------
 ``Monday``      ``Mon``   1
 ``Tuesday``     ``Tue``   2
@@ -410,7 +415,7 @@ Variable        Abbr.     Value (Int64)
 Months of the Year:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int64)
+Variable        Abbr.     Value (Int)
 --------------- --------- -------------
 ``January``     ``Jan``   1
 ``February``    ``Feb``   2
