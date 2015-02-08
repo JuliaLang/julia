@@ -93,10 +93,10 @@ function spelltest(tests; bias=0, verbose=false)
     end
 
     return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>int(100. - 100.*bad/n),
-            "unknown"=>unknown, "secs"=>toc())
+                "unknown"=>unknown, "secs"=>toc())
 end
 
-const tests1 = [ "access"=> "acess", "accessing"=> "accesing", "accommodation"=>
+const tests1 = Dict("access"=> "acess", "accessing"=> "accesing", "accommodation"=>
 "accomodation acommodation acomodation", "account"=> "acount", "address"=>
 "adress adres", "addressable"=> "addresable", "arranged"=> "aranged arrainged",
 "arrangeing"=> "aranging", "arrangement"=> "arragment", "articles"=> "articals",
@@ -156,6 +156,6 @@ const tests1 = [ "access"=> "acess", "accessing"=> "accesing", "accommodation"=>
 "variable"=> "varable", "variant"=> "vairiant", "various"=> "vairious",
 "visited"=> "fisited viseted vistid vistied", "visitors"=> "vistors",
 "voluntary"=> "volantry", "voting"=> "voteing", "wanted"=> "wantid wonted",
-"whether"=> "wether", "wrote"=> "rote wote"]
+"whether"=> "wether", "wrote"=> "rote wote")
 
 @timeit(spelltest(tests1), "spell", "Peter Norvig's spell corrector")
