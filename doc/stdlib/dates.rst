@@ -148,10 +148,10 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
 
-.. function:: eps(::DateTime) -> Millisecond   
-              eps(::Date) -> Day   
-   
-   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.    
+.. function:: eps(::DateTime) -> Millisecond
+              eps(::Date) -> Day
+
+   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
 
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
