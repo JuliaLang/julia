@@ -429,7 +429,7 @@ function nullspace{T}(A::StridedMatrix{T})
 end
 nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
-function cond(A::StridedMatrix, p::Real=2)
+function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)

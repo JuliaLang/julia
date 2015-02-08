@@ -614,8 +614,8 @@ function getindex(F::SVD, d::Symbol)
 end
 
 svdvals!{T<:BlasFloat}(A::StridedMatrix{T}) = any([size(A)...].==0) ? zeros(T, 0) : LAPACK.gesdd!('N', A)[2]
-svdvals{T<:BlasFloat}(A::StridedMatrix{T}) = svdvals!(copy(A))
-svdvals{T}(A::StridedMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? svdvals!(convert(AbstractMatrix{S}, A)) : svdvals!(copy(A)))
+svdvals{T<:BlasFloat}(A::AbstractMatrix{T}) = svdvals!(copy(A))
+svdvals{T}(A::AbstractMatrix{T}) = (S = promote_type(Float32,typeof(one(T)/norm(one(T)))); S != T ? svdvals!(convert(AbstractMatrix{S}, A)) : svdvals!(copy(A)))
 svdvals(x::Number) = [abs(x)]
 
 # SVD least squares

@@ -658,6 +658,7 @@ export
     eigmin,
     eigs,
     eigvals,
+    eigvals!,
     eigvecs,
     expm,
     eye,
