@@ -273,11 +273,11 @@ stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
         else
             X = x
             @ncall $N setindex_shape_check X I
-            # TODO? A variant that can use cartesian indexing for RHS
-            k = 1
+            iter = eachindex(X)
+            Xs = start(iter)
             @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-                @inbounds A[offset_0] = X[k]
-            k += 1
+                Xindex, Xs = next(iter, Xs)
+                @inbounds A[offset_0] = X[Xindex]
             end
         end
         A
