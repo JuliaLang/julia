@@ -56,7 +56,7 @@ const bigintpool = BigInt[]
 const BIGINTPOOL_MAXSIZE = 100000
 function bigintpoolingfinalizer(b::BigInt)
     if length(bigintpool) < BIGINTPOOL_MAXSIZE
-        push!(bigintpool, BigInt(NotFromPool))
+        push!(bigintpool, b)
     else
         ccall(_gmp_clear_func, Void, (Ptr{BigInt},), &b)
     end
