@@ -247,7 +247,7 @@ Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret
     // LLVM doesn't allow us to cast values directly, so
     // we need to use this alloca trick
     Value *mem = builder.CreateAlloca(target_type);
-    builder.CreateStore(v,builder.CreateBitCast(mem,v->getType()->getPointerTo()));
+    builder.CreateStore(v,builder.CreatePointerCast(mem,v->getType()->getPointerTo()));
     return builder.CreateLoad(mem);
 }
 

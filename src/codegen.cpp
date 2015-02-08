@@ -542,7 +542,7 @@ typedef struct {
         int64_t isref;
         Function *f;
     } data[];
-} simple_list;
+} cFunctionList_t;
 
 static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool boxed=true,
                         bool valuepos=true, jl_sym_t **valuevar=NULL);
@@ -712,7 +712,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
                 li->specFunctionObject = mover.CloneFunction((Function*)li->specFunctionObject);
             if (li->cFunctionList != NULL) {
                 size_t i;
-                simple_list *list = (simple_list*)li->cFunctionList;
+                cFunctionList_t *list = (cFunctionList_t*)li->cFunctionList;
                 for (i = 0; i < list->len; i++) {
                     list->data[i].f = mover.CloneFunction(list->data[i].f);
                 }
@@ -732,7 +732,7 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 
         if (li->cFunctionList != NULL) {
             size_t i;
-            simple_list *list = (simple_list*)li->cFunctionList;
+            cFunctionList_t *list = (cFunctionList_t*)li->cFunctionList;
             for (i = 0; i < list->len; i++) {
 #ifdef USE_MCJIT
                 (void)jl_ExecutionEngine->getFunctionAddress(list->data[i].f->getName());
@@ -3523,7 +3523,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
 static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_tuple_t *argt, int64_t isref)
 {
     jl_lambda_info_t *lam = ff->linfo;
-    simple_list *list = (simple_list*)lam->cFunctionList;
+    cFunctionList_t *list = (cFunctionList_t*)lam->cFunctionList;
     if (list != NULL) {
         size_t i;
         for (i = 0; i < list->len; i++) {
@@ -3593,7 +3593,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     // Save the Function object reference
     int len = (list ? list->len : 0) + 1;
-    simple_list *list2 = (simple_list*)realloc(list, sizeof(*list)+sizeof(list->data[0])*len);
+    cFunctionList_t *list2 = (cFunctionList_t*)realloc(list, sizeof(*list)+sizeof(list->data[0])*len);
     if (!list2)
         jl_throw(jl_memory_exception);
     list2->len = len;
@@ -3627,65 +3627,58 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         sretPtr = AI++; //const Argument &fArg = *AI++;
 
     for (size_t i=0; i < nargs; i++) {
-        Value *v = AI++;
+        Value *val = AI++;
+        jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
+
+        // figure out how to unpack this type
         if (isref & (2<<i)) {
-            jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
-            Value *val = builder.CreatePointerCast(v, jl_pvalue_llvmt);
-            val = builder.CreateConstGEP1_32(val, (unsigned)-1); // rewind to type-tag
-            if (specsig) {
-                Type *at = theFptr->getFunctionType()->getParamType(i);
-                if (at != jl_pvalue_llvmt) {
-                    val = emit_unbox(at, val, jargty);
-                    assert(dyn_cast<UndefValue>(val) == 0);
-                }
-                args.push_back(val);
+            if (!jl_isbits(jargty)) {
+                val = builder.CreatePointerCast(val, jl_pvalue_llvmt);
+                val = builder.CreateConstGEP1_32(val, (unsigned)-1); // rewind to type-tag
             }
             else {
-                make_gcroot(val, &ctx);
+                Type *t = julia_type_to_llvm(jargty);
+                val = builder.CreatePointerCast(val, t->getPointerTo());
+                val = builder.CreateLoad(val, false);
             }
         }
         else {
-            jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
-            Value *val = NULL;
-            if (fargt[i+sret] == fargt_sig[i+sret]) {
-                val = v;
-            }
-            else {
+            if (fargt[i+sret] != fargt_sig[i+sret]) {
                 // undo whatever we did to this poor argument
-                val = llvm_type_rewrite(v, fargt[i+sret], jargty, false);
+                val = llvm_type_rewrite(val, fargt[i+sret], jargty, false);
             }
-            // and perhaps box it if necessary
             if (byRefList[i]) {
                 val = builder.CreateLoad(val,false);
             }
-            Type *t = julia_type_to_llvm(jargty);
-            if (t != fargt[i+sret]) {
-                if (t == jl_pvalue_llvmt) {
-                    Value *mem = emit_newsym(jargty, 1, NULL, &ctx);
-                    if (!mem->getType()->isPointerTy()) {
-                       assert(type_is_ghost(t) && mem->getType() == t);
-                    }
-                    else {
-                        builder.CreateStore(val, builder.CreateBitCast(
-                            emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
-                        if (specsig)
-                            make_gcroot(val, &ctx);
-                    }
-                    val = builder.CreateBitCast(mem, jl_pvalue_llvmt);
+        }
+
+        // figure out how to repack this type
+        Type *at = specsig ? theFptr->getFunctionType()->getParamType(i) : jl_pvalue_llvmt;
+        if (val->getType() != at) {
+            if (at == jl_pvalue_llvmt) {
+                Value *mem = emit_newsym(jargty, 1, NULL, &ctx);
+                if (mem->getType() == jl_pvalue_llvmt) {
+                    builder.CreateStore(val, builder.CreateBitCast(
+                                emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
+                    val = mem;
                 }
                 else {
-                    assert(0);
+                    val = boxed(mem, &ctx, jargty);
                 }
-            }
-            if (specsig) {
-                args.push_back(val);
+                if (specsig)
+                    make_gcroot(val, &ctx);
             }
             else {
-                if (val->getType() != jl_pvalue_llvmt)
-                    val = boxed(val, &ctx, jargty);
-                make_gcroot(val, &ctx);
+                val = emit_unbox(at, val, jargty);
+                assert(dyn_cast<UndefValue>(val) == 0);
             }
         }
+
+        // add to argument list
+        if (specsig)
+            args.push_back(val);
+        else
+            make_gcroot(val, &ctx);
     }
 
     // Create the call
