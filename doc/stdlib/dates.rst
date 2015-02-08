@@ -97,6 +97,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
    like "y-m-dTH:M:S.s".
 
+.. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
+
+   Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. ``format`` is a format string in the form described above (e.g. ``"yyyy-mm-dd"``).
+
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
 .. function:: Date(y, [m, d]) -> Date
 
    Construct a ``Date`` type by parts. Arguments must be convertible to
@@ -125,6 +133,10 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
 
 .. function:: now() -> DateTime
 
