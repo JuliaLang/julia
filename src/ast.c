@@ -359,6 +359,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                                          scm_to_julia_(car_(e),0));
                 }
             }
+            else if (sym == inert_sym && !iscons(car_(e))) {
+                sym = quote_sym;
+            }
             jl_expr_t *ex = jl_exprn(sym, n);
             // allocate a fresh args array for empty exprs passed to macros
             if (eo && n == 0)
