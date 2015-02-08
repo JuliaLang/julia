@@ -317,5 +317,5 @@ importall Base.Operators
 
 Base.isfile("userimg.jl") && Base.include("userimg.jl")
 
-atexit(()->empty!(GMP.bigintpool))
-atexit(()->empty!(MPFR.bigfloatpool))
+atexit(()->empty!(Base.GMP.bigintpool))
+atexit(()->empty!(Base.MPFR.bigfloatpool))
