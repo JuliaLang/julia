@@ -59,6 +59,7 @@ export
     eigmin,
     eigs,
     eigvals,
+    eigvals!,
     eigvecs,
     expm,
     sqrtm,
