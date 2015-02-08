@@ -268,13 +268,7 @@ type ObjectIdDict <: Associative{Any,Any}
         d
     end
 
-    function ObjectIdDict(o::ObjectIdDict)
-        N = length(o.ht)
-        ht = cell(N)
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-              ht, o.ht, N*sizeof(Ptr))
-        new(ht)
-    end
+    ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -326,11 +320,10 @@ type Dict{K,V} <: Associative{K,V}
     vals::Array{V,1}
     ndel::Int
     count::Int
-    deleter::Function
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -348,9 +341,17 @@ type Dict{K,V} <: Associative{K,V}
         end
         return h
     end
+    function Dict(d::Dict{K,V})
+        if d.ndel > 0
+            rehash!(d)
+        end
+        @assert d.ndel == 0
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count)
+    end
 end
 Dict() = Dict{Any,Any}()
 Dict(kv::()) = Dict()
+copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
@@ -717,6 +718,14 @@ next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1
 
 # weak key dictionaries
 
+type WeakKeyDict{K,V} <: Associative{K,V}
+    ht::Dict{Any,V}
+    deleter::Function
+
+    WeakKeyDict() = new(Dict{Any,V}(), identity)
+end
+WeakKeyDict() = WeakKeyDict{Any,Any}()
+
 function weak_key_delete!(t::Dict, k)
     # when a weak key is finalized, remove from dictionary if it is still there
     wk = getkey(t, k, secret_table_token)
@@ -725,40 +734,20 @@ function weak_key_delete!(t::Dict, k)
     end
 end
 
-function add_weak_key(t::Dict, k, v)
-    if is(t.deleter, identity)
-        t.deleter = x->weak_key_delete!(t, x)
+function setindex!{K}(wkh::WeakKeyDict{K}, v, key)
+    t = wkh.ht
+    k = convert(K, key)
+    if is(wkh.deleter, identity)
+        wkh.deleter = x->weak_key_delete!(t, x)
     end
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
     # wiped WeakRefs to remain in the table, and delete them as
     # they are discovered by getindex and setindex!.
-    finalizer(k, t.deleter)
+    finalizer(k, wkh.deleter)
     return t
 end
 
-function weak_value_delete!(t::Dict, k, v)
-    # when a weak value is finalized, remove from dictionary if it is still there
-    wv = get(t, k, secret_table_token)
-    if !is(wv,secret_table_token) && is(wv.value, v)
-        delete!(t, k)
-    end
-end
-
-function add_weak_value(t::Dict, k, v)
-    t[k] = WeakRef(v)
-    finalizer(v, x->weak_value_delete!(t, k, x))
-    return t
-end
-
-type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
-
-    WeakKeyDict() = new(Dict{Any,V}())
-end
-WeakKeyDict() = WeakKeyDict{Any,Any}()
-
-setindex!{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
 function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
     k = getkey(wkh.ht, kk, secret_table_token)
