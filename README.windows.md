@@ -15,7 +15,7 @@ Instructions for adding fonts to the terminal are available at:
 
 Additionally, rather than sticking with the default command prompt, you may want to use a different terminal emulator program, such as [`Conemu`](https://code.google.com/p/conemu-maximus5/) or [`Mintty`](https://code.google.com/p/mintty/)
 (note that running Julia on Mintty needs a copy of `stty.exe` in your `%PATH%` to work properly).
-Alternatively, you may prefer the features of a more full-function IDE, such as [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
+Alternatively, you may prefer the features of a more full-function IDE, such as [`Juno`](http://junolag.org), [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
 
 
 # Binary distribution
