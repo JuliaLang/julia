@@ -97,6 +97,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
    like "y-m-dTH:M:S.s".
 
+.. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
+
+   Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. ``format`` is a format string in the form described above (e.g. ``"yyyy-mm-dd"``).
+
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
 .. function:: Date(y, [m, d]) -> Date
 
    Construct a ``Date`` type by parts. Arguments must be convertible to
@@ -126,6 +134,10 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
 
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
+
 .. function:: now() -> DateTime
 
    Returns a DateTime corresponding to the user's system
@@ -135,11 +147,6 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
-
-.. function:: eps(::DateTime) -> Millisecond
-              eps(::Date) -> Day
-
-   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
 
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
@@ -339,7 +346,7 @@ Periods
    Construct a ``Period`` type with the given ``v`` value.
    Input must be losslessly convertible to an ``Int64``.
 
-.. function:: default(p::Period) -> Period
+.. function:: default(p::Period) => Period
 
     Returns a sensible "default" value for the input Period by returning
     ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute,
@@ -389,7 +396,7 @@ Constants
 Days of the Week:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int)
+Variable        Abbr.     Value (Int64)
 --------------- --------- -------------
 ``Monday``      ``Mon``   1
 ``Tuesday``     ``Tue``   2
@@ -403,7 +410,7 @@ Variable        Abbr.     Value (Int)
 Months of the Year:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int)
+Variable        Abbr.     Value (Int64)
 --------------- --------- -------------
 ``January``     ``Jan``   1
 ``February``    ``Feb``   2
