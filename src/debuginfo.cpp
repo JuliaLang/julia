@@ -346,7 +346,7 @@ public:
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size
 #ifdef _OS_DARWIN_
-                ,strdup(sName.data())
+                ,strndup(sName.data(), sName.size())
 #endif
             };
             objectmap[Addr] = tmp;
