@@ -44,7 +44,7 @@ type BigInt <: Integer
             pop!(bigintpool)
         else
             x = new(zero(Cint), zero(Cint), C_NULL)
-            ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &b)
+            ccall((:__gmpz_init,:libgmp), Void, (Ptr{BigInt},), &x)
             x
         end
         finalizer(b, bigintpoolingfinalizer)
