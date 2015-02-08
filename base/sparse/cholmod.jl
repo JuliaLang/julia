@@ -53,7 +53,10 @@ end
 # Type definitions #
 ####################
 
-# The three core data types for CHOLMOD: Dense, Sparse and Factor. CHOLMOD manages the memory, so the Julia versions only wrap a pointer to a struct. Therefore finalizers should be registret each time a pointer is returned from CHOLMOD.
+# The three core data types for CHOLMOD: Dense, Sparse and Factor. CHOLMOD
+# manages the memory, so the Julia versions only wrap a pointer to a struct.
+# Therefore finalizers should be registret each time a pointer is returned from
+# CHOLMOD.
 
 # Dense
 immutable C_Dense{T<:VTypes}
@@ -89,7 +92,9 @@ immutable C_Sparse{Tv<:VTypes,Ti<:ITypes}
     packed::Cint
 end
 
-# Corresponds to the exact definition of cholmod_sparse_struct in the library. Useful when reading matrices of unknown type from files as in cholmod_read_sparse
+# Corresponds to the exact definition of cholmod_sparse_struct in the library.
+# Useful when reading matrices of unknown type from files as in
+# cholmod_read_sparse
 immutable C_SparseVoid
     nrow::Csize_t
     ncol::Csize_t
@@ -187,7 +192,8 @@ end
 #################
 
 # Dense wrappers
-## Note! Integer type defaults to Cint, but this is actually not necessary, but making this a choice would require another type parameter in the Dense type
+## Note! Integer type defaults to Cint, but this is actually not necessary, but
+## making this a choice would require another type parameter in the Dense type
 
 ### cholmod_core_h ###
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Float64})
@@ -527,7 +533,8 @@ for Ti in IndexTypes
         end
 
         # cholmod_cholesky.h
-        # For analyze, factorize and factorize_p, the Common argument must be supplied in order to control if the factorization is LLt or LDLt
+        # For analyze, factorize and factorize_p, the Common argument must be
+        # supplied in order to control if the factorization is LLt or LDLt
         function analyze{Tv<:VTypes}(A::Sparse{Tv,$Ti}, cmmn::Vector{UInt8})
             f = Factor(ccall((@cholmod_name("analyze", $Ti),:libcholmod), Ptr{C_Factor{Tv,$Ti}},
                     (Ptr{C_Sparse{Tv,$Ti}}, Ptr{UInt8}),
@@ -698,7 +705,8 @@ function Sparse(p::Ptr{C_SparseVoid})
 
 end
 
-Sparse(A::Dense) = dense_to_sparse(A, Cint) # default is Cint which is probably sufficient when converted from dense matrix
+# default is Cint which is probably sufficient when converted from dense matrix
+Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::ASCIIString)
     f = open(filename)
@@ -761,7 +769,8 @@ end
 sparse(L::Factor)   = sparse(Sparse(L))
 sparse(D::Dense)    = sparse(Sparse(D))
 
-# Calculate the offset into the stype field of the cholmod_sparse_struct and change the value
+# Calculate the offset into the stype field of the cholmod_sparse_struct and
+# change the value
 function change_stype!(A::Sparse, i::Integer)
     offset = fieldoffsets(C_Sparse)[names(C_Sparse) .== :stype][1]
     unsafe_store!(convert(Ptr{Cint}, A.p), i, div(offset, 4) + 1)
