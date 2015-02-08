@@ -161,6 +161,18 @@ debug && println("symmetric eigen-decomposition")
         eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
         @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
+
+        # relation to svdvals
+        @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
+
+        # cond
+        @test_approx_eq cond(Hermitian(asym)) cond(asym)
+
+        # rank
+        let
+            A = a[:,1:5]*a[:,1:5]'
+            @test rank(A) == rank(Hermitian(A))
+        end
     end
 
 debug && println("non-symmetric eigen decomposition")

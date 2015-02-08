@@ -88,6 +88,14 @@ end
 eigvals!{T<:BlasReal,S<:StridedMatrix}(A::HermOrSym{T,S}, B::HermOrSym{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 eigvals!{T<:BlasComplex,S<:StridedMatrix}(A::Hermitian{T,S}, B::Hermitian{T,S}) = LAPACK.sygvd!(1, 'N', A.uplo, A.data, B.uplo == A.uplo ? B.data : B.data')[1]
 
+function svdvals!{T<:Real,S}(A::Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})) #  the union is the same as RealHermSymComplexHerm, but right now parametric typealiases are broken
+    vals = eigvals!(A)
+    for i = 1:length(vals)
+        vals[i] = abs(vals[i])
+    end
+    return sort!(vals, rev = true)
+end
+
 #Matrix-valued functions
 expm{T<:Real}(A::RealHermSymComplexHerm{T}) = (F = eigfact(A); F.vectors*Diagonal(exp(F.values))*F.vectors')
 function sqrtm{T<:Real}(A::RealHermSymComplexHerm{T})
