@@ -19,11 +19,12 @@ next(s::AbstractString, i::Integer) = next(s,int(i))
 function print_to_string(xs...)
     # specialized for performance reasons
     s = IOBuffer(Array(UInt8,isa(xs[1],AbstractString) ? endof(xs[1]) : 0), true, true)
-    truncate(s,0)
     for x in xs
         print(s, x)
     end
-    takebuf_string(s)
+    d = s.data
+    resize!(d,s.size)
+    bytestring(d)
 end
 
 string() = ""

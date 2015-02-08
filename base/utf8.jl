@@ -152,6 +152,36 @@ function string(a::ByteString...)
     UTF8String(data)
 end
 
+function string(a::Union(ByteString,Char)...)
+    s = Array(UInt8,0)
+    for d in a
+        if isa(d,Char)
+            c = reinterpret(UInt32, d::Char)
+            if c < 0x80
+                push!(s, uint8(c))
+            elseif c < 0x800
+                push!(s, uint8(( c >> 6          ) | 0xC0))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            elseif c < 0x10000
+                push!(s, uint8(( c >> 12         ) | 0xE0))
+                push!(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            elseif c < 0x110000
+                push!(s, uint8(( c >> 18         ) | 0xF0))
+                push!(s, uint8(((c >> 12) & 0x3F ) | 0x80))
+                push!(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            else
+                # '\ufffd'
+                push!(s, 0xef); push!(s, 0xbf); push!(s, 0xbd)
+            end
+        else
+            append!(s,d.data)
+        end
+    end
+    UTF8String(s)
+end
+
 function reverse(s::UTF8String)
     out = similar(s.data)
     if ccall(:u8_reverse, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
