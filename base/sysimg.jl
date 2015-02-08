@@ -316,3 +316,6 @@ using Base
 importall Base.Operators
 
 Base.isfile("userimg.jl") && Base.include("userimg.jl")
+
+atexit(()->empty!(GMP.bigintpool))
+atexit(()->empty!(GMP.bigfloatpool))

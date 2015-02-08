@@ -43,16 +43,32 @@ type BigFloat <: FloatingPoint
     exp::Clong
     d::Ptr{Culong}
     function BigFloat()
-        N = get_bigfloat_precision()
-        z = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
-        ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &z, N)
-        finalizer(z, Base.GMP._mpfr_clear_func)
-        return z
+        b = if length(bigfloatpool) > 0
+            pop!(bigfloatpool)
+        else
+            N = get_bigfloat_precision()
+            x = new(zero(Clong), zero(Cint), zero(Clong), C_NULL)
+            ccall((:mpfr_init2,:libmpfr), Void, (Ptr{BigFloat}, Clong), &x, N)
+            x
+        end
+        finalizer(b, Base.GMP._mpfr_clear_func)
+        return b
     end
     # Not recommended for general use
     function BigFloat(prec::Clong, sign::Cint, exp::Clong, d::Ptr{Void})
         new(prec, sign, exp, d)
     end
+end
+
+const bigfloatpool = BigFloat[]
+const BIGFLOATPOOL_MAXSIZE = 100000
+function bigfloatpoolingfinalizer(b::BigFloat)
+    if length(bigfloatpool) < BIGFLOATPOOL_MAXSIZE
+        push!(bigfloatpool, b)
+    else
+        ccall(Base.GMP._mpfr_clear_func, Void, (Ptr{BigFloat},), &b)
+    end
+    nothing
 end
 
 widen(::Type{Float64}) = BigFloat
