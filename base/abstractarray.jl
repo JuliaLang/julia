@@ -75,39 +75,49 @@ linearindexing{A<:Array}(::Type{A}) = LinearFast()
 linearindexing{A<:Range}(::Type{A}) = LinearFast()
 
 ## Bounds checking ##
-checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
-checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
-checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
-checkbounds(sz::Int, r::Range{Int}) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || throw(BoundsError())
-checkbounds{T<:Real}(sz::Int, r::Range{T}) = checkbounds(sz, to_index(r))
+# note: we force inlining of all _checkbounds methods in order to force splatting
+#       of the arguments and avoid allocating tuples (unless a BoundsError is raised).
+#       we can't use @inline/@noinline at this stage in the build process, since it indirectly uses
+#       _checkbounds itself (see expr.jl), so we define a crude version
+macro _crude_meta(tag, f)
+    ex = Expr(:function, arrayref(f.args, 1), Expr(:block, Expr(:meta, tag), arrayref(f.args, 2)))
+    esc(ex)
+end
+@_crude_meta noinline boundserror(A, J) = throw(BoundsError(A, J))
 
-function checkbounds{T <: Real}(sz::Int, I::AbstractArray{T})
+@_crude_meta inline _checkbounds(sz::Int, i::Int, A::AbstractArray, J...) = 1 <= i <= sz || boundserror(A, J)
+@_crude_meta inline _checkbounds(sz::Int, i::Real, A::AbstractArray, J...) = _checkbounds(sz, to_index(i), A, J...)
+@_crude_meta inline _checkbounds(sz::Int, I::AbstractVector{Bool}, A::AbstractArray, J...) = length(I) == sz || boundserror(A, J)
+@_crude_meta inline _checkbounds(sz::Int, r::Range{Int}, A::AbstractArray, J...) = isempty(r) || (minimum(r) >= 1 && maximum(r) <= sz) || boundserror(A, J)
+@_crude_meta inline _checkbounds{T<:Real}(sz::Int, r::Range{T}, A::AbstractArray, J...) = _checkbounds(sz, to_index(r), A, J...)
+
+@_crude_meta inline function _checkbounds{T <: Real}(sz::Int, I::AbstractArray{T}, A::AbstractArray, J...)
     for i in I
-        checkbounds(sz, i)
+        _checkbounds(sz, i, A, J...)
     end
 end
 
-checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw(BoundsError())
+checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || throw(BoundsError(A, I))
 
-checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
+checkbounds(A::AbstractArray, I) = _checkbounds(length(A), I, A, I)
 
 function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
-    checkbounds(size(A,1), I)
-    checkbounds(size(A,2), J)
+    _checkbounds(size(A,1), I, A, I, J)
+    _checkbounds(size(A,2), J, A, I, J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
-    checkbounds(size(A,1), I)
-    checkbounds(trailingsize(A,2), J)
+    _checkbounds(size(A,1), I, A, I, J)
+    _checkbounds(trailingsize(A,2), J, A, I, J)
 end
 
 function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
-            checkbounds(size(A,dim), I[dim])
+            _checkbounds(size(A,dim), I[dim], A, I...)
         end
-        checkbounds(trailingsize(A,n), I[n])
+        _checkbounds(trailingsize(A,n), I[n], A, I...)
     end
 end
 
@@ -506,26 +516,26 @@ setindex!(t::AbstractArray, x) = throw(MethodError(setindex!, (t, x)))
 
 function getindex(A::AbstractVector, i1,i2,i3...)
     if i2*prod(i3) != 1
-        throw(BoundsError())
+        throw(BoundsError(A, tuple(i1,i2,i3...)))
     end
     A[i1]
 end
 function getindex(A::AbstractMatrix, i1,i2,i3,i4...)
     if i3*prod(i4) != 1
-        throw(BoundsError())
+        throw(BoundsError(A, tuple(i1,i2,i3,i4...)))
     end
     A[i1,i2]
 end
 
 function setindex!(A::AbstractVector, x, i1,i2,i3...)
     if i2*prod(i3) != 1
-        throw(BoundsError())
+        throw(BoundsError(A, tuple(i1,i2,i3...)))
     end
     A[i1] = x
 end
 function setindex!(A::AbstractMatrix, x, i1,i2,i3,i4...)
     if i3*prod(i4) != 1
-        throw(BoundsError())
+        throw(BoundsError(A, tuple(i1,i2,i3,i4...)))
     end
     A[i1,i2] = x
 end
