@@ -139,7 +139,7 @@ sdata(A::AbstractArray) = A
 
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
+cconvert{T}(::Type{Ptr{T}}, S::SharedArray) = cconvert(Ptr{T}, sdata(S))
 
 convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
 convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))

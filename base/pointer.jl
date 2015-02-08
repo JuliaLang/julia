@@ -14,17 +14,17 @@ convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,Int(x)))
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
 convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
-# object to pointer
-convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
-convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-convert(::Type{Ptr{UInt8}}, s::ByteString) = convert(Ptr{UInt8}, s.data)
-convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
+# object to pointer (when used with ccall)
+cconvert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
+cconvert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
+cconvert(::Type{Ptr{UInt8}}, s::ByteString) = cconvert(Ptr{UInt8}, s.data)
+cconvert(::Type{Ptr{Int8}}, s::ByteString) = cconvert(Ptr{Int8}, s.data)
 # convert strings to ByteString to pass as pointers
 cconvert_gcroot(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
 cconvert_gcroot(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
-convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
+cconvert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+cconvert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)

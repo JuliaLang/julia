@@ -75,7 +75,7 @@ convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data)-1, io->for c in s; write(io,c::Char); end)
 
 sizeof(s::UTF16String) = sizeof(s.data) - sizeof(UInt16)
-convert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
+cconvert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, pointer(s))
 
 function is_valid_utf16(data::AbstractArray{UInt16})
