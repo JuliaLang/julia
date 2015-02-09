@@ -1036,8 +1036,8 @@ val, state = next(r, state)
 
 #rotates
 
-a = [ [ 1 0 0 ], [ 0 0 0 ] ]
-@test rotr90(a,1) == [ [ 0 1 ], [ 0 0 ], [ 0 0 ] ]
+a = [1 0 0; 0 0 0]
+@test rotr90(a,1) == [0 1; 0 0; 0 0]
 @test rotr90(a,2) == rot180(a,1)
 @test rotr90(a,3) == rotl90(a,1)
 @test rotl90(a,3) == rotr90(a,1)
