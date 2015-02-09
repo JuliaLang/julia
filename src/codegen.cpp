@@ -782,7 +782,13 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
     JL_TYPECHK(cfunction, tuple, argt);
     JL_TYPECHK(cfunction, type, argt);
     JL_TYPECHK(cfunction, function, (jl_value_t*)f);
+    if (!jl_is_gf(f))
+        jl_error("only generic functions are currently c-callable");
+
     size_t i, nargs = jl_tuple_len(argt);
+    if (nargs >= 64)
+        jl_error("only functions with less than 64 arguments are c-callable");
+
     uint64_t isref = 0; // bit vector of which argument types are a subtype of Type{Ref{T}}
     jl_value_t *sigt; // type signature with Ref{} annotations removed
     JL_GC_PUSH(&sigt);
@@ -795,13 +801,19 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
                 jl_error("cfunction: argument type Ref should have an element type, not Ref{T}");
             isref |= (2<<i);
         }
+        else if (ati != (jl_value_t*)jl_any_type && !jl_is_leaf_type(ati)) {
+            jl_error("cfunction: type signature must only contain leaf types");
+        }
         jl_tupleset(sigt, i, ati);
     }
+
     if (rt != NULL) {
         if (jl_is_abstract_ref_type(rt)) {
             rt = jl_tparam0(rt);
             if (jl_is_typevar(rt))
                 jl_error("cfunction: return type Ref should have an element type, not Ref{T}");
+            if (rt == (jl_value_t*)jl_any_type)
+                jl_error("cfunction: return type Ref{Any} is invalid. Use Any or Ptr{Any} instead.");
             isref |= 1;
         }
         else if (!jl_is_leaf_type(rt)) {
@@ -809,32 +821,30 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
         }
     }
 
-    if (jl_is_gf(f) && jl_is_leaf_type(sigt) && nargs < 64) {
-        jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)sigt);
-        if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
-            jl_lambda_info_t *li = ff->linfo;
-            if (!jl_types_equal((jl_value_t*)li->specTypes, sigt)) {
-                jl_errorf("cfunction: type signature of %s does not match",
+    jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)sigt);
+    if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
+        jl_lambda_info_t *li = ff->linfo;
+        if (!jl_types_equal((jl_value_t*)li->specTypes, sigt)) {
+            jl_errorf("cfunction: type signature of %s does not match specification",
+                      li->name->name);
+        }
+        jl_value_t *astrt = jl_ast_rettype(li, li->ast);
+        if (rt != NULL) {
+            if (astrt == (jl_value_t*)jl_bottom_type) {
+                if (rt != (jl_value_t*)jl_void_type) {
+                    // a function that doesn't return can be passed to C as void
+                    jl_errorf("cfunction: %s does not return", li->name->name);
+                }
+            }
+            else if (!jl_subtype(astrt, rt, 0)) {
+                jl_errorf("cfunction: return type of %s does not match",
                           li->name->name);
             }
-            jl_value_t *astrt = jl_ast_rettype(li, li->ast);
-            if (rt != NULL) {
-                if (astrt == (jl_value_t*)jl_bottom_type) {
-                    if (rt != (jl_value_t*)jl_void_type) {
-                        // a function that doesn't return can be passed to C as void
-                        jl_errorf("cfunction: %s does not return", li->name->name);
-                    }
-                }
-                else if (!jl_subtype(astrt, rt, 0)) {
-                    jl_errorf("cfunction: return type of %s does not match",
-                              li->name->name);
-                }
-            }
-            JL_GC_POP(); // kill list: sigt
-            return gen_cfun_wrapper(ff, astrt, (jl_tuple_t*)argt, isref);
         }
+        JL_GC_POP(); // kill list: sigt
+        return gen_cfun_wrapper(ff, astrt, (jl_tuple_t*)argt, isref);
     }
-    jl_error("function is not yet c-callable");
+    jl_error("cfunction: no method exactly matched the required type signature (function not yet c-callable)");
 }
 
 // get the address of a C-callable entry point for a function
@@ -3708,7 +3718,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     finalize_gc_frame(&ctx);
 
     if (isref&1) {
-        r = builder.CreateConstGEP1_32(r, 1); // skip type-tag
+        //r = builder.CreateConstGEP1_32(r, 1); // skip type-tag -- broken if you do, broken if you don't
         builder.CreateRet(r);
     }
     else {
