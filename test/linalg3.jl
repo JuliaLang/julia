@@ -201,7 +201,7 @@ Ai = int(ceil(Ar*100))
 @test_approx_eq vecnorm(Ai)    vecnorm(full(Ai))
 
 # 2-argument version of scale
-a = reshape([1.:6], (2,3))
+a = reshape([1.:6;], (2,3))
 @test scale(a, 5.) == a*5
 @test scale(5., a) == a*5
 @test scale(a, [1.; 2.; 3.]) == a.*[1 2 3]

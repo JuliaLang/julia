@@ -609,8 +609,8 @@ end
 let M = 2^8, N=2^3
     Irand = randperm(M)
     Jrand = randperm(N)
-    I = sort([Irand, Irand, Irand])
-    J = [Jrand, Jrand]
+    I = sort([Irand; Irand; Irand])
+    J = [Jrand; Jrand]
 
     SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
     for S in SA

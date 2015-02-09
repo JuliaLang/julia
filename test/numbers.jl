@@ -2270,12 +2270,12 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
 end
 
 #eltype{T<:Number}(::Type{T}) = T
-for T in [subtypes(Complex), subtypes(Real)]
+for T in [subtypes(Complex); subtypes(Real)]
     @test eltype(T) == T
 end
 
 #ndims{T<:Number}(::Type{T}) = 0
-for x in [subtypes(Complex), subtypes(Real)]
+for x in [subtypes(Complex); subtypes(Real)]
     @test ndims(x) == 0
 end
 

@@ -1,7 +1,7 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
-@test sort(['z':-1:'a']) == ['a':'z']
-@test sort(['a':'z'], rev=true) == ['z':-1:'a']
+@test sort(['z':-1:'a';]) == ['a':'z';]
+@test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
@@ -39,9 +39,9 @@ for R in numTypes, T in numTypes
     @test searchsorted(1:3, T(2)) == 2:2
     @test searchsorted(1:3, T(4)) == 4:3
 
-    @test searchsorted(R[1:10], T(1), by=(x -> x >= 5)) == 1:4
-    @test searchsorted(R[1:10], T(10), by=(x -> x >= 5)) == 5:10
-    @test searchsorted(R[1:5, 1:5, 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
+    @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
+    @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
+    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
     @test searchsorted(ones(R, 15), T(1), 6, 10, Base.Order.Forward) == 6:10
 end
 
