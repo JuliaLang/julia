@@ -122,7 +122,7 @@ type List
     List(x::AbstractVector) = new(x)
 end
 
-List(xs...) = List([xs...])
+List(xs...) = List(vcat(xs...))
 
 const bullets = ["* ", "• ", "+ ", "- "]
 

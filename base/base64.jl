@@ -30,7 +30,7 @@ end
 
 # Based on code by Stefan Karpinski from https://github.com/hackerschool/WebSockets.jl (distributed under the same MIT license as Julia)
 
-const b64chars = ['A':'Z','a':'z','0':'9','+','/']
+const b64chars = ['A':'Z';'a':'z';'0':'9';'+';'/']
 
 const base64_pad = uint8('=')
 

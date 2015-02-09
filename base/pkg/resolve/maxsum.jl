@@ -148,7 +148,7 @@ type Graph
             end
         end
 
-        perm = [1:np]
+        perm = [1:np;]
 
         return new(gadj, gmsk, gdir, adjdict, spp, perm, np)
     end

@@ -288,4 +288,3 @@ days(c::Week)        = 7*value(c)
 days(c::Year)        = 365.2425*value(c)
 days(c::Month)       = 30.436875*value(c)
 days(c::CompoundPeriod) = isempty(c.periods)?0.0 : Float64(sum(days,c.periods))
-

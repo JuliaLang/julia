@@ -113,7 +113,7 @@ function doc(f::Function, m::Method)
 end
 
 catdoc() = nothing
-catdoc(xs...) = [xs...]
+catdoc(xs...) = vcat(xs...)
 
 # Modules
 
@@ -525,8 +525,8 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [names(mod, true, true),
-     map(names, moduleusings(mod))...,
+    [names(mod, true, true);
+     map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
 completions(name) = fuzzysort(name, accessible(current_module()))

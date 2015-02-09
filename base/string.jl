@@ -1679,7 +1679,7 @@ end
 rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
-let b = uint8(['0':'9','A':'Z','a':'z'])
+let b = uint8(['0':'9';'A':'Z';'a':'z'])
     global randstring
     randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
     randstring() = randstring(8)

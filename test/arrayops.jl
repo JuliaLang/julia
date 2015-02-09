@@ -73,12 +73,10 @@ a = rand(1, 1, 8, 8, 1)
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
-@test A[2:6] == [2:6]
-tmp = A[1:3,2,2:4]
-@test tmp == cat(3,46:48,86:88,126:128)
+@test A[2:6] == [2:6;]
+@test A[1:3,2,2:4] == cat(3,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-tmp = A[:,3:9]
-@test tmp == reshape(11:45,5,7)
+@test A[:,3:9] == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
 tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
@@ -135,13 +133,13 @@ let
     @test x == -12
     X = get(A, -5:5, NaN32)
     @test eltype(X) == Float32
-    @test isnan(X) == [trues(6),falses(5)]
-    @test X[7:11] == [1:5]
+    @test isnan(X) == [trues(6);falses(5)]
+    @test X[7:11] == [1:5;]
     X = get(A, (2:4, 9:-2:-13), 0)
     Xv = zeros(Int, 3, 12)
     Xv[1:2, 2:5] = A[2:3, 7:-2:1]
     @test X == Xv
-    X2 = get(A, Vector{Int}[[2:4], [9:-2:-13]], 0)
+    X2 = get(A, Vector{Int}[[2:4;], [9:-2:-13;]], 0)
     @test X == X2
 end
 
@@ -168,13 +166,13 @@ v = [3, 7, 6]
 for i = 1:4
     vc = copy(v)
     @test insert!(vc, i, 5) === vc
-    @test vc == [v[1:(i-1)], 5, v[i:end]]
+    @test vc == [v[1:(i-1)]; 5; v[i:end]]
 end
 @test_throws BoundsError insert!(v, 5, 5)
 
 # concatenation
 @test isequal([ones(2,2)  2*ones(2,1)], [1. 1 2; 1 1 2])
-@test isequal([ones(2,2), 2*ones(1,2)], [1. 1; 1 1; 2 2])
+@test isequal([ones(2,2); 2*ones(1,2)], [1. 1; 1 1; 2 2])
 
 # typed array literals
 X = Float64[1 2 3]
@@ -189,6 +187,27 @@ X = Float64[1 2 3; 4 5 6]
 Y = [1. 2. 3.; 4. 5. 6.]
 @test size(X) == size(Y)
 for i = 1:length(X) @test X[i] === Y[i] end
+
+_array_equiv(a,b) = eltype(a) == eltype(b) && a == b
+@test _array_equiv(UInt8[1:3;4], [0x1,0x2,0x3,0x4])
+if !Base._oldstyle_array_vcat_
+    @test_throws MethodError UInt8[1:3]
+    @test_throws MethodError UInt8[1:3,]
+    @test_throws MethodError UInt8[1:3,4:6]
+    a = Array(Range1{Int},1); a[1] = 1:3
+    @test _array_equiv([1:3,], a)
+    a = Array(Range1{Int},2); a[1] = 1:3; a[2] = 4:6
+    @test _array_equiv([1:3,4:6], a)
+end
+
+# typed hvcat
+let X = Float64[1 2 3; 4 5 6]
+    X32 = Float32[X X; X X]
+    @test eltype(X32) <: Float32
+    for i=[1,3], j=[1,4]
+        @test X32[i:(i+1), j:(j+2)] == X
+    end
+end
 
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -302,7 +321,7 @@ end
 
 # All rows and columns unique
 A = ones(10, 10)
-A[diagind(A)] = shuffle!([1:10])
+A[diagind(A)] = shuffle!([1:10;])
 @test unique(A, 1) == A
 @test unique(A, 2) == A
 
@@ -467,9 +486,9 @@ begin
                   3 3 4 4 3 3 4 4;
                   3 3 4 4 3 3 4 4]
 
-    A = reshape([1:8], 2, 2, 2)
+    A = reshape(1:8, 2, 2, 2)
     R = repeat(A, inner = [1, 1, 2], outer = [1, 1, 1])
-    T = reshape([1:4, 1:4, 5:8, 5:8], 2, 2, 4)
+    T = reshape([1:4; 1:4; 5:8; 5:8], 2, 2, 4)
     @test R == T
     A = Array(Int, 2, 2, 2)
     A[:, :, 1] = [1 2;
@@ -527,12 +546,12 @@ begin
 end
 
 @test (1:5)[[true,false,true,false,true]] == [1,3,5]
-@test [1:5][[true,false,true,false,true]] == [1,3,5]
+@test [1:5;][[true,false,true,false,true]] == [1,3,5]
 @test_throws BoundsError (1:5)[[true,false,true,false]]
 @test_throws BoundsError (1:5)[[true,false,true,false,true,false]]
-@test_throws BoundsError [1:5][[true,false,true,false]]
-@test_throws BoundsError [1:5][[true,false,true,false,true,false]]
-a = [1:5]
+@test_throws BoundsError [1:5;][[true,false,true,false]]
+@test_throws BoundsError [1:5;][[true,false,true,false,true,false]]
+a = [1:5;]
 a[[true,false,true,false,true]] = 6
 @test a == [6,2,6,4,6]
 a[[true,false,true,false,true]] = [7,8,9]
@@ -724,19 +743,19 @@ fill!(A, [1, 2])
 for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                8:9, 9:10, 6:9, 7:10]
     for repl in Any[[], [11], [11,22], [11,22,33,44,55]]
-        a = [1:10]; acopy = copy(a)
+        a = [1:10;]; acopy = copy(a)
         @test splice!(a, idx, repl) == acopy[idx]
-        @test a == [acopy[1:(first(idx)-1)], repl, acopy[(last(idx)+1):end]]
+        @test a == [acopy[1:(first(idx)-1)]; repl; acopy[(last(idx)+1):end]]
     end
 end
 
 # deleteat!
 for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
                8:9, 9:10, 6:9, 7:10]
-    a = [1:10]; acopy = copy(a)
-    @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)], acopy[(last(idx)+1):end]]
+    a = [1:10;]; acopy = copy(a)
+    @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
 end
-a = [1:10]
+a = [1:10;]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
@@ -762,15 +781,15 @@ end
 
 # reverse
 @test reverse([2,3,1]) == [1,3,2]
-@test reverse([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
-@test reverse([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
-@test reverse([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
 @test reverse(1:10,1,4) == [4,3,2,1,5,6,7,8,9,10]
 @test reverse(1:10,3,6) == [1,2,6,5,4,3,7,8,9,10]
 @test reverse(1:10,6,10) == [1,2,3,4,5,10,9,8,7,6]
-@test reverse!([1:10],1,4) == [4,3,2,1,5,6,7,8,9,10]
-@test reverse!([1:10],3,6) == [1,2,6,5,4,3,7,8,9,10]
-@test reverse!([1:10],6,10) == [1,2,3,4,5,10,9,8,7,6]
+@test reverse!([1:10;],1,4) == [4,3,2,1,5,6,7,8,9,10]
+@test reverse!([1:10;],3,6) == [1,2,6,5,4,3,7,8,9,10]
+@test reverse!([1:10;],6,10) == [1,2,3,4,5,10,9,8,7,6]
 
 # flipdim
 @test isequal(flipdim([2,3,1], 1), [1,3,2])
@@ -890,7 +909,7 @@ a = Array(Float64, 9,8,7,6,5,4,3,2,1)
 @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
 
 # Multidimensional iterators
-for a in ([1:5], reshape([2]))
+for a in ([1:5;], reshape([2]))
     counter = 0
     for I in eachindex(a)
         counter += 1
@@ -919,7 +938,7 @@ function mdsum2(A)
     s
 end
 
-a = [1:5]
+a = [1:5;]
 @test isa(Base.linearindexing(a), Base.LinearFast)
 b = sub(a, :)
 @test isa(Base.linearindexing(b), Base.LinearFast)
@@ -940,7 +959,7 @@ for i = 1:10
     unshift!(shp, 1)
 end
 
-a = [1:10]
+a = [1:10;]
 shp = [2,5]
 for i = 2:10
     A = reshape(a, tuple(shp...))
@@ -1017,8 +1036,8 @@ val, state = next(r, state)
 
 #rotates
 
-a = [ [ 1 0 0 ], [ 0 0 0 ] ]
-@test rotr90(a,1) == [ [ 0 1 ], [ 0 0 ], [ 0 0 ] ]
+a = [1 0 0; 0 0 0]
+@test rotr90(a,1) == [0 1; 0 0; 0 0]
 @test rotr90(a,2) == rot180(a,1)
 @test rotr90(a,3) == rotl90(a,1)
 @test rotl90(a,3) == rotr90(a,1)

@@ -1967,7 +1967,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
     9851, 9857, 9859, 9871, 9883, 9887, 9901, 9907, 9923, 9929, 9931, 9941,
     9949, 9967, 9973 ]
 
-for T in [Int,BigInt], n = [1:1000,1000000]
+for T in [Int,BigInt], n = [1:1000;1000000]
     n = convert(T,n)
     f = factor(n)
     @test n == prod(T[p^k for (p,k)=f])
@@ -2209,7 +2209,7 @@ ndigf(n) = float64(log(float32(n)))
 @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
 @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
 @test digits(100) == [0, 0, 1]
-@test digits(BigInt(2)^128, 2) == [zeros(128), 1]
+@test digits(BigInt(2)^128, 2) == [zeros(128); 1]
 let a = zeros(Int, 3)
     digits!(a, 50)
     @test a == [0, 5, 0]
@@ -2270,12 +2270,12 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
 end
 
 #eltype{T<:Number}(::Type{T}) = T
-for T in [subtypes(Complex), subtypes(Real)]
+for T in [subtypes(Complex); subtypes(Real)]
     @test eltype(T) == T
 end
 
 #ndims{T<:Number}(::Type{T}) = 0
-for x in [subtypes(Complex), subtypes(Real)]
+for x in [subtypes(Complex); subtypes(Real)]
     @test ndims(x) == 0
 end
 

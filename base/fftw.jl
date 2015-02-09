@@ -260,7 +260,7 @@ function dims_howmany(X::StridedArray, Y::StridedArray,
     ist = [strides(X)...]
     ost = [strides(Y)...]
     dims = [sz[reg] ist[reg] ost[reg]]'
-    oreg = [1:ndims(X)]
+    oreg = [1:ndims(X);]
     oreg[reg] = 0
     oreg = filter(d -> d > 0, oreg)
     howmany = [sz[oreg] ist[oreg] ost[oreg]]'

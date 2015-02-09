@@ -97,7 +97,7 @@ end
 
 # DataType
 create_serialization_stream() do s # standard types
-    typ1 = Uint8
+    typ1 = UInt8
     serialize(s, typ1)
     typ2 = Bool
     serialize(s, typ2)
@@ -185,7 +185,7 @@ end
 
 # Array
 type TA1
-    v::Uint8
+    v::UInt8
 end
 create_serialization_stream() do s # small 1d array
     arr1 = fill(0x01, 10)    # small 1d array
@@ -215,9 +215,9 @@ end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = slice(ones(Uint8, 4), 2:3)
+    slc1 = slice(ones(UInt8, 4), 2:3)
     serialize(s, slc1)
-    slc2 = slice(ones(Uint8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = slice(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
