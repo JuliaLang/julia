@@ -857,7 +857,7 @@ function hvcat_fill(a, xs)
     a
 end
 
-function typed_hvcat(T::Type, rows::(Int...), xs...)
+function typed_hvcat(T::Type, rows::(Int...), xs::Number...)
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
@@ -878,6 +878,29 @@ function hvcat(rows::(Int...), xs::Number...)
         T = promote_type(T,typeof(xs[i]))
     end
     typed_hvcat(T, rows, xs...)
+end
+
+# fallback definition of hvcat in terms of hcat and vcat
+function hvcat(rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    vcat(rs...)
+end
+
+function typed_hvcat(T::Type, rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    T[rs...;]
 end
 
 ## Reductions and scans ##
@@ -991,18 +1014,6 @@ function ipermutedims(A::AbstractArray,perm)
 end
 
 ## Other array functions ##
-
-# fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::(Int...), as...)
-    nbr = length(rows)  # number of block rows
-    rs = cell(nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = hcat(as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    vcat(rs...)
-end
 
 function repmat(a::AbstractVecOrMat, m::Int, n::Int=1)
     o, p = size(a,1), size(a,2)
