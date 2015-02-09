@@ -134,8 +134,9 @@ function complete_path(path::AbstractString, pos)
     return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
-# Determines whether a string endswiths ',' or '(' when disregarding whitespace_chars
-function ends_c(s::AbstractString)
+# Determines whether method_complete should be tried. It should only be done if
+# the string endswiths ',' or '(' when disregarding whitespace_chars
+function should_method_complete(s::AbstractString)
     for c in reverse(s)
         if c in [',', '(']
             return true
@@ -167,33 +168,42 @@ function find_start_brace(s::AbstractString)
     return startind:endof(s), method_name_end
 end
 
-# Return the next value when the sym is defined in current namespace fn
-function return_val(sym::Expr, fn)
+# Returns the value in a expression if sym is defined in current namespace fn.
+# This method is used to iterate to the value of a expression like:
+# :(Base.REPLCompletions.whitespace_chars) a `dump` of this expression
+# will show it consist of Expr, QuoteNode's and Symbol's which all needs to
+# be handled differently to iterate down to get the value of whitespace_chars.
+function get_value(sym::Expr, fn)
     sym.head != :. && return
     for ex in sym.args
-        fn = return_val(ex, fn)
+        fn = get_value(ex, fn)
         fn == nothing && return
     end
     fn
 end
-return_val(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
-return_val(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
-return_val(sym, fn) = sym
+get_value(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
+get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
+get_value(sym, fn) = sym
+
+# Takes the argument of a function call and determine the type of signature of the method.
+# If the function gets called with a val::DataType then it returns Type{val} else typeof(val)
+method_type_of_arg(val::DataType) = Type{val}
+method_type_of_arg(val) = typeof(val)
 
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
     args_ex = Any[]
     for ex in ex_org.args # First ex is the function name
-        val = return_val(ex, Main)
+        val = get_value(ex, Main)
         val == nothing && return UTF8String[]
         push!(args_ex, val)
     end
     isgeneric(args_ex[1]) || return UTF8String[]
     out = UTF8String[]
-    t_in = tuple(args_ex[2:end]...) # Input types
+    t_in = tuple([method_type_of_arg(arg) for arg in args_ex[2:end]]...) # Input types
     for method in methods(args_ex[1])
         # Check if the method's type signature intersects the input types
-        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], typeof(t_in)) != None &&
+        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], t_in) != None &&
             push!(out,string(method))
     end
     return out
@@ -259,7 +269,7 @@ function completions(string, pos)
     # Make sure that only latex_completions is working on strings
     inc_tag==:string && return UTF8String[], 0:-1, false
 
-     if inc_tag == :other && ends_c(partial)
+     if inc_tag == :other && should_method_complete(partial)
         frange, method_name_end = find_start_brace(partial)
         ex = parse(partial[frange] * ")", raise=false)
         if isa(ex, Expr) && ex.head==:call
