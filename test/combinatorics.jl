@@ -22,11 +22,12 @@ push!(p, 1)
 a = randcycle(10)
 @test ipermute!(permute!([1:10], a),a) == [1:10]
 
-@test collect(combinations("abc",3)) == ["abc"]
-@test collect(combinations("abc",2)) == ["ab","ac","bc"]
-@test collect(combinations("abc",1)) == ["a","b","c"]
-@test collect(combinations("abc",0)) == [""]
-@test collect(permutations("abc")) == ["abc","acb","bac","bca","cab","cba"]
+@test collect(combinations("abc",3)) == Any[['a','b','c']]
+@test collect(combinations("abc",2)) == Any[['a','b'],['a','c'],['b','c']]
+@test collect(combinations("abc",1)) == Any[['a'],['b'],['c']]
+@test collect(combinations("abc",0)) == Any[Char[]]
+@test collect(permutations("abc")) == Any[['a','b','c'],['a','c','b'],['b','a','c'],
+                                          ['b','c','a'],['c','a','b'],['c','b','a']]
 
 @test collect(filter(x->(iseven(x[1])),permutations([1,2,3]))) == Any[[2,1,3],[2,3,1]]
 @test collect(filter(x->(iseven(x[3])),permutations([1,2,3]))) == Any[[1,3,2],[3,1,2]]
