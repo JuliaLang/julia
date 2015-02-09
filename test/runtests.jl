@@ -80,3 +80,16 @@ end
 @test size(bitrand(MersenneTwister(), 3, 4)) == (3, 4)
 @test size(bitrand(MersenneTwister(), (3, 4))) == (3, 4)
 @test rand(Bool) in [false, true]
+
+module CartesianTest
+	using Base.Cartesian, Compat
+	@ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
+		@ncall N tuple X
+	end
+end
+
+@test CartesianTest.f(1) == (1,)
+@test CartesianTest.f(1,2) == (1,2)
+@test CartesianTest.f(1,2,3) == (1,2,3)
+@test CartesianTest.f(1,2,3,4) == (1,2,3,4)
+@test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)

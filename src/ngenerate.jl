@@ -51,7 +51,10 @@ function _nsplat(prototype, body, varname, T, itersym)
     bodyquot = Expr(:quote, body)
     newbody = quote
         $itersym = length($varsym)
-        Compat.CompatCartesian.resolvesplats!($bodyquot, $varquot, $itersym)
+        quote
+            Base.Cartesian.@nexprs $($itersym) (d->$($(Expr(:quote, symbol(varsym, "_d")))) = $($varquot)[d])
+            $(Compat.CompatCartesian.resolvesplats!($bodyquot, $varquot, $itersym))
+        end
     end
     prototype, newbody
 end
