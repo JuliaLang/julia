@@ -200,7 +200,7 @@ immutable RegexMatchIterator
     end
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
-eltype(itr::RegexMatchIterator) = RegexMatch
+eltype(::Type{RegexMatchIterator}) = RegexMatch
 start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, int32(0))
 done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
 

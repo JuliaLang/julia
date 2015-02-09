@@ -47,10 +47,7 @@ end
 
 size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
-eltype(x) = Any
-eltype{T,n}(::AbstractArray{T,n}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
-eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 iseltype(x,T) = eltype(x) <: T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 isinteger(x::AbstractArray) = all(isinteger,x)
