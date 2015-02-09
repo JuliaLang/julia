@@ -118,30 +118,71 @@ verbose && println("Testing cfunction roundtrip: ")
 # cfunction roundtrip
 for (t,v) in ((Complex{Int32},:ci32),(Complex{Int64},:ci64),
             (Complex64,:cf32),(Complex128,:cf64),(Struct1,:s1))
+    fname = symbol("foo"*string(v))
+    fname1 = symbol("foo1"*string(v))
     @eval begin
         verbose && println($t)
-        if($(t).mutable)
-            a = copy($v)
-        else
-            a = $v
-        end
+        a = copy($v)
         verbose && println("A: ",a)
-        function $(symbol("foo"*string(v)))(s::$t)
+        function $fname1(s::$t)
             verbose && println("B: ",s)
+            @test s == $v
+            @test s === a
+            global c = s
+            s
+        end
+        function $fname1(s)
+            verbose && println("B(Any): ",s)
+            @test s == $v
+            @test s === a
+            global c = s
+            s
+        end
+        function $fname(s::$t)
+            verbose && println("B: ",s)
+            @test s == $v
             if($(t).mutable)
                 @test !(s === a)
             end
-            @test s == a
+            global c = s
             s
         end
-        b = ccall(cfunction($(symbol("foo"*string(v))),$t,($t,)),$t,($t,),$v)
-        b = ccall(cfunction($(symbol("foo"*string(v))),Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),$v)
-        b = ccall(cfunction($(symbol("foo"*string(v))),$t,(Ref{$t},)),$t,(Ref{$t},),$v)
-        #b = ccall(cfunction($(symbol("foo"*string(v))),Any,(Ref{$t},)),Any,(Ref{$t},),$v) # broken due to #2818
+        function $fname(s)
+            verbose && println("B(Any): ",s)
+            @test s == $v
+            if($(t).mutable)
+                @test !(s === a)
+            end
+            global c = s
+            s
+        end
+        b = ccall(cfunction($fname1,Ref{$t},(Ref{$t},)),Ref{$t},(Ref{$t},),a)
         verbose && println("C: ",b)
+        @test b == $v
+        @test b === a
+        @test b === c
+        b = ccall(cfunction($fname,$t,($t,)),$t,($t,),a)
+        verbose && println("C: ",b)
+        @test b == $v
+        if ($(t).mutable)
+            @test !(b === c)
+            @test !(b === a)
+        end
+        b = ccall(cfunction($fname1,$t,(Ref{$t},)),$t,(Ref{$t},),a)
+        verbose && println("C: ",b)
+        @test b == $v
+        if ($(t).mutable)
+            @test !(b === c)
+            @test !(b === a)
+        end
+        b = ccall(cfunction($fname,Ref{$t},($t,)),Ref{$t},($t,),a)
+        verbose && println("C: ",b)
+        @test b == $v
+        @test b === c
         if ($(t).mutable)
             @test !(b === a)
         end
-        @test a == b
+        #b = ccall(cfunction($fname,Any,(Ref{Any},)),Any,(Ref{Any},),$v) # unimplemented
+        #b = ccall(cfunction($fname,Any,(Ref{$t},)),Any,(Ref{$t},),$v) # broken due to #2818
     end
 end
