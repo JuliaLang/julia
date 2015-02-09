@@ -122,7 +122,7 @@ export
     AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Symbol, Task, Array,
+    Module, Symbol, Task, Array, GenSym,
     # numeric types
     Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
     Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
@@ -157,6 +157,7 @@ export
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,
+    #sqrt_llvm_fast,
     #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
     #fptrunc, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
@@ -266,12 +267,14 @@ TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any
 
 Expr(args::ANY...) = _expr(args...)
 
-LineNumberNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LineNumberNode, n)::LineNumberNode
-LabelNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LabelNode, n)::LabelNode
-GotoNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), GotoNode, n)::GotoNode
-QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::QuoteNode
-NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
-TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
+_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::$(Expr(:call, :(Core.apply_type), :Type, typ)), n::$argty) = $(Expr(:new, typ, :n))))
+_new(:LineNumberNode, :Int)
+_new(:LabelNode, :Int)
+_new(:GotoNode, :Int)
+_new(:TopNode, :Symbol)
+_new(:NewvarNode, :Symbol)
+_new(:QuoteNode, :ANY)
+_new(:GenSym, :Int)
 
 Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
 Module() = Module(:anonymous)

@@ -11,8 +11,7 @@ SOURCES = \
 	table.c \
 	iostream.c \
 	julia_extensions.c \
-	dirname.c \
-	basename.c
+	dirname.c
 
 HEADERS = \
 	flisp.h \
@@ -27,8 +26,7 @@ OBJECTS = \
 	table.obj \
 	iostream.obj \
 	julia_extensions.obj \
-	dirname.obj \
-	basename.obj
+	dirname.obj
 
 LIBUV = $(MAKEDIR)\..\..\deps\libuv\libuv.lib
 LIBMOJIBAKE = $(MAKEDIR)\..\..\deps\libmojibake\libmojibake.lib

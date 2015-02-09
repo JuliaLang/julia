@@ -265,6 +265,28 @@ const base64 = base64encode
 @deprecate randbool(r::AbstractRNG, dims::Dims)    bitrand(r, dims)
 @deprecate randbool(r::AbstractRNG, dims::Int...)  bitrand(r, dims)
 
-@deprecate which(f, t::(Type...))  methods(f, t)[1]
-
 @deprecate beginswith startswith
+
+@deprecate functionlocs(f,t)  map(functionloc, methods(f,t))
+
+@deprecate null nullspace
+
+@deprecate error(ex::Exception) throw(ex)
+@deprecate error{E<:Exception}(::Type{E}) throw(E())
+
+@deprecate map!(f::Callable, dest::StridedArray, A::StridedArray, B::Number) broadcast!(f, dest, A, B)
+@deprecate map!(f::Callable, dest::StridedArray, A::Number, B::StridedArray) broadcast!(f, dest, A, B)
+
+#9295
+@deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
+
+# 0.4 discontinued functions
+
+function subtypetree(x::DataType, level=-1)
+    depwarn("`subtypetree` is discontinued", :subtypetree)
+    (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
+end
+
+# 8898
+@deprecate precision(x::DateTime) eps(x)
+@deprecate precision(x::Date) eps(x)

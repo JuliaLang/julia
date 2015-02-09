@@ -746,3 +746,21 @@ end
 @test exp10(1.0+0.0im) == 10.0+0.0im
 #wolframalpha
 @test_approx_eq exp10(1.0+2.0im) -1.0701348355877020772086517528518239460495529361-9.9425756941378968736161937190915602112878340717im
+
+# round #8291
+@test round(Complex(1.125, 0.875), 2) == Complex(1.12, 0.88)
+@test round(Complex(1.5, 0.5), RoundDown, RoundUp) == Complex(1.0, 1.0)
+@test round([1:5] + im) == [1:5] + im
+@test round([1:5] + 0.5im) == [1.0:5.0]
+
+# float #8291
+@test float(Complex(1, 2)) == Complex(1.0, 2.0)
+@test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
+
+# Complex32 arithmetic #10003
+@test float16(1)+float16(1)im === Complex32(1, 1)
+@test float16(1)-float16(1)im === float16(1)+float16(-1)im === Complex32(1, -1)
+@test float16(1)*im === Complex32(im)
+@test float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+@test float16(1)^im === Complex32(1) === float16(1)+float16(0)im
+

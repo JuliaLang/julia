@@ -12,7 +12,7 @@ Overview of Julia to LLVM Interface
 Julia statically links in LLVM by default.
 Build with ``USE_LLVM_SHLIB=1`` to link dynamically.
 
-The code for lowering Julia AST to LLVM IR or interpreting it directly is in 
+The code for lowering Julia AST to LLVM IR or interpreting it directly is in
 directory ``src/``.
 
 +---------------------+-------------------------------------------------------------+
@@ -56,7 +56,7 @@ Building Julia with a different version of LLVM
 -----------------------------------------------
 
 The default version of LLVM is specified in ``deps/Versions.make``.
-You can override it in your ``Make.user`` by adding a line such as:
+You can override it by creating a file called ``Make.user`` and adding a line to it such as:
 
     ``LLVM_VER = 3.5.0``
 

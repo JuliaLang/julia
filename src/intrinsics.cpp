@@ -6,12 +6,18 @@ namespace JL_I {
         neg_int, add_int, sub_int, mul_int,
         sdiv_int, udiv_int, srem_int, urem_int, smod_int,
         neg_float, add_float, sub_float, mul_float, div_float, rem_float,
+        fma_float, muladd_float,
+        // fast arithmetic
+        neg_float_fast, add_float_fast, sub_float_fast,
+        mul_float_fast, div_float_fast, rem_float_fast,
         // same-type comparisons
         eq_int,  ne_int,
         slt_int, ult_int,
         sle_int, ule_int,
         eq_float, ne_float,
         lt_float, le_float,
+        eq_float_fast, ne_float_fast,
+        lt_float_fast, le_float_fast,
         fpiseq, fpislt,
         // bitwise operators
         and_int, or_int, xor_int, not_int, shl_int, lshr_int, ashr_int,
@@ -31,6 +37,7 @@ namespace JL_I {
         abs_float, copysign_float, flipsign_int, select_value,
         ceil_llvm, floor_llvm, trunc_llvm, rint_llvm,
         sqrt_llvm, powi_llvm,
+        sqrt_llvm_fast,
         // pointer access
         pointerref, pointerset, pointertoref,
         // c interface
@@ -123,7 +130,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
     jl_value_t *jt = jl_typeof(e);
     jl_datatype_t *bt = (jl_datatype_t*)jt;
 
-    if (!jl_is_datatype(bt))
+    if (!jl_is_datatype(bt) || bt == jl_gensym_type)
         return NULL;
 
     if (e == jl_true)
@@ -348,7 +355,7 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *bt=NULL;
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -378,7 +385,7 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     else {
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -461,7 +468,7 @@ static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx
 {
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      &jl_tupleref(ctx->sp,0),
+                                      jl_tuple_data(ctx->sp),
                                       jl_tuple_len(ctx->sp)/2);
     if (!jl_is_bitstype(bt))
         jl_errorf("%s: expected bits type as first argument", fname);
@@ -617,14 +624,15 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
             return NULL;
         }
         assert(jl_is_datatype(ety));
-        uint64_t size = ((jl_datatype_t*)ety)->size;
+        uint64_t size = jl_datatype_size(ety);
         Value *strct =
             builder.CreateCall(prepare_call(jlallocobj_func),
                                ConstantInt::get(T_size,
                                     sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
                             emit_nthptr_addr(strct, (size_t)0));
-        im1 = builder.CreateMul(im1, ConstantInt::get(T_size, size));
+        im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
         builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
                             thePtr, size, 1);
@@ -679,8 +687,10 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         assert(val->getType() == jl_pvalue_llvmt); //Boxed
         assert(jl_is_datatype(ety));
         uint64_t size = ((jl_datatype_t*)ety)->size;
+        im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
+                    LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
-                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1),T_pint8), size, 1);
+                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1), T_pint8), size, 1);
     }
     else {
         if (val == NULL) {
@@ -689,7 +699,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        typed_store(thePtr, im1, val, ety, ctx, tbaa_user);
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL);
     }
     return mark_julia_type(thePtr, aty);
 }
@@ -717,6 +727,26 @@ static Value *emit_srem(Value *x, Value *den, jl_codectx_t *ctx)
     builder.Insert(ret);
     return ret;
 }
+
+// Temporarily switch the builder to fast-math mode if requested
+struct math_builder {
+    FastMathFlags old_fmf;
+    math_builder(jl_codectx_t *ctx, bool always_fast = false):
+        old_fmf(builder.getFastMathFlags())
+    {
+        if (jl_compileropts.fast_math != JL_COMPILEROPT_FAST_MATH_OFF &&
+            (always_fast ||
+             jl_compileropts.fast_math == JL_COMPILEROPT_FAST_MATH_ON)) {
+            FastMathFlags fmf;
+            fmf.setUnsafeAlgebra();
+            builder.SetFastMathFlags(fmf);
+        }
+    }
+    IRBuilder<>& operator()() const { return builder; }
+    ~math_builder() {
+        builder.SetFastMathFlags(old_fmf);
+    }
+};
 
 static Value *emit_smod(Value *x, Value *den, jl_codectx_t *ctx)
 {
@@ -848,9 +878,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                  emit_expr(args[2], ctx, false));
         }
         else if (t1 == t2 && llt1 == llt2 && llt1 != jl_pvalue_llvmt) {
-            ifelse_result = builder.CreateSelect(isfalse,
-                                                 auto_unbox(args[3], ctx),
-                                                 auto_unbox(args[2], ctx));
+            Value *x = auto_unbox(args[3], ctx);
+            ifelse_result = tpropagate(x, builder.CreateSelect(isfalse,
+                                                               x,
+                                                               auto_unbox(args[2], ctx)));
         }
         else {
             Value *arg1 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));
@@ -871,9 +902,13 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     if (nargs>1) {
         y = auto_unbox(args[2], ctx);
     }
+    Value *z = NULL;
+    if (nargs>2) {
+        z = auto_unbox(args[3], ctx);
+    }
     Type *t = x->getType();
-    if (t == T_void || (y && y->getType() == T_void))
-        return t == T_void ? x : y;
+    if (t == T_void || (y && y->getType() == T_void) || (z && z->getType() == T_void))
+        return t == T_void ? x : y->getType() == T_void ? y : z;
 
     Value *fy;
     Value *den;
@@ -926,15 +961,46 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
 // that do the correct thing on LLVM <= 3.3 and >= 3.5 respectively.
 // See issue #7868
 #ifdef LLVM35
-    HANDLE(neg_float,1) return builder.CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
+    HANDLE(neg_float,1) return math_builder(ctx)().CreateFSub(ConstantFP::get(FT(t), -0.0), FP(x));
+    HANDLE(neg_float_fast,1) return math_builder(ctx, true)().CreateFNeg(FP(x));
 #else
-    HANDLE(neg_float,1) return builder.CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
+    HANDLE(neg_float,1)
+        return math_builder(ctx)().CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
+    HANDLE(neg_float_fast,1)
+        return math_builder(ctx, true)().CreateFMul(ConstantFP::get(FT(t), -1.0), FP(x));
 #endif
-    HANDLE(add_float,2) return builder.CreateFAdd(FP(x), FP(y));
-    HANDLE(sub_float,2) return builder.CreateFSub(FP(x), FP(y));
-    HANDLE(mul_float,2) return builder.CreateFMul(FP(x), FP(y));
-    HANDLE(div_float,2) return builder.CreateFDiv(FP(x), FP(y));
-    HANDLE(rem_float,2) return builder.CreateFRem(FP(x), FP(y));
+    HANDLE(add_float,2) return math_builder(ctx)().CreateFAdd(FP(x), FP(y));
+    HANDLE(sub_float,2) return math_builder(ctx)().CreateFSub(FP(x), FP(y));
+    HANDLE(mul_float,2) return math_builder(ctx)().CreateFMul(FP(x), FP(y));
+    HANDLE(div_float,2) return math_builder(ctx)().CreateFDiv(FP(x), FP(y));
+    HANDLE(rem_float,2) return math_builder(ctx)().CreateFRem(FP(x), FP(y));
+    HANDLE(add_float_fast,2) return math_builder(ctx, true)().CreateFAdd(FP(x), FP(y));
+    HANDLE(sub_float_fast,2) return math_builder(ctx, true)().CreateFSub(FP(x), FP(y));
+    HANDLE(mul_float_fast,2) return math_builder(ctx, true)().CreateFMul(FP(x), FP(y));
+    HANDLE(div_float_fast,2) return math_builder(ctx, true)().CreateFDiv(FP(x), FP(y));
+    HANDLE(rem_float_fast,2) return math_builder(ctx, true)().CreateFRem(FP(x), FP(y));
+    HANDLE(fma_float,3) {
+      assert(y->getType() == x->getType());
+      assert(z->getType() == y->getType());
+      return builder.CreateCall3
+        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fma,
+                                   ArrayRef<Type*>(x->getType())),
+         FP(x), FP(y), FP(z));
+    }
+    HANDLE(muladd_float,3)
+#ifdef LLVM34
+    {
+      assert(y->getType() == x->getType());
+      assert(z->getType() == y->getType());
+      return builder.CreateCall3
+        (Intrinsic::getDeclaration(jl_Module, Intrinsic::fmuladd,
+                                   ArrayRef<Type*>(x->getType())),
+         FP(x), FP(y), FP(z));
+    }
+#else
+      return math_builder(ctx, true)().
+        CreateFAdd(builder.CreateFMul(FP(x), FP(y)), FP(z));
+#endif
 
     HANDLE(checked_sadd,2)
     HANDLE(checked_uadd,2)
@@ -981,10 +1047,15 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(sle_int,2) return builder.CreateICmpSLE(JL_INT(x), JL_INT(y));
     HANDLE(ule_int,2) return builder.CreateICmpULE(JL_INT(x), JL_INT(y));
 
-    HANDLE(eq_float,2) return builder.CreateFCmpOEQ(FP(x), FP(y));
-    HANDLE(ne_float,2) return builder.CreateFCmpUNE(FP(x), FP(y));
-    HANDLE(lt_float,2) return builder.CreateFCmpOLT(FP(x), FP(y));
-    HANDLE(le_float,2) return builder.CreateFCmpOLE(FP(x), FP(y));
+    HANDLE(eq_float,2) return math_builder(ctx)().CreateFCmpOEQ(FP(x), FP(y));
+    HANDLE(ne_float,2) return math_builder(ctx)().CreateFCmpUNE(FP(x), FP(y));
+    HANDLE(lt_float,2) return math_builder(ctx)().CreateFCmpOLT(FP(x), FP(y));
+    HANDLE(le_float,2) return math_builder(ctx)().CreateFCmpOLE(FP(x), FP(y));
+
+    HANDLE(eq_float_fast,2) return math_builder(ctx, true)().CreateFCmpOEQ(FP(x), FP(y));
+    HANDLE(ne_float_fast,2) return math_builder(ctx, true)().CreateFCmpUNE(FP(x), FP(y));
+    HANDLE(lt_float_fast,2) return math_builder(ctx, true)().CreateFCmpOLT(FP(x), FP(y));
+    HANDLE(le_float_fast,2) return math_builder(ctx, true)().CreateFCmpOLE(FP(x), FP(y));
 
     HANDLE(fpiseq,2) {
         Value *xi = JL_INT(x);
@@ -1204,6 +1275,12 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                         x, builder.CreateSIToFP(y, tx));
 #endif
     }
+    HANDLE(sqrt_llvm_fast,1) {
+        x = FP(x);
+        return builder.CreateCall(Intrinsic::getDeclaration(jl_Module, Intrinsic::sqrt,
+                                                            ArrayRef<Type*>(x->getType())),
+                                  x);
+    }
     default:
         assert(false);
     }
@@ -1261,12 +1338,16 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(sdiv_int); ADD_I(udiv_int); ADD_I(srem_int); ADD_I(urem_int);
     ADD_I(smod_int);
     ADD_I(neg_float); ADD_I(add_float); ADD_I(sub_float); ADD_I(mul_float);
-    ADD_I(div_float); ADD_I(rem_float);
+    ADD_I(div_float); ADD_I(rem_float); ADD_I(fma_float); ADD_I(muladd_float);
+    ADD_I(neg_float_fast); ADD_I(add_float_fast); ADD_I(sub_float_fast);
+    ADD_I(mul_float_fast); ADD_I(div_float_fast); ADD_I(rem_float_fast);
     ADD_I(eq_int); ADD_I(ne_int);
     ADD_I(slt_int); ADD_I(ult_int);
     ADD_I(sle_int); ADD_I(ule_int);
     ADD_I(eq_float); ADD_I(ne_float);
     ADD_I(lt_float); ADD_I(le_float);
+    ADD_I(eq_float_fast); ADD_I(ne_float_fast);
+    ADD_I(lt_float_fast); ADD_I(le_float_fast);
     ADD_I(fpiseq); ADD_I(fpislt);
     ADD_I(and_int); ADD_I(or_int); ADD_I(xor_int); ADD_I(not_int);
     ADD_I(shl_int); ADD_I(lshr_int); ADD_I(ashr_int); ADD_I(bswap_int);
@@ -1279,6 +1360,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(flipsign_int); ADD_I(select_value);
     ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
     ADD_I(sqrt_llvm); ADD_I(powi_llvm);
+    ADD_I(sqrt_llvm_fast);
     ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);

@@ -226,7 +226,7 @@ rand(r::Union(RandomDevice,MersenneTwister), ::Type{Float32}) =
 
 # MersenneTwister
 
-rand{T<:Union(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
+@inline rand{T<:Union(Bool, Int8, UInt8, Int16, UInt16, Int32, UInt32)}(r::MersenneTwister, ::Type{T}) = rand_ui52_raw(r) % T
 
 function rand(r::MersenneTwister, ::Type{UInt64})
     reserve(r, 2)
@@ -420,17 +420,25 @@ end
 RangeGeneratorInt{T, U<:Union(UInt32, UInt128)}(a::T, k::U) = RangeGeneratorInt{T, U}(a, k, maxmultiple(k))
 # mixed 32/64 bits entropy generator
 RangeGeneratorInt{T}(a::T, k::UInt64) = RangeGeneratorInt{T,UInt64}(a, k, maxmultiplemix(k))
-
-
 # generator for ranges
-RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+RangeGenerator{T<:Unsigned}(r::UnitRange{T}) = begin
+    if isempty(r)
+        throw(ArgumentError("range must be non-empty"))
+    end
+    RangeGeneratorInt(first(r), last(r) - first(r) + one(T))
+end
 
 # specialized versions
 for (T, U) in [(UInt8, UInt32), (UInt16, UInt32),
                (Int8, UInt32), (Int16, UInt32), (Int32, UInt32), (Int64, UInt64), (Int128, UInt128),
                (Bool, UInt32)]
 
-    @eval RangeGenerator(r::UnitRange{$T}) = isempty(r) ? error("range must be non-empty") : RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    @eval RangeGenerator(r::UnitRange{$T}) = begin
+        if isempty(r)
+            throw(ArgumentError("range must be non-empty"))
+        end
+        RangeGeneratorInt(first(r), convert($U, unsigned(last(r) - first(r)) + one($U))) # overflow ok
+    end
 end
 
 if GMP_VERSION.major >= 6
@@ -456,7 +464,7 @@ end
 
 function RangeGenerator(r::UnitRange{BigInt})
     m = last(r) - first(r)
-    m < 0 && error("range must be non-empty")
+    m < 0 && throw(ArgumentError("range must be non-empty"))
     nd = ndigits(m, 2)
     nlimbs, highbits = divrem(nd, 8*sizeof(Limb))
     highbits > 0 && (nlimbs += 1)
@@ -1087,14 +1095,14 @@ function randn_unlikely(rng, idx, rabs, x)
     end
 end
 
-function randn!(rng::AbstractRNG, A::Array{Float64})
+function randn!(rng::AbstractRNG, A::AbstractArray{Float64})
     for i = 1:length(A)
         @inbounds A[i] = randn(rng)
     end
     A
 end
 
-randn!(A::Array{Float64}) = randn!(GLOBAL_RNG, A)
+randn!(A::AbstractArray{Float64}) = randn!(GLOBAL_RNG, A)
 randn(dims::Dims) = randn!(Array(Float64, dims))
 randn(dims::Integer...) = randn!(Array(Float64, dims...))
 randn(rng::AbstractRNG, dims::Dims) = randn!(rng, Array(Float64, dims))
@@ -1152,7 +1160,7 @@ function Base.convert(::Type{UUID}, s::AbstractString)
     s = lowercase(s)
 
     if !ismatch(r"^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$", s)
-        error(ArgumentError("Malformed UUID string"))
+        throw(ArgumentError("Malformed UUID string"))
     end
 
     u = uint128(0)

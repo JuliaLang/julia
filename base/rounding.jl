@@ -34,7 +34,7 @@ function from_fenv(r::Integer)
     elseif r == JL_FE_TOWARDZERO
         return RoundToZero
     else
-        error("invalid rounding mode code")
+        throw(ArgumentError("invalid rounding mode code: $r"))
     end
 end
 

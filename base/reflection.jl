@@ -34,7 +34,7 @@ function names(v)
     if isa(t,DataType)
         return names(t)
     else
-        error("cannot call names() on a non-composite type")
+        throw(ArgumentError("cannot call names() on a non-composite type"))
     end
 end
 
@@ -84,8 +84,6 @@ end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
-subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
-
 # function reflection
 isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
@@ -122,7 +120,7 @@ end
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("not a generic function")
+        throw(ArgumentError("argument is not a generic function"))
     end
     f.env
 end
@@ -160,24 +158,47 @@ code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
 code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
 code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
-function functionlocs(f::ANY, types=(Type...))
-    locs = Any[]
-    for m in methods(f, types)
-        lsd = m.func.code::LambdaStaticData
-        ln = lsd.line
-        if ln > 0
-            push!(locs, (find_source_file(string(lsd.file)), ln))
+function which(f::ANY, t::(Type...))
+    if isleaftype(t)
+        ms = methods(f, t)
+        isempty(ms) && error("no method found for the specified argument types")
+        length(ms)!=1 && error("no unique matching method for the specified argument types")
+        ms[1]
+    else
+        if !isa(f,Function)
+            t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
+            f = call
+        elseif !isgeneric(f)
+            throw(ArgumentError("argument is not a generic function"))
         end
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
+        if m === nothing
+            error("no method found for the specified argument types")
+        end
+        m
     end
-    if length(locs) == 0
-       error("could not find function definition")
-    end
-    locs
 end
 
-functionloc(f::ANY, types=(Any...)) = functionlocs(f, types)[1]
+function functionloc(m::Method)
+    lsd = m.func.code::LambdaStaticData
+    ln = lsd.line
+    if ln <= 0
+        error("could not determine location of method definition")
+    end
+    (find_source_file(string(lsd.file)), ln)
+end
 
-function function_module(f, types=(Any...))
+functionloc(f::ANY, types) = functionloc(which(f,types))
+
+function functionloc(f)
+    m = methods(f)
+    if length(m) > 1
+        error("function has multiple methods; please specify a type signature")
+    end
+    functionloc(m.defs)
+end
+
+function function_module(f, types)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")

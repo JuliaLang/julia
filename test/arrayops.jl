@@ -63,13 +63,13 @@ a = rand(1, 1, 8, 8, 1)
 @test @inferred(squeeze(a, 1)) == @inferred(squeeze(a, (1,))) == reshape(a, (1, 8, 8, 1))
 @test @inferred(squeeze(a, (1, 5))) == squeeze(a, (5, 1)) == reshape(a, (1, 8, 8))
 @test @inferred(squeeze(a, (1, 2, 5))) == squeeze(a, (5, 2, 1)) == reshape(a, (8, 8))
-@test_throws ErrorException squeeze(a, 0)
-@test_throws ErrorException squeeze(a, (1, 1))
-@test_throws ErrorException squeeze(a, (1, 2, 1))
-@test_throws ErrorException squeeze(a, (1, 1, 2))
-@test_throws ErrorException squeeze(a, 3)
-@test_throws ErrorException squeeze(a, 4)
-@test_throws ErrorException squeeze(a, 6)
+@test_throws ArgumentError squeeze(a, 0)
+@test_throws ArgumentError squeeze(a, (1, 1))
+@test_throws ArgumentError squeeze(a, (1, 2, 1))
+@test_throws ArgumentError squeeze(a, (1, 1, 2))
+@test_throws ArgumentError squeeze(a, 3)
+@test_throws ArgumentError squeeze(a, 4)
+@test_throws ArgumentError squeeze(a, 6)
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
@@ -155,8 +155,8 @@ v = pop!(l)
 @test v == 3
 @test length(l)==2
 m = Any[]
-@test_throws ErrorException pop!(m)
-@test_throws ErrorException shift!(m)
+@test_throws ArgumentError pop!(m)
+@test_throws ArgumentError shift!(m)
 unshift!(l,4,7,5)
 @test l[1]==4 && l[2]==7 && l[3]==5 && l[4]==1 && l[5]==2
 v = shift!(l)
@@ -711,6 +711,14 @@ fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
 rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
+A = Array(Union(UInt8,Int8), 3)
+fill!(A, uint8(3))
+@test A == [0x03, 0x03, 0x03]
+# Issue #9964
+A = Array(Vector{Float64}, 2)
+fill!(A, [1, 2])
+@test A[1] == [1, 2]
+@test A[1] === A[2]
 
 # splice!
 for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
@@ -732,7 +740,7 @@ a = [1:10]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
-@test_throws ErrorException deleteat!(a, [5,3])
+@test_throws ArgumentError deleteat!(a, [5,3])
 
 # comprehensions
 X = [ i+2j for i=1:5, j=1:5 ]
@@ -769,10 +777,10 @@ end
 @test isequal(flipdim([2,3,1], 2), [2,3,1])
 @test isequal(flipdim([2 3 1], 1), [2 3 1])
 @test isequal(flipdim([2 3 1], 2), [1 3 2])
-@test_throws ErrorException flipdim([2,3,1], -1)
+@test_throws ArgumentError flipdim([2,3,1], -1)
 @test isequal(flipdim(1:10, 1), 10:-1:1)
 @test isequal(flipdim(1:10, 2), 1:10)
-@test_throws ErrorException flipdim(1:10, -1)
+@test_throws ArgumentError flipdim(1:10, -1)
 @test isequal(flipdim(Array(Int,0,0),1), Array(Int,0,0))  # issue #5872
 
 # issue 4228
@@ -914,7 +922,9 @@ end
 a = [1:5]
 @test isa(Base.linearindexing(a), Base.LinearFast)
 b = sub(a, :)
-@test isa(Base.linearindexing(b), Base.IteratorsMD.LinearFast)
+@test isa(Base.linearindexing(b), Base.LinearFast)
+@test isa(Base.linearindexing(trues(2)), Base.LinearFast)
+@test isa(Base.linearindexing(BitArray{2}), Base.LinearFast)
 aa = fill(99, 10)
 aa[1:2:9] = a
 shp = [5]
@@ -963,6 +973,48 @@ I2 = CartesianIndex((-1,5,2))
 @test min(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((2,2))
 @test max(CartesianIndex((2,3)), CartesianIndex((5,2))) == CartesianIndex((5,3))
 
+@test length(I1) == 3
+
+a = zeros(2,3)
+@test CartesianRange(size(a)) == eachindex(a)
+a[CartesianIndex{2}(2,3)] = 5
+@test a[2,3] == 5
+b = sub(a, 1:2, 2:3)
+b[CartesianIndex{2}(1,1)] = 7
+@test a[1,2] == 7
+@test 2*CartesianIndex{3}(1,2,3) == CartesianIndex{3}(2,4,6)
+
+R = CartesianRange(CartesianIndex{2}(2,3),CartesianIndex{2}(5,5))
+@test eltype(R) <: CartesianIndex{2}
+@test eltype(typeof(R)) <: CartesianIndex{2}
+indexes = collect(R)
+@test indexes[1] == CartesianIndex{2}(2,3)
+@test indexes[2] == CartesianIndex{2}(3,3)
+@test indexes[4] == CartesianIndex{2}(5,3)
+@test indexes[5] == CartesianIndex{2}(2,4)
+@test indexes[12] == CartesianIndex{2}(5,5)
+@test length(indexes) == 12
+@test length(R) == 12
+
+r = 2:3
+state = start(eachindex(r))
+@test !done(r, state)
+_, state = next(r, state)
+@test !done(r, state)
+val, state = next(r, state)
+@test done(r, state)
+@test val == 3
+r = 2:3:8
+state = start(eachindex(r))
+@test !done(r, state)
+_, state = next(r, state)
+_, state = next(r, state)
+@test !done(r, state)
+val, state = next(r, state)
+@test val == 8
+@test done(r, state)
+
+
 #rotates
 
 a = [ [ 1 0 0 ], [ 0 0 0 ] ]
@@ -974,3 +1026,9 @@ a = [ [ 1 0 0 ], [ 0 0 0 ] ]
 @test rotl90(a,4) == a
 @test rotr90(a,4) == a
 @test rot180(a,2) == a
+
+# issue #9648
+let x = fill(1.5f0, 10^7)
+    @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
+    @test cumsum(x) == cumsum!(similar(x), x)
+end

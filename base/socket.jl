@@ -13,7 +13,7 @@ immutable IPv4 <: IPAddr
                                                     d)
     function IPv4(a::Integer,b::Integer,c::Integer,d::Integer)
         if !(0<=a<=255 && 0<=b<=255 && 0<=c<=255 && 0<=d<=255)
-            throw(DomainError())
+            throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
         end
         IPv4(uint8(a),uint8(b),uint8(c),uint8(d))
     end
@@ -21,9 +21,9 @@ end
 
 function IPv4(host::Integer)
     if host < 0
-        error("IP address must not be negative")
+        throw(ArgumentError("IPv4 address must be positive"))
     elseif typemax(typeof(host)) > typemax(UInt32) && host > typemax(UInt32)
-        error("IPv4 address must fit within 32 bits")
+        throw(ArgumentError("IPv4 address must fit within 32 bits"))
     else
         return IPv4(uint32(host))
     end
@@ -52,22 +52,22 @@ immutable IPv6 <: IPAddr
                             h)
     function IPv6(a::Integer,b::Integer,c::Integer,d::Integer,
           e::Integer,f::Integer,g::Integer,h::Integer)
-    if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
-         0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
-        throw(DomainError())
-    end
-    IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
-         uint16(e),uint16(f),uint16(g),uint16(h))
+        if !(0<=a<=0xFFFF && 0<=b<=0xFFFF && 0<=c<=0xFFFF && 0<=d<=0xFFFF &&
+             0<=e<=0xFFFF && 0<=f<=0xFFFF && 0<=g<=0xFFFF && 0<=h<=0xFFFF)
+            throw(ArgumentError("IPv6 field out of range (must be 0-65535)"))
+        end
+        IPv6(uint16(a),uint16(b),uint16(c),uint16(d),
+             uint16(e),uint16(f),uint16(g),uint16(h))
     end
 end
 
 function IPv6(host::Integer)
     if host < 0
-        error("IP address must not be negative")
+        throw(ArgumentError("IPv6 address must be positive"))
         # We allow passing bigger integer types, but need to be careful to avoid overflow
         # Let's hope promotion rules are sensible
     elseif typemax(typeof(host)) > typemax(UInt128) && host > typemax(UInt128)
-        error("IPv6 address must fit within 128 bits")
+        throw(ArgumentError("IPv6 address must fit within 128 bits"))
     else
         return IPv6(uint128(host))
     end
@@ -142,17 +142,17 @@ function parseipv4(str)
     ret = 0
     for f in fields
         if length(f) == 0
-            error("empty field in IPv4 address")
+            throw(ArgumentError("empty field in IPv4 address"))
         end
         if f[1] == '0'
             if length(f) >= 2 && f[2] == 'x'
                 if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
-                    error("IPv4 field too large")
+                    throw(ArgumentError("IPv4 field too large"))
                 end
                 r = parseint(f[3:end],16)
             else
                 if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
-                    error("IPv4 field too large")
+                    throw(ArgumentError("IPv4 field too large"))
                 end
                 r = parseint(f,8)
             end
@@ -161,12 +161,12 @@ function parseipv4(str)
         end
         if i != length(fields)
             if r < 0 || r > 255
-                error("IPv4 field out of range (must be 0-255)")
+                throw(ArgumentError("IPv4 field out of range (must be 0-255)"))
             end
             ret |= uint32(r) << ((4-i)*8)
         else
             if r > ((uint64(1)<<((5-length(fields))*8))-1)
-                error("IPv4 field too large")
+                throw(ArgumentError("IPv4 field too large"))
             end
             ret |= r
         end
@@ -177,7 +177,7 @@ end
 
 function parseipv6fields(fields,num_fields)
     if length(fields) > num_fields
-        error("too many fields in IPv6 address")
+        throw(ArgumentError("too many fields in IPv6 address"))
     end
     cf = 7
     ret = uint128(0)
@@ -200,7 +200,7 @@ parseipv6fields(fields) = parseipv6fields(fields,8)
 function parseipv6(str)
     fields = split(str,':')
     if length(fields) > 8
-        error("too many fields in IPv6 address")
+        throw(ArgumentError("too many fields in IPv6 address"))
     elseif length(fields) == 8
         return IPv6(parseipv6fields(fields))
     elseif in('.',fields[end])
@@ -234,9 +234,10 @@ end
 type InetAddr
     host::IPAddr
     port::UInt16
-    function InetAddr(host,port)
+
+    function InetAddr(host, port::Integer)
         if !(0 <= port <= typemax(UInt16))
-            throw(DomainError())
+            throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
         end
         new(host,uint16(port))
     end
@@ -276,9 +277,10 @@ function TCPSocket()
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create tcp socket",err))
+        throw(UVError("failed to create tcp socket",err))
     end
     this.status = StatusInit
     this
@@ -306,9 +308,10 @@ function TCPServer()
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create tcp server",err))
+        throw(UVError("failed to create tcp server",err))
     end
     this.status = StatusInit
     this
@@ -374,9 +377,10 @@ function UDPSocket()
                   eventloop(),this.handle)
     finalizer(this, uvfinalize)
     if err != 0
+        #TODO: this codepath is not currently tested
         c_free(this.handle)
         this.handle = C_NULL
-        error(UVError("failed to create udp socket",err))
+        throw(UVError("failed to create udp socket",err))
     end
     this.status = StatusInit
     this
@@ -406,11 +410,14 @@ const UV_UDP_IPV6ONLY = 1
 const UV_UDP_PARTIAL = 2
 
 function bind(sock::Union(TCPServer,UDPSocket), host::IPv4, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("$(typeof(sock)) is not initialized")
+    end
     err = _bind(sock,host,uint16(port))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is not currently tested
+            throw(UVError("bind",err))
         else
             return false
         end
@@ -426,11 +433,14 @@ _bind(sock::UDPSocket, host::IPv6, port::UInt16, flags::UInt32 = uint32(0)) = cc
             sock.handle, hton(port), &hton(host.host), flags)
 
 function bind(sock::UDPSocket, host::IPv6, port::UInt16; ipv6only = false)
-    @assert sock.status == StatusInit
-    err = _bind(sock,host,ipv6only ? UV_UDP_IPV6ONLY : 0)
+    if sock.status != StatusInit
+        error("UDPSocket is not initialized")
+    end
+    err = _bind(sock,host,port, uint32(ipv6only ? UV_UDP_IPV6ONLY : 0))
     if err < 0
         if err != UV_EADDRINUSE && err != UV_EACCES
-            error(UVError("bind",err))
+            #TODO: this codepath is not currently tested
+            throw(UVError("bind",err))
         else
             return false
         end
@@ -470,22 +480,39 @@ end
 _recv_stop(sock::UDPSocket) = uv_error("recv_stop",ccall(:uv_udp_recv_stop,Cint,(Ptr{Void},),sock.handle))
 
 function recv(sock::UDPSocket)
-    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
-    if sock.status != StatusInit && sock.status != StatusOpen
-        error("Invalid socket state")
-    end
-    _recv_start(sock)
-    stream_wait(sock,sock.recvnotify)::Vector{UInt8}
+    addr, data = recvfrom(sock)
+    data
 end
 
+function recvfrom(sock::UDPSocket)
+    # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
+    if sock.status != StatusInit && sock.status != StatusOpen
+        error("UDPSocket is not initialized and open")
+    end
+    _recv_start(sock)
+    stream_wait(sock,sock.recvnotify)::(Union(IPv4, IPv6), Vector{UInt8})
+end
+
+
 function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
+    # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
-        # TODO: Decide what to do in this case. For now throw an error
         c_free(buf_addr)
         notify_error(sock.recvnotify,"Partial message received")
     end
+
+    # need to check the address type in order to convert to a Julia IPAddr
+    addrout = if (addr == C_NULL)
+                  IPv4(0)
+              elseif ccall(:jl_sockaddr_in_is_ip4, Cint, (Ptr{Void},), addr) == 1
+                  IPv4(ntoh(ccall(:jl_sockaddr_host4, Uint32, (Ptr{Void},), addr)))
+              else
+                  tmp = [uint128(0)]
+                  ccall(:jl_sockaddr_host6, Uint32, (Ptr{Void}, Ptr{Uint8}), addr, pointer(tmp))
+                  IPv6(ntoh(tmp[1]))
+              end
     buf = pointer_to_array(convert(Ptr{UInt8},buf_addr),int(buf_size),true)
-    notify(sock.recvnotify,buf[1:nread])
+    notify(sock.recvnotify,(addrout,buf[1:nread]))
 end
 
 function _send(sock::UDPSocket,ipaddr::IPv4,port::UInt16,buf)
@@ -499,7 +526,7 @@ end
 function send(sock::UDPSocket,ipaddr,port,msg)
     # If the socket has not been bound, it will be bound implicitly to ::0 and a random port
     if sock.status != StatusInit && sock.status != StatusOpen
-        error("Invalid socket state")
+        error("UDPSocket is not initialized and open")
     end
     uv_error("send",_send(sock,ipaddr,uint16(port),msg))
     stream_wait(sock,sock.sendnotify)
@@ -593,9 +620,11 @@ end
 ##
 
 function connect!(sock::TCPSocket, host::IPv4, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     if !(0 <= port <= typemax(UInt16))
-        throw(DomainError())
+        throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
     uv_error("connect",ccall(:jl_tcp4_connect,Int32,(Ptr{Void},UInt32,UInt16),
                  sock.handle,hton(host.host),hton(uint16(port))))
@@ -603,9 +632,11 @@ function connect!(sock::TCPSocket, host::IPv4, port::Integer)
 end
 
 function connect!(sock::TCPSocket, host::IPv6, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     if !(0 <= port <= typemax(UInt16))
-        throw(DomainError())
+        throw(ArgumentError("port out of range, must be 0 ≤ port ≤ 65535, got $port"))
     end
     uv_error("connect",ccall(:jl_tcp6_connect,Int32,(Ptr{Void},Ptr{UInt128},UInt16),
                  sock.handle,&hton(host.host),hton(uint16(port))))
@@ -624,7 +655,9 @@ connect(addr::InetAddr) = connect(TCPSocket(),addr)
 default_connectcb(sock,status) = nothing
 
 function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
-    @assert sock.status == StatusInit
+    if sock.status != StatusInit
+        error("TCPSocket is not initialized")
+    end
     ipaddr = getaddrinfo(host)
     sock.status = StatusInit
     connect!(sock,ipaddr,port)
@@ -651,7 +684,9 @@ listen(cb::Callback,sock::Socket; backlog::Integer=BACKLOG_DEFAULT) = (sock.ccb=
 ##
 
 function accept_nonblock(server::TCPServer,client::TCPSocket)
-    @assert client.status == StatusInit
+    if client.status != StatusInit
+        error("client TCPSocket is not initialized")
+    end
     err = ccall(:uv_accept,Int32,(Ptr{Void},Ptr{Void}),server.handle,client.handle)
     if err == 0
         client.status = StatusOpen

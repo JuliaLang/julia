@@ -101,17 +101,21 @@ Getting Around
 
 .. function:: which(f, types)
 
-   Return the method of ``f`` (a ``Method`` object) that will be called for arguments with the given types.
+   Returns the method of ``f`` (a ``Method`` object) that would be called for arguments of the given types.
+
+   If ``types`` is an abstract type, then the method that would be called by ``invoke``
+   is returned.
 
 .. function:: @which
 
-   Evaluates the arguments to the function call, determines their types, and calls the ``which`` function on the resulting expression
+   Evaluates the arguments to the specified function call, and returns the ``Method`` object
+   for the method that would be called for those arguments.
 
 .. function:: methods(f, [types])
 
-   Show all methods of ``f`` with their argument types.
+   Returns the method table for ``f``.
 
-   If ``types`` is specified, an array of methods whose types match is returned.
+   If ``types`` is specified, returns an array of methods whose types match.
 
 .. function:: methodswith(typ[, module or function][, showparents])
 
@@ -322,10 +326,6 @@ Types
 
    Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
-.. function:: subtypetree(T::DataType)
-
-   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
-
 .. function:: typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -505,6 +505,12 @@ Generic Functions
       julia> [1:5] |> x->x.^2 |> sum |> inv
       0.01818181818181818
 
+.. function:: call(x, args...)
+
+   If ``x`` is not a ``Function``, then ``x(args...)`` is equivalent to
+   ``call(x, args...)``.  This means that function-like behavior can be
+   added to any type by defining new ``call`` methods.
+
 Syntax
 ------
 
@@ -537,7 +543,7 @@ Syntax
 
 .. function:: parse(str, start; greedy=true, raise=true)
 
-   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. If ``raise`` is true (default), syntax errors will raise an error; otherwise, ``parse`` will return an expression that will raise an error upon evaluation.
+   Parse the expression string and return an expression (which could later be passed to eval for execution). Start is the index of the first character to start parsing. If ``greedy`` is true (default), ``parse`` will try to consume as much input as it can; otherwise, it will stop as soon as it has parsed a valid expression. Incomplete but otherwise syntactically valid expressions will return ``Expr(:incomplete, "(error message)")``. If ``raise`` is true (default), syntax errors other than incomplete expressions will raise an error. If ``raise`` is false, ``parse`` will return an expression that will raise an error upon evaluation.
 
 .. function:: parse(str; raise=true)
 
@@ -610,6 +616,14 @@ System
    on the resulting read or write stream, then closes the stream
    and waits for the process to complete.  Returns the value returned
    by ``f``.
+
+.. function:: Base.set_process_title(title::AbstractString)
+
+   Set the process title. No-op on some operating systems. (not exported)
+
+.. function:: Base.get_process_title()
+
+   Get the process title. On some systems, will always return empty string. (not exported)
 
 .. function:: readandwrite(command)
 
@@ -889,9 +903,9 @@ Reflection
 
    Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
-.. function:: functionlocs(f::Function, types)
+.. function:: functionloc(m::Method)
 
-   Returns an array of the results of ``functionloc`` for all matching definitions.
+   Returns a tuple ``(filename,line)`` giving the location of a method definition.
 
 Internals
 ---------

@@ -145,7 +145,7 @@ Constructors
 
 .. function:: similar(array, element_type, dims)
 
-   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments.
+   Create an uninitialized array of the same type as the given array, but with the specified element type and dimensions. The second and third arguments are both optional. The ``dims`` argument may be a tuple or a series of integer arguments. For some special ``AbstractArray`` objects which are not real containers (like ranges), this function returns a standard ``Array`` to allow operating on elements.
 
 .. function:: reinterpret(type, A)
 
@@ -397,8 +397,10 @@ Array functions
 
 .. function:: cumprod(A, [dim])
 
-   Cumulative product along a dimension.
-   The dimension defaults to 1.
+   Cumulative product along a dimension ``dim`` (defaults to 1).
+   See also :func:`cumprod!` to use a preallocated output array,
+   both for performance and to control the precision of the
+   output (e.g. to avoid overflow).
 
 .. function:: cumprod!(B, A, [dim])
 
@@ -407,8 +409,10 @@ Array functions
 
 .. function:: cumsum(A, [dim])
 
-   Cumulative sum along a dimension.
-   The dimension defaults to 1.
+   Cumulative sum along a dimension ``dim`` (defaults to 1).
+   See also :func:`cumsum!` to use a preallocated output array,
+   both for performance and to control the precision of the
+   output (e.g. to avoid overflow).
 
 .. function:: cumsum!(B, A, [dim])
 
@@ -633,16 +637,30 @@ BitArrays
 
    Performs a bitwise not operation on B. See :ref:`~ operator <~>`.
 
-.. function:: rol(B::BitArray{1},i::Integer) -> BitArray{1}
+.. function:: rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Left rotation operator.
+   Performs a left rotation operation on ``src`` and put the result into ``dest``.
 
-.. function:: ror(B::BitArray{1},i::Integer) -> BitArray{1}
+.. function:: rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Right rotation operator.
+   Performs a left rotation operation on B.
 
+.. function:: rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-.. module:: Sparse
+   Performs a left rotation operation.
+
+.. function:: ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on ``src`` and put the result into ``dest``.
+
+.. function:: ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on B.
+
+.. function:: ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation.
+
 .. _stdlib-sparse:
 
 Sparse Matrices
@@ -668,7 +686,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: sparse(A)
 
-   Convert a dense matrix ``A`` into a sparse matrix.
+   Convert an AbstractMatrix ``A`` into a sparse matrix.
 
 .. function:: sparsevec(A)
 

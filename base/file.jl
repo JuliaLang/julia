@@ -12,22 +12,22 @@ function cd(dir::AbstractString)
 end
 cd() = cd(homedir())
 
-@unix_only function cd(f::Function, dir::AbstractString, args...)
+@unix_only function cd(f::Function, dir::AbstractString)
     fd = ccall(:open,Int32,(Ptr{UInt8},Int32),".",0)
     systemerror(:open, fd == -1)
     try
         cd(dir)
-        f(args...)
+        f()
     finally
         systemerror(:fchdir, ccall(:fchdir,Int32,(Int32,),fd) != 0)
         systemerror(:close, ccall(:close,Int32,(Int32,),fd) != 0)
     end
 end
-@windows_only function cd(f::Function, dir::AbstractString, args...)
+@windows_only function cd(f::Function, dir::AbstractString)
     old = pwd()
     try
         cd(dir)
-        f(args...)
+        f()
    finally
         cd(old)
     end
@@ -48,8 +48,8 @@ function mkpath(path::AbstractString, mode::Unsigned=0o777)
     mkdir(path, mode)
 end
 
-mkdir(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
-mkpath(path::AbstractString, mode::Signed) = error("mode must be an unsigned integer; try 0o$mode")
+mkdir(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
+mkpath(path::AbstractString, mode::Signed) = throw(ArgumentError("mode must be an unsigned integer; try 0o$mode"))
 
 function rm(path::AbstractString; recursive::Bool=false)
     if islink(path) || !isdir(path)

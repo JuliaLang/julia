@@ -69,8 +69,6 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 *(J1::UniformScaling, J2::UniformScaling) = UniformScaling(J1.λ*J2.λ)
 *(B::BitArray{2}, J::UniformScaling) = *(bitunpack(B), J::UniformScaling)
 *(J::UniformScaling, B::BitArray{2}) = *(J::UniformScaling, bitunpack(B))
-*(S::SparseMatrixCSC, J::UniformScaling) = J.λ == 1 ? S : J.λ*S
-*{Tv,Ti}(J::UniformScaling, S::SparseMatrixCSC{Tv,Ti}) = J.λ == 1 ? S : S*J.λ
 *(A::AbstractMatrix, J::UniformScaling) = J.λ == 1 ? A : J.λ*A
 *(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 1 ? A : J.λ*A
 
@@ -84,7 +82,7 @@ inv(J::UniformScaling) = UniformScaling(inv(J.λ))
 /(J::UniformScaling, x::Number) = UniformScaling(J.λ/x)
 
 \(J1::UniformScaling, J2::UniformScaling) = J1.λ == 0 ? throw(SingularException(1)) : UniformScaling(J1.λ\J2.λ)
-\{T<:Number}(A::Union(Bidiagonal{T},Triangular{T}), J::UniformScaling) = inv(A)*J.λ
+\{T<:Number}(A::Union(Bidiagonal{T},AbstractTriangular{T}), J::UniformScaling) = inv(A)*J.λ
 \(J::UniformScaling, A::AbstractVecOrMat) = J.λ == 0 ? throw(SingularException(1)) : J.λ\A
 \(A::AbstractMatrix, J::UniformScaling) = inv(A)*J.λ
 

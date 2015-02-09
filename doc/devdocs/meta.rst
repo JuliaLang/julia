@@ -19,7 +19,7 @@ the implementation of the ``@inline`` macro::
     macro inline(ex)
         esc(_inline(ex))
     end
-    
+
     _inline(ex::Expr) = pushmeta!(ex, :inline)
     _inline(arg) = arg
 

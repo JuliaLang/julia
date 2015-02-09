@@ -54,7 +54,6 @@ extern "C" {
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
 #include <malloc.h>
-DLLEXPORT char * basename(char *);
 DLLEXPORT char * dirname(char *);
 #else
 #include <libgen.h>

@@ -60,7 +60,7 @@ function next(s::UTF8String, i::Int)
         end
         if 0 < j && i <= j+utf8_trailing[d[j]+1] <= length(d)
             # b is a continuation byte of a valid UTF-8 character
-            error("invalid UTF-8 character index")
+            throw(ArgumentError("invalid UTF-8 character index"))
         end
         # move past 1 byte in case the data is actually Latin-1
         return '\ufffd', i+1
@@ -152,18 +152,47 @@ function string(a::ByteString...)
     UTF8String(data)
 end
 
+function string(a::Union(ByteString,Char)...)
+    s = Array(UInt8,0)
+    for d in a
+        if isa(d,Char)
+            c = reinterpret(UInt32, d::Char)
+            if c < 0x80
+                push!(s, uint8(c))
+            elseif c < 0x800
+                push!(s, uint8(( c >> 6          ) | 0xC0))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            elseif c < 0x10000
+                push!(s, uint8(( c >> 12         ) | 0xE0))
+                push!(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            elseif c < 0x110000
+                push!(s, uint8(( c >> 18         ) | 0xF0))
+                push!(s, uint8(((c >> 12) & 0x3F ) | 0x80))
+                push!(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
+                push!(s, uint8(( c        & 0x3F ) | 0x80))
+            else
+                # '\ufffd'
+                push!(s, 0xef); push!(s, 0xbf); push!(s, 0xbd)
+            end
+        else
+            append!(s,d.data)
+        end
+    end
+    UTF8String(s)
+end
+
 function reverse(s::UTF8String)
     out = similar(s.data)
     if ccall(:u8_reverse, Cint, (Ptr{UInt8}, Ptr{UInt8}, Csize_t),
              out, s.data, length(out)) == 1
-        error("invalid UTF-8 data")
+        throw(ArgumentError("invalid UTF-8 data"))
     end
     UTF8String(out)
 end
 
 ## outputing UTF-8 strings ##
 
-print(io::IO, s::UTF8String) = (write(io, s.data); nothing)
 write(io::IO, s::UTF8String) = write(io, s.data)
 
 ## transcoding to UTF-8 ##
@@ -171,7 +200,7 @@ write(io::IO, s::UTF8String) = write(io, s.data)
 utf8(x) = convert(UTF8String, x)
 convert(::Type{UTF8String}, s::UTF8String) = s
 convert(::Type{UTF8String}, s::ASCIIString) = UTF8String(s.data)
-convert(::Type{UTF8String}, a::Array{UInt8,1}) = is_valid_utf8(a) ? UTF8String(a) : error("invalid UTF-8 sequence")
+convert(::Type{UTF8String}, a::Array{UInt8,1}) = is_valid_utf8(a) ? UTF8String(a) : throw(ArgumentError("invalid UTF-8 sequence"))
 function convert(::Type{UTF8String}, a::Array{UInt8,1}, invalids_as::AbstractString)
     l = length(a)
     idx = 1

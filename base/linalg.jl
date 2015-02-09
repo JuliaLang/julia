@@ -12,7 +12,6 @@ export
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
-    Woodbury,
     Factorization,
     BunchKaufman,
     Cholesky,
@@ -30,7 +29,8 @@ export
     SVD,
     Hermitian,
     Symmetric,
-    Triangular,
+    LowerTriangular,
+    UpperTriangular,
     Diagonal,
     UniformScaling,
 
@@ -59,6 +59,7 @@ export
     eigmin,
     eigs,
     eigvals,
+    eigvals!,
     eigvecs,
     expm,
     sqrtm,
@@ -84,7 +85,7 @@ export
     lufact!,
     lyap,
     norm,
-    null,
+    nullspace,
     ordschur!,
     ordschur,
     peakflops,
@@ -93,7 +94,6 @@ export
     qrfact!,
     qrfact,
     rank,
-    rref,
     scale,
     scale!,
     schur,
@@ -102,6 +102,7 @@ export
     svd,
     svdfact!,
     svdfact,
+    svds,
     svdvals!,
     svdvals,
     sylvester,
@@ -210,7 +211,6 @@ include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
 include("linalg/symmetric.jl")
-include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/uniformscaling.jl")
@@ -219,10 +219,6 @@ include("linalg/givens.jl")
 include("linalg/special.jl")
 include("linalg/bitarray.jl")
 include("linalg/ldlt.jl")
-
-include("linalg/sparse.jl")
-include("linalg/umfpack.jl")
-include("linalg/cholmod.jl")
 
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")

@@ -10,7 +10,17 @@ extern "C" {
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
-    jl_value_t *jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
+    jl_value_t *jv = NULL;
+    switch (nfields) {
+    case 1:
+        jv = (jl_value_t*)alloc_2w(); break;
+    case 2:
+        jv = (jl_value_t*)alloc_3w(); break;
+    case 3:
+        jv = (jl_value_t*)alloc_4w(); break;
+    default:
+        jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
+    }
     jv->type = type;
     return jv;
 }
@@ -54,6 +64,7 @@ STATIC_INLINE int jl_is_box(void *v)
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
 
+ssize_t jl_max_jlgensym_in(jl_value_t *v);
 
 extern uv_loop_t *jl_io_loop;
 
@@ -107,6 +118,8 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
+
+jl_value_t* skip_meta(jl_array_t *body);
 
 // backtraces
 #ifdef _OS_WINDOWS_

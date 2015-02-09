@@ -233,7 +233,7 @@ show(io::IO, s::Symbol) = show_unquoted(io, QuoteNode(s))
 
 typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
                          LabelNode, GotoNode, TopNode)
-print        (io::IO, ex::ExprNode)    = show_unquoted(io, ex)
+print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex); nothing)
 show         (io::IO, ex::ExprNode)    = show_unquoted(io, QuoteNode(ex))
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
@@ -283,7 +283,7 @@ is_linenumber(ex)                 = false
 
 is_quoted(ex)            = false
 is_quoted(ex::QuoteNode) = true
-is_quoted(ex::Expr)      = is_expr(ex, :quote, 1)
+is_quoted(ex::Expr)      = is_expr(ex, :quote, 1) || is_expr(ex, :inert, 1)
 
 unquoted(ex::QuoteNode)  = ex.value
 unquoted(ex::Expr)       = ex.args[1]
@@ -639,7 +639,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         a = map(args) do x
             if !isa(x,AbstractString)
                 if isa(x,Symbol) && !(x in quoted_syms)
-                    string("\$", x)
+                    string("\$(", x, ")")
                 else
                     string("\$(", sprint(show_unquoted,x), ")")
                 end
@@ -686,9 +686,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         print(io, "))")
     end
 
-    if ex.head == :(=)
-        show_type = show_type_assignment(ex.args[2])
-    elseif in(ex.head, (:boundscheck, :gotoifnot, :return))
+    if ex.head in (:(=), :boundscheck, :gotoifnot, :return)
         show_type = false
     end
 
@@ -698,13 +696,6 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
 
     show_expr_type_emphasize::Bool = state
 end
-
-show_type_assignment(::Number) = false
-show_type_assignment(::(Number...)) = false
-show_type_assignment(::Expr) = false
-show_type_assignment(::SymbolNode) = false
-show_type_assignment(::LambdaStaticData) = false
-show_type_assignment(a) = true
 
 function ismodulecall(ex::Expr)
     ex.head == :call && ex.args[1] == TopNode(:getfield) &&
@@ -851,7 +842,7 @@ xdump(fn::Function, io::IO, x::DataType, n::Int) = x.abstract ? dumptype(io, x, 
 # defaults:
 xdump(fn::Function, io::IO, x) = xdump(xdump, io, x, 5, "")  # default is 5 levels
 xdump(fn::Function, io::IO, x, n::Int) = xdump(xdump, io, x, n, "")
-xdump(fn::Function, io::IO, args...) = error("invalid arguments to xdump")
+xdump(fn::Function, io::IO, args...) = throw(ArgumentError("invalid arguments to xdump"))
 xdump(fn::Function, args...) = xdump(fn, STDOUT::IO, args...)
 xdump(io::IO, args...) = xdump(xdump, io, args...)
 xdump(args...) = with_output_limit(()->xdump(xdump, STDOUT::IO, args...), true)
@@ -863,7 +854,7 @@ dump(io::IO, x::AbstractString, n::Int, indent) =
                (print(io, typeof(x), " ");
                 show(io, x); println(io))
 dump(io::IO, x, n::Int, indent) = xdump(dump, io, x, n, indent)
-dump(io::IO, args...) = error("invalid arguments to dump")
+dump(io::IO, args...) = throw(ArgumentError("invalid arguments to dump"))
 dump(args...) = with_output_limit(()->dump(STDOUT::IO, args...), true)
 
 function dump(io::IO, x::Dict, n::Int, indent)

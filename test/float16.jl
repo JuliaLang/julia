@@ -97,3 +97,6 @@ end
 @test string(reinterpret(Float16, 0x7bff)) == "65500.0"
 
 @test log10(float16(100)) == float16(2.0)
+
+#  #9939 (and #9897)
+@test rationalize(float16(0.1)) == 1//10

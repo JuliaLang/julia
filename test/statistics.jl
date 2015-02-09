@@ -31,8 +31,7 @@ end
 @test all(median([2 3 1 -1; 7 4 5 -4], 2) .== [1.5, 4.5])
 @test all(median([2 3 1 -1; 7 4 5 -4], 1) .== [4.5 3.5 3.0 -2.5])
 
-
-@test_throws ErrorException median([])
+@test_throws ArgumentError median([])
 @test isnan(median([NaN]))
 @test isnan(median([0.0,NaN]))
 @test isnan(median([NaN,0.0]))
@@ -46,10 +45,10 @@ end
 
 # edge case: empty vector
 # iterable; this has to throw for type stability
-@test_throws ErrorException var(())
-@test_throws ErrorException var((); corrected=false)
-@test_throws ErrorException var((); mean=2)
-@test_throws ErrorException var((); mean=2, corrected=false)
+@test_throws ArgumentError var(())
+@test_throws ArgumentError var((); corrected=false)
+@test_throws ArgumentError var((); mean=2)
+@test_throws ArgumentError var((); mean=2, corrected=false)
 # reduction
 @test isnan(var(Int[]))
 @test isnan(var(Int[]; corrected=false))
@@ -265,3 +264,12 @@ end
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile([0.:100.],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
+
+
+# test invalid hist nbins argument (#9999)
+@test_throws ArgumentError hist(Int[], -1)
+@test hist(Int[], 0)[2] == Int[]
+@test_throws ArgumentError hist([1,2,3], -1)
+@test_throws ArgumentError hist([1,2,3], 0)
+@test_throws ArgumentError hist([1.0,2.0,3.0], -1)
+@test_throws ArgumentError hist([1.0,2.0,3.0], 0)

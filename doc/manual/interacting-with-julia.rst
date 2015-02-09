@@ -1,7 +1,7 @@
 .. _man-interacting-with-julia:
 
 ************************
- Interacting With Julia 
+ Interacting With Julia
 ************************
 
 Julia comes with a full-featured interactive command-line REPL (read-eval-print loop) built into the ``julia`` executable.  In addition to allowing quick and easy evaluation of Julia statements, it has a searchable history, tab-completion, many helpful keybindings, and dedicated help and shell modes.  The REPL can be started by simply calling julia with no arguments or double-clicking on the executable::
@@ -16,9 +16,9 @@ Julia comes with a full-featured interactive command-line REPL (read-eval-print 
      _/ |\__'_|_|_|\__'_|  |  Commit 64f437b (0 days old master)
     |__/                   |  x86_64-apple-darwin13.1.0
 
-    julia> 
+    julia>
 
-To exit the interactive session, type ``^D`` — the control key together with the ``d`` key on a blank line — or type ``quit()`` followed by the return or enter key. The REPL greets you with a banner and a ``julia>`` prompt.  
+To exit the interactive session, type ``^D`` — the control key together with the ``d`` key on a blank line — or type ``quit()`` followed by the return or enter key. The REPL greets you with a banner and a ``julia>`` prompt.
 
 The different prompt modes
 --------------------------
@@ -38,7 +38,7 @@ There are a number useful features unique to interactive work. In addition to sh
 .. doctest::
 
     julia> string(3 * 4);
-    
+
     julia> ans
     "12"
 
@@ -47,8 +47,8 @@ Help mode
 
 When the cursor is at the beginning of the line, the prompt can be changed to a help mode by typing ``?``.  Julia will attempt to print help or documentation for anything entered in help mode::
 
-    julia> ? # upon typing ?, the prompt changes (in place) to: help> 
-    
+    julia> ? # upon typing ?, the prompt changes (in place) to: help>
+
     help> string
     Base.string(xs...)
 
@@ -58,7 +58,7 @@ In addition to function names, complete function calls may be entered to see whi
 
     help> string(1)
     string(x::Union(Int16,Int128,Int8,Int32,Int64)) at string.jl:1553
-    
+
     help> @printf
     Base.@printf([io::IOStream], "%Fmt", args...)
 
@@ -80,8 +80,8 @@ Just as help mode is useful for quick access to documentation, another common ta
 
 ::
 
-    julia> ; # upon typing ;, the prompt changes (in place) to: shell> 
-    
+    julia> ; # upon typing ;, the prompt changes (in place) to: shell>
+
     shell> echo hello
     hello
 

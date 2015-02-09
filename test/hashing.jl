@@ -31,6 +31,11 @@ function coerce(T::Type, x)
     end
 end
 
+for T=types[2:end], x=vals
+    a = coerce(T,x)
+    @test hash(a,zero(UInt)) == invoke(hash,(Real,UInt),a,zero(UInt))
+end
+
 for T=types, S=types, x=vals
     a = coerce(T,x)
     b = coerce(S,x)

@@ -77,6 +77,20 @@ Mathematical Operators
 
    Element-wise exponentiation operator.
 
+.. function:: fma(x, y, z)
+
+   Computes ``x*y+z`` without rounding the intermediate result
+   ``x*y``. On some systems this is significantly more expensive than
+   ``x*y+z``. ``fma`` is used to improve accuracy in certain
+   algorithms. See ``muladd``.
+
+.. function:: muladd(x, y, z)
+
+   Combined multiply-add, computes ``x*y+z`` in an efficient manner.
+   This may on some systems be equivalent to ``x*y+z``, or to
+   ``fma(x,y,z)``. ``muladd`` is used to improve performance. See
+   ``fma``.
+
 .. function:: div(x, y)
               ÷(x, y)
 
@@ -642,15 +656,107 @@ Mathematical Functions
 
    Accurately compute :math:`e^x-1`
 
-.. function:: round([T,] x, [digits, [base]])
+.. function:: round([T,] x, [digits, [base]], [r::RoundingMode])
 
-   ``round(x)`` returns the nearest integral value of the same type as ``x``
-   to ``x``, breaking ties by rounding away from zero.
+   ``round(x)`` rounds ``x`` to an integer value according to the default
+   rounding mode (see :func:`get_rounding`), returning a value of the same type as
+   ``x``. By default (:obj:`RoundNearest`), this will round to the nearest
+   integer, with ties (fractional values of 0.5) being rounded to the even
+   integer.
 
-   ``round(T, x)`` converts the result to type ``T``, throwing an
-   ``InexactError`` if the value is not representable.
+   .. doctest::
 
-   ``round(x, digits)`` rounds to the specified number of digits after the decimal place, or before if negative, e.g., ``round(pi,2)`` is ``3.14``. ``round(x, digits, base)`` rounds using a different base, defaulting to 10, e.g., ``round(pi, 1, 8)`` is ``3.125``.
+      julia> round(1.7)
+      2.0
+
+      julia> round(1.5)
+      2.0
+
+      julia> round(2.5)
+      2.0
+
+   The optional :obj:`RoundingMode` argument will change how the number gets rounded.
+
+   ``round(T, x, [r::RoundingMode])`` converts the result to type ``T``, throwing an
+   :exc:`InexactError` if the value is not representable.
+
+   ``round(x, digits)`` rounds to the specified number of digits after the
+   decimal place (or before if negative). ``round(x, digits, base)`` rounds
+   using a base other than 10.
+
+      .. doctest::
+
+	 julia> round(pi, 2)
+	 3.14
+
+	 julia> round(pi, 3, 2)
+	 3.125
+
+   .. note::
+
+      Rounding to specified digits in bases other than 2 can be inexact when
+      operating on binary floating point numbers. For example, the ``Float64``
+      value represented by ``1.15`` is actually *less* than 1.15, yet will be
+      rounded to 1.2.
+
+      .. doctest::
+
+	 julia> x = 1.15
+	 1.15
+
+	 julia> @sprintf "%.20f" x
+	 "1.14999999999999991118"
+
+	 julia> x < 115//100
+	 true
+
+	 julia> round(x, 1)
+	 1.2
+
+.. data:: RoundingMode
+
+   A type which controls rounding behavior. Currently supported rounding modes are:
+
+   - :obj:`RoundNearest` (default)
+   - :obj:`RoundNearestTiesAway`
+   - :obj:`RoundNearestTiesUp`
+   - :obj:`RoundToZero`
+   - :obj:`RoundUp`
+   - :obj:`RoundDown`
+
+.. data:: RoundNearest
+
+   The default rounding mode. Rounds to the nearest integer, with ties
+   (fractional values of 0.5) being rounded to the nearest even integer.
+
+.. data:: RoundNearestTiesAway
+
+   Rounds to nearest integer, with ties rounded away from zero (C/C++
+   :func:`round` behaviour).
+
+.. data:: RoundNearestTiesUp
+
+   Rounds to nearest integer, with ties rounded toward positive infinity
+   (Java/JavaScript :func:`round` behaviour).
+
+.. data:: RoundToZero
+
+   :func:`round` using this rounding mode is an alias for :func:`trunc`.
+
+.. data:: RoundUp
+
+   :func:`round` using this rounding mode is an alias for :func:`ceil`.
+
+.. data:: RoundDown
+
+   :func:`round` using this rounding mode is an alias for :func:`floor`.
+
+.. function:: round(z, RoundingModeReal, RoundingModeImaginary)
+
+   Returns the nearest integral value of the same type as the complex-valued
+   ``z`` to ``z``, breaking ties using the specified :obj:`RoundingMode`\ s.
+   The first :obj:`RoundingMode` is used for rounding the real components while
+   the second is used for rounding the imaginary components.
 
 .. function:: ceil([T,] x, [digits, [base]])
 
@@ -660,7 +766,7 @@ Mathematical Functions
    ``ceil(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as for ``round``.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: floor([T,] x, [digits, [base]])
 
@@ -670,7 +776,7 @@ Mathematical Functions
    ``floor(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as above.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: trunc([T,] x, [digits, [base]])
 
@@ -680,7 +786,7 @@ Mathematical Functions
    ``trunc(T, x)`` converts the result to type ``T``, throwing an
    ``InexactError`` if the value is not representable.
 
-   ``digits`` and ``base`` work as above.
+   ``digits`` and ``base`` work as for :func:`round`.
 
 .. function:: unsafe_trunc(T, x)
 
@@ -801,7 +907,7 @@ Mathematical Functions
 
 .. function:: angle(z)
 
-   Compute the phase angle of a complex number ``z``
+   Compute the phase angle in radians of a complex number ``z``
 
 .. function:: cis(z)
 
@@ -813,7 +919,12 @@ Mathematical Functions
 
 .. function:: factorial(n)
 
-   Factorial of n
+   Factorial of ``n``.  If ``n`` is an :func:`Integer`, the factorial
+   is computed as an integer (promoted to at least 64 bits).  Note
+   that this may overflow if ``n`` is not small, but you can use
+   ``factorial(big(n))`` to compute the result exactly in arbitrary
+   precision.  If ``n`` is not an ``Integer``, ``factorial(n)`` is
+   equivalent to :func:`gamma(n+1) <gamma>`.
 
 .. function:: factorial(n,k)
 
@@ -902,7 +1013,9 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of absolute value of ``gamma(x)``
+   Compute the logarithm of the absolute value of ``gamma(x)`` for
+   :func:`Real` ``x``, while for :func:`Complex` ``x`` it computes the
+   logarithm of ``gamma(x)``.
 
 .. function:: lfact(x)
 

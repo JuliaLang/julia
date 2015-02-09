@@ -14,11 +14,6 @@ du = -rand(n-1)
 v = randn(n)
 B = randn(n,2)
 
-# Woodbury
-U = randn(n,2)
-V = randn(2,n)
-C = randn(2,2)
-
 for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Int
         srand(61516384)
@@ -27,20 +22,12 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         du = -rand(0:10, n-1)
         v = rand(1:100, n)
         B = rand(1:100, n, 2)
-
-        # Woodbury
-        U = rand(1:100, n, 2)
-        V = rand(1:100, 2, n)
-        C = rand(1:100, 2, 2)
     else
         d = convert(Vector{elty}, d)
         dl = convert(Vector{elty}, dl)
         du = convert(Vector{elty}, du)
         v = convert(Vector{elty}, v)
         B = convert(Matrix{elty}, B)
-        U = convert(Matrix{elty}, U)
-        V = convert(Matrix{elty}, V)
-        C = convert(Matrix{elty}, C)
     end
     ε = eps(abs2(float(one(elty))))
     T = Tridiagonal(dl, d, du)
@@ -90,19 +77,6 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         D, Vecs = eig(Fs)
         @test_approx_eq DT D
         @test_approx_eq abs(VT'Vecs) eye(elty, n)
-    end
-
-    # Woodbury
-    W = Woodbury(T, U, C, V)
-    F = full(W)
-    @test_approx_eq W*v F*v
-    iFv = F\v
-    @test norm(W\v - iFv)/norm(iFv) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    @test abs((det(W) - det(F))/det(F)) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    iWv = similar(iFv)
-    if elty != Int
-        iWv = A_ldiv_B!(W, copy(v))
-        @test_approx_eq iWv iFv
     end
 
     # Test det(A::Matrix)
@@ -199,7 +173,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         end
 
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A))
+        FJulia  = invoke(qrfact!, (AbstractMatrix,Type{Val{false}}), copy(A), Val{false})
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
@@ -233,7 +207,8 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                -2.0      4.0       1.0    -eps(real(one(elty)));
                                -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
                                -0.5     -0.5       0.1     1.0])
-    F = eigfact(A,permute=false,scale=false)
+    F = eigfact(A, permute=false, scale=false)
+    eig(A, permute=false, scale=false)
     @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
     F = eigfact(A)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
@@ -403,7 +378,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = LowerTriangular(randn(3,3))
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)

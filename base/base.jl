@@ -31,6 +31,7 @@ call(T::Type{NewvarNode}, s::Symbol) = Core.call(T, s)
 call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
 call(T::Type{Module}, args...) = Core.call(T, args...)
 call(T::Type{Task}, f::ANY) = Core.call(T, f)
+call(T::Type{GenSym}, n::Int) = Core.call(T, n)
 
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
@@ -154,7 +155,7 @@ end
 
 finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
-gc() = ccall(:jl_gc_collect, Void, ())
+gc(full = true) = ccall(:jl_gc_collect, Void, (Int,), full ? 1 : 0)
 gc_enable() = ccall(:jl_gc_enable, Void, ())
 gc_disable() = ccall(:jl_gc_disable, Void, ())
 

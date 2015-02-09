@@ -102,6 +102,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test_approx_eq full(op(T, T2)) op(Tfull, Tfull2)
             end
         end
+
+        debug && println("Inverse")
+        @test_approx_eq inv(T)*Tfull eye(n)
     end
 end
 
@@ -148,13 +151,23 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     for op in (+, -, *)
         @test_approx_eq full(op(D, D2)) op(DM, DM2)
     end
+
+    #10036
+    @test issym(D2)
+    @test ishermitian(D2)
+    if elty <: Complex
+        dc = d + im*convert(Vector{elty}, ones(n))
+        D3 = Diagonal(dc)
+        @test issym(D3)
+        @test !ishermitian(D3)
+    end
 end
 
 
 debug && println("Test interconversion between special matrix types")
 a=[1.0:n]
 A=Diagonal(a)
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
     debug && println("newtype is $(newtype)")
     @test full(convert(newtype, A)) == full(A)
 end
@@ -162,29 +175,31 @@ end
 for isupper in (true, false)
     debug && println("isupper is $(isupper)")
     A=Bidiagonal(a, [1.0:n-1], isupper)
-    for newtype in [Bidiagonal, Tridiagonal, Triangular, Matrix]
+    for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
     A=Bidiagonal(a, zeros(n-1), isupper) #morally Diagonal
-    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular, Matrix]
+    for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
+        @test full(newtype(A)) == full(A)
     end
 end
 
-A=SymTridiagonal(a, [1.0:n-1])
+A = SymTridiagonal(a, [1.0:n-1])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
+A = Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A=Triangular(full(Diagonal(a)), :L) #morally Diagonal
-for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Triangular, Matrix]
+A = LowerTriangular(full(Diagonal(a))) #morally Diagonal
+for newtype in [Diagonal, Bidiagonal, SymTridiagonal, LowerTriangular, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
@@ -204,8 +219,8 @@ end
 # Because transpose(x) == x
 @test_throws ErrorException transpose(qrfact(randn(3,3)))
 @test_throws ErrorException ctranspose(qrfact(randn(3,3)))
-@test_throws ErrorException transpose(qrfact(randn(3,3), pivot = false))
-@test_throws ErrorException ctranspose(qrfact(randn(3,3), pivot = false))
+@test_throws ErrorException transpose(qrfact(randn(3,3), Val{false}))
+@test_throws ErrorException ctranspose(qrfact(randn(3,3), Val{false}))
 @test_throws ErrorException transpose(qrfact(big(randn(3,3))))
 @test_throws ErrorException ctranspose(qrfact(big(randn(3,3))))
 @test_throws ErrorException transpose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
@@ -218,9 +233,14 @@ C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
 
 # Issues #8057 and #8058
-for f in (eigfact, eigvals)
+for f in (eigfact, eigvals, eig)
     for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
         @test_throws ArgumentError f(A, 3, 2)
         @test_throws ArgumentError f(A, 1:4)
     end
 end
+
+# test diag
+A = eye(4)
+@test diag(A) == ones(4)
+@test diag(sub(A, 1:3, 1:3)) == ones(3)

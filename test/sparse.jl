@@ -150,10 +150,30 @@ for i = 1:5
     a = sprand(10, 5, 0.7)
     b = sprand(5, 15, 0.3)
     @test maximum(abs(a*b - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
-    @test maximum(abs(Base.LinAlg.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:sortcols) - full(a)*full(b))) < 100*eps()
+    @test maximum(abs(Base.SparseMatrix.spmatmul(a,b,sortindices=:doubletranspose) - full(a)*full(b))) < 100*eps()
     @test full(kron(a,b)) == kron(full(a), full(b))
 end
+
+# scale and scale!
+sA = sprandn(3, 7, 0.5)
+sC = similar(sA)
+dA = full(sA)
+b = randn(7)
+@test scale(dA, b) == scale(sA, b)
+@test scale(dA, b) == scale!(sC, sA, b)
+@test scale(dA, b) == scale!(copy(sA), b)
+b = randn(3)
+@test scale(b, dA) == scale(b, sA)
+@test scale(b, dA) == scale!(sC, b, sA)
+@test scale(b, dA) == scale!(b, copy(sA))
+
+@test scale(dA, 0.5) == scale(sA, 0.5)
+@test scale(dA, 0.5) == scale!(sC, sA, 0.5)
+@test scale(dA, 0.5) == scale!(copy(sA), 0.5)
+@test scale(0.5, dA) == scale(0.5, sA)
+@test scale(0.5, dA) == scale!(sC, sA, 0.5)
+@test scale(0.5, dA) == scale!(0.5, copy(sA))
 
 # reductions
 @test sum(se33)[1] == 3.0
@@ -304,6 +324,33 @@ for (aa116, ss116) in [(a116, s116), (ad116, sd116)]
     @test full(ss116[i,lj]) == aa116[i,lj]
     @test full(ss116[:,lj]) == aa116[:,lj]
     @test full(ss116[li,lj]) == aa116[li,lj]
+
+    # empty indices
+    for empty in (1:0, Int[])
+        @test full(ss116[empty,:]) == aa116[empty,:]
+        @test full(ss116[:,empty]) == aa116[:,empty]''
+        @test full(ss116[empty,lj]) == aa116[empty,lj]
+        @test full(ss116[li,empty]) == aa116[li,empty]
+        @test full(ss116[empty,empty]) == aa116[empty,empty]
+    end
+
+    # out of bounds indexing
+    @test_throws BoundsError ss116[0, 1]
+    @test_throws BoundsError ss116[end+1, 1]
+    @test_throws BoundsError ss116[1, 0]
+    @test_throws BoundsError ss116[1, end+1]
+    for j in (1, 1:size(s116,2), 1:1, Int[1], trues(size(s116, 2)), 1:0, Int[])
+        @test_throws BoundsError ss116[0:1, j]
+        @test_throws BoundsError ss116[[0, 1], j]
+        @test_throws BoundsError ss116[end:end+1, j]
+        @test_throws BoundsError ss116[[end, end+1], j]
+    end
+    for i in (1, 1:size(s116,1), 1:1, Int[1], trues(size(s116, 1)), 1:0, Int[])
+        @test_throws BoundsError ss116[i, 0:1]
+        @test_throws BoundsError ss116[i, [0, 1]]
+        @test_throws BoundsError ss116[i, end:end+1]
+        @test_throws BoundsError ss116[i, [end, end+1]]
+    end
 end
 
 # workaround issue #7197: comment out let-block
@@ -499,3 +546,124 @@ a = speye(3,5)
 @test size(rot180(a)) == (3,5)
 @test size(rotr90(a)) == (5,3)
 @test size(rotl90(a)) == (5,3)
+
+function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+    # Sorted vectors for indexing rows.
+    # Similar to getindex_general but without the transpose trick.
+    (m, n) = size(A)
+    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && BoundsError()
+    end
+
+    (alg == 0) ? Base.SparseMatrix.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? Base.SparseMatrix.getindex_I_sorted_bsearch_I(A, I, J) :
+    Base.SparseMatrix.getindex_I_sorted_linear(A, I, J)
+end
+
+let M=2^14, N=2^4
+    Irand = randperm(M);
+    Jrand = randperm(N);
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    IA = [sort(Irand[1:int(n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    debug = false
+
+    if debug
+        println("row sizes: $([int(nnz(S)/S.n) for S in SA])");
+        println("I sizes: $([length(I) for I in IA])");
+        @printf("    S    |    I    | binary S | binary I |  linear  | best\n")
+    end
+
+    J = Jrand;
+    for I in IA
+        for S in SA
+            res = Any[1,2,3]
+            times = Float64[0,0,0]
+            best = [typemax(Float64), 0]
+            for searchtype in [0, 1, 2]
+                gc()
+                tres = @timed test_getindex_algs(S, I, J, searchtype)
+                res[searchtype+1] = tres[1]
+                times[searchtype+1] = tres[2]
+                if best[1] > tres[2]
+                    best[1] = tres[2]
+                    best[2] = searchtype
+                end
+            end
+
+            if debug
+                @printf(" %7d | %7d | %4.2e | %4.2e | %4.2e | %s\n", int(nnz(S)/S.n), length(I), times[1], times[2], times[3],
+                            (0 == best[2]) ? "binary S" : (1 == best[2]) ? "binary I" : "linear")
+            end
+            if res[1] != res[2]
+                println("1 and 2")
+            elseif res[2] != res[3]
+                println("2, 3")
+            end
+            @assert res[1] == res[2] == res[3]
+        end
+    end
+end
+
+let M = 2^8, N=2^3
+    Irand = randperm(M)
+    Jrand = randperm(N)
+    I = sort([Irand, Irand, Irand])
+    J = [Jrand, Jrand]
+
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    for S in SA
+        res = Any[1,2,3]
+        for searchtype in [0, 1, 2]
+            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+        end
+
+        @assert res[1] == res[2] == res[3]
+    end
+end
+
+let M = 2^14, N=2^4
+    I = randperm(M)
+    J = randperm(N)
+    Jsorted = sort(J)
+
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    IA = [I[1:int(n)] for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    debug = false
+    if debug
+        @printf("         |         |         |        times        |        memory       |\n")
+        @printf("    S    |    I    |    J    |  sorted  | unsorted |  sorted  | unsorted |\n")
+    end
+    for I in IA
+        Isorted = sort(I)
+        for S in SA
+            gc()
+            ru = @timed S[I, J]
+            gc()
+            rs = @timed S[Isorted, Jsorted]
+            if debug
+                @printf(" %7d | %7d | %7d | %4.2e | %4.2e | %4.2e | %4.2e |\n", int(nnz(S)/S.n), length(I), length(J), rs[2], ru[2], rs[3], ru[3])
+            end
+        end
+    end
+end
+
+let S = sprand(10, 10, 0.1)
+    @test_throws BoundsError S[[0,1,2], [1,2]]
+    @test_throws BoundsError S[[1,2], [0,1,2]]
+    @test_throws BoundsError S[[0,2,1], [1,2]]
+    @test_throws BoundsError S[[2,1], [0,1,2]]
+end
+
+# Test that sparse / sparsevec constructors work for AbstractMatrix subtypes
+let D = Diagonal(ones(10,10)),
+    sm = sparse(D),
+    sv = sparsevec(D)
+
+    @test countnz(sm) == 10
+    @test countnz(sv) == 10
+
+    @test countnz(sparse(Diagonal(Int[]))) == 0
+    @test countnz(sparsevec(Diagonal(Int[]))) == 0
+end

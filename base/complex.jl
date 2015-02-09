@@ -690,3 +690,23 @@ function lexcmp(a::Complex, b::Complex)
     c == 0 || return c
     cmp(imag(a), imag(b))
 end
+
+#Rounding complex numbers
+#Requires two different RoundingModes for the real and imaginary components
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex(round(real(z), RoundingMode{MR}()),
+            round(imag(z), RoundingMode{MI}()))
+end
+
+round(z::Complex) = Complex(round(real(z)), round(imag(z)))
+@vectorize_1arg Complex round
+
+function round(z::Complex, digits::Integer, base::Integer=10)
+    Complex(round(real(z), digits, base),
+            round(imag(z), digits, base))
+end
+
+float{T<:FloatingPoint}(z::Complex{T}) = z
+float(z::Complex) = Complex(float(real(z)), float(imag(z)))
+@vectorize_1arg Complex float
+

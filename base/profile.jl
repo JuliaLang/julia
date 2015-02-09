@@ -51,7 +51,7 @@ function print{T<:Unsigned}(io::IO, data::Vector{T} = fetch(), lidict::Dict = ge
     elseif format == :flat
         flat(io, data, lidict, C, combine, cols)
     else
-        error("output format ", format, " not recognized")
+        throw(ArgumentError("output format $(repr(format)) not recognized"))
     end
 end
 print{T<:Unsigned}(data::Vector{T} = fetch(), lidict::Dict = getdict(data); kwargs...) = print(STDOUT, data, lidict; kwargs...)
@@ -70,7 +70,7 @@ function callers(funcname::ByteString, bt::Vector{UInt}, lidict; filename = noth
     if filename == nothing && linerange == nothing
         return callersf(li -> li.func == funcname, bt, lidict)
     end
-    filename == nothing && error("If supplying linerange, you must also supply the filename")
+    filename == nothing && throw(ArgumentError("if supplying linerange, you must also supply the filename"))
     if linerange == nothing
         return callersf(li -> li.func == funcname && li.file == filename, bt, lidict)
     else

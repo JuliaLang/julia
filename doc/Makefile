@@ -174,3 +174,9 @@ doctest: $(SPHINX_BUILD)
 helpdb.jl: stdlib/*.rst $(SPHINX_BUILD)
 	$(SPHINXBUILD) -b jlhelp $(ALLSPHINXOPTS) $(BUILDDIR)/jlhelp
 	mv $(BUILDDIR)/jlhelp/jlhelp.jl helpdb.jl
+
+manual/unicode-input-table.rst: $(JULIAHOME)/base/latex_symbols.jl
+	$(JULIAHOME)/julia tabcomplete.jl > manual/unicode-input-table.rst
+
+unicode: manual/unicode-input-table.rst
+

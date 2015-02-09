@@ -6,8 +6,9 @@ arithtype(::Type{Bool}) = Int
 # multiply by diagonal matrix as vector
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    n == length(b) || throw(DimensionMismatch())
-    for j = 1:n
+    p, q = size(C)
+    n == length(b) && p == m && q == n || throw(DimensionMismatch())
+    @inbounds for j = 1:n
         bj = b[j]
         for i = 1:m
             C[i,j] = A[i,j]*bj
@@ -18,8 +19,9 @@ end
 
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    m == length(b) || throw(DimensionMismatch())
-    for j = 1:n, i = 1:m
+    p, q = size(C)
+    m == length(b) && p == m && q == n || throw(DimensionMismatch())
+    @inbounds for j = 1:n, i = 1:m
         C[i,j] = A[i,j]*b[i]
     end
     C
@@ -276,8 +278,8 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
     if mA == 2 && nA == 2 && nB == 2; return matmul2x2!(C,tA,tB,A,B); end
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3!(C,tA,tB,A,B); end
 
-    stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
-    return generic_matmatmul!(C, tA, tB, A, B)
+    stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && return BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
+    generic_matmatmul!(C, tA, tB, A, B)
 end
 
 # blas.jl defines matmul for floats; other integer and mixed precision

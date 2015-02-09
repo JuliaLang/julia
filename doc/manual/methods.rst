@@ -1,7 +1,7 @@
 .. _man-methods:
 
 *********
- Methods  
+ Methods
 *********
 
 Recall from :ref:`man-functions` that a function is an object
@@ -363,11 +363,11 @@ arguments:
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
-    Warning: New definition 
+    Warning: New definition
         g(Any,Float64) at none:1
-    is ambiguous with: 
+    is ambiguous with:
         g(Float64,Any) at none:1.
-    To fix, define 
+    To fix, define
         g(Float64,Float64)
     before the new definition.
 
@@ -545,5 +545,30 @@ In particular, they do not participate in method dispatch. Methods are
 dispatched based only on positional arguments, with keyword arguments processed
 after the matching method is identified.
 
-.. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.
+Call overloading and function-like objects
+------------------------------------------
 
+For any arbitrary Julia object ``x`` other than ``Function`` objects
+(defined via ``function`` syntax), ``x(args...)`` is equivalent to
+``call(x, args...)``, where :func:`call` is a generic function in
+the Julia ``Base`` module.   By adding new methods to ``call``, you
+can add a function-call syntax to arbitrary Julia types.   (Such
+"callable" objects are sometimes called "functors.")
+
+For example, if you want to make ``x(arg)`` equivalent to ``x * arg`` for
+``x::Number``, you can define::
+
+    Base.call(x::Number, arg) = x * arg
+
+at which point you can do::
+
+    x = 7
+    x(10)
+
+to get ``70``.
+
+``call`` overloading is also used extensively for type constructors in
+Julia, discussed later in the manual.
+
+
+.. [Clarke61] Arthur C. Clarke, *Profiles of the Future* (1961): Clarke's Third Law.

@@ -5,7 +5,7 @@ symbol(s::ASCIIString) = symbol(s.data)
 symbol(s::UTF8String) = symbol(s.data)
 symbol(a::Array{UInt8,1}) =
     ccall(:jl_symbol_n, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
-symbol(x::Char) = symbol(string(x))
+symbol(x...) = symbol(string(x...))
 
 gensym() = ccall(:jl_gensym, Any, ())::Symbol
 
@@ -14,6 +14,8 @@ gensym(s::UTF8String) = gensym(s.data)
 gensym(a::Array{UInt8,1}) =
     ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), a, length(a))::Symbol
 gensym(ss::Union(ASCIIString, UTF8String)...) = map(gensym, ss)
+gensym(s::Symbol) =
+    ccall(:jl_tagged_gensym, Any, (Ptr{UInt8}, Int32), s, ccall(:strlen, Csize_t, (Ptr{UInt8},), s))::Symbol
 
 macro gensym(names...)
     blk = Expr(:block)
