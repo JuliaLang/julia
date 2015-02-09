@@ -12,8 +12,7 @@ function imagePath()
 end
 
 function libDir()
-    @unix_only return match(r"(.*)(sys.ji)",imagePath()).captures[1];
-    @windows_only return Base.JULIA_HOME;
+    return  abspath(dirname(Sys.dlpath("libjulia")));
 end
 
 function includeDir()
