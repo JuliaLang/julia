@@ -40,7 +40,7 @@ if _oldstyle_array_vcat_
     end
 else
     function vect(X...)
-        T = promote_type(map(typeof, X)...)
+        T = promote_typeof(X...)
         T[ X[i] for i=1:length(X) ]
     end
 end
@@ -616,18 +616,12 @@ vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,length(X)), X)
 end
 
 function hcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,1,length(X)), X)
 end
 
@@ -873,10 +867,7 @@ function typed_hvcat(T::Type, rows::(Int...), xs::Number...)
 end
 
 function hvcat(rows::(Int...), xs::Number...)
-    T = typeof(xs[1])
-    for i = 2:length(xs)
-        T = promote_type(T,typeof(xs[i]))
-    end
+    T = promote_typeof(xs...)
     typed_hvcat(T, rows, xs...)
 end
 
