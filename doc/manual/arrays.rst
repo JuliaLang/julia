@@ -233,13 +233,13 @@ where each I\_k may be:
 The result X generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of X containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. As a special part of this syntax, the
-``end`` keyword may be used to represent the last index of each dimension within
-the indexing brackets. It is replaced by a call to ``size(A, n)``, where ``A`` is
-the innermost array being indexed and ``n`` is the index position. Trailing dimensions
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions
 indexed with scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
 a dimension indexed by a boolean vector will be the number of true values in the vector.
+As a special part of this syntax, the ``end`` keyword may be used to represent the last
+index of each dimension within the indexing brackets, as determined by the size of the
+innermost array being indexed.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
