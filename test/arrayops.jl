@@ -73,13 +73,10 @@ a = rand(1, 1, 8, 8, 1)
 
 sz = (5,8,7)
 A = reshape(1:prod(sz),sz...)
-tmp = A[2:6]
-@test tmp == [2:6;]
-tmp = A[1:3,2,2:4]
-@test tmp == cat(3,46:48,86:88,126:128)
+@test A[2:6] == [2:6;]
+@test A[1:3,2,2:4] == cat(3,46:48,86:88,126:128)
 @test A[:,7:-3:1,5] == [191 176 161; 192 177 162; 193 178 163; 194 179 164; 195 180 165]
-tmp = A[:,3:9]
-@test tmp == reshape(11:45,5,7)
+@test A[:,3:9] == reshape(11:45,5,7)
 rng = (2,2:3,2:2:5)
 tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]

@@ -1517,14 +1517,14 @@
                  (if (or (null? isdict) (not (car isdict)))
                      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
                  (parse-dict s first closer)))
-              (case (peek-token s)
-                ((#\, closer)
-                 (parse-vect s first closer))
-                ((for)
-                 (take-token s)
-                 (parse-comprehension s first closer))
-                (else
-                 (parse-matrix s first closer)))))))))
+	      (let ((t (peek-token s)))
+		(cond ((or (eqv? t #\,) (eqv? t closer))
+		       (parse-vect s first closer))
+		      ((eq? t 'for)
+		       (take-token s)
+		       (parse-comprehension s first closer))
+		      (else
+		       (parse-matrix s first closer))))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)

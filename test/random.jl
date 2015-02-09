@@ -21,7 +21,6 @@ srand(0); rand(); x = rand(384);
 
 # Test array filling, Issues #7643, #8360
 @test rand(MersenneTwister(0), 1) == [0.8236475079774124]
-
 A = zeros(2, 2)
 rand!(MersenneTwister(0), A)
 @test A == [0.8236475079774124  0.16456579813368521;
