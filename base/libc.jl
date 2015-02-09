@@ -1,8 +1,8 @@
 ## time-related functions ##
 
 # TODO: check for usleep errors?
-@unix_only systemsleep(s::Real) = ccall(:usleep, Int32, (Uint32,), uint32(iround(s*1e6)))
-@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (Uint32,), uint32(iround(s*1e3))); return int32(0))
+@unix_only systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32,s*1e6))
+@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return int32(0))
 
 type TmStruct
     sec::Int32
@@ -34,28 +34,29 @@ type TmStruct
 end
 
 strftime(t) = strftime("%c", t)
-strftime(fmt::String, t::Real) = strftime(fmt, TmStruct(t))
-function strftime(fmt::String, tm::TmStruct)
-    timestr = Array(Uint8, 128)
-    n = ccall(:strftime, Int, (Ptr{Uint8}, Int, Ptr{Uint8}, Ptr{Void}),
+strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
+function strftime(fmt::AbstractString, tm::TmStruct)
+    timestr = Array(UInt8, 128)
+    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{Void}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
     end
-    bytestring(convert(Ptr{Uint8},timestr))
+    bytestring(convert(Ptr{UInt8},timestr))
 end
 
-strptime(timestr::String) = strptime("%c", timestr)
-function strptime(fmt::String, timestr::String)
+strptime(timestr::AbstractString) = strptime("%c", timestr)
+function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Ptr{Uint8}, (Ptr{Uint8}, Ptr{Uint8}, Ptr{Void}),
+    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}),
               timestr, fmt, &tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be
     # exposed in the API.
     # tm.isdst = -1
     if r == C_NULL
-        error("invalid arguments")
+        #TODO: better error message
+        throw(ArgumentError("invalid arguments"))
     end
     @osx_only begin
         # if we didn't explicitly parse the weekday or year day, use mktime
@@ -76,11 +77,11 @@ getpid() = ccall(:jl_getpid, Int32, ())
 ## network functions ##
 
 function gethostname()
-    hn = Array(Uint8, 256)
-    @unix_only err=ccall(:gethostname, Int32, (Ptr{Uint8}, Uint), hn, length(hn))
-    @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
+    hn = Array(UInt8, 256)
+    @unix_only err=ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
+    @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     systemerror("gethostname", err != 0)
-    bytestring(convert(Ptr{Uint8},hn))
+    bytestring(convert(Ptr{UInt8},hn))
 end
 
 ## Memory related ##

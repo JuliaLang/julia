@@ -1,2 +1,2 @@
 (load "jlfrontend.scm")
-(make-system-image "julia_flisp.boot")
+(make-system-image (os.getenv "julia_flisp.boot"))

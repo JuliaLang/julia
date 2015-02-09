@@ -28,9 +28,12 @@ dmg:
 	-codesign -s "AFB379C0B4CBD9DB9A762797FC2AB5460A2B0DBE" --deep ./dmg/Julia-$(VERSION_SUFFIX).app
 	-cp -f Julia.icns dmg/.VolumeIcon.icns
 	-ln -fs /Applications ./dmg/Applications
-	-chmod 775 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
-	hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 200m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
+	-chmod 755 ./dmg/Julia-$(VERSION_SUFFIX).app/Contents/MacOS/Julia
+	@echo "We're going to chown the .app file to root:admin now, which requires sudo.  You may be asked for your password:"
+	sudo chown -R root:admin ./dmg/Julia-$(VERSION_SUFFIX).app
+	sudo hdiutil create Julia-$(VERSION_SUFFIX).dmg -size 200m -ov -volname "Julia" -imagekey zlib-level=9 -srcfolder dmg
 
 
 clean:
-	rm -fr julia dmg *.dmg
+	@echo "We have to use sudo here to clean out folders owned by root.  You may be asked for your password"
+	sudo rm -fr julia dmg *.dmg

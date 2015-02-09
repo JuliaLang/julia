@@ -8,9 +8,8 @@ eval(m,x) = Core.eval(m,x)
 
 include = Core.include
 
-using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize,
-            tuplelen, tupleref, convert_default, kwcall,
-            typeassert, apply_type
+using Core: Intrinsics, arraylen, arrayref, arrayset, arraysize, _expr,
+            tuplelen, tupleref, kwcall, _apply, typeassert, apply_type
 
 include("exports.jl")
 
@@ -47,6 +46,10 @@ include("int.jl")
 include("operators.jl")
 include("pointer.jl")
 
+# rounding utilities
+include("rounding.jl")
+importall .Rounding
+
 include("float.jl")
 include("complex.jl")
 include("rational.jl")
@@ -55,6 +58,8 @@ include("rational.jl")
 include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
+include("subarray2.jl")
+include("functors.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
@@ -138,16 +143,6 @@ include("multidimensional.jl")
 
 include("primes.jl")
 
-# concurrency and parallelism
-include("serialize.jl")
-include("multi.jl")
-
-# Polling (requires multi.jl)
-include("poll.jl")
-
-# code loading
-include("loading.jl")
-
 begin
     SOURCE_PATH = ""
     include = function(path)
@@ -172,9 +167,8 @@ include("sort.jl")
 importall .Sort
 include("combinatorics.jl")
 
-# rounding utilities
-include("rounding.jl")
-importall .Rounding
+# version
+include("version.jl")
 
 # BigInts and BigFloats
 include("gmp.jl")
@@ -193,13 +187,30 @@ include("dSFMT.jl")
 include("random.jl")
 importall .Random
 
+# (s)printf macros
+include("printf.jl")
+importall .Printf
+
+# nullable types
+include("nullable.jl")
+
+# concurrency and parallelism
+include("serialize.jl")
+include("multi.jl")
+include("managers.jl")
+
+# code loading
+include("loading.jl")
+
+# Polling (requires multi.jl)
+include("poll.jl")
+
 # distributed arrays and memory-mapped arrays
 include("darray.jl")
 include("mmap.jl")
 include("sharedarray.jl")
 
-# utilities - version, timing, help, edit, metaprogramming
-include("version.jl")
+# utilities - timing, help, edit, metaprogramming
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
@@ -220,22 +231,27 @@ include("REPLCompletions.jl")
 include("REPL.jl")
 include("client.jl")
 
-# (s)printf macros
-include("printf.jl")
-importall .Printf
+# Documentation
+
+include("markdown/Markdown.jl")
+include("docs.jl")
+using .Docs
+using .Markdown
 
 # misc useful functions & macros
 include("util.jl")
 
-# sparse matrices and linear algebra
-include("sparse.jl")
-importall .SparseMatrix
+# dense linear algebra
 include("linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# sparse matrices and sparse linear algebra
+include("sparse.jl")
+importall .SparseMatrix
 
 # statistics
 include("statistics.jl")
@@ -256,8 +272,9 @@ include("constants.jl")
 include("quadgk.jl")
 importall .QuadGK
 
-# deprecated functions
-include("deprecated.jl")
+# Fast math
+include("fastmath.jl")
+importall .FastMath
 
 # package manager
 include("pkg.jl")
@@ -274,14 +291,19 @@ importall .Profile
 include("Dates.jl")
 import .Dates: Date, DateTime, now
 
-# nullable types
-include("nullable.jl")
+# deprecated functions
+include("deprecated.jl")
+
+# Some basic documentation
+include("basedocs.jl")
 
 function __init__()
     # Base library init
     reinit_stdio()
     Multimedia.reinit_displays() # since Multimedia.displays uses STDOUT as fallback
     fdwatcher_init()
+    early_init()
+    init_load_path()
 end
 
 include("precompile.jl")

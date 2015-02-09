@@ -1,7 +1,7 @@
 .. _man-calling-c-and-fortran-code:
 
 ****************************
- Calling C and Fortran Code  
+ Calling C and Fortran Code
 ****************************
 
 Though most code can be written in Julia, there are many high-quality,
@@ -26,7 +26,7 @@ possible to perform whole-program optimizations that can even optimize
 across this boundary, but Julia does not yet support that. In the
 future, however, it may do so, yielding even greater performance gains.)
 
-Shared libraries and functions are referenced by a tuple of the 
+Shared libraries and functions are referenced by a tuple of the
 form ``(:function, "library")`` or ``("function", "library")`` where ``function``
 is the C-exported function name. ``library`` refers to the shared library
 name: shared libraries available in the (platform-specific) load path
@@ -37,6 +37,14 @@ A function name may be used alone in place of the tuple (just
 the current process. This form can be used to call C library functions,
 functions in the Julia runtime, or functions in an application linked to
 Julia.
+
+By default, Fortran compilers `generate mangled names
+<http://en.wikipedia.org/wiki/Name_mangling#Name_mangling_in_Fortran>`_
+(for example, converting function names to lowercase or uppercase,
+often appending an underscore), and so to call a Fortran function via
+``ccall`` you must pass the mangled identifier corresponding to the rule
+followed by your Fortran compiler.  Also, when calling a Fortran
+function, all inputs must be passed by reference.
 
 Finally, you can use ``ccall`` to actually generate a call to the
 library function. Arguments to ``ccall`` are as follows:
@@ -69,21 +77,21 @@ is that a 1-tuple must be written with a trailing comma. For
 example, to call the ``getenv`` function to get a pointer to the value
 of an environment variable, one makes a call like this::
 
-    julia> path = ccall( (:getenv, "libc"), Ptr{Uint8}, (Ptr{Uint8},), "SHELL")
-    Ptr{Uint8} @0x00007fff5fbffc45
+    julia> path = ccall( (:getenv, "libc"), Ptr{UInt8}, (Ptr{UInt8},), "SHELL")
+    Ptr{UInt8} @0x00007fff5fbffc45
 
     julia> bytestring(path)
     "/bin/bash"
 
-Note that the argument type tuple must be written as ``(Ptr{Uint8},)``,
-rather than ``(Ptr{Uint8})``. This is because ``(Ptr{Uint8})`` is just
-``Ptr{Uint8}``, rather than a 1-tuple containing ``Ptr{Uint8}``::
+Note that the argument type tuple must be written as ``(Ptr{UInt8},)``,
+rather than ``(Ptr{UInt8})``. This is because ``(Ptr{UInt8})`` is just
+``Ptr{UInt8}``, rather than a 1-tuple containing ``Ptr{UInt8}``::
 
-    julia> (Ptr{Uint8})
-    Ptr{Uint8}
+    julia> (Ptr{UInt8})
+    Ptr{UInt8}
 
-    julia> (Ptr{Uint8},)
-    (Ptr{Uint8},)
+    julia> (Ptr{UInt8},)
+    (Ptr{UInt8},)
 
 In practice, especially when providing reusable functionality, one
 generally wraps ``ccall`` uses in Julia functions that set up arguments
@@ -95,9 +103,9 @@ inconsistent about how they indicate error conditions. For example, the
 in
 `env.jl <https://github.com/JuliaLang/julia/blob/master/base/env.jl>`_::
 
-    function getenv(var::String)
+    function getenv(var::AbstractString)
       val = ccall( (:getenv, "libc"),
-                  Ptr{Uint8}, (Ptr{Uint8},), var)
+                  Ptr{UInt8}, (Ptr{UInt8},), var)
       if val == C_NULL
         error("getenv: undefined variable: ", var)
       end
@@ -120,11 +128,11 @@ Here is a slightly more complex example that discovers the local
 machine's hostname::
 
     function gethostname()
-      hostname = Array(Uint8, 128)
+      hostname = Array(UInt8, 128)
       ccall( (:gethostname, "libc"), Int32,
-            (Ptr{Uint8}, Uint),
+            (Ptr{UInt8}, UInt),
             hostname, length(hostname))
-      return bytestring(convert(Ptr{Uint8}, hostname))
+      return bytestring(convert(Ptr{UInt8}, hostname))
     end
 
 This example first allocates an array of bytes, then calls the C library
@@ -136,10 +144,9 @@ memory to be passed to the callee and filled in. Allocation of memory
 from Julia like this is generally accomplished by creating an
 uninitialized array and passing a pointer to its data to the C function.
 
-When calling a Fortran function, all inputs must be passed by reference.
-
 A prefix ``&`` is used to indicate that a pointer to a scalar argument
-should be passed instead of the scalar value itself. The following
+should be passed instead of the scalar value itself (required for all
+Fortran function arguments, as noted above). The following
 example computes a dot product using a BLAS function.
 
 ::
@@ -156,21 +163,34 @@ example computes a dot product using a BLAS function.
     end
 
 The meaning of prefix ``&`` is not quite the same as in C. In
-particular, any changes to the referenced variables will not be visible
-in Julia. However, it will
-never cause any harm for called functions to attempt such modifications
-(that is, writing through the passed pointers). Since this ``&`` is not
-a real address operator, it may be used with any syntax, such as
-``&0`` or ``&f(x)``.
+particular, any changes to the referenced variables will not be
+visible in Julia unless the type is mutable (declared via
+``type``). However, even for immutable types it will not cause any
+harm for called functions to attempt such modifications (that is,
+writing through the passed pointers). Moreover, ``&`` may be used with
+any expression, such as ``&0`` or ``&f(x)``.
 
-Note that no C header files are used anywhere in the process. Currently,
-it is not possible to pass structs and other non-primitive types from
-Julia to C libraries. However, C functions that generate and use opaque
-struct types by passing pointers to them can return such values
-to Julia as ``Ptr{Void}``, which can then be passed to other C functions
-as ``Ptr{Void}``. Memory allocation and deallocation of such objects
-must be handled by calls to the appropriate cleanup routines in the
-libraries being used, just like in any C program.
+Currently, it is not possible to reliably pass structs and other non-primitive
+types by *value* from Julia to/from C libraries. However, *pointers*
+to structs can be passed.  The simplest case is that of C functions
+that generate and use *opaque* pointers to struct types, which can be
+passed to/from Julia as ``Ptr{Void}`` (or any other ``Ptr``
+type). Memory allocation and deallocation of such objects must be
+handled by calls to the appropriate cleanup routines in the libraries
+being used, just like in any C program.  A more complicated approach
+is to declare a composite type in Julia that mirrors a C struct, which
+allows the structure fields to be directly accessed in Julia.  Given a
+Julia variable ``x`` of that type, a pointer can be passed as ``&x``
+to a C function expecting a pointer to the corresponding struct.  If
+the Julia type ``T`` is ``immutable``, then a Julia ``Array{T}`` is
+stored in memory identically to a C array of the corresponding struct,
+and can be passed to a C program expecting such an array pointer.
+
+Note that no C header files are used anywhere in the process: you are
+responsible for making sure that your Julia types and call signatures
+accurately reflect those in the C header file.  (The `Clang package
+<https://github.com/ihnorton/Clang.jl>` can be used to generate Julia
+code from a C header file.)
 
 Mapping C Types to Julia
 ------------------------
@@ -217,23 +237,23 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 **System-independent:**
 
 +------------------------+-------------------+--------------------------------+
-| ``unsigned char``      | ``Cuchar``        | ``Uint8``                      |
+| ``unsigned char``      | ``Cuchar``        | ``UInt8``                      |
 +------------------------+-------------------+--------------------------------+
 | ``short``              | ``Cshort``        | ``Int16``                      |
 +------------------------+-------------------+--------------------------------+
-| ``unsigned short``     | ``Cushort``       | ``Uint16``                     |
+| ``unsigned short``     | ``Cushort``       | ``UInt16``                     |
 +------------------------+-------------------+--------------------------------+
 | ``int``                | ``Cint``          | ``Int32``                      |
 +------------------------+-------------------+--------------------------------+
-| ``unsigned int``       | ``Cuint``         | ``Uint32``                     |
+| ``unsigned int``       | ``Cuint``         | ``UInt32``                     |
 +------------------------+-------------------+--------------------------------+
 | ``long long``          | ``Clonglong``     | ``Int64``                      |
 +------------------------+-------------------+--------------------------------+
-| ``unsigned long long`` | ``Culonglong``    | ``Uint64``                     |
+| ``unsigned long long`` | ``Culonglong``    | ``UInt64``                     |
 +------------------------+-------------------+--------------------------------+
 | ``intmax_t``           | ``Cintmax_t``     | ``Int64``                      |
 +------------------------+-------------------+--------------------------------+
-| ``uintmax_t``          | ``Cuintmax_t``    | ``Uint64``                     |
+| ``uintmax_t``          | ``Cuintmax_t``    | ``UInt64``                     |
 +------------------------+-------------------+--------------------------------+
 | ``float``              | ``Cfloat``        | ``Float32``                    |
 +------------------------+-------------------+--------------------------------+
@@ -243,21 +263,17 @@ Julia type with the same name, prefixed by C. This can help for writing portable
 +------------------------+-------------------+--------------------------------+
 | ``ssize_t``            | ``Cssize_t``      | ``Int``                        |
 +------------------------+-------------------+--------------------------------+
-| ``size_t``             | ``Csize_t``       | ``Uint``                       |
+| ``size_t``             | ``Csize_t``       | ``UInt``                       |
 +------------------------+-------------------+--------------------------------+
 | ``void``               |                   | ``Void``                       |
 +------------------------+-------------------+--------------------------------+
 | ``void*``              |                   | ``Ptr{Void}``                  |
 +------------------------+-------------------+--------------------------------+
-| ``char*`` (or ``char[]``, e.g. a string)   | ``Ptr{Uint8}``                 |
+| ``char*`` (or ``char[]``, e.g. a string)   | ``Ptr{UInt8}``                 |
 +------------------------+-------------------+--------------------------------+
-| ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{Uint8}}``            |
+| ``char**`` (or ``*char[]``)                | ``Ptr{Ptr{UInt8}}``            |
 +------------------------+-------------------+--------------------------------+
 | ``struct T*`` (where T represents an       | ``Ptr{T}`` (call using         |
-| appropriately defined bits type)           | &variable_name in the          |
-|                                            | parameter list)                |
-+------------------------+-------------------+--------------------------------+
-| ``struct T`` (where T represents  an       | ``T`` (call using              |
 | appropriately defined bits type)           | &variable_name in the          |
 |                                            | parameter list)                |
 +------------------------+-------------------+--------------------------------+
@@ -274,21 +290,21 @@ A C function declared to return ``void`` will give ``nothing`` in Julia.
 ======================  ==============  =======
 ``char``                ``Cchar``       ``Int8`` (x86, x86_64)
 
-                                        ``Uint8`` (powerpc, arm)
+                                        ``UInt8`` (powerpc, arm)
 ``long``                ``Clong``       ``Int`` (UNIX)
 
                                         ``Int32`` (Windows)
-``unsigned long``       ``Culong``      ``Uint`` (UNIX)
+``unsigned long``       ``Culong``      ``UInt`` (UNIX)
 
-                                        ``Uint32`` (Windows)
+                                        ``UInt32`` (Windows)
 ``wchar_t``             ``Cwchar_t``    ``Int32`` (UNIX)
 
-                                        ``Uint16`` (Windows)
+                                        ``UInt16`` (Windows)
 ======================  ==============  =======
 
-For string arguments (``char*``) the Julia type should be ``Ptr{Uint8}``,
+For string arguments (``char*``) the Julia type should be ``Ptr{UInt8}``,
 not ``ASCIIString``. C functions that take an argument of the type ``char**``
-can be called by using a ``Ptr{Ptr{Uint8}}`` type within Julia. For example, 
+can be called by using a ``Ptr{Ptr{UInt8}}`` type within Julia. For example,
 C functions of the form::
 
     int main(int argc, char **argv);
@@ -296,7 +312,7 @@ C functions of the form::
 can be called via the following Julia code::
 
     argv = [ "a.out", "arg1", "arg2" ]
-    ccall(:main, Int32, (Int32, Ptr{Ptr{Uint8}}), length(argv), argv)
+    ccall(:main, Int32, (Int32, Ptr{Ptr{UInt8}}), length(argv), argv)
 
 For ``wchar_t*`` arguments, the Julia type should be ``Ptr{Wchar_t}``,
 and data can be converted to/from ordinary Julia strings by the
@@ -378,7 +394,7 @@ the ccall. ccall automatically arranges that all of its arguments will be
 preserved from garbage collection until the call returns. If a C API will
 store a reference to memory allocated by Julia, after the ccall returns, you
 must arrange that the object remains visible to the garbage collector. The
-suggested way to handle this is to make a global variable of type 
+suggested way to handle this is to make a global variable of type
 ``Array{Any,1}`` to hold these values, until C interface notifies you that
 it is finished with them.
 
@@ -389,10 +405,10 @@ of the buffer, so that it is safe to free (or alter) the original data without
 affecting Julia. A notable exception is ``pointer_to_array()`` which, for performance
 reasons, shares (or can be told to take ownership of) the underlying buffer.
 
-The garbage collector does not guarantee any order of finalization. That is, if ``a`` 
-contained a reference to ``b`` and both ``a`` and ``b`` are due for garbage 
+The garbage collector does not guarantee any order of finalization. That is, if ``a``
+contained a reference to ``b`` and both ``a`` and ``b`` are due for garbage
 collection, there is no guarantee that ``b`` would be finalized after ``a``. If
-proper finalization of ``a`` depends on ``b`` being valid, it must be handled in 
+proper finalization of ``a`` depends on ``b`` being valid, it must be handled in
 other ways.
 
 
@@ -427,12 +443,12 @@ Calling Convention
 
 The second argument to ``ccall`` can optionally be a calling convention
 specifier (immediately preceding return type). Without any specifier,
-the platform-default C calling convention is used. Other supported 
+the platform-default C calling convention is used. Other supported
 conventions are: ``stdcall``, ``cdecl``, ``fastcall``, and ``thiscall``.
 For example (from base/libc.jl)::
 
-    hn = Array(Uint8, 256)
-    err=ccall(:gethostname, stdcall, Int32, (Ptr{Uint8}, Uint32), hn, length(hn))
+    hn = Array(UInt8, 256)
+    err=ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
 
 For more information, please see the `LLVM Language Reference`_.
 
@@ -527,7 +543,7 @@ For more details on how to pass callbacks to C libraries, see this
 C++
 ---
 
-Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_ 
+Limited support for C++ is provided by the `Cpp <https://github.com/timholy/Cpp.jl>`_
 and `Clang <https://github.com/ihnorton/Clang.jl>`_ packages.
 
 Handling Platform Variations
@@ -536,7 +552,7 @@ Handling Platform Variations
 When dealing with platform libraries, it is often necessary to provide special cases
 for various platforms. The variable ``OS_NAME`` can be used to write these special
 cases. Additionally, there are several macros intended to make this easier:
-``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that linux and osx are mutually 
+``@windows``, ``@unix``, ``@linux``, and ``@osx``. Note that linux and osx are mutually
 exclusive subsets of unix. Their usage takes the form of a ternary conditional
 operator, as demonstrated in the following examples.
 

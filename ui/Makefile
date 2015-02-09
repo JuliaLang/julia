@@ -58,9 +58,8 @@ julia_res.o: $(JULIAHOME)/contrib/windows/julia.rc
 	$(CROSS_COMPILE)windres $< -O coff -o $@ -DJLVER=$$JLVERi -DJLVER_STR=\\\"$$JLVER\\\"
 $(build_bindir)/julia$(EXE): julia_res.o
 $(build_bindir)/julia-debug$(EXE): julia_res.o
-JLDFLAGS += julia_res.o
 endif
-endif 
+endif
 
 julia-release: $(build_bindir)/julia$(EXE)
 julia-debug: $(build_bindir)/julia-debug$(EXE)

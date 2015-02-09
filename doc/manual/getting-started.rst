@@ -1,7 +1,7 @@
 .. _man-getting-started:
 
 *****************
- Getting Started  
+ Getting Started
 *****************
 
 Julia installation is straightforward, whether using precompiled
@@ -10,7 +10,9 @@ following the instructions at
 `http://julialang.org/downloads/ <http://julialang.org/downloads/>`_.
 
 The easiest way to learn and experiment with Julia is by starting an
-interactive session (also known as a read-eval-print loop or "repl")::
+interactive session (also known as a read-eval-print loop or "repl")
+by double-clicking the Julia executable or running ``julia`` from the
+command line::
 
     $ julia
                    _
@@ -65,18 +67,19 @@ Or you could put that code into a script and run it::
     foo
     bar
 
-Julia can be started in parallel mode with either the ``-p`` or the 
-``--machinefile`` options. ``-p n`` will launch an additional ``n`` 
-worker processes, while ``--machinefile file`` will launch a worker 
-for each line in file ``file``. The machines defined in ``file`` must be 
-accessible via a passwordless ``ssh`` login, with Julia installed at the
-same location as the current host. Each machine definition takes the form 
-``[user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user, 
-``port`` to the standard ssh port. The optional ``bind-to bind_addr[:port]`` 
-specifies the ip-address and port that other workers should use to 
+Julia can be started in parallel mode with either the ``-p`` or the
+``--machinefile`` options. ``-p n`` will launch an additional ``n`` worker
+processes, while ``--machinefile file`` will launch a worker for each line in
+file ``file``. The machines defined in ``file`` must be accessible via a
+passwordless ``ssh`` login, with Julia installed at the same location as the
+current host. Each machine definition takes the form
+``[count*][user@]host[:port] [bind_addr[:port]]`` . ``user`` defaults to current user,
+``port`` to the standard ssh port. ``count`` is the number of workers to spawn
+on the node, and defaults to 1. The optional ``bind-to bind_addr[:port]``
+specifies the ip-address and port that other workers should use to
 connect to this worker.
-    
-    
+
+
 If you have code that you want executed whenever julia is run, you can
 put it in ``~/.juliarc.jl``:
 
@@ -89,7 +92,7 @@ put it in ``~/.juliarc.jl``:
     $ echo 'println("Greetings! 你好! 안녕하세요?")' > ~/.juliarc.jl
     $ julia
     Greetings! 你好! 안녕하세요?
-    
+
     ...
 
 .. raw:: latex
@@ -107,8 +110,8 @@ those available for the ``perl`` and ``ruby`` programs::
 
      -e, --eval <expr>        Evaluate <expr>
      -E, --print <expr>       Evaluate and show <expr>
-     -P, --post-boot <expr>   Evaluate <expr> right after boot
-     -L, --load <file>        Load <file> right after boot on all processors
+     -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode
+     -L, --load <file>        Load <file> immediately on all processors
      -J, --sysimage <file>    Start up with the given system image file
 
      -p <n>                   Run n local processes
@@ -120,9 +123,19 @@ those available for the ``perl`` and ``ruby`` programs::
      -F                       Load ~/.juliarc.jl, then handle remaining inputs
      --color={yes|no}         Enable or disable color text
 
-     --code-coverage          Count executions of source lines
+     --compile={yes|no|all}   Enable or disable compiler, or request exhaustive compilation
+
+     --code-coverage={none|user|all}, --code-coverage
+                              Count executions of source lines (omitting setting is equivalent to 'user')
+     --track-allocation={none|user|all}
+                              Count bytes allocated by each source line
      --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)
+     --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),
+                              or adhere to declarations in source code
+     -O, --optimize           Run time-intensive code optimizations
      --int-literals={32|64}   Select integer literal size independent of platform
+     --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)
+     --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings
 
 
 Resources

@@ -30,8 +30,18 @@ function success(args::Cmd; dir="")
     Base.success(`$g $args`)
 end
 
+function version()
+    vs = split(readchomp(`version`), ' ')[3]
+    ns = split(vs, '.')
+    if length(ns) > 3
+        VersionNumber(join(ns[1:3], '.'))
+    else
+        VersionNumber(join(ns, '.'))
+    end
+end
+
 modules(args::Cmd; dir="") = readchomp(`config -f .gitmodules $args`, dir=dir)
-different(verA::String, verB::String, path::String; dir="") =
+different(verA::AbstractString, verB::AbstractString, path::AbstractString; dir="") =
     !success(`diff-tree --quiet $verA $verB -- $path`, dir=dir)
 
 dirty(; dir="") = !success(`diff-index --quiet HEAD`, dir=dir)
@@ -84,7 +94,7 @@ function transact(f::Function; dir="")
     end
 end
 
-function is_ancestor_of(a::String, b::String; dir="")
+function is_ancestor_of(a::AbstractString, b::AbstractString; dir="")
     A = readchomp(`rev-parse $a`, dir=dir)
     readchomp(`merge-base $A $b`, dir=dir) == A
 end
@@ -92,7 +102,7 @@ end
 const GITHUB_REGEX =
     r"^(?:git@|git://|https://(?:[\w\.\+\-]+@)?)github.com[:/](([^/].+)/(.+?))(?:\.git)?$"i
 
-function set_remote_url(url::String; remote::String="origin", dir="")
+function set_remote_url(url::AbstractString; remote::AbstractString="origin", dir="")
     run(`config remote.$remote.url $url`, dir=dir)
     m = match(GITHUB_REGEX,url)
     m == nothing && return
@@ -100,7 +110,7 @@ function set_remote_url(url::String; remote::String="origin", dir="")
     push != url && run(`config remote.$remote.pushurl $push`, dir=dir)
 end
 
-function normalize_url(url::String)
+function normalize_url(url::AbstractString)
     m = match(GITHUB_REGEX,url)
     m == nothing ? url : "git://github.com/$(m.captures[1]).git"
 end

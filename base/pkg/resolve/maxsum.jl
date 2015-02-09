@@ -461,7 +461,7 @@ function maxsum(graph::Graph, msgs::Messages)
         end
         if it >= params.nondec_iterations &&
            (it - params.nondec_iterations) % params.dec_interval == 0
-            numdec = clamp(ifloor(params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
+            numdec = clamp(floor(Int,params.dec_fraction * graph.np),  1, msgs.num_nondecimated)
             decimate(numdec, graph, msgs)
             if msgs.num_nondecimated == 0
                 break

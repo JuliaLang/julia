@@ -17,11 +17,13 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
-    JL_GC_PUSH1(&m);
     m->type = (jl_value_t*)jl_module_type;
+    JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
+    m->parent = NULL;
     m->constant_table = NULL;
+    m->call_func = NULL;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
     if (jl_core_module) {
@@ -34,19 +36,11 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     return m;
 }
 
-JL_CALLABLE(jl_f_new_module)
+DLLEXPORT jl_value_t *jl_f_new_module(jl_sym_t *name)
 {
-    jl_sym_t *name;
-    if (nargs == 0) {
-        name = anonymous_sym;
-    }
-    else {
-        JL_NARGS(Module, 1, 1);
-        JL_TYPECHK(Module, symbol, args[0]);
-        name = (jl_sym_t*)args[0];
-    }
     jl_module_t *m = jl_new_module(name);
     m->parent = jl_main_module;
+    gc_wb(m, m->parent);
     jl_add_standard_imports(m);
     return (jl_value_t*)m;
 }
@@ -89,6 +83,7 @@ jl_binding_t *jl_get_binding_wr(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
+    gc_wb_buf(m, b);
     return *bp;
 }
 
@@ -105,7 +100,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
             jl_binding_t *b2 = jl_get_binding(b->owner, var);
             if (b2 == NULL)
                 jl_errorf("invalid method definition: imported function %s.%s does not exist", b->owner->name->name, var->name);
-            if (!b->imported)
+            if (!b->imported && (b2->value==NULL || jl_is_function(b2->value)))
                 jl_errorf("error in method definition: function %s.%s must be explicitly imported to be extended", b->owner->name->name, var->name);
             return b2;
         }
@@ -116,6 +111,7 @@ jl_binding_t *jl_get_binding_for_method_def(jl_module_t *m, jl_sym_t *var)
     b = new_binding(var);
     b->owner = m;
     *bp = b;
+    gc_wb_buf(m, b);
     return *bp;
 }
 
@@ -232,6 +228,7 @@ static void module_import_(jl_module_t *to, jl_module_t *from, jl_sym_t *s,
             nb->owner = b->owner;
             nb->imported = (explici!=0);
             *bp = nb;
+            gc_wb_buf(to, nb);
         }
     }
 }
@@ -300,6 +297,7 @@ void jl_module_export(jl_module_t *from, jl_sym_t *s)
         // don't yet know who the owner is
         b->owner = NULL;
         *bp = b;
+        gc_wb_buf(from, b);
     }
     assert(*bp != HT_NOTFOUND);
     (*bp)->exportp = 1;
@@ -337,6 +335,7 @@ void jl_set_global(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     jl_binding_t *bp = jl_get_binding_wr(m, var);
     if (!bp->constp) {
         bp->value = val;
+        gc_wb(m, val);
     }
 }
 
@@ -346,6 +345,7 @@ void jl_set_const(jl_module_t *m, jl_sym_t *var, jl_value_t *val)
     if (!bp->constp) {
         bp->value = val;
         bp->constp = 1;
+        gc_wb(m, val);
     }
 }
 
@@ -368,6 +368,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         }
     }
     b->value = rhs;
+    gc_wb_binding(((void**)b)-1, rhs);
 }
 
 DLLEXPORT void jl_declare_constant(jl_binding_t *b)
@@ -393,7 +394,7 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
 DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH1(&a); 
+    JL_GC_PUSH1(&a);
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
         jl_array_grow_end(a, 1);
         jl_module_t *imp = (jl_module_t*)m->usings.items[i];
@@ -426,23 +427,48 @@ DLLEXPORT jl_value_t *jl_module_names(jl_module_t *m, int all, int imported)
 DLLEXPORT jl_sym_t *jl_module_name(jl_module_t *m) { return m->name; }
 DLLEXPORT jl_module_t *jl_module_parent(jl_module_t *m) { return m->parent; }
 
-int jl_module_has_initializer(jl_module_t *m)
+jl_function_t *jl_module_get_initializer(jl_module_t *m)
 {
-    return jl_get_global(m, jl_symbol("__init__")) != NULL;
+    jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
+    if (f == NULL || !jl_is_function(f))
+        return NULL;
+    return (jl_function_t*)f;
 }
 
 void jl_module_run_initializer(jl_module_t *m)
 {
-    jl_value_t *f = jl_get_global(m, jl_symbol("__init__"));
-    if (f == NULL || !jl_is_function(f))
+    jl_function_t *f = jl_module_get_initializer(m);
+    if (f == NULL)
         return;
     JL_TRY {
-        jl_apply((jl_function_t*)f, NULL, 0);
+        jl_apply(f, NULL, 0);
     }
     JL_CATCH {
         JL_PRINTF(JL_STDERR, "Warning: error initializing module %s:\n", m->name->name);
         jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PRINTF(JL_STDERR, "\n");
+    }
+}
+
+jl_function_t *jl_module_call_func(jl_module_t *m)
+{
+    if (m->call_func == NULL) {
+        jl_function_t *cf = (jl_function_t*)jl_get_global(m, call_sym);
+        if (cf == NULL || !jl_is_function(cf))
+            cf = jl_bottom_func;
+        m->call_func = cf;
+    }
+    return m->call_func;
+}
+
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+{
+    while (1) {
+        if (parent == child)
+            return 1;
+        if (child == NULL || child == child->parent)
+            return 0;
+        child = child->parent;
     }
 }
 

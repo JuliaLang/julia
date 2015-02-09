@@ -12,7 +12,7 @@ function trimrep(buffer)
 end
 
 const bufsize = 500
-buffer = Array(Uint8,bufsize);
+buffer = Array(UInt8,bufsize);
 fill!(buffer,0);
 
 # Start by checking the byte-order.

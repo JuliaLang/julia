@@ -2,13 +2,14 @@
 
 .. module:: Base.Graphics
 
-Graphics
-----------
+**********
+ Graphics
+**********
 
 The ``Base.Graphics`` interface is an abstract wrapper; specific packages (e.g., Cairo and Tk/Gtk) implement much of the functionality.
 
 Geometry
-========
+--------
 
 .. function:: Vec2(x,y)
 

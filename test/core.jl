@@ -30,7 +30,7 @@ const Bottom = Union()
 @test !(Type{Rational{Int}} <: Type{Rational})
 let T = TypeVar(:T,true)
     @test !is(Bottom, typeintersect(Array{Bottom},AbstractArray{T}))
-    @test  is(Bottom, typeintersect((Type{Ptr{Uint8}},Ptr{Bottom}),
+    @test  is(Bottom, typeintersect((Type{Ptr{UInt8}},Ptr{Bottom}),
                                   (Type{Ptr{T}},Ptr{T})))
     @test !(Type{T} <: TypeVar)
 
@@ -41,7 +41,7 @@ let T = TypeVar(:T,true)
                   (Int, Array{Int,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Int, Array{Number,1})),
-                  Bottom)
+                  (Int, Array{Number,1}))
 
     @test isequal(typeintersect((T, AbstractArray{T}),(Any, Array{Number,1})),
                   (Number, Array{Number,1}))
@@ -68,6 +68,8 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{(Bool,Int...)}, Type{(T...)}) === Bottom
     @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
+
+    @test typeintersect((Rational{T},T), (Rational{Integer},Int)) === (Rational{Integer},Int)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),
@@ -126,6 +128,8 @@ end
 @test !isa((Int,), Type{(Int...,)})
 @test !isa((Int,), Type{(Any...,)})
 
+@test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
+
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{(Any...)}, Array{NTuple})
@@ -150,21 +154,21 @@ end
 
 # join
 @test typejoin(Int8,Int16) === Signed
-@test typejoin(Int,String) === Any
+@test typejoin(Int,AbstractString) === Any
 @test typejoin(Array{Float64},BitArray) <: AbstractArray
 @test typejoin(Array{Bool},BitArray) <: AbstractArray{Bool}
 @test typejoin((Int,Int8),(Int8,Float64)) === (Signed,Real)
 @test Base.typeseq(typejoin((ASCIIString,ASCIIString),(UTF8String,ASCIIString),
                             (ASCIIString,UTF8String),(Int,ASCIIString,Int)),
-                   (Any,String,Int...))
+                   (Any,AbstractString,Int...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8)),
                    (Int8,Signed...))
 @test Base.typeseq(typejoin((Int8,Int...),(Int8,Int8...)),
                    (Int8,Signed...))
-@test Base.typeseq(typejoin((Int8,Uint8,Int...),(Int8,Int8...)),
+@test Base.typeseq(typejoin((Int8,UInt8,Int...),(Int8,Int8...)),
                    (Int8,Integer...))
-@test Base.typeseq(typejoin(Union(Int,String),Int), Union(Int,String))
-@test Base.typeseq(typejoin(Union(Int,String),Int8), Any)
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
+@test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
 
 @test promote_type(Bool,Bottom) === Bool
 
@@ -228,7 +232,7 @@ end
 
 type FooFoo{A,B} y::FooFoo{A} end
 
-@test FooFoo{Int} <: FooFoo{Int,String}.types[1]
+@test FooFoo{Int} <: FooFoo{Int,AbstractString}.types[1]
 
 
 x = (2,3)
@@ -466,7 +470,7 @@ begin
     function mytype(vec)
         convert(Vector{(ASCIIString, DataType)}, vec)
     end
-    some_data = {("a", Int32), ("b", Int32)}
+    some_data = Any[("a", Int32), ("b", Int32)]
     @test isa(mytype(some_data),Vector{(ASCIIString, DataType)})
 end
 
@@ -496,6 +500,16 @@ begin
     g{T}(a::_AA{_AA{T}}) = a
     a = _AA(_AA(1))
     @test is(g(a),a)
+end
+
+# dispatch using Val{T}. See discussion in #9452 for instances vs types
+begin
+    local firstlast
+    firstlast(::Type{Val{true}}) = "First"
+    firstlast(::Type{Val{false}}) = "Last"
+
+    @test firstlast(Val{true}) == "First"
+    @test firstlast(Val{false}) == "Last"
 end
 
 # try/finally
@@ -543,6 +557,20 @@ begin
     end
     @test retfinally() == 5
     @test glo == 18
+
+    @test try error() end === nothing
+end
+
+# finalizers
+let
+    A = [1]
+    x = 0
+    finalizer(A, a->(x+=1))
+    finalize(A)
+    @test x == 1
+    A = 0
+    gc(); gc()
+    @test x == 1
 end
 
 # issue #7307
@@ -558,8 +586,8 @@ function test7307(a, ret)
     end
     return a
 end
-@test test7307({}, true) == {"inner","outer"}
-@test test7307({}, false) == {"inner","outer"}
+@test test7307([], true) == ["inner","outer"]
+@test test7307([], false) == ["inner","outer"]
 
 # issue #8277
 function test8277(a)
@@ -575,7 +603,7 @@ function test8277(a)
         end
     end
 end
-let a = {}
+let a = []
     test8277(a)
     @test length(a) == 1
 end
@@ -651,7 +679,7 @@ begin
     c = Vector[a]
 
     @test my_func(c,c)==0
-    @test_throws MethodError my_func(a,c)
+    @test my_func(a,c)==1
 end
 
 begin
@@ -692,6 +720,24 @@ begin
     b = SI{0,0,1}(1.0) * SI{1,-2,0}(2.0)
     @test typeof(a) === SI{1,2,1}
     @test typeof(b) === SI{1,-2,1}
+end
+
+# pointer arithmetic
+begin
+   local a,b,c
+   a = C_NULL
+   b = C_NULL + 1
+   c = C_NULL - 1
+
+   @test a != b != c
+   @test UInt(a) == 0
+   @test UInt(b) == 1
+   @test UInt(c) == typemax(UInt)
+
+   @test b - a == -(a - b) == 1
+   @test c - a == -(a - c) == typemax(UInt)
+   @test c - b == -(b - c) == typemax(UInt) - 1
+   @test a < b < c
 end
 
 # pull request 1270
@@ -820,7 +866,7 @@ let
 
     # issue #1886
     X = [1:4;]
-    r = Array(Range1{Int},1)
+    r = Array(UnitRange{Int},1)
     r[1] = 2:3
     X[r...] *= 2
     @test X == [1,4,6,4]
@@ -867,7 +913,10 @@ end
 
 # issue #2098
 let
-    i2098() = (c={2.0};[1:1:c[1];])
+    i2098() = begin
+        c = Any[2.0]
+        [1:1:c[1];]
+    end
     @test isequal(i2098(), [1.0,2.0])
 end
 
@@ -922,7 +971,7 @@ begin
     Y(::Type{X1474}) = 3
     @test Y(X1474) == 3
     @test Y(X1474{Int}) == 2
-    @test Y(X1474{Int,String}) == 1
+    @test Y(X1474{Int,AbstractString}) == 1
 end
 
 # issue #2562
@@ -1001,7 +1050,7 @@ end
 function f3471(y)
     convert(Array{typeof(y[1]),1}, y)
 end
-@test isa(f3471({1.0,2.0}), Vector{Float64})
+@test isa(f3471(Any[1.0,2.0]), Vector{Float64})
 
 # issue #3729
 typealias A3729{B} Vector{Vector{B}}
@@ -1056,7 +1105,7 @@ function foo(x)
     end
     return ret
 end
-x = Array(Union(Dict{Int64,String},Array{Int64,3},Number,String,Void), 3)
+x = Array(Union(Dict{Int64,AbstractString},Array{Int64,3},Number,AbstractString,Void), 3)
 x[1] = 1.0
 x[2] = 2.0
 x[3] = 3.0
@@ -1106,7 +1155,7 @@ type MyType4154{T}
     a2
 end
 
-foo4154(x) = MyType4154(x, {})
+foo4154(x) = MyType4154(x, [])
 h4154() = typeof(foo4154(rand(2,2,2)))
 g4154() = typeof(foo4154(rand(2,2,2,2,2,2,2,2,2)))
 
@@ -1137,10 +1186,9 @@ type Foo4376{T}
 end
 
 @test isa(Foo4376{Float32}(Foo4376{Int}(2)), Foo4376{Float32})
-@test_throws MethodError Foo4376{Float32}(Foo4376{Float32}(2.0f0))
 
 type _0_test_ctor_syntax_
-    _0_test_ctor_syntax_{T<:String}(files::Vector{T},step) = 0
+    _0_test_ctor_syntax_{T<:AbstractString}(files::Vector{T},step) = 0
 end
 
 # issue #4413
@@ -1181,7 +1229,7 @@ f4526(x) = isa(x.a, Void)
 # issue #4528
 function f4528(A, B)
     if A
-        reinterpret(Uint64, B)
+        reinterpret(UInt64, B)
     end
 end
 @test f4528(false, int32(12)) === nothing
@@ -1229,7 +1277,7 @@ type Z4681
     Z4681() = new(C_NULL)
 end
 Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
-@test_throws TypeError ccall(:printf,Int,(Ptr{Uint8},Ptr{Z4681}),"",Z4681())
+@test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479
 f4479(::Real,c) = 1
@@ -1381,14 +1429,14 @@ cnvt{S, T, N}(::Type{Array{S, N}}, x::Array{T, N}) = convert(Array{S}, x)
 
 function tighttypes!(adf)
     T = Bottom
-    tt = {Int}
+    tt = Any[Int]
     for t in tt
         T = typejoin(T, t)
     end
     cnvt(Vector{T}, adf[1])
 end
 
-@test isequal(tighttypes!({Any[1.0,2.0]}), [1,2])
+@test isequal(tighttypes!(Any[Any[1.0,2.0],]), [1,2])
 
 # issue #5142
 bitstype 64 Int5142
@@ -1429,7 +1477,7 @@ end
 function read_file5374(fileobj)
     read(fileobj.io, Float32)
 end
-@test isa(read_file5374(FileObj5374(IOBuffer(Uint8[0,0,0,0]))), Float32)
+@test isa(read_file5374(FileObj5374(IOBuffer(UInt8[0,0,0,0]))), Float32)
 
 # issue #5457
 function f5457(obj_ptr::Ptr{Float64}, f)
@@ -1521,7 +1569,7 @@ for (str, tag) in Dict("" => :none, "\"" => :string, "#=" => :comment, "'" => :c
                        "let;" => :block, "for i=1;" => :block, "function f();" => :block,
                        "f() do x;" => :block, "module X;" => :block, "type X;" => :block,
                        "immutable X;" => :block, "(" => :other, "[" => :other,
-                       "{" => :other, "begin" => :other, "quote" => :other,
+                       "begin" => :other, "quote" => :other,
                        "let" => :other, "for" => :other, "function" => :other,
                        "f() do" => :other, "module" => :other, "type" => :other,
                        "immutable" => :other)
@@ -1534,9 +1582,9 @@ macro m6031(x); x; end
 @test (@m6031 [2,4,6])[2] == 4
 
 # issue #6050
-@test Base.getfield_tfunc({nothing,QuoteNode(:vals)},
-                          Dict{Int64,(Range1{Int64},Range1{Int64})},
-                          :vals) == Array{(Range1{Int64},Range1{Int64}),1}
+@test Base.getfield_tfunc([nothing, QuoteNode(:vals)],
+                          Dict{Int64,(UnitRange{Int64},UnitRange{Int64})},
+                          :vals) == Array{(UnitRange{Int64},UnitRange{Int64}),1}
 
 # issue #6068
 x6068 = 1
@@ -1619,8 +1667,8 @@ end
 # issue #5577
 f5577(::Any) = false
 f5577(::Type) = true
-@test !f5577((Int,String,2))
-@test f5577(((Int,String),String))
+@test !f5577((Int,AbstractString,2))
+@test f5577(((Int,AbstractString),AbstractString))
 @test f5577(Int)
 @test !f5577(2)
 
@@ -1630,7 +1678,7 @@ f6426(x,t::(Type...)) = string(t)
 @test f6426(1, (1.,2.)) == "((Float64,Float64),)"
 
 # issue #6502
-f6502() = convert(Base.tupletail((Bool,Int...)), (10,))
+f6502() = convert(Base.tail((Bool,Int...)), (10,))
 @test f6502() === (10,)
 @test convert((Bool,Int...,), (true,10)) === (true,10)
 @test convert((Int,Bool...), (true,1,0)) === (1,true,false)
@@ -1652,7 +1700,7 @@ end
 
 # issue #6634
 function crc6634(spec)
-    A = Uint
+    A = UInt
     remainder::A = 1
     function handler(append)
         remainder = append ? 1 : 2
@@ -1758,7 +1806,7 @@ f6980(::Union(Int, Float64), ::B6980) = true
 
 # issue #7049
 typealias Maybe7049{T} Union(T,Void)
-function ttt7049(;init::Maybe7049{Union(String,(Int,Char))} = nothing)
+function ttt7049(;init::Maybe7049{Union(AbstractString,(Int,Char))} = nothing)
     string("init=", init)
 end
 @test ttt7049(init="a") == "init=a"
@@ -1777,7 +1825,7 @@ f7062{t,n}(::Type{Array{t,n}}, ::Array{t,n}) = (t,n,2)
 
 # issue #7302
 function test7302()
-    t = [Uint64][1]
+    t = [UInt64][1]
     convert(t, "5")
 end
 @test_throws MethodError test7302()
@@ -1795,12 +1843,12 @@ end
 
 # issue #5154
 let
-    v = {}
+    v = []
     for i=1:3, j=1:3
         push!(v, (i, j))
         i == 1 && j == 2 && break
     end
-    @test v == {(1,1), (1,2)}
+    @test v == Any[(1,1), (1,2)]
 end
 
 # addition of ¬ (\neg) parsing
@@ -1812,11 +1860,12 @@ type A7652
     a :: Int
 end
 a7652 = A7652(0)
-f7652() = issubtype(fieldtype(a7652, :a), Int)
-@test f7652() == issubtype(fieldtype(a7652, :a), Int) == true
-g7652() = fieldtype(A7652, :types)
-@test g7652() == fieldtype(A7652, :types) == Tuple
-@test fieldtype(a7652, 1) == Int
+t_a7652 = A7652
+f7652() = issubtype(fieldtype(t_a7652, :a), Int)
+@test f7652() == issubtype(fieldtype(A7652, :a), Int) == true
+g7652() = fieldtype(DataType, :types)
+@test g7652() == fieldtype(DataType, :types) == Tuple
+@test fieldtype(t_a7652, 1) == Int
 h7652() = a7652.(1) = 2
 h7652()
 @test a7652.a == 2
@@ -1825,7 +1874,7 @@ i7652()
 @test a7652.a == 3
 
 # issue #7679
-@test map(f->f(), { ()->i for i=1:3 }) == {1,2,3}
+@test map(f->f(), Any[ ()->i for i=1:3 ]) == Any[1,2,3]
 
 # issue #7810
 type Foo7810{T<:AbstractVector}
@@ -1836,11 +1885,11 @@ bar7810() = [Foo7810([(a,b) for a in 1:2]) for b in 3:4]
 
 # issue 7897
 function issue7897!(data, arr)
-    data = reinterpret(Uint32, data)
+    data = reinterpret(UInt32, data)
     a = arr[1]
 end
 
-a = ones(Uint8, 10)
+a = ones(UInt8, 10)
 sa = sub(a,4:6)
 # This can throw an error, but shouldn't segfault
 try
@@ -1878,4 +1927,214 @@ end
 let ex = Expr(:(=), :(f8338(x;y=4)), :(x*y))
     eval(ex)
     @test f8338(2) == 8
+end
+
+# call overloading (#2403)
+Base.call(x::Int, y::Int) = x + 3y
+issue2403func(f) = f(7)
+let x = 10
+    @test x(3) == 19
+    @test x((3,)...) == 19
+    @test issue2403func(x) == 31
+end
+type Issue2403
+    x
+end
+Base.call(i::Issue2403, y) = i.x + 2y
+let x = Issue2403(20)
+    @test x(3) == 26
+    @test issue2403func(x) == 34
+end
+
+# a method specificity issue
+c99991{T}(::Type{T},x::T) = 0
+c99991{T}(::Type{UnitRange{T}},x::FloatRange{T}) = 1
+c99991{T}(::Type{UnitRange{T}},x::Range{T}) = 2
+@test c99991(UnitRange{Float64}, 1.0:2.0) == 1
+@test c99991(UnitRange{Int}, 1:2) == 2
+
+# issue #8798
+let
+    const npy_typestrs = Dict("b1"=>Bool,
+                              "i1"=>Int8,      "u1"=>UInt8,
+                              "i2"=>Int16,     "u2"=>UInt16,
+                              "i4"=>Int32,     "u4"=>UInt32,
+                              "i8"=>Int64,     "u8"=>UInt64)
+    sizeof_lookup() = sizeof(npy_typestrs["i8"])
+    @test sizeof_lookup() == 8
+end
+
+# issue #8851
+abstract AbstractThing{T,N}
+type ConcreteThing{T<:FloatingPoint,N} <: AbstractThing{T,N}
+end
+
+@test typeintersect(AbstractThing{TypeVar(:T,true),2}, ConcreteThing) == ConcreteThing{TypeVar(:T,FloatingPoint),2}
+
+# issue #8978
+module I8978
+y = 1
+g() = f(y)
+f(x) = 2
+f(x::Int) = 3.0
+module II8978
+function callf(f)
+    try
+        f()
+    finally
+    end
+end
+end
+h(f) = II8978.callf() do
+    local x
+    for i = 1:1
+        x = g()+f
+    end
+    x
+end
+end
+
+@test I8978.h(4) === 7.0
+
+# issue #9134
+function f9134()
+    ii = zeros(Int32, 1)
+    let i
+        ii[1] = i
+    end
+end
+@test_throws UndefVarError f9134()
+
+# issue #9475
+module I9475
+    arr = Array(Any, 1)
+    @eval @eval $arr[1] = 1
+end
+
+# issue #9520
+#f9520a(::Any, ::Any, args...) = 15
+#f9520b(::Any, ::Any, ::Any, args...) = 23
+#f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+#@test invoke(f9520a, (Any, Any), 1, 2) == 15
+#@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
+#@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
+#@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
+#@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
+#@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+
+# jl_new_bits testing
+let x = [1,2,3]
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Int, x) === 1
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), Complex{Int}, x) === 1+2im
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), NTuple{3,Int}, x) === (1,2,3)
+    @test ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int,Int,Int), x) === (1,2,3)
+    @test (ccall(:jl_new_bits, Any, (Any,Ptr{Void},), (Int16,(Void,),Int8,(),Int,Void,Int), x)::Tuple)[[2,4,5,6,7]] === ((nothing,),(),2,nothing,3)
+end
+
+# sig 2 is SIGINT per the POSIX.1-1990 standard
+#if Base.is_unix(OS_NAME)
+#    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+#    @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
+#    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+#end
+#XXX: test disabled since we may be getting this signal on any of our threads
+# (very bad), leading to segfaults. perhaps needs to switch to a multi-threading aware
+# sigwait-based handler?
+
+# pull request #9534
+@test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
+@test try; [][]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,); end
+@test try; [][1,2]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (1,2); end
+@test try; [][10]; catch ex; isempty((ex::BoundsError).a::Array{Any,1}) && ex.i == (10,); end
+f9534a() = (a=1+2im; a.(-100))
+f9534a(x) = (a=1+2im; a.(x))
+@test try; f9534a() catch ex; (ex::BoundsError).a === 1+2im && ex.i == -100; end
+@test try; f9534a(3) catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+f9534b() = (a=(1,2.,""); a[5])
+f9534b(x) = (a=(1,2.,""); a[x])
+@test try; f9534b() catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 5; end
+@test try; f9534b(4) catch ex; (ex::BoundsError).a == (1,2.,"") && ex.i == 4; end
+f9534c() = (a=(1,2.); a[3])
+f9534c(x) = (a=(1,2.); a[x])
+@test try; f9534c() catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 3; end
+@test try; f9534c(0) catch ex; (ex::BoundsError).a === (1,2.) && ex.i == 0; end
+f9534d() = (a=(1,2,4,6,7); a[7])
+f9534d(x) = (a=(1,2,4,6,7); a[x])
+@test try; f9534d() catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == 7; end
+@test try; f9534d(-1) catch ex; (ex::BoundsError).a === (1,2,4,6,7) && ex.i == -1; end
+f9534e(x) = (a=IOBuffer(); a.(x) = 3)
+@test try; f9534e(-2) catch ex; is((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
+f9534f() = (a=IOBuffer(); a.(-2))
+f9534f(x) = (a=IOBuffer(); a.(x))
+@test try; f9534f() catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == -2; end
+@test try; f9534f(typemin(Int)+2) catch ex; isa((ex::BoundsError).a,IOBuffer) && ex.i == typemin(Int)+2; end
+x9634 = 3
+@test try; getfield(1+2im, x9634); catch ex; (ex::BoundsError).a === 1+2im && ex.i == 3; end
+@test try; throw(BoundsError()) catch ex; !isdefined((ex::BoundsError), :a) && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int)) catch ex; (ex::BoundsError).a == Int && !isdefined((ex::BoundsError), :i); end
+@test try; throw(BoundsError(Int, typemin(Int))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == typemin(Int); end
+@test try; throw(BoundsError(Int, (:a,))) catch ex; (ex::BoundsError).a == Int && (ex::BoundsError).i == (:a,); end
+f9534g(a,b,c...) = c[0]
+@test try; f9534g(1,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 0; end
+f9534h(a,b,c...) = c[a]
+@test f9534h(4,2,3,4,5,6) == 6
+@test try; f9534h(5,2,3,4,5,6) catch ex; (ex::BoundsError).a === (3,4,5,6) && ex.i == 5; end
+
+# issue #9535
+counter9535 = 0
+f9535() = (global counter9535; counter9535 += 1; counter9535)
+g9535() = (f9535(),f9535())
+@assert g9535() == (1,2)
+@assert g9535() == (3,4)
+
+# issue #9617
+let p = 15
+    @test 2p+1 == 31  # not a hex float literal
+end
+@test_throws ParseError parse("0x0.1")  # must have p or P
+
+# weak references
+type Obj; x; end
+function mk_wr(r, wr)
+    x = Obj(1)
+    push!(r, x)
+    push!(wr, WeakRef(x))
+end
+test_wr(r,wr) = @test r[1] == wr[1].value
+function test_wr()
+    ref = []
+    wref = []
+    mk_wr(ref, wref)
+    test_wr(ref, wref)
+    gc()
+    test_wr(ref, wref)
+    pop!(ref)
+    gc()
+    @test wref[1].value == nothing
+end
+test_wr()
+
+# issue #9947
+function f9947()
+    if 1 == 0
+        1
+    else
+        min(UInt128(2),1)
+    end
+end
+@test f9947() == UInt128(1)
+
+# Type inference for tuple parameters
+immutable fooTuple{s}; end
+barTuple1() = fooTuple{(:y,)}()
+barTuple2() = fooTuple{tuple(:y)}()
+
+@test Base.return_types(barTuple1,())[1] == Base.return_types(barTuple2,())[1] == fooTuple{(:y,)}
+
+#issue #9835
+module M9835
+    using Base.Test
+    type A end; type B end
+    f() = (isa(A(), A) ? A : B)()
+    @test isa(f(), A)
 end

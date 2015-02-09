@@ -4,7 +4,7 @@ clear all
 mata // start mata code
 
 // fibonacci
-real scalar fib(n) 
+real scalar fib(n)
 {
 	if (n < 2) {
 		return(n)
@@ -25,7 +25,7 @@ void parse_int(real scalar t) {
 }
 
 // quick sort
-real matrix qsort(real matrix a) 
+real matrix qsort(real matrix a)
 {
 	return(qsort_kernel(a, 1, length(a)))
 }
@@ -62,7 +62,7 @@ real matrix quicksort(n)
 
 
 // mandelbrot
-real scalar mandelarg(z) 
+real scalar mandelarg(z)
 {
 	c = z
 	maxiter = 80
@@ -90,7 +90,7 @@ real matrix mandel()
 
 
 // pi series
-real scalar pi_sum() 
+real scalar pi_sum()
 {
 	real scalar sum
     sum = 0.0
@@ -107,7 +107,7 @@ real scalar pi_sum()
 
 // random matrix statistics
 real matrix rand_mat_stat(t)
-{ 
+{
 	n = 5
 	m = J(n, 1, 0)
 	s = J(n, 1, 1)
@@ -177,7 +177,7 @@ args a lo hi
 		local idx = floor((`lo' + `hi') / 2)
 		scalar `pivot' = `a'[`idx']
 		while (`i' <= `j') {
-			while (`a'[`i'] < `pivot') { 
+			while (`a'[`i'] < `pivot') {
 				local ++i
 			}
 			while (`a'[`j'] > `pivot') {
@@ -201,7 +201,7 @@ program quicksort
 args n
 	drop _all
 	set obs `n'
-	tempvar x 
+	tempvar x
 	g `x' = runiform()
 	qsort_kernel `x' 1 `n'
 end
@@ -244,7 +244,7 @@ end
 
 
 
-// arguments 
+// arguments
 local fib 20
 local parse_int 1000
 local quicksort 5000

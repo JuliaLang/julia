@@ -13,5 +13,11 @@
 *.dll
 *.do
 *.o
+*.obj
 *.dylib
 *.dSYM
+*.jl.cov
+*.jl.mem
+*.ji
+
+.DS_Store

@@ -6,7 +6,7 @@
 
 #include "platform.h"
 #include "julia.h"
-#include "uv.h"
+#include "julia_internal.h"
 #ifdef _OS_WINDOWS_
 #include <windows.h>
 #include <direct.h>
@@ -38,14 +38,15 @@ extern char *julia_home;
 
 #define JL_RTLD(flags, FLAG) (flags & JL_RTLD_ ## FLAG ? RTLD_ ## FLAG : 0)
 
-DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
+DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned flags)
 {
+    uv_lib_t *lib = (uv_lib_t *) lib_;
 #if defined(_OS_WINDOWS_)
     needsSymRefreshModuleList = 1;
 #endif
 #if defined(RTLD_GLOBAL) && defined(RTLD_LAZY) /* POSIX flags available */
     dlerror(); /* Reset error status. */
-    lib->handle = dlopen(filename, 
+    lib->handle = dlopen(filename,
                          (flags & JL_RTLD_NOW ? RTLD_NOW : RTLD_LAZY)
                          | JL_RTLD(flags, GLOBAL) | JL_RTLD(flags, LOCAL)
 #ifdef RTLD_NODELETE
@@ -60,7 +61,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
 #ifdef RTLD_FIRST
                          | JL_RTLD(flags, FIRST)
 #endif
-	 );
+                         );
     if (lib->handle) {
         lib->errmsg = NULL;
         return 0;
@@ -74,7 +75,7 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, uv_lib_t *lib, unsigned flags)
 #endif
 }
 
-static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int throw_err)
+static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, int throw_err)
 {
     int error;
     char *ext;
@@ -115,7 +116,7 @@ static uv_lib_t *jl_load_dynamic_library_(char *modname, unsigned flags, int thr
                     ext = extensions[i];
                     path[0] = '\0';
                     handle->handle = NULL;
-                    if (dl_path[len-1] == PATHSEP)
+                    if (dl_path[len-1] == PATHSEPSTRING[0])
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
                     else
                         snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
@@ -152,37 +153,37 @@ done:
     return handle;
 }
 
-uv_lib_t *jl_load_dynamic_library_e(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library_e(const char *modname, unsigned flags)
 {
-    return jl_load_dynamic_library_(modname, flags, 0);
+    return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 0);
 }
 
-uv_lib_t *jl_load_dynamic_library(char *modname, unsigned flags)
+jl_uv_libhandle jl_load_dynamic_library(const char *modname, unsigned flags)
 {
-    return jl_load_dynamic_library_(modname, flags, 1);
+    return (jl_uv_libhandle) jl_load_dynamic_library_(modname, flags, 1);
 }
 
-void *jl_dlsym_e(uv_lib_t *handle, char *symbol)
+void *jl_dlsym_e(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
-    int  error=uv_dlsym(handle, symbol, &ptr);
+    int  error=uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error) ptr=NULL;
     return ptr;
 }
 
-void *jl_dlsym(uv_lib_t *handle, char *symbol)
+void *jl_dlsym(jl_uv_libhandle handle, const char *symbol)
 {
     void *ptr;
-    int  error = uv_dlsym(handle, symbol, &ptr);
+    int  error = uv_dlsym((uv_lib_t *) handle, symbol, &ptr);
     if (error != 0) {
-        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror(handle));
+        jl_printf(JL_STDERR, "symbol could not be found %s (%d): %s\n", symbol, error, uv_dlerror((uv_lib_t *) handle));
     }
     return ptr;
 }
 
 #ifdef _OS_WINDOWS_
 //Look for symbols in win32 libraries
-char *jl_dlfind_win32(char *f_name)
+char *jl_dlfind_win32(const char *f_name)
 {
     if (jl_dlsym_e(jl_exe_handle, f_name))
         return (char*)1;

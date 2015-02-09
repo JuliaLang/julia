@@ -112,7 +112,7 @@ end
 
 low(x) = uint64(x&0xffffffffffffffff)
 high(x) = uint64(x >>> 64)
-bitat(x::Uint128,y) = y >= 64 ? (int32(high(x) >> (y-64)) & 1) : (int32(low(x) >> y) & 1)
+bitat(x::UInt128,y) = y >= 64 ? (int32(high(x) >> (y-64)) & 1) : (int32(low(x) >> y) & 1)
 function divrem2(x,power)
     h = high(x)
     l = low(x)
@@ -121,13 +121,13 @@ function divrem2(x,power)
         h -= uint64(result) << (power - 64)
         return result, (uint128(h) << 64) + l
     else
-        part_low::Uint64 = l >> power
-        part_high::Uint64 = h << (64 - power)
+        part_low::UInt64 = l >> power
+        part_high::UInt64 = h << (64 - power)
         result = int32(part_low + part_high)
         return result, uint128(l - (part_low << power))
     end
 end
-function shift(x::Uint128,amt)
+function shift(x::UInt128,amt)
     if amt == 0
       return x
     elseif amt == -64
@@ -169,7 +169,7 @@ end
 
 function fastfixedtoa(v,mode,fractional_count,buffer)
     v = float64(v)
-    significand::Uint64 = _significand(v)
+    significand::UInt64 = _significand(v)
     exponent = _exponent(v)
     exponent > 20 && return false, 0, 0, buffer
     fractional_count > 20 && return false, 0, 0, buffer

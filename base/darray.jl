@@ -94,7 +94,7 @@ end
 # get array of start indexes for dividing sz into nc chunks
 function defaultdist(sz::Int, nc::Int)
     if sz >= nc
-        iround(linspace(1, sz+1, nc+1))
+        round(Int,linspace(1, sz+1, nc+1))
     else
         [[1:(sz+1)], zeros(Int, nc-sz)]
     end
@@ -166,9 +166,15 @@ function distribute(a::AbstractArray)
     owner = myid()
     rr = RemoteRef()
     put!(rr, a)
-    DArray(size(a)) do I
+    d = DArray(size(a)) do I
         remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
+    # Ensure that all workers have fetched their localparts.
+    # Else a gc in between can recover the RemoteRef rr
+    for chunk in d.chunks
+        wait(chunk)
+    end
+    d
 end
 
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
@@ -198,7 +204,7 @@ end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
     if prod(d) != length(A)
-        error("dimensions must be consistent with array size")
+        throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
     DArray(d) do I
         sz = map(length,I)
@@ -212,9 +218,9 @@ function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
         for i=1:div(length(B),nr)
             i2 = ind2sub(sztail, i)
             globalidx = [ I[j][i2[j-1]] for j=2:nd ]
-            
+
             a = sub2ind(d, d1offs, globalidx...)
-            
+
             B[:,i] = A[a:(a+nr-1)]
         end
         B
@@ -243,9 +249,15 @@ function getindex_tuple{T}(d::DArray{T}, I::(Int...))
 end
 
 getindex(d::DArray) = d[1]
-getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I)
+getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I...)
 
-copy(d::SubOrDArray) = d
+function copy!(dest::SubOrDArray, src::SubOrDArray)
+    dest.dims == src.dims && dest.pmap == src.pmap && dest.indexes == src.indexes && dest.cuts == src.cuts || throw(DimensionMismatch("destination array doesn't fit to source array"))
+    for p in dest.pmap
+        @spawnat p copy!(localpart(dest), localpart(src))
+    end
+    dest
+end
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
@@ -272,7 +284,7 @@ function setindex!(a::Array, s::SubDArray, I::UnitRange{Int}...)
     offs = [isa(J[i],Int) ? J[i]-1 : first(J[i])-1 for i=1:n]
     @sync begin
         for i = 1:length(d.chunks)
-            K_c = {d.indexes[i]...}
+            K_c = Any[d.indexes[i]...]
             K = [ intersect(J[j],K_c[j]) for j=1:n ]
             if !any(isempty, K)
                 idxs = [ I[j][K[j]-offs[j]] for j=1:n ]
@@ -302,10 +314,13 @@ map(f::Callable, d::DArray) = DArray(I->map(f, localpart(d)), d)
 
 reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
-              { @spawnat p reduce(f, localpart(d)) for p in procs(d) })
+              Any[ @spawnat p reduce(f, localpart(d)) for p in procs(d) ])
 
-              
-function map!(f::Callable, d::DArray) 
+mapreduce(f :: Function, opt :: Function, d :: DArray) =
+    mapreduce(fetch, opt,
+              Any[ @spawnat p mapreduce(f, opt, localpart(d)) for p in procs(d) ])
+
+function map!(f::Callable, d::DArray)
     @sync begin
         for p in procs(d)
             @spawnat p map!(f, localpart(d))

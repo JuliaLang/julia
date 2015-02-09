@@ -19,21 +19,21 @@ const BLACK_TERRITORY = 4
 const UNKNOWN = 5
 
 type XorRand
-  state::Uint32
+  state::UInt32
 end
 
-function xor_srand(rand::XorRand, seed::Uint32)
+function xor_srand(rand::XorRand, seed::UInt32)
   rand.state = seed
 end
 
-function xor_randn(rand::XorRand, n::Uint32)
+function xor_randn(rand::XorRand, n::UInt32)
   rand.state $= rand.state << 13
   rand.state $= rand.state >> 17
   rand.state $= rand.state << 5
   rand.state % n
 end
 
-xor_randn(rand::XorRand, n::Int) = convert(Int, xor_randn(rand, convert(Uint32, n)))
+xor_randn(rand::XorRand, n::Int) = convert(Int, xor_randn(rand, convert(UInt32, n)))
 
 # Offsets for the four directly adjacent neighbors. Used for looping.
 const deltai = (-1, 1, 0, 0)
@@ -43,31 +43,31 @@ neighbor(i::Int, j::Int, k::Int) = (i + deltai[k], j + deltaj[k])
 type Board
   size::Int
   komi::Float64
-  
+
   # Board represented by a 1D array. The first board_size*board_size
   # elements are used. Vertices are indexed row by row, starting with 0
   # in the upper left corner.
   board::Matrix{Int}
-  
+
   # Stones are linked together in a circular list for each string.
   next_stone::Matrix{Int}
-  
+
   # Storage for final status computations.
   final_status::Matrix{Int}
-  
+
   # Point which would be an illegal ko recapture.
   ko_i::Int
   ko_j::Int
-  
+
   # xor-shift random number generator.
   rand::XorRand
 
   function Board(n::Int)
-    init(new(), n, convert(Uint32, 2463534242))
+    init(new(), n, convert(UInt32, 2463534242))
   end
 end
 
-function init(board::Board, n::Int, seed::Uint32)
+function init(board::Board, n::Int, seed::UInt32)
   board.size = n
   board.komi = 0.0
   board.board = zeros(Int, n, n)
@@ -92,7 +92,7 @@ function set_komi(board::Board, komi::Float64)
   board.komi = komi
 end
 
-function set_random_seed(board::Board, seed::Uint32)
+function set_random_seed(board::Board, seed::UInt32)
   xor_srand(board.rand, seed)
 end
 
@@ -137,7 +137,7 @@ function has_additional_liberty(board::Board, i::Int, j::Int, libi::Int, libj::I
     for k = 1:4
       (bi, bj) = neighbor(ai, aj, k)
       if on_board(board, bi, bj) && board[bi, bj] == EMPTY && (bi != libi || bj != libj)
-	return true
+        return true
       end
     end
 
@@ -239,7 +239,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
     for k = 1:4
       (ai, aj) = neighbor(i, j, k)
       if on_board(board, ai, aj) && board[ai, aj] == color
-	remove_string(board, ai, aj)
+        remove_string(board, ai, aj)
       end
     end
     return
@@ -287,7 +287,7 @@ function play_move(board::Board, i::Int, j::Int, color::Int)
           board.ko_i = ai
           board.ko_j = aj
         end
-	break
+        break
       end
     end
   end
@@ -309,13 +309,13 @@ function generate_move(board::Board, color::Int)
         # ...however, if the move captures at least one stone,
         # consider it anyway.
         for k = 1:4
-	  (bi, bj) = neighbor(ai, aj, k)
-	  if on_board(board, bi, bj) && board[bi, bj] == other_color(color)
-	    num_moves += 1
+          (bi, bj) = neighbor(ai, aj, k)
+          if on_board(board, bi, bj) && board[bi, bj] == other_color(color)
+            num_moves += 1
             moves[:,num_moves] = [ai, aj]
-	    break
-	  end
-	end
+            break
+          end
+        end
       end
     end
   end
@@ -350,28 +350,28 @@ end
 # Compute final status. This function is only valid to call in a
 # position where generate_move() would return pass for at least one
 # color.
-# 
+#
 # Due to the nature of the move generation algorithm, the final
 # status of stones can be determined by a very simple algorithm:
-# 
+#
 # 1. Stones with two or more liberties are alive with territory.
 # 2. Stones in atari are dead.
-# 
+#
 # Moreover alive stones are unconditionally alive even if the
 # opponent is allowed an arbitrary number of consecutive moves.
 # Similarly dead stones cannot be brought alive even by an arbitrary
 # number of consecutive moves.
-# 
+#
 # Seki is not an option. The move generation algorithm would never
 # leave a seki on the board.
-# 
+#
 # Comment: This algorithm doesn't work properly if the game ends with
 #          an unfilled ko. If three passes are required for game end,
 #          that will not happen.
-# 
+#
 function compute_final_status(board::Board)
   board.final_status[:] = UNKNOWN
-  
+
   for i = 1:board.size, j = 1:board.size
     if board[i, j] == EMPTY
       for k = 1:4
@@ -384,7 +384,7 @@ function compute_final_status(board::Board)
         # never leave two adjacent empty vertices. Check the number
         # of liberties to decide its status, unless it's known
         # already.
-        # 
+        #
         # If we should be called in a non-final position, just make
         # sure we don't call set_final_status_string() on an empty
         # vertex.
@@ -397,7 +397,7 @@ function compute_final_status(board::Board)
               set_final_status_string(board, pos, DEAD)
             end
           end
-	end
+        end
         # Set the final status of the pos vertex to either black
         # or white territory.
         if board.final_status[i, j] == UNKNOWN
@@ -433,7 +433,7 @@ function compute_score(board::Board)
 end
 
 function benchmark(num_games_per_point::Int)
-  random_seed = convert(Uint32, 1)
+  random_seed = convert(UInt32, 1)
   board_size = 9
   komi = 0.5
 

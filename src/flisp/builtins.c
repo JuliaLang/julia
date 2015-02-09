@@ -372,7 +372,7 @@ static value_t fl_os_setenv(value_t *args, uint32_t nargs)
 #if defined (_OS_WINDOWS_)
         result = SetEnvironmentVariable(name,val);
 #else
-		result = setenv(name, val, 1);
+        result = setenv(name, val, 1);
 #endif
     }
     if (result != 0)

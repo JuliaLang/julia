@@ -18,11 +18,18 @@ We start with a simple C program that initializes Julia and calls some Julia cod
 
   int main(int argc, char *argv[])
   {
+      /* required: setup the julia context */
       jl_init(NULL);
-      JL_SET_STACK_BASE;
 
+      /* run julia commands */
       jl_eval_string("print(sqrt(2.0))");
 
+      /* strongly recommended: notify julia that the
+           program is about to terminate. this allows
+           julia time to cleanup pending write requests
+           and run all finalizers
+      */
+      jl_atexit_hook();
       return 0;
   }
 
@@ -30,7 +37,7 @@ In order to build this program you have to put the path to the Julia header into
 
     gcc -o test -I$JULIA_DIR/include/julia -L$JULIA_DIR/usr/lib -ljulia test.c
 
-Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder.
+Alternatively, look at the ``embedding.c`` program in the julia source tree in the ``examples/`` folder. The file ``ui/repl.c`` program is another simple example of how to set ``jl_compileropts`` options while linking against libjulia.
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
@@ -100,6 +107,23 @@ Several Julia values can be pushed at once using the ``JL_GC_PUSH2`` , ``JL_GC_P
     // Do something with args (e.g. call jl_... functions)
     JL_GC_POP();
 
+The garbage collector also operates under the assumption that it is aware of every old-generation object pointing to a young-generation one. Any time a pointer is updated breaking that assumption, it must be signaled to the collector with the ``gc_wb`` (write barrier) function like so::
+
+    jl_value_t *parent = some_old_value, *child = some_young_value;
+    ((some_specific_type*)parent)->field = child;
+    gc_wb(parent, child);
+
+It is in general impossible to predict which values will be old at runtime, so the write barrier must be inserted after all explicit stores. One notable exception is if the ``parent`` object was just allocated and garbage collection was not run since then. Remember that most ``jl_...`` functions can sometimes invoke garbage collection.
+
+The write barrier is also necessary for arrays of pointers when updating their data directly. For example::
+
+    jl_array_t *some_array = ...; // e.g. a Vector{Any}
+    void **data = (void**)jl_array_data(some_array);
+    jl_value_t *some_value = ...;
+    data[0] = some_value;
+    gc_wb(some_array, some_value);
+
+
 Manipulating the Garbage Collector
 ---------------------------------------------------
 
@@ -131,18 +155,18 @@ Alternatively, if you have already allocated the array you can generate a thin w
 
     double *existingArray = (double*)malloc(sizeof(double)*10);
     jl_array_t *x = jl_ptr_to_array_1d(array_type, existingArray, 10, 0);
-    
+
 The last argument is a boolean indicating whether Julia should take ownership of the data. If this argument is non-zero, the GC will call ``free`` on the data pointer when the array is no longer referenced.
 
 In order to access the data of x, we can use ``jl_array_data``::
 
     double *xData = (double*)jl_array_data(x);
-    
+
 Now we can fill the array::
 
     for(size_t i=0; i<jl_array_len(x); i++)
         xData[i] = i;
-      
+
 Now let us call a Julia function that performs an in-place operation on ``x``::
 
     jl_function_t *func  = jl_get_function(jl_base_module, "reverse!");

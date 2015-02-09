@@ -35,7 +35,7 @@ void arraylist_free(arraylist_t *a)
     a->items = &a->_space[0];
 }
 
-static void al_grow(arraylist_t *a, size_t n)
+void arraylist_grow(arraylist_t *a, size_t n)
 {
     if (a->len+n > a->max) {
         if (a->items == &a->_space[0]) {
@@ -60,7 +60,7 @@ static void al_grow(arraylist_t *a, size_t n)
 
 void arraylist_push(arraylist_t *a, void *elt)
 {
-    al_grow(a, 1);
+    arraylist_grow(a, 1);
     a->items[a->len-1] = elt;
 }
 

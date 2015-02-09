@@ -4,7 +4,6 @@
 */
 
 #include <stdlib.h>
-#include <stdio.h>
 #include <string.h>
 #include <stdarg.h>
 #include <setjmp.h>
@@ -20,7 +19,6 @@
 
 #ifndef _MSC_VER
 #include <unistd.h>
-#include <libgen.h>
 #include <getopt.h>
 #else
 #include "getopt.h"
@@ -34,30 +32,18 @@
 #error "JL_SYSTEM_IMAGE_PATH not defined!"
 #endif
 
-#ifdef _MSC_VER
-#define PATH_MAX MAX_PATH
-#endif
-
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#ifdef _MSC_VER
-DLLEXPORT char * dirname(char *);
-#endif
-
-extern DLLEXPORT char *julia_home;
-
-char system_image[256] = JL_SYSTEM_IMAGE_PATH;
 
 static int lisp_prompt = 0;
 static int codecov  = JL_LOG_NONE;
 static int malloclog= JL_LOG_NONE;
 static char *program = NULL;
-char *image_file = NULL;
+static int imagepathspecified = 0;
 
-static const char *usage = "julia [options] [program] [args...]\n";
-static const char *opts =
+static const char usage[] = "julia [options] [program] [args...]\n";
+static const char opts[] =
     " -v, --version            Display version information\n"
     " -h, --help               Print this message\n"
     " -q, --quiet              Quiet startup without banner\n"
@@ -67,7 +53,8 @@ static const char *opts =
     " -E, --print <expr>       Evaluate and show <expr>\n"
     " -P, --post-boot <expr>   Evaluate <expr>, but don't disable interactive mode\n"
     " -L, --load <file>        Load <file> immediately on all processors\n"
-    " -J, --sysimage <file>    Start up with the given system image file\n\n"
+    " -J, --sysimage <file>    Start up with the given system image file\n"
+    " -C --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
     " -p <n>                   Run n local processes\n"
     " --machinefile <file>     Run processes on hosts listed in <file>\n\n"
@@ -85,31 +72,47 @@ static const char *opts =
     " --track-allocation={none|user|all}\n"
     "                          Count bytes allocated by each source line\n"
     " --check-bounds={yes|no}  Emit bounds checks always or never (ignoring declarations)\n"
+    " --inline={yes|no}        Control whether inlining is permitted (even for functions declared as @inline)\n"
+    " --math-mode={ieee|user}  Always use IEEE semantics for math (ignoring declarations),\n"
+    "                          or adhere to declarations in source code\n"
+    " -O, --optimize           Run time-intensive code optimizations\n"
     " --int-literals={32|64}   Select integer literal size independent of platform\n"
-    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n";
+    " --dump-bitcode={yes|no}  Dump bitcode for the system image (used with --build)\n"
+    " --depwarn={yes|no}       Enable or disable syntax and method deprecation warnings\n";
 
 void parse_opts(int *argcp, char ***argvp)
 {
-    static char* shortopts = "+H:T:hJ:";
-    static struct option longopts[] = {
+    enum {
+	opt_check_bounds = 300,
+	opt_int_literals,
+	opt_dump_bitcode,
+	opt_compile,
+	opt_depwarn,
+	opt_inline,
+        opt_math_mode
+    };
+    static const char shortopts[] = "+H:hJ:C:O";
+    static const struct option longopts[] = {
         { "home",          required_argument, 0, 'H' },
-        { "tab",           required_argument, 0, 'T' },
         { "build",         required_argument, 0, 'b' },
         { "lisp",          no_argument,       &lisp_prompt, 1 },
         { "help",          no_argument,       0, 'h' },
         { "sysimage",      required_argument, 0, 'J' },
         { "code-coverage", optional_argument, 0, 'c' },
+        { "cpu-target",    required_argument, 0, 'C' },
         { "track-allocation",required_argument, 0, 'm' },
-        { "check-bounds",  required_argument, 0, 300 },
-        { "int-literals",  required_argument, 0, 301 },
-        { "dump-bitcode",  required_argument, 0, 302 },
-        { "compile",       required_argument, 0, 303 },
+        { "check-bounds",  required_argument, 0, opt_check_bounds },
+        { "optimize",      no_argument,       0, 'O' },
+        { "int-literals",  required_argument, 0, opt_int_literals },
+        { "dump-bitcode",  required_argument, 0, opt_dump_bitcode },
+        { "compile",       required_argument, 0, opt_compile },
+        { "depwarn",       required_argument, 0, opt_depwarn },
+        { "inline",        required_argument, 0, opt_inline },
+        { "math-mode",     required_argument, 0, opt_math_mode },
         { 0, 0, 0, 0 }
     };
     int c;
     opterr = 0;
-    int imagepathspecified=0;
-    image_file = system_image;
     int skip = 0;
     int lastind = optind;
     while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
@@ -121,50 +124,57 @@ void parse_opts(int *argcp, char ***argvp)
             lastind = optind;
             break;
         case 'H':
-            julia_home = strdup(optarg);
+            jl_compileropts.julia_home = strdup(optarg);
             break;
         case 'b':
             jl_compileropts.build_path = strdup(optarg);
             if (!imagepathspecified)
-                image_file = NULL;
+                jl_compileropts.image_file = NULL;
             break;
         case 'J':
-            image_file = strdup(optarg);
+            jl_compileropts.image_file = strdup(optarg);
             imagepathspecified = 1;
             break;
+        case 'C':
+            jl_compileropts.cpu_target = strdup(optarg);
+            break;
         case 'h':
-            printf("%s%s", usage, opts);
+            ios_printf(ios_stdout, "%s%s", usage, opts);
             exit(0);
-	case 'c':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    codecov = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    codecov = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    codecov = JL_LOG_NONE;
-	        break;
-	    }
-	    else
-		codecov = JL_LOG_USER;
-	    break;
-	case 'm':
-	    if (optarg != NULL) {
-		if (!strcmp(optarg,"user"))
-		    malloclog = JL_LOG_USER;
-		else if (!strcmp(optarg,"all"))
-		    malloclog = JL_LOG_ALL;
-		else if (!strcmp(optarg,"none"))
-		    malloclog = JL_LOG_NONE;
-	        break;
-	    }
-        case 300:
+        case 'O':
+            jl_compileropts.opt_level = 1;
+            break;
+        case 'c':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    codecov = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    codecov = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    codecov = JL_LOG_NONE;
+                break;
+            }
+            else {
+                codecov = JL_LOG_USER;
+            }
+            break;
+        case 'm':
+            if (optarg != NULL) {
+                if (!strcmp(optarg,"user"))
+                    malloclog = JL_LOG_USER;
+                else if (!strcmp(optarg,"all"))
+                    malloclog = JL_LOG_ALL;
+                else if (!strcmp(optarg,"none"))
+                    malloclog = JL_LOG_NONE;
+                break;
+            }
+        case opt_check_bounds:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_ON;
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.check_bounds = JL_COMPILEROPT_CHECK_BOUNDS_OFF;
             break;
-        case 301:
+        case opt_int_literals:
             if (!strcmp(optarg,"32"))
                 jl_compileropts.int_literals = 32;
             else if (!strcmp(optarg,"64"))
@@ -174,13 +184,13 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
-        case 302:
+        case opt_dump_bitcode:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_ON;
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.dumpbitcode = JL_COMPILEROPT_DUMPBITCODE_OFF;
             break;
-        case 303:
+        case opt_compile:
             if (!strcmp(optarg,"yes"))
                 jl_compileropts.compile_enabled = 1;
             else if (!strcmp(optarg,"no"))
@@ -192,6 +202,36 @@ void parse_opts(int *argcp, char ***argvp)
                 exit(1);
             }
             break;
+        case opt_depwarn:
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.depwarn = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.depwarn = 0;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --depwarn (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case opt_inline:      /* inline */
+            if (!strcmp(optarg,"yes"))
+                jl_compileropts.can_inline = 1;
+            else if (!strcmp(optarg,"no"))
+                jl_compileropts.can_inline = 0;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --inline (%s)\n", optarg);
+                exit(1);
+            }
+            break;
+        case opt_math_mode:
+            if (!strcmp(optarg, "ieee"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_OFF;
+            else if (!strcmp(optarg, "user"))
+                jl_compileropts.fast_math = JL_COMPILEROPT_FAST_MATH_DEFAULT;
+            else {
+                ios_printf(ios_stderr, "julia: invalid argument to --math-mode (%s)\n", optarg);
+                exit(1);
+            }
+            break;
         default:
             ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
             ios_printf(ios_stderr, "This is a bug, please report it.\n");
@@ -200,45 +240,12 @@ void parse_opts(int *argcp, char ***argvp)
     }
     jl_compileropts.code_coverage = codecov;
     jl_compileropts.malloc_log    = malloclog;
-    if (!julia_home) {
-        julia_home = getenv("JULIA_HOME");
-        if (julia_home) {
-            julia_home = strdup(julia_home);
-        }
-        else {
-            char *julia_path = (char*)malloc(PATH_MAX);
-            size_t path_size = PATH_MAX;
-            uv_exepath(julia_path, &path_size);
-            julia_home = strdup(dirname(julia_path));
-            free(julia_path);
-        }
-    }
     optind -= skip;
     *argvp += optind;
     *argcp -= optind;
-    if (image_file==NULL && *argcp > 0) {
+    if (jl_compileropts.image_file==NULL && *argcp > 0) {
         if (strcmp((*argvp)[0], "-")) {
             program = (*argvp)[0];
-        }
-    }
-    if (image_file) {
-        if (image_file[0] != PATHSEP) {
-            uv_stat_t stbuf;
-            char path[512];
-            if (!imagepathspecified) {
-                // build time path relative to JULIA_HOME
-                snprintf(path, sizeof(path), "%s%s%s",
-                         julia_home, PATHSEPSTRING, system_image);
-                image_file = strdup(path);
-            }
-            else if (jl_stat(image_file, (char*)&stbuf) != 0) {
-                // otherwise try julia_home/../lib/julia/%s
-                snprintf(path, sizeof(path), "%s%s%s",
-                         julia_home,
-                         PATHSEPSTRING ".." PATHSEPSTRING "lib" PATHSEPSTRING "julia" PATHSEPSTRING,
-                         image_file);
-                image_file = strdup(path);
-            }
         }
     }
 }
@@ -255,8 +262,10 @@ static int exec_program(void)
                 jl_show(jl_stderr_obj(), e);
             }
             else {
-                jl_printf(JL_STDERR, "error during bootstrap: ");
+                jl_printf(JL_STDERR, "error during bootstrap:\n");
                 jl_static_show(JL_STDERR, e);
+                JL_PUTS("\n",JL_STDERR);
+                jlbacktrace();
             }
             jl_printf(JL_STDERR, "\n");
             JL_EH_POP();
@@ -299,7 +308,7 @@ static void print_profile(void)
 }
 #endif
 
-int true_main(int argc, char *argv[])
+static int true_main(int argc, char *argv[])
 {
     if (jl_base_module != NULL) {
         jl_array_t *args = (jl_array_t*)jl_get_global(jl_base_module, jl_symbol("ARGS"));
@@ -348,12 +357,14 @@ int true_main(int argc, char *argv[])
         iserr = 1;
         JL_PUTS("error during run:\n",JL_STDERR);
         jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        JL_PUTS("\n",JL_STDOUT);
+        JL_PUTS("\n",JL_STDERR);
+        jlbacktrace();
         goto again;
     }
-    uv_tty_reset_mode();
     return iserr;
 }
+
+DLLEXPORT extern void julia_save();
 
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
@@ -364,11 +375,10 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
     int i;
     for (i=0; i<argc; i++) { // write the command line to UTF8
         wchar_t *warg = argv[i];
-        size_t wlen = wcslen(warg)+1;
-        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, wlen, NULL, 0, NULL, NULL);
+        size_t len = WideCharToMultiByte(CP_UTF8, 0, warg, -1, NULL, 0, NULL, NULL);
         if (!len) return 1;
         char *arg = (char*)alloca(len);
-        if (!WideCharToMultiByte(CP_UTF8, 0, warg, wlen, arg, len, NULL, NULL)) return 1;
+        if (!WideCharToMultiByte(CP_UTF8, 0, warg, -1, arg, len, NULL, NULL)) return 1;
         argv[i] = (wchar_t*)arg;
     }
 #endif
@@ -378,8 +388,11 @@ int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
         jl_lisp_prompt();
         return 0;
     }
-    julia_init(lisp_prompt ? NULL : image_file);
-    return julia_trampoline(argc, (char**)argv, true_main);
+    julia_init(imagepathspecified ? JL_IMAGE_CWD : JL_IMAGE_JULIA_HOME);
+    int ret = true_main(argc, (char**)argv);
+    jl_atexit_hook();
+    julia_save();
+    return ret;
 }
 
 #ifdef __cplusplus

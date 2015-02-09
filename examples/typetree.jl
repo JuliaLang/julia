@@ -88,8 +88,8 @@ function store_all_from(m::Module)
 end
 
 type_props(typ) = ""
-type_props(typ::DataType) = string("<<", 
-                                 typ.abstract    ? " abstract"    : " concrete", 
+type_props(typ::DataType) = string("<<",
+                                 typ.abstract    ? " abstract"    : " concrete",
                                  typ.mutable     ? " mutable"     : " immutable",
                                  typ.pointerfree ? " pointerfree" : "",
                                  " size:", typ.size,
@@ -108,7 +108,7 @@ function print_tree(subtypes::Dict{String, TTNode}, pfx::String="")
 end
 
 
-# TODO: optionally take module names in command line 
+# TODO: optionally take module names in command line
 # TODO: sort output
 # TODO: option to list subtrees of type tree, or other symbol types
 const types_tree = Dict{String, TTNode}()
@@ -120,3 +120,7 @@ end
 # print_tree(types_tree)
 
 end # module
+
+if !isinteractive()
+    TypeTrees.print_tree(TypeTrees.types_tree)
+end

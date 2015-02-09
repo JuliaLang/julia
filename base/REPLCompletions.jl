@@ -5,10 +5,10 @@ export completions, shell_completions, latex_completions
 using Base.Meta
 
 function completes_global(x, name)
-    return beginswith(x, name) && !('#' in x)
+    return startswith(x, name) && !('#' in x)
 end
 
-function filtered_mod_names(ffunc::Function, mod::Module, name::String, all::Bool=false, imported::Bool=false)
+function filtered_mod_names(ffunc::Function, mod::Module, name::AbstractString, all::Bool=false, imported::Bool=false)
     ssyms = names(mod, all, imported)
     filter!(ffunc, ssyms)
     syms = UTF8String[string(s) for s in ssyms]
@@ -82,7 +82,7 @@ function complete_symbol(sym, ffunc)
         fields = t.names
         for field in fields
             s = string(field)
-            if beginswith(s, name)
+            if startswith(s, name)
                 push!(suggestions, s)
             end
         end
@@ -100,14 +100,14 @@ function complete_keyword(s::ByteString)
     r = searchsorted(sorted_keywords, s)
     i = first(r)
     n = length(sorted_keywords)
-    while i <= n && beginswith(sorted_keywords[i],s)
+    while i <= n && startswith(sorted_keywords[i],s)
         r = first(r):i
         i += 1
     end
     sorted_keywords[r]
 end
 
-function complete_path(path::String, pos)
+function complete_path(path::AbstractString, pos)
     dir, prefix = splitdir(path)
     local files
     try
@@ -124,15 +124,17 @@ function complete_path(path::String, pos)
 
     matches = UTF8String[]
     for file in files
-        if beginswith(file, prefix)
+        if startswith(file, prefix)
             id = try isdir(joinpath(dir, file)) catch; false end
-            push!(matches, id ? joinpath(file,"") : file)
+            # joinpath is not used because windows needs to complete with double-backslash
+            push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
-    matches, (nextind(path, pos-sizeof(prefix))):pos, length(matches) > 0
+    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
+    return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
-function complete_methods(input::String)
+function complete_methods(input::AbstractString)
     tokens = split(input, '.')
     fn = Main
     for token in tokens
@@ -147,7 +149,6 @@ end
 include("latex_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
-const non_filename_chars = [" \t\n\r\"\\'`@\$><=;|&{("...]
 const whitespace_chars = [" \t\n\r"...]
 
 # Aux function to detect whether we're right after a
@@ -159,13 +160,13 @@ function afterusing(string::ByteString, startpos::Int)
     rstr = reverse(str)
     r = search(rstr, r"\s(gnisu|tropmi)\b")
     isempty(r) && return false
-    fr = chr2ind(str, length(str)-ind2chr(rstr, last(r))+1)
+    fr = reverseind(str, last(r))
     return ismatch(r"^\b(using|import)\s*(\w+\s*,\s*)*\w*$", str[fr:end])
 end
 
 function latex_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if rsearch(string, whitespace_chars, pos) < slashpos
+    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[prevind(string, slashpos)]=='\\'))
         # latex symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
@@ -174,7 +175,7 @@ function latex_completions(string, pos)
         else
             # return possible matches; these cannot be mixed with regular
             # Julian completions as only latex symbols contain the leading \
-            latex_names = filter(k -> beginswith(k, s), keys(latex_symbols))
+            latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
     end
@@ -186,20 +187,24 @@ function completions(string, pos)
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
-        startpos = nextind(partial, rsearch(partial, non_filename_chars, pos))
+        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
-        paths, r, success = complete_path(string[r], pos)
+        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(string[startpos:start(r)-1] * paths[1]) &&  # except if it's a directory
+           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
-        return sort(paths), r, success
+        #Latex symbols can be completed for strings
+        (success || inc_tag==:cmd) && return sort(paths), r, success
     end
 
     ok, ret = latex_completions(string, pos)
     ok && return ret
+    # Make sure that only latex_completions is working on strings
+    inc_tag==:string && return UTF8String[], 0:-1, false
 
     if inc_tag == :other && string[pos] == '('
         endpos = prevind(string, pos)
@@ -223,12 +228,19 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            append!(suggestions, filter(readdir(Pkg.dir())) do pname
-                pname[1] != '.' &&
-                pname != "METADATA" &&
-                pname != "REQUIRE" &&
-                beginswith(pname, s)
-            end)
+            for dir in [Pkg.dir(), LOAD_PATH, pwd()]
+                isdir(dir) || continue
+                for pname in readdir(dir)
+                    if pname[1] != '.' && pname != "METADATA" &&
+                          pname != "REQUIRE" && startswith(pname, s)
+                        if isfile(joinpath(dir, pname))
+                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                        else
+                            push!(suggestions, pname)
+                        end
+                    end
+                end
+            end
         end
         ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
         comp_keywords = false
@@ -253,9 +265,9 @@ function shell_completions(string, pos)
     # Now look at the last thing we parsed
     isempty(args.args[end].args) && return UTF8String[], 0:-1, false
     arg = args.args[end].args[end]
-    if isa(arg,String)
+    if all(map(s -> isa(s, AbstractString), args.args[end].args))
         # Treat this as a path (perhaps give a list of comands in the future as well?)
-        return complete_path(arg, pos)
+        return complete_path(join(args.args[end].args), pos)
     elseif isexpr(arg, :escape) && (isexpr(arg.args[1], :incomplete) || isexpr(arg.args[1], :error))
         r = first(last_parse):prevind(last_parse, last(last_parse))
         partial = scs[r]
@@ -263,6 +275,7 @@ function shell_completions(string, pos)
         range += first(r) - 1
         return ret, range, true
     end
+    return UTF8String[], 0:-1, false
 end
 
 end # module

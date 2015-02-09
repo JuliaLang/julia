@@ -34,7 +34,7 @@ function names(v)
     if isa(t,DataType)
         return names(t)
     else
-        error("cannot call names() on a non-composite type")
+        throw(ArgumentError("cannot call names() on a non-composite type"))
     end
 end
 
@@ -45,10 +45,10 @@ isconst(m::Module, s::Symbol) =
     ccall(:jl_is_const, Int32, (Any, Any), m, s) != 0
 
 # return an integer such that object_id(x)==object_id(y) if is(x,y)
-object_id(x::ANY) = ccall(:jl_object_id, Uint, (Any,), x)
+object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # type predicates
-const isimmutable = x->(isa(x,Tuple) || !typeof(x).mutable)
+isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
 isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
 isstructtype(x) = false
 isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
@@ -84,16 +84,15 @@ end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
 
-subtypetree(x::DataType, level=-1) = (level == 0 ? (x, {}) : (x, {subtypetree(y, level-1) for y in subtypes(x)}))
-
 # function reflection
-isgeneric(f::ANY) = (isa(f,Function)||isa(f,DataType)) && isa(f.env,MethodTable)
+isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
 
 function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
-code_lowered(f::Callable,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
-methods(f::ANY,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
-_methods(f::ANY,t::ANY,lim) = _methods(f,{(t::Tuple)...},length(t::Tuple),lim,{})
+code_lowered(f::Function,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
+methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
+methods(f::ANY,t::ANY) = methods(call, tuple(isa(f,Type) ? Type{f} : typeof(f), t...))
+_methods(f::ANY,t::ANY,lim) = _methods(f, Any[(t::Tuple)...], length(t::Tuple), lim, [])
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, tuple(t...), lim)
@@ -121,13 +120,12 @@ end
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("not a generic function")
+        throw(ArgumentError("argument is not a generic function"))
     end
     f.env
 end
 
-methods(t::DataType) = (_methods(t,Tuple,0);  # force constructor creation
-                        t.env)
+methods(x::ANY) = methods(call, (isa(x,Type) ? Type{x} : typeof(x), Any...))
 
 function length(mt::MethodTable)
     n = 0
@@ -155,27 +153,52 @@ function _dump_function(f, t::ANY, native, wrapper)
     str
 end
 
-code_llvm  (f::Callable, types::(Type...)) = print(_dump_function(f, types, false, false))
-code_native(f::Callable, types::(Type...)) = print(_dump_function(f, types, true, false))
+code_llvm(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, false, false))
+code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
+code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
+code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
-function functionlocs(f::Callable, types=(Type...))
-    locs = Any[]
-    for m in methods(f, types)
-        lsd = m.func.code::LambdaStaticData
-        ln = lsd.line
-        if ln > 0
-            push!(locs, (find_source_file(string(lsd.file)), ln))
+function which(f::ANY, t::(Type...))
+    if isleaftype(t)
+        ms = methods(f, t)
+        isempty(ms) && error("no method found for the specified argument types")
+        length(ms)!=1 && error("no unique matching method for the specified argument types")
+        ms[1]
+    else
+        if !isa(f,Function)
+            t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
+            f = call
+        elseif !isgeneric(f)
+            throw(ArgumentError("argument is not a generic function"))
         end
+        m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
+        if m === nothing
+            error("no method found for the specified argument types")
+        end
+        m
     end
-    if length(locs) == 0
-       error("could not find function definition")
-    end
-    locs
 end
 
-functionloc(f::Callable, types=(Any...)) = functionlocs(f, types)[1]
+function functionloc(m::Method)
+    lsd = m.func.code::LambdaStaticData
+    ln = lsd.line
+    if ln <= 0
+        error("could not determine location of method definition")
+    end
+    (find_source_file(string(lsd.file)), ln)
+end
 
-function function_module(f::Function, types=(Any...))
+functionloc(f::ANY, types) = functionloc(which(f,types))
+
+function functionloc(f)
+    m = methods(f)
+    if length(m) > 1
+        error("function has multiple methods; please specify a type signature")
+    end
+    functionloc(m.defs)
+end
+
+function function_module(f, types)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")

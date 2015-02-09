@@ -4,23 +4,23 @@ const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
 
 type IOStream <: IO
     handle::Ptr{Void}
-    ios::Array{Uint8,1}
-    name::String
+    ios::Array{UInt8,1}
+    name::AbstractString
     mark::Int64
 
-    IOStream(name::String, buf::Array{Uint8,1}) = new(pointer(buf), buf, name, -1)
+    IOStream(name::AbstractString, buf::Array{UInt8,1}) = new(pointer(buf), buf, name, -1)
 end
 # TODO: delay adding finalizer, e.g. for memio with a small buffer, or
 # in the case where we takebuf it.
-function IOStream(name::String, finalize::Bool)
-    buf = zeros(Uint8,sizeof_ios_t)
+function IOStream(name::AbstractString, finalize::Bool)
+    buf = zeros(UInt8,sizeof_ios_t)
     x = IOStream(name, buf)
     if finalize
         finalizer(x, close)
     end
     return x
 end
-IOStream(name::String) = IOStream(name, true)
+IOStream(name::AbstractString) = IOStream(name, true)
 
 convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
@@ -37,10 +37,10 @@ end
 iswritable(s::IOStream) = bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
 isreadable(s::IOStream) = bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
-modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : error("Neither readable nor writable"))
+modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function truncate(s::IOStream, n::Integer)
-    systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, Uint), s.ios, n) != 0)
+    systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)
     return s
 end
 
@@ -81,8 +81,8 @@ immutable CFILE
 end
 
 function CFILE(s::IO)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{Uint8}), convert(Cint, fd(s)), modestr(s))
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
     systemerror("fdopen", FILEp == C_NULL)
     seek(CFILE(FILEp), position(s))
 end
@@ -100,7 +100,7 @@ position(h::CFILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 ## constructing and opening streams ##
 
 # "own" means the descriptor will be closed with the IOStream
-function fdio(name::String, fd::Integer, own::Bool=false)
+function fdio(name::AbstractString, fd::Integer, own::Bool=false)
     s = IOStream(name)
     ccall(:ios_fd, Ptr{Void}, (Ptr{Void}, Clong, Int32, Int32),
           s.ios, fd, 0, own);
@@ -108,27 +108,27 @@ function fdio(name::String, fd::Integer, own::Bool=false)
 end
 fdio(fd::Integer, own::Bool=false) = fdio(string("<fd ",fd,">"), fd, own)
 
-function open(fname::String, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
+function open(fname::AbstractString, rd::Bool, wr::Bool, cr::Bool, tr::Bool, ff::Bool)
     s = IOStream(string("<file ",fname,">"))
     systemerror("opening file $fname",
                 ccall(:ios_file, Ptr{Void},
-                      (Ptr{Uint8}, Ptr{Uint8}, Int32, Int32, Int32, Int32),
+                      (Ptr{UInt8}, Ptr{UInt8}, Int32, Int32, Int32, Int32),
                       s.ios, fname, rd, wr, cr, tr) == C_NULL)
     if ff
         systemerror("seeking to end of file $fname", ccall(:ios_seek_end, FileOffset, (Ptr{Void},), s.ios) != 0)
     end
     return s
 end
-open(fname::String) = open(fname, true, false, false, false, false)
+open(fname::AbstractString) = open(fname, true, false, false, false, false)
 
-function open(fname::String, mode::String)
+function open(fname::AbstractString, mode::AbstractString)
     mode == "r"  ? open(fname, true , false, false, false, false) :
     mode == "r+" ? open(fname, true , true , false, false, false) :
     mode == "w"  ? open(fname, false, true , true , true , false) :
     mode == "w+" ? open(fname, true , true , true , true , false) :
     mode == "a"  ? open(fname, false, true , true , false, true ) :
     mode == "a+" ? open(fname, true , true , true , false, true ) :
-    error("invalid open mode: ", mode)
+    throw(ArgumentError("invalid open mode: $mode"))
 end
 
 function open(f::Function, args...)
@@ -142,14 +142,14 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::Uint8) = int(ccall(:ios_putc, Int32, (Uint8, Ptr{Void}), b, s.ios))
+write(s::IOStream, b::UInt8) = int(ccall(:ios_putc, Int32, (UInt8, Ptr{Void}), b, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
         if !iswritable(s)
-            error("attempt to write to a read-only IOStream")
+            throw(ArgumentError("write failed, IOStream is not writeable"))
         end
-        int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint),
+        int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                   s.ios, a, length(a)*sizeof(T)))
     else
         invoke(write, (IO, Array), s, a)
@@ -158,9 +158,9 @@ end
 
 function write(s::IOStream, p::Ptr, nb::Integer)
     if !iswritable(s)
-        error("attempt to write to a read-only IOStream")
+        throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    int(ccall(:ios_write, Uint, (Ptr{Void}, Ptr{Void}, Uint), s.ios, p, nb))
+    int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt), s.ios, p, nb))
 end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
@@ -180,7 +180,7 @@ end
 # num bytes available without blocking
 nb_available(s::IOStream) = ccall(:jl_nb_available, Int32, (Ptr{Void},), s.ios)
 
-function read(s::IOStream, ::Type{Uint8})
+function read(s::IOStream, ::Type{UInt8})
     b = ccall(:ios_getc, Int32, (Ptr{Void},), s.ios)
     if b == -1
         throw(EOFError())
@@ -191,8 +191,8 @@ end
 function read!{T}(s::IOStream, a::Array{T})
     if isbits(T)
         nb = length(a)*sizeof(T)
-        if ccall(:ios_readall, Uint,
-                 (Ptr{Void}, Ptr{Void}, Uint), s.ios, a, nb) < nb
+        if ccall(:ios_readall, UInt,
+                 (Ptr{Void}, Ptr{Void}, UInt), s.ios, a, nb) < nb
             throw(EOFError())
         end
     else
@@ -205,7 +205,7 @@ end
 
 function write(s::IOStream, c::Char)
     if !iswritable(s)
-        error("attempt to write to a read-only IOStream")
+        throw(ArgumentError("write failed, IOStream is not writeable"))
     end
     int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
 end
@@ -215,16 +215,16 @@ takebuf_string(s::IOStream) =
     ccall(:jl_takebuf_string, ByteString, (Ptr{Void},), s.ios)
 
 takebuf_array(s::IOStream) =
-    ccall(:jl_takebuf_array, Vector{Uint8}, (Ptr{Void},), s.ios)
+    ccall(:jl_takebuf_array, Vector{UInt8}, (Ptr{Void},), s.ios)
 
 function takebuf_raw(s::IOStream)
     sz = position(s)
-    buf = ccall(:jl_takebuf_raw, Ptr{Uint8}, (Ptr{Void},), s.ios)
+    buf = ccall(:jl_takebuf_raw, Ptr{UInt8}, (Ptr{Void},), s.ios)
     return buf, sz
 end
 
 function sprint(size::Integer, f::Function, args...)
-    s = IOBuffer(Array(Uint8,size), true, true)
+    s = IOBuffer(Array(UInt8,size), true, true)
     truncate(s,0)
     f(s, args...)
     takebuf_string(s)
@@ -234,11 +234,11 @@ sprint(f::Function, args...) = sprint(0, f, args...)
 
 write(x) = write(STDOUT::IO, x)
 
-function readuntil(s::IOStream, delim::Uint8)
-    ccall(:jl_readuntil, Array{Uint8,1}, (Ptr{Void}, Uint8), s.ios, delim)
+function readuntil(s::IOStream, delim::UInt8)
+    ccall(:jl_readuntil, Array{UInt8,1}, (Ptr{Void}, UInt8), s.ios, delim)
 end
 
-function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
+function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b))
     olb = lb = length(b)
     nr = 0
     while !eof(s) && nr < nb
@@ -246,8 +246,8 @@ function readbytes!(s::IOStream, b::Array{Uint8}, nb=length(b))
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
         end
-        nr += int(ccall(:ios_readall, Uint,
-                        (Ptr{Void}, Ptr{Void}, Uint),
+        nr += int(ccall(:ios_readall, UInt,
+                        (Ptr{Void}, Ptr{Void}, UInt),
                         s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
     end
     if lb > olb

@@ -11,9 +11,15 @@ end
 
 Nullable{T}(value::T) = Nullable{T}(value)
 
-function convert{S, T}(::Type{Nullable{T}}, x::Nullable{S})
-    return isnull(x) ? Nullable{T}() : Nullable(convert(T, get(x)))
+eltype{T}(::Type{Nullable{T}}) = T
+
+eltype{T}(x::Nullable{T}) = T
+
+function convert{T}(::Type{Nullable{T}}, x::Nullable)
+    return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end
+
+convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
 
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull
@@ -25,11 +31,11 @@ end
 
 get(x::Nullable) = x.isnull ? throw(NullException()) : x.value
 
-get{S, T}(x::Nullable{S}, y::T) = x.isnull ? convert(S, y) : x.value
+get{T}(x::Nullable{T}, y) = x.isnull ? convert(T, y) : x.value
 
 isnull(x::Nullable) = x.isnull
 
-function isequal{S, T}(x::Nullable{S}, y::Nullable{T})
+function isequal(x::Nullable, y::Nullable)
     if x.isnull && y.isnull
         return true
     elseif x.isnull || y.isnull
@@ -39,11 +45,11 @@ function isequal{S, T}(x::Nullable{S}, y::Nullable{T})
     end
 end
 
-=={S, T}(x::Nullable{S}, y::Nullable{T}) = throw(NullException())
+==(x::Nullable, y::Nullable) = throw(NullException())
 
-const nullablehash_seed = Uint === Uint64 ? 0x932e0143e51d0171 : 0xe51d0171
+const nullablehash_seed = UInt === UInt64 ? 0x932e0143e51d0171 : 0xe51d0171
 
-function hash(x::Nullable, h::Uint)
+function hash(x::Nullable, h::UInt)
     if x.isnull
         return h + nullablehash_seed
     else

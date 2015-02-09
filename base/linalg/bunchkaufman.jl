@@ -2,15 +2,17 @@
 ## LD for BunchKaufman, UL for CholeskyDense, LU for LUDense and
 ## define size methods for Factorization types using it.
 
-immutable BunchKaufman{T} <: Factorization{T}
-    LD::Matrix{T}
+immutable BunchKaufman{T,S<:AbstractMatrix} <: Factorization{T}
+    LD::S
     ipiv::Vector{BlasInt}
     uplo::Char
     symmetric::Bool
+    BunchKaufman(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = new(LD, ipiv, uplo, symmetric)
 end
+BunchKaufman{T}(LD::AbstractMatrix{T}, ipiv::Vector{BlasInt}, uplo::Char, symmetric::Bool) = BunchKaufman{T,typeof(LD)}(LD, ipiv, uplo, symmetric)
 
 function bkfact!{T<:BlasReal}(A::StridedMatrix{T}, uplo::Symbol=:U, symmetric::Bool=issym(A))
-    symmetric || error("The Bunch-Kaufman decomposition is only valid for symmetric matrices")
+    symmetric || throw(ArgumentError("Bunch-Kaufman decomposition is only valid for symmetric matrices"))
     LD, ipiv = LAPACK.sytrf!(char_uplo(uplo) , A)
     BunchKaufman(LD, ipiv, char_uplo(uplo), symmetric)
 end
@@ -29,7 +31,7 @@ size(B::BunchKaufman,d::Integer) = size(B.LD,d)
 issym(B::BunchKaufman) = B.symmetric
 ishermitian(B::BunchKaufman) = !B.symmetric
 
-inv{T<:BlasReal}(B::BunchKaufman{T})=copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
+inv{T<:BlasReal}(B::BunchKaufman{T}) = copytri!(LAPACK.sytri!(B.uplo, copy(B.LD), B.ipiv), B.uplo, true)
 
 function inv{T<:BlasComplex}(B::BunchKaufman{T})
     if issym(B)

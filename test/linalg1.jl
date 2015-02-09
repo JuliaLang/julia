@@ -3,6 +3,11 @@ debug = false
 import Base.LinAlg: BlasComplex, BlasFloat, BlasReal, QRPivoted
 
 n = 10
+
+# Split n into 2 parts for tests needing two matrices
+n1 = div(n, 2)
+n2 = 2*n1
+
 srand(1234321)
 
 a = rand(n,n)
@@ -28,7 +33,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
     asym = a'+a                  # symmetric indefinite
     apd  = a'*a                 # symmetric positive-definite
     ε = εa = eps(abs(float(one(eltya))))
-    
+
     for eltyb in (Float32, Float64, Complex64, Complex128, Int)
         b = eltyb == Int ? rand(1:5, n, 2) : convert(Matrix{eltyb}, eltyb <: Complex ? complex(breal, bimg) : breal)
         εb = eps(abs(float(one(eltyb))))
@@ -37,7 +42,7 @@ for eltya in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
 debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
 debug && println("(Automatic) upper Cholesky factor")
-    
+
     capd  = factorize(apd)
     r     = capd[:U]
     κ     = cond(apd, 1) #condition number
@@ -63,6 +68,14 @@ debug && println("(Automatic) upper Cholesky factor")
     @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
     @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
+    apos = asym[1,1]            # test chol(x::Number), needs x>0
+    @test_approx_eq cholfact(apos).UL √apos
+
+    # test chol of 2x2 Strang matrix
+    S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
+    U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+    @test_approx_eq full(chol(S)) full(U)
+
 debug && println("lower Cholesky factor")
     lapd = cholfact(apd, :L)
     @test_approx_eq full(lapd) apd
@@ -71,7 +84,7 @@ debug && println("lower Cholesky factor")
 
 debug && println("pivoted Choleksy decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
-        cpapd = cholfact(apd, pivot=true)
+        cpapd = cholfact(apd, :U, Val{true})
         @test rank(cpapd) == n
         @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
         @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
@@ -102,15 +115,15 @@ debug && println("(Automatic) Square LU decomposition")
     @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
 
 debug && println("Thin LU")
-    lua   = lufact(a[:,1:5])
-    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[:,1:5]
+    lua   = lufact(a[:,1:n1])
+    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[:,1:n1]
 
 debug && println("Fat LU")
-    lua   = lufact(a[1:5,:])
-    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[1:5,:]
+    lua   = lufact(a[1:n1,:])
+    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[1:n1,:]
 
 debug && println("QR decomposition (without pivoting)")
-    qra   = qrfact(a, pivot=false)
+    qra   = qrfact(a, Val{false})
     q,r   = qra[:Q], qra[:R]
     @test_approx_eq q'*full(q, thin=false) eye(n)
     @test_approx_eq q*full(q, thin=false)' eye(n)
@@ -118,23 +131,23 @@ debug && println("QR decomposition (without pivoting)")
     @test_approx_eq_eps a*(qra\b) b 3000ε
 
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
-    qrpa  = factorize(a[1:5,:])
+    qrpa  = factorize(a[1:n1,:])
     q,r = qrpa[:Q], qrpa[:R]
     if isa(qrpa,QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
-    @test_approx_eq q'*full(q, thin=false) eye(5)
-    @test_approx_eq q*full(q, thin=false)' eye(5)
-    @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:5,p] : a[1:5,:]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:5,:]
-    @test_approx_eq_eps a[1:5,:]*(qrpa\b[1:5]) b[1:5] 5000ε
+    @test_approx_eq q'*full(q, thin=false) eye(n1)
+    @test_approx_eq q*full(q, thin=false)' eye(n1)
+    @test_approx_eq q*r isa(qrpa,QRPivoted) ? a[1:n1,p] : a[1:n1,:]
+    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[1:n1,:]
+    @test_approx_eq_eps a[1:n1,:]*(qrpa\b[1:n1]) b[1:n1] 5000ε
 
 debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
-    qrpa  = factorize(a[:,1:5])
+    qrpa  = factorize(a[:,1:n1])
     q,r = qrpa[:Q], qrpa[:R]
     if isa(qrpa, QRPivoted) p = qrpa[:p] end # Reconsider if pivoted QR gets implemented in julia
     @test_approx_eq q'*full(q, thin=false) eye(n)
     @test_approx_eq q*full(q, thin=false)' eye(n)
-    @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:5]
-    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:5]
+    @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:n1]
+    @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:n1]
 
 debug && println("symmetric eigen-decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
@@ -143,9 +156,23 @@ debug && println("symmetric eigen-decomposition")
         @test_approx_eq v*Diagonal(d)*v' asym
         @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
         @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), 1:2) # same result, but checks that method works
         @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
+        eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
         @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
+
+        # relation to svdvals
+        @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
+
+        # cond
+        @test_approx_eq cond(Hermitian(asym)) cond(asym)
+
+        # rank
+        let
+            A = a[:,1:5]*a[:,1:5]'
+            @test rank(A) == rank(Hermitian(A))
+        end
     end
 
 debug && println("non-symmetric eigen decomposition")
@@ -156,19 +183,24 @@ debug && println("non-symmetric eigen decomposition")
 
 debug && println("symmetric generalized eigenproblem")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        a610 = a[:,6:10]
-        f = eigfact(asym[1:5,1:5], a610'a610)
-        @test_approx_eq asym[1:5,1:5]*f[:vectors] scale(a610'a610*f[:vectors], f[:values])
-        @test_approx_eq f[:values] eigvals(asym[1:5,1:5], a610'a610)
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym[1:5,1:5]/(a610'a610))) 200ε
+        asym_sg = asym[1:n1, 1:n1]
+        a_sg = a[:,n1+1:n2]
+        f = eigfact(asym_sg, a_sg'a_sg)
+        eig(asym_sg, a_sg'a_sg) # same result, but checks that method works
+        @test_approx_eq asym_sg*f[:vectors] scale(a_sg'a_sg*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(asym_sg, a_sg'a_sg)
+        @test_approx_eq_eps prod(f[:values]) prod(eigvals(asym_sg/(a_sg'a_sg))) 200ε
     end
 
 debug && println("Non-symmetric generalized eigenproblem")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        f = eigfact(a[1:5,1:5], a[6:10,6:10])
-        @test_approx_eq a[1:5,1:5]*f[:vectors] scale(a[6:10,6:10]*f[:vectors], f[:values])
-        @test_approx_eq f[:values] eigvals(a[1:5,1:5], a[6:10,6:10])
-        @test_approx_eq_eps prod(f[:values]) prod(eigvals(a[1:5,1:5]/a[6:10,6:10])) 50000ε
+        a1_nsg = a[1:n1, 1:n1]
+        a2_nsg = a[n1+1:n2, n1+1:n2]
+        f = eigfact(a1_nsg, a2_nsg)
+        eig(a1_nsg, a2_nsg) # same result, but checks that method works
+        @test_approx_eq a1_nsg*f[:vectors] scale(a2_nsg*f[:vectors], f[:values])
+        @test_approx_eq f[:values] eigvals(a1_nsg, a2_nsg)
+        @test_approx_eq_eps prod(f[:values]) prod(eigvals(a1_nsg/a2_nsg)) 50000ε
     end
 
 debug && println("Schur")
@@ -194,11 +226,29 @@ debug && println("Reorder Schur")
 
 debug && println("Generalized Schur")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        f = schurfact(a[1:5,1:5], a[6:10,6:10])
-        @test_approx_eq f[:Q]*f[:S]*f[:Z]' a[1:5,1:5]
-        @test_approx_eq f[:Q]*f[:T]*f[:Z]' a[6:10,6:10]
+        a1_sf = a[1:n1, 1:n1]
+        a2_sf = a[n1+1:n2, n1+1:n2]
+        f = schurfact(a1_sf, a2_sf)
+        @test_approx_eq f[:Q]*f[:S]*f[:Z]' a1_sf
+        @test_approx_eq f[:Q]*f[:T]*f[:Z]' a2_sf
         @test istriu(f[:S]) || iseltype(a,Real)
         @test istriu(f[:T]) || iseltype(a,Real)
+    end
+
+debug && println("Reorder Generalized Schur")
+    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in Julia
+        a1_sf = a[1:n1, 1:n1]
+        a2_sf = a[n1+1:n2, n1+1:n2]
+        NS = schurfact(a1_sf, a2_sf)
+        # Currently just testing with selecting gen eig values < 1
+        select = int(real(NS[:values] .* conj(NS[:values])) .< 1)
+        m = sum(select)
+        S = ordschur(NS, select)
+        # Make sure that the new factorization stil factors matrix
+        @test_approx_eq S[:Q]*S[:S]*S[:Z]' a1_sf
+        @test_approx_eq S[:Q]*S[:T]*S[:Z]' a2_sf
+        # Make sure that we have sorted it correctly
+        @test_approx_eq NS[:values][find(select)] S[:values][1:m]
     end
 
 debug && println("singular value decomposition")
@@ -209,9 +259,10 @@ debug && println("singular value decomposition")
 
 debug && println("Generalized svd")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        gsvd = svdfact(a,a[1:5,:])
+        a_svd = a[1:n1, :]
+        gsvd = svdfact(a,a_svd)
         @test_approx_eq gsvd[:U]*gsvd[:D1]*gsvd[:R]*gsvd[:Q]' a
-        @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a[1:5,:]
+        @test_approx_eq gsvd[:V]*gsvd[:D2]*gsvd[:R]*gsvd[:Q]' a_svd
     end
 
 debug && println("Solve square general system of equations")
@@ -221,58 +272,23 @@ debug && println("Solve square general system of equations")
     @test_throws DimensionMismatch b\b'
     @test norm(a*x - b, 1)/norm(b) < ε*κ*n*2 # Ad hoc, revisit!
 
-debug && println("Solve upper triangular system")
-    x = triu(a) \ b
-
-    #Test forward error [JIN 5705] if this is not a BigFloat
-    γ = n*ε/(1-n*ε)
-    if eltya != BigFloat
-        bigA = big(triu(a))
-        x̂ = bigA \ b
-        for i=1:size(b, 2)
-            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
-        end
-    end
-    #Test backward error [JIN 5705]
-    for i=1:size(b, 2)
-        @test norm(abs(b[:,i] - triu(a)*x[:,i]), Inf) <= γ * norm(triu(a), Inf) * norm(x[:,i], Inf)
-    end
-
-debug && println("Solve lower triangular system")
-    x = tril(a)\b
-
-    #Test forward error [JIN 5705] if this is not a BigFloat
-    γ = n*ε/(1-n*ε)
-    if eltya != BigFloat
-        bigA = big(tril(a))
-        x̂ = bigA \ b
-        for i=1:size(b, 2)
-            @test norm(x̂[:,i]-x[:,i], Inf)/norm(x[:,i], Inf) <= abs(condskeel(bigA, x[:,i])*γ/(1-condskeel(bigA)*γ))
-        end
-    end
-    #Test backward error [JIN 5705]
-    for i=1:size(b, 2)
-        @test norm(abs(b[:,i] - tril(a)*x[:,i]), Inf) <= γ * norm(tril(a), Inf) * norm(x[:,i], Inf)
-    end
-
-debug && println("Test null")
+debug && println("Test nullspace")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        a15null = null(a[:,1:5]')
-        @test rank([a[:,1:5] a15null]) == 10
-        @test_approx_eq_eps norm(a[:,1:5]'a15null, Inf) zero(eltya) 300ε
-        @test_approx_eq_eps norm(a15null'a[:,1:5], Inf) zero(eltya) 400ε
-        @test size(null(b), 2) == 0
+        a15null = nullspace(a[:,1:n1]')
+        @test rank([a[:,1:n1] a15null]) == 10
+        @test_approx_eq_eps norm(a[:,1:n1]'a15null, Inf) zero(eltya) 300ε
+        @test_approx_eq_eps norm(a15null'a[:,1:n1], Inf) zero(eltya) 400ε
+        @test size(nullspace(b), 2) == 0
     end
-
     end # for eltyb
 
 debug && println("\ntype of a: ", eltya, "\n")
 
 debug && println("Test pinv")
     if eltya != BigFloat # Revisit when implemented in julia
-        pinva15 = pinv(a[:,1:5])
-        @test_approx_eq a[:,1:5]*pinva15*a[:,1:5] a[:,1:5]
-        @test_approx_eq pinva15*a[:,1:5]*pinva15 pinva15
+        pinva15 = pinv(a[:,1:n1])
+        @test_approx_eq a[:,1:n1]*pinva15*a[:,1:n1] a[:,1:n1]
+        @test_approx_eq pinva15*a[:,1:n1]*pinva15 pinva15
     end
 
     # if isreal(a)
@@ -286,7 +302,7 @@ debug && println("Matrix square root")
 
 debug && println("Lyapunov/Sylvester")
     if eltya != BigFloat
-        let 
+        let
             x = lyap(a, a2)
             @test_approx_eq -a2 a*x + x*a'
             x2 = sylvester(a[1:3, 1:3], a[4:n, 4:n], a2[1:3,4:n])
@@ -298,3 +314,12 @@ end # for eltya
 #6941
 #@test (ones(10^7,4)*ones(4))[3] == 4.0
 
+# test diff, throw ArgumentError for invalid dimension argument
+let X = [3  9   5;
+         7  4   2;
+         2  1  10]
+    @test diff(X,1) == [4  -5 -3; -5  -3  8]
+    @test diff(X,2) == [6 -4; -3 -2; -1 9]
+    @test_throws ArgumentError diff(X,3)
+    @test_throws ArgumentError diff(X,-1)
+end

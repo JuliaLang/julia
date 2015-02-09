@@ -47,6 +47,6 @@ lib$(NAME).lib: $(OBJECTS)
 
 .c.obj:
 	$(CC) $(CFLAGS) $<
-	
+
 # vim: noexpandtab:ts=4:sw=4:
 

@@ -76,96 +76,25 @@ Supplying the number of expressions
 The first argument to both of these macros is the number of
 expressions, which must be an integer. When you're writing a function
 that you intend to work in multiple dimensions, this may not be
-something you want to hard-code.  Perhaps the most straightforward
-approach is to use the ``@ngenerate`` macro.
+something you want to hard-code. If you're writing code that
+you need to work with older julia versions, currently you
+should use the ``@ngenerate`` macro described in `an older version of this documentation <http://docs.julialang.org/en/release-0.3/devdocs/cartesian/#supplying-the-number-of-expressions>`_.
 
-Perhaps the easiest way to understand ``@ngenerate`` is to see it in
-action.  Here's a slightly cleaned up example::
+Starting in Julia 0.4-pre, the recommended approach is to use
+a ``stagedfunction``.  Here's an example::
 
-    julia> macroexpand(:(@ngenerate N typeof(A) function mysum{T,N}(A::Array{T,N})
-            s = zero(T)
-            @nloops N i A begin
-                s += @nref N A i
-            end
-            s
-        end))
-    :(begin
-        function mysum{T}(A::Array{T,1}) # none, line 2:
-            s = zero(T) # line 3:
-            for i_1 = 1:size(A,1) # line 293:
-                s += A[i_1]
-            end # line 295:
-            s
-        end
-        function mysum{T}(A::Array{T,2}) # none, line 2:
-            s = zero(T) # line 3:
-            for i_2 = 1:size(A,2) # line 293:
-                for i_1 = 1:size(A,1) # line 293:
-                    s += A[i_1,i_2]
-                end # line 295:
-            end # line 295:
-            s
-        end
-        function mysum{T}(A::Array{T,3}) # none, line 2:
-            s = zero(T) # line 3:
-            for i_3 = 1:size(A,3) # line 293:
-                for i_2 = 1:size(A,2) # line 293:
-                    for i_1 = 1:size(A,1) # line 293:
-                        s += A[i_1,i_2,i_3]
-                    end # line 295:
-                end # line 295:
-            end # line 295:
-            s
-        end
-        function mysum{T}(A::Array{T,4}) # none, line 2:
-            ...
-        end
-        let mysum_cache = Dict{Int,Function}() # line 113:
-            function mysum{T,N}(A::Array{T,N}) # cartesian.jl, line 100:
-                if !(haskey(mysum_cache,N)) # line 102:
-                    localfunc = quote
-		        function _F_{T}(A::Array{T,$N})
-                            s = zero(T)
-                            @nloops $N i A begin
-                                s += @nref $N A i
-                            end
-                            s
-                        end
-                    end
-		    mysum_cache[N] = eval(quote
-                        local _F_
-                        $localfunc
-                        _F_
-                    end)
-                end
-                mysum_cache[N](A)::typeof(A)
-            end
-        end
-    end)
+  stagedfunction mysum{T,N}(A::Array{T,N})
+      quote
+          s = zero(T)
+          @nloops $N i A begin
+              s += @nref $N A i
+          end
+          s
+      end
+  end
 
-You can see that ``@ngenerate`` causes explicit versions to be
-generated for dimensions 1 to 4 (a setting controlled by the constant
-``CARTESIAN_DIMS``).  To allow arbitrary-dimensional arrays to be
-handled, it also generates a version in which different methods are
-cached in a dictionary.  If a given method has not yet been generated,
-it creates a version specific to that dimensionality and then stores
-it in the dictionary.  Creating the method is slow---it involves
-generating expressions and then evaluating them---but once created the
-function can be looked up from the cache, and is reasonably efficient
-(but still less efficient than the versions generated for explicit
-dimensionality).
-
-The arguments to ``@ngenerate`` are:
-
-- The symbol of the variable that will be used for generating
-  different versions (in the example, ``N``)
-- The return type of the function (in the example,
-  ``typeof(A)``). This is not used for the versions that are generated
-  for specific ``N``, but is needed for the dictionary-backed
-  version.  Julia cannot infer the return type of the function looked
-  up from the dictionary.
-- The actual function declaration.  Use ``N`` as you would a normal
-  parameter.
+Naturally, you can also prepare expressions or perform calculations
+before the ``quote`` block.
 
 
 Anonymous-function expressions as macro arguments
@@ -206,30 +135,6 @@ Anonymous-function expressions have many uses in practice.
 
 Macro reference
 ~~~~~~~~~~~~~~~
-
-Macros for creating functions
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-.. function:: @ngenerate Nsym returntypeexpr functiondeclexpr
-
-    Generate versions of a function for different values of ``Nsym``.
-
-.. function:: @nsplat Nsym functiondeclexpr
-              @nsplat Nsym dimrange functiondeclexpr
-
-    Generate explicit versions of a function for different numbers of
-    arguments.  For example::
-
-        @nsplat N 2:3 absgetindex(A, I::NTuple{N,Real}...) = abs(getindex(A, I...))
-
-    generates::
-
-        absgetindex(A, I_1::Real, I_2::Real) = abs(getindex(A, I_1, I_2))
-        absgetindex(A, I_1::Real, I_2::Real, I_3::Real) = abs(getindex(A, I_1, I_2, I_3))
-
-
-Macros for function bodies
-^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 .. function:: @nloops N itersym rangeexpr bodyexpr
               @nloops N itersym rangeexpr preexpr bodyexpr
@@ -301,13 +206,3 @@ Macros for function bodies
         else
 	    println("All OK")
 	end
-
-
-Frequently asked questions
-^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-
-I got an error ``ERROR: N not defined`` when using ``@ngenerate``. Why?
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-Most likely you forgot to define your function with ``N`` as a type parameter, e.g., ``@ngenerate N returntype myfunc{N}(...)``.

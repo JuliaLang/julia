@@ -1,42 +1,4 @@
-se33 = speye(3)
-do33 = ones(3)
-@test isequal(se33 \ do33, do33)
-
-# based on deps/Suitesparse-4.0.2/UMFPACK/Demo/umfpack_di_demo.c
-
-using Base.LinAlg.UMFPACK.increment!
-
-A = sparse(increment!([0,4,1,1,2,2,0,1,2,3,4,4]),
-           increment!([0,4,0,2,1,2,1,4,3,2,1,2]),
-           [2.,1.,3.,4.,-1.,-3.,3.,6.,2.,1.,4.,2.], 5, 5)
-lua = lufact(A)
-L,U,p,q,Rs = lua[:(:)]
-@test_approx_eq scale(Rs,A)[p,q] L*U
-
-@test_approx_eq det(lua) det(full(A))
-
-b = [8., 45., -3., 3., 19.]
-x = lua\b
-@test_approx_eq x float([1:5;])
-
-@test norm(A*x-b,1) < eps(1e4)
-
-b = [8., 20., 13., 6., 17.]
-x = lua'\b
-@test_approx_eq x float([1:5;])
-
-@test norm(A'*x-b,1) < eps(1e4)
-
-Ac = complex(A,A)
-lua = lufact(Ac)
-L,U,p,q,Rs = lua[:(:)]
-@test_approx_eq scale(Rs,Ac)[p,q] L*U 
-
-#4523 - complex sparse \
-x = speye(2) + im * speye(2)
-@test_approx_eq ((lufact(x) \ ones(2)) * x) (complex(ones(2)))
-
-using Base.LinAlg.CHOLMOD
+using Base.SparseMatrix.CHOLMOD
 
 # based on deps/SuiteSparse-4.0.2/CHOLMOD/Demo/
 
@@ -69,7 +31,7 @@ using Base.LinAlg.CHOLMOD
 ## residual  1.3e-19 (|Ax-b|/(|A||x|+|b|)) after iterative refinement
 ## rcond     9.5e-06
 
-A = CholmodSparse!(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,67,71,77,84,90,93,95,
+A = CholmodSparse(int32([0,1,2,3,6,9,12,15,18,20,25,30,34,36,39,43,47,52,58,62,67,71,77,84,90,93,95,
                           98,103,106,110,115,119,123,130,136,142,146,150,155,161,167,174,182,189,197,
                           207,215,224]), # zero-based column pointers
                    int32([0,1,2,1,2,3,0,2,4,0,1,5,0,4,6,1,3,7,2,8,1,3,7,8,9,0,4,6,8,10,5,6,7,11,6,12,
@@ -138,7 +100,7 @@ x = chma\B
 @test_approx_eq x.mat ones(size(x))
 
 #lp_afiro example
-afiro = CholmodSparse!(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,25,27,29,33,37,
+afiro = CholmodSparse(int32([0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,23,25,27,29,33,37,
                               41,45,47,49,51,53,55,57,59,63,65,67,69,71,75,79,83,87,89,91,93,95,97,
                               99,101,102]),
                        int32([2,3,6,7,8,9,12,13,16,17,18,19,20,21,22,23,24,25,26,0,1,2,23,0,3,0,21,
@@ -160,6 +122,6 @@ pred = afiro'*sol
 @test norm(afiro * (y.mat - pred.mat)) < 1e-8
 
 # explicit zeros
-a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0]) 
+a = SparseMatrixCSC(2,2,[1,3,5],[1,2,1,2],[1.0,0.0,0.0,1.0])
 @test_approx_eq lufact(a)\[2.0,3.0] [2.0,3.0]
 @test_approx_eq cholfact(a)\[2.0,3.0] [2.0,3.0]

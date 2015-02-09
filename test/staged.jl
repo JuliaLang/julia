@@ -53,8 +53,17 @@ splat2(1:5, 3:3)
 splat2(3, 3:5)
 @test takebuf_string(stagediobuf) == "($intstr,UnitRange{$intstr})"
 
-
+# varargs specialization with parametric stagedfunctions (issue #8944)
+stagedfunction splat3{T,N}(A::AbstractArray{T,N}, indx::RangeIndex...)
+    print(stagediobuf, indx)
+    :(nothing)
+end
 A = rand(5,5,3);
+splat3(A, 1:2, 1:2, 1)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},UnitRange{$intstr},$intstr)"
+splat3(A, 1:2, 1, 1:2)
+@test takebuf_string(stagediobuf) == "(UnitRange{$intstr},$intstr,UnitRange{$intstr})"
+
 B = slice(A, 1:3, 2, 1:3);
 stagedfunction mygetindex(S::SubArray, indexes::Real...)
     T, N, A, I = S.parameters
@@ -87,3 +96,19 @@ stagedfunction h(x)
 end
 end
 @test MyTest8497.h(3) == 4
+
+# static parameters (issue #8505)
+stagedfunction foo1{N,T}(a::Array{T,N})
+    "N = $N, T = $T"
+end
+stagedfunction foo2{T,N}(a::Array{T,N})
+    "N = $N, T = $T"
+end
+@test foo1(randn(3,3)) == "N = 2, T = Float64"
+@test foo2(randn(3,3)) == "N = 2, T = Float64"
+
+# issue #9088
+stagedfunction f9088(x, a=5)
+    :(x+a)
+end
+@test f9088(7) == 12

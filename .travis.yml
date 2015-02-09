@@ -27,12 +27,13 @@ before_install:
         sudo apt-get install patchelf gfortran llvm-3.3-dev libsuitesparse-dev libopenblas-dev liblapack-dev libarpack2-dev libfftw3-dev libgmp-dev libpcre3-dev libunwind7-dev libopenlibm-dev librmath-dev libmpfr-dev -y;
       elif [ `uname` = "Darwin" ]; then
         brew tap staticfloat/julia;
-        brew install -v --only-dependencies --HEAD julia;
+        brew rm --force $(brew deps --HEAD julia);
         brew update;
-        brew upgrade gcc;
+        sed -i '' -e "s@https://downloads.sf.net/project/machomebrew/Bottles@http://cache.e.ip.saba.us@" /usr/local/Library/Homebrew/software_spec.rb;
+        brew install -v --only-dependencies --HEAD julia;
         BUILDOPTS="USECLANG=1 LLVM_CONFIG=$(brew --prefix llvm33-julia)/bin/llvm-config-3.3 VERBOSE=1 USE_BLAS64=0 SUITESPARSE_INC=-I$(brew --prefix suite-sparse-julia)/include";
         BUILDOPTS="$BUILDOPTS LIBBLAS=-lopenblas LIBBLASNAME=libopenblas LIBLAPACK=-lopenblas LIBLAPACKNAME=libopenblas";
-        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND; do
+        for lib in LLVM ZLIB SUITESPARSE ARPACK BLAS FFTW LAPACK GMP MPFR PCRE LIBUNWIND LIBGIT2; do
             export BUILDOPTS="$BUILDOPTS USE_SYSTEM_$lib=1";
         done;
         export LDFLAGS="-L$(brew --prefix openblas-julia)/lib -L$(brew --prefix suite-sparse-julia)/lib";
@@ -40,6 +41,7 @@ before_install:
         make $BUILDOPTS -C contrib -f repackage_system_suitesparse4.make;
       fi
 script:
+    - make check-whitespace || exit 1
     - make $BUILDOPTS prefix=/tmp/julia install
     - if [ `uname` = "Darwin" ]; then
         for name in spqr umfpack colamd cholmod amd suitesparse_wrapper; do
@@ -47,6 +49,7 @@ script:
         done;
       fi
     - cd .. && mv julia julia2
+    - cp /tmp/julia/lib/julia/sys.ji local.ji && /tmp/julia/bin/julia-debug -J local.ji -e 'true' && rm local.ji
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."

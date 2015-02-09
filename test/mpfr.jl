@@ -26,14 +26,14 @@ y = BigFloat(12//1)
 x = BigFloat(12)
 y = BigFloat(30)
 @test x + y == BigFloat(42)
-@test x + typemax(Uint128) == x + BigInt(typemax(Uint128))
+@test x + typemax(UInt128) == x + BigInt(typemax(UInt128))
 @test x + typemax(Int128) == x + BigInt(typemax(Int128))
 
 # -
 x = BigFloat(12)
 y = BigFloat(-30)
 @test x - y == BigFloat(42)
-@test x - typemax(Uint128) == x - BigInt(typemax(Uint128))
+@test x - typemax(UInt128) == x - BigInt(typemax(UInt128))
 @test x - typemax(Int128) == x - BigInt(typemax(Int128))
 
 # *
@@ -41,14 +41,14 @@ x = BigFloat(6)
 y = BigFloat(9)
 @test x * y != BigFloat(42)
 @test x * y == BigFloat(54)
-@test x * typemax(Uint128) == x * BigInt(typemax(Uint128))
+@test x * typemax(UInt128) == x * BigInt(typemax(UInt128))
 @test x * typemax(Int128) == x * BigInt(typemax(Int128))
 
 # /
 x = BigFloat(9)
 y = BigFloat(6)
 @test x / y == BigFloat(9/6)
-@test x / typemax(Uint128) == x / BigInt(typemax(Uint128))
+@test x / typemax(UInt128) == x / BigInt(typemax(UInt128))
 @test x / typemax(Int128) == x / BigInt(typemax(Int128))
 
 # iterated arithmetic
@@ -149,6 +149,7 @@ y = BigFloat(1)
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
 @test convert(Float32, BigFloat(0.5)) == float32(0.5)
+@test convert(Float16, BigFloat(0.5)) == float16(0.5)
 
 # exponent
 x = BigFloat(0)
@@ -337,29 +338,29 @@ y = BigFloat(42)
 @test_throws InexactError convert(Int32, x)
 @test_throws InexactError convert(Int64, x)
 @test_throws InexactError convert(BigInt, x)
-@test_throws InexactError convert(Uint32, x)
-@test_throws InexactError convert(Uint32, x)
+@test_throws InexactError convert(UInt32, x)
+@test_throws InexactError convert(UInt32, x)
 @test convert(Int32, y) == 42
 @test convert(Int64, y) == 42
 @test convert(BigInt, y) == 42
-@test convert(Uint32, y) == 42
-@test convert(Uint32, y) == 42
+@test convert(UInt32, y) == 42
+@test convert(UInt32, y) == 42
 
-# iround
+# round
 x = BigFloat(42.42)
 y = with_bigfloat_precision(256) do
     BigFloat("9223372036854775809.2324")
 end
 z = BigInt("9223372036854775809")
-@test iround(x) == 42
-@test iround(y) == z
-@test typeof(iround(Uint8, x)) == Uint8 && iround(Uint8, x) == 0x2a
-@test typeof(iround(Uint16, x)) == Uint16 && iround(Uint16, x) == 0x2a
-@test typeof(iround(Uint32, x)) == Uint32 && iround(Uint32, x) == 0x2a
-@test typeof(iround(Uint64, x)) == Uint64 && iround(Uint64, x) == 0x2a
-@test typeof(iround(Int64, x)) == Int64 && iround(Int64, x) == 42
-@test typeof(iround(Int, x)) == Int && iround(Int, x) == 42
-@test typeof(iround(Uint, x)) == Uint && iround(Uint, x) == 0x2a
+@test round(Integer,x) == 42
+@test round(Integer,y) == z
+@test typeof(round(UInt8, x)) == UInt8 && round(UInt8, x) == 0x2a
+@test typeof(round(UInt16, x)) == UInt16 && round(UInt16, x) == 0x2a
+@test typeof(round(UInt32, x)) == UInt32 && round(UInt32, x) == 0x2a
+@test typeof(round(UInt64, x)) == UInt64 && round(UInt64, x) == 0x2a
+@test typeof(round(Int64, x)) == Int64 && round(Int64, x) == 42
+@test typeof(round(Int, x)) == Int && round(Int, x) == 42
+@test typeof(round(UInt, x)) == UInt && round(UInt, x) == 0x2a
 
 # string representation
 str = "1.000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000012e+00"
@@ -445,8 +446,8 @@ with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 
-# ceil / iceil / floor / ifloor / trunc / itrunc
-x = BigFloat("28273.2312487489135135135")
+# ceil / floor / trunc
+x = BigFloat("28273.7312487489135135135")
 y = BigInt(28273)
 z = BigInt(28274)
 a = BigFloat("123456789012345678901234567890.2414")
@@ -459,75 +460,90 @@ c = BigInt("123456789012345678901234567891")
 @test trunc(x) == y
 @test typeof(trunc(x)) == BigFloat
 
-@test iceil(x) == z
-@test typeof(iceil(x)) == BigInt
-@test ifloor(x) == y
-@test typeof(ifloor(x)) == BigInt
-@test itrunc(x) == y
-@test typeof(itrunc(x)) == BigInt
+@test ceil(Integer,x) == z
+@test typeof(ceil(Integer,x)) == BigInt
+@test floor(Integer,x) == y
+@test typeof(floor(Integer,x)) == BigInt
+@test trunc(Integer,x) == y
+@test typeof(trunc(Integer,x)) == BigInt
 
-@test iceil(Int64, x) == int64(z)
-@test typeof(iceil(Int64, x)) == Int64
-@test ifloor(Int64, x) == int64(y)
-@test typeof(ifloor(Int64, x)) == Int64
-@test itrunc(Int64, x) == int64(y)
-@test typeof(itrunc(Int64, x)) == Int64
+@test ceil(Int64, x) == int64(z)
+@test typeof(ceil(Int64, x)) == Int64
+@test floor(Int64, x) == int64(y)
+@test typeof(floor(Int64, x)) == Int64
+@test trunc(Int64, x) == int64(y)
+@test typeof(trunc(Int64, x)) == Int64
 
-@test iceil(Int32, x) == int32(z)
-@test typeof(iceil(Int32, x)) == Int32
-@test ifloor(Int32, x) == int32(y)
-@test typeof(ifloor(Int32, x)) == Int32
-@test itrunc(Int32, x) == int32(y)
-@test typeof(itrunc(Int32, x)) == Int32
+@test ceil(Int32, x) == int32(z)
+@test typeof(ceil(Int32, x)) == Int32
+@test floor(Int32, x) == int32(y)
+@test typeof(floor(Int32, x)) == Int32
+@test trunc(Int32, x) == int32(y)
+@test typeof(trunc(Int32, x)) == Int32
 
-@test iceil(Int16, x) == int16(z)
-@test typeof(iceil(Int16, x)) == Int16
-@test ifloor(Int16, x) == int16(y)
-@test typeof(ifloor(Int16, x)) == Int16
-@test itrunc(Int16, x) == int16(y)
-@test typeof(itrunc(Int16, x)) == Int16
+@test ceil(Int16, x) == int16(z)
+@test typeof(ceil(Int16, x)) == Int16
+@test floor(Int16, x) == int16(y)
+@test typeof(floor(Int16, x)) == Int16
+@test trunc(Int16, x) == int16(y)
+@test typeof(trunc(Int16, x)) == Int16
 
-#@test iceil(Int8, x) == int8(z)
-#@test typeof(iceil(Int8, x)) == Int8
-#@test ifloor(Int8, x) == int8(y)
-#@test typeof(ifloor(Int8, x)) == Int8
-#@test itrunc(Int8, x) == int8(y)
-#@test typeof(itrunc(Int8, x)) == Int8
+#@test ceil(Int8, x) == int8(z)
+#@test typeof(ceil(Int8, x)) == Int8
+#@test floor(Int8, x) == int8(y)
+#@test typeof(floor(Int8, x)) == Int8
+#@test trunc(Int8, x) == int8(y)
+#@test typeof(trunc(Int8, x)) == Int8
 
-@test iceil(Uint64, x) == uint64(z)
-@test typeof(iceil(Uint64, x)) == Uint64
-@test ifloor(Uint64, x) == uint64(y)
-@test typeof(ifloor(Uint64, x)) == Uint64
-@test itrunc(Uint64, x) == uint64(y)
-@test typeof(itrunc(Uint64, x)) == Uint64
+@test ceil(UInt64, x) == uint64(z)
+@test typeof(ceil(UInt64, x)) == UInt64
+@test floor(UInt64, x) == uint64(y)
+@test typeof(floor(UInt64, x)) == UInt64
+@test trunc(UInt64, x) == uint64(y)
+@test typeof(trunc(UInt64, x)) == UInt64
 
-@test iceil(Uint32, x) == uint32(z)
-@test typeof(iceil(Uint32, x)) == Uint32
-@test ifloor(Uint32, x) == uint32(y)
-@test typeof(ifloor(Uint32, x)) == Uint32
-@test itrunc(Uint32, x) == uint32(y)
-@test typeof(itrunc(Uint32, x)) == Uint32
+@test ceil(UInt32, x) == uint32(z)
+@test typeof(ceil(UInt32, x)) == UInt32
+@test floor(UInt32, x) == uint32(y)
+@test typeof(floor(UInt32, x)) == UInt32
+@test trunc(UInt32, x) == uint32(y)
+@test typeof(trunc(UInt32, x)) == UInt32
 
-@test iceil(Uint16, x) == uint16(z)
-@test typeof(iceil(Uint16, x)) == Uint16
-@test ifloor(Uint16, x) == uint16(y)
-@test typeof(ifloor(Uint16, x)) == Uint16
-@test itrunc(Uint16, x) == uint16(y)
-@test typeof(itrunc(Uint16, x)) == Uint16
+@test ceil(UInt16, x) == uint16(z)
+@test typeof(ceil(UInt16, x)) == UInt16
+@test floor(UInt16, x) == uint16(y)
+@test typeof(floor(UInt16, x)) == UInt16
+@test trunc(UInt16, x) == uint16(y)
+@test typeof(trunc(UInt16, x)) == UInt16
 
-#@test iceil(Uint8, x) == uint8(z)
-#@test typeof(iceil(Uint8, x)) == Uint8
-#@test ifloor(Uint8, x) == uint8(y)
-#@test typeof(ifloor(Uint8, x)) == Uint8
-#@test itrunc(Uint8, x) == uint8(y)
-#@test typeof(itrunc(Uint8, x)) == Uint8
+#@test ceil(UInt8, x) == uint8(z)
+#@test typeof(ceil(UInt8, x)) == UInt8
+#@test floor(UInt8, x) == uint8(y)
+#@test typeof(floor(UInt8, x)) == UInt8
+#@test trunc(UInt8, x) == uint8(y)
+#@test typeof(trunc(UInt8, x)) == UInt8
 
-@test iceil(a) == c
-@test typeof(iceil(a)) == BigInt
-@test ifloor(a) == b
-@test typeof(ifloor(a)) == BigInt
-@test itrunc(a) == b
-@test typeof(itrunc(a)) == BigInt
+@test ceil(Integer,a) == c
+@test typeof(ceil(Integer,a)) == BigInt
+@test floor(Integer,a) == b
+@test typeof(floor(Integer,a)) == BigInt
+@test trunc(Integer,a) == b
+@test typeof(trunc(Integer,a)) == BigInt
+
+@test ceil(Int128,a) == c
+@test typeof(ceil(Int128,a)) == Int128
+@test floor(Int128,a) == b
+@test typeof(floor(Int128,a)) == Int128
+@test trunc(Int128,a) == b
+@test typeof(trunc(Int128,a)) == Int128
+
+@test ceil(UInt128,a) == c
+@test typeof(ceil(UInt128,a)) == UInt128
+@test floor(UInt128,a) == b
+@test typeof(floor(UInt128,a)) == UInt128
+@test trunc(UInt128,a) == b
+@test typeof(trunc(UInt128,a)) == UInt128
+
 
 # basic arithmetic
 # Signed addition
@@ -728,11 +744,11 @@ d = BigFloat("-24.69135780242")
 @test typeof(BigFloat(typemax(Int128))) == BigFloat
 
 @test typeof(BigFloat(true)) == BigFloat
-@test typeof(BigFloat(typemax(Uint8))) == BigFloat
-@test typeof(BigFloat(typemax(Uint16))) == BigFloat
-@test typeof(BigFloat(typemax(Uint32))) == BigFloat
-@test typeof(BigFloat(typemax(Uint64))) == BigFloat
-@test typeof(BigFloat(typemax(Uint128))) == BigFloat
+@test typeof(BigFloat(typemax(UInt8))) == BigFloat
+@test typeof(BigFloat(typemax(UInt16))) == BigFloat
+@test typeof(BigFloat(typemax(UInt32))) == BigFloat
+@test typeof(BigFloat(typemax(UInt64))) == BigFloat
+@test typeof(BigFloat(typemax(UInt128))) == BigFloat
 
 @test typeof(BigFloat(realmax(Float32))) == BigFloat
 @test typeof(BigFloat(realmax(Float64))) == BigFloat
@@ -775,8 +791,8 @@ tol = 1e-3
 # issue #5963
 @test typemax(Int128) == convert(BigFloat, typemax(Int128))
 @test typemax(Int128)  * big(1.0) == convert(BigFloat, typemax(Int128))
-@test typemax(Uint64)  * big(1.0) == big(typemax(Uint64))
-@test typemax(Uint128) * big(1.0) == big(typemax(Uint128))
+@test typemax(UInt64)  * big(1.0) == big(typemax(UInt64))
+@test typemax(UInt128) * big(1.0) == big(typemax(UInt128))
 
 # issue #3399
 i1 = BigInt(10)^int32(1000)
@@ -789,7 +805,7 @@ f = BigFloat(10)^int32(1000)
 @test f > i1
 @test f > i2
 
-i3 = itrunc(f)
+i3 = trunc(Integer,f)
 @test i3 == f
 @test i3+1 > f
 @test i3+1 >= f
@@ -798,5 +814,10 @@ err(z, x) = abs(z - x) / abs(x)
 @test 1e-60 > err(eta(BigFloat("1.005")), BigFloat("0.693945708117842473436705502427198307157819636785324430166786"))
 @test 1e-60 > err(exp(eta(big(1.0))), 2.0)
 
-# issue 8318
+# issue #8318
 @test convert(Int64,big(500_000_000_000_000.)) == 500_000_000_000_000
+
+# issue #9816
+# check exponent range is set to max possible
+@test MPFR.get_emin() == MPFR.get_emin_min()
+@test MPFR.get_emax() == MPFR.get_emax_max()

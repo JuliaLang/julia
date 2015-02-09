@@ -1,2 +1,2 @@
--e git+https://github.com/JuliaLang/JuliaDoc.git#egg=JuliaDoc
--e git+https://github.com/snide/sphinx_rtd_theme.git#egg=sphinx_rtd_theme
+-e git+https://github.com/JuliaLang/JuliaDoc.git@15e0f6f97ecd08f93504b639956047968e3e6a42#egg=JuliaDoc
+-e git+https://github.com/snide/sphinx_rtd_theme.git@21e875d3a53ce897089ad690d897252f6063349d#egg=sphinx_rtd_theme

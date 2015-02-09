@@ -6,6 +6,15 @@
 @test Base.mapfoldl(abs2, -, 2:5) == -46
 @test Base.mapfoldl(abs2, -, 10, 2:5) == -44
 
+@test_approx_eq Base.mapfoldl(abs2, /, 2:5 ) 1/900
+@test_approx_eq Base.mapfoldl(abs2, /, 10, 2:5 ) 1/1440
+
+@test Base.mapfoldl((x)-> x $ true, &, true, [true false true false false]) == false
+@test Base.mapfoldl((x)-> x $ true, &, [true false true false false]) == false
+
+@test Base.mapfoldl((x)-> x $ true, |, [true false true false false]) == true
+@test Base.mapfoldl((x)-> x $ true, |, false, [true false true false false]) == true
+
 @test foldr(-, 1:5) == 3
 @test foldr(-, 10, 1:5) == -7
 
@@ -39,7 +48,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws ErrorException sum(sin, Int[])
+@test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -83,7 +92,7 @@ for f in (sum2, sum5, sum6, sum9, sum10)
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
-    @test_throws ErrorException f(Int[])
+    @test_throws ArgumentError f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
@@ -93,16 +102,19 @@ end
 
 # prod
 
-prod(Int[]) === 0
-prod(Int8[]) === 0
-prod(Float64[]) === 0.0
+@test prod(Int[]) === 1
+@test prod(Int8[]) === 1
+@test prod(Float64[]) === 1.0
 
-prod([3]) === 0
-prod([int8(3)]) === 0
-prod([3.0]) === 0.0
+@test prod([3]) === 3
+@test prod([int8(3)]) === 3
+@test prod([3.0]) === 3.0
 
-prod(z) === 120
-prod(fz) === 120.0
+@test prod(z) === 120
+@test prod(fz) === 120.0
+
+@test prod(1:big(16)) == big(20922789888000)
+@test prod(big(typemax(Int64)):big(typemax(Int64))+16) == BigInt("25300281663413827620486300433089141956148633919452440329174083959168114253708467653081909888307573358090001734956158476311046124934597861626299416732205795533726326734482449215730132757595422510465791525610410023802664753402501982524443370512346073948799084936298007821432734720004795146875180123558814648586972474376192000")
 
 # check type-stability
 prod2(itr) = invoke(prod, (Any,), itr)
@@ -113,8 +125,8 @@ prod2(itr) = invoke(prod, (Any,), itr)
 
 # maximum & minimum & extrema
 
-@test_throws ErrorException maximum(Int[])
-@test_throws ErrorException minimum(Int[])
+@test_throws ArgumentError maximum(Int[])
+@test_throws ArgumentError minimum(Int[])
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -137,7 +149,7 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
 @test maxabs(Int[]) == 0
-@test_throws ErrorException Base.minabs(Int[])
+@test_throws ArgumentError Base.minabs(Int[])
 
 @test maxabs(-2) == 2
 @test minabs(-2) == 2
@@ -146,6 +158,10 @@ prod2(itr) = invoke(prod, (Any,), itr)
 
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9
+
+@test maximum(Int16[1]) === Int16(1)
+@test maximum(collect(Int16(1):Int16(100))) === Int16(100)
+@test maximum(Int32[1,2]) === Int32(2)
 
 # any & all
 
@@ -187,6 +203,11 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test in(0, 1:3) == false
 @test in(1, 1:3) == true
 @test in(2, 1:3) == true
+
+# contains
+
+@test contains("quick fox", "fox") == true
+@test contains("quick fox", "lazy dog") == false
 
 # count & countnz
 

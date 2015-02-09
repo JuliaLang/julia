@@ -4,7 +4,7 @@ function collect_eachmatch(re, str, overlap=false)
 end
 
 for f in [matchall, collect_eachmatch]
-    @test f(r"a?b?", "asbd") == ["a","","b","",""] == f(r"""a?b?""", "asbd") 
+    @test f(r"a?b?", "asbd") == ["a","","b","",""] == f(r"""a?b?""", "asbd")
     @test f(r"a?b?", "asbd", true) == ["a","","b","",""]
     @test f(r"\w+", "hello", true) == ["hello","ello","llo","lo","o"]
     @test f(r".\s", "x \u2200 x \u2203 y") == ["x ", "∀ ", "x ", "∃ "]
@@ -16,6 +16,8 @@ for f in [matchall, collect_eachmatch]
     @test f(r"aa", "aaaa", true) == ["aa", "aa", "aa"]
     @test f(r"", "aaa") == ["", "", "", ""]
     @test f(r"", "aaa", true) == ["", "", "", ""]
+    @test f(r"GCG","GCGCG") == ["GCG"]
+    @test f(r"GCG","GCGCG",true) == ["GCG","GCG"]
 end
 
 # Issue 8278
@@ -23,3 +25,7 @@ target = """71.163.72.113 - - [30/Jul/2014:16:40:55 -0700] "GET emptymind.org/th
 pat = r"""([\d\.]+) ([\w.-]+) ([\w.-]+) (\[.+\]) "([^"\r\n]*|[^"\r\n\[]*\[.+\][^"]+|[^"\r\n]+.[^"]+)" (\d{3}) (\d+|-) ("(?:[^"]|\")+)"? ("(?:[^"]|\")+)"?"""
 match(pat, target)
 
+# Issue 9545 (32 bit)
+buf = PipeBuffer()
+show(buf, r"")
+@test readall(buf) == "r\"\""

@@ -1,6 +1,6 @@
 function temp_pkg_dir(fn::Function)
   # Used in tests below to setup and teardown a sandboxed package directory
-  const tmpdir = ENV["JULIA_PKGDIR"] = abspath(string("tmp.",randstring()))
+  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
   @test !isdir(Pkg.dir())
   try
     Pkg.init()
@@ -24,7 +24,7 @@ end
 
 # testing a package with test dependencies causes them to be installed for the duration of the test
 temp_pkg_dir() do
-  Pkg.generate("PackageWithTestDependencies", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithTestDependencies", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
   @test [keys(Pkg.installed())...] == ["PackageWithTestDependencies"]
 
   isdir(Pkg.dir("PackageWithTestDependencies","test")) || mkdir(Pkg.dir("PackageWithTestDependencies","test"))
@@ -47,7 +47,7 @@ end
 
 # testing a package with no runtests.jl errors
 temp_pkg_dir() do
-  Pkg.generate("PackageWithNoTests", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithNoTests", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
 
   if isfile(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
     rm(Pkg.dir("PackageWithNoTests", "test", "runtests.jl"))
@@ -62,7 +62,7 @@ end
 
 # testing a package with failing tests errors
 temp_pkg_dir() do
-  Pkg.generate("PackageWithFailingTests", "MIT", config=["user.name"=>"Julia Test", "user.email"=>"test@julialang.org"])
+  Pkg.generate("PackageWithFailingTests", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
 
   isdir(Pkg.dir("PackageWithFailingTests","test")) || mkdir(Pkg.dir("PackageWithFailingTests","test"))
   open(Pkg.dir("PackageWithFailingTests", "test", "runtests.jl"),"w") do f
@@ -77,3 +77,44 @@ temp_pkg_dir() do
   end
 end
 
+# Testing with code-coverage
+temp_pkg_dir() do
+  Pkg.generate("PackageWithCodeCoverage", "MIT", config=Dict("user.name"=>"Julia Test", "user.email"=>"test@julialang.org"))
+
+  src = """
+module PackageWithCodeCoverage
+
+export f1, f2, f3, untested
+
+f1(x) = 2x
+f2(x) = f1(x)
+function f3(x)
+    3x
+end
+untested(x) = 7
+
+end"""
+  linetested = [false, false, false, false, true, true, false, true, false, false]
+  open(Pkg.dir("PackageWithCodeCoverage", "src", "PackageWithCodeCoverage.jl"), "w") do f
+      println(f, src)
+  end
+  isdir(Pkg.dir("PackageWithCodeCoverage","test")) || mkdir(Pkg.dir("PackageWithCodeCoverage","test"))
+  open(Pkg.dir("PackageWithCodeCoverage", "test", "runtests.jl"),"w") do f
+    println(f,"using PackageWithCodeCoverage, Base.Test")
+    println(f,"@test f2(2) == 4")
+    println(f,"@test f3(5) == 15")
+  end
+
+  Pkg.test("PackageWithCodeCoverage")
+  covfile = Pkg.dir("PackageWithCodeCoverage","src","PackageWithCodeCoverage.jl.cov")
+  @test !isfile(covfile)
+  Pkg.test("PackageWithCodeCoverage", coverage=true)
+  @test isfile(covfile)
+  covstr = readall(covfile)
+  srclines = split(src, '\n')
+  covlines = split(covstr, '\n')
+  for i = 1:length(linetested)
+      covline = (linetested[i] ? "        1 " : "        - ")*srclines[i]
+      @test covlines[i] == covline
+  end
+end

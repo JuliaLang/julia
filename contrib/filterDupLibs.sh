@@ -9,7 +9,7 @@ for i in "$@"; do
     name=$(basename "$i")
 
     if [[ -z $(echo $libnames | grep "$name") ]]; then
-        libnames+="$name " 
+        libnames+="$name "
         libpaths+="$i "
     fi
 done

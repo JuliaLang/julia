@@ -1,9 +1,9 @@
-types = {
-    Bool, Char,
-    Int8, Uint8, Int16, Uint16, Int32, Uint32, Int64, Uint64, Float32, Float64,
-    Rational{Int8}, Rational{Uint8}, Rational{Int16}, Rational{Uint16},
-    Rational{Int32}, Rational{Uint32}, Rational{Int64}, Rational{Uint64}
-}
+types = Any[
+    Bool,
+    Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Float32, Float64,
+    Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
+    Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
+]
 vals = vcat(
     typemin(Int64),
     -int64(maxintfloat(Float64))+Int64[-4:1;],
@@ -23,7 +23,7 @@ function coerce(T::Type, x)
     if !(T<:Integer) || T===Bool
         convert(T, x)
     elseif sizeof(T) < sizeof(x)
-        itrunc(T, x)
+        x % T
     elseif sizeof(T) == sizeof(x)
         reinterpret(T, x)
     else
@@ -31,12 +31,14 @@ function coerce(T::Type, x)
     end
 end
 
+for T=types[2:end], x=vals
+    a = coerce(T,x)
+    @test hash(a,zero(UInt)) == invoke(hash,(Real,UInt),a,zero(UInt))
+end
+
 for T=types, S=types, x=vals
     a = coerce(T,x)
     b = coerce(S,x)
-    if (isa(a,Char) && !is_valid_char(a)) || (isa(b,Char) && !is_valid_char(b))
-        continue
-    end
     #println("$(typeof(a)) $a")
     #println("$(typeof(b)) $b")
     @test isequal(a,b) == (hash(a)==hash(b))
@@ -48,18 +50,29 @@ for T=types, S=types, x=vals
     # end
 end
 
+# issue #8619
+@test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
+
+# issue #9264
+@test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))
+@test hash(1//6) == hash(big(1)//big(6))
+@test hash(1//6) == hash(0x01//0x06)
+
 # hashing collections (e.g. issue #6870)
-vals = {[1,2,3,4], [1 3;2 4], {1,2,3,4}, [1,3,2,4],
-        [1,0], [true,false], bitpack([true,false]),
-        Set([1,2,3,4]),
-        Set([1:10;]),                 # these lead to different key orders
-        Set([7,9,4,10,2,3,5,8,6,1]), #
-        Dict(42 => 101, 77 => 93), Dict(42 => 101, 77 => 93),
-        (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
-        ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
-        # issue #6900
-        [x => x for x in 1:10],
-        Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)}
+vals = Any[
+    [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
+    [1,0], [true,false], bitpack([true,false]),
+    Set([1,2,3,4]),
+    Set([1:10;]),                # these lead to different key orders
+    Set([7,9,4,10,2,3,5,8,6,1]), #
+    Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
+    (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
+    ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
+    # issue #6900
+    [x => x for x in 1:10],
+    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)
+]
 
 for a in vals, b in vals
     @test isequal(a,b) == (hash(a)==hash(b))

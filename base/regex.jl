@@ -6,17 +6,17 @@ const DEFAULT_OPTS = PCRE.JAVASCRIPT_COMPAT | PCRE.UTF8 | PCRE.NO_UTF8_CHECK
 
 type Regex
     pattern::ByteString
-    options::Uint32
+    options::Int32
     regex::Ptr{Void}
     extra::Ptr{Void}
     ovec::Vector{Int32}
 
 
-    function Regex(pattern::String, options::Integer)
+    function Regex(pattern::AbstractString, options::Integer)
         pattern = bytestring(pattern)
         options = int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
-            error("invalid regex options: $options")
+            throw(ArgumentError("invalid regex options: $options"))
         end
         re = compile(new(pattern, options, C_NULL, C_NULL, Array(Int32, 0)))
         finalizer(re,
@@ -28,18 +28,18 @@ type Regex
     end
 end
 
-function Regex(pattern::String, flags::String)
+function Regex(pattern::AbstractString, flags::AbstractString)
     options = DEFAULT_OPTS
     for f in flags
         options |= f=='i' ? PCRE.CASELESS  :
                    f=='m' ? PCRE.MULTILINE :
                    f=='s' ? PCRE.DOTALL    :
                    f=='x' ? PCRE.EXTENDED  :
-                   error("unknown regex flag: $f")
+                   throw(ArgumentError("unknown regex flag: $f"))
     end
     Regex(pattern, options)
 end
-Regex(pattern::String) = Regex(pattern, DEFAULT_OPTS)
+Regex(pattern::AbstractString) = Regex(pattern, DEFAULT_OPTS)
 
 function compile(regex::Regex)
     if regex.regex == C_NULL
@@ -101,7 +101,7 @@ function show(io::IO, m::RegexMatch)
     print(io, ")")
 end
 
-function ismatch(r::Regex, s::String, offset::Integer=0)
+function ismatch(r::Regex, s::AbstractString, offset::Integer=0)
     compile(r)
     return PCRE.exec(r.regex, r.extra, bytestring(s), offset, r.options & PCRE.EXECUTE_MASK,
                      r.ovec)
@@ -113,7 +113,7 @@ function ismatch(r::Regex, s::SubString, offset::Integer=0)
                   r.ovec)
 end
 
-function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32(0))
+function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Int32=int32(0))
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
     compile(re)
     if !PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec)
@@ -127,11 +127,11 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Uint32=uint32
     RegexMatch(mat, cap, re.ovec[1]+1, off)
 end
 
-match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Uint32=uint32(0)) =
+match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Int32=int32(0)) =
     match(re, utf8(str), idx, add_opts)
 
-match(r::Regex, s::String) = match(r, s, start(s))
-match(r::Regex, s::String, i::Integer) =
+match(r::Regex, s::AbstractString) = match(r, s, start(s))
+match(r::Regex, s::AbstractString, i::Integer) =
     error("regex matching is only available for bytestrings; use bytestring(s) to convert")
 
 function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
@@ -146,7 +146,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     ovec = Array(Int32, 3)
     while true
         result = ccall((:pcre_exec, :libpcre), Int32,
-                       (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+                       (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32,
                        Int32, Int32, Ptr{Int32}, Int32),
                        regex, extra, str, n,
                        offset, prevempty ? opts_nonempty : opts, ovec, 3)
@@ -165,7 +165,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
         prevempty = offset == ovec[2]
         if overlap
             if !prevempty
-                offset = int32(nextind(str, offset + 1) - 1)
+                offset = int32(ovec[1]+1)
             end
         else
             offset = ovec[2]
@@ -186,22 +186,22 @@ function search(str::Union(ByteString,SubString), re::Regex, idx::Integer)
     PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec) ?
         ((re.ovec[1]+1):prevind(str,re.ovec[2]+1)) : (0:-1)
 end
-search(s::String, r::Regex, idx::Integer) =
+search(s::AbstractString, r::Regex, idx::Integer) =
     error("regex search is only available for bytestrings; use bytestring(s) to convert")
-search(s::String, r::Regex) = search(s,r,start(s))
+search(s::AbstractString, r::Regex) = search(s,r,start(s))
 
 immutable RegexMatchIterator
     regex::Regex
     string::UTF8String
     overlap::Bool
 
-    function RegexMatchIterator(regex::Regex, string::String, ovr::Bool=false)
+    function RegexMatchIterator(regex::Regex, string::AbstractString, ovr::Bool=false)
         new(regex, string, ovr)
     end
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(itr::RegexMatchIterator) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, uint32(0))
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, int32(0))
 done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
 
 # Assumes prev_match is not nothing
@@ -218,10 +218,10 @@ function next(itr::RegexMatchIterator, prev_match)
         offset = prev_match.offset + endof(prev_match.match)
     end
 
-    opts_nonempty = uint32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
+    opts_nonempty = int32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
-                    prevempty ? opts_nonempty : uint32(0))
+                    prevempty ? opts_nonempty : int32(0))
 
         if mat === nothing
             if prevempty && offset <= length(itr.string.data)
@@ -238,11 +238,11 @@ function next(itr::RegexMatchIterator, prev_match)
     (prev_match, nothing)
 end
 
-function eachmatch(re::Regex, str::String, ovr::Bool=false)
+function eachmatch(re::Regex, str::AbstractString, ovr::Bool=false)
     RegexMatchIterator(re,str,ovr)
 end
 
-eachmatch(re::Regex, str::String) = RegexMatchIterator(re,str)
+eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
 # miscellaneous methods that depend on Regex being defined
 
@@ -256,12 +256,12 @@ filter(r::Regex,  d::Dict) = filter!(r,copy(d))
 # Don't serialize the pointers
 function serialize(s, r::Regex)
     serialize_type(s, typeof(r))
-    serialize(s, r.pattern) 
-    serialize(s, r.options) 
+    serialize(s, r.pattern)
+    serialize(s, r.options)
 end
 
 function deserialize(s, t::Type{Regex})
     pattern = deserialize(s)
     options = deserialize(s)
-    Regex(pattern, options)        
+    Regex(pattern, options)
 end

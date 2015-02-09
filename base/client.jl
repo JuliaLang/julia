@@ -37,7 +37,7 @@ exit(n) = ccall(:jl_exit, Void, (Int32,), n)
 exit() = exit(0)
 quit() = exit()
 
-function repl_cmd(cmd)
+function repl_cmd(cmd, out)
     shell = shell_split(get(ENV,"JULIA_SHELL",get(ENV,"SHELL","/bin/sh")))
     # Note that we can't support the fish shell due to its lack of subshells
     #   See this for details: https://github.com/JuliaLang/julia/issues/4918
@@ -48,29 +48,38 @@ function repl_cmd(cmd)
     end
 
     if isempty(cmd.exec)
-        error("no cmd to execute")
+        throw(ArgumentError("no cmd to execute"))
     elseif cmd.exec[1] == "cd"
+        new_oldpwd = pwd()
         if length(cmd.exec) > 2
-            error("cd method only takes one argument")
+            throw(ArgumentError("cd method only takes one argument"))
         elseif length(cmd.exec) == 2
             dir = cmd.exec[2]
-            cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            if dir == "-"
+                if !haskey(ENV, "OLDPWD")
+                    error("cd: OLDPWD not set")
+                end
+                cd(ENV["OLDPWD"])
+            else
+                cd(@windows? dir : readchomp(`$shell -c "echo $(shell_escape(dir))"`))
+            end
         else
             cd()
         end
-        println(pwd())
+        ENV["OLDPWD"] = new_oldpwd
+        println(out, pwd())
     else
         run(ignorestatus(@windows? cmd : (isa(STDIN, TTY) ? `$shell -i -c "($(shell_escape(cmd))) && true"` : `$shell -c "($(shell_escape(cmd))) && true"`)))
     end
     nothing
 end
 
-function repl_hook(input::String)
+function repl_hook(input::AbstractString)
     Expr(:call, :(Base.repl_cmd),
          macroexpand(Expr(:macrocall,symbol("@cmd"),input)))
 end
 
-display_error(er) = display_error(er, {})
+display_error(er) = display_error(er, [])
 function display_error(er, bt)
     with_output_color(:red, STDERR) do io
         print(io, "ERROR: ")
@@ -129,17 +138,20 @@ end
 
 _repl_start = Condition()
 
-function parse_input_line(s::String)
+syntax_deprecation_warnings(warn::Bool) =
+    bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
+
+function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
-    #                   (Ptr{Uint8},Int32,Int32),
+    #                   (Ptr{UInt8},Int32,Int32),
     #                   s, int32(pos)-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
     # expr
-    ccall(:jl_parse_input_line, Any, (Ptr{Uint8},), s)
+    ccall(:jl_parse_input_line, Any, (Ptr{UInt8},), s)
 end
 
 function parse_input_line(io::IO)
@@ -169,7 +181,7 @@ function incomplete_tag(ex::Expr)
 end
 
 # try to include() a file, ignoring if not found
-try_include(path::String) = isfile(path) && include(path)
+try_include(path::AbstractString) = isfile(path) && include(path)
 
 function init_bind_addr(args::Vector{UTF8String})
     # Treat --bind-to in a position independent manner in ARGS since
@@ -177,7 +189,7 @@ function init_bind_addr(args::Vector{UTF8String})
     btoidx = findfirst(args, "--bind-to")
     if btoidx > 0
         bind_to = split(args[btoidx+1], ":")
-        bind_addr = parseip(bind_to[1])
+        bind_addr = string(parseip(bind_to[1]))
         if length(bind_to) > 1
             bind_port = parseint(bind_to[2])
         else
@@ -186,11 +198,11 @@ function init_bind_addr(args::Vector{UTF8String})
     else
         bind_port = 0
         try
-            bind_addr = getipaddr()
+            bind_addr = string(getipaddr())
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used. 
-            bind_addr = ip"127.0.0.1"
+            # Will cause an exception to be raised only when used.
+            bind_addr = "127.0.0.1"
         end
     end
     global LPROC
@@ -210,17 +222,26 @@ function process_options(args::Vector{UTF8String})
         if args[i]=="-q" || args[i]=="--quiet"
             quiet = true
         elseif args[i]=="--worker"
-            start_worker()
-            # doesn't return
+            worker_arg = (i == length(args)) ? "" : args[i+1]
+
+            if worker_arg == "custom"
+                i += 1
+            else
+                start_worker()
+                # doesn't return
+            end
+
         elseif args[i]=="--bind-to"
             i+=1 # has already been processed
         elseif args[i]=="-e" || args[i]=="--eval"
+            i == length(args) && error("-e,--eval  no <expr> provided")
             repl = false
             i+=1
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
             eval(Main,parse_input_line(args[i]))
             break
         elseif args[i]=="-E" || args[i]=="--print"
+            i == length(args) && error("-E,--print  no <expr> provided")
             repl = false
             i+=1
             splice!(ARGS, 1:length(ARGS), args[i+1:end])
@@ -228,23 +249,28 @@ function process_options(args::Vector{UTF8String})
             println()
             break
         elseif args[i]=="-P" || args[i]=="--post-boot"
+            i == length(args) && error("-P,--post-boot  no <expr> provided")
             i+=1
             eval(Main,parse_input_line(args[i]))
         elseif args[i]=="-L" || args[i]=="--load"
+            i == length(args) && error("-L, --load  no <file> provided")
             i+=1
             require(args[i])
         elseif args[i]=="-p"
+            i == length(args) && error("-p  <n> processes not provided")
             i+=1
             if i > length(args) || !isdigit(args[i][1])
                 np = Sys.CPU_CORES
                 i -= 1
             else
                 np = int(args[i])
+                np < 1 && error("-p  <n> must be ≥ 1")
             end
             addprocs(np)
         elseif args[i]=="--machinefile"
+            i == length(args) && error("--machinefile  no <file> provided")
             i+=1
-            machines = split(readall(args[i]), '\n'; keep=false)
+            machines = load_machine_file(args[i])
             addprocs(machines)
         elseif args[i]=="-v" || args[i]=="--version"
             println("julia version ", VERSION)
@@ -263,7 +289,7 @@ function process_options(args::Vector{UTF8String})
             startup = false
         elseif args[i] == "-i"
             global is_interactive = true
-        elseif beginswith(args[i], "--color")
+        elseif startswith(args[i], "--color")
             if args[i] == "--color"
                 color_set = true
                 global have_color = true
@@ -309,7 +335,7 @@ const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
@@ -335,10 +361,28 @@ function load_juliarc()
     try_include(abspath(homedir(),".juliarc.jl"))
 end
 
+function load_machine_file(path::AbstractString)
+    machines = []
+    for line in split(readall(path),'\n'; keep=false)
+        s = map!(strip, split(line,'*'; keep=false))
+        if length(s) > 1
+            cnt = isnumber(s[1]) ? int(s[1]) : symbol(s[1])
+            push!(machines,(s[2], cnt))
+        else
+            push!(machines,line)
+        end
+    end
+    return machines
+end
+
 function early_init()
+    global const JULIA_HOME = ccall(:jl_get_julia_home, Any, ())
+    # make sure OpenBLAS does not set CPU affinity (#1070, #9639)
+    ENV["OPENBLAS_MAIN_FREE"] = get(ENV, "OPENBLAS_MAIN_FREE",
+                                    get(ENV, "GOTOBLAS_MAIN_FREE", "1"))
     Sys.init_sysinfo()
     if CPU_CORES > 8 && !("OPENBLAS_NUM_THREADS" in keys(ENV)) && !("OMP_NUM_THREADS" in keys(ENV))
-        # Prevent openblas from stating to many threads, unless/until specifically requested
+        # Prevent openblas from starting too many threads, unless/until specifically requested
         ENV["OPENBLAS_NUM_THREADS"] = 8
     end
 end
@@ -352,13 +396,10 @@ import .Terminals
 import .REPL
 
 function _start()
-    early_init()
-
     try
         init_parallel()
         init_bind_addr(ARGS)
         any(a->(a=="--worker"), ARGS) || init_head_sched()
-        init_load_path()
         (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
 
         local term
@@ -374,6 +415,7 @@ function _start()
                 quiet || REPL.banner(term,term)
                 if term.term_type == "dumb"
                     active_repl = REPL.BasicREPL(term)
+                    quiet || warn("Terminal not fully functional")
                 else
                     active_repl = REPL.LineEditREPL(term, true)
                     active_repl.no_history_file = no_history_file
@@ -392,35 +434,28 @@ function _start()
                 # note: currently IOStream is used for file STDIN
                 if isa(STDIN,File) || isa(STDIN,IOStream)
                     # reading from a file, behave like include
-                    eval(parse_input_line(readall(STDIN)))
+                    eval(Main,parse_input_line(readall(STDIN)))
                 else
                     # otherwise behave repl-like
                     while !eof(STDIN)
                         eval_user_input(parse_input_line(STDIN), true)
                     end
                 end
-                if have_color
-                    print(color_normal)
-                end
-                quit()
+            else
+                REPL.run_repl(active_repl)
             end
-            REPL.run_repl(active_repl)
         end
     catch err
         display_error(err,catch_backtrace())
         println()
         exit(1)
     end
-    if is_interactive
-        if have_color
-            print(color_normal)
-        end
-        println()
+    if is_interactive && have_color
+        print(color_normal)
     end
-    ccall(:uv_atexit_hook, Void, ())
 end
 
-const atexit_hooks = {}
+const atexit_hooks = []
 
 atexit(f::Function) = (unshift!(atexit_hooks, f); nothing)
 

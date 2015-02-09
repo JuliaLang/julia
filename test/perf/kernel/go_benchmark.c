@@ -106,7 +106,7 @@ static int
 legal_move(int i, int j, int color)
 {
   int other = OTHER_COLOR(color);
-  
+
   /* Pass is always legal. */
   if (pass_move(i, j))
     return 1;
@@ -217,7 +217,7 @@ same_string(int pos1, int pos2)
       return 1;
     pos = next_stone[pos];
   } while (pos != pos1);
-  
+
   return 0;
 }
 
@@ -307,7 +307,7 @@ play_move(int i, int j, int color)
       if (on_board(ai, aj) && get_board(ai, aj) == EMPTY)
 	break;
     }
-    
+
     if (!has_additional_liberty(i, j, ai, aj)) {
       ko_i = ai;
       ko_j = aj;
@@ -410,7 +410,7 @@ compute_final_status(void)
 
   for (pos = 0; pos < board_size * board_size; pos++)
     final_status[pos] = UNKNOWN;
-  
+
   for (i = 0; i < board_size; i++)
     for (j = 0; j < board_size; j++)
       if (get_board(i, j) == EMPTY)

@@ -53,7 +53,7 @@ function plife(m, n)
     last = time(); f = 1
     while !done
         @async begin
-            img = convert(Array{Uint32,2},grid) .* 0x00ffffff
+            img = convert(Array{UInt32,2},grid) .* 0x00ffffff
             set_source_surface(cr, CairoRGBSurface(img), 0, 0)
             paint(cr)
             reveal(c)

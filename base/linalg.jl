@@ -3,7 +3,7 @@ module LinAlg
 importall Base
 import Base: USE_BLAS64, size, copy, copy_transpose!, power_by_squaring, print_matrix, transpose!
 
-export 
+export
 # Modules
     LAPACK,
     BLAS,
@@ -12,7 +12,6 @@ export
     SymTridiagonal,
     Tridiagonal,
     Bidiagonal,
-    Woodbury,
     Factorization,
     BunchKaufman,
     Cholesky,
@@ -30,7 +29,8 @@ export
     SVD,
     Hermitian,
     Symmetric,
-    Triangular,
+    LowerTriangular,
+    UpperTriangular,
     Diagonal,
     UniformScaling,
 
@@ -59,6 +59,7 @@ export
     eigmin,
     eigs,
     eigvals,
+    eigvals!,
     eigvecs,
     expm,
     sqrtm,
@@ -84,7 +85,7 @@ export
     lufact!,
     lyap,
     norm,
-    null,
+    nullspace,
     ordschur!,
     ordschur,
     peakflops,
@@ -93,7 +94,6 @@ export
     qrfact!,
     qrfact,
     rank,
-    rref,
     scale,
     scale!,
     schur,
@@ -102,6 +102,7 @@ export
     svd,
     svdfact!,
     svdfact,
+    svds,
     svdvals!,
     svdvals,
     sylvester,
@@ -161,22 +162,22 @@ end
 
 #Check that stride of matrix/vector is 1
 function chkstride1(A::StridedVecOrMat...)
-    for a in A 
-        stride(a,1)== 1 || error("Matrix does not have contiguous columns")
-    end  
+    for a in A
+        stride(a,1)== 1 || error("matrix does not have contiguous columns")
+    end
 end
 
 #Check that matrix is square
 function chksquare(A::AbstractMatrix)
     m,n = size(A)
-    m == n || throw(DimensionMismatch("Matrix is not square"))
+    m == n || throw(DimensionMismatch("matrix is not square"))
     m
 end
 
 function chksquare(A...)
-    sizes=Int[]
-    for a in A 
-        size(a,1)==size(a,2) || throw(DimensionMismatch("Matrix is not square: dimensions are $(size(a))"))
+    sizes = Int[]
+    for a in A
+        size(a,1)==size(a,2) || throw(DimensionMismatch("matrix is not square: dimensions are $(size(a))"))
         push!(sizes, size(a,1))
     end
     length(A)==1 ? sizes[1] : sizes
@@ -185,9 +186,14 @@ end
 #Check that upper/lower (for special matrices) is correctly specified
 macro chkuplo()
    :((uplo=='U' || uplo=='L') || throw(ArgumentError("""invalid uplo = $uplo
-            
+
 Valid choices are 'U' (upper) or 'L' (lower).""")))
 end
+
+const CHARU = 'U'
+const CHARL = 'L'
+char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
+
 
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")
@@ -205,7 +211,6 @@ include("linalg/lu.jl")
 
 include("linalg/bunchkaufman.jl")
 include("linalg/symmetric.jl")
-include("linalg/woodbury.jl")
 include("linalg/diagonal.jl")
 include("linalg/bidiag.jl")
 include("linalg/uniformscaling.jl")
@@ -214,10 +219,6 @@ include("linalg/givens.jl")
 include("linalg/special.jl")
 include("linalg/bitarray.jl")
 include("linalg/ldlt.jl")
-
-include("linalg/sparse.jl")
-include("linalg/umfpack.jl")
-include("linalg/cholmod.jl")
 
 include("linalg/arpack.jl")
 include("linalg/arnoldi.jl")

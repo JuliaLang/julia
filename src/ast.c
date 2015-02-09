@@ -34,6 +34,7 @@ static value_t true_sym;
 static value_t false_sym;
 static value_t fl_error_sym;
 static value_t fl_null_sym;
+static value_t fl_jlgensym_sym;
 
 static jl_value_t *scm_to_julia(value_t e, int expronly);
 static value_t julia_to_scm(jl_value_t *v);
@@ -114,13 +115,15 @@ static builtinspec_t julia_flisp_ast_ext[] = {
     { NULL, NULL }
 };
 
-DLLEXPORT void jl_init_frontend(void)
+extern int jl_parse_depwarn(int warn);
+
+void jl_init_frontend(void)
 {
     fl_init(4*1024*1024);
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);
     ios_static_buffer(pi, (char*)flisp_system_image, sizeof(flisp_system_image));
-    
+
     if (fl_load_system_image(img)) {
         JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
         jl_exit(1);
@@ -136,6 +139,10 @@ DLLEXPORT void jl_init_frontend(void)
     false_sym = symbol("false");
     fl_error_sym = symbol("error");
     fl_null_sym = symbol("null");
+    fl_jlgensym_sym = symbol("jlgensym");
+
+    // Enable / disable syntax deprecation warnings
+    jl_parse_depwarn((int)jl_compileropts.depwarn);
 }
 
 DLLEXPORT void jl_lisp_prompt(void)
@@ -276,6 +283,12 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
     }
     if (iscons(e)) {
         value_t hd = car_(e);
+        if (hd == fl_jlgensym_sym) {
+            size_t genid = numval(car_(cdr_(e)));
+            return jl_box_gensym(genid);
+        }
+        if (hd == fl_null_sym && llength(e) == 1)
+            return jl_nothing;
         if (issymbol(hd)) {
             jl_sym_t *sym = scmsym_to_julia(hd);
             /* tree node types:
@@ -287,26 +300,28 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             */
             size_t n = llength(e)-1;
             size_t i;
-            if (sym == null_sym && n == 0)
-                return jl_nothing;
             if (sym == lambda_sym) {
                 jl_expr_t *ex = jl_exprn(lambda_sym, n);
                 e = cdr_(e);
                 value_t largs = car_(e);
                 jl_cellset(ex->args, 0, full_list(largs,eo));
                 e = cdr_(e);
-                
+
                 value_t ee = car_(e);
-                jl_array_t *vinf = jl_alloc_cell_1d(3);
+                jl_array_t *vinf = jl_alloc_cell_1d(4);
                 jl_cellset(vinf, 0, full_list(car_(ee),eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 1, full_list_of_lists(car_(ee),eo));
                 ee = cdr_(ee);
                 jl_cellset(vinf, 2, full_list_of_lists(car_(ee),eo));
+                ee = cdr_(ee);
+                jl_cellset(vinf, 3, isfixnum(car_(ee)) ?
+                        jl_box_long(numval(car_(ee))) :
+                        full_list(car_(ee),eo));
                 assert(!iscons(cdr_(ee)));
                 jl_cellset(ex->args, 1, vinf);
                 e = cdr_(e);
-                
+
                 for(i=2; i < n; i++) {
                     assert(iscons(e));
                     jl_cellset(ex->args, i, scm_to_julia_(car_(e), eo));
@@ -330,7 +345,8 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return jl_new_struct(jl_gotonode_type,
                                          scm_to_julia_(car_(e),0));
                 }
-                if (sym == quote_sym) {
+                if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)) ||
+                                                              !iscons(cdr_(car_(e)))))) {
                     return jl_new_struct(jl_quotenode_type,
                                          scm_to_julia_(car_(e),0));
                 }
@@ -342,6 +358,9 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return jl_new_struct(jl_newvarnode_type,
                                          scm_to_julia_(car_(e),0));
                 }
+            }
+            else if (sym == inert_sym && !iscons(car_(e))) {
+                sym = quote_sym;
             }
             jl_expr_t *ex = jl_exprn(sym, n);
             // allocate a fresh args array for empty exprs passed to macros
@@ -367,15 +386,20 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
         return *(jl_value_t**)cv_data((cvalue_t*)ptr(e));
     }
     jl_error("malformed tree");
-    
+
     return (jl_value_t*)jl_null;
 }
 
 static value_t julia_to_scm_(jl_value_t *v);
+static arraylist_t jlgensym_to_flisp;
 
 static value_t julia_to_scm(jl_value_t *v)
 {
     value_t temp;
+    if (jlgensym_to_flisp.len)
+        jlgensym_to_flisp.len = 0; // in case we didn't free it last time we got here (for example, if we threw an error)
+    else
+        arraylist_new(&jlgensym_to_flisp, 0);
     // need try/catch to reset GC handle stack in case of error
     FL_TRY_EXTERN {
         temp = julia_to_scm_(v);
@@ -383,6 +407,7 @@ static value_t julia_to_scm(jl_value_t *v)
     FL_CATCH_EXTERN {
         temp = fl_list2(fl_error_sym, cvalue_static_cstring("expression too large"));
     }
+    arraylist_free(&jlgensym_to_flisp);
     return temp;
 }
 
@@ -414,6 +439,19 @@ static value_t julia_to_scm_(jl_value_t *v)
     if (jl_is_symbol(v)) {
         return symbol(((jl_sym_t*)v)->name);
     }
+    if (jl_is_gensym(v)) {
+        size_t idx = ((jl_gensym_t*)v)->id;
+        size_t i;
+        for (i = 0; i < jlgensym_to_flisp.len; i+=2) {
+            if ((ssize_t)jlgensym_to_flisp.items[i] == idx)
+                return fl_list2(fl_jlgensym_sym, fixnum((size_t)jlgensym_to_flisp.items[i+1]));
+        }
+        arraylist_push(&jlgensym_to_flisp, (void*)idx);
+        value_t flv = fl_applyn(0, symbol_value(symbol("make-jlgensym")));
+        assert(iscons(flv) && car_(flv) == fl_jlgensym_sym);
+        arraylist_push(&jlgensym_to_flisp, (void*)(size_t)numval(car_(cdr_(flv))));
+        return flv;
+    }
     if (v == jl_true) {
         return FL_T;
     }
@@ -443,7 +481,7 @@ static value_t julia_to_scm_(jl_value_t *v)
         return julia_to_list2((jl_value_t*)goto_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_quotenode_type)) {
-        return julia_to_list2((jl_value_t*)quote_sym, jl_fieldref(v,0));
+        return julia_to_list2((jl_value_t*)inert_sym, jl_fieldref(v,0));
     }
     if (jl_typeis(v, jl_newvarnode_type)) {
         return julia_to_list2((jl_value_t*)newvar_sym, jl_fieldref(v,0));
@@ -466,7 +504,7 @@ DLLEXPORT jl_value_t *jl_parse_input_line(const char *str)
     value_t e = fl_applyn(1, symbol_value(symbol("jl-parse-string")), s);
     if (e == FL_EOF)
         return jl_nothing;
-    
+
     return scm_to_julia(e,0);
 }
 
@@ -505,6 +543,12 @@ int jl_start_parsing_file(const char *fname)
 void jl_stop_parsing(void)
 {
     fl_applyn(0, symbol_value(symbol("jl-parser-close-stream")));
+}
+
+DLLEXPORT int jl_parse_depwarn(int warn)
+{
+    value_t prev = fl_applyn(1, symbol_value(symbol("jl-parser-depwarn")), warn? FL_T : FL_F);
+    return prev == FL_T ? 1 : 0;
 }
 
 extern int jl_lineno;
@@ -568,19 +612,37 @@ DLLEXPORT jl_value_t *jl_macroexpand(jl_value_t *expr)
     return result;
 }
 
+ssize_t jl_max_jlgensym_in(jl_value_t *v)
+{
+    ssize_t genid = -1;
+    if (jl_is_gensym(v)) {
+        genid = ((jl_gensym_t*)v)->id;
+    } else if (jl_is_expr(v)) {
+        jl_expr_t *e = (jl_expr_t*)v;
+        size_t i, l = jl_array_len(e->args);
+        for (i = 0; i < l; i++) {
+            ssize_t maxid = jl_max_jlgensym_in(jl_exprarg(e, i));
+            if (maxid > genid)
+                genid = maxid;
+        }
+    }
+    return genid;
+}
+
 // wrap expr in a thunk AST
 jl_lambda_info_t *jl_wrap_expr(jl_value_t *expr)
 {
-    // `(lambda () (() () ()) ,expr)
+    // `(lambda () (() () () ()) ,expr)
     jl_expr_t *le=NULL, *bo=NULL; jl_value_t *vi=NULL;
     jl_value_t *mt = jl_an_empty_cell;
     JL_GC_PUSH3(&le, &vi, &bo);
     le = jl_exprn(lambda_sym, 3);
     jl_cellset(le->args, 0, mt);
-    vi = (jl_value_t*)jl_alloc_cell_1d(3);
+    vi = (jl_value_t*)jl_alloc_cell_1d(4);
     jl_cellset(vi, 0, mt);
     jl_cellset(vi, 1, mt);
     jl_cellset(vi, 2, mt);
+    jl_cellset(vi, 3, jl_box_long(jl_max_jlgensym_in(expr)+1));
     jl_cellset(le->args, 1, vi);
     if (!jl_is_expr(expr) || ((jl_expr_t*)expr)->head != body_sym) {
         bo = jl_exprn(body_sym, 1);
@@ -647,6 +709,16 @@ jl_array_t *jl_lam_capt(jl_expr_t *l)
     jl_value_t *ll = jl_cellref(le, 2);
     assert(jl_is_array(ll));
     return (jl_array_t*)ll;
+}
+
+// get array of types for GenSym vars, or it's length (if not type-inferred)
+jl_value_t *jl_lam_gensyms(jl_expr_t *l)
+{
+    assert(jl_is_expr(l));
+    jl_value_t *le = jl_exprarg(l, 1);
+    assert(jl_is_array(le));
+    assert(jl_array_len(le) == 4);
+    return jl_cellref(le, 3);
 }
 
 int jl_lam_vars_captured(jl_expr_t *ast)
@@ -720,6 +792,7 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         // of a top-level thunk that gets type inferred.
         li->def = li;
         li->ast = jl_prepare_ast(li, li->sparams);
+        gc_wb(li, li->ast);
         JL_GC_POP();
         return (jl_value_t*)li;
     }
@@ -738,17 +811,18 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
         jl_expr_t *ne = jl_exprn(e->head, jl_array_len(e->args));
         JL_GC_PUSH1(&ne);
         if (e->head == lambda_sym) {
-            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 0);
-            jl_exprarg(ne, 2) = copy_ast(jl_exprarg(e,2), sp, 1);
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 0));
+            jl_exprargset(ne, 2, copy_ast(jl_exprarg(e,2), sp, 1));
         }
         else if (e->head == assign_sym) {
-            jl_exprarg(ne, 0) = copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(ne, 1) = copy_ast(jl_exprarg(e,1), sp, 1);
+            jl_exprargset(ne, 0, copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(ne, 1, copy_ast(jl_exprarg(e,1), sp, 1));
         }
         else {
-            for(size_t i=0; i < jl_array_len(e->args); i++)
-                jl_exprarg(ne, i) = copy_ast(jl_exprarg(e,i), sp, 1);
+            for(size_t i=0; i < jl_array_len(e->args); i++) {
+                jl_exprargset(ne, i, copy_ast(jl_exprarg(e,i), sp, 1));
+            }
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
@@ -758,7 +832,10 @@ static jl_value_t *copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
 
 DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
 {
-    if (jl_is_expr(expr)) {
+    if (expr == NULL) {
+        return NULL;
+    }
+    else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         size_t i, l = jl_array_len(e->args);
         jl_expr_t *ne = NULL;
@@ -766,10 +843,12 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         ne = jl_exprn(e->head, l);
         if (l == 0) {
             ne->args = jl_alloc_cell_1d(0);
+            gc_wb(ne, ne->args);
         }
         else {
-            for(i=0; i < l; i++)
-                jl_exprarg(ne, i) = jl_copy_ast(jl_exprarg(e,i));
+            for(i=0; i < l; i++) {
+                jl_exprargset(ne, i, jl_copy_ast(jl_exprarg(e,i)));
+            }
         }
         JL_GC_POP();
         return (jl_value_t*)ne;
@@ -786,12 +865,13 @@ DLLEXPORT jl_value_t *jl_copy_ast(jl_value_t *expr)
         return (jl_value_t*)na;
     }
     else if (jl_is_quotenode(expr)) {
-        if (jl_is_symbol(jl_fieldref(expr,0)))
+        jl_value_t *v = jl_fieldref(expr,0);
+        if (jl_is_symbol(v) || jl_is_gensym(v))
             return expr;
         jl_value_t *q = NULL;
-        JL_GC_PUSH2(&q, &expr);
-        q = jl_copy_ast(jl_fieldref(expr,0));
-        jl_value_t *v = jl_new_struct(jl_quotenode_type, q);
+        JL_GC_PUSH2(&q, &v);
+        q = jl_copy_ast(v);
+        v = jl_new_struct(jl_quotenode_type, q);
         JL_GC_POP();
         return v;
     }
@@ -806,17 +886,18 @@ static jl_value_t *dont_copy_ast(jl_value_t *expr, jl_tuple_t *sp, int do_sp)
     else if (jl_is_expr(expr)) {
         jl_expr_t *e = (jl_expr_t*)expr;
         if (e->head == lambda_sym) {
-            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 0);
-            jl_exprarg(e, 2) = dont_copy_ast(jl_exprarg(e,2), sp, 1);
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 0));
+            jl_exprargset(e, 2, dont_copy_ast(jl_exprarg(e,2), sp, 1));
         }
         else if (e->head == assign_sym) {
-            jl_exprarg(e, 0) = dont_copy_ast(jl_exprarg(e,0), sp, 0);
-            jl_exprarg(e, 1) = dont_copy_ast(jl_exprarg(e,1), sp, 1);
+            jl_exprargset(e, 0, dont_copy_ast(jl_exprarg(e,0), sp, 0));
+            jl_exprargset(e, 1, dont_copy_ast(jl_exprarg(e,1), sp, 1));
         }
         else {
-            for(size_t i=0; i < jl_array_len(e->args); i++)
-                jl_exprarg(e, i) = dont_copy_ast(jl_exprarg(e,i), sp, 1);
+            for(size_t i=0; i < jl_array_len(e->args); i++) {
+                jl_exprargset(e, i, dont_copy_ast(jl_exprarg(e,i), sp, 1));
+            }
         }
         return (jl_value_t*)e;
     }
@@ -833,10 +914,10 @@ static void eval_decl_types(jl_array_t *vi, jl_value_t *ast, jl_tuple_t *spenv)
         jl_value_t *ty = jl_static_eval(jl_cellref(v,1), NULL, jl_current_module,
                                         (jl_value_t*)spenv, (jl_expr_t*)ast, 1, 1);
         if (ty != NULL && (jl_is_type(ty) || jl_is_typevar(ty))) {
-            jl_cellref(v, 1) = ty;
+            jl_cellset(v, 1, ty);
         }
         else {
-            jl_cellref(v, 1) = (jl_value_t*)jl_any_type;
+            jl_cellset(v, 1, (jl_value_t*)jl_any_type);
         }
     }
 }
@@ -896,6 +977,14 @@ DLLEXPORT int jl_is_operator(char *sym) {
 DLLEXPORT int jl_operator_precedence(char *sym) {
      return numval(fl_applyn(1, symbol_value(symbol("operator-precedence")),
                              symbol(sym)));
+}
+
+jl_value_t* skip_meta(jl_array_t *body) {
+    jl_value_t *body1 = jl_cellref(body,0);
+    if (jl_is_expr(body1) && ((jl_expr_t*)body1)->head == meta_sym
+        && jl_array_len(body) > 1)
+        body1 = jl_cellref(body,1);
+    return body1;
 }
 
 #ifdef __cplusplus

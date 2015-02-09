@@ -27,7 +27,7 @@ const clg_coeff = [76.18009172947146,
 
 function clgamma_lanczos(z)
     const sqrt2pi = 2.5066282746310005
-    
+
     y = x = z
     temp = x + 5.5
     zz = log(temp)
@@ -80,7 +80,7 @@ function digamma(z::Union(Float64,Complex{Float64}))
     end
     if x < 7
         # shift using recurrence formula
-        n = 7 - ifloor(x)
+        n = 7 - floor(Int,x)
         for ν = 1:n-1
             ψ -= inv(z + ν)
         end
@@ -103,7 +103,7 @@ function trigamma(z::Union(Float64,Complex{Float64}))
     ψ = zero(z)
     if x < 8
         # shift using recurrence formula
-        n = 8 - ifloor(x)
+        n = 8 - floor(Int,x)
         ψ += inv(z)^2
         for ν = 1:n-1
             ψ += inv(z + ν)^2
@@ -224,7 +224,7 @@ function inv_oftype(x::Complex, y::Real)
 end
 inv_oftype(x::Real, y::Real) = oftype(x, inv(y))
 
-# Hurwitz zeta function, which is related to polygamma 
+# Hurwitz zeta function, which is related to polygamma
 # (at least for integer m > 0 and real(z) > 0) by:
 #    polygamma(m, z) = (-1)^(m+1) * gamma(m+1) * zeta(m+1, z).
 # Our algorithm for the polygamma is just the m-th derivative
@@ -285,7 +285,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
             throw(DomainError()) # or return NaN?
         end
         nx = int(xf)
-        n = iceil(cutoff - nx)
+        n = ceil(Int,cutoff - nx)
         ζ += inv_oftype(ζ, z)^s
         for ν = -nx:-1:1
             ζₒ= ζ
@@ -428,7 +428,7 @@ function zeta(s::Union(Float64,Complex{Float64}))
                              -1.0031782279542924256050500133649802190,
                              -1.00078519447704240796017680222772921424,
                              -0.9998792995005711649578008136558752359121)
-        end 
+        end
         return zeta(1 - s) * gamma(1 - s) * sinpi(s*0.5) * (2π)^s / π
     end
 
@@ -437,19 +437,19 @@ function zeta(s::Union(Float64,Complex{Float64}))
     # shift using recurrence formula:
     #   n is a semi-empirical cutoff for the Stirling series, based
     #   on the error term ~ (|m|/n)^18 / n^real(m)
-    n = iceil(6 + 0.7*abs(imag(s-1))^inv(1 + real(m)*0.05))
+    n = ceil(Int,6 + 0.7*abs(imag(s-1))^inv(1 + real(m)*0.05))
     ζ = one(s)
     for ν = 2:n
         ζₒ= ζ
         ζ += inv(ν)^s
-        ζ == ζₒ && break # prevent long loop for large m 
+        ζ == ζₒ && break # prevent long loop for large m
     end
     z = 1 + n
     t = inv(z)
     w = t^m
     ζ += w * (inv(m) + 0.5*t)
 
-    t *= t # 1/z^2                                                              
+    t *= t # 1/z^2
     ζ += w*t * @pg_horner(t,m,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686,3.0539543302701198)
 
     return ζ

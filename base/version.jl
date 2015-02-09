@@ -8,26 +8,26 @@ immutable VersionNumber
     build::(Union(Int,ASCIIString)...)
 
     function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
-        major >= 0 || error("invalid negative major version: $major")
-        minor >= 0 || error("invalid negative minor version: $minor")
-        patch >= 0 || error("invalid negative patch version: $patch")
+        major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
+        minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
+        patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
         for ident in pre
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative pre-release identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    error("invalid pre-release identifier: ", repr(ident))
+                    throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
             end
         end
         for ident in bld
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative build identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
-                    error("invalid build identifier: ", repr(ident))
+                    throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
             end
         end
@@ -71,7 +71,7 @@ const VERSION_REGEX = r"^
     ))
 $"ix
 
-function split_idents(s::String)
+function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
@@ -79,9 +79,9 @@ function split_idents(s::String)
     end
 end
 
-VersionNumber(v::String) = begin
+VersionNumber(v::AbstractString) = begin
     m = match(VERSION_REGEX, v)
-    if m == nothing error("invalid version string: $v") end
+    m == nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
     major = int(major)
     minor = minor != nothing ? int(minor) : 0
@@ -94,9 +94,9 @@ VersionNumber(v::String) = begin
     VersionNumber(major, minor, patch, prerl, build)
 end
 
-convert(::Type{VersionNumber}, v::String) = VersionNumber(v)
+convert(::Type{VersionNumber}, v::AbstractString) = VersionNumber(v)
 
-macro v_str(v); VersionNumber(v); end 
+macro v_str(v); VersionNumber(v); end
 
 typemin(::Type{VersionNumber}) = v"0-"
 typemax(::Type{VersionNumber}) = VersionNumber(typemax(Int),typemax(Int),typemax(Int),(),("",))
@@ -150,8 +150,8 @@ function isless(a::VersionNumber, b::VersionNumber)
     return false
 end
 
-function hash(v::VersionNumber, h::Uint)
-    h += itrunc(Uint,0x8ff4ffdb75f9fede)
+function hash(v::VersionNumber, h::UInt)
+    h += 0x8ff4ffdb75f9fede % UInt
     h = hash(v.major, h)
     h = hash(v.minor, h)
     h = hash(v.patch, h)
@@ -229,8 +229,8 @@ function banner(io::IO = STDOUT)
         d3 = "\033[32m" # third dot
         d4 = "\033[35m" # fourth dot
 
-        print(io,"""\033[1m               $(d3)_
-           $(d1)_       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
+        print(io,"""\033[1m               $(d3)_$(tx)
+           $(d1)_$(tx)       $(jl)_$(tx) $(d2)_$(d3)(_)$(d4)_$(tx)     |  A fresh approach to technical computing
           $(d1)(_)$(jl)     | $(d2)(_)$(tx) $(d4)(_)$(tx)    |  Documentation: http://docs.julialang.org
            $(jl)_ _   _| |_  __ _$(tx)   |  Type \"help()\" for help.
           $(jl)| | | | | | |/ _` |$(tx)  |
