@@ -93,9 +93,9 @@ end
 
 # test invalid port
 @test_throws ArgumentError connect(ip"127.0.0.1",-1)
-@test_throws ArgumentError connect(ip"127.0.0.1", typemax(Uint16)+1)
+@test_throws ArgumentError connect(ip"127.0.0.1", typemax(UInt16)+1)
 @test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", -1)
-@test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(Uint16)+1)
+@test_throws ArgumentError connect(ip"0:0:0:0:0:ffff:127.0.0.1", typemax(UInt16)+1)
 
 p, server = listenany(defaultport)
 r = RemoteRef()

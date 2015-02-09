@@ -719,13 +719,11 @@ function cat_t(catdims, typeC::Type, X...)
         dims2cat[catdims[k]]=k
     end
 
-    typeC = isa(X[1],AbstractArray) ? eltype(X[1]) : typeof(X[1])
     dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
     for k = 1:length(catdims)
         catsizes[1,k] = dimsC[catdims[k]]
     end
     for i = 2:nargs
-        typeC = promote_type(typeC, isa(X[i], AbstractArray) ? eltype(X[i]) : typeof(X[i]))
         for d = 1:ndimsC
             currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
             if dims2cat[d]==0
@@ -761,51 +759,7 @@ typed_hcat(T::Type, X...) = cat_t(2, T, X...)
 
 cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
-cat(catdims, A::AbstractArray...) =
-    cat_t(catdims, promote_eltype(A...), A...)
-
-function cat_t(catdims, typeC::Type, A::AbstractArray...)
-    catdims = collect(catdims)
-    nargs = length(A)
-    ndimsA = Int[ndims(a) for a in A]
-    ndimsC = max(maximum(ndimsA), maximum(catdims))
-    catsizes = zeros(Int,(nargs,length(catdims)))
-    dims2cat = zeros(Int,ndimsC)
-    for k = 1:length(catdims)
-        dims2cat[catdims[k]]=k
-    end
-
-    dimsC = Int[d <= ndimsA[1] ? size(A[1],d) : 1 for d=1:ndimsC]
-    for k = 1:length(catdims)
-        catsizes[1,k] = dimsC[catdims[k]]
-    end
-    for i = 2:nargs
-        for d = 1:ndimsC
-            currentdim = (d <= ndimsA[i] ? size(A[i],d) : 1)
-            if dims2cat[d]==0
-                dimsC[d] == currentdim || throw(DimensionMismatch("mismatch in dimension $(d)"))
-            else
-                dimsC[d] += currentdim
-                catsizes[i,dims2cat[d]] = currentdim
-            end
-        end
-    end
-
-    C = similar(full(A[1]), typeC, tuple(dimsC...))
-    if length(catdims)>1
-        fill!(C,0)
-    end
-
-    offsets = zeros(Int,length(catdims))
-    for i=1:nargs
-        cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
-        C[cat_one...] = A[i]
-        for k = 1:length(catdims)
-            offsets[k] += catsizes[i,k]
-        end
-    end
-    return C
-end
+cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 
 vcat(A::AbstractArray...) = cat(1, A...)
 hcat(A::AbstractArray...) = cat(2, A...)

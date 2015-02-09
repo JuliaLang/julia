@@ -965,7 +965,8 @@
                           (loop (list* 'ref ex (cdr al)))))
                      ((vect)  (loop (list* 'ref ex (cdr al))))
                      ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
-                     ((vcat)  (loop (list* 'typed_vcat ex (cdr al))))
+                     ((vcat)
+		      (loop (list* 'typed_vcat ex (cdr al))))
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
                      ((dict_comprehension)
@@ -1457,7 +1458,7 @@
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
 
-(define (parse-matrix s first closer)
+(define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
@@ -1466,7 +1467,7 @@
   (define semicolon (eqv? (peek-token s) #\;))
   (let loop ((vec   (list first))
              (outer '()))
-    (let ((t  (if (eqv? (peek-token s) #\newline)
+    (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
                   #\newline
                   (require-token s))))
       (if (eqv? t closer)
@@ -1478,7 +1479,9 @@
                          (fix 'hcat vec))))  ; [x y] => (hcat x y)
           (case t
             ((#\; #\newline)
-             (take-token s) (loop '() (update-outer vec outer)))
+             (or gotnewline (take-token s))
+	     (set! gotnewline #f)
+	     (loop '() (update-outer vec outer)))
             ((#\,)
              (error "unexpected comma in matrix expression"))
             ((#\] #\})
@@ -1523,8 +1526,13 @@
 		      ((eq? t 'for)
 		       (take-token s)
 		       (parse-comprehension s first closer))
+		      ((eqv? t #\newline)
+		       (take-token s)
+		       (if (memv (peek-token s) (list #\, closer))
+			   (parse-vect s first closer)
+			   (parse-matrix s first closer #t)))
 		      (else
-		       (parse-matrix s first closer))))))))))
+		       (parse-matrix s first closer #f))))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)

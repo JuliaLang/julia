@@ -333,7 +333,7 @@ sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
 @test sub(sub([1:5], 1:5), 1:5) == [1:5]
 
 # sub logical indexing #4763
-A = sub([1:10], 5:8)
+A = sub([1:10;], 5:8)
 @test A[A.<7] == [5, 6]
 B = reshape(1:16, 4, 4)
 sB = sub(B, 2:3, 2:3)
@@ -363,7 +363,7 @@ sA = slice(A, 1:2:3, 3, 1:2:8)
 @test strides(sA) == (2,30)
 @test sA[:] == A[sA.indexes...][:]
 
-a = [5:8]
+a = [5:8;]
 @test parent(a) == a
 @test parentindexes(a) == (1:4,)
 
