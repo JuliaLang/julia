@@ -20,16 +20,16 @@ end
 
 function initDir()
     @unix_only return match(r"(.*)(julia/sys.ji)",imagePath()).captures[1];
-    @windows_only return match(r"(.*)(julia\sys.ji)",imagePath()).captures[1];
+    @windows_only return match(r"(.*)(julia\\sys.ji)",imagePath()).captures[1];
 end
 
 function ldflags()
-    @unix_only return "-L$(libDir()) -Wl,-rpath $(libDir()) -ljulia";
-    @windows_only return "-L$(libDir()) -ljulia";
+    @unix_only return replace("""-L$(libDir()) -Wl,-rpath $(libDir()) -ljulia""","\\","\\\\");
+    @windows_only return replace("""-L$(libDir()) -ljulia""","\\","\\\\");
 end
 
 function cflags()
-    "-DJULIA_INIT_DIR=\"$(initDir())\" -I$(includeDir())";
+    replace("""-DJULIA_INIT_DIR="$(initDir())" -I$(includeDir())""","\\","\\\\");
 end
 
 function check_args(args)
