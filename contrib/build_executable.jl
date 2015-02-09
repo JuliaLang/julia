@@ -110,7 +110,7 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
 
     gcc = find_system_gcc()
     # This argument is needed for the gcc, see issue #9973
-    win_arg = @windows ? "-D_WIN32_WINNT=0x0502" : ""
+    win_arg = @windows ? `-D_WIN32_WINNT=0x0502` : ``
     incs = get_includes()
     ENV2 = deepcopy(ENV)
     @windows_only begin
@@ -197,9 +197,9 @@ function emit_cmain(cfile, exename, relocation)
     if relocation
         sysji = joinpath("lib"*exename)
     else
-        sysji = joinpath("..", "lib", "lib"*exename)
+        sysji = joinpath(dirname(Sys.dlpath("libjulia")), "lib"*exename)
     end
-
+    sysji = escape_string(sysji)
     f = open(cfile, "w")
     write( f, """
         #include <julia.h>
