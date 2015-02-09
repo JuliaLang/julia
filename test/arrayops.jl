@@ -200,6 +200,15 @@ if !Base._oldstyle_array_vcat_
     @test _array_equiv([1:3,4:6], a)
 end
 
+# typed hvcat
+let X = Float64[1 2 3; 4 5 6]
+    X32 = Float32[X X; X X]
+    @test eltype(X32) <: Float32
+    for i=[1,3], j=[1,4]
+        @test X32[i:(i+1), j:(j+2)] == X
+    end
+end
+
 # "end"
 X = [ i+2j for i=1:5, j=1:5 ]
 @test X[end,end] == 15
