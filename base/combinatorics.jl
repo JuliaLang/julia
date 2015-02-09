@@ -245,7 +245,7 @@ immutable Combinations{T}
     t::Int
 end
 
-eltype(c::Combinations) = typeof(c.a[1:c.t])
+eltype{T}(::Type{Combinations{T}}) = Vector{eltype(T)}
 
 length(c::Combinations) = binomial(length(c.a),c.t)
 
@@ -259,7 +259,7 @@ end
 
 start(c::Combinations) = [1:c.t]
 function next(c::Combinations, s)
-    comb = c.a[s]
+    comb = [c.a[si] for si in s]
     if c.t == 0
         # special case to generate 1 result for t==0
         return (comb,[length(c.a)+2])
@@ -283,7 +283,7 @@ immutable Permutations{T}
     a::T
 end
 
-eltype(p::Permutations) = typeof(p.a[1:length(p.a)])
+eltype{T}(::Type{Permutations{T}}) = Vector{eltype(T)}
 
 length(p::Permutations) = factorial(length(p.a))
 
@@ -291,7 +291,7 @@ permutations(a) = Permutations(a)
 
 start(p::Permutations) = [1:length(p.a)]
 function next(p::Permutations, s)
-    perm = p.a[s]
+    perm = [p.a[si] for si in s]
     if length(p.a) == 0
         # special case to generate 1 result for len==0
         return (perm,[1])
