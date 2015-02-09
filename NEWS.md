@@ -178,7 +178,7 @@ Deprecated or removed
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
-  * `inf` and `nan` are now deprecated in favor of `T(Inf)` and `NaN`, respectively ([#8776]).
+  * `inf` and `nan` are now deprecated in favor of `T(Inf)` and `T(NaN)`, respectively ([#8776]).
 
   * `oftype(T::Type, x)` is deprecated in favor of `convert(T,x)` (or `T(x)`).
 
