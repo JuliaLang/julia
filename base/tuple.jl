@@ -22,7 +22,7 @@ indexed_next(I, i, state) = done(I,state) ? throw(BoundsError()) : next(I, state
 
 # eltype
 
-eltype{T}(x::(T...)) = T
+eltype{T,_}(::Type{NTuple{_,T}}) = T
 
 ## mapping ##
 

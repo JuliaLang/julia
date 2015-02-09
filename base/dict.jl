@@ -143,8 +143,8 @@ end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
 isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
-eltype(v::KeyIterator) = eltype(v.dict)[1]
-eltype(v::ValueIterator) = eltype(v.dict)[2]
+eltype{D}(::Type{KeyIterator{D}}) = eltype(D)[1]
+eltype{D}(::Type{ValueIterator{D}}) = eltype(D)[2]
 
 start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
 done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
@@ -201,7 +201,7 @@ function filter!(f::Function, d::Associative)
 end
 filter(f::Function, d::Associative) = filter!(f,copy(d))
 
-eltype{K,V}(a::Associative{K,V}) = (K,V)
+eltype{K,V}(::Type{Associative{K,V}}) = (K,V)
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)

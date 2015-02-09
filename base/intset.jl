@@ -7,7 +7,7 @@ type IntSet
 end
 IntSet(itr) = (s=IntSet(); for a in itr; push!(s,a); end; s)
 
-eltype(s::IntSet) = Int64
+eltype(::Type{IntSet}) = Int64
 similar(s::IntSet) = IntSet()
 
 function show(io::IO, s::IntSet)
@@ -30,7 +30,6 @@ function show(io::IO, s::IntSet)
 end
 
 copy(s::IntSet) = union!(IntSet(), s)
-
 
 function sizehint!(s::IntSet, top::Integer)
     if top >= s.limit
