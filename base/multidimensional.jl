@@ -259,6 +259,23 @@ end
 
 stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
     N = length(J)
+    if x<:AbstractArray
+        ex=quote
+            X = x
+            @ncall $N setindex_shape_check X I
+            Xs = start(X)
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                v, Xs = next(X, Xs)
+                @inbounds A[offset_0] = v
+            end
+        end
+    else
+        ex=quote
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                @inbounds A[offset_0] = x
+            end
+        end
+    end
     quote
         @nexprs $N d->(J_d = J[d])
         @ncall $N checkbounds A J
@@ -266,20 +283,7 @@ stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d*size(A,d))
         @nexprs $N d->(offset_d = 1)  # really only need offset_$N = 1
-        if !isa(x, AbstractArray)
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-                @inbounds A[offset_0] = x
-            end
-        else
-            X = x
-            @ncall $N setindex_shape_check X I
-            iter = eachindex(X)
-            Xs = start(iter)
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-                Xindex, Xs = next(iter, Xs)
-                @inbounds A[offset_0] = X[Xindex]
-            end
-        end
+        $ex
         A
     end
 end
