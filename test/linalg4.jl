@@ -26,14 +26,14 @@ end
 n=12 #Size of matrix problem to test
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers
-for Mi7647 in (Symmetric(diagm([1.0:3.0])),
-               Hermitian(diagm([1.0:3.0])),
-               Hermitian(diagm(complex([1.0:3.0]))),
-               SymTridiagonal([1.0:3.0], zeros(2)))
+for Mi7647 in (Symmetric(diagm(1.0:3.0)),
+               Hermitian(diagm(1.0:3.0)),
+               Hermitian(diagm(complex(1.0:3.0))),
+               SymTridiagonal([1.0:3.0;], zeros(2)))
     debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
-    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0]
+    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]
 end
 
 debug && println("Bidiagonal matrices")
@@ -165,7 +165,7 @@ end
 
 
 debug && println("Test interconversion between special matrix types")
-a=[1.0:n]
+a=[1.0:n;]
 A=Diagonal(a)
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
     debug && println("newtype is $(newtype)")
@@ -174,7 +174,7 @@ end
 
 for isupper in (true, false)
     debug && println("isupper is $(isupper)")
-    A=Bidiagonal(a, [1.0:n-1], isupper)
+    A=Bidiagonal(a, [1.0:n-1;], isupper)
     for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
@@ -188,12 +188,12 @@ for isupper in (true, false)
     end
 end
 
-A = SymTridiagonal(a, [1.0:n-1])
+A = SymTridiagonal(a, [1.0:n-1;])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A = Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
+A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end

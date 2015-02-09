@@ -1,7 +1,7 @@
 @test sort([2,3,1]) == [1,2,3]
 @test sort([2,3,1], rev=true) == [3,2,1]
-@test sort(['z':-1:'a']) == ['a':'z']
-@test sort(['a':'z'], rev=true) == ['z':-1:'a']
+@test sort(['z':-1:'a';]) == ['a':'z';]
+@test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
 @test !issorted([2,3,1])
@@ -9,10 +9,10 @@
 @test reverse([2,3,1]) == [1,3,2]
 @test select([3,6,30,1,9],3) == 6
 @test select([3,6,30,1,9],3:4) == [6,9]
-let a=[1:10]
+let a=[1:10;]
     for r in Any[2:4, 1:2, 10:10, 4:2, 2:1, 4:-1:2, 2:-1:1, 10:-1:10, 4:1:3, 1:2:8, 10:-3:1]
-        @test select(a, r) == [r]
-        @test select(a, r, rev=true) == (11 .- [r])
+        @test select(a, r) == [r;]
+        @test select(a, r, rev=true) == (11 .- [r;])
     end
 end
 @test sum(randperm(6)) == 21
@@ -21,6 +21,11 @@ end
 numTypes = [ Int8,  Int16,  Int32,  Int64,  Int128,
             UInt8, UInt16, UInt32, UInt64, UInt128,
             Float16, Float32, Float64, BigInt, BigFloat]
+
+@test searchsorted([1:10;], 1, by=(x -> x >= 5)) == 1:4
+@test searchsorted([1:10;], 10, by=(x -> x >= 5)) == 5:10
+@test searchsorted([1:5; 1:5; 1:5], 1, 6, 10, Base.Order.Forward) == 6:6
+@test searchsorted(ones(15), 1, 6, 10, Base.Order.Forward) == 6:10
 
 for R in numTypes, T in numTypes
     @test searchsorted(R[1, 1, 2, 2, 3, 3], T(0)) == 1:0
@@ -34,15 +39,15 @@ for R in numTypes, T in numTypes
     @test searchsorted(1:3, T(2)) == 2:2
     @test searchsorted(1:3, T(4)) == 4:3
 
-    @test searchsorted(R[1:10], T(1), by=(x -> x >= 5)) == 1:4
-    @test searchsorted(R[1:10], T(10), by=(x -> x >= 5)) == 5:10
-    @test searchsorted(R[1:5, 1:5, 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
+    @test searchsorted(R[1:10;], T(1), by=(x -> x >= 5)) == 1:4
+    @test searchsorted(R[1:10;], T(10), by=(x -> x >= 5)) == 5:10
+    @test searchsorted(R[1:5; 1:5; 1:5], T(1), 6, 10, Base.Order.Forward) == 6:6
     @test searchsorted(ones(R, 15), T(1), 6, 10, Base.Order.Forward) == 6:10
 end
 
 for (rg,I) in [(49:57,47:59), (1:2:17,-1:19), (-3:0.5:2,-5:.5:4)]
     rg_r = reverse(rg)
-    rgv, rgv_r = [rg], [rg_r]
+    rgv, rgv_r = [rg;], [rg_r;]
     for i = I
         @test searchsorted(rg,i) == searchsorted(rgv,i)
         @test searchsorted(rg_r,i,rev=true) == searchsorted(rgv_r,i,rev=true)
@@ -63,8 +68,8 @@ for i = 1:100
     @test searchsorted(rg_r, nextfloat(rg_r[i]), rev=true) == i:i-1
 end
 
-@test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10], 1, by=(x -> x >= 5))
-@test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10], 10, by=(x -> x >= 5))
+@test searchsorted(1:10, 1, by=(x -> x >= 5)) == searchsorted([1:10;], 1, by=(x -> x >= 5))
+@test searchsorted(1:10, 10, by=(x -> x >= 5)) == searchsorted([1:10;], 10, by=(x -> x >= 5))
 
 @test searchsorted([], 0) == 1:0
 @test searchsorted([1,2,3], 0) == 1:0
@@ -145,7 +150,7 @@ end
 
 srand(0xdeadbeef)
 
-for n in [0:10, 100, 101, 1000, 1001]
+for n in [0:10; 100; 101; 1000; 1001]
     r = -5:5
     v = rand(r,n)
     h = hist(v,r)

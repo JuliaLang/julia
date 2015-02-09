@@ -4,17 +4,17 @@ types = Any[
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
     Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
 ]
-vals = [
+vals = vcat(
     typemin(Int64),
-    -int64(maxintfloat(Float64))+Int64[-4:1],
+    -int64(maxintfloat(Float64))+Int64[-4:1;],
     typemin(Int32),
     -integer(maxintfloat(Float32))+(-4:1),
     -2:2,
     integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
-    int64(maxintfloat(Float64))+Int64[-1:4],
+    int64(maxintfloat(Float64))+Int64[-1:4;],
     typemax(Int64),
-]
+)
 
 function coerce(T::Type, x)
     if T<:Rational
@@ -64,7 +64,7 @@ vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
     [1,0], [true,false], bitpack([true,false]),
     Set([1,2,3,4]),
-    Set([1:10]),                 # these lead to different key orders
+    Set([1:10;]),                # these lead to different key orders
     Set([7,9,4,10,2,3,5,8,6,1]), #
     Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),

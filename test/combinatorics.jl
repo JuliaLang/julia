@@ -12,7 +12,7 @@
 @test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
 @test_throws InexactError binomial(int64(67), int64(30))
 
-p = shuffle([1:1000])
+p = shuffle([1:1000;])
 @test isperm(p)
 @test all(invperm(invperm(p)) .== p)
 
@@ -20,7 +20,7 @@ push!(p, 1)
 @test !isperm(p)
 
 a = randcycle(10)
-@test ipermute!(permute!([1:10], a),a) == [1:10]
+@test ipermute!(permute!([1:10;], a),a) == [1:10;]
 
 @test collect(combinations("abc",3)) == ["abc"]
 @test collect(combinations("abc",2)) == ["ab","ac","bc"]
@@ -48,7 +48,7 @@ a = randcycle(10)
 @test length(collect(partitions('a':'h',5))) == length(partitions('a':'h',5))
 
 for n = 0:7, k = 1:factorial(n)
-    p = nthperm!([1:n], k)
+    p = nthperm!([1:n;], k)
     @test isperm(p)
     @test nthperm(p) == k
 end

@@ -752,7 +752,7 @@ arr = ["a","b","c"]
 
 # string iteration, and issue #1454
 str = "é"
-str_a = [str...]
+str_a = vcat(str...)
 @test length(str_a)==1
 @test str_a[1] == str[1]
 
@@ -907,7 +907,7 @@ bin_val = hex2bytes("07bf")
 # combo
 @test (@sprintf "%f %d %d %f" 1.0 [3 4]... 5) == "1.000000 3 4 5.000000"
 # multi
-@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
+@test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6;]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
 # comprehension
 @test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
@@ -1049,11 +1049,11 @@ end
 @test_throws BoundsError checkbounds("hello", 6)
 @test_throws BoundsError checkbounds("hello", 0:3)
 @test_throws BoundsError checkbounds("hello", 4:6)
-@test_throws BoundsError checkbounds("hello", [0:3])
-@test_throws BoundsError checkbounds("hello", [4:6])
+@test_throws BoundsError checkbounds("hello", [0:3;])
+@test_throws BoundsError checkbounds("hello", [4:6;])
 @test checkbounds("hello", 2)
 @test checkbounds("hello", 1:5)
-@test checkbounds("hello", [1:5])
+@test checkbounds("hello", [1:5;])
 
 
 # isvalid(), chr2ind() and ind2chr() for SubString{DirectIndexString}

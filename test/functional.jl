@@ -1,7 +1,7 @@
 # tests related to functional programming functions and styles
 
 # map -- array.jl
-@test isequal(map((x)->"$x"[end:end], [9:11]), ["9", "0", "1"])
+@test isequal(map((x)->"$x"[end:end], 9:11), ["9", "0", "1"])
 # TODO: @test map!()
 # map -- ranges.jl
 @test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])

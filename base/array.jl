@@ -140,12 +140,15 @@ end
 
 getindex(T::(Type...)) = Array(T,0)
 
+if _oldstyle_array_vcat_
 # T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Union(Char,Number)}(::Type{T}, r::Range)
+    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
     copy!(Array(T,length(r)), r)
 end
 
 function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
+    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
     copy!(a, o, r1)
@@ -155,6 +158,7 @@ function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
         o += length(r)
     end
     return a
+end
 end
 
 function fill!(a::Union(Array{UInt8}, Array{Int8}), x::Integer)
@@ -238,6 +242,8 @@ convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x
 convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
+
+promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
 
 function collect(T::Type, itr)
     if applicable(length, itr)

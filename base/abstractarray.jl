@@ -6,6 +6,45 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
+vect() = Array(Any, 0)
+vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+const _oldstyle_array_vcat_ = true
+
+if _oldstyle_array_vcat_
+    function oldstyle_vcat_warning(n::Int)
+        if n == 1
+            before = "a"
+            after  = "a;"
+        elseif n == 2
+            before = "a,b"
+            after  = "a;b"
+        else
+            before = "a,b,..."
+            after  = "a;b;..."
+        end
+        depwarn("[$before] concatenation is deprecated; use [$after] instead", :vect)
+    end
+    function vect(A::AbstractArray...)
+        oldstyle_vcat_warning(length(A))
+        vcat(A...)
+    end
+    function vect(X...)
+        for a in X
+            if typeof(a) <: AbstractArray
+                oldstyle_vcat_warning(length(X))
+                break
+            end
+        end
+        vcat(X...)
+    end
+else
+    function vect(X...)
+        T = promote_typeof(X...)
+        T[ X[i] for i=1:length(X) ]
+    end
+end
+
 size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
 eltype(x) = Any
@@ -488,7 +527,7 @@ function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
     for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
+        I = tuple(I..., d==0 ? [1:s;] : mod([-d:s-1-d;], s).+1)
     end
     a[(I::NTuple{N,Vector{Int}})...]
 end
@@ -577,18 +616,12 @@ vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,length(X)), X)
 end
 
 function hcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,1,length(X)), X)
 end
 
@@ -663,7 +696,13 @@ function vcat{T}(A::AbstractMatrix{T}...)
 end
 
 ## cat: general case
+
 function cat(catdims, X...)
+    T = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
+    cat_t(catdims, T, X...)
+end
+
+function cat_t(catdims, typeC::Type, X...)
     catdims = collect(catdims)
     nargs = length(X)
     ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
@@ -674,13 +713,11 @@ function cat(catdims, X...)
         dims2cat[catdims[k]]=k
     end
 
-    typeC = isa(X[1],AbstractArray) ? eltype(X[1]) : typeof(X[1])
     dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
     for k = 1:length(catdims)
         catsizes[1,k] = dimsC[catdims[k]]
     end
     for i = 2:nargs
-        typeC = promote_type(typeC, isa(X[i], AbstractArray) ? eltype(X[i]) : typeof(X[i]))
         for d = 1:ndimsC
             currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
             if dims2cat[d]==0
@@ -711,56 +748,18 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
+typed_vcat(T::Type, X...) = cat_t(1, T, X...)
+typed_hcat(T::Type, X...) = cat_t(2, T, X...)
+
 cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
-cat(catdims, A::AbstractArray...) =
-    cat_t(catdims, promote_eltype(A...), A...)
-
-function cat_t(catdims, typeC, A::AbstractArray...)
-    catdims = collect(catdims)
-    nargs = length(A)
-    ndimsA = Int[ndims(a) for a in A]
-    ndimsC = max(maximum(ndimsA), maximum(catdims))
-    catsizes = zeros(Int,(nargs,length(catdims)))
-    dims2cat = zeros(Int,ndimsC)
-    for k = 1:length(catdims)
-        dims2cat[catdims[k]]=k
-    end
-
-    dimsC = Int[d <= ndimsA[1] ? size(A[1],d) : 1 for d=1:ndimsC]
-    for k = 1:length(catdims)
-        catsizes[1,k] = dimsC[catdims[k]]
-    end
-    for i = 2:nargs
-        for d = 1:ndimsC
-            currentdim = (d <= ndimsA[i] ? size(A[i],d) : 1)
-            if dims2cat[d]==0
-                dimsC[d] == currentdim || throw(DimensionMismatch("mismatch in dimension $(d)"))
-            else
-                dimsC[d] += currentdim
-                catsizes[i,dims2cat[d]] = currentdim
-            end
-        end
-    end
-
-    C = similar(full(A[1]), typeC, tuple(dimsC...))
-    if length(catdims)>1
-        fill!(C,0)
-    end
-
-    offsets = zeros(Int,length(catdims))
-    for i=1:nargs
-        cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
-        C[cat_one...] = A[i]
-        for k = 1:length(catdims)
-            offsets[k] += catsizes[i,k]
-        end
-    end
-    return C
-end
+cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 
 vcat(A::AbstractArray...) = cat(1, A...)
 hcat(A::AbstractArray...) = cat(2, A...)
+
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -852,24 +851,47 @@ function hvcat_fill(a, xs)
     a
 end
 
-function hvcat(rows::(Int...), xs::Number...)
+function typed_hvcat(T::Type, rows::(Int...), xs::Number...)
     nr = length(rows)
     nc = rows[1]
-    #error check
     for i = 2:nr
         if nc != rows[i]
             throw(ArgumentError("row $(i) has mismatched number of columns"))
         end
     end
     len = length(xs)
-    T = typeof(xs[1])
-    for i=2:len
-        T = promote_type(T,typeof(xs[i]))
-    end
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
     hvcat_fill(Array(T, nr, nc), xs)
+end
+
+function hvcat(rows::(Int...), xs::Number...)
+    T = promote_typeof(xs...)
+    typed_hvcat(T, rows, xs...)
+end
+
+# fallback definition of hvcat in terms of hcat and vcat
+function hvcat(rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    vcat(rs...)
+end
+
+function typed_hvcat(T::Type, rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    T[rs...;]
 end
 
 ## Reductions and scans ##
@@ -983,18 +1005,6 @@ function ipermutedims(A::AbstractArray,perm)
 end
 
 ## Other array functions ##
-
-# fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::(Int...), as...)
-    nbr = length(rows)  # number of block rows
-    rs = cell(nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = hcat(as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    vcat(rs...)
-end
 
 function repmat(a::AbstractVecOrMat, m::Int, n::Int=1)
     o, p = size(a,1), size(a,2)
@@ -1252,7 +1262,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
 
     dimsA = [size(A)...]
     ndimsA = ndims(A)
-    alldims = [1:ndimsA]
+    alldims = [1:ndimsA;]
 
     otherdims = setdiff(alldims, dims)
 

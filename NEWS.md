@@ -30,6 +30,9 @@ New language features
 Language changes
 ----------------
 
+  * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
+    ([#3737], [#2488], [#8599]).
+
   * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
      in favor of using an explicit `throw` ([#9690]).
 
@@ -941,6 +944,7 @@ Too numerous to mention.
 [#2380]: https://github.com/JuliaLang/julia/issues/2380
 [#2403]: https://github.com/JuliaLang/julia/issues/2403
 [#2468]: https://github.com/JuliaLang/julia/issues/2468
+[#2488]: https://github.com/JuliaLang/julia/issues/2488
 [#2515]: https://github.com/JuliaLang/julia/issues/2515
 [#2516]: https://github.com/JuliaLang/julia/issues/2516
 [#2597]: https://github.com/JuliaLang/julia/issues/2597
@@ -986,6 +990,7 @@ Too numerous to mention.
 [#3688]: https://github.com/JuliaLang/julia/issues/3688
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
+[#3737]: https://github.com/JuliaLang/julia/issues/3737
 [#3759]: https://github.com/JuliaLang/julia/issues/3759
 [#3790]: https://github.com/JuliaLang/julia/issues/3790
 [#3819]: https://github.com/JuliaLang/julia/issues/3819
@@ -1143,9 +1148,11 @@ Too numerous to mention.
 [#8501]: https://github.com/JuliaLang/julia/issues/8501
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#8578]: https://github.com/JuliaLang/julia/issues/8578
+[#8599]: https://github.com/JuliaLang/julia/issues/8599
 [#8605]: https://github.com/JuliaLang/julia/issues/8605
 [#8624]: https://github.com/JuliaLang/julia/issues/8624
 [#8660]: https://github.com/JuliaLang/julia/issues/8660
+[#8672]: https://github.com/JuliaLang/julia/issues/8672
 [#8712]: https://github.com/JuliaLang/julia/issues/8712
 [#8734]: https://github.com/JuliaLang/julia/issues/8734
 [#8750]: https://github.com/JuliaLang/julia/issues/8750
@@ -1173,12 +1180,22 @@ Too numerous to mention.
 [#9132]: https://github.com/JuliaLang/julia/issues/9132
 [#9133]: https://github.com/JuliaLang/julia/issues/9133
 [#9144]: https://github.com/JuliaLang/julia/issues/9144
+[#9198]: https://github.com/JuliaLang/julia/issues/9198
 [#9249]: https://github.com/JuliaLang/julia/issues/9249
 [#9261]: https://github.com/JuliaLang/julia/issues/9261
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
+[#9309]: https://github.com/JuliaLang/julia/issues/9309
 [#9418]: https://github.com/JuliaLang/julia/issues/9418
 [#9425]: https://github.com/JuliaLang/julia/issues/9425
+[#9434]: https://github.com/JuliaLang/julia/issues/9434
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
+[#9690]: https://github.com/JuliaLang/julia/issues/9690
+[#9745]: https://github.com/JuliaLang/julia/issues/9745
+[#9779]: https://github.com/JuliaLang/julia/issues/9779
+[#9957]: https://github.com/JuliaLang/julia/issues/9957
+[#10024]: https://github.com/JuliaLang/julia/issues/10024
+[#10031]: https://github.com/JuliaLang/julia/issues/10031

@@ -857,15 +857,15 @@ end
 let
     tst = 1
     m1(i) = (tst+=1;i-1)
-    x = [1:4]
+    x = [1:4;]
     x[1:end] *= 2
-    @test x == [2:2:8]
+    @test x == [2:2:8;]
     x[m1(end)] += 3
     @test x == [2,4,9,8]
     @test tst == 2
 
     # issue #1886
-    X = [1:4]
+    X = [1:4;]
     r = Array(UnitRange{Int},1)
     r[1] = 2:3
     X[r...] *= 2
@@ -915,7 +915,7 @@ end
 let
     i2098() = begin
         c = Any[2.0]
-        [1:1:c[1]]
+        [1:1:c[1];]
     end
     @test isequal(i2098(), [1.0,2.0])
 end

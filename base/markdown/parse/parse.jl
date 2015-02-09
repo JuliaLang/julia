@@ -6,7 +6,7 @@ type MD
         new(content, meta)
 end
 
-MD(xs...) = MD([xs...])
+MD(xs...) = MD(vcat(xs...))
 
 # Forward some array methods
 
@@ -71,7 +71,7 @@ parseinline(s) = parseinline(s, _config_ == nothing ? julia : _config_)
 function parse(stream::IO, block::MD, config::Config; breaking = false)
     skipblank(stream)
     eof(stream) && return false
-    for parser in (breaking ? config.breaking : [config.breaking, config.regular])
+    for parser in (breaking ? config.breaking : [config.breaking; config.regular])
         parser(stream, block, config) && return true
     end
     return false

@@ -199,9 +199,9 @@ end
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
-    @test gamma(Float64[1:25]) == gamma(1:25)
+    @test gamma(Float64[1:25;]) == gamma(1:25)
 else
-    @test_approx_eq gamma(Float64[1:25]) gamma(1:25)
+    @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
 end
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
