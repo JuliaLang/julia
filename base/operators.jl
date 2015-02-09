@@ -170,9 +170,26 @@ widen{T<:Number}(x::T) = convert(widen(T), x)
 
 sizeof(x) = Core.sizeof(x)
 
-# copying immutable things
+# copying immutables is a no-op; mutables create a new object with the same contents
+stagedfunction Base.copy(x)
+    if !x.mutable
+        :x
+    else
+        quote
+            y = ccall(:jl_new_struct_uninit, Any, (Any,), $x)
+            for i in 1:length($(x.names))
+                !isdefined(x, i) && continue
+                fld = getfield(x, i)
+                setfield!(y, i, ifelse(x === fld, y, fld))
+            end
+            y
+        end
+    end
+end
+# Avoid staging for common immutable types
 copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
+
 
 # function pipelining
 |>(x, f::Callable) = f(x)

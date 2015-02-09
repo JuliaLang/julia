@@ -100,7 +100,6 @@ end
 
 immutable DevNullStream <: AsyncStream end
 const DevNull = DevNullStream()
-copy(::DevNullStream) = DevNull
 uvhandle(::DevNullStream) = C_NULL
 uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM

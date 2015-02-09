@@ -231,7 +231,7 @@ maximum(r::Range)  = isempty(r) ? throw(ArgumentError("range must be non-empty")
 ctranspose(r::Range) = [x for _=1, x=r]
 transpose(r::Range) = r'
 
-# Ranges are immutable
+# Ranges are immutable, but the AbstractArray copy method doesn't know that
 copy(r::Range) = r
 
 
