@@ -85,7 +85,6 @@ function write(s::IO, ch::Char)
         return 4
     else
         return write(s, '\ufffd')
-
     end
 end
 

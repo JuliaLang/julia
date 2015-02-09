@@ -6,7 +6,7 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
-vect() = Array(Void, 0)
+vect() = Array(Any, 0)
 vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 const _oldstyle_array_vcat_ = true
