@@ -68,7 +68,7 @@ function single_stride_dim(A::Array)
         Ar = reshape(A, shp...)
         # Compute the diff along dimension 1
         if size(Ar, 1) > 1
-            indexes = map(d->1:size(Ar,d), [1:ndims(Ar)])
+            indexes = map(d->1:size(Ar,d), [1:ndims(Ar);])
             indexesp = copy(indexes); indexesp[1] = 2:size(Ar,1)
             indexesm = copy(indexes); indexesm[1] = 1:size(Ar,1)-1
             dA = Ar[indexesp...] - Ar[indexesm...]
@@ -304,9 +304,9 @@ A = reshape(1:120, 3, 5, 8)
 sA = sub(A, 2, 1:5, :)
 @test parent(sA) == A
 @test parentindexes(sA) == (2:2, 1:5, :)
-@test Base.parentdims(sA) == [1:3]
+@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (1, 5, 8)
-@test sA[1, 2, 1:8][:] == [5:15:120]
+@test sA[1, 2, 1:8][:] == [5:15:120;]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
@@ -314,23 +314,23 @@ sA[2:5:end] = -1
 @test stride(sA,3) == 15
 @test stride(sA,4) == 120
 sA = sub(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2]
+@test Base.parentdims(sA) == [1:2;]
 sA[1:3,1:5] = -2
 @test all(A[:,:,5] .== -2)
 sA[:] = -3
 @test all(A[:,:,5] .== -3)
 @test strides(sA) == (1,3)
 sA = sub(A, 1:3, 3, 2:5)
-@test Base.parentdims(sA) == [1:3]
+@test Base.parentdims(sA) == [1:3;]
 @test size(sA) == (3,1,4)
 @test sA == A[1:3,3,2:5]
 @test sA[:] == A[1:3,3,2:5][:]
 sA = sub(A, 1:2:3, 1:3:5, 1:2:8)
-@test Base.parentdims(sA) == [1:3]
+@test Base.parentdims(sA) == [1:3;]
 @test strides(sA) == (2,9,30)
 @test sA[:] == A[1:2:3, 1:3:5, 1:2:8][:]
 # issue #8807
-@test sub(sub([1:5], 1:5), 1:5) == [1:5]
+@test sub(sub([1:5;], 1:5), 1:5) == [1:5;]
 
 # sub logical indexing #4763
 A = sub([1:10;], 5:8)
@@ -344,17 +344,17 @@ A = reshape(1:120, 3, 5, 8)
 sA = slice(A, 2, :, 1:8)
 @test parent(sA) == A
 @test parentindexes(sA) == (2, :, 1:8)
-@test Base.parentdims(sA) == [2:3]
+@test Base.parentdims(sA) == [2:3;]
 @test size(sA) == (5, 8)
 @test strides(sA) == (3,15)
-@test sA[2, 1:8][:] == [5:15:120]
-@test sA[:,1] == [2:3:14]
-@test sA[2:5:end] == [5:15:110]
+@test sA[2, 1:8][:] == [5:15:120;]
+@test sA[:,1] == [2:3:14;]
+@test sA[2:5:end] == [5:15:110;]
 sA[2:5:end] = -1
 @test all(sA[2:5:end] .== -1)
 @test all(A[5:15:120] .== -1)
 sA = slice(A, 1:3, 1:5, 5)
-@test Base.parentdims(sA) == [1:2]
+@test Base.parentdims(sA) == [1:2;]
 @test size(sA) == (3,5)
 @test strides(sA) == (1,3)
 sA = slice(A, 1:2:3, 3, 1:2:8)

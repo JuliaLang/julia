@@ -137,7 +137,7 @@ function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, m
     end
     otype = eltype(X)
     ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
-    ind   = [1:2:nsv*2]
+    ind   = [1:2:nsv*2;]
     sval  = abs(ex[1][ind])
 
     ritzvec || return (sval, ex[2], ex[3], ex[4], ex[5])

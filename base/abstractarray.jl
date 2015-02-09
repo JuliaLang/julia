@@ -23,7 +23,7 @@ if _oldstyle_array_vcat_
             before = "a,b,..."
             after  = "a;b;..."
         end
-        warn("[$before] concatenation is deprecated; use [$after] instead")
+        depwarn("[$before] concatenation is deprecated; use [$after] instead", :vect)
     end
     function vect(A::AbstractArray...)
         oldstyle_vcat_warning(length(A))

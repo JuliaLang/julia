@@ -7,7 +7,7 @@ upperchars = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'I', 'J', 'K', 'L', 'M', '
 plane1_playingcards = ['🂠', '🂡', '🂢', '🂣', '🂤', '🂥', '🂦', '🂧', '🂨', '🂩', '🂪', '🂫', '🂬', '🂭', '🂮']
 plane2_cjkpart1 = ['𠀀', '𠀁', '𠀂', '𠀃', '𠀄', '𠀅', '𠀆', '𠀇', '𠀈', '𠀉', '𠀊', '𠀋', '𠀌', '𠀍', '𠀎', '𠀏']
 
-testarrays = [numberchars, lowerchars, upperchars, plane1_playingcards, plane2_cjkpart1]
+testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_cjkpart1]
 
 #char(x::FloatingPoint) = char(round(UInt32,x))
   @test char(1.00000001) == '\x01' #Round down

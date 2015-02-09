@@ -300,7 +300,7 @@ for rng in ([], [MersenneTwister()], [RandomDevice()])
 end
 
 # test uniform distribution of floats
-let bins = [prevfloat(0.0):0.25:1.0]
+let bins = [prevfloat(0.0):0.25:1.0;]
     for rng in [srand(MersenneTwister()), RandomDevice()]
         for T in [Float16,Float32,Float64]
             # array version
