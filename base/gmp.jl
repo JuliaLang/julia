@@ -193,12 +193,48 @@ if sizeof(Int64) == sizeof(Clong)
 end
 convert(::Type{Int128}, x::BigInt) = copysign(UInt128(abs(x))%Int128,x)
 
-function convert(::Type{Float64}, n::BigInt)
-    # TODO: this should round to nearest but instead rounds to zero
+
+function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
-convert(::Type{Float32}, n::BigInt) = Float32(Float64(n))
-convert(::Type{Float16}, n::BigInt) = Float16(Float64(n))
+
+function call{T<:Union(Float16,Float32)}(::Type{T}, n::BigInt, ::RoundingMode{:ToZero})
+    T(Float64(n,RoundToZero),RoundToZero)
+end
+
+function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Down})
+    x = T(n,RoundToZero)
+    x > n ? prevfloat(x) : x
+end
+function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Up})
+    x = T(n,RoundToZero)
+    x < n ? nextfloat(x) : x
+end
+function call{T<:CdoubleMax}(::Type{T}, n::BigInt, ::RoundingMode{:Nearest})
+    x = T(n,RoundToZero)
+    if maxintfloat(T) <= abs(x) < T(Inf)
+        r = n-BigInt(x)
+        h = eps(x)/2
+        if iseven(reinterpret(Unsigned,x)) # check if last bit is odd/even
+            if r < -h
+                return prevfloat(x)
+            elseif r > h
+                return nextfloat(x)
+            end
+        else
+            if r <= -h
+                return prevfloat(x)
+            elseif r >= h
+                return nextfloat(x)
+            end
+        end
+    end
+    x
+end
+
+convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
+convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
+convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
 
 rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
 
@@ -207,6 +243,7 @@ function rem{T<:Integer}(n::BigInt, ::Type{T})
     lo, hi = typemin(T), typemax(T)
     convert(T, (n-lo) & (widen(hi)-widen(lo)) + lo)
 end
+
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
