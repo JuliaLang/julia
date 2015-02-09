@@ -189,11 +189,11 @@ Y = [1. 2. 3.; 4. 5. 6.]
 for i = 1:length(X) @test X[i] === Y[i] end
 
 _array_equiv(a,b) = eltype(a) == eltype(b) && a == b
-@test _array_equiv(Uint8[1:3;4], [0x1,0x2,0x3,0x4])
+@test _array_equiv(UInt8[1:3;4], [0x1,0x2,0x3,0x4])
 if !Base._oldstyle_array_vcat_
-    @test_throws MethodError Uint8[1:3]
-    @test_throws MethodError Uint8[1:3,]
-    @test_throws MethodError Uint8[1:3,4:6]
+    @test_throws MethodError UInt8[1:3]
+    @test_throws MethodError UInt8[1:3,]
+    @test_throws MethodError UInt8[1:3,4:6]
     a = Array(Range1{Int},1); a[1] = 1:3
     @test _array_equiv([1:3,], a)
     a = Array(Range1{Int},2); a[1] = 1:3; a[2] = 4:6
@@ -900,7 +900,7 @@ a = Array(Float64, 9,8,7,6,5,4,3,2,1)
 @test size(a,9,8,7,6,5,4,3,2,19,8,7,6,5,4,3,2,1) == (1,2,3,4,5,6,7,8,1,2,3,4,5,6,7,8,9)
 
 # Multidimensional iterators
-for a in ([1:5], reshape([2]))
+for a in ([1:5;], reshape([2]))
     counter = 0
     for I in eachindex(a)
         counter += 1
@@ -929,7 +929,7 @@ function mdsum2(A)
     s
 end
 
-a = [1:5]
+a = [1:5;]
 @test isa(Base.linearindexing(a), Base.LinearFast)
 b = sub(a, :)
 @test isa(Base.linearindexing(b), Base.LinearFast)
@@ -950,7 +950,7 @@ for i = 1:10
     unshift!(shp, 1)
 end
 
-a = [1:10]
+a = [1:10;]
 shp = [2,5]
 for i = 2:10
     A = reshape(a, tuple(shp...))
