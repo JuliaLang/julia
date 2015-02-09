@@ -8,7 +8,8 @@ Diagonal(A::Matrix) = Diagonal(diag(A))
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
-convert{T}(::Type{Triangular}, A::Diagonal{T}) = Triangular{T, Diagonal{T}, :U, false}(A)
+convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
+convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
     d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
@@ -18,7 +19,7 @@ end
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
-size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
+size(D::Diagonal,d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(D.diag) : 1)
 
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
@@ -32,9 +33,12 @@ function getindex(D::Diagonal, i::Integer)
     zero(eltype(D.diag))
 end
 
-ishermitian(D::Diagonal) = true
+ishermitian{T<:Real}(D::Diagonal{T}) = true
+ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
+
+factorize(D::Diagonal) = D
 
 tril!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
 triu!(D::Diagonal,i::Integer) = i == 0 ? D : zeros(D)
@@ -58,7 +62,7 @@ Ac_mul_B!(A::Diagonal,B::AbstractMatrix)= scale!(conj(A.diag),B)
 
 /(Da::Diagonal, Db::Diagonal) = Diagonal(Da.diag ./ Db.diag )
 function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
-    length(v)==length(D.diag) || throw(DimensionMismatch(""))
+    length(v)==length(D.diag) || throw(DimensionMismatch())
     for i=1:length(D.diag)
         d = D.diag[i]
         d==zero(T) && throw(SingularException(i))
@@ -67,7 +71,7 @@ function A_ldiv_B!{T}(D::Diagonal{T}, v::AbstractVector{T})
     v
 end
 function A_ldiv_B!{T}(D::Diagonal{T}, V::AbstractMatrix{T})
-    size(V,1)==length(D.diag) || throw(DimensionMismatch(""))
+    size(V,1)==length(D.diag) || throw(DimensionMismatch())
     for i=1:length(D.diag)
         d = D.diag[i]
         d==zero(T) && throw(SingularException(i))
@@ -97,7 +101,7 @@ sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 #Linear solver
 function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::AbstractArray{TA,1})
     m, n = size(A,2)==1 ? (size(A,1),1) : size(A)
-    m==length(D.diag) || throw(DimensionMismatch(""))
+    m==length(D.diag) || throw(DimensionMismatch())
     (m == 0 || n == 0) && return A
     C = Array(typeof(one(TD)/one(TA)),size(A))
     for j = 1:n
@@ -116,6 +120,26 @@ function inv{T}(D::Diagonal{T})
     for i = 1:length(D.diag)
         D.diag[i]==zero(T) && throw(SingularException(i))
         Di[i]=inv(D.diag[i])
+    end
+    Diagonal(Di)
+end
+
+function pinv{T}(D::Diagonal{T})
+    Di = similar(D.diag)
+    for i = 1:length(D.diag)
+        isfinite(inv(D.diag[i])) ? Di[i]=inv(D.diag[i]) : Di[i]=zero(T)
+    end
+    Diagonal(Di)
+end
+function pinv{T}(D::Diagonal{T}, tol::Real)
+    Di = similar(D.diag)
+    if( length(D.diag) != 0 ) maxabsD = maximum(abs(D.diag)) end
+    for i = 1:length(D.diag)
+        if( abs(D.diag[i]) > tol*maxabsD && isfinite(inv(D.diag[i])) )
+            Di[i]=inv(D.diag[i])
+        else
+            Di[i]=zero(T)
+        end
     end
     Diagonal(Di)
 end

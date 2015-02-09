@@ -1,5 +1,5 @@
 # string escaping & unescaping
-cx = {
+cx = Any[
     0x00000000      '\0'        "\\0"
     0x00000001      '\x01'      "\\x01"
     0x00000006      '\x06'      "\\x06"
@@ -49,10 +49,10 @@ cx = {
     0x000fffff      '\Ufffff'   "\\Ufffff"
     0x00100000      '\U100000'  "\\U100000"
     0x0010ffff      '\U10ffff'  "\\U10ffff"
-}
+]
 
 for i = 1:size(cx,1)
-    @test cx[i,1] == cx[i,2]
+    @test cx[i,1] == convert(UInt32, cx[i,2])
     @test string(cx[i,2]) == unescape_string(cx[i,3])
     if isascii(cx[i,2]) || !isprint(cx[i,2])
         @test cx[i,3] == escape_string(string(cx[i,2]))
@@ -63,8 +63,8 @@ for i = 1:size(cx,1)
     end
 end
 
-for i = 0:0x7f, p = {"","\0","x","xxx","\x7f","\uFF","\uFFF",
-                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"}
+for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
+                     "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
     c = char(i)
     cp = string(c,p)
     op = string(char(div(i,8)), oct(i%8), p)
@@ -216,9 +216,12 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_throws ErrorException parseint("   2 \n 0")
-@test_throws ErrorException parseint("2x")
-@test_throws ErrorException parseint("-")
+@test_throws ArgumentError parseint("   2 \n 0")
+@test_throws ArgumentError parseint("2x")
+@test_throws ArgumentError parseint("-")
+
+@test parseint('a') == 10
+@test_throws ArgumentError parseint(typemax(Char))
 
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
@@ -237,10 +240,10 @@ for T in (Int8, Int16, Int32, Int64)
     @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
 end
 
-for T in (Uint8,Uint16,Uint32,Uint64)
+for T in (UInt8,UInt16,UInt32,UInt64)
     @test parseint(T,string(typemin(T))) == typemin(T)
     @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws ErrorException parseint(T,string(big(typemin(T))-1))
+    @test_throws ArgumentError parseint(T,string(big(typemin(T))-1))
     @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
 end
 
@@ -252,7 +255,7 @@ astr = "Hello, world.\n"
 u8str = "∀ ε > 0, ∃ δ > 0: |x-y| < δ ⇒ |f(x)-f(y)| < ε"
 
 # ascii search
-for str in {astr, Base.GenericString(astr)}
+for str in [astr, Base.GenericString(astr)]
     @test search(str, 'x') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -269,7 +272,7 @@ for str in {astr, Base.GenericString(astr)}
 end
 
 # ascii rsearch
-for str in {astr}
+for str in [astr]
     @test rsearch(str, 'x') == 0
     @test rsearch(str, '\0') == 0
     @test rsearch(str, '\u80') == 0
@@ -287,7 +290,7 @@ for str in {astr}
 end
 
 # utf-8 search
-for str in {u8str, Base.GenericString(u8str)}
+for str in (u8str, Base.GenericString(u8str))
     @test search(str, 'z') == 0
     @test search(str, '\0') == 0
     @test search(str, '\u80') == 0
@@ -308,7 +311,7 @@ for str in {u8str, Base.GenericString(u8str)}
 end
 
 # utf-8 rsearch
-for str in {u8str}
+for str in [u8str]
     @test rsearch(str, 'z') == 0
     @test rsearch(str, '\0') == 0
     @test rsearch(str, '\u80') == 0
@@ -475,8 +478,8 @@ end
 @test rsearch("foo,bar,baz", "az", 10) == 0:-1
 
 # array rsearch
-@test rsearch(Uint8[1,2,3],Uint8[2,3],3) == 2:3
-@test rsearch(Uint8[1,2,3],Uint8[2,3],1) == 0:-1
+@test rsearch(UInt8[1,2,3],UInt8[2,3],3) == 2:3
+@test rsearch(UInt8[1,2,3],UInt8[2,3],1) == 0:-1
 
 # string search with a two-char regex
 @test search("foo,bar,baz", r"xx") == 0:-1
@@ -658,12 +661,12 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
 
-# {begins,ends}with
-@test beginswith("abcd", 'a')
-@test beginswith("abcd", "a")
-@test beginswith("abcd", "ab")
-@test !beginswith("ab", "abcd")
-@test !beginswith("abcd", "bc")
+# {starts,ends}with
+@test startswith("abcd", 'a')
+@test startswith("abcd", "a")
+@test startswith("abcd", "ab")
+@test !startswith("ab", "abcd")
+@test !startswith("abcd", "bc")
 @test endswith("abcd", 'd')
 @test endswith("abcd", "d")
 @test endswith("abcd", "cd")
@@ -771,7 +774,7 @@ n = 3
 a = [3,1,2]
 @test """$(a[2])""" == "1"
 @test """$(a[3]+7)""" == "9"
-@test """$(ifloor(4.5))""" == "4"
+@test """$(floor(Int,4.5))""" == "4"
 nl = "
 "
 @test """
@@ -834,17 +837,17 @@ bin_val = hex2bytes(hex_str)
 bin_val = hex2bytes("07bf")
 @test bin_val[1] == 7
 @test bin_val[2] == 191
-@test typeof(bin_val) == Array{Uint8, 1}
+@test typeof(bin_val) == Array{UInt8, 1}
 @test length(bin_val) == 2
 
 # all valid hex chars
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEF0")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEF0")
 
 #non-hex characters
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
 
 # sizeof
 @test sizeof("abc") == 3
@@ -885,6 +888,10 @@ bin_val = hex2bytes("07bf")
 @test (@sprintf "%.4e" 1.2345) == "1.2345e+00"
 @test (@sprintf "%.0e" 3e142) == "3e+142"
 @test (@sprintf "%#.0e" 3e142) == "3.e+142"
+# hex float
+@test (@sprintf "%a" 1.5) == "0x1.8p+0"
+@test (@sprintf "%#.0a" 1.5) == "0x2.p+0"
+@test (@sprintf "%+30a" 1/3) == "         +0x1.5555555555555p-2"
 # chars
 @test (@sprintf "%c" 65) == "A"
 @test (@sprintf "%c" 'A') == "A"
@@ -902,14 +909,14 @@ bin_val = hex2bytes("07bf")
 # multi
 @test (@sprintf "%s %f %9.5f %d %d %d %d%d%d%d" [1:6;]... [7,8,9,10]...) == "1 2.000000   3.00000 4 5 6 78910"
 # comprehension
-@test (@sprintf "%s %s %s %d %d %d %f %f %f" {10^x+y for x=1:3,y=1:3 }...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
+@test (@sprintf "%s %s %s %d %d %d %f %f %f" Any[10^x+y for x=1:3,y=1:3 ]...) == "11 101 1001 12 102 1002 13.000000 103.000000 1003.000000"
 
 # issue #4183
-@test split(SubString(ascii("x"), 2, 0), "y") == String[""]
-@test split(SubString(utf8("x"), 2, 0), "y") == String[""]
+@test split(SubString(ascii("x"), 2, 0), "y") == AbstractString[""]
+@test split(SubString(utf8("x"), 2, 0), "y") == AbstractString[""]
 
 # issue #4586
-@test rsplit(RevString("ailuj"),'l') == {"ju","ia"}
+@test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
 @test float64(RevString("64")) === 46.0
 
 # issue #6772
@@ -917,7 +924,7 @@ bin_val = hex2bytes("07bf")
 @test float(SubString("1 0",1,1)) === 1.0
 @test float32(SubString("10",1,1)) === 1.0f0
 
-for T = (Uint8,Int8,Uint16,Int16,Uint32,Int32,Uint64,Int64,Uint128,Int128,BigInt),
+for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
     @test parseint(T,base(b,n),b) == n
@@ -1010,6 +1017,15 @@ let
     @test expand(sym) === sym
     @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
 end
+
+@test symbol("asdf") === :asdf
+@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
+@test startswith(string(gensym("asdf")),"##asdf#")
+@test gensym("asdf") != gensym("asdf")
+@test gensym() != gensym()
+@test startswith(string(gensym()),"##")
+@test_throws ArgumentError symbol("ab\0")
+@test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
 let f =IOBuffer(),
@@ -1245,3 +1261,83 @@ end
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
 @test last('\x00':'\x7f') === '\x7f'
+
+# Tests of join()
+@test join([]) == ""
+@test join(["a"],"?") == "a"
+@test join("HELLO",'-') == "H-E-L-L-O"
+@test join(1:5, ", ", " and ") == "1, 2, 3, 4 and 5"
+@test join(["apples", "bananas", "pineapples"], ", ", " and ") == "apples, bananas and pineapples"
+
+# issue #9178 `join` calls `done()` twice on the iterables
+type i9178
+    nnext::Int64
+    ndone::Int64
+end
+Base.start(jt::i9178) = (jt.nnext=0 ; jt.ndone=0 ; 0)
+Base.done(jt::i9178, n) = (jt.ndone += 1 ; n > 3)
+Base.next(jt::i9178, n) = (jt.nnext += 1 ; ("$(jt.nnext),$(jt.ndone)", n+1))
+@test join(i9178(0,0), ";") == "1,1;2,2;3,3;4,4"
+
+# make sure substrings handle last code unit even if not start of codepoint
+let s = "x\u0302"
+    @test s[1:3] == s
+end
+
+# reverseind
+for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
+    for prefix in ("", "abcd", "\U0001d6a4\U0001d4c1", "\U0001d6a4\U0001d4c1c", " \U0001d6a4\U0001d4c1")
+        for suffix in ("", "abcde", "\U0001d4c1β\U0001d6a4", "\U0001d4c1β\U0001d6a4c", " \U0001d4c1β\U0001d6a4")
+            for c in ('X', 'δ', '\U0001d6a5')
+                T != ASCIIString || (isascii(prefix) && isascii(suffix) && isascii(c)) || continue
+                s = convert(T, string(prefix, c, suffix))
+                ri = search(reverse(s), c)
+                @test reverse(s) == RevString(s)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = RevString(s)
+                ri = search(reverse(s), c)
+                @test c == s[reverseind(s, ri)] == reverse(s)[ri]
+                s = convert(T, string(prefix, prefix, c, suffix, suffix))
+                pre = convert(T, prefix)
+                sb = SubString(s, nextind(pre, endof(pre)), endof(convert(T, string(prefix, prefix, c, suffix))))
+                ri = search(reverse(sb), c)
+                @test c == sb[reverseind(sb, ri)] == reverse(sb)[ri]
+            end
+        end
+    end
+end
+
+# issue #9781
+# float(SubString) wasn't tolerant of trailing whitespace, which was different
+# to "normal" strings. This also checks we aren't being too tolerant and allowing
+# any arbitrary trailing characters.
+@test float64("1\n") == 1.0
+@test float64(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float64(split("0,1 X\n",","))[2]
+@test float32("1\n") == 1.0
+@test float32(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float32(split("0,1 X\n",","))[2]
+
+#more ascii tests
+@test convert(ASCIIString, UInt8[32,107,75], "*") == " kK"
+@test convert(ASCIIString, UInt8[132,107,75], "*") == "*kK"
+@test convert(ASCIIString, UInt8[], "*") == ""
+@test convert(ASCIIString, UInt8[255], "*") == "*"
+
+@test ucfirst("Hola")=="Hola"
+@test ucfirst("hola")=="Hola"
+@test ucfirst("")==""
+@test ucfirst("*")=="*"
+
+@test lcfirst("Hola")=="hola"
+@test lcfirst("hola")=="hola"
+@test lcfirst("")==""
+@test lcfirst("*")=="*"
+
+#more UTF8String tests
+@test convert(UTF8String, UInt8[32,107,75], "*") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "*") == "*kK"
+@test convert(UTF8String, UInt8[32,107,75], "αβ") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
+@test convert(UTF8String, UInt8[], "*") == ""
+@test convert(UTF8String, UInt8[255], "αβ") == "αβ"

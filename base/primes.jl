@@ -8,7 +8,7 @@ function primesmask(s::AbstractVector{Bool})
     n = length(s)
     n < 2 && return s; s[2] = true
     n < 3 && return s; s[3] = true
-    r = ifloor(sqrt(n))
+    r = floor(Int,sqrt(n))
     for x = 1:r
         xx = x*x
         for y = 1:r
@@ -26,7 +26,7 @@ function primesmask(s::AbstractVector{Bool})
 end
 primesmask(n::Int) = primesmask(falses(n))
 primesmask(n::Integer) = n <= typemax(Int) ? primesmask(int(n)) :
-    error("you want WAY too many primes ($n)")
+    throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
 primes(n::Union(Integer,AbstractVector{Bool})) = find(primesmask(n))
 
@@ -57,17 +57,17 @@ end
 #     http://primes.utm.edu/prove/merged.html
 #     http://miller-rabin.appspot.com
 #
-witnesses(n::Union(Uint8,Int8,Uint16,Int16)) = (2,3)
-witnesses(n::Union(Uint32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
-witnesses(n::Union(Uint64,Int64)) =
+witnesses(n::Union(UInt8,Int8,UInt16,Int16)) = (2,3)
+witnesses(n::Union(UInt32,Int32)) = n < 1373653 ? (2,3) : (2,7,61)
+witnesses(n::Union(UInt64,Int64)) =
         n < 1373653         ? (2,3) :
         n < 4759123141      ? (2,7,61) :
         n < 2152302898747   ? (2,3,5,7,11) :
         n < 3474749660383   ? (2,3,5,7,11,13) :
                               (2,325,9375,28178,450775,9780504,1795265022)
 
-isprime(n::Uint128) =
-    n <= typemax(Uint64) ? isprime(uint64(n)) : isprime(BigInt(n))
+isprime(n::UInt128) =
+    n <= typemax(UInt64) ? isprime(uint64(n)) : isprime(BigInt(n))
 isprime(n::Int128) = n < 2 ? false :
     n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
 
@@ -76,7 +76,7 @@ isprime(n::Int128) = n < 2 ? false :
 const PRIMES = primes(10000)
 
 function factor{T<:Integer}(n::T)
-    0 < n || error("number to be factored must be positive")
+    0 < n || throw(ArgumentError("number to be factored must be ≥ 0, got $n"))
     h = Dict{T,Int}()
     n == 1 && return h
     n <= 3 && (h[n] = 1; return h)
@@ -93,6 +93,10 @@ function factor{T<:Integer}(n::T)
                 n = oftype(n, div(n,p))
             end
             n == 1 && return h
+            if isprime(n)
+                h[n] = 1
+                return h
+            end
             s = isqrt(n)
         end
     end
@@ -103,7 +107,9 @@ function factor{T<:Integer}(n::T)
                 h[p] = get(h,p,0)+1
                 n = oftype(n, div(n,p))
             end
-            if n == 1
+            n == 1 && return h
+            if isprime(n)
+                h[n] = 1
                 return h
             end
             s = isqrt(n)

@@ -89,10 +89,10 @@ extravagant_args(x,y=0,rest...;color="blue",kw...) =
               (1,2,(3,),"red",386))
 
 # passing empty kw container to function with no kwargs
-@test sin(1.0) == sin(1.0;{}...)
+@test sin(1.0) == sin(1.0; Dict()...)
 
 # passing junk kw container
-@test_throws BoundsError extravagant_args(1; {[]}...)
+@test_throws BoundsError extravagant_args(1; Any[[]]...)
 
 # keyword args with static parmeters
 kwf6{T}(x; k::T=1) = T
@@ -173,7 +173,7 @@ function test4974(;kwargs...)
     end
 end
 
-@test test4974(a=1) == (2, {(:a,1)})
+@test test4974(a=1) == (2, [(:a, 1)])
 
 # issue #7704, computed keywords
 @test kwf1(1; (:tens, 2)) == 21

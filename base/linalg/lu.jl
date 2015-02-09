@@ -1,20 +1,22 @@
 ####################
 # LU Factorization #
 ####################
-immutable LU{T,S<:AbstractMatrix{T}} <: Factorization{T}
+immutable LU{T,S<:AbstractMatrix} <: Factorization{T}
     factors::S
     ipiv::Vector{BlasInt}
     info::BlasInt
+    LU(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = new(factors, ipiv, info)
 end
+LU{T}(factors::AbstractMatrix{T}, ipiv::Vector{BlasInt}, info::BlasInt) = LU{T,typeof(factors)}(factors, ipiv, info)
 
 # StridedMatrix
-function lufact!{T<:BlasFloat}(A::StridedMatrix{T}; pivot = true)
-    !pivot && return generic_lufact!(A, pivot=pivot)
+function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+    pivot==Val{false} && return generic_lufact!(A, pivot)
     lpt = LAPACK.getrf!(A)
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
-lufact!(A::StridedMatrix; pivot = true) = generic_lufact!(A, pivot=pivot)
-function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
+lufact!(A::StridedMatrix, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = generic_lufact!(A, pivot)
+function generic_lufact!{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
     m, n = size(A)
     minmn = min(m,n)
     info = 0
@@ -23,7 +25,7 @@ function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
         for k = 1:minmn
             # find index max
             kp = k
-            if pivot
+            if pivot==Val{true}
                 amax = real(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
@@ -56,26 +58,26 @@ function generic_lufact!{T}(A::StridedMatrix{T}; pivot = true)
                 for i = k+1:m
                     A[i,j] -= A[i,k]*A[k,j]
                 end
-            end        
+            end
         end
     end
     LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
-lufact{T<:BlasFloat}(A::AbstractMatrix{T}; pivot = true) = lufact!(copy(A), pivot=pivot)
-lufact{T}(A::AbstractMatrix{T}; pivot = true) = (S = typeof(zero(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot=pivot) : lufact!(copy(A), pivot=pivot))
+lufact{T<:BlasFloat}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = lufact!(copy(A), pivot)
+lufact{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = (S = typeof(zero(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot) : lufact!(copy(A), pivot))
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 lufact(F::LU) = F
 
 lu(x::Number) = (one(x), x, 1)
-function lu(A::AbstractMatrix; pivot = true)
-    F = lufact(A, pivot = pivot)
+function lu(A::AbstractMatrix, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+    F = lufact(A, pivot)
     F[:L], F[:U], F[:p]
 end
 
 function convert{T}(::Type{LU{T}}, F::LU)
     M = convert(AbstractMatrix{T}, F.factors)
     LU{T,typeof(M)}(M, F.ipiv, F.info)
-end    
+end
 convert{T,S}(::Type{LU{T,S}}, F::LU) = LU{T,S}(convert(S, F.factors), F.ipiv, F.info)
 convert{T}(::Type{Factorization{T}}, F::LU) = convert(LU{T}, F)
 
@@ -112,8 +114,8 @@ function getindex{T,S<:StridedMatrix}(A::LU{T,S}, d::Symbol)
 end
 
 A_ldiv_B!{T<:BlasFloat, S<:StridedMatrix}(A::LU{T, S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('N', A.factors, A.ipiv, B) A.info
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), b[ipiv2perm(A.ipiv, length(b))]))
-A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(Triangular(A.factors, :U, false), A_ldiv_B!(Triangular(A.factors, :L, true), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
+A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, b::StridedVector) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), b[ipiv2perm(A.ipiv, length(b))]))
+A_ldiv_B!{T,S<:StridedMatrix}(A::LU{T,S}, B::StridedMatrix) = A_ldiv_B!(UpperTriangular(A.factors), A_ldiv_B!(UnitLowerTriangular(A.factors), B[ipiv2perm(A.ipiv, size(B, 1)),:]))
 At_ldiv_B{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, copy(B)) A.info
 Ac_ldiv_B{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('C', A.factors, A.ipiv, copy(B)) A.info
 At_ldiv_Bt{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) = @assertnonsingular LAPACK.getrs!('T', A.factors, A.ipiv, transpose(B)) A.info
@@ -129,7 +131,7 @@ function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     dg = diag(A.factors)
     s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
-    sum(log(abs(dg))), s 
+    sum(log(abs(dg))), s
 end
 
 function logdet{T<:Real,S}(A::LU{T,S})
@@ -140,10 +142,10 @@ end
 
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0) 
+    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0)
     r, a = reim(s)
-    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi] 
-    complex(r,a)    
+    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi]
+    complex(r,a)
 end
 
 inv{T<:BlasFloat,S<:StridedMatrix}(A::LU{T,S}) = @assertnonsingular LAPACK.getri!(copy(A.factors), A.ipiv) A.info
@@ -154,7 +156,7 @@ cond(A::LU, p::Number) = norm(A[:L]*A[:U],p)*norm(inv(A),p)
 # Tridiagonal
 
 # See dgttrf.f
-function lufact!{T}(A::Tridiagonal{T}; pivot = true)
+function lufact!{T}(A::Tridiagonal{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
     n = size(A, 1)
     info = 0
     ipiv = Array(BlasInt, n)
@@ -169,7 +171,7 @@ function lufact!{T}(A::Tridiagonal{T}; pivot = true)
         end
         for i = 1:n-2
             # pivot or not?
-            if !pivot || abs(d[i]) >= abs(dl[i])
+            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
                 # No interchange
                 if d[i] != 0
                     fact = dl[i]/d[i]
@@ -192,7 +194,7 @@ function lufact!{T}(A::Tridiagonal{T}; pivot = true)
         end
         if n > 1
             i = n-1
-            if !pivot || abs(d[i]) >= abs(dl[i])
+            if pivot==Val{false} || abs(d[i]) >= abs(dl[i])
                 if d[i] != 0
                     fact = dl[i]/d[i]
                     dl[i] = fact
@@ -218,12 +220,13 @@ function lufact!{T}(A::Tridiagonal{T}; pivot = true)
     end
     LU{T,Tridiagonal{T}}(A, ipiv, convert(BlasInt, info))
 end
+
 factorize(A::Tridiagonal) = lufact(A)
 
 # See dgtts2.f
 function A_ldiv_B!{T}(A::LU{T,Tridiagonal{T}}, B::AbstractVecOrMat)
     n = size(A,1)
-    n == size(B,1) || throw(DimensionMismatch(""))
+    n == size(B,1) || throw(DimensionMismatch())
     nrhs = size(B,2)
     dl = A.factors.dl
     d = A.factors.d

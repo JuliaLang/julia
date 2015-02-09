@@ -119,7 +119,6 @@
       <keyword>STDIN</keyword>
       <keyword>STDOUT</keyword>
       <!-- type-related -->
-      <keyword>T</keyword>
       <keyword>ANY</keyword>
     </context>
 
@@ -218,8 +217,8 @@
     <context id="module" style-ref="module">
       <!-- http://docs.julialang.org/en/latest/manual/modules/#standard-modules -->
       <keyword>Base</keyword>
-      <keyword>Core</keyword> 
-      <keyword>Main</keyword> 
+      <keyword>Core</keyword>
+      <keyword>Main</keyword>
       <!-- exports.jl -->
       <keyword>FFTW</keyword>
       <keyword>Collections</keyword>
@@ -248,7 +247,7 @@
       <keyword>ImaginaryUnit</keyword>
       <keyword>Signed|Unsigned</keyword>
       <keyword>Int(eger|Set|8|16|32|64|128)?</keyword>
-      <keyword>Uint(8|16|32|64|128)?</keyword>
+      <keyword>UInt(8|16|32|64|128)?</keyword>
       <keyword>Float(ingPoint|16|32|64)</keyword>
       <keyword>Complex(Pair|64|128)?</keyword>
       <keyword>Big(Int|Float)</keyword>
@@ -336,7 +335,6 @@
       <keyword>VersionNumber</keyword>
       <keyword>Wait(For|Task)</keyword>
       <keyword>Weak(KeyDict|Ref)</keyword>
-      <keyword>Woodbury</keyword>
       <keyword>(Timeout|Idle|Single)?AsyncWork</keyword>
       <keyword>Work(er|Item)</keyword>
       <keyword>Zip</keyword>

@@ -3,7 +3,7 @@
   I/O and operating system utility functions
 */
 #include "julia.h"
-#include "uv.h"
+#include "julia_internal.h"
 #include <sys/stat.h>
 #include <stdlib.h>
 #include <string.h>
@@ -46,7 +46,6 @@ extern "C" {
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-DLLEXPORT char *basename(char *);
 DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
@@ -611,7 +610,7 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 {
     if (!uv_lib)
         return NULL;
-    
+
     void *handle = uv_lib->handle;
 #ifdef __APPLE__
     for (int32_t i = _dyld_image_count(); i >= 0 ; i--) {

@@ -20,6 +20,7 @@ export # also exported by Base
     sort,
     sort!,
     sortperm,
+    sortperm!,
     sortrows,
     sortcols,
     # algorithms:
@@ -53,7 +54,7 @@ issorted(itr;
     issorted(itr, ord(lt,by,rev,order))
 
 function select!(v::AbstractVector, k::Int, lo::Int, hi::Int, o::Ordering)
-    lo <= k <= hi || error("select index $k is out of range $lo:$hi")
+    lo <= k <= hi || throw(ArgumentError("select index $k is out of range $lo:$hi"))
     @inbounds while lo < hi
         if hi-lo == 1
             if lt(o, v[hi], v[lo])
@@ -84,7 +85,7 @@ end
 function select!(v::AbstractVector, r::OrdinalRange, lo::Int, hi::Int, o::Ordering)
     isempty(r) && (return v[r])
     a, b = extrema(r)
-    lo <= a <= b <= hi || error("selection $r is out of range $lo:$hi")
+    lo <= a <= b <= hi || throw(ArgumentError("selection $r is out of range $lo:$hi"))
     @inbounds while true
         if lo == a && hi == b
             sort!(v, lo, hi, DEFAULT_UNSTABLE, o)
@@ -179,7 +180,7 @@ function searchsortedlast{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        n = max(min(round(Integer,(x-first(a))/step(a))+1,length(a)),1)
         lt(o, x, a[n]) ? n-1 : n
     end
 end
@@ -188,7 +189,7 @@ function searchsortedfirst{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
-        n = max(min(iround((x-first(a))/step(a))+1,length(a)),1)
+        n = max(min(round(Integer,(x-first(a))/step(a))+1,length(a)),1)
         lt(o, a[n] ,x) ? n+1 : n
     end
 end
@@ -197,7 +198,7 @@ function searchsortedlast{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, x, first(a)) ? 0 : length(a)
     else
-        max(min(fld(ifloor(x)-first(a),step(a))+1,length(a)),0)
+        max(min(fld(floor(Integer,x)-first(a),step(a))+1,length(a)),0)
     end
 end
 
@@ -205,14 +206,30 @@ function searchsortedfirst{T<:Integer}(a::Range{T}, x::Real, o::DirectOrdering)
     if step(a) == 0
         lt(o, first(a), x) ? length(a)+1 : 1
     else
-        max(min(-fld(ifloor(-x)+first(a),step(a))+1,length(a)+1),1)
+        max(min(-fld(floor(Integer,-x)+first(a),step(a))+1,length(a)+1),1)
+    end
+end
+
+function searchsortedfirst{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+    if step(a) == 0
+        lt(o, first(a), x) ? length(a)+1 : 1
+    else
+        max(min(-fld(first(a)-signed(x),step(a))+1,length(a)+1),1)
+    end
+end
+
+function searchsortedlast{T<:Integer}(a::Range{T}, x::Unsigned, o::DirectOrdering)
+    if step(a) == 0
+        lt(o, x, first(a)) ? 0 : length(a)
+    else
+        max(min(fld(signed(x)-first(a),step(a))+1,length(a)),0)
     end
 end
 
 searchsorted{T<:Real}(a::Range{T}, x::Real, o::DirectOrdering) =
     searchsortedfirst(a,x,o):searchsortedlast(a,x,o)
 
-for s in {:searchsortedfirst, :searchsortedlast, :searchsorted}
+for s in [:searchsortedfirst, :searchsortedlast, :searchsorted]
     @eval begin
         $s(v::AbstractVector, x, o::Ordering) = $s(v,x,1,length(v),o)
         $s(v::AbstractVector, x;
@@ -263,10 +280,11 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
             v[mi], v[lo] = v[lo], v[mi]
         end
         if lt(o, v[hi], v[mi])
-            v[hi], v[mi] = v[mi], v[hi]
-        end
-        if lt(o, v[mi], v[lo])
-            v[mi], v[lo] = v[lo], v[mi]
+            if lt(o, v[hi], v[lo])
+                v[lo], v[mi], v[hi] = v[hi], v[lo], v[mi]
+            else
+                v[hi], v[mi] = v[mi], v[hi]
+            end
         end
         v[mi], v[lo] = v[lo], v[mi]
         i, j = lo, hi
@@ -279,8 +297,16 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::QuickSortAlg, o::Ordering
             v[i], v[j] = v[j], v[i]
         end
         v[j], v[lo] = v[lo], v[j]
-        lo < (j-1) && sort!(v, lo, j-1, a, o)
-        lo = j+1
+        if j-lo < hi-j
+            # recurse on the smaller chunk
+            # this is necessary to preserve O(log(n))
+            # stack space in the worst case (rather than O(n))
+            lo < (j-1) && sort!(v, lo, j-1, a, o)
+            lo = j+1
+        else
+            j+1 < hi && sort!(v, j+1, hi, a, o)
+            hi = j-1
+        end
     end
     return v
 end
@@ -340,6 +366,14 @@ sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
     lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
     sort!([1:length(v);], alg, Perm(ord(lt,by,rev,order),v))
+
+function sortperm!{I<:Integer}(x::Vector{I}, v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
+                               lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward,
+                               initialized::Bool=false)
+    length(x) != length(v) && throw(ArgumentError("Index vector must be the same length as the source vector."))
+    !initialized && @inbounds for i = 1:length(v); x[i] = i; end
+    sort!(x, alg, Perm(ord(lt,by,rev,order),v))
+end
 
 ## sorting multi-dimensional arrays ##
 

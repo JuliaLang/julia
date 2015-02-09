@@ -14,7 +14,10 @@
 /libosxunwind-*
 /lighttpd-*
 /libcxx-*
+/libffi-*
+/libgit*
 /llvm-*
+/lldb-*
 /mpfr-*
 /openblas-*
 /patchelf-*
@@ -25,9 +28,6 @@
 /zlib-*
 /utf8proc-*
 /librandom.*
-# obsolete dependencies
-/double-conversion-*
-grisu-*
-/libgrisu.so
 /virtualenv-*
 /julia-env
+/objconv*

@@ -7,9 +7,6 @@ extern "C" {
 
 // declarations for julia-callable builtin functions
 
-JL_CALLABLE(jl_f_new_expr);
-JL_CALLABLE(jl_f_new_box);
-JL_CALLABLE(jl_f_new_module);
 JL_CALLABLE(jl_f_throw);
 JL_CALLABLE(jl_f_is);
 JL_CALLABLE(jl_f_typeof);
@@ -32,15 +29,13 @@ JL_CALLABLE(jl_f_arrayref);
 JL_CALLABLE(jl_f_arrayset);
 JL_CALLABLE(jl_f_arraysize);
 JL_CALLABLE(jl_f_instantiate_type);
-JL_CALLABLE(jl_f_convert_default);
-JL_CALLABLE(jl_f_new_type_constructor);
 JL_CALLABLE(jl_f_typevar);
 JL_CALLABLE(jl_f_union);
 JL_CALLABLE(jl_f_methodexists);
 JL_CALLABLE(jl_f_applicable);
 JL_CALLABLE(jl_f_invoke);
-JL_CALLABLE(jl_f_task);
 JL_CALLABLE(jl_f_yieldto);
+JL_CALLABLE(jl_f_new_expr);
 
 #ifdef __cplusplus
 }

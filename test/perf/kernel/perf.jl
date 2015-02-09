@@ -117,7 +117,7 @@ rm("random.csv")
 include("json.jl")
 
 _json_data = "{\"web-app\": {
-  \"servlet\": [   
+  \"servlet\": [
     {
       \"servlet-name\": \"cofaxCDS\",
       \"servlet-class\": \"org.cofax.cds.CDSServlet\",
@@ -173,7 +173,7 @@ _json_data = "{\"web-app\": {
     {
       \"servlet-name\": \"cofaxAdmin\",
       \"servlet-class\": \"org.cofax.cds.AdminServlet\"},
- 
+
     {
       \"servlet-name\": \"fileServlet\",
       \"servlet-class\": \"org.cofax.cds.FileServlet\"},
@@ -200,7 +200,7 @@ _json_data = "{\"web-app\": {
     \"cofaxAdmin\": \"/admin/*\",
     \"fileServlet\": \"/static/*\",
     \"cofaxTools\": \"/tools/*\"},
- 
+
   \"taglib\": {
     \"taglib-uri\": \"cofax.tld\",
     \"taglib-location\": \"/WEB-INF/tlds/cofax.tld\"}}}"
@@ -217,3 +217,4 @@ logical_y = map(iseven, 1:length(x))
 @timeit (for n=1:100 add1!(x,logical_y) end) "add1_logical" "Increment x_i if y_i is true"
 @timeit (for n=1:100 devec_add1_logical!(x,logical_y) end) "devec_add1_logical" "Devectorized increment x_i if y_i is true"
 
+maxrss("kernel")

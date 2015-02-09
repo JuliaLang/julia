@@ -4,7 +4,7 @@ const _fact_table64 =
           121645100408832000,2432902008176640000]
 
 const _fact_table128 =
-    Uint128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
+    UInt128[0x00000000000000000000000000000001, 0x00000000000000000000000000000002,
             0x00000000000000000000000000000006, 0x00000000000000000000000000000018,
             0x00000000000000000000000000000078, 0x000000000000000000000000000002d0,
             0x000000000000000000000000000013b0, 0x00000000000000000000000000009d80,
@@ -31,17 +31,17 @@ function factorial_lookup(n::Integer, table, lim)
 end
 
 factorial(n::Int128) = factorial_lookup(n, _fact_table128, 33)
-factorial(n::Uint128) = factorial_lookup(n, _fact_table128, 34)
-factorial(n::Union(Int64,Uint64)) = factorial_lookup(n, _fact_table64, 20)
+factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
+factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,Uint8,Int16,Uint16)) = factorial(int32(n))
-factorial(n::Union(Int32,Uint32)) = factorial_lookup(n, _fact_table64, 12)
+factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(int32(n))
+factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32)) = factorial(int64(n))
+factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(int64(n))
 end
 
-function gamma(n::Union(Int8,Uint8,Int16,Uint16,Int32,Uint32,Int64,Uint64))
+function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
@@ -59,18 +59,21 @@ function factorial(n::Integer)
     return f
 end
 
+factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
+
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
-        return zero(T)
+        throw(DomainError())
     end
     f = one(T)
     while n > k
-        f *= n
+        f = Base.checked_mul(f,n)
         n -= 1
     end
     return f
 end
+factorial(n::Integer, k::Integer) = factorial(promote(n, k)...)
 
 function binomial{T<:Integer}(n::T, k::T)
     k < 0 && return zero(T)
@@ -136,6 +139,7 @@ end
 
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
+    k < 0 && throw(ArgumentError("permutation k must be ≥ 0, got $k"))
     n = length(a)
     n == 0 && return a
     f = factorial(oftype(k, n-1))
@@ -156,7 +160,7 @@ end
 nthperm(a::AbstractVector, k::Integer) = nthperm!(copy(a),k)
 
 function nthperm{T<:Integer}(p::AbstractVector{T})
-    isperm(p) || error("argument is not a permutation")
+    isperm(p) || throw(ArgumentError("argument is not a permutation"))
     k, n = 1, length(p)
     for i = 1:n-1
         f = factorial(n-i)
@@ -173,7 +177,7 @@ function invperm(a::AbstractVector)
     for i = 1:n
         j = a[i]
         ((1 <= j <= n) && b[j] == 0) ||
-            error("argument is not a permutation")
+            throw(ArgumentError("argument is not a permutation"))
         b[j] = i
     end
     b
@@ -291,12 +295,12 @@ permutations(a) = Permutations(a)
 
 start(p::Permutations) = [1:length(p.a);]
 function next(p::Permutations, s)
+    perm = p.a[s]
     if length(p.a) == 0
         # special case to generate 1 result for len==0
-        return (p.a,[1])
+        return (perm,[1])
     end
     s = copy(s)
-    perm = p.a[s]
     k = length(s)-1
     while k > 0 && s[k] > s[k+1];  k -= 1;  end
     if k == 0
@@ -330,7 +334,7 @@ function nextpartition(n, as)
     if isempty(as);  return Int[n];  end
 
     xs = similar(as,0)
-    sizehint(xs,length(as)+1)
+    sizehint!(xs,length(as)+1)
 
     for i = 1:length(as)-1
         if as[i+1] == 1
@@ -463,7 +467,7 @@ function nextsetpartition(s::AbstractVector, a, b, n, m)
         filter!(x->!isempty(x), temp)
     end
 
-    if isempty(s);  return ({s}, ([1], Int[], n, 1));  end
+    if isempty(s);  return ([s], ([1], Int[], n, 1));  end
 
     part = makeparts(s,a,m)
 
@@ -593,7 +597,7 @@ end
 # for integer n1, n2, n3
 function nextprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter
@@ -634,7 +638,7 @@ end
 # for integer n1, n2, n3
 function prevprod(a::Vector{Int}, x)
     if x > typemax(Int)
-        error("unsafe for x bigger than typemax(Int)")
+        throw(ArgumentError("unsafe for x > typemax(Int), got $x"))
     end
     k = length(a)
     v = ones(Int, k)                  # current value of each counter

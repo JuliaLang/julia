@@ -24,21 +24,16 @@ maxintfloat() = maxintfloat(Float64)
 
 isinteger(x::FloatingPoint) = (trunc(x)==x)&isfinite(x)
 
-num2hex(x::Float16) = hex(reinterpret(Uint16,x), 4)
-num2hex(x::Float32) = hex(box(Uint32,unbox(Float32,x)),8)
-num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
+num2hex(x::Float16) = hex(reinterpret(UInt16,x), 4)
+num2hex(x::Float32) = hex(box(UInt32,unbox(Float32,x)),8)
+num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
-function hex2num(s::String)
+function hex2num(s::AbstractString)
     if length(s) <= 8
         return box(Float32,unbox(Int32,parseint(Int32,s,16)))
     end
     return box(Float64,unbox(Int64,parseint(Int64,s,16)))
 end
-
-@vectorize_1arg Real iround
-@vectorize_1arg Real itrunc
-@vectorize_1arg Real ifloor
-@vectorize_1arg Real iceil
 
 @vectorize_1arg Number abs
 @vectorize_1arg Number abs2
@@ -48,9 +43,60 @@ end
 @vectorize_1arg Number isinf
 @vectorize_1arg Number isfinite
 
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,1}) = [ iround(T, x[i]) for i = 1:length(x) ]
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R,2}) = [ iround(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
-iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T, x[i]) for i = 1:length(x) ], size(x))
+
+round(x::Real, ::RoundingMode{:ToZero}) = trunc(x)
+round(x::Real, ::RoundingMode{:Up}) = ceil(x)
+round(x::Real, ::RoundingMode{:Down}) = floor(x)
+# C-style round
+function round(x::FloatingPoint, ::RoundingMode{:NearestTiesAway})
+    y = trunc(x)
+    ifelse(x==y,y,trunc(2*x-y))
+end
+# Java-style round
+function round(x::FloatingPoint, ::RoundingMode{:NearestTiesUp})
+    y = floor(x)
+    ifelse(x==y,y,copysign(floor(2*x-y),x))
+end
+round{T<:Integer}(::Type{T}, x::FloatingPoint, r::RoundingMode) = trunc(T,round(x,r))
+
+@vectorize_1arg Real trunc
+@vectorize_1arg Real floor
+@vectorize_1arg Real ceil
+@vectorize_1arg Real round
+
+for f in (:trunc,:floor,:ceil,:round)
+    @eval begin
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R,1})
+            [ ($f)(T, x[i]) for i = 1:length(x) ]
+        end
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R,2})
+            [ ($f)(T, x[i,j]) for i = 1:size(x,1), j = 1:size(x,2) ]
+        end
+        function ($f){T,R<:Real}(::Type{T}, x::AbstractArray{R})
+            reshape([ ($f)(T, x[i]) for i = 1:length(x) ], size(x))
+        end
+    end
+end
+
+function round{R<:Real}(x::AbstractArray{R,1}, r::RoundingMode)
+    [ round(x[i], r) for i = 1:length(x) ]
+end
+function round{R<:Real}(x::AbstractArray{R,2}, r::RoundingMode)
+    [ round(x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
+end
+function round{R<:Real}(x::AbstractArray{R}, r::RoundingMode)
+    reshape([ round(x[i], r) for i = 1:length(x) ], size(x))
+end
+
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R,1}, r::RoundingMode)
+    [ round(T, x[i], r) for i = 1:length(x) ]
+end
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R,2}, r::RoundingMode)
+    [ round(T, x[i,j], r) for i = 1:size(x,1), j = 1:size(x,2) ]
+end
+function round{T,R<:Real}(::Type{T}, x::AbstractArray{R}, r::RoundingMode)
+    reshape([ round(T, x[i], r) for i = 1:length(x) ], size(x))
+end
 
 # adapted from Matlab File Exchange roundsd: http://www.mathworks.com/matlabcentral/fileexchange/26212
 # for round, og is the power of 10 relative to the decimal point
@@ -59,31 +105,37 @@ iround{T<:Integer,R<:Real}(::Type{T}, x::AbstractArray{R}) = reshape([ iround(T,
 
 function _signif_og(x, digits, base)
     if base == 10
-        oftype(x, 10. ^ floor(log10(abs(x)) - digits + 1.))
+        e = floor(log10(abs(x)) - digits + 1.)
+        og = oftype(x, exp10(abs(e)))
     elseif base == 2
-        oftype(x, 2. ^ floor(log2(abs(x)) - digits + 1.))
+        e = exponent(abs(x)) - digits + 1.
+        og = oftype(x, exp2(abs(e)))
     else
-        oftype(x, float(base) ^ floor(log2(abs(x))/log2(base) - digits + 1.))
+        e = floor(log(base, abs(x)) - digits + 1.)
+        og = oftype(x, float(base) ^ abs(e))
     end
+    return og, e
 end
 
-function signif(x, digits::Integer, base::Integer=10)
-    if digits < 0
-        throw(DomainError())
-    end
+function signif(x::Real, digits::Integer, base::Integer=10)
+    digits < 1 && throw(DomainError())
+
     x = float(x)
-    if x==0 || !isfinite(x)
-        return x
+    (x == 0 || !isfinite(x)) && return x
+    og, e = _signif_og(x, digits, base)
+    if e >= 0 # for numeric stability
+        r = round(x/og)*og
+    else
+        r = round(x*og)/og
     end
-    og = _signif_og(x, digits, base)
-    round(x/og) * og
+    !isfinite(r) ? x : r
 end
 
 for f in (:round, :ceil, :floor, :trunc)
     @eval begin
         function ($f)(x, digits::Integer, base::Integer=10)
             x = float(x)
-            og = oftype(eltype(x),base)^digits
+            og = convert(eltype(x),base)^digits
             ($f)(x * og) / og
         end
     end

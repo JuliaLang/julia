@@ -154,7 +154,7 @@ inv{T<:Union(Float16,Float32)}(z::Complex{T}) =
 # the first step is to scale variables if appropriate ,then do calculations
 # in a way that avoids over/underflow (subfuncs 1 and 2), then undo the scaling.
 # scaling variable s and other techniques
-# based on arxiv.1210.4539 
+# based on arxiv.1210.4539
 #             a + i*b
 #  p + i*q = ---------
 #             c + i*d
@@ -286,7 +286,7 @@ angle(z::Complex) = atan2(imag(z), real(z))
 function log{T<:FloatingPoint}(z::Complex{T})
     const T1::T  = 1.25
     const T2::T  = 3
-    const ln2::T = log(oftype(T,2))  #0.6931471805599453
+    const ln2::T = log(convert(T,2))  #0.6931471805599453
     x, y = reim(z)
     ρ, k = ssqs(x,y)
     ax = abs(x)
@@ -338,12 +338,12 @@ function exp(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-zero(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
         er = exp(zr)
@@ -360,18 +360,18 @@ function expm1(z::Complex)
     if isnan(zr)
         Complex(zr, zi==0 ? zi : zr)
     elseif !isfinite(zi)
-        if zr == inf(zr)
-            Complex(-zr, nan(zr))
-        elseif zr == -inf(zr)
+        if zr == Inf
+            Complex(-zr, oftype(zr,NaN))
+        elseif zr == -Inf
             Complex(-one(zr), copysign(zero(zi), zi))
         else
-            Complex(nan(zr), nan(zi))
+            Complex(oftype(zr,NaN), oftype(zi,NaN))
         end
     else
-        erm1 = expm1(zr)        
+        erm1 = expm1(zr)
         if zi == 0
             Complex(erm1, zi)
-        else            
+        else
             er = erm1+one(erm1)
             wr = isfinite(er) ? erm1 - 2.0*er*(sin(0.5*zi))^2 : er*cos(zi)
             Complex(wr, er*sin(zi))
@@ -391,9 +391,9 @@ function log1p{T}(z::Complex{T})
     elseif isnan(zr)
         Complex(zr, zr)
     elseif isfinite(zi)
-        Complex(inf(T), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
+        Complex(T(Inf), copysign(zr > 0 ? zero(T) : convert(T, pi), zi))
     else
-        Complex(inf(T), nan(T))
+        Complex(T(Inf), T(NaN))
     end
 end
 
@@ -477,21 +477,19 @@ function ^{T<:Complex}(z::T, p::T)
 
     # apply some corrections to force known zeros
     if pim == 0
-        ip = itrunc(pr)
-        if ip == pr
+        if isinteger(pr)
             if zi == 0
                 im = copysign(zero(im), im)
             elseif zr == 0
-                if isodd(ip)
-                    re = copysign(zero(re), re)
-                else
+                if isinteger(0.5*pr) # pr is even
                     im = copysign(zero(im), im)
+                else
+                    re = copysign(zero(re), re)
                 end
             end
         else
             dr = pr*2
-            ip = itrunc(dr)
-            if ip == dr && zi == 0
+            if isinteger(dr) && zi == 0
                 if zr < 0
                     re = copysign(zero(re), re)
                 else
@@ -636,7 +634,7 @@ function acosh(z::Complex)
             return Complex(oftype(zr, NaN), oftype(zi, NaN))
         end
     elseif zr==-Inf && zi===-0.0 #Edge case is wrong - WHY?
-        return Complex(inf(zr), oftype(zi, -pi))
+        return Complex(oftype(zr,Inf), oftype(zi, -pi))
     end
     ξ = asinh(real(sqrt(conj(z-1))*sqrt(z+1)))
     η = 2atan2(imag(sqrt(z-1)),real(sqrt(z+1)))
@@ -692,3 +690,23 @@ function lexcmp(a::Complex, b::Complex)
     c == 0 || return c
     cmp(imag(a), imag(b))
 end
+
+#Rounding complex numbers
+#Requires two different RoundingModes for the real and imaginary components
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex(round(real(z), RoundingMode{MR}()),
+            round(imag(z), RoundingMode{MI}()))
+end
+
+round(z::Complex) = Complex(round(real(z)), round(imag(z)))
+@vectorize_1arg Complex round
+
+function round(z::Complex, digits::Integer, base::Integer=10)
+    Complex(round(real(z), digits, base),
+            round(imag(z), digits, base))
+end
+
+float{T<:FloatingPoint}(z::Complex{T}) = z
+float(z::Complex) = Complex(float(real(z)), float(imag(z)))
+@vectorize_1arg Complex float
+

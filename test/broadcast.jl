@@ -50,7 +50,7 @@ for arr in (identity, as_sub)
 
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1, 4])) == arr([2 1; 4 5])
     A = arr(eye(2)); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4; 1 5])
-    A = arr([1  0]); @test_throws ErrorException broadcast!(+, A, A, arr([1, 4]))
+    A = arr([1  0]); @test_throws DimensionMismatch broadcast!(+, A, A, arr([1, 4]))
     A = arr([1  0]); @test broadcast!(+, A, A, arr([1  4])) == arr([2 4])
     A = arr([1  0]); @test broadcast!(+, A, A, 2) == arr([3 2])
 
@@ -93,7 +93,7 @@ for arr in (identity, as_sub)
         bittest(f, ewf, arr(rand(rb, n1, n2, n3)), arr(rand(rb, n1, n2, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2, n3)), arr(rand(rb, n1,  1, n3)))
         bittest(f, ewf, arr(rand(rb,  1, n2,  1)), arr(rand(rb, n1,  1, n3)))
-        bittest(f, ewf, arr(randbool(n1, n2, n3)), arr(randbool(n1, n2, n3)))
+        bittest(f, ewf, arr(bitrand(n1, n2, n3)), arr(bitrand(n1, n2, n3)))
     end
 end
 

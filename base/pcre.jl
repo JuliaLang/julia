@@ -4,7 +4,7 @@ module PCRE
 
 include("pcre_h.jl")
 
-const VERSION = bytestring(ccall((:pcre_version, :libpcre), Ptr{Uint8}, ()))
+const VERSION = bytestring(ccall((:pcre_version, :libpcre), Ptr{UInt8}, ()))
 
 global JIT_STACK = C_NULL
 function __init__()
@@ -57,9 +57,9 @@ function info{T}(
     regex::Ptr{Void},
     extra::Ptr{Void}, what::Integer, ::Type{T}
 )
-    buf = Array(Uint8,sizeof(T))
+    buf = Array(UInt8,sizeof(T))
     ret = ccall((:pcre_fullinfo, :libpcre), Int32,
-                (Ptr{Void}, Ptr{Void}, Int32, Ptr{Uint8}),
+                (Ptr{Void}, Ptr{Void}, Int32, Ptr{UInt8}),
                 regex, extra, what, buf)
     if ret != 0
         error(ret == ERROR_NULL      ? "NULL regex object" :
@@ -71,22 +71,22 @@ function info{T}(
 end
 
 function config{T}(what::Integer, ::Type{T})
-    buf = Array(Uint8, sizeof(T))
+    buf = Array(UInt8, sizeof(T))
     ret = ccall((:pcre_config, :libpcre), Int32,
-                (Int32, Ptr{Uint8}),
+                (Int32, Ptr{UInt8}),
                 what, buf)
 
     if ret != 0
-        error("error $n")
+        error("PCRE.config error code $n")
     end
     reinterpret(T,buf)[1]
 end
 
-function compile(pattern::String, options::Integer)
-    errstr = Array(Ptr{Uint8},1)
+function compile(pattern::AbstractString, options::Integer)
+    errstr = Array(Ptr{UInt8},1)
     erroff = Array(Int32,1)
     re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},
-                    (Ptr{Uint8}, Int32, Ptr{Ptr{Uint8}}, Ptr{Int32}, Ptr{Uint8}),
+                    (Ptr{UInt8}, Int32, Ptr{Ptr{UInt8}}, Ptr{Int32}, Ptr{UInt8}),
                     pattern, options, errstr, erroff, C_NULL)
     if re_ptr == C_NULL
         error("$(bytestring(errstr[1]))",
@@ -99,9 +99,9 @@ end
 
 function study(regex::Ptr{Void}, options::Integer)
     # NOTE: options should always be zero in current PCRE
-    errstr = Array(Ptr{Uint8},1)
+    errstr = Array(Ptr{UInt8},1)
     extra = ccall((:pcre_study, :libpcre), Ptr{Void},
-                  (Ptr{Void}, Int32, Ptr{Ptr{Uint8}}),
+                  (Ptr{Void}, Int32, Ptr{Ptr{UInt8}}),
                   regex, options, errstr)
     if errstr[1] != C_NULL
         error("$(bytestring(errstr[1]))")
@@ -136,16 +136,14 @@ function exec(regex::Ptr{Void}, extra::Ptr{Void},
               len::Integer, options::Integer,
               ovec::Vector{Int32})
     if offset < 0 || len < offset || len+shift > sizeof(str)
-        error(BoundsError)
+        throw(BoundsError())
     end
     n = ccall((:pcre_exec, :libpcre), Int32,
-              (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32,
+              (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32,
                Int32, Int32, Ptr{Int32}, Int32),
               regex, extra, pointer(str.data,shift+1), len,
               offset, options, ovec, length(ovec))
-    if n < -1
-        error("error $n")
-    end
+    n < -1 && error("PCRE.exec error code $n")
     return n > -1
 end
 

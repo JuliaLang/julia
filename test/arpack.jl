@@ -25,31 +25,31 @@ begin
         bsym  = b' + b
         bpd   = b'*b
 
-    	(d,v) = eigs(a, nev=3)
-    	@test_approx_eq a*v[:,2] d[2]*v[:,2]
+        (d,v) = eigs(a, nev=3)
+        @test_approx_eq a*v[:,2] d[2]*v[:,2]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
         # (d,v) = eigs(a, b, nev=3, tol=1e-8) # not handled yet
         # @test_approx_eq_eps a*v[:,2] d[2]*b*v[:,2] testtol
         # @test norm(v) > testtol # eigenvectors cannot be null vectors
-    
-    	(d,v) = eigs(asym, nev=3)
-    	@test_approx_eq asym*v[:,1] d[1]*v[:,1]
+
+        (d,v) = eigs(asym, nev=3)
+        @test_approx_eq asym*v[:,1] d[1]*v[:,1]
         @test_approx_eq eigs(asym; nev=1, sigma=d[3])[1][1] d[3]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-    
-    	(d,v) = eigs(apd, nev=3)
-    	@test_approx_eq apd*v[:,3] d[3]*v[:,3]
+
+        (d,v) = eigs(apd, nev=3)
+        @test_approx_eq apd*v[:,3] d[3]*v[:,3]
         @test_approx_eq eigs(apd; nev=1, sigma=d[3])[1][1] d[3]
-    	
+
         (d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
-    	@test_approx_eq_eps apd*v[:,2] d[2]*bpd*v[:,2] testtol
+        @test_approx_eq_eps apd*v[:,2] d[2]*bpd*v[:,2] testtol
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-    
+
         # test (shift-and-)invert mode
         (d,v) = eigs(apd, nev=3, sigma=0)
         @test_approx_eq apd*v[:,3] d[3]*v[:,3]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-        
+
         (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
         @test_approx_eq_eps apd*v[:,1] d[1]*bpd*v[:,1] testtol
         @test norm(v) > testtol # eigenvectors cannot be null vectors
@@ -68,17 +68,24 @@ A6965 = [
         -1.0   0.0   0.0   0.0   0.0   0.0   7.0  1.0
         -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  8.0
        ];
-       
+
 d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
 @test_approx_eq d[1] 2.5346936860350002
 @test_approx_eq real(d[2]) 2.6159972444834976
 @test_approx_eq abs(imag(d[2])) 1.2917858749046127
 
+# Requires ARPACK 3.2 or a patched 3.1.5
+#T6965 = [ 0.9  0.05  0.05
+#          0.8  0.1   0.1
+#          0.7  0.1   0.2 ]
+#d,v,nconv = eigs(T6965,nev=1,which=:LM)
+#@test_approx_eq_eps T6965*v d[1]*v 1e-6
+
 # Example from Quantum Information Theory
 import Base: size, issym, ishermitian
 
 type CPM{T<:Base.LinAlg.BlasFloat}<:AbstractMatrix{T} # completely positive map
-	kraus::Array{T,3} # kraus operator representation
+    kraus::Array{T,3} # kraus operator representation
 end
 
 size(Phi::CPM)=(size(Phi.kraus,1)^2,size(Phi.kraus,3)^2)
@@ -86,13 +93,13 @@ issym(Phi::CPM)=false
 ishermitian(Phi::CPM)=false
 
 function *{T<:Base.LinAlg.BlasFloat}(Phi::CPM{T},rho::Vector{T})
-	rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
-	rho2=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
-	for s=1:size(Phi.kraus,2)
-		As=slice(Phi.kraus,:,s,:)
-		rho2+=As*rho*As'
-	end
-	return reshape(rho2,(size(Phi.kraus,1)^2,))
+    rho=reshape(rho,(size(Phi.kraus,3),size(Phi.kraus,3)))
+    rho2=zeros(T,(size(Phi.kraus,1),size(Phi.kraus,1)))
+    for s=1:size(Phi.kraus,2)
+        As=slice(Phi.kraus,:,s,:)
+        rho2+=As*rho*As'
+    end
+    return reshape(rho2,(size(Phi.kraus,1)^2,))
 end
 # Generate random isometry
 (Q,R)=qr(randn(100,50))

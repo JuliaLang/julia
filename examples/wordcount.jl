@@ -1,22 +1,22 @@
 # wordcount.jl
-#   
-# Implementation of parallelized "word-count" of a text, inspired by the 
-# Hadoop WordCount example. Uses @spawn and fetch() to parallelize 
+#
+# Implementation of parallelized "word-count" of a text, inspired by the
+# Hadoop WordCount example. Uses @spawn and fetch() to parallelize
 # the "map" task. Reduce is currently done single-threaded.
 #
 # To run in parallel on a string stored in variable `text`:
-#  julia -p <N> 
-#  julia> require("<julia_dir>/examples/wordcount.jl")
+#  julia -p <N>
+#  julia> require("<julia_doc_dir>/examples/wordcount.jl")
 #  julia> ...(define text)...
 #  julia> counts=parallel_wordcount(text)
 #
 # Or to run on a group of files, writing results to an output file:
 #  julia -p <N>
-#  julia> require("<julia_dir>/examples/wordcount.jl")
-#  julia> wordcount_files("/tmp/output.txt", "/tmp/input1.txt","/tmp/input2.txt",...) 
+#  julia> require("<julia_doc_dir>/examples/wordcount.jl")
+#  julia> wordcount_files("/tmp/output.txt", "/tmp/input1.txt","/tmp/input2.txt",...)
 
 # "Map" function.
-# Takes a string. Returns a Dict with the number of times each word 
+# Takes a string. Returns a Dict with the number of times each word
 # appears in that string.
 function wordcount(text)
     words=split(text,[' ','\n','\t','-','.',',',':',';'],false)
@@ -39,15 +39,15 @@ function wcreduce(wcs)
     return counts
 end
 
-# Splits input string into nprocs() equal-sized chunks (last one rounds up), 
+# Splits input string into nprocs() equal-sized chunks (last one rounds up),
 # and @spawns wordcount() for each chunk to run in parallel. Then fetch()s
 # results and performs wcreduce().
 function parallel_wordcount(text)
     lines=split(text,'\n',false)
     np=nprocs()
     unitsize=ceil(length(lines)/np)
-    wcounts={}
-    rrefs={}
+    wcounts=[]
+    rrefs=[]
     # spawn procs
     for i=1:np
         first=unitsize*(i-1)+1

@@ -47,11 +47,11 @@ end
 @test typeof(BigInt(typemax(Int128))) == BigInt
 
 @test typeof(BigInt(true)) == BigInt
-@test typeof(BigInt(typemax(Uint8))) == BigInt
-@test typeof(BigInt(typemax(Uint16))) == BigInt
-@test typeof(BigInt(typemax(Uint32))) == BigInt
-@test typeof(BigInt(typemax(Uint64))) == BigInt
-@test typeof(BigInt(typemax(Uint128))) == BigInt
+@test typeof(BigInt(typemax(UInt8))) == BigInt
+@test typeof(BigInt(typemax(UInt16))) == BigInt
+@test typeof(BigInt(typemax(UInt32))) == BigInt
+@test typeof(BigInt(typemax(UInt64))) == BigInt
+@test typeof(BigInt(typemax(UInt128))) == BigInt
 
 @test typeof(BigInt(BigInt(1))) == BigInt
 
@@ -164,6 +164,8 @@ end
 @test lcm(BigInt(48), BigInt(180)) == 720
 
 @test factorial(BigInt(40)) == BigInt("815915283247897734345611269596115894272000000000")
+@test binomial(BigInt(1), -1) == BigInt(0)
+@test binomial(BigInt(1), 2)  == BigInt(0)
 @test binomial(BigInt(-53), 42) == BigInt("959509335087854414441273718")
 @test binomial(BigInt(113), BigInt(42)) == BigInt("18672199984318438125634054194360")
 
@@ -252,7 +254,7 @@ n = bigfib(1000001)
 s = string(n)
 @test length(s) == 208988
 @test endswith(s, "359244926937501")
-@test beginswith(s, "316047687386689")
+@test startswith(s, "316047687386689")
 
 # serialization (#5133)
 let

@@ -1,15 +1,15 @@
 module Math
 
 export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
-       asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot, 
-       sech, csch, coth, asech, acsch, acoth, 
-       sinpi, cospi, sinc, cosc, 
+       asinh, acosh, atanh, sec, csc, cot, asec, acsc, acot,
+       sech, csch, coth, asech, acsch, acoth,
+       sinpi, cospi, sinc, cosc,
        cosd, cotd, cscd, secd, sind, tand,
        acosd, acotd, acscd, asecd, asind, atand, atan2,
        rad2deg, deg2rad,
        log, log2, log10, log1p, exponent, exp, exp2, exp10, expm1,
        cbrt, sqrt, erf, erfc, erfcx, erfi, dawson,
-       ceil, floor, trunc, round, significand, 
+       significand,
        lgamma, hypot, gamma, lfact, max, min, minmax, ldexp, frexp,
        clamp, modf, ^, mod2pi,
        airy, airyai, airyprime, airyaiprime, airybi, airybiprime, airyx,
@@ -22,7 +22,7 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
-             max, min, minmax, ceil, floor, trunc, round, ^, exp2,
+             max, min, minmax, ^, exp2,
              exp10, expm1, log1p
 
 import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
@@ -45,7 +45,7 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + t * $ex)
+        ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
     Expr(:block, :(t = $(esc(x))), ex)
 end
@@ -57,12 +57,12 @@ end
 macro evalpoly(z, p...)
     a = :($(esc(p[end])))
     b = :($(esc(p[end-1])))
-    as = {}
+    as = []
     for i = length(p)-2:-1:1
-        ai = symbol(string("a", i))
+        ai = symbol("a", i)
         push!(as, :($ai = $a))
-        a = :($b + r*$ai)
-        b = :($(esc(p[i])) - s * $ai)
+        a = :(muladd(r, $ai, $b))
+        b = :(muladd(-s, $ai, $(esc(p[i]))))
     end
     ai = :a0
     push!(as, :($ai = $a))
@@ -72,7 +72,7 @@ macro evalpoly(z, p...)
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * tt + $b))
+             :(muladd($ai, tt, $b)))
     R = Expr(:macrocall, symbol("@horner"), :tt, p...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
@@ -132,7 +132,7 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
+for f in (:significand,)
     @eval begin
         ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
         ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
@@ -140,14 +140,9 @@ for f in (:ceil, :trunc, :significand) # :rint, :nearbyint
     end
 end
 
-round(x::Float32) = ccall((:roundf, libm), Float32, (Float32,), x)
-@vectorize_1arg Real round
-
-floor(x::Float32) = ccall((:floorf, libm), Float32, (Float32,), x)
-@vectorize_1arg Real floor
 
 hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
-function hypot{T<:FloatingPoint}(x::T, y::T) 
+function hypot{T<:FloatingPoint}(x::T, y::T)
     x = abs(x)
     y = abs(y)
     if x < y
@@ -166,13 +161,13 @@ function hypot{T<:FloatingPoint}(x::T, y::T)
     x * sqrt(one(r)+r*r)
 end
 
-atan2(x::Real, y::Real) = atan2(promote(float(x),float(y))...)
-atan2{T<:FloatingPoint}(x::T, y::T) = Base.no_op_err("atan2", T)
+atan2(y::Real, x::Real) = atan2(promote(float(y),float(x))...)
+atan2{T<:FloatingPoint}(y::T, x::T) = Base.no_op_err("atan2", T)
 
 for f in (:atan2, :hypot)
     @eval begin
-        ($f)(x::Float64, y::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), x, y)
-        ($f)(x::Float32, y::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), x, y)
+        ($f)(y::Float64, x::Float64) = ccall(($(string(f)),libm), Float64, (Float64, Float64,), y, x)
+        ($f)(y::Float32, x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32, Float32), y, x)
         @vectorize_2arg Number $f
     end
 end
@@ -182,6 +177,7 @@ max{T<:FloatingPoint}(x::T, y::T) = ifelse((y > x) | (x != x), y, x)
 
 min{T<:FloatingPoint}(x::T, y::T) = ifelse((y < x) | (x != x), y, x)
 @vectorize_2arg Real min
+
 
 minmax{T<:FloatingPoint}(x::T, y::T) =  x <= y ? (x, y) :
                                         x >  y ? (y, x) :
@@ -206,12 +202,12 @@ ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, i
 # TODO: vectorize ldexp
 
 function frexp(x::Float64)
-    xu = reinterpret(Uint64,x)
+    xu = reinterpret(UInt64,x)
     k = int(xu >> 52) & 0x07ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 1.8014398509481984e16 # 0x1p54, normalise significand
-        xu = reinterpret(Uint64,x)
+        xu = reinterpret(UInt64,x)
         k = int(xu >> 52) & 0x07ff - 54
     elseif k == 0x07ff # NaN or Inf
         return x,0
@@ -221,12 +217,12 @@ function frexp(x::Float64)
     reinterpret(Float64,xu), k
 end
 function frexp(x::Float32)
-    xu = reinterpret(Uint32,x)
+    xu = reinterpret(UInt32,x)
     k = int(xu >> 23) & 0x00ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
-        xu = reinterpret(Uint32,x)
+        xu = reinterpret(UInt32,x)
         k = int(xu >> 23) & 0x00ff - 25
     elseif k == 0x00ff # NaN or Inf
         return x,0
@@ -292,16 +288,16 @@ end
 
 function ieee754_rem_pio2(x::Float64)
     # rem_pio2 essentially computes x mod pi/2 (ie within a quarter circle)
-    # and returns the result as 
+    # and returns the result as
     # y between + and - pi/4 (for maximal accuracy (as the sign bit is exploited)), and
-    # n, where n specifies the integer part of the division, or, at any rate, 
+    # n, where n specifies the integer part of the division, or, at any rate,
     # in which quadrant we are.
     # The invariant fulfilled by the returned values seems to be
     #  x = y + n*pi/2 (where y = y1+y2 is a double-double and y2 is the "tail" of y).
-    # Note: for very large x (thus n), the invariant might hold only modulo 2pi 
+    # Note: for very large x (thus n), the invariant might hold only modulo 2pi
     # (in other words, n might be off by a multiple of 4, or a multiple of 100)
 
-    # this is just wrapping up 
+    # this is just wrapping up
     # https://github.com/JuliaLang/openspecfun/blob/master/rem_pio2/e_rem_pio2.c
 
     y = [0.0,0.0]
@@ -332,7 +328,7 @@ function mod2pi(x::Float64) # or modtau(x)
 
     if x < pi4o2_h
         if 0.0 <= x return x end
-        if x > -pi4o2_h 
+        if x > -pi4o2_h
             return add22condh(x,0.0,pi4o2_h,pi4o2_l)
         end
     end
@@ -351,9 +347,9 @@ function mod2pi(x::Float64) # or modtau(x)
         end
     else # add pi/2 or 3pi/2
         if n & 2 == 2 # add 3pi/2
-            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l) 
+            return add22condh(y[1],y[2],pi3o2_h,pi3o2_l)
         else # add pi/2
-            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l) 
+            return add22condh(y[1],y[2],pi1o2_h,pi1o2_l)
         end
     end
 end
@@ -362,7 +358,7 @@ mod2pi(x::Float32) = float32(mod2pi(float64(x)))
 mod2pi(x::Int32) = mod2pi(float64(x))
 function mod2pi(x::Int64)
   fx = float64(x)
-  fx == x || error("Integer argument to mod2pi is too large: $x")
+  fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end
 

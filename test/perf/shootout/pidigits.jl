@@ -14,7 +14,7 @@ function pidigits(N::Int, printOut::Bool)
     OUTPUT:
 
     - returns the last ten digits anyway
-    
+
     - prints all the digits in packets of 10 iff printOut == true
 
     """

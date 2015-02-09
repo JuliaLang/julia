@@ -3,7 +3,7 @@
 function mean(iterable)
     state = start(iterable)
     if done(iterable, state)
-        error("mean of empty collection undefined: $(repr(iterable))")
+        throw(ArgumentError("mean of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
     total, state = next(iterable, state)
@@ -30,9 +30,9 @@ end
 
 momenttype{T}(::Type{T}) = typeof((zero(T) + zero(T)) / 2)
 momenttype(::Type{Float32}) = Float32
-momenttype{T<:Union(Float64,Int32,Int64,Uint32,Uint64)}(::Type{T}) = Float64
+momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
 
-mean{T}(A::AbstractArray{T}, region) = 
+mean{T}(A::AbstractArray{T}, region) =
     mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
 
 
@@ -41,13 +41,13 @@ mean{T}(A::AbstractArray{T}, region) =
 function var(iterable; corrected::Bool=true, mean=nothing)
     state = start(iterable)
     if done(iterable, state)
-        error("variance of empty collection undefined: $(repr(iterable))")
+        throw(ArgumentError("variance of empty collection undefined: $(repr(iterable))"))
     end
     count = 1
     value, state = next(iterable, state)
     if mean == nothing
-        # Use Welford algorithm as seen in (among other places) 
-        # Knuth's TAOCP, Vol 2, page 232, 3rd edition. 
+        # Use Welford algorithm as seen in (among other places)
+        # Knuth's TAOCP, Vol 2, page 232, 3rd edition.
         M = value / 1
         S = zero(M)
         while !done(iterable, state)
@@ -61,7 +61,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
     elseif isa(mean, Number) # mean provided
         # Cannot use a compensated version, e.g. the one from
         # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
-        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773, 
+        # by Chan, Golub, and LeVeque, Technical Report STAN-CS-79-773,
         # Department of Computer Science, Stanford University,
         # because user can provide mean value that is different to mean(iterable)
         sum2 = (value - mean::Number)^2
@@ -72,7 +72,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
         end
         return sum2 / (count - int(corrected))
     else
-        error("invalid value of mean")
+        throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
     end
 end
 
@@ -92,49 +92,51 @@ function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
     return R
 end
 
-varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) = 
+varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
     varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
 
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
 end
-evaluate(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
-@ngenerate N typeof(R) function centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
-    # following the implementation of _mapreducedim! at base/reducedim.jl
-    lsiz = check_reducdims(R, A)
-    isempty(R) || fill!(R, zero(S))
-    isempty(A) && return R
-    @nextract N sizeR d->size(R,d)
-    sizA1 = size(A, 1)
+stagedfunction centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
+    quote
+        # following the implementation of _mapreducedim! at base/reducedim.jl
+        lsiz = check_reducdims(R, A)
+        isempty(R) || fill!(R, zero(S))
+        isempty(A) && return R
+        @nextract $N sizeR d->size(R,d)
+        sizA1 = size(A, 1)
 
-    if has_fast_linear_indexing(A) && lsiz > 16
-        # use centralize_sumabs2, which is probably better tuned to achieve higher performance
-        nslices = div(length(A), lsiz)
-        ibase = 0
-        for i = 1:nslices
-            @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
-            ibase += lsiz
-        end
-    elseif size(R, 1) == 1 && sizA1 > 1
-        # keep the accumulator as a local variable when reducing along the first dimension
-        @nloops N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds r = (@nref N R j)
-            @inbounds m = (@nref N means j) 
-            for i_1 = 1:sizA1
-                @inbounds r += abs2((@nref N A i) - m)
+        if has_fast_linear_indexing(A) && lsiz > 16
+            # use centralize_sumabs2, which is probably better tuned to achieve higher performance
+            nslices = div(length(A), lsiz)
+            ibase = 0
+            for i = 1:nslices
+                @inbounds R[i] = centralize_sumabs2(A, means[i], ibase+1, ibase+lsiz)
+                ibase += lsiz
             end
-            @inbounds (@nref N R j) = r
-        end 
-    else
-        # general implementation
-        @nloops N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-            @inbounds (@nref N R j) += abs2((@nref N A i) - (@nref N means j))
+        elseif size(R, 1) == 1 && sizA1 > 1
+            # keep the accumulator as a local variable when reducing along the first dimension
+            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds r = (@nref $N R j)
+                @inbounds m = (@nref $N means j)
+                for i_1 = 1:sizA1
+                    @inbounds r += abs2((@nref $N A i) - m)
+                end
+                @inbounds (@nref $N R j) = r
+            end
+        else
+            # general implementation
+            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
+                @inbounds (@nref $N R j) += abs2((@nref $N A i) - (@nref $N means j))
+            end
         end
+        return R
     end
-    return R
 end
 
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
@@ -154,7 +156,7 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
     return R
 end
 
-varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) = 
+varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
     varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
 
 
@@ -162,14 +164,14 @@ function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
     convert(momenttype(T), mean == 0 ? varzm(A; corrected=corrected) :
                            mean == nothing ? varm(A, Base.mean(A); corrected=corrected) :
                            isa(mean, Number) ? varm(A, mean::Number; corrected=corrected) :
-                           error("invalid value of mean"))::momenttype(T)
+                           throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))")))::momenttype(T)
 end
 
 function var(A::AbstractArray, region; corrected::Bool=true, mean=nothing)
     mean == 0 ? varzm(A, region; corrected=corrected) :
     mean == nothing ? varm(A, Base.mean(A, region), region; corrected=corrected) :
     isa(mean, AbstractArray) ? varm(A, mean::AbstractArray, region; corrected=corrected) :
-    error("invalid value of mean")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 varm(iterable, m::Number; corrected::Bool=true) =
@@ -191,20 +193,20 @@ end
 
 ##### standard deviation #####
 
-function sqrt!(A::AbstractArray) 
+function sqrt!(A::AbstractArray)
     for i = 1:length(A)
         @inbounds A[i] = sqrt(A[i])
     end
     A
 end
 
-stdm(A::AbstractArray, m::Number; corrected::Bool=true) = 
+stdm(A::AbstractArray, m::Number; corrected::Bool=true) =
     sqrt(varm(A, m; corrected=corrected))
 
-std(A::AbstractArray; corrected::Bool=true, mean=nothing) = 
+std(A::AbstractArray; corrected::Bool=true, mean=nothing) =
     sqrt(var(A; corrected=corrected, mean=mean))
 
-std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) = 
+std(A::AbstractArray, region; corrected::Bool=true, mean=nothing) =
     sqrt!(var(A, region; corrected=corrected, mean=mean))
 
 std(iterable; corrected::Bool=true, mean=nothing) =
@@ -226,7 +228,7 @@ _getnobs(x::AbstractMatrix, vardim::Int) = size(x, vardim)
 
 function _getnobs(x::AbstractVecOrMat, y::AbstractVecOrMat, vardim::Int)
     n = _getnobs(x, vardim)
-    _getnobs(y, vardim) == n || throw(DimensionMismatch("Dimensions of x and y mismatch."))
+    _getnobs(y, vardim) == n || throw(DimensionMismatch("dimensions of x and y mismatch"))
     return n
 end
 
@@ -239,38 +241,38 @@ unscaled_covzm(x::AbstractVector) = dot(x, x)
 unscaled_covzm(x::AbstractMatrix, vardim::Int) = (vardim == 1 ? _conj(x'x) : x * x')
 
 unscaled_covzm(x::AbstractVector, y::AbstractVector) = dot(x, y)
-unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) = 
+unscaled_covzm(x::AbstractVector, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : At_mul_Bt(x, _conj(y)))
-unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) = 
+unscaled_covzm(x::AbstractMatrix, y::AbstractVector, vardim::Int) =
     (c = vardim == 1 ? At_mul_B(x, _conj(y)) :  x * _conj(y); reshape(c, length(c), 1))
-unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) = 
+unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
     (vardim == 1 ? At_mul_B(x, _conj(y)) : A_mul_Bc(x, y))
 
 # covzm (with centered data)
 
 covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
 
-covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) = 
+covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - int(corrected)))
 
-covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) = 
+covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
     unscaled_covzm(x, y) / (length(x) - int(corrected))
 
-covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) = 
+covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) =
     scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
 
 # covm (with provided mean)
 
-covm(x::AbstractVector, xmean; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean; corrected::Bool=true) =
     covzm(x .- xmean; corrected=corrected)
 
-covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractMatrix, xmean; vardim::Int=1, corrected::Bool=true) =
     covzm(x .- xmean; vardim=vardim, corrected=corrected)
 
-covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) = 
+covm(x::AbstractVector, xmean, y::AbstractVector, ymean; corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean; corrected=corrected)
 
-covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) = 
+covm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1, corrected::Bool=true) =
     covzm(x .- xmean, y .- ymean; vardim=vardim, corrected=corrected)
 
 # cov (API)
@@ -279,21 +281,21 @@ function cov(x::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; corrected=corrected) :
     mean == nothing ? covm(x, Base.mean(x); corrected=corrected) :
     isa(mean, Number) ? covm(x, mean; corrected=corrected) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x; vardim=vardim, corrected=corrected) :
     mean == nothing ? covm(x, _vmean(x, vardim); vardim=vardim, corrected=corrected) :
     isa(mean, AbstractArray) ? covm(x, mean; vardim=vardim, corrected=corrected) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractVector, y::AbstractVector; corrected::Bool=true, mean=nothing)
     mean == 0 ? covzm(x, y; corrected=corrected) :
     mean == nothing ? covm(x, Base.mean(x), y, Base.mean(y); corrected=corrected) :
     isa(mean, (Number,Number)) ? covm(x, mean[1], y, mean[2]; corrected=corrected) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true, mean=nothing)
@@ -304,7 +306,7 @@ function cov(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected:
     elseif isa(mean, (Any,Any))
         covm(x, mean[1], y, mean[2]; vardim=vardim, corrected=corrected)
     else
-        error("Invalid value of mean.")
+        throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
     end
 end
 
@@ -315,7 +317,7 @@ end
 
 function cov2cor!{T}(C::AbstractMatrix{T}, xsd::AbstractArray)
     nx = length(xsd)
-    size(C) == (nx, nx) || throw(DimensionMismatch("Inconsistent dimensions."))
+    size(C) == (nx, nx) || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:nx
         for i = 1:j-1
             C[i,j] = C[j,i]
@@ -330,7 +332,7 @@ end
 
 function cov2cor!(C::AbstractMatrix, xsd::Number, ysd::AbstractArray)
     nx, ny = size(C)
-    length(ysd) == ny || throw(DimensionMismatch("Inconsistent dimensions."))
+    length(ysd) == ny || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:ny
         for i = 1:nx
             C[i,j] /= (xsd * ysd[j])
@@ -341,7 +343,7 @@ end
 
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::Number)
     nx, ny = size(C)
-    length(xsd) == nx || throw(DimensionMismatch("Inconsistent dimensions."))
+    length(xsd) == nx || throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:ny
         for i = 1:nx
             C[i,j] /= (xsd[i] * ysd)
@@ -352,8 +354,8 @@ end
 
 function cov2cor!(C::AbstractMatrix, xsd::AbstractArray, ysd::AbstractArray)
     nx, ny = size(C)
-    (length(xsd) == nx && length(ysd) == ny) || 
-        throw(DimensionMismatch("Inconsistent dimensions."))
+    (length(xsd) == nx && length(ysd) == ny) ||
+        throw(DimensionMismatch("inconsistent dimensions"))
     for j = 1:ny
         for i = 1:nx
             C[i,j] /= (xsd[i] * ysd[j])
@@ -366,12 +368,12 @@ end
 
 corzm{T}(x::AbstractVector{T}) = float(one(T) * one(T))
 
-corzm(x::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractMatrix; vardim::Int=1) =
     (c = unscaled_covzm(x, vardim); cov2cor!(c, sqrt!(diag(c))))
 
 function corzm(x::AbstractVector, y::AbstractVector)
     n = length(x)
-    length(y) == n || throw(DimensionMismatch("Inconsistent lengths."))
+    length(y) == n || throw(DimensionMismatch("inconsistent lengths"))
     x1 = x[1]
     y1 = y[1]
     xx = abs2(x1)
@@ -389,13 +391,13 @@ function corzm(x::AbstractVector, y::AbstractVector)
     return xy / (sqrt(xx) * sqrt(yy))
 end
 
-corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractVector, y::AbstractMatrix; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt(sumabs2(x)), sqrt!(sumabs2(y, vardim)))
 
-corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) = 
+corzm(x::AbstractMatrix, y::AbstractVector; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt(sumabs2(y)))
 
-corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) = 
+corzm(x::AbstractMatrix, y::AbstractMatrix; vardim::Int=1) =
     cov2cor!(unscaled_covzm(x, y, vardim), sqrt!(sumabs2(x, vardim)), sqrt!(sumabs2(y, vardim)))
 
 # corm
@@ -406,7 +408,7 @@ corm(x::AbstractMatrix, xmean; vardim::Int=1) = corzm(x .- xmean; vardim=vardim)
 
 corm(x::AbstractVector, xmean, y::AbstractVector, ymean) = corzm(x .- xmean, y .- ymean)
 
-corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) = 
+corm(x::AbstractVecOrMat, xmean, y::AbstractVecOrMat, ymean; vardim::Int=1) =
     corzm(x .- xmean, y .- ymean; vardim=vardim)
 
 # cor
@@ -415,50 +417,51 @@ function cor(x::AbstractVector; mean=nothing)
     mean == 0 ? corzm(x) :
     mean == nothing ? corm(x, Base.mean(x)) :
     isa(mean, Number) ? corm(x, mean) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractMatrix; vardim::Int=1, mean=nothing)
     mean == 0 ? corzm(x; vardim=vardim) :
     mean == nothing ? corm(x, _vmean(x, vardim); vardim=vardim) :
     isa(mean, AbstractArray) ? corm(x, mean; vardim=vardim) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractVector, y::AbstractVector; mean=nothing)
-    mean == 0 ? corzm(x, y) : 
+    mean == 0 ? corzm(x, y) :
     mean == nothing ? corm(x, Base.mean(x), y, Base.mean(y)) :
     isa(mean, (Number,Number)) ? corm(x, mean[1], y, mean[2]) :
-    error("Invalid value of mean.")
+    throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
 end
 
 function cor(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, mean=nothing)
     if mean == 0
         corzm(x, y; vardim=vardim)
-    elseif mean == nothing 
+    elseif mean == nothing
         corm(x, _vmean(x, vardim), y, _vmean(y, vardim); vardim=vardim)
     elseif isa(mean, (Any,Any))
         corm(x, mean[1], y, mean[2]; vardim=vardim)
     else
-        error("Invalid value of mean.")
+        throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
     end
 end
 
 
 ##### median & quantiles #####
 
-middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)) = float64(x)
+# Specialized functions for real types allow for improved performance
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = float64(x)
 middle(x::FloatingPoint) = x
 middle(x::Float16) = float32(x)
 middle(x::Real) = (x + zero(x)) / 1
-middle(x::Real, y::Real) = (x + y) / 2
+middle(x::Real, y::Real) = x/2 + y/2
 middle(a::Range) = middle(a[1], a[end])
 middle(a::AbstractArray) = ((v1, v2) = extrema(a); middle(v1, v2))
 
-function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
-    isempty(v) && error("median of an empty array is undefined")
-    if checknan && T<:FloatingPoint
-        for x in v
+function median!{T}(v::AbstractVector{T})
+    isempty(v) && throw(ArgumentError("median of an empty array is undefined, $(repr(v))"))
+    if T<:FloatingPoint
+        @inbounds for x in v
             isnan(x) && return x
         end
     end
@@ -471,18 +474,16 @@ function median!{T}(v::AbstractVector{T}; checknan::Bool=true)
     end
 end
 
-median{T}(v::AbstractArray{T}; checknan::Bool=true) =
-    median!(vec(copy(v)), checknan=checknan)
-median{T}(v::AbstractArray{T}, region; checknan::Bool=true) = 
-    mapslices( x->median(x; checknan=checknan), v, region )
+median{T}(v::AbstractArray{T}) = median!(vec(copy(v)))
+median{T}(v::AbstractArray{T}, region) = mapslices(median, v, region)
 
 # for now, use the R/S definition of quantile; may want variants later
 # see ?quantile in R -- this is type 7
 # TODO: need faster implementation (use select!?)
 #
 function quantile!(v::AbstractVector, q::AbstractVector)
-    isempty(v) && error("empty data array")
-    isempty(q) && error("empty quantile array")
+    isempty(v) && throw(ArgumentError("empty data array"))
+    isempty(q) && throw(ArgumentError("empty quantile array"))
 
     # make sure the quantiles are in [0,1]
     q = bound_quantiles(q)
@@ -491,10 +492,10 @@ function quantile!(v::AbstractVector, q::AbstractVector)
     lq = length(q)
 
     index = 1 .+ (lv-1)*q
-    lo = ifloor(index)
-    hi = iceil(index)
+    lo = floor(Int,index)
+    hi = ceil(Int,index)
     sort!(v)
-    isnan(v[end]) && error("quantiles are undefined in presence of NaNs")
+    isnan(v[end]) && throw(ArgumentError("quantiles are undefined in presence of NaNs"))
     i = find(index .> lo)
     r = float(v[lo])
     h = (index.-lo)[i]
@@ -507,7 +508,7 @@ quantile(v::AbstractVector, q::Number) = quantile(v,[q])[1]
 function bound_quantiles(qs::AbstractVector)
     epsilon = 100*eps()
     if (any(qs .< -epsilon) || any(qs .> 1+epsilon))
-        error("quantiles out of [0,1] range")
+        throw(ArgumentError("quantiles out of [0,1] range"))
     end
     [min(1,max(0,q)) for q = qs]
 end
@@ -519,7 +520,13 @@ end
 ## nice-valued ranges for histograms
 
 function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
-    if length(v) == 0
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
         return 0.0:1.0:0.0
     end
     lo, hi = extrema(v)
@@ -538,12 +545,18 @@ function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    nm1 = ceil(Int,(hi - start)/step)
     start:step:(start + nm1*step)
 end
 
 function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
-    if length(v) == 0
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
         return 0:1:0
     end
     lo, hi = extrema(v)
@@ -551,7 +564,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
         step = 1
     else
         bw = (hi - lo) / n
-        e = 10^max(0,ifloor(log10(bw)))
+        e = 10^max(0,floor(Int,log10(bw)))
         r = bw / e
         if r <= 1
             step = e
@@ -564,7 +577,7 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
         end
     end
     start = step*(ceil(lo/step)-1)
-    nm1 = iceil((hi - start)/step)
+    nm1 = ceil(Int,(hi - start)/step)
     start:step:(start + nm1*step)
 end
 
@@ -575,12 +588,12 @@ midpoints(v::AbstractVector) = [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1]
 ## hist ##
 function sturges(n)  # Sturges' formula
     n==0 && return one(n)
-    iceil(log2(n))+1
+    ceil(Int,log2(n))+1
 end
 
 function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
     n = length(edg) - 1
-    length(h) == n || error("length(h) must equal length(edg) - 1.")
+    length(h) == n || throw(DimensionMismatch("length(histogram) must equal length(edges) - 1"))
     if init
         fill!(h, zero(HT))
     end
@@ -599,7 +612,9 @@ hist(v::AbstractVector) = hist(v,sturges(length(v)))
 
 function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
     m, n = size(A)
-    size(H) == (length(edg)-1, n) || error("Incorrect size of H.")
+    sH = size(H)
+    sE = (length(edg)-1,n)
+    sH == sE || throw(DimensionMismatch("incorrect size of histogram"))
     if init
         fill!(H, zero(HT))
     end
@@ -615,12 +630,12 @@ hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
 
 
 ## hist2d
-function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix, 
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
                      edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
-    size(v,2) == 2 || error("hist2d requires an Nx2 matrix.")
+    size(v,2) == 2 || throw(DimensionMismatch("hist2d requires an Nx2 matrix"))
     n = length(edg1) - 1
     m = length(edg2) - 1
-    size(H) == (n, m) || error("Incorrect size of H.")
+    size(H) == (n, m) || throw(DimensionMismatch("incorrect size of histogram"))
     if init
         fill!(H, zero(HT))
     end
@@ -634,12 +649,12 @@ function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
     edg1, edg2, H
 end
 
-hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) = 
+hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) =
     hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
 
 hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
 
-hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) = 
+hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
     hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
 hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
 hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))

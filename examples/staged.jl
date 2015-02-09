@@ -1,5 +1,5 @@
 function add_method(gf, an, at, body)
-    argexs = { Expr(symbol("::"), an[i], at[i]) for i=1:length(an) }
+    argexs = [Expr(symbol("::"), an[i], at[i]) for i=1:length(an)]
     def = quote
         let __F__=($gf)
             function __F__($(argexs...))
@@ -32,7 +32,7 @@ macro staged(fdef)
                 ($argtypes) = typeof(tuple($(argnames...)))
                 if !method_exists($gengf, $argtypes)
                     ($genbody) = apply(($expander), ($argtypes))
-                    add_method($gengf, {$(qargnames...)},
+                    add_method($gengf, Any[$(qargnames...)],
                                    $argtypes, $genbody)
                 end
                 return ($gengf)($(argnames...))

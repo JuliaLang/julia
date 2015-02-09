@@ -1,6 +1,13 @@
 using Base.REPLCompletions
 
 module CompletionFoo
+    type Test_y
+        yy
+    end
+    type Test_x
+        xx :: Test_y
+    end
+    type_test = Test_x(Test_y(1))
     module CompletionFoo2
 
     end
@@ -9,6 +16,19 @@ module CompletionFoo
     macro foobar()
         :()
     end
+end
+
+function temp_pkg_dir(fn::Function)
+  # Used in tests below to setup and teardown a sandboxed package directory
+  const tmpdir = ENV["JULIA_PKGDIR"] = joinpath(tempdir(),randstring())
+  @test !isdir(Pkg.dir())
+  try
+    mkpath(Pkg.dir())
+    @test isdir(Pkg.dir())
+    fn()
+  finally
+    rm(tmpdir, recursive=true)
+  end
 end
 
 test_complete(s) = completions(s,endof(s))
@@ -54,6 +74,21 @@ c,r = test_complete(s)
 @test s[r] == "@f"
 @test !("foo" in c)
 
+s = "Main.CompletionFoo.type_test.x"
+c,r = test_complete(s)
+@test "xx" in c
+@test r == 30:30
+@test s[r] == "x"
+
+# To complete on a variable of a type, the type T of the variable
+# must be a concrete type, hence Base.isstructtype(T) returns true,
+# for the completion to succeed. That why `xx :: Test_y` of `Test_x`.
+s = "Main.CompletionFoo.type_test.xx.y"
+c,r = test_complete(s)
+@test "yy" in c
+@test r == 33:33
+@test s[r] == "y"
+
 # issue #6333
 s = "Base.return_types(getin"
 c,r = test_complete(s)
@@ -73,31 +108,103 @@ c,r = test_latexcomplete(s)
 @test r == 1:length(s)
 @test length(c) == 1
 
-## Test completion of packages
-#mkp(p) = ((@assert !isdir(p)); mkdir(p))
-#temp_pkg_dir() do
-#    mkp(Pkg.dir("MyAwesomePackage"))
-#    mkp(Pkg.dir("CompletionFooPackage"))
-#
-#    s = "using MyAwesome"
-#    c,r = test_complete(s)
-#    @test "MyAwesomePackage" in c
-#    @test s[r] == "MyAwesome"
-#
-#    s = "using Completion"
-#    c,r = test_complete(s)
-#    @test "CompletionFoo" in c #The module
-#    @test "CompletionFooPackage" in c #The package
-#    @test s[r] == "Completion"
-#
-#    s = "using CompletionFoo.Completion"
-#    c,r = test_complete(s)
-#    @test "CompletionFoo2" in c
-#    @test s[r] == "Completion"
-#
-#    rm(Pkg.dir("MyAwesomePackage"))
-#    rm(Pkg.dir("CompletionFooPackage"))
-#end
+# test latex symbol completions after unicode #9209
+s = "α\\alpha"
+c,r = test_latexcomplete(s)
+@test c[1] == "α"
+@test r == 3:sizeof(s)
+@test length(c) == 1
+
+# test latex symbol completions in strings should not work when there
+# is a backslash in front of `\alpha` because it interferes with path completion on windows
+s = "cd(\"path_to_an_empty_folder_should_not_complete_latex\\\\\\alpha"
+c,r,res = test_complete(s)
+@test length(c) == 0
+
+# test latex symbol completions in strings
+s = "\"C:\\\\ \\alpha"
+c,r,res = test_complete(s)
+@test c[1] == "α"
+@test r == 7:12
+@test length(c) == 1
+
+s = "\\a"
+c, r, res = test_complete(s)
+"\\alpha" in c
+@test r == 1:2
+@test s[r] == "\\a"
+
+# `cd("C:\U should not make the repl crash due to escaping see comment #9137
+s = "cd(\"C:\\U"
+c,r,res = test_complete(s)
+
+# Test method completions
+s = "max("
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(start(methods(max)))
+@test r == 1:3
+@test s[r] == "max"
+
+# Test completion in multi-line comments
+s = "#=\n\\alpha"
+c, r, res = test_complete(s)
+@test c[1] == "α"
+@test r == 4:9
+@test length(c) == 1
+
+# Test that completion do not work in multi-line comments
+s = "#=\nmax"
+c, r, res = test_complete(s)
+@test length(c) == 0
+
+# Test completion of packages
+mkp(p) = ((@assert !isdir(p)); mkdir(p))
+temp_pkg_dir() do
+    mkp(Pkg.dir("CompletionFooPackage"))
+
+    s = "using Completion"
+    c,r = test_complete(s)
+    @test "CompletionFoo" in c #The module
+    @test "CompletionFooPackage" in c #The package
+    @test s[r] == "Completion"
+end
+
+path = joinpath(tempdir(),randstring())
+push!(LOAD_PATH, path)
+try
+    # Should not throw an error even though the path do no exist
+    test_complete("using ")
+    Pack_folder = joinpath(path,"Test_pack")
+    mkpath(Pack_folder)
+
+    # Test it completes on folders
+    c,r,res = test_complete("using Test_p")
+    @test "Test_pack" in c
+
+    # Test that it also completes on .jl files in pwd()
+    cd(Pack_folder) do
+        open("Text.txt","w") do f end
+        open("Pack.jl","w") do f end
+        c,r,res = test_complete("using ")
+        @test "Pack" in c
+        @test !("Text.txt" in c)
+    end
+finally
+    @test pop!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
+# Test $ in shell-mode
+s = "cd \$(max"
+c, r, res = test_scomplete(s)
+@test "max" in c
+@test r == 6:8
+@test s[r] == "max"
+
+# The return type is of importance, before #8995 it would return nothing
+# which would raise an error in the repl code.
+@test (UTF8String[], 0:-1, false) == test_scomplete("\$a")
 
 @unix_only begin
     #Assume that we can rely on the existence and accessibility of /tmp
@@ -152,4 +259,55 @@ c,r = test_latexcomplete(s)
     @test "Pkg" in c
     @test r == 6:7
     @test s[r] == "Pk"
+end
+
+let #test that it can auto complete with spaces in file/path
+    path = tempdir()
+    space_folder = randstring() * " α"
+    dir = joinpath(path, space_folder)
+    dir_space = replace(space_folder, " ", "\\ ")
+    mkdir(dir)
+    cd(path) do
+        open(joinpath(space_folder, "space .file"),"w") do f
+            s = @windows? "rm $dir_space\\\\space" : "cd $dir_space/space"
+            c,r = test_scomplete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file" in c
+
+            s = @windows? "cd(\"β $dir_space\\\\space" : "cd(\"β $dir_space/space"
+            c,r = test_complete(s)
+            @test r == endof(s)-4:endof(s)
+            @test "space\\ .file\"" in c
+        end
+    end
+    rm(dir, recursive=true)
+end
+
+@windows_only begin
+    tmp = tempname()
+    path = dirname(tmp)
+    file = basename(tmp)
+    temp_name = basename(path)
+    cd(path) do
+        s = "cd ..\\\\"
+        c,r = test_scomplete(s)
+        @test r == length(s)+1:length(s)
+        @test temp_name * "\\\\" in c
+
+        s = "ls $(file[1:2])"
+        c,r = test_scomplete(s)
+        @test r == length(s)-1:length(s)
+        @test file in c
+
+        s = "cd(\"..\\"
+        c,r = test_complete(s)
+        @test r == length(s)+1:length(s)
+        @test temp_name * "\\\\" in c
+
+        s = "cd(\"$(file[1:2])"
+        c,r = test_complete(s)
+        @test r == length(s) - 1:length(s)
+        @test file  in c
+    end
+    rm(tmp)
 end

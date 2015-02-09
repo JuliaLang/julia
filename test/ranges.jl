@@ -40,6 +40,9 @@ r = 5:-1:1
 @test (1:2:13)[2:3:7] == 3:6:13
 @test typeof((1:2:13)[2:3:7]) == typeof(3:6:13)
 
+@test isempty((1:4)[5:4])
+@test_throws BoundsError (1:10)[8:-1:-2]
+
 let
     span = 5:20
     r = -7:3:42
@@ -116,7 +119,7 @@ r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test_throws BoundsError (0:2:10)[7:7]
 
 # indexing with negative ranges (#8351)
-for a={3:6, 0:2:10}, b={0:1, 2:-1:0}
+for a=Range[3:6, 0:2:10], b=Range[0:1, 2:-1:0]
     @test_throws BoundsError a[b]
 end
 
@@ -152,7 +155,7 @@ let s = 0
 
     # loops covering the full range of smaller integer types
     s = 0
-    for i = typemin(Uint8):typemax(Uint8)
+    for i = typemin(UInt8):typemax(UInt8)
         s += 1
     end
     @test s == 256
@@ -160,12 +163,12 @@ let s = 0
     # loops past typemax(Int)
     n = 0
     s = int128(0)
-    for i = typemax(Uint64)-2:typemax(Uint64)
+    for i = typemax(UInt64)-2:typemax(UInt64)
         n += 1
         s += i
     end
     @test n == 3
-    @test s == 3*int128(typemax(Uint64)) - 3
+    @test s == 3*int128(typemax(UInt64)) - 3
 
     # loops over empty ranges
     s = 0
@@ -265,8 +268,8 @@ end
 
 # comparing and hashing ranges
 let
-    Rs = {1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
-          0.0:0.1:1.0, float32(0.0:0.1:1.0)}
+    Rs = Range[1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
+               0.0:0.1:1.0, float32(0.0:0.1:1.0)]
     for r in Rs
         ar = collect(r)
         @test r != ar
@@ -302,8 +305,8 @@ for s in 3:100
 end
 
 @test length(uint(1):uint(1):uint(0)) == 0
-@test length(typemax(Uint):uint(1):(typemax(Uint)-1)) == 0
-@test length(typemax(Uint):uint(2):(typemax(Uint)-1)) == 0
+@test length(typemax(UInt):uint(1):(typemax(UInt)-1)) == 0
+@test length(typemax(UInt):uint(2):(typemax(UInt)-1)) == 0
 @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 
 # issue #6364
@@ -366,9 +369,28 @@ end
 
 # issue #8531
 let smallint = (Int === Int64 ?
-                (Int8,Uint8,Int16,Uint16,Int32,Uint32) :
-                (Int8,Uint8,Int16,Uint16))
+                (Int8,UInt8,Int16,UInt16,Int32,UInt32) :
+                (Int8,UInt8,Int16,UInt16))
     for T in smallint
         @test length(typemin(T):typemax(T)) == 2^(8*sizeof(T))
     end
 end
+
+# issue #8584
+@test (0:1//2:2)[1:2:3] == 0:1//1:1
+
+# zip
+let i = 0
+x = 1:2:8
+y = 2:2:8
+xy = 1:8
+for (thisx, thisy) in zip(x, y)
+    @test thisx == xy[i+=1]
+    @test thisy == xy[i+=1]
+end
+end
+
+# issue #9962
+@test eltype(0:1//3:10) <: Rational
+@test (0:1//3:10)[1] == 0
+@test (0:1//3:10)[2] == 1//3

@@ -8,12 +8,12 @@ include("../perfutil.jl")
 sorts = [InsertionSort, QuickSort, MergeSort, HeapSort, RadixSort, TimSort]
 
 randstr_fn!(str_len::Int) = d -> (for i = 1:length(d); d[i] = randstring(str_len); end; d)
-randint_fn!(m::Int) = d -> rand!(1:m,d)
+randint_fn!(m::Int) = d -> rand!(d, 1:m)
 
 # If we're reporting to codespeed, only do a few tests.
 if codespeed
     for (T, typename, randfn!) in [(Int, string(Int), randint_fn!(10)),
-                                    (String, "String_10", randstr_fn!(10))]
+                                    (AbstractString, "String_10", randstr_fn!(10))]
         for size in [2^6,2^16]
             for s in sorts
                 if s == InsertionSort && size != 2^6; continue; end
@@ -32,16 +32,16 @@ if codespeed
         end
     end
 else
-    for (T, typename, randfn!) in [(Int, string(Int), randint_fn!(10)), 
-                                    (Float64, string(Float64), rand!), 
-                                    (String, "String_05", randstr_fn!(5)),
-                                    (String, "String_10", randstr_fn!(10))]
+    for (T, typename, randfn!) in [(Int, string(Int), randint_fn!(10)),
+                                    (Float64, string(Float64), rand!),
+                                    (AbstractString, "String_05", randstr_fn!(5)),
+                                    (AbstractString, "String_10", randstr_fn!(10))]
         for logsize = 6:2:18
             size = 2^logsize
             for s in sorts
-                if s == RadixSort && T == String continue end      #Radix sort not implemented
+                if s == RadixSort && T == AbstractString continue end      #Radix sort not implemented
                 if s == InsertionSort && logsize >=14 continue end #Too slow
-                println(s, s==RadixSort, s, typename, typename==String, logsize)
+                println(s, s==RadixSort, s, typename, typename==AbstractString, logsize)
                 data = Array(T, size)
                 gc()
 
@@ -59,20 +59,20 @@ else
 
                 ## Sorted with 3 exchanges
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_3exchanges"
-                @timeit_init(sort!(data, alg=s), 
+                @timeit_init(sort!(data, alg=s),
                              begin
                                  for i = 1:3
                                      n1 = rand(1:size)
                                      n2 = rand(1:size)
                                      data[n1], data[n2] = data[n2], data[n1]
                                  end
-                             end, 
+                             end,
                              name, "")
 
                 ## Sorted with 10 unsorted values appended
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_append"
                 @timeit_init(sort!(data, alg=s), begin data[end-9:end]=randfn!(Array(T,10)) end, name, "")
-                
+
                 ## Random data with 4 unique values
                 name = "$(typename)_$(logsize)_$(string(s)[1:end-5])_4unique"
                 @timeit_init(sort!(data4, alg=s), begin data4=data[rand(1:4,size)] end, name, "")

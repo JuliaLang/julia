@@ -14,8 +14,8 @@ function test_all_combos()
                 @test first(dr) == f1
                 @test last(dr) == f1-one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
                 @test [dr;] == T[]
@@ -66,8 +66,8 @@ function test_all_combos()
                 @test first(dr) == l1
                 @test last(dr) == l1+one(l1 - f1)
                 @test length([i for i in dr]) == 0
-                @test_throws ErrorException minimum(dr)
-                @test_throws ErrorException maximum(dr)
+                @test_throws ArgumentError minimum(dr)
+                @test_throws ArgumentError maximum(dr)
                 @test_throws BoundsError dr[1]
                 @test findin(dr,dr) == Int64[]
                 @test [dr;] == T[]
@@ -119,8 +119,8 @@ function test_all_combos()
                     @test first(dr) == f1
                     @test last(dr) == f1-one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
                     @test [dr;] == T[]
@@ -171,8 +171,8 @@ function test_all_combos()
                     @test first(dr) == l1
                     @test last(dr) == l1+one(l1 - f1)
                     @test length([i for i in dr]) == 0
-                    @test_throws ErrorException minimum(dr)
-                    @test_throws ErrorException maximum(dr)
+                    @test_throws ArgumentError minimum(dr)
+                    @test_throws ArgumentError maximum(dr)
                     @test_throws BoundsError dr[1]
                     @test findin(dr,dr) == Int64[]
                     @test [dr;] == T[]
@@ -249,8 +249,8 @@ dr18 = typemax(Dates.DateTime):Dates.Month(-100000):typemin(Dates.DateTime)
 dr19 = typemax(Dates.DateTime):Dates.Year(-1000000):typemin(Dates.DateTime)
 dr20 = typemin(Dates.DateTime):Dates.Day(2):typemax(Dates.DateTime)
 
-drs = {dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
-       dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20}
+drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
+          dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 drs2 = map(x->Dates.Date(first(x)):step(x):Dates.Date(last(x)),drs)
 
 @test map(length,drs) == map(x->size(x)[1],drs)
@@ -330,8 +330,8 @@ dr18 = typemax(Dates.Date):Dates.Month(-100000):typemin(Dates.Date)
 dr19 = typemax(Dates.Date):Dates.Year(-1000000):typemin(Dates.Date)
 dr20 = typemin(Dates.Date):Dates.Day(2):typemax(Dates.Date)
 
-drs = {dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
-       dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20}
+drs = Any[dr,dr1,dr2,dr3,dr4,dr5,dr6,dr7,dr8,dr9,dr10,
+          dr11,dr12,dr13,dr14,dr15,dr16,dr17,dr18,dr19,dr20]
 
 @test map(length,drs) == map(x->size(x)[1],drs)
 @test all(map(x->findin(x,x) == [1:length(x);], drs[1:4]))
@@ -491,3 +491,9 @@ testmonthranges2(100000)
 # Issue 5
 lastdaysofmonth = [Dates.Date(2014,i,Dates.daysinmonth(2014,i)) for i=1:12]
 @test [Date(2014,1,31):Dates.Month(1):Date(2015);] == lastdaysofmonth
+
+# Range addition/subtraction:
+let d = Dates.Day(1)
+    @test (Dates.Date(2000):d:Dates.Date(2001))+d == (Dates.Date(2000)+d:d:Dates.Date(2001)+d)
+    @test (Dates.Date(2000):d:Dates.Date(2001))-d == (Dates.Date(2000)-d:d:Dates.Date(2001)-d)
+end

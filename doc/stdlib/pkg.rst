@@ -1,26 +1,27 @@
 .. module:: Base.Pkg
 
-Package Manager Functions
--------------------------
+***************************
+ Package Manager Functions
+***************************
 
 All package manager functions are defined in the ``Pkg`` module. None of the ``Pkg`` module's functions are exported;
 to use them, you'll need to prefix each function call with an explicit ``Pkg.``, e.g. ``Pkg.status()`` or ``Pkg.dir()``.
 
-.. function:: dir() -> String
+.. function:: dir() -> AbstractString
 
    Returns the absolute path of the package directory.
    This defaults to ``joinpath(homedir(),".julia")`` on all platforms (i.e. ``~/.julia`` in UNIX shell syntax).
    If the ``JULIA_PKGDIR`` environment variable is set, that path is used instead.
    If ``JULIA_PKGDIR`` is a relative path, it is interpreted relative to whatever the current working directory is.
 
-.. function:: dir(names...) -> String
+.. function:: dir(names...) -> AbstractString
 
    Equivalent to ``normpath(Pkg.dir(),names...)`` – i.e. it appends path components to the package directory and normalizes the resulting path.
    In particular, ``Pkg.dir(pkg)`` returns the path to the package ``pkg``.
 
-.. function:: init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
+.. function:: init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
 
-   Initialize ``Pkg.dir()`` as a package directory.  
+   Initialize ``Pkg.dir()`` as a package directory.
    This will be done automatically when the ``JULIA_PKGDIR`` is not set and ``Pkg.dir()`` uses its default value.
    As part of this process, clones a local METADATA git repository from the site and branch specified by its arguments, which
    are typically not provided.  Explicit (non-default) arguments can be used to support a custom METADATA setup.
@@ -114,7 +115,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
 .. function:: generate(pkg,license)
 
-   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"`` or ``"BSD"``.
+   Generate a new package named ``pkg`` with one of these license keys: ``"MIT"``, ``"BSD"`` or ``"ASL"``.
    If you want to make a package with a different license, you can edit it afterwards.
    Generate creates a git repo at ``Pkg.dir(pkg)`` for the package and inside it ``LICENSE.md``, ``README.md``, the julia entrypoint ``$pkg/src/$pkg.jl``, and a travis test file, ``.travis.yml``.
 

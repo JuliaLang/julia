@@ -1,5 +1,44 @@
 .. module:: Dates
 
+****************
+ Dates and Time
+****************
+
+Dates and Time Types
+--------------------
+
+.. data:: Period
+.. data:: Year
+.. data:: Month
+.. data:: Week
+.. data:: Day
+.. data:: Hour
+.. data:: Minute
+.. data:: Second
+.. data:: Millisecond
+
+   ``Period`` types represent discrete, human representations of time.
+
+.. data:: Instant
+
+   ``Instant`` types represent integer-based, machine representations of time as continuous timelines starting from an epoch.
+
+.. data:: UTInstant{T}
+
+   The ``UTInstant`` represents a machine timeline based on `UT` time (1 day = one revolution of the earth). The ``{T}`` is a ``Period`` parameter that indicates the resolution or precision of the instant.
+
+.. data:: TimeType
+
+   ``TimeType`` types wrap ``Instant`` machine instances to provide human representations of the machine instant.
+
+.. data:: DateTime
+
+   ``DateTime`` wraps a ``UTInstant{Millisecond}`` and interprets it according to the proleptic Gregorian calendar.
+
+.. data:: Date
+
+   ``Date`` wraps a ``UTInstant{Day}`` and interprets it according to the proleptic Gregorian calendar.
+
 Dates Functions
 ---------------
 
@@ -20,7 +59,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
 .. function:: DateTime(f::Function, y[, m, d, h, mi, s]; step=Day(1), negate=false, limit=10000) -> DateTime
 
-    Create a DateTime through the adjuster API. The starting point will be constructed from the 
+    Create a DateTime through the adjuster API. The starting point will be constructed from the
     provided ``y, m, d...`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
     adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
     will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
@@ -32,7 +71,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``Date`` type to a ``DateTime``. The hour, minute, second, and millisecond
     parts of the new ``DateTime`` are assumed to be zero.
 
-.. function:: DateTime(dt::String, format::String; locale="english") -> DateTime
+.. function:: DateTime(dt::AbstractString, format::AbstractString; locale="english") -> DateTime
 
    Construct a DateTime type by parsing the ``dt`` date string following the pattern given in
    the ``format`` string. The following codes can be used for constructing format strings:
@@ -58,6 +97,14 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
    So a ``dt`` string of "1996-01-15T00:00:00.0" would have a ``format`` string
    like "y-m-dTH:M:S.s".
 
+.. function:: Dates.DateFormat(format::AbstractString) -> DateFormat
+
+   Construct a date formatting object that can be passed repeatedly for parsing similarly formatted date strings. ``format`` is a format string in the form described above (e.g. ``"yyyy-mm-dd"``).
+
+.. function:: DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a ``DateTime``, but passes a ``DateFormat`` object instead of a raw formatting string. It is more efficient if similarly formatted date strings will be parsed repeatedly to first create a ``DateFormat`` object then use this method for parsing.
+
 .. function:: Date(y, [m, d]) -> Date
 
    Construct a ``Date`` type by parts. Arguments must be convertible to
@@ -70,7 +117,7 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
 
 .. function:: Date(f::Function, y[, m]; step=Day(1), negate=false, limit=10000) -> Date
 
-    Create a Date through the adjuster API. The starting point will be constructed from the 
+    Create a Date through the adjuster API. The starting point will be constructed from the
     provided ``y, m`` arguments, and will be adjusted until ``f::Function`` returns true. The step size in
     adjusting can be provided manually through the ``step`` keyword. If ``negate=true``, then the adjusting
     will stop when ``f::Function`` returns false instead of true. ``limit`` provides a limit to
@@ -82,21 +129,30 @@ alternatively, you could call ``using Dates`` to bring all exported functions in
     Converts a ``DateTime`` type to a ``Date``. The hour, minute, second, and millisecond
     parts of the ``DateTime`` are truncated, so only the year, month and day parts are used in construction.
 
-.. function:: Date(dt::String, format::String; locale="english") -> Date
+.. function:: Date(dt::AbstractString, format::AbstractString; locale="english") -> Date
 
    Construct a Date type by parsing a ``dt`` date string following the pattern given in
    the ``format`` string. Follows the same conventions as ``DateTime`` above.
+
+.. function:: Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string ``dt`` using a ``DateFormat`` object ``df``.
 
 .. function:: now() -> DateTime
 
    Returns a DateTime corresponding to the user's system
    time including the system timezone locale.
 
-.. function:: nowutc() -> DateTime
-  
+.. function:: now(::Type{UTC}) -> DateTime
+
    Returns a DateTime corresponding to the user's system
    time as UTC/GMT.
-   
+
+.. function:: eps(::DateTime) -> Millisecond
+              eps(::Date) -> Day
+
+   Returns ``Millisecond(1)`` for ``DateTime`` values and ``Day(1)`` for ``Date`` values.
+
 Accessor Functions
 ~~~~~~~~~~~~~~~~~~
 
@@ -137,12 +193,12 @@ Accessor Functions
 Query Functions
 ~~~~~~~~~~~~~~~
 
-.. function:: dayname(dt::TimeType; locale="english") -> String
+.. function:: dayname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full day name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
 
-.. function:: dayabbr(dt::TimeType; locale="english") -> String
+.. function:: dayabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated name corresponding to the day of the week
    of the Date or DateTime in the given ``locale``.
@@ -164,11 +220,11 @@ Query Functions
     the last day of a week in a month by including ``dayofweekofmonth(dt) == daysofweekinmonth(dt)``
     in the adjuster function.
 
-.. function:: monthname(dt::TimeType; locale="english") -> String
+.. function:: monthname(dt::TimeType; locale="english") -> AbstractString
 
    Return the full name of the month of the Date or DateTime in the given ``locale``.
 
-.. function:: monthabbr(dt::TimeType; locale="english") -> String
+.. function:: monthabbr(dt::TimeType; locale="english") -> AbstractString
 
    Return the abbreviated month name of the Date or DateTime in the given ``locale``.
 
@@ -176,7 +232,7 @@ Query Functions
 
     Returns the number of days in the month of ``dt``. Value will be 28, 29, 30, or 31.
 
-.. function:: isleapyear(dt::TimeType) -> Bool 
+.. function:: isleapyear(dt::TimeType) -> Bool
 
     Returns true if the year of ``dt`` is a leap year.
 
@@ -206,56 +262,56 @@ Adjuster Functions
 
 .. function:: firstdayofweek(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the Monday of it's week.
+    Adjusts ``dt`` to the Monday of its week.
 
 .. function:: lastdayofweek(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the Sunday of it's week.
+    Adjusts ``dt`` to the Sunday of its week.
 
 .. function:: firstdayofmonth(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's month.
+    Adjusts ``dt`` to the first day of its month.
 
 .. function:: lastdayofmonth(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's month.
+    Adjusts ``dt`` to the last day of its month.
 
 .. function:: firstdayofyear(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's year.
+    Adjusts ``dt`` to the first day of its year.
 
 .. function:: lastdayofyear(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's year.
+    Adjusts ``dt`` to the last day of its year.
 
 .. function:: firstdayofquarter(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the first day of it's quarter.
+    Adjusts ``dt`` to the first day of its quarter.
 
 .. function:: lastdayofquarter(dt::TimeType) -> TimeType
 
-    Adjusts ``dt`` to the last day of it's quarter.
+    Adjusts ``dt`` to the last day of its quarter.
 
 .. function:: tonext(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with 
+    Adjusts ``dt`` to the next day of week corresponding to ``dow`` with
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the next ``dow``, allowing for no adjustment to occur.
 
 .. function:: toprev(dt::TimeType,dow::Int;same::Bool=false) -> TimeType
 
-    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with 
+    Adjusts ``dt`` to the previous day of week corresponding to ``dow`` with
     ``1 = Monday, 2 = Tuesday, etc``. Setting ``same=true`` allows the current
     ``dt`` to be considered as the previous ``dow``, allowing for no adjustment to occur.
 
 .. function:: tofirst(dt::TimeType,dow::Int;of=Month) -> TimeType
 
-    Adjusts ``dt`` to the first ``dow`` of it's month. Alternatively, ``of=Year``
+    Adjusts ``dt`` to the first ``dow`` of its month. Alternatively, ``of=Year``
     will adjust to the first ``dow`` of the year.
 
 .. function:: tolast(dt::TimeType,dow::Int;of=Month) -> TimeType
 
-    Adjusts ``dt`` to the last ``dow`` of it's month. Alternatively, ``of=Year``
+    Adjusts ``dt`` to the last ``dow`` of its month. Alternatively, ``of=Year``
     will adjust to the last ``dow`` of the year.
 
 .. function:: tonext(func::Function,dt::TimeType;step=Day(1),negate=false,limit=10000,same=false) -> TimeType
@@ -275,7 +331,7 @@ Adjuster Functions
 .. function:: recur{T<:TimeType}(func::Function,dr::StepRange{T};negate=false,limit=10000) -> Vector{T}
 
     ``func`` takes a single TimeType argument and returns a ``Bool`` indicating whether the input
-    should be "included" in the final set. ``recur`` applies ``func`` over each element in the 
+    should be "included" in the final set. ``recur`` applies ``func`` over each element in the
     range of ``dr``, including those elements for which ``func`` returns ``true`` in the resulting
     Array, unless ``negate=true``, then only elements where ``func`` returns ``false`` are included.
 
@@ -295,7 +351,7 @@ Periods
    Construct a ``Period`` type with the given ``v`` value.
    Input must be losslessly convertible to an ``Int64``.
 
-.. function:: default(p::Period) => Period
+.. function:: default(p::Period) -> Period
 
     Returns a sensible "default" value for the input Period by returning
     ``one(p)`` for Year, Month, and Day, and ``zero(p)`` for Hour, Minute,
@@ -345,7 +401,7 @@ Constants
 Days of the Week:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int64)
+Variable        Abbr.     Value (Int)
 --------------- --------- -------------
 ``Monday``      ``Mon``   1
 ``Tuesday``     ``Tue``   2
@@ -359,7 +415,7 @@ Variable        Abbr.     Value (Int64)
 Months of the Year:
 
 =============== ========= =============
-Variable        Abbr.     Value (Int64)
+Variable        Abbr.     Value (Int)
 --------------- --------- -------------
 ``January``     ``Jan``   1
 ``February``    ``Feb``   2

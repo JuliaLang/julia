@@ -96,7 +96,7 @@ rm(c_tmpdir, recursive=true)
 # This section tests file watchers.                                   #
 #######################################################################
 function test_file_poll(channel,timeout_s)
-    rc = poll_file(file, iround(timeout_s/10), timeout_s)
+    rc = poll_file(file, round(Int,timeout_s/10), timeout_s)
     put!(channel,rc)
 end
 
@@ -150,6 +150,19 @@ function test_monitor_wait(tval)
     @test events.changed
 end
 
+function test_monitor_wait_poll(tval)
+    fm = watch_file(file, poll=true)
+    @async begin
+        sleep(tval)
+        f = open(file,"a")
+        write(f,"Hello World\n")
+        close(f)
+    end
+    fname, events = wait(fm)
+    @test fname == basename(file)
+    @test events.writable
+end
+
 # Commented out the tests below due to issues 3015, 3016 and 3020
 test_timeout(0.1)
 test_timeout(1)
@@ -159,6 +172,7 @@ test_touch(2)
 #test_monitor(0.1)
 test_monitor(2)
 test_monitor_wait(0.1)
+test_monitor_wait_poll(0.5)
 
 ##########
 #  mmap  #
@@ -169,23 +183,23 @@ write(s, "Hello World\n")
 close(s)
 s = open(file, "r")
 @test isreadonly(s) == true
-c = mmap_array(Uint8, (11,), s)
+c = mmap_array(UInt8, (11,), s)
 @test c == "Hello World".data
-c = mmap_array(Uint8, (uint16(11),), s)
+c = mmap_array(UInt8, (uint16(11),), s)
 @test c == "Hello World".data
-@test_throws ErrorException mmap_array(Uint8, (int16(-11),), s)
-@test_throws ErrorException mmap_array(Uint8, (typemax(Uint),), s)
+@test_throws ArgumentError mmap_array(UInt8, (int16(-11),), s)
+@test_throws ArgumentError mmap_array(UInt8, (typemax(UInt),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
-c = mmap_array(Uint8, (11,), s)
+c = mmap_array(UInt8, (11,), s)
 c[5] = uint8('x')
 msync(c)
 close(s)
 s = open(file, "r")
 str = readline(s)
 close(s)
-@test beginswith(str, "Hellx World")
+@test startswith(str, "Hellx World")
 c=nothing; gc(); gc(); # cause munmap finalizer to run & free resources
 
 s = open(file, "w")
@@ -198,7 +212,7 @@ s = open(file, "r")
 @test isreadonly(s)
 b = mmap_bitarray((17,13), s)
 @test b == trues(17,13)
-@test_throws ErrorException mmap_bitarray((7,3), s)
+@test_throws ArgumentError mmap_bitarray((7,3), s)
 close(s)
 s = open(file, "r+")
 b = mmap_bitarray((17,19), s)
@@ -247,18 +261,18 @@ close(s)
 s = open(file)
 mark(s)
 str = readline(s)
-@test beginswith(str, "Marked!")
+@test startswith(str, "Marked!")
 @test ismarked(s)
 reset(s)
 @test !ismarked(s)
 str = readline(s)
-@test beginswith(str, "Marked!")
+@test startswith(str, "Marked!")
 mark(s)
 @test readline(s) == "Hello world!\n"
 @test ismarked(s)
 unmark(s)
 @test !ismarked(s)
-@test_throws ErrorException reset(s)
+@test_throws ArgumentError reset(s)
 @test !unmark(s)
 @test !ismarked(s)
 close(s)
@@ -267,17 +281,39 @@ close(s)
 # This section tests temporary file and directory creation.           #
 #######################################################################
 
-# my_tempdir = tempdir()
-# @test isdir(my_tempdir) == true
+my_tempdir = tempdir()
+@test isdir(my_tempdir) == true
 
-# path = tempname()
-# @test ispath(path) == false
+path = tempname()
+# Issue #9053.
+@unix_only @test ispath(path) == false
+@windows_only @test ispath(path) == true
 
-# (file, f) = mktemp()
-# print(f, "Here is some text")
-# close(f)
-# @test isfile(file) == true
-# @test readall(file) == "Here is some text"
+(p, f) = mktemp()
+print(f, "Here is some text")
+close(f)
+@test isfile(p) == true
+@test readall(p) == "Here is some text"
+rm(p)
+
+let
+    tmp_path = mktemp() do p, io
+        @test isfile(p)
+        print(io, "鴨かも？")
+        p
+    end
+    @test tmp_path != ""
+    @test !isfile(tmp_path)
+end
+
+let
+    tmpdir = mktempdir() do d
+        @test isdir(d)
+        d
+    end
+    @test tmpdir != ""
+    @test !isdir(tmpdir)
+end
 
 emptyfile = joinpath(dir, "empty")
 touch(emptyfile)
@@ -295,14 +331,24 @@ write(af, "This is indeed a test")
 bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
+# issue #8698
+cfile = joinpath(dir, "c.txt")
+open(cfile, "w") do cf
+    write(cf, "This is longer than the contents of afile")
+end
+cp(afile, cfile)
+
 a_stat = stat(afile)
 b_stat = stat(bfile)
+c_stat = stat(cfile)
 @test a_stat.mode == b_stat.mode
 @test a_stat.size == b_stat.size
+@test a_stat.size == c_stat.size
 
 close(af)
 rm(afile)
 rm(bfile)
+rm(cfile)
 
 ###################
 # FILE* interface #
@@ -313,7 +359,7 @@ write(f, "Hello, world!")
 close(f)
 f = open(file, "r")
 FILEp = convert(CFILE, f)
-buf = Array(Uint8, 8)
+buf = Array(UInt8, 8)
 str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp.ptr)
 @test bytestring(buf) == "Hello, w"
 @test position(FILEp) == 8

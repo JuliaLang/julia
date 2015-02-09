@@ -11,7 +11,7 @@ for T = (Float32,Float64,Rational{Int})
         @test_approx_eq_eps sind(convert(T,x))::fT convert(fT,sin(pi/180*x)) eps(deg2rad(convert(fT,x)))
         @test_approx_eq_eps cosd(convert(T,x))::fT convert(fT,cos(pi/180*x)) eps(deg2rad(convert(fT,x)))
     end
-    
+
     @test sind(convert(T,0.0))::fT === zero(fT)
     @test sind(convert(T,180.0))::fT === zero(fT)
     @test sind(convert(T,360.0))::fT === zero(fT)
@@ -198,12 +198,21 @@ end
 @test_approx_eq lbeta(-1/2, 3) log(16/3)
 
 # gamma, lgamma (complex argument)
-@test gamma(1:25) == gamma(Float64[1:25;])
+if Base.Math.libm == "libopenlibm"
+    @test gamma(Float64[1:25;]) == gamma(1:25)
+else
+    @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
+end
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
+@test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
+@test factorial(3.0) == gamma(4.0) == factorial(3)
+for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
+    @test factorial(x) == gamma(1+x)
+end
 
 # digamma
 for elty in (Float32, Float64)
@@ -270,24 +279,8 @@ end
 @test_approx_eq quadgk(cos, 0,0.7,1, norm=abs)[1] sin(1)
 
 # Ensure subnormal flags functions don't segfault
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 1) .== [0x00 0x01])
-@test any(ccall("jl_zero_subnormals", Uint8, (Uint8,), 0) .== [0x00 0x01])
-
-# isqrt (issue #4884)
-@test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == int128("13043817825332782212")
-@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
-@test isqrt(0) == 0
-for i = 1:1000
-    n = rand(Uint128)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-    n = rand(Uint64)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-end
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
+@test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
 
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)
@@ -357,4 +350,23 @@ end
 
 for z in (1.234, 1.234 + 5.678im, [1.234, 5.678])
     @test_approx_eq cis(z) exp(im*z)
+end
+
+# modf
+for elty in (Float32, Float64)
+    @test_approx_eq modf( convert(elty,1.2) )[1] convert(elty,0.2)
+    @test_approx_eq modf( convert(elty,1.2) )[2] convert(elty,1.0)
+    @test_approx_eq modf( convert(elty,1.0) )[1] convert(elty,0.0)
+    @test_approx_eq modf( convert(elty,1.0) )[2] convert(elty,1.0)
+end
+
+# frexp
+for elty in (Float32, Float64)
+    @test frexp( convert(elty,0.5) ) == (convert(elty,0.5),0)
+    @test frexp( convert(elty,4.0) ) == (convert(elty,0.5),3)
+    @test_approx_eq frexp( convert(elty,10.5) )[1] convert(elty,0.65625)
+    @test frexp( convert(elty,10.5) )[2] == 4
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][1] convert(elty,0.5)
+    @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
+    @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
 end

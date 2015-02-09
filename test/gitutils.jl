@@ -9,7 +9,7 @@ end
 function mktree(d::Dict)
     lstree = ""
     for (name, data) in d
-        if isa(data, String)
+        if isa(data, AbstractString)
             sha1 = write_and_readchomp(data, `git hash-object -w --stdin`)
             lstree *= "100644 blob $sha1\t$name\n"
         elseif isa(data, Dict)
@@ -24,7 +24,7 @@ function mktree(d::Dict)
     write_and_readchomp(lstree, `git mktree`)
 end
 
-function verify_tree(d::Dict, tree::String)
+function verify_tree(d::Dict, tree::AbstractString)
     # check that tree matches d
     seen = Set()
     for line in eachline(`git ls-tree $tree`)
@@ -33,7 +33,7 @@ function verify_tree(d::Dict, tree::String)
         perm, kind, sha1, name = m.captures
         @test haskey(d,name)
         data = d[name]
-        if isa(data, String)
+        if isa(data, AbstractString)
             @test kind == "blob"
             @test data == readall(`git cat-file blob $sha1`)
         elseif isa(data, Dict)
@@ -58,7 +58,7 @@ function verify_work(d::Dict)
             continue
         end
         @test ispath(name)
-        if isa(data, String)
+        if isa(data, AbstractString)
             @test isfile(name)
             @test readall(name) == data
         elseif isa(data, Dict)
@@ -82,7 +82,7 @@ function git_verify(h::Dict, i::Dict, w::Dict)
     verify_work(w)
 end
 
-function git_setup(h::Dict, i::Dict, w::Dict, parents::String...)
+function git_setup(h::Dict, i::Dict, w::Dict, parents::AbstractString...)
     # create tree objects
     headt = mktree(h)
     index = mktree(i)

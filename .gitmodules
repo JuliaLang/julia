@@ -10,10 +10,6 @@
 [submodule "deps/Rmath"]
 	path = deps/Rmath
 	url = git://github.com/JuliaLang/Rmath.git
-[submodule "doc/juliadoc"]
-	path = doc/juliadoc
-	url = git://github.com/JuliaLang/JuliaDoc.git
-
 [submodule "deps/libmojibake"]
 	path = deps/libmojibake
 	url = git://github.com/JuliaLang/libmojibake.git

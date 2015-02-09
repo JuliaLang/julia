@@ -94,8 +94,7 @@ end
 
 promote_type()  = Bottom
 promote_type(T) = T
-promote_type(T, S   ) = typejoin(T, S)
-promote_type(T, S...) = promote_type(T, promote_type(S...))
+promote_type(T, S, U, V...) = promote_type(T, promote_type(S, U, V...))
 
 promote_type(::Type{Bottom}, ::Type{Bottom}) = Bottom
 promote_type{T}(::Type{T}, ::Type{T}) = T
@@ -161,6 +160,9 @@ promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 /(x::Number, y::Number) = /(promote(x,y)...)
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
+fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
+muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
+
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
@@ -192,6 +194,10 @@ no_op_err(name, T) = error(name," not defined for ",T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)
 ^{T<:Number}(x::T, y::T) = no_op_err("^", T)
 
+fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
+fma(x::Integer, y::Integer, z::Integer) = x*y+z
+muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
+
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
 ($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
@@ -199,6 +205,16 @@ no_op_err(name, T) = error(name," not defined for ",T)
 =={T<:Number}(x::T, y::T) = x === y
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
 
+div{T<:Real}(x::T, y::T) = no_op_err("div", T)
+fld{T<:Real}(x::T, y::T) = no_op_err("fld", T)
+cld{T<:Real}(x::T, y::T) = no_op_err("cld", T)
+rem{T<:Real}(x::T, y::T) = no_op_err("rem", T)
+mod{T<:Real}(x::T, y::T) = no_op_err("mod", T)
+
+mod1{T<:Real}(x::T, y::T) = no_op_err("mod1", T)
+rem1{T<:Real}(x::T, y::T) = no_op_err("rem1", T)
+fld1{T<:Real}(x::T, y::T) = no_op_err("fld1", T)
+
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
-min{T<:Real}(x::T, y::T) = ifelse(x < y, x, y)
-minmax{T<:Real}(x::T, y::T) = x < y ? (x, y) : (y, x)
+min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
+minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)

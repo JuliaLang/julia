@@ -2,7 +2,7 @@
 
 length(t::Tuple) = tuplelen(t)
 endof(t::Tuple) = tuplelen(t)
-size(t::Tuple, d) = d==1 ? tuplelen(t) : error("invalid tuple dimension $(d)")
+size(t::Tuple, d) = d==1 ? tuplelen(t) : throw(ArgumentError("invalid tuple dimension $d"))
 getindex(t::Tuple, i::Int) = tupleref(t, i)
 getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
@@ -35,9 +35,6 @@ ntuple(f::Function, n::Integer) =
     n==4 ? (f(1),f(2),f(3),f(4),) :
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
-
-argtail(x, rest...) = rest
-tail(x::Tuple) = argtail(x...)
 
 # 0 argument function
 map(f::Callable) = f()
@@ -86,11 +83,11 @@ function ==(t1::Tuple, t2::Tuple)
     return true
 end
 
-const tuplehash_seed = Uint === Uint64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::(), h::Uint) = h + tuplehash_seed
-hash(x::(Any,), h::Uint)    = hash(x[1], hash((), h))
-hash(x::(Any,Any), h::Uint) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::Uint)     = hash(x[1], hash(x[2], hash(tupletail(x), h)))
+const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
+hash(::(), h::UInt) = h + tuplehash_seed
+hash(x::(Any,), h::UInt)    = hash(x[1], hash((), h))
+hash(x::(Any,Any), h::UInt) = hash(x[1], hash(x[2], hash((), h)))
+hash(x::Tuple, h::UInt)     = hash(x[1], hash(x[2], hash(tail(x), h)))
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)

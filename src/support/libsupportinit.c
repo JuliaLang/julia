@@ -1,15 +1,9 @@
 #include <locale.h>
-#include <math.h>
 #include "libsupport.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-double D_PNAN;
-double D_NNAN;
-double D_PINF;
-double D_NINF;
 
 static int isInitialized = 0;
 
@@ -24,10 +18,6 @@ void libsupport_init(void)
 
         ios_init_stdstreams();
 
-        D_PNAN = +NAN;
-        D_NNAN = -NAN;
-        D_PINF = +INFINITY;
-        D_NINF = -INFINITY;
         isInitialized=1;
     }
 }

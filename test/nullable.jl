@@ -1,6 +1,5 @@
 types = [
     Bool,
-    Char,
     Float16,
     Float32,
     Float64,
@@ -9,10 +8,10 @@ types = [
     Int32,
     Int64,
     Int8,
-    Uint16,
-    Uint32,
-    Uint64,
-    Uint8,
+    UInt16,
+    UInt32,
+    UInt64,
+    UInt8,
 ]
 
 # Nullable{T}() = new(true)
@@ -20,6 +19,8 @@ for T in types
     x = Nullable{T}()
     @test x.isnull === true
     @test isa(x.value, T)
+    @test eltype(Nullable{T}) === T
+    @test eltype(x) === T
 end
 
 # Nullable{T}(value::T) = new(false, value)
@@ -28,11 +29,13 @@ for T in types
     @test x.isnull === false
     @test isa(x.value, T)
     @test x.value === zero(T)
+    @test eltype(x) === T
 
     x = Nullable{T}(one(T))
     @test x.isnull === false
     @test isa(x.value, T)
     @test x.value === one(T)
+    @test eltype(x) === T
 end
 
 # immutable NullException <: Exception
@@ -65,10 +68,10 @@ p1s = [
     "Nullable{Int32}()",
     "Nullable{Int64}()",
     "Nullable{Int8}()",
-    "Nullable{Uint16}()",
-    "Nullable{Uint32}()",
-    "Nullable{Uint64}()",
-    "Nullable{Uint8}()",
+    "Nullable{UInt16}()",
+    "Nullable{UInt32}()",
+    "Nullable{UInt64}()",
+    "Nullable{UInt8}()",
 ]
 
 p2s = [
@@ -209,17 +212,17 @@ for T in types
     @test_throws NullException (x4 == x4)
 end
 
-# function hash(x::Nullable, h::Uint)
+# function hash(x::Nullable, h::UInt)
 for T in types
     x1 = Nullable{T}()
     x2 = Nullable{T}()
     x3 = Nullable(zero(T))
     x4 = Nullable(one(T))
 
-    @test isa(hash(x1), Uint)
-    @test isa(hash(x2), Uint)
-    @test isa(hash(x3), Uint)
-    @test isa(hash(x4), Uint)
+    @test isa(hash(x1), UInt)
+    @test isa(hash(x2), UInt)
+    @test isa(hash(x3), UInt)
+    @test isa(hash(x4), UInt)
 
     @test hash(x1) == hash(x2)
     @test hash(x1) != hash(x3)
@@ -227,4 +230,22 @@ for T in types
     @test hash(x2) != hash(x3)
     @test hash(x2) != hash(x4)
     @test hash(x3) != hash(x4)
+end
+
+type TestNType{T}
+    v::Nullable{T}
+end
+
+for T in types
+    x1 = TestNType{T}(Nullable{T}())
+    @test isnull(x1.v)
+    x1.v = one(T)
+    @test !isnull(x1.v)
+    @test get(x1.v, one(T)) === one(T)
+end
+
+# issue #9462
+for T in types
+    @test isa(convert(Nullable{Number}, Nullable(one(T))), Nullable{Number})
+    @test isa(convert(Nullable{Any}, Nullable(one(T))), Nullable{Any})
 end

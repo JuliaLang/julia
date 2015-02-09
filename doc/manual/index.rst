@@ -28,12 +28,13 @@
    linear-algebra
    networking-and-streams
    parallel-computing
-   nullable-types
+   dates
    interacting-with-julia
    running-external-programs
    calling-c-and-fortran-code
    embedding
    packages
+   profile
    performance-tips
    style-guide
    faq

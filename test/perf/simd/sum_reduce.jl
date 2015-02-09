@@ -12,7 +12,7 @@ function flog_sum_reduce( m, x )
         # Try different starting and ending indices.
         sum_reduce(x,j,length(x)-(j-1))
     end
-    s    
+    s
 end
 
 for t in [Float32,Float64]

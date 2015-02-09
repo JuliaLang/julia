@@ -23,9 +23,9 @@ function simd_loop_with_multiple_reductions(x, y, z)
     (s,t)
 end
 
-for T in {Int32,Int64,Float32,Float64}
+for T in [Int32,Int64,Float32,Float64]
    # Try various lengths to make sure "remainder loop" works
-   for n in {0,1,2,3,4,255,256,257}
+   for n in [0,1,2,3,4,255,256,257]
         # Dataset chosen so that results will be exact with only 24 bits of mantissa
         a = convert(Array{T},[2*j+1 for j in 1:n])
         b = convert(Array{T},[3*j+2 for j in 1:n])
@@ -60,10 +60,66 @@ let j=4
     # Index that is local to loop
     @simd for simd_loop_local=1:0 end
     simd_loop_local_present = true
-    try 
+    try
         simd_loop_local += 1
     catch
         simd_loop_local_present = false
     end
     @test !simd_loop_local_present
 end
+
+import Base.SimdLoop.SimdError
+
+# Test that @simd rejects inner loop body with invalid control flow statements
+# issue #8613
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 && break
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x < 5 && continue
+    end
+end))
+
+@test_throws SimdError eval(:(begin
+    @simd for x = 1:10
+        x == 1 || @goto exit_loop
+    end
+    @label exit_loop
+end))
+
+# @simd with cartesian iteration
+function simd_cartesian_range!(indexes, crng)
+    @simd for I in crng
+        push!(indexes, I)
+    end
+    indexes
+end
+
+crng = CartesianRange(CartesianIndex{4}(2,0,1,3),
+                      CartesianIndex{4}(4,1,1,5))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{2}(-1,1),
+                      CartesianIndex{2}(1,3))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{2}(-1,1),
+                      CartesianIndex{2}(-1,3))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{1}(2),
+                      CartesianIndex{1}(4))
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)
+
+crng = CartesianRange(CartesianIndex{0}(),
+                      CartesianIndex{0}())
+indexes = simd_cartesian_range!(Array(eltype(crng), 0), crng)
+@test indexes == collect(crng)

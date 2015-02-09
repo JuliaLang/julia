@@ -21,7 +21,7 @@ function generic_scale!(X::AbstractArray, s::Number)
 end
 
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
-    length(C) == length(X) || error("C must be the same length as X")
+    length(C) == length(X) || throw(DimensionMismatch("first array argument must be the same length as the second array argument"))
     for i = 1:length(X)
         @inbounds C[i] = X[i]*s
     end
@@ -45,8 +45,10 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 function diff(A::AbstractMatrix, dim::Integer)
     if dim == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    else
+    elseif dim == 2
         [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    else
+        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
     end
 end
 
@@ -229,15 +231,16 @@ trace(x::Number) = x
 
 #det(a::AbstractMatrix)
 
-inv(a::AbstractVector) = error("argument must be a square matrix")
+inv(a::StridedMatrix) = error("argument must be a square matrix")
 function inv{T}(A::AbstractMatrix{T})
     S = typeof(zero(T)/one(T))
-    A_ldiv_B!(convert(AbstractMatrix{S}, A), eye(S, chksquare(A)))
+    A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
 end
 
-function \{TA,TB,N}(A::AbstractMatrix{TA}, B::AbstractArray{TB,N})
+function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
     TC = typeof(one(TA)/one(TB))
-    A_ldiv_B!(TA == TC ? copy(A) : convert(AbstractMatrix{TC}, A), TB == TC ? copy(B) : convert(AbstractArray{TC,N}, B))
+    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    A_ldiv_B!(factorize(TA == TC ? copy(A) : convert(AbstractMatrix{TC}, A)), TB == TC ? copy(B) : convert(AbstractArray{TC}, B))
 end
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
@@ -326,8 +329,6 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 #findmax(a::AbstractArray)
 #findmin(a::AbstractArray)
 
-#rref{T}(A::AbstractMatrix{T})
-
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = rand(100,100)
     t = @elapsed a*a
@@ -340,14 +341,14 @@ end
 #                                          for BlasFloat Arrays)
 function axpy!(alpha, x::AbstractArray, y::AbstractArray)
     n = length(x)
-    n==length(y) || throw(DimensionMismatch(""))
+    n==length(y) || throw(DimensionMismatch())
     for i = 1:n
         @inbounds y[i] += alpha * x[i]
     end
     y
 end
 function axpy!{Ti<:Integer,Tj<:Integer}(alpha, x::AbstractArray, rx::AbstractArray{Ti}, y::AbstractArray, ry::AbstractArray{Tj})
-    length(x)==length(y) || throw(DimensionMismatch(""))
+    length(x)==length(y) || throw(DimensionMismatch())
     if minimum(rx) < 1 || maximum(rx) > length(x) || minimum(ry) < 1 || maximum(ry) > length(y) || length(rx) != length(ry)
         throw(BoundsError())
     end
@@ -423,7 +424,7 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
 end
 
 function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
     return det(lufact(A))
 end
 det(x::Number) = x

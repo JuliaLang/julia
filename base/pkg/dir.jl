@@ -6,7 +6,7 @@ import ..Git
 const DIR_NAME = ".julia"
 
 _pkgroot() = abspath(get(ENV,"JULIA_PKGDIR",joinpath(homedir(),DIR_NAME)))
-isversioned(p::String) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
+isversioned(p::AbstractString) = ((x,y) = (VERSION.major, VERSION.minor); basename(p) == "v$x.$y")
 
 function path()
     b = _pkgroot()
@@ -17,7 +17,7 @@ function path()
     end
     return b
 end
-path(pkg::String...) = normpath(path(),pkg...)
+path(pkg::AbstractString...) = normpath(path(),pkg...)
 
 function cd(f::Function, args...; kws...)
     dir = path()
@@ -28,7 +28,10 @@ function cd(f::Function, args...; kws...)
     Base.cd(()->f(args...; kws...), dir)
 end
 
-function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
+function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRANCH)
+    if Git.version() < v"1.7.3"
+        warn("Pkg only works with git versions greater than v1.7.3")
+    end
     dir = path()
     info("Initializing package repository $dir")
     if isdir(joinpath(dir,"METADATA"))
@@ -42,11 +45,26 @@ function init(meta::String=DEFAULT_META, branch::String=META_BRANCH)
             info("Cloning METADATA from $meta")
             run(`git clone -q -b $branch $meta METADATA`)
             Git.set_remote_url(meta, dir="METADATA")
-            run(`touch REQUIRE`)
+            touch("REQUIRE")
+            touch("META_BRANCH")
+            open("META_BRANCH", "w") do io
+                write(io, branch)
+                close(io)
+            end
         end
     catch e
-        rm(dir, recursive=true)
+        ispath(dir) && rm(dir, recursive=true)
         rethrow(e)
+    end
+end
+
+function getmetabranch()
+    try
+        open(joinpath(path(),"META_BRANCH")) do io
+          chomp(readuntil(io, "/n"))
+        end
+    catch
+        META_BRANCH
     end
 end
 

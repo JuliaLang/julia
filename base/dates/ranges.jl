@@ -4,7 +4,7 @@
 Base.colon{T<:DateTime}(start::T, stop::T) = StepRange(start, Day(1), stop)
 
 # Given a start and end date, how many steps/periods are in between
-guess(a::DateTime,b::DateTime,c) = ifloor(Int64,(int128(b) - int128(a))/toms(c))
+guess(a::DateTime,b::DateTime,c) = floor(Int64,(int128(b) - int128(a))/toms(c))
 guess(a::Date,b::Date,c) = int64(div(int64(b - a),days(c)))
 function len(a,b,c)
     lo, hi, st = min(a,b), max(a,b), abs(c)
@@ -29,5 +29,12 @@ function in{T<:TimeType}(x::T, r::StepRange{T})
 end
 
 Base.start{T<:TimeType}(r::StepRange{T}) = 0
-Base.next{T<:TimeType}(r::StepRange{T}, i) = (r.start+r.step*i,i+1)
+Base.next{T<:TimeType}(r::StepRange{T}, i::Int) = (r.start+r.step*i,i+1)
 Base.done{T<:TimeType,S<:Period}(r::StepRange{T,S}, i::Integer) = length(r) <= i
+
+.+{T<:TimeType}(x::Period, r::Range{T}) = (x+first(r)):step(r):(x+last(r))
+.+{T<:TimeType}(r::Range{T},x::Period) = x .+ r
++{T<:TimeType}(r::Range{T},x::Period) = x .+ r
++{T<:TimeType}(x::Period,r::Range{T}) = x .+ r
+.-{T<:TimeType}(r::Range{T},x::Period) = (first(r)-x):step(r):(last(r)-x)
+-{T<:TimeType}(r::Range{T},x::Period) = r .- x

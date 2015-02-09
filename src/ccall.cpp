@@ -71,7 +71,7 @@ extern "C" DLLEXPORT void jl_read_sonames(void)
     pclose(ldc);
 }
 
-extern "C" DLLEXPORT const char *jl_lookup_soname(char *pfx, size_t n)
+extern "C" DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n)
 {
     if (!got_sonames) {
         jl_read_sonames();
@@ -102,7 +102,7 @@ static uv_lib_t *get_library(char *lib)
     hnd = libMap[lib];
     if (hnd != NULL)
         return hnd;
-    hnd = jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
+    hnd = (uv_lib_t *) jl_load_dynamic_library(lib, JL_RTLD_DEFAULT);
     if (hnd != NULL)
         libMap[lib] = hnd;
     return hnd;
@@ -452,7 +452,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         jl_value_t *ptr_ty = expr_type(arg, ctx);
         Value *arg1 = emit_unboxed(arg, ctx);
         if (!jl_is_cpointer_type(ptr_ty)) {
-            emit_cpointercheck(arg1, 
+            emit_cpointercheck(arg1,
                                !strcmp(fname,"ccall") ?
                                "ccall: first argument not a pointer or valid constant expression" :
                                "cglobal: first argument not a pointer or valid constant expression",
@@ -512,7 +512,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 
 #ifdef LLVM33
     typedef AttributeSet attr_type;
-#else 
+#else
     typedef AttrListPtr attr_type;
 #endif
 
@@ -528,7 +528,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               &jl_tupleref(ctx->sp,0),
+                                               jl_tuple_data(ctx->sp),
                                                jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -593,7 +593,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -603,7 +603,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -613,7 +613,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                            &jl_tupleref(ctx->sp,0),
+                                            jl_tuple_data(ctx->sp),
                                             jl_tuple_len(ctx->sp)/2);
     }
     JL_CATCH {
@@ -711,7 +711,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         for (std::vector<Type *>::iterator it = argtypes.begin(); it != argtypes.end(); ++it) {
             if (!first)
                 argstream << ",";
-            else 
+            else
                 first = false;
             (*it)->print(argstream);
             argstream << " ";
@@ -732,7 +732,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (!failed)
             m = jl_Module;
 #else
-        Module *m = ParseAssemblyString(ir_string.data(),jl_Module,Err,jl_LLVMContext);
+        Module *m = ParseAssemblyString(ir_string.c_str(),jl_Module,Err,jl_LLVMContext);
 #endif
         if (m == NULL) {
             std::string message = "Failed to parse LLVM Assembly: \n";
@@ -756,7 +756,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (f->getParent() != jl_Module)
         {
             FunctionMover mover(jl_Module,f->getParent());
-            f = (llvm::Function*)MapValue(f,mover.VMap,RF_None,NULL,&mover);
+            f = mover.CloneFunction(f);
         }
 #endif
 
@@ -842,7 +842,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_data(ctx->sp),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -883,7 +883,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                                &jl_tupleref(ctx->sp,0),
+                                                jl_tuple_data(ctx->sp),
                                                 jl_tuple_len(ctx->sp)/2);
         }
         JL_CATCH {
@@ -930,11 +930,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
                 if (jl_signed_type == NULL) {
                     jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
                 }
-#if LLVM33 
+#if LLVM33
                 Attribute::AttrKind av;
-#elif LLVM32 
+#elif LLVM32
                 Attributes::AttrVal av;
-#else 
+#else
                 Attribute::AttrConst av;
 #endif
 #if LLVM32 && !LLVM33
@@ -991,7 +991,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             nargs--;
         }
     }
-    
+
     if ((!isVa && jl_tuple_len(tt)  != (nargs-2)/2) ||
         ( isVa && jl_tuple_len(tt)-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
@@ -1247,7 +1247,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     ctx->argDepth = last_depth;
     if (0) { // Enable this to turn on SSPREQ (-fstack-protector) on the function containing this ccall
-#if LLVM32 && !LLVM33     
+#if LLVM32 && !LLVM33
         ctx->f->addFnAttr(Attributes::StackProtectReq);
 #else
         ctx->f->addFnAttr(Attribute::StackProtectReq);
