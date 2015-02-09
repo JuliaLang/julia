@@ -765,6 +765,10 @@ Network I/O
 
    Read a UDP packet from the specified socket, and return the bytes received. This call blocks.
 
+.. function:: recvfrom(socket::UDPSocket) -> (address, data)
+
+    Read a UDP packet from the specified socket, returning a tuple of (address, data), where address will be either IPv4 or IPv6 as appropriate.
+
 .. function:: setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing, enable_broadcast=nothing, ttl=nothing)
 
    Set UDP socket options. ``multicast_loop``: loopback for multicast packets (default: true). ``multicast_ttl``: TTL for multicast packets. ``enable_broadcast``: flag must be set to true if socket will be used for broadcast messages, or else the UDP system will return an access error (default: false). ``ttl``: Time-to-live of packets sent on the socket.

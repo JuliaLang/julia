@@ -18,7 +18,7 @@ FLAGS = \
 	-D_GNU_SOURCE -Iflisp -Isupport \
 	-I$(call exec,$(LLVM_CONFIG) --includedir) \
 	-I$(LIBUV_INC) -I$(build_includedir) -DLIBRARY_EXPORTS \
-	-I$(BUILDDIR)
+	-I$(BUILDDIR) -I$(JULIAHOME)/deps/valgrind
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fno-omit-frame-pointer -fvisibility=hidden -fno-common
 endif
@@ -72,7 +72,7 @@ $(julia_flisp.boot): julia-parser.scm julia-syntax.scm \
 	@$(call PRINT_FLISP, $(call spawn,$(BUILDDIR)/flisp/flisp) ./mk_julia_flisp_boot.scm)
 
 $(BUILDDIR)/ast.o $(BUILDDIR)/ast.dbg.obj: $(BUILDDIR)/julia_flisp.boot.inc flisp/*.h
-$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp 
+$(BUILDDIR)/codegen.o $(BUILDDIR)/codegen.dbg.obj: intrinsics.cpp cgutils.cpp ccall.cpp
 $(BUILDDIR)/builtins.o $(BUILDDIR)/builtins.dbg.obj: table.c
 
 $(BUILDDIR)/support/libsupport.a: support/*.h support/*.c

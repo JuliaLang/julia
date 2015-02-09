@@ -37,7 +37,7 @@ end
 convert{T}(::Type{Matrix}, M::SymTridiagonal{T}) = convert(Matrix{T}, M)
 
 size(A::SymTridiagonal) = (length(A.dv), length(A.dv))
-size(A::SymTridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(A.dv) : 1)
+size(A::SymTridiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(A.dv) : 1)
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -190,7 +190,7 @@ end
 function Tridiagonal{T}(dl::Vector{T}, d::Vector{T}, du::Vector{T})
     n = length(d)
     if (length(dl) != n-1 || length(du) != n-1)
-        error(string("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: (", length(dl), ", ", length(d), ", ", length(du),")"))
+        throw(ArgumentError("Cannot make Tridiagonal from incompatible lengths of subdiagonal, diagonal and superdiagonal: ($(length(dl)), $(length(d)), $(length(du))"))
     end
     Tridiagonal(dl, d, du, zeros(T,n-2))
 end
@@ -199,7 +199,7 @@ function Tridiagonal{Tl, Td, Tu}(dl::Vector{Tl}, d::Vector{Td}, du::Vector{Tu})
 end
 
 size(M::Tridiagonal) = (length(M.d), length(M.d))
-size(M::Tridiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.d) : 1)
+size(M::Tridiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension d must be ≥ 1, got $d")) : (d<=2 ? length(M.d) : 1)
 
 full{T}(M::Tridiagonal{T}) = convert(Matrix{T}, M)
 function convert{T}(::Type{Matrix{T}}, M::Tridiagonal{T})
@@ -273,7 +273,7 @@ convert{T}(::Type{Tridiagonal{T}},M::Tridiagonal) = Tridiagonal(convert(Vector{T
 convert{T}(::Type{AbstractMatrix{T}},M::Tridiagonal) = convert(Tridiagonal{T}, M)
 convert{T}(::Type{Tridiagonal{T}}, M::SymTridiagonal{T}) = Tridiagonal(M)
 convert{T}(::Type{SymTridiagonal{T}}, M::Tridiagonal) = M.dl==M.du ? (SymTridiagonal(M.dl, M.d)) :
-    error("Tridiagonal is not symmetric, cannot convert to SymTridiagonal")
+    throw(ArgumentError("Tridiagonal is not symmetric, cannot convert to SymTridiagonal"))
 convert{T}(::Type{SymTridiagonal{T}},M::SymTridiagonal) = SymTridiagonal(convert(Vector{T}, M.dv), convert(Vector{T}, M.ev))
 
 function A_mul_B!(C::AbstractVecOrMat, A::Tridiagonal, B::AbstractVecOrMat)

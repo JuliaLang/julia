@@ -77,10 +77,6 @@ void __cdecl fpreset (void);
 extern int needsSymRefreshModuleList;
 extern BOOL (WINAPI *hSymRefreshModuleList)(HANDLE);
 #endif
-#if defined(__linux__)
-//#define _GNU_SOURCE
-#include <sched.h>   // for setting CPU affinity
-#endif
 
 DLLEXPORT void jlbacktrace();
 DLLEXPORT void gdbbacktrace();
@@ -101,7 +97,8 @@ jl_compileropts_t jl_compileropts = { NULL, // julia_home
                                       JL_COMPILEROPT_COMPILE_DEFAULT,
                                       0,    // opt_level
                                       1,    // depwarn
-                                      1     // can_inline
+                                      1,    // can_inline
+                                      JL_COMPILEROPT_FAST_MATH_DEFAULT
 };
 
 int jl_boot_file_loaded = 0;
@@ -793,7 +790,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
-static int isabspath(const char *in)
+int isabspath(const char *in)
 {
 #ifdef _OS_WINDOWS_
     char c0 = in[0];
@@ -809,7 +806,7 @@ static int isabspath(const char *in)
         }
     }
 #else
-    if (jl_compileropts.image_file[0] == '/') return 1; // absolute path
+    if (in[0] == '/') return 1; // absolute path
 #endif
     return 0; // relative path
 }
@@ -837,6 +834,7 @@ static char *abspath(const char *in)
             path[path_size-1] = PATHSEPSTRING[0];
             memcpy(path+path_size, in, len+1);
             out = strdup(path);
+            free(path);
         }
     }
 #else
@@ -971,18 +969,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         if (SIGSTKSZ < 1<<16)
             sig_stack_size = 1<<16;
 #endif
-    }
-#endif
-
-#if defined(__linux__)
-    int ncores = jl_cpu_cores();
-    if (ncores > 1) {
-        cpu_set_t cpumask;
-        CPU_ZERO(&cpumask);
-        for(int i=0; i < ncores; i++) {
-            CPU_SET(i, &cpumask);
-        }
-        sched_setaffinity(0, sizeof(cpu_set_t), &cpumask);
     }
 #endif
 
@@ -1143,10 +1129,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
         jl_exit(1);
     }
-    if (sigaction(SIGPIPE, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
-    }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
         JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGFPE\n");
@@ -1304,6 +1286,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     if (jl_errorexception_type) return; // only do this once
 
     jl_errorexception_type = (jl_datatype_t*)basemod("ErrorException");
+    jl_argumenterror_type = (jl_datatype_t*)basemod("ArgumentError");
     jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");

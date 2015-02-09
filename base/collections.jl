@@ -126,7 +126,7 @@ type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
                            o::O)
         # TODO: maybe deprecate
         if length(ks) != length(vs)
-            error("key and value arrays must have equal lengths")
+            throw(ArgumentError("key and value arrays must have equal lengths"))
         end
         PriorityQueue{K,V,O}(zip(ks, vs), o)
     end
@@ -137,7 +137,7 @@ type PriorityQueue{K,V,O<:Ordering} <: Associative{K,V}
         for (i, (k, v)) in enumerate(itr)
             xs[i] = Pair{K,V}(k, v)
             if haskey(index, k)
-                error("PriorityQueue keys must be unique")
+                throw(ArgumentError("PriorityQueue keys must be unique"))
             end
             index[k] = i
         end
@@ -247,9 +247,8 @@ end
 
 function enqueue!{K,V}(pq::PriorityQueue{K,V}, key, value)
     if haskey(pq, key)
-        error("PriorityQueue keys must be unique")
+        throw(ArgumentError("PriorityQueue keys must be unique"))
     end
-
     push!(pq.xs, Pair{K,V}(key, value))
     pq.index[key] = length(pq)
     percolate_up!(pq, length(pq))

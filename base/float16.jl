@@ -133,6 +133,12 @@ abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) & 0x7fff)
 for op in (:+,:-,:*,:/,:\,:^)
     @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
 end
+function fma(a::Float16, b::Float16, c::Float16)
+    float16(fma(float32(a), float32(b), float32(c)))
+end
+function muladd(a::Float16, b::Float16, c::Float16)
+    float16(muladd(float32(a), float32(b), float32(c)))
+end
 for op in (:<,:<=,:isless)
     @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
 end
@@ -143,8 +149,15 @@ for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
         $func(a::Complex32) = complex32($func(complex64(a)))
     end
 end
-atan2(y::Float16, x::Float16) = float16(atan2(float32(y), float32(x)))
-hypot(a::Float16, b::Float16) = float16(hypot(float32(a), float32(b)))
+
+for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
+    @eval begin
+        $func(a::Float16,b::Float16) = float16($func(float32(a),float32(a)))
+    end
+end
+
 ldexp(a::Float16, b::Integer) = float16(ldexp(float32(a), b))
 exponent(x::Float16) = exponent(float32(x))
-^(x::Float16, y::Integer) = x^float16(y)
+^(x::Float16, y::Integer) = float16(float32(x)^y)
+
+rationalize{T<:Integer}(::Type{T}, x::Float16; tol::Real=eps(x)) = rationalize(T, float32(x); tol=tol)

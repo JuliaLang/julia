@@ -166,9 +166,15 @@ function distribute(a::AbstractArray)
     owner = myid()
     rr = RemoteRef()
     put!(rr, a)
-    DArray(size(a)) do I
+    d = DArray(size(a)) do I
         remotecall_fetch(owner, ()->fetch(rr)[I...])
     end
+    # Ensure that all workers have fetched their localparts.
+    # Else a gc in between can recover the RemoteRef rr
+    for chunk in d.chunks
+        wait(chunk)
+    end
+    d
 end
 
 function convert{S,T,N}(::Type{Array{S,N}}, d::DArray{T,N})
@@ -198,7 +204,7 @@ end
 
 function reshape{T,S<:Array}(A::DArray{T,1,S}, d::Dims)
     if prod(d) != length(A)
-        error("dimensions must be consistent with array size")
+        throw(DimensionMismatch("dimensions must be consistent with array size"))
     end
     DArray(d) do I
         sz = map(length,I)
@@ -245,7 +251,13 @@ end
 getindex(d::DArray) = d[1]
 getindex(d::DArray, I::Union(Int,UnitRange{Int})...) = sub(d,I...)
 
-copy(d::SubOrDArray) = d
+function copy!(dest::SubOrDArray, src::SubOrDArray)
+    dest.dims == src.dims && dest.pmap == src.pmap && dest.indexes == src.indexes && dest.cuts == src.cuts || throw(DimensionMismatch("destination array doesn't fit to source array"))
+    for p in dest.pmap
+        @spawnat p copy!(localpart(dest), localpart(src))
+    end
+    dest
+end
 
 # local copies are obtained by convert(Array, ) or assigning from
 # a SubDArray to a local Array.
@@ -304,6 +316,9 @@ reduce(f::Function, d::DArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, localpart(d)) for p in procs(d) ])
 
+mapreduce(f :: Function, opt :: Function, d :: DArray) =
+    mapreduce(fetch, opt,
+              Any[ @spawnat p mapreduce(f, opt, localpart(d)) for p in procs(d) ])
 
 function map!(f::Callable, d::DArray)
     @sync begin

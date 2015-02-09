@@ -156,7 +156,7 @@ jl_methlist_t *mtcache_hash_lookup(jl_array_t *a, jl_value_t *ty, int tparam)
     return (jl_methlist_t*)JL_NULL;
 }
 
-static void mtcache_rehash(jl_array_t **pa)
+static void mtcache_rehash(jl_array_t **pa, jl_value_t* parent)
 {
     size_t len = (*pa)->nrows;
     jl_value_t **d = (jl_value_t**)(*pa)->data;
@@ -173,16 +173,17 @@ static void mtcache_rehash(jl_array_t **pa)
             nd[uid & (len*2-1)] = (jl_value_t*)ml;
         }
     }
+    gc_wb(parent, n);
     *pa = n;
 }
 
 static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
-                                       int tparam)
+                                       int tparam, jl_value_t* parent)
 {
     uptrint_t uid;
     if (jl_is_datatype(ty) && (uid = ((jl_datatype_t*)ty)->uid)) {
         while (1) {
-            jl_methlist_t **pml = (jl_methlist_t**)&jl_cellref(*pa, uid & ((*pa)->nrows-1));
+            jl_methlist_t **pml = &((jl_methlist_t**)jl_array_data(*pa))[uid & ((*pa)->nrows-1)];
             if (*pml == NULL || *pml == JL_NULL) {
                 *pml = (jl_methlist_t*)JL_NULL;
                 return pml;
@@ -191,7 +192,7 @@ static jl_methlist_t **mtcache_hash_bp(jl_array_t **pa, jl_value_t *ty,
             if (tparam) t = jl_tparam0(t);
             if (t == ty)
                 return pml;
-            mtcache_rehash(pa);
+            mtcache_rehash(pa, parent);
         }
     }
     return NULL;
@@ -225,7 +226,7 @@ static jl_function_t *jl_method_table_assoc_exact_by_type(jl_methtable_t *mt,
         ml = mt->cache;
  mt_assoc_bt_lkup:
     while (ml != JL_NULL) {
-        if (cache_match_by_type(&jl_tupleref(types,0), jl_tuple_len(types),
+        if (cache_match_by_type(jl_tuple_data(types), jl_tuple_len(types),
                                 (jl_tuple_t*)ml->sig, ml->va)) {
             return ml->func;
         }
@@ -309,6 +310,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
     jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL);
     JL_GC_PUSH1(&nf);
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
+    gc_wb(nf, nf->linfo);
     JL_GC_POP();
     return nf;
 }
@@ -339,12 +341,13 @@ jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
-                                     int check_amb, int8_t isstaged);
+                                     int check_amb, int8_t isstaged, jl_value_t* parent);
 
 jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
                                       jl_function_t *method)
 {
     jl_methlist_t **pml = &mt->cache;
+    jl_value_t* cache_array = NULL;
     if (jl_tuple_len(type) > 0) {
         jl_value_t *t0 = jl_t0(type);
         uptrint_t uid=0;
@@ -356,22 +359,28 @@ jl_function_t *jl_method_cache_insert(jl_methtable_t *mt, jl_tuple_t *type,
             if (jl_is_datatype(a0))
                 uid = ((jl_datatype_t*)a0)->uid;
             if (uid > 0) {
-                if (mt->cache_targ == JL_NULL)
+                if (mt->cache_targ == JL_NULL) {
                     mt->cache_targ = jl_alloc_cell_1d(16);
-                pml = mtcache_hash_bp(&mt->cache_targ, a0, 1);
+                    gc_wb(mt, mt->cache_targ);
+                }
+                pml = mtcache_hash_bp(&mt->cache_targ, a0, 1, (jl_value_t*)mt);
+                cache_array = (jl_value_t*)mt->cache_targ;
                 goto ml_do_insert;
             }
         }
         if (jl_is_datatype(t0))
             uid = ((jl_datatype_t*)t0)->uid;
         if (uid > 0) {
-            if (mt->cache_arg1 == JL_NULL)
+            if (mt->cache_arg1 == JL_NULL) {
                 mt->cache_arg1 = jl_alloc_cell_1d(16);
-            pml = mtcache_hash_bp(&mt->cache_arg1, t0, 0);
+                gc_wb(mt, mt->cache_arg1);
+            }
+            pml = mtcache_hash_bp(&mt->cache_arg1, t0, 0, (jl_value_t*)mt);
+            cache_array = (jl_value_t*)mt->cache_arg1;
         }
     }
  ml_do_insert:
-    return jl_method_list_insert(pml, type, method, jl_null, 0, 0)->func;
+    return jl_method_list_insert(pml, type, method, jl_null, 0, 0, cache_array ? cache_array : (jl_value_t*)mt)->func;
 }
 
 extern jl_function_t *jl_typeinf_func;
@@ -406,6 +415,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 #ifdef ENABLE_INFERENCE
         jl_value_t *newast = jl_apply(jl_typeinf_func, fargs, 4);
         li->ast = jl_tupleref(newast, 0);
+        gc_wb(li, li->ast);
         li->inferred = 1;
 #endif
         li->inInference = 0;
@@ -868,12 +878,15 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         if (method->linfo->unspecialized == NULL) {
             method->linfo->unspecialized =
                 jl_instantiate_method(method, jl_null);
+            gc_wb(method->linfo, method->linfo->unspecialized);
         }
         newmeth->linfo->unspecialized = method->linfo->unspecialized;
+        gc_wb(newmeth->linfo, newmeth->linfo->unspecialized);
     }
 
     if (newmeth->linfo != NULL && newmeth->linfo->ast != NULL) {
         newmeth->linfo->specTypes = type;
+        gc_wb(newmeth->linfo, type);
         jl_array_t *spe = method->linfo->specializations;
         if (spe == NULL) {
             spe = jl_alloc_cell_1d(1);
@@ -883,6 +896,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             jl_cell_1d_push(spe, (jl_value_t*)newmeth->linfo);
         }
         method->linfo->specializations = spe;
+        gc_wb(method->linfo, method->linfo->specializations);
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
@@ -907,7 +921,7 @@ static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
         tvarslen = 1;
     }
     else {
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     int l = jl_tuple_len(*penv);
@@ -1015,8 +1029,8 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
                 ti = (jl_value_t*)jl_bottom_type;
             }
         }
-        else if (jl_tuple_subtype(&jl_tupleref(tt,0), nargs,
-                                  &jl_tupleref(m->sig,0),
+        else if (jl_tuple_subtype(jl_tuple_data(tt), nargs,
+                                  jl_tuple_data(m->sig),
                                   jl_tuple_len(m->sig), 0)) {
             break;
         }
@@ -1050,7 +1064,7 @@ static jl_function_t *jl_mt_assoc_by_type(jl_methtable_t *mt, jl_tuple_t *tt, in
     }
     if (i < jl_tuple_len(tt)) {
         newsig = (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                       &jl_tupleref(env,0),
+                                                       jl_tuple_data(env),
                                                        jl_tuple_len(env)/2);
     }
     else {
@@ -1200,7 +1214,7 @@ static int has_unions(jl_tuple_t *type)
 static
 jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                                      jl_function_t *method, jl_tuple_t *tvars,
-                                     int check_amb, int8_t isstaged)
+                                     int check_amb, int8_t isstaged, jl_value_t* parent)
 {
     jl_methlist_t *l, **pl;
 
@@ -1225,13 +1239,16 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
             }
             JL_SIGATOMIC_BEGIN();
             l->sig = type;
+            gc_wb(l, l->sig);
             l->tvars = tvars;
+            gc_wb(l, l->tvars);
             l->va = (jl_tuple_len(type) > 0 &&
                      jl_is_vararg_type(jl_tupleref(type,jl_tuple_len(type)-1))) ?
                 1 : 0;
             l->isstaged = isstaged;
             l->invokes = (struct _jl_methtable_t *)JL_NULL;
             l->func = method;
+            gc_wb(l, l->func);
             JL_SIGATOMIC_END();
             return l;
         }
@@ -1239,6 +1256,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     }
     pl = pml;
     l = *pml;
+    jl_value_t *pa = parent;
     while (l != JL_NULL) {
         if (jl_args_morespecific((jl_value_t*)type, (jl_value_t*)l->sig))
             break;
@@ -1248,6 +1266,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
                             anonymous_sym, method->linfo);
         }
         pl = &l->next;
+        pa = (jl_value_t*)l;
         l = l->next;
     }
     jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
@@ -1262,34 +1281,47 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
     newrec->invokes = (struct _jl_methtable_t*)JL_NULL;
     newrec->next = l;
     JL_SIGATOMIC_BEGIN();
+    JL_GC_PUSH1(&newrec);
     *pl = newrec;
+    gc_wb(pa, newrec);
     // if this contains Union types, methods after it might actually be
     // more specific than it. we need to re-sort them.
     if (has_unions(type)) {
+        jl_value_t* item_parent = (jl_value_t*)newrec;
+        jl_value_t* next_parent = 0;
         jl_methlist_t *item = newrec->next, *next;
         jl_methlist_t **pitem = &newrec->next, **pnext;
         while (item != JL_NULL) {
             pl = pml;
             l = *pml;
+            pa = parent;
             next = item->next;
             pnext = &item->next;
+            next_parent = (jl_value_t*)item;
             while (l != newrec->next) {
                 if (jl_args_morespecific((jl_value_t*)item->sig,
                                          (jl_value_t*)l->sig)) {
                     // reinsert item earlier in the list
                     *pitem = next;
+                    gc_wb(item_parent, next);
                     item->next = l;
+                    gc_wb(item, item->next);
                     *pl = item;
+                    gc_wb(pa, item);
                     pnext = pitem;
+                    next_parent = item_parent;
                     break;
                 }
                 pl = &l->next;
+                pa = (jl_value_t*)l;
                 l = l->next;
             }
             item = next;
             pitem = pnext;
+	    item_parent = next_parent;
         }
     }
+    JL_GC_POP();
     JL_SIGATOMIC_END();
     return newrec;
 }
@@ -1316,21 +1348,26 @@ jl_methlist_t *jl_method_table_insert(jl_methtable_t *mt, jl_tuple_t *type,
     if (jl_tuple_len(tvars) == 1)
         tvars = (jl_tuple_t*)jl_t0(tvars);
     JL_SIGATOMIC_BEGIN();
-    jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1,isstaged);
+    jl_methlist_t *ml = jl_method_list_insert(&mt->defs,type,method,tvars,1,isstaged,(jl_value_t*)mt);
     // invalidate cached methods that overlap this definition
     remove_conflicting(&mt->cache, (jl_value_t*)type);
+    gc_wb(mt, mt->cache);
     if (mt->cache_arg1 != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_arg1); i++) {
-            jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_arg1,i);
-            if (*pl && *pl != JL_NULL)
+            jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_arg1))[i];
+            if (*pl && *pl != JL_NULL) {
                 remove_conflicting(pl, (jl_value_t*)type);
+                gc_wb(mt->cache_arg1, jl_cellref(mt->cache_arg1,i));
+            }
         }
     }
     if (mt->cache_targ != JL_NULL) {
         for(int i=0; i < jl_array_len(mt->cache_targ); i++) {
-            jl_methlist_t **pl = (jl_methlist_t**)&jl_cellref(mt->cache_targ,i);
-            if (*pl && *pl != JL_NULL)
+            jl_methlist_t **pl = &((jl_methlist_t**)jl_array_data(mt->cache_targ))[i];
+            if (*pl && *pl != JL_NULL) {
                 remove_conflicting(pl, (jl_value_t*)type);
+                gc_wb(mt->cache_targ, jl_cellref(mt->cache_targ,i));
+            }
         }
     }
     // update max_args
@@ -1357,7 +1394,8 @@ void NORETURN jl_no_method_error(jl_function_t *f, jl_value_t **args, size_t na)
 static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
 {
     jl_tuple_t *tt = jl_alloc_tuple(nargs);
-    JL_GC_PUSH1(&tt);
+    jl_value_t *a = NULL;
+    JL_GC_PUSH2(&tt, &a);
     size_t i;
     for(i=0; i < nargs; i++) {
         jl_value_t *ai = args[i];
@@ -1369,7 +1407,7 @@ static jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs)
             a = jl_typeof(ai);
         }
         else {
-            a = (jl_value_t*)arg_type_tuple(&jl_tupleref(ai,0), jl_tuple_len(ai));
+            a = (jl_value_t*)arg_type_tuple(jl_tuple_data(ai), jl_tuple_len(ai));
         }
         jl_tupleset(tt, i, a);
     }
@@ -1458,7 +1496,7 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_tuple_t *tvars)
         tvarslen = 1;
     }
     else {
-        tvs = &jl_t0(tvars);
+        tvs = jl_tuple_data(tvars);
         tvarslen = jl_tuple_len(tvars);
     }
     size_t i;
@@ -1479,6 +1517,7 @@ static void all_p2c(jl_value_t *ast, jl_tuple_t *tvars)
     if (jl_is_lambda_info(ast)) {
         jl_lambda_info_t *li = (jl_lambda_info_t*)ast;
         li->ast = jl_prepare_ast(li, jl_null);
+        gc_wb(li, li->ast);
         parameters_to_closureenv(li->ast, tvars);
         all_p2c(li->ast, tvars);
     }
@@ -1515,6 +1554,7 @@ void jl_compile_all_defs(jl_function_t *gf)
         else if (m->func->linfo->unspecialized == NULL) {
             jl_function_t *func = jl_instantiate_method(m->func, jl_null);
             m->func->linfo->unspecialized = func;
+            gc_wb(m->func->linfo, func);
             precompile_unspecialized(func, m->sig, m->tvars);
         }
         m = m->next;
@@ -1553,6 +1593,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
                 jl_lambda_info_t *li = (jl_lambda_info_t*)el;
                 jl_function_t *func = jl_new_closure(li->fptr, (jl_value_t*)jl_null, li);
                 li->unspecialized = func;
+                gc_wb(li, func);
                 precompile_unspecialized(func, NULL, jl_null);
             }
         }
@@ -1615,6 +1656,7 @@ JL_CALLABLE(jl_apply_generic)
             jl_lambda_info_t *li = mfunc->linfo;
             if (li->unspecialized == NULL) {
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
+                gc_wb(li, li->unspecialized);
             }
             mfunc = li->unspecialized;
             assert(mfunc != jl_bottom_func);
@@ -1645,6 +1687,32 @@ JL_CALLABLE(jl_apply_generic)
     return res;
 }
 
+DLLEXPORT jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_tuple_t *types)
+{
+    assert(jl_is_gf(gf));
+    jl_methtable_t *mt = jl_gf_mtable(gf);
+    jl_methlist_t *m = mt->defs;
+    size_t typelen = jl_tuple_len(types);
+    jl_value_t *env = (jl_value_t*)jl_false;
+
+    while (m != JL_NULL) {
+        if (m->tvars!=jl_null) {
+            env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
+            if (env != (jl_value_t*)jl_false) break;
+        }
+        else if (jl_tuple_subtype(jl_tuple_data(types), typelen,
+                                  jl_tuple_data(m->sig),
+                                  jl_tuple_len(m->sig), 0)) {
+            break;
+        }
+        m = m->next;
+    }
+
+    if (m == JL_NULL)
+        return jl_nothing;
+    return (jl_value_t*)m;
+}
+
 // invoke()
 // this does method dispatch with a set of types to match other than the
 // types of the actual arguments. this means it sometimes does NOT call the
@@ -1659,26 +1727,10 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 {
     assert(jl_is_gf(gf));
     jl_methtable_t *mt = jl_gf_mtable(gf);
-
-    jl_methlist_t *m = mt->defs;
-    size_t typelen = jl_tuple_len(types);
+    jl_methlist_t *m = (jl_methlist_t*)jl_gf_invoke_lookup(gf, types);
     size_t i;
-    jl_value_t *env = (jl_value_t*)jl_false;
 
-    while (m != JL_NULL) {
-        if (m->tvars!=jl_null) {
-            env = jl_type_match((jl_value_t*)types, (jl_value_t*)m->sig);
-            if (env != (jl_value_t*)jl_false) break;
-        }
-        else if (jl_tuple_subtype(&jl_tupleref(types,0), typelen,
-                                  &jl_tupleref(m->sig,0),
-                                  jl_tuple_len(m->sig), 0)) {
-            break;
-        }
-        m = m->next;
-    }
-
-    if (m == JL_NULL) {
+    if ((jl_value_t*)m == jl_nothing) {
         jl_no_method_error(gf, args, nargs);
         // unreachable
     }
@@ -1699,6 +1751,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
             jl_lambda_info_t *li = mfunc->linfo;
             if (li->unspecialized == NULL) {
                 li->unspecialized = jl_instantiate_method(mfunc, li->sparams);
+                gc_wb(li, li->unspecialized);
             }
             mfunc = li->unspecialized;
         }
@@ -1707,19 +1760,20 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         jl_tuple_t *tpenv=jl_null;
         jl_tuple_t *newsig=NULL;
         jl_tuple_t *tt=NULL;
-        JL_GC_PUSH3(&env, &newsig, &tt);
+        JL_GC_PUSH3(&tpenv, &newsig, &tt);
 
         if (m->invokes == JL_NULL) {
             m->invokes = new_method_table(mt->name);
+            gc_wb(m, m->invokes);
             // this private method table has just this one definition
-            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0);
+            jl_method_list_insert(&m->invokes->defs,m->sig,m->func,m->tvars,0,0,(jl_value_t*)m->invokes);
         }
 
         tt = arg_type_tuple(args, nargs);
 
         newsig = (jl_tuple_t*)m->sig;
 
-        if (env != (jl_value_t*)jl_false) {
+        if (m->tvars != jl_null) {
             jl_value_t *ti =
                 lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
             assert(ti != (jl_value_t*)jl_bottom_type);
@@ -1732,7 +1786,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
             if (i < jl_tuple_len(tt)) {
                 newsig =
                     (jl_tuple_t*)jl_instantiate_type_with((jl_value_t*)m->sig,
-                                                          &jl_tupleref(tpenv,0),
+                                                          jl_tuple_data(tpenv),
                                                           jl_tuple_len(tpenv)/2);
             }
         }
@@ -1756,6 +1810,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 {
     f->fptr = jl_apply_generic;
     f->env = (jl_value_t*)new_method_table(name);
+    gc_wb(f, f->env);
 }
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
@@ -1892,7 +1947,7 @@ static jl_value_t *ml_matches(jl_methlist_t *ml, jl_value_t *type,
                 }
                 if (len == 1) {
                     t = jl_alloc_cell_1d(1);
-                    jl_cellref(t,0) = (jl_value_t*)matc;
+                    jl_cellset(t, 0, (jl_value_t*)matc);
                 }
                 else {
                     jl_cell_1d_push(t, (jl_value_t*)matc);

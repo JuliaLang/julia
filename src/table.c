@@ -14,9 +14,16 @@ void jl_idtable_rehash(jl_array_t **pa, size_t newsz)
     size_t i;
     void **ol = (void**)(*pa)->data;
     *pa = jl_alloc_cell_1d(newsz);
+    // we do not check the write barrier here
+    // because pa always points to a C stack location
+    // (see eqtable_put)
+    // it should be changed if this assumption no longer holds
     for(i=0; i < sz; i+=2) {
         if (ol[i+1] != NULL) {
             (*jl_table_lookup_bp(pa, ol[i])) = ol[i+1];
+            gc_wb(*pa, ol[i+1]);
+             // it is however necessary here because allocation
+            // can (and will) occur in a recursive call inside table_lookup_bp
         }
     }
 }
@@ -40,6 +47,7 @@ static void **jl_table_lookup_bp(jl_array_t **pa, void *key)
     do {
         if (tab[index+1] == NULL) {
             tab[index] = key;
+            gc_wb(a, key);
             return &tab[index+1];
         }
 
@@ -108,6 +116,7 @@ jl_array_t *jl_eqtable_put(jl_array_t *h, void *key, void *val)
 {
     void **bp = jl_table_lookup_bp(&h, key);
     *bp = val;
+    gc_wb(h, val);
     return h;
 }
 

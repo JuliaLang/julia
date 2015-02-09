@@ -22,10 +22,12 @@ end
 # (and does so by default)
 function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::Union(AbstractVector, Number),
                       x::AbstractArray{T}, si::AbstractArray{S,N}=_zerosi(b,a,T))
-    isempty(b) && error("b must be non-empty")
-    isempty(a) && error("a must be non-empty")
-    a[1] == 0  && error("a[1] must be nonzero")
-    size(x) != size(out) && error("out size must match x")
+    isempty(b) && throw(ArgumentError("filter vector b must be non-empty"))
+    isempty(a) && throw(ArgumentError("filter vector a must be non-empty"))
+    a[1] == 0  && throw(ArgumentError("filter vector a[1] must be nonzero"))
+    if size(x) != size(out)
+        thow(ArgumentError("output size $(size(out)) must match input size $(size(x))"))
+    end
 
     as = length(a)
     bs = length(b)
@@ -33,8 +35,12 @@ function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::U
     silen = sz - 1
     ncols = trailingsize(x,2)
 
-    size(si, 1) != silen && error("si must have max(length(a),length(b))-1 rows")
-    N > 1 && trailingsize(si,2) != ncols && error("si must either be a vector or have the same number of columns as x")
+    if size(si, 1) != silen
+        throw(ArgumentError("initial state vector si must have max(length(a),length(b))-1 rows"))
+    end
+    if N > 1 && trailingsize(si,2) != ncols
+        throw(ArgumentError("initial state vector si must be a vector or have the same number of columns as x"))
+    end
 
     size(x,1) == 0 && return out
     sz == 1 && return scale!(out, x, b[1]/a[1]) # Simple scaling without memory
@@ -187,10 +193,10 @@ fftwcopy{T<:Complex}(X::StridedArray{T}) = complex128(X)
 
 for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                          (:dct!, :r2r!, :X, :fftwNumber))
-    plan_f = symbol(string("plan_",f))
-    plan_fr2r = symbol(string("plan_",fr2r))
-    fi = symbol(string("i",f))
-    plan_fi = symbol(string("plan_",fi))
+    plan_f = symbol("plan_",f)
+    plan_fr2r = symbol("plan_",fr2r)
+    fi = symbol("i",f)
+    plan_fi = symbol("plan_",fi)
     Ycopy = Y == :X ? 0 : :(Y = fftwcopy(X))
     @eval begin
         function $f{T<:$Tx}(X::StridedArray{T}, region)

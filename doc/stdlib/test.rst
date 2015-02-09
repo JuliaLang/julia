@@ -15,7 +15,7 @@ binary install, you can run the test suite using ``Base.runtests()``.
 .. function:: runtests([tests=["all"] [, numcores=iceil(CPU_CORES/2) ]])
 
    Run the Julia unit tests listed in ``tests``, which can be either a
-   string or an array of strings, using ``numcores`` processors.
+   string or an array of strings, using ``numcores`` processors. (not exported)
 
 
 .. module:: Base.Test
@@ -30,7 +30,7 @@ provided by the user by using the :func:`registerhandler` function.
 To use the default handler, the macro :func:`@test` can be used directly::
 
   julia> using Base.Test
-  
+
   julia> @test 1 == 1
 
   julia> @test 1 == 0

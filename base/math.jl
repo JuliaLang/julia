@@ -45,7 +45,7 @@ clamp{T}(x::AbstractArray{T}, lo, hi) =
 macro horner(x, p...)
     ex = esc(p[end])
     for i = length(p)-1:-1:1
-        ex = :($(esc(p[i])) + t * $ex)
+        ex = :(muladd(t, $ex, $(esc(p[i]))))
     end
     Expr(:block, :(t = $(esc(x))), ex)
 end
@@ -59,10 +59,10 @@ macro evalpoly(z, p...)
     b = :($(esc(p[end-1])))
     as = []
     for i = length(p)-2:-1:1
-        ai = symbol(string("a", i))
+        ai = symbol("a", i)
         push!(as, :($ai = $a))
-        a = :($b + r*$ai)
-        b = :($(esc(p[i])) - s * $ai)
+        a = :(muladd(r, $ai, $b))
+        b = :(muladd(-s, $ai, $(esc(p[i]))))
     end
     ai = :a0
     push!(as, :($ai = $a))
@@ -72,7 +72,7 @@ macro evalpoly(z, p...)
              :(r = x + x),
              :(s = x*x + y*y),
              as...,
-             :($ai * tt + $b))
+             :(muladd($ai, tt, $b)))
     R = Expr(:macrocall, symbol("@horner"), :tt, p...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
@@ -131,7 +131,6 @@ sqrt(x::Float64) = box(Float64,sqrt_llvm(unbox(Float64,x)))
 sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
-
 
 for f in (:significand,)
     @eval begin
@@ -358,7 +357,7 @@ mod2pi(x::Float32) = float32(mod2pi(float64(x)))
 mod2pi(x::Int32) = mod2pi(float64(x))
 function mod2pi(x::Int64)
   fx = float64(x)
-  fx == x || error("Integer argument to mod2pi is too large: $x")
+  fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end
 

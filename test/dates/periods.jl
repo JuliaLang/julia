@@ -237,7 +237,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Minute("1") == mi
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
-@test_throws ErrorException Dates.Year("1.0")
+@test_throws ArgumentError Dates.Year("1.0")
 @test Dates.Year(parsefloat("1.0")) == y
 
 dt = Dates.DateTime(2014)

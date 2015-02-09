@@ -59,6 +59,7 @@ include("abstractarray.jl")
 include("subarray.jl")
 include("array.jl")
 include("subarray2.jl")
+include("functors.jl")
 include("bitarray.jl")
 include("intset.jl")
 include("dict.jl")
@@ -196,6 +197,7 @@ include("nullable.jl")
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
+include("managers.jl")
 
 # code loading
 include("loading.jl")
@@ -239,15 +241,17 @@ using .Markdown
 # misc useful functions & macros
 include("util.jl")
 
-# sparse matrices and linear algebra
-include("sparse.jl")
-importall .SparseMatrix
+# dense linear algebra
 include("linalg.jl")
 importall .LinAlg
 const ⋅ = dot
 const × = cross
 include("broadcast.jl")
 importall .Broadcast
+
+# sparse matrices and sparse linear algebra
+include("sparse.jl")
+importall .SparseMatrix
 
 # statistics
 include("statistics.jl")
@@ -268,8 +272,9 @@ include("constants.jl")
 include("quadgk.jl")
 importall .QuadGK
 
-# deprecated functions
-include("deprecated.jl")
+# Fast math
+include("fastmath.jl")
+importall .FastMath
 
 # package manager
 include("pkg.jl")
@@ -285,6 +290,9 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
+
+# deprecated functions
+include("deprecated.jl")
 
 # Some basic documentation
 include("basedocs.jl")

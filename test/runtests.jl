@@ -1,17 +1,18 @@
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings", "dates",
-    "collections", "hashing", "remote", "iobuffer", "staged", "arrayops",
+    "dict", "hashing", "remote", "iobuffer", "staged", "arrayops",
     "subarray", "reduce", "reducedim", "random", "intfuncs",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "copy", "math",
-    "functional", "bigint", "sorting", "statistics", "spawn",
+    "fastmath", "functional", "bigint", "sorting", "statistics", "spawn",
     "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "repl", "test", "goto",
+    "lineedit", "replcompletions", "repl", "replutil", "sets", "test", "goto",
     "llvmcall", "grisu", "nullable", "meta", "profile",
-    "libgit2", "docs", "base64"
+    "libgit2", "docs", "markdown", "base64", "parser", "serialize", "functors",
+    "char", "misc"
 ]
 
 if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))

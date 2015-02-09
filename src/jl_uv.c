@@ -531,7 +531,7 @@ DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
 DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_write_t *uvw, void *writecb)
 {
     JL_SIGATOMIC_BEGIN();
-    char *data = (char*)(uvw+1);
+    char *data = (char*)uvw+sizeof(*uvw);
     memcpy(data,str,n);
     uv_buf_t buf[1];
     buf[0].base = data;

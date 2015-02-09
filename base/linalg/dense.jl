@@ -118,7 +118,7 @@ end
 
 diagind(A::AbstractMatrix, k::Integer=0) = diagind(size(A,1), size(A,2), k)
 
-diag(A::Matrix, k::Integer=0) = A[diagind(A,k)]
+diag(A::AbstractMatrix, k::Integer=0) = A[diagind(A,k)]
 
 function diagm{T}(v::AbstractVector{T}, k::Integer=0)
     n = length(v) + abs(k)
@@ -168,42 +168,6 @@ function ^(A::Matrix, p::Number)
     Xinv = ishermitian(A) ? X' : inv(X)
     scale(X, v.^p)*Xinv
 end
-
-function rref{T}(A::Matrix{T})
-    nr, nc = size(A)
-    U = copy!(similar(A, T <: Complex ? Complex128 : Float64), A)
-    e = eps(norm(U,Inf))
-    i = j = 1
-    while i <= nr && j <= nc
-        (m, mi) = findmax(abs(U[i:nr,j]))
-        mi = mi+i - 1
-        if m <= e
-            U[i:nr,j] = 0
-            j += 1
-        else
-            for k=j:nc
-                U[i, k], U[mi, k] = U[mi, k], U[i, k]
-            end
-            d = U[i,j]
-            for k = j:nc
-                U[i,k] /= d
-            end
-            for k = 1:nr
-                if k != i
-                    d = U[k,j]
-                    for l = j:nc
-                        U[k,l] -= d*U[i,l]
-                    end
-                end
-            end
-            i += 1
-            j += 1
-        end
-    end
-    U
-end
-
-rref(x::Number) = one(x)
 
 # Matrix exponential
 expm{T<:BlasFloat}(A::StridedMatrix{T}) = expm!(copy(A))
@@ -307,7 +271,7 @@ function sqrtm{T<:Real}(A::StridedMatrix{T})
     issym(A) && return sqrtm(Symmetric(A))
     n = chksquare(A)
     SchurF = schurfact(complex(A))
-    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
+    R = full(sqrtm(UpperTriangular(SchurF[:T])))
     retmat = SchurF[:vectors]*R*SchurF[:vectors]'
     all(imag(retmat) .== 0) ? real(retmat) : retmat
 end
@@ -315,7 +279,7 @@ function sqrtm{T<:Complex}(A::StridedMatrix{T})
     ishermitian(A) && return sqrtm(Hermitian(A))
     n = chksquare(A)
     SchurF = schurfact(A)
-    R = full(sqrtm(Triangular(SchurF[:T], :U, false)))
+    R = full(sqrtm(UpperTriangular(SchurF[:T])))
     SchurF[:vectors]*R*SchurF[:vectors]'
 end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
@@ -325,9 +289,9 @@ function inv{S}(A::StridedMatrix{S})
     T = typeof(one(S)/one(S))
     Ac = convert(AbstractMatrix{T}, A)
     if istriu(Ac)
-        Ai = inv(Triangular(A, :U, false))
+        Ai = inv(UpperTriangular(A))
     elseif istril(Ac)
-        Ai = inv(Triangular(A, :L, false))
+        Ai = inv(LowerTriangular(A))
     else
         Ai = inv(lufact(Ac))
     end
@@ -377,7 +341,7 @@ function factorize{T}(A::Matrix{T})
                 if utri1
                     return Bidiagonal(diag(A), diag(A, -1), false)
                 end
-                return Triangular(A, :L)
+                return LowerTriangular(A)
             end
             if utri
                 return Bidiagonal(diag(A), diag(A, 1), true)
@@ -392,7 +356,7 @@ function factorize{T}(A::Matrix{T})
             end
         end
         if utri
-            return Triangular(A, :U)
+            return UpperTriangular(A)
         end
         if herm
             try
@@ -405,26 +369,27 @@ function factorize{T}(A::Matrix{T})
         end
         return lufact(A)
     end
-    qrfact(A,pivot=typeof(zero(T)/sqrt(zero(T) + zero(T)))<:BlasFloat) # Generic pivoted QR not implemented yet
+    qrfact(A,typeof(zero(T)/sqrt(zero(T) + zero(T)))<:BlasFloat?Val{true}:Val{false}) # Generic pivoted QR not implemented yet
 end
 
 (\)(a::Vector, B::StridedVecOrMat) = (\)(reshape(a, length(a), 1), B)
-function (\)(A::StridedMatrix, B::StridedVecOrMat)
-    m, n = size(A)
-    if m == n
-        if istril(A)
-            return istriu(A) ? \(Diagonal(A),B) : \(Triangular(A, :L),B)
+
+for (T1,PIVOT) in ((BlasFloat,Val{true}),(Any,Val{false}))
+    @eval function (\){T<:$T1}(A::StridedMatrix{T}, B::StridedVecOrMat)
+        m, n = size(A)
+        if m == n
+            if istril(A)
+                return istriu(A) ? \(Diagonal(A),B) : \(LowerTriangular(A),B)
+            end
+            istriu(A) && return \(UpperTriangular(A),B)
+            return \(lufact(A),B)
         end
-        istriu(A) && return \(Triangular(A, :U),B)
-        return \(lufact(A),B)
+        return qrfact(A,$PIVOT)\B
     end
-    return qrfact(A,pivot=eltype(A)<:BlasFloat)\B
 end
 
-## Moore-Penrose inverse
+## Moore-Penrose pseudoinverse
 function pinv{T}(A::StridedMatrix{T}, tol::Real)
-## for __dense__ ill-conditioned matrices, please use
-## the threshold tol = sqrt(eps(real(float(one(T)))))
     m, n        = size(A)
     (m == 0 || n == 0) && return Array(T, n, m)
     if istril(A)
@@ -455,16 +420,16 @@ pinv(a::StridedVector) = pinv(reshape(a, length(a), 1))
 pinv(x::Number) = isfinite(one(x)/x) ? one(x)/x : zero(x)
 
 ## Basis for null space
-function null{T}(A::StridedMatrix{T})
+function nullspace{T}(A::StridedMatrix{T})
     m, n = size(A)
     (m == 0 || n == 0) && return eye(T, n)
     SVD = svdfact(A, thin=false)
     indstart = sum(SVD[:S] .> max(m,n)*maximum(SVD[:S])*eps(eltype(SVD[:S]))) + 1
     return SVD[:V][:,indstart:end]
 end
-null(a::StridedVector) = null(reshape(a, length(a), 1))
+nullspace(a::StridedVector) = nullspace(reshape(a, length(a), 1))
 
-function cond(A::StridedMatrix, p::Real=2)
+function cond(A::AbstractMatrix, p::Real=2)
     if p == 2
         v = svdvals(A)
         maxv = maximum(v)
@@ -473,7 +438,7 @@ function cond(A::StridedMatrix, p::Real=2)
         chksquare(A)
         return cond(lufact(A), p)
     end
-    throw(ArgumentError("invalid p-norm p=$p. Valid: 1, 2 or Inf"))
+    throw(ArgumentError("p-norm must be 1, 2 or Inf, got $p"))
 end
 
 ## Lyapunov and Sylvester equation

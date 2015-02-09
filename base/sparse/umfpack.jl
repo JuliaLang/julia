@@ -1,14 +1,12 @@
 module UMFPACK
 
-export UmfpackLU,
-       decrement,
-       decrement!,
-       increment,
-       increment!
+export UmfpackLU
 
 import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
+import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
-import ..LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact, lufact!
+importall Base.SparseMatrix
+import Base.SparseMatrix: increment, increment!, decrement, decrement!
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -56,17 +54,6 @@ end
 macro isok(A)
     :(umferror($A))
 end
-
-function decrement!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] -= one(T) end
-    A
-end
-decrement{T<:Integer}(A::AbstractArray{T}) = decrement!(copy(A))
-function increment!{T<:Integer}(A::AbstractArray{T})
-    for i in 1:length(A) A[i] += one(T) end
-    A
-end
-increment{T<:Integer}(A::AbstractArray{T}) = increment!(copy(A))
 
 # check the size of SuiteSparse_long
 if int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
@@ -122,18 +109,6 @@ function lufact{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
                     zerobased ? copy(S.colptr) : decrement(S.colptr),
                     zerobased ? copy(S.rowval) : decrement(S.rowval),
                     copy(S.nzval))
-    finalizer(res, umfpack_free_symbolic)
-    umfpack_numeric!(res)
-end
-
-function lufact!{Tv<:UMFVTypes,Ti<:UMFITypes}(S::SparseMatrixCSC{Tv,Ti})
-    S.m == S.n || error("argument matrix must be square")
-
-    zerobased = S.colptr[1] == 0
-    res = UmfpackLU(C_NULL, C_NULL, S.m, S.n,
-                    zerobased ? S.colptr : decrement!(S.colptr),
-                    zerobased ? S.rowval : decrement!(S.rowval),
-                    S.nzval)
     finalizer(res, umfpack_free_symbolic)
     umfpack_numeric!(res)
 end
@@ -446,4 +421,3 @@ end
 umfpack_report_numeric(lu::UmfpackLU) = umfpack_report_numeric(lu,4.)
 
 end # UMFPACK module
-

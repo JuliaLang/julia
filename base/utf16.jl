@@ -25,7 +25,7 @@ function next(s::UTF16String, i::Int)
     elseif length(s.data)-1 > i && utf16_is_lead(s.data[i]) && utf16_is_trail(s.data[i+1])
         return utf16_get_supplementary(s.data[i], s.data[i+1]), i+2
     end
-    error("invalid UTF-16 character index")
+    throw(ArgumentError("invalid UTF-16 character index"))
 end
 
 function reverseind(s::UTF16String, i::Integer)

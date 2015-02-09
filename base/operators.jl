@@ -131,7 +131,7 @@ const % = rem
 const ÷ = div
 
 # mod returns in [0,y) whereas mod1 returns in (0,y]
-mod1{T<:Real}(x::T, y::T) = y-mod(y-x,y)
+mod1{T<:Real}(x::T, y::T) = (m=mod(x,y); ifelse(m==0, y, m))
 rem1{T<:Real}(x::T, y::T) = rem(x-1,y)+1
 fld1{T<:Real}(x::T, y::T) = fld(x-1,y)+1
 
@@ -181,14 +181,14 @@ copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
 
 function promote_shape(a::(Int,), b::(Int,))
     if a[1] != b[1]
-        error("dimensions must match")
+        throw(DimensionMismatch("dimensions must match"))
     end
     return a
 end
 
 function promote_shape(a::(Int,Int), b::(Int,))
     if a[1] != b[1] || a[2] != 1
-        error("dimensions must match")
+        throw(DimensionMismatch("dimensions must match"))
     end
     return a
 end
@@ -197,7 +197,7 @@ promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
 
 function promote_shape(a::(Int, Int), b::(Int, Int))
     if a[1] != b[1] || a[2] != b[2]
-        error("dimensions must match")
+        throw(DimensionMismatch("dimensions must match"))
     end
     return a
 end
@@ -208,12 +208,12 @@ function promote_shape(a::Dims, b::Dims)
     end
     for i=1:length(b)
         if a[i] != b[i]
-            error("dimensions must match")
+            throw(DimensionMismatch("dimensions must match"))
         end
     end
     for i=length(b)+1:length(a)
         if a[i] != 1
-            error("dimensions must match")
+            throw(DimensionMismatch("dimensions must match"))
         end
     end
     return a
@@ -226,11 +226,10 @@ index_shape(i, I...) = tuple(length(i), index_shape(I...)...)
 
 function throw_setindex_mismatch(X, I)
     if length(I) == 1
-        e = DimensionMismatch("tried to assign $(length(X)) elements to $(length(I[1])) destinations")
+        throw(DimensionMismatch("tried to assign $(length(X)) elements to $(length(I[1])) destinations"))
     else
-        e = DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(map(length,I))) destination")
+        throw(DimensionMismatch("tried to assign $(dims2string(size(X))) array to $(dims2string(map(length,I))) destination"))
     end
-    throw(e)
 end
 
 # check for valid sizes in A[I...] = X where X <: AbstractArray

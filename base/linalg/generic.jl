@@ -21,7 +21,7 @@ function generic_scale!(X::AbstractArray, s::Number)
 end
 
 function generic_scale!(C::AbstractArray, X::AbstractArray, s::Number)
-    length(C) == length(X) || error("C must be the same length as X")
+    length(C) == length(X) || throw(DimensionMismatch("first array argument must be the same length as the second array argument"))
     for i = 1:length(X)
         @inbounds C[i] = X[i]*s
     end
@@ -45,8 +45,10 @@ diff(a::AbstractVector) = [ a[i+1] - a[i] for i=1:length(a)-1 ]
 function diff(A::AbstractMatrix, dim::Integer)
     if dim == 1
         [A[i+1,j] - A[i,j] for i=1:size(A,1)-1, j=1:size(A,2)]
-    else
+    elseif dim == 2
         [A[i,j+1] - A[i,j] for i=1:size(A,1), j=1:size(A,2)-1]
+    else
+        throw(ArgumentError("dimension dim must be 1 or 2, got $dim"))
     end
 end
 
@@ -327,8 +329,6 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 #findmax(a::AbstractArray)
 #findmin(a::AbstractArray)
 
-#rref{T}(A::AbstractMatrix{T})
-
 function peakflops(n::Integer=2000; parallel::Bool=false)
     a = rand(100,100)
     t = @elapsed a*a
@@ -424,7 +424,7 @@ function elementaryRightTrapezoid!(A::AbstractMatrix, row::Integer)
 end
 
 function det(A::AbstractMatrix)
-    (istriu(A) || istril(A)) && return det(Triangular(A, :U, false))
+    (istriu(A) || istril(A)) && return det(UpperTriangular(A))
     return det(lufact(A))
 end
 det(x::Number) = x

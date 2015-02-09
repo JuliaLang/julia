@@ -8,7 +8,8 @@ Diagonal(A::Matrix) = Diagonal(diag(A))
 convert{T}(::Type{Diagonal{T}}, D::Diagonal{T}) = D
 convert{T}(::Type{Diagonal{T}}, D::Diagonal) = Diagonal{T}(convert(Vector{T}, D.diag))
 convert{T}(::Type{AbstractMatrix{T}}, D::Diagonal) = convert(Diagonal{T}, D)
-convert{T}(::Type{Triangular}, A::Diagonal{T}) = Triangular{T, Diagonal{T}, :U, false}(A)
+convert{T}(::Type{UpperTriangular}, A::Diagonal{T}) = UpperTriangular(A)
+convert{T}(::Type{LowerTriangular}, A::Diagonal{T}) = LowerTriangular(A)
 
 function similar{T}(D::Diagonal, ::Type{T}, d::(Int,Int))
     d[1] == d[2] || throw(ArgumentError("Diagonal matrix must be square"))
@@ -18,7 +19,7 @@ end
 copy!(D1::Diagonal, D2::Diagonal) = (copy!(D1.diag, D2.diag); D1)
 
 size(D::Diagonal) = (length(D.diag),length(D.diag))
-size(D::Diagonal,d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(D.diag) : 1)
+size(D::Diagonal,d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(D.diag) : 1)
 
 fill!(D::Diagonal, x) = (fill!(D.diag, x); D)
 
@@ -32,7 +33,8 @@ function getindex(D::Diagonal, i::Integer)
     zero(eltype(D.diag))
 end
 
-ishermitian(D::Diagonal) = true
+ishermitian{T<:Real}(D::Diagonal{T}) = true
+ishermitian(D::Diagonal) = all(D.diag .== real(D.diag))
 issym(D::Diagonal) = true
 isposdef(D::Diagonal) = all(D.diag .> 0)
 

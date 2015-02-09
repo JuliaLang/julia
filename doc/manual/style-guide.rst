@@ -289,3 +289,64 @@ But any function can be passed directly, without being "wrapped" in an
 anonymous function. Instead of writing ``map(x->f(x), a)``, write
 :func:`map(f, a) <map>`.
 
+Avoid using floats for numeric literals in generic code when possible
+---------------------------------------------------------------------
+
+If you write generic code which handles numbers, and which can be expected to
+run with many different numeric type arguments, try using literals of a numeric
+type that will affect the arguments as little as possible through promotion.
+
+For example,
+
+.. doctest::
+
+    julia> f(x) = 2.0 * x
+    f (generic function with 1 method)
+
+    julia> f(1//2)
+    1.0
+
+    julia> f(1/2)
+    1.0
+
+    julia> f(1)
+    2.0
+
+while
+
+.. doctest::
+
+    julia> g(x) = 2 * x
+    g (generic function with 1 method)
+
+    julia> g(1//2)
+    1//1
+
+    julia> g(1/2)
+    1.0
+
+    julia> g(2)
+    4
+
+As you can see, the second version, where we used an :obj:`Int` literal, preserved
+the type of the input argument, while the first didn't. This is because e.g.
+``promote_type(Int, Float64) == Float64``, and promotion happens with the
+multiplication. Similarly, :obj:`Rational` literals are less type disruptive than
+:obj:`Float64` literals, but more disruptive than :obj:`Int`\ s:
+
+.. doctest::
+
+    julia> h(x) = 2//1 * x
+    h (generic function with 1 method)
+
+    julia> h(1//2)
+    1//1
+
+    julia> h(1/2)
+    1.0
+
+    julia> h(1)
+    2//1
+
+Thus, use :obj:`Int` literals when possible, with :obj:`Rational{Int}` for literal
+non-integer numbers, in order to make it easier to use your code.

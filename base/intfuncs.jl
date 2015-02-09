@@ -275,7 +275,7 @@ const base36digits = ['0':'9','a':'z']
 const base62digits = ['0':'9','A':'Z','a':'z']
 
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
-    if !(2 <= b <= 62) error("invalid base: $b") end
+    2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     digits = b <= 36 ? base36digits : base62digits
     i = neg + max(pad,ndigits0z(x,b))
     a = Array(UInt8,i)
@@ -307,7 +307,7 @@ bits(x::Union(Int64,UInt64,Float64))      = bin(reinterpret(UInt64,x),64)
 bits(x::Union(Int128,UInt128))            = bin(reinterpret(UInt128,x),128)
 
 function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
-    2 <= base || error("invalid base: $base")
+    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     m = max(pad,ndigits0z(n,base))
     a = zeros(T,m)
     digits!(a, n, base)
@@ -315,7 +315,7 @@ function digits{T<:Integer}(n::Integer, base::T=10, pad::Integer=1)
 end
 
 function digits!{T<:Integer}(a::AbstractArray{T,1}, n::Integer, base::T=10)
-    2 <= base || error("invalid base: $base")
+    2 <= base || throw(ArgumentError("base must be ≥ 2, got $base"))
     for i = 1:length(a)
         a[i] = rem(n, base)
         n = div(n, base)

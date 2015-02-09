@@ -228,12 +228,19 @@ function completions(string, pos)
         # also search for packages
         s = string[startpos:pos]
         if dotpos <= startpos
-            append!(suggestions, filter(isdir(Pkg.dir()) ? readdir(Pkg.dir()) : Union(ASCIIString,UTF8String)[]) do pname
-                pname[1] != '.' &&
-                pname != "METADATA" &&
-                pname != "REQUIRE" &&
-                startswith(pname, s)
-            end)
+            for dir in [Pkg.dir(), LOAD_PATH, pwd()]
+                isdir(dir) || continue
+                for pname in readdir(dir)
+                    if pname[1] != '.' && pname != "METADATA" &&
+                          pname != "REQUIRE" && startswith(pname, s)
+                        if isfile(joinpath(dir, pname))
+                            endswith(pname, ".jl") && push!(suggestions, pname[1:end-3])
+                        else
+                            push!(suggestions, pname)
+                        end
+                    end
+                end
+            end
         end
         ffunc = (mod,x)->(isdefined(mod, x) && isa(mod.(x), Module))
         comp_keywords = false

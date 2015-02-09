@@ -90,7 +90,6 @@ reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
 
 ## outputing ASCII strings ##
 
-print(io::IO, s::ASCIIString) = (write(io, s);nothing)
 write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
@@ -98,7 +97,11 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{UInt8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
+convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
+    is_valid_ascii(a) || throw(ArgumentError("invalid ASCII sequence"))
+    return ASCIIString(a)
+end
+
 function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
     idx = 1

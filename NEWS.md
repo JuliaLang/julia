@@ -30,6 +30,9 @@ New language features
 Language changes
 ----------------
 
+  * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
+     in favor of using an explicit `throw` ([#9690]).
+
   * `Uint` et al. are now spelled `UInt` ([#8905]).
 
   * `String` has been renamed to `AbstractString` ([#8872]).
@@ -73,6 +76,12 @@ Compiler improvements
 Library improvements
 --------------------
 
+  * The `LinAlg` module is now exported.
+
+  * `sparse(A)` now takes any `AbstractMatrix` A as an argument. ([#10031])
+
+  * Factorization api is now type-stable, functions dispatch on `Val{false}` or `Val{true}` instead of a boolean value ([#9575]).
+
   * `convert` now checks for overflow when truncating integers or converting between
     signed and unsigned ([#5413]).
 
@@ -87,7 +96,15 @@ Library improvements
 
   * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
 
+  * Add `svds` for sparse truncated SVD. ([#9425])
+
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
+
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+
+  * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
+
+  * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * New `sortperm!` function for pre-allocated index arrays ([#8792]).
 
@@ -114,15 +131,9 @@ Library improvements
 
   * New `Nullable` type for missing data ([#8152]).
 
-  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
-
   * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
   * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
-
-  * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
-
-  * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
 
   * The `machinefile` now supports a host count ([#7616]).
 
@@ -145,8 +156,25 @@ Library improvements
 
   * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
 
+  * Added `recvfrom` to get source address of UDP packets ([#9418])
+
+  * copy(DArray) will now make a copy of the DArray ([#9745])
+
+  * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
+
+  * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
+
+  * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
+  across all numeric types ([#9133], [#9198]).
+
+  * Rational arithmetic throws errors on overflow ([#8672]).
+
+  * Added Base.get_process_title / Base.set_process_title. ([#9957])
+
 Deprecated or removed
 ---------------------
+
+  * Woodbury special matrix type has been removed from LinAlg ([#10024]).
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
 
@@ -170,6 +198,8 @@ Deprecated or removed
     `bitrand` to produce a random BitArray ([#9105], [#9569]).
 
   * `beginswith` is renamed to `startswith` ([#9578]).
+
+  * `null` is renamed to `nullspace`.
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -1147,5 +1177,8 @@ Too numerous to mention.
 [#9261]: https://github.com/JuliaLang/julia/issues/9261
 [#9271]: https://github.com/JuliaLang/julia/issues/9271
 [#9294]: https://github.com/JuliaLang/julia/issues/9294
-[#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9418]: https://github.com/JuliaLang/julia/issues/9418
+[#9425]: https://github.com/JuliaLang/julia/issues/9425
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
+[#9569]: https://github.com/JuliaLang/julia/issues/9569
+[#9578]: https://github.com/JuliaLang/julia/issues/9578

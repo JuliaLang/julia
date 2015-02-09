@@ -29,14 +29,14 @@ seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test_throws ErrorException read!(io,UInt8[0])
+@test_throws ArgumentError read!(io,UInt8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
 close(io)
-@test_throws ErrorException write(io,UInt8[0])
-@test_throws ErrorException seek(io,0)
+@test_throws ArgumentError write(io,UInt8[0])
+@test_throws ArgumentError seek(io,0)
 @test eof(io)
 end
 
@@ -47,9 +47,9 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
-@test_throws ErrorException truncate(io,0)
-@test_throws ErrorException write(io,uint8(0))
-@test_throws ErrorException write(io,UInt8[0])
+@test_throws ArgumentError truncate(io,0)
+@test_throws ArgumentError write(io,uint8(0))
+@test_throws ArgumentError write(io,UInt8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
@@ -64,8 +64,8 @@ Base.compact(io)
 @test readline(io) == "waffles\n"
 @test write(io,"whipped cream\n") > 0
 @test readline(io) == "blueberries\n"
-@test_throws ErrorException seek(io,0)
-@test_throws ErrorException truncate(io,0)
+@test_throws ArgumentError seek(io,0)
+@test_throws ArgumentError truncate(io,0)
 @test readline(io) == "whipped cream\n"
 Base.compact(io)
 @test position(io) == 0

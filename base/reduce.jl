@@ -1,46 +1,5 @@
 ## reductions ##
 
-###### Functors ######
-
-# Note that functors are merely used as internal machinery to enhance code reuse.
-# They are not exported.
-# When function arguments can be inlined, the use of functors can be removed.
-
-abstract Func{N}
-
-immutable IdFun <: Func{1} end
-call(::IdFun, x)  = x
-
-immutable AbsFun <: Func{1} end
-call(::AbsFun, x) = abs(x)
-
-immutable Abs2Fun <: Func{1} end
-call(::Abs2Fun, x) = abs2(x)
-
-immutable ExpFun <: Func{1} end
-call(::ExpFun, x) = exp(x)
-
-immutable LogFun <: Func{1} end
-call(::LogFun, x) = log(x)
-
-immutable AddFun <: Func{2} end
-call(::AddFun, x, y) = x + y
-
-immutable MulFun <: Func{2} end
-call(::MulFun, x, y) = x * y
-
-immutable AndFun <: Func{2} end
-call(::AndFun, x, y) = x & y
-
-immutable OrFun <: Func{2} end
-call(::OrFun, x, y) =  x | y
-
-immutable MaxFun <: Func{2} end
-call(::MaxFun, x, y) = scalarmax(x,y)
-
-immutable MinFun <: Func{2} end
-call(::MinFun, x, y) = scalarmin(x, y)
-
 ###### Generic (map)reduce functions ######
 
 if Int === Int32
@@ -63,6 +22,10 @@ r_promote(::AddFun, x::Number) = x + zero(x)
 r_promote(::MulFun, x::Number) = x * one(x)
 r_promote(::AddFun, x) = x
 r_promote(::MulFun, x) = x
+r_promote(::MaxFun, x::WidenReduceResult) = x
+r_promote(::MinFun, x::WidenReduceResult) = x
+r_promote(::MaxFun, x) = x
+r_promote(::MinFun, x) = x
 
 
 ## foldl && mapfoldl
@@ -85,13 +48,7 @@ end
 
 mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
-function mapfoldl(f, op::Function, v0, itr)
-    is(op, +) ? mapfoldl(f, AddFun(), v0, itr) :
-    is(op, *) ? mapfoldl(f, MulFun(), v0, itr) :
-    is(op, &) ? mapfoldl(f, AndFun(), v0, itr) :
-    is(op, |) ? mapfoldl(f, OrFun(), v0, itr) :
-    mapfoldl_impl(f, op, v0, itr, start(itr))
-end
+mapfoldl(f, op::Function, v0, itr) = mapfoldl_impl(f, specialized_binary(op), v0, itr, start(itr))
 
 function mapfoldl(f, op, itr)
     i = start(itr)
@@ -161,7 +118,7 @@ mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
-mr_empty(f, op, T) = error("Reducing over an empty array is not allowed.")
+mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
 # use zero(T)::T to improve type information when zero(T) is not defined
 mr_empty(::IdFun, op::AddFun, T) = r_promote(op, zero(T)::T)
 mr_empty(::AbsFun, op::AddFun, T) = r_promote(op, abs(zero(T)::T))
@@ -196,13 +153,7 @@ end
 mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
 mapreduce(f, op, a::Number) = f(a)
 
-function mapreduce(f, op::Function, A::AbstractArray)
-    is(op, +) ? _mapreduce(f, AddFun(), A) :
-    is(op, *) ? _mapreduce(f, MulFun(), A) :
-    is(op, &) ? _mapreduce(f, AndFun(), A) :
-    is(op, |) ? _mapreduce(f, OrFun(), A) :
-    _mapreduce(f, op, A)
-end
+mapreduce(f, op::Function, A::AbstractArray) = _mapreduce(f, specialized_binary(op), A)
 
 reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
 reduce(op, itr) = mapreduce(IdFun(), op, itr)
@@ -324,7 +275,7 @@ extrema(x::Real) = (x, x)
 
 function extrema(itr)
     s = start(itr)
-    done(itr, s) && error("argument is empty")
+    done(itr, s) && throw(ArgumentError("collection must be non-empty"))
     (v, s) = next(itr, s)
     while v != v && !done(itr, s)
         (x, s) = next(itr, s)

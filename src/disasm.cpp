@@ -69,7 +69,11 @@
 #else
 #include <llvm/LLVMContext.h>
 #endif
+#ifdef LLVM37
+#include <llvm/DebugInfo/DWARF/DIContext.h>
+#else
 #include <llvm/DebugInfo/DIContext.h>
+#endif
 #ifdef LLVM35
 #include <llvm/IR/DebugInfo.h>
 #elif defined(LLVM32)
@@ -383,6 +387,11 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                         OpInfoLookup,
                         SymbolLookup,
                         &DisInfo)));
+#elif defined LLVM34
+            OwningPtr<MCRelocationInfo> relinfo(new MCRelocationInfo(Ctx));
+            DisAsm->setupForSymbolicDisassembly(
+                    OpInfoLookup, SymbolLookup, &DisInfo, &Ctx,
+                    relinfo);
 #else
             DisAsm->setupForSymbolicDisassembly(
                     OpInfoLookup, SymbolLookup, &DisInfo, &Ctx);
@@ -479,7 +488,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                     // Pass 0: Record all branch targets
                     if (MCIA->isBranch(Inst)) {
                         uint64_t addr;
-#ifdef LLVM35
+#ifdef LLVM34
                         if (MCIA->evaluateBranch(Inst, Index, insSize, addr))
 #else
                         if ((addr = MCIA->evaluateBranch(Inst, Index, insSize)) != (uint64_t)-1)

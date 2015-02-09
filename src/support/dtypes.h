@@ -127,8 +127,16 @@
 #  define STATIC_INLINE static __inline
 #  define INLINE __inline
 #else
-# define STATIC_INLINE static inline
-# define INLINE inline
+#  define STATIC_INLINE static inline
+#  define INLINE inline
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#  define NOINLINE __declspec(noinline)
+#  define NOINLINE_DECL(f) __declspec(noinline) f
+#else
+#  define NOINLINE __attribute__((noinline))
+#  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
 typedef int bool_t;

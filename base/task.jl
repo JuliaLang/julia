@@ -80,6 +80,10 @@ function task_done_hook(t::Task)
         end
         yieldto(nexttask, result)
     else
+        if err && isa(result,InterruptException) && isdefined(REPL,:interactive_task) &&
+            REPL.interactive_task.state == :waiting && isempty(Workqueue)
+            throwto(REPL.interactive_task, result)
+        end
         wait()
     end
 end

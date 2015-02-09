@@ -208,6 +208,11 @@ end
 @test_approx_eq lgamma(-1/2) log(abs(gamma(-1/2)))
 @test_approx_eq lgamma(1.4+3.7im) -3.7094025330996841898 + 2.4568090502768651184im
 @test_approx_eq lgamma(1.4+3.7im) log(gamma(1.4+3.7im))
+@test_approx_eq lgamma(-4.2+0im) lgamma(-4.2)-pi*im
+@test factorial(3.0) == gamma(4.0) == factorial(3)
+for x in (3.2, 2+1im, 3//2, 3.2+0.1im)
+    @test factorial(x) == gamma(1+x)
+end
 
 # digamma
 for elty in (Float32, Float64)
@@ -276,22 +281,6 @@ end
 # Ensure subnormal flags functions don't segfault
 @test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 1) .== [0x00 0x01])
 @test any(ccall("jl_zero_subnormals", UInt8, (UInt8,), 0) .== [0x00 0x01])
-
-# isqrt (issue #4884)
-@test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == int128("13043817825332782212")
-@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
-@test isqrt(0) == 0
-for i = 1:1000
-    n = rand(UInt128)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-    n = rand(UInt64)
-    s = isqrt(n)
-    @test s*s <= n
-    @test (s+1)*(s+1) > n
-end
 
 # useful test functions for relative error
 err(z, x) = abs(z - x) / abs(x)

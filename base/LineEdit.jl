@@ -948,6 +948,7 @@ const escape_defaults = merge!(
     AnyDict( # And ignore other escape sequences by default
     "\e*" => nothing,
     "\e[*" => nothing,
+    "\eO*" => nothing,
     # Also ignore extended escape sequences
     # TODO: Support ranges of characters
     "\e[1**" => nothing,
@@ -1214,8 +1215,12 @@ function setup_search_keymap(hp)
         "\ef"     => (s,o...)->(accept_result(s, p); edit_move_word_right(s)),
         # Ctrl-Left Arrow
         "\e[1;5D" => "\eb",
+        # Ctrl-Left Arrow on rxvt
+        "\eOd" => "\eb",
         # Ctrl-Right Arrow
         "\e[1;5C" => "\ef",
+        # Ctrl-Right Arrow on rxvt
+        "\eOc" => "\ef",
         "^A"         => (s,o...)->(accept_result(s, p); move_line_start(s); refresh_line(s)),
         "^E"         => (s,o...)->(accept_result(s, p); move_line_end(s); refresh_line(s)),
         "^Z"      => (s,o...)->(return :suspend),
@@ -1340,8 +1345,12 @@ AnyDict(
     "\ef" => (s,o...)->edit_move_word_right(s),
     # Ctrl-Left Arrow
     "\e[1;5D" => "\eb",
+    # Ctrl-Left Arrow on rxvt
+    "\eOd" => "\eb",
     # Ctrl-Right Arrow
     "\e[1;5C" => "\ef",
+    # Ctrl-Right Arrow on rxvt
+    "\eOc" => "\ef",
     # Meta Enter
     "\e\r" => (s,o...)->(edit_insert(s, '\n')),
     "\e\n" => "\e\r",

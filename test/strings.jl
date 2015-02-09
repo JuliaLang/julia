@@ -216,9 +216,12 @@ parsehex(s) = parseint(s,16)
 @test parseint(" 2") == 2
 @test parseint("+2\n") == 2
 @test parseint("-2") == -2
-@test_throws ErrorException parseint("   2 \n 0")
-@test_throws ErrorException parseint("2x")
-@test_throws ErrorException parseint("-")
+@test_throws ArgumentError parseint("   2 \n 0")
+@test_throws ArgumentError parseint("2x")
+@test_throws ArgumentError parseint("-")
+
+@test parseint('a') == 10
+@test_throws ArgumentError parseint(typemax(Char))
 
 @test parseint("1234") == 1234
 @test parseint("0x1234") == 0x1234
@@ -240,7 +243,7 @@ end
 for T in (UInt8,UInt16,UInt32,UInt64)
     @test parseint(T,string(typemin(T))) == typemin(T)
     @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws ErrorException parseint(T,string(big(typemin(T))-1))
+    @test_throws ArgumentError parseint(T,string(big(typemin(T))-1))
     @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
 end
 
@@ -841,10 +844,10 @@ bin_val = hex2bytes("07bf")
 @test "0123456789abcdefabcdef" == bytes2hex(hex2bytes("0123456789abcdefABCDEF"))
 
 # odd size
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEF0")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEF0")
 
 #non-hex characters
-@test_throws ErrorException hex2bytes("0123456789abcdefABCDEFGH")
+@test_throws ArgumentError hex2bytes("0123456789abcdefABCDEFGH")
 
 # sizeof
 @test sizeof("abc") == 3
@@ -1016,12 +1019,13 @@ let
 end
 
 @test symbol("asdf") === :asdf
+@test symbol(:abc,"def",'g',"hi",0) === :abcdefghi0
 @test startswith(string(gensym("asdf")),"##asdf#")
 @test gensym("asdf") != gensym("asdf")
 @test gensym() != gensym()
 @test startswith(string(gensym()),"##")
-@test_throws ErrorException symbol("ab\0")
-@test_throws ErrorException gensym("ab\0")
+@test_throws ArgumentError symbol("ab\0")
+@test_throws ArgumentError gensym("ab\0")
 
 # issue #6949
 let f =IOBuffer(),
@@ -1302,3 +1306,38 @@ for T in (ASCIIString, UTF8String, UTF16String, UTF32String)
         end
     end
 end
+
+# issue #9781
+# float(SubString) wasn't tolerant of trailing whitespace, which was different
+# to "normal" strings. This also checks we aren't being too tolerant and allowing
+# any arbitrary trailing characters.
+@test float64("1\n") == 1.0
+@test float64(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float64(split("0,1 X\n",","))[2]
+@test float32("1\n") == 1.0
+@test float32(split("0,1\n",","))[2] == 1.0
+@test_throws ArgumentError float32(split("0,1 X\n",","))[2]
+
+#more ascii tests
+@test convert(ASCIIString, UInt8[32,107,75], "*") == " kK"
+@test convert(ASCIIString, UInt8[132,107,75], "*") == "*kK"
+@test convert(ASCIIString, UInt8[], "*") == ""
+@test convert(ASCIIString, UInt8[255], "*") == "*"
+
+@test ucfirst("Hola")=="Hola"
+@test ucfirst("hola")=="Hola"
+@test ucfirst("")==""
+@test ucfirst("*")=="*"
+
+@test lcfirst("Hola")=="hola"
+@test lcfirst("hola")=="hola"
+@test lcfirst("")==""
+@test lcfirst("*")=="*"
+
+#more UTF8String tests
+@test convert(UTF8String, UInt8[32,107,75], "*") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "*") == "*kK"
+@test convert(UTF8String, UInt8[32,107,75], "αβ") == " kK"
+@test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
+@test convert(UTF8String, UInt8[], "*") == ""
+@test convert(UTF8String, UInt8[255], "αβ") == "αβ"

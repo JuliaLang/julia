@@ -170,6 +170,31 @@ temp_pkg_dir() do
     @test s[r] == "Completion"
 end
 
+path = joinpath(tempdir(),randstring())
+push!(LOAD_PATH, path)
+try
+    # Should not throw an error even though the path do no exist
+    test_complete("using ")
+    Pack_folder = joinpath(path,"Test_pack")
+    mkpath(Pack_folder)
+
+    # Test it completes on folders
+    c,r,res = test_complete("using Test_p")
+    @test "Test_pack" in c
+
+    # Test that it also completes on .jl files in pwd()
+    cd(Pack_folder) do
+        open("Text.txt","w") do f end
+        open("Pack.jl","w") do f end
+        c,r,res = test_complete("using ")
+        @test "Pack" in c
+        @test !("Text.txt" in c)
+    end
+finally
+    @test pop!(LOAD_PATH) == path
+    rm(path, recursive=true)
+end
+
 # Test $ in shell-mode
 s = "cd \$(max"
 c, r, res = test_scomplete(s)
