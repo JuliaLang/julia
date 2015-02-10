@@ -1,8 +1,8 @@
 # NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 
-if nprocs() < 3
-    remotecall_fetch(1, () -> addprocs(2))
+if nworkers() < 3
+    remotecall_fetch(1, () -> addprocs(3))
 end
 
 id_me = myid()
@@ -148,9 +148,6 @@ map!(x->1, d)
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-if nprocs() < 4
-    remotecall_fetch(1, () -> addprocs(4 - nprocs()))
-end
 workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 @test maximum(workloads) - minimum(workloads) <= 1
 
@@ -195,7 +192,8 @@ s = [randstring() for x in 1:10^5]
 @test s == remotecall_fetch(id_other, (x)->x, s)
 
 #large number of small requests
-[remotecall_fetch(id_other, myid) for i in 1:100000]
+num_small_requests = 10000
+@test fill(id_other, num_small_requests) == [remotecall_fetch(id_other, myid) for i in 1:num_small_requests]
 
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
