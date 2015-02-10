@@ -16,6 +16,15 @@ module CompletionFoo
     macro foobar()
         :()
     end
+
+    test{T<:Real}(x::T, y::T) = pass
+    test(x::Real, y::Real) = pass
+    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(args...) = pass
+
+    test1(x::Type{Float64}) = pass
+
+    array = [1, 1]
 end
 
 function temp_pkg_dir(fn::Function)
@@ -145,6 +154,50 @@ c, r, res = test_complete(s)
 @test c[1] == string(start(methods(max)))
 @test r == 1:3
 @test s[r] == "max"
+
+# Test completion of methods with input args
+s = "CompletionFoo.test(1,1, "
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Int, Int))[1])
+@test length(c) == 3
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(CompletionFoo.array,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Array{Int, 1}, Any))[1])
+@test length(c) == 2
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(1,1,1,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Any, Any, Any))[1])
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test1(Int,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 0
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "CompletionFoo.test1(Float64,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "prevind(\"θ\",1,"
+c, r, res = test_complete(s)
+@test c[1] == string(methods(prevind, (UTF8String, Int))[1])
+@test r == 1:7
+@test s[r] == "prevind"
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
