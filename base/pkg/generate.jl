@@ -60,7 +60,7 @@ function package(
             $pkg.jl $(isnew ? "generated" : "regenerated") files.
 
                 license:  $license
-                authors:  $(join([authors],", "))
+                authors:  $(join([authors...],", "))
                 years:    $years
                 user:     $user
 
