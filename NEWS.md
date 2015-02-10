@@ -177,6 +177,9 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * The `Graphics` module has been removed from `Base` and is now a
+    standalone package ([#10150], [#9862]).
+
   * Woodbury special matrix type has been removed from LinAlg ([#10024]).
 
   * `median` and `median!` no longer accept a `checknan` keyword argument ([#8605]).
