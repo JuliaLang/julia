@@ -4,7 +4,7 @@ type DArray{T,N,A} <: AbstractArray{T,N}
     chunks::Array{RemoteRef,N}
 
     # pmap[i]==p ⇒ processor p has piece i
-    pmap::Vector{Int}
+    pmap::Array{Int,N}
 
     # indexes held by piece i
     indexes::Array{NTuple{N,UnitRange{Int}},N}
@@ -16,7 +16,7 @@ type DArray{T,N,A} <: AbstractArray{T,N}
         assert(size(chunks) == size(indexes))
         assert(length(chunks) == length(pmap))
         assert(dims == map(last,last(indexes)))
-        new(dims, chunks, pmap, indexes, cuts)
+        new(dims, chunks, reshape(pmap, size(chunks)), indexes, cuts)
     end
 end
 
@@ -111,7 +111,7 @@ function chunk_idxs(dims, chunks)
     idxs, cuts
 end
 
-function localpartindex(pmap::Vector{Int})
+function localpartindex(pmap::Array{Int})
     mi = myid()
     for i = 1:length(pmap)
         if pmap[i] == mi
