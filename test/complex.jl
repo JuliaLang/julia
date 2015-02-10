@@ -764,3 +764,5 @@ end
 @test float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
 @test float16(1)^im === Complex32(1) === float16(1)+float16(0)im
 
+# issue/PR #10148
+@test typeof(int8(1) - im) == Complex{Int8}
