@@ -1713,158 +1713,16 @@ function permutedims(B::Union(BitArray,StridedArray), perm)
     permutedims!(P, B, perm)
 end
 
-
 ## Concatenation ##
 
-function hcat(B::BitVector...)
-    height = length(B[1])
-    for j = 2:length(B)
-        if length(B[j]) != height
-            throw(DimensionMismatch("dimensions must match"))
-        end
-    end
-    M = BitArray(height, length(B))
-    for j = 1:length(B)
-        copy_chunks!(M.chunks, (height*(j-1))+1, B[j].chunks, 1, height)
-    end
-    return M
+cat_containertypeof(::(Union(Bool,BitArray)...)) = BitArray
+cat_container(::Type{Bool}, sz, ::Type{BitArray}) = BitArray(sz)
+
+vcat_fill!(C::BitVector, catrange, x::BitVector) = copy_chunks!(C.chunks,first(catrange), x.chunks,1,length(x))
+hcat_fill!(C::BitMatrix, catrange, x::Union(BitMatrix,BitVector)) = begin
+    size(C,1)==size(x,1) || throw(ArgumentError("number of rows must match"))
+    copy_chunks!(C.chunks,size(C,1)*(first(catrange)-1)+1,x.chunks,1,length(x))
 end
-
-function vcat(V::BitVector...)
-    n = 0
-    for Vk in V
-        n += length(Vk)
-    end
-    B = BitArray(n)
-    j = 1
-    for Vk in V
-        copy_chunks!(B.chunks, j, Vk.chunks, 1, length(Vk))
-        j += length(Vk)
-    end
-    return B
-end
-
-function hcat(A::Union(BitMatrix,BitVector)...)
-    nargs = length(A)
-    nrows = size(A[1], 1)
-    ncols = 0
-    dense = true
-    for j = 1:nargs
-        Aj = A[j]
-        nd = ndims(Aj)
-        ncols += (nd==2 ? size(Aj,2) : 1)
-        if size(Aj, 1) != nrows
-            throw(DimensionMismatch("row lengths must match"))
-        end
-    end
-
-    B = BitArray(nrows, ncols)
-
-    pos = 1
-    for k = 1:nargs
-        Ak = A[k]
-        n = length(Ak)
-        copy_chunks!(B.chunks, pos, Ak.chunks, 1, n)
-        pos += n
-    end
-    return B
-end
-
-function vcat(A::BitMatrix...)
-    nargs = length(A)
-    nrows = sum(a->size(a, 1), A)::Int
-    ncols = size(A[1], 2)
-    for j = 2:nargs
-        if size(A[j], 2) != ncols
-            throw(DimensionMismatch("column lengths must match"))
-        end
-    end
-    B = BitArray(nrows, ncols)
-    Bc = B.chunks
-    nrowsA = [size(a, 1) for a in A]
-    Ac = [a.chunks for a in A]
-    pos_d = 1
-    pos_s = ones(Int, nargs)
-    for j = 1:ncols, k = 1:nargs
-        copy_chunks!(Bc, pos_d, Ac[k], pos_s[k], nrowsA[k])
-        pos_s[k] += nrowsA[k]
-        pos_d += nrowsA[k]
-    end
-    return B
-end
-
-# general case, specialized for BitArrays and Integers
-function cat(catdim::Integer, X::Union(BitArray, Integer)...)
-    nargs = length(X)
-    # using integers results in conversion to Array{Int}
-    # (except in the all-Bool case)
-    has_bitarray = false
-    has_integer = false
-    for a in X
-        if isa(a, BitArray)
-            has_bitarray = true
-        else
-            has_integer = true
-        end
-    end
-    # just integers and no BitArrays -> general case
-    has_bitarray || return invoke(cat, (Integer, Any...), catdim, X...)
-    dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
-    ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
-    d_max = maximum(ndimsX)
-
-    if catdim > d_max + 1
-        for i = 1:nargs
-            if dimsX[1] != dimsX[i]
-                throw(DimensionMismatch("all inputs must have same dimensions when concatenating along a higher dimension"))
-            end
-        end
-    elseif nargs >= 2
-        for d = 1:d_max
-            d == catdim && continue
-            len = d <= ndimsX[1] ? dimsX[1][d] : 1
-            for i = 2:nargs
-                len == (d <= ndimsX[i] ? dimsX[i][d] : 1) || throw(DimensionMismatch("mismatch in dimension $d"))
-            end
-        end
-    end
-
-    cat_ranges = ntuple(nargs, i->(catdim <= ndimsX[i] ? dimsX[i][catdim] : 1))
-
-    function compute_dims(d)
-        if d == catdim
-            catdim <= d_max && return sum(cat_ranges)
-            return nargs
-        else
-            d <= ndimsX[1] && return dimsX[1][d]
-            return 1
-        end
-    end
-
-    ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
-    typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
-    if !has_integer || typeC == Bool
-        C = BitArray(dimsC)
-    else
-        C = Array(typeC, dimsC)
-    end
-
-    range = 1
-    for k = 1:nargs
-        nextrange = range + cat_ranges[k]
-        cat_one = ntuple(ndimsC, i->(i != catdim ?
-                                     (1:dimsC[i]) : (range:nextrange-1) ))
-        # note: when C and X are BitArrays, this calls
-        #       the special assign with ranges
-        C[cat_one...] = X[k]
-        range = nextrange
-    end
-    return C
-end
-
-# hvcat -> use fallbacks in abstractarray.jl
-
 
 # BitArray I/O
 

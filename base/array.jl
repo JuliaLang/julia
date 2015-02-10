@@ -1046,36 +1046,10 @@ function reverse!(v::StridedVector, s=1, n=length(v))
     v
 end
 
-function vcat{T}(arrays::Vector{T}...)
-    n = 0
-    for a in arrays
-        n += length(a)
-    end
-    arr = Array(T, n)
-    ptr = pointer(arr)
-    offset = 0
-    if isbits(T)
-        elsz = sizeof(T)
-    else
-        elsz = div(WORD_SIZE,8)
-    end
-    for a in arrays
-        nba = length(a)*elsz
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-              ptr+offset, a, nba)
-        offset += nba
-    end
-    return arr
-end
-
-function hcat{T}(V::Vector{T}...)
-    height = length(V[1])
-    for j = 2:length(V)
-        if length(V[j]) != height
-            throw(DimensionMismatch("vectors must have same lengths"))
-        end
-    end
-    [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
+vcat_fill!{T}(C::Vector{T}, catrange, x::Vector) = copy!(C,first(catrange), x,1,length(x))
+hcat_fill!{T}(C::Matrix{T}, catrange, x::VecOrMat) = begin
+    size(C,1)==size(x,1) || throw(ArgumentError("number of rows must match"))
+    copy!(C,size(C,1)*(first(catrange)-1)+1,x,1,length(x))
 end
 
 ## find ##

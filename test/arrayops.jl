@@ -82,9 +82,9 @@ tmp = zeros(Int,map(maximum,rng)...)
 tmp[rng...] = A[rng...]
 @test  tmp == cat(3,zeros(Int,2,3),[0 0 0; 0 47 52],zeros(Int,2,3),[0 0 0; 0 127 132])
 
-@test cat([1,2],1,2,3.,4.,5.) == diagm([1,2,3.,4.,5.])
+@test dcat([1,2],1,2,3.,4.,5.) == diagm([1,2,3.,4.,5.])
 blk = [1 2;3 4]
-tmp = cat([1,3],blk,blk)
+tmp = dcat([1,3],blk,blk)
 @test tmp[1:2,1:2,1] == blk
 @test tmp[1:2,1:2,2] == zero(blk)
 @test tmp[3:4,1:2,1] == zero(blk)

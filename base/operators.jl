@@ -175,6 +175,9 @@ eltype(::Type{Any}) = Any
 eltype(t::DataType) = eltype(super(t))
 eltype(x) = eltype(typeof(x))
 
+promote_eltype() = Bottom
+promote_eltype(v1, vs...) = promote_type(eltype(v1), promote_eltype(vs...))
+
 # copying immutable things
 copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
               TopNode,QuoteNode,DataType,UnionType)) = x
