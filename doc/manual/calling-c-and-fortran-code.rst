@@ -256,7 +256,10 @@ Syntax / Keyword                Example                         Description
 ==============================  ==============================  ======================================================
 ``type``                        ``ASCIIString``                 "Leaf Type" :: A group of related data that includes
                                                                 a type-tag, is managed by the Julia GC, and
-                                                                is defined by object-identity
+                                                                is defined by object-identity.
+                                                                The type parameters of a leaf type must be fully defined
+                                                                (no `TypeVars` are allowed)
+                                                                in order for the instance to be constructed.
 
 ``abstract``                    ``Any``,                        "Super Type" :: A super-type (not a leaf-type)
                                 ``AbstractArray{T,N}``,         that cannot be instantiated, but can be used to
@@ -264,6 +267,9 @@ Syntax / Keyword                Example                         Description
 
 ``{T}``                         ``Vector{Int}``                 "Type Parameter" :: A specialization of a type
                                                                 (typically used to dispatch or storage optimization)
+
+                                                                "TypeVar" :: The ``T`` in the type parameter declaration
+                                                                is referred to as a TypeVar (short for type variable)
 
 ``bitstype``                    ``Int``,                        "Bits Type" :: A type with no fields, but a size. It
                                 ``Float64``                     is stored and defined by-value
