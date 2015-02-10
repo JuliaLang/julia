@@ -184,16 +184,17 @@ function dllist()
     dynamic_libraries = Array(AbstractString,0)
 
     @linux_only begin
-        const callback = cfunction(dl_phdr_info_callback, Cint, (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{AbstractString,1}} ))
-        ccall( cglobal("dl_iterate_phdr"), Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries) )
+        const callback = cfunction(dl_phdr_info_callback, Cint,
+                                   (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{AbstractString,1}} ))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries))
     end
 
     @osx_only begin
-        numImages = ccall( cglobal("_dyld_image_count"), Cint, (), )
+        numImages = ccall(:_dyld_image_count, Cint, (), )
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1
-            name = bytestring(ccall( cglobal("_dyld_get_image_name"), Ptr{UInt8}, (UInt32,), uint32(i)))
+            name = bytestring(ccall(:_dyld_get_image_name, Ptr{UInt8}, (UInt32,), uint32(i)))
             push!(dynamic_libraries, name)
         end
     end
