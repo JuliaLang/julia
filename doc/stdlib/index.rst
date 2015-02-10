@@ -23,7 +23,6 @@
    sort
    pkg
    collections
-   graphics
    test
    c
    profile
