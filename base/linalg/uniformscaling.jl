@@ -1,4 +1,4 @@
-import Base: copy, ctranspose, getindex, showarray, transpose, one, zero, inv
+import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv
 import Base.LinAlg: SingularException
 
 immutable UniformScaling{T<:Number}
