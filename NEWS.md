@@ -103,7 +103,7 @@ Library improvements
 
   * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
 
-  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues.
+  * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues. ([#8467],[#9701])
 
   * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
 

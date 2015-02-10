@@ -3547,7 +3547,7 @@ for (trsen, tgsen, elty) in
     ((:dtrsen_, :dtgsen_, :Float64),
      (:strsen_, :stgsen_, :Float32))
     @eval begin
-        function trsen!(select::Array{Int}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+        function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
 #       INTEGER            INFO, LDQ, LDT, LIWORK, LWORK, M, N
@@ -3593,7 +3593,7 @@ for (trsen, tgsen, elty) in
             end
             T, Q, all(wi .== 0) ? wr : complex(wr, wi)
         end
-        function tgsen!(select::Array{Int}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
+        function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                                             Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
 # *       .. Scalar Arguments ..
 # *       LOGICAL            WANTQ, WANTZ
@@ -3659,7 +3659,7 @@ for (trsen, tgsen, elty) in
     ((:ztrsen_, :ztgsen_, :Complex128),
      (:ctrsen_, :ctgsen_, :Complex64))
     @eval begin
-        function trsen!(select::Array{Int}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
+        function trsen!(select::StridedVector{BlasInt}, T::StridedMatrix{$elty}, Q::StridedMatrix{$elty})
 # *     .. Scalar Arguments ..
 #       CHARACTER          COMPQ, JOB
 #       INTEGER            INFO, LDQ, LDT, LWORK, M, N
@@ -3699,7 +3699,7 @@ for (trsen, tgsen, elty) in
             end
             T, Q, w
         end
-        function tgsen!(select::Array{Int}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
+        function tgsen!(select::StridedVector{BlasInt}, S::StridedMatrix{$elty}, T::StridedMatrix{$elty},
                                             Q::StridedMatrix{$elty}, Z::StridedMatrix{$elty})
 # *       .. Scalar Arguments ..
 # *       LOGICAL            WANTQ, WANTZ
