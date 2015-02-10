@@ -303,6 +303,7 @@ end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+==(r::OrdinalRange, s::OrdinalRange) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -329,7 +330,7 @@ intersect{T<:Integer}(i::Integer, r::UnitRange{T}) =
 intersect{T<:Integer}(r::UnitRange{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::StepRange{T2})
-    if length(s) == 0
+    if isempty(s)
         range(first(r), 0)
     elseif step(s) == 0
         intersect(first(s), r)
@@ -356,7 +357,7 @@ function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::UnitRange{T2})
 end
 
 function intersect(r::StepRange, s::StepRange)
-    if length(r) == 0 || length(s) == 0
+    if isempty(r) || isempty(s)
         return range(first(r), step(r), 0)
     elseif step(s) < 0
         return intersect(r, reverse(s))
@@ -523,7 +524,7 @@ function vcat{T}(rs::Range{T}...)
     return a
 end
 
-reverse(r::OrdinalRange) = range(last(r), -step(r), length(r))
+reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
 
 ## sorting ##
@@ -558,5 +559,5 @@ function in(x, r::Range)
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(int(x)-first(r),step(r)) == 0)
+in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
 in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(int(x) - int(first(r)), step(r)) == 0)
