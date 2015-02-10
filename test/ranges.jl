@@ -57,6 +57,11 @@ end
 #@test isempty(findin(5+0*(1:6), 6:7))
 #@test findin(5+0*(1:6), 5:5) == 1:6
 
+@test reverse(reverse(1:10)) == 1:10
+
+@test reverse(reverse(typemin(Int):typemax(Int))) == typemin(Int):typemax(Int)
+@test reverse(reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
+
 @test intersect(1:5, 2:3) == 2:3
 @test intersect(-3:5, 2:8) == 2:5
 @test intersect(-8:-3, -8:-3) == -8:-3
@@ -95,6 +100,22 @@ end
 #@test isempty(intersect(6+0*(0:6:24), 0:4:24))
 @test intersect(-10:3:24, -10:3:24) == -10:3:23
 @test isempty(intersect(-11:3:24, -10:3:24))
+@test intersect(typemin(Int):2:typemax(Int),1:10) == 2:2:10
+@test intersect(1:10,typemin(Int):2:typemax(Int)) == 2:2:10
+
+@test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
+@test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
+
+@test 0 in uint(0):100:typemax(Uint)
+@test last(uint(0):100:typemax(Uint)) in uint(0):100:typemax(Uint)
+@test -9223372036854775790 in -9223372036854775790:100:9223372036854775710
+@test -9223372036854775690 in -9223372036854775790:100:9223372036854775710
+@test -90 in -9223372036854775790:100:9223372036854775710
+@test 10 in -9223372036854775790:100:9223372036854775710
+@test 110 in -9223372036854775790:100:9223372036854775710
+@test 9223372036854775610 in -9223372036854775790:100:9223372036854775710
+@test 9223372036854775710 in -9223372036854775790:100:9223372036854775710
+
 
 @test !(3.5 in 1:5)
 @test (3 in 1:5)
