@@ -134,16 +134,79 @@ function complete_path(path::AbstractString, pos)
     return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
-function complete_methods(input::AbstractString)
-    tokens = split(input, '.')
-    fn = Main
-    for token in tokens
-        sym = symbol(token)
-        isdefined(fn, sym) || return UTF8String[]
-        fn = fn.(sym)
+# Determines whether method_complete should be tried. It should only be done if
+# the string endswiths ',' or '(' when disregarding whitespace_chars
+function should_method_complete(s::AbstractString)
+    for c in reverse(s)
+        if c in [',', '(']
+            return true
+        elseif !(c in whitespace_chars)
+            return false
+        end
     end
-    isgeneric(fn) || return UTF8String[]
-    UTF8String[string(m) for m in methods(fn)]
+    false
+end
+
+# Returns a range that includes the method name in front of the first non
+# closed start brace from the end of the string.
+function find_start_brace(s::AbstractString)
+    braces = 0
+    r = RevString(s)
+    i = start(r)
+    while !done(r, i)
+        c, i = next(r, i)
+        if c == '('
+            braces += 1
+        elseif c == ')'
+            braces -= 1
+        end
+        braces == 1 && break
+    end
+    braces != 1 && return 0:-1
+    method_name_end = reverseind(r, i)
+    startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
+    return startind:endof(s), method_name_end
+end
+
+# Returns the value in a expression if sym is defined in current namespace fn.
+# This method is used to iterate to the value of a expression like:
+# :(Base.REPLCompletions.whitespace_chars) a `dump` of this expression
+# will show it consist of Expr, QuoteNode's and Symbol's which all needs to
+# be handled differently to iterate down to get the value of whitespace_chars.
+function get_value(sym::Expr, fn)
+    sym.head != :. && return
+    for ex in sym.args
+        fn = get_value(ex, fn)
+        fn == nothing && return
+    end
+    fn
+end
+get_value(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
+get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
+get_value(sym, fn) = sym
+
+# Takes the argument of a function call and determine the type of signature of the method.
+# If the function gets called with a val::DataType then it returns Type{val} else typeof(val)
+method_type_of_arg(val::DataType) = Type{val}
+method_type_of_arg(val) = typeof(val)
+
+# Method completion on function call expression that look like :(max(1))
+function complete_methods(ex_org::Expr)
+    args_ex = Any[]
+    for ex in ex_org.args # First ex is the function name
+        val = get_value(ex, Main)
+        val == nothing && return UTF8String[]
+        push!(args_ex, val)
+    end
+    isgeneric(args_ex[1]) || return UTF8String[]
+    out = UTF8String[]
+    t_in = tuple([method_type_of_arg(arg) for arg in args_ex[2:end]]...) # Input types
+    for method in methods(args_ex[1])
+        # Check if the method's type signature intersects the input types
+        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], t_in) != None &&
+            push!(out,string(method))
+    end
+    return out
 end
 
 include("latex_symbols.jl")
@@ -206,10 +269,12 @@ function completions(string, pos)
     # Make sure that only latex_completions is working on strings
     inc_tag==:string && return UTF8String[], 0:-1, false
 
-    if inc_tag == :other && string[pos] == '('
-        endpos = prevind(string, pos)
-        startpos = nextind(string, rsearch(string, non_identifier_chars, endpos))
-        return complete_methods(string[startpos:endpos]), startpos:endpos, false
+     if inc_tag == :other && should_method_complete(partial)
+        frange, method_name_end = find_start_brace(partial)
+        ex = parse(partial[frange] * ")", raise=false)
+        if isa(ex, Expr) && ex.head==:call
+            return complete_methods(ex), start(frange):method_name_end, false
+        end
     elseif inc_tag == :comment
         return UTF8String[], 0:-1, false
     end

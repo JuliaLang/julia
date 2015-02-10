@@ -173,9 +173,6 @@ function show_method_candidates(io::IO, ex::MethodError)
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
 
-    return_T(val) = typeof(val)
-    return_T(val::DataType) = Type{val}
-
     lines = Array((IOBuffer, Int), 0)
     name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
     # These functions are special cased to only show if first argument is matched.
@@ -192,7 +189,7 @@ function show_method_candidates(io::IO, ex::MethodError)
             show_delim_array(buf, tv, '{', ',', '}', false)
         end
         print(buf, "(")
-        t_i = [return_T(arg) for arg in ex.args]
+        t_i = [Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
         right_matches = 0
         for i = 1 : min(length(t_i), length(method.sig))
             i != 1 && print(buf, ", ")
