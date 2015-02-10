@@ -1,6 +1,5 @@
 ## generic operations on numbers ##
 
-isreal(x::Real) = true
 isinteger(x::Integer) = true
 
 size(x::Number) = ()
