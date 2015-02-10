@@ -18,13 +18,7 @@ mean(A::AbstractArray) = sum(A) / length(A)
 
 function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
     sum!(R, A; init=true)
-    lenR = length(R)
-    rs = convert(T, length(A) / lenR)
-    if rs != 1
-        for i = 1:lenR
-            @inbounds R[i] /= rs
-        end
-    end
+    scale!(R, length(R) / length(A))
     return R
 end
 
@@ -33,7 +27,7 @@ momenttype(::Type{Float32}) = Float32
 momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
 
 mean{T}(A::AbstractArray{T}, region) =
-    mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
+    mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
 
 
 ##### variances #####
@@ -93,7 +87,7 @@ function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
 end
 
 varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
-    varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
+    varzm!(reducedim_initarray(A, region, 0, momenttype(T)), A; corrected=corrected)
 
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
@@ -157,7 +151,7 @@ function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corre
 end
 
 varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
-    varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
+    varm!(reducedim_initarray(A, region, 0, momenttype(T)), A, m; corrected=corrected)
 
 
 function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)

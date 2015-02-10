@@ -200,7 +200,7 @@ function to_op(op::Function)
     is(op, |) ? OrFun() : op
 end
 
-mapreducedim!(f::Function, op, R::AbstractArray, A::AbstractArray) =
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
     _mapreducedim!(f, to_op(op), R, A)
 
 reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
