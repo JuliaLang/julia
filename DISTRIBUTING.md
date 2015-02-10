@@ -127,7 +127,7 @@ Notes on BLAS and LAPACK
 
 Julia builds OpenBLAS by default, which includes the BLAS and LAPACK
 libraries. On 32-bit architectures, Julia builds OpenBLAS to use
-32-bit integers, while on 64-bit architectuers, Julia builds OpenBLAS
+32-bit integers, while on 64-bit architectures, Julia builds OpenBLAS
 to use 64-bit integers (ILP64). It is essential that all Julia functions
 that call BLAS and LAPACK API routines use integers of the correct width.
 
