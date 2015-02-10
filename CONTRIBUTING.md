@@ -25,7 +25,7 @@ A useful bug report filed as a GitHub issue provides information about how to re
   - Try some simple debugging techniques to help isolate the problem.
     - Try running the code with the debug build of Julia with `make debug`, which produces the `usr/bin/julia-debug`.
     - Consider running `julia-debug` with a debugger such as `gdb` or `lldb`. Obtaining even a simple [backtrace](http://www.unknownroad.com/rtfm/gdbtut/gdbsegfault.html) is very useful.
-    - If Julia segfaults, try following [these debugging tips](https://gist.github.com/staticfloat/6188418#segfaults-during-bootstrap-sysimgjl) to help track down the specific origin of the bug.
+    - If Julia segfaults, try following [these debugging tips](http://julia.readthedocs.org/en/latest/devdocs/backtraces/#segfaults-during-bootstrap-sysimg-jl) to help track down the specific origin of the bug.
 
 2. If the problem is caused by a Julia package rather than core Julia, file a bug report with the relevant package author rather than here.
 
