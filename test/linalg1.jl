@@ -102,7 +102,7 @@ debug && println("(Automatic) Bunch-Kaufman factor of indefinite matrix")
 debug && println("Bunch-Kaufman factors of a pos-def matrix")
         bc2 = bkfact(apd)
         @test_approx_eq inv(bc2) * apd eye(n)
-        @test_approx_eq_eps apd * (bc2\b) b 60000ε
+        @test_approx_eq_eps apd * (bc2\b) b 150000ε
     end
 
 debug && println("(Automatic) Square LU decomposition")
@@ -218,7 +218,7 @@ debug && println("Reorder Schur")
         # avoiding partly selection of conj. eigenvalues
         ordschura = eltya <: Complex ? a : asym
         S = schurfact(ordschura)
-        select = rand(range(0,2), n)
+        select = bitrand(n)
         O = ordschur(S, select)
         bool(sum(select)) && @test_approx_eq S[:values][find(select)] O[:values][1:sum(select)]
         @test_approx_eq O[:vectors]*O[:Schur]*O[:vectors]' ordschura
@@ -241,7 +241,7 @@ debug && println("Reorder Generalized Schur")
         a2_sf = a[n1+1:n2, n1+1:n2]
         NS = schurfact(a1_sf, a2_sf)
         # Currently just testing with selecting gen eig values < 1
-        select = int(real(NS[:values] .* conj(NS[:values])) .< 1)
+        select = abs2(NS[:values]) .< 1
         m = sum(select)
         S = ordschur(NS, select)
         # Make sure that the new factorization stil factors matrix
