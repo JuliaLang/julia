@@ -789,6 +789,7 @@ export
     mapfoldl,
     mapfoldr,
     mapreduce,
+    mapreducedim,
     merge!,
     merge,
     #pop!,
