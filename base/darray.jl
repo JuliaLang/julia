@@ -377,7 +377,7 @@ end
 function mapreducedim!(f, op, R::DArray, A::DArray)
     nd = ndims(A)
     nd == ndims(R) || throw(ArgumentError("input and output arrays must have the same number of dimensions"))
-    region = tuple([1:ndims(A)][[size(R)...] .!= [size(A)...]]...)
+    region = tuple([1:ndims(A);][[size(R)...] .!= [size(A)...]]...)
     B = mapreducedim_within(f, op, A, region)
     return mapreducedim_between!(identity, op, R, B, region)
 end
