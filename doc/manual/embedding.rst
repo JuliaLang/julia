@@ -41,9 +41,9 @@ Alternatively, look at the ``embedding.c`` program in the julia source tree in t
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
-The second statement initializes Julia's task scheduling system. This statement must appear in a function that will not return as long as calls into Julia will be made (``main`` works fine). Strictly speaking, this statement is optional, but operations that switch tasks will cause problems if it is omitted.
+The second statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
 
-The third statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
+Before the program terminates, it is strongly recommended to call ``jl_atexit_hook``.  The above example program calls this before returning from ``main``.
 
 Converting Types
 ========================
