@@ -291,6 +291,10 @@ importall .Profile
 include("Dates.jl")
 import .Dates: Date, DateTime, now
 
+# enums
+include("Enums.jl")
+import .Enums: @enum
+
 # deprecated functions
 include("deprecated.jl")
 
