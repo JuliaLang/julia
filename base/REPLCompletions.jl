@@ -211,25 +211,18 @@ method_type_of_arg(val) = typeof(val)
 
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
-    args_ex = Any[]
-    for ex in ex_org.args # First ex is the function name
+    args_ex = DataType[]
+    func, found = get_value(ex_org.args[1], Main)
+    (!found || (found && !isgeneric(func))) && return UTF8String[]
+    for ex in ex_org.args[2:end]
         val, found = get_value(ex, Main)
-        if length(args_ex) == 0
-            if !found || (found && !isgeneric(val))
-                return UTF8String[]
-            else
-                push!(args_ex, val)
-            end
-        else
-            # If a the argument could not be determined then it inserts type Any
-            found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
-        end
+        found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
     end
     out = UTF8String[]
-    t_in = tuple(args_ex[2:end]...) # Input types
-    for method in methods(args_ex[1])
+    t_in = tuple(args_ex...) # Input types
+    for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], t_in) != None &&
+        typeintersect(method.sig[1 : min(length(args_ex), end)], t_in) != None &&
             push!(out,string(method))
     end
     return out
