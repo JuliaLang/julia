@@ -117,7 +117,7 @@ sign(z::Complex) = z/abs(z)
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = Complex(x + real(z), imag(z))
 +(z::Complex, x::Real) = Complex(x + real(z), imag(z))
--(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
+-(x::Real, z::Complex) = Complex(x - real(z), zero(x) - imag(z))
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 
 /(a::Real  , w::Complex) = a*inv(w)
