@@ -167,12 +167,35 @@ hash(x::Float16, h::UInt) = hash(float64(x), h)
 
 ## hashing collections ##
 const hashaa_seed = UInt === UInt64 ? 0x7f53e68ceb575e76 : 0xeb575e76
+const hashrle_seed = UInt == UInt64 ? 0x2aab8909bfea414c : 0xbfea414c
 function hash(a::AbstractArray, h::UInt)
     h += hashaa_seed
     h += hash(size(a))
-    for x in a
-        h = hash(x, h)
+
+    state = start(a)
+    done(a, state) && return h
+    x2, state = next(a, state)
+    done(a, state) && return hash(x2, h)
+
+    x1 = x2
+    while !done(a, state)
+        x1 = x2
+        x2, state = next(a, state)
+        if x2 == x1
+            # For repeated elements, use run length encoding
+            # This allows efficient hashing of sparse arrays
+            runlength = 2
+            while !done(a, state)
+                x2, state = next(a, state)
+                x2 != x1 && break
+                runlength += 1
+            end
+            h += hashrle_seed
+            h = hash(runlength, h)
+        end
+        h = hash(x1, h)
     end
+    x2 != x1 && (h = hash(x2, h))
     return h
 end
 
