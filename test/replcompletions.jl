@@ -24,6 +24,9 @@ module CompletionFoo
 
     test1(x::Type{Float64}) = pass
 
+    test2(x::AbstractString) = pass
+    test2(x::Char) = pass
+
     array = [1, 1]
 end
 
@@ -198,6 +201,15 @@ c, r, res = test_complete(s)
 @test c[1] == string(methods(prevind, (UTF8String, Int))[1])
 @test r == 1:7
 @test s[r] == "prevind"
+
+for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+    s = "(1, CompletionFoo.test2($arg,"
+    c, r, res = test_complete(s)
+    @test length(c) == 1
+    @test c[1] == string(methods(CompletionFoo.test2, (T,))[1])
+    @test r == 5:23
+    @test s[r] == "CompletionFoo.test2"
+end
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"

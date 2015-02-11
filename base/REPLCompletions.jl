@@ -153,16 +153,35 @@ function find_start_brace(s::AbstractString)
     braces = 0
     r = RevString(s)
     i = start(r)
+    in_single_quotes = false
+    in_double_quotes = false
+    in_back_ticks = false
     while !done(r, i)
         c, i = next(r, i)
-        if c == '('
-            braces += 1
-        elseif c == ')'
-            braces -= 1
+        if !in_single_quotes && !in_double_quotes && !in_back_ticks
+            if c == '('
+                braces += 1
+            elseif c == ')'
+                braces -= 1
+            elseif c == '\''
+                in_single_quotes = true
+            elseif c == '"'
+                in_double_quotes = true
+            elseif c == '`'
+                in_back_ticks = true
+            end
+        else
+            if !in_back_ticks && !in_double_quotes && c == '\''
+                in_single_quotes = !in_single_quotes
+            elseif !in_back_ticks && !in_single_quotes && c == '"'
+                in_double_quotes = !in_double_quotes
+            elseif !in_single_quotes && !in_double_quotes && c == '`'
+                in_back_ticks = !in_back_ticks
+            end
         end
         braces == 1 && break
     end
-    braces != 1 && return 0:-1
+    braces != 1 && return 0:-1, -1
     method_name_end = reverseind(r, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return startind:endof(s), method_name_end
