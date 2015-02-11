@@ -863,9 +863,9 @@ function A_mul_Bc{Tv<:VRealTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, B::Sparse{Tv,Ti})
     s = unsafe_load(A.p)
     if s.stype != 0
         aa1 = copy(A, 0, 1)
-        return aat(aa1, Ti[0:s.ncol-1], 1)
+        return aat(aa1, Ti[0:s.ncol-1;], 1)
     else
-        return aat(A, Ti[0:s.ncol-1], 1)
+        return aat(A, Ti[0:s.ncol-1;], 1)
     end
 end
 
@@ -957,7 +957,7 @@ function update!{Tv<:VTypes,Ti<:ITypes}(F::Factor{Tv,Ti}, A::Sparse{Tv,Ti}, β::
     if bool(s.is_ll)
         cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
     end
-    factorize_p!(A, β, Ti[0:size(F, 1) - 1], F, cm)
+    factorize_p!(A, β, Ti[0:size(F, 1) - 1;], F, cm)
 end
 update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}) = update!(F, Sparse(A))
 update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}, β::Number) = update!(F, Sparse(A), convert(T, β))
