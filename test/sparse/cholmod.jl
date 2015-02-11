@@ -119,7 +119,7 @@ afiro = CHOLMOD.Sparse(27, 51,
                       1.0,-1.0,1.0,-1.0,1.0,-1.0,1.0,1.0,-0.43,1.0,1.0,0.109,-0.43,1.0,1.0,0.108,
                       -0.39,1.0,1.0,0.108,-0.37,1.0,1.0,0.107,-1.0,2.191,-1.0,2.219,-1.0,2.249,
                       -1.0,2.279,1.4,-1.0,1.0,-1.0,1.0,1.0,1.0], 0)
-afiro2 = CHOLMOD.aat(afiro, Int32[0:50], int32(1))
+afiro2 = CHOLMOD.aat(afiro, Int32[0:50;], int32(1))
 CHOLMOD.change_stype!(afiro2, -1)
 chmaf = cholfact(afiro2)
 y = afiro'*ones(size(afiro,1))
@@ -287,8 +287,8 @@ p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64,
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
-    A1 = sparse([1:5, 1], [1:5, 2], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
-    A2 = sparse([1:5, 1], [1:5, 2], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
+    A1 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
+    A2 = sparse([1:5, 1;], [1:5, 2;], elty == Float64 ? randn(6) : complex(randn(6), randn(6)))
     A1pd = A1'A1
     A1Sparse = CHOLMOD.Sparse(A1)
     A2Sparse = CHOLMOD.Sparse(A2)
@@ -408,11 +408,11 @@ for elty in (Float64, Complex{Float64})
         svec = ones(elty, 5)
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SCALAR, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.ROW, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1]), CHOLMOD.ROW, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.ROW, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.COL, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1]), CHOLMOD.COL, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.COL, A1Sparse)
         @test CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SYM, A1Sparse) == A1Sparse
-        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1]), CHOLMOD.SYM, A1Sparse)
+        @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense([svec, 1;]), CHOLMOD.SYM, A1Sparse)
         @test_throws DimensionMismatch CHOLMOD.scale!(CHOLMOD.Dense(svec), CHOLMOD.SYM, CHOLMOD.Sparse(A1[:,1:4]))
     else
         @test_throws MethodError CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
@@ -423,8 +423,8 @@ for elty in (Float64, Complex{Float64})
 
     if elty <: Real
         @test_approx_eq CHOLMOD.ssmult(A1Sparse, A2Sparse, 0, true, true) A1*A2
-        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:size(A1,2)-1], 1) A1*A1'
-        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:1], 1) A1[:,1:2]*A1[:,1:2]'
+        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:size(A1,2)-1;], 1) A1*A1'
+        @test_approx_eq CHOLMOD.aat(A1Sparse, [0:1;], 1) A1[:,1:2]*A1[:,1:2]'
         @test CHOLMOD.copy(A1Sparse, 0, 1) == A1Sparse
     end
 
