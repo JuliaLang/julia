@@ -2,11 +2,19 @@ include("rich.jl")
 
 # Utils
 
-function withtag(f, io, tag)
-    print(io, "<$tag>")
+function withtag(f, io::IO, tag, attrs...)
+    print(io, "<$tag")
+    for (attr, value) in attrs
+        print(io, " $attr=\"$value\"")
+    end
+    f == nothing && return print(io, " />")
+
+    print(io, ">")
     f()
     print(io, "</$tag>")
 end
+
+tag(io::IO, tag, attrs...) = withtag(nothing, io, tag, attrs...)
 
 # Block elements
 
@@ -89,17 +97,17 @@ function htmlinline(io::IO, md::Italic)
 end
 
 function htmlinline(io::IO, md::Image)
-    print(io, """<img src="$(md.url)" alt="$(md.alt)" />""")
+    tag(io, :img, :src=>md.url, :alt=>md.alt)
 end
 
 function htmlinline(io::IO, link::Link)
-    print(io, """<a href="$(link.url)">""")
-    htmlinline(io, link.text)
-    print(io,"""</a>""")
+    withtag(io, :a, :href=>link.url) do
+        htmlinline(io, link.text)
+    end
 end
 
 function htmlinline(io::IO, br::LineBreak)
-   print(io, "<br />")
+    tag(io, :br)
 end
 
 htmlinline(io::IO, x) = tohtml(io, x)
@@ -111,7 +119,7 @@ export html
 html(md) = sprint(html, md)
 
 function writemime(io::IO, ::MIME"text/html", md::MD)
-    println(io, """<div class="markdown">""")
-    html(io, md)
-    println(io, """</div>""")
+    withtag(io, :div, :class=>"markdown") do
+        html(io, md)
+    end
 end
