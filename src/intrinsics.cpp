@@ -152,7 +152,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
         case 1: {
             uint8_t data8 = *(uint8_t*)jl_data_ptr(e);
             return ConstantInt::get(T_int8, data8);
-                }
+        }
         case 2: {
             uint16_t data16 = *(uint16_t*)jl_data_ptr(e);
 #ifndef DISABLE_FLOAT16
@@ -161,21 +161,21 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             }
 #endif
             return ConstantInt::get(T_int16, data16);
-                }
+        }
         case 4: {
             uint32_t data32 = *(uint32_t*)jl_data_ptr(e);
             if (jl_is_float(e)) {
                 return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
             }
             return ConstantInt::get(T_int32, data32);
-                }
+        }
         case 8: {
             uint64_t data64 = *(uint64_t*)jl_data_ptr(e);
             if (jl_is_float(e)) {
                 return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
             }
             return ConstantInt::get(T_int64, data64);
-                }
+        }
         default:
             size_t nw = (nb+sizeof(uint64_t)-1)/sizeof(uint64_t);
             uint64_t *data = (uint64_t*)jl_data_ptr(e);
@@ -200,7 +200,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
             return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         }
     }
-    else if (jl_isbits(jt)) {
+    if (jl_isbits(jt)) {
         size_t nf = jl_tuple_len(bt->names), i;
         size_t llvm_nf = 0;
         Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
@@ -297,9 +297,9 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
             Type *ety = jl_llvmtuple_eltype(to,jt,i);
             if (ety == T_void)
                 continue;
-            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL);
+            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i),jt,NULL);
             Value *elt = emit_unbox(ety,ref,jl_tupleref(jt,i));
-            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
+            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i),elt,jt,NULL);
         }
         return tpl;
     }
@@ -663,11 +663,11 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                                ConstantInt::get(T_size,
                                     sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
-                            emit_nthptr_addr(strct, (size_t)0));
+                            emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
-        builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
+        builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
@@ -723,7 +723,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
-                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1), T_pint8), size, 1);
+                             builder.CreateBitCast(val, T_pint8), size, 1);
     }
     else {
         if (val == NULL) {

@@ -2974,13 +2974,13 @@ void jl_init_types(void)
 {
     // create base objects
     jl_datatype_type = jl_new_uninitialized_datatype(10);
-    jl_datatype_type->type = (jl_value_t*)jl_datatype_type;
+    jl_set_typeof(jl_datatype_type, jl_datatype_type);
     jl_typename_type = jl_new_uninitialized_datatype(4);
     jl_sym_type = jl_new_uninitialized_datatype(0);
     jl_symbol_type = jl_sym_type;
 
     jl_tuple_type = jl_alloc_tuple(1);
-    jl_tuple_type->type = (jl_value_t*)jl_tuple_type;
+    jl_set_typeof(jl_tuple_type, jl_tuple_type);
 #ifdef OVERLAP_TUPLE_LEN
     jl_tuple_set_len_unsafe(jl_tuple_type, 1);
 #endif

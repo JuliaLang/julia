@@ -277,6 +277,17 @@ DLLEXPORT const char* jl_ver_string(void)
    return JULIA_VERSION_STRING;
 }
 
+// Create function versions of some useful macros
+#undef jl_typetagof
+DLLEXPORT jl_typetag_t *jl_typetagof(jl_value_t *v) {
+    return jl_typetagof__MACRO(v);
+}
+
+#undef jl_typeof
+DLLEXPORT jl_value_t *jl_typeof(jl_value_t *v) {
+    return jl_typeof__MACRO(v);
+}
+
 #ifdef __cplusplus
 }
 #endif
