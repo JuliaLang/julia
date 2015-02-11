@@ -868,7 +868,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
     int has_instance = (flags>>3)&1;
     if (has_instance) {
         dt->instance = jl_deserialize_value(s, &dt->instance);
-        dt->instance->type = (jl_value_t*)dt;
+        jl_set_typeof(dt->instance, dt);
     }
     assert(tree_literal_values==NULL && mode != MODE_AST);
     backref_list.items[pos] = dt;
@@ -878,7 +878,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         arraylist_push(&flagref_list, (void*)(uptrint_t)pos);
         if (has_instance) {
             arraylist_push(&flagref_list, dt);
-            arraylist_push(&flagref_list, &dt->instance->type);
+            arraylist_push(&flagref_list, &jl_typetagof(dt->instance)->type);
             arraylist_push(&flagref_list, (void*)(uptrint_t)-1);
         }
     }
@@ -1038,7 +1038,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             }
         }
         if (mode == MODE_MODULE) {
-            aty = jl_deserialize_value(s, &a->type);
+            aty = jl_deserialize_value(s, &jl_typetagof(a)->type);
             assert(aty == jl_typeof(a));
         }
         return (jl_value_t*)a;
@@ -1065,7 +1065,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         return (jl_value_t*)e;
     }
     else if (vtag == (jl_value_t*)jl_tvar_type) {
-        jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_value_t*)jl_tvar_type, 4);
+        jl_tvar_t *tv = (jl_tvar_t*)newobj((jl_value_t*)jl_tvar_type, NWORDS(sizeof(jl_tvar_t)));
         if (usetable)
             arraylist_push(&backref_list, tv);
         tv->name = (jl_sym_t*)jl_deserialize_value(s, NULL);
@@ -1079,7 +1079,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     }
     else if (vtag == (jl_value_t*)jl_function_type) {
         jl_function_t *f =
-            (jl_function_t*)newobj((jl_value_t*)jl_function_type, 3);
+            (jl_function_t*)newobj((jl_value_t*)jl_function_type, NWORDS(sizeof(jl_function_t)));
         if (usetable)
             arraylist_push(&backref_list, f);
         f->linfo = (jl_lambda_info_t*)jl_deserialize_value(s, (jl_value_t**)&f->linfo);
@@ -1092,7 +1092,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
     else if (vtag == (jl_value_t*)jl_lambda_info_type) {
         jl_lambda_info_t *li =
             (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
-                                      LAMBDA_INFO_NW);
+                                      NWORDS(sizeof(jl_lambda_info_t)));
         if (usetable)
             arraylist_push(&backref_list, li);
         li->ast = jl_deserialize_value(s, &li->ast);
@@ -1240,8 +1240,8 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
                 case 4: v = jl_box32(dt, *(int32_t*)data); break;
                 case 8: v = jl_box64(dt, *(int64_t*)data); break;
                 default:
-                    v = (jl_value_t*)allocobj(sizeof(void*)+nby);
-                    v->type = (jl_value_t*)dt;
+                    v = (jl_value_t*)allocobj(nby);
+                    jl_set_typeof(v, dt);
                     memcpy(jl_data_ptr(v), data, nby);
                 }
             }
@@ -1275,14 +1275,14 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         }
         // TODO: put WeakRefs on the weak_refs list
         if (mode == MODE_MODULE) {
-            dt = (jl_datatype_t*)jl_deserialize_value(s, (jl_value_t**)&v->type);
+            dt = (jl_datatype_t*)jl_deserialize_value(s, &jl_typetagof(v)->type);
             assert((jl_value_t*)dt == jl_typeof(v));
         }
         return v;
     }
     else if (vtag == (jl_value_t*)Singleton_tag) {
         assert(mode != MODE_MODULE_LAMBDAS);
-        jl_value_t *v = (jl_value_t*)allocobj(sizeof(void*));
+        jl_value_t *v = (jl_value_t*)allocobj(0);
         if (usetable) {
             uptrint_t pos = backref_list.len;
             arraylist_push(&backref_list, (void*)v);
@@ -1667,14 +1667,14 @@ jl_module_t *jl_restore_new_module(const char *fname)
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         int offs = (int)(intptr_t)flagref_list.items[i++];
         if (t != dt) {
-            dt->type = (jl_value_t*)(ptrint_t)2; // invalidate the old value to help catch errors
+            jl_set_typeof(dt, (ptrint_t)2); // invalidate the old value to help catch errors
             if ((jl_value_t*)dt == o) {
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs > 0) backref_list.items[offs] = t;
             }
         }
         if (t->instance != v) {
-            v->type = (jl_value_t*)(ptrint_t)1; // invalidate the old value to help catch errors
+            jl_set_typeof(v, (ptrint_t)1); // invalidate the old value to help catch errors
             if (v == o) {
                 if (loc) *loc = v;
                 if (offs > 0) backref_list.items[offs] = v;

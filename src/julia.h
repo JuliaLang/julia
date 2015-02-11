@@ -39,6 +39,9 @@ extern "C" {
 #define NORETURN
 #endif
 
+#define container_of(ptr, type, member) \
+    ((type *) ((char *)(ptr) - offsetof(type, member)))
+
 #ifdef _MSC_VER
 #if _WIN64
 #define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) __declspec(align(8)) x
@@ -53,18 +56,39 @@ extern "C" {
 
 // core data types ------------------------------------------------------------
 
-#ifdef OVERLAP_TUPLE_LEN
-#define JL_DATA_TYPE    \
-    size_t type : 52;   \
-    size_t _resvd : 12;
-#else
 #define JL_DATA_TYPE \
-    struct _jl_value_t *type;
-#endif
+    struct _jl_value_t *fieldptr0[0];
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
+    struct _jl_value_t *fieldptr[];
 } jl_value_t;
+
+typedef struct {
+    union {
+        jl_value_t *type;
+        uintptr_t type_bits;
+        struct {
+            uintptr_t gc_bits:2;
+#ifdef OVERLAP_TUPLE_LEN
+#ifdef _P64
+            uintptr_t unmarked:50;
+#else
+#error OVERLAP_TUPLE_LEN requires 64-bit pointers
+#endif
+            uintptr_t length:12;
+#endif
+        };
+    };
+    jl_value_t value[0];
+} jl_typetag_t;
+
+#define jl_typetagof__MACRO(v) container_of((v),jl_typetag_t,value)
+#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_typetagof__MACRO(v)->type_bits&~(size_t)3))
+#define jl_typetagof jl_typetagof__MACRO
+#define jl_typeof jl_typeof__MACRO
+#define jl_set_typeof(v,t) (jl_typetagof(v)->type = (jl_value_t*)(t))
+#define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
 typedef struct _jl_sym_t {
     JL_DATA_TYPE
@@ -80,11 +104,8 @@ typedef struct _jl_gensym_t {
 } jl_gensym_t;
 
 typedef struct {
-#ifdef OVERLAP_TUPLE_LEN
-    size_t type : 52;
-    size_t length : 12;
-#else
     JL_DATA_TYPE
+#ifndef OVERLAP_TUPLE_LEN
     size_t length;
 #endif
     jl_value_t *data[];
@@ -171,8 +192,6 @@ typedef struct _jl_lambda_info_t {
     int32_t functionID; // index that this function will have in the codegen table
     int32_t specFunctionID; // index that this specFunction will have in the codegen table
 } jl_lambda_info_t;
-
-#define LAMBDA_INFO_NW (NWORDS(sizeof(jl_lambda_info_t))-1)
 
 typedef struct _jl_function_t {
     JL_DATA_TYPE
@@ -431,38 +450,36 @@ extern jl_sym_t *inert_sym;
 
 // GC write barrier
 
-DLLEXPORT void gc_queue_root(void *root);
-void gc_queue_binding(void *bnd);
+DLLEXPORT void gc_queue_root(jl_value_t *root); // root isa jl_value_t*
+void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
-DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
 
-static inline void gc_wb_binding(void *bnd, void *val)
+static inline void gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
-    bnd = (void*)((void**)bnd - 1);
-    if (__unlikely((*(uintptr_t*)bnd & 1) == 1 && (*(uintptr_t*)val & 1) == 0))
+    if (__unlikely((*((uintptr_t*)bnd-1) & 1) == 1 && (*(uintptr_t*)jl_typetagof(val) & 1) == 0))
         gc_queue_binding(bnd);
 }
 
-static inline void gc_wb(void *parent, void *ptr)
+static inline void gc_wb(void *parent, void *ptr) // parent and ptr isa jl_value_t*
 {
-    if (__unlikely((*((uintptr_t*)parent) & 1) == 1 &&
-                   (*((uintptr_t*)ptr) & 1) == 0))
-        gc_queue_root(parent);
+    if (__unlikely((*((uintptr_t*)jl_typetagof(parent)) & 1) == 1 &&
+                   (*((uintptr_t*)jl_typetagof(ptr)) & 1) == 0))
+        gc_queue_root((jl_value_t*)parent);
 }
 
-static inline void gc_wb_buf(void *parent, void *bufptr)
+static inline void gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
-    if (__unlikely((*((uintptr_t*)parent) & 1) == 1))
+    if (__unlikely((*((uintptr_t*)jl_typetagof(parent)) & 1) == 1))
         //                   (*((uintptr_t*)bufptr) & 3) != 1))
-        gc_setmark_buf(bufptr, *(uintptr_t*)parent & 3);
+        gc_setmark_buf(bufptr, *(uintptr_t*)jl_typetagof(parent) & 3);
 }
 
-static inline void gc_wb_back(void *ptr)
+static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is marked
-    if(__unlikely((*((uintptr_t*)ptr) & 1) == 1)) {
-        gc_queue_root(ptr);
+    if(__unlikely((*((uintptr_t*)jl_typetagof(ptr)) & 1) == 1)) {
+        gc_queue_root((jl_value_t*)ptr);
     }
 }
 
@@ -470,16 +487,13 @@ static inline void gc_wb_back(void *ptr)
 // object accessors -----------------------------------------------------------
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & 0x000ffffffffffffeULL))
+#define jl_tuple_len(t)   (jl_typetagof(t)->length)
+#define jl_tuple_set_len_unsafe(t,n) (jl_typetagof(t)->length=(n))
 #else
-#define jl_typeof(v) ((jl_value_t*)((uptrint_t)((jl_value_t*)(v))->type & ((uintptr_t)~3)))
-#endif
-
-#define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
-
 #define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
-#define jl_tuple_data(t)   (((jl_tuple_t*)(t))->data)
+#endif
+#define jl_tuple_data(t)  (((jl_tuple_t*)(t))->data)
 #define TUPLE_DATA_OFFSET offsetof(jl_tuple_t,data)/sizeof(void*)
 
 #ifdef STORE_ARRAY_LEN
@@ -520,8 +534,8 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
     return (jl_value_t*)x;
 }
 
-# define jl_t0(t) jl_tupleref(t,0)
-# define jl_t1(t) jl_tupleref(t,1)
+#define jl_t0(t) jl_tupleref(t,0)
+#define jl_t1(t) jl_tupleref(t,1)
 
 #define jl_exprarg(e,n) (((jl_value_t**)jl_array_data(((jl_expr_t*)(e))->args))[n])
 #define jl_exprargset(e, n, v) jl_cellset(((jl_expr_t*)(e))->args, n, v)
@@ -530,9 +544,9 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 
 #define jl_symbolnode_sym(s) ((jl_sym_t*)jl_fieldref(s,0))
 #define jl_symbolnode_type(s) (jl_fieldref(s,1))
-#define jl_linenode_line(x) (((ptrint_t*)x)[1])
-#define jl_labelnode_label(x) (((ptrint_t*)x)[1])
-#define jl_gotonode_label(x) (((ptrint_t*)x)[1])
+#define jl_linenode_line(x) (((ptrint_t*)x)[0])
+#define jl_labelnode_label(x) (((ptrint_t*)x)[0])
+#define jl_gotonode_label(x) (((ptrint_t*)x)[0])
 #define jl_globalref_mod(s) ((jl_module_t*)jl_fieldref(s,0))
 #define jl_globalref_name(s) ((jl_sym_t*)jl_fieldref(s,1))
 
@@ -541,14 +555,14 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 
 
 #define jl_cell_data(a)   ((jl_value_t**)((jl_array_t*)a)->data)
-#define jl_string_data(s) ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
-#define jl_iostr_data(s)  ((char*)((jl_array_t*)((jl_value_t**)(s))[1])->data)
+#define jl_string_data(s) ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
+#define jl_iostr_data(s)  ((char*)((jl_array_t*)(s)->fieldptr[0])->data)
 
 #define jl_gf_mtable(f) ((jl_methtable_t*)((jl_function_t*)(f))->env)
 #define jl_gf_name(f)   (jl_gf_mtable(f)->name)
 
 // get a pointer to the data in a datatype
-#define jl_data_ptr(v)  (&((void**)(v))[1])
+#define jl_data_ptr(v)  (((jl_value_t*)v)->fieldptr)
 
 // struct type info
 #define jl_field_offset(st,i) (((jl_datatype_t*)st)->fields[i].offset)
@@ -804,13 +818,13 @@ DLLEXPORT ssize_t jl_unbox_gensym(jl_value_t *v);
 
 #ifdef _P64
 #define jl_box_long(x)   jl_box_int64(x)
-#define jl_box_ulong(x)   jl_box_uint64(x)
+#define jl_box_ulong(x)  jl_box_uint64(x)
 #define jl_unbox_long(x) jl_unbox_int64(x)
 #define jl_is_long(x)    jl_is_int64(x)
 #define jl_long_type     jl_int64_type
 #else
 #define jl_box_long(x)   jl_box_int32(x)
-#define jl_box_ulong(x)   jl_box_uint32(x)
+#define jl_box_ulong(x)  jl_box_uint32(x)
 #define jl_unbox_long(x) jl_unbox_int32(x)
 #define jl_is_long(x)    jl_is_int32(x)
 #define jl_long_type     jl_int32_type
@@ -1177,12 +1191,12 @@ void jl_gc_free_array(jl_array_t *a);
 void jl_gc_track_malloced_array(jl_array_t *a);
 void jl_gc_count_allocd(size_t sz);
 void jl_gc_run_all_finalizers(void);
-DLLEXPORT void *alloc_2w(void);
-DLLEXPORT void *alloc_3w(void);
-DLLEXPORT void *alloc_4w(void);
+DLLEXPORT jl_value_t *alloc_1w(void);
+DLLEXPORT jl_value_t *alloc_2w(void);
+DLLEXPORT jl_value_t *alloc_3w(void);
 void *allocb(size_t sz);
 void *reallocb(void*, size_t);
-DLLEXPORT void *allocobj(size_t sz);
+DLLEXPORT jl_value_t *allocobj(size_t sz);
 
 DLLEXPORT void jl_clear_malloc_data(void);
 DLLEXPORT int64_t jl_gc_num_pause(void);
@@ -1198,11 +1212,11 @@ DLLEXPORT int64_t jl_gc_num_full_sweep(void);
 #define jl_gc_unpreserve()
 #define jl_gc_n_preserved_values() (0)
 
-STATIC_INLINE void *alloc_2w() { return allocobj(2*sizeof(void*)); }
-STATIC_INLINE void *alloc_3w() { return allocobj(3*sizeof(void*)); }
-STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
+STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
+STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
+STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
 #define allocb(nb)    malloc(nb)
-#define allocobj(nb)  malloc(nb)
+#define allocobj(nb)  (((jl_typetag_t*)malloc((nb)+sizeof(jl_typetag_t)))->value)
 #endif
 
 // async signal handling ------------------------------------------------------

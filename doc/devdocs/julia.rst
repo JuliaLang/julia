@@ -10,6 +10,7 @@
    :maxdepth: 1
 
    init
+   eval
    object
    cartesian
    meta
