@@ -71,7 +71,10 @@ vals = Any[
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
     # issue #6900
     [x => x for x in 1:10],
-    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)
+    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
+    [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
+    zeros(2, 2), spzeros(2, 2), eye(2, 2), speye(2, 2),
+    sparse(ones(2, 2)), ones(2, 2), sparse([0 0; 1 0]), [0 0; 1 0]
 ]
 
 for a in vals, b in vals
@@ -84,3 +87,9 @@ end
 @test hash(:(X.x)) != hash(:(X.y))
 
 @test hash([1,2]) == hash(sub([1,2,3,4],1:2))
+
+# test explicit zeros in SparseMatrixCSC
+x = sprand(10, 10, 0.5)
+x[1] = 1
+x.nzval[1] = 0
+@test hash(x) == hash(full(x))
