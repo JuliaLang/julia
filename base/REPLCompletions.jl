@@ -193,16 +193,16 @@ end
 # will show it consist of Expr, QuoteNode's and Symbol's which all needs to
 # be handled differently to iterate down to get the value of whitespace_chars.
 function get_value(sym::Expr, fn)
-    sym.head != :. && return
+    sym.head != :. && return (nothing, false)
     for ex in sym.args
-        fn = get_value(ex, fn)
-        fn == nothing && return
+        fn, found = get_value(ex, fn)
+        !found && return (nothing, false)
     end
-    fn
+    fn, true
 end
-get_value(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
-get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
-get_value(sym, fn) = sym
+get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (fn.(sym), true) : (nothing, false)
+get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (fn.(sym.value), true) : (nothing, false)
+get_value(sym, fn) = sym, true
 
 # Takes the argument of a function call and determine the type of signature of the method.
 # If the function gets called with a val::DataType then it returns Type{val} else typeof(val)
@@ -213,13 +213,20 @@ method_type_of_arg(val) = typeof(val)
 function complete_methods(ex_org::Expr)
     args_ex = Any[]
     for ex in ex_org.args # First ex is the function name
-        val = get_value(ex, Main)
-        val == nothing && return UTF8String[]
-        push!(args_ex, val)
+        val, found = get_value(ex, Main)
+        if length(args_ex) == 0
+            if !found || (found && !isgeneric(val))
+                return UTF8String[]
+            else
+                push!(args_ex, val)
+            end
+        else
+            # If a the argument could not be determined then it inserts type Any
+            found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
+        end
     end
-    isgeneric(args_ex[1]) || return UTF8String[]
     out = UTF8String[]
-    t_in = tuple([method_type_of_arg(arg) for arg in args_ex[2:end]]...) # Input types
+    t_in = tuple(args_ex[2:end]...) # Input types
     for method in methods(args_ex[1])
         # Check if the method's type signature intersects the input types
         typeintersect(method.sig[1 : min(length(args_ex)-1, end)], t_in) != None &&
