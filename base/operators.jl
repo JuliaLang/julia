@@ -426,6 +426,8 @@ isequal(p::Pair, q::Pair) = isequal(p.first,q.first) & isequal(p.second,q.second
 
 isless(p::Pair, q::Pair) = ifelse(!isequal(p.first,q.first), isless(p.first,q.first),
                                                              isless(p.second,q.second))
+getindex(p::Pair,i::Int) = getfield(p,i)
+getindex(p::Pair,i::Real) = getfield(p, convert(Int, i))
 
 # some operators not defined yet
 global //, .>>, .<<, >:, <|, |>, hcat, hvcat, ⋅, ×, ∈, ∉, ∋, ∌, ⊆, ⊈, ⊊, ∩, ∪, √, ∛
