@@ -344,7 +344,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(((void**)b)-1, dt);
+        gc_wb_binding(b, dt);
         super = eval(args[2], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;

@@ -368,7 +368,7 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
         }
     }
     b->value = rhs;
-    gc_wb_binding(((void**)b)-1, rhs);
+    gc_wb_binding(b, rhs);
 }
 
 DLLEXPORT void jl_declare_constant(jl_binding_t *b)
