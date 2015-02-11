@@ -13,6 +13,7 @@ typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
 typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
 
 size(A::HermOrSym, args...) = size(A.data, args...)
+getindex(A::HermOrSym, i::Integer) = ((q, r) = divrem(i - 1, size(A, 1)); A[r + 1, q + 1])
 getindex(A::Symmetric, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : getindex(A.data, j, i)
 getindex(A::Hermitian, i::Integer, j::Integer) = (A.uplo == 'U') == (i < j) ? getindex(A.data, i, j) : conj(getindex(A.data, j, i))
 full(A::Symmetric) = copytri!(copy(A.data), A.uplo)
@@ -45,7 +46,7 @@ A_mul_B!{T<:BlasComplex,S<:AbstractMatrix}(y::StridedMatrix{T}, A::Hermitian{T,S
 *(A::StridedMatrix, B::HermOrSym) = A*full(B)
 
 factorize(A::HermOrSym) = bkfact(A.data, symbol(A.uplo), issym(A))
-\(A::HermOrSym, B::StridedVecOrMat) = \(bkfact(A.data, symbol(A.uplo), issym(A)), B)
+\{T,S<:StridedMatrix}(A::HermOrSym{T,S}, B::StridedVecOrMat) = \(bkfact(A.data, symbol(A.uplo), issym(A)), B)
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Hermitian{T,S}) = Hermitian{T,S}(inv(bkfact(A.data, symbol(A.uplo))), A.uplo)
 inv{T<:BlasFloat,S<:StridedMatrix}(A::Symmetric{T,S}) = Symmetric{T,S}(inv(bkfact(A.data, symbol(A.uplo), true)), A.uplo)
 

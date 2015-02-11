@@ -673,6 +673,41 @@ scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
 scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
     scale!(similar(A, promote_type(Tv,T)), b, A)
 
+function factorize(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m == n
+        AC = CHOLMOD.Sparse(A)
+        if ishermitian(AC)
+            try
+                return cholfact(A)
+            catch e
+                isa(e, PosDefException) || e
+                return ldltfact(A)
+            end
+        end
+        return lufact(A)
+    else
+        throw(ArgumentError("sparse least squares problems by QR are not handled yet"))
+    end
+end
+
+function factorize{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}})
+    try
+        return cholfact(A)
+    catch e
+        isa(e, PosDefException) || e
+        return ldltfact(A)
+    end
+end
+function factorize{Ti}(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},Ti}})
+    try
+        return cholfact(A)
+    catch e
+        isa(e, PosDefException) || e
+        return ldltfact(A)
+    end
+end
+
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")
 eig(A::SparseMatrixCSC) = error("Use eigs() instead of eig() for sparse matrices.")

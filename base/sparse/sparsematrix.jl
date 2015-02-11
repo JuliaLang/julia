@@ -22,7 +22,7 @@ nonzeros(S::SparseMatrixCSC) = S.nzval
 rowvals(S::SparseMatrixCSC) = S.rowval
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
-function Base.showarray(io::IO, S::SparseMatrixCSC;
+function showarray(io::IO, S::SparseMatrixCSC;
                         header::Bool=true, limit::Bool=Base._limit_output,
                         rows = Base.tty_size()[1], repr=false)
     # TODO: repr?

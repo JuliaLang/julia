@@ -5,7 +5,7 @@ testnames = [
     "subarray", "reduce", "reducedim", "random", "intfuncs",
     "simdloop", "blas", "fft", "dsp", "sparse", "bitarray", "copy", "math",
     "fastmath", "functional", "bigint", "sorting", "statistics", "spawn",
-    "backtrace", "priorityqueue", "arpack", "file", "suitesparse", "version",
+    "backtrace", "priorityqueue", "arpack", "file", "version",
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "reflection", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
@@ -25,10 +25,16 @@ push!(testnames, "parallel")
 
 tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
 
+if "sparse" in tests
+    # specifically selected case
+    filter!(x -> x != "sparse", tests)
+    prepend!(tests, ["sparse/sparse", "sparse/cholmod", "sparse/umfpack"])
+end
+
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)
-    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/lapack", "linalg/triangular", "linalg/tridiag", "linalg/pinv", "linalg/cholmod", "linalg/umfpack", "linalg/givens"])
+    prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4", "linalg/lapack", "linalg/triangular", "linalg/tridiag", "linalg/pinv", "linalg/givens"])
 end
 
 net_required_for = ["socket", "parallel"]
