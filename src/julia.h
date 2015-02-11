@@ -434,6 +434,7 @@ DLLEXPORT void gc_wb_slow(void* parent, void* ptr);
 
 static inline void gc_wb_binding(void *bnd, void *val)
 {
+    bnd = (void*)((void**)bnd - 1);
     if (__unlikely((*(uintptr_t*)bnd & 1) == 1 && (*(uintptr_t*)val & 1) == 0))
         gc_queue_binding(bnd);
 }
