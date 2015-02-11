@@ -1438,4 +1438,5 @@ export
     @noinline,
     @doc,
     @doc_str,
-    @doc_mstr
+    @doc_mstr,
+    @enum
