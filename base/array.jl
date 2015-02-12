@@ -127,7 +127,7 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 # T[x...] constructs Array{T,1}
 function getindex(T::NonTupleType, vals...)
     a = Array(T,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
@@ -135,13 +135,19 @@ end
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
 end
 
-getindex(T::(Type...)) = Array(T,0)
+function getindex(T::(Type...), vals::Tuple...)
+    a = Array(T,length(vals))
+    @inbounds for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
 
 if _oldstyle_array_vcat_
 # T[a:b] and T[a:s:b] also construct typed ranges
