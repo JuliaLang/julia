@@ -40,11 +40,11 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 
    For a set of iterable objects, returns an iterable of tuples, where the ``i``\ th tuple contains the ``i``\ th component of each input iterable.
 
-   Note that :func:`zip` is its own inverse: ``[zip(zip(a...)...)...] == [a...]``.
+   Note that :func:`zip` is its own inverse: ``collect(zip(zip(a...)...)) == collect(a)``.
 
 .. function:: enumerate(iter)
 
-   Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
+   An iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
 
    .. doctest::
 
@@ -57,6 +57,30 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
         2 b
         3 c
 
+.. function:: rest(iter, state)
+
+   An iterator that yields the same elements as ``iter``, but starting at the given ``state``.
+
+.. function:: countfrom(start=1, step=1)
+
+   An iterator that counts forever, starting at ``start`` and incrementing by ``step``.
+
+.. function:: take(iter, n)
+
+   An iterator that generates at most the first ``n`` elements of ``iter``.
+
+.. function:: drop(iter, n)
+
+   An iterator that generates all but the first ``n`` elements of ``iter``.
+
+.. function:: cycle(iter)
+
+   An iterator that cycles through ``iter`` forever.
+
+.. function:: repeated(x[, n::Int])
+
+   An iterator that generates the value ``x`` forever. If ``n`` is specified, generates
+   ``x`` that many times (equivalent to ``take(repeated(x), n)``).
 
 Fully implemented by:
 
