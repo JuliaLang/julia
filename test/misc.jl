@@ -25,3 +25,83 @@ let bt = backtrace()
         @test contains(l, b)
     end
 end
+
+# test assert() method
+@test_throws AssertionError assert(false)
+let res = assert(true)
+    @test res === nothing
+end
+let
+    try
+        assert(false)
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test isempty(ex.msg)
+    end
+end
+let
+    try
+        assert(false, "this is a test")
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "this is a test"
+    end
+end
+
+# test @assert macro
+@test_throws AssertionError (@assert 1 == 2)
+@test_throws AssertionError (@assert false)
+@test_throws AssertionError (@assert false "this is a test")
+@test_throws AssertionError (@assert false "this is a test" "another test")
+@test_throws AssertionError (@assert false :a)
+let
+    try
+        @assert 1 == 2
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test contains(ex.msg, "1 == 2")
+    end
+end
+# test @assert message
+let
+    try
+        @assert 1 == 2 "this is a test"
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "this is a test"
+    end
+end
+# @assert only uses the first message string
+let
+    try
+        @assert 1 == 2 "this is a test" "this is another test"
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "this is a test"
+    end
+end
+# @assert calls string() on second argument
+let
+    try
+        @assert 1 == 2 :random_object
+        @unexpected
+    catch ex
+        @test isa(ex, AssertionError)
+        @test !contains(ex.msg,  "1 == 2")
+        @test contains(ex.msg, "random_object")
+    end
+end
+# if the second argument is an expression, c
+let deepthought(x, y) = 42
+    try
+        @assert 1 == 2 string("the answer to the ultimate question: ", deepthought(6,9))
+    catch ex
+        @test isa(ex, AssertionError)
+        @test ex.msg == "the answer to the ultimate question: 42"
+    end
+end

@@ -785,11 +785,15 @@ Errors
 
 .. function:: assert(cond, [text])
 
-   Raise an error if ``cond`` is false. Also available as the macro ``@assert expr``.
+   Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``.
 
-.. function:: @assert
+.. function:: @assert cond [text]
 
-   Raise an error if ``cond`` is false. Preferred syntax for writings assertions.
+   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writings assertions.
+
+.. data:: AssertionError
+
+   The asserted condition did not evalutate to ``true``.
 
 .. data:: ArgumentError
 
