@@ -3,8 +3,8 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, getindex, show, size
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 A_ldiv_B!, cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issym, isvalid, ldltfact, logdet
+                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
+                 issym, ldltfact, logdet
 
 import Base.SparseMatrix: sparse
 
