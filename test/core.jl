@@ -319,7 +319,7 @@ function clotest()
     @test (()->c)() == 1
 
     fibb(n) = n < 2 ? n : fibb(n-1)+fibb(n-2)
-    assert(fibb(10)==55)
+    @test fibb(10) == 55
 
     return (n->(c+=n), ()->c)
 end
@@ -2084,8 +2084,8 @@ f9534h(a,b,c...) = c[a]
 counter9535 = 0
 f9535() = (global counter9535; counter9535 += 1; counter9535)
 g9535() = (f9535(),f9535())
-@assert g9535() == (1,2)
-@assert g9535() == (3,4)
+@test g9535() == (1,2)
+@test g9535() == (3,4)
 
 # issue #9617
 let p = 15

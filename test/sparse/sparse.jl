@@ -601,7 +601,7 @@ let M=2^14, N=2^4
             elseif res[2] != res[3]
                 println("2, 3")
             end
-            @assert res[1] == res[2] == res[3]
+            @test res[1] == res[2] == res[3]
         end
     end
 end
@@ -619,7 +619,7 @@ let M = 2^8, N=2^3
             res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
         end
 
-        @assert res[1] == res[2] == res[3]
+        @test res[1] == res[2] == res[3]
     end
 end
 
