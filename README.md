@@ -341,8 +341,10 @@ To use the Intel [MKL] BLAS and LAPACK libraries, make sure that MKL version 10.
 For a 64-bit architecture, the environment should be set up as follows:
 
     # bash
+    source /path/to/intel/bin/compilervars.sh intel64
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
+    export CPLUS_INCLUDE_PATH=$CPLUS_INCLUDE_PATH:/usr/include/x86_64-linux-gnu/c++/4.8 #replace 4.8 with gcc version; required for some external dependencies
 
 It is recommended that Intel compilers be used to build Julia when using MKL.
 Add the following to the `Make.user` file:
