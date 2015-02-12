@@ -118,10 +118,12 @@ Any[
 
 "),
 
-("Base","Array","Array(type, dims)
+("Base","Array","Array(dims)
 
-   Construct an uninitialized dense array. \"dims\" may be a tuple or
-   a series of integer arguments.
+   \"Array{T}(dims)\" constructs an uninitialized dense array with
+   element type \"T\". \"dims\" may be a tuple or a series of integer
+   arguments. The syntax \"Array(T, dims)\" is also available, but
+   deprecated.
 
 "),
 
@@ -214,7 +216,10 @@ Any[
    Create an uninitialized array of the same type as the given array,
    but with the specified element type and dimensions. The second and
    third arguments are both optional. The \"dims\" argument may be a
-   tuple or a series of integer arguments.
+   tuple or a series of integer arguments. For some special
+   \"AbstractArray\" objects which are not real containers (like
+   ranges), this function returns a standard \"Array\" to allow
+   operating on elements.
 
 "),
 
@@ -728,15 +733,24 @@ Any[
 
 "),
 
-("Base","reducedim","reducedim(f, A, dims, initial)
+("Base","reducedim","reducedim(f, A, dims[, initial])
 
    Reduce 2-argument function \"f\" along dimensions of \"A\".
    \"dims\" is a vector specifying the dimensions to reduce, and
-   \"initial\" is the initial value to use in the reductions.
+   \"initial\" is the initial value to use in the reductions. For *+*,
+   ***, *max* and *min* the *initial* argument is optional.
 
    The associativity of the reduction is implementation-dependent; if
    you need a particular associativity, e.g. left-to-right, you should
    write your own loop. See documentation for \"reduce\".
+
+"),
+
+("Base","mapreducedim","mapreducedim(f, op, A, dims[, initial])
+
+   Evaluates to the same as *reducedim(op, map(f, A), dims,
+   f(initial))*, but is generally faster because the intermediate
+   array is avoided.
 
 "),
 
@@ -944,15 +958,41 @@ Any[
 
 "),
 
+("Base","rol!","rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on \"src\" and put the result
+   into \"dest\".
+
+"),
+
+("Base","rol!","rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on B.
+
+"),
+
 ("Base","rol","rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Left rotation operator.
+   Performs a left rotation operation.
+
+"),
+
+("Base","ror!","ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on \"src\" and put the result
+   into \"dest\".
+
+"),
+
+("Base","ror!","ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on B.
 
 "),
 
 ("Base","ror","ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Right rotation operator.
+   Performs a right rotation operation.
 
 "),
 
@@ -994,7 +1034,7 @@ Any[
 
 ("Base","sparse","sparse(A)
 
-   Convert a dense matrix \"A\" into a sparse matrix.
+   Convert an AbstractMatrix \"A\" into a sparse matrix.
 
 "),
 
@@ -1619,14 +1659,6 @@ Any[
 
 "),
 
-("Base","subtypetree","subtypetree(T::DataType)
-
-   Return a nested list of all subtypes of DataType T.  Note that all
-   currently loaded subtypes are included, including those not visible
-   in the current module.
-
-"),
-
 ("Base","typemin","typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -1793,6 +1825,13 @@ Any[
 
    Compute a type that contains the intersection of \"T\" and \"S\".
    Usually this will be the smallest such type or one close to it.
+
+"),
+
+("Base","Union","Union(Ts...)
+
+   Construct a special abstract type that behaves as though all of the
+   types in \"Ts\" are its subtypes.
 
 "),
 
@@ -3083,18 +3122,17 @@ Any[
    the \"i\"th tuple contains the \"i\"th component of each input
    iterable.
 
-   Note that \"zip()\" is its own inverse: \"[zip(zip(a...)...)...] ==
-   [a...]\".
+   Note that \"zip()\" is its own inverse:
+   \"collect(zip(zip(a...)...)) == collect(a)\".
 
 "),
 
 ("Base","enumerate","enumerate(iter)
 
-   Return an iterator that yields \"(i, x)\" where \"i\" is an index
-   starting at 1, and \"x\" is the \"i\"th value from the given
-   iterator. It's useful when you need not only the values \"x\" over
-   which you are iterating, but also the index \"i\" of the
-   iterations.
+   An iterator that yields \"(i, x)\" where \"i\" is an index starting
+   at 1, and \"x\" is the \"i\"th value from the given iterator. It's
+   useful when you need not only the values \"x\" over which you are
+   iterating, but also the index \"i\" of the iterations.
 
       julia> a = [\"a\", \"b\", \"c\"];
 
@@ -3104,6 +3142,48 @@ Any[
       1 a
       2 b
       3 c
+
+"),
+
+("Base","rest","rest(iter, state)
+
+   An iterator that yields the same elements as \"iter\", but starting
+   at the given \"state\".
+
+"),
+
+("Base","countfrom","countfrom(start=1, step=1)
+
+   An iterator that counts forever, starting at \"start\" and
+   incrementing by \"step\".
+
+"),
+
+("Base","take","take(iter, n)
+
+   An iterator that generates at most the first \"n\" elements of
+   \"iter\".
+
+"),
+
+("Base","drop","drop(iter, n)
+
+   An iterator that generates all but the first \"n\" elements of
+   \"iter\".
+
+"),
+
+("Base","cycle","cycle(iter)
+
+   An iterator that cycles through \"iter\" forever.
+
+"),
+
+("Base","repeated","repeated(x[, n::Int])
+
+   An iterator that generates the value \"x\" forever. If \"n\" is
+   specified, generates \"x\" that many times (equivalent to
+   \"take(repeated(x), n)\").
 
 "),
 
@@ -3159,11 +3239,14 @@ Any[
 
 "),
 
-("Base","eltype","eltype(collection)
+("Base","eltype","eltype(type)
 
-   Determine the type of the elements generated by iterating
-   \"collection\". For associative collections, this will be a
-   \"(key,value)\" tuple type.
+   Determine the type of the elements generated by iterating a
+   collection of the given \"type\". For associative collection types,
+   this will be a \"(key,value)\" tuple type. The definition
+   \"eltype(x) = eltype(typeof(x))\" is provided for convenience so
+   that instances can be passed instead of types. However the form
+   that accepts a type argument should be defined for new types.
 
 "),
 
@@ -4504,6 +4587,25 @@ Any[
 
 "),
 
+("Dates","Dates","Dates.DateFormat(format::AbstractString) -> DateFormat
+
+   Construct a date formatting object that can be passed repeatedly
+   for parsing similarly formatted date strings. \"format\" is a
+   format string in the form described above (e.g. \"\"yyyy-mm-
+   dd\"\").
+
+"),
+
+("Dates","DateTime","DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a \"DateTime\", but passes a
+   \"DateFormat\" object instead of a raw formatting string. It is
+   more efficient if similarly formatted date strings will be parsed
+   repeatedly to first create a \"DateFormat\" object then use this
+   method for parsing.
+
+"),
+
 ("Dates","Date","Date(y[, m, d]) -> Date
 
    Construct a \"Date\" type by parts. Arguments must be convertible
@@ -4548,6 +4650,13 @@ Any[
 
 "),
 
+("Dates","Date","Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string \"dt\" using a \"DateFormat\"
+   object \"df\".
+
+"),
+
 ("Dates","now","now() -> DateTime
 
    Returns a DateTime corresponding to the user's system time
@@ -4559,6 +4668,14 @@ Any[
 
    Returns a DateTime corresponding to the user's system time as
    UTC/GMT.
+
+"),
+
+("Dates","eps","eps(::DateTime) -> Millisecond
+eps(::Date) -> Day
+
+   Returns \"Millisecond(1)\" for \"DateTime\" values and \"Day(1)\"
+   for \"Date\" values.
 
 "),
 
@@ -4838,7 +4955,7 @@ Millisecond(v)
 
 "),
 
-("","default(p::Period) => Period","default(p::Period) => Period
+("Dates","default","default(p::Period) -> Period
 
    Returns a sensible \"default\" value for the input Period by
    returning \"one(p)\" for Year, Month, and Day, and \"zero(p)\" for
@@ -6637,13 +6754,6 @@ popdisplay(d::Display)
 
 "),
 
-("Base","factorize!","factorize!(A)
-
-   \"factorize!\" is the same as \"factorize()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
-
-"),
-
 ("Base","lu","lu(A) -> L, U, p
 
    Compute the LU factorization of \"A\", such that \"A[p,:] = L*U\".
@@ -6745,23 +6855,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cholfact","cholfact(A[, ll]) -> CholmodFactor
+("Base","cholfact","cholfact(A) -> CHOLMOD.Factor
 
-   Compute the sparse Cholesky factorization of a sparse matrix \"A\".
-   If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
-   is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
-   fill-reducing permutation is used.  Methods for \"size\",
-   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
-   are available for \"CholmodFactor\" objects.  One of the solve
-   methods includes an integer argument that can be used to solve
-   systems involving parts of the factorization only.  The optional
-   boolean argument, \"ll\" determines whether the factorization
-   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
-   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
-   unit lower triangular and \"D\" is a non-negative vector.  The
-   default is LDL. The symbolic factorization can also be reused for
-   other matrices with the same structure as \"A\" by calling
-   \"cholfact!\".
+   Compute the Cholesky factorization of a sparse positive definite
+   matrix \"A\". A fill-reducing permutation is used.  The main
+   application of this type is to solve systems of equations with
+   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
+   defined. The function calls the C library CHOLMOD and many other
+   functions from the library are wrapped but not exported.
 
 "),
 
@@ -6780,6 +6881,17 @@ popdisplay(d::Display)
    Compute a factorization of a positive definite matrix \"A\" such
    that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
    matrix and \"d\" is a vector with non-negative elements.
+
+"),
+
+("Base","ldltfact","ldltfact(A) -> CHOLMOD.Factor
+
+   Compute the LDLt factorization of a sparse symmetric or Hermitian
+   matrix \"A\". A fill-reducing permutation is used.  The main
+   application of this type is to solve systems of equations with
+   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
+   defined. The function calls the C library CHOLMOD and many other
+   functions from the library are wrapped but not exported.
 
 "),
 
@@ -7351,13 +7463,6 @@ popdisplay(d::Display)
    upper diagonal, respectively. The result is of type
    \"SymTridiagonal\" and provides efficient specialized eigensolvers,
    but may be converted into a regular matrix with \"full()\".
-
-"),
-
-("Base","Woodbury","Woodbury(A, U, C, V)
-
-   Construct a matrix in a form suitable for applying the Woodbury
-   matrix identity.
 
 "),
 
@@ -8992,25 +9097,8 @@ popdisplay(d::Display)
       julia> round(2.5)
       2.0
 
-   The optional \"RoundingMode\" argument will change this behaviour.
-   Currently supported are
-
-      \"RoundNearestTiesAway\"
-         rounds to nearest integer, with ties rounded away from zero
-         (C/C++ \"round\" behaviour).
-
-      \"RoundNearestTiesUp\"
-         rounds to nearest integer, with ties rounded toward positive
-         infinity (Java/JavaScript \"round\" behaviour).
-
-      \"RoundToZero\"
-         an alias for \"trunc()\".
-
-      \"RoundUp\"
-         an alias for \"ceil()\".
-
-      \"RoundDown\"
-         an alias for \"floor()\".
+   The optional \"RoundingMode\" argument will change how the number
+   gets rounded.
 
    \"round(T, x, [r::RoundingMode])\" converts the result to type
    \"T\", throwing an \"InexactError\" if the value is not
@@ -9026,22 +9114,91 @@ popdisplay(d::Display)
          julia> round(pi, 3, 2)
          3.125
 
-   Note: rounding to specified digits in bases other than 2 can be
-   inexact when operating on binary floating point numbers. For
-   example, the \"Float64\" value represented by \"1.15\" is actually
-   *less* than 1.15, yet will be rounded to 1.2.
+   Note: Rounding to specified digits in bases other than 2 can be
+     inexact when operating on binary floating point numbers. For
+     example, the \"Float64\" value represented by \"1.15\" is
+     actually *less* than 1.15, yet will be rounded to 1.2.
 
-         julia> x = 1.15
-         1.15
+        julia> x = 1.15
+        1.15
 
-         julia> @sprintf \"%.20f\" x
-         \"1.14999999999999991118\"
+        julia> @sprintf \"%.20f\" x
+        \"1.14999999999999991118\"
 
-         julia> x < 115//100
-         true
+        julia> x < 115//100
+        true
 
-         julia> round(x, 1)
-         1.2
+        julia> round(x, 1)
+        1.2
+
+"),
+
+("Base","RoundingMode","RoundingMode
+
+   A type which controls rounding behavior. Currently supported
+   rounding modes are:
+
+   * \"RoundNearest\" (default)
+
+   * \"RoundNearestTiesAway\"
+
+   * \"RoundNearestTiesUp\"
+
+   * \"RoundToZero\"
+
+   * \"RoundUp\"
+
+   * \"RoundDown\"
+
+"),
+
+("Base","RoundNearest","RoundNearest
+
+   The default rounding mode. Rounds to the nearest integer, with ties
+   (fractional values of 0.5) being rounded to the nearest even
+   integer.
+
+"),
+
+("Base","RoundNearestTiesAway","RoundNearestTiesAway
+
+   Rounds to nearest integer, with ties rounded away from zero (C/C++
+   \"round()\" behaviour).
+
+"),
+
+("Base","RoundNearestTiesUp","RoundNearestTiesUp
+
+   Rounds to nearest integer, with ties rounded toward positive
+   infinity (Java/JavaScript \"round()\" behaviour).
+
+"),
+
+("Base","RoundToZero","RoundToZero
+
+   \"round()\" using this rounding mode is an alias for \"trunc()\".
+
+"),
+
+("Base","RoundUp","RoundUp
+
+   \"round()\" using this rounding mode is an alias for \"ceil()\".
+
+"),
+
+("Base","RoundDown","RoundDown
+
+   \"round()\" using this rounding mode is an alias for \"floor()\".
+
+"),
+
+("Base","round","round(z, RoundingModeReal, RoundingModeImaginary)
+
+   Returns the nearest integral value of the same type as the complex-
+   valued \"z\" to \"z\", breaking ties using the specified
+   \"RoundingMode\"s. The first \"RoundingMode\" is used for rounding
+   the real components while the second is used for rounding the
+   imaginary components.
 
 "),
 
@@ -9268,7 +9425,7 @@ popdisplay(d::Display)
 
 ("Base","angle","angle(z)
 
-   Compute the phase angle of a complex number \"z\"
+   Compute the phase angle in radians of a complex number \"z\"
 
 "),
 
@@ -9286,7 +9443,7 @@ popdisplay(d::Display)
 
 ("Base","factorial","factorial(n)
 
-   Factorial of \"n\".  If \"n\" is an \"Integer()\", the factorial is
+   Factorial of \"n\".  If \"n\" is an \"Integer\", the factorial is
    computed as an integer (promoted to at least 64 bits).  Note that
    this may overflow if \"n\" is not small, but you can use
    \"factorial(big(n))\" to compute the result exactly in arbitrary
@@ -9422,8 +9579,8 @@ popdisplay(d::Display)
 
 ("Base","lgamma","lgamma(x)
 
-   Compute the logarithm of the absolute value of \"gamma(x)\" for
-   \"Real()\" \"x\", while for \"Complex()\" \"x\" it computes the
+   Compute the logarithm of the absolute value of \"gamma()\" for
+   \"Real\" \"x\", while for \"Complex\" \"x\" it computes the
    logarithm of \"gamma(x)\".
 
 "),
@@ -11274,8 +11431,8 @@ popdisplay(d::Display)
    \"bind_addr\" and \"port\".
 
    \"count\" is the number of workers to be launched on the specified
-   host. If specified as \"\"auto\"\" or \":auto\" it will launch as
-   many workers as the number of cores on the specific host.
+   host. If specified as \":auto\" it will launch as many workers as
+   the number of cores on the specific host.
 
    Keyword arguments:
 
@@ -11304,9 +11461,6 @@ popdisplay(d::Display)
 
    For example Beowulf clusters are  supported via a custom cluster
    manager implemented in  package \"ClusterManagers\".
-
-   See the documentation for package \"ClusterManagers\" for more
-   information on how to write a custom cluster manager.
 
 "),
 
@@ -11355,12 +11509,13 @@ popdisplay(d::Display)
 
 "),
 
-("Base","pmap","pmap(f, lsts...; err_retry=true, err_stop=false)
+("Base","pmap","pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    Transform collections \"lsts\" by applying \"f\" to each element in
    parallel. If \"nprocs() > 1\", the calling process will be
    dedicated to assigning tasks. All other available processes will be
-   used as parallel workers.
+   used as parallel workers, or on the processes specified by
+   \"pids\".
 
    If \"err_retry\" is true, it retries a failed application of \"f\"
    on a different worker. If \"err_stop\" is true, it takes precedence
@@ -12757,7 +12912,8 @@ popdisplay(d::Display)
 ("Base","runtests","runtests([tests=[\"all\"][, numcores=iceil(CPU_CORES/2)]])
 
    Run the Julia unit tests listed in \"tests\", which can be either a
-   string or an array of strings, using \"numcores\" processors.
+   string or an array of strings, using \"numcores\" processors. (not
+   exported)
 
 "),
 
