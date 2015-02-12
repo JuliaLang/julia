@@ -1009,6 +1009,12 @@ export
     next,
     start,
     zip,
+    rest,
+    countfrom,
+    take,
+    drop,
+    cycle,
+    repeated,
 
 # object identity and equality
     copy,
