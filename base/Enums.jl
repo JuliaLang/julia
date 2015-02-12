@@ -5,12 +5,12 @@ export @enum
 abstract Enum
 
 function Base.convert{T<:Integer}(::Type{T},x::Enum)
-    (x.n < typemin(T) || x.n > typemax(T)) && throw(InexactError())
-    convert(T, x.n)
+    (x.val < typemin(T) || x.val > typemax(T)) && throw(InexactError())
+    convert(T, x.val)
 end
-Base.convert(::Type{BigInt},x::Enum) = big(x.n)
+Base.convert(::Type{BigInt},x::Enum) = big(x.val)
 function Base.convert{T<:Enum}(::Type{T},x::Integer)
-    (x < typemin(T).n || x > typemax(T).n) && throw(InexactError())
+    (x < typemin(T).val || x > typemax(T).val) && throw(InexactError())
     T(x)
 end
 Base.start{T<:Enum}(::Type{T}) = 1
@@ -47,7 +47,7 @@ macro enum(T,syms...)
     blk = quote
         # enum definition
         immutable $(esc(T)) <: $(esc(Enum))
-            n::$(esc(enumT))
+            val::$(esc(enumT))
         end
         $(esc(:(Base.typemin)))(x::Type{$(esc(T))}) = $(esc(T))($lo)
         $(esc(:(Base.typemax)))(x::Type{$(esc(T))}) = $(esc(T))($hi)
@@ -57,7 +57,7 @@ macro enum(T,syms...)
             vals = $vals
             for (sym, i) in vals
                 i = convert($(esc(enumT)), i)
-                i == x.n && print(io, sym)
+                i == x.val && print(io, sym)
             end
             print(io, "::", T.name)
         end
