@@ -55,7 +55,7 @@ _attach(val, ex) = pushmeta!(ex, :test, val)
 end
 
 asts = code_lowered(dummy, ())
-@assert length(asts) == 1
+@test length(asts) == 1
 ast = asts[1]
 
 body = Expr(:block)
