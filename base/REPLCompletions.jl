@@ -153,16 +153,35 @@ function find_start_brace(s::AbstractString)
     braces = 0
     r = RevString(s)
     i = start(r)
+    in_single_quotes = false
+    in_double_quotes = false
+    in_back_ticks = false
     while !done(r, i)
         c, i = next(r, i)
-        if c == '('
-            braces += 1
-        elseif c == ')'
-            braces -= 1
+        if !in_single_quotes && !in_double_quotes && !in_back_ticks
+            if c == '('
+                braces += 1
+            elseif c == ')'
+                braces -= 1
+            elseif c == '\''
+                in_single_quotes = true
+            elseif c == '"'
+                in_double_quotes = true
+            elseif c == '`'
+                in_back_ticks = true
+            end
+        else
+            if !in_back_ticks && !in_double_quotes && c == '\''
+                in_single_quotes = !in_single_quotes
+            elseif !in_back_ticks && !in_single_quotes && c == '"'
+                in_double_quotes = !in_double_quotes
+            elseif !in_single_quotes && !in_double_quotes && c == '`'
+                in_back_ticks = !in_back_ticks
+            end
         end
         braces == 1 && break
     end
-    braces != 1 && return 0:-1
+    braces != 1 && return 0:-1, -1
     method_name_end = reverseind(r, i)
     startind = nextind(s, rsearch(s, non_identifier_chars, method_name_end))
     return startind:endof(s), method_name_end
@@ -174,16 +193,16 @@ end
 # will show it consist of Expr, QuoteNode's and Symbol's which all needs to
 # be handled differently to iterate down to get the value of whitespace_chars.
 function get_value(sym::Expr, fn)
-    sym.head != :. && return
+    sym.head != :. && return (nothing, false)
     for ex in sym.args
-        fn = get_value(ex, fn)
-        fn == nothing && return
+        fn, found = get_value(ex, fn)
+        !found && return (nothing, false)
     end
-    fn
+    fn, true
 end
-get_value(sym::Symbol, fn) = isdefined(fn, sym) ? fn.(sym) : nothing
-get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? fn.(sym.value) : nothing
-get_value(sym, fn) = sym
+get_value(sym::Symbol, fn) = isdefined(fn, sym) ? (fn.(sym), true) : (nothing, false)
+get_value(sym::QuoteNode, fn) = isdefined(fn, sym.value) ? (fn.(sym.value), true) : (nothing, false)
+get_value(sym, fn) = sym, true
 
 # Takes the argument of a function call and determine the type of signature of the method.
 # If the function gets called with a val::DataType then it returns Type{val} else typeof(val)
@@ -192,18 +211,18 @@ method_type_of_arg(val) = typeof(val)
 
 # Method completion on function call expression that look like :(max(1))
 function complete_methods(ex_org::Expr)
-    args_ex = Any[]
-    for ex in ex_org.args # First ex is the function name
-        val = get_value(ex, Main)
-        val == nothing && return UTF8String[]
-        push!(args_ex, val)
+    args_ex = DataType[]
+    func, found = get_value(ex_org.args[1], Main)
+    (!found || (found && !isgeneric(func))) && return UTF8String[]
+    for ex in ex_org.args[2:end]
+        val, found = get_value(ex, Main)
+        found ? push!(args_ex, method_type_of_arg(val)) : push!(args_ex, Any)
     end
-    isgeneric(args_ex[1]) || return UTF8String[]
     out = UTF8String[]
-    t_in = tuple([method_type_of_arg(arg) for arg in args_ex[2:end]]...) # Input types
-    for method in methods(args_ex[1])
+    t_in = tuple(args_ex...) # Input types
+    for method in methods(func)
         # Check if the method's type signature intersects the input types
-        typeintersect(method.sig[1 : min(length(args_ex)-1, end)], t_in) != None &&
+        typeintersect(method.sig[1 : min(length(args_ex), end)], t_in) != None &&
             push!(out,string(method))
     end
     return out
