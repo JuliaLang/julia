@@ -19,39 +19,16 @@ eltype{I}(::Type{Enumerate{I}}) = (Int, eltype(I))
 
 # zip
 
-immutable Zip{I<:Tuple}
-    itrs::I
-    Zip(itrs) = new(itrs)
-end
-_mkZip{I}(itrs::I) = Zip{I}(itrs)
-Zip(itrs...) = _mkZip(itrs)
-zip(itrs...) = _mkZip(itrs)
+abstract AbstractZipIterator
 
-length(z::Zip) = minimum(length, z.itrs)
-start(z::Zip) = map(start, z.itrs)
-function next(z::Zip, state)
-    n = map(next, z.itrs, state)
-    map(x->x[1], n), map(x->x[2], n)
-end
-done(z::Zip, state::()) = true
-function done(z::Zip, state)
-    for i = 1:length(z.itrs)
-        if done(z.itrs[i], state[i])
-            return true
-        end
-    end
-    return false
-end
-
-eltype{I}(::Type{Zip{I}}) = map(eltype, I)
-
-immutable Zip2{I1, I2}
+immutable Zip2{I1, I2} <: AbstractZipIterator
     a::I1
     b::I2
 end
+zip(a) = a
 zip(a, b) = Zip2(a, b)
-
 length(z::Zip2) = min(length(z.a), length(z.b))
+eltype{I1,I2}(::Type{Zip2{I1,I2}}) = (eltype(I1), eltype(I2))
 start(z::Zip2) = (start(z.a), start(z.b))
 function next(z::Zip2, st)
     n1 = next(z.a,st[1])
@@ -60,7 +37,20 @@ function next(z::Zip2, st)
 end
 done(z::Zip2, st) = done(z.a,st[1]) | done(z.b,st[2])
 
-eltype{I1,I2}(::Type{Zip2{I1,I2}}) = (eltype(I1), eltype(I2))
+immutable Zip{I, Z<:AbstractZipIterator} <: AbstractZipIterator
+    a::I
+    z::Z
+end
+zip(a, b, c...) = Zip(a, zip(b, c...))
+length(z::Zip) = min(length(z.a), length(z.z))
+eltype{I,Z}(::Type{Zip{I,Z}}) = tuple(eltype(I), eltype(Z)...)
+start(z::Zip) = tuple(start(z.a), start(z.z))
+function next(z::Zip, st)
+    n1 = next(z.a, st[1])
+    n2 = next(z.z, st[2])
+    (tuple(n1[1], n2[1]...), (n1[2], n2[2]))
+end
+done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
 # filter
 
