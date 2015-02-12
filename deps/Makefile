@@ -32,14 +32,14 @@ endif
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
 #autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
+#custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
 #CMake libs: libgit2
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
 STAGE1_DEPS =
-STAGE2_DEPS = Rmath
+STAGE2_DEPS = Rmath-julia
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -163,7 +163,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -791,46 +791,43 @@ check-dsfmt: compile-dsfmt
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 
-## Rmath ##
+## Rmath-julia ##
 
 ifeq ($(USE_SYSTEM_DSFMT),0)
 DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
 endif
 
-RMATH_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
+RMATH_JULIA_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
+RMATH_JULIA_OBJ_SOURCE = Rmath-julia-$(RMATH_JULIA_VER)/src/libRmath-julia.$(SHLIB_EXT)
 
-RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
+RMATH_JULIA_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
 			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
 			   DSFMT_includedir="$(build_includedir)"
 
-Rmath/Make.inc:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
-$(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
-$(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
-endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_FAKE_TARGET)
-	$(MAKE) -C Rmath/src $(RMATH_FLAGS) $(MAKE_COMMON)
+Rmath-julia-$(RMATH_JULIA_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/Rmath-julia/archive/v$(RMATH_JULIA_VER).tar.gz
+$(RMATH_JULIA_OBJ_SOURCE): Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(DSFMT_FAKE_TARGET)
+	$(JLCHECKSUM) Rmath-julia-$(RMATH_JULIA_VER).tar.gz && \
+	mkdir -p Rmath-julia-$(RMATH_JULIA_VER) && \
+	$(TAR) -C Rmath-julia-$(RMATH_JULIA_VER) --strip-components 1 -xf $< && \
+	$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER)/src $(RMATH_JULIA_FLAGS) $(MAKE_COMMON) && \
 	touch -c $@
-$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(build_shlibdir)
+$(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
 	$(INSTALL_NAME_CMD)libRmath-julia.$(SHLIB_EXT) $@
 
-clean-Rmath:
-	-$(MAKE) -C Rmath/src clean
-	-rm $(RMATH_OBJ_TARGET)
-distclean-Rmath: clean-Rmath
-	-cd Rmath && git clean -fdx
+clean-Rmath-julia:
+	-$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER)/src clean
+	-rm $(RMATH_JULIA_OBJ_TARGET)
+distclean-Rmath-julia: clean-Rmath-julia
+	-cd Rmath-julia-$(RMATH_JULIA_VER) && git clean -fdx
 
-get-Rmath: Rmath/Make.inc
-configure-Rmath: get-Rmath
-compile-Rmath: $(RMATH_OBJ_SOURCE)
-check-Rmath: compile-Rmath
-install-Rmath: $(RMATH_OBJ_TARGET)
+get-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER)/openblas-$(OPENBLAS_VER).tar.gz
+configure-Rmath-julia: get-Rmath-julia
+compile-Rmath-julia: $(RMATH_JULIA_OBJ_SOURCE)
+check-Rmath-julia: compile-Rmath-julia
+install-Rmath-julia: $(RMATH_JULIA_OBJ_TARGET)
 
 
 ## objconv ##
