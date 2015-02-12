@@ -208,7 +208,7 @@ _json_data = "{\"web-app\": {
 @timeit (for n in 1:10; a = parse_json(_json_data); end) "json" "JSON parsing"
 
 include("indexing.jl")
-x = [1:100_000]
+x = [1:100_000;]
 y = filter(iseven, 1:length(x))
 logical_y = map(iseven, 1:length(x))
 
