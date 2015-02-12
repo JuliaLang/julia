@@ -345,8 +345,7 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
                     return jl_new_struct(jl_gotonode_type,
                                          scm_to_julia_(car_(e),0));
                 }
-                if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e)) ||
-                                                              !iscons(cdr_(car_(e)))))) {
+                if (sym == inert_sym || (sym == quote_sym && (!iscons(car_(e))))) {
                     return jl_new_struct(jl_quotenode_type,
                                          scm_to_julia_(car_(e),0));
                 }

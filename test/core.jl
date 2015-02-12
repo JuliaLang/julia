@@ -2138,3 +2138,8 @@ module M9835
     f() = (isa(A(), A) ? A : B)()
     @test isa(f(), A)
 end
+
+#issue #10163
+let a = :(()), b = :(())
+    @test a.args !== b.args
+end
