@@ -671,34 +671,33 @@ install-pcre: $(PCRE_OBJ_TARGET)
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
-OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
-OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_SOURCE = openlibm-$(OPENLIBM_VER)/libopenlibm.$(SHLIB_EXT)
 
-openlibm/Makefile:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d openlibm/.git ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): openlibm/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/openlibm ] && echo exists ))
-$(OPENLIBM_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/openlibm/HEAD
-endif
-$(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
-	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
+openlibm-$(OPENLIBM_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/openlibm/archive/v$(OPENLIBM_VER).tar.gz
+openlibm-$(OPENLIBM_VER)/Makefile: openlibm-$(OPENLIBM_VER).tar.gz
+	$(JLCHECKSUM) openlibm-$(OPENLIBM_VER).tar.gz && \
+	mkdir -p openlibm-$(OPENLIBM_VER) && \
+	$(TAR) -C openlibm-$(OPENLIBM_VER) --strip-components 1 -xf $< && \
+	touch -c $@
+$(OPENLIBM_OBJ_SOURCE): openlibm-$(OPENLIBM_VER)/Makefile
+	$(MAKE) -C openlibm-$(OPENLIBM_VER) $(OPENLIBM_FLAGS) $(MAKE_COMMON) && \
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
-	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
+	$(MAKE) -C openlibm-$(OPENLIBM_VER) install $(OPENLIBM_FLAGS) $(MAKE_COMMON) && \
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) && \
 	touch -c $@
 
 clean-openlibm:
-	-$(MAKE) -C openlibm distclean $(OPENLIBM_FLAGS)
-	-rm $(OPENLIBM_OBJ_TARGET)
-	-rm $(build_libdir)/libopenlibm.a
+	-rm -f $(build_libdir)/libopenlibm.*
+	-rm -fr $(build_includedir)/openlibm*
+	-$(MAKE) -C openlibm-$(OPENLIBM_VER) distclean $(OPENLIBM_FLAGS)
 
 distclean-openlibm: clean-openlibm
-	-cd openlibm && git clean -fdx
+	-rm -fr openlibm-$(OPENLIBM_VER) openlibm-$(OPENLIBM_VER).tar.gz
 
-get-openlibm: openlibm/Makefile
+get-openlibm: openlibm-$(OPENLIBM_VER)/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
