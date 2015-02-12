@@ -13,7 +13,7 @@ export
     Factor,
     Sparse
 
-using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, increment!, indtype, decrement, decrement!
+using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
 
 #########
 # Setup #
@@ -717,7 +717,7 @@ function Sparse(filename::ASCIIString)
 end
 
 ## convertion back to base Julia types
-function convert{T<:VTypes}(::Type{Matrix}, D::Dense{T})
+function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     s = unsafe_load(D.p)
     a = Array(T, s.nrow, s.ncol)
     if s.d == s.nrow
@@ -731,6 +731,14 @@ function convert{T<:VTypes}(::Type{Matrix}, D::Dense{T})
     end
     a
 end
+convert{T}(::Type{Matrix}, D::Dense{T}) = convert(Matrix{T}, D)
+function convert{T}(::Type{Vector{T}}, D::Dense{T})
+    if size(D, 2) > 1
+        throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
+    end
+    reshape(convert(Matrix, D), size(D, 1))
+end
+convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
 
 function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, A::Sparse{Tv,Ti})
     s = unsafe_load(A.p)
