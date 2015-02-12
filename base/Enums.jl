@@ -17,7 +17,7 @@ Base.start{T<:Enum}(::Type{T}) = 1
 Base.next{T<:Enum}(::Type{T},s) = Base.next(names(T),s)
 Base.done{T<:Enum}(::Type{T},s) = Base.done(names(T),s)
 # Pass Integer through to Enum constructor through Val{T}
-call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:n),x)})
+call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:val),x)})
 # Catchall that errors when specific Enum(::Type{Val{n}}) hasn't been defined
 call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = error(string("invalid enum value for $T: ",n))
 
@@ -28,6 +28,7 @@ macro enum(T,syms...)
     hi = typemin(Int)
     i = -1
     enumT = typeof(i)
+    hasexpr = false
     for s in syms
         i += one(typeof(i))
         if isa(s,Symbol)
@@ -35,6 +36,7 @@ macro enum(T,syms...)
         elseif isa(s,Expr) && s.head == :(=) && length(s.args) == 2 && isa(s.args[1],Symbol)
             i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
             s = s.args[1]
+            hasexpr = true
         else
             error(string("invalid syntax in @enum: ",s))
         end
@@ -43,6 +45,11 @@ macro enum(T,syms...)
         enumT = ifelse(length(vals) == 1, I, promote_type(enumT,I))
         i < lo && (lo = i)
         i > hi && (hi = i)
+    end
+    if !hasexpr
+        n = length(vals)
+        enumT = n < 128 ? Int8 : n < 32768 ? Int16 :
+                n < 2147483648 ? Int32 : Int64
     end
     blk = quote
         # enum definition

@@ -8,16 +8,19 @@ using Base.Test
 @test typeof(Fruit) == DataType
 @test isbits(Fruit)
 @test typeof(apple) <: Fruit <: Base.Enums.Enum
-@test typeof(apple.val) <: Int
+@test typeof(apple.val) <: Int8
 @test int(apple) == 0
 @test int(orange) == 1
 @test int(kiwi) == 2
+@test apple.val === Int8(0)
+@test orange.val === Int8(1)
+@test kiwi.val === Int8(2)
 @test Fruit(0) == apple
 @test Fruit(1) == orange
 @test Fruit(2) == kiwi
 @test_throws ErrorException Fruit(3)
 @test_throws ErrorException Fruit(-1)
-@test Fruit(Val{0}) == apple
+@test Fruit(Val{Int8(0)}) == apple
 @test_throws ErrorException Fruit(Val{3})
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
@@ -81,11 +84,11 @@ end
 @test ff.val === 0xff
 @test overflowed.val === 0x00
 
-@test_throws MethodError eval(macroexpand(:(@enum Test1 _zerofp=0.0)))
+@test_throws MethodError eval(:(@enum Test1 _zerofp=0.0))
 
-@test_throws InexactError eval(macroexpand(:(@enum Test11 _zerofp2=0.5)))
+@test_throws InexactError eval(:(@enum Test11 _zerofp2=0.5))
 # can't use non-identifiers as enum members
-@test_throws ErrorException eval(macroexpand(:(@enum Test2 1=2)))
+@test_throws ErrorException eval(:(@enum Test2 1=2))
 # other Integer types of enum members
 @enum Test3 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
 @test typeof(_one_Test3.val) <: UInt8
@@ -93,19 +96,30 @@ end
 @test length(Test3) == 3
 
 @enum Test4 _one_Test4=0x01 _two_Test4=0x0002 _three_Test4=0x03
+@test _one_Test4.val === 0x0001
+@test _two_Test4.val === 0x0002
+@test _three_Test4.val === 0x0003
 @test typeof(_one_Test4.val) <: UInt16
 
 @enum Test5 _one_Test5=0x01 _two_Test5=0x00000002 _three_Test5=0x00000003
+@test _one_Test5.val === 0x00000001
+@test _two_Test5.val === 0x00000002
+@test _three_Test5.val === 0x00000003
 @test typeof(_one_Test5.val) <: UInt32
 
 @enum Test6 _one_Test6=0x00000000000000000000000000000001 _two_Test6=0x00000000000000000000000000000002
+@test _one_Test6.val === 0x00000000000000000000000000000001
+@test _two_Test6.val === 0x00000000000000000000000000000002
 @test typeof(_one_Test6.val) <: UInt128
 
 @enum Test7 _zero_Test7=0b0 _one_Test7=0b1 _two_Test7=0b10
+@test _zero_Test7.val === 0x00
+@test _one_Test7.val === 0x01
+@test _two_Test7.val === 0x02
 @test typeof(_zero_Test7.val) <: UInt8
 
-@test_throws MethodError eval(macroexpand(:(@enum Test8 _zero="zero")))
-@test_throws MethodError eval(macroexpand(:(@enum Test9 _zero='0')))
+@test_throws MethodError eval(:(@enum Test8 _zero="zero"))
+@test_throws MethodError eval(:(@enum Test9 _zero='0'))
 
 @enum Test8 _zero_Test8=zero(Int64)
 @test typeof(_zero_Test8.val) <: Int64
