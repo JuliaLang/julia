@@ -91,10 +91,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @assert takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @assert takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments
