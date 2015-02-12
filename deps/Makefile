@@ -818,12 +818,12 @@ $(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
 	$(INSTALL_NAME_CMD)libRmath-julia.$(SHLIB_EXT) $@
 
 clean-Rmath-julia:
-	-$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER)/src clean
+	-$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER) clean
 	-rm $(RMATH_JULIA_OBJ_TARGET)
 distclean-Rmath-julia: clean-Rmath-julia
-	-cd Rmath-julia-$(RMATH_JULIA_VER) && git clean -fdx
+	-rm -rf Rmath-julia-$(RMATH_JULIA_VER).tar.gz Rmath-julia-$(RMATH_JULIA_VER)
 
-get-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER)/openblas-$(OPENBLAS_VER).tar.gz
+get-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER).tar.gz
 configure-Rmath-julia: get-Rmath-julia
 compile-Rmath-julia: $(RMATH_JULIA_OBJ_SOURCE)
 check-Rmath-julia: compile-Rmath-julia
