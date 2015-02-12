@@ -24,9 +24,6 @@ New language features
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
 
-  * New multidimensional iterators and index types for efficient
-    iteration over general AbstractArrays
-
 Language changes
 ----------------
 
@@ -43,6 +40,8 @@ Language changes
   * `None` is deprecated; use `Union()` instead ([#8423]).
 
   * `Nothing` (the type of `nothing`) is renamed to `Void` ([#8423]).
+
+  * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075])
 
   * `Dict` literal syntax `[a=>b,c=>d]` is replaced with `Dict(a=>b,c=>d)`.
     `{a=>b}` is replaced with `Dict{Any,Any}(a=>b)`.
@@ -78,6 +77,9 @@ Compiler improvements
 
 Library improvements
 --------------------
+
+  * New multidimensional iterators and index types for efficient
+    iteration over general AbstractArrays
 
   * `LinAlg` improvements
 
@@ -980,6 +982,7 @@ Too numerous to mention.
 [#3141]: https://github.com/JuliaLang/julia/issues/3141
 [#3148]: https://github.com/JuliaLang/julia/issues/3148
 [#3149]: https://github.com/JuliaLang/julia/issues/3149
+[#3214]: https://github.com/JuliaLang/julia/issues/3214
 [#3233]: https://github.com/JuliaLang/julia/issues/3233
 [#3272]: https://github.com/JuliaLang/julia/issues/3272
 [#3344]: https://github.com/JuliaLang/julia/issues/3344
@@ -1151,6 +1154,7 @@ Too numerous to mention.
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8467]: https://github.com/JuliaLang/julia/issues/8467
 [#8501]: https://github.com/JuliaLang/julia/issues/8501
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#8578]: https://github.com/JuliaLang/julia/issues/8578
@@ -1200,8 +1204,11 @@ Too numerous to mention.
 [#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
 [#9690]: https://github.com/JuliaLang/julia/issues/9690
+[#9701]: https://github.com/JuliaLang/julia/issues/9701
 [#9745]: https://github.com/JuliaLang/julia/issues/9745
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
 [#9957]: https://github.com/JuliaLang/julia/issues/9957
 [#10024]: https://github.com/JuliaLang/julia/issues/10024
 [#10031]: https://github.com/JuliaLang/julia/issues/10031
+[#10075]: https://github.com/JuliaLang/julia/issues/10075
+[#10117]: https://github.com/JuliaLang/julia/issues/10117
