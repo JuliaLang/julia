@@ -13,7 +13,7 @@ export
     Factor,
     Sparse
 
-using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, increment!, indtype, decrement, decrement!
+using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
 
 #########
 # Setup #
