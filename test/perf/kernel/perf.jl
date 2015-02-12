@@ -47,7 +47,7 @@ v = rand(64^3)
 @timeit A*v "matvec" "Sparse matrix - dense vector multiplication"
 
 # issue #939
-y = [500000:-1:1];
+y = [500000:-1:1;]
 @timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
 
 # issue #445
