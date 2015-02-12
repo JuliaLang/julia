@@ -13,6 +13,9 @@ typealias StridedVector{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,
 typealias StridedMatrix{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,2}, SubArray{T,2,A,I})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
+call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
+call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
+
 ## Basic functions ##
 
 size(a::Array) = arraysize(a)
