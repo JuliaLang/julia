@@ -90,16 +90,16 @@ A = CHOLMOD.Sparse(48, 48,
 @test_approx_eq CHOLMOD.norm_sparse(A, 0) 3.570948074697437e9
 @test_approx_eq CHOLMOD.norm_sparse(A, 1) 3.570948074697437e9
 @test_throws ArgumentError CHOLMOD.norm_sparse(A, 2)
-@test isvalid(A)
+@test CHOLMOD.isvalid(A)
 
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
-@test isvalid(chma)
+@test CHOLMOD.isvalid(chma)
 x = chma\B
 @test_approx_eq x ones(size(x))
 
 chma = cholfact(A)                      # LL' form
-@test isvalid(chma)
+@test CHOLMOD.isvalid(chma)
 x = chma\B
 @test_approx_eq x ones(size(x))
 
@@ -124,7 +124,7 @@ CHOLMOD.change_stype!(afiro2, -1)
 chmaf = cholfact(afiro2)
 y = afiro'*ones(size(afiro,1))
 sol = chmaf\(afiro*y) # least squares solution
-@test isvalid(sol)
+@test CHOLMOD.isvalid(sol)
 pred = afiro'*sol
 @test norm(afiro * (convert(Matrix, y) - convert(Matrix, pred))) < 1e-8
 
