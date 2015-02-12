@@ -89,9 +89,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``. ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``. The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``Cholesky`` objects: ``size``, ``\``, ``inv``, ``det``. For ``CholeskyPivoted`` there is also defined a ``rank``. If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
-.. function:: cholfact(A, [ll]) -> CholmodFactor
+.. function:: cholfact(A) -> CHOLMOD.Factor
 
-   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet`` are available for ``CholmodFactor`` objects.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = L*Diagonal(D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL. The symbolic factorization can also be reused for other matrices with the same structure as ``A`` by calling ``cholfact!``.
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
@@ -100,6 +100,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ldltfact(A) -> LDLtFactorization
 
    Compute a factorization of a positive definite matrix ``A`` such that ``A=L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector with non-negative elements.
+
+.. function:: ldltfact(A) -> CHOLMOD.Factor
+
+   Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
