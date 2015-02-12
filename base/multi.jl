@@ -543,18 +543,18 @@ function send_add_client(rr::RemoteRef, i)
     end
 end
 
-function serialize(s, rr::RemoteRef)
-    i = worker_id_from_socket(s)
+function serialize(s::SerializationState, rr::RemoteRef)
+    i = worker_id_from_socket(s.io)
     #println("$(myid()) serializing $rr to $i")
     if i != -1
         #println("send add $rr to $i")
         send_add_client(rr, i)
     end
-    invoke(serialize, Tuple{Any, Any}, s, rr)
+    invoke(serialize, Tuple{SerializationState, Any}, s, rr)
 end
 
-function deserialize(s, t::Type{RemoteRef})
-    rr = invoke(deserialize, Tuple{Any, DataType}, s, t)
+function deserialize(s::SerializationState, t::Type{RemoteRef})
+    rr = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     where = rr.where
     if where == myid()
         add_client(rr2id(rr), myid())

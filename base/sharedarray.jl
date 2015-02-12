@@ -189,11 +189,12 @@ end
 
 # Don't serialize s (it is the complete array) and
 # pidx, which is relevant to the current process only
-function serialize(s, S::SharedArray)
+function serialize(s::SerializationState, S::SharedArray)
+    Serializer.serialize_cycle(s, S) && return
     Serializer.serialize_type(s, typeof(S))
     for n in SharedArray.name.names
         if n in [:s, :pidx, :loc_subarr_1d]
-            Serializer.writetag(s,
+            Serializer.writetag(s.io,
                 Serializer.sertag(Serializer.UndefRefTag))
         else
             serialize(s, getfield(S, n))
@@ -201,8 +202,8 @@ function serialize(s, S::SharedArray)
     end
 end
 
-function deserialize{T,N}(s, t::Type{SharedArray{T,N}})
-    S = invoke(deserialize, Tuple{Any, DataType}, s, t)
+function deserialize{T,N}(s::SerializationState, t::Type{SharedArray{T,N}})
+    S = invoke(deserialize, Tuple{SerializationState, DataType}, s, t)
     init_loc_flds(S)
     S
 end
