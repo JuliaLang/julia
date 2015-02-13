@@ -130,6 +130,10 @@ end
 
 @test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
 
+@test () == Type{()}
+@test ((),) == Type{((),)}
+@test (Int,) != Type{(DataType,)}
+
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
 @test issubtype(Array{(Any...)}, Array{NTuple})

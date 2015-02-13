@@ -1575,8 +1575,19 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
             }
             return 1;
         }
+        if (jl_is_type_type(b) && jl_is_tuple(jl_tparam0(b))) {
+            // () == Type{()}, ((),) == Type{((),)}, etc.
+            jl_value_t *temp = NULL;
+            JL_GC_PUSH1(&temp);
+            temp = jl_full_type(a);
+            int res = type_eqv_(temp, jl_tparam0(b)) && type_eqv_(a, temp);
+            JL_GC_POP();
+            return res;
+        }
         return 0;
     }
+    if (jl_is_type_type(a) && jl_is_tuple(b))
+        return type_eqv_(b, a);
     if (jl_is_uniontype(a)) {
         if (jl_is_uniontype(b)) {
             return extensionally_same_type(a, b);
@@ -2180,7 +2191,11 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
                     JL_GC_POP();
                     return res;
                 }
+                // () == Type{()}, ((),) == Type{((),)}, etc.
+                temp = jl_full_type(a);
+                int res = jl_subtype_le(temp, jl_tparam0(b), 0, 1) && jl_subtype_le(a, temp, 0, 1);
                 JL_GC_POP();
+                return res;
             }
         }
         if (jl_is_tuple(b)) {
