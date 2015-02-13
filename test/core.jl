@@ -2147,3 +2147,12 @@ end
 let a = :(()), b = :(())
     @test a.args !== b.args
 end
+
+# issue caused by commit 189b00aef0376d1a998d36115cd11b17464d26ce and worked around
+# by commit 24c64b86bd4e793dbfe9d85c067dc0579b320d14
+let
+    g{T}(x::T...) = T
+    g(x...) = 0
+    @test g((),Int) == 0
+    @test g((),()) == ()
+end
