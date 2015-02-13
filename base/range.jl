@@ -498,12 +498,18 @@ convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
 
 ## concatenation ##
 
-function vcat{T}(rs::Range{T}...)
-    n::Int = 0
-    for r in rs; n+=length(r); end
+function vcat{T}(r::Range{T}, rs::Range{T}...)
+    n::Int = length(r)
+    for ra in rs
+        n += length(ra)
+    end
     a = Array(T,n)
     i = 1
-    for r in rs, x in r
+    for x in r
+        @inbounds a[i] = x
+        i += 1
+    end
+    for ra in rs, x in ra
         @inbounds a[i] = x
         i += 1
     end
