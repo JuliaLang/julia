@@ -103,6 +103,8 @@ Library improvements
 
   * Other improvements
 
+    * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
+
     * `convert` now checks for overflow when truncating integers or converting between
     signed and unsigned ([#5413]).
 

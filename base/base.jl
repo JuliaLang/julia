@@ -119,6 +119,13 @@ type DimensionMismatch <: Exception
 end
 DimensionMismatch() = DimensionMismatch("")
 
+type AssertionError <: Exception
+    msg::AbstractString
+
+    AssertionError() = new("")
+    AssertionError(msg) = new(msg)
+end
+
 # For passing constants through type inference
 immutable Val{T}
 end
