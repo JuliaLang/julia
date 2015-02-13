@@ -142,9 +142,12 @@ end
 
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0)
+    s = sum(log(diag(A.factors)))
+    if bool(sum(A.ipiv .!= 1:n) % 2)
+        s = Complex(real(s), imag(s)+π)
+    end
     r, a = reim(s)
-    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi]
+    a = π-mod2pi(π-a) #Take principal branch with argument (-pi,pi]
     complex(r,a)
 end
 
