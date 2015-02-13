@@ -485,7 +485,9 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     int need_guard_entries = 0;
     jl_value_t *temp=NULL;
     jl_function_t *newmeth=NULL;
-    JL_GC_PUSH3(&type, &temp, &newmeth);
+    jl_tuple_t *origtype=NULL;
+    JL_GC_PUSH4(&type, &temp, &newmeth, &origtype);
+    origtype = (jl_tuple_t*)jl_f_tuple(NULL, jl_tuple_data(type), jl_tuple_len(type));
 
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
@@ -704,6 +706,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                     }
                     if (ok) {
                         jl_tupleset(type, i, jl_typetype_type);
+                        need_guard_entries = 1;
                     }
                 }
             }
@@ -789,11 +792,28 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     if (need_guard_entries) {
         temp = ml_matches(mt->defs, (jl_value_t*)type, lambda_sym, -1);
+        int unmatched_tvars = 0;
         for(i=0; i < jl_array_len(temp); i++) {
             jl_value_t *m = jl_cellref(temp, i);
-            if (jl_tupleref(m,2) != (jl_value_t*)method->linfo) {
-                jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(m, 0),
-                                       jl_bottom_func);
+            jl_value_t *env = jl_tupleref(m,1);
+            for(int k=1; k < jl_tuple_len(env); k+=2) {
+                if (jl_is_typevar(jl_tupleref(env,k))) {
+                    unmatched_tvars = 1; break;
+                }
+            }
+            if (unmatched_tvars) {
+                // if distinguishing a guard entry from the generalized signature
+                // would require matching type vars then bail out, since the
+                // method cache matching algorithm cannot do that.
+                type = origtype; break;
+            }
+        }
+        if (!unmatched_tvars) {
+            for(i=0; i < jl_array_len(temp); i++) {
+                jl_value_t *m = jl_cellref(temp, i);
+                if (((jl_methlist_t*)jl_tupleref(m,2))->func != method) {
+                    jl_method_cache_insert(mt, (jl_tuple_t*)jl_tupleref(m, 0), jl_bottom_func);
+                }
             }
         }
     }
