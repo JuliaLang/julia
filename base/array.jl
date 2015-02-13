@@ -381,6 +381,9 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
+        is(I,A) && (I = X)
+    elseif is(I,A)
+        I = copy(I)
     end
     for i in I
         A[i] = X[count]

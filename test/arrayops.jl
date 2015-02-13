@@ -677,6 +677,9 @@ a = [1,3,5]
 b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
+a = [3,2,1]
+a[a] = [4,5,6]
+@test a == [6,5,4]
 
 # lexicographic comparison
 @test lexcmp([1.0], [1]) == 0
