@@ -751,7 +751,7 @@ The inner constructor requires that the element type of ``A`` be ``T``.
 How do I declare type fields (like class members in Python, C++)
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This currently needs to use a getter/setter syntax (``get_a(MyType)`` ``set_a(MyType, val)``) rather 
+This currently needs to use a getter/setter syntax (``get_a(MyType)`` ``set_a(MyType, val)``) rather
 than field syntax (``MyType.a`` ``Mytype.a = val``).
 
 If the field is an immutable the getter can be declared external to the type with::
