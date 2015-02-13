@@ -748,6 +748,33 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
+How do I declare type fields (like class members in Python, C++)
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+This currently needs to use a getter/setter syntax (``get_a(MyType)`` ``set_a(MyType, val)``) rather 
+than field syntax (``MyType.a`` ``Mytype.a = val``).
+
+If the field is an immutable the getter can be declared external to the type with::
+
+   get_a(::Type{MyType}) = val
+
+If the field is to be mutable it needs some support from within the type definition::
+
+   immutable MyType_a end
+   type MyType
+       .
+       .
+       let a=0
+           MyType(::Type{MyType_a}) = a
+           MyType(::Type{MyType_a}, i) = a = i
+       end
+   end
+
+Now the getter and setter can be outer functions::
+
+   get_a(::Type{MyType}) = MyType(MyType_a)
+   set_a(::Type{MyType}, i) = MyType(MyType_a, i)
+
 Nothingness and missing values
 ------------------------------
 
