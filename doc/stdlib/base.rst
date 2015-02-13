@@ -789,7 +789,7 @@ Errors
 
 .. function:: @assert cond [text]
 
-   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writings assertions.
+   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
 
 .. data:: AssertionError
 
