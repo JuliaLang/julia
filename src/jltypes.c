@@ -33,7 +33,6 @@ jl_datatype_t *jl_uniontype_type;
 jl_datatype_t *jl_datatype_type;
 
 jl_value_t *jl_bottom_type;
-jl_value_t *jl_top_type;
 jl_datatype_t *jl_vararg_type;
 jl_datatype_t *jl_abstractarray_type;
 jl_datatype_t *jl_densearray_type;
@@ -842,8 +841,6 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
         return intersect_union((jl_uniontype_t*)a, b, penv, eqc, var);
     if (jl_is_uniontype(b))
         return intersect_union((jl_uniontype_t*)b, a, penv, eqc, var);
-    if (a == (jl_value_t*)jl_undef_type) return (jl_value_t*)jl_bottom_type;
-    if (b == (jl_value_t*)jl_undef_type) return (jl_value_t*)jl_bottom_type;
     if (a == (jl_value_t*)jl_any_type || a == jl_ANY_flag) return b;
     if (b == (jl_value_t*)jl_any_type || b == jl_ANY_flag) return a;
     // tuple
@@ -1925,14 +1922,9 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                 iparams[i] = t;
             }
             else {
-                jl_value_t *tv =
-                    jl_tupleref(((jl_datatype_t*)tc)->parameters, i);
-                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack,
-                                                       elt != tv);
+                jl_value_t *tv = jl_tupleref(((jl_datatype_t*)tc)->parameters, i);
+                iparams[i] = (jl_value_t*)inst_type_w_(elt, env, n, stack, elt != tv);
                 if (jl_is_typevar(tv) && !jl_is_typevar(iparams[i])) {
-                    // TODO: Undef should not be special here; fix.
-                    // maybe introduce Top == Union(Any,Undef), and make this
-                    // the default upper bound.
                     if (!jl_subtype(iparams[i], tv, 0)) {
                         jl_type_error_rt(tt->name->name->name,
                                          ((jl_tvar_t*)tv)->name->name,
@@ -2249,9 +2241,6 @@ static int jl_subtype_le(jl_value_t *a, jl_value_t *b, int ta, int invariant)
     if (ta) a = (jl_value_t*)jl_typeof(a);
 
     if (a == b) return 1;
-    if ((a==(jl_value_t*)jl_undef_type && !jl_is_typevar(b)) ||
-        b==(jl_value_t*)jl_undef_type)
-        return 0;
     if (!invariant && (jl_datatype_t*)b == jl_any_type) return 1;
 
     if (jl_is_type_type(b) && jl_is_typevar(jl_tparam0(b)) && jl_is_tuple(a)) {
@@ -2512,9 +2501,6 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
         return 0;
     }
 
-    if ((a==(jl_value_t*)jl_undef_type && !jl_is_typevar(b)) ||
-        b==(jl_value_t*)jl_undef_type)
-        return 0;
     if (!invariant && (jl_datatype_t*)b == jl_any_type) return 1;
 
     if (jl_is_type_type(b) && jl_is_typevar(jl_tparam0(b)) && jl_is_tuple(a)) {
@@ -3049,14 +3035,8 @@ void jl_init_types(void)
                                             jl_type_type, jl_any_type),
                                    0, 0, 0);
 
-    jl_undef_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Undef"),
-                                        jl_any_type, jl_null);
-
-    jl_top_type = jl_new_struct(jl_uniontype_type,
-                                jl_tuple2(jl_any_type, jl_undef_type));
-
     jl_tvar_t *tttvar = jl_new_typevar(jl_symbol("T"),
-                                       (jl_value_t*)jl_bottom_type,jl_top_type);
+                                       (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_any_type);
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
@@ -3261,7 +3241,7 @@ void jl_init_types(void)
 
     // Type{T}
     jl_typetype_tvar = jl_new_typevar(jl_symbol("T"),
-                                      (jl_value_t*)jl_bottom_type,jl_top_type);
+                                      (jl_value_t*)jl_bottom_type,(jl_value_t*)jl_any_type);
     jl_typetype_type = (jl_datatype_t*)jl_apply_type((jl_value_t*)jl_type_type,
                                                      jl_tuple(1,jl_typetype_tvar));
 
