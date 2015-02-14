@@ -941,27 +941,29 @@ void *jl_get_llvmf(jl_function_t *f, jl_tupletype_t *tt, bool getwrapper)
         jl_printf(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
-    Function *llvmf;
-    if (getwrapper || sf->linfo->specTypes == NULL) {
-        if (sf->linfo->functionObject == NULL) {
-            jl_compile(sf);
+    if (sf->linfo->specFunctionObject != NULL) {
+        // found in the system image: force a recompile
+        Function *llvmf = (Function*)sf->linfo->specFunctionObject;
+        if (llvmf->isDeclaration()) {
+            sf->linfo->specFunctionObject = NULL;
+            sf->linfo->functionObject = NULL;
         }
     }
-    else {
-        if (sf->linfo->specFunctionObject == NULL) {
-            jl_compile(sf);
+    if (sf->linfo->functionObject != NULL) {
+        // found in the system image: force a recompile
+        Function *llvmf = (Function*)sf->linfo->functionObject;
+        if (llvmf->isDeclaration()) {
+            sf->linfo->specFunctionObject = NULL;
+            sf->linfo->functionObject = NULL;
         }
     }
-    if (sf->fptr == &jl_trampoline) {
-        if (!getwrapper && sf->linfo->specFunctionObject != NULL)
-            llvmf = (Function*)sf->linfo->specFunctionObject;
-        else
-            llvmf = (Function*)sf->linfo->functionObject;
+    if (sf->linfo->functionObject == NULL && sf->linfo->specFunctionObject == NULL) {
+        jl_compile(sf);
     }
-    else {
-        llvmf = to_function(sf->linfo);
-    }
-    return llvmf;
+    if (!getwrapper && sf->linfo->specFunctionObject != NULL)
+        return (Function*)sf->linfo->specFunctionObject;
+    else
+        return (Function*)sf->linfo->functionObject;
 }
 
 extern "C" DLLEXPORT
