@@ -613,8 +613,7 @@ void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 
 void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super)
 {
-    if (!jl_is_datatype(super) || super == (jl_value_t*)jl_undef_type ||
-        !jl_is_abstracttype(super) ||
+    if (!jl_is_datatype(super) || !jl_is_abstracttype(super) ||
         tt->name == ((jl_datatype_t*)super)->name ||
         jl_subtype(super,(jl_value_t*)jl_vararg_type,0) ||
         jl_subtype(super,(jl_value_t*)jl_type_type,0)) {

@@ -117,7 +117,7 @@ import Core.Intrinsics.ccall
 
 export
     # key types
-    Any, DataType, Vararg, ANY, NTuple, Top,
+    Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
     AbstractArray, DenseArray,
     # special objects

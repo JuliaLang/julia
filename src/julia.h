@@ -306,7 +306,6 @@ extern DLLEXPORT jl_datatype_t *jl_type_type;
 extern DLLEXPORT jl_tvar_t     *jl_typetype_tvar;
 extern DLLEXPORT jl_datatype_t *jl_typetype_type;
 extern DLLEXPORT jl_value_t    *jl_ANY_flag;
-extern DLLEXPORT jl_datatype_t *jl_undef_type;
 extern DLLEXPORT jl_datatype_t *jl_typename_type;
 extern DLLEXPORT jl_datatype_t *jl_typector_type;
 extern DLLEXPORT jl_datatype_t *jl_sym_type;
@@ -323,7 +322,6 @@ extern DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern DLLEXPORT jl_datatype_t *jl_datatype_type;
 
 extern DLLEXPORT jl_value_t *jl_bottom_type;
-extern DLLEXPORT jl_value_t *jl_top_type;
 extern DLLEXPORT jl_datatype_t *jl_lambda_info_type;
 extern DLLEXPORT jl_datatype_t *jl_module_type;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
@@ -1058,6 +1056,11 @@ STATIC_INLINE int jl_vinfo_assigned_inner(jl_array_t *vi)
 STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
 {
     return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
+}
+
+STATIC_INLINE int jl_vinfo_usedundef(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&32)!=0;
 }
 
 // calling into julia ---------------------------------------------------------

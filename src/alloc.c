@@ -15,7 +15,6 @@ extern "C" {
 jl_value_t *jl_true;
 jl_value_t *jl_false;
 
-jl_datatype_t *jl_undef_type;
 jl_tvar_t     *jl_typetype_tvar;
 jl_datatype_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
