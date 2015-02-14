@@ -18,6 +18,11 @@ type StaticVarInfo
     fedbackvars::ObjectIdDict
 end
 
+type VarState
+    typ
+    undef::Bool
+end
+
 type EmptyCallStack
 end
 
@@ -1017,7 +1022,7 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         t = Any
     elseif is(e.head,:static_typeof)
         var = e.args[1]
-        t = t0 = abstract_eval(var, vtypes, sv)
+        t = abstract_eval(var, vtypes, sv)
         if isa(t,DataType) && typeseq(t,t.name.primary)
             # remove unnecessary typevars
             t = t.name.primary
@@ -1129,7 +1134,7 @@ function abstract_eval_symbol(s::Symbol, vtypes::ObjectIdDict, sv::StaticVarInfo
         # global
         return abstract_eval_global(s)
     end
-    return t
+    return t.typ
 end
 
 typealias VarTable ObjectIdDict
@@ -1157,7 +1162,7 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
             lhs = lhs.name
         end
         assert(isa(lhs,Symbol) || isa(lhs,GenSym))
-        return StateUpdate(lhs, t, vtypes)
+        return StateUpdate(lhs, VarState(t,false), vtypes)
     elseif is(e.head,:call) || is(e.head,:call1)
         abstract_eval(e, vtypes, sv)
     elseif is(e.head,:gotoifnot)
@@ -1165,7 +1170,7 @@ function abstract_interpret(e::ANY, vtypes, sv::StaticVarInfo)
     elseif is(e.head,:method)
         fname = e.args[1]
         if isa(fname,Symbol)
-            return StateUpdate(fname, Function, vtypes)
+            return StateUpdate(fname, VarState(Function,false), vtypes)
         end
     end
     return vtypes
@@ -1195,7 +1200,7 @@ function type_too_complex(t::ANY, d)
 end
 
 function tmerge(typea::ANY, typeb::ANY)
-    is(typea, NF ) && return typeb
+    is(typea, NF)  && return typeb
     is(typeb, NF)  && return typea
     typea <: typeb && return typeb
     typeb <: typea && return typea
@@ -1214,7 +1219,18 @@ function tmerge(typea::ANY, typeb::ANY)
     return u
 end
 
+issubstate(a::VarState,b::VarState) = (a.typ <: b.typ && a.undef <= b.undef)
+
+function smerge(sa::Union(NotFound,VarState), sb::Union(NotFound,VarState))
+    is(sa, NF) && return sb
+    is(sb, NF) && return sa
+    issubstate(sa,sb) && return sb
+    issubstate(sb,sa) && return sa
+    VarState(tmerge(sa.typ, sb.typ), sa.undef | sb.undef)
+end
+
 tchanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !(n <: o))
+schanged(n::ANY, o::ANY) = is(o,NF) || (!is(n,NF) && !issubstate(n, o))
 
 stupdate(state::(), changes::VarTable, vars) = copy(changes)
 stupdate(state::(), changes::StateUpdate, vars) = stupdate(ObjectIdDict(), changes, vars)
@@ -1224,26 +1240,19 @@ function stupdate(state::ObjectIdDict, changes::Union(StateUpdate,VarTable), var
         v = vars[i]
         newtype = changes[v]
         oldtype = get(state::ObjectIdDict,v,NF)
-        if tchanged(newtype, oldtype)
-            state[v] = tmerge(oldtype, newtype)
+        if schanged(newtype, oldtype)
+            state[v] = smerge(oldtype, newtype)
         end
     end
     state
 end
 
-function stchanged(new::Union(StateUpdate,VarTable), old, vinflist)
+function stchanged(new::Union(StateUpdate,VarTable), old, vars)
     if is(old,())
         return true
     end
-    for vi in vinflist
-        v = vi[1]
-        newtype = new[v]
-        oldtype = get(old,v,NF)
-        if (newtype === Bottom && oldtype !== NF && oldtype !== Bottom) ||
-            (oldtype === Bottom && newtype !== NF && newtype !== Bottom)
-            vi[3] |= 32
-        end
-        if tchanged(newtype, oldtype)
+    for v in vars
+        if schanged(new[v], get(old,v,NF))
             return true
         end
     end
@@ -1442,7 +1451,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     # initial types
     s[1] = ObjectIdDict()
     for v in vars
-        s[1][v] = Bottom
+        s[1][v] = VarState(Bottom,true)
     end
     if la > 0
         lastarg = ast.args[1][la]
@@ -1451,9 +1460,9 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 if la > 1
                     atypes = tuple(NTuple{la-1,Any}..., Tuple[1])
                 end
-                s[1][args[la]] = Tuple
+                s[1][args[la]] = VarState(Tuple,false)
             else
-                s[1][args[la]] = limit_tuple_depth(atypes[la:end])
+                s[1][args[la]] = VarState(limit_tuple_depth(atypes[la:end]),false)
             end
             la -= 1
         else
@@ -1474,10 +1483,10 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             laty = la
         end
         for i=1:laty
-            s[1][args[i]] = atypes[i]
+            s[1][args[i]] = VarState(atypes[i],false)
         end
         for i=laty+1:la
-            s[1][args[i]] = lastatype
+            s[1][args[i]] = VarState(lastatype,false)
         end
     else
         @assert la == 0
@@ -1490,7 +1499,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         vname = vi[1]
         vtype = vi[2]
         cenv[vname] = vtype
-        s[1][vname] = vtype
+        s[1][vname] = VarState(vtype,false)
     end
     vinflist = ast.args[2][2]::Array{Any,1}
     for vi in vinflist
@@ -1501,7 +1510,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             vname = vi[1]
             vtype = vi[2]
             cenv[vname] = vtype
-            s[1][vname] = vtype
+            s[1][vname] = VarState(vtype,false)
         end
     end
 
@@ -1551,7 +1560,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             if !is(cur_hand,())
                 # propagate type info to exception handler
                 l = cur_hand[1]::Int
-                if stchanged(changes, s[l], vinflist)
+                if stchanged(changes, s[l], vars)
                     push!(W, l)
                     s[l] = stupdate(s[l], changes, vars)
                 end
@@ -1560,7 +1569,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             if isa(changes,StateUpdate) && isa((changes::StateUpdate).var, GenSym)
                 changes = changes::StateUpdate
                 id = (changes.var::GenSym).id+1
-                new = changes.vtype
+                new = changes.vtype.typ
                 old = gensym_types[id]
                 if old===NF || !(new <: old)
                     gensym_types[id] = tmerge(old, new)
@@ -1584,7 +1593,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     else
                         # general case
                         handler_at[l] = cur_hand
-                        if stchanged(changes, s[l], vinflist)
+                        if stchanged(changes, s[l], vars)
                             push!(W, l)
                             s[l] = stupdate(s[l], changes, vars)
                         end
@@ -1650,7 +1659,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                 end
             end
             if pc´<=n && (handler_at[pc´] = cur_hand; true) &&
-               stchanged(changes, s[pc´], vinflist)
+               stchanged(changes, s[pc´], vars)
                 s[pc´] = stupdate(s[pc´], changes, vars)
                 pc = pc´
             elseif pc´ in W
@@ -1748,7 +1757,8 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo, undef
             return e
         end
         t = abstract_eval(e, vtypes, sv)
-        if t === Bottom
+        s = get(vtypes, e, NF)
+        if s !== NF && s.undef
             undefs[e] = true
         end
         record_var_type(e, t, decls)
@@ -1758,10 +1768,11 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo, undef
     if isa(e, SymbolNode)
         e = e::SymbolNode
         curtype = e.typ
-        if curtype === Bottom
-            undefs[e.name] = true
-        end
         t = abstract_eval(e.name, vtypes, sv)
+        s = get(vtypes, e.name, NF)
+        if s !== NF && s.undef
+            undefs[e] = true
+        end
         if !(curtype <: t) || typeseq(curtype, t)
             record_var_type(e.name, t, decls)
             e.typ = t
@@ -1828,7 +1839,7 @@ function type_annotate(ast::Expr, states::Array{Any,1}, sv::ANY, rettype::ANY,
     undefs = ObjectIdDict()
     # initialize decls with argument types
     for arg in args
-        decls[arg] = states[1][arg]
+        decls[arg] = states[1][arg].typ
     end
     closures = []
     body = ast.args[3].args::Array{Any,1}
