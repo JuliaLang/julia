@@ -876,25 +876,25 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
                   "Warning: Returned code may not match what actually runs.\n");
     }
     Function *llvmf;
-    if (getwrapper || sf->linfo->specTypes == NULL) {
-        if (sf->linfo->functionObject == NULL) {
-            jl_compile(sf);
-        }
+    if (sf->linfo->cFunctionObject != NULL) {
+        // found in the system image: force a recompile
+        Function *llvmf = (Function*)sf->linfo->cFunctionObject;
+        if (llvmf->isDeclaration())
+            sf->linfo->cFunctionObject = NULL;
     }
-    else {
-        if (sf->linfo->cFunctionObject == NULL) {
-            jl_cstyle_compile(sf);
-        }
+    if (sf->linfo->functionObject != NULL) {
+        // found in the system image: force a recompile
+        Function *llvmf = (Function*)sf->linfo->functionObject;
+        if (llvmf->isDeclaration())
+            sf->linfo->functionObject = NULL;
     }
-    if (sf->fptr == &jl_trampoline) {
-        if (!getwrapper && sf->linfo->cFunctionObject != NULL)
-            llvmf = (Function*)sf->linfo->cFunctionObject;
-        else
-            llvmf = (Function*)sf->linfo->functionObject;
+    if (sf->linfo->functionObject == NULL && sf->linfo->cFunctionObject == NULL) {
+        jl_compile(sf);
     }
-    else {
-        llvmf = to_function(sf->linfo, false);
-    }
+    if (!getwrapper && sf->linfo->cFunctionObject != NULL)
+        llvmf = (Function*)sf->linfo->cFunctionObject;
+    else
+        llvmf = (Function*)sf->linfo->functionObject;
     return llvmf;
 }
 
