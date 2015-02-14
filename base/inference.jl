@@ -320,41 +320,42 @@ function limit_type_depth(t::ANY, d::Int, cov::Bool, vars)
     return R
 end
 
-
-const getfield_tfunc = function (A, s0, name)
+const getfield_tfunc = (A,s,n) -> _getfield_tfunc(A,s,n)[1]
+# returns (type,exact) with exact being true iff the returned type is the declared field type of s0.(name)
+const _getfield_tfunc = function(A, s0, name)
     s = s0
     if isType(s)
         s = typeof(s.parameters[1])
         if s === TypeVar
-            return Any
+            return Any, false
         end
     end
     if isa(s,UnionType)
-        return reduce(tmerge, Bottom, map(t->getfield_tfunc(A, t, name), s.types))
+        return reduce(tmerge, Bottom, map(t->getfield_tfunc(A, t, name), s.types)), false
     end
     if !isa(s,DataType) || s.abstract
-        return Any
+        return Any, false
     end
     if isa(A[2],QuoteNode) && isa(A[2].value,Symbol)
         fld = A[2].value
         A1 = A[1]
         if isa(A1,Module) && isdefined(A1,fld) && isconst(A1, fld)
-            return abstract_eval_constant(eval(A1,fld))
+            return abstract_eval_constant(eval(A1,fld)), true
         end
         if s === Module
-            return Top
+            return Top, false
         end
         if isType(s0)
             sp = s0.parameters[1]
             if isa(sp,DataType) && !any(x->isa(x,TypeVar), sp.parameters)
                 if fld === :parameters
-                    return Type{sp.parameters}
+                    return Type{sp.parameters}, true
                 end
                 if fld === :types
-                    return Type{sp.types}
+                    return Type{sp.types}, true
                 end
                 if fld === :super
-                    return Type{sp.super}
+                    return Type{sp.super}, true
                 end
             end
         end
@@ -362,25 +363,25 @@ const getfield_tfunc = function (A, s0, name)
             if is(s.names[i],fld)
                 R = s.types[i]
                 if s.parameters === ()
-                    return R
+                    return R, true
                 else
                     return limit_type_depth(R, 0, true,
-                                            filter!(x->isa(x,TypeVar), Any[s.parameters...]))
+                                            filter!(x->isa(x,TypeVar), Any[s.parameters...])), true
                 end
             end
         end
-        return Bottom
+        return Bottom, false
     elseif isa(A[2],Int)
         if isa(A[1],Module) || s === Module
-            return Bottom
+            return Bottom, false
         end
         i::Int = A[2]
         if i < 1 || i > length(s.names)
-            return Bottom
+            return Bottom, false
         end
-        return s.types[i]
+        return s.types[i], true
     else
-        return reduce(tmerge, Bottom, s.types)#Union(s.types...)
+        return reduce(tmerge, Bottom, s.types), false#Union(s.types...)
     end
 end
 t_func[getfield] = (2, 2, getfield_tfunc)
@@ -391,11 +392,11 @@ const fieldtype_tfunc = function (A, s, name)
     else
         return Type
     end
-    t = getfield_tfunc(A, s, name)
-    if is(t,Bottom)
+    t, exact = _getfield_tfunc(A, s, name)
+    if is(t,Bottom) && !exact
         return t
     end
-    Type{isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
+    Type{exact || isleaftype(t) || isa(t,TypeVar) ? t : TypeVar(:_, t)}
 end
 t_func[fieldtype] = (2, 2, fieldtype_tfunc)
 t_func[Box] = (1, 1, (a,)->Box)
