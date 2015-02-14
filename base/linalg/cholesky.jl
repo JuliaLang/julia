@@ -95,7 +95,7 @@ function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
-cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
+cholfact!(A::StridedMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
 
 function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     _, info = LAPACK.potrf!(char_uplo(UpLo), C.UL)
