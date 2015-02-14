@@ -673,3 +673,10 @@ a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
 @test_approx_eq lufact(a)\[2.0, 3.0] [2.0, 3.0]
 @test_approx_eq cholfact(a)\[2.0, 3.0] [2.0, 3.0]
 
+# issue #10113
+let S = spzeros(5,1), I = [false,true,false,true,false]
+    @test_throws BoundsError S[I]
+end
+
+# issue #9917
+@test sparse([]') == reshape(sparse([]), 1, 0)
