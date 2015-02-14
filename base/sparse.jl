@@ -7,7 +7,7 @@ using Base.LinAlg: AbstractTriangular
 importall Base
 importall Base.LinAlg
 
-export SparseMatrixCSC,
+export AbstractSparseArray, AbstractSparseMatrix, AbstractSparseVector, SparseMatrixCSC,
        blkdiag, dense, droptol!, dropzeros!, etree, issparse, nnz, nonzeros, nzrange,
        rowvals, sparse, sparsevec, spdiagm, speye, spones, sprand, sprandbool, sprandn,
        spzeros, symperm
