@@ -1074,7 +1074,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         e = jl_fieldref(e,0);
         jl_binding_t *b = jl_get_binding(topmod(ctx), (jl_sym_t*)e);
         if (!b || !b->value)
-            return (jl_value_t*)jl_any_type;
+            return jl_top_type;
         if (b->constp) {
             e = b->value;
             goto type_of_constant;
@@ -1101,7 +1101,7 @@ static jl_value_t *expr_type(jl_value_t *e, jl_codectx_t *ctx)
         }
         jl_binding_t *b = jl_get_binding(ctx->module, (jl_sym_t*)e);
         if (!b || !b->value)
-            return (jl_value_t*)jl_any_type;
+            return jl_top_type;
         if (b->constp)
             e = b->value;
         else

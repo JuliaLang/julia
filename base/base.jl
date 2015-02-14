@@ -271,7 +271,7 @@ call{T}(::Type{Array{T}}, m::Integer, n::Integer, o::Integer) =
 
 # TODO: possibly turn these into deprecations
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
-Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert((Int...), d))
+Array(T::Type, d::Integer...)           = Array{T}(convert((Int...), d))
 Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)

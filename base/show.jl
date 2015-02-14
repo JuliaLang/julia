@@ -66,7 +66,13 @@ function show(io::IO, x::IntrinsicFunction)
     print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
-show(io::IO, x::UnionType) = print(io, "Union", x.types)
+function show(io::IO, x::UnionType)
+    if is(x,Top)
+        print(io, "Top")
+    else
+        print(io, "Union", x.types)
+    end
+end
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 

@@ -52,9 +52,9 @@ let T = TypeVar(:T,true)
     @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
     @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
 
-    TT = TypeVar(:T)
-    S = TypeVar(:S,true); N = TypeVar(:N,true); SN = TypeVar(:S,Number,true)
-    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{SN,N}}) == Type{Array{SN,1}}
+    TT = TypeVar(:T,Top)
+    S = TypeVar(:S,true); N = TypeVar(:N,true)
+    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{S,N}}) == Type{Array{S,1}}
     # issue #5359
     @test typeintersect((Type{Array{T,1}},Array{T,1}),
                         (Type{AbstractVector},Vector{Int})) === Bottom
@@ -2156,8 +2156,3 @@ let
     @test g((),Int) == 0
     @test g((),()) == ()
 end
-
-# issue #8631
-f8631(::(Type, Type...), ::(Any, Any...)) = 1
-f8631{T}(::Type{(T...)}, x::Tuple) = 2
-@test length(methods(f8631, ((Type, Type...), (Any, Any...)))) == 2

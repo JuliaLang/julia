@@ -1138,6 +1138,7 @@ void jl_init_primitives(void)
 
     // builtin types
     add_builtin("Any", (jl_value_t*)jl_any_type);
+    add_builtin("Top",  (jl_value_t*)jl_top_type);
     add_builtin("Void", (jl_value_t*)jl_void_type);
     add_builtin("nothing", (jl_value_t*)jl_nothing);
     add_builtin("TypeVar", (jl_value_t*)jl_tvar_type);
@@ -1149,6 +1150,7 @@ void jl_init_primitives(void)
     add_builtin("Vararg", (jl_value_t*)jl_vararg_type);
     add_builtin("DataType", (jl_value_t*)jl_datatype_type);
     add_builtin("UnionType", (jl_value_t*)jl_uniontype_type);
+    add_builtin("Undef", (jl_value_t*)jl_undef_type);
 
     add_builtin("Module", (jl_value_t*)jl_module_type);
     add_builtin("Method", (jl_value_t*)jl_method_type);
