@@ -95,11 +95,13 @@ A = CHOLMOD.Sparse(48, 48,
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
 @test CHOLMOD.isvalid(chma)
+@test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test_approx_eq x ones(size(x))
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
+@test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test_approx_eq x ones(size(x))
 
@@ -334,6 +336,13 @@ for elty in (Float64, Complex{Float64})
     # Factor
     @test_throws ArgumentError cholfact(A1)
     @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - I)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -1.0)
+    @test_throws Base.LinAlg.ArgumentError ldltfact(sprandn(5, 5, 0.2) |> t -> t + t')
+    @test_throws Base.LinAlg.ArgumentError ldltfact(sprandn(5, 5, 0.2) |> t -> t + t', 0.0)
+    @test_throws ArgumentError cholfact(A1)
+    @test_throws ArgumentError cholfact(A1, 1.0)
+    @test_throws ArgumentError ldltfact(A1)
+    @test_throws ArgumentError ldltfact(A1, 1.0)
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -372,9 +381,9 @@ for elty in (Float64, Complex{Float64})
 
     ### update!
     F = cholfact(A1pd)
-    CHOLMOD.change_factor(elty, false, false, true, true, F)
+    CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(F.p).is_ll == 0
-    CHOLMOD.change_factor(elty, true, false, true, true, F)
+    CHOLMOD.change_factor!(elty, true, false, true, true, F)
     @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1

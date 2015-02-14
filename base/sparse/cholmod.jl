@@ -40,6 +40,7 @@ end
 const cholmod_com_offsets = Array(Csize_t, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
       Void, (Ptr{Csize_t},), cholmod_com_offsets)
+const common_supernodal = (1:4) + cholmod_com_offsets[4]
 const common_final_ll = (1:4) + cholmod_com_offsets[7]
 const common_print = (1:4) + cholmod_com_offsets[13]
 const common_itype = (1:4) + cholmod_com_offsets[18]
@@ -344,14 +345,14 @@ for Ti in IndexTypes
             s
         end
 
-        function change_factor{Tv<:VTypes}(::Type{Float64}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
+        function change_factor!{Tv<:VTypes}(::Type{Float64}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
             @isok ccall((@cholmod_name("change_factor", $Ti),:libcholmod), Cint,
                     (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
                         REAL, to_ll, to_super, to_packed, to_monotonic, F.p, common($Ti))
             Factor{Float64,$Ti}(F.p)
         end
 
-        function change_factor{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
+        function change_factor!{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
             @isok ccall((@cholmod_name("change_factor", $Ti),:libcholmod), Cint,
                     (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
                         COMPLEX, to_ll, to_super, to_packed, to_monotonic, F.p, common($Ti))
@@ -886,9 +887,11 @@ Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
 function cholfact(A::Sparse)
     sA = unsafe_load(A.p)
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(indtype(A))
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+
+    # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
     F = analyze(A, cm)
     factorize!(A, F, cm)
     s = unsafe_load(F.p)
@@ -897,33 +900,63 @@ function cholfact(A::Sparse)
 end
 
 function cholfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(Ti)
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+
+    # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
+
     F = analyze(A, cm)
-    factorize_p!(A, β, Ti[], F, cm)
+    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
+
     s = unsafe_load(F.p)
     s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
 function ldltfact(A::Sparse)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(indtype(A))
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+
+    # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
+
+    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
+    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
+
     F = analyze(A, cm)
     factorize!(A, F, cm)
+
+    # Check if decomposition failed
+    s = unsafe_load(F.p)
+    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+
     return F
 end
 
 function ldltfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(Ti)
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+
+    # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
+
+    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
+    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
+
     F = analyze(A, cm)
-    factorize_p!(A, β, Ti[], F, cm)
+    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
+
+    # Check if decomposition failed
     s = unsafe_load(F.p)
-    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
+    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+
     return F
 end
 
