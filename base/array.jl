@@ -1190,7 +1190,7 @@ function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
-    NZs = zeros(T, nnzA)
+    NZs = Array(T, nnzA)
     count = 1
     if nnzA > 0
         for j=1:size(A,2), i=1:size(A,1)
