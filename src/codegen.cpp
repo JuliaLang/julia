@@ -1360,6 +1360,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         }
         return;
     }
+    jl_value_t *ty = expr_type(expr, ctx);
     if (jl_is_symbolnode(expr)) {
         expr = (jl_value_t*)jl_symbolnode_sym(expr);
     }
@@ -1368,6 +1369,9 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         if (ctx->vars.find(vname) != ctx->vars.end()) {
             jl_varinfo_t &vi = ctx->vars[vname];
             vi.escapes |= esc;
+            vi.usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
+            if (!ctx->linfo->inferred)
+                vi.usedUndef = true;
             vi.used = true;
         }
     }
@@ -2865,7 +2869,8 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     }
     assert(jbp == NULL);
     if (arg != NULL ||    // arguments are always defined
-        ((!is_var_closed(sym, ctx) || !vi.isAssigned) && !vi.usedUndef)) {
+        ((!is_var_closed(sym, ctx) || !vi.isAssigned) &&
+         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))) {
         Value *theLoad = builder.CreateLoad(bp, vi.isVolatile);
         if (vi.closureidx > -1 && !(vi.isAssigned && vi.isCaptured))
             theLoad = tbaa_decorate(tbaa_const, (Instruction*)theLoad);
@@ -2996,7 +3001,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_sym_t *sym = (jl_sym_t*)expr;
         if (valuevar != NULL)
             *valuevar = sym;
-        return emit_var(sym, (jl_value_t*)jl_any_type, ctx, isboxed);
+        return emit_var(sym, (jl_value_t*)jl_undef_type, ctx, isboxed);
     }
     if (jl_is_symbolnode(expr)) {
         if (!valuepos) return NULL;
@@ -3062,12 +3067,15 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
+        jl_value_t *etype = expr_type(expr, ctx);
         jl_module_t *mod = topmod(ctx);
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
         Value *bp = julia_binding_gv(b);
-        if (b->constp && b->value!=NULL) {
+        if ((b->constp && b->value!=NULL) ||
+            (etype!=(jl_value_t*)jl_any_type &&
+             !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
             return builder.CreateLoad(bp, false);
         }
         return emit_checked_var(bp, var, ctx);
@@ -3438,7 +3446,7 @@ static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
     jl_varinfo_t &vi = ctx->vars[s];
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && !vi.isCaptured && !vi.usedUndef &&
+    return (ctx->linfo->inferred && !vi.isCaptured &&
             // don't unbox vararg tuples
             s != ctx->vaName && store_unboxed_p(vi.declType));
 }
@@ -3741,7 +3749,6 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (varinfo.isCaptured)
             varinfo.used = true;
         varinfo.isSA = (jl_vinfo_sa(vi)!=0);
-        varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || (!varinfo.isArgument && !lam->inferred);
         varinfo.declType = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -3756,9 +3763,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         varinfo.closureidx = i;
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = true;
-        varinfo.escapes = true;
         varinfo.used = true;
-        varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || !lam->inferred;
+        varinfo.escapes = true;
         varinfo.declType = jl_cellref(vi,1);
     }
 

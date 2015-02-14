@@ -74,6 +74,7 @@ importall .SimdLoop
 include("reduce.jl")
 
 # compiler
+import Core.Undef  # used internally by compiler
 include("inference.jl")
 
 # For OS specific stuff in I/O
