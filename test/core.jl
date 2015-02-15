@@ -2164,4 +2164,7 @@ f8631{T}(::Type{(T...)}, x::Tuple) = 2
 
 # issue caused by 8d0037cb377257fc4232c8526b12337dd7bdf0a7
 args8d003 = (:x, :y)
-@test eval(:(:(f($($(args8d003...)))))) == :(f(x,y))
+@test eval(:(:(f($(($args8d003)...))))) == :(f(x,y))
+x8d003 = Any[:y8d003]
+y8d003 = 777
+@test eval(:(string(:(f($($(x8d003...))))))) == "f(777)"
