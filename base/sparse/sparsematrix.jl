@@ -1884,47 +1884,60 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
 end
 
 
-
 # Sparse concatenation
 
 function vcat(X::SparseMatrixCSC...)
-    num = length(X)
-    mX = [ size(x, 1) for x in X ]
-    nX = [ size(x, 2) for x in X ]
-    n = nX[1]
-    for i = 2 : num
-        if nX[i] != n; throw(DimensionMismatch("")); end
-    end
-    m = sum(mX)
-
     Tv = promote_type(map(x->eltype(x.nzval), X)...)
     Ti = promote_type(map(x->eltype(x.rowval), X)...)
 
-    colptr = Array(Ti, n + 1)
+    vcat(map(x->convert(SparseMatrixCSC{Tv,Ti}, x), X)...)
+end
+
+function vcat{Tv,Ti<:Integer}(X::SparseMatrixCSC{Tv,Ti}...)
+    num = length(X)
+    mX = [ size(x, 1) for x in X ]
+    nX = [ size(x, 2) for x in X ]
+    m = sum(mX)
+    n = nX[1]
+
+    for i = 2 : num
+        if nX[i] != n
+            throw(DimensionMismatch("All inputs to vcat should have the same number of columns"))
+        end
+    end
+
     nnzX = [ nnz(x) for x in X ]
     nnz_res = sum(nnzX)
+    colptr = Array(Ti, n + 1)
     rowval = Array(Ti, nnz_res)
-    nzval = Array(Tv, nnz_res)
+    nzval  = Array(Tv, nnz_res)
 
     colptr[1] = 1
-    @inbounds for c = 1 : n
+    for c = 1:n
         mX_sofar = 0
-        rr1 = colptr[c]
+        ptr_res = colptr[c]
         for i = 1 : num
-            XI = X[i]
-            rX1 = XI.colptr[c]
-            rX2 = XI.colptr[c + 1] - 1
-            rr2 = rr1 + (rX2 - rX1)
+            Xi = X[i]
+            colptrXi = Xi.colptr
+            rowvalXi = Xi.rowval
+            nzvalXi  = Xi.nzval
 
-            rowval[rr1 : rr2] = XI.rowval[rX1 : rX2] .+ mX_sofar
-            nzval[rr1 : rr2] = XI.nzval[rX1 : rX2]
+            col_length = (colptrXi[c + 1] - 1) - colptrXi[c]
+            ptrXi = colptrXi[c]
+            for k=ptr_res:(ptr_res + col_length)
+                @inbounds rowval[k] = rowvalXi[ptrXi] + mX_sofar
+                @inbounds nzval[k]  = nzvalXi[ptrXi]
+                ptrXi += 1
+            end
+
+            ptr_res += col_length + 1
             mX_sofar += mX[i]
-            rr1 = rr2 + 1
         end
-        colptr[c + 1] = rr1
+        colptr[c + 1] = ptr_res
     end
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
+
 
 function hcat(X::SparseMatrixCSC...)
     num = length(X)
