@@ -15,12 +15,12 @@ ifeq ($(JULIA_DIST_TARNAME),)
 	JULIA_DIST_TARNAME = julia-$(JULIA_COMMIT)-$(OS)-$(ARCH)
 endif
 
-all: default
 ifeq ($(JULIA_DEBUG), 1)
 default: debug
 else
 default: release
 endif
+all: debug release
 
 # sort is used to remove potential duplicates
 DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_libexecdir) $(build_sysconfdir)/julia $(build_datarootdir)/julia $(build_man1dir))
@@ -46,10 +46,38 @@ else
        $(warn "Submodules could not be updated because git is unavailable")
 endif
 
-debug release: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
-	@$(MAKE) $(QUIET_MAKE) julia-$@
-	@export private_libdir=$(private_libdir) && \
-	$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$@)" $(build_private_libdir)/sys.$(SHLIB_EXT)
+julia-symlink-debug: julia-ui-debug
+ifneq ($(OS),WINNT)
+ifndef JULIA_VAGRANT_BUILD
+	@ln -sf "$(build_bindir)/julia-debug" julia
+endif
+endif
+
+julia-symlink-release: julia-ui-release
+ifneq ($(OS),WINNT)
+ifndef JULIA_VAGRANT_BUILD
+	@ln -sf "$(build_bindir)/julia" julia
+endif
+endif
+
+julia-deps: git-submodules
+	@$(MAKE) $(QUIET_MAKE) -C deps
+
+julia-base: julia-deps
+	@$(MAKE) $(QUIET_MAKE) -C base
+
+julia-src-%: julia-deps
+	@$(MAKE) $(QUIET_MAKE) -C src libjulia-$*
+
+julia-ui-%: julia-src-%
+	@$(MAKE) $(QUIET_MAKE) -C ui julia-$*
+
+julia-sysimg-% : julia-ui-% julia-base
+	@$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)" $(build_private_libdir)/sys.$(SHLIB_EXT)
+
+julia-debug julia-release : julia-% : julia-sysimg-% julia-symlink-% | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+
+debug release : % : julia-%
 
 check-whitespace:
 ifneq ($(NO_GIT), 1)
@@ -99,23 +127,6 @@ release-candidate: release test
 	@echo 8. Announce on mailing lists
 	@echo 9. Change master to release-0.X in base/version.jl and base/version_git.sh as in 4cb1e20
 	@echo
-
-julia-debug-symlink:
-	@ln -sf $(build_bindir)/julia-debug julia
-
-julia-release-symlink:
-	@ln -sf $(build_bindir)/julia julia
-
-julia-debug julia-release: git-submodules
-	@$(MAKE) $(QUIET_MAKE) -C deps
-	@$(MAKE) $(QUIET_MAKE) -C src lib$@
-	@$(MAKE) $(QUIET_MAKE) -C base
-	@$(MAKE) $(QUIET_MAKE) -C ui $@
-ifneq ($(OS),WINNT)
-ifndef JULIA_VAGRANT_BUILD
-	@$(MAKE) $(QUIET_MAKE) $@-symlink
-endif
-endif
 
 $(build_docdir)/helpdb.jl: doc/helpdb.jl | $(build_docdir)
 	@cp $< $@
@@ -448,6 +459,7 @@ distcleanall: cleanall
 
 .PHONY: default debug release check-whitespace release-candidate \
 	julia-debug julia-release \
+	julia-deps julia-ui-* julia-src-* julia-symlink-* julia-base julia-sysimg-* \
 	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install dist source-dist git-submodules
