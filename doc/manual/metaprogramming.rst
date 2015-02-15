@@ -219,11 +219,11 @@ and ``quote .. end`` blocks are treated identically.
             x = 1
             y = 2
             x + y
-        end
+           end
     quote  # none, line 2:
-    x = 1 # line 3:
-    y = 2 # line 4:
-    x + y
+        x = 1 # line 3:
+        y = 2 # line 4:
+        x + y
     end
 
     julia> typeof(ex)
@@ -281,13 +281,13 @@ at global scope using :func:`eval`:
     julia> eval(ans)
     3
 
-    julia> ex = :(a + b)
-    :(a + b)
+    julia> ex = :(c + d)
+    :(c + d)
 
     julia> eval(ex)
-    ERROR: a not defined
+    ERROR: c not defined
 
-    julia> a = 1; b = 2;
+    julia> c = 1; d = 2;
 
     julia> eval(ex)
     3

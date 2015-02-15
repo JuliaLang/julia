@@ -8103,7 +8103,9 @@ popdisplay(d::Display)
 
 ("Base","lgamma","lgamma(x)
 
-   Compute the logarithm of absolute value of \"gamma(x)\"
+   Compute the logarithm of the absolute value of \"gamma(x)\" for
+   \"Real()\" \"x\", while for \"Complex()\" \"x\" it computes the
+   logarithm of \"gamma(x)\".
 
 "),
 
