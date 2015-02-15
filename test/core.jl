@@ -2161,3 +2161,7 @@ end
 f8631(::(Type, Type...), ::(Any, Any...)) = 1
 f8631{T}(::Type{(T...)}, x::Tuple) = 2
 @test length(methods(f8631, ((Type, Type...), (Any, Any...)))) == 2
+
+# issue caused by 8d0037cb377257fc4232c8526b12337dd7bdf0a7
+args8d003 = (:x, :y)
+@test eval(:(:(f($($(args8d003...)))))) == :(f(x,y))
