@@ -31,4 +31,5 @@
 /virtualenv-*
 /julia-env
 /objconv*
-/Rmath-julia*
+/Rmath-julia-*
+/openlibm-*
