@@ -8,7 +8,11 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#ifdef LLVM37
+#include "llvm/IR/LegacyPassManager.h"
+#else
 #include <llvm/PassManager.h>
+#endif
 #include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
@@ -110,6 +114,9 @@
 #include <cstdio>
 #include <cassert>
 using namespace llvm;
+#if LLVM37
+using namespace llvm::legacy;
+#endif
 
 extern "C" {
 
