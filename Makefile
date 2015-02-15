@@ -60,7 +60,7 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-julia-deps: git-submodules
+julia-deps: git-submodules |  $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C deps
 
 julia-base: julia-deps
@@ -75,7 +75,7 @@ julia-ui-%: julia-src-%
 julia-sysimg-% : julia-ui-% julia-base
 	@$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-julia-debug julia-release : julia-% : julia-sysimg-% julia-symlink-% | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-debug julia-release : julia-% : julia-sysimg-% julia-symlink-%
 
 debug release : % : julia-%
 
@@ -158,7 +158,7 @@ else
 	@true
 endif
 
-$(build_private_libdir)/sys0.o:
+$(build_private_libdir)/sys0.o: | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
 	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
