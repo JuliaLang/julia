@@ -402,7 +402,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         // temporarily assign so binding is available for field types
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(((void**)b)-1, dt);
+        gc_wb_binding(b,dt);
 
         JL_TRY {
             // operations that can fail
