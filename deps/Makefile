@@ -3,6 +3,27 @@ JULIAHOME = $(abspath ..)
 include Versions.make
 include $(JULIAHOME)/Make.inc
 
+# Special comments:
+#
+# all targets in here should follow the same structure,
+# and provide a get-a, configure-a, compile-a, check-a, and install-a
+# additionally all targets should be listed in the getall target for easier off-line compilation
+# if you are adding a new target, it can help to copy an similar, existing target
+#
+# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
+# custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
+# CMake libs: libgit2
+#
+# downloaded from git: llvm-svn, uv, libopenlibm, mojibake, openspecfun
+#
+# there are rules in this file with the . replaced by a %
+# this is some magic Makefile trick that tells make
+# that all targets with a % in them on that line will
+# be rebuilt in a single invocation
+#
+
+## Some shared configuration options ##
+
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -31,9 +52,8 @@ endif
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
-#autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
-#CMake libs: libgit2
+
+## Overall configuration of which rules exist and should be run by default ##
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
@@ -685,7 +705,7 @@ endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
+$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a : $(OPENLIBM_OBJ_SOURCE)
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
 	touch -c $@
@@ -748,7 +768,7 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 
 ## DSFMT ##
 
-DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) $(build_includedir)/dSFMT.h
 DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 DSFMT_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
@@ -774,7 +794,7 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 	cd dsfmt-$(DSFMT_VER) && \
 	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT)
-$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+$(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
 	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(build_includedir)
 	cp $< $@ && \
 	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET)
