@@ -23,8 +23,8 @@ rowvals(S::SparseMatrixCSC) = S.rowval
 nzrange(S::SparseMatrixCSC, col::Integer) = S.colptr[col]:(S.colptr[col+1]-1)
 
 function showarray(io::IO, S::SparseMatrixCSC;
-                        header::Bool=true, limit::Bool=Base._limit_output,
-                        rows = Base.tty_size()[1], repr=false)
+                   header::Bool=true, limit::Bool=Base._limit_output,
+                   rows = Base.tty_size()[1], repr=false)
     # TODO: repr?
 
     if header
