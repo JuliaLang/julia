@@ -194,51 +194,51 @@ run(`rm tmp.mtx`)
 # test that Sparse(Ptr) constructor throws the right places
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 ### illegal dtype (for now but should be supprted at some point)
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal dtype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal xtype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 3)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal itype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal itype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 # test that Sparse(Ptr) works for SuiteSparse_long (on 64 bit systems)
 if CHOLMOD.SuiteSparse_long == Int64
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
-    @test isa(CHOLMOD.Sparse(p), CHOLMOD.Sparse{Float64,CHOLMOD.SuiteSparse_long})
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Int32))
+    @test isa(CHOLMOD.Sparse(p), CHOLMOD.Sparse{Float64,Int32})
 end
 
 # Test Dense wrappers (only Float64 supported a present)
@@ -283,9 +283,9 @@ end
 
 # Test Sparse and Factor
 ## test free_sparse!
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64,Cint}},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64,Cint}},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Int))
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
