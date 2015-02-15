@@ -13,6 +13,7 @@ export
     LinAlg,
     BLAS,
     LAPACK,
+    SparseMatrix,
     Docs,
     Markdown,
 
@@ -904,6 +905,7 @@ export
     searchindex,
     show,
     showall,
+    showarray,
     showcompact,
     showerror,
     split,
