@@ -1,6 +1,11 @@
 include("choosetests.jl")
 tests, net_on = choosetests(ARGS)
 
+if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
+    warn("Running under valgrind: Skipping rounding tests")
+    filter!(x -> x != "rounding", tests)
+end
+
 cd(dirname(@__FILE__)) do
     n = 1
     if net_on
