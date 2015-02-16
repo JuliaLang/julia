@@ -510,7 +510,7 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //printf("lookup %d\n", AddrBase);
+    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
@@ -530,7 +530,7 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //printf("lookup base %d\n", dwAddr);
+    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
@@ -737,11 +737,11 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         if (line_num == ip)
-            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
+            jl_safe_printf("unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
-            ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
         else
-            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s:%d\n", func_name, file_name, line_num);
     }
 }
 
@@ -769,9 +769,9 @@ void NORETURN throw_internal(jl_value_t *e)
     }
     else {
         if (jl_current_task == jl_root_task) {
-            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+            jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
             jl_static_show(JL_STDERR, e);
-            JL_PRINTF(JL_STDERR, "\n");
+            jl_printf(JL_STDERR, "\n");
             jlbacktrace();
             jl_exit(1);
         }
@@ -779,7 +779,7 @@ void NORETURN throw_internal(jl_value_t *e)
         finish_task(jl_current_task, e);
         assert(0);
     }
-    jl_exit(1);
+    assert(0);
 }
 
 // record backtrace and raise an error

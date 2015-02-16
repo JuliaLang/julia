@@ -386,6 +386,7 @@ value_t cvalue_wchar(value_t *args, uint32_t nargs);
 
 void fl_init(size_t initial_heapsize);
 int fl_load_system_image(value_t ios);
+int fl_load_system_image_str(char* str, size_t len);
 
 /* julia extensions */
 DLLEXPORT int jl_id_char(uint32_t wc);

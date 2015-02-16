@@ -27,7 +27,6 @@ static uint8_t flisp_system_image[] = {
 #include "julia_flisp.boot.inc"
 };
 
-extern fltype_t *iostreamtype;
 static fltype_t *jvtype=NULL;
 
 static value_t true_sym;
@@ -120,13 +119,10 @@ extern int jl_parse_depwarn(int warn);
 void jl_init_frontend(void)
 {
     fl_init(4*1024*1024);
-    value_t img = cvalue(iostreamtype, sizeof(ios_t));
-    ios_t *pi = value2c(ios_t*, img);
-    ios_static_buffer(pi, (char*)flisp_system_image, sizeof(flisp_system_image));
 
-    if (fl_load_system_image(img)) {
-        JL_PRINTF(JL_STDERR, "fatal error loading system image\n");
-        jl_exit(1);
+    if (fl_load_system_image_str((char*)flisp_system_image,
+                                 sizeof(flisp_system_image))) {
+        jl_error("fatal error loading system image\n");
     }
 
     fl_applyn(0, symbol_value(symbol("__init_globals")));

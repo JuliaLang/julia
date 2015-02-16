@@ -143,7 +143,7 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
 #endif
 
     if (throw_err) {
-        //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
+        //jl_printf(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
         jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
     }
     uv_dlclose(handle);

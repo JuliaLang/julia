@@ -322,7 +322,7 @@ static void jl_delayed_fptrs(jl_lambda_info_t *li, int32_t func, int32_t cfunc)
 
 static void jl_update_all_fptrs()
 {
-    //printf("delayed_fptrs_n: %d\n", delayed_fptrs_n);
+    //jl_printf(JL_STDOUT, "delayed_fptrs_n: %d\n", delayed_fptrs_n);
     jl_value_t ***gvars = sysimg_gvars;
     if (gvars == 0) return;
     // jl_fptr_to_llvm needs to decompress some ASTs, therefore this needs to be NULL
@@ -743,7 +743,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
     }
 }
 
-void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, jl_methtable_t *mt, int8_t iskw)
+static void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, jl_methtable_t *mt, int8_t iskw)
 {
     if (iskw) {
         if (!mt->kwsorter)
@@ -783,7 +783,7 @@ void jl_serialize_methtable_from_mod(ios_t *s, jl_module_t *m, jl_sym_t *name, j
     }
 }
 
-void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
+static void jl_serialize_lambdas_from_mod(ios_t *s, jl_module_t *m)
 {
     if (m == jl_current_module) return;
     size_t i;
@@ -1337,8 +1337,7 @@ DLLEXPORT void jl_save_system_image(const char *fname)
     htable_reset(&backref_table, 250000);
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        JL_PRINTF(JL_STDERR, "Cannot open system image file \"%s\" for writing.\n", fname);
-        exit(1);
+        jl_errorf("Cannot open system image file \"%s\" for writing.\n", fname);
     }
 
     // orphan old Base module if present
@@ -1411,8 +1410,7 @@ void jl_restore_system_image(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        JL_PRINTF(JL_STDERR, "System image file \"%s\" not found\n", fname);
-        exit(1);
+        jl_errorf("System image file \"%s\" not found\n", fname);
     }
     int build_mode = 0;
 #ifdef _OS_WINDOWS_
@@ -1475,7 +1473,7 @@ void jl_restore_system_image(const char *fname)
     jl_set_t_uid_ctr(read_int32(&f));
     jl_set_gs_ctr(read_int32(&f));
 
-    //ios_printf(ios_stderr, "backref_list.len = %d\n", backref_list.len);
+    //jl_printf(JL_STDERR, "backref_list.len = %d\n", backref_list.len);
     arraylist_free(&backref_list);
     ios_close(&f);
 
@@ -1550,7 +1548,7 @@ jl_value_t *jl_compress_ast(jl_lambda_info_t *li, jl_value_t *ast)
     jl_serialize_value(&dest, jl_lam_body((jl_expr_t*)ast)->etype);
     jl_serialize_value(&dest, ast);
 
-    //JL_PRINTF(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
+    //jl_printf(JL_STDERR, "%d bytes, %d values\n", dest.size, vals->length);
 
     jl_value_t *v = (jl_value_t*)jl_takebuf_array(&dest);
     if (jl_array_len(tree_literal_values) == 0 && last_tlv == NULL) {
@@ -1590,7 +1588,7 @@ int jl_save_new_module(const char *fname, jl_module_t *mod)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 1, 1, 1) == NULL) {
-        JL_PRINTF(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
+        jl_printf(JL_STDERR, "Cannot open cache file \"%s\" for writing.\n", fname);
         return 1;
     }
     htable_new(&backref_table, 5000);
@@ -1628,7 +1626,7 @@ jl_module_t *jl_restore_new_module(const char *fname)
 {
     ios_t f;
     if (ios_file(&f, fname, 1, 0, 0, 0) == NULL) {
-        JL_PRINTF(JL_STDERR, "Cache file \"%s\" not found\n", fname);
+        jl_printf(JL_STDERR, "Cache file \"%s\" not found\n", fname);
         return NULL;
     }
     if (ios_eof(&f)) {
@@ -1649,7 +1647,7 @@ jl_module_t *jl_restore_new_module(const char *fname)
     jl_binding_t *b = jl_get_binding_wr(parent, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
+        jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     b->value = jl_deserialize_value(&f, &b->value);
 

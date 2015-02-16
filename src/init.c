@@ -212,7 +212,7 @@ void sigdie_handler(int sig, siginfo_t *info, void *context)
         sigprocmask(SIG_UNBLOCK, &sset, NULL);
         signal(sig, SIG_DFL);
     }
-    ios_printf(ios_stderr,"\nsignal (%d): %s\n", sig, strsignal(sig));
+    jl_safe_printf("\nsignal (%d): %s\n", sig, strsignal(sig));
 #ifdef __APPLE__
     bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (bt_context_t)&((ucontext64_t*)context)->uc_mcontext64->__ss);
 #else
@@ -305,7 +305,7 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         jl_signal_pending = 0;
         if ((DWORD)-1 == SuspendThread(hMainThread)) {
             //error
-            fputs("error: SuspendThread failed\n",stderr);
+            jl_safe_printf("error: SuspendThread failed\n");
             return 0;
         }
         CONTEXT ctxThread;
@@ -313,18 +313,18 @@ static BOOL WINAPI sigint_handler(DWORD wsig) //This needs winapi types to guara
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!GetThreadContext(hMainThread, &ctxThread)) {
             //error
-            fputs("error: GetThreadContext failed\n",stderr);
+            jl_safe_printf("error: GetThreadContext failed\n");
             return 0;
         }
         jl_throw_in_ctx(jl_interrupt_exception, &ctxThread, 1);
         ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
         if (!SetThreadContext(hMainThread,&ctxThread)) {
-            fputs("error: SetThreadContext failed\n",stderr);
+            jl_safe_printf("error: SetThreadContext failed\n");
             //error
             return 0;
         }
         if ((DWORD)-1 == ResumeThread(hMainThread)) {
-            fputs("error: ResumeThread failed\n",stderr);
+            jl_safe_printf("error: ResumeThread failed\n");
             //error
             return 0;
         }
@@ -344,52 +344,52 @@ static LONG WINAPI _exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo,
                 jl_throw_in_ctx(jl_stackovf_exception, ExceptionInfo->ContextRecord,in_ctx&&pSetThreadStackGuarantee);
                 return EXCEPTION_CONTINUE_EXECUTION;
         }
-        ios_puts("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ", ios_stderr);
+        jl_safe_printf("\nPlease submit a bug report with steps to reproduce this fault, and any error messages that follow (in their entirety). Thanks.\nException: ");
         switch (ExceptionInfo->ExceptionRecord->ExceptionCode) {
             case EXCEPTION_ACCESS_VIOLATION:
-                ios_puts("EXCEPTION_ACCESS_VIOLATION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_ACCESS_VIOLATION"); break;
             case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
-                ios_puts("EXCEPTION_ARRAY_BOUNDS_EXCEEDED", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_ARRAY_BOUNDS_EXCEEDED"); break;
             case EXCEPTION_BREAKPOINT:
-                ios_puts("EXCEPTION_BREAKPOINT", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_BREAKPOINT"); break;
             case EXCEPTION_DATATYPE_MISALIGNMENT:
-                ios_puts("EXCEPTION_DATATYPE_MISALIGNMENT", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_DATATYPE_MISALIGNMENT"); break;
             case EXCEPTION_FLT_DENORMAL_OPERAND:
-                ios_puts("EXCEPTION_FLT_DENORMAL_OPERAND", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_DENORMAL_OPERAND"); break;
             case EXCEPTION_FLT_DIVIDE_BY_ZERO:
-                ios_puts("EXCEPTION_FLT_DIVIDE_BY_ZERO", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_DIVIDE_BY_ZERO"); break;
             case EXCEPTION_FLT_INEXACT_RESULT:
-                ios_puts("EXCEPTION_FLT_INEXACT_RESULT", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_INEXACT_RESULT"); break;
             case EXCEPTION_FLT_INVALID_OPERATION:
-                ios_puts("EXCEPTION_FLT_INVALID_OPERATION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_INVALID_OPERATION"); break;
             case EXCEPTION_FLT_OVERFLOW:
-                ios_puts("EXCEPTION_FLT_OVERFLOW", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_OVERFLOW"); break;
             case EXCEPTION_FLT_STACK_CHECK:
-                ios_puts("EXCEPTION_FLT_STACK_CHECK", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_STACK_CHECK"); break;
             case EXCEPTION_FLT_UNDERFLOW:
-                ios_puts("EXCEPTION_FLT_UNDERFLOW", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_FLT_UNDERFLOW"); break;
             case EXCEPTION_ILLEGAL_INSTRUCTION:
-                ios_puts("EXCEPTION_ILLEGAL_INSTRUCTION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_ILLEGAL_INSTRUCTION"); break;
             case EXCEPTION_IN_PAGE_ERROR:
-                ios_puts("EXCEPTION_IN_PAGE_ERROR", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_IN_PAGE_ERROR"); break;
             case EXCEPTION_INT_DIVIDE_BY_ZERO:
-                ios_puts("EXCEPTION_INT_DIVIDE_BY_ZERO", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_INT_DIVIDE_BY_ZERO"); break;
             case EXCEPTION_INT_OVERFLOW:
-                ios_puts("EXCEPTION_INT_OVERFLOW", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_INT_OVERFLOW"); break;
             case EXCEPTION_INVALID_DISPOSITION:
-                ios_puts("EXCEPTION_INVALID_DISPOSITION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_INVALID_DISPOSITION"); break;
             case EXCEPTION_NONCONTINUABLE_EXCEPTION:
-                ios_puts("EXCEPTION_NONCONTINUABLE_EXCEPTION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_NONCONTINUABLE_EXCEPTION"); break;
             case EXCEPTION_PRIV_INSTRUCTION:
-                ios_puts("EXCEPTION_PRIV_INSTRUCTION", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_PRIV_INSTRUCTION"); break;
             case EXCEPTION_SINGLE_STEP:
-                ios_puts("EXCEPTION_SINGLE_STEP", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_SINGLE_STEP"); break;
             case EXCEPTION_STACK_OVERFLOW:
-                ios_puts("EXCEPTION_STACK_OVERFLOW", ios_stderr); break;
+                jl_safe_printf("EXCEPTION_STACK_OVERFLOW"); break;
             default:
-                ios_puts("UNKNOWN", ios_stderr); break;
+                jl_safe_printf("UNKNOWN"); break;
         }
-        ios_printf(ios_stderr," at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
+        jl_safe_printf(" at 0x%Ix -- ", (size_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         gdblookup((ptrint_t)ExceptionInfo->ExceptionRecord->ExceptionAddress);
         bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, ExceptionInfo->ContextRecord);
         jlbacktrace();
@@ -470,7 +470,7 @@ static void jl_uv_exitcleanup_add(uv_handle_t *handle, struct uv_shutdown_queue 
 
 static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 {
-    if (handle != (uv_handle_t*)jl_uv_stdout && handle != (uv_handle_t*)jl_uv_stderr)
+    if (handle != (uv_handle_t*)JL_STDOUT && handle != (uv_handle_t*)JL_STDERR)
         jl_uv_exitcleanup_add(handle, (struct uv_shutdown_queue*)arg);
 }
 
@@ -493,7 +493,7 @@ DLLEXPORT void jl_atexit_hook()
                 jl_apply((jl_function_t*)f, NULL, 0);
             }
             JL_CATCH {
-                JL_PRINTF(JL_STDERR, "\natexit hook threw an error: ");
+                jl_printf(JL_STDERR, "\natexit hook threw an error: ");
                 jl_show(jl_stderr_obj(),jl_exception_in_transit);
             }
         }
@@ -502,14 +502,21 @@ DLLEXPORT void jl_atexit_hook()
     jl_gc_run_all_finalizers();
 
     uv_loop_t *loop = jl_global_event_loop();
+
+    if (loop == NULL) {
+        return;
+    }
+
     struct uv_shutdown_queue queue = {NULL, NULL};
     uv_walk(loop, jl_uv_exitcleanup_walk, &queue);
     // close stdout and stderr last, since we like being
     // able to show stuff (incl. printf's)
-    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stdout, &queue);
-    jl_uv_exitcleanup_add((uv_handle_t*)jl_uv_stderr, &queue);
-    //uv_unref((uv_handle_t*)jl_uv_stdout);
-    //uv_unref((uv_handle_t*)jl_uv_stderr);
+    if (JL_STDOUT != (void*) STDOUT_FILENO)
+        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDOUT, &queue);
+    if (JL_STDERR != (void*) STDERR_FILENO)
+        jl_uv_exitcleanup_add((uv_handle_t*)JL_STDERR, &queue);
+    //uv_unref((uv_handle_t*)JL_STDOUT);
+    //uv_unref((uv_handle_t*)JL_STDERR);
     struct uv_shutdown_queue_item *item = queue.first;
     while (item) {
         JL_TRY {
@@ -593,13 +600,12 @@ void *init_stdio_handle(uv_file fd,int readable)
     // unnecessary.
     fd = dup(fd);
 #endif
-    //printf("%d: %d -- %d\n", fd, type, 0);
+    //jl_printf(JL_STDOUT, "%d: %d -- %d\n", fd, type, 0);
     switch(type) {
         case UV_TTY:
             handle = malloc(sizeof(uv_tty_t));
             if (uv_tty_init(jl_io_loop,(uv_tty_t*)handle,fd,readable)) {
                 jl_errorf("Error initializing stdio in uv_tty_init (%d, %d)\n", fd, type);
-                abort();
             }
             ((uv_tty_t*)handle)->data=0;
             uv_tty_set_mode((uv_tty_t*)handle,0); //cooked stdio
@@ -624,11 +630,9 @@ void *init_stdio_handle(uv_file fd,int readable)
             handle = malloc(sizeof(uv_pipe_t));
             if (uv_pipe_init(jl_io_loop, (uv_pipe_t*)handle, (readable?UV_PIPE_READABLE:UV_PIPE_WRITABLE))) {
                 jl_errorf("Error initializing stdio in uv_pipe_init (%d, %d)\n", fd, type);
-                abort();
             }
             if (uv_pipe_open((uv_pipe_t*)handle,fd)) {
                 jl_errorf("Error initializing stdio in uv_pipe_open (%d, %d)\n", fd, type);
-                abort();
             }
             ((uv_pipe_t*)handle)->data=0;
             break;
@@ -636,18 +640,15 @@ void *init_stdio_handle(uv_file fd,int readable)
             handle = malloc(sizeof(uv_tcp_t));
             if (uv_tcp_init(jl_io_loop, (uv_tcp_t*)handle)) {
                 jl_errorf("Error initializing stdio in uv_tcp_init (%d, %d)\n", fd, type);
-                abort();
             }
             if (uv_tcp_open((uv_tcp_t*)handle,fd)) {
                 jl_errorf("Error initializing stdio in uv_tcp_open (%d, %d)\n", fd, type);
-                abort();
             }
             ((uv_tcp_t*)handle)->data=0;
             break;
         case UV_UDP:
         default:
             jl_errorf("This type of handle for stdio is not yet supported (%d, %d)!\n", fd, type);
-            handle = NULL;
             break;
     }
     return handle;
@@ -655,9 +656,11 @@ void *init_stdio_handle(uv_file fd,int readable)
 
 void init_stdio()
 {   //order must be 2,1,0
-    JL_STDERR = (uv_stream_t*)init_stdio_handle(2,0);
-    JL_STDOUT = (uv_stream_t*)init_stdio_handle(1,0);
-    JL_STDIN = (uv_stream_t*)init_stdio_handle(0,1);
+    JL_STDERR = (uv_stream_t*)init_stdio_handle(STDERR_FILENO,0);
+    JL_STDOUT = (uv_stream_t*)init_stdio_handle(STDOUT_FILENO,0);
+    JL_STDIN  = (uv_stream_t*)init_stdio_handle(STDIN_FILENO,1);
+
+    jl_flush_cstdio();
 }
 
 #ifdef JL_USE_INTEL_JITEVENTS
@@ -689,7 +692,7 @@ void *mach_segv_listener(void *arg)
     (void)arg;
     while (1) {
         int ret = mach_msg_server(exc_server,2048,segv_port,MACH_MSG_TIMEOUT_NONE);
-        printf("mach_msg_server: %s\n", mach_error_string(ret));
+        jl_safe_printf("mach_msg_server: %s\n", mach_error_string(ret));
         jl_exit(1);
     }
 }
@@ -781,7 +784,7 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
     else {
         ret = thread_get_state(thread,x86_THREAD_STATE64,(thread_state_t)&state,&count);
         HANDLE_MACH_ERROR("thread_get_state(3)",ret);
-        ios_printf(ios_stderr,"\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
+        jl_safe_printf("\nsignal (%d): %s\n", SIGSEGV, strsignal(SIGSEGV));
         bt_size = rec_backtrace_ctx(bt_data, MAX_BT_SIZE, (unw_context_t*)&state);
         jlbacktrace();
         return KERN_INVALID_ARGUMENT;
@@ -824,12 +827,10 @@ static char *abspath(const char *in)
             size_t len = strlen(in);
             char *path = (char*)malloc(PATH_MAX);
             if (uv_cwd(path, &path_size)) {
-                ios_printf(ios_stderr, "fatal error: unexpected error while retrieving current working directory\n");
-                exit(1);
+                jl_error("fatal error: unexpected error while retrieving current working directory\n");
             }
             if (path_size + len + 1 >= PATH_MAX) {
-                ios_printf(ios_stderr, "fatal error: current working directory path too long\n");
-                exit(1);
+                jl_error("fatal error: current working directory path too long\n");
             }
             path[path_size-1] = PATHSEPSTRING[0];
             memcpy(path+path_size, in, len+1);
@@ -840,14 +841,12 @@ static char *abspath(const char *in)
 #else
     DWORD n = GetFullPathName(in, 0, NULL, NULL);
     if (n <= 0) {
-        ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
-        exit(1);
+        jl_error("fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
     }
     char *out = (char*)malloc(n);
     DWORD m = GetFullPathName(in, n, out, NULL);
     if (n != m + 1) {
-        ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
-        exit(1);
+        jl_error("fatal error: jl_compileropts.image_file path too long or GetFullPathName failed\n");
     }
 #endif
     return out;
@@ -864,12 +863,10 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
     if (uv_exepath(free_path, &path_size)) {
-        ios_printf(ios_stderr, "fatal error: unexpected error while retrieving exepath\n");
-        exit(1);
+        jl_error("fatal error: unexpected error while retrieving exepath\n");
     }
     if (path_size >= PATH_MAX) {
-        ios_printf(ios_stderr, "fatal error: jl_compileropts.julia_bin path too long\n");
-        exit(1);
+        jl_error("fatal error: jl_compileropts.julia_bin path too long\n");
     }
     jl_compileropts.julia_bin = strdup(free_path);
     if (!jl_compileropts.julia_home) {
@@ -889,8 +886,7 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
                      jl_compileropts.julia_home, jl_compileropts.image_file);
             if (n >= PATH_MAX || n < 0) {
-                ios_printf(ios_stderr, "fatal error: jl_compileropts.image_file path too long\n");
-                exit(1);
+                jl_error("fatal error: jl_compileropts.image_file path too long\n");
             }
             jl_compileropts.image_file = free_path;
         }
@@ -947,11 +943,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (!DuplicateHandle(GetCurrentProcess(), GetCurrentThread(),
                          GetCurrentProcess(), (PHANDLE)&hMainThread, 0,
                          TRUE, DUPLICATE_SAME_ACCESS)) {
-        ios_printf(ios_stderr, "WARNING: failed to access handle to main thread\n");
+        jl_printf(JL_STDERR, "WARNING: failed to access handle to main thread\n");
     }
     SymSetOptions(SYMOPT_UNDNAME | SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES);
     if (!SymInitialize(GetCurrentProcess(), NULL, 1)) {
-        ios_printf(ios_stderr, "WARNING: failed to initialize stack walk info\n");
+        jl_printf(JL_STDERR, "WARNING: failed to initialize stack walk info\n");
     }
     needsSymRefreshModuleList = 0;
     uv_lib_t jl_dbghelp;
@@ -962,7 +958,6 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     if (uv_dlsym(jl_kernel32_handle, "SetThreadStackGuarantee", (void**)&pSetThreadStackGuarantee) || !pSetThreadStackGuarantee(&StackSizeInBytes))
         pSetThreadStackGuarantee = NULL;
 #endif
-    init_stdio();
 
 #if defined(JL_USE_INTEL_JITEVENTS)
     const char *jit_profiling = getenv("ENABLE_JITPROFILING");
@@ -983,9 +978,12 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_init_frontend();
     jl_init_types();
     jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
+
+    init_stdio();
+    // libuv stdio cleanup depends on jl_init_tasks() because JL_TRY is used in jl_atexit_hook()
+
     jl_init_codegen();
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
-
     jl_init_serializer();
 
     if (!jl_compileropts.image_file) {
@@ -1010,9 +1008,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
             jl_restore_system_image(jl_compileropts.image_file);
         }
         JL_CATCH {
-            JL_PRINTF(JL_STDERR, "error during init:\n");
+            jl_printf(JL_STDERR, "error during init:\n");
             jl_show(jl_stderr_obj(), jl_exception_in_transit);
-            JL_PRINTF(JL_STDERR, "\n");
+            jl_printf(JL_STDERR, "\n");
             jl_exit(1);
         }
     }
@@ -1049,12 +1047,10 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     actf.sa_handler = fpe_handler;
     actf.sa_flags = 0;
     if (sigaction(SIGFPE, &actf, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (signal(SIGPIPE,SIG_IGN) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGPIPE\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGPIPE\n");
     }
 #if defined (_OS_DARWIN_)
     kern_return_t ret;
@@ -1068,13 +1064,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     pthread_t thread;
     pthread_attr_t attr;
     if (pthread_attr_init(&attr) != 0) {
-        JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-        jl_exit(1);
+        jl_error("pthread_attr_init failed");
     }
     pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
     if (pthread_create(&thread,&attr,mach_segv_listener,NULL) != 0) {
-        JL_PRINTF(JL_STDERR, "pthread_create failed");
-        jl_exit(1);
+        jl_error("pthread_create failed");
     }
     pthread_attr_destroy(&attr);
 
@@ -1086,8 +1080,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     ss.ss_size = sig_stack_size;
     ss.ss_sp = signal_stack;
     if (sigaltstack(&ss, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaltstack: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaltstack: %s\n", strerror(errno));
     }
 
     struct sigaction act;
@@ -1096,8 +1089,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     act.sa_sigaction = segv_handler;
     act.sa_flags = SA_ONSTACK | SA_SIGINFO;
     if (sigaction(SIGSEGV, &act, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
 #endif // defined(_OS_DARWIN_)
     struct sigaction act_die;
@@ -1106,53 +1098,41 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     act_die.sa_sigaction = sigdie_handler;
     act_die.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINFO, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGBUS, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGILL, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGTERM, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGABRT, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGQUIT, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
     if (sigaction(SIGSYS, &act_die, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
 #else // defined(_OS_WINDOWS_)
     if (signal(SIGFPE, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGFPE\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGFPE\n");
     }
     if (signal(SIGILL, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGILL\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGILL\n");
     }
     if (signal(SIGINT, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGINT\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGINT\n");
     }
     if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGSEGV\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGSEGV\n");
     }
     if (signal(SIGTERM, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
-        JL_PRINTF(JL_STDERR, "fatal error: Couldn't set SIGTERM\n");
-        jl_exit(1);
+        jl_error("fatal error: Couldn't set SIGTERM\n");
     }
     SetUnhandledExceptionFilter(exception_handler);
 #endif
@@ -1178,8 +1158,7 @@ DLLEXPORT void jl_install_sigint_handler()
     act.sa_sigaction = sigint_handler;
     act.sa_flags = SA_SIGINFO;
     if (sigaction(SIGINT, &act, NULL) < 0) {
-        JL_PRINTF(JL_STDERR, "fatal error: sigaction: %s\n", strerror(errno));
-        jl_exit(1);
+        jl_errorf("fatal error: sigaction: %s\n", strerror(errno));
     }
 #endif
 }
@@ -1206,7 +1185,7 @@ DLLEXPORT void julia_save()
                     free(build_bc);
                 }
                 else {
-                    ios_printf(ios_stderr,"\nWARNING: failed to create string for .bc build path\n");
+                    jl_printf(JL_STDERR,"\nWARNING: failed to create string for .bc build path\n");
                 }
             }
             char *build_o;
@@ -1215,11 +1194,11 @@ DLLEXPORT void julia_save()
                 free(build_o);
             }
             else {
-                ios_printf(ios_stderr,"\nFATAL: failed to create string for .o build path\n");
+                jl_printf(JL_STDERR,"\nFATAL: failed to create string for .o build path\n");
             }
         }
         else {
-            ios_printf(ios_stderr,"\nFATAL: failed to create string for .ji build path\n");
+            jl_printf(JL_STDERR,"\nFATAL: failed to create string for .ji build path\n");
         }
     }
 }
