@@ -1377,6 +1377,7 @@ export
 
 # nullable types
     isnull,
+    nulled,
 
 # Macros
     @__FILE__,
