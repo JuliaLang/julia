@@ -227,8 +227,6 @@ convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 handle(s::AsyncStream) = s.handle
 handle(s::Ptr{Void}) = s
 
-make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
-
 associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
     ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,jlobj)
 disassociate_julia_struct(uv) = disassociate_julia_struct(uv.handle)
@@ -239,6 +237,8 @@ function init_stdio(handle)
     t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
     if t == UV_FILE
         return fdio(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle))
+#       Replace ios.c filw with libuv file?
+#       return File(RawFD(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle)))
     else
         if t == UV_TTY
             ret = TTY(handle)
@@ -272,7 +272,6 @@ function reinit_stdio()
     global uv_jl_readcb = cglobal(:jl_uv_readcb)
     global uv_jl_connectioncb = cglobal(:jl_uv_connectioncb)
     global uv_jl_connectcb = cglobal(:jl_uv_connectcb)
-    global uv_jl_writecb = cglobal(:jl_uv_writecb)
     global uv_jl_writecb_task = cglobal(:jl_uv_writecb_task)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
@@ -726,93 +725,52 @@ end
 #    finish_read(state...)
 #end
 
-macro uv_write(n,call)
-    esc(quote
-        check_open(s)
-        uvw = c_malloc(_sizeof_uv_write+$(n))
-        err = $call
+function uv_write(s::AsyncStream, p, n::Integer)
+    check_open(s)
+    uvw = c_malloc(_sizeof_uv_write)
+    try
+        uv_req_set_data(uvw,C_NULL)
+        err = ccall(:jl_uv_write,
+                    Int32,
+                    (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
+                    handle(s), p, n, uvw,
+                    uv_jl_writecb_task::Ptr{Void})
         if err < 0
-            c_free(uvw)
             uv_error("write", err)
         end
-    end)
-end
-
-## low-level calls ##
-
-function write!{T}(s::AsyncStream, a::Array{T})
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb::Ptr{Void})
-        return int(length(a)*sizeof(T))
-    else
-        throw(MethodError(write,(s,a)))
-    end
-end
-function write!(s::AsyncStream, p::Ptr, nb::Integer)
-    @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
-    return nb
-end
-write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
-
-function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    if status < 0
-        err = UVError("write",status)
-        showerror(STDERR, err, backtrace())
-    end
-    nothing
-end
-
-function write(s::AsyncStream, b::UInt8)
-    @uv_write 1 ccall(:jl_putc_copy, Int32, (UInt8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return 1
-end
-function write(s::AsyncStream, c::Char)
-    nb = utf8sizeof(c)
-    @uv_write nb ccall(:jl_pututf8_copy, Int32, (Ptr{Void}, UInt32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return nb
-end
-function write{T}(s::AsyncStream, a::Array{T})
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb_task::Ptr{Void})
         ct = current_task()
         uv_req_set_data(uvw,ct)
         ct.state = :waiting
         stream_wait(ct)
-        return int(length(a)*sizeof(T))
+    finally
+        c_free(uvw)
+    end
+    return n
+end
+
+## low-level calls ##
+
+write(s::AsyncStream, b::UInt8) = write(s, [b])
+write(s::AsyncStream, c::Char) = write(s, string(c))
+function write{T}(s::AsyncStream, a::Array{T})
+    if isbits(T)
+        n = uint(length(a)*sizeof(T))
+        return uv_write(s, a, n);
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
     end
 end
-function write(s::AsyncStream, p::Ptr, nb::Integer)
-    @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return int(nb)
-end
+
+write(s::AsyncStream, p::Ptr, n::Integer) = uv_write(s, p, n)
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
+    @assert d != C_NULL
     if status < 0
         err = UVError("write",status)
-        if d != C_NULL
-            schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
-        else
-            showerror(STDERR, err, backtrace())
-        end
-    elseif d != C_NULL
+        schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+    else
         schedule(unsafe_pointer_to_objref(d)::Task)
     end
 end

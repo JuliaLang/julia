@@ -106,7 +106,7 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
     jl_binding_t *b = jl_get_binding_wr(parent_module, name);
     jl_declare_constant(b);
     if (b->value != NULL) {
-        JL_PRINTF(JL_STDERR, "Warning: replacing module %s\n", name->name);
+        jl_printf(JL_STDERR, "Warning: replacing module %s\n", name->name);
     }
     jl_module_t *newm = jl_new_module(name);
     newm->parent = parent_module;
@@ -341,7 +341,7 @@ static jl_module_t *eval_import_path_(jl_array_t *args, int retrying)
             }
         }
         if (retrying && require_func) {
-            JL_PRINTF(JL_STDERR, "Warning: requiring \"%s\" did not define a corresponding module.\n", var->name);
+            jl_printf(JL_STDERR, "Warning: requiring \"%s\" did not define a corresponding module.\n", var->name);
             return NULL;
         }
         else {
@@ -380,7 +380,7 @@ int jl_is_toplevel_only_expr(jl_value_t *e)
 jl_value_t *jl_toplevel_eval_flex(jl_value_t *e, int fast)
 {
     //jl_show(ex);
-    //JL_PRINTF(JL_STDOUT, "\n");
+    //jl_printf(JL_STDOUT, "\n");
     if (!jl_is_expr(e))
         return jl_interpret_toplevel_expr(e);
 
@@ -740,10 +740,10 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
         if (!jl_is_typevar(tv))
             jl_type_error_rt(name->name, "method definition", (jl_value_t*)jl_tvar_type, tv);
         if (!ishidden && !type_contains((jl_value_t*)argtypes, tv)) {
-            JL_PRINTF(JL_STDERR, "Warning: static parameter %s does not occur in signature for %s",
+            jl_printf(JL_STDERR, "Warning: static parameter %s does not occur in signature for %s",
                       ((jl_tvar_t*)tv)->name->name, name->name);
             print_func_loc(JL_STDERR, f->linfo);
-            JL_PRINTF(JL_STDERR, ".\nThe method will not be callable.\n");
+            jl_printf(JL_STDERR, ".\nThe method will not be callable.\n");
         }
     }
 
@@ -784,11 +784,11 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl
                 if (jl_is_typevar(tv)) {
                     if ((jl_sym_t*)jl_arrayref((jl_array_t*)jl_arrayref(vinfo,j),0) ==
                         ((jl_tvar_t*)tv)->name) {
-                        JL_PRINTF(JL_STDERR,
+                        jl_printf(JL_STDERR,
                                   "Warning: local variable %s conflicts with a static parameter in %s",
                                   ((jl_tvar_t*)tv)->name->name, fname->name);
                         print_func_loc(JL_STDERR, li);
-                        JL_PRINTF(JL_STDERR, ".\n");
+                        jl_printf(JL_STDERR, ".\n");
                     }
                 }
             }

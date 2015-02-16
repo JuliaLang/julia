@@ -327,7 +327,6 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
-static Function *jlputs_func;
 static Function *wbfunc;
 static Function *queuerootfun;
 static Function *expect_func;
@@ -603,7 +602,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li, cstyle);
-        //JL_PRINTF(JL_STDOUT, "emit %s\n", li->name->name);
+        //jl_printf(JL_STDOUT, "emit %s\n", li->name->name);
         //n_emit++;
     }
     JL_CATCH {
@@ -637,7 +636,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
-    //ios_printf(ios_stderr, "%s:%d\n",
+    //jl_printf(JL_STDERR, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //if (verifyFunction(*f,PrintMessageAction)) {
     //    f->dump();
@@ -860,7 +859,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         if (jl_get_llvmf_info(fptr, &symsize, &object))
             jl_dump_function_asm((char *)fptr, symsize, object, fstream);
         else
-            JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
+            jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
         fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
@@ -879,7 +878,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
             return NULL;
-        JL_PRINTF(JL_STDERR,
+        jl_printf(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
     Function *llvmf;
@@ -1905,7 +1904,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      JL_PRINTF(JL_STDOUT, "call %s%s\n",
+                      jl_printf(JL_STDOUT, "call %s%s\n",
                       jl_sprint(args[0]),
                       jl_sprint((jl_value_t*)aty));
                   }
@@ -3394,7 +3393,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else if (head == simdloop_sym) {
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
-            JL_PRINTF(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
+            jl_printf(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
         return NULL;
     }
     else if (head == meta_sym) {
@@ -3690,8 +3689,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
-    //JL_PRINTF((jl_value_t*)ast);
-    //JL_PRINTF(JL_STDOUT, "\n");
+    //jl_printf((jl_value_t*)ast);
+    //jl_printf(JL_STDOUT, "\n");
     std::map<jl_sym_t*, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
     std::map<int, Value*> handlers;
@@ -3951,7 +3950,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
-    //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
+    //jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           lam->name->name, filename.c_str(), lno);
 
     DebugLoc noDbg;
@@ -5129,15 +5128,6 @@ static void init_julia_llvm_env(Module *m)
                          "jl_alloc_tuple", m);
     add_named_global(jl_alloc_tuple_func, (void*)&jl_alloc_tuple);
 
-    std::vector<Type *> puts_args(0);
-    puts_args.push_back(T_pint8);
-    puts_args.push_back(T_pint8);
-    jlputs_func =
-        Function::Create(FunctionType::get(T_void, puts_args, false),
-                         Function::ExternalLinkage,
-                         "jl_puts", m);
-    add_named_global(jlputs_func, (void*)&jl_puts);
-
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);
     dlsym_args.push_back(T_pint8);
@@ -5422,9 +5412,9 @@ extern "C" void jl_init_codegen(void)
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
 #endif
     jl_ExecutionEngine = eb->create(jl_TargetMachine);
-    //ios_printf(ios_stderr,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
+    //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
     if (!jl_ExecutionEngine) {
-        JL_PRINTF(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
+        jl_printf(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
         exit(1);
     }
 #ifdef LLVM35
