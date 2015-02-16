@@ -19,7 +19,7 @@ function git(d)
 end
 
 cmd(args::Cmd; dir="") = `$(git(dir)) $args`
-run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> out)
+run(args::Cmd; dir="", out=STDOUT) = Base.run(cmd(args,dir=dir) |> redirect(out))
 readall(args::Cmd; dir="") = Base.readall(cmd(args,dir=dir))
 readchomp(args::Cmd; dir="") = Base.readchomp(cmd(args,dir=dir))
 

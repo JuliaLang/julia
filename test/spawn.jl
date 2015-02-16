@@ -14,23 +14,23 @@ yes = `perl -le 'while (1) {print STDOUT "y"}'`
 #### Examples used in the manual ####
 
 @test readall(`echo hello | sort`) == "hello | sort\n"
-@test readall(`echo hello` |> `sort`) == "hello\n"
-@test length(spawn(`echo hello` |> `sort`).processes) == 2
+@test readall(`echo hello` |> redirect(`sort`)) == "hello\n"
+@test length(spawn(`echo hello` |> redirect(`sort`)).processes) == 2
 
 out = readall(`echo hello` & `echo world`)
 @test search(out,"world") != (0,0)
 @test search(out,"hello") != (0,0)
-@test readall((`echo hello` & `echo world`) |> `sort`)=="hello\nworld\n"
+@test readall((`echo hello` & `echo world`) |> redirect(`sort`))=="hello\nworld\n"
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@unix_only @test (run(yes|>`head`|>DevNull); true)
+@unix_only @test (run(yes|>redirect(`head`)|>redirect(DevNull)); true)
 
 begin
     a = Base.Condition()
     @schedule begin
-        p = spawn(yes|>DevNull)
+        p = spawn(yes|>redirect(DevNull))
         Base.notify(a,p)
         @test !success(p)
     end
@@ -43,29 +43,29 @@ end
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
     @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
-                  prefixer("A",2) & prefixer("B",2))
+                  redirect(prefixer("A",2) & prefixer("B",2)))
     @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
-                  prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |>
-                  prefixer("A",2) & prefixer("B",2))
+                  redirect(prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3)) |>
+                  redirect(prefixer("A",2) & prefixer("B",2)))
 end
 
 @test  success(`true`)
 @test !success(`false`)
-@test success(`true` |> `true`)
+@test success(`true` |> redirect(`true`))
 if false
     @test  success(ignorestatus(`false`))
-    @test  success(ignorestatus(`false`) |> `true`)
-    @test !success(ignorestatus(`false`) |> `false`)
+    @test  success(ignorestatus(`false`) |> redirect(`true`))
+    @test !success(ignorestatus(`false`) |> redirect(`false`))
     @test !success(ignorestatus(`false`) & `false`)
-    @test  success(ignorestatus(`false` |> `false`))
+    @test  success(ignorestatus(`false` |> redirect(`false`)))
     @test  success(ignorestatus(`false` & `false`))
 end
 
 # STDIN Redirection
 file = tempname()
-run(`echo hello world` |> file)
-@test readall(file |> `cat`) == "hello world\n"
-@test open(readall, file |> `cat`, "r") == "hello world\n"
+run(`echo hello world` |> redirect(file))
+@test readall(file |> redirect(`cat`)) == "hello world\n"
+@test open(readall, file |> redirect(`cat`), "r") == "hello world\n"
 rm(file)
 
 # Stream Redirection
@@ -75,12 +75,12 @@ rm(file)
         port, server = listenany(2326)
         put!(r,port)
         client = accept(server)
-        @test readall(client |> `cat`) == "hello world\n"
+        @test readall(client |> redirect(`cat`)) == "hello world\n"
         close(server)
     end
     @async begin
         sock = connect(fetch(r))
-        run(`echo hello world` |> sock)
+        run(`echo hello world` |> redirect(sock))
         close(sock)
     end
 end
@@ -102,7 +102,7 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-open(`cat -` |> file, "w") do io
+open(`cat -` |> redirect(file), "w") do io
     write(io, str)
 end
 rm(file)
@@ -154,13 +154,13 @@ close(sock)
 
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
-@test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
+@test readall(`$exename -f -e 'println(STDERR,"Hello World")'` |> redirect(stderr=`cat`)) == "Hello World\n"
 
 # issue #6310
-@test readall(`echo "2+2"` |> `$exename -f`) == "4\n"
+@test readall(`echo "2+2"` |> redirect(`$exename -f`)) == "4\n"
 
 # issue #5904
-@test run(ignorestatus(`false`) |> `true`) === nothing
+@test run(ignorestatus(`false`) |> redirect(`true`)) === nothing
 
 
 # issue #6010
