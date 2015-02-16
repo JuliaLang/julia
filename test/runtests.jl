@@ -25,12 +25,6 @@ push!(testnames, "parallel")
 
 tests = (ARGS==["all"] || isempty(ARGS)) ? testnames : ARGS
 
-if "sparse" in tests
-    # specifically selected case
-    filter!(x -> x != "sparse", tests)
-    prepend!(tests, ["sparse/sparse", "sparse/cholmod", "sparse/umfpack"])
-end
-
 if "linalg" in tests
     # specifically selected case
     filter!(x -> x != "linalg", tests)

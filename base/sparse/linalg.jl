@@ -686,8 +686,10 @@ function factorize(A::SparseMatrixCSC)
             end
         end
         return lufact(A)
+    elseif m > n
+        return qrfact(A)
     else
-        throw(ArgumentError("sparse least squares problems by QR are not handled yet"))
+        throw(ArgumentError("underdetermined systemes are not implemented yet"))
     end
 end
 
