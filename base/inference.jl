@@ -1371,10 +1371,6 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
         end
     end
-    # TODO: typeinf currently gets stuck without this
-    if linfo.name === :abstract_interpret || linfo.name === :tuple_elim_pass || linfo.name === :abstract_call_gf
-        return (linfo.ast, Any)
-    end
 
     ast0 = def.ast
 
