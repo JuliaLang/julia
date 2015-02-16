@@ -23,9 +23,9 @@ convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
 
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull
-        @printf(io, "Nullable{%s}()", repr(T))
+        @printf(io, "NULL")
     else
-        @printf(io, "Nullable(%s)", repr(x.value))
+        show(io, x.value)
     end
 end
 
