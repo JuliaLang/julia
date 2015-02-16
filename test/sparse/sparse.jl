@@ -15,6 +15,8 @@ do33 = ones(3)
 
 # check vert concatenation
 @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
+@test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
 
 # check h+v concatenation
 se44 = speye(4)
