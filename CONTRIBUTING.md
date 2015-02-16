@@ -89,7 +89,7 @@ Add new code to Julia's base libraries as follows:
 
  3. Add any necessary export symbols in `exports.jl`.
 
- 4. Include your tests in `test/Makefile` and `test/runtests.jl`.
+ 4. Include your tests in `test/Makefile` and `test/choosetests.jl`.
 
 Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
 
