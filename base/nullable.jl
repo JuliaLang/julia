@@ -13,6 +13,8 @@ Nullable{T}(value::T) = Nullable{T}(value)
 
 eltype{T}(::Type{Nullable{T}}) = T
 
+const nulled = Nullable{Union()}()
+
 function convert{T}(::Type{Nullable{T}}, x::Nullable)
     return isnull(x) ? Nullable{T}() : Nullable{T}(convert(T, get(x)))
 end

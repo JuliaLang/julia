@@ -571,6 +571,11 @@ Nullables
 
    Is the ``Nullable`` object ``x`` null, i.e. missing a value?
 
+.. data:: nulled
+
+   A constant ``Nullable`` value in the null (missing value) state. Used, for example,
+   as a compact way to initialize ``Nullable`` fields: ``x.field = nulled``.
+
 
 System
 ------
