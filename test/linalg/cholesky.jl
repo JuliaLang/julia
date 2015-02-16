@@ -44,53 +44,54 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
 debug && println("(Automatic) upper Cholesky factor")
 
-    capd  = factorize(apd)
-    r     = capd[:U]
-    κ     = cond(apd, 1) #condition number
+        capd  = factorize(apd)
+        r     = capd[:U]
+        κ     = cond(apd, 1) #condition number
 
-    #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
-    E = abs(apd - r'*r)
-    for i=1:n, j=1:n
-        @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
-    end
-    E = abs(apd - full(capd))
-    for i=1:n, j=1:n
-        @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
-    end
+        #Test error bound on reconstruction of matrix: LAWNS 14, Lemma 2.1
+        E = abs(apd - r'*r)
+        for i=1:n, j=1:n
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+        end
+        E = abs(apd - full(capd))
+        for i=1:n, j=1:n
+            @test E[i,j] <= (n+1)ε/(1-(n+1)ε)*real(sqrt(apd[i,i]*apd[j,j]))
+        end
 
-    #Test error bound on linear solver: LAWNS 14, Theorem 2.1
-    #This is a surprisingly loose bound...
-    x = capd\b
-    @test norm(x-apd\b,1)/norm(x,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
-    @test norm(apd*x-b,1)/norm(b,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+        #Test error bound on linear solver: LAWNS 14, Theorem 2.1
+        #This is a surprisingly loose bound...
+        x = capd\b
+        @test norm(x-apd\b,1)/norm(x,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
+        @test norm(apd*x-b,1)/norm(b,1) <= (3n^2 + n + n^3*ε)*ε/(1-(n+1)*ε)*κ
 
-    @test_approx_eq apd * inv(capd) eye(n)
-    @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
-    @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
-    @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
+        @test_approx_eq apd * inv(capd) eye(n)
+        @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
+        @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
+        @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
 
-    apos = asym[1,1]            # test chol(x::Number), needs x>0
-    @test_approx_eq cholfact(apos).UL √apos
+        apos = apd[1,1]            # test chol(x::Number), needs x>0
+        @test_approx_eq cholfact(apos).UL √apos
 
-    # test chol of 2x2 Strang matrix
-    S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
-    U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
-    @test_approx_eq full(chol(S)) full(U)
+        # test chol of 2x2 Strang matrix
+        S = convert(AbstractMatrix{eltya},full(SymTridiagonal([2,2],[-1])))
+        U = Bidiagonal([2,sqrt(eltya(3))],[-1],true) / sqrt(eltya(2))
+        @test_approx_eq full(chol(S)) full(U)
 
 debug && println("lower Cholesky factor")
-    lapd = cholfact(apd, :L)
-    @test_approx_eq full(lapd) apd
-    l = lapd[:L]
-    @test_approx_eq l*l' apd
+        lapd = cholfact(apd, :L)
+        @test_approx_eq full(lapd) apd
+        l = lapd[:L]
+        @test_approx_eq l*l' apd
 
 debug && println("pivoted Choleksy decomposition")
-    if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
-        cpapd = cholfact(apd, :U, Val{true})
-        @test rank(cpapd) == n
-        @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
-        @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
-        if isreal(apd)
-            @test_approx_eq apd * inv(cpapd) eye(n)
+        if eltya != BigFloat && eltyb != BigFloat # Note! Need to implement pivoted cholesky decomposition in julia
+            cpapd = cholfact(apd, :U, Val{true})
+            @test rank(cpapd) == n
+            @test all(diff(diag(real(cpapd.UL))).<=0.) # diagonal should be non-increasing
+            @test norm(apd * (cpapd\b) - b)/norm(b) <= ε*κ*n # Ad hoc, revisit
+            if isreal(apd)
+                @test_approx_eq apd * inv(cpapd) eye(n)
+            end
         end
     end
 end
