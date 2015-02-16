@@ -9,6 +9,9 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+
+valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
+
 yes = `perl -le 'while (1) {print STDOUT "y"}'`
 
 #### Examples used in the manual ####
@@ -38,7 +41,11 @@ begin
     kill(p)
 end
 
-@test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+if valgrind_off
+    # If --trace-children=yes is passed to valgrind, valgrind will
+    # exit here with an error code, and no UVError will be raised.
+    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+end
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
@@ -154,7 +161,11 @@ close(sock)
 
 # issue #4535
 exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
-@test readall(pipe(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
+if valgrind_off
+    # If --trace-children=yes is passed to valgrind, we will get a
+    # valgrind banner here, not "Hello World\n".
+    @test readall(pipe(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
+end
 
 # issue #6310
 @test readall(pipe(`echo "2+2"`, `$exename -f`)) == "4\n"
