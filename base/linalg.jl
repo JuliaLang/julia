@@ -193,6 +193,8 @@ const CHARU = 'U'
 const CHARL = 'L'
 char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
+copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")
