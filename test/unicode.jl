@@ -45,7 +45,7 @@ else
     for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
         output_path = joinpath(unicodedir, encoding*".unicode")
         f = Base.FS.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
-        run(`iconv -f $primary_encoding -t $encoding $primary_path` |> f)
+        run(`iconv -f $primary_encoding -t $encoding $primary_path` |> redirect(f))
         Base.FS.close(f)
     end
 

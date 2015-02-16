@@ -124,7 +124,7 @@ function make_seed()
         seed = reinterpret(UInt64, time())
         seed = hash(seed, uint64(getpid()))
         try
-        seed = hash(seed, parseint(UInt64, readall(`ifconfig` |> `sha1sum`)[1:40], 16))
+        seed = hash(seed, parseint(UInt64, readall(`ifconfig` |> redirect(`sha1sum`))[1:40], 16))
         end
         return make_seed(seed)
     end
