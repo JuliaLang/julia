@@ -2065,8 +2065,11 @@ void jl_gc_collect(int full)
         // 2. mark every object in a remembered binding
         int n_bnd_refyoung = 0;
         for (int i = 0; i < rem_bindings.len; i++) {
-            void *ptr = rem_bindings.items[i];
-            if (gc_push_root(((jl_binding_t*)ptr)->value, 0) == GC_MARKED_NOESC) {
+            jl_binding_t *ptr = (jl_binding_t*)rem_bindings.items[i];
+            // A null pointer can happen here when the binding is cleaned up
+            // as an exception is thrown after it was already queued (#10221)
+            if (!ptr->value) continue;
+            if (gc_push_root(ptr->value, 0) == GC_MARKED_NOESC) {
                 rem_bindings.items[n_bnd_refyoung] = ptr;
                 n_bnd_refyoung++;
             }
