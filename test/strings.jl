@@ -660,6 +660,17 @@ end
 @test replace("ḟøøƀäṙḟøø", r"(ḟø|ƀä)", "xx") == "xxøxxṙxxø"
 @test replace("ḟøøƀäṙḟøø", r"(ḟøø|ƀä)", "ƀäṙ") == "ƀäṙƀäṙṙƀäṙ"
 
+# lower and upper
+@test uppercase("aBc") == "ABC"
+@test uppercase('A') == 'A'
+@test uppercase('a') == 'A'
+@test lowercase("AbC") == "abc"
+@test lowercase('A') == 'a'
+@test lowercase('a') == 'a'
+@test ucfirst("Abc") == "Abc"
+@test ucfirst("abc") == "Abc"
+@test lcfirst("ABC") == "aBC"
+@test lcfirst("aBC") == "aBC"
 
 # {starts,ends}with
 @test startswith("abcd", 'a')
@@ -1257,6 +1268,21 @@ end
 @test isalpha("23435")==false
 @test iscntrl( string(char(0x0080))) == true
 @test ispunct( "‡؟჻") ==true
+
+@test isxdigit('0') == true
+@test isxdigit("0") == true
+@test isxdigit("a") == true
+@test isxdigit("g") == false
+
+@test is_valid_ascii("is_valid_ascii") == true
+@test is_valid_ascii("Σ_not_valid_ascii") == false
+@test is_valid_char('a') == true
+@test is_valid_char('\x00') == true
+@test is_valid_char('\ud800') == false
+
+@test is_valid_utf16(utf16("a")) == true
+@test is_valid_utf16(utf16("\ud800")) == false
+# TODO is_valid_utf8
 
 # This caused JuliaLang/JSON.jl#82
 @test first('\x00':'\x7f') === '\x00'
