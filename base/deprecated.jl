@@ -290,3 +290,147 @@ end
 # 8898
 @deprecate precision(x::DateTime) eps(x)
 @deprecate precision(x::Date) eps(x)
+
+# Histogram: moved to StatsBase (#6842)
+function histrange{T<:FloatingPoint,N}(v::AbstractArray{T,N}, n::Integer)
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
+        return 0.0:1.0:0.0
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        step = 1.0
+    else
+        bw = (hi - lo) / n
+        e = 10.0^floor(log10(bw))
+        r = bw / e
+        if r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
+    end
+    start = step*(ceil(lo/step)-1)
+    nm1 = ceil(Int,(hi - start)/step)
+    start:step:(start + nm1*step)
+end
+
+function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
+    nv = length(v)
+    if nv == 0 && n < 0
+        throw(ArgumentError("number of bins must be ≥ 0 for an empty array, got $n"))
+    elseif nv > 0 && n < 1
+        throw(ArgumentError("number of bins must be ≥ 1 for a non-empty array, got $n"))
+    end
+    if nv == 0
+        return 0:1:0
+    end
+    lo, hi = extrema(v)
+    if hi == lo
+        step = 1
+    else
+        bw = (hi - lo) / n
+        e = 10^max(0,floor(Int,log10(bw)))
+        r = bw / e
+        if r <= 1
+            step = e
+        elseif r <= 2
+            step = 2*e
+        elseif r <= 5
+            step = 5*e
+        else
+            step = 10*e
+        end
+    end
+    start = step*(ceil(lo/step)-1)
+    nm1 = ceil(Int,(hi - start)/step)
+    start:step:(start + nm1*step)
+end
+
+## midpoints of intervals
+midpoints(r::Range) = (depwarn("midpoints(x) is deprecated. Method now in StatsBase.jl"); r[1:length(r)-1] + 0.5*step(r))
+midpoints(v::AbstractVector) = (depwarn("midpoints(x) is deprecated. Method now in StatsBase.jl"); [0.5*(v[i] + v[i+1]) for i in 1:length(v)-1])
+
+## hist ##
+function sturges(n)  # Sturges' formula
+    n==0 && return one(n)
+    ceil(Int,log2(n))+1
+end
+
+function hist!{HT}(h::AbstractArray{HT}, v::AbstractVector, edg::AbstractVector; init::Bool=true)
+    depwarn("hist(...) and hist!(...) are deprecated. Use fit(Histogram,...) in StatsBase.jl instead.")
+    n = length(edg) - 1
+    length(h) == n || throw(DimensionMismatch("length(histogram) must equal length(edges) - 1"))
+    if init
+        fill!(h, zero(HT))
+    end
+    for x in v
+        i = searchsortedfirst(edg, x)-1
+        if 1 <= i <= n
+            h[i] += 1
+        end
+    end
+    edg, h
+end
+
+hist(v::AbstractVector, edg::AbstractVector) = hist!(Array(Int, length(edg)-1), v, edg)
+hist(v::AbstractVector, n::Integer) = hist(v,histrange(v,n))
+hist(v::AbstractVector) = hist(v,sturges(length(v)))
+
+function hist!{HT}(H::AbstractArray{HT,2}, A::AbstractMatrix, edg::AbstractVector; init::Bool=true)
+    depwarn("hist(...) and hist!(...) are deprecated. Use fit(Histogram,...) in StatsBase.jl instead.")
+    m, n = size(A)
+    sH = size(H)
+    sE = (length(edg)-1,n)
+    sH == sE || throw(DimensionMismatch("incorrect size of histogram"))
+    if init
+        fill!(H, zero(HT))
+    end
+    for j = 1:n
+        hist!(sub(H, :, j), sub(A, :, j), edg)
+    end
+    edg, H
+end
+
+hist(A::AbstractMatrix, edg::AbstractVector) = hist!(Array(Int, length(edg)-1, size(A,2)), A, edg)
+hist(A::AbstractMatrix, n::Integer) = hist(A,histrange(A,n))
+hist(A::AbstractMatrix) = hist(A,sturges(size(A,1)))
+
+
+## hist2d
+function hist2d!{HT}(H::AbstractArray{HT,2}, v::AbstractMatrix,
+                     edg1::AbstractVector, edg2::AbstractVector; init::Bool=true)
+    depwarn("hist2d(...) is deprecated. Use fit(Histogram,...) in StatsBase.jl instead.")
+    size(v,2) == 2 || throw(DimensionMismatch("hist2d requires an Nx2 matrix"))
+    n = length(edg1) - 1
+    m = length(edg2) - 1
+    size(H) == (n, m) || throw(DimensionMismatch("incorrect size of histogram"))
+    if init
+        fill!(H, zero(HT))
+    end
+    for i = 1:size(v,1)
+        x = searchsortedfirst(edg1, v[i,1]) - 1
+        y = searchsortedfirst(edg2, v[i,2]) - 1
+        if 1 <= x <= n && 1 <= y <= m
+            @inbounds H[x,y] += 1
+        end
+    end
+    edg1, edg2, H
+end
+
+hist2d(v::AbstractMatrix, edg1::AbstractVector, edg2::AbstractVector) =
+    hist2d!(Array(Int, length(edg1)-1, length(edg2)-1), v, edg1, edg2)
+
+hist2d(v::AbstractMatrix, edg::AbstractVector) = hist2d(v, edg, edg)
+
+hist2d(v::AbstractMatrix, n1::Integer, n2::Integer) =
+    hist2d(v, histrange(sub(v,:,1),n1), histrange(sub(v,:,2),n2))
+hist2d(v::AbstractMatrix, n::Integer) = hist2d(v, n, n)
+hist2d(v::AbstractMatrix) = hist2d(v, sturges(size(v,1)))

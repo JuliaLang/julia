@@ -243,32 +243,6 @@ for vd in [1, 2], zm in [true, false]
     @test_approx_eq C Cxy
 end
 
-
-
-# test hist
-
-@test sum(hist([1,2,3])[2]) == 3
-@test hist(Union()[])[2] == []
-@test hist([1])[2] == [1]
-@test hist([1,2,3],[0,2,4]) == ([0,2,4],[2,1])
-@test hist([1,2,3],0:2:4) == (0:2:4,[2,1])
-@test all(hist([1:100;]/100,0.0:0.01:1.0)[2] .==1)
-@test hist([1,1,1,1,1])[2][1] == 5
-@test sum(hist2d(rand(100, 2))[3]) == 100
-@test hist([1 2 3 4;1 2 3 4]) == (0.0:2.0:4.0, [2 2 0 0; 0 0 2 2])
-
-@test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
-@test midpoints(1:10) == 1.5:9.5
-@test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
-
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
 @test quantile([0.:100.;],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
-
-# test invalid hist nbins argument (#9999)
-@test_throws ArgumentError hist(Int[], -1)
-@test hist(Int[], 0)[2] == Int[]
-@test_throws ArgumentError hist([1,2,3], -1)
-@test_throws ArgumentError hist([1,2,3], 0)
-@test_throws ArgumentError hist([1.0,2.0,3.0], -1)
-@test_throws ArgumentError hist([1.0,2.0,3.0], 0)

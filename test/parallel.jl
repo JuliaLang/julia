@@ -167,7 +167,8 @@ map!(x->1, d)
 
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
+ids = @parallel((a,b)->[a;b], for i=1:7; myid(); end)
+workloads = Int[sum(ids .== i) for i in 1:nprocs()]
 @test maximum(workloads) - minimum(workloads) <= 1
 
 # @parallel reduction should work even with very short ranges
