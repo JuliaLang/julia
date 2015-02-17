@@ -107,6 +107,9 @@ type Pipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
+    sendbuf::Nullable{IOBuffer}
+    lock_task::Nullable{Task}
+    lock_wait::Condition
     Pipe(handle) = new(
         handle,
         StatusUninit,
@@ -114,7 +117,8 @@ type Pipe <: AsyncStream
         true,
         false,Condition(),
         false,Condition(),
-        false,Condition())
+        false,Condition(),
+        nothing,nothing,Condition())
 end
 function Pipe()
     handle = c_malloc(_sizeof_uv_named_pipe)
@@ -181,6 +185,9 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
+    sendbuf::Nullable{IOBuffer}
+    lock_task::Nullable{Task}
+    lock_wait::Condition
     @windows_only ispty::Bool
     function TTY(handle)
         tty = new(
@@ -189,7 +196,8 @@ type TTY <: AsyncStream
             true,
             PipeBuffer(),
             false,Condition(),
-            false,Condition())
+            false,Condition(),
+            nothing,nothing,Condition())
         @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
         tty
     end
@@ -278,8 +286,6 @@ function reinit_stdio()
     global STDOUT = init_stdio(ccall(:jl_stdout_stream,Ptr{Void},()))
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
-
-flush(::AsyncStream) = nothing
 
 function isopen{T<:Union(AsyncStream,UVServer)}(x::T)
     if !(x.status != StatusUninit && x.status != StatusInit)
@@ -660,6 +666,7 @@ function read!{T}(s::AsyncStream, a::Array{T})
     return a
 end
 
+const SZ_UNBUFFERED_IO=65536
 function read!(s::AsyncStream, a::Vector{UInt8})
     nb = length(a)
     sbuf = s.buffer
@@ -670,7 +677,7 @@ function read!(s::AsyncStream, a::Vector{UInt8})
         return read!(sbuf, a)
     end
 
-    if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
+    if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
         wait_readnb(s,nb)
         read!(sbuf, a)
     else
@@ -748,21 +755,82 @@ function uv_write(s::AsyncStream, p, n::Integer)
     return Int(n)
 end
 
+# Optimized send
+# - smaller writes are buffered, final uv write on flush or when buffer full
+# - large isbits arrays are unbuffered and written directly
+
+function buffer_or_write(s::AsyncStream, p::Ptr, n::Integer)
+    if isnull(s.sendbuf)
+        return uv_write(s, p, n)
+    else
+        buf = get(s.sendbuf)
+    end
+
+    totb = nb_available(buf) + n
+    if totb < maxsize(buf)
+        nb = write(buf, p, n)
+    else
+        flush(s)
+        if n > maxsize(buf)
+            nb = uv_write(s, p, n)
+        else
+            nb = write(buf, p, n)
+        end
+    end
+    return nb
+end
+
+function flush(s::AsyncStream)
+    if isnull(s.sendbuf)
+        return s
+    end
+    buf = get(s.sendbuf)
+    if nb_available(buf) > 0
+        arr = takebuf_array(buf)        # Array of UInt8s
+        uv_write(s, arr, length(arr))
+    end
+    s
+end
+
+buffer_writes(s::AsyncStream, bufsize=SZ_UNBUFFERED_IO) = (s.sendbuf=PipeBuffer(bufsize); s)
+
+# Locks an asyncstream. Recursive calls by the same task is OK.
+function lock(f::Function, s::AsyncStream)
+    t = current_task()
+    release_lock = true
+    while true
+        if isnull(s.lock_task)
+            s.lock_task = t; break
+        else
+            if get(s.lock_task) == t
+                release_lock = false; break
+            end
+            wait(s.lock_wait)
+        end
+    end
+
+    f(s)
+    if release_lock
+        s.lock_task = nothing
+        notify(s.lock_wait)
+    end
+end
+
 ## low-level calls ##
 
 write(s::AsyncStream, b::UInt8) = write(s, [b])
 write(s::AsyncStream, c::Char) = write(s, string(c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
-        n = uint(length(a))*sizeof(T)
-        return uv_write(s, a, n)
+        n = uint(length(a)*sizeof(T))
+        return buffer_or_write(s, pointer(a), n);
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
     end
 end
 
-write(s::AsyncStream, p::Ptr, n::Integer) = uv_write(s, p, n)
+write(s::AsyncStream, p::Ptr, n::Integer) = buffer_or_write(s, p, n)
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
@@ -925,8 +993,11 @@ type BufferStream <: AsyncStream
     r_c::Condition
     close_c::Condition
     is_open::Bool
+    buffer_writes::Bool
+    lock_task::Nullable{Task}
+    lock_wait::Condition
 
-    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true)
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false, nothing, Condition())
 end
 
 isopen(s::BufferStream) = s.is_open
@@ -958,7 +1029,20 @@ end
 wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
 start_reading(s::BufferStream) = nothing
 
-write(s::BufferStream, b::UInt8) = (rv=write(s.buffer, b); notify(s.r_c; all=true);rv)
-write{T}(s::BufferStream, a::Array{T}) = (rv=write(s.buffer, a); notify(s.r_c; all=true);rv)
-write(s::BufferStream, p::Ptr, nb::Integer) = (rv=write(s.buffer, p, nb); notify(s.r_c; all=true);rv)
+write(s::BufferStream, b::UInt8) = write(s, [b])
+write(s::BufferStream, c::Char) = write(s, string(c))
 
+function write{T}(s::BufferStream, a::Array{T})
+    rv=write(s.buffer, a)
+    !(s.buffer_writes) && notify(s.r_c; all=true);
+    rv
+end
+function write(s::BufferStream, p::Ptr, nb::Integer)
+    rv=write(s.buffer, p, nb)
+    !(s.buffer_writes) && notify(s.r_c; all=true);
+    rv
+end
+
+# If buffer_writes is called, it will delay notifying waiters till a flush is called.
+buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
+flush(s::BufferStream) = (notify(s.r_c; all=true); s)

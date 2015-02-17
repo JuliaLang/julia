@@ -51,6 +51,7 @@ IOBuffer() = IOBuffer(UInt8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(UInt8,maxsize),true,true,maxsize); x.size=0; x)
 
 is_maxsize_unlimited(io::IOBuffer) = (io.maxsize == typemax(Int))
+maxsize(io::IOBuffer) = io.maxsize
 
 read!(from::IOBuffer, a::Array) = read_sub(from, a, 1, length(a))
 

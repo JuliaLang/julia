@@ -259,6 +259,9 @@ type TCPSocket <: Socket
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
+    sendbuf::Nullable{IOBuffer}
+    lock_task::Nullable{Task}
+    lock_wait::Condition
 
     TCPSocket(handle) = new(
         handle,
@@ -267,7 +270,8 @@ type TCPSocket <: Socket
         PipeBuffer(),
         false, Condition(),
         false, Condition(),
-        false, Condition()
+        false, Condition(),
+        nothing,nothing,Condition()
     )
 end
 function TCPSocket()
