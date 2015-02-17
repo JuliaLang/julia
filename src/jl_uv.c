@@ -530,11 +530,11 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
     uv_file fd = 0;
 
     // Fallback for output during early initialisation...
-    if (stream == (void*)STDOUT_FILENO
-    ||  stream == (void*)STDERR_FILENO) {
+    if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
         jl_io_loop = uv_default_loop();
-        fd = (uv_file)stream;
-    } else if (stream->type == UV_FILE){
+        fd = (uv_file)(size_t)stream;
+    }
+    else if (stream->type == UV_FILE) {
         fd = ((jl_uv_file_t *)stream)->file;
     }
 
@@ -559,8 +559,7 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
         buf[0].len = n;
         req->data = NULL;
         JL_SIGATOMIC_BEGIN();
-        int status = uv_write(req, stream, buf, 1,
-                              (uv_write_cb)jl_uv_writecb);
+        int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
         JL_SIGATOMIC_END();
         if (status < 0) {
             jl_uv_writecb(req, status);
@@ -614,7 +613,9 @@ DLLEXPORT void jl_safe_printf(const char *fmt, ...)
     va_end(args);
 
     buf[999] = '\0';
-    write(STDERR_FILENO, buf, strlen(buf));
+    if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
+        // nothing we can do; ignore the failure
+    }
 }
 
 
