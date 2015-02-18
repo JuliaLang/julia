@@ -2182,3 +2182,19 @@ const N10281 = 1000
     for i in 1:N10281
     end
 end === nothing
+
+# issue #10221
+module GCbrokentype
+OLD_STDOUT = STDOUT
+file = open(tempname(), "w")
+redirect_stdout(file)
+versioninfo()
+try
+    type Foo{T}
+        val::Bar{T}
+    end
+end
+gc()
+redirect_stdout(OLD_STDOUT)
+close(file)
+end
