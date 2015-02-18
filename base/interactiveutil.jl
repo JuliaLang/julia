@@ -83,7 +83,7 @@ end
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
-            success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
+            success(pipe(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
         error("no clipboard command found, please install xsel or xclip")
     end
@@ -158,7 +158,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(`lsb_release -ds` .> DevNull) end
+        @linux_only try lsb = readchomp(pipe(`lsb_release -ds`, stderr=DevNull)) end
         @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
@@ -333,7 +333,7 @@ downloadcmd = nothing
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
+            if success(pipe(`which $checkcmd`, DevNull))
                 downloadcmd = checkcmd
                 break
             end
