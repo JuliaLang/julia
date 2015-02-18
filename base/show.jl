@@ -98,7 +98,9 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::TypeName)
-    if tn.module == Core || tn.module == Base || tn.module == Main
+    if (tn.module == Core && tn.name in names(Core)) ||
+            (tn.module == Base && tn.name in names(Base)) ||
+            tn.module == Main
         print(io, tn.name)
     else
         print(io, tn.module, '.', tn.name)
