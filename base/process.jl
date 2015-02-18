@@ -157,6 +157,8 @@ end
 pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
 pipe(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipe(cmd, stdin=src)
 
+pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
+
 typealias RawOrBoxedHandle Union(UVHandle,UVStream,Redirectable,IOStream)
 typealias StdIOSet NTuple{3,RawOrBoxedHandle}
 
