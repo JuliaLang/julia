@@ -280,6 +280,17 @@ const base64 = base64encode
 #9295
 @deprecate push!(t::Associative, key, v)  setindex!(t, v, key)
 
+@deprecate (|>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::AbstractCmd)    pipe(src, stderr=dest)
+@deprecate (|>)(src::Redirectable,   dest::AbstractCmd)    pipe(src, dest)
+@deprecate (|>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::Redirectable)   pipe(src, stderr=dest)
+@deprecate (|>)(src::AbstractCmd,    dest::AbstractString) pipe(src, dest)
+@deprecate (|>)(src::AbstractString, dest::AbstractCmd)    pipe(src, dest)
+@deprecate (.>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stderr=dest)
+@deprecate (>>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stdout=dest, append=true)
+@deprecate (.>>)(src::AbstractCmd,   dest::AbstractString) pipe(src, stderr=dest, append=true)
+
 # 0.4 discontinued functions
 
 function subtypetree(x::DataType, level=-1)

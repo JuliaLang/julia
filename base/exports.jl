@@ -1177,6 +1177,7 @@ export
     nb_available,
     ntoh,
     open,
+    pipe,
     PipeBuffer,
     poll_fd,
     poll_file,

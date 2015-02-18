@@ -216,6 +216,9 @@ Deprecated or removed
 
   * `null` is renamed to `nullspace`.
 
+  * The operators `|>`, `.>`, `>>`, and `.>>` as used for process I/O redirection
+    are replaced with the `pipe` function ([#5349]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
@@ -1062,6 +1065,7 @@ Too numerous to mention.
 [#5275]: https://github.com/JuliaLang/julia/issues/5275
 [#5277]: https://github.com/JuliaLang/julia/issues/5277
 [#5330]: https://github.com/JuliaLang/julia/issues/5330
+[#5349]: https://github.com/JuliaLang/julia/issues/5349
 [#5358]: https://github.com/JuliaLang/julia/issues/5358
 [#5380]: https://github.com/JuliaLang/julia/issues/5380
 [#5381]: https://github.com/JuliaLang/julia/issues/5381
@@ -1209,6 +1213,7 @@ Too numerous to mention.
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
 [#9690]: https://github.com/JuliaLang/julia/issues/9690
 [#9701]: https://github.com/JuliaLang/julia/issues/9701
+[#9734]: https://github.com/JuliaLang/julia/issues/9734
 [#9745]: https://github.com/JuliaLang/julia/issues/9745
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
 [#9957]: https://github.com/JuliaLang/julia/issues/9957
@@ -1216,3 +1221,4 @@ Too numerous to mention.
 [#10031]: https://github.com/JuliaLang/julia/issues/10031
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
 [#10117]: https://github.com/JuliaLang/julia/issues/10117
+[#10180]: https://github.com/JuliaLang/julia/issues/10180
