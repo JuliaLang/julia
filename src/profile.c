@@ -430,7 +430,7 @@ DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (ptrint_t*) malloc(maxsize*sizeof(ptrint_t));
+    bt_data_prof = (ptrint_t*) calloc(maxsize, sizeof(ptrint_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;
