@@ -659,11 +659,14 @@ System
    The ``dir`` keyword argument can be used to specify a working directory for the
    command.
 
-.. function:: pipe(from, to)
+.. function:: pipe(from, to, ...)
 
    Create a pipeline from a data source to a destination. The source and destination can
-   be commands, I/O streams, or strings, but at least one must be a command. Strings refer
-   to filenames.
+   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
+   argument must be a command. Strings refer to filenames.
+   When called with more than two arguments, they are chained together from left to right.
+   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
+   concise way to specify multi-stage pipelines.
 
    **Examples**:
      * ``run(pipe(`ls`, `grep xyz`))``
