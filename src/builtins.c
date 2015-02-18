@@ -49,7 +49,7 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
         jl_exit(1);
     }
 
-    char* str = NULL;
+    char *str = NULL;
     vasprintf(&str, fmt, args);
 
     va_end(args);

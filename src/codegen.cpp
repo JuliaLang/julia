@@ -269,7 +269,6 @@ static GlobalVariable *jlundeferr_var;
 static GlobalVariable *jldomerr_var;
 static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
-static GlobalVariable *jlstderr_var;
 static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
@@ -4794,11 +4793,6 @@ static void init_julia_llvm_env(Module *m)
                                   (void*)&jl_overflow_exception, m);
     jlinexacterr_var = global_to_llvm("jl_inexact_exception",
                                       (void*)&jl_inexact_exception, m);
-    jlstderr_var =
-        new GlobalVariable(*m, T_int8,
-                           true, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_uv_stderr");
-    add_named_global(jlstderr_var, (void*)&jl_uv_stderr);
 
     jlRTLD_DEFAULT_var =
         new GlobalVariable(*m, T_pint8,
