@@ -785,6 +785,7 @@ for idx in {1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:10,
     @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)], acopy[(last(idx)+1):end]]
 end
 a = [1:10]
+@test deleteat!(a, 11:10) == [1:10;]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
