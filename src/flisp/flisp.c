@@ -2445,7 +2445,7 @@ void fl_init(size_t initial_heapsize)
 
 extern fltype_t *iostreamtype;
 
-int fl_load_system_image_str(char* str, size_t len)
+int fl_load_system_image_str(char *str, size_t len)
 {
     value_t img = cvalue(iostreamtype, sizeof(ios_t));
     ios_t *pi = value2c(ios_t*, img);

@@ -503,7 +503,7 @@ DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
 DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n, uv_write_t *uvw, void *writecb)
 {
     uv_buf_t buf[1];
-    buf[0].base = (char*) data;
+    buf[0].base = (char*)data;
     buf[0].len = n;
     JL_SIGATOMIC_BEGIN();
     int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
@@ -530,11 +530,11 @@ static void jl_write(uv_stream_t *stream, const char *str, size_t n)
     uv_file fd = 0;
 
     // Fallback for output during early initialisation...
-    if (stream == (void*)STDOUT_FILENO
-    ||  stream == (void*)STDERR_FILENO) {
+    if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
         jl_io_loop = uv_default_loop();
         fd = (uv_file)stream;
-    } else if (stream->type == UV_FILE){
+    }
+    else if (stream->type == UV_FILE){
         fd = ((jl_uv_file_t *)stream)->file;
     }
 
