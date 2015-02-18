@@ -52,7 +52,14 @@ type Factorization{Tv<:VTypes,Ti<:ITypes} <: Base.LinAlg.Factorization{Tv}
     m::Int
     n::Int
     p::Ptr{C_Factorization{Tv,Ti}}
+    function Factorization(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv,Ti}})
+        if p == C_NULL
+            throw(ArgumentError("factorization failed for unknown reasons. Please submit a bug report."))
+        end
+        new(m, n, p)
+    end
 end
+Factorization{Tv<:VTypes,Ti<:ITypes}(m::Integer, n::Integer, p::Ptr{C_Factorization{Tv,Ti}}) = Factorization{Tv,Ti}(m, n, p)
 
 size(F::Factorization) = (F.m, F.n)
 function size(F::Factorization, i::Integer)
@@ -86,6 +93,10 @@ function backslash{Tv<:VTypes,Ti<:ITypes}(ordering::Integer, tol::Real, A::Spars
 end
 
 function factorize{Tv<:VTypes,Ti<:ITypes}(ordering::Integer, tol::Real, A::Sparse{Tv,Ti})
+    s = unsafe_load(A.p)
+    if s.stype != 0
+        throw(ArgumentError("stype must be zero"))
+    end
     f = Factorization(size(A)..., ccall((:SuiteSparseQR_C_factorize, :libspqr), Ptr{C_Factorization{Tv,Ti}},
         (Cint, Cdouble, Ptr{Sparse{Tv,Ti}}, Ptr{Void}),
             ordering, tol, A.p, common(Ti)))
@@ -123,7 +134,7 @@ function qmult{Tv<:VTypes,Ti<:ITypes}(method::Integer, QR::Factorization{Tv,Ti},
     d
 end
 
-qrfact(A::SparseMatrixCSC) = factorize(ORDERING_DEFAULT, DEFAULT_TOL, Sparse(A))
+qrfact(A::SparseMatrixCSC) = factorize(ORDERING_DEFAULT, DEFAULT_TOL, Sparse(A, 0))
 
 function (\){T}(F::Factorization{T}, B::StridedVecOrMat{T})
     QtB = qmult(QTX, F, Dense(B))
