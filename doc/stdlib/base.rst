@@ -557,6 +557,12 @@ Syntax
 Nullables
 ---------
 
+.. function:: Nullable(x)
+
+   Wrap value ``x`` in an object of type ``Nullable``, which indicates whether a value is present.
+   ``Nullable(x)`` yields a non-empty wrapper, and ``Nullable{T}()`` yields an empty instance
+   of a wrapper that might contain a value of type ``T``.
+
 .. function:: get(x)
 
    Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
