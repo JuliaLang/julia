@@ -745,7 +745,7 @@ function uv_write(s::AsyncStream, p, n::Integer)
     finally
         c_free(uvw)
     end
-    return n
+    return Int(n)
 end
 
 ## low-level calls ##
@@ -754,8 +754,8 @@ write(s::AsyncStream, b::UInt8) = write(s, [b])
 write(s::AsyncStream, c::Char) = write(s, string(c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        return uv_write(s, a, n);
+        n = uint(length(a))*sizeof(T)
+        return uv_write(s, a, n)
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
