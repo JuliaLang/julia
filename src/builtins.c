@@ -50,12 +50,18 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
     }
 
     char *str = NULL;
-    vasprintf(&str, fmt, args);
+    int ok = vasprintf(&str, fmt, args);
 
     va_end(args);
 
-    jl_value_t *msg = jl_pchar_to_string(str, strlen(str));
-    free(str);
+    jl_value_t *msg;
+    if (ok < 0) {  // vasprintf failed
+        msg = jl_cstr_to_string("internal error: could not display error message");
+    }
+    else {
+        msg = jl_pchar_to_string(str, strlen(str));
+        free(str);
+    }
     JL_GC_PUSH1(&msg);
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }

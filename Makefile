@@ -227,7 +227,7 @@ endif
 
 ifeq ($(OS),WINNT)
 define std_dll
-debug release: | $$(build_bindir)/lib$(1).dll
+julia-deps: | $$(build_bindir)/lib$(1).dll
 $$(build_bindir)/lib$(1).dll: | $$(build_bindir)
 ifeq ($$(BUILD_OS),$$(OS))
 	cp $$(call pathsearch,lib$(1).dll,$$(PATH)) $$(build_bindir) ;
