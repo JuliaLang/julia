@@ -659,24 +659,30 @@ System
    The ``dir`` keyword argument can be used to specify a working directory for the
    command.
 
-.. function:: |>(command, command)
-              |>(command, filename)
-              |>(filename, command)
+.. function:: pipe(from, to)
 
-   Redirect operator. Used for piping the output of a process into another (first form) or to redirect the standard output/input of a command to/from a file (second and third forms).
+   Create a pipeline from a data source to a destination. The source and destination can
+   be commands, I/O streams, or strings, but at least one must be a command. Strings refer
+   to filenames.
 
    **Examples**:
-     * ``run(`ls` |> `grep xyz`)``
-     * ``run(`ls` |> "out.txt")``
-     * ``run("out.txt" |> `grep xyz`)``
+     * ``run(pipe(`ls`, `grep xyz`))``
+     * ``run(pipe(`ls`, "out.txt"))``
+     * ``run(pipe("out.txt", `grep xyz`))``
 
-.. function:: >>(command, filename)
+.. function:: pipe(command; stdin, stdout, stderr, append=false)
 
-   Redirect standard output of a process, appending to the destination file.
+   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
+   the command's streams should be redirected. ``append`` controls whether file output
+   appends to the file.
+   This is a more general version of the 2-argument ``pipe`` function.
+   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
+   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
+   data source.
 
-.. function:: .>(command, filename)
-
-   Redirect the standard error stream of a process.
+   **Examples**:
+     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+     * ``run(pipe(`update`, stdout="log.txt", append=true))``
 
 .. function:: gethostname() -> AbstractString
 
