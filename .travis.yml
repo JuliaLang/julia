@@ -2,6 +2,13 @@ language: cpp
 os:
     - linux
     - osx
+matrix:
+    include:
+        - os: linux
+          env: COVERAGE="true"
+    allow_failures:
+        - env: COVERAGE="true"
+    fast_finish: true
 notifications:
     email: false
     irc:
@@ -53,3 +60,7 @@ script:
     - cd /tmp/julia/share/julia/test && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl all && /tmp/julia/bin/julia-debug --check-bounds=yes runtests.jl pkg
     - cd - && mv julia2 julia
     - echo "Ready for packaging..."
+after_success:
+    - if [ "${COVERAGE}" = "true" ]; then
+        cd /tmp/julia/share/julia/test && JULIA_CPU_CORES=1 /tmp/julia/bin/julia-debug --code-coverage=all runtests.jl all; cd -; cd /tmp/julia/share/julia/; /tmp/julia/bin/julia-debug -e 'Pkg.add("Coverage")'; /tmp/julia/bin/julia-debug -e 'using Coverage; Coveralls.submit(Coveralls.process_folder("base"))'; cd-;
+      fi
