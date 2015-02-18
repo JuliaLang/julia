@@ -597,6 +597,7 @@ end
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
+    n == 0 && return a
     f = first(r)
     l = last(r)
     if !(1 <= f && l <= n)
