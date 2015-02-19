@@ -1395,7 +1395,7 @@ const char * jl_get_system_image_cpu_target(const char *fname)
         *fname_shlib_dot = 0;
 
     // Get handle to sys.so
-    uv_lib_t * sysimg_handle = jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+    uv_lib_t * sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
 
     // Return jl_sysimg_cpu_target if we can
     if (sysimg_handle)
