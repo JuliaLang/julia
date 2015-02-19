@@ -130,6 +130,18 @@ Because the package manager uses git internally to manage the package git reposi
 
     git config --global url."https://".insteadOf git://
 
+Offline Installation of Packages
+--------------------------------
+
+For machines with no internet connection, installing packages just requires that the packages be copied to ~/.julia/v0.X/.
+
+This is sufficient, since the Pkg.add() command just does these 4 things:
+
+1. It adds the name of the package to ~/.julia/INSTALLED
+2. Downloads the package to ~/.julia/.cache and makes a copy in ~/.julia/
+3. Recursively performs step 2 against all of the packages it has in the REQUIRES file in METADATA.
+4. Runs Pkg.build()
+
 Installing Unregistered Packages
 --------------------------------
 
