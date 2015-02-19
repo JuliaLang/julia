@@ -133,14 +133,23 @@ Because the package manager uses git internally to manage the package git reposi
 Offline Installation of Packages
 --------------------------------
 
-For machines with no internet connection, installing packages just requires that the packages be copied to ~/.julia/v0.X/.
+For machines with no Internet connection, packages may be installed by copying
+the package root directory (given by :func:`Pkg.dir`) from a machine with the
+same operating system and environment.
 
-This is sufficient, since the Pkg.add() command just does these 4 things:
+:func:`Pkg.add` does the following within the package root directory:
 
-1. It adds the name of the package to ~/.julia/INSTALLED
-2. Downloads the package to ~/.julia/.cache and makes a copy in ~/.julia/
-3. Recursively performs step 2 against all of the packages it has in the REQUIRES file in METADATA.
-4. Runs Pkg.build()
+1. Adds the name of the package to ``INSTALLED``.
+2. Downloads the package to ``.cache``, then copies the package to the package root directory.
+3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRES`` file.
+4. Runs :func:`Pkg.build`
+
+.. warning::
+
+   Copying installed packages from a different machine is brittle for packages
+   requiring binary external dependencies. Such packages may break due to
+   differences in operating system versions, build environments, and/or
+   absolute path dependencies.
 
 Installing Unregistered Packages
 --------------------------------
