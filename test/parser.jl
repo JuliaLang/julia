@@ -22,3 +22,16 @@ let a = :a
             end) == :(module a
                       end)
 end
+
+# string literals
+macro test999_str(args...); args; end
+@test test999"a"b == ("a","b")
+@test test999"""a"""b == ("a","b")
+@test test999"
+    a
+    b" == ("
+    a
+    b",)
+@test test999"""
+    a
+    b""" == ("a\nb",)
