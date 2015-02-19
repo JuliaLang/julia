@@ -55,6 +55,11 @@ function choosetests(choices = [])
         net_on = false
     end
 
+    if ccall(:jl_running_on_valgrind,Cint,()) != 0 && "rounding" in tests
+        warn("Running under valgrind: Skipping rounding tests")
+        filter!(x -> x != "rounding", tests)
+    end
+
     if !net_on
         filter!(x -> !(x in net_required_for), tests)
     end
