@@ -3183,6 +3183,9 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
+                if (isBoxed((jl_sym_t*)mn, ctx)) {
+                    bp_owner = builder.CreateBitCast(emit_nthptr_addr(bp, -1), jl_pvalue_llvmt);
+                }
             }
         }
         Value *a1 = boxed(emit_expr(args[1], ctx),ctx);

@@ -23,6 +23,10 @@
 #endif
 #endif
 
+#ifdef GC_VERIFY
+void jl_(void *jl_value);
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -471,7 +475,7 @@ static __attribute__((noinline)) void *malloc_page(void)
 #ifdef _OS_WINDOWS_
             char* mem = VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
-            char* mem = mmap(0, sizeof(region_t) + GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            char* mem = (char*)mmap(0, sizeof(region_t) + GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
 #endif
             if (mem == NULL) {
@@ -961,13 +965,13 @@ static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
 
 static __attribute__((noinline)) void  add_page(pool_t *p)
 {
-    char *data = malloc_page();
+    char *data = (char*)malloc_page();
     if (data == NULL)
         jl_throw(jl_memory_exception);
     gcpage_t *pg = page_metadata(data);
     pg->data = data;
     pg->osize = p->osize;
-    pg->ages = malloc((GC_PAGE_SZ/p->osize + 7)/8);
+    pg->ages = (char*)malloc((GC_PAGE_SZ/p->osize + 7)/8);
     gcval_t *fl = reset_page(p, pg, p->newpages);
     p->newpages = fl;
 }
@@ -1164,44 +1168,46 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
         goto free_page;
     }
 
-    int pg_nfree = 0;
-    gcval_t **pfl_begin = NULL;
-    unsigned char msk = 1; // mask for the age bit in the current age byte
-    while ((char*)v <= lim) {
-        int bits = gc_bits(v);
-        if (!(bits & GC_MARKED)) {
-            *pfl = v;
-            pfl = &v->next;
-            pfl_begin = pfl_begin ? pfl_begin : pfl;
-            pg_nfree++;
-            *ages &= ~msk;
-        }
-        else { // marked young or old
-            if (*ages & msk) { // old enough
-                if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
-                    gc_bits(v) = GC_QUEUED; // promote
+    {  // scope to avoid clang goto errors
+        int pg_nfree = 0;
+        gcval_t **pfl_begin = NULL;
+        unsigned char msk = 1; // mask for the age bit in the current age byte
+        while ((char*)v <= lim) {
+            int bits = gc_bits(v);
+            if (!(bits & GC_MARKED)) {
+                *pfl = v;
+                pfl = &v->next;
+                pfl_begin = pfl_begin ? pfl_begin : pfl;
+                pg_nfree++;
+                *ages &= ~msk;
+            }
+            else { // marked young or old
+                if (*ages & msk) { // old enough
+                    if (sweep_mask == GC_MARKED || bits == GC_MARKED_NOESC) {
+                        gc_bits(v) = GC_QUEUED; // promote
+                    }
                 }
+                else if ((sweep_mask & bits) == sweep_mask) {
+                    gc_bits(v) = GC_CLEAN; // unmark
+                }
+                *ages |= msk;
+                freedall = 0;
             }
-            else if ((sweep_mask & bits) == sweep_mask) {
-                gc_bits(v) = GC_CLEAN; // unmark
+            v = (gcval_t*)((char*)v + osize);
+            msk *= 2;
+            if (!msk) {
+                msk = 1;
+                ages++;
             }
-            *ages |= msk;
-            freedall = 0;
         }
-        v = (gcval_t*)((char*)v + osize);
-        msk *= 2;
-        if (!msk) {
-            msk = 1;
-            ages++;
-        }
+
+        pg->fl_begin_offset = pfl_begin ? (char*)pfl_begin - data : (uint16_t)-1;
+        pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
+
+        pg->nfree = pg_nfree;
+        page_done++;
+        pg->allocd = 0;
     }
-
-    pg->fl_begin_offset = pfl_begin ? (char*)pfl_begin - data : (uint16_t)-1;
-    pg->fl_end_offset = pfl_begin ? (char*)pfl - data : (uint16_t)-1;
-
-    pg->nfree = pg_nfree;
-    page_done++;
-    pg->allocd = 0;
  free_page:
     pg_freedall += freedall;
 
@@ -2059,7 +2065,7 @@ void jl_gc_collect(int full)
         for (int i = 0; i < last_remset->len; i++) {
             uintptr_t item = (uintptr_t)last_remset->items[i];
             void* ptr = (void*)(item & ~(uintptr_t)1);
-            push_root(ptr, 0, gc_bits(ptr));
+            push_root((jl_value_t*)ptr, 0, gc_bits(ptr));
         }
 
         // 2. mark every object in a remembered binding

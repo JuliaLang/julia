@@ -389,9 +389,9 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN  = (void*)STDIN_FILENO;
-JL_STREAM *JL_STDOUT = (void*)STDOUT_FILENO;
-JL_STREAM *JL_STDERR = (void*)STDERR_FILENO;
+JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 
 JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
 JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
