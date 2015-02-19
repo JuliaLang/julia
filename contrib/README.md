@@ -40,4 +40,4 @@ Editors  + Debuggers
 |[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc config file |
 |[ README.ctags.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ctags.txt) | README for ctags config file |
 |[ repackage_system_suitesparse4.make ](https://github.com/JuliaLang/julia/blob/master/contrib/repackage_system_suitesparse4. make) | reinstall_suitesparse4 script |
-|[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | support for Valgrind   debugging tool |
+|[ valgrind-julia.supp ](https://github.com/JuliaLang/julia/blob/master/contrib/valgrind-julia.supp) | suppressions for Valgrind debugging tool |
