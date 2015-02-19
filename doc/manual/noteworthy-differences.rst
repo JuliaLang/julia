@@ -113,8 +113,8 @@ noteworthy differences:
   the object being indexed. For example:
   - In R, ``c(1, 2, 3, 4)[c(True, False)]`` produces ``c(1,3)``.
   - In R, ``c(1, 2, 3, 4)[c(True, False, True, False)]`` produces ``c(1,3)``.
-  - In Julia, ``[1, 2, 3, 4][true, false]`` throws a :exc:`BoundsError`.
-  - In Julia, ``[1, 2, 3, 4][true, false, true, false]`` produces ``[1, 3]``.
+  - In Julia, ``[1, 2, 3, 4][[true, false]]`` throws a :exc:`BoundsError`.
+  - In Julia, ``[1, 2, 3, 4][[true, false, true, false]]`` produces ``[1, 3]``.
 - Like many languages, Julia does not always allow operations on vectors of
   different lengths, unlike R where the vectors only need to share a common
   index range.  For example, ``c(1,2,3,4) + c(1,2)`` is valid R but the
