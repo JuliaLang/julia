@@ -28,6 +28,10 @@ DIRS = $(sort $(build_bindir) $(build_libdir) $(build_private_libdir) $(build_li
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 $(foreach link,base test,$(eval $(call symlink_target,$(link),$(build_datarootdir)/julia)))
 
+# Build the HTML docs (skipped if already exists, notably in tarballs)
+doc/_build/html:
+	@$(MAKE) -C doc html
+
 # doc needs to live under $(build_docdir), not under $(build_datarootdir)/julia/
 CLEAN_TARGETS += clean-$(build_docdir)
 clean-$(build_docdir):
@@ -35,7 +39,6 @@ clean-$(build_docdir):
 $(subst $(abspath $(JULIAHOME))/,,$(abspath $(build_docdir))): $(build_docdir)
 $(build_docdir):
 	@mkdir -p $@/examples
-	@cp -R doc/devdocs doc/manual doc/stdlib $@
 	@cp -R examples/*.jl $@/examples/
 	@cp -R examples/clustermanager $@/examples/
 
@@ -121,7 +124,7 @@ release-candidate: release test
 	@echo 2. Bump VERSION
 	@echo 3. Create tag, push to github "\(git tag v\`cat VERSION\` && git push --tags\)"		#"` # These comments deal with incompetent syntax highlighting rules
 	@echo 4. Clean out old .tar.gz files living in deps/, "\`git clean -fdx\`" seems to work	#"`
-	@echo 5. Replace github release tarball with tarball created from make full-source-dist
+	@echo 5. Replace github release tarball with tarballs created from make light-source-dist and make full-source-dist
 	@echo 6. Follow packaging instructions in DISTRIBUTING.md to create binary packages for all platforms
 	@echo 7. Upload to AWS, update http://julialang.org/downloads and http://status.julialang.org/stable links
 	@echo 8. Announce on mailing lists
@@ -247,7 +250,7 @@ endif
 $(eval $(call std_dll,ssp-0))
 endif
 
-install: $(build_bindir)/stringreplace
+install: $(build_bindir)/stringreplace doc/_build/html
 	@$(MAKE) $(QUIET_MAKE) release
 	@$(MAKE) $(QUIET_MAKE) debug
 	@for subdir in $(bindir) $(libexecdir) $(datarootdir)/julia/site/$(VERSDIR) $(docdir) $(man1dir) $(includedir)/julia $(libdir) $(private_libdir) $(sysconfdir); do \
@@ -305,6 +308,8 @@ endif
 	cp -R -L $(build_datarootdir)/julia $(DESTDIR)$(datarootdir)/
 	# Copy documentation
 	cp -R -L $(build_docdir)/* $(DESTDIR)$(docdir)/
+	cp -R -L doc/_build/html $(DESTDIR)$(docdir)/
+	-rm $(DESTDIR)$(docdir)/html/.buildinfo
 	# Remove perf suite
 	-rm -rf $(DESTDIR)$(datarootdir)/julia/test/perf/
 	# Remove various files which should not be installed
@@ -412,34 +417,47 @@ else
 endif
 	rm -fr $(prefix)
 
-
-full-source-dist source-dist: git-submodules
+light-source-dist.tmp: doc/_build/html
 	# Save git information
 	-@$(MAKE) -C base version_git.jl.phony
+
+	# Create file light-source-dist.tmp to hold all the filenames that go into the tarball
+	echo "base/version_git.jl" > light-source-dist.tmp
+	git ls-files | sed -e '/\.git/d' -e '/\.travis/d' >> light-source-dist.tmp
+	find doc/_build/html >> light-source-dist.tmp
+
+# Make tarball with only Julia code
+light-source-dist: light-source-dist.tmp
+	# Prefix everything with the current directory name (usually "julia"), then create tarball
+	DIRNAME=$$(basename $$(pwd)); \
+	sed -e "s_.*_$$DIRNAME/&_" light-source-dist.tmp > light-source-dist.tmp1; \
+	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+
+# Make tarball with Julia code plus all dependencies
+full-source-dist source-dist: git-submodules light-source-dist.tmp
 	# Get all the dependencies downloaded
 	@$(MAKE) -C deps getall
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
-	echo "base/version_git.jl" > full-source-dist.tmp
-	git ls-files >> full-source-dist.tmp
+	cp light-source-dist.tmp full-source-dist.tmp
 	ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tar.xz deps/*.tgz deps/*.zip >> full-source-dist.tmp
 	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> full-source-dist.tmp
 
-	# Remove unwanted files
-	sed -e '/\.git/d' -e '/\.travis/d' full-source-dist.tmp > full-source-dist.tmp1
-
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
-	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp1 > full-source-dist.tmp; \
-	cd ../ && tar -cz -T $$DIRNAME/full-source-dist.tmp --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
+	sed -e "s_.*_$$DIRNAME/&_" full-source-dist.tmp > full-source-dist.tmp1; \
+	cd ../ && tar -cz -T $$DIRNAME/full-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT)-full.tar.gz
 
 clean: | $(CLEAN_TARGETS)
 	@$(MAKE) -C base clean
+	@$(MAKE) -C doc clean
 	@$(MAKE) -C src clean
 	@$(MAKE) -C ui clean
 	@rm -f julia
 	@rm -f *~ *# *.tar.gz
-	@rm -f $(build_bindir)/stringreplace full-source-dist.tmp full-source-dist.tmp1
+	@rm -f $(build_bindir)/stringreplace \
+		light-source-dist.tmp light-source-dist.tmp1 \
+		full-source-dist.tmp full-source-dist.tmp1
 	@rm -fr $(build_private_libdir)
 # Temporarily add this line to the Makefile to remove extras
 	@rm -fr $(build_datarootdir)/julia/extras
@@ -462,7 +480,8 @@ distcleanall: cleanall
 	julia-deps julia-ui-* julia-src-* julia-symlink-* julia-base julia-sysimg-* \
 	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
-	install binary-dist dist full-source-dist source-dist git-submodules
+	install binary-dist light-source-dist.tmp light-source-dist \
+	dist full-source-dist source-dist git-submodules
 
 test: check-whitespace release
 	@$(MAKE) $(QUIET_MAKE) -C test default
