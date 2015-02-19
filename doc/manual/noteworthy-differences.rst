@@ -108,7 +108,13 @@ noteworthy differences:
   always follows the name of a specific variable, unlike R, for which ``...``
   can occur in isolation.
 - In Julia, modulus, is :obj:`%`, not ``%%``.
-- In Julia, unlike R, not all data structures support logical indexing.
+- In Julia, not all data structures support logical indexing. Furthermore,
+  logical indexing in Julia is supported only with vectors of length equal to
+  the object being indexed. For example:
+  - In R, ``c(1, 2, 3, 4)[c(True, False)]`` produces ``c(1,3)``.
+  - In R, ``c(1, 2, 3, 4)[c(True, False, True, False)]`` produces ``c(1,3)``.
+  - In Julia, ``[1, 2, 3, 4][true, false]`` throws a :exc:`BoundsError`.
+  - In Julia, ``[1, 2, 3, 4][true, false, true, false]`` produces ``[1, 3]``.
 - Like many languages, Julia does not always allow operations on vectors of
   different lengths, unlike R where the vectors only need to share a common
   index range.  For example, ``c(1,2,3,4) + c(1,2)`` is valid R but the
@@ -154,12 +160,14 @@ noteworthy differences:
   `packages <http://docs.julialang.org/en/latest/packages/packagelist/>`_
   under the `JuliaStats organization <https://github.com/JuliaStats>`_. For
   example:
+
   - Functions pertaining to probability distributions are provided by the
     `Distributions package <https://github.com/JuliaStats/Distributions.jl>`_.
   - The `DataFrames package <https://github.com/JuliaStats/DataFrames.jl>`_
     provides data frames.
   - Generalized linear models are provided by the `GLM package
     <https://github.com/JuliaStats/GLM.jl>`_.
+
 - Julia provides tuples and real hash tables, but not R-style lists. When
   returning multiple items, you should typically use a tuple: instead of
   ``list(a = 1, b = 2)``, use ``(1, 2)``.
@@ -211,12 +219,14 @@ Noteworthy differences from Python
 
 - In Julia, a vector of vectors can automatically concatenate into a
   one-dimensional vector *if* no explicit element type is specified. For example:
+
   - In Julia, ``[1, [2, 3]]`` concatenates into ``[1, 2, 3]``, like in R.
   - In Julia, ``Int[1, Int[2, 3]]`` will *not* concatenate, but instead throw an error.
   - In Julia, ``Any[1, [2,3]]`` will *not* concatenate.
   - In Julia, ``Vector{Int}[[1, 2], [3, 4]]`` will *not* concatenate, but
     produces an object similar to Python's list of lists. This object is
     *different* from a two-dimensional :obj:`Array` of :obj:`Int`\ s.
+
 - Julia requires ``end`` to end a block. Unlike Python, Julia has no ``pass``
   keyword.
 - In Julia, indexing of arrays, strings, etc. is 1-based not 0-based.
