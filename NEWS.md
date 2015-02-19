@@ -62,6 +62,10 @@ Language changes
   * `round` rounds to the nearest integer using the default rounding mode,
     which is ties to even by default ([#8750]).
 
+  * A custom triple-quoted string like `x"""..."""` no longer invokes an `x_mstr`
+    macro. Instead, the string is first unindented and then `x_str` is invoked,
+    as if the string had been single-quoted ([#10228]).
+
 Compiler improvements
 ---------------------
 
@@ -1222,3 +1226,4 @@ Too numerous to mention.
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
 [#10117]: https://github.com/JuliaLang/julia/issues/10117
 [#10180]: https://github.com/JuliaLang/julia/issues/10180
+[#10228]: https://github.com/JuliaLang/julia/issues/10228
