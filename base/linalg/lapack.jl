@@ -639,8 +639,8 @@ for (gesvx, elty) in
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
             @lapackerror
-            if info[1] == n+1 && isinteractive()
-                warn("Matrix is singular to working precision.")
+            if info[1] == n+1 warn("Matrix is singular to working precision.")
+            else @assertnonsingular
             end
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, work[1]
@@ -694,9 +694,8 @@ for (gesvx, elty, relty) in
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, rwork, info)
             @lapackerror
-            if info[1] == n+1 && isinteractive()
-                warn("Matrix is singular to working precision.")
-            end
+            if info[1] == n+1 warn("Matrix is singular to working precision.")
+            else @assertnonsingular end
             #RWORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
             X, equed, R, C, B, rcond[1], ferr, berr, rwork[1]
         end
@@ -3182,7 +3181,7 @@ for (bdsdc, elty) in
             if compq == 'N'
                 lwork = 6n
             elseif compq == 'P'
-                isinteractive() && warn("COMPQ='P' is not tested")
+                warn("COMPQ='P' is not tested")
                 #TODO turn this into an actual LAPACK call
                 #smlsiz=ilaenv(9, $elty==:Float64 ? 'dbdsqr' : 'sbdsqr', string(uplo, compq), n,n,n,n)
                 smlsiz=100 #For now, completely overkill
