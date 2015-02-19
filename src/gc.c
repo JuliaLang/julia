@@ -23,6 +23,10 @@
 #endif
 #endif
 
+#ifdef GC_VERIFY
+void jl_(void *jl_value);
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
