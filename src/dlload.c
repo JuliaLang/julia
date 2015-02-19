@@ -137,9 +137,11 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
     }
 
 #if defined(__linux__) || defined(__FreeBSD__)
-    const char *soname = jl_lookup_soname(modname, strlen(modname));
-    error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
-    if (!error) goto done;
+    {
+        const char *soname = jl_lookup_soname(modname, strlen(modname));
+        error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
+        if (!error) goto done;
+    }
 #endif
 
     if (throw_err) {
