@@ -1383,12 +1383,9 @@ export
     @__FILE__,
     @b_str,
     @r_str,
-    @r_mstr,
     @v_str,
     @text_str,
-    @text_mstr,
     @html_str,
-    @html_mstr,
     @int128_str,
     @uint128_str,
     @bigint_str,
@@ -1447,5 +1444,4 @@ export
     @inline,
     @noinline,
     @doc,
-    @doc_str,
-    @doc_mstr
+    @doc_str
