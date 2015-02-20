@@ -98,7 +98,7 @@ end
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
-    maxabs == 0 && return maxabs
+    (maxabs == 0 || isinf(maxabs)) && return maxabs
     s = start(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
@@ -113,10 +113,12 @@ function generic_vecnorm2(x)
     return convert(T, maxabs * sqrt(sum))
 end
 
+# Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
+# (Not technically a "norm" for p < 1.)
 function generic_vecnormp(x, p)
-    if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
-        maxabs = vecnormInf(x)
-        maxabs == 0 && return maxabs
+    if p > 1 || p < -1 # need to rescale to avoid overflow
+        maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
+        (maxabs == 0 || isinf(maxabs)) && return maxabs
         s = start(x)
         (v, s) = next(x, s)
         T = typeof(maxabs)
@@ -128,7 +130,7 @@ function generic_vecnormp(x, p)
             ssum += (abs(v)*scale)^spp
         end
         return convert(T, maxabs * ssum^inv(spp))
-    else # 0 < p < 1, no need for rescaling (but technically not a true norm)
+    else # -1 ≤ p ≤ 1, no need for rescaling
         s = start(x)
         (v, s) = next(x, s)
         av = float(abs(v))
