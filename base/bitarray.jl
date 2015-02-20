@@ -1719,7 +1719,7 @@ cat_containertype(::(Union(Bool,BitArray)...)) = BitArray
 cat_container(::Type{Bool}, sz, ::Type{BitArray}) = BitArray(sz)
 
 vcat_fill!(C::BitVector, catrange, x::BitVector) = copy_chunks!(C.chunks,first(catrange), x.chunks,1,length(x))
-hcat_fill!(C::BitMatrix, catrange, x::Union(BitMatrix,BitVector)) = begin
+@inline function hcat_fill!(C::BitMatrix, catrange, x::Union(BitMatrix,BitVector))
     size(C,1)==size(x,1) || throw(ArgumentError("number of rows must match"))
     copy_chunks!(C.chunks,size(C,1)*(first(catrange)-1)+1,x.chunks,1,length(x))
 end
