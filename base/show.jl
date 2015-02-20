@@ -135,12 +135,11 @@ function show(io::IO, l::LambdaStaticData)
     print(io, ")")
 end
 
-function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, compact=false)
+function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, compact=false, i1=1, l=length(itr))
     print(io, op)
     newline = true
     first = true
-    i = 1
-    l = length(itr)
+    i = i1
     if l > 0
         while true
             if !isassigned(itr, i)
@@ -153,7 +152,7 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
                 compact ? showcompact_lim(io, x) : show(io, x)
             end
             i += 1
-            if i > l
+            if i > i1+l-1
                 delim_one && first && print(io, delim)
                 break
             end
@@ -170,18 +169,23 @@ function show_delim_array(io::IO, itr::AbstractArray, op, delim, cl, delim_one, 
     print(io, cl)
 end
 
-function show_delim_array(io::IO, itr, op, delim, cl, delim_one)
+function show_delim_array(io::IO, itr, op, delim, cl, delim_one, compact=false, i1=1, n=typemax(Int))
     print(io, op)
     state = start(itr)
     newline = true
     first = true
+    while i1 > 1 && !done(itr,state)
+        _, state = next(itr, state)
+        i1 -= 1
+    end
     if !done(itr,state)
         while true
             x, state = next(itr,state)
             multiline = isa(x,AbstractArray) && ndims(x)>1 && length(x)>0
             newline && multiline && println(io)
             show(io, x)
-            if done(itr,state)
+            i1 += 1
+            if done(itr,state) || i1 > n
                 delim_one && first && print(io, delim)
                 break
             end
@@ -1238,10 +1242,10 @@ function show_vector(io::IO, v, opn, cls)
     compact, prefix = array_eltype_show_how(v)
     print(io, prefix)
     if _limit_output && length(v) > 20
-        show_delim_array(io, sub(v,1:10), opn, ",", "", false, compact)
+        show_delim_array(io, v, opn, ",", "", false, compact, 1, 10)
         print(io, "  \u2026  ")
         n = length(v)
-        show_delim_array(io, sub(v,(n-9):n), "", ",", cls, false, compact)
+        show_delim_array(io, v, "", ",", cls, false, compact, n-9, 10)
     else
         show_delim_array(io, v, opn, ",", cls, false)
     end
