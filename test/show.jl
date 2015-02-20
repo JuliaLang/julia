@@ -218,3 +218,6 @@ let a = Expr(:quote,Expr(:$,:x8d003))
     @test eval(parse(repr(a))) == a
     @test eval(eval(parse(repr(a)))) == 2
 end
+
+# issue #9865
+@test ismatch(r"^Set\(\[.+….+\]\)$", replstr(Set(1:100)))
