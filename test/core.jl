@@ -2168,3 +2168,10 @@ args8d003 = (:x, :y)
 x8d003 = Any[:y8d003]
 y8d003 = 777
 @test eval(:(string(:(f($($(x8d003...))))))) == "f(777)"
+
+# issue #9378
+abstract Foo9378{T,S}
+immutable B9378{T} end
+typealias FooB9378{T} Foo9378{T,B9378}
+immutable CFoo9378 <: FooB9378{Float64} end
+@test isa(CFoo9378(),FooB9378)
