@@ -20,8 +20,10 @@ JULIA_ENV_BIN = $(shell if [ -e $(JULIA_ENV)/Scripts ]; then echo $(JULIA_ENV)/S
 ACTIVATE      = $(JULIA_ENV_BIN)/activate
 SPHINX_BUILD  = $(JULIA_ENV_BIN)/sphinx-build
 
-$(ACTIVATE):
+virtualenv:
 	$(MAKE) -C $(JULIAHOME)/deps install-virtualenv
+
+$(ACTIVATE): virtualenv
 	touch -c $@
 
 $(SPHINX_BUILD): $(ACTIVATE) requirements.txt
