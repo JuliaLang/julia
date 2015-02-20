@@ -1715,7 +1715,7 @@ end
 
 ## Concatenation ##
 
-cat_containertypeof(::(Union(Bool,BitArray)...)) = BitArray
+cat_containertype(::(Union(Bool,BitArray)...)) = BitArray
 cat_container(::Type{Bool}, sz, ::Type{BitArray}) = BitArray(sz)
 
 vcat_fill!(C::BitVector, catrange, x::BitVector) = copy_chunks!(C.chunks,first(catrange), x.chunks,1,length(x))

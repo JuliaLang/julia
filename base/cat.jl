@@ -4,148 +4,142 @@ cat(catdim::Integer) = Array(Any, 0)
 hvcat(rows::(Int...)) = Array(Any, 0)
 
 # auxiliary cat functions
-vcatsize(x::AbstractArray) = size(x)
-vcatsize(x) = (1,)
-
-hcatsize(x::AbstractVector) = (length(x),1)
-hcatsize(x::AbstractArray) = size(x)
-hcatsize(x) = (1,1)
-
-catsize(catdim, x::AbstractArray) = ndims(x)>catdim ? size(x) : size(x, (1:catdim)...)
-catsize(catdim, x) = tuple(ones(Int,catdim)...)
-
 catrange(catdim, x::AbstractArray) = 1:size(x,catdim)
 catrange(catdim, x) = 1
 
-vcatshape(::()) = (0,)
-@inline function vcatshape(X::(AbstractVector...,))
-    s1::Int = 0
-    for x in X
-        s1 += length(x)
-    end
-    (s1,)
-end
-@inline function vcatshape(X::(AbstractMatrix...,))
-    s1::Int = 0
-    for x in X
-        s1 += size(x,1)
-    end
-    s2::Int = size(X[1],2)
-    (s1, s2)
-end
-vcatshape(X::(Number...,)) = (length(X),)
-vcatshape{T}(X::(T...,)) = (length(X),)
-@inline function vcatshape(X::(Any...,))
-    sz::Dims = vcatsize(X[1])
-    for k = 2:length(X)
-        sz = vcatshape_add(sz, vcatsize(X[k]))
-    end
-    sz
-end
+cattype(x::AbstractArray) = eltype(x)
+cattype(x) = typeof(x)
 
-stagedfunction vcatshape_add{N1,N2}(sz::NTuple{N1,Int}, sz2::NTuple{N2,Int})
-    newsize = Expr(:tuple, :(sz[1]+sz2[1]), [:(sz[$i]) for i=2:N1]..., [1 for i=N1+1:N2]...)
+stagedfunction vcatshape{T,N}(n::Int,x::AbstractArray{T,N})
+    Expr(:tuple,:(n),[:(Int(size(x,$i))) for i=2:N]...)
+end
+vcatshape(n,x) = (n,)
+
+stagedfunction hcatshape{T,N}(n::Int,x::AbstractArray{T,N})
+    Expr(:tuple,:(Int(size(x,1))),:(n),[:(Int(size(x,$i))) for i=3:N]...)
+end
+hcatshape(n,x) = (1,n)
+
+stagedfunction catshape{T,N}(catdim, n::Int, x::AbstractArray{T,N})
     quote
-        $(Expr(:meta,:inline))
-        $newsize
+        if catdim<$N
+            $(Expr(:tuple,[:(catdim==$i ? n : Int(size(x,$i))) for i=1:N]...))
+        else
+            tuple(Int[size(x,i) for i=1:catdim-1]..., n)::Dims
+        end
     end
+end
+catshape(catdim, n, x) = tuple(ones(Int,catdim-1)..., n)::Dims
+
+stagedfunction hvcatshape{T,N}(nr::Int,nc::Int,x::AbstractArray{T,N})
+    Expr(:tuple,:(nr),:(nc),[:(Int(size(x,$i))) for i=3:N]...)
+end
+hvcatshape(nr,nc,x) = (nr, nc)
+
+@inline function vcatsize(X::(Any...,))
+    catlength::Int = 0
+    N = 1
+    y = X[1]
+    @inbounds for k = 1:length(X)
+        x = X[k]
+        if isa(x, AbstractArray)
+            catlength += size(x, 1)
+            Nk = ndims(x)
+            Nk > N && (y = x; N = Nk)
+        else
+            catlength += 1
+        end
+    end
+    Base.vcatshape(catlength,y)
+end
+@inline function hcatsize(X::(Any...,))
+    catlength::Int = 0
+    N = 1
+    y = X[1]
+    @inbounds for k = 1:length(X)
+        x = X[k]
+        if isa(x, AbstractArray)
+            catlength += size(x, 2)
+            Nk = ndims(x)
+            Nk > N && (y = x; N = Nk)
+        else
+            catlength += 1
+        end
+    end
+    hcatshape(catlength,y)
+end
+@inline function catsize(catdim::Integer, X::(Any...,))
+    catlength::Int = 0
+    N = 1
+    y = X[1]
+    @inbounds for k = 1:length(X)
+        x = X[k]
+        if isa(x, AbstractArray)
+            catlength += size(x, catdim)
+            Nk = ndims(x)
+            Nk > N && (y = x; N = Nk)
+        else
+            catlength += 1
+        end
+    end
+    catshape(catdim,catlength,y)
 end
 
-hcatshape(::()) = (1,0)
-hcatshape(X::(Number...,)) = (1,length(X))
-hcatshape{T}(X::(T...,)) = (1,length(X))
-hcatshape(X::(AbstractVector...,)) = (length(X[1]), length(X))
-@inline function hcatshape(X::(AbstractVecOrMat...,))
-    s2::Int = 0
-    for x in X
-        s2 += size(x,2)
+@inline function hvcatsize(rows::(Integer...), X::(Any...,))
+    nb = 0
+    @inbounds for i = 1:length(rows)
+        nb += rows[i]
     end
-    s1::Int = size(X[1],1)
-    (s1, s2)
-end
-@inline function hcatshape(X::(Any...))
-    sz::Dims = hcatsize(X[1])
-    for k = 2:length(X)
-        sz = hcatshape_add(sz, hcatsize(X[k]))
-    end
-    sz
-end
+    nb == length(X) || throw(ArgumentError("Insufficient number of blocks"))
 
-stagedfunction hcatshape_add{N1,N2}(sz::NTuple{N1,Int}, sz2::NTuple{N2, Int})
-    newsize = Expr(:tuple, :(sz[1]), :(sz[2]+sz2[2]), [:(sz[$i]) for i=3:N1]..., [1 for i=N1+1:N2]...)
-    quote
-        $(Expr(:meta,:inline))
-        $newsize
-    end
-end
-
-catshape(catdim, ::()) = tuple(ones(Int,catdim-1)...,0)
-catshape(catdim, X::(Number...,)) = tuple(ones(Int,catdim-1)...,length(X))
-@inline function catshape(catdim, X::(Any...))
-    sz::Dims = catsize(catdim, X[1])
-    for k = 2:length(X)
-        sz = catshape_add(catdim, sz, catsize(catdim, X[k]))
-    end
-    sz
-end
-
-stagedfunction catshape_add{N1,N2}(catdim, sz::NTuple{N1,Int}, sz2::NTuple{N2,Int})
-    newsize = Expr(:tuple, [:($i==catdim ? (sz[$i]+sz2[$i]) : sz[$i]) for i=1:N1]..., [1 for i=N1+1:N2]...)
-    quote
-        $(Expr(:meta,:inline))
-        $newsize
-    end
-end
-
-hvcatshape(rows::(Integer...),::()) = (length(rows),0)
-hvcatshape(rows::(Integer...), X::(Number...,)) = (length(rows), rows[1])
-hvcatshape{T}(rows::(Integer...), X::(T...,)) = (length(rows), rows[1])
-@inline function hvcatshape(rows::(Integer...), X::(AbstractVecOrMat...,))
     nc::Int = 0
-    for k = 1:rows[1]
-        nc += size(X[k], 2)
+    @inbounds for k = 1:rows[1]
+        x = X[k]
+        if isa(x, AbstractArray)
+            nc += size(x, 2)
+        else
+            nc += 1
+        end
     end
+
     k = 1
     nr::Int = 0
-    for i = 1:length(rows)
-        nr += size(X[k], 1)
+    @inbounds for i = 1:length(rows)
+        x = X[k]
+        if isa(x, AbstractArray)
+            nr += size(x, 1)
+        else
+            nr += 1
+        end
         k += rows[i]
     end
-    return (nr, nc)
-end
-@inline function hvcatshape(rows::(Integer...), X::(Any...))
-    k=1
-    rowsz::Dims = hcatsize(X[k])
-    k+=1
-    for j = 2:rows[1]
-        rowsz = hcatshape_add(rowsz, hcatsize(X[k]))
-        k+=1
-    end
-    sz::Dims = rowsz
-    for i = 2:length(rows)
-        rowsz = hcatsize(X[k])
-        k+=1
-        for j = 2:rows[i]
-            rowsz = hcatshape_add(rowsz, hcatsize(X[k]))
-            k+=1
+
+    N = 1
+    y = X[1]
+    for k = 1:length(X)
+        @inbounds x = X[k]
+        if isa(x, AbstractArray)
+            Nk = ndims(x)
+            Nk > N && (y = x; N = Nk)
         end
-        sz = vcatshape_add(sz, rowsz)
     end
-    sz
+    hvcatshape(nr, nc, y)
 end
 
-cat_eltypeof{T}(::(T...,)) = T
-cat_eltypeof{T}(::(AbstractArray{T}...,)) = T
-@inline function cat_eltypeof(X::(Any...,))
-    T = cat_eltypeof((X[1],))
+cat_eltype(::()) = Any
+cat_eltype{T}(X::(T...,)) = T
+cat_eltype{T}(X::(AbstractArray{T}...,)) = T
+@inline function cat_eltype(X::(Any...,))
+    T = cat_eltype((X[1],))
     for k = 2:length(X)
-        T = promote_type(T, cat_eltypeof((X[k],)))
+        @inbounds x = X[k]
+        T = promote_type(T, cattype(x))
     end
     T
 end
 
-cat_containertypeof(::()) = Array
-cat_containertypeof(::(Any...,)) = Array
+cat_containertype(::()) = Array
+cat_containertype(::(Any...,)) = Array
 
 cat_container(T, sz, ::Type{Array}) = Array(T, sz)
 
@@ -188,10 +182,10 @@ end
 
 ## vcat
 function typed_vcat(T::Type, X...)
-    C = cat_container(T, vcatshape(X), cat_containertypeof(X))
+    C = cat_container(T, vcatsize(X), cat_containertype(X))
     offset = 0
-    for i = 1:length(X)
-        x = X[i]
+    for k = 1:length(X)
+        @inbounds x = X[k]
         r = offset+catrange(1, x)
         vcat_fill!(C, r, x)
         offset = last(r)
@@ -200,10 +194,10 @@ function typed_vcat(T::Type, X...)
 end
 
 function vcat(X...)
-    C = cat_container(cat_eltypeof(X), vcatshape(X), cat_containertypeof(X))
+    C = cat_container(cat_eltype(X), vcatsize(X), cat_containertype(X))
     offset = 0
-    for i = 1:length(X)
-        x = X[i]
+    for k = 1:length(X)
+        @inbounds x = X[k]
         r = offset+catrange(1, x)
         vcat_fill!(C, r, x)
         offset = last(r)
@@ -213,10 +207,10 @@ end
 
 ## hcat
 function typed_hcat(T::Type, X...)
-    C=cat_container(T, hcatshape(X), cat_containertypeof(X))
+    C=cat_container(T, hcatsize(X), cat_containertype(X))
     offset = 0
-    for i = 1:length(X)
-        x = X[i]
+    for k = 1:length(X)
+        @inbounds x = X[k]
         r = offset+catrange(2, x)
         hcat_fill!(C, r, x)
         offset = last(r)
@@ -225,10 +219,10 @@ function typed_hcat(T::Type, X...)
 end
 
 function hcat(X...)
-    C=cat_container(cat_eltypeof(X), hcatshape(X), cat_containertypeof(X))
+    C=cat_container(cat_eltype(X), hcatsize(X), cat_containertype(X))
     offset = 0
-    for i = 1:length(X)
-        x = X[i]
+    for k = 1:length(X)
+        @inbounds x = X[k]
         r = offset+catrange(2, x)
         hcat_fill!(C, r, x)
         offset = last(r)
@@ -238,10 +232,10 @@ end
 
 # cat: general case
 function cat(catdim::Integer, X...)
-    C=cat_container(cat_eltypeof(X), catshape(catdim, X), cat_containertypeof(X))
+    C=cat_container(cat_eltype(X), catsize(catdim, X), cat_containertype(X))
     offset = 0
-    for i = 1:length(X)
-        x = X[i]
+    for k = 1:length(X)
+        @inbounds x = X[k]
         r = offset+catrange(catdim, x)
         cat_fill!(C, catdim, r, x)
         offset = last(r)
@@ -251,14 +245,14 @@ end
 
 ## hvcat: 2d horizontal and vertical concatenation
 function typed_hvcat(T::Type, rows::(Int...), X...)
-    C = cat_container(T, hvcatshape(rows,X), cat_containertypeof(X))
+    C = cat_container(T, hvcatsize(rows,X), cat_containertype(X))
     rowoffset = 0
     k = 1
     for nbc in rows
         rowrange = rowoffset + catrange(1, X[k])
         columnoffset = 0
         for j = 1:nbc
-            x = X[k]
+            @inbounds x = X[k]
             columnrange = columnoffset + catrange(2, x)
             hvcat_fill!(C, rowrange, columnrange, x)
             columnoffset = last(columnrange)
@@ -273,14 +267,14 @@ function typed_hvcat(T::Type, rows::(Int...), X...)
 end
 
 function hvcat(rows::(Int...), X...)
-    C = cat_container(cat_eltypeof(X), hvcatshape(rows,X), cat_containertypeof(X))
+    C = cat_container(cat_eltype(X), hvcatsize(rows,X), cat_containertype(X))
     rowoffset = 0
     k = 1
     for nbc in rows
         rowrange = rowoffset + catrange(1, X[k])
         columnoffset = 0
         for j = 1:nbc
-            x = X[k]
+            @inbounds x = X[k]
             columnrange = columnoffset + catrange(2, x)
             hvcat_fill!(C, rowrange, columnrange, x)
             columnoffset = last(columnrange)
@@ -322,7 +316,7 @@ function dcat(catdims, X...)
     for d = 1:N
         catsizes[d] == 0 && (catsizes[d]=length(catrange(d, X[1])))
     end
-    C=cat_container(cat_eltypeof(X), tuple(catsizes...), cat_containertypeof(X))
+    C=cat_container(cat_eltype(X), tuple(catsizes...), cat_containertype(X))
     M > 1 && fill!(C,0)
 
     offsets = zeros(Int, M)
