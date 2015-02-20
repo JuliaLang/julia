@@ -2,7 +2,6 @@ export
 # Modules
     Collections,
     FFTW,
-    Graphics,
     Meta,
     Operators,
     Pkg,
