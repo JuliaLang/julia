@@ -16,7 +16,7 @@ function lufact!{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}
     return LU{T,typeof(A)}(lpt[1], lpt[2], lpt[3])
 end
 lufact!(A::StridedMatrix, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = generic_lufact!(A, pivot)
-function generic_lufact!{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true})
+function generic_lufact!{T,Pivot}(A::StridedMatrix{T}, ::Type{Val{Pivot}} = Val{true})
     m, n = size(A)
     minmn = min(m,n)
     info = 0
@@ -25,7 +25,7 @@ function generic_lufact!{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, 
         for k = 1:minmn
             # find index max
             kp = k
-            if pivot==Val{true}
+            if Pivot
                 amax = real(zero(T))
                 for i = k:m
                     absi = abs(A[i,k])
@@ -63,8 +63,26 @@ function generic_lufact!{T}(A::StridedMatrix{T}, pivot::Union(Type{Val{false}}, 
     end
     LU{T,typeof(A)}(A, ipiv, convert(BlasInt, info))
 end
-lufact{T<:BlasFloat}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = lufact!(copy(A), pivot)
-lufact{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = (S = typeof(zero(T)/one(T)); S != T ? lufact!(convert(AbstractMatrix{S}, A), pivot) : lufact!(copy(A), pivot))
+
+# floating point types doesn't have to be promoted for LU, but should default to pivoting
+lufact{T<:FloatingPoint}(A::Union(AbstractMatrix{T},AbstractMatrix{Complex{T}}), pivot::Union(Type{Val{false}}, Type{Val{true}}) = Val{true}) = lufact!(copy(A), pivot)
+
+# for all other types we must promote to a type which is stable under division
+function lufact{T}(A::AbstractMatrix{T}, pivot::Union(Type{Val{false}}, Type{Val{true}}))
+    S = typeof(zero(T)/one(T))
+    lufact!(copy_oftype(A, S), pivot)
+end
+# We can't assume an ordered field so we first try without pivoting
+function lufact{T}(A::AbstractMatrix{T})
+    S = typeof(zero(T)/one(T))
+    F = lufact!(copy_oftype(A, S), Val{false})
+    if F.info == 0
+        return F
+    else
+        return lufact!(copy_oftype(A, S), Val{true})
+    end
+end
+
 lufact(x::Number) = LU(fill(x, 1, 1), BlasInt[1], x == 0 ? one(BlasInt) : zero(BlasInt))
 lufact(F::LU) = F
 
@@ -142,9 +160,12 @@ end
 
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
-    s = sum(log(diag(A.factors))) + (bool(sum(A.ipiv .!= 1:n) % 2) ? complex(0,pi) : 0)
+    s = sum(log(diag(A.factors)))
+    if bool(sum(A.ipiv .!= 1:n) % 2)
+        s = Complex(real(s), imag(s)+π)
+    end
     r, a = reim(s)
-    a = pi-mod(pi-a,2pi) #Take principal branch with argument (-pi,pi]
+    a = π-mod2pi(π-a) #Take principal branch with argument (-pi,pi]
     complex(r,a)
 end
 

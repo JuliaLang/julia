@@ -557,6 +557,12 @@ Syntax
 Nullables
 ---------
 
+.. function:: Nullable(x)
+
+   Wrap value ``x`` in an object of type ``Nullable``, which indicates whether a value is present.
+   ``Nullable(x)`` yields a non-empty wrapper, and ``Nullable{T}()`` yields an empty instance
+   of a wrapper that might contain a value of type ``T``.
+
 .. function:: get(x)
 
    Attempt to access the value of the ``Nullable`` object, ``x``. Returns the
@@ -653,24 +659,33 @@ System
    The ``dir`` keyword argument can be used to specify a working directory for the
    command.
 
-.. function:: |>(command, command)
-              |>(command, filename)
-              |>(filename, command)
+.. function:: pipe(from, to, ...)
 
-   Redirect operator. Used for piping the output of a process into another (first form) or to redirect the standard output/input of a command to/from a file (second and third forms).
+   Create a pipeline from a data source to a destination. The source and destination can
+   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
+   argument must be a command. Strings refer to filenames.
+   When called with more than two arguments, they are chained together from left to right.
+   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
+   concise way to specify multi-stage pipelines.
 
    **Examples**:
-     * ``run(`ls` |> `grep xyz`)``
-     * ``run(`ls` |> "out.txt")``
-     * ``run("out.txt" |> `grep xyz`)``
+     * ``run(pipe(`ls`, `grep xyz`))``
+     * ``run(pipe(`ls`, "out.txt"))``
+     * ``run(pipe("out.txt", `grep xyz`))``
 
-.. function:: >>(command, filename)
+.. function:: pipe(command; stdin, stdout, stderr, append=false)
 
-   Redirect standard output of a process, appending to the destination file.
+   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
+   the command's streams should be redirected. ``append`` controls whether file output
+   appends to the file.
+   This is a more general version of the 2-argument ``pipe`` function.
+   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
+   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
+   data source.
 
-.. function:: .>(command, filename)
-
-   Redirect the standard error stream of a process.
+   **Examples**:
+     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+     * ``run(pipe(`update`, stdout="log.txt", append=true))``
 
 .. function:: gethostname() -> AbstractString
 
@@ -785,11 +800,15 @@ Errors
 
 .. function:: assert(cond, [text])
 
-   Raise an error if ``cond`` is false. Also available as the macro ``@assert expr``.
+   Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``.
 
-.. function:: @assert
+.. function:: @assert cond [text]
 
-   Raise an error if ``cond`` is false. Preferred syntax for writings assertions.
+   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
+
+.. data:: AssertionError
+
+   The asserted condition did not evalutate to ``true``.
 
 .. data:: ArgumentError
 

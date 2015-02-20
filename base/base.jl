@@ -119,6 +119,13 @@ type DimensionMismatch <: Exception
 end
 DimensionMismatch() = DimensionMismatch("")
 
+type AssertionError <: Exception
+    msg::AbstractString
+
+    AssertionError() = new("")
+    AssertionError(msg) = new(msg)
+end
+
 # For passing constants through type inference
 immutable Val{T}
 end
@@ -251,22 +258,20 @@ macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
 
-Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
+call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert((Int...), d))
 
-Array{T}(::Type{T}, m::Int) =
+call{T}(::Type{Array{T}}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T}(::Type{T}, m::Int,n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m,n)
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
-
-Array(T::Type, d::Int...) = Array(T, d)
-Array(T::Type, d::Integer...) = Array(T, convert((Int...), d))
-
-Array{T}(::Type{T}, m::Integer) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T}(::Type{T}, m::Integer,n::Integer) =
+call{T}(::Type{Array{T}}, m::Integer, n::Integer) =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
+call{T}(::Type{Array{T}}, m::Integer, n::Integer, o::Integer) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+
+# TODO: possibly turn these into deprecations
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
+Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert((Int...), d))
+Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
+Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)

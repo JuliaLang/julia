@@ -272,3 +272,14 @@ end
 @test_throws ArgumentError hist([1,2,3], 0)
 @test_throws ArgumentError hist([1.0,2.0,3.0], -1)
 @test_throws ArgumentError hist([1.0,2.0,3.0], 0)
+
+@test histrange([1, 2, 3, 4], 4) == 0.0:1.0:4.0
+@test histrange([1, 2, 2, 4], 4) == 0.0:1.0:4.0
+@test histrange([1, 10], 4) == 0.0:5.0:10.0
+@test histrange([1, 20], 4) == 0.0:5.0:20.0
+@test histrange([1, 600], 4) == 0.0:200.0:600.0
+@test histrange([1, -1000], 4) == -1500.0:500.0:500.0
+
+@test_throws ArgumentError histrange([1, 10], 0)
+@test_throws ArgumentError histrange([1, 10], -1)
+

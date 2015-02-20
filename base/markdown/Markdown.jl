@@ -19,7 +19,7 @@ include("render/html.jl")
 
 include("render/terminal/render.jl")
 
-export readme, license, @md_str, @md_mstr, @doc_str, @doc_mstr
+export readme, license, @md_str, @doc_str
 
 parse(markdown::String; flavor = julia) = parse(IOBuffer(markdown), flavor = flavor)
 parse_file(file::String; flavor = julia) = parse(readall(file), flavor = flavor)
@@ -49,17 +49,7 @@ macro md_str(s, t...)
     mdexpr(s, t...)
 end
 
-macro md_mstr(s, t...)
-    s = Base.triplequoted(s)
-    mdexpr(s, t...)
-end
-
 macro doc_str(s, t...)
-    docexpr(s, t...)
-end
-
-macro doc_mstr(s, t...)
-    s = Base.triplequoted(s)
     docexpr(s, t...)
 end
 

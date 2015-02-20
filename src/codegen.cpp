@@ -8,7 +8,11 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#ifdef LLVM37
+#include "llvm/IR/LegacyPassManager.h"
+#else
 #include <llvm/PassManager.h>
+#endif
 #include <llvm/Target/TargetSubtargetInfo.h>
 #include <llvm/Support/TargetRegistry.h>
 #include <llvm/Analysis/Passes.h>
@@ -110,6 +114,9 @@
 #include <cstdio>
 #include <cassert>
 using namespace llvm;
+#if LLVM37
+using namespace llvm::legacy;
+#endif
 
 extern "C" {
 
@@ -262,7 +269,6 @@ static GlobalVariable *jlundeferr_var;
 static GlobalVariable *jldomerr_var;
 static GlobalVariable *jlovferr_var;
 static GlobalVariable *jlinexacterr_var;
-static GlobalVariable *jlstderr_var;
 static GlobalVariable *jlRTLD_DEFAULT_var;
 #ifdef _OS_WINDOWS_
 static GlobalVariable *jlexe_var;
@@ -320,7 +326,6 @@ static Function *box8_func;
 static Function *box16_func;
 static Function *box32_func;
 static Function *box64_func;
-static Function *jlputs_func;
 static Function *wbfunc;
 static Function *queuerootfun;
 static Function *expect_func;
@@ -596,7 +601,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li, cstyle);
-        //JL_PRINTF(JL_STDOUT, "emit %s\n", li->name->name);
+        //jl_printf(JL_STDOUT, "emit %s\n", li->name->name);
         //n_emit++;
     }
     JL_CATCH {
@@ -630,7 +635,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
-    //ios_printf(ios_stderr, "%s:%d\n",
+    //jl_printf(JL_STDERR, "%s:%d\n",
     //           ((jl_sym_t*)li->file)->name, li->line);
     //if (verifyFunction(*f,PrintMessageAction)) {
     //    f->dump();
@@ -853,7 +858,7 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         if (jl_get_llvmf_info(fptr, &symsize, &object))
             jl_dump_function_asm((char *)fptr, symsize, object, fstream);
         else
-            JL_PRINTF(JL_STDERR, "Warning: Unable to find function pointer\n");
+            jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
         fstream.flush();
     }
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
@@ -872,7 +877,7 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
         sf = jl_method_lookup_by_type(jl_gf_mtable(f), types, 0, 0);
         if (sf == jl_bottom_func)
             return NULL;
-        JL_PRINTF(JL_STDERR,
+        jl_printf(JL_STDERR,
                   "Warning: Returned code may not match what actually runs.\n");
     }
     Function *llvmf;
@@ -1360,7 +1365,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         }
         return;
     }
-    jl_value_t *ty = expr_type(expr, ctx);
     if (jl_is_symbolnode(expr)) {
         expr = (jl_value_t*)jl_symbolnode_sym(expr);
     }
@@ -1369,9 +1373,6 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
         if (ctx->vars.find(vname) != ctx->vars.end()) {
             jl_varinfo_t &vi = ctx->vars[vname];
             vi.escapes |= esc;
-            vi.usedUndef |= (jl_subtype((jl_value_t*)jl_undef_type,ty,0)!=0);
-            if (!ctx->linfo->inferred)
-                vi.usedUndef = true;
             vi.used = true;
         }
     }
@@ -1902,7 +1903,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (aty != NULL) {
                 /*
                   if (trace) {
-                      JL_PRINTF(JL_STDOUT, "call %s%s\n",
+                      jl_printf(JL_STDOUT, "call %s%s\n",
                       jl_sprint(args[0]),
                       jl_sprint((jl_value_t*)aty));
                   }
@@ -2869,8 +2870,7 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     }
     assert(jbp == NULL);
     if (arg != NULL ||    // arguments are always defined
-        ((!is_var_closed(sym, ctx) || !vi.isAssigned) &&
-         !jl_subtype((jl_value_t*)jl_undef_type, ty, 0))) {
+        ((!is_var_closed(sym, ctx) || !vi.isAssigned) && !vi.usedUndef)) {
         Value *theLoad = builder.CreateLoad(bp, vi.isVolatile);
         if (vi.closureidx > -1 && !(vi.isAssigned && vi.isCaptured))
             theLoad = tbaa_decorate(tbaa_const, (Instruction*)theLoad);
@@ -3001,7 +3001,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         jl_sym_t *sym = (jl_sym_t*)expr;
         if (valuevar != NULL)
             *valuevar = sym;
-        return emit_var(sym, (jl_value_t*)jl_undef_type, ctx, isboxed);
+        return emit_var(sym, (jl_value_t*)jl_any_type, ctx, isboxed);
     }
     if (jl_is_symbolnode(expr)) {
         if (!valuepos) return NULL;
@@ -3067,15 +3067,12 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);
-        jl_value_t *etype = expr_type(expr, ctx);
         jl_module_t *mod = topmod(ctx);
         jl_binding_t *b = jl_get_binding(mod, var);
         if (b == NULL)
             b = jl_get_binding_wr(mod, var);
         Value *bp = julia_binding_gv(b);
-        if ((b->constp && b->value!=NULL) ||
-            (etype!=(jl_value_t*)jl_any_type &&
-             !jl_subtype((jl_value_t*)jl_undef_type, etype, 0))) {
+        if (b->constp && b->value!=NULL) {
             return builder.CreateLoad(bp, false);
         }
         return emit_checked_var(bp, var, ctx);
@@ -3395,7 +3392,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     }
     else if (head == simdloop_sym) {
         if (!llvm::annotateSimdLoop(builder.GetInsertBlock()))
-            JL_PRINTF(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
+            jl_printf(JL_STDERR, "Warning: could not attach metadata for @simd loop.\n");
         return NULL;
     }
     else if (head == meta_sym) {
@@ -3446,7 +3443,7 @@ static bool store_unboxed_p(jl_sym_t *s, jl_codectx_t *ctx)
     jl_varinfo_t &vi = ctx->vars[s];
     // only store a variable unboxed if type inference has run, which
     // checks that the variable is not referenced undefined.
-    return (ctx->linfo->inferred && !vi.isCaptured &&
+    return (ctx->linfo->inferred && !vi.isCaptured && !vi.usedUndef &&
             // don't unbox vararg tuples
             s != ctx->vaName && store_unboxed_p(vi.declType));
 }
@@ -3691,8 +3688,8 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     }
     assert(jl_is_expr(ast));
     sparams = jl_tuple_tvars_to_symbols(lam->sparams);
-    //JL_PRINTF((jl_value_t*)ast);
-    //JL_PRINTF(JL_STDOUT, "\n");
+    //jl_printf((jl_value_t*)ast);
+    //jl_printf(JL_STDOUT, "\n");
     std::map<jl_sym_t*, jl_arrayvar_t> arrayvars;
     std::map<int, BasicBlock*> labels;
     std::map<int, Value*> handlers;
@@ -3749,6 +3746,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         if (varinfo.isCaptured)
             varinfo.used = true;
         varinfo.isSA = (jl_vinfo_sa(vi)!=0);
+        varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || (!varinfo.isArgument && !lam->inferred);
         varinfo.declType = jl_cellref(vi,1);
     }
     vinfos = jl_lam_capt(ast);
@@ -3763,8 +3761,9 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
         varinfo.closureidx = i;
         varinfo.isAssigned = (jl_vinfo_assigned(vi)!=0);
         varinfo.isCaptured = true;
-        varinfo.used = true;
         varinfo.escapes = true;
+        varinfo.used = true;
+        varinfo.usedUndef = (jl_vinfo_usedundef(vi)!=0) || !lam->inferred;
         varinfo.declType = jl_cellref(vi,1);
     }
 
@@ -3950,7 +3949,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", f);
     builder.SetInsertPoint(b0);
 
-    //ios_printf(ios_stderr, "\n*** compiling %s at %s:%d\n\n",
+    //jl_printf(JL_STDERR, "\n*** compiling %s at %s:%d\n\n",
     //           lam->name->name, filename.c_str(), lno);
 
     DebugLoc noDbg;
@@ -4794,11 +4793,6 @@ static void init_julia_llvm_env(Module *m)
                                   (void*)&jl_overflow_exception, m);
     jlinexacterr_var = global_to_llvm("jl_inexact_exception",
                                       (void*)&jl_inexact_exception, m);
-    jlstderr_var =
-        new GlobalVariable(*m, T_int8,
-                           true, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_uv_stderr");
-    add_named_global(jlstderr_var, (void*)&jl_uv_stderr);
 
     jlRTLD_DEFAULT_var =
         new GlobalVariable(*m, T_pint8,
@@ -5128,15 +5122,6 @@ static void init_julia_llvm_env(Module *m)
                          "jl_alloc_tuple", m);
     add_named_global(jl_alloc_tuple_func, (void*)&jl_alloc_tuple);
 
-    std::vector<Type *> puts_args(0);
-    puts_args.push_back(T_pint8);
-    puts_args.push_back(T_pint8);
-    jlputs_func =
-        Function::Create(FunctionType::get(T_void, puts_args, false),
-                         Function::ExternalLinkage,
-                         "jl_puts", m);
-    add_named_global(jlputs_func, (void*)&jl_puts);
-
     std::vector<Type *> dlsym_args(0);
     dlsym_args.push_back(T_pint8);
     dlsym_args.push_back(T_pint8);
@@ -5421,9 +5406,9 @@ extern "C" void jl_init_codegen(void)
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
 #endif
     jl_ExecutionEngine = eb->create(jl_TargetMachine);
-    //ios_printf(ios_stderr,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
+    //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
     if (!jl_ExecutionEngine) {
-        JL_PRINTF(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
+        jl_printf(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
         exit(1);
     }
 #ifdef LLVM35

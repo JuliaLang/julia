@@ -90,16 +90,18 @@ A = CHOLMOD.Sparse(48, 48,
 @test_approx_eq CHOLMOD.norm_sparse(A, 0) 3.570948074697437e9
 @test_approx_eq CHOLMOD.norm_sparse(A, 1) 3.570948074697437e9
 @test_throws ArgumentError CHOLMOD.norm_sparse(A, 2)
-@test isvalid(A)
+@test CHOLMOD.isvalid(A)
 
 B = A * ones(size(A,2))
 chma = ldltfact(A)                      # LDL' form
-@test isvalid(chma)
+@test CHOLMOD.isvalid(chma)
+@test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test_approx_eq x ones(size(x))
 
 chma = cholfact(A)                      # LL' form
-@test isvalid(chma)
+@test CHOLMOD.isvalid(chma)
+@test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test_approx_eq x ones(size(x))
 
@@ -124,7 +126,7 @@ CHOLMOD.change_stype!(afiro2, -1)
 chmaf = cholfact(afiro2)
 y = afiro'*ones(size(afiro,1))
 sol = chmaf\(afiro*y) # least squares solution
-@test isvalid(sol)
+@test CHOLMOD.isvalid(sol)
 pred = afiro'*sol
 @test norm(afiro * (convert(Matrix, y) - convert(Matrix, pred))) < 1e-8
 
@@ -192,51 +194,51 @@ run(`rm tmp.mtx`)
 # test that Sparse(Ptr) constructor throws the right places
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 ### illegal dtype (for now but should be supprted at some point)
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, CHOLMOD.SINGLE, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal dtype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, 5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 4)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal xtype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, 3, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 3)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal itype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint, CHOLMOD.INTLONG, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 ### illegal itype
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
 puint = convert(Ptr{Uint32}, p)
 unsafe_store!(puint,  5, 3*div(sizeof(Csize_t), 4) + 5*div(sizeof(Ptr{Void}), 4) + 2)
 @test_throws CHOLMOD.CHOLMODException CHOLMOD.Sparse(p)
 
 # test that Sparse(Ptr) works for SuiteSparse_long (on 64 bit systems)
 if CHOLMOD.SuiteSparse_long == Int64
-    p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
+    p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
         (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
-    @test isa(CHOLMOD.Sparse(p), CHOLMOD.Sparse{Float64,CHOLMOD.SuiteSparse_long})
+        1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Int32))
+    @test isa(CHOLMOD.Sparse(p), CHOLMOD.Sparse{Float64,Int32})
 end
 
 # Test Dense wrappers (only Float64 supported a present)
@@ -281,9 +283,9 @@ end
 
 # Test Sparse and Factor
 ## test free_sparse!
-p = ccall((:cholmod_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64,Cint}},
+p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_Sparse{Float64,Cint}},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
-    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Cint))
+    1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(Int))
 @test CHOLMOD.free_sparse!(p)
 
 for elty in (Float64, Complex{Float64})
@@ -334,6 +336,13 @@ for elty in (Float64, Complex{Float64})
     # Factor
     @test_throws ArgumentError cholfact(A1)
     @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - I)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -1.0)
+    @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
+    @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1', -2real(A1[1,1]))
+    @test_throws ArgumentError cholfact(A1)
+    @test_throws ArgumentError cholfact(A1, 1.0)
+    @test_throws ArgumentError ldltfact(A1)
+    @test_throws ArgumentError ldltfact(A1, 1.0)
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -372,9 +381,9 @@ for elty in (Float64, Complex{Float64})
 
     ### update!
     F = cholfact(A1pd)
-    CHOLMOD.change_factor(elty, false, false, true, true, F)
+    CHOLMOD.change_factor!(elty, false, false, true, true, F)
     @test unsafe_load(F.p).is_ll == 0
-    CHOLMOD.change_factor(elty, true, false, true, true, F)
+    CHOLMOD.change_factor!(elty, true, false, true, true, F)
     @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
     @test size(F, 2) == 5
     @test size(F, 3) == 1

@@ -249,3 +249,7 @@ for T in types
     @test isa(convert(Nullable{Number}, Nullable(one(T))), Nullable{Number})
     @test isa(convert(Nullable{Any}, Nullable(one(T))), Nullable{Any})
 end
+
+@test isnull(convert(Nullable, nothing))
+@test isnull(convert(Nullable{Int}, nothing))
+@test isa(convert(Nullable{Int}, nothing), Nullable{Int})

@@ -13,6 +13,7 @@ export
     LinAlg,
     BLAS,
     LAPACK,
+    SparseMatrix,
     Docs,
     Markdown,
 
@@ -160,6 +161,7 @@ export
     ProcessExitedException,
     SystemError,
     TypeError,
+    AssertionError,
 
 # Global constants and variables
     ARGS,
@@ -903,6 +905,7 @@ export
     searchindex,
     show,
     showall,
+    showarray,
     showcompact,
     showerror,
     split,
@@ -1009,6 +1012,12 @@ export
     next,
     start,
     zip,
+    rest,
+    countfrom,
+    take,
+    drop,
+    cycle,
+    repeated,
 
 # object identity and equality
     copy,
@@ -1168,6 +1177,7 @@ export
     nb_available,
     ntoh,
     open,
+    pipe,
     PipeBuffer,
     poll_fd,
     poll_file,
@@ -1373,12 +1383,9 @@ export
     @__FILE__,
     @b_str,
     @r_str,
-    @r_mstr,
     @v_str,
     @text_str,
-    @text_mstr,
     @html_str,
-    @html_mstr,
     @int128_str,
     @uint128_str,
     @bigint_str,
@@ -1438,5 +1445,4 @@ export
     @noinline,
     @doc,
     @doc_str,
-    @doc_mstr,
     @enum

@@ -687,7 +687,7 @@ function factorize(A::SparseMatrixCSC)
         end
         return lufact(A)
     else
-        throw(ArgumentError("sparse least squares problems by QR are not handled yet"))
+        return qrfact(A)
     end
 end
 

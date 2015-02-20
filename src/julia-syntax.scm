@@ -3255,20 +3255,18 @@ So far only the second case can actually occur.
        (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
        (vararg? (cadadr e))))
 
+(define (wrap-with-splice x)
+  `(call (top _expr) (inert $)
+	 (call (top _expr) (inert tuple)
+	       (call (top _expr) (inert |...|) ,x))))
+
 (define (julia-bq-bracket x d)
-  (cond ((splice-expr? x)
-	 (if (= d 0)
-	     (cadr (cadr (cadr x)))
-	     (list 'cell1d
-		   `(call (top _expr) (inert $)
-			  (call (top _expr) (inert tuple)
-				(call (top _expr) (inert |...|)
-				      ,(julia-bq-expand (cadr (cadr (cadr x))) (- d 1))))))))
-	((and (pair? x) (eq? (car x) '$))
-	 (if (= d 0)
-	     (list 'cell1d (cadr x))
-	     (list 'cell1d `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
-	(else  (list 'cell1d (julia-bq-expand x d)))))
+  (if (splice-expr? x)
+      (if (= d 0)
+	  (cadr (cadr (cadr x)))
+	  (list 'cell1d
+		(wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
+      (list 'cell1d (julia-bq-expand x d))))
 
 (define (julia-bq-expand x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
@@ -3279,10 +3277,13 @@ So far only the second case can actually occur.
         ((eq? (car x) '$)
 	 (if (and (= d 0) (length= x 2))
 	     (cadr x)
-	     `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1)))))
+	     (if (splice-expr? (cadr x))
+		 `(call (top splicedexpr) (inert $)
+			(call (top append_any) ,(julia-bq-bracket (cadr x) (- d 1))))
+		 `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
          `(copyast (inert ,x)))
-	((or (> d 0) (not (any splice-expr? x)))
+	((not (any splice-expr? x))
 	 `(call (top _expr) ,.(map (lambda (ex) (julia-bq-expand ex d)) x)))
 	(else
 	 (let loop ((p (cdr x)) (q '()))
@@ -3302,7 +3303,13 @@ So far only the second case can actually occur.
         ((eq? (car e) 'macrocall)
          ;; expand macro
          (let ((form
-                (apply invoke-julia-macro (cadr e) (cddr e))))
+		(if (and (length> e 2) (pair? (caddr e)) (eq? (caaddr e) 'triple_quoted_string))
+		    ;; for a custom triple-quoted string literal, first invoke mstr
+		    ;; to handle unindenting
+		    (apply invoke-julia-macro (cadr e)
+			   (julia-expand-macros `(macrocall @mstr ,(cadr (caddr e))))
+			   (cdddr e))
+		    (apply invoke-julia-macro (cadr e) (cddr e)))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))

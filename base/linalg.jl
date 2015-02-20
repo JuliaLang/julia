@@ -150,7 +150,6 @@ export
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)
 typealias BlasComplex Union(Complex128,Complex64)
-typealias BlasChar Char
 
 if USE_BLAS64
     typealias BlasInt Int64
@@ -194,6 +193,8 @@ const CHARU = 'U'
 const CHARL = 'L'
 char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
+copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")

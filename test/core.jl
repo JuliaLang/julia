@@ -52,9 +52,9 @@ let T = TypeVar(:T,true)
     @test typeintersect((T,T), (Union(Float64,Int64),Int64)) == (Int64,Int64)
     @test typeintersect((T,T), (Int64,Union(Float64,Int64))) == (Int64,Int64)
 
-    TT = TypeVar(:T,Top)
-    S = TypeVar(:S,true); N = TypeVar(:N,true)
-    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{S,N}}) == Type{Array{S,1}}
+    TT = TypeVar(:T)
+    S = TypeVar(:S,true); N = TypeVar(:N,true); SN = TypeVar(:S,Number,true)
+    @test typeintersect(Type{TypeVar(:T,Array{TT,1})},Type{Array{SN,N}}) == Type{Array{SN,1}}
     # issue #5359
     @test typeintersect((Type{Array{T,1}},Array{T,1}),
                         (Type{AbstractVector},Vector{Int})) === Bottom
@@ -129,6 +129,10 @@ end
 @test !isa((Int,), Type{(Any...,)})
 
 @test !issubtype(Type{Array{TypeVar(:T,true)}}, Type{Array})
+
+@test () == Type{()}
+@test ((),) == Type{((),)}
+@test (Int,) != Type{(DataType,)}
 
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
@@ -319,7 +323,7 @@ function clotest()
     @test (()->c)() == 1
 
     fibb(n) = n < 2 ? n : fibb(n-1)+fibb(n-2)
-    assert(fibb(10)==55)
+    @test fibb(10) == 55
 
     return (n->(c+=n), ()->c)
 end
@@ -2084,8 +2088,8 @@ f9534h(a,b,c...) = c[a]
 counter9535 = 0
 f9535() = (global counter9535; counter9535 += 1; counter9535)
 g9535() = (f9535(),f9535())
-@assert g9535() == (1,2)
-@assert g9535() == (3,4)
+@test g9535() == (1,2)
+@test g9535() == (3,4)
 
 # issue #9617
 let p = 15
@@ -2138,3 +2142,29 @@ module M9835
     f() = (isa(A(), A) ? A : B)()
     @test isa(f(), A)
 end
+
+#issue #10163
+let a = :(()), b = :(())
+    @test a.args !== b.args
+end
+
+# issue caused by commit 189b00aef0376d1a998d36115cd11b17464d26ce and worked around
+# by commit 24c64b86bd4e793dbfe9d85c067dc0579b320d14
+let
+    g{T}(x::T...) = T
+    g(x...) = 0
+    @test g((),Int) == 0
+    @test g((),()) == ()
+end
+
+# issue #8631
+f8631(::(Type, Type...), ::(Any, Any...)) = 1
+f8631{T}(::Type{(T...)}, x::Tuple) = 2
+@test length(methods(f8631, ((Type, Type...), (Any, Any...)))) == 2
+
+# issue caused by 8d0037cb377257fc4232c8526b12337dd7bdf0a7
+args8d003 = (:x, :y)
+@test eval(:(:(f($(($args8d003)...))))) == :(f(x,y))
+x8d003 = Any[:y8d003]
+y8d003 = 777
+@test eval(:(string(:(f($($(x8d003...))))))) == "f(777)"

@@ -15,6 +15,8 @@ do33 = ones(3)
 
 # check vert concatenation
 @test all([se33; se33] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
+se33_32bit = convert(SparseMatrixCSC{Float32,Int32}, se33)
+@test all([se33; se33_32bit] == sparse([1, 4, 2, 5, 3, 6], [1, 1, 2, 2, 3, 3], ones(6)))
 
 # check h+v concatenation
 se44 = speye(4)
@@ -601,7 +603,7 @@ let M=2^14, N=2^4
             elseif res[2] != res[3]
                 println("2, 3")
             end
-            @assert res[1] == res[2] == res[3]
+            @test res[1] == res[2] == res[3]
         end
     end
 end
@@ -619,7 +621,7 @@ let M = 2^8, N=2^3
             res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
         end
 
-        @assert res[1] == res[2] == res[3]
+        @test res[1] == res[2] == res[3]
     end
 end
 
@@ -673,3 +675,10 @@ a = SparseMatrixCSC(2, 2, [1, 3, 5], [1, 2, 1, 2], [1.0, 0.0, 0.0, 1.0])
 @test_approx_eq lufact(a)\[2.0, 3.0] [2.0, 3.0]
 @test_approx_eq cholfact(a)\[2.0, 3.0] [2.0, 3.0]
 
+# issue #10113
+let S = spzeros(5,1), I = [false,true,false,true,false]
+    @test_throws BoundsError S[I]
+end
+
+# issue #9917
+@test sparse([]') == reshape(sparse([]), 1, 0)

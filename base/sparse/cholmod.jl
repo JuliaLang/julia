@@ -3,8 +3,8 @@ module CHOLMOD
 import Base: (*), convert, copy, eltype, getindex, show, size
 
 import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_mul_B,
-                 A_ldiv_B!, cholfact, cholfact!, det, diag, ishermitian, isposdef,
-                 issym, isvalid, ldltfact, logdet
+                 cholfact, cholfact!, det, diag, ishermitian, isposdef,
+                 issym, ldltfact, logdet
 
 import Base.SparseMatrix: sparse
 
@@ -13,7 +13,7 @@ export
     Factor,
     Sparse
 
-using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, increment!, indtype, decrement, decrement!
+using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indtype
 
 #########
 # Setup #
@@ -22,7 +22,7 @@ using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, incre
 include("cholmod_h.jl")
 
 ## macro to generate the name of the C function according to the integer type
-macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == Int64 ? "l_" : "", nm) end
+macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm) end
 
 for Ti in IndexTypes
     @eval begin
@@ -40,6 +40,7 @@ end
 const cholmod_com_offsets = Array(Csize_t, 19)
 ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
       Void, (Ptr{Csize_t},), cholmod_com_offsets)
+const common_supernodal = (1:4) + cholmod_com_offsets[4]
 const common_final_ll = (1:4) + cholmod_com_offsets[7]
 const common_print = (1:4) + cholmod_com_offsets[13]
 const common_itype = (1:4) + cholmod_com_offsets[18]
@@ -197,44 +198,44 @@ end
 
 ### cholmod_core_h ###
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Float64})
-    d = Dense(ccall((:cholmod_allocate_dense, :libcholmod), Ptr{C_Dense{Float64}},
+    d = Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Float64}},
         (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
-        nrow, ncol, d, REAL, common(Cint)))
+        nrow, ncol, d, REAL, common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
 function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex{Float64}})
-    d = Dense(ccall((:cholmod_allocate_dense, :libcholmod), Ptr{C_Dense{Complex{Float64}}},
+    d = Dense(ccall((:cholmod_l_allocate_dense, :libcholmod), Ptr{C_Dense{Complex{Float64}}},
         (Csize_t, Csize_t, Csize_t, Cint, Ptr{Void}),
-        nrow, ncol, d, COMPLEX, common(Cint)))
+        nrow, ncol, d, COMPLEX, common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
 
-free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_free_dense, :libcholmod), Cint, (Ptr{Ptr{C_Dense{T}}}, Ptr{Void}), &p, common(Cint))
+free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_l_free_dense, :libcholmod), Cint, (Ptr{Ptr{C_Dense{T}}}, Ptr{Void}), &p, common(Cint))
 
 function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
-    d = Dense(ccall((:cholmod_zeros, :libcholmod), Ptr{C_Dense{T}},
+    d = Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common(Cint)))
+         m, n, xtyp(T), common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
 zeros(m::Integer, n::Integer) = zeros(m, n, Float64)
 
 function ones{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
-    d = Dense(ccall((:cholmod_ones, :libcholmod), Ptr{C_Dense{T}},
+    d = Dense(ccall((:cholmod_l_ones, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common(Cint)))
+         m, n, xtyp(T), common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
 ones(m::Integer, n::Integer) = ones(m, n, Float64)
 
 function eye{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
-    d = Dense(ccall((:cholmod_eye, :libcholmod), Ptr{C_Dense{T}},
+    d = Dense(ccall((:cholmod_l_eye, :libcholmod), Ptr{C_Dense{T}},
         (Csize_t, Csize_t, Cint, Ptr{UInt8}),
-         m, n, xtyp(T), common(Cint)))
+         m, n, xtyp(T), common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
@@ -242,9 +243,9 @@ eye(m::Integer, n::Integer) = eye(m, n, Float64)
 eye(n::Integer) = eye(n, n, Float64)
 
 function copy_dense{Tv<:VTypes}(A::Dense{Tv})
-    d = Dense(ccall((:cholmod_copy_dense, :libcholmod), Ptr{C_Dense{Tv}},
+    d = Dense(ccall((:cholmod_l_copy_dense, :libcholmod), Ptr{C_Dense{Tv}},
         (Ptr{C_Dense{Tv}}, Ptr{UInt8}),
-         A.p, common(Cint)))
+         A.p, common(SuiteSparse_long)))
     finalizer(d, free!)
     d
 end
@@ -259,16 +260,16 @@ function norm_dense{Tv<:VTypes}(D::Dense{Tv}, p::Integer)
     elseif p != 0 && p != 1
         throw(ArgumentError("second argument must be either 0 (Inf norm), 1, or 2"))
     end
-    ccall((:cholmod_norm_dense, :libcholmod), Cdouble,
+    ccall((:cholmod_l_norm_dense, :libcholmod), Cdouble,
         (Ptr{C_Dense{Tv}}, Cint, Ptr{UInt8}),
-          D.p, p, common(Cint))
+          D.p, p, common(SuiteSparse_long))
 end
 
 ### cholmod_check.h ###
 function check_dense{T<:VTypes}(A::Dense{T})
-    bool(ccall((:cholmod_check_dense, :libcholmod), Cint,
+    bool(ccall((:cholmod_l_check_dense, :libcholmod), Cint,
         (Ptr{C_Dense{T}}, Ptr{UInt8}),
-         A.p, common(Cint)))
+         A.p, common(SuiteSparse_long)))
 end
 
 # Non-Dense wrappers (which all depend on IType)
@@ -344,14 +345,14 @@ for Ti in IndexTypes
             s
         end
 
-        function change_factor{Tv<:VTypes}(::Type{Float64}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
+        function change_factor!{Tv<:VTypes}(::Type{Float64}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
             @isok ccall((@cholmod_name("change_factor", $Ti),:libcholmod), Cint,
                     (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
                         REAL, to_ll, to_super, to_packed, to_monotonic, F.p, common($Ti))
             Factor{Float64,$Ti}(F.p)
         end
 
-        function change_factor{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
+        function change_factor!{Tv<:VTypes}(::Type{Complex{Float64}}, to_ll::Bool, to_super::Bool, to_packed::Bool, to_monotonic::Bool, F::Factor{Tv,$Ti})
             @isok ccall((@cholmod_name("change_factor", $Ti),:libcholmod), Cint,
                     (Cint, Cint, Cint, Cint, Cint, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
                         COMPLEX, to_ll, to_super, to_packed, to_monotonic, F.p, common($Ti))
@@ -710,13 +711,13 @@ Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::ASCIIString)
     f = open(filename)
-    A = read_sparse(CFILE(f), Int)
+    A = read_sparse(CFILE(f), SuiteSparse_long)
     close(f)
     A
 end
 
 ## convertion back to base Julia types
-function convert{T<:VTypes}(::Type{Matrix}, D::Dense{T})
+function convert{T}(::Type{Matrix{T}}, D::Dense{T})
     s = unsafe_load(D.p)
     a = Array(T, s.nrow, s.ncol)
     if s.d == s.nrow
@@ -730,6 +731,14 @@ function convert{T<:VTypes}(::Type{Matrix}, D::Dense{T})
     end
     a
 end
+convert{T}(::Type{Matrix}, D::Dense{T}) = convert(Matrix{T}, D)
+function convert{T}(::Type{Vector{T}}, D::Dense{T})
+    if size(D, 2) > 1
+        throw(DimensionMismatch("input must be a vector but had $(size(D, 2)) columns"))
+    end
+    reshape(convert(Matrix, D), size(D, 1))
+end
+convert{T}(::Type{Vector}, D::Dense{T}) = convert(Vector{T}, D)
 
 function convert{Tv,Ti}(::Type{SparseMatrixCSC{Tv,Ti}}, A::Sparse{Tv,Ti})
     s = unsafe_load(A.p)
@@ -886,9 +895,11 @@ Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
 function cholfact(A::Sparse)
     sA = unsafe_load(A.p)
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(indtype(A))
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+
+    # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
     F = analyze(A, cm)
     factorize!(A, F, cm)
     s = unsafe_load(F.p)
@@ -897,33 +908,63 @@ function cholfact(A::Sparse)
 end
 
 function cholfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(Ti)
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
+
+    # Hack! makes it a llt
+    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
+
     F = analyze(A, cm)
-    factorize_p!(A, β, Ti[], F, cm)
+    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
+
     s = unsafe_load(F.p)
     s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
 function ldltfact(A::Sparse)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(indtype(A))
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+
+    # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
+
+    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
+    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
+
     F = analyze(A, cm)
     factorize!(A, F, cm)
+
+    # Check if decomposition failed
+    s = unsafe_load(F.p)
+    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+
     return F
 end
 
 function ldltfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
+    sA = unsafe_load(A.p)
+    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
+
     cm = common(Ti)
-    ## may need to change final_asis as well as final_ll
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)]) # Hack! makes it a ldlt
+
+    # Hack! makes it a ldlt
+    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
+
+    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
+    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
+
     F = analyze(A, cm)
-    factorize_p!(A, β, Ti[], F, cm)
+    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
+
+    # Check if decomposition failed
     s = unsafe_load(F.p)
-    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
+    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
+
     return F
 end
 
@@ -1033,22 +1074,22 @@ function issym(A::Sparse)
     return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
 end
 
-function ishermitian(A::Sparse)
+function ishermitian(A::Sparse{Float64})
     s = unsafe_load(A.p)
-    if isreal(A)
-        if s.stype != 0
-            return true
-        else
-            i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
-            return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
-        end
+    if s.stype != 0
+        return true
     else
-        if s.stype != 0
-            return true
-        else
-            i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
-            return i == MM_HERMITIAN || i == MM_HERMITIAN_POSDIAG
-        end
+        i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
+        return i == MM_SYMMETRIC || i == MM_SYMMETRIC_POSDIAG
+    end
+end
+function ishermitian(A::Sparse{Complex{Float64}})
+    s = unsafe_load(A.p)
+    if s.stype != 0
+        return true
+    else
+        i = symmetry(A, ifelse(version >= v"3.0.5", 0, 1))[1] # 0 is faster, but had a bug before 3.0.5
+        return i == MM_HERMITIAN || i == MM_HERMITIAN_POSDIAG
     end
 end
 

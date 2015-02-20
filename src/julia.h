@@ -306,7 +306,6 @@ extern DLLEXPORT jl_datatype_t *jl_type_type;
 extern DLLEXPORT jl_tvar_t     *jl_typetype_tvar;
 extern DLLEXPORT jl_datatype_t *jl_typetype_type;
 extern DLLEXPORT jl_value_t    *jl_ANY_flag;
-extern DLLEXPORT jl_datatype_t *jl_undef_type;
 extern DLLEXPORT jl_datatype_t *jl_typename_type;
 extern DLLEXPORT jl_datatype_t *jl_typector_type;
 extern DLLEXPORT jl_datatype_t *jl_sym_type;
@@ -323,7 +322,6 @@ extern DLLEXPORT jl_datatype_t *jl_uniontype_type;
 extern DLLEXPORT jl_datatype_t *jl_datatype_type;
 
 extern DLLEXPORT jl_value_t *jl_bottom_type;
-extern DLLEXPORT jl_value_t *jl_top_type;
 extern DLLEXPORT jl_datatype_t *jl_lambda_info_type;
 extern DLLEXPORT jl_datatype_t *jl_module_type;
 extern DLLEXPORT jl_datatype_t *jl_vararg_type;
@@ -1060,6 +1058,11 @@ STATIC_INLINE int jl_vinfo_sa(jl_array_t *vi)
     return (jl_unbox_long(jl_cellref(vi,2))&16)!=0;
 }
 
+STATIC_INLINE int jl_vinfo_usedundef(jl_array_t *vi)
+{
+    return (jl_unbox_long(jl_cellref(vi,2))&32)!=0;
+}
+
 // calling into julia ---------------------------------------------------------
 
 STATIC_INLINE
@@ -1314,10 +1317,6 @@ void jl_longjmp(jmp_buf _Buf,int _Value);
 #define JL_STDOUT jl_uv_stdout
 #define JL_STDERR jl_uv_stderr
 #define JL_STDIN  jl_uv_stdin
-#define JL_PRINTF jl_printf
-#define JL_PUTC	  jl_putc
-#define JL_PUTS	  jl_puts
-#define JL_WRITE  jl_write
 
 DLLEXPORT int jl_spawn(char *name, char **argv, uv_loop_t *loop,
                        uv_process_t *proc, jl_value_t *julia_struct,
@@ -1344,10 +1343,6 @@ DLLEXPORT uv_idle_t * jl_make_idle(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT int jl_idle_start(uv_idle_t *idle);
 DLLEXPORT int jl_idle_stop(uv_idle_t *idle);
 
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream);
-DLLEXPORT int jl_puts(const char *str, uv_stream_t *stream);
-DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar);
-
 DLLEXPORT uv_timer_t *jl_make_timer(uv_loop_t *loop, jl_value_t *julia_struct);
 DLLEXPORT int jl_timer_stop(uv_timer_t *timer);
 
@@ -1373,13 +1368,13 @@ typedef struct {
     uv_file file;
 } jl_uv_file_t;
 
-DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n);
 DLLEXPORT int jl_printf(uv_stream_t *s, const char *format, ...);
 DLLEXPORT int jl_vprintf(uv_stream_t *s, const char *format, va_list args);
+DLLEXPORT void jl_safe_printf(const char *str, ...);
 
-extern DLLEXPORT uv_stream_t *jl_uv_stdin;
-extern DLLEXPORT uv_stream_t *jl_uv_stdout;
-extern DLLEXPORT uv_stream_t *jl_uv_stderr;
+extern DLLEXPORT JL_STREAM *JL_STDIN;
+extern DLLEXPORT JL_STREAM *JL_STDOUT;
+extern DLLEXPORT JL_STREAM *JL_STDERR;
 
 DLLEXPORT JL_STREAM *jl_stdout_stream(void);
 DLLEXPORT JL_STREAM *jl_stdin_stream(void);

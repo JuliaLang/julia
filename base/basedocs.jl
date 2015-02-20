@@ -229,8 +229,6 @@ keywords[:...] = doc"""
       RegexMatch("angry,\nBad world")
   """ r""
 
-@doc (@doc r"") @r_mstr
-
 @doc doc"""
       push!(collection, items...) → collection
 

@@ -66,13 +66,7 @@ function show(io::IO, x::IntrinsicFunction)
     print(io, "(intrinsic function #", box(Int32,unbox(IntrinsicFunction,x)), ")")
 end
 
-function show(io::IO, x::UnionType)
-    if is(x,Top)
-        print(io, "Top")
-    else
-        print(io, "Union", x.types)
-    end
-end
+show(io::IO, x::UnionType) = print(io, "Union", x.types)
 
 show(io::IO, x::TypeConstructor) = show(io, x.body)
 
@@ -104,7 +98,9 @@ macro show(exs...)
 end
 
 function show(io::IO, tn::TypeName)
-    if tn.module == Core || tn.module == Base || tn.module == Main
+    if (tn.module == Core && tn.name in names(Core)) ||
+            (tn.module == Base && tn.name in names(Base)) ||
+            tn.module == Main
         print(io, tn.name)
     else
         print(io, tn.module, '.', tn.name)
@@ -205,7 +201,7 @@ end
 show_comma_array(io::IO, itr, o, c) = show_delim_array(io, itr, o, ',', c, false)
 show(io::IO, t::Tuple) = show_delim_array(io, t, '(', ',', ')', true)
 
-show(io::IO, s::Symbol) = show_unquoted(io, QuoteNode(s))
+show(io::IO, s::Symbol) = show_unquoted_quote_expr(io, s, 0, 0)
 
 ## Abstract Syntax Tree (AST) printing ##
 
@@ -234,7 +230,7 @@ show(io::IO, s::Symbol) = show_unquoted(io, QuoteNode(s))
 typealias ExprNode Union(Expr, QuoteNode, SymbolNode, LineNumberNode,
                          LabelNode, GotoNode, TopNode)
 print        (io::IO, ex::ExprNode)    = (show_unquoted(io, ex); nothing)
-show         (io::IO, ex::ExprNode)    = show_unquoted(io, QuoteNode(ex))
+show         (io::IO, ex::ExprNode)    = show_unquoted_quote_expr(io, ex, 0, 0)
 show_unquoted(io::IO, ex)              = show_unquoted(io, ex, 0, 0)
 show_unquoted(io::IO, ex, indent::Int) = show_unquoted(io, ex, indent, 0)
 show_unquoted(io::IO, ex, ::Int,::Int) = show(io, ex)
@@ -391,8 +387,15 @@ function show_unquoted(io::IO, ex::SymbolNode, ::Int, ::Int)
     show_expr_type(io, ex.typ)
 end
 
-show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int) =
-    show_unquoted_quote_expr(io, ex.value, indent, prec)
+function show_unquoted(io::IO, ex::QuoteNode, indent::Int, prec::Int)
+    if isa(ex.value, Symbol)
+        show_unquoted_quote_expr(io, ex.value, indent, prec)
+    else
+        print(io, "\$(QuoteNode(")
+        show(io, ex.value)
+        print(io, "))")
+    end
+end
 
 function show_unquoted_quote_expr(io::IO, value, indent::Int, prec::Int)
     if isa(value, Symbol) && !(value in quoted_syms)
@@ -617,7 +620,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
     elseif is(head, :block) || is(head, :body)
         show_block(io, "begin", ex, indent); print(io, "end")
 
-    elseif is(head, :quote) && nargs == 1
+    elseif is(head, :quote) && nargs == 1 && isa(args[1],Symbol)
         show_unquoted_quote_expr(io, args[1], indent, 0)
 
     elseif is(head, :gotoifnot) && nargs == 2
@@ -649,9 +652,13 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
         end
         print(io, '"', a..., '"')
 
-    elseif is(head, :&) && length(args) == 1
-        print(io, '&')
-        show_unquoted(io, args[1])
+    elseif (is(head, :&)#= || is(head, :$)=#) && length(args) == 1
+        print(io, head)
+        a1 = args[1]
+        parens = (isa(a1,Expr) && a1.head !== :tuple) || (isa(a1,Symbol) && isoperator(a1))
+        parens && print(io, "(")
+        show_unquoted(io, a1)
+        parens && print(io, ")")
 
     # transpose
     elseif (head === symbol('\'') || head === symbol(".'")) && length(args) == 1

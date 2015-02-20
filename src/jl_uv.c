@@ -2,11 +2,11 @@
 
 /*
  * There is no need to define WINVER because it is already defined in Makefile.
- */
 #if defined(_COMPILER_MINGW_)
 #define WINVER                 _WIN32_WINNT
 #define _WIN32_WINDOWS         _WIN32_WINNT
 #endif
+ */
 
 #include <stdio.h>
 #include <stddef.h>
@@ -66,7 +66,6 @@ enum CALLBACK_TYPE { CB_PTR, CB_INT32, CB_UINT32, CB_INT64, CB_UINT64 };
     XX(fspollcb) \
     XX(isopen) \
     XX(fseventscb) \
-    XX(writecb) \
     XX(writecb_task) \
     XX(recv) \
     XX(send)
@@ -452,24 +451,13 @@ DLLEXPORT int jl_fs_chmod(char *path, int mode)
     return ret;
 }
 
-DLLEXPORT int jl_fs_write(int handle, char *data, size_t len, int64_t offset)
+DLLEXPORT int jl_fs_write(int handle, const char *data, size_t len, int64_t offset)
 {
     uv_fs_t req;
     uv_buf_t buf[1];
-    buf[0].base = data;
+    buf[0].base = (char*)data;
     buf[0].len = len;
     int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, offset, NULL);
-    uv_fs_req_cleanup(&req);
-    return ret;
-}
-
-DLLEXPORT int jl_fs_write_byte(int handle, char c)
-{
-    uv_fs_t req;
-    uv_buf_t buf[1];
-    buf[0].base = &c;
-    buf[0].len = 1;
-    int ret = uv_fs_write(jl_io_loop, &req, handle, buf, 1, -1, NULL);
     uv_fs_req_cleanup(&req);
     return ret;
 }
@@ -507,143 +495,75 @@ DLLEXPORT int jl_fs_close(int handle)
     return ret;
 }
 
-//units are in ms
-DLLEXPORT int jl_puts(const char *str, uv_stream_t *stream)
+DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
 {
-    if (!stream) return 0;
-    return jl_write(stream,str,strlen(str));
+    JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status);
+}
+
+DLLEXPORT int jl_uv_write(uv_stream_t *stream, const char *data, size_t n, uv_write_t *uvw, void *writecb)
+{
+    uv_buf_t buf[1];
+    buf[0].base = (char*)data;
+    buf[0].len = n;
+    JL_SIGATOMIC_BEGIN();
+    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
+    JL_SIGATOMIC_END();
+    return err;
 }
 
 DLLEXPORT void jl_uv_writecb(uv_write_t *req, int status)
 {
-    if (req->data) {
-        JULIA_CB(writecb, req->data, 2, CB_PTR, req, CB_INT32, status);
-    }
     free(req);
-}
-
-DLLEXPORT void jl_uv_writecb_task(uv_write_t *req, int status)
-{
-    JULIA_CB(writecb_task, req->handle->data, 2, CB_PTR, req, CB_INT32, status);
-    free(req);
-}
-
-DLLEXPORT int jl_write_copy(uv_stream_t *stream, const char *str, size_t n, uv_write_t *uvw, void *writecb)
-{
-    JL_SIGATOMIC_BEGIN();
-    char *data = (char*)uvw+sizeof(*uvw);
-    memcpy(data,str,n);
-    uv_buf_t buf[1];
-    buf[0].base = data;
-    buf[0].len = n;
-    uvw->data = NULL;
-    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
-    JL_SIGATOMIC_END();
-    return err;
-}
-
-DLLEXPORT int jl_putc(char c, uv_stream_t *stream)
-{
-    int err;
-    if (stream!=0) {
-        if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-            if (stream->type == UV_FILE) {
-                JL_SIGATOMIC_BEGIN();
-                jl_uv_file_t *file = (jl_uv_file_t *)stream;
-                // Do a blocking write for now
-                uv_fs_t req;
-                uv_buf_t buf[1];
-                buf[0].base = &c;
-                buf[0].len = 1;
-                err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
-                JL_SIGATOMIC_END();
-                return err ? 0 : 1;
-            }
-            else {
-                uv_write_t *uvw = (uv_write_t*)malloc(sizeof(uv_write_t)+1);
-                err = jl_write_copy(stream,(char*)&c,1,uvw, (void*)&jl_uv_writecb);
-                if (err < 0) {
-                    free(uvw);
-                    return 0;
-                }
-                return 1;
-            }
-        }
-        else {
-            ios_t *handle = (ios_t*)stream;
-            return ios_putc(c,handle);
-        }
+    if (status < 0) {
+        jl_safe_printf("jl_uv_writecb() ERROR: %s %s\n",
+                       uv_strerror(status), uv_err_name(status));
     }
-    return 0;
 }
 
-DLLEXPORT int jl_write_no_copy(uv_stream_t *stream, char *data, size_t n, uv_write_t *uvw, void *writecb)
-{
-    uv_buf_t buf[1];
-    buf[0].base = data;
-    buf[0].len = n;
-    JL_SIGATOMIC_BEGIN();
-    int err = uv_write(uvw,stream,buf,1,(uv_write_cb)writecb);
-    uvw->data = NULL;
-    JL_SIGATOMIC_END();
-    return err;
-}
+// Note: jl_write() is called only by jl_vprintf().
+// See: doc/devdocs/stdio.rst
 
-DLLEXPORT int jl_putc_copy(unsigned char c, uv_stream_t *stream, void *uvw, void *writecb)
+static void jl_write(uv_stream_t *stream, const char *str, size_t n)
 {
-    return jl_write_copy(stream,(char *)&c,1,(uv_write_t*)uvw,writecb);
-}
+    assert(stream);
 
-DLLEXPORT int jl_pututf8(uv_stream_t *s, uint32_t wchar )
-{
-    char buf[8];
-    if (wchar < 0x80)
-        return jl_putc((int)wchar, s);
-    size_t n = u8_toutf8(buf, 8, &wchar, 1);
-    return jl_write(s, buf, n);
-}
+    uv_file fd = 0;
 
-DLLEXPORT int jl_pututf8_copy(uv_stream_t *s, uint32_t wchar, void *uvw, void *writecb)
-{
-    char buf[8];
-    if (wchar < 0x80)
-        return jl_putc_copy((int)wchar, s, uvw, writecb);
-    size_t n = u8_toutf8(buf, 8, &wchar, 1);
-    return jl_write_copy(s, buf, n, (uv_write_t*)uvw, writecb);
-}
+    // Fallback for output during early initialisation...
+    if (stream == (void*)STDOUT_FILENO || stream == (void*)STDERR_FILENO) {
+        jl_io_loop = uv_default_loop();
+        fd = (uv_file)(size_t)stream;
+    }
+    else if (stream->type == UV_FILE) {
+        fd = ((jl_uv_file_t*)stream)->file;
+    }
 
-DLLEXPORT size_t jl_write(uv_stream_t *stream, const char *str, size_t n)
-{
-    int err;
-    //TODO: BAD!! Needed because Julia can't yet detect null stdio
-    if (stream == 0)
-        return 0;
-    if (stream->type<UV_HANDLE_TYPE_MAX) { //is uv handle
-        if (stream->type == UV_FILE) {
-            JL_SIGATOMIC_BEGIN();
-            jl_uv_file_t *file = (jl_uv_file_t *)stream;
-            // Do a blocking write for now
-            uv_fs_t req;
-            uv_buf_t buf[1];
-            buf[0].base = (char*)str;
-            buf[0].len = n;
-            err = uv_fs_write(file->loop, &req, file->file, buf, 1, -1, NULL);
-            JL_SIGATOMIC_END();
-            return err ? 0 : n;
-        }
-        else {
-            uv_write_t *uvw = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
-            err = jl_write_copy(stream,str,n,uvw, (void*)&jl_uv_writecb);
-            if (err < 0) {
-                free(uvw);
-                return 0;
-            }
-            return n;
-        }
+    if (fd) {
+        // Write to file descriptor...
+        jl_fs_write(fd, str, n, -1);
+    }
+    else if (stream->type > UV_HANDLE_TYPE_MAX) {
+        // Write to ios.c stream...
+        // This is needed because caller jl_static_show() in builtins.c can be
+        // called from fl_print in flisp/print.c (via cvalue_printdata()),
+        // and cvalue_printdata() passes ios_t* to jl_static_show().
+        ios_write((ios_t*)stream, str, n);
     }
     else {
-        ios_t *handle = (ios_t*)stream;
-        return ios_write(handle,str,n);
+        // Write to libuv stream...
+        uv_write_t *req = (uv_write_t*)malloc(sizeof(uv_write_t)+n);
+        char *data = (char*)(req+1);
+        memcpy(data,str,n);
+        uv_buf_t buf[1];
+        buf[0].base = data;
+        buf[0].len = n;
+        req->data = NULL;
+        JL_SIGATOMIC_BEGIN();
+        int status = uv_write(req, stream, buf, 1, (uv_write_cb)jl_uv_writecb);
+        JL_SIGATOMIC_END();
+        if (status < 0) {
+            jl_uv_writecb(req, status);
+        }
     }
 }
 
@@ -664,7 +584,7 @@ int jl_vprintf(uv_stream_t *s, const char *format, va_list args)
 
     if (c >= 0) {
         jl_write(s, str, c);
-        LLT_FREE(str);
+        free(str);
     }
     va_end(al);
     return c;
@@ -681,10 +601,23 @@ int jl_printf(uv_stream_t *s, const char *format, ...)
     return c;
 }
 
-char *jl_bufptr(ios_t *s)
+DLLEXPORT void jl_safe_printf(const char *fmt, ...)
 {
-    return s->buf;
+    static char buf[1000];
+    buf[0] = '\0';
+
+    va_list args;
+    va_start(args, fmt);
+    // Not async signal safe on some platforms?
+    vsnprintf(buf, sizeof(buf), fmt, args);
+    va_end(args);
+
+    buf[999] = '\0';
+    if (write(STDERR_FILENO, buf, strlen(buf)) < 0) {
+        // nothing we can do; ignore the failure
+    }
 }
+
 
 DLLEXPORT void jl_exit(int exitcode)
 {
@@ -900,11 +833,6 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 }
 #endif
 
-DLLEXPORT char *jl_ios_buf_base(ios_t *ios)
-{
-    return ios->buf;
-}
-
 DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle)
 {
     uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
@@ -949,7 +877,7 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
     if (uv_pipe_getsockname(pipe, name, &len)) return 0;
     // return true if name matches regex:
     // ^\\\\?\\pipe\\(msys|cygwin)-[0-9a-z]{16}-[pt]ty[1-9][0-9]*-
-    //JL_PRINTF(JL_STDERR,"pipe_name: %s\n", name);
+    //jl_printf(JL_STDERR,"pipe_name: %s\n", name);
     int n = 0;
     if (!strncmp(name,"\\\\?\\pipe\\msys-",14))
         n = 14;
@@ -957,16 +885,16 @@ DLLEXPORT int jl_ispty(uv_pipe_t *pipe)
         n = 16;
     else
         return 0;
-    //JL_PRINTF(JL_STDERR,"prefix pass\n");
+    //jl_printf(JL_STDERR,"prefix pass\n");
     name += n;
     for (int n = 0; n < 16; n++)
         if (!ishexchar(*name++)) return 0;
-    //JL_PRINTF(JL_STDERR,"hex pass\n");
+    //jl_printf(JL_STDERR,"hex pass\n");
     if ((*name++)!='-') return 0;
     if (*name != 'p' && *name != 't') return 0;
     name++;
     if (*name++ != 't' || *name++ != 'y') return 0;
-    //JL_PRINTF(JL_STDERR,"tty pass\n");
+    //jl_printf(JL_STDERR,"tty pass\n");
     return 1;
 }
 #endif

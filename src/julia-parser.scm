@@ -998,15 +998,14 @@
                  (let* ((str (begin (take-token s)
                                     (parse-string-literal s #t)))
                         (nxt (peek-token s))
-                        (suffix (if (triplequote-string-literal? str) '_mstr '_str))
-                        (macname (symbol (string #\@ ex suffix)))
-                        (macstr (cdr str)))
+                        (macname (symbol (string #\@ ex '_str)))
+                        (macstr (if (triplequote-string-literal? str) str (cadr str))))
                    (if (and (symbol? nxt) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
-                       (loop `(macrocall ,macname ,@macstr
+                       (loop `(macrocall ,macname ,macstr
                                          ,(string (take-token s))))
-                       (loop `(macrocall ,macname ,@macstr))))
+                       (loop `(macrocall ,macname ,macstr))))
                  ex))
             (else ex))))))
 
