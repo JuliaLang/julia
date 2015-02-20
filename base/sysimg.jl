@@ -279,9 +279,6 @@ importall .FastMath
 include("pkg.jl")
 const Git = Pkg.Git
 
-# base graphics API
-include("graphics.jl")
-
 # profiler
 include("profile.jl")
 importall .Profile
