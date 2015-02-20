@@ -167,12 +167,14 @@ static jl_value_t *full_list(value_t e, int expronly)
     size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
+    JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
         jl_cellset(ar, i, scm_to_julia_(car_(e), expronly));
         e = cdr_(e);
         i++;
     }
+    JL_GC_POP();
     return (jl_value_t*)ar;
 }
 
@@ -181,12 +183,14 @@ static jl_value_t *full_list_of_lists(value_t e, int expronly)
     size_t ln = llength(e);
     if (ln == 0) return jl_an_empty_cell;
     jl_array_t *ar = jl_alloc_cell_1d(ln);
+    JL_GC_PUSH1(&ar);
     size_t i=0;
     while (iscons(e)) {
         jl_cellset(ar, i, full_list(car_(e),expronly));
         e = cdr_(e);
         i++;
     }
+    JL_GC_POP();
     return (jl_value_t*)ar;
 }
 
@@ -666,11 +670,14 @@ jl_array_t *jl_lam_args(jl_expr_t *l)
 jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
 {
     jl_expr_t *ast;
+    JL_GC_PUSH1(&ast);
     if (jl_is_expr(li->ast))
         ast = (jl_expr_t*)li->ast;
     else
         ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
-    return (jl_sym_t*)jl_arrayref(jl_lam_args(ast),i);
+    jl_sym_t *result = (jl_sym_t*)jl_arrayref(jl_lam_args(ast),i);
+    JL_GC_POP();
+    return result;
 }
 
 // get array of local var symbols
