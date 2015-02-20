@@ -115,7 +115,7 @@ end
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
 mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
-    mapreduce_seq_impl(f, op, A, ifirst, ilast)
+    mapreduce_pairwise_impl(f, op, A, ifirst, ilast, 1024)
 
 # handling empty arrays
 mr_empty(f, op, T) = throw(ArgumentError("reducing over an empty collection is not allowed"))
