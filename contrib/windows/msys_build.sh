@@ -143,7 +143,7 @@ $SEVENZIP x -y $f >> get-deps.log
 echo 'LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
 
 if [ -n "$APPVEYOR" ]; then
-  for i in make.exe msys-intl-8.dll msys-iconv-2.dll; do
+  for i in make.exe touch.exe msys-intl-8.dll msys-iconv-2.dll; do
     f="/c/MinGW/msys/1.0/bin/$i"
     if [ -e $f ]; then
       cp $f /bin/$i
