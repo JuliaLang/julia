@@ -55,7 +55,6 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
                 for i = 1:k - 1
                     A[k,k] -= A[k,i]*A[k,i]'
                 end
-                println(A[k,k])
                 Akk = chol!(A[k,k], uplo)
                 A[k,k] = Akk
                 AkkInv = inv(Akk)
