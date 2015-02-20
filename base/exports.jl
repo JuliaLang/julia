@@ -358,6 +358,7 @@ export
     factor,
     factorial,
     fld,
+    fldmod,
     flipsign,
     float,
     float16,
