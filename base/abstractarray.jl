@@ -41,7 +41,9 @@ if _oldstyle_array_vcat_
 else
     function vect(X...)
         T = promote_typeof(X...)
-        T[ X[i] for i=1:length(X) ]
+        #T[ X[i] for i=1:length(X) ]
+        # TODO: this is currently much faster. should figure out why. not clear.
+        copy!(Array(T,length(X)), X)
     end
 end
 
