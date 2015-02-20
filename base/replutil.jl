@@ -119,6 +119,7 @@ showerror(io::IO, ex::ErrorException) = print(io, ex.msg)
 showerror(io::IO, ex::KeyError) = print(io, "KeyError: $(ex.key) not found")
 showerror(io::IO, ex::InterruptException) = print(io, "InterruptException:")
 showerror(io::IO, ex::ArgumentError) = print(io, "ArgumentError: $(ex.msg)")
+showerror(io::IO, ex::AssertionError) = print(io, "AssertionError: $(ex.msg)")
 
 function showerror(io::IO, ex::MethodError)
     print(io, "MethodError: ")
@@ -162,10 +163,9 @@ function showerror(io::IO, ex::MethodError)
     # and sees a no method error for convert
     if ex.f == Base.convert && !isempty(ex.args) && isa(ex.args[1], Type)
         println(io)
-        print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...), ")
-        print(io, "since type constructors fall back to convert methods in julia v0.4.")
+        print(io, "This may have arisen from a call to the constructor $(ex.args[1])(...),")
+        print(io, "\nsince type constructors fall back to convert methods.")
     end
-
     show_method_candidates(io, ex)
 end
 

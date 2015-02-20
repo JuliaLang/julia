@@ -27,6 +27,8 @@ DLLEXPORT int jl_profile_start_timer(void);
 volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
+    // Note: illegal to use jl_* functions from this thread
+
     TIMECAPS tc;
     if (MMSYSERR_NOERROR!=timeGetDevCaps(&tc, sizeof(tc))) {
         fputs("failed to get timer resolution",stderr);
@@ -216,7 +218,7 @@ void *mach_profile_listener(void *arg)
                 bt_size_cur += rec_backtrace_ctx_dwarf((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &uc);
             }
             else if (forceDwarf == -1) {
-                JL_PRINTF(JL_STDERR, "Warning: Profiler attempt to access an invalid memory location\n");
+                jl_safe_printf("Warning: Profiler attempt to access an invalid memory location\n");
             }
 
             forceDwarf = -2;
@@ -254,13 +256,11 @@ DLLEXPORT int jl_profile_start_timer(void)
         // Alright, create a thread to serve as the listener for exceptions
         pthread_attr_t attr;
         if (pthread_attr_init(&attr) != 0) {
-            JL_PRINTF(JL_STDERR, "pthread_attr_init failed");
-            jl_exit(1);
+            jl_error("pthread_attr_init failed");
         }
         pthread_attr_setdetachstate(&attr,PTHREAD_CREATE_DETACHED);
         if (pthread_create(&profiler_thread,&attr,mach_profile_listener,NULL) != 0) {
-            JL_PRINTF(JL_STDERR, "pthread_create failed");
-            jl_exit(1);
+            jl_error("pthread_create failed");
         }
         pthread_attr_destroy(&attr);
 
@@ -430,7 +430,7 @@ DLLEXPORT int jl_profile_init(size_t maxsize, u_int64_t delay_nsec)
     nsecprof = delay_nsec;
     if (bt_data_prof != NULL)
         free((void*)bt_data_prof);
-    bt_data_prof = (ptrint_t*) malloc(maxsize*sizeof(ptrint_t));
+    bt_data_prof = (ptrint_t*) calloc(maxsize, sizeof(ptrint_t));
     if (bt_data_prof == NULL && maxsize > 0)
         return -1;
     bt_size_cur = 0;

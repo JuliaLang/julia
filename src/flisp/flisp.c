@@ -2443,6 +2443,18 @@ void fl_init(size_t initial_heapsize)
     fl_init_julia_extensions();
 }
 
+extern fltype_t *iostreamtype;
+
+int fl_load_system_image_str(char *str, size_t len)
+{
+    value_t img = cvalue(iostreamtype, sizeof(ios_t));
+    ios_t *pi = value2c(ios_t*, img);
+    ios_static_buffer(pi, str, len);
+
+    return fl_load_system_image(img);
+}
+
+
 int fl_load_system_image(value_t sys_image_iostream)
 {
     value_t e;

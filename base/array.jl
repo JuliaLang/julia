@@ -13,6 +13,9 @@ typealias StridedVector{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,
 typealias StridedMatrix{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,2}, SubArray{T,2,A,I})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
+call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
+call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
+
 ## Basic functions ##
 
 size(a::Array) = arraysize(a)
@@ -124,7 +127,7 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 # T[x...] constructs Array{T,1}
 function getindex(T::NonTupleType, vals...)
     a = Array(T,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
@@ -132,13 +135,19 @@ end
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
 end
 
-getindex(T::(Type...)) = Array(T,0)
+function getindex(T::(Type...), vals::Tuple...)
+    a = Array(T,length(vals))
+    @inbounds for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
 
 if _oldstyle_array_vcat_
 # T[a:b] and T[a:s:b] also construct typed ranges
@@ -372,6 +381,9 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
+        is(I,A) && (I = X)
+    elseif is(I,A)
+        I = copy(I)
     end
     for i in I
         A[i] = X[count]
@@ -585,6 +597,7 @@ end
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
+    isempty(r) && return a
     f = first(r)
     l = last(r)
     if !(1 <= f && l <= n)
@@ -1178,7 +1191,7 @@ function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
-    NZs = zeros(T, nnzA)
+    NZs = Array(T, nnzA)
     count = 1
     if nnzA > 0
         for j=1:size(A,2), i=1:size(A,1)

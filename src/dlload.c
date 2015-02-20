@@ -137,13 +137,15 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
     }
 
 #if defined(__linux__) || defined(__FreeBSD__)
-    const char *soname = jl_lookup_soname(modname, strlen(modname));
-    error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
-    if (!error) goto done;
+    {
+        const char *soname = jl_lookup_soname(modname, strlen(modname));
+        error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
+        if (!error) goto done;
+    }
 #endif
 
     if (throw_err) {
-        //JL_PRINTF(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
+        //jl_printf(JL_STDERR, "could not load module %s (%d): %s\n", modname, error, uv_dlerror(handle));
         jl_errorf("could not load module %s: %s", modname, uv_dlerror(handle));
     }
     uv_dlclose(handle);

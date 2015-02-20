@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # linalg tests take the longest - start them off first
 testnames = [
     "linalg", "core", "keywordargs", "numbers", "strings", "dates",
@@ -45,6 +46,10 @@ catch
     warn("Networking unavailable: Skipping tests [" * join(net_required_for, ", ") * "]")
     net_on = false
 end
+=======
+include("choosetests.jl")
+tests, net_on = choosetests(ARGS)
+>>>>>>> master
 
 cd(dirname(@__FILE__)) do
     n = 1
@@ -52,8 +57,6 @@ cd(dirname(@__FILE__)) do
         n = min(8, CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)
-    else
-        filter!(x -> !(x in net_required_for), tests)
     end
 
     @everywhere include("testdefs.jl")

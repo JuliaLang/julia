@@ -4,6 +4,13 @@
 @test significand(12.8) == 1.6
 @test exponent(12.8) == 3
 
+for T in (Int, Float64, BigFloat)
+    @test_approx_eq deg2rad(T(180)) 1pi
+    @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
+    @test_approx_eq rad2deg([pi/T(4), pi/T(3)]) [45, 60]
+    @test_approx_eq rad2deg(T(1)*pi) 180
+end
+
 # degree-based trig functions
 for T = (Float32,Float64,Rational{Int})
     fT = typeof(float(one(T)))

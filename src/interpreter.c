@@ -174,7 +174,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         return e;
     }
     jl_expr_t *ex = (jl_expr_t*)e;
-    jl_value_t **args = jl_array_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym ||  ex->head == call1_sym) {
         if (jl_is_lambda_info(args[0])) {

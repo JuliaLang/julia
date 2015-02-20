@@ -553,6 +553,9 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     if nv == 0
         return 0:1:0
     end
+    if n <= 0
+        throw(ArgumentError("number of bins n=$n must be positive"))
+    end
     lo, hi = extrema(v)
     if hi == lo
         step = 1

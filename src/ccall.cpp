@@ -552,7 +552,7 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else if (sym.fptr != NULL) {
         res = literal_static_pointer_val(sym.fptr, lrt);
         if (imaging_mode)
-            JL_PRINTF(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
+            jl_printf(JL_STDERR,"warning: literal address used in cglobal for %s; code cannot be statically compiled\n", sym.f_name);
     }
     else {
         if (imaging_mode) {
@@ -1045,25 +1045,6 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         savespot = &_savespot;
     }
 
-    if (0 && f_name != NULL) {
-        // print the f_name before each ccall
-        Value *zeros[2] = { ConstantInt::get(T_int32, 0),
-                            ConstantInt::get(T_int32, 0) };
-        std::stringstream msg;
-            msg << "ccall: ";
-            msg << f_name;
-            msg << "(...)";
-            if (f_lib != NULL && (intptr_t)f_lib != 1 && (intptr_t)f_lib != 2) {
-                msg << " in library ";
-                msg << f_lib;
-            }
-            msg << "\n";
-        builder.CreateCall2(prepare_call(jlputs_func),
-                            builder.CreateGEP(stringConst(msg.str()),
-                                         ArrayRef<Value*>(zeros)),
-                            prepare_global(jlstderr_var));
-    }
-
     // emit arguments
     Value **argvals = (Value**) alloca(((nargs-3)/2 + sret)*sizeof(Value*));
     Value *result;
@@ -1159,7 +1140,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         Type *funcptype = PointerType::get(functype,0);
         llvmf = literal_static_pointer_val(fptr, funcptype);
         if (imaging_mode)
-            JL_PRINTF(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
+            jl_printf(JL_STDERR,"warning: literal address used in ccall for %s; code cannot be statically compiled\n", f_name);
     }
     else {
         assert(f_name != NULL);
@@ -1258,7 +1239,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (!sret && lrt == T_void)
         return literal_pointer_val((jl_value_t*)jl_nothing);
     if (lrt->isStructTy()) {
-        //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
+        //jl_printf(JL_STDERR, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
         assert(jl_is_structtype(rt));
         Value *strct =
             builder.CreateCall(prepare_call(jlallocobj_func),

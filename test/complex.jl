@@ -1,3 +1,5 @@
+@test reim(2 + 3im) == (2, 3)
+
 # sqrt:
 # tests special values from csqrt man page
 # as well as conj(sqrt(z)) = sqrt(conj(z))

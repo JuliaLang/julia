@@ -677,6 +677,9 @@ a = [1,3,5]
 b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
+a = [3,2,1]
+a[a] = [4,5,6]
+@test a == [6,5,4]
 
 # lexicographic comparison
 @test lexcmp([1.0], [1]) == 0
@@ -756,6 +759,7 @@ for idx in Any[1, 2, 5, 9, 10, 1:0, 2:1, 1:1, 2:2, 1:2, 2:4, 9:8, 10:9, 9:9, 10:
     @test deleteat!(a, idx) == [acopy[1:(first(idx)-1)]; acopy[(last(idx)+1):end]]
 end
 a = [1:10;]
+@test deleteat!(a, 11:10) == [1:10;]
 @test deleteat!(a, [1,3,5,7:10...]) == [2,4,6]
 @test_throws BoundsError deleteat!(a, 13)
 @test_throws BoundsError deleteat!(a, [1,13])
@@ -1050,4 +1054,12 @@ a = [1 0 0; 0 0 0]
 let x = fill(1.5f0, 10^7)
     @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
     @test cumsum(x) == cumsum!(similar(x), x)
+end
+
+# PR #10164
+let
+    A = Array{Int}
+    V = Array{Int,1}
+    @test eltype(A) == Int
+    @test eltype(V) == Int
 end

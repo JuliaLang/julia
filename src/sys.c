@@ -58,8 +58,6 @@ DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     return wc;
 }
 
-DLLEXPORT size_t jl_ios_size(ios_t *s) { return s->size; }
-
 DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
 DLLEXPORT off_t jl_lseek(int fd, off_t offset, int whence) { return lseek(fd, offset, whence); }
@@ -391,13 +389,13 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN=0;
-JL_STREAM *JL_STDOUT=0;
-JL_STREAM *JL_STDERR=0;
+JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 
-JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
+JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
+JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
+JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
 // CPUID
 

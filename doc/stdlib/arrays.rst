@@ -90,9 +90,11 @@ Basic functions
 Constructors
 ------------
 
-.. function:: Array(type, dims)
+.. function:: Array(dims)
 
-   Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
+   ``Array{T}(dims)`` constructs an uninitialized dense array with element type ``T``.
+   ``dims`` may be a tuple or a series of integer arguments.
+   The syntax ``Array(T, dims)`` is also available, but deprecated.
 
 .. function:: getindex(type[, elements...])
 

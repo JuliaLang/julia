@@ -69,3 +69,26 @@ end
 @test isbits(Float32)
 @test isbits(Int)
 @test !isbits(AbstractString)
+
+# issue #10165
+i10165(::DataType) = 0
+i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
+@test i10165(AbstractArray{Int}) == 0
+@test which(i10165, (Type{AbstractArray{Int}},)).sig == (DataType,)
+
+# fullname
+@test fullname(Base) == (:Base,)
+@test fullname(Base.Pkg) == (:Base, :Pkg)
+
+const a_const = 1
+not_const = 1
+@test isconst(:a_const) == true
+@test isconst(Base, :pi) == true
+@test isconst(:pi) == true
+@test isconst(:not_const) == false
+@test isconst(:is_not_defined) == false
+
+@test isimmutable(1) == true
+@test isimmutable([]) == false
+@test isimmutable("abc") == true
+

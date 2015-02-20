@@ -35,7 +35,6 @@ cache:
   - mingw-w64-bin-x86_64-20140102.7z
   - llvm-3.3-i686-w64-mingw32-juliadeps.7z
   - llvm-3.3-x86_64-w64-mingw32-juliadeps.7z
-  - make-3.81-2-msys-1.0.11-bin.tar.lzma
   - jq.exe
 
 build_script:

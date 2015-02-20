@@ -139,8 +139,8 @@ void parse_opts(int *argcp, char ***argvp)
             jl_compileropts.cpu_target = strdup(optarg);
             break;
         case 'h':
-            ios_printf(ios_stdout, "%s%s", usage, opts);
-            exit(0);
+            jl_printf(JL_STDOUT, "%s%s", usage, opts);
+            jl_exit(0);
         case 'O':
             jl_compileropts.opt_level = 1;
             break;
@@ -180,8 +180,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"64"))
                 jl_compileropts.int_literals = 64;
             else {
-                ios_printf(ios_stderr, "julia: invalid integer literal size (%s)\n", optarg);
-                exit(1);
+                jl_errorf("julia: invalid integer literal size (%s)\n", optarg);
             }
             break;
         case opt_dump_bitcode:
@@ -198,8 +197,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"all"))
                 jl_compileropts.compile_enabled = 2;
             else {
-                ios_printf(ios_stderr, "julia: invalid argument to --compile (%s)\n", optarg);
-                exit(1);
+                jl_errorf("julia: invalid argument to --compile (%s)\n", optarg);
             }
             break;
         case opt_depwarn:
@@ -208,8 +206,7 @@ void parse_opts(int *argcp, char ***argvp)
             else if (!strcmp(optarg,"no"))
                 jl_compileropts.depwarn = 0;
             else {
-                ios_printf(ios_stderr, "julia: invalid argument to --depwarn (%s)\n", optarg);
-                exit(1);
+                jl_errorf("julia: invalid argument to --depwarn (%s)\n", optarg);
             }
             break;
         case opt_inline:      /* inline */
@@ -233,9 +230,8 @@ void parse_opts(int *argcp, char ***argvp)
             }
             break;
         default:
-            ios_printf(ios_stderr, "julia: unhandled option -- %c\n",  c);
-            ios_printf(ios_stderr, "This is a bug, please report it.\n");
-            exit(1);
+            jl_errorf("julia: unhandled option -- %c\n"
+                      "This is a bug, please report it.\n", c);
         }
     }
     jl_compileropts.code_coverage = codecov;
@@ -264,7 +260,7 @@ static int exec_program(void)
             else {
                 jl_printf(JL_STDERR, "error during bootstrap:\n");
                 jl_static_show(JL_STDERR, e);
-                JL_PUTS("\n",JL_STDERR);
+                jl_printf(JL_STDERR, "\n");
                 jlbacktrace();
             }
             jl_printf(JL_STDERR, "\n");
@@ -299,7 +295,7 @@ static void print_profile(void)
             jl_binding_t *b = (jl_binding_t*)table[i];
             if (b->value != NULL && jl_is_function(b->value) &&
                 jl_is_gf(b->value)) {
-                ios_printf(ios_stdout, "%d\t%s\n",
+                jl_printf(JL_STDERR, "%d\t%s\n",
                            jl_gf_mtable(b->value)->ncalls,
                            jl_gf_name(b->value)->name);
             }
@@ -355,9 +351,9 @@ static int true_main(int argc, char *argv[])
     }
     JL_CATCH {
         iserr = 1;
-        JL_PUTS("error during run:\n",JL_STDERR);
+        jl_printf(JL_STDERR, "error during run:\n");
         jl_show(jl_stderr_obj(),jl_exception_in_transit);
-        JL_PUTS("\n",JL_STDERR);
+        jl_printf(JL_STDERR, "\n");
         jlbacktrace();
         goto again;
     }

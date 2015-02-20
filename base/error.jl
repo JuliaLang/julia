@@ -38,17 +38,18 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 
 ## assertion functions and macros ##
 
-assert(x) = x ? nothing : error("assertion failed")
-macro assert(ex,msgs...)
+assert(x) = x ? nothing : throw(AssertionError())
+assert(x, msgs...) = x ? nothing : throw(AssertionError(msgs[1]))
+macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if !isempty(msgs) && isa(msg, Expr)
         # message is an expression needing evaluating
-        msg = :(string("assertion failed: ", $(esc(msg))))
-    elseif isdefined(Base,:string)
-        msg = string("assertion failed: ", msg)
+        msg = :(string($(esc(msg))))
+    elseif isdefined(Base, :string)
+        msg = string(msg)
     else
         # string() might not be defined during bootstrap
-        msg = :(string("assertion failed: ", $(Expr(:quote,msg))))
+        msg = :(string($(Expr(:quote,msg))))
     end
-    :($(esc(ex)) ? $(nothing) : error($msg))
+    :($(esc(ex)) ? $(nothing) : throw(AssertionError($msg)))
 end

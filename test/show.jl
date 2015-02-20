@@ -212,3 +212,9 @@ let q1 = parse(repr(:("$(a)b"))),
     @test q2.args[1].head == :string
     @test q2.args[1].args == [:ab,]
 end
+
+x8d003 = 2
+let a = Expr(:quote,Expr(:$,:x8d003))
+    @test eval(parse(repr(a))) == a
+    @test eval(eval(parse(repr(a)))) == 2
+end

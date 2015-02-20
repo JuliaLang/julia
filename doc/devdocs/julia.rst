@@ -14,3 +14,4 @@
    subarrays
    sysimg
    llvm
+   stdio

@@ -10,6 +10,7 @@ immutable NullException <: Exception
 end
 
 Nullable{T}(value::T) = Nullable{T}(value)
+Nullable() = Nullable{Union()}()
 
 eltype{T}(::Type{Nullable{T}}) = T
 
@@ -18,6 +19,9 @@ function convert{T}(::Type{Nullable{T}}, x::Nullable)
 end
 
 convert{T}(::Type{Nullable{T}}, x::T) = Nullable{T}(x)
+
+convert{T}(::Type{Nullable{T}}, ::Void) = Nullable{T}()
+convert(   ::Type{Nullable   }, ::Void) = Nullable{Union()}()
 
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull
