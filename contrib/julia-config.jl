@@ -3,7 +3,8 @@
 const options =
 [
     "--cflags",
-    "--ldflags"
+    "--ldflags",
+    "--ldlibs"
 ];
 
 function imagePath()
@@ -12,7 +13,7 @@ function imagePath()
 end
 
 function libDir()
-    return  abspath(dirname(Sys.dlpath("libjulia")));
+    abspath(dirname(Sys.dlpath("libjulia")));
 end
 
 function includeDir()
@@ -25,12 +26,18 @@ function initDir()
 end
 
 function ldflags()
-    @unix_only return replace("""-L$(libDir()) -Wl,-rpath $(libDir()) -ljulia""","\\","\\\\");
-    @windows_only return replace("""-L$(libDir()) -ljulia""","\\","\\\\");
+    replace("""-L$(libDir())""","\\","\\\\");
+end
+
+function ldlibs()
+    @unix_only return replace("""-Wl,-rpath $(libDir()) -ljulia""","\\","\\\\");
+    @windows_only return replace("""-ljulia""","\\","\\\\");
 end
 
 function cflags()
-    replace("""-DJULIA_INIT_DIR="$(initDir())" -I$(includeDir())""","\\","\\\\");
+    arg1 = replace(initDir(),"\\","\\\\");
+    arg2 = replace(includeDir(),"\\","\\\\");
+    return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
 end
 
 function check_args(args)
@@ -48,6 +55,8 @@ function main()
             println(ldflags());
         elseif args == "--cflags"
             println(cflags());
+        elseif args == "--ldlibs"
+            println(ldlibs());
         end
     end
 end
