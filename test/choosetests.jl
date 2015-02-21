@@ -27,7 +27,8 @@ function choosetests(choices = [])
         "euler", "show", "lineedit", "replcompletions", "repl",
         "replutil", "sets", "test", "goto", "llvmcall", "grisu",
         "nullable", "meta", "profile", "libgit2", "docs", "markdown",
-        "base64", "parser", "serialize", "functors", "char", "misc"
+        "base64", "parser", "serialize", "functors", "char", "misc",
+        "enums"
     ]
 
     if isdir(joinpath(JULIA_HOME, Base.DOCDIR, "examples"))
