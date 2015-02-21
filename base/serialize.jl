@@ -534,7 +534,7 @@ function deserialize(s, t::DataType)
     nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
-    elseif !t.mutable
+    elseif isbits(t)
         if nf == 1
             return ccall(:jl_new_struct, Any, (Any,Any...), t, deserialize(s))
         elseif nf == 2
@@ -548,15 +548,14 @@ function deserialize(s, t::DataType)
             return ccall(:jl_new_struct, Any, (Any,Any...), t, f1, f2, f3)
         else
             flds = Any[ deserialize(s) for i = 1:nf ]
-            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32),
-                         t, flds, nf)
+            return ccall(:jl_new_structv, Any, (Any,Ptr{Void},UInt32), t, flds, nf)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         for i in 1:length(t.names)
             tag = int32(read(s, UInt8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
-                setfield!(x, i, handle_deserialize(s, tag))
+                ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end
         end
         return x
