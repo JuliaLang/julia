@@ -24,6 +24,8 @@ New language features
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
 
+  * Enums are now supported through the `@enum EnumName EnumValue1 EnumValue2` syntax. Enum member values also support abitrary value assignment by the `@enum EnumName EnumValue1=1 EnumValue2=10 EnumValue3=20` syntax.
+
 Language changes
 ----------------
 
