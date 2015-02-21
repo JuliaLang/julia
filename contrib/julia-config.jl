@@ -21,8 +21,8 @@ function includeDir()
 end
 
 function initDir()
-    @unix_only return match(r"(.*)(julia/sys.ji)",imagePath()).captures[1];
-    @windows_only return match(r"(.*)(julia\\sys.ji)",imagePath()).captures[1];
+    @unix_only return match(r"(.*)(/julia/sys.ji)",imagePath()).captures[1];
+    @windows_only return match(r"(.*)(\\julia\\sys.ji)",imagePath()).captures[1];
 end
 
 function ldflags()
@@ -35,7 +35,7 @@ function ldlibs()
 end
 
 function cflags()
-    arg1 = replace(initDir(),"\\","\\\\");
+    arg1 = replace(initDir(),"\\","\\\\\\\\");
     arg2 = replace(includeDir(),"\\","\\\\");
     return """-DJULIA_INIT_DIR=\\"$arg1\\" -I$arg2""";
 end
