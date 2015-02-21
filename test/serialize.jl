@@ -264,3 +264,12 @@ create_serialization_stream() do s # user-defined type array
     @test r.state == :failed
     @test isa(t.exception, ErrorException)
 end
+
+# corner case: undefined inside immutable type
+create_serialization_stream() do s
+    serialize(s, Nullable{Any}())
+    seekstart(s)
+    n = deserialize(s)
+    @test isa(n, Nullable)
+    @test !isdefined(n, :value)
+end
