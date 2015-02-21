@@ -134,7 +134,7 @@ creates the global "Main" module and sets
 Note: _julia_init() `then sets <https://github.com/JuliaLang/julia/blob/master/src/init.c#L975>`_ :code:`jl_root_task->current_module = jl_core_module`. :code:`jl_root_task` is an alias of :code:`jl_current_task` at this point, so the current_module set by jl_new_main_module() above is overwritten.
 
 `jl_load("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L568>`_ calls `jl_parse_eval_all("boot.jl") <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L525>`_ which repeatedly calls `jl_parse_next() <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L523>`_ and `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c#L376>`_ to parse and execute `boot.jl <https://github.com/JuliaLang/julia/blob/master/base/boot.jl#L116>`_. TODO -- drill down into eval?
- 
+
 `jl_get_builtin_hooks() <https://github.com/JuliaLang/julia/blob/master/src/init.c#L1209>`_ initialises global C pointers to Julia globals defined in boot.jl.
 
 
@@ -178,7 +178,7 @@ Base._start
 `Base._start <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L388>`_ calls `Base.process_options <https://github.com/JuliaLang/julia/blob/master/base/client.jl#L214>`_ which calls `jl_parse_input_line("println(\"Hello World!\")") <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L468>`_ to create an expression object and :func:`Base.eval` to execute it.
 
 
-Base.eval 
+Base.eval
 ---------
 
 Base.eval was `mapped to jl_f_top_eval <https://github.com/JuliaLang/julia/blob/master/src/builtins.c#L1005>`_ by jl_init_primitives().
@@ -222,7 +222,7 @@ jl_apply()                    julia.h:989
 jl_apply_generic()            gf.c:1643          Base.println(ASCIIString,)
 jl_apply()                    julia.h:989
 do_call()                     interpreter.c:70
-eval()                        interpreter.c:210  
+eval()                        interpreter.c:210
 jl_interpret_toplevel_expr()  interpreter.c:25
 jl_toplevel_eval_flex()       toplevel.c:498
 jl_toplevel_eval()            toplevel.c:521
