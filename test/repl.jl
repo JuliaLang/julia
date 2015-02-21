@@ -217,7 +217,7 @@ end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
+let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin

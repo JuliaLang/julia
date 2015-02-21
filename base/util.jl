@@ -260,7 +260,7 @@ warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
-function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
+function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
     opts = JLOptions()
     cpu_target = bytestring(opts.cpu_target)
     image_file = bytestring(opts.image_file)

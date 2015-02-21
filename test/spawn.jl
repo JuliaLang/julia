@@ -160,7 +160,7 @@ unmark(sock)
 close(sock)
 
 # issue #4535
-exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
+exename = joinpath(JULIA_HOME, Base.julia_exename())
 if valgrind_off
     # If --trace-children=yes is passed to valgrind, we will get a
     # valgrind banner here, not "Hello World\n".
