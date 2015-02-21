@@ -670,7 +670,9 @@ jl_sym_t *jl_lam_argname(jl_lambda_info_t *li, int i)
         ast = (jl_expr_t*)li->ast;
     else
         ast = (jl_expr_t*)jl_uncompress_ast(li, li->ast);
-    return (jl_sym_t*)jl_arrayref(jl_lam_args(ast),i);
+    // NOTE (gc root): `ast` is not rooted here, but jl_lam_args and jl_cellref
+    // do not allocate.
+    return (jl_sym_t*)jl_cellref(jl_lam_args(ast),i);
 }
 
 // get array of local var symbols
