@@ -1529,6 +1529,7 @@ static void parameters_to_closureenv(jl_value_t *ast, jl_tuple_t *tvars)
         jl_cellset(vi, 1, jl_any_type);
         jl_cellset(vi, 2, jl_box_long(1));
         jl_cell_1d_push(closed, (jl_value_t*)vi);
+        gc_wb(closed, vi);
     }
     JL_GC_POP();
 }
