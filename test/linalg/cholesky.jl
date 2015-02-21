@@ -95,3 +95,15 @@ debug && println("pivoted Choleksy decomposition")
         end
     end
 end
+
+begin
+    # Cholesky factor of Matrix with non-commutative elements, here 2x2-matrices
+
+    X = Matrix{Float64}[0.1*rand(2,2) for i in 1:3, j = 1:3]
+    L = full(Base.LinAlg.chol!(X*X', :L))
+    U = full(Base.LinAlg.chol!(X*X', :U))
+    XX = full(X*X')
+
+    @test sum(sum(norm, L*L' - XX)) < eps()
+    @test sum(sum(norm, U'*U - XX)) < eps()
+end
