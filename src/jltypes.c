@@ -728,7 +728,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                 return both;
             }
             if (!jl_is_typevar(both))
-                both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
+                both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);  // does this need a root? See call to jl_full_type in type_eqv_
             extend((jl_value_t*)a, both, penv);
             extend((jl_value_t*)b, both, penv);
         }
@@ -756,7 +756,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             return (jl_value_t*)a;
         }
         else {
-            jl_tvar_t *new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
+            jl_tvar_t *new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);  // ditto here
             extend((jl_value_t*)new_b, b, penv);
             extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
             JL_GC_POP();
