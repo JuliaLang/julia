@@ -181,13 +181,13 @@ function hash(a::AbstractArray, h::UInt)
     while !done(a, state)
         x1 = x2
         x2, state = next(a, state)
-        if x2 == x1
+        if isequal(x2, x1)
             # For repeated elements, use run length encoding
             # This allows efficient hashing of sparse arrays
             runlength = 2
             while !done(a, state)
                 x2, state = next(a, state)
-                x2 != x1 && break
+                isequal(x1, x2) || break
                 runlength += 1
             end
             h += hashrle_seed
@@ -195,7 +195,7 @@ function hash(a::AbstractArray, h::UInt)
         end
         h = hash(x1, h)
     end
-    x2 != x1 && (h = hash(x2, h))
+    !isequal(x2, x1) && (h = hash(x2, h))
     return h
 end
 

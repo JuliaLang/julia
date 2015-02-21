@@ -2334,11 +2334,11 @@ function hash{T}(A::SparseMatrixCSC{T}, h::UInt)
     @inbounds for col = 1:size(A, 2)
         for j = colptr[col]:colptr[col+1]-1
             nz = nzval[j]
-            nz == 0 && continue
+            isequal(nz, zero(T)) && continue
             idx = sub2ind(sz, rowval[j], col)
-            if idx != lastidx+1 || nz != lastnz   # Run is over
-                h = hashrun(lastnz, runlength, h) # Hash previous run
-                h = hashrun(0, idx-lastidx-1, h)  # Hash intervening zeros
+            if idx != lastidx+1 || !isequal(nz, lastnz)  # Run is over
+                h = hashrun(lastnz, runlength, h)        # Hash previous run
+                h = hashrun(0, idx-lastidx-1, h)         # Hash intervening zeros
 
                 runlength = 1
                 lastnz = nz
