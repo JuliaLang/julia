@@ -1200,7 +1200,6 @@ end
 @test div(typemin(Int64)  , 1) == -9223372036854775807-1
 @test div(typemin(Int64)  , 2) == -4611686018427387904
 @test div(typemin(Int64)  , 7) == -1317624576693539401
-#@test div(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test div(typemin(Int64)  ,-2) ==  4611686018427387904
 @test div(typemin(Int64)  ,-7) ==  1317624576693539401
 @test div(typemin(Int64)+1, 1) == -9223372036854775807
@@ -1244,7 +1243,6 @@ end
 @test fld(typemin(Int64)  , 1) == -9223372036854775807-1
 @test fld(typemin(Int64)  , 2) == -4611686018427387904
 @test fld(typemin(Int64)  , 7) == -1317624576693539402
-#@test fld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test fld(typemin(Int64)  ,-2) ==  4611686018427387904
 @test fld(typemin(Int64)  ,-7) ==  1317624576693539401
 @test fld(typemin(Int64)+1, 1) == -9223372036854775807
@@ -1288,7 +1286,6 @@ end
 @test cld(typemin(Int64)  , 1) == -9223372036854775807-1
 @test cld(typemin(Int64)  , 2) == -4611686018427387904
 @test cld(typemin(Int64)  , 7) == -1317624576693539401
-#@test cld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test cld(typemin(Int64)  ,-2) ==  4611686018427387904
 @test cld(typemin(Int64)  ,-7) ==  1317624576693539402
 @test cld(typemin(Int64)+1, 1) == -9223372036854775807
