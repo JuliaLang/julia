@@ -922,14 +922,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
                                     // best to call this first, since it also initializes libuv
     restore_signals();
     jl_resolve_sysimg_location(rel);
-
-    // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
-    if (jl_options.cpu_target == NULL) {
-        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(jl_options.image_file);
-
-        // If we can't load anything from the sysimg, default to native
-        jl_options.cpu_target = sysimg_cpu_target ? sysimg_cpu_target : "native";
-    }
+    // loads sysimg if available, and conditionally sets jl_options.cpu_target
+    jl_preload_sysimg_so(jl_options.image_file);
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
