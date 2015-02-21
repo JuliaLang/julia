@@ -768,6 +768,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
 }
 
 // convert (Type{T}, Type{S}, ...) to Type{(T,S,...)}
+// NOTE: ptemp must be rooted by the caller
 static int tuple_to_Type(jl_tuple_t *a, jl_tuple_t **ptemp)
 {
     int alen = jl_tuple_len(a);
