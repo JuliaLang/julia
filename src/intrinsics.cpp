@@ -734,9 +734,9 @@ struct math_builder {
     math_builder(jl_codectx_t *ctx, bool always_fast = false):
         old_fmf(builder.getFastMathFlags())
     {
-        if (jl_compileropts.fast_math != JL_COMPILEROPT_FAST_MATH_OFF &&
+        if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
-             jl_compileropts.fast_math == JL_COMPILEROPT_FAST_MATH_ON)) {
+             jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
             FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
             builder.SetFastMathFlags(fmf);

@@ -183,12 +183,10 @@ end
 # try to include() a file, ignoring if not found
 try_include(path::AbstractString) = isfile(path) && include(path)
 
-function init_bind_addr(args::Vector{UTF8String})
-    # Treat --bind-to in a position independent manner in ARGS since
-    # --worker, -n and --machinefile options are affected by it
-    btoidx = findfirst(args, "--bind-to")
-    if btoidx > 0
-        bind_to = split(args[btoidx+1], ":")
+# initialize the local proc network address / port
+function init_bind_addr(opts::JLOptions)
+    if opts.bindto != C_NULL
+        bind_to = split(bytestring(opts.bindto), ":")
         bind_addr = string(parseip(bind_to[1]))
         if length(bind_to) > 1
             bind_port = parseint(bind_to[2])
@@ -210,120 +208,126 @@ function init_bind_addr(args::Vector{UTF8String})
     LPROC.bind_port = uint16(bind_port)
 end
 
-
-function process_options(args::Vector{UTF8String})
-    quiet = false
-    repl = true
-    startup = true
-    color_set = false
-    no_history_file = false
-    i = 1
-    while i <= length(args)
-        if args[i]=="-q" || args[i]=="--quiet"
-            quiet = true
-        elseif args[i]=="--worker"
-            worker_arg = (i == length(args)) ? "" : args[i+1]
-
-            if worker_arg == "custom"
-                i += 1
-            else
-                start_worker()
-                # doesn't return
+# NOTE: This set of required arguments need to be kept in sync with the required arguments defined in ui/repl.c
+let reqarg = Set(UTF8String["--home",          "-H",
+                            "--eval",          "-e",
+                            "--print",         "-E",
+                            "--post-boot",     "-P",
+                            "--load",          "-L",
+                            "--sysimage",      "-J",
+                            "--cpu-target",    "-C",
+                            "--procs",         "-p",
+                            "--machinefile",
+                            "--color",
+                            "--history-file",
+                            "--startup-file",
+                            "--compile",
+                            "--check-bounds",
+                            "--int-literals",
+                            "--dump-bitcode",
+                            "--depwarn",
+                            "--inline",
+                            "--build",        "-b",
+                            "--bind-to"])
+    global process_options
+    function process_options(opts::JLOptions, args::Vector{UTF8String})
+        if !isempty(args) && (arg = first(args); arg[1] == '-' && in(arg, reqarg))
+            println(STDERR, "julia: option `$arg` is missing an argument")
+            exit(1)
+        end
+        repl = true
+        startup = true
+        quiet = false
+        color_set = false
+        no_history_file = false
+        while true
+            # show julia VERSION and quit
+            if bool(opts.version)
+                println(STDOUT, "julia version ", VERSION)
+                exit(0)
             end
-
-        elseif args[i]=="--bind-to"
-            i+=1 # has already been processed
-        elseif args[i]=="-e" || args[i]=="--eval"
-            i == length(args) && error("-e,--eval  no <expr> provided")
-            repl = false
-            i+=1
-            splice!(ARGS, 1:length(ARGS), args[i+1:end])
-            eval(Main,parse_input_line(args[i]))
-            break
-        elseif args[i]=="-E" || args[i]=="--print"
-            i == length(args) && error("-E,--print  no <expr> provided")
-            repl = false
-            i+=1
-            splice!(ARGS, 1:length(ARGS), args[i+1:end])
-            show(eval(Main,parse_input_line(args[i])))
-            println()
-            break
-        elseif args[i]=="-P" || args[i]=="--post-boot"
-            i == length(args) && error("-P,--post-boot  no <expr> provided")
-            i+=1
-            eval(Main,parse_input_line(args[i]))
-        elseif args[i]=="-L" || args[i]=="--load"
-            i == length(args) && error("-L, --load  no <file> provided")
-            i+=1
-            require(args[i])
-        elseif args[i]=="-p"
-            i == length(args) && error("-p  <n> processes not provided")
-            i+=1
-            if i > length(args) || !isdigit(args[i][1])
-                np = Sys.CPU_CORES
-                i -= 1
-            else
-                np = int(args[i])
-                np < 1 && error("-p  <n> must be ≥ 1")
-            end
-            addprocs(np)
-        elseif args[i]=="--machinefile"
-            i == length(args) && error("--machinefile  no <file> provided")
-            i+=1
-            machines = load_machine_file(args[i])
-            addprocs(machines)
-        elseif args[i]=="-v" || args[i]=="--version"
-            println("julia version ", VERSION)
-            exit(0)
-        elseif args[i]=="--no-history"
-            # deprecated in v0.3
-            warn("'--no-history' is deprecated; use '--no-history-file'")
-            no_history_file = true
-        elseif args[i] == "--no-history-file"
-            no_history_file = true
-        elseif args[i] == "-f" || args[i] == "--no-startup"
-            startup = false
-        elseif args[i] == "-F"
-            # load juliarc now before processing any more options
-            load_juliarc()
-            startup = false
-        elseif args[i] == "-i"
-            global is_interactive = true
-        elseif startswith(args[i], "--color")
-            if args[i] == "--color"
-                color_set = true
-                global have_color = true
-            elseif args[i][8] == '='
-                val = args[i][9:end]
-                if in(val, ("no","0","false"))
-                    color_set = true
-                    global have_color = false
-                elseif in(val, ("yes","1","true"))
-                    color_set = true
-                    global have_color = true
+            # startup worker
+            if bool(opts.worker)
+                assert(opts.worker == 1 || opts.worker == 2)
+                # if default, start worker process otherwise if custom pass through
+                if opts.worker == 1
+                    start_worker() # does not return
                 end
             end
-            if !color_set
-                error("invalid option: ", args[i])
+            # load file immediately on all processors
+            if opts.load != C_NULL
+                require(bytestring(opts.load))
             end
-        elseif args[i][1]!='-'
-            if startup
+            # show banner
+            quiet = bool(opts.quiet)
+            # load ~/.juliarc file
+            if opts.startupfile == 1
                 load_juliarc()
                 startup = false
+            elseif opts.startupfile == 2
+                startup = false
             end
-            # program
-            repl = false
-            # remove julia's arguments
-            splice!(ARGS, 1:length(ARGS), args[i+1:end])
-            ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
-            include(args[i])
+            # load ~/.julia_history file
+            no_history_file = bool(opts.historyfile)
+            # add processors
+            if opts.nprocs > 1
+                addprocs(opts.nprocs)
+            end
+            # load processes from machine file
+            if opts.machinefile != C_NULL
+                addprocs(load_machine_file(bytestring(opts.machinefile)))
+            end
+            global is_interactive = bool(opts.isinteractive)
+            # REPL color
+            if opts.color == 0
+                color_set = false
+                global have_color = false
+            elseif opts.color == 1
+                color_set = true
+                global have_color = true
+            elseif opts.color == 2
+                color_set = true
+                global have_color = false
+            end
+            # eval expression
+            if opts.eval != C_NULL
+                repl = false
+                eval(Main, parse_input_line(bytestring(opts.eval)))
+                break
+            end
+            # eval expression and show result
+            if opts.print != C_NULL
+                repl = false
+                show(eval(Main, parse_input_line(bytestring(opts.print))))
+                println()
+                break
+            end
+            # eval expression but don't disable interactive mode
+            if opts.postboot != C_NULL
+                eval(Main, parse_input_line(bytestring(opts.postboot)))
+            end
+            # load file
+            if !isempty(args)
+                if args[1][1] != '-'
+                    if startup
+                        load_juliarc()
+                        startup = false
+                    end
+                    # program
+                    repl = false
+                    # remove filename from ARGS
+                    shift!(ARGS)
+                    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+                    include(args[1])
+                else
+                    println(STDERR, "julia: unknown option `$(args[1])`")
+                    exit(1)
+                end
+            end
             break
-        else
-            error("unknown option: ", args[i])
         end
-        i += 1
+        return (quiet,repl,startup,color_set,no_history_file)
     end
-    return (quiet,repl,startup,color_set,no_history_file)
 end
 
 const roottask = current_task()
@@ -341,6 +345,8 @@ function init_load_path()
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
 end
 
+# start local process as head "master" process with process id  1
+# register this process as a local worker
 function init_head_sched()
     # start in "head node" mode
     global PGRP
@@ -387,6 +393,8 @@ function early_init()
     end
 end
 
+# starts the gc message task (for distrubuted gc) and
+# registers worker process termination method
 function init_parallel()
     start_gc_msgs_task()
     atexit(terminate_all_workers)
@@ -396,11 +404,13 @@ import .Terminals
 import .REPL
 
 function _start()
+    opts = JLOptions()
     try
         init_parallel()
-        init_bind_addr(ARGS)
-        any(a->(a=="--worker"), ARGS) || init_head_sched()
-        (quiet,repl,startup,color_set,no_history_file) = process_options(copy(ARGS))
+        init_bind_addr(opts)
+        # if this process is not a worker, schedule head process
+        bool(opts.worker) || init_head_sched()
+        (quiet,repl,startup,color_set,no_history_file) = process_options(opts,copy(ARGS))
 
         local term
         global active_repl

@@ -851,7 +851,7 @@ Note: The julia processes are still all *logically* connected to each other - an
 awareness of 0MQ being used as the transport layer.
 
 When using custom transports:
-    - julia workers must be started with arguments ``--worker custom``. Just ``--worker`` will result in the newly launched
+    - julia workers must be started with arguments ``--worker=custom``. Just ``--worker`` or ``--worker=default`` will result in the newly launched
       workers defaulting to the socket transport implementation
     - For every logical connection with a worker, ``process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
       This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects

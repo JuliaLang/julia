@@ -9,7 +9,7 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
     for i in 1:manager.np
         sockname = tempname()
         try
-            cmd = `$(params[:exename]) --worker custom $(@__FILE__) worker $sockname`
+            cmd = `$(params[:exename]) --worker=custom $(@__FILE__) worker $sockname`
             io, pobj = open (cmd, "r")
 
             wconfig = WorkerConfig()
