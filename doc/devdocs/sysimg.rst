@@ -2,6 +2,8 @@
 System Image Building
 *********************
 
+.. _dev-sysimg:
+
 Building the Julia system image
 -------------------------------
 
