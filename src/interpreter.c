@@ -357,7 +357,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
-        JL_GC_PUSH3(&para, &super, &temp);
+        jl_datatype_t *dt = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &dt);
         assert(jl_is_symbol(name));
         para = eval(args[1], locals, nl, ngensym);
         assert(jl_is_tuple(para));
@@ -368,12 +369,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       ((jl_sym_t*)name)->name);
-        jl_datatype_t *dt =
-            jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
+        dt = jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        gc_wb_binding(b, dt);
         super = eval(args[3], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
