@@ -335,11 +335,11 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_value_t *para = eval(args[1], locals, nl, ngensym);
         jl_value_t *super = NULL;
         jl_value_t *temp = NULL;
-        JL_GC_PUSH3(&para, &super, &temp);
+        jl_datatype_t *dt = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &dt);
         assert(jl_is_tuple(para));
         assert(jl_is_symbol(name));
-        jl_datatype_t *dt =
-            jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
+        dt = jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
