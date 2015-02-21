@@ -341,8 +341,6 @@ Julia language. Core operations typically have dozens of methods::
     +(a::VWPreBuild,b::VWPreBuild) at pkg/resolve/versionweight.jl:120
     +(a::VersionWeight,b::VersionWeight) at pkg/resolve/versionweight.jl:164
     +(a::FieldValue,b::FieldValue) at pkg/resolve/fieldvalue.jl:41
-    +(a::Vec2,b::Vec2) at graphics.jl:60
-    +(bb1::BoundingBox,bb2::BoundingBox) at graphics.jl:123
     +(a,b,c) at operators.jl:82
     +(a,b,c,xs...) at operators.jl:83
 

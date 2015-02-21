@@ -165,12 +165,12 @@ Constructors
 
    Constructs an identity matrix of the same dimensions and type as ``A``.
 
-.. function:: linspace(start, stop, n)
+.. function:: linspace(start, stop, n=100)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
    See also: :func:`linrange` that constructs a range object.
 
-.. function:: logspace(start, stop, n)
+.. function:: logspace(start, stop, n=50)
 
    Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
 

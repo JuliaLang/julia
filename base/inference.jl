@@ -758,7 +758,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
         ls = length(sig)
-        if ls > lsig+1
+        if ls > lsig+1 && !(isdefined(Main.Base,:promote_typeof) && f === Main.Base.promote_typeof)
             fst = sig[lsig+1]
             allsame = true
             # allow specializing on longer arglists if all the trailing
