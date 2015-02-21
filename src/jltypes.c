@@ -1861,7 +1861,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                 jl_typestack_t *stack, int check)
 {
     jl_typestack_t top;
-    size_t i;
+    size_t i, j;
     if (n == 0) return t;
     if (jl_is_typevar(t)) {
         for(i=0; i < n; i++) {
@@ -1915,7 +1915,7 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
         for(i=0; i < ntp+2; i++) iparams[i] = NULL;
         jl_value_t **rt1 = &iparams[ntp+0];  // some extra gc roots
         jl_value_t **rt2 = &iparams[ntp+1];
-        int cacheable = 1, isabstract = 0;
+        int cacheable = 1, isabstract = 0, bound = 0;
         for(i=0; i < ntp; i++) {
             jl_value_t *elt = jl_tupleref(tp, i);
             if (elt == t) {
@@ -1931,12 +1931,21 @@ static jl_value_t *inst_type_w_(jl_value_t *t, jl_value_t **env, size_t n,
                                          tv, iparams[i]);
                     }
                 }
+                if (!bound) {
+                    for(j=0; j < n; j++) {
+                        if (env[j*2] == tv) {
+                            bound = 1; break;
+                        }
+                    }
+                }
             }
             if (jl_is_typevar(iparams[i]))
                 isabstract = 1;
             if (jl_has_typevars_(iparams[i],0))
                 cacheable = 0;
         }
+        // if t's parameters are not bound in the environment, return it uncopied (#9378)
+        if (!bound && t == tc) { JL_GC_POP(); return (jl_value_t*)t; }
 
         jl_tuple_t *iparams_tuple;
         jl_datatype_t *dt;

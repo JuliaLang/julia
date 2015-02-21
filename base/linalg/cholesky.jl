@@ -34,13 +34,14 @@ function chol!{T}(A::AbstractMatrix{T})
             for i = 1:k - 1
                 A[k,k] -= A[i,k]'A[i,k]
             end
-            A[k,k] = chol!(A[k,k], :U)
-            AkkInv = inv(A[k,k])
+            Akk = chol!(A[k,k], :U)
+            A[k,k] = Akk
+            AkkInv = inv(Akk')
             for j = k + 1:n
                 for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
                 end
-                A[k,j] = A[k,k]'\A[k,j]
+                A[k,j] = AkkInv*A[k,j]
             end
         end
     end
@@ -54,12 +55,17 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
                 for i = 1:k - 1
                     A[k,k] -= A[k,i]*A[k,i]'
                 end
-                A[k,k] = chol!(A[k,k], uplo)
-                AkkInv = inv(A[k,k]')
+                Akk = chol!(A[k,k], uplo)
+                A[k,k] = Akk
+                AkkInv = inv(Akk)
                 for j = 1:k
                     for i = k + 1:n
-                        j == 1 && (A[i,k] = A[i,k]*AkkInv)
-                        j < k && (A[i,k] -= A[i,j]*A[k,j]'*AkkInv)
+                        if j == 1
+                            A[i,k] = A[i,k]*AkkInv'
+                        end
+                        if j < k
+                            A[i,k] -= A[i,j]*A[k,j]'*AkkInv'
+                        end
                     end
                 end
             end
@@ -68,13 +74,14 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
                 for i = 1:k - 1
                     A[k,k] -= A[i,k]'A[i,k]
                 end
-                A[k,k] = chol!(A[k,k], uplo)
-                AkkInv = inv(A[k,k])
+                Akk = chol!(A[k,k], uplo)
+                A[k,k] = Akk
+                AkkInv = inv(Akk')
                 for j = k + 1:n
                     for i = 1:k - 1
                         A[k,j] -= A[i,k]'A[i,j]
                     end
-                    A[k,j] = A[k,k]'\A[k,j]
+                    A[k,j] = AkkInv*A[k,j]
                 end
             end
         else

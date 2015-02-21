@@ -249,7 +249,9 @@ wait(p)
 
 ccall(:close,Cint,(Cint,),fds)
 output = readall(master)
-@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+if ccall(:jl_running_on_valgrind,Cint,()) == 0
+    @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+end
 close(master)
 
 end

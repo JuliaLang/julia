@@ -37,7 +37,7 @@ include(joinpath(dir, "queens.jl"))
 @unix_only begin
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
-    if !success(cmd)
+    if !success(cmd) && ccall(:jl_running_on_valgrind,Cint,()) == 0
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end

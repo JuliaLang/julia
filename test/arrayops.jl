@@ -1057,9 +1057,5 @@ let x = fill(1.5f0, 10^7)
 end
 
 # PR #10164
-let
-    A = Array{Int}
-    V = Array{Int,1}
-    @test eltype(A) == Int
-    @test eltype(V) == Int
-end
+@test eltype(Array{Int}) == Int
+@test eltype(Array{Int,1}) == Int
