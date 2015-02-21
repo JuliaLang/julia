@@ -450,6 +450,20 @@ Types
    (at compile-time) to an implementation ``f(::Type{Val{false}})``,
    without having to test the boolean value at runtime.
 
+.. function:: @enum EnumName EnumValue1[=x] EnumValue2[=y]
+
+   Create an `Enum` type with name `EnumName` and enum member values of `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively. `EnumName` can be used just like other types and enum member values as regular values, such as
+
+   .. doctest::
+
+      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+
+      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(int(x))"
+      f (generic function with 1 method)
+
+      julia> f(apple)
+      "I'm a FRUIT with value: 1"
+
 Generic Functions
 -----------------
 
