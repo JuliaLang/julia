@@ -1768,7 +1768,7 @@ jl_gf_invoke_get_specialization(jl_function_t *gf, jl_tuple_t *types,
         m->invokes = new_method_table(mt->name);
         // this private method table has just this one definition
         jl_method_list_insert(&m->invokes->defs, m->sig, m->func,
-                              m->tvars, 0, 0);
+                              m->tvars, 0, 0, (jl_value_t*)m->invokes);
     }
     newsig = (jl_tuple_t*)m->sig;
 
@@ -1781,7 +1781,7 @@ jl_gf_invoke_get_specialization(jl_function_t *gf, jl_tuple_t *types,
         for (size_t i = 0;i < jl_tuple_len(tt);i++) {
             if (jl_is_tuple(jl_tupleref(tt, i))) {
                 newsig = (jl_tuple_t*)jl_instantiate_type_with(
-                    (jl_value_t*)m->sig, &jl_tupleref(tpenv, 0),
+                    (jl_value_t*)m->sig, jl_tuple_data(tpenv),
                     jl_tuple_len(tpenv) / 2);
                 break;
             }
