@@ -84,21 +84,35 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 
 static const char system_image_path[256] = JL_SYSTEM_IMAGE_PATH;
 
-jl_compileropts_t jl_compileropts = { NULL, // julia_home
-                                      NULL, // julia_bin
-                                      NULL, // build_path
-                                      system_image_path, // image_file
-                                      NULL, // cpu_target ("native", "core2", etc...)
-                                      0,    // code_coverage
-                                      0,    // malloc_log
-                                      JL_COMPILEROPT_CHECK_BOUNDS_DEFAULT,
-                                      JL_COMPILEROPT_DUMPBITCODE_OFF,
-                                      0,    // int_literals
-                                      JL_COMPILEROPT_COMPILE_DEFAULT,
-                                      0,    // opt_level
-                                      1,    // depwarn
-                                      1,    // can_inline
-                                      JL_COMPILEROPT_FAST_MATH_DEFAULT
+jl_options_t jl_options = { 0,    // version
+                            0,    // quiet
+                            NULL, // julia_home
+                            NULL, // julia_bin
+                            NULL, // build_path
+                            NULL, // eval
+                            NULL, // print
+                            NULL, // postboot
+                            NULL, // load
+                            system_image_path, // image_file
+                            NULL, // cpu_taget ("native", "core2", etc...)
+                            0,    // nprocs
+                            NULL, // machinefile
+                            0,    // isinteractive
+                            0,    // color
+                            0,    // historyfile
+                            0,    // startupfile
+                            JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
+                            0,    // code_coverage
+                            0,    // malloc_log
+                            0,    // opt_level
+                            JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
+                            0,    // int_literals
+                            JL_OPTIONS_DUMPBITCODE_OFF, // dump_bitcode
+                            1,    // depwarn
+                            1,    // can_inline
+                            JL_OPTIONS_FAST_MATH_DEFAULT,
+                            0,    // worker
+                            NULL, // bindto
 };
 
 int jl_boot_file_loaded = 0;
@@ -482,9 +496,9 @@ DLLEXPORT void jl_atexit_hook()
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
     jl_print_gc_stats(JL_STDERR);
 #endif
-    if (jl_compileropts.code_coverage)
+    if (jl_options.code_coverage)
         jl_write_coverage_data();
-    if (jl_compileropts.malloc_log)
+    if (jl_options.malloc_log)
         jl_write_malloc_log();
     if (jl_base_module) {
         jl_value_t *f = jl_get_global(jl_base_module, jl_symbol("_atexit"));
@@ -853,12 +867,12 @@ static char *abspath(const char *in)
 }
 
 static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
-{ // this function resolves the paths in jl_compileropts to absolute file locations as needed
+{ // this function resolves the paths in jl_options to absolute file locations as needed
   // and it replaces the pointers to `julia_home`, `julia_bin`, `image_file`, and `build_path`
   // it may fail, print an error, and exit(1) if any of these paths are longer than PATH_MAX
   //
   // note: if you care about lost memory, you should call the appropriate `free()` function
-  // on the original pointer for each `char*` you've inserted into `jl_compileropts`, after
+  // on the original pointer for each `char*` you've inserted into `jl_options`, after
   // calling `julia_init()`
     char *free_path = (char*)malloc(PATH_MAX);
     size_t path_size = PATH_MAX;
@@ -868,37 +882,37 @@ static void jl_resolve_sysimg_location(JL_IMAGE_SEARCH rel)
     if (path_size >= PATH_MAX) {
         jl_error("fatal error: jl_compileropts.julia_bin path too long\n");
     }
-    jl_compileropts.julia_bin = strdup(free_path);
-    if (!jl_compileropts.julia_home) {
-        jl_compileropts.julia_home = getenv("JULIA_HOME");
-        if (!jl_compileropts.julia_home) {
-            jl_compileropts.julia_home = dirname(free_path);
+    jl_options.julia_bin = strdup(free_path);
+    if (!jl_options.julia_home) {
+        jl_options.julia_home = getenv("JULIA_HOME");
+        if (!jl_options.julia_home) {
+            jl_options.julia_home = dirname(free_path);
         }
     }
-    if (jl_compileropts.julia_home)
-        jl_compileropts.julia_home = abspath(jl_compileropts.julia_home);
+    if (jl_options.julia_home)
+        jl_options.julia_home = abspath(jl_options.julia_home);
     free(free_path);
     free_path = NULL;
-    if (jl_compileropts.image_file) {
-        if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_compileropts.image_file)) {
+    if (jl_options.image_file) {
+        if (rel == JL_IMAGE_JULIA_HOME && !isabspath(jl_options.image_file)) {
             // build time path, relative to JULIA_HOME
             free_path = (char*)malloc(PATH_MAX);
             int n = snprintf(free_path, PATH_MAX, "%s" PATHSEPSTRING "%s",
-                     jl_compileropts.julia_home, jl_compileropts.image_file);
+                     jl_options.julia_home, jl_options.image_file);
             if (n >= PATH_MAX || n < 0) {
                 jl_error("fatal error: jl_compileropts.image_file path too long\n");
             }
-            jl_compileropts.image_file = free_path;
+            jl_options.image_file = free_path;
         }
-        if (jl_compileropts.image_file)
-            jl_compileropts.image_file = abspath(jl_compileropts.image_file);
+        if (jl_options.image_file)
+            jl_options.image_file = abspath(jl_options.image_file);
         if (free_path) {
             free(free_path);
             free_path = NULL;
         }
     }
-    if (jl_compileropts.build_path)
-        jl_compileropts.build_path = abspath(jl_compileropts.build_path);
+    if (jl_options.build_path)
+        jl_options.build_path = abspath(jl_options.build_path);
 }
 
 void _julia_init(JL_IMAGE_SEARCH rel)
@@ -910,11 +924,11 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_resolve_sysimg_location(rel);
 
     // If we are able to load the sysimg and get a cpu_target, use that unless user has overridden
-    if (jl_compileropts.cpu_target == NULL) {
-        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(jl_compileropts.image_file);
+    if (jl_options.cpu_target == NULL) {
+        const char * sysimg_cpu_target = jl_get_system_image_cpu_target(jl_options.image_file);
 
         // If we can't load anything from the sysimg, default to native
-        jl_compileropts.cpu_target = sysimg_cpu_target ? sysimg_cpu_target : "native";
+        jl_options.cpu_target = sysimg_cpu_target ? sysimg_cpu_target : "native";
     }
 
     jl_page_size = jl_getpagesize();
@@ -986,7 +1000,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_an_empty_cell = (jl_value_t*)jl_alloc_cell_1d(0);
     jl_init_serializer();
 
-    if (!jl_compileropts.image_file) {
+    if (!jl_options.image_file) {
         jl_core_module = jl_new_module(jl_symbol("Core"));
         jl_init_intrinsic_functions();
         jl_init_primitives();
@@ -1003,9 +1017,9 @@ void _julia_init(JL_IMAGE_SEARCH rel)
         jl_init_box_caches();
     }
 
-    if (jl_compileropts.image_file) {
+    if (jl_options.image_file) {
         JL_TRY {
-            jl_restore_system_image(jl_compileropts.image_file);
+            jl_restore_system_image(jl_options.image_file);
         }
         JL_CATCH {
             jl_printf(JL_STDERR, "error during init:\n");
@@ -1141,7 +1155,7 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_gc_enable();
 #endif
 
-    if (jl_compileropts.image_file)
+    if (jl_options.image_file)
         jl_init_restored_modules();
 
     jl_install_sigint_handler();
@@ -1170,15 +1184,15 @@ void jl_compile_all(void);
 
 DLLEXPORT void julia_save()
 {
-    const char *build_path = jl_compileropts.build_path;
+    const char *build_path = jl_options.build_path;
     if (build_path) {
-        if (jl_compileropts.compile_enabled == JL_COMPILEROPT_COMPILE_ALL)
+        if (jl_options.compile_enabled == JL_OPTIONS_COMPILE_ALL)
             jl_compile_all();
         char *build_ji;
         if (asprintf(&build_ji, "%s.ji",build_path) > 0) {
             jl_save_system_image(build_ji);
             free(build_ji);
-            if (jl_compileropts.dumpbitcode == JL_COMPILEROPT_DUMPBITCODE_ON) {
+            if (jl_options.dumpbitcode == JL_OPTIONS_DUMPBITCODE_ON) {
                 char *build_bc;
                 if (asprintf(&build_bc, "%s.bc",build_path) > 0) {
                     jl_dump_bitcode(build_bc);

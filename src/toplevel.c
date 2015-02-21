@@ -70,7 +70,7 @@ jl_array_t *jl_module_init_order = NULL;
 // load time init procedure: in build mode, only record order
 void jl_module_load_time_initialize(jl_module_t *m)
 {
-    int build_mode = (jl_compileropts.build_path != NULL);
+    int build_mode = (jl_options.build_path != NULL);
     if (build_mode) {
         if (jl_module_init_order == NULL)
             jl_module_init_order = jl_alloc_cell_1d(0);

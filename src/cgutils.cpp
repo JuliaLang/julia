@@ -313,7 +313,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                     ConstantInt::get(T_size,globalUnique+1),
                     "jl_globalUnique")));
 
-    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_compileropts.cpu_target);
+    Constant *feature_string = ConstantDataArray::getString(jl_LLVMContext, jl_options.cpu_target);
     globalvars.push_back(addComdat(new GlobalVariable(
                     *mod,
                     feature_string->getType(),
@@ -323,7 +323,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                     "jl_sysimg_cpu_target")));
 
     // For native also store the cpuid
-    if (strcmp(jl_compileropts.cpu_target,"native") == 0) {
+    if (strcmp(jl_options.cpu_target,"native") == 0) {
         uint32_t info[4];
 
         jl_cpuid((int32_t*)info, 1);
@@ -910,8 +910,8 @@ static Value *emit_bounds_check(Value *a, jl_value_t *ty, Value *i, Value *len, 
     Value *im1 = builder.CreateSub(i, ConstantInt::get(T_size, 1));
 #if CHECK_BOUNDS==1
     if (((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
-         jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
-        jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON) {
+         jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+         jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON) {
         Value *ok = builder.CreateICmpULT(im1, len);
         BasicBlock *failBB = BasicBlock::Create(getGlobalContext(),"fail",ctx->f);
         BasicBlock *passBB = BasicBlock::Create(getGlobalContext(),"pass");
@@ -1469,8 +1469,8 @@ static Value *emit_array_nd_index(Value *a, jl_value_t *ex, size_t nd, jl_value_
     Value *stride = ConstantInt::get(T_size, 1);
 #if CHECK_BOUNDS==1
     bool bc = ((ctx->boundsCheck.empty() || ctx->boundsCheck.back()==true) &&
-               jl_compileropts.check_bounds != JL_COMPILEROPT_CHECK_BOUNDS_OFF) ||
-        jl_compileropts.check_bounds == JL_COMPILEROPT_CHECK_BOUNDS_ON;
+               jl_options.check_bounds != JL_OPTIONS_CHECK_BOUNDS_OFF) ||
+              jl_options.check_bounds == JL_OPTIONS_CHECK_BOUNDS_ON;
     BasicBlock *failBB=NULL, *endBB=NULL;
     if (bc) {
         failBB = BasicBlock::Create(getGlobalContext(), "oob");
