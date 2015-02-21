@@ -242,9 +242,9 @@ Indexing, Assignment, and Concatenation
 
    Broadcasts the ``X`` and ``inds`` arrays to a common size and stores the value from each position in ``X`` at the indices given by the same positions in ``inds``.
 
-.. function:: cat(dims, A...)
+.. function:: cat(dim::Integer, A...)
 
-   Concatenate the input arrays along the specified dimensions in the iterable ``dims``. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension. If ``dims`` is a single number, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal.
+   Concatenate along the specified dimension ``dim``.
 
 .. function:: vcat(A...)
 
@@ -254,7 +254,7 @@ Indexing, Assignment, and Concatenation
 
    Concatenate along dimension 2
 
-.. function:: hvcat(rows::(Int...), values...)
+.. function:: hvcat(rows::(Integer...), values...)
 
    Horizontal and vertical concatenation in one call. This function is called for
    block matrix syntax. The first argument specifies the number of arguments to
@@ -262,6 +262,10 @@ Indexing, Assignment, and Concatenation
    For example, ``[a b;c d e]`` calls ``hvcat((2,3),a,b,c,d,e)``.
 
    If the first argument is a single integer ``n``, then all block rows are assumed to have ``n`` block columns.
+
+.. function:: dcat(dims, values...)
+
+    Concatenate along the diagonal in the hyperplane specified by the iterable ``dims``. If ``dims`` contains a single dimension, the different arrays are tightly stacked along that dimension. If ``dims`` is an iterable containing several dimensions, this allows to construct block diagonal matrices and their higher-dimensional analogues by simultaneously increasing several dimensions for every new input array and putting zero blocks elsewhere. For example, `cat([1,2], matrices...)` builds a block diagonal matrix, i.e. a block matrix with `matrices[1]`, `matrices[2]`, ... as diagonal blocks and matching zero blocks away from the diagonal. For dimensions not in ``dims``, all input arrays should have the same size, which will also be the size of the output array along that dimension. For dimensions in ``dims``, the size of the output array is the sum of the sizes of the input arrays along that dimension.
 
 .. function:: flipdim(A, d)
 

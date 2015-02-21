@@ -503,6 +503,7 @@ export
 
 # arrays
     bitbroadcast,
+    blkdiag,
     broadcast!,
     broadcast!_function,
     broadcast,
@@ -524,6 +525,7 @@ export
     cumsum,
     cumsum!,
     cumsum_kbn,
+    dcat,
     eachindex,
     extrema,
     fill!,
