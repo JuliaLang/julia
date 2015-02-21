@@ -4,10 +4,6 @@ include(joinpath(dir, "bubblesort.jl"))
 a = rand(1:100,100)
 @test issorted(sort!(a;alg=BubbleSort))
 
-include(joinpath(dir, "enum.jl"))
-@enum TestEnum TestEnum1 TestEnum2 TestEnum3
-@test [TestEnum1.n,TestEnum2.n,TestEnum3.n] == [0,1,2]
-
 include(joinpath(dir, "lru.jl"))
 include(joinpath(dir, "lru_test.jl"))
 
