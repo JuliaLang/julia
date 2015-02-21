@@ -782,7 +782,7 @@ void jl_check_static_parameter_conflicts(jl_lambda_info_t *li, jl_tuple_t *t, jl
             for(size_t j=0; j < nvars; j++) {
                 jl_value_t *tv = jl_tupleref(t,i);
                 if (jl_is_typevar(tv)) {
-                    if ((jl_sym_t*)jl_arrayref((jl_array_t*)jl_arrayref(vinfo,j),0) ==
+                    if ((jl_sym_t*)jl_cellref((jl_array_t*)jl_cellref(vinfo,j),0) ==
                         ((jl_tvar_t*)tv)->name) {
                         jl_printf(JL_STDERR,
                                   "Warning: local variable %s conflicts with a static parameter in %s",

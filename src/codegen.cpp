@@ -1245,7 +1245,7 @@ static std::set<jl_sym_t*> assigned_in_try(jl_array_t *stmts, int s, long l, int
     std::set<jl_sym_t*> av;
     size_t slength = jl_array_dim0(stmts);
     for(int i=s; i < (int)slength; i++) {
-        jl_value_t *st = jl_arrayref(stmts,i);
+        jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == assign_sym) {
                 jl_value_t *ar = jl_exprarg(st, 0);
@@ -1272,7 +1272,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::map<jl_sym_t*,jl_varinfo_
 {
     size_t slength = jl_array_dim0(stmts);
     for(int i=0; i < (int)slength; i++) {
-        jl_value_t *st = jl_arrayref(stmts,i);
+        jl_value_t *st = jl_cellref(stmts,i);
         if (jl_is_expr(st)) {
             if (((jl_expr_t*)st)->head == enter_sym) {
                 int last = (int)slength-1;
@@ -1284,7 +1284,7 @@ static void mark_volatile_vars(jl_array_t *stmts, std::map<jl_sym_t*,jl_varinfo_
                         std::set<jl_sym_t*>::iterator it = as.begin();
                         for(; it != as.end(); it++) {
                             if (vars.find(*it) != vars.end() &&
-                                local_var_occurs(jl_arrayref(stmts,j), *it)) {
+                                local_var_occurs(jl_cellref(stmts,j), *it)) {
                                 vars[*it].isVolatile = true;
                             }
                         }
@@ -1571,7 +1571,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     else {
         size_t rlen = jl_array_dim0(li->roots);
         for(size_t i=0; i < rlen; i++) {
-            if (jl_arrayref(li->roots,i) == val) {
+            if (jl_cellref(li->roots,i) == val) {
                 JL_GC_POP();
                 return;
             }
