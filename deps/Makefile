@@ -438,7 +438,8 @@ LIBCXX_DEPENDENCY = $(build_libdir)/libc++abi.so.1.0 $(build_libdir)/libc++.so.1
 LIBCXX_GET_DEPENDENCY = get-libcxx get-libcxxabi
 endif
 
-llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
+llvm-$(LLVM_VER)/configure:
+	$(MAKE) $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR) $(LLVM_LLDB_TAR)
 ifneq ($(LLVM_CLANG_TAR),)
 	$(JLCHECKSUM) $(LLVM_CLANG_TAR)
 endif
@@ -651,9 +652,10 @@ PCRE_OBJ_TARGET = $(build_shlibdir)/libpcre.$(SHLIB_EXT)
 
 pcre-$(PCRE_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://sourceforge.net/projects/pcre/files/pcre/$(PCRE_VER)/$@/download
-pcre-$(PCRE_VER)/configure: pcre-$(PCRE_VER).tar.bz2
-	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+pcre-$(PCRE_VER)/configure:
+	$(MAKE) pcre-$(PCRE_VER).tar.bz2
+	$(JLCHECKSUM) pcre-$(PCRE_VER).tar.bz2
+	$(TAR) jxf pcre-$(PCRE_VER).tar.bz2
 	touch -c $@
 pcre-$(PCRE_VER)/config.status: pcre-$(PCRE_VER)/configure
 	cd pcre-$(PCRE_VER) && \
@@ -785,8 +787,9 @@ endif
 dsfmt-$(DSFMT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
 	touch -c $@
-dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
-	$(JLCHECKSUM) $<
+dsfmt-$(DSFMT_VER)/config.status:
+	$(MAKE) dsfmt-$(DSFMT_VER).tar.gz
+	$(JLCHECKSUM) dsfmt-$(DSFMT_VER).tar.gz
 	mkdir -p dsfmt-$(DSFMT_VER) && \
 	$(TAR) -C dsfmt-$(DSFMT_VER) --strip-components 1 -xf dsfmt-$(DSFMT_VER).tar.gz && \
 	cd dsfmt-$(DSFMT_VER) && patch < ../dSFMT.h.patch && patch < ../dSFMT.c.patch
@@ -827,10 +830,12 @@ RMATH_JULIA_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 
 Rmath-julia-$(RMATH_JULIA_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/Rmath-julia/archive/v$(RMATH_JULIA_VER).tar.gz
-$(RMATH_JULIA_OBJ_SOURCE): Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(DSFMT_FAKE_TARGET)
-	$(JLCHECKSUM) Rmath-julia-$(RMATH_JULIA_VER).tar.gz && \
+Rmath-julia-$(RMATH_JULIA_VER)/Makefile:
+	$(MAKE) Rmath-julia-$(RMATH_JULIA_VER).tar.gz
+	$(JLCHECKSUM) Rmath-julia-$(RMATH_JULIA_VER).tar.gz
 	mkdir -p Rmath-julia-$(RMATH_JULIA_VER) && \
-	$(TAR) -C Rmath-julia-$(RMATH_JULIA_VER) --strip-components 1 -xf $< && \
+	$(TAR) -C Rmath-julia-$(RMATH_JULIA_VER) --strip-components 1 -xf Rmath-julia-$(RMATH_JULIA_VER).tar.gz
+$(RMATH_JULIA_OBJ_SOURCE): Rmath-julia-$(RMATH_JULIA_VER)/Makefile $(DSFMT_FAKE_TARGET)
 	$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER)/src $(RMATH_JULIA_FLAGS) $(MAKE_COMMON) && \
 	touch -c $@
 $(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
@@ -844,7 +849,7 @@ distclean-Rmath-julia: clean-Rmath-julia
 	-rm -rf Rmath-julia-$(RMATH_JULIA_VER).tar.gz Rmath-julia-$(RMATH_JULIA_VER)
 
 get-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER).tar.gz
-configure-Rmath-julia: get-Rmath-julia
+configure-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER)/Makefile
 compile-Rmath-julia: $(RMATH_JULIA_OBJ_SOURCE)
 check-Rmath-julia: compile-Rmath-julia
 install-Rmath-julia: $(RMATH_JULIA_OBJ_TARGET)
@@ -857,8 +862,9 @@ OBJCONV_TARGET = $(build_bindir)/objconv
 
 objconv.zip:
 	$(JLDOWNLOAD) $@ http://www.agner.org/optimize/objconv.zip
-objconv/config.status: objconv.zip
-	unzip -d objconv $<
+objconv/config.status:
+	$(MAKE) objconv.zip
+	unzip -d objconv objconv.zip
 	cd objconv && unzip source.zip
 	echo 1 > $@
 $(OBJCONV_SOURCE): objconv/config.status
@@ -951,12 +957,13 @@ endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
-openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
+openblas-$(OPENBLAS_VER)/config.status:
+	$(MAKE) openblas-$(OPENBLAS_VER).tar.gz
 ifneq ($(OPENBLAS_VER),develop)
-	$(JLCHECKSUM) $<
+	$(JLCHECKSUM) openblas-$(OPENBLAS_VER).tar.gz
 endif
 	mkdir -p openblas-$(OPENBLAS_VER) && \
-	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
+	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf openblas-$(OPENBLAS_VER).tar.gz
 	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
 	echo 1 > $@
 $(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
@@ -1080,9 +1087,10 @@ endif
 
 lapack-$(LAPACK_VER).tgz:
 	$(JLDOWNLOAD) $@ http://www.netlib.org/lapack/$@
-lapack-$(LAPACK_VER)/Makefile: lapack-$(LAPACK_VER).tgz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+lapack-$(LAPACK_VER)/Makefile:
+	$(MAKE) lapack-$(LAPACK_VER).tgz
+	$(JLCHECKSUM) lapack-$(LAPACK_VER).tgz
+	$(TAR) zxf lapack-$(LAPACK_VER).tgz
 	touch -c $@
 ifeq ($(USE_SYSTEM_BLAS), 0)
 lapack-$(LAPACK_VER)/liblapack.a: | $(OPENBLAS_OBJ_TARGET)
@@ -1163,9 +1171,10 @@ endif
 arpack-ng-$(ARPACK_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/opencollab/arpack-ng/archive/$(ARPACK_VER).tar.gz
 	touch -c $@
-arpack-ng-$(ARPACK_VER)/configure: arpack-ng-$(ARPACK_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+arpack-ng-$(ARPACK_VER)/configure:
+	$(MAKE) arpack-ng-$(ARPACK_VER).tar.gz
+	$(JLCHECKSUM) arpack-ng-$(ARPACK_VER).tar.gz
+	$(TAR) zxf arpack-ng-$(ARPACK_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
@@ -1246,11 +1255,11 @@ endif
 
 fftw-$(FFTW_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://www.fftw.org/$@
-
-fftw-$(FFTW_VER)-single/configure: fftw-$(FFTW_VER).tar.gz
-	$(JLCHECKSUM) $<
+fftw-$(FFTW_VER)-single/configure:
+	$(MAKE) fftw-$(FFTW_VER).tar.gz
+	$(JLCHECKSUM) fftw-$(FFTW_VER).tar.gz
 	mkdir -p fftw-$(FFTW_VER)-single && \
-	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf $<
+	$(TAR) -C fftw-$(FFTW_VER)-single --strip-components 1 -xf fftw-$(FFTW_VER).tar.gz
 	touch -c $@
 fftw-$(FFTW_VER)-single/config.status: fftw-$(FFTW_VER)-single/configure
 	cd fftw-$(FFTW_VER)-single && \
@@ -1424,10 +1433,11 @@ SUITESPARSE_MFLAGS = CC="$(CC)" CXX="$(CXX)" F77="$(FC)" AR="$(AR)" RANLIB="$(RA
 
 SuiteSparse-$(SUITESPARSE_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://faculty.cse.tamu.edu/davis/SuiteSparse/$@
-SuiteSparse-$(SUITESPARSE_VER)/Makefile: SuiteSparse-$(SUITESPARSE_VER).tar.gz
-	$(JLCHECKSUM) $<
+SuiteSparse-$(SUITESPARSE_VER)/Makefile:
+	$(MAKE) SuiteSparse-$(SUITESPARSE_VER).tar.gz
+	$(JLCHECKSUM) SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	mkdir -p SuiteSparse-$(SUITESPARSE_VER)
-	$(TAR) -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf $<
+	$(TAR) -C SuiteSparse-$(SUITESPARSE_VER) --strip-components 1 -zxf SuiteSparse-$(SUITESPARSE_VER).tar.gz
 	touch -c $@
 
 ifeq ($(USE_ATLAS), 1)
@@ -1517,9 +1527,10 @@ LIBUNWIND_CPPFLAGS = $(CPPFLAGS)
 
 libunwind-$(UNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@
-libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) xfz $<
+libunwind-$(UNWIND_VER)/configure:
+	$(MAKE) libunwind-$(UNWIND_VER).tar.gz
+	$(JLCHECKSUM) libunwind-$(UNWIND_VER).tar.gz
+	$(TAR) xfz libunwind-$(UNWIND_VER).tar.gz
 	cd libunwind-$(UNWIND_VER) && patch -p1 < ../libunwind.patch
 	touch -c $@
 libunwind-$(UNWIND_VER)/config.status: libunwind-$(UNWIND_VER)/configure
@@ -1564,9 +1575,10 @@ OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
 libosxunwind-$(OSXUNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
 
-libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) xfz $<
+libosxunwind-$(OSXUNWIND_VER)/Makefile:
+	$(MAKE) libosxunwind-$(OSXUNWIND_VER).tar.gz
+	$(JLCHECKSUM) libosxunwind-$(OSXUNWIND_VER).tar.gz
+	$(TAR) xfz libosxunwind-$(OSXUNWIND_VER).tar.gz
 	touch -c $@
 
 $(OSXUNWIND_OBJ_SOURCE): libosxunwind-$(OSXUNWIND_VER)/Makefile
@@ -1596,9 +1608,10 @@ GMP_OBJ_TARGET = $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
 gmp-$(GMP_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$@
-gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
-	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+gmp-$(GMP_VER)/configure:
+	$(MAKE) gmp-$(GMP_VER).tar.bz2
+	$(JLCHECKSUM) gmp-$(GMP_VER).tar.bz2
+	$(TAR) jxf gmp-$(GMP_VER).tar.bz2
 ifeq ($(OS), Darwin)
 	cd gmp-$(GMP_VER) && patch -p1 < ../gmp_6.0.0_osx.patch
 endif
@@ -1646,9 +1659,10 @@ endif
 
 mpfr-$(MPFR_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ http://www.mpfr.org/mpfr-current/$@
-mpfr-$(MPFR_VER)/configure: mpfr-$(MPFR_VER).tar.bz2
-	$(JLCHECKSUM) $<
-	$(TAR) jxf $<
+mpfr-$(MPFR_VER)/configure:
+	$(MAKE) mpfr-$(MPFR_VER).tar.bz2
+	$(JLCHECKSUM) mpfr-$(MPFR_VER).tar.bz2
+	$(TAR) jxf mpfr-$(MPFR_VER).tar.bz2
 	touch -c $@
 mpfr-$(MPFR_VER)/config.status: mpfr-$(MPFR_VER)/configure | $(MPFR_DEPS)
 	cd mpfr-$(MPFR_VER) && \
@@ -1688,9 +1702,10 @@ install-patchelf: $(PATCHELF_TARGET)
 
 patchelf-$(PATCHELF_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
-patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+patchelf-$(PATCHELF_VER)/configure:
+	$(MAKE) patchelf-$(PATCHELF_VER).tar.gz
+	$(JLCHECKSUM) patchelf-$(PATCHELF_VER).tar.gz
+	$(TAR) zxf patchelf-$(PATCHELF_VER).tar.gz
 	touch -c $@
 patchelf-$(PATCHELF_VER)/config.status: patchelf-$(PATCHELF_VER)/configure
 	cd patchelf-$(PATCHELF_VER) && \
@@ -1729,9 +1744,10 @@ GIT_TARGET = $(build_prefix)/git
 
 git-$(GIT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://www.kernel.org/pub/software/scm/git/git-$(GIT_VER).tar.gz
-git-$(GIT_VER)/configure: git-$(GIT_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+git-$(GIT_VER)/configure:
+	$(MAKE) git-$(GIT_VER).tar.gz
+	$(JLCHECKSUM) git-$(GIT_VER).tar.gz
+	$(TAR) zxf git-$(GIT_VER).tar.gz
 	touch -c $@
 git-$(GIT_VER)/config.status: git-$(GIT_VER)/configure
 	cd git-$(GIT_VER) && \
@@ -1765,9 +1781,10 @@ VIRTUALENV_TARGET = julia-env
 
 virtualenv-$(VIRTUALENV_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$@
-$(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+$(VIRTUALENV_SOURCE):
+	$(MAKE) virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(JLCHECKSUM) virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(TAR) zxf virtualenv-$(VIRTUALENV_VER).tar.gz
 	touch -c $@
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
 	"$(shell ./find_python2)" $< $@
@@ -1803,9 +1820,10 @@ endif
 
 libgit2-$(LIBGIT2_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/libgit2/libgit2/archive/v$(LIBGIT2_VER).tar.gz
-libgit2-$(LIBGIT2_VER)/CMakeLists.txt: libgit2-$(LIBGIT2_VER).tar.gz
-	$(JLCHECKSUM) $<
-	$(TAR) zxf $<
+libgit2-$(LIBGIT2_VER)/CMakeLists.txt:
+	$(MAKE) libgit2-$(LIBGIT2_VER).tar.gz
+	$(JLCHECKSUM) libgit2-$(LIBGIT2_VER).tar.gz
+	$(TAR) zxf libgit2-$(LIBGIT2_VER).tar.gz
 	touch -c $@
 libgit2-$(LIBGIT2_VER)/build/Makefile: libgit2-$(LIBGIT2_VER)/CMakeLists.txt
 	mkdir -p libgit2-$(LIBGIT2_VER)/build
