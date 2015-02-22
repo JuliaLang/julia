@@ -30,7 +30,7 @@ function ldflags()
 end
 
 function ldlibs()
-    @unix_only return replace("""-Wl,-rpath $(libDir()) -ljulia""","\\","\\\\");
+    @unix_only return replace("""-Wl,-rpath,$(libDir()) -ljulia""","\\","\\\\");
     @windows_only return replace("""-ljulia""","\\","\\\\");
 end
 
