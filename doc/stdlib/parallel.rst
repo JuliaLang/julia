@@ -233,6 +233,18 @@ General Parallel Computing Support
 .. function:: take!(RemoteRef)
 
    Fetch the value of a remote reference, removing it so that the reference is empty again.
+   
+     addprocs(1)            #  add another process
+     rr  =  RemoteRef(2)    #  create a remote reference for process 2
+     @everywhere function f(inRR::RemoteRef)
+       x  =  take!(RR)
+       put!(x ^ 2)
+     end
+     @spawnat 2 f(rr)
+     put!(rr, 8)
+     @show( take!(rr) )  #   =>  64
+     put!(rr, 8)
+     @show( take!(rr) )  #   =>  8
 
 .. function:: isready(r::RemoteRef)
 
