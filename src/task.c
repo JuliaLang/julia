@@ -688,7 +688,7 @@ DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 {
     jl_tuple_t *tp = NULL;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH3(&tp, &bt, &array_ptr_void_type);
+    JL_GC_PUSH2(&tp, &bt);
     if (array_ptr_void_type == NULL) {
         tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
         array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
@@ -725,7 +725,7 @@ DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
     jl_tuple_t *tp = NULL;
     jl_array_t *bt = NULL;
-    JL_GC_PUSH3(&tp, &bt, &array_ptr_void_type);
+    JL_GC_PUSH2(&tp, &bt);
     if (array_ptr_void_type == NULL) {
         tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
         array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
