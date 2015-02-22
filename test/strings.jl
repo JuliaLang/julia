@@ -1399,6 +1399,6 @@ gstr = Base.GenericString("12");
 
 @test nextind(AbstractArray([bool(1):bool(1);]),1)==2
 
-@test checkbounds(gstr,1.0)==true 
+@test checkbounds(gstr,1.0)==true
 
 @test ind2chr(gstr,2)==2
