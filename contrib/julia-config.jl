@@ -8,7 +8,7 @@ const options =
 ];
 
 function imagePath()
-    opts = Base.compileropts();
+    opts = Base.JLOptions();
     bytestring(opts.image_file);
 end
 
