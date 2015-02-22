@@ -576,9 +576,9 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 update-llvm:
 	(cd llvm-$(LLVM_VER); git pull --ff-only)
-	([ -d llvm-$(LLVM_VER)/tools/clang ] && (cd llvm-$(LLVM_VER)/tools/clang; git pull --ff-only))
-	([ -d llvm-$(LLVM_VER)/projects/compiler-rt ] && (cd llvm-$(LLVM_VER)/projects/compiler-rt; git pull --ff-only))
-	([ -d llvm-$(LLVM_VER)/tools/lldb ] && (cd llvm-$(LLVM_VER)/tools/lldb; git pull --ff-only))
+	([ -d "llvm-$(LLVM_VER)/tools/clang"  ] || exit 0;          cd llvm-$(LLVM_VER)/tools/clang; git pull --ff-only)
+	([ -d "llvm-$(LLVM_VER)/projects/compiler-rt" ] || exit 0;  cd llvm-$(LLVM_VER)/projects/compiler-rt; git pull --ff-only)
+	([ -d "llvm-$(LLVM_VER)/tools/lldb" ] || exit 0;            cd llvm-$(LLVM_VER)/tools/lldb; git pull --ff-only)
 
 ## LIBUV ##
 
