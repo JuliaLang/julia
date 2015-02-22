@@ -105,3 +105,11 @@ let deepthought(x, y) = 42
         @test ex.msg == "the answer to the ultimate question: 42"
     end
 end
+
+let # test the process title functions, issue #9957
+    oldtitle = Base.get_process_title()
+    Base.set_process_title("julia0x1")
+    @test Base.get_process_title() == "julia0x1"
+    Base.set_process_title(oldtitle)
+    @test Base.get_process_title() == oldtitle
+end
