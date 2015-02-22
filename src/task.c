@@ -686,14 +686,18 @@ static void record_backtrace(void)
 static jl_value_t *array_ptr_void_type = NULL;
 DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 {
-    if (array_ptr_void_type == NULL)
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
-                                            jl_tuple2(jl_voidpointer_type,
-                                                      jl_box_long(1)));
-    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
+    jl_tuple_t *tp = NULL;
+    jl_array_t *bt = NULL;
+    JL_GC_PUSH3(&tp, &bt, &array_ptr_void_type);
+    if (array_ptr_void_type == NULL) {
+        tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+    }
+    bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
     size_t n = rec_backtrace((ptrint_t*)jl_array_data(bt), MAX_BT_SIZE);
     if (n < MAX_BT_SIZE)
         jl_array_del_end(bt, MAX_BT_SIZE-n);
+    JL_GC_POP();
     return (jl_value_t*)bt;
 }
 
@@ -719,12 +723,16 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 
 DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
-    if (array_ptr_void_type == NULL)
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
-                                            jl_tuple2(jl_voidpointer_type,
-                                                      jl_box_long(1)));
-    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    jl_tuple_t *tp = NULL;
+    jl_array_t *bt = NULL;
+    JL_GC_PUSH3(&tp, &bt, &array_ptr_void_type);
+    if (array_ptr_void_type == NULL) {
+        tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+    }
+    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     memcpy(bt->data, bt_data, bt_size*sizeof(void*));
+    JL_GC_POP();
     return (jl_value_t*)bt;
 }
 
