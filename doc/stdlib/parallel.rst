@@ -237,7 +237,7 @@ General Parallel Computing Support
      addprocs(1)            #  add another process
      rr  =  RemoteRef(2)    #  create a remote reference for process 2
      @everywhere function f(inRR::RemoteRef)
-       x  =  take!(RR)
+       x  =  take!(inRR)
        put!(x ^ 2)
      end
      @spawnat 2 f(rr)
