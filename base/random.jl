@@ -522,8 +522,8 @@ else
             rand!(rng, g.limbs)
             g.limbs[end] &= g.mask
             ccall((:__gmpz_import, :libgmp), Void,
-                  (Ptr{BigInt}, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Void}),
-                  &x, length(g.limbs), -1, sizeof(Limb), 0, 0, &g.limbs)
+                  (Ptr{BigInt}, Csize_t, Cint, Csize_t, Cint, Csize_t, Ptr{Limb}),
+                  &x, length(g.limbs), -1, sizeof(Limb), 0, 0, g.limbs)
             x <= g.m && break
         end
         ccall((:__gmpz_add, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Ptr{BigInt}), &x, &x, &g.a)
