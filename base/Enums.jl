@@ -1,6 +1,6 @@
 module Enums
 
-export @enum
+export Enum, @enum
 
 abstract Enum
 

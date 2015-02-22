@@ -2,12 +2,12 @@ module TestEnums
 
 using Base.Test
 
-@test_throws MethodError convert(Base.Enums.Enum, 1.0)
+@test_throws MethodError convert(Enum, 1.0)
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
 @test isbits(Fruit)
-@test typeof(apple) <: Fruit <: Base.Enums.Enum
+@test typeof(apple) <: Fruit <: Enum
 @test typeof(apple.val) <: Int8
 @test int(apple) == 0
 @test int(orange) == 1
@@ -63,7 +63,7 @@ end
 
 @enum(QualityofFrenchFood, ReallyGood)
 @test length(QualityofFrenchFood) == 1
-@test typeof(ReallyGood) <: QualityofFrenchFood <: Base.Enums.Enum
+@test typeof(ReallyGood) <: QualityofFrenchFood <: Enum
 @test int(ReallyGood) == 0
 
 @enum Binary _zero=0 _one=1 _two=10 _three=11
