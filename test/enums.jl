@@ -18,10 +18,10 @@ using Base.Test
 @test Fruit(0) == apple
 @test Fruit(1) == orange
 @test Fruit(2) == kiwi
-@test_throws ErrorException Fruit(3)
-@test_throws ErrorException Fruit(-1)
+@test_throws ArgumentError Fruit(3)
+@test_throws ArgumentError Fruit(-1)
 @test Fruit(Val{Int8(0)}) == apple
-@test_throws ErrorException Fruit(Val{3})
+@test_throws ArgumentError Fruit(Val{3})
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
 @test_throws MethodError Fruit(0.0)
