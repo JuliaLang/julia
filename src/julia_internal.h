@@ -116,6 +116,9 @@ DLLEXPORT void jl_read_sonames(void);
 jl_lambda_info_t *jl_add_static_parameters(jl_lambda_info_t *l, jl_tuple_t *sp);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 jl_function_t *jl_module_get_initializer(jl_module_t *m);
+jl_function_t *jl_gf_invoke_get_specialization(jl_function_t *gf,
+                                               jl_tuple_t *types,
+                                               jl_tuple_t *tt);
 void jl_generate_fptr(jl_function_t *f);
 void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 

@@ -1656,7 +1656,7 @@ static int valid_type_param(jl_value_t *v)
     }
     else {
         // TODO: maybe more things
-        return jl_is_type(v) || jl_is_typevar(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
+        return jl_is_type(v) || jl_is_symbol(v) || jl_isbits(jl_typeof(v));
     }
 }
 

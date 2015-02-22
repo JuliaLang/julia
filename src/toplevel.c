@@ -604,8 +604,8 @@ void jl_reinstantiate_inner_types(jl_datatype_t *t);
 void jl_check_type_tuple(jl_tuple_t *t, jl_sym_t *name, const char *ctx)
 {
     for(size_t i=0; i < jl_tuple_len(t); i++) {
-        jl_value_t *elt = jl_tupleref(t,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        jl_value_t *elt = jl_tupleref(t, i);
+        if (!jl_is_type(elt)) {
             jl_type_error_rt(name->name, ctx, (jl_value_t*)jl_type_type, elt);
         }
     }
@@ -727,7 +727,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
     size_t na = jl_tuple_len(argtypes);
     for(size_t i=0; i < na; i++) {
         jl_value_t *elt = jl_tupleref(argtypes,i);
-        if (!jl_is_type(elt) && !jl_is_typevar(elt)) {
+        if (!jl_is_type(elt)) {
             jl_lambda_info_t *li = f->linfo;
             jl_exceptionf(jl_argumenterror_type, "invalid type for argument %s in method definition for %s at %s:%d",
                           jl_lam_argname(li,i)->name, name->name, li->file->name, li->line);

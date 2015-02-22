@@ -2175,3 +2175,22 @@ immutable B9378{T} end
 typealias FooB9378{T} Foo9378{T,B9378}
 immutable CFoo9378 <: FooB9378{Float64} end
 @test isa(CFoo9378(),FooB9378)
+
+# pull request #9642
+let
+    f9642(a, b) = a + b
+    counter = 0
+    @noinline function get_next_9642()
+        return (counter = counter + 1)
+    end
+    @noinline function get_type_9642(t)
+        get_next_9642()
+        return t
+    end
+
+    function g9642()
+        invoke(f9642, (get_type_9642(Any), get_type_9642(Any)),
+               get_next_9642(), get_next_9642())
+    end
+    @test g9642() == 7
+end

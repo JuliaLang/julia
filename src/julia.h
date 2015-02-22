@@ -1013,6 +1013,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
 jl_function_t *jl_method_lookup_by_type(jl_methtable_t *mt, jl_tuple_t *types,
                                         int cache, int inexact);
 jl_function_t *jl_method_lookup(jl_methtable_t *mt, jl_value_t **args, size_t nargs, int cache);
+jl_value_t *jl_gf_invoke_lookup(jl_function_t *gf, jl_tuple_t *types);
 jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
                          jl_value_t **args, size_t nargs);
 
