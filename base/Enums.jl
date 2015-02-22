@@ -16,10 +16,12 @@ end
 Base.start{T<:Enum}(::Type{T}) = 1
 Base.next{T<:Enum}(::Type{T},s) = Base.next(names(T),s)
 Base.done{T<:Enum}(::Type{T},s) = Base.done(names(T),s)
+
 # Pass Integer through to Enum constructor through Val{T}
 call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:val),x)})
+
 # Catchall that errors when specific Enum(::Type{Val{n}}) hasn't been defined
-call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = error(string("invalid enum value for $T: ",n))
+call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = throw(ArgumentError("invalid value for Enum $T, $n"))
 
 macro enum(T,syms...)
     assert(!isempty(syms))
