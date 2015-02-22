@@ -35,7 +35,10 @@ macro enum(T,syms...)
         i += one(typeof(i))
         if isa(s,Symbol)
             # pass
-        elseif isa(s,Expr) && s.head == :(=) && length(s.args) == 2 && isa(s.args[1],Symbol)
+        elseif isa(s,Expr) &&
+               (s.head == :(=) || s.head == :kw) &&
+               length(s.args) == 2 &&
+               isa(s.args[1],Symbol)
             i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
             s = s.args[1]
             hasexpr = true
