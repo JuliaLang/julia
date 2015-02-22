@@ -472,6 +472,7 @@ DLLEXPORT extern void julia_save();
 #ifndef _OS_WINDOWS_
 int main(int argc, char *argv[])
 {
+    uv_setup_args(argc, argv); // no-op on Windows
 #else
 int wmain(int argc, wchar_t *argv[], wchar_t *envp[])
 {
