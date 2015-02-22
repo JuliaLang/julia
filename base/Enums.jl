@@ -47,14 +47,15 @@ macro enum(T,syms...)
         end
         push!(vals, (s,i))
         I = typeof(i)
-        enumT = ifelse(length(vals) == 1, I, promote_type(enumT,I))
-        i < lo && (lo = i)
-        i > hi && (hi = i)
+        enumT = length(vals) == 1 ? I : promote_type(enumT,I)
+        lo = min(lo, i)
+        hi = max(hi, i)
     end
     if !hasexpr
         n = length(vals)
-        enumT = n < 128 ? Int8 : n < 32768 ? Int16 :
-                n < 2147483648 ? Int32 : Int64
+        enumT = n <= typemax(Int8) ? Int8 :
+                n <= typemax(Int16) ? Int16 :
+                n <= typemax(Int32) ? Int32 : Int64
     end
     blk = quote
         # enum definition
