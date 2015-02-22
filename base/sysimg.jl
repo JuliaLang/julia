@@ -290,7 +290,7 @@ import .Dates: Date, DateTime, now
 
 # enums
 include("Enums.jl")
-import .Enums: @enum
+importall .Enums
 
 # deprecated functions
 include("deprecated.jl")

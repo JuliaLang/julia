@@ -50,6 +50,7 @@ export
     Dict,
     Dims,
     EachLine,
+    Enum,
     Enumerate,
     Factorization,
     FileMonitor,

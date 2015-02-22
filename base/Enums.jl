@@ -1,6 +1,6 @@
 module Enums
 
-export @enum
+export Enum, @enum
 
 abstract Enum
 
@@ -16,10 +16,12 @@ end
 Base.start{T<:Enum}(::Type{T}) = 1
 Base.next{T<:Enum}(::Type{T},s) = Base.next(names(T),s)
 Base.done{T<:Enum}(::Type{T},s) = Base.done(names(T),s)
+
 # Pass Integer through to Enum constructor through Val{T}
 call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:val),x)})
+
 # Catchall that errors when specific Enum(::Type{Val{n}}) hasn't been defined
-call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = error(string("invalid enum value for $T: ",n))
+call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = throw(ArgumentError("invalid value for Enum $T, $n"))
 
 macro enum(T,syms...)
     assert(!isempty(syms))
@@ -33,7 +35,10 @@ macro enum(T,syms...)
         i += one(typeof(i))
         if isa(s,Symbol)
             # pass
-        elseif isa(s,Expr) && s.head == :(=) && length(s.args) == 2 && isa(s.args[1],Symbol)
+        elseif isa(s,Expr) &&
+               (s.head == :(=) || s.head == :kw) &&
+               length(s.args) == 2 &&
+               isa(s.args[1],Symbol)
             i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
             s = s.args[1]
             hasexpr = true
@@ -42,14 +47,15 @@ macro enum(T,syms...)
         end
         push!(vals, (s,i))
         I = typeof(i)
-        enumT = ifelse(length(vals) == 1, I, promote_type(enumT,I))
-        i < lo && (lo = i)
-        i > hi && (hi = i)
+        enumT = length(vals) == 1 ? I : promote_type(enumT,I)
+        lo = min(lo, i)
+        hi = max(hi, i)
     end
     if !hasexpr
         n = length(vals)
-        enumT = n < 128 ? Int8 : n < 32768 ? Int16 :
-                n < 2147483648 ? Int32 : Int64
+        enumT = n <= typemax(Int8) ? Int8 :
+                n <= typemax(Int16) ? Int16 :
+                n <= typemax(Int32) ? Int32 : Int64
     end
     blk = quote
         # enum definition
