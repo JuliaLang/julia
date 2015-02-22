@@ -653,7 +653,9 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b);
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
 {
-    JL_GC_PUSH1(&b);
+    jl_value_t *both;
+    jl_tvar_t *new_b;
+    JL_GC_PUSH3(&b, &both, &new_b);
     if (var == covariant) {
         // matching T to Type{S} in covariant context
         b = type_to_static_parameter_value(b);
@@ -722,13 +724,13 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             return (jl_value_t*)a;
         }
         if (jl_is_typevar(b)) {
-            jl_value_t *both = meet_tvars(a, (jl_tvar_t*)b);
+            both = meet_tvars(a, (jl_tvar_t*)b);
             if (both == jl_bottom_type) {
                 JL_GC_POP();
                 return both;
             }
             if (!jl_is_typevar(both))
-                both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);  // does this need a root? See call to jl_full_type in type_eqv_
+                both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
             extend((jl_value_t*)a, both, penv);
             extend((jl_value_t*)b, both, penv);
         }
@@ -756,7 +758,7 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             return (jl_value_t*)a;
         }
         else {
-            jl_tvar_t *new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);  // ditto here
+            new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
             extend((jl_value_t*)new_b, b, penv);
             extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
             JL_GC_POP();
