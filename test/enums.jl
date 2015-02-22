@@ -141,4 +141,15 @@ end
 @test typeof(_two_Test10.val) <: UInt8
 @test _two_Test10.val === 0x02
 
+# test macro handles keyword arguments
+@enum(Test11, _zero_Test11=2,
+              _one_Test11,
+              _two_Test11=5,
+              _three_Test11)
+
+@test Int(_zero_Test11) == 2
+@test Int(_one_Test11) == 3
+@test Int(_two_Test11) == 5
+@test Int(_three_Test11) == 6
+
 end # module
