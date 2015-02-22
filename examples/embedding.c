@@ -2,6 +2,9 @@
 #include <stdio.h>
 #include <math.h>
 
+#ifdef _OS_WINDOWS_
+__declspec(dllexport) __cdecl
+#endif
 double my_c_sqrt(double x)
 {
     return sqrt(x);
