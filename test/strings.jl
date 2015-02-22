@@ -1,3 +1,5 @@
+import Base: endof, next
+
 # string escaping & unescaping
 cx = Any[
     0x00000000      '\0'        "\\0"
@@ -1367,3 +1369,25 @@ end
 @test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
 @test convert(UTF8String, UInt8[], "*") == ""
 @test convert(UTF8String, UInt8[255], "αβ") == "αβ"
+
+# test AbstractString functions at beginning of string.jl
+immutable tstStringType1 <: AbstractString
+    data::Array{UInt8,1}
+end
+s1 = tstStringType1("12");
+@test_throws ErrorException endof(s1)
+# Still need to somehow test the following
+# next(s::AbstractString, i::Integer)
+
+immutable tstStringType2 <: AbstractString
+    data::Array{UInt8,1}
+end
+endof(s::tstStringType2) = length(s.data);
+next(s::tstStringType2, i::Int) = (s.data[i],i+1)
+s2 = tstStringType2("12");
+@test typeof(string(s2))==tstStringType2
+@test bytestring()==""
+
+@test convert(Array{UInt8}, s2) ==[49;50]
+@test convert(Array{Char,1}, s2) ==['1';'2']
+@test convert(Symbol, s2)==symbol("12")
