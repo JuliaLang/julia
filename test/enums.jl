@@ -2,12 +2,12 @@ module TestEnums
 
 using Base.Test
 
-@test_throws MethodError convert(Base.Enums.Enum, 1.0)
+@test_throws MethodError convert(Enum, 1.0)
 
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
 @test isbits(Fruit)
-@test typeof(apple) <: Fruit <: Base.Enums.Enum
+@test typeof(apple) <: Fruit <: Enum
 @test typeof(apple.val) <: Int8
 @test int(apple) == 0
 @test int(orange) == 1
@@ -18,10 +18,10 @@ using Base.Test
 @test Fruit(0) == apple
 @test Fruit(1) == orange
 @test Fruit(2) == kiwi
-@test_throws ErrorException Fruit(3)
-@test_throws ErrorException Fruit(-1)
+@test_throws ArgumentError Fruit(3)
+@test_throws ArgumentError Fruit(-1)
 @test Fruit(Val{Int8(0)}) == apple
-@test_throws ErrorException Fruit(Val{3})
+@test_throws ArgumentError Fruit(Val{3})
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
 @test_throws MethodError Fruit(0.0)
@@ -63,7 +63,7 @@ end
 
 @enum(QualityofFrenchFood, ReallyGood)
 @test length(QualityofFrenchFood) == 1
-@test typeof(ReallyGood) <: QualityofFrenchFood <: Base.Enums.Enum
+@test typeof(ReallyGood) <: QualityofFrenchFood <: Enum
 @test int(ReallyGood) == 0
 
 @enum Binary _zero=0 _one=1 _two=10 _three=11
@@ -140,5 +140,16 @@ end
 @test _one_Test10.val === 0x01
 @test typeof(_two_Test10.val) <: UInt8
 @test _two_Test10.val === 0x02
+
+# test macro handles keyword arguments
+@enum(Test11, _zero_Test11=2,
+              _one_Test11,
+              _two_Test11=5,
+              _three_Test11)
+
+@test Int(_zero_Test11) == 2
+@test Int(_one_Test11) == 3
+@test Int(_two_Test11) == 5
+@test Int(_three_Test11) == 6
 
 end # module
