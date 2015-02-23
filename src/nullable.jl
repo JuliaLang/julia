@@ -1,5 +1,5 @@
 import Base: eltype, convert, get, isequal, ==, hash, show
-export Nullable, NullException, isnull, get
+export Nullable, NullException, isnull
 
 immutable Nullable{T}
     isnull::Bool
