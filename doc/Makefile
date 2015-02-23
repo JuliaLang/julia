@@ -14,10 +14,8 @@ ALLSPHINXOPTS   = -d _build/doctrees $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 I18NSPHINXOPTS  = $(PAPEROPT_$(PAPER)) $(SPHINXOPTS) .
 
 JULIA_ENV     = $(JULIAHOME)/deps/julia-env
-# Win32 Python uses /Scripts instead of /bin
-JULIA_ENV_BIN = $(shell if [ -e $(JULIA_ENV)/Scripts ]; then echo $(JULIA_ENV)/Scripts; else echo $(JULIA_ENV)/bin; fi)
-ACTIVATE      = $(JULIA_ENV_BIN)/activate
-SPHINX_BUILD  = $(JULIA_ENV_BIN)/sphinx-build
+ACTIVATE      = $(JULIA_ENV)/bin/activate
+SPHINX_BUILD  = $(JULIA_ENV)/bin/sphinx-build
 
 $(JULIA_ENV):
 	$(MAKE) -C $(JULIAHOME)/deps install-virtualenv
