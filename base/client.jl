@@ -237,9 +237,9 @@ let reqarg = Set(UTF8String["--home",          "-H",
         end
         repl = true
         startup = true
+        history_file = true
         quiet = false
         color_set = false
-        no_history_file = false
         while true
             # show julia VERSION and quit
             if bool(opts.version)
@@ -268,7 +268,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                 startup = false
             end
             # load ~/.julia_history file
-            no_history_file = bool(opts.historyfile)
+            history_file = bool(opts.historyfile)
             # add processors
             if opts.nprocs > 1
                 addprocs(opts.nprocs)
@@ -326,7 +326,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             break
         end
-        return (quiet,repl,startup,color_set,no_history_file)
+        return (quiet,repl,startup,color_set,history_file)
     end
 end
 
@@ -410,7 +410,7 @@ function _start()
         init_bind_addr(opts)
         # if this process is not a worker, schedule head process
         bool(opts.worker) || init_head_sched()
-        (quiet,repl,startup,color_set,no_history_file) = process_options(opts,copy(ARGS))
+        (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
 
         local term
         global active_repl
@@ -428,7 +428,7 @@ function _start()
                     quiet || warn("Terminal not fully functional")
                 else
                     active_repl = REPL.LineEditREPL(term, true)
-                    active_repl.no_history_file = no_history_file
+                    active_repl.history_file = history_file
                     active_repl.hascolor = have_color
                 end
                 # Make sure any displays pushed in .juliarc.jl ends up above the

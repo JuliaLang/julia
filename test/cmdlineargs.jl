@@ -87,6 +87,8 @@ let exename = joinpath(JULIA_HOME, (ccall(:jl_is_debugbuild, Cint, ()) == 0 ? "j
     # --history-file
     @test readchomp(`$exename -E "bool(Base.JLOptions().historyfile)" --history-file=yes`) == "true"
     @test readchomp(`$exename -E "bool(Base.JLOptions().historyfile)" --history-file=no`) == "false"
+    # deprecated
+    @test readchomp(`$exename -E "bool(Base.JLOptions().historyfile)" --no-history-file`) == "false"
     @test !success(`$exename --history-file=false`)
 
     # --startup-file
