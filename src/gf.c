@@ -486,7 +486,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     jl_value_t *temp=NULL;
     jl_function_t *newmeth=NULL;
     jl_tuple_t *origtype=NULL;
-    JL_GC_PUSH4(&type, &temp, &newmeth, &origtype);
+    jl_tuple_t *limited=NULL;
+    JL_GC_PUSH5(&type, &temp, &newmeth, &origtype, &limited);
     origtype = (jl_tuple_t*)jl_f_tuple(NULL, jl_tuple_data(type), jl_tuple_len(type));
 
     for (i=0; i < jl_tuple_len(type); i++) {
@@ -740,7 +741,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     if (!mt->defs->isstaged && jl_tuple_len(type) > mt->max_args &&
         jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
         size_t nspec = mt->max_args + 2;
-        jl_tuple_t *limited = jl_alloc_tuple(nspec);
+        limited = jl_alloc_tuple(nspec);
         for(i=0; i < nspec-1; i++) {
             jl_tupleset(limited, i, jl_tupleref(type, i));
         }
