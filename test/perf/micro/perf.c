@@ -4,9 +4,6 @@
 #define DSFMT_MEXP 19937
 #include "perf.h"
 
-// include RNG code:
-#include "../../../deps/Rmath/src/randmtzig.c"
-
 double *myrand(int n) {
     double *d = (double *)malloc(n*sizeof(double));
     dsfmt_gv_fill_array_close_open(d, n);
