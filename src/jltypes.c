@@ -653,8 +653,8 @@ static jl_value_t *meet_tvars(jl_tvar_t *a, jl_tvar_t *b);
 static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                                      cenv_t *penv, cenv_t *eqc, variance_t var)
 {
-    jl_value_t *both;
-    jl_tvar_t *new_b;
+    jl_value_t *both=NULL;
+    jl_tvar_t *new_b=NULL;
     JL_GC_PUSH3(&b, &both, &new_b);
     if (var == covariant) {
         // matching T to Type{S} in covariant context
