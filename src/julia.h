@@ -946,7 +946,7 @@ DLLEXPORT int julia_trampoline(int argc, const char *argv[], int (*pmain)(int ac
 DLLEXPORT void jl_atexit_hook(void);
 DLLEXPORT void NORETURN jl_exit(int status);
 
-DLLEXPORT const char * jl_get_system_image_cpu_target(const char *fname);
+DLLEXPORT void jl_preload_sysimg_so(const char *fname);
 DLLEXPORT void jl_save_system_image(const char *fname);
 DLLEXPORT void jl_restore_system_image(const char *fname);
 DLLEXPORT int jl_save_new_module(const char *fname, jl_module_t *mod);

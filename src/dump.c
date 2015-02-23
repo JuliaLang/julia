@@ -177,15 +177,14 @@ DLLEXPORT int jl_running_on_valgrind() {
     return RUNNING_ON_VALGRIND;
 }
 
-static void jl_load_sysimg_so(char *fname)
+static void jl_load_sysimg_so()
 {
 #ifndef _OS_WINDOWS_
     Dl_info dlinfo;
 #endif
-    // attempt to load the pre-compiled sysimg at fname
+    // attempt to load the pre-compiled sysimage from jl_sysimg_handle
     // if this succeeds, sysimg_gvars will be a valid array
     // otherwise, it will be NULL
-    jl_sysimg_handle = (uv_lib_t *) jl_load_dynamic_library_e(fname, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
     if (jl_sysimg_handle != 0) {
         sysimg_gvars = (jl_value_t***)jl_dlsym(jl_sysimg_handle, "jl_sysimg_gvars");
         globalUnique = *(size_t*)jl_dlsym(jl_sysimg_handle, "jl_globalUnique");
@@ -1381,11 +1380,11 @@ extern void jl_get_uv_hooks();
 
 // Takes in a path of the form "usr/lib/julia/sys.ji", such as passed in to jl_restore_system_image()
 DLLEXPORT
-const char * jl_get_system_image_cpu_target(const char *fname)
+void jl_preload_sysimg_so(const char *fname)
 {
     // If passed NULL, don't even bother
     if (!fname)
-        return NULL;
+        return;
 
     // First, get "sys" from "sys.ji"
     char *fname_shlib = (char*)alloca(strlen(fname)+1);
@@ -1395,14 +1394,22 @@ const char * jl_get_system_image_cpu_target(const char *fname)
         *fname_shlib_dot = 0;
 
     // Get handle to sys.so
-    uv_lib_t * sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+#ifdef _OS_WINDOWS_
+    if (!jl_is_debugbuild()) {
+#endif
+        jl_sysimg_handle = (uv_lib_t*)jl_load_dynamic_library_e(fname_shlib, JL_RTLD_DEFAULT | JL_RTLD_GLOBAL);
+#ifdef _OS_WINDOWS_
+    }
+#endif
 
-    // Return jl_sysimg_cpu_target if we can
-    if (sysimg_handle)
-        return (const char *)jl_dlsym(sysimg_handle, "jl_sysimg_cpu_target");
+    // set cpu target if unspecified by user and available from sysimg
+    // otherwise default to native.
+    if (jl_sysimg_handle && jl_options.cpu_target == NULL)
+        jl_options.cpu_target = (const char *)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
+    else if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
 
-    // If something goes wrong, return NULL
-    return NULL;
+    return;
 }
 
 DLLEXPORT
@@ -1419,11 +1426,7 @@ void jl_restore_system_image(const char *fname)
     if (jl_is_debugbuild()) build_mode = 1;
 #endif
     if (!build_mode) {
-        char *fname_shlib = (char*)alloca(strlen(fname)+1);
-        strcpy(fname_shlib, fname);
-        char *fname_shlib_dot = strrchr(fname_shlib, '.');
-        if (fname_shlib_dot != NULL) *fname_shlib_dot = 0;
-        jl_load_sysimg_so(fname_shlib);
+        jl_load_sysimg_so();
     }
 #ifdef JL_GC_MARKSWEEP
     int en = jl_gc_is_enabled();
