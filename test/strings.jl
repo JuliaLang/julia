@@ -1367,3 +1367,38 @@ end
 @test convert(UTF8String, UInt8[132,107,75], "αβ") == "αβkK"
 @test convert(UTF8String, UInt8[], "*") == ""
 @test convert(UTF8String, UInt8[255], "αβ") == "αβ"
+
+# test AbstractString functions at beginning of string.jl
+immutable tstStringType <: AbstractString
+    data::Array{UInt8,1}
+end
+tstr = tstStringType("12");
+@test_throws ErrorException endof(tstr)
+@test_throws ErrorException next(tstr, bool(1))
+
+gstr = Base.GenericString("12");
+@test typeof(string(gstr))==Base.GenericString
+@test bytestring()==""
+
+@test convert(Array{UInt8}, gstr) ==[49;50]
+@test convert(Array{Char,1}, gstr) ==['1';'2']
+@test convert(Symbol, gstr)==symbol("12")
+
+@test getindex(gstr, bool(1))=='1'
+@test getindex(gstr, 1.0)=='1'
+@test getindex(gstr,bool(1):bool(1))=="1"
+@test getindex(gstr,AbstractVector([bool(1):bool(1);]))=="1"
+
+@test symbol(gstr)==symbol("12")
+
+@test_throws ErrorException sizeof(gstr)
+
+@test length(Base.GenericString(""))==0
+
+@test getindex(gstr,AbstractVector([bool(1):bool(1);]))=="1"
+
+@test nextind(AbstractArray([bool(1):bool(1);]),1)==2
+
+@test checkbounds(gstr,1.0)==true
+
+@test ind2chr(gstr,2)==2
