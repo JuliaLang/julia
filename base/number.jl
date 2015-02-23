@@ -17,6 +17,7 @@ first(x::Number) = x
 last(x::Number) = x
 
 divrem(x,y) = (div(x,y),rem(x,y))
+fldmod(x,y) = (fld(x,y),mod(x,y))
 signbit(x::Real) = x < 0
 sign(x::Real) = ifelse(x < 0, oftype(x,-1), ifelse(x > 0, one(x), x))
 sign(x::Unsigned) = ifelse(x > 0, one(x), x)

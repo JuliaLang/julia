@@ -128,6 +128,10 @@ Mathematical Operators
 
    The quotient and remainder from Euclidean division. Equivalent to ``(x÷y, x%y)``.
 
+.. function:: fldmod(x, y)
+
+   The floored quotient and modulus after division. Equivalent to ``(fld(x,y), mod(x,y))``.
+
 .. function:: mod1(x,m)
 
    Modulus after division, returning in the range (0,m]

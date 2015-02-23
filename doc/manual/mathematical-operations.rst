@@ -384,9 +384,10 @@ Function                     Description
 :func:`fld(x,y) <fld>`       floored division; quotient rounded towards ``-Inf``
 :func:`cld(x,y) <cld>`       ceiling division; quotient rounded towards ``+Inf``
 :func:`rem(x,y) <rem>`       remainder; satisfies ``x == div(x,y)*y + rem(x,y)``; sign matches ``x``
-:func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
 :func:`mod(x,y) <mod>`       modulus; satisfies ``x == fld(x,y)*y + mod(x,y)``; sign matches ``y``
 :func:`mod2pi(x) <mod2pi>`   modulus with respect to 2pi;  ``0 <= mod2pi(x)  < 2pi``
+:func:`divrem(x,y) <divrem>` returns ``(div(x,y),rem(x,y))``
+:func:`fldmod(x,y) <fldmod>` returns ``(fld(x,y),mod(x,y))``
 :func:`gcd(x,y...) <gcd>`    greatest common divisor of ``x``, ``y``,...; sign matches ``x``
 :func:`lcm(x,y...) <lcm>`    least common multiple of ``x``, ``y``,...; sign matches ``x``
 ============================ =======================================================================
