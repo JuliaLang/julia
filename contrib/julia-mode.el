@@ -426,6 +426,9 @@ before point. Returns nil if we're not within nested parens."
        (should (equal (buffer-substring-no-properties (point-min) (point-max))
                       ,to))))
 
+  ;; Tell the byte compiler that `julia--should-indent` is defined.
+  (declare-function julia--should-indent "julia-mode.el" (from to))
+
   (ert-deftest julia--test-indent-if ()
     "We should indent inside if bodies."
     (julia--should-indent
