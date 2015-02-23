@@ -240,7 +240,7 @@ General Parallel Computing Support
          x  =  take!(inRR)
          put!(inRR, x ^ 2)
        end
-       @spawnat 2 f(rr)
+       @spawnat procList[1] f(rr)
        put!(rr, 8)
        @show( take!(rr) )  #   =>  64
        put!(rr, 8)
