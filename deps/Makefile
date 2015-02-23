@@ -950,7 +950,7 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
+	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/archive/$(OPENBLAS_VER).tar.gz
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 ifneq ($(OPENBLAS_VER),develop)
 	$(JLCHECKSUM) $<
