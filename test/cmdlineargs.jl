@@ -1,4 +1,4 @@
-let exename = joinpath(JULIA_HOME, (ccall(:jl_is_debugbuild, Cint, ()) == 0 ? "julia" : "julia-debug"))
+let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # --version
     let v = split(readall(`$exename -v`), "julia version ")[end]
         @test VERSION == VersionNumber(v)
