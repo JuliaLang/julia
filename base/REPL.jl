@@ -224,7 +224,7 @@ type LineEditREPL <: AbstractREPL
     answer_color::AbstractString
     shell_color::AbstractString
     help_color::AbstractString
-    no_history_file::Bool
+    history_file::Bool
     in_shell::Bool
     in_help::Bool
     envcolors::Bool
@@ -232,8 +232,8 @@ type LineEditREPL <: AbstractREPL
     specialdisplay
     interface
     backendref::REPLBackendRef
-    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,in_help,envcolors) =
-        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,no_history_file,in_shell,
+    LineEditREPL(t,hascolor,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,in_help,envcolors) =
+        new(t,true,prompt_color,input_color,answer_color,shell_color,help_color,history_file,in_shell,
             in_help,envcolors,false,nothing)
 end
 outstream(r::LineEditREPL) = r.t
@@ -699,7 +699,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
     hp = REPLHistoryProvider(Dict{Symbol,Any}(:julia => julia_prompt,
                                               :shell => shell_mode,
                                               :help  => help_mode))
-    if !repl.no_history_file
+    if repl.history_file
         try
             f = open(find_hist_file(), true, true, true, false, false)
             finalizer(replc, replc->close(f))
@@ -708,7 +708,7 @@ function setup_interface(repl::LineEditREPL; hascolor = repl.hascolor, extra_rep
             print_response(repl, e, catch_backtrace(), true, Base.have_color)
             println(outstream(repl))
             info("Disabling history file for this session.")
-            repl.no_history_file = true
+            repl.history_file = false
         end
     end
     history_reset_state(hp)

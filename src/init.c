@@ -99,7 +99,7 @@ jl_options_t jl_options = { 0,    // version
                             NULL, // machinefile
                             0,    // isinteractive
                             0,    // color
-                            0,    // historyfile
+                            JL_OPTIONS_HISTORYFILE_ON, // historyfile
                             0,    // startupfile
                             JL_OPTIONS_COMPILE_DEFAULT, // compile_enabled
                             0,    // code_coverage

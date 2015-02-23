@@ -29,7 +29,7 @@ begin
 stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.no_history_file = true
+repl.history_file = false
 
 repltask = @async begin
     Base.REPL.run_repl(repl)
