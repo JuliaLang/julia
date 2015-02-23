@@ -1653,7 +1653,7 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
     if (jt == NULL) {
         jt = julia_type_of(v);
     }
-    else if (!jl_is_leaf_type(jt)) {
+    else if (jt != jl_bottom_type && !jl_is_leaf_type(jt)) {
         // we can get a sharper type from julia_type_of than expr_type in some
         // cases, due to ccall's compile-time evaluations of types. see issue #5752
         jl_value_t *jt2 = julia_type_of(v);
