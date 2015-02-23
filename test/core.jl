@@ -2175,3 +2175,10 @@ immutable B9378{T} end
 typealias FooB9378{T} Foo9378{T,B9378}
 immutable CFoo9378 <: FooB9378{Float64} end
 @test isa(CFoo9378(),FooB9378)
+
+# issue #10281
+const N10281 = 1000
+@test if false
+    for i in 1:N10281
+    end
+end === nothing
