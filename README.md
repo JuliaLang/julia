@@ -52,6 +52,14 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Base.Random.randmtzig_exprnd` is now `randexp` [#9144](https://github.com/JuliaLang/julia/pull/9144)
 
+* `sizehint` is now `sizehint!` [#9278](https://github.com/JuliaLang/julia/pull/9278)
+
+* `Base.IPv4` and `Base.IPv6` can now accept `String`s as constructor arguments [#9346](https://github.com/JuliaLang/julia/pull/9346)
+
+* `randbool()` is now `rand(Bool)` and `randbool([dims])` is now `bitrand([dims])` [#9569](https://github.com/JuliaLang/julia/pull/9569)
+
+* `beginswith` is now `startswith` [#9583](https://github.com/JuliaLang/julia/pull/9583)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.
@@ -65,10 +73,13 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 ## Developer tips
 
-If you're adding additional compatibility code to this package, the following shell script is a useful for extracting the version number from a git commit SHA:
+If you're adding additional compatibility code to this package, the following shell script is useful for extracting the version number from a git commit SHA:
 
 ```sh
 #! /bin/bash
 last_tag=$(git describe --tags --abbrev=0)
 git rev-list $1 ^$last_tag | wc -l | sed -e 's/[^[:digit:]]//g'
 ```
+This will print a number `XXXX`, and you can then test whether Julia
+is at least this version by `VERSION >= v"0.4.0-dev+XXXX"` (assuming
+it is a commit from the 0.4 development cycle).

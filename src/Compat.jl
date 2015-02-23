@@ -2,6 +2,12 @@ module Compat
 
 using Base.Meta
 
+if VERSION >= v"0.4.0-dev+3184"
+    include("ngenerate.jl")
+    using .CompatCartesian
+    export @ngenerate, @nsplat
+end
+
 if VERSION < v"0.4.0-dev+1419"
     export UInt, UInt8, UInt16, UInt32, UInt64, UInt128
     const UInt = Uint
@@ -15,6 +21,21 @@ end
 if VERSION < v"0.4.0-dev+1387"
     typealias AbstractString String
     export AbstractString
+end
+
+if VERSION < v"0.4.0-dev+412"
+    eval(Base, :(const IPAddr = IpAddr))
+end
+
+if VERSION < v"0.4.0-dev+2197"
+    Base.IPv4(ipstr::AbstractString) = Base.parseipv4(ipstr)
+    Base.IPv6(ipstr::AbstractString) = Base.parseipv6(ipstr)
+end
+
+if VERSION < v"0.4.0-dev+2200"
+    function Base.isless{T<:Base.IPAddr}(a::T, b::T)
+        return isless(a.host, b.host)
+    end
 end
 
 if VERSION < v"0.4.0-dev+980"
@@ -43,6 +64,7 @@ if VERSION < v"0.4.0-dev+1827"
         @eval begin
             ($fnew){T<:Integer}(::Type{T}, x::Integer) = convert(T, x)  # ambiguity resolution with digits/base version, not all old methods defined
             ($fnew){T<:Integer}(::Type{T}, x) = ($fold)(T, x)
+            ($fnew){T<:Integer}(::Type{T}, x::Rational) = convert(T, ($fold)(x)) # no e.g. iround(::Type{T}, x::Rational) is defined in 0.3
         end
     end
 end
@@ -51,6 +73,11 @@ if VERSION < v"0.4.0-dev+1884"
     randexp(rng::MersenneTwister) = Base.Random.randmtzig_exprnd(rng)
     randexp() = Base.Random.randmtzig_exprnd()
     export randexp
+end
+
+if VERSION < v"0.4.0-dev+2014"
+    sizehint! = Base.sizehint
+    export sizehint!
 end
 
 function rewrite_dict(ex)
@@ -71,7 +98,7 @@ function rewrite_dict(ex)
     newex
 end
 
-# rewrite Julia 0.4-style split or rsplit (str, splitter; kws...) 
+# rewrite Julia 0.4-style split or rsplit (str, splitter; kws...)
 # into 0.2/0.3-style positional arguments
 function rewrite_split(ex, f)
     limit = nothing
@@ -107,10 +134,24 @@ if VERSION < v"0.4.0-dev+707"
     end
 end
 
-if VERSION < v"0.4.0-dev+2099"
+if VERSION < v"0.4.0-dev+2056"
     macro noinline(ex)
         esc(ex)
     end
+end
+
+if VERSION < v"0.4.0-dev+2440"
+    bitrand(r::AbstractRNG, dims::Dims)   = rand!(r, BitArray(dims))
+    bitrand(r::AbstractRNG, dims::Int...) = rand!(r, BitArray(dims))
+    bitrand(dims::Dims)   = rand!(BitArray(dims))
+    bitrand(dims::Int...) = rand!(BitArray(dims))
+    export bitrand
+    Base.rand(::Type{Bool}) = randbool()
+end
+
+if VERSION < v"0.4.0-dev+2485"
+    startswith = Base.beginswith
+    export startswith
 end
 
 function _compat(ex::Expr)

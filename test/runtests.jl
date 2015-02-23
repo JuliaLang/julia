@@ -49,6 +49,9 @@ d = Dict(zip([1, 2], [3, 4]))
 end
 @test f() == d2
 
+ns = length(d.slots)
+@test length(sizehint!(d, ns + 1).slots) > ns
+
 @test @compat split("a,b,,c", ',', limit=2) == ["a", "b,,c"]
 @test @compat split("a,b,,c", ',', limit=2,keep=true) == ["a", "b,,c"]
 @test @compat split("a,b,,c", ',', keep=false) == ["a", "b", "c"]
@@ -62,3 +65,31 @@ end
 if VERSION < v"0.4.0-dev+1387"
     @test isdefined(Main, :AbstractString)
 end
+
+@test round(Int, 3//4) == 1
+
+@test IPv4("1.2.3.4") == ip"1.2.3.4"
+@test IPv6("2001:1:2:3::1") == ip"2001:1:2:3::1"
+@test isless(ip"1.2.3.4", ip"1.2.3.5")
+
+@test startswith("abcdef","abc") == true
+@test startswith("abcdef","def") == false
+
+@test size(bitrand(3, 4)) == (3, 4)
+@test size(bitrand((3, 4))) == (3, 4)
+@test size(bitrand(MersenneTwister(), 3, 4)) == (3, 4)
+@test size(bitrand(MersenneTwister(), (3, 4))) == (3, 4)
+@test rand(Bool) in [false, true]
+
+module CartesianTest
+	using Base.Cartesian, Compat
+	@ngenerate N NTuple{N,Int} function f(X::NTuple{N,Int}...)
+		@ncall N tuple X
+	end
+end
+
+@test CartesianTest.f(1) == (1,)
+@test CartesianTest.f(1,2) == (1,2)
+@test CartesianTest.f(1,2,3) == (1,2,3)
+@test CartesianTest.f(1,2,3,4) == (1,2,3,4)
+@test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
