@@ -641,11 +641,11 @@ System
    and waits for the process to complete.  Returns the value returned
    by ``f``.
 
-.. function:: Base.set_process_title(title::AbstractString)
+.. function:: Sys.set_process_title(title::AbstractString)
 
    Set the process title. No-op on some operating systems. (not exported)
 
-.. function:: Base.get_process_title()
+.. function:: Sys.get_process_title()
 
    Get the process title. On some systems, will always return empty string. (not exported)
 
