@@ -252,7 +252,7 @@ Any[
 
 "),
 
-("Base","linspace","linspace(start, stop, n)
+("Base","linspace","linspace(start, stop, n=100)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
    to \"stop\". See also: \"linrange()\" that constructs a range
@@ -260,7 +260,7 @@ Any[
 
 "),
 
-("Base","logspace","logspace(start, stop, n)
+("Base","logspace","logspace(start, stop, n=50)
 
    Construct a vector of \"n\" logarithmically-spaced numbers from
    \"10^start\" to \"10^stop\".
@@ -1845,6 +1845,23 @@ Any[
 
 "),
 
+("","@enum EnumName EnumValue1[=x] EnumValue2[=y]","@enum EnumName EnumValue1[=x] EnumValue2[=y]
+
+   Create an *Enum* type with name *EnumName* and enum member values
+   of *EnumValue1* and *EnumValue2* with optional assigned values of
+   *x* and *y*, respectively. *EnumName* can be used just like other
+   types and enum member values as regular values, such as
+
+      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+
+      julia> f(x::FRUIT) = \"I'm a FRUIT with value: \$(int(x))\"
+      f (generic function with 1 method)
+
+      julia> f(apple)
+      \"I'm a FRUIT with value: 1\"
+
+"),
+
 ("Base","apply","apply(f, x...)
 
    Accepts a function and several arguments, each of which must be
@@ -1994,6 +2011,15 @@ Any[
 
 "),
 
+("Base","Nullable","Nullable(x)
+
+   Wrap value \"x\" in an object of type \"Nullable\", which indicates
+   whether a value is present. \"Nullable(x)\" yields a non-empty
+   wrapper, and \"Nullable{T}()\" yields an empty instance of a
+   wrapper that might contain a value of type \"T\".
+
+"),
+
 ("Base","get","get(x)
 
    Attempt to access the value of the \"Nullable\" object, \"x\".
@@ -2135,33 +2161,40 @@ Any[
 
 "),
 
-("Base","|>","|>(command, command)
-|>(command, filename)
-|>(filename, command)
+("Base","pipe","pipe(from, to, ...)
 
-   Redirect operator. Used for piping the output of a process into
-   another (first form) or to redirect the standard output/input of a
-   command to/from a file (second and third forms).
+   Create a pipeline from a data source to a destination. The source
+   and destination can be commands, I/O streams, strings, or results
+   of other \"pipe\" calls. At least one argument must be a command.
+   Strings refer to filenames. When called with more than two
+   arguments, they are chained together from left to right. For
+   example \"pipe(a,b,c)\" is equivalent to \"pipe(pipe(a,b),c)\".
+   This provides a more concise way to specify multi-stage pipelines.
 
    **Examples**:
-      * \"run(`ls` |> `grep xyz`)\"
+      * \"run(pipe(`ls`, `grep xyz`))\"
 
-      * \"run(`ls` |> \"out.txt\")\"
+      * \"run(pipe(`ls`, \"out.txt\"))\"
 
-      * \"run(\"out.txt\" |> `grep xyz`)\"
-
-"),
-
-("Base",">>",">>(command, filename)
-
-   Redirect standard output of a process, appending to the destination
-   file.
+      * \"run(pipe(\"out.txt\", `grep xyz`))\"
 
 "),
 
-("Base",".>",".>(command, filename)
+("Base","pipe","pipe(command; stdin, stdout, stderr, append=false)
 
-   Redirect the standard error stream of a process.
+   Redirect I/O to or from the given \"command\". Keyword arguments
+   specify which of the command's streams should be redirected.
+   \"append\" controls whether file output appends to the file. This
+   is a more general version of the 2-argument \"pipe\" function.
+   \"pipe(from, to)\" is equivalent to \"pipe(from, stdout=to)\" when
+   \"from\" is a command, and to \"pipe(to, stdin=from)\" when
+   \"from\" is another kind of data source.
+
+   **Examples**:
+      * \"run(pipe(`dothings`, stdout=\"out.txt\",
+        stderr=\"errs.txt\"))\"
+
+      * \"run(pipe(`update`, stdout=\"log.txt\", append=true))\"
 
 "),
 
@@ -2354,15 +2387,21 @@ Any[
 
 ("Base","assert","assert(cond[, text])
 
-   Raise an error if \"cond\" is false. Also available as the macro
-   \"@assert expr\".
+   Throw an \"AssertionError\" if \"cond\" is false. Also available as
+   the macro \"@assert expr\".
 
 "),
 
-("Base","@assert","@assert()
+("","@assert cond [text]","@assert cond [text]
 
-   Raise an error if \"cond\" is false. Preferred syntax for writings
-   assertions.
+   Throw an \"AssertionError\" if \"cond\" is false. Preferred syntax
+   for writing assertions.
+
+"),
+
+("Base","AssertionError","AssertionError
+
+   The asserted condition did not evalutate to \"true\".
 
 "),
 
@@ -4375,6 +4414,14 @@ Any[
 
 "),
 
+("Base","nothing","nothing
+
+   The singleton instance of type \"Void\", used by convention when
+   there is no value to return (as in a C \"void\" function). Can be
+   converted to an empty \"Nullable\" value.
+
+"),
+
 ("Base","OS_NAME","OS_NAME
 
    A symbol representing the name of the operating system. Possible
@@ -5415,146 +5462,6 @@ Millisecond(v)
    everything before the dot and everything including and after the
    dot. Otherwise, return a tuple of the argument unmodified and the
    empty string.
-
-"),
-
-("Base.Graphics","Vec2","Vec2(x, y)
-
-   Creates a point in two dimensions
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
-
-   Creates a box in two dimensions with the given edges
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(objs...)
-
-   Creates a box in two dimensions that encloses all objects
-
-"),
-
-("Base.Graphics","width","width(obj)
-
-   Computes the width of an object
-
-"),
-
-("Base.Graphics","height","height(obj)
-
-   Computes the height of an object
-
-"),
-
-("Base.Graphics","xmin","xmin(obj)
-
-   Computes the minimum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","xmax","xmax(obj)
-
-   Computes the maximum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymin","ymin(obj)
-
-   Computes the minimum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymax","ymax(obj)
-
-   Computes the maximum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","diagonal","diagonal(obj)
-
-   Return the length of the diagonal of an object
-
-"),
-
-("Base.Graphics","aspect_ratio","aspect_ratio(obj)
-
-   Compute the height/width of an object
-
-"),
-
-("Base.Graphics","center","center(obj)
-
-   Return the point in the center of an object
-
-"),
-
-("Base.Graphics","xrange","xrange(obj)
-
-   Returns a tuple \"(xmin(obj), xmax(obj))\"
-
-"),
-
-("Base.Graphics","yrange","yrange(obj)
-
-   Returns a tuple \"(ymin(obj), ymax(obj))\"
-
-"),
-
-("Base.Graphics","rotate","rotate(obj, angle, origin) -> newobj
-
-   Rotates an object around origin by the specified angle (radians),
-   returning a new object of the same type.  Because of type-
-   constancy, this new object may not always be a strict geometric
-   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
-   the return is the smallest \"BoundingBox\" that encloses the
-   rotated input.
-
-"),
-
-("Base.Graphics","shift","shift(obj, dx, dy)
-
-   Returns an object shifted horizontally and vertically by the
-   indicated amounts
-
-"),
-
-("Base.Graphics","*","*(obj, s::Real)
-
-   Scale the width and height of a graphics object, keeping the center
-   fixed
-
-"),
-
-("Base.Graphics","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the smallest box containing both boxes
-
-"),
-
-("Base.Graphics","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the intersection, the largest box contained in both boxes
-
-"),
-
-("Base.Graphics","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
-
-   Returns a bounding box with all edges shifted by the indicated
-   amounts
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, x, y)
-
-   True if the given point is inside the box
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, point)
-
-   True if the given point is inside the box
 
 "),
 
@@ -6724,8 +6631,12 @@ popdisplay(d::Display)
    Otherwise an LU factorization is used. For rectangular \"A\" the
    result is the minimum-norm least squares solution computed by a
    pivoted QR factorization of \"A\" and a rank estimate of A based on
-   the R factor. For sparse, square \"A\" the LU factorization (from
-   UMFPACK) is used.
+   the R factor.
+
+   When \"A\" is sparse, a similar polyalgorithm is used. For
+   indefinite matrices, the LDLt factorization does not use pivoting
+   during the numerical factorization and therefore the procedure can
+   fail even for invertible matrices.
 
 "),
 
@@ -6984,10 +6895,21 @@ popdisplay(d::Display)
 
 "),
 
+("Base","qrfact","qrfact(A) -> SPQR.Factorization
+
+   Compute the QR factorization of a sparse matrix \"A\". A fill-
+   reducing permutation is used. The main application of this type is
+   to solve least squares problems with \"\\\". The function calls the
+   C library SPQR and a few additional functions from the library are
+   wrapped but not exported.
+
+"),
+
 ("Base","qrfact!","qrfact!(A[, pivot=Val{false}])
 
-   \"qrfact!\" is the same as \"qrfact()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
+   \"qrfact!\" is the same as \"qrfact()\" when A is a subtype of
+   \"StridedMatrix\", but saves space by overwriting the input \"A\",
+   instead of creating a copy.
 
 "),
 
@@ -8330,6 +8252,13 @@ popdisplay(d::Display)
 
    The quotient and remainder from Euclidean division. Equivalent to
    \"(x÷y, x%y)\".
+
+"),
+
+("Base","fldmod","fldmod(x, y)
+
+   The floored quotient and modulus after division. Equivalent to
+   \"(fld(x,y), mod(x,y))\".
 
 "),
 
