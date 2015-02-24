@@ -107,9 +107,9 @@ let deepthought(x, y) = 42
 end
 
 let # test the process title functions, issue #9957
-    oldtitle = Base.get_process_title()
-    Base.set_process_title("julia0x1")
-    @test Base.get_process_title() == "julia0x1"
-    Base.set_process_title(oldtitle)
-    @test Base.get_process_title() == oldtitle
+    oldtitle = Sys.get_process_title()
+    Sys.set_process_title("julia0x1")
+    @test Sys.get_process_title() == "julia0x1"
+    Sys.set_process_title(oldtitle)
+    @test Sys.get_process_title() == oldtitle
 end
