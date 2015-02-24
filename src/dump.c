@@ -889,12 +889,12 @@ static jl_value_t *jl_deserialize_value_internal(ios_t *s)
         return v;
     }
     else if (vtag == (jl_value_t*)jl_datatype_type || vtag == (jl_value_t*)IdTable_tag) {
-        // If the value v we are about to deserialize is some dt->instance, we have a circular 
-        // reference, because v == v->type->instance. To avoid this, we put a null value in 
+        // If the value v we are about to deserialize is some dt->instance, we have a circular
+        // reference, because v == v->type->instance. To avoid this, we put a null value in
         // the backref table to reserve the space. If jl_deserialize_value encounters this,
         // it knows to do the allocation itself. This work, because in all instances where
         // v->type->instance != null, v->type has no fields, so there is no further serialized
-        // data stored that we would need to construct the type. 
+        // data stored that we would need to construct the type.
         if (usetable)
             ptrhash_put(&backref_table, (void*)(ptrint_t)pos, DTINSTANCE_PLACEHOLDER);
         jl_datatype_t *dt = (jl_datatype_t*)jl_deserialize_value(s);
@@ -1074,7 +1074,7 @@ void jl_restore_system_image(char *fname)
     datatype_list = jl_alloc_cell_1d(0);
 
     jl_array_type->env = jl_deserialize_value(&f);
-    
+
     jl_main_module = (jl_module_t*)jl_deserialize_value(&f);
     jl_internal_main_module = jl_main_module;
     jl_core_module = (jl_module_t*)jl_get_global(jl_main_module,
@@ -1280,7 +1280,7 @@ void jl_init_serializer(void)
                      jl_symbol("T"), jl_symbol("S"),
                      jl_symbol("X"), jl_symbol("Y"),
                      jl_symbol("add_int"), jl_symbol("sub_int"),
-                     jl_symbol("mul_int"), 
+                     jl_symbol("mul_int"),
                      jl_symbol("add_float"), jl_symbol("sub_float"),
                      jl_symbol("mul_float"), jl_symbol("ccall"),
                      jl_symbol("box"), jl_symbol("unbox"),

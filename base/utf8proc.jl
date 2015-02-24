@@ -66,7 +66,7 @@ let
                        s, 0, p, flags | UTF8PROC_NULLTERM)
         result < 0 && error(bytestring(ccall(:utf8proc_errmsg, Ptr{Uint8},
                                              (Cssize_t,), result)))
-        a = ccall(:jl_ptr_to_array_1d, Vector{Uint8}, 
+        a = ccall(:jl_ptr_to_array_1d, Vector{Uint8},
                   (Any, Ptr{Uint8}, Csize_t, Cint),
                   Vector{Uint8}, p[1], result, true)
         ccall(:jl_array_to_string, Any, (Any,), a)::ByteString
@@ -106,7 +106,7 @@ function normalize_string(s::String, nf::Symbol)
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
-    
+
 # returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
     c > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs

@@ -153,6 +153,16 @@ for i = 1:5
     @test full(kron(a,b)) == kron(full(a), full(b))
 end
 
+# scale and scale!
+sA = sprandn(3, 7, 0.5)
+dA = full(sA)
+b = randn(7)
+@test scale(dA, b) == scale(sA, b)
+@test scale(dA, b) == scale!(copy(sA), b)
+b = randn(3)
+@test scale(b, dA) == scale(b, sA)
+@test scale(b, dA) == scale!(b, copy(sA))
+
 # reductions
 @test sum(se33)[1] == 3.0
 @test sum(se33, 1) == [1.0 1.0 1.0]
@@ -340,7 +350,7 @@ let A = spzeros(Int, 10, 20)
     @test A[4:8,8:16] == 15 * ones(Int, 5, 9)
 end
 
-let ASZ = 1000, TSZ = 800 
+let ASZ = 1000, TSZ = 800
     A = sprand(ASZ, 2*ASZ, 0.0001)
     B = copy(A)
     nA = countnz(A)
@@ -446,3 +456,97 @@ end
 b = findn( speye(4) )
 @test (length(b[1]) == 4)
 @test (length(b[2]) == 4)
+
+#rotations
+a = sparse( [1,1,2,3], [1,3,4,1], [1,2,3,4] )
+
+@test rot180(a,2) == a
+@test rot180(a,1) == sparse( [3,3,2,1], [4,2,1,4], [1,2,3,4] )
+@test rotr90(a,1) == sparse( [1,3,4,1], [3,3,2,1], [1,2,3,4] )
+@test rotl90(a,1) == sparse( [4,2,1,4], [1,1,2,3], [1,2,3,4] )
+@test rotl90(a,2) == rot180(a)
+@test rotr90(a,2) == rot180(a)
+@test rotl90(a,3) == rotr90(a)
+@test rotr90(a,3) == rotl90(a)
+
+#ensure we have preserved the correct dimensions!
+
+a = speye(3,5)
+@test size(rot180(a)) == (3,5)
+@test size(rotr90(a)) == (5,3)
+@test size(rotl90(a)) == (5,3)
+
+function test_getindex_algs{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, I::AbstractVector, J::AbstractVector, alg::Int)
+    # Sorted vectors for indexing rows.
+    # Similar to getindex_general but without the transpose trick.
+    (m, n) = size(A)
+    !isempty(I) && ((I[1] < 1) || (I[end] > m)) && BoundsError()
+    if !isempty(J)
+        minj, maxj = extrema(J)
+        ((minj < 1) || (maxj > n)) && BoundsError()
+    end
+
+    (alg == 0) ? Base.SparseMatrix.getindex_I_sorted_bsearch_A(A, I, J) :
+    (alg == 1) ? Base.SparseMatrix.getindex_I_sorted_bsearch_I(A, I, J) :
+    Base.SparseMatrix.getindex_I_sorted_linear(A, I, J)
+end
+
+let M=2^14, N=2^4
+    Irand = randperm(M);
+    Jrand = randperm(N);
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    IA = [sort(Irand[1:int(n)]) for n in [M, M*0.1, M*0.01, M*0.001, M*0.0001, 0.]];
+    debug = false
+
+    if debug
+        println("row sizes: $([int(nnz(S)/S.n) for S in SA])");
+        println("I sizes: $([length(I) for I in IA])");
+        @printf("    S    |    I    | binary S | binary I |  linear  | best\n")
+    end
+
+    J = Jrand;
+    for I in IA
+        for S in SA
+            res = Any[1,2,3]
+            times = Float64[0,0,0]
+            best = [typemax(Float64), 0]
+            for searchtype in [0, 1, 2]
+                tres = @timed test_getindex_algs(S, I, J, searchtype)
+                res[searchtype+1] = tres[1]
+                times[searchtype+1] = tres[2]
+                if best[1] > tres[2]
+                    best[1] = tres[2]
+                    best[2] = searchtype
+                end
+            end
+
+            if debug
+                @printf(" %7d | %7d | %4.2e | %4.2e | %4.2e | %s\n", int(nnz(S)/S.n), length(I), times[1], times[2], times[3],
+                            (0 == best[2]) ? "binary S" : (1 == best[2]) ? "binary I" : "linear")
+            end
+            if res[1] != res[2]
+                println("1 and 2")
+            elseif res[2] != res[3]
+                println("2, 3")
+            end
+            @assert res[1] == res[2] == res[3]
+        end
+    end
+end
+
+let M = 2^8, N=2^3
+    Irand = randperm(M)
+    Jrand = randperm(N)
+    I = sort([Irand, Irand, Irand])
+    J = [Jrand, Jrand]
+
+    SA = [sprand(M, N, d) for d in [1., 0.1, 0.01, 0.001, 0.0001, 0.]];
+    for S in SA
+        res = Any[1,2,3]
+        for searchtype in [0, 1, 2]
+            res[searchtype+1] = test_getindex_algs(S, I, J, searchtype)
+        end
+
+        @assert res[1] == res[2] == res[3]
+    end
+end

@@ -1,7 +1,7 @@
 .. currentmodule:: Base
 
 ****************
- Linear algebra 
+ Linear algebra
 ****************
 
 Matrix factorizations
@@ -30,7 +30,7 @@ in the :ref:`stdlib-linalg` section of the standard library documentation.
 :class:`GeneralizedSVD`  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
 ======================== ======
 
-Special matrices 
+Special matrices
 ================
 
 `Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_

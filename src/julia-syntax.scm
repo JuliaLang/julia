@@ -2298,7 +2298,7 @@
 	    (dest (cons (if tail `(return ,e) e)
 			'()))
 	    (else (cons e '())))
-      
+
       (case (car e)
 	((call)  ;; ensure left-to-right evaluation of arguments
 	 (let ((assigned
@@ -2334,7 +2334,7 @@
 			 (each-arg (cdr ass) (cdr args)
 				   tmp
 				   (cons (car args) newa))))))))
-	
+
 	((=)
 	 (if (or (not (symbol? (cadr e)))
 		 (eq? (cadr e) 'true)
@@ -2364,7 +2364,7 @@
 				    (= ,LHS ,val)
 				    ,val))
 			  dest tail)))))
-	
+
 	((if)
 	 (cond ((or tail (eq? dest #f) (symbol? dest))
 		(let ((r (to-lff (cadr e) #t #f)))
@@ -2378,11 +2378,11 @@
 	       (else (let ((g (gensy)))
 		       (cons g
 			     (cons `(local! ,g) (to-lff e g #f)))))))
-	
+
 	((line)
 	 (set! *lff-line* (cadr e))
 	 (cons e '()))
-	
+
 	((trycatch)
 	 (cond ((and (eq? dest #t) (not tail))
 		(let ((g (gensy)))
@@ -2394,12 +2394,12 @@
 				   (to-blk (to-lff (cadr e) dest tail)))
 				 ,(to-blk (to-lff (caddr e) dest tail)))
 		      ()))))
-	
+
 	((&&)
 	 (to-lff (expand-and e) dest tail))
 	((|\|\||)
 	 (to-lff (expand-or e) dest tail))
-	
+
 	((block)
 	 (if (length= e 2)
 	     (to-lff (cadr e) dest tail)
@@ -2421,12 +2421,12 @@
 			     '())
 		       (cons (cons 'block stmts)
 			     '()))))))
-	
+
 	((return)
 	 (if (and dest (not tail))
 	     (error "misplaced return statement")
 	     (to-lff (cadr e) #t #t)))
-	
+
 	((_while) (cond ((eq? dest #t)
 			 (cons (if tail '(return (null)) '(null))
 			       (to-lff e #f #f)))
@@ -2440,7 +2440,7 @@
 			   (if (symbol? dest)
 			       (cons `(= ,dest (null)) w)
 			       w)))))
-	
+
 	((break-block)
 	 (let ((r (to-lff (caddr e) dest tail)))
 	   (if dest
@@ -2448,7 +2448,7 @@
 		     (list `(break-block ,(cadr e) ,(to-blk (cdr r)))))
 	       (cons `(break-block ,(cadr e) ,(car r))
 		     (cdr r)))))
-	
+
 	((scope-block)
 	 (if (and dest (not tail))
 	     (let* ((g (gensy))
@@ -2463,31 +2463,31 @@
 	     (let ((r (to-lff (cadr e) dest tail)))
 	       (cons `(scope-block ,(to-blk r))
 		     '()))))
-	
+
 	;; move the break to the list of preceding statements. value is
 	;; null but this will never be observed.
 	((break) (cons '(null) (list e)))
-	
+
 	((lambda)
 	 (let ((l `(lambda ,(cadr e)
 		     ,(to-blk (to-lff (caddr e) #t #t)))))
 	   (if (symbol? dest)
 	       (cons `(= ,dest ,l) '())
 	       (cons (if tail `(return ,l) l) '()))))
-	
+
 	((local global)
 	 (if dest
 	     (error (string "misplaced \"" (car e) "\" declaration")))
 	 (cons (to-blk (to-lff '(null) dest tail))
 	       (list e)))
-	
+
 	((|::|)
 	 (if dest
 	     ;; convert to typeassert or decl based on whether it's in
 	     ;; value or statement position.
 	     (to-lff `(typeassert ,@(cdr e)) dest tail)
 	     (to-lff `(decl ,@(cdr e)) dest tail)))
-	
+
 	((unnecessary-tuple)
 	 (if dest
 	     (to-lff (cadr e) dest tail)

@@ -36,7 +36,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     end
 
     for (M, TM) in ((triu(A), Triangular(A, :U)), (tril(A), Triangular(A, :L)))
-        
+
         ##Idempotent tests #XXX - not implemented
         #for func in (conj, transpose, ctranspose)
         #    @test full(func(func(TM))) == M
@@ -243,7 +243,7 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
         end
 
         debug && println("Binary operations")
-        for isupper2 in (true, false) 
+        for isupper2 in (true, false)
             dv = convert(Vector{elty}, randn(n))
             ev = convert(Vector{elty}, randn(n-1))
             T2 = Bidiagonal(dv, ev, isupper2)
@@ -252,6 +252,10 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 @test_approx_eq full(op(T, T2)) op(Tfull, Tfull2)
             end
         end
+
+        debug && println("Conversion from Bidiagonal to Tridiagonal")
+        C = Bidiagonal(dv, ev, isupper)
+        @test full(C) == full(Tridiagonal(C))
     end
 end
 
@@ -297,6 +301,16 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
     DM2= diagm(d)
     for op in (+, -, *)
         @test_approx_eq full(op(D, D2)) op(DM, DM2)
+    end
+
+    #10036
+    @test issym(D2)
+    @test ishermitian(D2)
+    if elty <: Complex
+        dc = d + im*convert(Vector{elty}, ones(n))
+        D3 = Diagonal(dc)
+        @test issym(D3)
+        @test !ishermitian(D3)
     end
 end
 
@@ -350,9 +364,14 @@ C7933 = full(Symmetric(A7933))
 @test A7933 == B7933
 
 # Issues #8057 and #8058
-for f in (eigfact, eigvals)
+for f in (eigfact, eigvals, eig)
     for A in (Symmetric(randn(2,2)), Hermitian(complex(randn(2,2), randn(2,2))))
         @test_throws ArgumentError f(A, 3, 2)
         @test_throws ArgumentError f(A, 1:4)
     end
 end
+
+# test diag
+A = eye(4)
+@test diag(A) == ones(4)
+@test diag(sub(A, 1:3, 1:3)) == ones(3)

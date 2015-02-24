@@ -91,7 +91,7 @@ convert(T::Type{UTF16String}, data::AbstractArray{Int16}) =
 function convert(T::Type{UTF16String}, bytes::AbstractArray{Uint8})
     isempty(bytes) && return UTF16String(Uint16[0])
     isodd(length(bytes)) && throw(ArgumentError("odd number of bytes"))
-    data = reinterpret(Uint16, bytes)    
+    data = reinterpret(Uint16, bytes)
     # check for byte-order mark (BOM):
     if data[1] == 0xfeff        # native byte order
         d = Array(Uint16, length(data))

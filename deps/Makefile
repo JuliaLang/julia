@@ -122,7 +122,7 @@ endif
 
 # Only compile standalone LAPACK if we are not using OpenBLAS.
 # OpenBLAS otherwise compiles LAPACK as part of its build.
-# This is useful where one wants to use the vendor BLAS, but 
+# This is useful where one wants to use the vendor BLAS, but
 # build LAPACK as the vendor LAPACK may be too old (eg. Apple vecLib)
 ifeq ($(USE_SYSTEM_BLAS), 1)
 ifeq ($(USE_SYSTEM_LAPACK), 0)
@@ -149,7 +149,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc get-objconv
+getall: get-llvm get-uv get-pcre get-double-conversion get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-zlib get-patchelf get-utf8proc get-objconv get-virtualenv
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -189,10 +189,10 @@ LLVM_OBJ_SOURCE = llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/$(LLVM_FLAVOR)/lib/$(
 LLVM_OBJ_TARGET = $(build_libdir)/$(LLVM_LIB_FILE)
 
 ifneq ($(LLVM_VER),svn)
-ifeq ($(LLVM_VER), 3.0)
-LLVM_TAR=llvm-$(LLVM_VER).tar.gz
-else
+ifeq ($(LLVM_VER), 3.3)
 LLVM_TAR=llvm-$(LLVM_VER).src.tar.gz
+else
+LLVM_TAR=llvm-$(LLVM_VER).src.tar.xz
 endif
 
 ifeq ($(BUILD_LLVM_CLANG),1)
@@ -310,7 +310,7 @@ llvm-$(LLVM_VER)/python2_path:
 	ln -sf /usr/bin/python2 "llvm-$(LLVM_VER)/python2_path/python"
 llvm_python_workaround=llvm-$(LLVM_VER)/python2_path
 else
-  LLVM_FLAGS += --with-python="$(shell ./find_python_for_llvm)"
+  LLVM_FLAGS += --with-python="$(shell ./find_python2)"
 endif
 
 llvm-$(LLVM_VER)/configure: $(LLVM_TAR) $(LLVM_CLANG_TAR) $(LLVM_COMPILER_RT_TAR) $(LLVM_LIBCXX_TAR)
@@ -350,7 +350,7 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/tools/clang ] && \
 		git clone $(LLVM_GIT_URL_CLANG) llvm-$(LLVM_VER)/tools/clang  ) || \
 		(cd llvm-$(LLVM_VER)/tools/clang  && \
-		git pull --ff-only)	
+		git pull --ff-only)
 endif
 endif
 ifneq ($(LLVM_VER),svn)
@@ -371,7 +371,7 @@ ifeq ($(BUILD_LLVM_CLANG),1)
 	([ ! -d llvm-$(LLVM_VER)/projects/compiler-rt ] && \
 		git clone $(LLVM_GIT_URL_COMPILER_RT) llvm-$(LLVM_VER)/projects/compiler-rt  ) || \
 		(cd llvm-$(LLVM_VER)/projects/compiler-rt  && \
-		git pull --ff-only)		
+		git pull --ff-only)
 ifneq ($(LLVM_CLANG_VER),)
 	(cd llvm-$(LLVM_VER) && \
 		git checkout $(LLVM_GIT_VER))
@@ -405,7 +405,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configu
 	cd llvm-$(LLVM_VER) && \
 	mkdir -p build_$(LLVM_BUILDTYPE) && cd build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS) 
+	../configure $(CONFIGURE_COMMON) $(LLVM_CC) $(LLVM_FLAGS)
 	touch -c $@
 
 $(LLVM_OBJ_SOURCE): llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status | $(llvm_python_workaround)
@@ -418,7 +418,7 @@ llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/checked: $(LLVM_OBJ_SOURCE) | $(llvm_py
 ifeq ($(OS),$(BUILD_OS))
 	cd llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) && \
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) $(LLVM_MFLAGS) check 
+	$(MAKE) $(LLVM_MFLAGS) check
 endif
 	echo 1 > $@
 
@@ -593,7 +593,7 @@ install-double-conversion: $(GRISU_OBJ_TARGET)
 
 OPENLIBM_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USECLANG=$(USECLANG) USEGCC=$(USEGCC)
 
-OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
+OPENLIBM_OBJ_TARGET = $(build_shlibdir)/libopenlibm.$(SHLIB_EXT) $(build_libdir)/libopenlibm.a
 OPENLIBM_OBJ_SOURCE = openlibm/libopenlibm.$(SHLIB_EXT)
 
 openlibm/Makefile:
@@ -609,7 +609,7 @@ $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	touch -c $@
 $(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
-	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $@
+	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
 	touch -c $@
 
 clean-openlibm:
@@ -624,7 +624,7 @@ get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
 check-openlibm: compile-openlibm
-install-openlibm: $(OPENLIBM_OBJ_TARGET) 
+install-openlibm: $(OPENLIBM_OBJ_TARGET)
 
 ## openspecfun ##
 
@@ -666,7 +666,7 @@ get-openspecfun: openspecfun/Makefile
 configure-openspecfun: get-openspecfun
 compile-openspecfun: $(OPENSPECFUN_OBJ_SOURCE)
 check-openspecfun: compile-openspecfun
-install-openspecfun: $(OPENSPECFUN_OBJ_TARGET) 
+install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 
 ## DSFMT ##
 
@@ -685,7 +685,7 @@ DSFMT_CFLAGS += -msse2 -DHAVE_SSE2
 endif
 
 dsfmt-$(DSFMT_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz 
+	$(JLDOWNLOAD) $@ http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/dSFMT-src-$(DSFMT_VER).tar.gz
 	touch -c $@
 dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	$(JLCHECKSUM) $<
@@ -752,7 +752,7 @@ get-Rmath: Rmath/Make.inc
 configure-Rmath: get-Rmath
 compile-Rmath: $(RMATH_OBJ_SOURCE)
 check-Rmath: compile-Rmath
-install-Rmath: $(RMATH_OBJ_TARGET) 
+install-Rmath: $(RMATH_OBJ_TARGET)
 
 
 ## objconv ##
@@ -856,7 +856,7 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER) 
+	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 ifneq ($(OPENBLAS_VER),develop)
 	$(JLCHECKSUM) $<
@@ -899,7 +899,7 @@ ATLAS_OBJ_TARGET = $(build_shlibdir)/libsatlas.$(SHLIB_EXT)
 ATLAS_FLAGS = --shared --prefix=$(build_prefix) --cc=gcc -t 0 \
 	--with-netlib-lapack-tarfile=$(JULIAHOME)/deps/lapack-$(LAPACK_VER).tgz
 ifeq ($(OS), WINNT)
-ATLAS_FLAGS += -b 32 
+ATLAS_FLAGS += -b 32
 endif
 
 #force backwards compatibility (pick any 1)
@@ -1293,7 +1293,7 @@ distclean-utf8proc: clean-utf8proc
 get-utf8proc: utf8proc-v$(UTF8PROC_VER).tar.gz
 configure-utf8proc: get-utf8proc
 compile-utf8proc: $(UTF8PROC_OBJ_SOURCE)
-check-utf8proc: 
+check-utf8proc:
 install-utf8proc: $(UTF8PROC_OBJ_TARGET)
 
 ## SUITESPARSE ##
@@ -1419,7 +1419,7 @@ LIBUNWIND_TARGET_SOURCE = libunwind-$(UNWIND_VER)/src/.libs/libunwind.a
 LIBUNWIND_CFLAGS = $(CFLAGS) -U_FORTIFY_SOURCE $(fPIC)
 
 libunwind-$(UNWIND_VER).tar.gz:
-	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@ 
+	$(JLDOWNLOAD) $@ http://download.savannah.gnu.org/releases/libunwind/$@
 libunwind-$(UNWIND_VER)/configure: libunwind-$(UNWIND_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) xfz $<
@@ -1464,7 +1464,7 @@ OSXUNWIND_FLAGS = ARCH="$(ARCH)" CC="$(CC)" FC="$(FC)" AR="$(AR)" OS="$(OS)" USE
 OSXUNWIND_OBJ_TARGET = $(build_shlibdir)/libosxunwind.$(SHLIB_EXT)
 OSXUNWIND_OBJ_SOURCE = libosxunwind-$(OSXUNWIND_VER)/libosxunwind.$(SHLIB_EXT)
 
-libosxunwind-$(OSXUNWIND_VER).tar.gz: 
+libosxunwind-$(OSXUNWIND_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/libosxunwind/archive/v$(OSXUNWIND_VER).tar.gz
 
 libosxunwind-$(OSXUNWIND_VER)/Makefile: libosxunwind-$(OSXUNWIND_VER).tar.gz
@@ -1483,14 +1483,14 @@ $(OSXUNWIND_OBJ_TARGET): $(OSXUNWIND_OBJ_SOURCE) | $(build_shlibdir)
 
 clean-osxunwind:
 	-$(MAKE) -C libosxunwind-$(OSXUNWIND_VER) distclean $(OSXUNWIND_FLAGS)
-	-rm $(OPENLIBM_OBJ_TARGET)
+	-rm $(OSXUNWIND_OBJ_TARGET)
 distclean-osxunwind: clean-osxunwind
 
 get-osxunwind: libosxunwind-$(OSXUNWIND_VER)/Makefile
 configure-osxunwind: get-osxunwind
 compile-osxunwind: $(OSXUNWIND_OBJ_SOURCE)
 check-osxunwind: compile-osxunwind
-install-osxunwind: $(OSXUNWIND_OBJ_TARGET) 
+install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
 
 ## GMP ##
 
@@ -1720,6 +1720,33 @@ configure-git: git-$(GIT_VER)/config.status
 compile-git: $(GIT_SOURCE)
 check-git: git-$(GIT_VER)/checked
 install-git: $(GIT_TARGET)
+
+## virtualenv
+
+VIRTUALENV_SOURCE = virtualenv-$(VIRTUALENV_VER)/virtualenv.py
+VIRTUALENV_TARGET = julia-env
+
+virtualenv-$(VIRTUALENV_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://pypi.python.org/packages/source/v/virtualenv/$@
+$(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
+	$(JLCHECKSUM) $<
+	$(TAR) zxf $<
+	touch -c $@
+$(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
+	"$(shell ./find_python2)" $< $@
+	touch -c $@
+
+clean-virtualenv:
+	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
+	-rm -f $(VIRTUALENV_TARGET)
+distclean-virtualenv:
+	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
+
+get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz
+configure-virtualenv: get-virtualenv
+compile-virtualenv: $(VIRTUALENV_SOURCE)
+check-virtualenv: compile-virtualenv
+install-virtualenv: $(VIRTUALENV_TARGET)
 
 ## phony targets ##
 

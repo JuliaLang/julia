@@ -62,7 +62,7 @@ convert(::Type{SymTridiagonal}, A::Triangular) = convert(SymTridiagonal, convert
 
 function convert(::Type{Tridiagonal}, A::Triangular)
     fA = full(A)
-    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1) 
+    if fA == diagm(diag(A)) + diagm(diag(fA, 1), 1) + diagm(diag(fA, -1), -1)
         return Tridiagonal(diag(fA, -1), diag(A), diag(fA,1))
     else
         throw(ArgumentError("Matrix cannot be represented as Tridiagonal"))
@@ -100,7 +100,7 @@ for op in (:+, :-)
             end
         end
     end
-    
+
     for matrixtype1 in (:Diagonal, :Bidiagonal) #matrixtype1 is the sparser matrix type
         for matrixtype2 in (:SymTridiagonal,)   #matrixtype2 is the denser matrix type
             @eval begin

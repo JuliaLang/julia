@@ -57,7 +57,7 @@ General I/O
 
 .. function:: IOBuffer([data,],[readable,writable,[maxsize]])
 
-   Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given, 
+   Create an IOBuffer, which may optionally operate on a pre-existing array. If the readable/writable arguments are given,
    they restrict whether or not the buffer may be read from or written to respectively. By default the buffer is readable
    but not writable. The last argument optionally specifies a size beyond which the buffer may not be grown.
 
@@ -140,14 +140,14 @@ General I/O
 
 .. function:: unmark(s)
 
-   Remove a mark from stream ``s``. 
+   Remove a mark from stream ``s``.
    Returns ``true`` if the stream was marked, ``false`` otherwise.
 
    See also :func:`mark`, :func:`reset`, :func:`ismarked`
 
 .. function:: reset(s)
 
-   Reset a stream ``s`` to a previously marked position, and remove the mark.  
+   Reset a stream ``s`` to a previously marked position, and remove the mark.
    Returns the previously marked position.
    Throws an error if the stream is not marked.
 
@@ -214,7 +214,7 @@ General I/O
 .. function:: deserialize(stream)
 
    Read a value written by ``serialize``.
-   
+
 .. function:: print_escaped(io, str::String, esc::String)
 
    General escaping of traditional C and Unicode escape sequences, plus any characters in esc are also escaped (with a backslash).
@@ -238,10 +238,10 @@ General I/O
 
 .. function:: redirect_stdout()
 
-   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr) 
-   representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The 
+   Create a pipe to which all C and Julia level STDOUT output will be redirected. Returns a tuple (rd,wr)
+   representing the pipe ends. Data written to STDOUT may now be read from the rd end of the pipe. The
    wr end is given for convenience in case the old STDOUT object was cached by the user and needs to be
-   replaced elsewhere. 
+   replaced elsewhere.
 
 .. function:: redirect_stdout(stream)
 
@@ -281,7 +281,7 @@ General I/O
 
 .. function:: PipeBuffer()
 
-   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors. 
+   An IOBuffer that allows reading and performs writes by appending. Seeking and truncating are not supported. See IOBuffer for the available constructors.
 
 .. function:: PipeBuffer(data::Vector{Uint8},[maxsize])
 
@@ -289,7 +289,7 @@ General I/O
 
 .. function:: readavailable(stream)
 
-   Read all available data on the stream, blocking the task only if no data is available. 
+   Read all available data on the stream, blocking the task only if no data is available.
 
 
 Network I/O
@@ -310,7 +310,7 @@ Network I/O
 
 .. function:: listen(path) -> PipeServer
 
-   Listens on/Creates a Named Pipe/Domain Socket 
+   Listens on/Creates a Named Pipe/Domain Socket
 
 .. function:: getaddrinfo(host)
 
@@ -319,14 +319,14 @@ Network I/O
 .. function:: parseip(addr)
 
    Parse a string specifying an IPv4 or IPv6 ip address.
-   
+
 .. function:: IPv4(host::Integer) -> IPv4
 
    Returns IPv4 object from ip address formatted as Integer
 
 .. function:: IPv6(host::Integer) -> IPv6
 
-   Returns IPv6 object from ip address formatted as Integer  
+   Returns IPv6 object from ip address formatted as Integer
 
 .. function:: nb_available(stream)
 
@@ -334,13 +334,13 @@ Network I/O
 
 .. function:: accept(server[,client])
 
-   Accepts a connection on the given server and returns a connection to the client. An uninitialized client 
+   Accepts a connection on the given server and returns a connection to the client. An uninitialized client
    stream may be provided, in which case it will be used instead of creating a new stream.
 
 .. function:: listenany(port_hint) -> (Uint16,TcpServer)
 
    Create a TcpServer on any port, using hint as a starting point. Returns a tuple of the actual port that the server
-   was created on and the server itself. 
+   was created on and the server itself.
 
 .. function:: watch_file(cb=false, s; poll=false)
 
@@ -355,9 +355,9 @@ Network I/O
    ``timedout``, giving the result of the polling.
 
 .. function:: poll_file(s, interval_seconds::Real, seconds::Real)
-   
+
    Monitor a file for changes by polling every `interval_seconds` seconds for `seconds` seconds. A return value of true indicates
-   the file changed, a return value of false indicates a timeout. 
+   the file changed, a return value of false indicates a timeout.
 
 .. function:: bind(socket::Union(UdpSocket, TcpSocket), host::IPv4, port::Integer)
 
@@ -472,7 +472,7 @@ Text I/O
 
 .. function:: readdlm(source, delim::Char, T::Type, eol::Char; header=false, skipstart=0, use_mmap, ignore_invalid_chars=false, quotes=true, dims, comments=true, comment_char='#')
 
-   Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source. 
+   Read a matrix from the source where each line (separated by ``eol``) gives one row, with elements separated by the given delimeter. The source can be a text file, stream or byte array. Memory mapped files can be used by passing the byte array representation of the mapped segment as source.
 
    If ``T`` is a numeric type, the result is an array of that type, with any non-numeric elements as ``NaN`` for floating-point types, or zero. Other useful values of ``T`` include ``ASCIIString``, ``String``, and ``Any``.
 
@@ -493,7 +493,7 @@ Text I/O
 .. function:: readdlm(source, delim::Char, eol::Char; options...)
 
    If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
-   
+
 .. function:: readdlm(source, delim::Char, T::Type; options...)
 
    The end of line delimiter is taken as ``\n``.
@@ -717,11 +717,11 @@ Memory-mapped I/O
    Create an ``Array`` whose values are linked to a file, using memory-mapping. This provides a convenient way of working with data too large to fit in the computer's memory.
 
    The type determines how the bytes of the array are interpreted. Note that the file must be stored in binary format, and no format conversions are possible (this is a limitation of operating systems, not Julia).
-   
+
    ``dims`` is a tuple specifying the size of the array.
 
    The file is passed via the stream argument.  When you initialize the stream, use ``"r"`` for a "read-only" array, and ``"w+"`` to create a new array used to write values to disk.
-   
+
    Optionally, you can specify an offset (in bytes) if, for example, you want to skip over a header in the file. The default value for the offset is the current stream position.
 
    For example, the following code::
@@ -744,7 +744,7 @@ Memory-mapped I/O
       A2 = mmap_array(Int, (m,n), s)
 
    creates a ``m``-by-``n`` ``Matrix{Int}``, linked to the file associated with stream ``s``.
-   
+
    A more portable file would need to encode the word size---32 bit or 64 bit---and endianness information in the header. In practice, consider encoding binary data using standard formats like HDF5 (which can be used with memory-mapping).
 
 .. function:: mmap_bitarray([type,] dims, stream, [offset])
@@ -762,7 +762,7 @@ Memory-mapped I/O
 .. function:: msync(ptr, len, [flags])
 
    Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
- 
+
    You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
 
 .. data:: MS_ASYNC

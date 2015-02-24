@@ -11,13 +11,13 @@ promote_rule(::Type{Float64}, ::Type{Int128} ) = Float64
 promote_rule(::Type{Float64}, ::Type{Uint128}) = Float64
 
 convert(::Type{Float16}, x::Union(Signed,Unsigned)) = convert(Float16, convert(Float32,x))
-for t in (Bool,Char,Int8,Int16,Int32,Int64,Uint8,Uint16,Uint32,Uint64)
+for t in (Bool,Char,Int8,Int16,Int32,Int64,Int128,Uint8,Uint16,Uint32,Uint64,Uint128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
 
 for t1 in (Float32,Float64)
     for st in (Int8,Int16,Int32,Int64)
-        @eval begin 
+        @eval begin
             convert(::Type{$t1},x::($st)) = box($t1,sitofp($t1,unbox($st,x)))
             promote_rule(::Type{$t1}, ::Type{$st}  ) = $t1
         end

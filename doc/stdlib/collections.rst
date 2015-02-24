@@ -45,7 +45,7 @@ The ``state`` object may be anything, and should be chosen appropriately for eac
 .. function:: enumerate(iter)
 
    Return an iterator that yields ``(i, x)`` where ``i`` is an index starting at 1, and ``x`` is the ``i``\ th value from the given iterator. It's useful when you need not only the values ``x`` over which you are iterating, but also the index ``i`` of the iterations.
-   
+
    .. doctest::
 
        julia> a = ["a", "b", "c"];
@@ -66,14 +66,14 @@ General Collections
 .. function:: isempty(collection) -> Bool
 
    Determine whether a collection is empty (has no elements).
-   
+
    .. doctest::
-   
+
        julia> isempty([])
-   	true
-	
+       true
+
        julia> isempty([1 2 3])
-   	false
+       false
 
 .. function:: empty!(collection) -> collection
 
@@ -194,7 +194,7 @@ Iterable Collections
 
 .. function:: maximum!(r, A)
 
-   Compute the maximum value of ``A`` over the singleton dimensions of ``r``, 
+   Compute the maximum value of ``A`` over the singleton dimensions of ``r``,
    and write results to ``r``.
 
 .. function:: minimum(itr)
@@ -207,7 +207,7 @@ Iterable Collections
 
 .. function:: minimum!(r, A)
 
-   Compute the minimum value of ``A`` over the singleton dimensions of ``r``, 
+   Compute the minimum value of ``A`` over the singleton dimensions of ``r``,
    and write results to ``r``.
 
 .. function:: extrema(itr)
@@ -277,8 +277,8 @@ Iterable Collections
 
 .. function:: sum!(r, A)
 
-   Sum elements of ``A`` over the singleton dimensions of ``r``, 
-   and write results to ``r``. 
+   Sum elements of ``A`` over the singleton dimensions of ``r``,
+   and write results to ``r``.
 
 .. function:: sum(f, itr)
 
@@ -324,7 +324,7 @@ Iterable Collections
 
 .. function:: prod!(r, A)
 
-   Multiply elements of ``A`` over the singleton dimensions of ``r``, 
+   Multiply elements of ``A`` over the singleton dimensions of ``r``,
    and write results to ``r``.
 
 .. function:: any(itr) -> Bool
@@ -337,8 +337,8 @@ Iterable Collections
 
 .. function:: any!(r, A)
 
-   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true, 
-   and write results to ``r``. 
+   Test whether any values in ``A`` along the singleton dimensions of ``r`` are true,
+   and write results to ``r``.
 
 .. function:: all(itr) -> Bool
 
@@ -350,7 +350,7 @@ Iterable Collections
 
 .. function:: all!(r, A)
 
-   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true, 
+   Test whether all values in ``A`` along the singleton dimensions of ``r`` are true,
    and write results to ``r``.
 
 .. function:: count(p, itr) -> Integer
@@ -418,7 +418,7 @@ Iterable Collections
       14
 
    The associativity of the reduction is implementation-dependent. Use
-   :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed left or 
+   :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed left or
    right associativity.
 
 .. function:: mapreduce(f, op, itr)

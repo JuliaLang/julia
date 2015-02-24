@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ***********
- Functions  
+ Functions
 ***********
 
 In Julia, a function is an object that maps a tuple of argument values
@@ -510,8 +510,8 @@ undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
 
 
-Block Syntax for Function Arguments
------------------------------------
+Do-Block Syntax for Function Arguments
+--------------------------------------
 
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially

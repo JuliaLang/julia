@@ -71,7 +71,7 @@
    Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NODELETE
-    
+
    Enum constant for :func:`dlopen`. See your platform man page for details, if applicable.
 
 .. data:: RTLD_NOLOAD
@@ -244,7 +244,7 @@
 .. data:: Culong
 
    Equivalent to the native ``unsigned long`` c-type
- 
+
 .. data:: Clonglong
 
    Equivalent to the native ``signed long long`` c-type (Int64)

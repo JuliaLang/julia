@@ -253,15 +253,15 @@ Assuming no method more specific than the above is found, Julia next internally
 defines and compiles a method called ``myplus`` specifically for two :class:`Int`
 arguments based on the generic function given above, i.e., it implicitly
 defines and compiles::
- 
+
     function myplus(x::Int,y::Int)
      x+y
     end
-    
+
 and finally, it invokes this specific method.
 
 Thus, abstract types allow programmers to write generic functions that can
-later be used as the default method by many combinations of concrete types.  
+later be used as the default method by many combinations of concrete types.
 Thanks to multiple dispatch, the programmer has full control over whether the
 default or more specific method is used.
 
@@ -412,7 +412,7 @@ You may find a list of field names using the ``names`` function.
      :bar
      :baz
      :qux
-     
+
 You can access the field values of a composite object using the
 traditional ``foo.bar`` notation:
 
@@ -510,7 +510,7 @@ i.e., if the fields of objects passed around by copying could be modified,
 then it would become more difficult to reason about certain instances of generic code.  For example,
 suppose ``x`` is a function argument of an abstract type, and suppose that the function
 changes a field: ``x.isprocessed = true``.  Depending on whether ``x`` is passed by copying
-or by reference, this statement may or may not alter the actual argument in the 
+or by reference, this statement may or may not alter the actual argument in the
 calling routine.  Julia
 sidesteps the possibility of creating functions with unknown effects in this
 scenario by forbidding modification of fields
@@ -1136,7 +1136,7 @@ This declaration of ``Vector`` creates a subtype relation
 ``typealias`` statement creates such a relation; for example, the statement::
 
     typealias AA{T} Array{Array{T,1},1}
- 
+
 does not create the relation ``AA{Int} <: AA``.  The reason is that ``Array{Array{T,1},1}`` is not
 an abstract type at all; in fact, it is a concrete type describing a
 1-dimensional array in which each entry

@@ -18,7 +18,7 @@ s = "ccall(:f,Int,(Ptr{Void},),&x)"
 
 macro test_repr(x)
     quote
-        # Note: We can't just compare x1 and x2 because interpolated 
+        # Note: We can't just compare x1 and x2 because interpolated
         # strings get converted to string Exprs by the first show().
         # This could produce a few false positives, but until string
         # interpolation works we don't really have a choice.
@@ -173,3 +173,15 @@ end"""
 @test_repr "Int[(i, j) for (i, j) in zip(1:10,1:0)]"
 
 @test_repr "[1 2 3; 4 5 6; 7 8 9]'"
+
+# issue #9797
+let q1 = parse(repr(:("$(a)b"))),
+    q2 = parse(repr(:("$ab")))
+    @test isa(q1, QuoteNode)
+    @test q1.value.head === :string
+    @test q1.value.args == [:a, "b"]
+
+    @test isa(q2, QuoteNode)
+    @test q2.value.head == :string
+    @test q2.value.args == [:ab,]
+end

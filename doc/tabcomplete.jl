@@ -62,7 +62,7 @@ for entry in entries
         print(rpad(col, maxlen[i], " "), " ")
     end
     println()
-    if isheader 
+    if isheader
         println(underline("-", maxlen))
         isheader = false
     end

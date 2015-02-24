@@ -24,7 +24,7 @@ elements representing the field names:
             x::Int
 	        y
 	       end
-    
+
     julia> names(Point)
     2-element Array{Symbol,1}:
      :x
@@ -35,7 +35,7 @@ The type of each field in a ``Point`` object is stored in the ``types`` field of
 .. doctest::
 
 	julia> Point.types
-	(Int,Any)
+	(Int64,Any)
 
 While ``x`` is annotated as an ``Int``, ``y`` was unannotated in the type definition, therefore ``y`` defaults to the ``Any`` type.
 
@@ -104,14 +104,9 @@ variable assignments:
 .. doctest::
 
    julia> expand( :(f() = 1) )
-   :($(Expr(:method, :f,
-            :((top(tuple))((top(tuple))(),(top(tuple))())),
-            AST(:($(Expr(:lambda, Any[], Any[Any[],Any[],Any[]],
-                :(begin 
-                    return 1
-                  end)
-            )))),
-            false)))
+   :($(Expr(:method, :f, :((top(tuple))((top(tuple))(),(top(tuple))())), AST(:($(Expr(:lambda, {}, {{},{},{}}, :(begin
+           return 1
+       end))))))))
 
 .. rubric:: Intermediate and compiled representations
 

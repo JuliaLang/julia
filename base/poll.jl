@@ -7,18 +7,20 @@ type FileMonitor
         handle = c_malloc(_sizeof_uv_fs_event)
         err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{Uint8}, Int32), eventloop(),handle,file,0)
         if err < 0
-            c_free(handle)
+            ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
+            disassociate_julia_struct(handle)
+            ccall(:jl_forceclose_uv, Void, (Ptr{Void},), handle)
             throw(UVError("FileMonitor",err))
         end
         this = new(handle,cb,false,Condition())
         associate_julia_struct(handle,this)
         finalizer(this,uvfinalize)
-        this        
+        this
     end
     FileMonitor(file) = FileMonitor(false,file)
 end
 
-function close(t::FileMonitor) 
+function close(t::FileMonitor)
     if t.handle != C_NULL
         ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
     end
@@ -82,11 +84,11 @@ type PollingFileWatcher <: UVPollingWatcher
         associate_julia_struct(handle,this)
         finalizer(this,uvfinalize)
         this
-    end  
+    end
     PollingFileWatcher(file) =  PollingFileWatcher(false,file)
 end
 
-@unix_only typealias FDW_FD RawFD 
+@unix_only typealias FDW_FD RawFD
 @windows_only typealias FDW_FD WindowsRawSocket
 
 @unix_only _get_osfhandle(fd::RawFD) = fd
@@ -165,7 +167,7 @@ function _wait(fdw::FDWatcher,readable,writable)
     events
 end
 
-# On Unix we can only have one watcher per FD, so we need to keep an explicit 
+# On Unix we can only have one watcher per FD, so we need to keep an explicit
 # list of them. On Windows, I think it is techincally possible to have more than one
 # watcher per FD, but in order to keep compatibility, we do the same on windows as we do
 # on unix
@@ -187,7 +189,7 @@ let
                 fdwatcher_array[fd.fd+1] = FDWatcher(fd)
             end
             _wait(fdwatcher_array[fd.fd+1],readable,writable)
-        end 
+        end
     end
     @windows_only begin
         local fdwatcher_array
@@ -204,7 +206,7 @@ let
                 fdwatcher_array[socket] = FDWatcher(socket)
             end
             _wait(fdwatcher_array[socket],readable,writable)
-        end 
+        end
     end
 end
 
@@ -328,7 +330,7 @@ function watch_file(cb, s; poll=false)
         pfw = PollingFileWatcher(cb,s)
         start_watching(pfw)
         return pfw
-    else 
+    else
         return FileMonitor(cb,s)
     end
 end

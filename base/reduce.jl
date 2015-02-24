@@ -139,7 +139,7 @@ end
 
 mapreduce(f, op, itr) = mapfoldl(f, op, itr)
 mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
-mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_seq_impl(f, op, A, ifirst, ilast)
 
 # handling empty arrays
@@ -224,7 +224,7 @@ function mapreduce_seq_impl(f, op::AddFun, a::AbstractArray, ifirst::Int, ilast:
             i += 1
         end
         return s1 + s2 + s3 + s4
-    end    
+    end
 end
 
 # Note: sum_seq uses four accumulators, so each accumulator gets at most 256 numbers
@@ -233,7 +233,7 @@ sum_pairwise_blocksize(f) = 1024
 # This appears to show a benefit from a larger block size
 sum_pairwise_blocksize(::Abs2Fun) = 4096
 
-mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) = 
+mapreduce_impl(f, op::AddFun, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, sum_pairwise_blocksize(f))
 
 sum(f::Union(Callable,Func{1}), a) = mapreduce(f, AddFun(), a)

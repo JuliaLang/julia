@@ -4,7 +4,7 @@ Strings
 .. function:: length(s)
 
    The number of characters in string ``s``.
-   
+
 .. function:: sizeof(s::String)
 
    The number of bytes in string ``s``.
@@ -23,7 +23,7 @@ Strings
    Repeat ``n`` times the string ``s``. The ``^`` operator is an alias to this function.
 
    .. doctest::
-   
+
    	julia> "Test "^3
    	"Test Test Test "
 
@@ -133,9 +133,9 @@ Strings
 .. function:: search(string, chars, [start])
 
    Search for the first occurance of the given characters within the given string. The second argument may be a single character, a vector or a set of characters, a string, or a regular expression (though regular expressions are only allowed on contiguous strings, such as ASCII or UTF-8 strings). The third argument optionally specifies a starting index. The return value is a range of indexes where the matching sequence is found, such that ``s[search(s,x)] == x``:
-   
+
    ``search(string, "substring")`` = ``start:end`` such that ``string[start:end] == "substring"``, or ``0:-1`` if unmatched.
-   
+
    ``search(string, 'c')``         = ``index`` such that ``string[index] == 'c'``, or ``0`` if unmatched.
 
 .. function:: rsearch(string, chars, [start])

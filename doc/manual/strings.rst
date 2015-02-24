@@ -239,11 +239,11 @@ Using an index less than 1 or greater than ``end`` raises an error::
 
     julia> str[0]
     ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+     in getindex at <julia root>/usr/lib/julia/sys.dylib (repeats 2 times)
 
     julia> str[end+1]
     ERROR: BoundsError()
-     in getindex at /Users/sabae/src/julia/usr/lib/julia/sys.dylib (repeats 2 times)
+     in getindex at <julia root>/usr/lib/julia/sys.dylib (repeats 2 times)
 
 You can also extract a substring using range indexing:
 
@@ -409,7 +409,7 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call 
+Both concatenation and string interpolation call
 :func:`string` to convert objects into string form. Most
 non-:obj:`String` objects are converted to strings closely
 corresponding to how they are entered as literal expressions:

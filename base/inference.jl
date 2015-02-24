@@ -1932,7 +1932,19 @@ end
 # and some affect-free calls (allow_volatile=false) -- affect_free means the call
 # cannot be affected by previous calls, except assignment nodes
 function effect_free(e::ANY, sv, allow_volatile::Bool)
-    if isa(e,Symbol) || isa(e,SymbolNode) || isa(e,Number) || isa(e,String) ||
+    if isa(e,SymbolNode)
+        allow_volatile && return true
+        if is_global(sv, (e::SymbolNode).name)
+            return false
+        end
+    end
+    if isa(e,Symbol)
+        allow_volatile && return true
+        if is_global(sv, e::Symbol)
+            return false
+        end
+    end
+    if isa(e,Number) || isa(e,String) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
         return true
     end
@@ -2328,9 +2340,7 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
                         # we need to keep it as a variable name
         for vi in vinflist
             if vi[1] === a && vi[3] != 0
-                if !islocal
-                    islocal = true
-                end
+                islocal = true
                 aeitype = tmerge(aeitype, vi[2])
                 if aeitype === Any
                     break
@@ -2370,14 +2380,13 @@ function inlineable(f, e::Expr, atypes, sv, enclosing_ast)
             occ = 0
             for j = length(body.args):-1:1
                 b = body.args[j]
-                if occ < 1
-                    occ += occurs_more(b, x->is(x,a), 5)
+                if occ < 6
+                    occ += occurs_more(b, x->is(x,a), 6)
                 end
                 if occ > 0 && affect_free && !effect_free(b, sv, true) #TODO: we could short-circuit this test better by memoizing effect_free(b) in the for loop over i
                     affect_free = false
                 end
-                if occ > 5
-                    occ = 6
+                if occ > 5 && !affect_free
                     break
                 end
             end
@@ -2617,6 +2626,8 @@ function inlining_pass(e::Expr, sv, ast)
             ET = exprtype(arg1)
             if isType(ET)
                 f = ET.parameters[1]
+            elseif isconstantfunc(arg1,sv) === false
+                f = abstract_eval(arg1, emptydict, sv)
             else
                 f = _ieval(arg1)
             end

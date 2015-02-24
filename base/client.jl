@@ -182,7 +182,7 @@ function init_bind_addr(args::Vector{UTF8String})
             bind_addr = getipaddr()
         catch
             # All networking is unavailable, initialize bind_addr to the loopback address
-            # Will cause an exception to be raised only when used. 
+            # Will cause an exception to be raised only when used.
             bind_addr = ip"127.0.0.1"
         end
     end
@@ -301,7 +301,7 @@ const LOAD_PATH = ByteString[]
 function init_load_path()
     vers = "v$(VERSION.major).$(VERSION.minor)"
     if haskey(ENV,"JULIA_LOAD_PATH")
-        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))    
+        prepend!(LOAD_PATH, split(ENV["JULIA_LOAD_PATH"], @windows? ';' : ':'))
     end
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","local","share","julia","site",vers))
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))

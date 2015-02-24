@@ -563,7 +563,7 @@ jl_value_t *jl_load(const char *fname)
     if (jl_current_module == jl_base_module) {
         //This deliberatly uses ios, because stdio initialization has been moved to Julia
         jl_printf(JL_STDOUT, "%s\r\n", fname);
-#ifdef _OS_WINDOWS_        
+#ifdef _OS_WINDOWS_
         uv_run(uv_default_loop(), 1);
 #endif
     }
@@ -650,8 +650,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
     jl_value_t *gf=NULL;
 
     if (bnd && bnd->value != NULL && !bnd->constp) {
-        jl_errorf("cannot define function %s; it already has a value",
-                  bnd->name->name);
+        jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
     }
 
     if (*bp != NULL) {
@@ -662,7 +661,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 jl_add_constructors((jl_datatype_t*)gf);
             }
             if (!jl_is_gf(gf)) {
-                jl_error("invalid method definition: not a generic function");
+                jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
             }
         }
     }

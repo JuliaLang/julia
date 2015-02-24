@@ -166,7 +166,7 @@ public:
             objectmap[Addr] = tmp;
         }
         #else
-        error_code itererr; 
+        error_code itererr;
         object::symbol_iterator sym_iter = obj.begin_symbols();
         object::symbol_iterator sym_end = obj.end_symbols();
         for (; sym_iter != sym_end; sym_iter.increment(itererr)) {
@@ -468,7 +468,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
                 }
                 else {
                     const llvm::object::pe32_header *pe32;
-                    coffobj->getPE32Header(pe32); 
+                    coffobj->getPE32Header(pe32);
                     if (pe32 == NULL) {
                         obj = NULL;
                         context = NULL;

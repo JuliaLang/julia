@@ -21,6 +21,7 @@ jl_module_t *jl_new_module(jl_sym_t *name)
     m->type = (jl_value_t*)jl_module_type;
     assert(jl_is_symbol(name));
     m->name = name;
+    m->parent = NULL;
     m->constant_table = NULL;
     htable_new(&m->bindings, 0);
     arraylist_new(&m->usings, 0);
@@ -393,7 +394,7 @@ DLLEXPORT void jl_set_current_module(jl_value_t *m)
 DLLEXPORT jl_value_t *jl_module_usings(jl_module_t *m)
 {
     jl_array_t *a = jl_alloc_array_1d(jl_array_any_type, 0);
-    JL_GC_PUSH1(&a); 
+    JL_GC_PUSH1(&a);
     for(int i=(int)m->usings.len-1; i >= 0; --i) {
         jl_array_grow_end(a, 1);
         jl_module_t *imp = (jl_module_t*)m->usings.items[i];
@@ -443,6 +444,17 @@ void jl_module_run_initializer(jl_module_t *m)
         JL_PRINTF(JL_STDERR, "Warning: error initializing module %s:\n", m->name->name);
         jl_static_show(JL_STDERR, jl_exception_in_transit);
         JL_PRINTF(JL_STDERR, "\n");
+    }
+}
+
+int jl_is_submodule(jl_module_t *child, jl_module_t *parent)
+{
+    while (1) {
+        if (parent == child)
+            return 1;
+        if (child == NULL || child == child->parent)
+            return 0;
+        child = child->parent;
     }
 }
 

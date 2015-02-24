@@ -72,7 +72,7 @@ static Type *FTnbits(size_t nb)
         return Type::getDoubleTy(jl_LLVMContext);
     else if (nb == 128)
         return Type::getFP128Ty(jl_LLVMContext);
-    else 
+    else
         jl_error("Unsupported Float Size");
 }
 // convert int type to same-size float type
@@ -907,7 +907,7 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(fpext,2) {
         Value *x = auto_unbox(args[2],ctx);
 #if JL_NEED_FLOATTEMP_VAR
-        // Target platform might carry extra precision.  
+        // Target platform might carry extra precision.
         // Force rounding to single precision first. The reason is that it's
         // fine to keep working in extended precision as long as it's
         // understood that everything is implicitly rounded to 23 bits,
@@ -935,9 +935,10 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
                                                  emit_expr(args[2], ctx, false));
         }
         else if (t1 == t2 && llt1 == llt2 && llt1 != jl_pvalue_llvmt) {
-            ifelse_result = builder.CreateSelect(isfalse,
-                                                 auto_unbox(args[3], ctx),
-                                                 auto_unbox(args[2], ctx));
+            Value *x = auto_unbox(args[3], ctx);
+            ifelse_result = tpropagate(x, builder.CreateSelect(isfalse,
+                                                               x,
+                                                               auto_unbox(args[2], ctx)));
         }
         else {
             Value *arg1 = boxed(emit_expr(args[3],ctx,false), ctx, expr_type(args[3],ctx));

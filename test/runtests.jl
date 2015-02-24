@@ -8,7 +8,7 @@ testnames = [
     "resolve", "pollfd", "mpfr", "broadcast", "complex", "socket",
     "floatapprox", "readdlm", "regex", "float16", "combinatorics",
     "sysinfo", "rounding", "ranges", "mod2pi", "euler", "show",
-    "lineedit", "replcompletions", "repl", "test", "goto"
+    "lineedit", "replcompletions", "repl", "test", "goto", "parser"
 ]
 
 if isdir(joinpath(dirname(@__FILE__), "..", "examples"))
@@ -38,7 +38,7 @@ end
 
 cd(dirname(@__FILE__)) do
     n = 1
-    if net_on 
+    if net_on
         n = min(8, CPU_CORES, length(tests))
         n > 1 && addprocs(n; exeflags=`--check-bounds=yes`)
         blas_set_num_threads(1)

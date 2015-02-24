@@ -410,10 +410,10 @@ Integers
    Returns ``true`` if ``x`` is odd (that is, not divisible by 2), and ``false`` otherwise.
 
    .. doctest::
-   
+
    	julia> isodd(9)
    	true
-   
+
    	julia> isodd(10)
    	false
 
@@ -422,10 +422,10 @@ Integers
    Returns ``true`` is ``x`` is even (that is, divisible by 2), and ``false`` otherwise.
 
    .. doctest::
-   
+
    	julia> iseven(10)
    	true
-   
+
    	julia> iseven(9)
    	false
 

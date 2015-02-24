@@ -2,6 +2,978 @@
 
 {
 
+("Base","ndims","ndims(A) -> Integer
+
+   Returns the number of dimensions of A
+
+"),
+
+("Base","size","size(A)
+
+   Returns a tuple containing the dimensions of A
+
+"),
+
+("Base","iseltype","iseltype(A, T)
+
+   Tests whether A or its elements are of type T
+
+"),
+
+("Base","length","length(A) -> Integer
+
+   Returns the number of elements in A
+
+"),
+
+("Base","countnz","countnz(A)
+
+   Counts the number of nonzero values in array A (dense or sparse).
+   Note that this is not a constant-time operation. For sparse
+   matrices, one should usually use \"nnz\", which returns the number
+   of stored values.
+
+"),
+
+("Base","conj!","conj!(A)
+
+   Convert an array to its complex conjugate in-place
+
+"),
+
+("Base","stride","stride(A, k)
+
+   Returns the distance in memory (in number of elements) between
+   adjacent elements in dimension k
+
+"),
+
+("Base","strides","strides(A)
+
+   Returns a tuple of the memory strides in each dimension
+
+"),
+
+("Base","ind2sub","ind2sub(dims, index) -> subscripts
+
+   Returns a tuple of subscripts into an array with dimensions
+   \"dims\", corresponding to the linear index \"index\"
+
+   **Example** \"i, j, ... = ind2sub(size(A), indmax(A))\" provides
+   the indices of the maximum element
+
+"),
+
+("Base","sub2ind","sub2ind(dims, i, j, k...) -> index
+
+   The inverse of \"ind2sub\", returns the linear index corresponding
+   to the provided subscripts
+
+"),
+
+("Base","Array","Array(type, dims)
+
+   Construct an uninitialized dense array. \"dims\" may be a tuple or
+   a series of integer arguments.
+
+"),
+
+("Base","getindex","getindex(type[, elements...])
+
+   Construct a 1-d array of the specified type. This is usually called
+   with the syntax \"Type[]\". Element values can be specified using
+   \"Type[a,b,c,...]\".
+
+"),
+
+("Base","cell","cell(dims)
+
+   Construct an uninitialized cell array (heterogeneous array).
+   \"dims\" can be either a tuple or a series of integer arguments.
+
+"),
+
+("Base","zeros","zeros(type, dims)
+
+   Create an array of all zeros of specified type. The type defaults
+   to Float64 if not specified.
+
+"),
+
+("Base","zeros","zeros(A)
+
+   Create an array of all zeros with the same element type and shape
+   as A.
+
+"),
+
+("Base","ones","ones(type, dims)
+
+   Create an array of all ones of specified type. The type defaults to
+   Float64 if not specified.
+
+"),
+
+("Base","ones","ones(A)
+
+   Create an array of all ones with the same element type and shape as
+   A.
+
+"),
+
+("Base","trues","trues(dims)
+
+   Create a \"BitArray\" with all values set to true
+
+"),
+
+("Base","falses","falses(dims)
+
+   Create a \"BitArray\" with all values set to false
+
+"),
+
+("Base","fill","fill(x, dims)
+
+   Create an array filled with the value \"x\". For example,
+   \"fill(1.0, (10,10))\" returns a  10x10 array of floats, with each
+   element initialized to 1.0.
+
+   If \"x\" is an object reference, all elements will refer to the
+   same object. \"fill(Foo(), dims)\" will return an array filled with
+   the result of evaluating \"Foo()\" once.
+
+"),
+
+("Base","fill!","fill!(A, x)
+
+   Fill array \"A\" with the value \"x\". If \"x\" is an object
+   reference, all elements will refer to the same object. \"fill!(A,
+   Foo())\" will return \"A\" filled with the result of evaluating
+   \"Foo()\" once.
+
+"),
+
+("Base","reshape","reshape(A, dims)
+
+   Create an array with the same data as the given array, but with
+   different dimensions. An implementation for a particular type of
+   array may choose whether the data is copied or shared.
+
+"),
+
+("Base","similar","similar(array, element_type, dims)
+
+   Create an uninitialized array of the same type as the given array,
+   but with the specified element type and dimensions. The second and
+   third arguments are both optional. The \"dims\" argument may be a
+   tuple or a series of integer arguments.
+
+"),
+
+("Base","reinterpret","reinterpret(type, A)
+
+   Change the type-interpretation of a block of memory. For example,
+   \"reinterpret(Float32, uint32(7))\" interprets the 4 bytes
+   corresponding to \"uint32(7)\" as a \"Float32\". For arrays, this
+   constructs an array with the same binary data as the given array,
+   but with the specified element type.
+
+"),
+
+("Base","eye","eye(n)
+
+   n-by-n identity matrix
+
+"),
+
+("Base","eye","eye(m, n)
+
+   m-by-n identity matrix
+
+"),
+
+("Base","eye","eye(A)
+
+   Constructs an identity matrix of the same dimensions and type as
+   \"A\".
+
+"),
+
+("Base","linspace","linspace(start, stop, n)
+
+   Construct a vector of \"n\" linearly-spaced elements from \"start\"
+   to \"stop\". See also: \"linrange()\" that constructs a range
+   object.
+
+"),
+
+("Base","logspace","logspace(start, stop, n)
+
+   Construct a vector of \"n\" logarithmically-spaced numbers from
+   \"10^start\" to \"10^stop\".
+
+"),
+
+("Base","broadcast","broadcast(f, As...)
+
+   Broadcasts the arrays \"As\" to a common size by expanding
+   singleton dimensions, and returns an array of the results
+   \"f(as...)\" for each position.
+
+"),
+
+("Base","broadcast!","broadcast!(f, dest, As...)
+
+   Like \"broadcast\", but store the result of \"broadcast(f, As...)\"
+   in the \"dest\" array. Note that \"dest\" is only used to store the
+   result, and does not supply arguments to \"f\" unless it is also
+   listed in the \"As\", as in \"broadcast!(f, A, A, B)\" to perform
+   \"A[:] = broadcast(f, A, B)\".
+
+"),
+
+("Base","bitbroadcast","bitbroadcast(f, As...)
+
+   Like \"broadcast\", but allocates a \"BitArray\" to store the
+   result, rather then an \"Array\".
+
+"),
+
+("Base","broadcast_function","broadcast_function(f)
+
+   Returns a function \"broadcast_f\" such that
+   \"broadcast_function(f)(As...) === broadcast(f, As...)\". Most
+   useful in the form \"const broadcast_f = broadcast_function(f)\".
+
+"),
+
+("Base","broadcast!_function","broadcast!_function(f)
+
+   Like \"broadcast_function\", but for \"broadcast!\".
+
+"),
+
+("Base","getindex","getindex(A, inds...)
+
+   Returns a subset of array \"A\" as specified by \"inds\", where
+   each \"ind\" may be an \"Int\", a \"Range\", or a \"Vector\".
+
+"),
+
+("Base","sub","sub(A, inds...)
+
+   Returns a SubArray, which stores the input \"A\" and \"inds\"
+   rather than computing the result immediately. Calling \"getindex\"
+   on a SubArray computes the indices on the fly.
+
+"),
+
+("Base","parent","parent(A)
+
+   Returns the \"parent array\" of an array view type (e.g.,
+   SubArray), or the array itself if it is not a view
+
+"),
+
+("Base","parentindexes","parentindexes(A)
+
+   From an array view \"A\", returns the corresponding indexes in the
+   parent
+
+"),
+
+("Base","slicedim","slicedim(A, d, i)
+
+   Return all the data of \"A\" where the index for dimension \"d\"
+   equals \"i\". Equivalent to \"A[:,:,...,i,:,:,...]\" where \"i\" is
+   in position \"d\".
+
+"),
+
+("Base","slice","slice(A, inds...)
+
+   Create a view of the given indexes of array \"A\", dropping
+   dimensions indexed with scalars.
+
+"),
+
+("Base","setindex!","setindex!(A, X, inds...)
+
+   Store values from array \"X\" within some subset of \"A\" as
+   specified by \"inds\".
+
+"),
+
+("Base","broadcast_getindex","broadcast_getindex(A, inds...)
+
+   Broadcasts the \"inds\" arrays to a common size like \"broadcast\",
+   and returns an array of the results \"A[ks...]\", where \"ks\" goes
+   over the positions in the broadcast.
+
+"),
+
+("Base","broadcast_setindex!","broadcast_setindex!(A, X, inds...)
+
+   Broadcasts the \"X\" and \"inds\" arrays to a common size and
+   stores the value from each position in \"X\" at the indices given
+   by the same positions in \"inds\".
+
+"),
+
+("Base","cat","cat(dim, A...)
+
+   Concatenate the input arrays along the specified dimension
+
+"),
+
+("Base","vcat","vcat(A...)
+
+   Concatenate along dimension 1
+
+"),
+
+("Base","hcat","hcat(A...)
+
+   Concatenate along dimension 2
+
+"),
+
+("Base","hvcat","hvcat(rows::(Int...), values...)
+
+   Horizontal and vertical concatenation in one call. This function is
+   called for block matrix syntax. The first argument specifies the
+   number of arguments to concatenate in each block row. For example,
+   \"[a b;c d e]\" calls \"hvcat((2,3),a,b,c,d,e)\".
+
+   If the first argument is a single integer \"n\", then all block
+   rows are assumed to have \"n\" block columns.
+
+"),
+
+("Base","flipdim","flipdim(A, d)
+
+   Reverse \"A\" in dimension \"d\".
+
+"),
+
+("Base","flipud","flipud(A)
+
+   Equivalent to \"flipdim(A,1)\".
+
+"),
+
+("Base","fliplr","fliplr(A)
+
+   Equivalent to \"flipdim(A,2)\".
+
+"),
+
+("Base","circshift","circshift(A, shifts)
+
+   Circularly shift the data in an array. The second argument is a
+   vector giving the amount to shift in each dimension.
+
+"),
+
+("Base","find","find(A)
+
+   Return a vector of the linear indexes of the non-zeros in \"A\"
+   (determined by \"A[i]!=0\").  A common use of this is to convert a
+   boolean array to an array of indexes of the \"true\" elements.
+
+"),
+
+("Base","find","find(f, A)
+
+   Return a vector of the linear indexes of  \"A\" where \"f\" returns
+   true.
+
+"),
+
+("Base","findn","findn(A)
+
+   Return a vector of indexes for each dimension giving the locations
+   of the non-zeros in \"A\" (determined by \"A[i]!=0\").
+
+"),
+
+("Base","findnz","findnz(A)
+
+   Return a tuple \"(I, J, V)\" where \"I\" and \"J\" are the row and
+   column indexes of the non-zero values in matrix \"A\", and \"V\" is
+   a vector of the non-zero values.
+
+"),
+
+("Base","findfirst","findfirst(A)
+
+   Return the index of the first non-zero value in \"A\" (determined
+   by \"A[i]!=0\").
+
+"),
+
+("Base","findfirst","findfirst(A, v)
+
+   Return the index of the first element equal to \"v\" in \"A\".
+
+"),
+
+("Base","findfirst","findfirst(predicate, A)
+
+   Return the index of the first element of \"A\" for which
+   \"predicate\" returns true.
+
+"),
+
+("Base","findnext","findnext(A, i)
+
+   Find the next index >= \"i\" of a non-zero element of \"A\", or
+   \"0\" if not found.
+
+"),
+
+("Base","findnext","findnext(predicate, A, i)
+
+   Find the next index >= \"i\" of an element of \"A\" for which
+   \"predicate\" returns true, or \"0\" if not found.
+
+"),
+
+("Base","findnext","findnext(A, v, i)
+
+   Find the next index >= \"i\" of an element of \"A\" equal to \"v\"
+   (using \"==\"), or \"0\" if not found.
+
+"),
+
+("Base","permutedims","permutedims(A, perm)
+
+   Permute the dimensions of array \"A\". \"perm\" is a vector
+   specifying a permutation of length \"ndims(A)\". This is a
+   generalization of transpose for multi-dimensional arrays. Transpose
+   is equivalent to \"permutedims(A,[2,1])\".
+
+"),
+
+("Base","ipermutedims","ipermutedims(A, perm)
+
+   Like \"permutedims()\", except the inverse of the given permutation
+   is applied.
+
+"),
+
+("Base","squeeze","squeeze(A, dims)
+
+   Remove the dimensions specified by \"dims\" from array \"A\"
+
+"),
+
+("Base","vec","vec(Array) -> Vector
+
+   Vectorize an array using column-major convention.
+
+"),
+
+("Base","promote_shape","promote_shape(s1, s2)
+
+   Check two array shapes for compatibility, allowing trailing
+   singleton dimensions, and return whichever shape has more
+   dimensions.
+
+"),
+
+("Base","checkbounds","checkbounds(array, indexes...)
+
+   Throw an error if the specified indexes are not in bounds for the
+   given array.
+
+"),
+
+("Base","randsubseq","randsubseq(A, p) -> Vector
+
+   Return a vector consisting of a random subsequence of the given
+   array \"A\", where each element of \"A\" is included (in order)
+   with independent probability \"p\".   (Complexity is linear in
+   \"p*length(A)\", so this function is efficient even if \"p\" is
+   small and \"A\" is large.)  Technically, this process is known as
+   \"Bernoulli sampling\" of \"A\".
+
+"),
+
+("Base","randsubseq!","randsubseq!(S, A, p)
+
+   Like \"randsubseq\", but the results are stored in \"S\" (which is
+   resized as needed).
+
+"),
+
+("Base","cumprod","cumprod(A[, dim])
+
+   Cumulative product along a dimension.
+
+"),
+
+("Base","cumprod!","cumprod!(B, A[, dim])
+
+   Cumulative product of \"A\" along a dimension, storing the result
+   in \"B\".
+
+"),
+
+("Base","cumsum","cumsum(A[, dim])
+
+   Cumulative sum along a dimension.
+
+"),
+
+("Base","cumsum!","cumsum!(B, A[, dim])
+
+   Cumulative sum of \"A\" along a dimension, storing the result in
+   \"B\".
+
+"),
+
+("Base","cumsum_kbn","cumsum_kbn(A[, dim])
+
+   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
+   compensated summation algorithm for additional accuracy.
+
+"),
+
+("Base","cummin","cummin(A[, dim])
+
+   Cumulative minimum along a dimension.
+
+"),
+
+("Base","cummax","cummax(A[, dim])
+
+   Cumulative maximum along a dimension.
+
+"),
+
+("Base","diff","diff(A[, dim])
+
+   Finite difference operator of matrix or vector.
+
+"),
+
+("Base","gradient","gradient(F[, h])
+
+   Compute differences along vector \"F\", using \"h\" as the spacing
+   between points. The default spacing is one.
+
+"),
+
+("Base","rot180","rot180(A)
+
+   Rotate matrix \"A\" 180 degrees.
+
+"),
+
+("Base","rot180","rot180(A, k)
+
+   Rotate matrix \"A\" 180 degrees an integer \"k\" number of times.
+   If \"k\" is even, this is equivalent to a \"copy\".
+
+"),
+
+("Base","rotl90","rotl90(A)
+
+   Rotate matrix \"A\" left 90 degrees.
+
+"),
+
+("Base","rotl90","rotl90(A, k)
+
+   Rotate matrix \"A\" left 90 degrees an integer \"k\" number of
+   times. If \"k\" is zero or a multiple of four, this is equivalent
+   to a \"copy\".
+
+"),
+
+("Base","rotr90","rotr90(A)
+
+   Rotate matrix \"A\" right 90 degrees.
+
+"),
+
+("Base","rotr90","rotr90(A, k)
+
+   Rotate matrix \"A\" right 90 degrees an integer \"k\" number of
+   times. If \"k\" is zero or a multiple of four, this is equivalent
+   to a \"copy\".
+
+"),
+
+("Base","reducedim","reducedim(f, A, dims, initial)
+
+   Reduce 2-argument function \"f\" along dimensions of \"A\".
+   \"dims\" is a vector specifying the dimensions to reduce, and
+   \"initial\" is the initial value to use in the reductions.
+
+   The associativity of the reduction is implementation-dependent; if
+   you need a particular associativity, e.g. left-to-right, you should
+   write your own loop. See documentation for \"reduce\".
+
+"),
+
+("Base","mapslices","mapslices(f, A, dims)
+
+   Transform the given dimensions of array \"A\" using function \"f\".
+   \"f\" is called on each slice of \"A\" of the form
+   \"A[...,:,...,:,...]\". \"dims\" is an integer vector specifying
+   where the colons go in this expression. The results are
+   concatenated along the remaining dimensions. For example, if
+   \"dims\" is \"[1,2]\" and A is 4-dimensional, \"f\" is called on
+   \"A[:,:,i,j]\" for all \"i\" and \"j\".
+
+"),
+
+("Base","sum_kbn","sum_kbn(A)
+
+   Returns the sum of all array elements, using the Kahan-Babuska-
+   Neumaier compensated summation algorithm for additional accuracy.
+
+"),
+
+("Base","cartesianmap","cartesianmap(f, dims)
+
+   Given a \"dims\" tuple of integers \"(m, n, ...)\", call \"f\" on
+   all combinations of integers in the ranges \"1:m\", \"1:n\", etc.
+
+      julia> cartesianmap(println, (2,2))
+      11
+      21
+      12
+      22
+
+"),
+
+("Base","nthperm","nthperm(v, k)
+
+   Compute the kth lexicographic permutation of a vector.
+
+"),
+
+("Base","nthperm","nthperm(p)
+
+   Return the \"k\" that generated permutation \"p\". Note that
+   \"nthperm(nthperm([1:n], k)) == k\" for \"1 <= k <= factorial(n)\".
+
+"),
+
+("Base","nthperm!","nthperm!(v, k)
+
+   In-place version of \"nthperm()\".
+
+"),
+
+("Base","randperm","randperm(n)
+
+   Construct a random permutation of the given length.
+
+"),
+
+("Base","invperm","invperm(v)
+
+   Return the inverse permutation of v.
+
+"),
+
+("Base","isperm","isperm(v) -> Bool
+
+   Returns true if v is a valid permutation.
+
+"),
+
+("Base","permute!","permute!(v, p)
+
+   Permute vector \"v\" in-place, according to permutation \"p\".  No
+   checking is done to verify that \"p\" is a permutation.
+
+   To return a new permutation, use \"v[p]\".  Note that this is
+   generally faster than \"permute!(v,p)\" for large vectors.
+
+"),
+
+("Base","ipermute!","ipermute!(v, p)
+
+   Like permute!, but the inverse of the given permutation is applied.
+
+"),
+
+("Base","randcycle","randcycle(n)
+
+   Construct a random cyclic permutation of the given length.
+
+"),
+
+("Base","shuffle","shuffle(v)
+
+   Return a randomly permuted copy of \"v\".
+
+"),
+
+("Base","shuffle!","shuffle!(v)
+
+   In-place version of \"shuffle()\".
+
+"),
+
+("Base","reverse","reverse(v[, start=1[, stop=length(v)]])
+
+   Return a copy of \"v\" reversed from start to stop.
+
+"),
+
+("Base","reverse!","reverse!(v[, start=1[, stop=length(v)]]) -> v
+
+   In-place version of \"reverse()\".
+
+"),
+
+("Base","combinations","combinations(arr, n)
+
+   Generate all combinations of \"n\" elements from an indexable
+   object.  Because the number of combinations can be very large, this
+   function returns an iterator object. Use
+   \"collect(combinations(a,n))\" to get an array of all combinations.
+
+"),
+
+("Base","permutations","permutations(arr)
+
+   Generate all permutations of an indexable object.  Because the
+   number of permutations can be very large, this function returns an
+   iterator object. Use \"collect(permutations(a,n))\" to get an array
+   of all permutations.
+
+"),
+
+("Base","partitions","partitions(n)
+
+   Generate all integer arrays that sum to \"n\". Because the number
+   of partitions can be very large, this function returns an iterator
+   object. Use \"collect(partitions(n))\" to get an array of all
+   partitions. The number of partitions to generete can be efficiently
+   computed using \"length(partitions(n))\".
+
+"),
+
+("Base","partitions","partitions(n, m)
+
+   Generate all arrays of \"m\" integers that sum to \"n\". Because
+   the number of partitions can be very large, this function returns
+   an iterator object. Use \"collect(partitions(n,m))\" to get an
+   array of all partitions. The number of partitions to generete can
+   be efficiently computed using \"length(partitions(n,m))\".
+
+"),
+
+("Base","partitions","partitions(array)
+
+   Generate all set partitions of the elements of an array,
+   represented as arrays of arrays. Because the number of partitions
+   can be very large, this function returns an iterator object. Use
+   \"collect(partitions(array))\" to get an array of all partitions.
+   The number of partitions to generete can be efficiently computed
+   using \"length(partitions(array))\".
+
+"),
+
+("Base","partitions","partitions(array, m)
+
+   Generate all set partitions of the elements of an array into
+   exactly m subsets, represented as arrays of arrays. Because the
+   number of partitions can be very large, this function returns an
+   iterator object. Use \"collect(partitions(array,m))\" to get an
+   array of all partitions. The number of partitions into m subsets is
+   equal to the Stirling number of the second kind and can be
+   efficiently computed using \"length(partitions(array,m))\".
+
+"),
+
+("Base","bitpack","bitpack(A::AbstractArray{T, N}) -> BitArray
+
+   Converts a numeric array to a packed boolean array
+
+"),
+
+("Base","bitunpack","bitunpack(B::BitArray{N}) -> Array{Bool,N}
+
+   Converts a packed boolean array to an array of booleans
+
+"),
+
+("Base","flipbits!","flipbits!(B::BitArray{N}) -> BitArray{N}
+
+   Performs a bitwise not operation on B. See *~ operator*.
+
+"),
+
+("Base","rol","rol(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Left rotation operator.
+
+"),
+
+("Base","ror","ror(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Right rotation operator.
+
+"),
+
+("Base","sparse","sparse(I, J, V[, m, n, combine])
+
+   Create a sparse matrix \"S\" of dimensions \"m x n\" such that
+   \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
+   combine duplicates. If \"m\" and \"n\" are not specified, they are
+   set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
+   function is not supplied, duplicates are added by default.
+
+"),
+
+("Base","sparsevec","sparsevec(I, V[, m, combine])
+
+   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
+   = V[k]\". Duplicates are combined using the \"combine\" function,
+   which defaults to \"+\" if it is not provided. In julia, sparse
+   vectors are really just sparse matrices with one column. Given
+   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
+   column matrix with one column is sparse, whereas a sparse row
+   matrix with one row ends up being dense.
+
+"),
+
+("Base","sparsevec","sparsevec(D::Dict[, m])
+
+   Create a sparse matrix of size \"m x 1\" where the row values are
+   keys from the dictionary, and the nonzero values are the values
+   from the dictionary.
+
+"),
+
+("Base","issparse","issparse(S)
+
+   Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
+
+"),
+
+("Base","sparse","sparse(A)
+
+   Convert a dense matrix \"A\" into a sparse matrix.
+
+"),
+
+("Base","sparsevec","sparsevec(A)
+
+   Convert a dense vector \"A\" into a sparse matrix of size \"m x
+   1\". In julia, sparse vectors are really just sparse matrices with
+   one column.
+
+"),
+
+("Base","full","full(S)
+
+   Convert a sparse matrix \"S\" into a dense matrix.
+
+"),
+
+("Base","nnz","nnz(A)
+
+   Returns the number of stored (filled) elements in a sparse matrix.
+
+"),
+
+("Base","spzeros","spzeros(m, n)
+
+   Create an empty sparse matrix of size \"m x n\".
+
+"),
+
+("Base","spones","spones(S)
+
+   Create a sparse matrix with the same structure as that of \"S\",
+   but with every nonzero element having the value \"1.0\".
+
+"),
+
+("Base","speye","speye(type, m[, n])
+
+   Create a sparse identity matrix of specified type of size \"m x
+   m\". In case \"n\" is supplied, create a sparse identity matrix of
+   size \"m x n\".
+
+"),
+
+("Base","spdiagm","spdiagm(B, d[, m, n])
+
+   Construct a sparse diagonal matrix. \"B\" is a tuple of vectors
+   containing the diagonals and \"d\" is a tuple containing the
+   positions of the diagonals. In the case the input contains only one
+   diagonaly, \"B\" can be a vector (instead of a tuple) and \"d\" can
+   be the diagonal position (instead of a tuple), defaulting to 0
+   (diagonal). Optionally, \"m\" and \"n\" specify the size of the
+   resulting sparse matrix.
+
+"),
+
+("Base","sprand","sprand(m, n, p[, rng])
+
+   Create a random \"m\" by \"n\" sparse matrix, in which the
+   probability of any element being nonzero is independently given by
+   \"p\" (and hence the mean density of nonzeros is also exactly
+   \"p\"). Nonzero values are sampled from the distribution specified
+   by \"rng\". The uniform distribution is used in case \"rng\" is not
+   specified.
+
+"),
+
+("Base","sprandn","sprandn(m, n, p)
+
+   Create a random \"m\" by \"n\" sparse matrix with the specified
+   (independent) probability \"p\" of any entry being nonzero, where
+   nonzero values are sampled from the normal distribution.
+
+"),
+
+("Base","sprandbool","sprandbool(m, n, p)
+
+   Create a random \"m\" by \"n\" sparse boolean matrix with the
+   specified (independent) probability \"p\" of any entry being
+   \"true\".
+
+"),
+
+("Base","etree","etree(A[, post])
+
+   Compute the elimination tree of a symmetric sparse matrix \"A\"
+   from \"triu(A)\" and, optionally, its post-ordering permutation.
+
+"),
+
+("Base","symperm","symperm(A, p)
+
+   Return the symmetric permutation of A, which is \"A[p,p]\". A
+   should be symmetric and sparse, where only the upper triangular
+   part of the matrix is stored. This algorithm ignores the lower
+   triangular part of the matrix. Only the upper triangular part of
+   the result is returned as well.
+
+"),
+
+("Base","nonzeros","nonzeros(A)
+
+   Return a vector of the structural nonzero values in sparse matrix
+   \"A\". This includes zeros that are explicitly stored in the sparse
+   matrix. The returned vector points directly to the internal nonzero
+   storage of \"A\", and any modifications to the returned vector will
+   mutate \"A\" as well.
+
+"),
+
 ("Base","exit","exit([code])
 
    Quit (or control-D at the prompt). The default exit code is zero,
@@ -207,12 +1179,14 @@
 "),
 
 ("Base","is","is(x, y) -> Bool
+===(x, y) -> Bool
+≡(x, y) -> Bool
 
    Determine whether \"x\" and \"y\" are identical, in the sense that
    no program could distinguish them. Compares mutable objects by
    address in memory, and compares immutable objects (such as numbers)
    by contents at the bit level. This function is sometimes called
-   \"egal\". The \"===\" operator is an alias for this function.
+   \"egal\".
 
 "),
 
@@ -401,8 +1375,6 @@
    precision as the argument, and usually more). Otherwise the
    argument \"x\" is converted to \"widen(typeof(x))\".
 
-   **Examples**:
-
       julia> widen(Int32)
       Int64
 
@@ -513,10 +1485,10 @@
 
    Determine a type big enough to hold values of each argument type
    without loss, whenever possible. In some cases, where no type
-   exists which to which both types can be promoted losslessly, some
-   loss is tolerated; for example, \"promote_type(Int64,Float64)\"
-   returns \"Float64\" even though strictly, not all \"Int64\" values
-   can be represented exactly as \"Float64\" values.
+   exists to which both types can be promoted losslessly, some loss is
+   tolerated; for example, \"promote_type(Int64,Float64)\" returns
+   \"Float64\" even though strictly, not all \"Int64\" values can be
+   represented exactly as \"Float64\" values.
 
 "),
 
@@ -551,8 +1523,22 @@
    For example, we could use it in the following manner to summarize
    information about a struct type:
 
-      structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...]
-      structinfo(StatStruct)
+      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+
+      julia> structinfo(StatStruct)
+      12-element Array{(Int64,Symbol,DataType),1}:
+       (0,:device,Uint64)
+       (8,:inode,Uint64)
+       (16,:mode,Uint64)
+       (24,:nlink,Int64)
+       (32,:uid,Uint64)
+       (40,:gid,Uint64)
+       (48,:rdev,Uint64)
+       (56,:size,Int64)
+       (64,:blksize,Int64)
+       (72,:blocks,Int64)
+       (80,:mtime,Float64)
+       (88,:ctime,Float64)
 
 "),
 
@@ -578,6 +1564,12 @@
    contains no references to other values. Typical examples are
    numeric types such as \"Uint8\", \"Float64\", and
    \"Complex{Float64}\".
+
+      julia> isbits(Complex{Float64})
+      true
+
+      julia> isbits(Complex)
+      false
 
 "),
 
@@ -609,15 +1601,11 @@
    into a single list, which is then passed to \"f\" as its argument
    list.
 
-   **Example**:
+      julia> function f(x, y) # Define a function f
+               x + y
+             end;
 
-      # Define a function f
-      julia> function f(x, y)
-                 x + y
-             end
-
-      # Apply f with 1 and 2 as arguments
-      julia> apply(f, [1 2])
+      julia> apply(f, [1 2]) # Apply f with 1 and 2 as arguments
       3
 
    \"apply\" is called to implement the \"...\" argument splicing
@@ -631,8 +1619,6 @@
    Determine whether the given generic function has a method matching
    the given tuple of argument types.
 
-   **Example**:
-
       julia> method_exists(length, (Array,))
       true
 
@@ -643,11 +1629,9 @@
    Determine whether the given generic function has a method
    applicable to the given arguments.
 
-   **Examples**:
-
       julia> function f(x, y)
-                 x + y
-             end
+               x + y
+             end;
 
       julia> applicable(f, 1)
       false
@@ -674,7 +1658,8 @@
    Applies a function to the preceding argument. This allows for easy
    function chaining.
 
-   **Example**: \"[1:5] |> x->x.^2 |> sum |> inv\"
+      julia> [1:5] |> x->x.^2 |> sum |> inv
+      0.01818181818181818
 
 "),
 
@@ -705,9 +1690,9 @@
 
    Only valid in the context of an Expr returned from a macro.
    Prevents the macro hygiene pass from turning embedded variables
-   into gensym variables. See the *Macros* section of the
-   Metaprogramming chapter of the manual for more details and
-   examples.
+   into gensym variables. See the *Non-Standard String Literals*
+   section of the Metaprogramming chapter of the manual for more
+   details and examples.
 
 "),
 
@@ -720,8 +1705,8 @@
 
 ("Base","@gensym","@gensym()
 
-   Generates a gensym symbol for a variable. For example, *@gensym x
-   y* is transformed into *x = gensym(\"x\"); y = gensym(\"y\")*.
+   Generates a gensym symbol for a variable. For example, \"@gensym x
+   y\" is transformed into \"x = gensym(\"x\"); y = gensym(\"y\")\".
 
 "),
 
@@ -731,10 +1716,12 @@
    later be passed to eval for execution). Start is the index of the
    first character to start parsing. If \"greedy\" is true (default),
    \"parse\" will try to consume as much input as it can; otherwise,
-   it will stop as soon as it has parsed a valid expression. If
-   \"raise\" is true (default), syntax errors will raise an error;
-   otherwise, \"parse\" will return an expression that will raise an
-   error upon evaluation.
+   it will stop as soon as it has parsed a valid expression.
+   Incomplete but otherwise syntactically valid expressions will
+   return \"Expr(:incomplete, \"(error message)\")\". If \"raise\" is
+   true (default), syntax errors other than incomplete expressions
+   will raise an error. If \"raise\" is false, \"parse\" will return
+   an expression that will raise an error upon evaluation.
 
 "),
 
@@ -745,6 +1732,1046 @@
    expression. If \"raise\" is true (default), syntax errors will
    raise an error; otherwise, \"parse\" will return an expression that
    will raise an error upon evaluation.
+
+"),
+
+("Base","run","run(command)
+
+   Run a command object, constructed with backticks. Throws an error
+   if anything goes wrong, including the process exiting with a non-
+   zero status.
+
+"),
+
+("Base","spawn","spawn(command)
+
+   Run a command object asynchronously, returning the resulting
+   \"Process\" object.
+
+"),
+
+("Base","DevNull","DevNull
+
+   Used in a stream redirect to discard all data written to it.
+   Essentially equivalent to /dev/null on Unix or NUL on Windows.
+   Usage: \"run(`cat test.txt` |> DevNull)\"
+
+"),
+
+("Base","success","success(command)
+
+   Run a command object, constructed with backticks, and tell whether
+   it was successful (exited with a code of 0). An exception is raised
+   if the process cannot be started.
+
+"),
+
+("Base","process_running","process_running(p::Process)
+
+   Determine whether a process is currently running.
+
+"),
+
+("Base","process_exited","process_exited(p::Process)
+
+   Determine whether a process has exited.
+
+"),
+
+("Base","kill","kill(p::Process, signum=SIGTERM)
+
+   Send a signal to a process. The default is to terminate the
+   process.
+
+"),
+
+("Base","open","open(command, mode::String=\"r\", stdio=DevNull)
+
+   Start running \"command\" asynchronously, and return a tuple
+   \"(stream,process)\".  If \"mode\" is \"\"r\"\", then \"stream\"
+   reads from the process's standard output and \"stdio\" optionally
+   specifies the process's standard input stream.  If \"mode\" is
+   \"\"w\"\", then \"stream\" writes to the process's standard input
+   and \"stdio\" optionally specifies the process's standard output
+   stream.
+
+"),
+
+("Base","open","open(f::Function, command, mode::String=\"r\", stdio=DevNull)
+
+   Similar to \"open(command, mode, stdio)\", but calls \"f(stream)\"
+   on the resulting read or write stream, then closes the stream and
+   waits for the process to complete.  Returns the value returned by
+   \"f\".
+
+"),
+
+("Base","readandwrite","readandwrite(command)
+
+   Starts running a command asynchronously, and returns a tuple
+   (stdout,stdin,process) of the output stream and input stream of the
+   process, and the process object itself.
+
+"),
+
+("Base","ignorestatus","ignorestatus(command)
+
+   Mark a command object so that running it will not throw an error if
+   the result code is non-zero.
+
+"),
+
+("Base","detach","detach(command)
+
+   Mark a command object so that it will be run in a new process
+   group, allowing it to outlive the julia process, and not have
+   Ctrl-C interrupts passed to it.
+
+"),
+
+("Base","setenv","setenv(command, env; dir=working_dir)
+
+   Set environment variables to use when running the given command.
+   \"env\" is either a dictionary mapping strings to strings, or an
+   array of strings of the form \"\"var=val\"\".
+
+   The \"dir\" keyword argument can be used to specify a working
+   directory for the command.
+
+"),
+
+("Base","|>","|>(command, command)
+|>(command, filename)
+|>(filename, command)
+
+   Redirect operator. Used for piping the output of a process into
+   another (first form) or to redirect the standard output/input of a
+   command to/from a file (second and third forms).
+
+   **Examples**:
+      * \"run(`ls` |> `grep xyz`)\"
+
+      * \"run(`ls` |> \"out.txt\")\"
+
+      * \"run(\"out.txt\" |> `grep xyz`)\"
+
+"),
+
+("Base",">>",">>(command, filename)
+
+   Redirect standard output of a process, appending to the destination
+   file.
+
+"),
+
+("Base",".>",".>(command, filename)
+
+   Redirect the standard error stream of a process.
+
+"),
+
+("Base","gethostname","gethostname() -> String
+
+   Get the local machine's host name.
+
+"),
+
+("Base","getipaddr","getipaddr() -> String
+
+   Get the IP address of the local machine, as a string of the form
+   \"x.x.x.x\".
+
+"),
+
+("Base","getpid","getpid() -> Int32
+
+   Get julia's process ID.
+
+"),
+
+("Base","time","time([t::TmStruct])
+
+   Get the system time in seconds since the epoch, with fairly high
+   (typically, microsecond) resolution. When passed a \"TmStruct\",
+   converts it to a number of seconds since the epoch.
+
+"),
+
+("Base","time_ns","time_ns()
+
+   Get the time in nanoseconds. The time corresponding to 0 is
+   undefined, and wraps every 5.8 years.
+
+"),
+
+("Base","strftime","strftime([format], time)
+
+   Convert time, given as a number of seconds since the epoch or a
+   \"TmStruct\", to a formatted string using the given format.
+   Supported formats are the same as those in the standard C library.
+
+"),
+
+("Base","strptime","strptime([format], timestr)
+
+   Parse a formatted time string into a \"TmStruct\" giving the
+   seconds, minute, hour, date, etc. Supported formats are the same as
+   those in the standard C library. On some platforms, timezones will
+   not be parsed correctly. If the result of this function will be
+   passed to \"time\" to convert it to seconds since the epoch, the
+   \"isdst\" field should be filled in manually. Setting it to \"-1\"
+   will tell the C library to use the current system settings to
+   determine the timezone.
+
+"),
+
+("Base","TmStruct","TmStruct([seconds])
+
+   Convert a number of seconds since the epoch to broken-down format,
+   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
+   \"year\", \"wday\", \"yday\", and \"isdst\".
+
+"),
+
+("Base","tic","tic()
+
+   Set a timer to be read by the next call to \"toc()\" or \"toq()\".
+   The macro call \"@time expr\" can also be used to time evaluation.
+
+"),
+
+("Base","toc","toc()
+
+   Print and return the time elapsed since the last \"tic()\".
+
+"),
+
+("Base","toq","toq()
+
+   Return, but do not print, the time elapsed since the last
+   \"tic()\".
+
+"),
+
+("Base","@time","@time()
+
+   A macro to execute an expression, printing the time it took to
+   execute and the total number of bytes its execution caused to be
+   allocated, before returning the value of the expression.
+
+"),
+
+("Base","@elapsed","@elapsed()
+
+   A macro to evaluate an expression, discarding the resulting value,
+   instead returning the number of seconds it took to execute as a
+   floating-point number.
+
+"),
+
+("Base","@allocated","@allocated()
+
+   A macro to evaluate an expression, discarding the resulting value,
+   instead returning the total number of bytes allocated during
+   evaluation of the expression.
+
+"),
+
+("Base","EnvHash","EnvHash() -> EnvHash
+
+   A singleton of this type provides a hash table interface to
+   environment variables.
+
+"),
+
+("Base","ENV","ENV
+
+   Reference to the singleton \"EnvHash\", providing a dictionary
+   interface to system environment variables.
+
+"),
+
+("Base","@unix","@unix()
+
+   Given \"@unix? a : b\", do \"a\" on Unix systems (including Linux
+   and OS X) and \"b\" elsewhere. See documentation for Handling
+   Platform Variations in the Calling C and Fortran Code section of
+   the manual.
+
+"),
+
+("Base","@osx","@osx()
+
+   Given \"@osx? a : b\", do \"a\" on OS X and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("Base","@linux","@linux()
+
+   Given \"@linux? a : b\", do \"a\" on Linux and \"b\" elsewhere. See
+   documentation for Handling Platform Variations in the Calling C and
+   Fortran Code section of the manual.
+
+"),
+
+("Base","@windows","@windows()
+
+   Given \"@windows? a : b\", do \"a\" on Windows and \"b\" elsewhere.
+   See documentation for Handling Platform Variations in the Calling C
+   and Fortran Code section of the manual.
+
+"),
+
+("Base","error","error(message::String)
+
+   Raise an error with the given message
+
+"),
+
+("Base","throw","throw(e)
+
+   Throw an object as an exception
+
+"),
+
+("Base","rethrow","rethrow([e])
+
+   Throw an object without changing the current exception backtrace.
+   The default argument is the current exception (if called within a
+   \"catch\" block).
+
+"),
+
+("Base","backtrace","backtrace()
+
+   Get a backtrace object for the current program point.
+
+"),
+
+("Base","catch_backtrace","catch_backtrace()
+
+   Get the backtrace of the current exception, for use within
+   \"catch\" blocks.
+
+"),
+
+("Base","assert","assert(cond[, text])
+
+   Raise an error if \"cond\" is false. Also available as the macro
+   \"@assert expr\".
+
+"),
+
+("Base","@assert","@assert()
+
+   Raise an error if \"cond\" is false. Preferred syntax for writings
+   assertions.
+
+"),
+
+("Base","ArgumentError","ArgumentError
+
+   The parameters given to a function call are not valid.
+
+"),
+
+("Base","BoundsError","BoundsError
+
+   An indexing operation into an array tried to access an out-of-
+   bounds element.
+
+"),
+
+("Base","EOFError","EOFError
+
+   No more data was available to read from a file or stream.
+
+"),
+
+("Base","ErrorException","ErrorException
+
+   Generic error type. The error message, in the *.msg* field, may
+   provide more specific details.
+
+"),
+
+("Base","KeyError","KeyError
+
+   An indexing operation into an \"Associative\" (\"Dict\") or \"Set\"
+   like object tried to access or delete a non-existent element.
+
+"),
+
+("Base","LoadError","LoadError
+
+   An error occurred while *including*, *requiring*, or *using* a
+   file. The error specifics should be available in the *.error*
+   field.
+
+"),
+
+("Base","MethodError","MethodError
+
+   A method with the required type signature does not exist in the
+   given generic function.
+
+"),
+
+("Base","ParseError","ParseError
+
+   The expression passed to the *parse* function could not be
+   interpreted as a valid Julia expression.
+
+"),
+
+("Base","ProcessExitedException","ProcessExitedException
+
+   After a client Julia process has exited, further attempts to
+   reference the dead child will throw this exception.
+
+"),
+
+("Base","SystemError","SystemError
+
+   A system call failed with an error code (in the \"errno\" global
+   variable).
+
+"),
+
+("Base","TypeError","TypeError
+
+   A type assertion failure, or calling an intrinsic function with an
+   incorrect argument type.
+
+"),
+
+("Base","Timer","Timer(f::Function)
+
+   Create a timer to call the given callback function. The callback is
+   passed one argument, the timer object itself. The timer can be
+   started and stopped with \"start_timer\" and \"stop_timer\".
+
+"),
+
+("Base","start_timer","start_timer(t::Timer, delay, repeat)
+
+   Start invoking the callback for a \"Timer\" after the specified
+   initial delay, and then repeating with the given interval. Times
+   are in seconds. If \"repeat\" is \"0\", the timer is only triggered
+   once.
+
+"),
+
+("Base","stop_timer","stop_timer(t::Timer)
+
+   Stop invoking the callback for a timer.
+
+"),
+
+("Base","module_name","module_name(m::Module) -> Symbol
+
+   Get the name of a module as a symbol.
+
+"),
+
+("Base","module_parent","module_parent(m::Module) -> Module
+
+   Get a module's enclosing module. \"Main\" is its own parent.
+
+"),
+
+("Base","current_module","current_module() -> Module
+
+   Get the *dynamically* current module, which is the module code is
+   currently being read from. In general, this is not the same as the
+   module containing the call to this function.
+
+"),
+
+("Base","fullname","fullname(m::Module)
+
+   Get the fully-qualified name of a module as a tuple of symbols. For
+   example, \"fullname(Base.Pkg)\" gives \"(:Base,:Pkg)\", and
+   \"fullname(Main)\" gives \"()\".
+
+"),
+
+("Base","names","names(x::Module[, all=false[, imported=false]])
+
+   Get an array of the names exported by a module, with optionally
+   more module globals according to the additional parameters.
+
+"),
+
+("Base","names","names(x::DataType)
+
+   Get an array of the fields of a data type.
+
+"),
+
+("Base","isconst","isconst([m::Module], s::Symbol) -> Bool
+
+   Determine whether a global is declared \"const\" in a given module.
+   The default module argument is \"current_module()\".
+
+"),
+
+("Base","isgeneric","isgeneric(f::Function) -> Bool
+
+   Determine whether a function is generic.
+
+"),
+
+("Base","function_name","function_name(f::Function) -> Symbol
+
+   Get the name of a generic function as a symbol, or \":anonymous\".
+
+"),
+
+("Base","function_module","function_module(f::Function, types) -> Module
+
+   Determine the module containing a given definition of a generic
+   function.
+
+"),
+
+("Base","functionloc","functionloc(f::Function, types)
+
+   Returns a tuple \"(filename,line)\" giving the location of a method
+   definition.
+
+"),
+
+("Base","functionlocs","functionlocs(f::Function, types)
+
+   Returns an array of the results of \"functionloc\" for all matching
+   definitions.
+
+"),
+
+("Base","gc","gc()
+
+   Perform garbage collection. This should not generally be used.
+
+"),
+
+("Base","gc_disable","gc_disable()
+
+   Disable garbage collection. This should be used only with extreme
+   caution, as it can cause memory use to grow without bound.
+
+"),
+
+("Base","gc_enable","gc_enable()
+
+   Re-enable garbage collection after calling \"gc_disable\".
+
+"),
+
+("Base","macroexpand","macroexpand(x)
+
+   Takes the expression x and returns an equivalent expression with
+   all macros removed (expanded).
+
+"),
+
+("Base","expand","expand(x)
+
+   Takes the expression x and returns an equivalent expression in
+   lowered form
+
+"),
+
+("Base","code_lowered","code_lowered(f, types)
+
+   Returns an array of lowered ASTs for the methods matching the given
+   generic function and type signature.
+
+"),
+
+("Base","@code_lowered","@code_lowered()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_lowered\" function on the resulting
+   expression
+
+"),
+
+("Base","code_typed","code_typed(f, types)
+
+   Returns an array of lowered and type-inferred ASTs for the methods
+   matching the given generic function and type signature.
+
+"),
+
+("Base","@code_typed","@code_typed()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_typed\" function on the resulting
+   expression
+
+"),
+
+("Base","code_llvm","code_llvm(f, types)
+
+   Prints the LLVM bitcodes generated for running the method matching
+   the given generic function and type signature to STDOUT.
+
+"),
+
+("Base","@code_llvm","@code_llvm()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_llvm\" function on the resulting
+   expression
+
+"),
+
+("Base","code_native","code_native(f, types)
+
+   Prints the native assembly instructions generated for running the
+   method matching the given generic function and type signature to
+   STDOUT.
+
+"),
+
+("Base","@code_native","@code_native()
+
+   Evaluates the arguments to the function call, determines their
+   types, and calls the \"code_native\" function on the resulting
+   expression
+
+"),
+
+("Base","precompile","precompile(f, args::(Any..., ))
+
+   Compile the given function \"f\" for the argument tuple (of types)
+   \"args\", but do not execute it.
+
+"),
+
+("Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
+
+   Call function in C-exported shared library, specified by
+   \"(function name, library)\" tuple, where each component is a
+   String or :Symbol. Alternatively, ccall may be used to call a
+   function pointer returned by dlsym, but note that this usage is
+   generally discouraged to facilitate future static compilation. Note
+   that the argument type tuple must be a literal tuple, and not a
+   tuple-valued variable or expression.
+
+"),
+
+("Base","cglobal","cglobal((symbol, library) or ptr[, Type=Void])
+
+   Obtain a pointer to a global variable in a C-exported shared
+   library, specified exactly as in \"ccall\".  Returns a
+   \"Ptr{Type}\", defaulting to \"Ptr{Void}\" if no Type argument is
+   supplied.  The values can be read or written by \"unsafe_load\" or
+   \"unsafe_store!\", respectively.
+
+"),
+
+("Base","cfunction","cfunction(fun::Function, RetType::Type, (ArgTypes...))
+
+   Generate C-callable function pointer from Julia function. Type
+   annotation of the return value in the callback function is a must
+   for situations where Julia cannot infer the return type
+   automatically.
+
+   For example:
+
+      function foo()
+          # body
+
+          retval::Float64
+      end
+
+      bar = cfunction(foo, Float64, ())
+
+"),
+
+("Base","dlopen","dlopen(libfile::String[, flags::Integer])
+
+   Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
+   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
+   \"RTLD_FIRST\".  These are converted to the corresponding flags of
+   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
+   possible, or are ignored if the specified functionality is not
+   available on the current platform.  The default is
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
+   these flags, on POSIX platforms, is to specify
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
+
+"),
+
+("Base","dlopen_e","dlopen_e(libfile::String[, flags::Integer])
+
+   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
+   of raising errors.
+
+"),
+
+("Base","RTLD_DEEPBIND","RTLD_DEEPBIND
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_FIRST","RTLD_FIRST
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_GLOBAL","RTLD_GLOBAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_LAZY","RTLD_LAZY
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_LOCAL","RTLD_LOCAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_NODELETE","RTLD_NODELETE
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_NOLOAD","RTLD_NOLOAD
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","RTLD_NOW","RTLD_NOW
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Base","dlsym","dlsym(handle, sym)
+
+   Look up a symbol from a shared library handle, return callable
+   function pointer on success.
+
+"),
+
+("Base","dlsym_e","dlsym_e(handle, sym)
+
+   Look up a symbol from a shared library handle, silently return NULL
+   pointer on lookup failure.
+
+"),
+
+("Base","dlclose","dlclose(handle)
+
+   Close shared library referenced by handle.
+
+"),
+
+("Base","find_library","find_library(names, locations)
+
+   Searches for the first library in \"names\" in the paths in the
+   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
+   that order) which can successfully be dlopen'd. On success, the
+   return value will be one of the names (potentially prefixed by one
+   of the paths in locations). This string can be assigned to a
+   \"global const\" and used as the library name in future
+   \"ccall\"'s. On failure, it returns the empty string.
+
+"),
+
+("Base","DL_LOAD_PATH","DL_LOAD_PATH
+
+   When calling \"dlopen\", the paths in this list will be searched
+   first, in order, before searching the system locations for a valid
+   library handle.
+
+"),
+
+("Base","c_malloc","c_malloc(size::Integer) -> Ptr{Void}
+
+   Call \"malloc\" from the C standard library.
+
+"),
+
+("Base","c_calloc","c_calloc(num::Integer, size::Integer) -> Ptr{Void}
+
+   Call \"calloc\" from the C standard library.
+
+"),
+
+("Base","c_realloc","c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+
+   Call \"realloc\" from the C standard library.
+
+"),
+
+("Base","c_free","c_free(addr::Ptr)
+
+   Call \"free\" from the C standard library.
+
+"),
+
+("Base","unsafe_load","unsafe_load(p::Ptr{T}, i::Integer)
+
+   Load a value of type \"T\" from the address of the ith element
+   (1-indexed) starting at \"p\". This is equivalent to the C
+   expression \"p[i-1]\".
+
+"),
+
+("Base","unsafe_store!","unsafe_store!(p::Ptr{T}, x, i::Integer)
+
+   Store a value of type \"T\" to the address of the ith element
+   (1-indexed) starting at \"p\". This is equivalent to the C
+   expression \"p[i-1] = x\".
+
+"),
+
+("Base","unsafe_copy!","unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
+
+   Copy \"N\" elements from a source pointer to a destination, with no
+   checking. The size of an element is determined by the type of the
+   pointers.
+
+"),
+
+("Base","unsafe_copy!","unsafe_copy!(dest::Array, do, src::Array, so, N)
+
+   Copy \"N\" elements from a source array to a destination, starting
+   at offset \"so\" in the source and \"do\" in the destination
+   (1-indexed).
+
+"),
+
+("Base","copy!","copy!(dest, src)
+
+   Copy all elements from collection \"src\" to array \"dest\".
+   Returns \"dest\".
+
+"),
+
+("Base","copy!","copy!(dest, do, src, so, N)
+
+   Copy \"N\" elements from collection \"src\" starting at offset
+   \"so\", to array \"dest\" starting at offset \"do\". Returns
+   \"dest\".
+
+"),
+
+("Base","pointer","pointer(a[, index])
+
+   Get the native address of an array or string element. Be careful to
+   ensure that a julia reference to \"a\" exists as long as this
+   pointer will be used.
+
+"),
+
+("Base","pointer","pointer(type, int)
+
+   Convert an integer to a pointer of the specified element type.
+
+"),
+
+("Base","pointer_to_array","pointer_to_array(p, dims[, own])
+
+   Wrap a native pointer as a Julia Array object. The pointer element
+   type determines the array element type. \"own\" optionally
+   specifies whether Julia should take ownership of the memory,
+   calling \"free\" on the pointer when the array is no longer
+   referenced.
+
+"),
+
+("Base","pointer_from_objref","pointer_from_objref(obj)
+
+   Get the memory address of a Julia object as a \"Ptr\". The
+   existence of the resulting \"Ptr\" will not protect the object from
+   garbage collection, so you must ensure that the object remains
+   referenced for the whole time that the \"Ptr\" will be used.
+
+"),
+
+("Base","unsafe_pointer_to_objref","unsafe_pointer_to_objref(p::Ptr)
+
+   Convert a \"Ptr\" to an object reference. Assumes the pointer
+   refers to a valid heap-allocated Julia object. If this is not the
+   case, undefined behavior results, hence this function is considered
+   \"unsafe\" and should be used with care.
+
+"),
+
+("Base","disable_sigint","disable_sigint(f::Function)
+
+   Disable Ctrl-C handler during execution of a function, for calling
+   external code that is not interrupt safe. Intended to be called
+   using \"do\" block syntax as follows:
+
+      disable_sigint() do
+          # interrupt-unsafe code
+          ...
+      end
+
+"),
+
+("Base","reenable_sigint","reenable_sigint(f::Function)
+
+   Re-enable Ctrl-C handler during execution of a function.
+   Temporarily reverses the effect of \"disable_sigint\".
+
+"),
+
+("Base","errno","errno([code])
+
+   Get the value of the C library's \"errno\". If an argument is
+   specified, it is used to set the value of \"errno\".
+
+   The value of \"errno\" is only valid immediately after a \"ccall\"
+   to a C library routine that sets it. Specifically, you cannot call
+   \"errno\" at the next prompt in a REPL, because lots of code is
+   executed between prompts.
+
+"),
+
+("Base","systemerror","systemerror(sysfunc, iftrue)
+
+   Raises a \"SystemError\" for \"errno\" with the descriptive string
+   \"sysfunc\" if \"bool\" is true
+
+"),
+
+("Base","strerror","strerror(n)
+
+   Convert a system call error code to a descriptive string
+
+"),
+
+("Base","Cchar","Cchar
+
+   Equivalent to the native \"char\" c-type
+
+"),
+
+("Base","Cuchar","Cuchar
+
+   Equivalent to the native \"unsigned char\" c-type (Uint8)
+
+"),
+
+("Base","Cshort","Cshort
+
+   Equivalent to the native \"signed short\" c-type (Int16)
+
+"),
+
+("Base","Cushort","Cushort
+
+   Equivalent to the native \"unsigned short\" c-type (Uint16)
+
+"),
+
+("Base","Cint","Cint
+
+   Equivalent to the native \"signed int\" c-type (Int32)
+
+"),
+
+("Base","Cuint","Cuint
+
+   Equivalent to the native \"unsigned int\" c-type (Uint32)
+
+"),
+
+("Base","Clong","Clong
+
+   Equivalent to the native \"signed long\" c-type
+
+"),
+
+("Base","Culong","Culong
+
+   Equivalent to the native \"unsigned long\" c-type
+
+"),
+
+("Base","Clonglong","Clonglong
+
+   Equivalent to the native \"signed long long\" c-type (Int64)
+
+"),
+
+("Base","Culonglong","Culonglong
+
+   Equivalent to the native \"unsigned long long\" c-type (Uint64)
+
+"),
+
+("Base","Csize_t","Csize_t
+
+   Equivalent to the native \"size_t\" c-type (Uint)
+
+"),
+
+("Base","Cssize_t","Cssize_t
+
+   Equivalent to the native \"ssize_t\" c-type
+
+"),
+
+("Base","Cptrdiff_t","Cptrdiff_t
+
+   Equivalent to the native \"ptrdiff_t\" c-type (Int)
+
+"),
+
+("Base","Coff_t","Coff_t
+
+   Equivalent to the native \"off_t\" c-type
+
+"),
+
+("Base","Cwchar_t","Cwchar_t
+
+   Equivalent to the native \"wchar_t\" c-type (Int32)
+
+"),
+
+("Base","Cfloat","Cfloat
+
+   Equivalent to the native \"float\" c-type (Float32)
+
+"),
+
+("Base","Cdouble","Cdouble
+
+   Equivalent to the native \"double\" c-type (Float64)
 
 "),
 
@@ -781,19 +2808,19 @@
 ("Base","enumerate","enumerate(iter)
 
    Return an iterator that yields \"(i, x)\" where \"i\" is an index
-   starting at 1, and \"x\" is the \"ith\" value from the given
-   iterator. It's useful when you need not only the values *x* over
-   which you are iterating, but also the index *i* of the iterations.
+   starting at 1, and \"x\" is the \"i\"th value from the given
+   iterator. It's useful when you need not only the values \"x\" over
+   which you are iterating, but also the index \"i\" of the
+   iterations.
 
-   **Example**:
+      julia> a = [\"a\", \"b\", \"c\"];
 
-      julia> a = [\"a\", \"b\", \"c\"]
-      julia> for (index, value) in enumerate(a)
-                 println(\"\$index \$value\")
-             end
-      1 a
-      2 b
-      3 c
+       julia> for (index, value) in enumerate(a)
+                  println(\"\$index \$value\")
+              end
+       1 a
+       2 b
+       3 c
 
 "),
 
@@ -801,14 +2828,10 @@
 
    Determine whether a collection is empty (has no elements).
 
-   **Examples**:
-
-      julia> a = []
-      julia> isempty(a)
+      julia> isempty([])
       true
 
-      julia> b = [1 2 3]
-      julia> isempty(b)
+      julia> isempty([1 2 3])
       false
 
 "),
@@ -831,14 +2854,16 @@
 
    Returns the last index of the collection.
 
-   **Example**:
-
       julia> endof([1,2,4])
       3
 
 "),
 
 ("Base","in","in(item, collection) -> Bool
+∈(item, collection) -> Bool
+∋(collection, item) -> Bool
+∉(item, collection) -> Bool
+∌(collection, item) -> Bool
 
    Determine whether an item is in the given collection, in the sense
    that it is \"==\" to one of the values generated by iterating over
@@ -1213,8 +3238,6 @@
    Determine whether predicate \"p\" returns true for all elements of
    \"itr\".
 
-   **Example**:
-
       julia> all(i->(4<=i<=6), [4,5,6])
       true
 
@@ -1225,12 +3248,17 @@
    Transform collection \"c\" by applying \"f\" to each element. For
    multiple collection arguments, apply \"f\" elementwise.
 
-   **Examples**:
-
       julia> map((x) -> x * 2, [1, 2, 3])
-      [2, 4, 6]
+      3-element Array{Int64,1}:
+       2
+       4
+       6
+
       julia> map(+, [1, 2, 3], [10, 20, 30])
-      [11, 22, 33]
+      3-element Array{Int64,1}:
+       11
+       22
+       33
 
 "),
 
@@ -1261,11 +3289,12 @@
    intermediate collection needs to be created. See documentation for
    \"reduce\" and \"map\".
 
-   **Example**: \"mapreduce(x->x^2, +, [1:3]) == 1 + 4 + 9 == 14\"
+      julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
+      14
 
    The associativity of the reduction is implementation-dependent. Use
-   \"mapfoldl\" or \"mapfoldr\" instead for guaranteed left or right
-   associativity.
+   \"mapfoldl()\" or \"mapfoldr()\" instead for guaranteed left or
+   right associativity.
 
 "),
 
@@ -1341,6 +3370,9 @@
 "),
 
 ("Base","issubset","issubset(a, b)
+⊆(A, S) -> Bool
+⊈(A, S) -> Bool
+⊊(A, S) -> Bool
 
    Determine whether every element of \"a\" is also in \"b\", using
    the \"in\" function.
@@ -1381,10 +3413,11 @@
 
 ("Base","Dict","Dict()
 
-   \"Dict{K,V}()\" constructs a hashtable with keys of type K and
-   values of type V. The literal syntax is \"{\"A\"=>1, \"B\"=>2}\"
-   for a \"Dict{Any,Any}\", or \"[\"A\"=>1, \"B\"=>2]\" for a \"Dict\"
-   of inferred type.
+   \"Dict{K,V}()\" constructs a hash
+
+   table with keys of type K and values of type V. The literal syntax
+   is \"{\"A\"=>1, \"B\"=>2}\" for a \"Dict{Any,Any}\", or
+   \"[\"A\"=>1, \"B\"=>2]\" for a \"Dict\" of inferred type.
 
 "),
 
@@ -1411,7 +3444,7 @@
 
       get(dict, key) do
           # default value calculated here
-          time()
+               time()
       end
 
 "),
@@ -1432,7 +3465,7 @@
 
       get!(dict, key) do
           # default value calculated here
-          time()
+               time()
       end
 
 "),
@@ -1511,6 +3544,7 @@
 "),
 
 ("Base","union","union(s1, s2...)
+∪(s1, s2)
 
    Construct the union of two or more sets. Maintains order with
    arrays.
@@ -1524,6 +3558,7 @@
 "),
 
 ("Base","intersect","intersect(s1, s2...)
+∩(s1, s2)
 
    Construct the intersection of two or more sets. Maintains order and
    multiplicity of the first argument for arrays and ranges.
@@ -1576,26 +3611,28 @@
 
 ("Base","complement","complement(s)
 
-   Returns the set-complement of IntSet s.
+   Returns the set-complement of IntSet \"s\".
 
 "),
 
 ("Base","complement!","complement!(s)
 
-   Mutates IntSet s into its set-complement.
+   Mutates IntSet \"s\" into its set-complement.
 
 "),
 
 ("Base","intersect!","intersect!(s1, s2)
 
-   Intersects IntSets s1 and s2 and overwrites the set s1 with the
-   result. If needed, s1 will be expanded to the size of s2.
+   Intersects IntSets \"s1\" and \"s2\" and overwrites the set \"s1\"
+   with the result. If needed, s1 will be expanded to the size of
+   \"s2\".
 
 "),
 
 ("Base","issubset","issubset(A, S) -> Bool
+⊆(A, S) -> Bool
 
-   True if \"A ⊆ S\" (A is a subset of or equal to S)
+   True if A is a subset of or equal to S.
 
 "),
 
@@ -1638,9 +3675,9 @@
 
 ("Base","deleteat!","deleteat!(collection, itr)
 
-   Remove the items at the indices given by *itr*, and return the
+   Remove the items at the indices given by \"itr\", and return the
    modified collection. Subsequent items are shifted to fill the
-   resulting gap.  *itr* must be sorted and unique.
+   resulting gap.  \"itr\" must be sorted and unique.
 
 "),
 
@@ -1677,635 +3714,677 @@
 ("Base","append!","append!(collection, items) -> collection.
 
    Add the elements of \"items\" to the end of a collection.
-   \"append!([1],[2,3]) => [1,2,3]\"
+
+      julia> append!([1],[2,3])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 "),
 
 ("Base","prepend!","prepend!(collection, items) -> collection
 
    Insert the elements of \"items\" to the beginning of a collection.
-   \"prepend!([3],[1,2]) => [1,2,3]\"
+
+      julia> prepend!([3],[1,2])
+      3-element Array{Int64,1}:
+       1
+       2
+       3
 
 "),
 
-("Base","length","length(s)
+("Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
 
-   The number of characters in string \"s\".
-
-"),
-
-("Base","sizeof","sizeof(s::String)
-
-   The number of bytes in string \"s\".
+   Construct a new PriorityQueue, with keys of type \"K\" and
+   values/priorites of type \"V\". If an order is not given, the
+   priority queue is min-ordered using the default comparison for
+   \"V\".
 
 "),
 
-("Base","*","*(s, t)
+("Base.Collections","enqueue!","enqueue!(pq, k, v)
 
-   Concatenate strings. The \"*\" operator is an alias to this
-   function.
-
-   **Example**:
-
-      julia> \"Hello \" * \"world\"
-      \"Hello world\"
+   Insert the a key \"k\" into a priority queue \"pq\" with priority
+   \"v\".
 
 "),
 
-("Base","^","^(s, n)
+("Base.Collections","dequeue!","dequeue!(pq)
 
-   Repeat \"n\" times the string \"s\". The \"^\" operator is an alias
-   to this function.
-
-   **Example**:
-
-      julia> \"Test \"^3
-      \"Test Test Test \"
+   Remove and return the lowest priority key from a priority queue.
 
 "),
 
-("Base","string","string(xs...)
+("Base.Collections","peek","peek(pq)
 
-   Create a string from any values using the \"print\" function.
-
-"),
-
-("Base","repr","repr(x)
-
-   Create a string from any value using the \"showall\" function.
+   Return the lowest priority key from a priority queue without
+   removing that key from the queue.
 
 "),
 
-("Base","bytestring","bytestring(::Ptr{Uint8}[, length])
+("Base.Collections","heapify","heapify(v[, ord])
 
-   Create a string from the address of a C (0-terminated) string
-   encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
-   freed. If \"length\" is specified, the string does not have to be
-   0-terminated.
+   Return a new vector in binary heap order, optionally using the
+   given ordering.
 
 "),
 
-("Base","bytestring","bytestring(s)
+("Base.Collections","heapify!","heapify!(v[, ord])
 
-   Convert a string to a contiguous byte array representation
-   appropriate for passing it to C functions. The string will be
-   encoded as either ASCII or UTF-8.
+   In-place heapify.
 
 "),
 
-("Base","ascii","ascii(::Array{Uint8, 1})
+("Base.Collections","isheap","isheap(v[, ord])
 
-   Create an ASCII string from a byte array.
-
-"),
-
-("Base","ascii","ascii(s)
-
-   Convert a string to a contiguous ASCII string (all characters must
-   be valid ASCII characters).
+   Return true iff an array is heap-ordered according to the given
+   order.
 
 "),
 
-("Base","utf8","utf8(::Array{Uint8, 1})
+("Base.Collections","heappush!","heappush!(v, x[, ord])
 
-   Create a UTF-8 string from a byte array.
-
-"),
-
-("Base","utf8","utf8(s)
-
-   Convert a string to a contiguous UTF-8 string (all characters must
-   be valid UTF-8 characters).
+   Given a binary heap-ordered array, push a new element \"x\",
+   preserving the heap property. For efficiency, this function does
+   not check that the array is indeed heap-ordered.
 
 "),
 
-("Base","normalize_string","normalize_string(s, normalform::Symbol)
+("Base.Collections","heappop!","heappop!(v[, ord])
 
-   Normalize the string \"s\" according to one of the four \"normal
-   forms\" of the Unicode standard: \"normalform\" can be \":NFC\",
-   \":NFD\", \":NFKC\", or \":NFKD\".  Normal forms C (canonical
-   composition) and D (canonical decomposition) convert different
-   visually identical representations of the same abstract string into
-   a single canonical form, with form C being more compact.  Normal
-   forms KC and KD additionally canonicalize \"compatibility
-   equivalents\": they convert characters that are abstractly similar
-   but visually distinct into a single canonical choice (e.g. they
-   expand ligatures into the individual characters), with form KC
-   being more compact.
-
-   Alternatively, finer control and additional transformations may be
-   be obtained by calling *normalize_string(s; keywords...)*, where
-   any number of the following boolean keywords options (which all
-   default to \"false\" except for \"compose\") are specified:
-
-   * \"compose=false\": do not perform canonical composition
-
-   * \"decompose=true\": do canonical decomposition instead of
-     canonical composition (\"compose=true\" is ignored if present)
-
-   * \"compat=true\": compatibility equivalents are canonicalized
-
-   * \"casefold=true\": perform Unicode case folding, e.g. for case-
-     insensitive string comparison
-
-   * \"newline2lf=true\", \"newline2ls=true\", or \"newline2ps=true\":
-     convert various newline sequences (LF, CRLF, CR, NEL) into a
-     linefeed (LF), line-separation (LS), or paragraph-separation (PS)
-     character, respectively
-
-   * \"stripmark=true\": strip diacritical marks (e.g. accents)
-
-   * \"stripignore=true\": strip Unicode's \"default ignorable\"
-     characters (e.g. the soft hyphen or the left-to-right marker)
-
-   * \"stripcc=true\": strip control characters; horizontal tabs and
-     form feeds are converted to spaces; newlines are also converted
-     to spaces unless a newline-conversion flag was specified
-
-   * \"rejectna=true\": throw an error if unassigned code points are
-     found
-
-   * \"stable=true\": enforce Unicode Versioning Stability
-
-   For example, NFKC corresponds to the options \"compose=true,
-   compat=true, stable=true\".
+   Given a binary heap-ordered array, remove and return the lowest
+   ordered element. For efficiency, this function does not check that
+   the array is indeed heap-ordered.
 
 "),
 
-("Base","is_valid_ascii","is_valid_ascii(s) -> Bool
+("Base","OS_NAME","OS_NAME
 
-   Returns true if the string or byte vector is valid ASCII, false
+   A symbol representing the name of the operating system. Possible
+   values are \":Linux\", \":Darwin\" (OS X), or \":Windows\".
+
+"),
+
+("Base","ARGS","ARGS
+
+   An array of the command line arguments passed to Julia, as strings.
+
+"),
+
+("Base","C_NULL","C_NULL
+
+   The C null pointer constant, sometimes used when calling external
+   code.
+
+"),
+
+("Base","CPU_CORES","CPU_CORES
+
+   The number of CPU cores in the system.
+
+"),
+
+("Base","WORD_SIZE","WORD_SIZE
+
+   Standard word size on the current machine, in bits.
+
+"),
+
+("Base","VERSION","VERSION
+
+   An object describing which version of Julia is in use.
+
+"),
+
+("Base","LOAD_PATH","LOAD_PATH
+
+   An array of paths (as strings) where the \"require\" function looks
+   for code.
+
+"),
+
+("Base","pwd","pwd() -> String
+
+   Get the current working directory.
+
+"),
+
+("Base","cd","cd(dir::String)
+
+   Set the current working directory.
+
+"),
+
+("Base","cd","cd(f[, dir])
+
+   Temporarily changes the current working directory (HOME if not
+   specified) and applies function f before returning.
+
+"),
+
+("Base","mkdir","mkdir(path[, mode])
+
+   Make a new directory with name \"path\" and permissions \"mode\".
+   \"mode\" defaults to 0o777, modified by the current file creation
+   mask.
+
+"),
+
+("Base","mkpath","mkpath(path[, mode])
+
+   Create all directories in the given \"path\", with permissions
+   \"mode\". \"mode\" defaults to 0o777, modified by the current file
+   creation mask.
+
+"),
+
+("Base","symlink","symlink(target, link)
+
+   Creates a symbolic link to \"target\" with the name \"link\".
+
+   Note: This function raises an error under operating systems that
+     do not support soft symbolic links, such as Windows XP.
+
+"),
+
+("Base","chmod","chmod(path, mode)
+
+   Change the permissions mode of \"path\" to \"mode\". Only integer
+   modes (e.g. 0o777) are currently supported.
+
+"),
+
+("Base","stat","stat(file)
+
+   Returns a structure whose fields contain information about the
+   file. The fields of the structure are:
+
+   +-----------+------------------------------------------------------------------------+
+   | size      | The size (in bytes) of the file                                        |
+   +-----------+------------------------------------------------------------------------+
+   | device    | ID of the device that contains the file                                |
+   +-----------+------------------------------------------------------------------------+
+   | inode     | The inode number of the file                                           |
+   +-----------+------------------------------------------------------------------------+
+   | mode      | The protection mode of the file                                        |
+   +-----------+------------------------------------------------------------------------+
+   | nlink     | The number of hard links to the file                                   |
+   +-----------+------------------------------------------------------------------------+
+   | uid       | The user id of the owner of the file                                   |
+   +-----------+------------------------------------------------------------------------+
+   | gid       | The group id of the file owner                                         |
+   +-----------+------------------------------------------------------------------------+
+   | rdev      | If this file refers to a device, the ID of the device it refers to     |
+   +-----------+------------------------------------------------------------------------+
+   | blksize   | The file-system preffered block size for the file                      |
+   +-----------+------------------------------------------------------------------------+
+   | blocks    | The number of such blocks allocated                                    |
+   +-----------+------------------------------------------------------------------------+
+   | mtime     | Unix timestamp of when the file was last modified                      |
+   +-----------+------------------------------------------------------------------------+
+   | ctime     | Unix timestamp of when the file was created                            |
+   +-----------+------------------------------------------------------------------------+
+
+"),
+
+("Base","lstat","lstat(file)
+
+   Like stat, but for symbolic links gets the info for the link itself
+   rather than the file it refers to. This function must be called on
+   a file path rather than a file object or a file descriptor.
+
+"),
+
+("Base","ctime","ctime(file)
+
+   Equivalent to stat(file).ctime
+
+"),
+
+("Base","mtime","mtime(file)
+
+   Equivalent to stat(file).mtime
+
+"),
+
+("Base","filemode","filemode(file)
+
+   Equivalent to stat(file).mode
+
+"),
+
+("Base","filesize","filesize(path...)
+
+   Equivalent to stat(file).size
+
+"),
+
+("Base","uperm","uperm(file)
+
+   Gets the permissions of the owner of the file as a bitfield of
+
+   +------+-----------------------+
+   | 01   | Execute Permission    |
+   +------+-----------------------+
+   | 02   | Write Permission      |
+   +------+-----------------------+
+   | 04   | Read Permission       |
+   +------+-----------------------+
+
+   For allowed arguments, see \"stat\".
+
+"),
+
+("Base","gperm","gperm(file)
+
+   Like uperm but gets the permissions of the group owning the file
+
+"),
+
+("Base","operm","operm(file)
+
+   Like uperm but gets the permissions for people who neither own the
+   file nor are a member of the group owning the file
+
+"),
+
+("Base","cp","cp(src::String, dst::String)
+
+   Copy a file from *src* to *dest*.
+
+"),
+
+("Base","download","download(url[, localfile])
+
+   Download a file from the given url, optionally renaming it to the
+   given local file name. Note that this function relies on the
+   availability of external tools such as \"curl\", \"wget\" or
+   \"fetch\" to download the file and is provided for convenience. For
+   production use or situations in which more options are need, please
+   use a package that provides the desired functionality instead.
+
+"),
+
+("Base","mv","mv(src::String, dst::String)
+
+   Move a file from *src* to *dst*.
+
+"),
+
+("Base","rm","rm(path::String; recursive=false)
+
+   Delete the file, link, or empty directory at the given path. If
+   \"recursive=true\" is passed and the path is a directory, then all
+   contents are removed recursively.
+
+"),
+
+("Base","touch","touch(path::String)
+
+   Update the last-modified timestamp on a file to the current time.
+
+"),
+
+("Base","tempname","tempname()
+
+   Generate a unique temporary file path.
+
+"),
+
+("Base","tempdir","tempdir()
+
+   Obtain the path of a temporary directory (possibly shared with
+   other processes).
+
+"),
+
+("Base","mktemp","mktemp()
+
+   Returns \"(path, io)\", where \"path\" is the path of a new
+   temporary file and \"io\" is an open file object for this path.
+
+"),
+
+("Base","mktempdir","mktempdir()
+
+   Create a temporary directory and return its path.
+
+"),
+
+("Base","isblockdev","isblockdev(path) -> Bool
+
+   Returns \"true\" if \"path\" is a block device, \"false\"
    otherwise.
 
 "),
 
-("Base","is_valid_utf8","is_valid_utf8(s) -> Bool
+("Base","ischardev","ischardev(path) -> Bool
 
-   Returns true if the string or byte vector is valid UTF-8, false
+   Returns \"true\" if \"path\" is a character device, \"false\"
    otherwise.
 
 "),
 
-("Base","is_valid_char","is_valid_char(c) -> Bool
+("Base","isdir","isdir(path) -> Bool
 
-   Returns true if the given char or integer is a valid Unicode code
-   point.
-
-"),
-
-("Base","is_assigned_char","is_assigned_char(c) -> Bool
-
-   Returns true if the given char or integer is an assigned Unicode
-   code point.
+   Returns \"true\" if \"path\" is a directory, \"false\" otherwise.
 
 "),
 
-("Base","ismatch","ismatch(r::Regex, s::String) -> Bool
+("Base","isexecutable","isexecutable(path) -> Bool
 
-   Test whether a string contains a match of the given regular
-   expression.
-
-"),
-
-("Base","match","match(r::Regex, s::String[, idx::Integer[, addopts]])
-
-   Search for the first match of the regular expression \"r\" in \"s\"
-   and return a RegexMatch object containing the match, or nothing if
-   the match failed. The matching substring can be retrieved by
-   accessing \"m.match\" and the captured sequences can be retrieved
-   by accessing \"m.captures\" The optional \"idx\" argument specifies
-   an index at which to start the search.
+   Returns \"true\" if the current user has permission to execute
+   \"path\", \"false\" otherwise.
 
 "),
 
-("Base","eachmatch","eachmatch(r::Regex, s::String[, overlap::Bool=false])
+("Base","isfifo","isfifo(path) -> Bool
 
-   Search for all matches of a the regular expression \"r\" in \"s\"
-   and return a iterator over the matches. If overlap is true, the
-   matching sequences are allowed to overlap indices in the original
-   string, otherwise they must be from distinct character ranges.
+   Returns \"true\" if \"path\" is a FIFO, \"false\" otherwise.
 
 "),
 
-("Base","matchall","matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+("Base","isfile","isfile(path) -> Bool
 
-   Return a vector of the matching substrings from eachmatch.
-
-"),
-
-("Base","lpad","lpad(string, n, p)
-
-   Make a string at least \"n\" characters long by padding on the left
-   with copies of \"p\".
+   Returns \"true\" if \"path\" is a regular file, \"false\"
+   otherwise.
 
 "),
 
-("Base","rpad","rpad(string, n, p)
+("Base","islink","islink(path) -> Bool
 
-   Make a string at least \"n\" characters long by padding on the
-   right with copies of \"p\".
-
-"),
-
-("Base","search","search(string, chars[, start])
-
-   Search for the first occurance of the given characters within the
-   given string. The second argument may be a single character, a
-   vector or a set of characters, a string, or a regular expression
-   (though regular expressions are only allowed on contiguous strings,
-   such as ASCII or UTF-8 strings). The third argument optionally
-   specifies a starting index. The return value is a range of indexes
-   where the matching sequence is found, such that \"s[search(s,x)] ==
-   x\":
-
-   \"search(string, \"substring\")\" = \"start:end\" such that
-   \"string[start:end] == \"substring\"\", or \"0:-1\" if unmatched.
-
-   \"search(string, 'c')\"         = \"index\" such that
-   \"string[index] == 'c'\", or \"0\" if unmatched.
+   Returns \"true\" if \"path\" is a symbolic link, \"false\"
+   otherwise.
 
 "),
 
-("Base","rsearch","rsearch(string, chars[, start])
+("Base","ispath","ispath(path) -> Bool
 
-   Similar to \"search\", but returning the last occurance of the
-   given characters within the given string, searching in reverse from
-   \"start\".
-
-"),
-
-("Base","searchindex","searchindex(string, substring[, start])
-
-   Similar to \"search\", but return only the start index at which the
-   substring is found, or 0 if it is not.
+   Returns \"true\" if \"path\" is a valid filesystem path, \"false\"
+   otherwise.
 
 "),
 
-("Base","rsearchindex","rsearchindex(string, substring[, start])
+("Base","isreadable","isreadable(path) -> Bool
 
-   Similar to \"rsearch\", but return only the start index at which
-   the substring is found, or 0 if it is not.
-
-"),
-
-("Base","contains","contains(haystack, needle)
-
-   Determine whether the second argument is a substring of the first.
+   Returns \"true\" if the current user has permission to read
+   \"path\", \"false\" otherwise.
 
 "),
 
-("Base","replace","replace(string, pat, r[, n])
+("Base","issetgid","issetgid(path) -> Bool
 
-   Search for the given pattern \"pat\", and replace each occurrence
-   with \"r\". If \"n\" is provided, replace at most \"n\"
-   occurrences.  As with search, the second argument may be a single
-   character, a vector or a set of characters, a string, or a regular
-   expression. If \"r\" is a function, each occurrence is replaced
-   with \"r(s)\" where \"s\" is the matched substring.
+   Returns \"true\" if \"path\" has the setgid flag set, \"false\"
+   otherwise.
 
 "),
 
-("Base","split","split(string, [chars, [limit,] [include_empty]])
+("Base","issetuid","issetuid(path) -> Bool
 
-   Return an array of substrings by splitting the given string on
-   occurrences of the given character delimiters, which may be
-   specified in any of the formats allowed by \"search\"'s second
-   argument (i.e. a single character, collection of characters,
-   string, or regular expression). If \"chars\" is omitted, it
-   defaults to the set of all space characters, and \"include_empty\"
-   is taken to be false. The last two arguments are also optional:
-   they are are a maximum size for the result and a flag determining
-   whether empty fields should be included in the result.
+   Returns \"true\" if \"path\" has the setuid flag set, \"false\"
+   otherwise.
 
 "),
 
-("Base","rsplit","rsplit(string, [chars, [limit,] [include_empty]])
+("Base","issocket","issocket(path) -> Bool
 
-   Similar to \"split\", but starting from the end of the string.
-
-"),
-
-("Base","strip","strip(string[, chars])
-
-   Return \"string\" with any leading and trailing whitespace removed.
-   If \"chars\" (a character, or vector or set of characters) is
-   provided, instead remove characters contained in it.
+   Returns \"true\" if \"path\" is a socket, \"false\" otherwise.
 
 "),
 
-("Base","lstrip","lstrip(string[, chars])
+("Base","issticky","issticky(path) -> Bool
 
-   Return \"string\" with any leading whitespace removed. If \"chars\"
-   (a character, or vector or set of characters) is provided, instead
-   remove characters contained in it.
-
-"),
-
-("Base","rstrip","rstrip(string[, chars])
-
-   Return \"string\" with any trailing whitespace removed. If
-   \"chars\" (a character, or vector or set of characters) is
-   provided, instead remove characters contained in it.
+   Returns \"true\" if \"path\" has the sticky bit set, \"false\"
+   otherwise.
 
 "),
 
-("Base","beginswith","beginswith(string, prefix | chars)
+("Base","iswritable","iswritable(path) -> Bool
 
-   Returns \"true\" if \"string\" starts with \"prefix\". If the
-   second argument is a vector or set of characters, tests whether the
-   first character of \"string\" belongs to that set.
-
-"),
-
-("Base","endswith","endswith(string, suffix | chars)
-
-   Returns \"true\" if \"string\" ends with \"suffix\". If the second
-   argument is a vector or set of characters, tests whether the last
-   character of \"string\" belongs to that set.
+   Returns \"true\" if the current user has permission to write to
+   \"path\", \"false\" otherwise.
 
 "),
 
-("Base","uppercase","uppercase(string)
+("Base","homedir","homedir() -> String
 
-   Returns \"string\" with all characters converted to uppercase.
-
-"),
-
-("Base","lowercase","lowercase(string)
-
-   Returns \"string\" with all characters converted to lowercase.
+   Return the current user's home directory.
 
 "),
 
-("Base","ucfirst","ucfirst(string)
+("Base","dirname","dirname(path::String) -> String
 
-   Returns \"string\" with the first character converted to uppercase.
-
-"),
-
-("Base","lcfirst","lcfirst(string)
-
-   Returns \"string\" with the first character converted to lowercase.
+   Get the directory part of a path.
 
 "),
 
-("Base","join","join(strings, delim[, last])
+("Base","basename","basename(path::String) -> String
 
-   Join an array of \"strings\" into a single string, inserting the
-   given delimiter between adjacent strings. If \"last\" is given, it
-   will be used instead of \"delim\" between the last two strings. For
-   example, \"join([\"apples\", \"bananas\", \"pineapples\"], \", \",
-   \" and \") == \"apples, bananas and pineapples\"\".
-
-   \"strings\" can be any iterable over elements \"x\" which are
-   convertible to strings via \"print(io::IOBuffer, x)\".
+   Get the file name part of a path.
 
 "),
 
-("Base","chop","chop(string)
+("Base","@__FILE__","@__FILE__() -> String
 
-   Remove the last character from a string
-
-"),
-
-("Base","chomp","chomp(string)
-
-   Remove a trailing newline from a string
+   \"@__FILE__\" expands to a string with the absolute path and file
+   name of the script being run. Returns \"nothing\" if run from a
+   REPL or an empty string if evaluated by \"julia -e <expr>\".
 
 "),
 
-("Base","ind2chr","ind2chr(string, i)
+("Base","isabspath","isabspath(path::String) -> Bool
 
-   Convert a byte index to a character index
-
-"),
-
-("Base","chr2ind","chr2ind(string, i)
-
-   Convert a character index to a byte index
+   Determines whether a path is absolute (begins at the root
+   directory).
 
 "),
 
-("Base","isvalid","isvalid(str, i)
+("Base","isdirpath","isdirpath(path::String) -> Bool
 
-   Tells whether index \"i\" is valid for the given string
-
-"),
-
-("Base","nextind","nextind(str, i)
-
-   Get the next valid string index after \"i\". Returns a value
-   greater than \"endof(str)\" at or after the end of the string.
+   Determines whether a path refers to a directory (for example, ends
+   with a path separator).
 
 "),
 
-("Base","prevind","prevind(str, i)
+("Base","joinpath","joinpath(parts...) -> String
 
-   Get the previous valid string index before \"i\". Returns a value
-   less than \"1\" at the beginning of the string.
-
-"),
-
-("Base","randstring","randstring(len)
-
-   Create a random ASCII string of length \"len\", consisting of
-   upper- and lower-case letters and the digits 0-9
+   Join path components into a full path. If some argument is an
+   absolute path, then prior components are dropped.
 
 "),
 
-("Base","charwidth","charwidth(c)
+("Base","abspath","abspath(path::String) -> String
 
-   Gives the number of columns needed to print a character.
-
-"),
-
-("Base","strwidth","strwidth(s)
-
-   Gives the number of columns needed to print a string.
+   Convert a path to an absolute path by adding the current directory
+   if necessary.
 
 "),
 
-("Base","isalnum","isalnum(c::Union(Char, String)) -> Bool
+("Base","normpath","normpath(path::String) -> String
 
-   Tests whether a character is alphanumeric, or whether this is true
-   for all elements of a string.
-
-"),
-
-("Base","isalpha","isalpha(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is alphabetic, or whether this is true
-   for all elements of a string.
+   Normalize a path, removing \".\" and \"..\" entries.
 
 "),
 
-("Base","isascii","isascii(c::Union(Char, String)) -> Bool
+("Base","realpath","realpath(path::String) -> String
 
-   Tests whether a character belongs to the ASCII character set, or
-   whether this is true for all elements of a string.
-
-"),
-
-("Base","isblank","isblank(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is a tab or space, or whether this is
-   true for all elements of a string.
+   Canonicalize a path by expanding symbolic links and removing \".\"
+   and \"..\" entries.
 
 "),
 
-("Base","iscntrl","iscntrl(c::Union(Char, String)) -> Bool
+("Base","expanduser","expanduser(path::String) -> String
 
-   Tests whether a character is a control character, or whether this
-   is true for all elements of a string.
-
-"),
-
-("Base","isdigit","isdigit(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is a numeric digit (0-9), or whether this
-   is true for all elements of a string.
+   On Unix systems, replace a tilde character at the start of a path
+   with the current user's home directory.
 
 "),
 
-("Base","isgraph","isgraph(c::Union(Char, String)) -> Bool
+("Base","splitdir","splitdir(path::String) -> (String, String)
 
-   Tests whether a character is printable, and not a space, or whether
-   this is true for all elements of a string.
-
-"),
-
-("Base","islower","islower(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is a lowercase letter, or whether this is
-   true for all elements of a string.
+   Split a path into a tuple of the directory name and file name.
 
 "),
 
-("Base","isprint","isprint(c::Union(Char, String)) -> Bool
+("Base","splitdrive","splitdrive(path::String) -> (String, String)
 
-   Tests whether a character is printable, including space, or whether
-   this is true for all elements of a string.
-
-"),
-
-("Base","ispunct","ispunct(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is printable, and not a space or
-   alphanumeric, or whether this is true for all elements of a string.
+   On Windows, split a path into the drive letter part and the path
+   part. On Unix systems, the first component is always the empty
+   string.
 
 "),
 
-("Base","isspace","isspace(c::Union(Char, String)) -> Bool
+("Base","splitext","splitext(path::String) -> (String, String)
 
-   Tests whether a character is any whitespace character, or whether
-   this is true for all elements of a string.
-
-"),
-
-("Base","isupper","isupper(c::Union(Char, String)) -> Bool
-
-   Tests whether a character is an uppercase letter, or whether this
-   is true for all elements of a string.
+   If the last component of a path contains a dot, split the path into
+   everything before the dot and everything including and after the
+   dot. Otherwise, return a tuple of the argument unmodified and the
+   empty string.
 
 "),
 
-("Base","isxdigit","isxdigit(c::Union(Char, String)) -> Bool
+("Base.Graphics","Vec2","Vec2(x, y)
 
-   Tests whether a character is a valid hexadecimal digit, or whether
-   this is true for all elements of a string.
-
-"),
-
-("Base","symbol","symbol(str) -> Symbol
-
-   Convert a string to a \"Symbol\".
+   Creates a point in two dimensions
 
 "),
 
-("Base","escape_string","escape_string(str::String) -> String
+("Base.Graphics","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
 
-   General escaping of traditional C and Unicode escape sequences. See
-   \"print_escaped()\" for more general escaping.
-
-"),
-
-("Base","unescape_string","unescape_string(s::String) -> String
-
-   General unescaping of traditional C and Unicode escape sequences.
-   Reverse of \"escape_string()\". See also \"print_unescaped()\".
+   Creates a box in two dimensions with the given edges
 
 "),
 
-("Base","utf16","utf16(s)
+("Base.Graphics","BoundingBox","BoundingBox(objs...)
 
-   Create a UTF-16 string from a byte array, array of \"Uint16\", or
-   any other string type.  (Data must be valid UTF-16.  Conversions of
-   byte arrays check for a byte-order marker in the first two bytes,
-   and do not include it in the resulting string.)
-
-   Note that the resulting \"UTF16String\" data is terminated by the
-   NUL codepoint (16-bit zero), which is not treated as a character in
-   the string (so that it is mostly invisible in Julia); this allows
-   the string to be passed directly to external functions requiring
-   NUL-terminated data.  This NUL is appended automatically by the
-   *utf16(s)* conversion function.  If you have a \"Uint16\" array
-   \"A\" that is already NUL-terminated valid UTF-16 data, then you
-   can instead use *UTF16String(A)`* to construct the string without
-   making a copy of the data and treating the NUL as a terminator
-   rather than as part of the string.
+   Creates a box in two dimensions that encloses all objects
 
 "),
 
-("Base","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+("Base.Graphics","width","width(obj)
 
-   Create a string from the address of a NUL-terminated UTF-16 string.
-   A copy is made; the pointer can be safely freed. If \"length\" is
-   specified, the string does not have to be NUL-terminated.
+   Computes the width of an object
 
 "),
 
-("Base","is_valid_utf16","is_valid_utf16(s) -> Bool
+("Base.Graphics","height","height(obj)
 
-   Returns true if the string or \"Uint16\" array is valid UTF-16.
-
-"),
-
-("Base","utf32","utf32(s)
-
-   Create a UTF-32 string from a byte array, array of \"Uint32\", or
-   any other string type.  (Conversions of byte arrays check for a
-   byte-order marker in the first four bytes, and do not include it in
-   the resulting string.)
-
-   Note that the resulting \"UTF32String\" data is terminated by the
-   NUL codepoint (32-bit zero), which is not treated as a character in
-   the string (so that it is mostly invisible in Julia); this allows
-   the string to be passed directly to external functions requiring
-   NUL-terminated data.  This NUL is appended automatically by the
-   *utf32(s)* conversion function.  If you have a \"Uint32\" array
-   \"A\" that is already NUL-terminated UTF-32 data, then you can
-   instead use *UTF32String(A)`* to construct the string without
-   making a copy of the data and treating the NUL as a terminator
-   rather than as part of the string.
+   Computes the height of an object
 
 "),
 
-("Base","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+("Base.Graphics","xmin","xmin(obj)
 
-   Create a string from the address of a NUL-terminated UTF-32 string.
-   A copy is made; the pointer can be safely freed. If \"length\" is
-   specified, the string does not have to be NUL-terminated.
+   Computes the minimum x-coordinate contained in an object
 
 "),
 
-("Base","wstring","wstring(s)
+("Base.Graphics","xmax","xmax(obj)
 
-   This is a synonym for either \"utf32(s)\" or \"utf16(s)\",
-   depending on whether \"Cwchar_t\" is 32 or 16 bits, respectively.
-   The synonym \"WString\" for \"UTF32String\" or \"UTF16String\" is
-   also provided.
+   Computes the maximum x-coordinate contained in an object
 
 "),
+
+("Base.Graphics","ymin","ymin(obj)
+
+   Computes the minimum y-coordinate contained in an object
+
+"),
+
+("Base.Graphics","ymax","ymax(obj)
+
+   Computes the maximum y-coordinate contained in an object
+
+"),
+
+("Base.Graphics","diagonal","diagonal(obj)
+
+   Return the length of the diagonal of an object
+
+"),
+
+("Base.Graphics","aspect_ratio","aspect_ratio(obj)
+
+   Compute the height/width of an object
+
+"),
+
+("Base.Graphics","center","center(obj)
+
+   Return the point in the center of an object
+
+"),
+
+("Base.Graphics","xrange","xrange(obj)
+
+   Returns a tuple \"(xmin(obj), xmax(obj))\"
+
+"),
+
+("Base.Graphics","yrange","yrange(obj)
+
+   Returns a tuple \"(ymin(obj), ymax(obj))\"
+
+"),
+
+("Base.Graphics","rotate","rotate(obj, angle, origin) -> newobj
+
+   Rotates an object around origin by the specified angle (radians),
+   returning a new object of the same type.  Because of type-
+   constancy, this new object may not always be a strict geometric
+   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
+   the return is the smallest \"BoundingBox\" that encloses the
+   rotated input.
+
+"),
+
+("Base.Graphics","shift","shift(obj, dx, dy)
+
+   Returns an object shifted horizontally and vertically by the
+   indicated amounts
+
+"),
+
+("Base.Graphics","*","*(obj, s::Real)
+
+   Scale the width and height of a graphics object, keeping the center
+   fixed
+
+"),
+
+("Base.Graphics","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the smallest box containing both boxes
+
+"),
+
+("Base.Graphics","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
+
+   Returns the intersection, the largest box contained in both boxes
+
+"),
+
+("Base.Graphics","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
+
+   Returns a bounding box with all edges shifted by the indicated
+   amounts
+
+"),
+
+("Base.Graphics","isinside","isinside(bb::BoundingBox, x, y)
+
+   True if the given point is inside the box
+
+"),
+
+("Base.Graphics","isinside","isinside(bb::BoundingBox, point)
+
+   True if the given point is inside the box
+
+"),
+
 
 ("Base","STDOUT","STDOUT
 
@@ -2755,137 +4834,6 @@
 
    Read all available data on the stream, blocking the task only if no
    data is available.
-
-"),
-
-("Base","stat","stat(file)
-
-   Returns a structure whose fields contain information about the
-   file. The fields of the structure are:
-
-   +-----------+------------------------------------------------------------------------+
-   | size      | The size (in bytes) of the file                                        |
-   +-----------+------------------------------------------------------------------------+
-   | device    | ID of the device that contains the file                                |
-   +-----------+------------------------------------------------------------------------+
-   | inode     | The inode number of the file                                           |
-   +-----------+------------------------------------------------------------------------+
-   | mode      | The protection mode of the file                                        |
-   +-----------+------------------------------------------------------------------------+
-   | nlink     | The number of hard links to the file                                   |
-   +-----------+------------------------------------------------------------------------+
-   | uid       | The user id of the owner of the file                                   |
-   +-----------+------------------------------------------------------------------------+
-   | gid       | The group id of the file owner                                         |
-   +-----------+------------------------------------------------------------------------+
-   | rdev      | If this file refers to a device, the ID of the device it refers to     |
-   +-----------+------------------------------------------------------------------------+
-   | blksize   | The file-system preffered block size for the file                      |
-   +-----------+------------------------------------------------------------------------+
-   | blocks    | The number of such blocks allocated                                    |
-   +-----------+------------------------------------------------------------------------+
-   | mtime     | Unix timestamp of when the file was last modified                      |
-   +-----------+------------------------------------------------------------------------+
-   | ctime     | Unix timestamp of when the file was created                            |
-   +-----------+------------------------------------------------------------------------+
-
-"),
-
-("Base","lstat","lstat(file)
-
-   Like stat, but for symbolic links gets the info for the link itself
-   rather than the file it refers to. This function must be called on
-   a file path rather than a file object or a file descriptor.
-
-"),
-
-("Base","ctime","ctime(file)
-
-   Equivalent to stat(file).ctime
-
-"),
-
-("Base","mtime","mtime(file)
-
-   Equivalent to stat(file).mtime
-
-"),
-
-("Base","filemode","filemode(file)
-
-   Equivalent to stat(file).mode
-
-"),
-
-("Base","filesize","filesize(path...)
-
-   Equivalent to stat(file).size
-
-"),
-
-("Base","uperm","uperm(file)
-
-   Gets the permissions of the owner of the file as a bitfield of
-
-   +------+-----------------------+
-   | 01   | Execute Permission    |
-   +------+-----------------------+
-   | 02   | Write Permission      |
-   +------+-----------------------+
-   | 04   | Read Permission       |
-   +------+-----------------------+
-
-   For allowed arguments, see \"stat\".
-
-"),
-
-("Base","gperm","gperm(file)
-
-   Like uperm but gets the permissions of the group owning the file
-
-"),
-
-("Base","operm","operm(file)
-
-   Like uperm but gets the permissions for people who neither own the
-   file nor are a member of the group owning the file
-
-"),
-
-("Base","cp","cp(src::String, dst::String)
-
-   Copy a file from *src* to *dest*.
-
-"),
-
-("Base","download","download(url[, localfile])
-
-   Download a file from the given url, optionally renaming it to the
-   given local file name. Note that this function relies on the
-   availability of external tools such as \"curl\", \"wget\" or
-   \"fetch\" to download the file and is provided for convenience. For
-   production use or situations in which more options are need, please
-   use a package that provides the desired functionality instead.
-
-"),
-
-("Base","mv","mv(src::String, dst::String)
-
-   Move a file from *src* to *dst*.
-
-"),
-
-("Base","rm","rm(path::String; recursive=false)
-
-   Delete the file, link, or empty directory at the given path. If
-   \"recursive=true\" is passed and the path is a directory, then all
-   contents are removed recursively.
-
-"),
-
-("Base","touch","touch(path::String)
-
-   Update the last-modified timestamp on a file to the current time.
 
 "),
 
@@ -3456,7 +5404,7 @@ popdisplay(d::Display)
    conversions are possible (this is a limitation of operating
    systems, not Julia).
 
-   dims is a tuple specifying the size of the array.
+   \"dims\" is a tuple specifying the size of the array.
 
    The file is passed via the stream argument.  When you initialize
    the stream, use \"\"r\"\" for a \"read-only\" array, and \"\"w+\"\"
@@ -3466,7 +5414,7 @@ popdisplay(d::Display)
    you want to skip over a header in the file. The default value for
    the offset is the current stream position.
 
-   **Example**:
+   For example, the following code:
 
       # Create a file for mmapping
       # (you could alternatively use mmap_array to do this step, too)
@@ -3485,7 +5433,7 @@ popdisplay(d::Display)
       n = read(s, Int)
       A2 = mmap_array(Int, (m,n), s)
 
-   This would create a m-by-n \"Matrix{Int}\", linked to the file
+   creates a \"m\"-by-\"n\" \"Matrix{Int}\", linked to the file
    associated with stream \"s\".
 
    A more portable file would need to encode the word size---32 bit or
@@ -3519,10 +5467,11 @@ popdisplay(d::Display)
 
 ("Base","msync","msync(ptr, len[, flags])
 
-   Forces synchronization of the mmap'd memory region from ptr to
-   ptr+len. Flags defaults to MS_SYNC, but can be a combination of
-   MS_ASYNC, MS_SYNC, or MS_INVALIDATE. See your platform man page for
-   specifics. The flags argument is not valid on Windows.
+   Forces synchronization of the \"mmap()\"ped memory region from
+   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
+   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
+   your platform man page for specifics. The flags argument is not
+   valid on Windows.
 
    You may not need to call \"msync\", because synchronization is
    performed at intervals automatically by the operating system.
@@ -3533,36 +5482,1361 @@ popdisplay(d::Display)
 
 ("Base","MS_ASYNC","MS_ASYNC
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","MS_SYNC","MS_SYNC
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","MS_INVALIDATE","MS_INVALIDATE
 
-   Enum constant for msync. See your platform man page for details.
-   (not available on Windows).
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
 
 "),
 
 ("Base","mmap","mmap(len, prot, flags, fd, offset)
 
-   Low-level interface to the mmap system call. See the man page.
+   Low-level interface to the \"mmap\" system call. See the man page.
 
 "),
 
 ("Base","munmap","munmap(pointer, len)
 
    Low-level interface for unmapping memory (see the man page). With
-   mmap_array you do not need to call this directly; the memory is
-   unmapped for you when the array goes out of scope.
+   \"mmap_array()\" you do not need to call this directly; the memory
+   is unmapped for you when the array goes out of scope.
+
+"),
+
+("Base","*","*(A, B)
+
+   Matrix multiplication
+
+"),
+
+("Base","\\","\\(A, B)
+
+   Matrix division using a polyalgorithm. For input matrices \"A\" and
+   \"B\", the result \"X\" is such that \"A*X == B\" when \"A\" is
+   square.  The solver that is used depends upon the structure of
+   \"A\".  A direct solver is used for upper- or lower triangular
+   \"A\".  For Hermitian \"A\" (equivalent to symmetric \"A\" for non-
+   complex \"A\") the \"BunchKaufman\" factorization is used.
+   Otherwise an LU factorization is used. For rectangular \"A\" the
+   result is the minimum-norm least squares solution computed by a
+   pivoted QR factorization of \"A\" and a rank estimate of A based on
+   the R factor. For sparse, square \"A\" the LU factorization (from
+   UMFPACK) is used.
+
+"),
+
+("Base","dot","dot(x, y)
+⋅(x, y)
+
+   Compute the dot product. For complex vectors, the first vector is
+   conjugated.
+
+"),
+
+("Base","cross","cross(x, y)
+×(x, y)
+
+   Compute the cross product of two 3-vectors.
+
+"),
+
+("Base","rref","rref(A)
+
+   Compute the reduced row echelon form of the matrix A.
+
+"),
+
+("Base","factorize","factorize(A)
+
+   Compute a convenient factorization (including LU, Cholesky, Bunch-
+   Kaufman, Triangular) of A, based upon the type of the input matrix.
+   The return value can then be reused for efficient solving of
+   multiple systems. For example: \"A=factorize(A); x=A\\\\b;
+   y=A\\\\C\".
+
+"),
+
+("Base","factorize!","factorize!(A)
+
+   \"factorize!\" is the same as \"factorize()\", but saves space by
+   overwriting the input \"A\", instead of creating a copy.
+
+"),
+
+("Base","lu","lu(A) -> L, U, p
+
+   Compute the LU factorization of \"A\", such that \"A[p,:] = L*U\".
+
+"),
+
+("Base","lufact","lufact(A[, pivot=true]) -> F
+
+   Compute the LU factorization of \"A\". The return type of \"F\"
+   depends on the type of \"A\". In most cases, if \"A\" is a subtype
+   \"S\" of AbstractMatrix with an element type \"T`\" supporting
+   \"+\", \"-\", \"*\" and \"/\" the return type is \"LU{T,S{T}}\". If
+   pivoting is chosen (default) the element type should also support
+   \"abs\" and \"<\". When \"A\" is sparse and have element of type
+   \"Float32\", \"Float64\", \"Complex{Float32}\", or
+   \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
+   examples are shown in the table below.
+
+      +-------------------------+---------------------------+----------------------------------------------+
+      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"         |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"               |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                          |
+      +-------------------------+---------------------------+----------------------------------------------+
+      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == F[:Rs] .* A[F[:p], F[:q]]\\\" |
+      +-------------------------+---------------------------+----------------------------------------------+
+
+   The individual components of the factorization \"F\" can be
+   accessed by indexing:
+
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | Component   | Description                             | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:L]\\\"   | \\\"L\\\" (lower triangular) part of \\\"LU\\\" | ✓      |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:U]\\\"   | \\\"U\\\" (upper triangular) part of \\\"LU\\\" | ✓      |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:p]\\\"   | (right) permutation \\\"Vector\\\"          | ✓      |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:P]\\\"   | (right) permutation \\\"Matrix\\\"          | ✓      |                          |               |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:q]\\\"   | left permutation \\\"Vector\\\"             |        |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:Rs]\\\"  | \\\"Vector\\\" of scaling factors           |        |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+      | \\\"F[:(:)]\\\" | \\\"(L,U,p,q,Rs)\\\" components             |        |                          | ✓             |
+      +-------------+-----------------------------------------+--------+--------------------------+---------------+
+
+      +--------------------+--------+--------------------------+---------------+
+      | Supported function | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"/\\\"              | ✓      |                          |               |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"\\\\\\\"             | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"cond\\\"           | ✓      |                          | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"det\\\"            | ✓      | ✓                        | ✓             |
+      +--------------------+--------+--------------------------+---------------+
+      | \\\"size\\\"           | ✓      | ✓                        |               |
+      +--------------------+--------+--------------------------+---------------+
+
+"),
+
+("Base","lufact!","lufact!(A) -> LU
+
+   \"lufact!\" is the same as \"lufact()\", but saves space by
+   overwriting the input A, instead of creating a copy.  For sparse
+   \"A\" the \"nzval\" field is not overwritten but the index fields,
+   \"colptr\" and \"rowval\" are decremented in place, converting from
+   1-based indices to 0-based indices.
+
+"),
+
+("Base","chol","chol(A[, LU]) -> F
+
+   Compute the Cholesky factorization of a symmetric positive definite
+   matrix \"A\" and return the matrix \"F\". If \"LU\" is \":L\"
+   (Lower), \"A = L*L'\". If \"LU\" is \":U\" (Upper), \"A = R'*R\".
+
+"),
+
+("Base","cholfact","cholfact(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
+
+   Compute the Cholesky factorization of a dense symmetric positive
+   (semi)definite matrix \"A\" and return either a \"Cholesky\" if
+   \"pivot=false\" or \"CholeskyPivoted\" if \"pivot=true\". \"LU\"
+   may be \":L\" for using the lower part or \":U\" for the upper
+   part. The default is to use \":U\". The triangular matrix can be
+   obtained from the factorization \"F\" with: \"F[:L]\" and
+   \"F[:U]\". The following functions are available for \"Cholesky\"
+   objects: \"size\", \"\\\", \"inv\", \"det\". For
+   \"CholeskyPivoted\" there is also defined a \"rank\". If
+   \"pivot=false\" a \"PosDefException\" exception is thrown in case
+   the matrix is not positive definite. The argument \"tol\"
+   determines the tolerance for determining the rank. For negative
+   values, the tolerance is the machine precision.
+
+"),
+
+("Base","cholfact","cholfact(A[, ll]) -> CholmodFactor
+
+   Compute the sparse Cholesky factorization of a sparse matrix \"A\".
+   If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
+   is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
+   fill-reducing permutation is used.  Methods for \"size\",
+   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
+   are available for \"CholmodFactor\" objects.  One of the solve
+   methods includes an integer argument that can be used to solve
+   systems involving parts of the factorization only.  The optional
+   boolean argument, \"ll\" determines whether the factorization
+   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
+   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
+   unit lower triangular and \"D\" is a non-negative vector.  The
+   default is LDL. The symbolic factorization can also be reused for
+   other matrices with the same structure as \"A\" by calling
+   \"cholfact!\".
+
+"),
+
+("Base","cholfact!","cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
+
+   \"cholfact!\" is the same as \"cholfact()\", but saves space by
+   overwriting the input \"A\", instead of creating a copy.
+   \"cholfact!\" can also reuse the symbolic factorization from a
+   different matrix \"F\" with the same structure when used as:
+   \"cholfact!(F::CholmodFactor, A)\".
+
+"),
+
+("Base","ldltfact","ldltfact(A) -> LDLtFactorization
+
+   Compute a factorization of a positive definite matrix \"A\" such
+   that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
+   matrix and \"d\" is a vector with non-negative elements.
+
+"),
+
+("Base","qr","qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
+
+   Compute the (pivoted) QR factorization of \"A\" such that either
+   \"A = Q*R\" or \"A[:,p] = Q*R\". Also see \"qrfact\". The default
+   is to compute a thin factorization. Note that \"R\" is not extended
+   with zeros when the full \"Q\" is requested.
+
+"),
+
+("Base","qrfact","qrfact(A[, pivot=false]) -> F
+
+   Computes the QR factorization of \"A\". The return type of \"F\"
+   depends on the element type of \"A\" and whether pivoting is
+   specified (with \"pivot=true\").
+
+      +------------------+-------------------+-----------+---------------------------------------+
+      | Return type      | \\\"eltype(A)\\\"     | \\\"pivot\\\" | Relationship between \\\"F\\\" and \\\"A\\\"  |
+      +------------------+-------------------+-----------+---------------------------------------+
+      | \\\"QR\\\"           | not \\\"BlasFloat\\\" | either    | \\\"A==F[:Q]*F[:R]\\\"                    |
+      +------------------+-------------------+-----------+---------------------------------------+
+      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
+      +------------------+-------------------+-----------+---------------------------------------+
+      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
+      +------------------+-------------------+-----------+---------------------------------------+
+
+   \"BlasFloat\" refers to any of: \"Float32\", \"Float64\",
+   \"Complex64\" or \"Complex128\".
+
+   The individual components of the factorization \"F\" can be
+   accessed by indexing:
+
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+      | Component   | Description                                   | \\\"QR\\\"             | \\\"QRCompactWY\\\"       | \\\"QRPivoted\\\"      |
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+      | \\\"F[:Q]\\\"   | \\\"Q\\\" (orthogonal/unitary) part of \\\"QR\\\"     | ✓ (\\\"QRPackedQ\\\")  | ✓ (\\\"QRCompactWYQ\\\")  | ✓ (\\\"QRPackedQ\\\")  |
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+      | \\\"F[:R]\\\"   | \\\"R\\\" (upper right triangular) part of \\\"QR\\\" | ✓                  | ✓                     | ✓                  |
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+      | \\\"F[:p]\\\"   | pivot \\\"Vector\\\"                              |                    |                       | ✓                  |
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+      | \\\"F[:P]\\\"   | (pivot) permutation \\\"Matrix\\\"                |                    |                       | ✓                  |
+      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
+
+   The following functions are available for the \"QR\" objects:
+   \"size\", \"\\\". When \"A\" is rectangular, \"\\\" will return a
+   least squares solution and if the solution is not unique, the one
+   with smallest norm is returned.
+
+   Multiplication with respect to either thin or full \"Q\" is
+   allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\" are supported. A
+   \"Q\" matrix can be converted into a regular matrix with \"full()\"
+   which has a named argument \"thin\".
+
+   Note: \"qrfact\" returns multiple types because LAPACK uses
+     several representations that minimize the memory storage
+     requirements of products of Householder elementary reflectors, so
+     that the \"Q\" and \"R\" matrices can be stored compactly rather
+     as two separate dense matrices.The data contained in \"QR\" or
+     \"QRPivoted\" can be used to construct the \"QRPackedQ\" type,
+     which is a compact representation of the rotation matrix:
+
+           Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
+
+     where \\tau_i is the scale factor and v_i is the projection
+     vector associated with the i^{th} Householder elementary
+     reflector.The data contained in \"QRCompactWY\" can be used to
+     construct the \"QRCompactWYQ\" type, which is a compact
+     representation of the rotation matrix
+
+           Q = I + Y T Y^T
+
+     where \"Y\" is m \\times r lower trapezoidal and \"T\" is r
+     \\times r upper triangular. The *compact WY* representation
+     [Schreiber1989] is not to be confused with the older, *WY*
+     representation [Bischof1987]. (The LAPACK documentation uses
+     \"V\" in lieu of \"Y\".)
+
+   [Bischof1987] C Bischof and C Van Loan, The WY
+                 representation for products of Householder matrices,
+                 SIAM J Sci Stat Comput 8 (1987), s2-s13.
+                 doi:10.1137/0908009
+
+   [Schreiber1989] R Schreiber and C Van Loan, A
+                   storage-efficient WY representation for products of
+                   Householder transformations, SIAM J Sci Stat Comput
+                   10 (1989), 53-57. doi:10.1137/0910005
+
+"),
+
+("Base","qrfact!","qrfact!(A[, pivot=false])
+
+   \"qrfact!\" is the same as \"qrfact()\", but saves space by
+   overwriting the input \"A\", instead of creating a copy.
+
+"),
+
+("Base","bkfact","bkfact(A) -> BunchKaufman
+
+   Compute the Bunch-Kaufman [Bunch1977] factorization of a real
+   symmetric or complex Hermitian matrix \"A\" and return a
+   \"BunchKaufman\" object. The following functions are available for
+   \"BunchKaufman\" objects: \"size\", \"\\\", \"inv\", \"issym\",
+   \"ishermitian\".
+
+"),
+
+("Base","bkfact!","bkfact!(A) -> BunchKaufman
+
+   \"bkfact!\" is the same as \"bkfact()\", but saves space by
+   overwriting the input \"A\", instead of creating a copy.
+
+"),
+
+("Base","sqrtm","sqrtm(A)
+
+   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
+   \"B*B == A\" within roundoff error.
+
+   \"sqrtm\" uses a polyalgorithm, computing the matrix square root
+   using Schur factorizations (\"schurfact()\") unless it detects the
+   matrix to be Hermitian or real symmetric, in which case it computes
+   the matrix square root from an eigendecomposition (\"eigfact()\").
+   In the latter situation for positive definite matrices, the matrix
+   square root has \"Real\" elements, otherwise it has \"Complex\"
+   elements.
+
+"),
+
+("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
+
+   Computes eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
+   for details on the \"balance\" keyword argument.
+
+      julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
+      ([1.0,3.0,18.0],
+      3x3 Array{Float64,2}:
+       1.0  0.0  0.0
+       0.0  1.0  0.0
+       0.0  0.0  1.0)
+
+   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
+   the factorization to a tuple; where possible, using \"eigfact()\"
+   is recommended.
+
+"),
+
+("Base","eig","eig(A, B) -> D, V
+
+   Computes generalized eigenvalues and vectors of \"A\" with respect
+   to \"B\".
+
+   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
+   the factorization to a tuple; where possible, using \"eigfact()\"
+   is recommended.
+
+"),
+
+("Base","eigvals","eigvals(A,[irange,][vl,][vu])
+
+   Returns the eigenvalues of \"A\". If \"A\" is \"Symmetric\",
+   \"Hermitian\" or \"SymTridiagonal\", it is possible to calculate
+   only a subset of the eigenvalues by specifying either a
+   \"UnitRange\" \"irange\" covering indices of the sorted
+   eigenvalues, or a pair \"vl\" and \"vu\" for the lower and upper
+   boundaries of the eigenvalues.
+
+   For general non-symmetric matrices it is possible to specify how
+   the matrix is balanced before the eigenvector calculation. The
+   option \"permute=true\" permutes the matrix to become closer to
+   upper triangular, and \"scale=true\" scales the matrix by its
+   diagonal elements to make rows and columns more equal in norm. The
+   default is \"true\" for both options.
+
+"),
+
+("Base","eigmax","eigmax(A)
+
+   Returns the largest eigenvalue of \"A\".
+
+"),
+
+("Base","eigmin","eigmin(A)
+
+   Returns the smallest eigenvalue of \"A\".
+
+"),
+
+("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
+
+   Returns a matrix \"M\" whose columns are the eigenvectors of \"A\".
+   (The \"k``th eigenvector can be obtained from the slice ``M[:,
+   k]\".) The \"permute\" and \"scale\" keywords are the same as for
+   \"eigfact()\".
+
+   For \"SymTridiagonal\" matrices, if the optional vector of
+   eigenvalues \"eigvals\" is specified, returns the specific
+   corresponding eigenvectors.
+
+"),
+
+("Base","eigfact","eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
+
+   Computes the eigenvalue decomposition of \"A\", returning an
+   \"Eigen\" factorization object \"F\" which contains the eigenvalues
+   in \"F[:values]\" and the eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th eigenvector can be obtained from the
+   slice ``F[:vectors][:, k]\".)
+
+   The following functions are available for \"Eigen\" objects:
+   \"inv\", \"det\".
+
+   If \"A\" is \"Symmetric\", \"Hermitian\" or \"SymTridiagonal\", it
+   is possible to calculate only a subset of the eigenvalues by
+   specifying either a \"UnitRange\" \"irange\" covering indices of
+   the sorted eigenvalues or a pair \"vl\" and \"vu\" for the lower
+   and upper boundaries of the eigenvalues.
+
+   For general nonsymmetric matrices it is possible to specify how the
+   matrix is balanced before the eigenvector calculation. The option
+   \"permute=true\" permutes the matrix to become closer to upper
+   triangular, and \"scale=true\" scales the matrix by its diagonal
+   elements to make rows and columns more equal in norm. The default
+   is \"true\" for both options.
+
+"),
+
+("Base","eigfact","eigfact(A, B) -> GeneralizedEigen
+
+   Computes the generalized eigenvalue decomposition of \"A\" and
+   \"B\", returning a \"GeneralizedEigen\" factorization object \"F\"
+   which contains the generalized eigenvalues in \"F[:values]\" and
+   the generalized eigenvectors in the columns of the matrix
+   \"F[:vectors]\". (The \"k``th generalized eigenvector can be
+   obtained from the slice ``F[:vectors][:, k]\".)
+
+"),
+
+("Base","eigfact!","eigfact!(A[, B])
+
+   Same as \"eigfact()\", but saves space by overwriting the input
+   \"A\" (and \"B\"), instead of creating a copy.
+
+"),
+
+("Base","hessfact","hessfact(A)
+
+   Compute the Hessenberg decomposition of \"A\" and return a
+   \"Hessenberg\" object. If \"F\" is the factorization object, the
+   unitary matrix can be accessed with \"F[:Q]\" and the Hessenberg
+   matrix with \"F[:H]\". When \"Q\" is extracted, the resulting type
+   is the \"HessenbergQ\" object, and may be converted to a regular
+   matrix with \"full()\".
+
+"),
+
+("Base","hessfact!","hessfact!(A)
+
+   \"hessfact!\" is the same as \"hessfact()\", but saves space by
+   overwriting the input A, instead of creating a copy.
+
+"),
+
+("Base","schurfact","schurfact(A) -> Schur
+
+   Computes the Schur factorization of the matrix \"A\". The (quasi)
+   triangular Schur factor can be obtained from the \"Schur\" object
+   \"F\" with either \"F[:Schur]\" or \"F[:T]\" and the
+   unitary/orthogonal Schur vectors can be obtained with
+   \"F[:vectors]\" or \"F[:Z]\" such that
+   \"A=F[:vectors]*F[:Schur]*F[:vectors]'\". The eigenvalues of \"A\"
+   can be obtained with \"F[:values]\".
+
+"),
+
+("Base","schurfact!","schurfact!(A)
+
+   Computer the Schur factorization of \"A\", overwriting \"A\" in the
+   process. See \"schurfact()\"
+
+"),
+
+("Base","schur","schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
+
+   See \"schurfact()\"
+
+"),
+
+("Base","schurfact","schurfact(A, B) -> GeneralizedSchur
+
+   Computes the Generalized Schur (or QZ) factorization of the
+   matrices \"A\" and \"B\". The (quasi) triangular Schur factors can
+   be obtained from the \"Schur\" object \"F\" with \"F[:S]\" and
+   \"F[:T]\", the left unitary/orthogonal Schur vectors can be
+   obtained with \"F[:left]\" or \"F[:Q]\" and the right
+   unitary/orthogonal Schur vectors can be obtained with \"F[:right]\"
+   or \"F[:Z]\" such that \"A=F[:left]*F[:S]*F[:right]'\" and
+   \"B=F[:left]*F[:T]*F[:right]'\". The generalized eigenvalues of
+   \"A\" and \"B\" can be obtained with \"F[:alpha]./F[:beta]\".
+
+"),
+
+("Base","schur","schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
+
+   See \"schurfact()\"
+
+"),
+
+("Base","svdfact","svdfact(A[, thin=true]) -> SVD
+
+   Compute the Singular Value Decomposition (SVD) of \"A\" and return
+   an \"SVD\" object. \"U\", \"S\", \"V\" and \"Vt\" can be obtained
+   from the factorization \"F\" with \"F[:U]\", \"F[:S]\", \"F[:V]\"
+   and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
+   \"true\", an economy mode decomposition is returned. The algorithm
+   produces \"Vt\" and hence \"Vt\" is more efficient to extract than
+   \"V\". The default is to produce a thin decomposition.
+
+"),
+
+("Base","svdfact!","svdfact!(A[, thin=true]) -> SVD
+
+   \"svdfact!\" is the same as \"svdfact()\", but saves space by
+   overwriting the input A, instead of creating a copy. If \"thin\" is
+   \"true\", an economy mode decomposition is returned. The default is
+   to produce a thin decomposition.
+
+"),
+
+("Base","svd","svd(A[, thin=true]) -> U, S, V
+
+   Wrapper around \"svdfact\" extracting all parts the factorization
+   to a tuple. Direct use of \"svdfact\" is therefore generally more
+   efficient. Computes the SVD of A, returning \"U\", vector \"S\",
+   and \"V\" such that \"A == U*diagm(S)*V'\". If \"thin\" is
+   \"true\", an economy mode decomposition is returned. The default is
+   to produce a thin decomposition.
+
+"),
+
+("Base","svdvals","svdvals(A)
+
+   Returns the singular values of \"A\".
+
+"),
+
+("Base","svdvals!","svdvals!(A)
+
+   Returns the singular values of \"A\", while saving space by
+   overwriting the input.
+
+"),
+
+("Base","svdfact","svdfact(A, B) -> GeneralizedSVD
+
+   Compute the generalized SVD of \"A\" and \"B\", returning a
+   \"GeneralizedSVD\" Factorization object \"F\", such that \"A =
+   F[:U]*F[:D1]*F[:R0]*F[:Q]'\" and \"B =
+   F[:V]*F[:D2]*F[:R0]*F[:Q]'\".
+
+"),
+
+("Base","svd","svd(A, B) -> U, V, Q, D1, D2, R0
+
+   Wrapper around \"svdfact\" extracting all parts the factorization
+   to a tuple. Direct use of \"svdfact\" is therefore generally more
+   efficient. The function returns the generalized SVD of \"A\" and
+   \"B\", returning \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\"
+   such that \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
+
+"),
+
+("Base","svdvals","svdvals(A, B)
+
+   Return only the singular values from the generalized singular value
+   decomposition of \"A\" and \"B\".
+
+"),
+
+("Base","triu","triu(M)
+
+   Upper triangle of a matrix.
+
+"),
+
+("Base","triu!","triu!(M)
+
+   Upper triangle of a matrix, overwriting \"M\" in the process.
+
+"),
+
+("Base","tril","tril(M)
+
+   Lower triangle of a matrix.
+
+"),
+
+("Base","tril!","tril!(M)
+
+   Lower triangle of a matrix, overwriting \"M\" in the process.
+
+"),
+
+("Base","diagind","diagind(M[, k])
+
+   A \"Range\" giving the indices of the \"k\"-th diagonal of the
+   matrix \"M\".
+
+"),
+
+("Base","diag","diag(M[, k])
+
+   The \"k\"-th diagonal of a matrix, as a vector. Use \"diagm\" to
+   construct a diagonal matrix.
+
+"),
+
+("Base","diagm","diagm(v[, k])
+
+   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   diagonal.
+
+"),
+
+("Base","scale","scale(A, b)
+
+"),
+
+("Base","scale","scale(b, A)
+
+   Scale an array \"A\" by a scalar \"b\", returning a new array.
+
+   If \"A\" is a matrix and \"b\" is a vector, then \"scale(A,b)\"
+   scales each column \"i\" of \"A\" by \"b[i]\" (similar to
+   \"A*diagm(b)\"), while \"scale(b,A)\" scales each row \"i\" of
+   \"A\" by \"b[i]\" (similar to \"diagm(b)*A\"), returning a new
+   array.
+
+   Note: for large \"A\", \"scale\" can be much faster than \"A .* b\"
+   or \"b .* A\", due to the use of BLAS.
+
+"),
+
+("Base","scale!","scale!(A, b)
+
+"),
+
+("Base","scale!","scale!(b, A)
+
+   Scale an array \"A\" by a scalar \"b\", similar to \"scale()\" but
+   overwriting \"A\" in-place.
+
+   If \"A\" is a matrix and \"b\" is a vector, then \"scale!(A,b)\"
+   scales each column \"i\" of \"A\" by \"b[i]\" (similar to
+   \"A*diagm(b)\"), while \"scale!(b,A)\" scales each row \"i\" of
+   \"A\" by \"b[i]\" (similar to \"diagm(b)*A\"), again operating in-
+   place on \"A\".
+
+"),
+
+("Base","Tridiagonal","Tridiagonal(dl, d, du)
+
+   Construct a tridiagonal matrix from the lower diagonal, diagonal,
+   and upper diagonal, respectively.  The result is of type
+   \"Tridiagonal\" and provides efficient specialized linear solvers,
+   but may be converted into a regular matrix with \"full()\".
+
+"),
+
+("Base","Bidiagonal","Bidiagonal(dv, ev, isupper)
+
+   Constructs an upper (\"isupper=true\") or lower (\"isupper=false\")
+   bidiagonal matrix using the given diagonal (\"dv\") and off-
+   diagonal (\"ev\") vectors.  The result is of type \"Bidiagonal\"
+   and provides efficient specialized linear solvers, but may be
+   converted into a regular matrix with \"full()\".
+
+"),
+
+("Base","SymTridiagonal","SymTridiagonal(d, du)
+
+   Construct a real symmetric tridiagonal matrix from the diagonal and
+   upper diagonal, respectively. The result is of type
+   \"SymTridiagonal\" and provides efficient specialized eigensolvers,
+   but may be converted into a regular matrix with \"full()\".
+
+"),
+
+("Base","Woodbury","Woodbury(A, U, C, V)
+
+   Construct a matrix in a form suitable for applying the Woodbury
+   matrix identity.
+
+"),
+
+("Base","rank","rank(M)
+
+   Compute the rank of a matrix.
+
+"),
+
+("Base","norm","norm(A[, p])
+
+   Compute the \"p\"-norm of a vector or the operator norm of a matrix
+   \"A\", defaulting to the \"p=2\"-norm.
+
+   For vectors, \"p\" can assume any numeric value (even though not
+   all values produce a mathematically valid vector norm). In
+   particular, \"norm(A, Inf)\" returns the largest value in
+   \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest.
+
+   For matrices, valid values of \"p\" are \"1\", \"2\", or \"Inf\".
+   (Note that for sparse matrices, \"p=2\" is currently not
+   implemented.) Use \"vecnorm()\" to compute the Frobenius norm.
+
+"),
+
+("Base","vecnorm","vecnorm(A[, p])
+
+   For any iterable container \"A\" (including arrays of any
+   dimension) of numbers, compute the \"p\"-norm (defaulting to
+   \"p=2\") as if \"A\" were a vector of the corresponding length.
+
+   For example, if \"A\" is a matrix and \"p=2\", then this is
+   equivalent to the Frobenius norm.
+
+"),
+
+("Base","cond","cond(M[, p])
+
+   Condition number of the matrix \"M\", computed using the operator
+   \"p\"-norm. Valid values for \"p\" are \"1\", \"2\" (default), or
+   \"Inf\".
+
+"),
+
+("Base","condskeel","condskeel(M[, x, p])
+
+      \\kappa_S(M, p) & = \\left\\Vert \\left\\vert M \\right\\vert
+      \\left\\vert M^{-1} \\right\\vert  \\right\\Vert_p \\\\
+      \\kappa_S(M, x, p) & = \\left\\Vert \\left\\vert M \\right\\vert
+      \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert
+      \\right\\Vert_p
+
+   Skeel condition number \\kappa_S of the matrix \"M\", optionally
+   with respect to the vector \"x\", as computed using the operator
+   \"p\"-norm. \"p\" is \"Inf\" by default, if not provided. Valid
+   values for \"p\" are \"1\", \"2\", or \"Inf\".
+
+   This quantity is also known in the literature as the Bauer
+   condition number, relative condition number, or componentwise
+   relative condition number.
+
+"),
+
+("Base","trace","trace(M)
+
+   Matrix trace
+
+"),
+
+("Base","det","det(M)
+
+   Matrix determinant
+
+"),
+
+("Base","logdet","logdet(M)
+
+   Log of matrix determinant. Equivalent to \"log(det(M))\", but may
+   provide increased accuracy and/or speed.
+
+"),
+
+("Base","inv","inv(M)
+
+   Matrix inverse
+
+"),
+
+("Base","pinv","pinv(M)
+
+   Moore-Penrose pseudoinverse
+
+"),
+
+("Base","null","null(M)
+
+   Basis for nullspace of \"M\".
+
+"),
+
+("Base","repmat","repmat(A, n, m)
+
+   Construct a matrix by repeating the given matrix \"n\" times in
+   dimension 1 and \"m\" times in dimension 2.
+
+"),
+
+("Base","repeat","repeat(A, inner = Int[], outer = Int[])
+
+   Construct an array by repeating the entries of \"A\". The i-th
+   element of \"inner\" specifies the number of times that the
+   individual entries of the i-th dimension of \"A\" should be
+   repeated. The i-th element of \"outer\" specifies the number of
+   times that a slice along the i-th dimension of \"A\" should be
+   repeated.
+
+"),
+
+("Base","kron","kron(A, B)
+
+   Kronecker tensor product of two vectors or two matrices.
+
+"),
+
+("Base","blkdiag","blkdiag(A...)
+
+   Concatenate matrices block-diagonally. Currently only implemented
+   for sparse matrices.
+
+"),
+
+("Base","linreg","linreg(x, y) -> [a; b]
+
+   Linear Regression. Returns \"a\" and \"b\" such that \"a+b*x\" is
+   the closest line to the given points \"(x,y)\". In other words,
+   this function determines parameters \"[a, b]\" that minimize the
+   squared error between \"y\" and \"a+b*x\".
+
+   **Example**:
+
+      using PyPlot;
+      x = float([1:12])
+      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
+      a, b = linreg(x,y) # Linear regression
+      plot(x, y, \"o\") # Plot (x,y) points
+      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
+
+"),
+
+("Base","linreg","linreg(x, y, w)
+
+   Weighted least-squares linear regression.
+
+"),
+
+("Base","expm","expm(A)
+
+   Matrix exponential.
+
+"),
+
+("Base","lyap","lyap(A, C)
+
+   Computes the solution \"X\" to the continuous Lyapunov equation
+   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
+   part and no two eigenvalues are negative complex conjugates of each
+   other.
+
+"),
+
+("Base","sylvester","sylvester(A, B, C)
+
+   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
+   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
+   \"A\" and \"-B\" have no eigenvalues with equal real part.
+
+"),
+
+("Base","issym","issym(A) -> Bool
+
+   Test whether a matrix is symmetric.
+
+"),
+
+("Base","isposdef","isposdef(A) -> Bool
+
+   Test whether a matrix is positive definite.
+
+"),
+
+("Base","isposdef!","isposdef!(A) -> Bool
+
+   Test whether a matrix is positive definite, overwriting \"A\" in
+   the processes.
+
+"),
+
+("Base","istril","istril(A) -> Bool
+
+   Test whether a matrix is lower triangular.
+
+"),
+
+("Base","istriu","istriu(A) -> Bool
+
+   Test whether a matrix is upper triangular.
+
+"),
+
+("Base","ishermitian","ishermitian(A) -> Bool
+
+   Test whether a matrix is Hermitian.
+
+"),
+
+("Base","transpose","transpose(A)
+
+   The transposition operator (\".'\").
+
+"),
+
+("Base","ctranspose","ctranspose(A)
+
+   The conjugate transposition operator (\"'\").
+
+"),
+
+("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
+
+   \"eigs\" computes eigenvalues \"d\" of \"A\" using Lanczos or
+   Arnoldi iterations for real symmetric or general nonsymmetric
+   matrices respectively. If \"B\" is provided, the generalized eigen-
+   problem is solved.  The following keyword arguments are supported:
+      * \"nev\": Number of eigenvalues
+
+      * \"ncv\": Number of Krylov vectors used in the computation;
+        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
+        problems and \"nev+2 <= ncv <= n\" for other problems; default
+        is \"ncv = max(20,2*nev+1)\".
+
+      * \"which\": type of eigenvalues to compute. See the note
+        below.
+
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\"which\\\" | type of eigenvalues                                                                                                         |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LM\\\"   | eigenvalues of largest magnitude (default)                                                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SM\\\"   | eigenvalues of smallest magnitude                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LR\\\"   | eigenvalues of largest real part                                                                                            |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SR\\\"   | eigenvalues of smallest real part                                                                                           |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":LI\\\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                  |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":SI\\\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                 |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+        | \\\":BE\\\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \\\"A\\\" only) |
+        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
+
+      * \"tol\": tolerance (tol \\le 0.0 defaults to
+        \"DLAMCH('EPS')\")
+
+      * \"maxiter\": Maximum number of iterations (default = 300)
+
+      * \"sigma\": Specifies the level shift used in inverse
+        iteration. If \"nothing\" (default), defaults to ordinary
+        (forward) iterations. Otherwise, find eigenvalues close to
+        \"sigma\" using shift and invert iterations.
+
+      * \"ritzvec\": Returns the Ritz vectors \"v\" (eigenvectors)
+        if \"true\"
+
+      * \"v0\": starting vector from which to start the iterations
+
+   \"eigs\" returns the \"nev\" requested eigenvalues in \"d\", the
+   corresponding Ritz vectors \"v\" (only if \"ritzvec=true\"), the
+   number of converged eigenvalues \"nconv\", the number of iterations
+   \"niter\" and the number of matrix vector multiplications
+   \"nmult\", as well as the final residual vector \"resid\".
+
+   Note: The \"sigma\" and \"which\" keywords interact: the
+     description of eigenvalues searched for by \"which\" do _not_
+     necessarily refer to the eigenvalues of \"A\", but rather the
+     linear operator constructed by the specification of the iteration
+     mode implied by \"sigma\".
+
+     +-----------------+------------------------------------+------------------------------------+
+     | \\\"sigma\\\"       | iteration mode                     | \\\"which\\\" refers to eigenvalues of |
+     +-----------------+------------------------------------+------------------------------------+
+     | \\\"nothing\\\"     | ordinary (forward)                 | A                                  |
+     +-----------------+------------------------------------+------------------------------------+
+     | real or complex | inverse with level shift \\\"sigma\\\" | (A - \\\\sigma I )^{-1}              |
+     +-----------------+------------------------------------+------------------------------------+
+
+"),
+
+("Base","peakflops","peakflops(n; parallel=false)
+
+   \"peakflops\" computes the peak flop rate of the computer by using
+   double precision \"Base.LinAlg.BLAS.gemm!()\". By default, if no
+   arguments are specified, it multiplies a matrix of size \"n x n\",
+   where \"n = 2000\". If the underlying BLAS is using multiple
+   threads, higher flop rates are realized. The number of BLAS threads
+   can be set with \"blas_set_num_threads(n)\".
+
+   If the keyword argument \"parallel\" is set to \"true\",
+   \"peakflops\" is run in parallel on all the worker processors. The
+   flop rate of the entire parallel computer is returned. When running
+   in parallel, only 1 BLAS thread is used. The argument \"n\" still
+   refers to the size of the problem that is solved on each processor.
+
+"),
+
+("Base.LinAlg.BLAS","dot","dot(n, X, incx, Y, incy)
+
+   Dot product of two vectors consisting of \"n\" elements of array
+   \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
+   stride \"incy\".
+
+"),
+
+("Base.LinAlg.BLAS","dotu","dotu(n, X, incx, Y, incy)
+
+   Dot function for two complex vectors.
+
+"),
+
+("Base.LinAlg.BLAS","dotc","dotc(n, X, incx, U, incy)
+
+   Dot function for two complex vectors conjugating the first vector.
+
+"),
+
+("Base.LinAlg.BLAS","blascopy!","blascopy!(n, X, incx, Y, incy)
+
+   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
+   \"Y\" with stride \"incy\".  Returns \"Y\".
+
+"),
+
+("Base.LinAlg.BLAS","nrm2","nrm2(n, X, incx)
+
+   2-norm of a vector consisting of \"n\" elements of array \"X\" with
+   stride \"incx\".
+
+"),
+
+("Base.LinAlg.BLAS","asum","asum(n, X, incx)
+
+   sum of the absolute values of the first \"n\" elements of array
+   \"X\" with stride \"incx\".
+
+"),
+
+("Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
+
+   Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
+
+"),
+
+("Base.LinAlg.BLAS","scal!","scal!(n, a, X, incx)
+
+   Overwrite \"X\" with \"a*X\".  Returns \"X\".
+
+"),
+
+("Base.LinAlg.BLAS","scal","scal(n, a, X, incx)
+
+   Returns \"a*X\".
+
+"),
+
+("Base.LinAlg.BLAS","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
+
+   Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
+   beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
+   is 'N' or 'T'.  When \"uplo\" is 'U' the upper triangle of \"C\" is
+   updated ('L' for lower triangle).  Returns \"C\".
+
+"),
+
+("Base.LinAlg.BLAS","syrk","syrk(uplo, trans, alpha, A)
+
+   Returns either the upper triangle or the lower triangle, according
+   to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
+   according to \"trans\" ('N' or 'T').
+
+"),
+
+("Base.LinAlg.BLAS","herk!","herk!(uplo, trans, alpha, A, beta, C)
+
+   Methods for complex arrays only.  Rank-k update of the Hermitian
+   matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
+   according to whether \"trans\" is 'N' or 'T'.  When \"uplo\" is 'U'
+   the upper triangle of \"C\" is updated ('L' for lower triangle).
+   Returns \"C\".
+
+"),
+
+("Base.LinAlg.BLAS","herk","herk(uplo, trans, alpha, A)
+
+   Methods for complex arrays only.  Returns either the upper triangle
+   or the lower triangle, according to \"uplo\" ('U' or 'L'), of
+   \"alpha*A*A'\" or \"alpha*A'*A\", according to \"trans\" ('N' or
+   'T').
+
+"),
+
+("Base.LinAlg.BLAS","gbmv!","gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
+   beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
+   a general band matrix of dimension \"m\" by \"size(A,2)\" with
+   \"kl\" sub-diagonals and \"ku\" super-diagonals. Returns the
+   updated \"y\".
+
+"),
+
+("Base.LinAlg.BLAS","gbmv","gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
+
+   Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
+   or 'T'). The matrix \"A\" is a general band matrix of dimension
+   \"m\" by \"size(A,2)\" with \"kl\" sub-diagonals and \"ku\" super-
+   diagonals.
+
+"),
+
+("Base.LinAlg.BLAS","sbmv!","sbmv!(uplo, k, alpha, A, x, beta, y)
+
+   Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
+   symmetric band matrix of order \"size(A,2)\" with \"k\" super-
+   diagonals stored in the argument \"A\".  The storage layout for
+   \"A\" is described the reference BLAS module, level-2 BLAS at
+   http://www.netlib.org/lapack/explore-html/.
+
+   Returns the updated \"y\".
+
+"),
+
+("Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, alpha, A, x)
+
+   Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
+   order \"size(A,2)\" with \"k\" super-diagonals stored in the
+   argument \"A\".
+
+"),
+
+("Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, A, x)
+
+   Returns \"A*x\" where \"A\" is a symmetric band matrix of order
+   \"size(A,2)\" with \"k\" super-diagonals stored in the argument
+   \"A\".
+
+"),
+
+("Base.LinAlg.BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
+   according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
+   updated \"C\".
+
+"),
+
+("Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("Base.LinAlg.BLAS","gemm","gemm(tA, tB, A, B)
+
+   Returns \"A*B\" or the other three variants according to \"tA\"
+   (transpose \"A\") and \"tB\".
+
+"),
+
+("Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'x +
+   beta*y\" according to \"tA\" (transpose \"A\"). Returns the updated
+   \"y\".
+
+"),
+
+("Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
+
+   Returns \"alpha*A*x\" or \"alpha*A'x\" according to \"tA\"
+   (transpose \"A\").
+
+"),
+
+("Base.LinAlg.BLAS","gemv","gemv(tA, A, x)
+
+   Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
+
+"),
+
+("Base.LinAlg.BLAS","symm!","symm!(side, ul, alpha, A, B, beta, C)
+
+   Update \"C\" as \"alpha*A*B + beta*C\" or \"alpha*B*A + beta*C\"
+   according to \"side\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.  Returns the updated \"C\".
+
+"),
+
+("Base.LinAlg.BLAS","symm","symm(side, ul, alpha, A, B)
+
+   Returns \"alpha*A*B\" or \"alpha*B*A\" according to \"side\". \"A\"
+   is assumed to be symmetric.  Only the \"ul\" triangle of \"A\" is
+   used.
+
+"),
+
+("Base.LinAlg.BLAS","symm","symm(side, ul, A, B)
+
+   Returns \"A*B\" or \"B*A\" according to \"side\".  \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+
+"),
+
+("Base.LinAlg.BLAS","symm","symm(tA, tB, alpha, A, B)
+
+   Returns \"alpha*A*B\" or the other three variants according to
+   \"tA\" (transpose \"A\") and \"tB\".
+
+"),
+
+("Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
+
+   Update the vector \"y\" as \"alpha*A*x + beta*y\". \"A\" is assumed
+   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
+   Returns the updated \"y\".
+
+"),
+
+("Base.LinAlg.BLAS","symv","symv(ul, alpha, A, x)
+
+   Returns \"alpha*A*x\". \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("Base.LinAlg.BLAS","symv","symv(ul, A, x)
+
+   Returns \"A*x\".  \"A\" is assumed to be symmetric.  Only the
+   \"ul\" triangle of \"A\" is used.
+
+"),
+
+("Base.LinAlg.BLAS","trmm!","trmm!(side, ul, tA, dA, alpha, A, B)
+
+   Update \"B\" as \"alpha*A*B\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"B\".
+
+"),
+
+("Base.LinAlg.BLAS","trmm","trmm(side, ul, tA, dA, alpha, A, B)
+
+   Returns \"alpha*A*B\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("Base.LinAlg.BLAS","trsm!","trsm!(side, ul, tA, dA, alpha, A, B)
+
+   Overwrite \"B\" with the solution to \"A*X = alpha*B\" or one of
+   the other three variants determined by \"side\" (A on left or right
+   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
+   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).  Returns the updated \"B\".
+
+"),
+
+("Base.LinAlg.BLAS","trsm","trsm(side, ul, tA, dA, alpha, A, B)
+
+   Returns the solution to \"A*X = alpha*B\" or one of the other three
+   variants determined by \"side\" (A on left or right of \"X\") and
+   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
+   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
+   assumed to be all ones).
+
+"),
+
+("Base.LinAlg.BLAS","trmv!","trmv!(side, ul, tA, dA, alpha, A, b)
+
+   Update \"b\" as \"alpha*A*b\" or one of the other three variants
+   determined by \"side\" (A on left or right) and \"tA\" (transpose
+   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
+   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
+   Returns the updated \"b\".
+
+"),
+
+("Base.LinAlg.BLAS","trmv","trmv(side, ul, tA, dA, alpha, A, b)
+
+   Returns \"alpha*A*b\" or one of the other three variants determined
+   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
+   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
+   unit-triangular (the diagonal is assumed to be all ones).
+
+"),
+
+("Base.LinAlg.BLAS","trsv!","trsv!(ul, tA, dA, A, b)
+
+   Overwrite \"b\" with the solution to \"A*x = b\" or one of the
+   other two variants determined by \"tA\" (transpose A) and \"ul\"
+   (triangle of \"A\" used).  \"dA\" indicates if \"A\" is unit-
+   triangular (the diagonal is assumed to be all ones).  Returns the
+   updated \"b\".
+
+"),
+
+("Base.LinAlg.BLAS","trsv","trsv(ul, tA, dA, A, b)
+
+   Returns the solution to \"A*x = b\" or one of the other two
+   variants determined by \"tA\" (transpose A) and \"ul\" (triangle of
+   \"A\" is used.) \"dA\" indicates if \"A\" is unit-triangular (the
+   diagonal is assumed to be all ones).
+
+"),
+
+("Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
+
+   Set the number of threads the BLAS library should use.
 
 "),
 
@@ -3651,6 +6925,7 @@ popdisplay(d::Display)
 "),
 
 ("Base","div","div(a, b)
+÷(a, b)
 
    Compute a/b, truncating to an integer.
 
@@ -3803,6 +7078,7 @@ popdisplay(d::Display)
 "),
 
 ("Base","!=","!=(x, y)
+≠(x, y)
 
    Not-equals comparison operator. Always gives the opposite answer as
    \"==\". New types should generally not implement this, and rely on
@@ -3811,12 +7087,14 @@ popdisplay(d::Display)
 "),
 
 ("Base","===","===(x, y)
+≡(x, y)
 
    See the \"is()\" operator
 
 "),
 
 ("Base","!==","!==(x, y)
+≢(x, y)
 
    Equivalent to \"!is(x, y)\"
 
@@ -3833,6 +7111,7 @@ popdisplay(d::Display)
 "),
 
 ("Base","<=","<=(x, y)
+≤(x, y)
 
    Less-than-or-equals comparison operator.
 
@@ -3847,6 +7126,7 @@ popdisplay(d::Display)
 "),
 
 ("Base",">=",">=(x, y)
+≥(x, y)
 
    Greater-than-or-equals comparison operator.
 
@@ -3859,6 +7139,7 @@ popdisplay(d::Display)
 "),
 
 ("Base",".!=",".!=(x, y)
+.≠(x, y)
 
    Element-wise not-equals comparison operator.
 
@@ -3871,6 +7152,7 @@ popdisplay(d::Display)
 "),
 
 ("Base",".<=",".<=(x, y)
+.≤(x, y)
 
    Element-wise less-than-or-equals comparison operator.
 
@@ -3883,6 +7165,7 @@ popdisplay(d::Display)
 "),
 
 ("Base",".>=",".>=(x, y)
+.≥(x, y)
 
    Element-wise greater-than-or-equals comparison operator.
 
@@ -3951,9 +7234,17 @@ popdisplay(d::Display)
 
 "),
 
-("Base","A_mul_B","A_mul_B(...)
+("Base","A_mul_B!","A_mul_B!(Y, A, B) -> Y
 
-   Matrix operator A B
+   Calculates the matrix-matrix or matrix-vector product *A B* and
+   stores the result in *Y*, overwriting the existing value of *Y*.
+
+      julia> A=[1.0 2.0; 3.0 4.0]; B=[1.0 1.0; 1.0 1.0]; A_mul_B!(B, A, B);
+
+      julia> B
+      2x2 Array{Float64,2}:
+       3.0  3.0
+       7.0  7.0
 
 "),
 
@@ -4565,7 +7856,7 @@ popdisplay(d::Display)
 ("Base","sqrt","sqrt(x)
 
    Return \\sqrt{x}. Throws \"DomainError\" for negative \"Real\"
-   arguments. Use complex negative arguments instead. The prefix
+   arguments. Use complex negative arguments instead.  The prefix
    operator \"√\" is equivalent to \"sqrt\".
 
 "),
@@ -4579,7 +7870,7 @@ popdisplay(d::Display)
 
 ("Base","cbrt","cbrt(x)
 
-   Return x^{1/3}.   The prefix operator \"∛\" is equivalent to
+   Return x^{1/3}.  The prefix operator \"∛\" is equivalent to
    \"cbrt\".
 
 "),
@@ -4699,10 +7990,10 @@ popdisplay(d::Display)
    each key indicates the number of times the factor appears in the
    factorization.
 
-   **Example**: 100=2*2*5*5; then:
-
-      julia> factor(100)
-      [5=>2,2=>2]
+      julia> factor(100) # == 2*2*5*5
+      Dict{Int64,Int64} with 2 entries:
+        2 => 2
+        5 => 2
 
 "),
 
@@ -4721,8 +8012,23 @@ popdisplay(d::Display)
 
 ("Base","gcdx","gcdx(x, y)
 
-   Greatest common (positive) divisor, also returning integer
-   coefficients \"u\" and \"v\" that solve \"ux+vy == gcd(x,y)\"
+   Computes the greatest common (positive) divisor of \"x\" and \"y\"
+   and their Bézout coefficients, i.e. the integer coefficients \"u\"
+   and \"v\" that satisfy ux+vy = d = gcd(x,y).
+
+      julia> gcdx(12, 42)
+      (6,-3,1)
+
+      julia> gcdx(240, 46)
+      (2,-9,47)
+
+   Note: Bézout coefficients are *not* uniquely defined. \"gcdx\"
+     returns the minimal Bézout coefficients that are computed by the
+     extended Euclid algorithm. (Ref: D. Knuth, TAoCP, 2/e, p. 325,
+     Algorithm X.) These coefficients \"u\" and \"v\" are minimal in
+     the sense that |u| < |\\frac y d and |v| < |\\frac x d.
+     Furthermore, the signs of \"u\" and \"v\" are chosen so that
+     \"d\" is positive.
 
 "),
 
@@ -4797,7 +8103,9 @@ popdisplay(d::Display)
 
 ("Base","lgamma","lgamma(x)
 
-   Compute the logarithm of absolute value of \"gamma(x)\"
+   Compute the logarithm of the absolute value of \"gamma(x)\" for
+   \"Real()\" \"x\", while for \"Complex()\" \"x\" it computes the
+   logarithm of \"gamma(x)\".
 
 "),
 
@@ -5045,1510 +8353,6 @@ popdisplay(d::Display)
    ascending order by power of \"z\".  This macro expands to efficient
    inline code that uses either Horner's method or, for complex \"z\",
    a more efficient Goertzel-like algorithm.
-
-"),
-
-("Base","bin","bin(n[, pad])
-
-   Convert an integer to a binary string, optionally specifying a
-   number of digits to pad to.
-
-"),
-
-("Base","hex","hex(n[, pad])
-
-   Convert an integer to a hexadecimal string, optionally specifying a
-   number of digits to pad to.
-
-"),
-
-("Base","dec","dec(n[, pad])
-
-   Convert an integer to a decimal string, optionally specifying a
-   number of digits to pad to.
-
-"),
-
-("Base","oct","oct(n[, pad])
-
-   Convert an integer to an octal string, optionally specifying a
-   number of digits to pad to.
-
-"),
-
-("Base","base","base(base, n[, pad])
-
-   Convert an integer to a string in the given base, optionally
-   specifying a number of digits to pad to. The base can be specified
-   as either an integer, or as a \"Uint8\" array of character values
-   to use as digit symbols.
-
-"),
-
-("Base","digits","digits(n[, base][, pad])
-
-   Returns an array of the digits of \"n\" in the given base,
-   optionally padded with zeros to a specified size. More significant
-   digits are at higher indexes, such that \"n ==
-   sum([digits[k]*base^(k-1) for k=1:length(digits)])\".
-
-"),
-
-("Base","bits","bits(n)
-
-   A string giving the literal bit representation of a number.
-
-"),
-
-("Base","parseint","parseint([type], str[, base])
-
-   Parse a string as an integer in the given base (default 10),
-   yielding a number of the specified type (default \"Int\").
-
-"),
-
-("Base","parsefloat","parsefloat([type], str)
-
-   Parse a string as a decimal floating point number, yielding a
-   number of the specified type.
-
-"),
-
-("Base","big","big(x)
-
-   Convert a number to a maximum precision representation (typically
-   \"BigInt\" or \"BigFloat\"). See \"BigFloat\" for information about
-   some pitfalls with floating-point numbers.
-
-"),
-
-("Base","bool","bool(x)
-
-   Convert a number or numeric array to boolean
-
-"),
-
-("Base","int","int(x)
-
-   Convert a number or array to the default integer type on your
-   platform. Alternatively, \"x\" can be a string, which is parsed as
-   an integer.
-
-"),
-
-("Base","uint","uint(x)
-
-   Convert a number or array to the default unsigned integer type on
-   your platform. Alternatively, \"x\" can be a string, which is
-   parsed as an unsigned integer.
-
-"),
-
-("Base","integer","integer(x)
-
-   Convert a number or array to integer type. If \"x\" is already of
-   integer type it is unchanged, otherwise it converts it to the
-   default integer type on your platform.
-
-"),
-
-("Base","signed","signed(x)
-
-   Convert a number to a signed integer
-
-"),
-
-("Base","unsigned","unsigned(x) -> Unsigned
-
-   Convert a number to an unsigned integer
-
-"),
-
-("Base","int8","int8(x)
-
-   Convert a number or array to \"Int8\" data type
-
-"),
-
-("Base","int16","int16(x)
-
-   Convert a number or array to \"Int16\" data type
-
-"),
-
-("Base","int32","int32(x)
-
-   Convert a number or array to \"Int32\" data type
-
-"),
-
-("Base","int64","int64(x)
-
-   Convert a number or array to \"Int64\" data type
-
-"),
-
-("Base","int128","int128(x)
-
-   Convert a number or array to \"Int128\" data type
-
-"),
-
-("Base","uint8","uint8(x)
-
-   Convert a number or array to \"Uint8\" data type
-
-"),
-
-("Base","uint16","uint16(x)
-
-   Convert a number or array to \"Uint16\" data type
-
-"),
-
-("Base","uint32","uint32(x)
-
-   Convert a number or array to \"Uint32\" data type
-
-"),
-
-("Base","uint64","uint64(x)
-
-   Convert a number or array to \"Uint64\" data type
-
-"),
-
-("Base","uint128","uint128(x)
-
-   Convert a number or array to \"Uint128\" data type
-
-"),
-
-("Base","float16","float16(x)
-
-   Convert a number or array to \"Float16\" data type
-
-"),
-
-("Base","float32","float32(x)
-
-   Convert a number or array to \"Float32\" data type
-
-"),
-
-("Base","float64","float64(x)
-
-   Convert a number or array to \"Float64\" data type
-
-"),
-
-("Base","float32_isvalid","float32_isvalid(x, out::Vector{Float32}) -> Bool
-
-   Convert a number or array to \"Float32\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
-
-"),
-
-("Base","float64_isvalid","float64_isvalid(x, out::Vector{Float64}) -> Bool
-
-   Convert a number or array to \"Float64\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
-
-"),
-
-("Base","float","float(x)
-
-   Convert a number, array, or string to a \"FloatingPoint\" data
-   type. For numeric data, the smallest suitable \"FloatingPoint\"
-   type is used. Converts strings to \"Float64\".
-
-   This function is not recommended for arrays. It is better to use a
-   more specific function such as \"float32\" or \"float64\".
-
-"),
-
-("Base","significand","significand(x)
-
-   Extract the significand(s) (a.k.a. mantissa), in binary
-   representation, of a floating-point number or array.
-
-   For example, \"significand(15.2)/15.2 == 0.125\", and
-   \"significand(15.2)*8 == 15.2\"
-
-"),
-
-("Base","exponent","exponent(x) -> Int
-
-   Get the exponent of a normalized floating-point number.
-
-"),
-
-("Base","complex64","complex64(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
-   \"i\" defaults to zero.
-
-"),
-
-("Base","complex128","complex128(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
-   \"i\" defaults to zero.
-
-"),
-
-("Base","complex","complex(r[, i])
-
-   Convert real numbers or arrays to complex. \"i\" defaults to zero.
-
-"),
-
-("Base","char","char(x)
-
-   Convert a number or array to \"Char\" data type
-
-"),
-
-("Base","bswap","bswap(n)
-
-   Byte-swap an integer
-
-"),
-
-("Base","num2hex","num2hex(f)
-
-   Get a hexadecimal string of the binary representation of a floating
-   point number
-
-"),
-
-("Base","hex2num","hex2num(str)
-
-   Convert a hexadecimal string to the floating point number it
-   represents
-
-"),
-
-("Base","hex2bytes","hex2bytes(s::ASCIIString)
-
-   Convert an arbitrarily long hexadecimal string to its binary
-   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
-
-"),
-
-("Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8, 1})
-
-   Convert an array of bytes to its hexadecimal representation. All
-   characters are in lower-case. Returns an ASCIIString.
-
-"),
-
-("Base","one","one(x)
-
-   Get the multiplicative identity element for the type of x (x can
-   also specify the type itself). For matrices, returns an identity
-   matrix of the appropriate size and type.
-
-"),
-
-("Base","zero","zero(x)
-
-   Get the additive identity element for the type of x (x can also
-   specify the type itself).
-
-"),
-
-("Base","pi","pi
-
-   The constant pi
-
-"),
-
-("Base","im","im
-
-   The imaginary unit
-
-"),
-
-("Base","e","e
-
-   The constant e
-
-"),
-
-("Base","catalan","catalan
-
-   Catalan's constant
-
-"),
-
-("Base","Inf","Inf
-
-   Positive infinity of type Float64
-
-"),
-
-("Base","Inf32","Inf32
-
-   Positive infinity of type Float32
-
-"),
-
-("Base","Inf16","Inf16
-
-   Positive infinity of type Float16
-
-"),
-
-("Base","NaN","NaN
-
-   A not-a-number value of type Float64
-
-"),
-
-("Base","NaN32","NaN32
-
-   A not-a-number value of type Float32
-
-"),
-
-("Base","NaN16","NaN16
-
-   A not-a-number value of type Float16
-
-"),
-
-("Base","issubnormal","issubnormal(f) -> Bool
-
-   Test whether a floating point number is subnormal
-
-"),
-
-("Base","isfinite","isfinite(f) -> Bool
-
-   Test whether a number is finite
-
-"),
-
-("Base","isinf","isinf(f) -> Bool
-
-   Test whether a number is infinite
-
-"),
-
-("Base","isnan","isnan(f) -> Bool
-
-   Test whether a floating point number is not a number (NaN)
-
-"),
-
-("Base","inf","inf(f)
-
-   Returns positive infinity of the floating point type \"f\" or of
-   the same floating point type as \"f\"
-
-"),
-
-("Base","nan","nan(f)
-
-   Returns NaN (not-a-number) of the floating point type \"f\" or of
-   the same floating point type as \"f\"
-
-"),
-
-("Base","nextfloat","nextfloat(f)
-
-   Get the next floating point number in lexicographic order
-
-"),
-
-("Base","prevfloat","prevfloat(f) -> FloatingPoint
-
-   Get the previous floating point number in lexicographic order
-
-"),
-
-("Base","isinteger","isinteger(x) -> Bool
-
-   Test whether \"x\" or all its elements are numerically equal to
-   some integer
-
-"),
-
-("Base","isreal","isreal(x) -> Bool
-
-   Test whether \"x\" or all its elements are numerically equal to
-   some real number
-
-"),
-
-("Base","BigInt","BigInt(x)
-
-   Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
-   anything that can be converted to an \"Int\") or a \"String\". The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a \"BigInt\".
-
-"),
-
-("Base","BigFloat","BigFloat(x)
-
-   Create an arbitrary precision floating point number. \"x\" may be
-   an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
-   usual mathematical operators are defined for this type, and results
-   are promoted to a \"BigFloat\". Note that because floating-point
-   numbers are not exactly-representable in decimal notation,
-   \"BigFloat(2.1)\" may not yield what you expect. You may prefer to
-   initialize constants using strings, e.g., \"BigFloat(\"2.1\")\".
-
-"),
-
-("Base","get_rounding","get_rounding(T)
-
-   Get the current floating point rounding mode for type \"T\". Valid
-   modes are \"RoundNearest\", \"RoundToZero\", \"RoundUp\",
-   \"RoundDown\", and \"RoundFromZero\" (\"BigFloat\" only).
-
-"),
-
-("Base","set_rounding","set_rounding(T, mode)
-
-   Set the rounding mode of floating point type \"T\". Note that this
-   may affect other types, for instance changing the rounding mode of
-   \"Float64\" will change the rounding mode of \"Float32\". See
-   \"get_rounding\" for available modes
-
-"),
-
-("Base","with_rounding","with_rounding(f::Function, T, mode)
-
-   Change the rounding mode of floating point type \"T\" for the
-   duration of \"f\". It is logically equivalent to:
-
-      old = get_rounding(T)
-      set_rounding(T, mode)
-      f()
-      set_rounding(T, old)
-
-   See \"get_rounding\" for available rounding modes.
-
-"),
-
-("Base","count_ones","count_ones(x::Integer) -> Integer
-
-   Number of ones in the binary representation of \"x\".
-
-   **Example**: \"count_ones(7) -> 3\"
-
-"),
-
-("Base","count_zeros","count_zeros(x::Integer) -> Integer
-
-   Number of zeros in the binary representation of \"x\".
-
-   **Example**: \"count_zeros(int32(2 ^ 16 - 1)) -> 16\"
-
-"),
-
-("Base","leading_zeros","leading_zeros(x::Integer) -> Integer
-
-   Number of zeros leading the binary representation of \"x\".
-
-   **Example**: \"leading_zeros(int32(1)) -> 31\"
-
-"),
-
-("Base","leading_ones","leading_ones(x::Integer) -> Integer
-
-   Number of ones leading the binary representation of \"x\".
-
-   **Example**: \"leading_ones(int32(2 ^ 32 - 2)) -> 31\"
-
-"),
-
-("Base","trailing_zeros","trailing_zeros(x::Integer) -> Integer
-
-   Number of zeros trailing the binary representation of \"x\".
-
-   **Example**: \"trailing_zeros(2) -> 1\"
-
-"),
-
-("Base","trailing_ones","trailing_ones(x::Integer) -> Integer
-
-   Number of ones trailing the binary representation of \"x\".
-
-   **Example**: \"trailing_ones(3) -> 2\"
-
-"),
-
-("Base","isprime","isprime(x::Integer) -> Bool
-
-   Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
-
-   **Example**:
-
-      julia> isprime(3)
-      true
-
-"),
-
-("Base","primes","primes(n)
-
-   Returns a collection of the prime numbers <= \"n\".
-
-"),
-
-("Base","isodd","isodd(x::Integer) -> Bool
-
-   Returns \"true\" if \"x\" is odd (that is, not divisible by 2), and
-   \"false\" otherwise.
-
-   **Examples**:
-
-      julia> isodd(9)
-      true
-
-      julia> isodd(10)
-      false
-
-"),
-
-("Base","iseven","iseven(x::Integer) -> Bool
-
-   Returns \"true\" is \"x\" is even (that is, divisible by 2), and
-   \"false\" otherwise.
-
-   **Examples**:
-
-      julia> iseven(10)
-      true
-
-      julia> iseven(9)
-      false
-
-"),
-
-("Base","precision","precision(num::FloatingPoint)
-
-   Get the precision of a floating point number, as defined by the
-   effective number of bits in the mantissa.
-
-"),
-
-("Base","get_bigfloat_precision","get_bigfloat_precision()
-
-   Get the precision (in bits) currently used for BigFloat arithmetic.
-
-"),
-
-("Base","set_bigfloat_precision","set_bigfloat_precision(x::Int64)
-
-   Set the precision (in bits) to be used to BigFloat arithmetic.
-
-"),
-
-("Base","with_bigfloat_precision","with_bigfloat_precision(f::Function, precision::Integer)
-
-   Change the BigFloat arithmetic precision (in bits) for the duration
-   of \"f\". It is logically equivalent to:
-
-      old = get_bigfloat_precision()
-      set_bigfloat_precision(precision)
-      f()
-      set_bigfloat_precision(old)
-
-"),
-
-("Base","srand","srand([rng], seed)
-
-   Seed the RNG with a \"seed\", which may be an unsigned integer or a
-   vector of unsigned integers. \"seed\" can even be a filename, in
-   which case the seed is read from a file. If the argument \"rng\" is
-   not provided, the default global RNG is seeded.
-
-"),
-
-("Base","MersenneTwister","MersenneTwister([seed])
-
-   Create a \"MersenneTwister\" RNG object. Different RNG objects can
-   have their own seeds, which may be useful for generating different
-   streams of random numbers.
-
-"),
-
-("Base","rand","rand() -> Float64
-
-   Generate a \"Float64\" random number uniformly in [0,1)
-
-"),
-
-("Base","rand!","rand!([rng], A)
-
-   Populate the array A with random number generated from the
-   specified RNG.
-
-"),
-
-("Base","rand","rand(rng::AbstractRNG[, dims...])
-
-   Generate a random \"Float64\" number or array of the size specified
-   by dims, using the specified RNG object. Currently,
-   \"MersenneTwister\" is the only available Random Number Generator
-   (RNG), which may be seeded using srand.
-
-"),
-
-("Base","rand","rand(dims or [dims...])
-
-   Generate a random \"Float64\" array of the size specified by dims
-
-"),
-
-("Base","rand","rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
-
-   Generate a random integer of the given type. Optionally, generate
-   an array of random integers of the given type by specifying dims.
-
-"),
-
-("Base","rand","rand(r[, dims...])
-
-   Generate a random integer in the range \"r\" (for example, \"1:n\"
-   or \"0:2:10\"). Optionally, generate a random integer array.
-
-"),
-
-("Base","randbool","randbool([dims...])
-
-   Generate a random boolean value. Optionally, generate an array of
-   random boolean values.
-
-"),
-
-("Base","randbool!","randbool!(A)
-
-   Fill an array with random boolean values. A may be an \"Array\" or
-   a \"BitArray\".
-
-"),
-
-("Base","randn","randn([rng], dims or [dims...])
-
-   Generate a normally-distributed random number with mean 0 and
-   standard deviation 1. Optionally generate an array of normally-
-   distributed random numbers.
-
-"),
-
-("Base","randn!","randn!([rng], A::Array{Float64, N})
-
-   Fill the array A with normally-distributed (mean 0, standard
-   deviation 1) random numbers. Also see the rand function.
-
-"),
-
-("Base","ndims","ndims(A) -> Integer
-
-   Returns the number of dimensions of A
-
-"),
-
-("Base","size","size(A)
-
-   Returns a tuple containing the dimensions of A
-
-"),
-
-("Base","iseltype","iseltype(A, T)
-
-   Tests whether A or its elements are of type T
-
-"),
-
-("Base","length","length(A) -> Integer
-
-   Returns the number of elements in A
-
-"),
-
-("Base","countnz","countnz(A)
-
-   Counts the number of nonzero values in array A (dense or sparse).
-   Note that this is not a constant-time operation. For sparse
-   matrices, one should usually use \"nnz\", which returns the number
-   of stored values.
-
-"),
-
-("Base","conj!","conj!(A)
-
-   Convert an array to its complex conjugate in-place
-
-"),
-
-("Base","stride","stride(A, k)
-
-   Returns the distance in memory (in number of elements) between
-   adjacent elements in dimension k
-
-"),
-
-("Base","strides","strides(A)
-
-   Returns a tuple of the memory strides in each dimension
-
-"),
-
-("Base","ind2sub","ind2sub(dims, index) -> subscripts
-
-   Returns a tuple of subscripts into an array with dimensions
-   \"dims\", corresponding to the linear index \"index\"
-
-   **Example** \"i, j, ... = ind2sub(size(A), indmax(A))\" provides
-   the indices of the maximum element
-
-"),
-
-("Base","sub2ind","sub2ind(dims, i, j, k...) -> index
-
-   The inverse of \"ind2sub\", returns the linear index corresponding
-   to the provided subscripts
-
-"),
-
-("Base","Array","Array(type, dims)
-
-   Construct an uninitialized dense array. \"dims\" may be a tuple or
-   a series of integer arguments.
-
-"),
-
-("Base","getindex","getindex(type[, elements...])
-
-   Construct a 1-d array of the specified type. This is usually called
-   with the syntax \"Type[]\". Element values can be specified using
-   \"Type[a,b,c,...]\".
-
-"),
-
-("Base","cell","cell(dims)
-
-   Construct an uninitialized cell array (heterogeneous array).
-   \"dims\" can be either a tuple or a series of integer arguments.
-
-"),
-
-("Base","zeros","zeros(type, dims)
-
-   Create an array of all zeros of specified type. The type defaults
-   to Float64 if not specified.
-
-"),
-
-("Base","zeros","zeros(A)
-
-   Create an array of all zeros with the same element type and shape
-   as A.
-
-"),
-
-("Base","ones","ones(type, dims)
-
-   Create an array of all ones of specified type. The type defaults to
-   Float64 if not specified.
-
-"),
-
-("Base","ones","ones(A)
-
-   Create an array of all ones with the same element type and shape as
-   A.
-
-"),
-
-("Base","trues","trues(dims)
-
-   Create a \"BitArray\" with all values set to true
-
-"),
-
-("Base","falses","falses(dims)
-
-   Create a \"BitArray\" with all values set to false
-
-"),
-
-("Base","fill","fill(x, dims)
-
-   Create an array filled with the value \"x\". For example,
-   \"fill(1.0, (10,10))\" returns a  10x10 array of floats, with each
-   element initialized to 1.0.
-
-   If \"x\" is an object reference, all elements will refer to the
-   same object. \"fill(Foo(), dims)\" will return an array filled with
-   the result of evaluating \"Foo()\" once.
-
-"),
-
-("Base","fill!","fill!(A, x)
-
-   Fill array \"A\" with the value \"x\". If \"x\" is an object
-   reference, all elements will refer to the same object. \"fill!(A,
-   Foo())\" will return \"A\" filled with the result of evaluating
-   \"Foo()\" once.
-
-"),
-
-("Base","reshape","reshape(A, dims)
-
-   Create an array with the same data as the given array, but with
-   different dimensions. An implementation for a particular type of
-   array may choose whether the data is copied or shared.
-
-"),
-
-("Base","similar","similar(array, element_type, dims)
-
-   Create an uninitialized array of the same type as the given array,
-   but with the specified element type and dimensions. The second and
-   third arguments are both optional. The \"dims\" argument may be a
-   tuple or a series of integer arguments.
-
-"),
-
-("Base","reinterpret","reinterpret(type, A)
-
-   Change the type-interpretation of a block of memory. For example,
-   \"reinterpret(Float32, uint32(7))\" interprets the 4 bytes
-   corresponding to \"uint32(7)\" as a \"Float32\". For arrays, this
-   constructs an array with the same binary data as the given array,
-   but with the specified element type.
-
-"),
-
-("Base","eye","eye(n)
-
-   n-by-n identity matrix
-
-"),
-
-("Base","eye","eye(m, n)
-
-   m-by-n identity matrix
-
-"),
-
-("Base","eye","eye(A)
-
-   Constructs an identity matrix of the same dimensions and type as
-   \"A\".
-
-"),
-
-("Base","linspace","linspace(start, stop, n)
-
-   Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\". See also: \"linrange()\" that constructs a range
-   object.
-
-"),
-
-("Base","logspace","logspace(start, stop, n)
-
-   Construct a vector of \"n\" logarithmically-spaced numbers from
-   \"10^start\" to \"10^stop\".
-
-"),
-
-("Base","broadcast","broadcast(f, As...)
-
-   Broadcasts the arrays \"As\" to a common size by expanding
-   singleton dimensions, and returns an array of the results
-   \"f(as...)\" for each position.
-
-"),
-
-("Base","broadcast!","broadcast!(f, dest, As...)
-
-   Like \"broadcast\", but store the result of \"broadcast(f, As...)\"
-   in the \"dest\" array. Note that \"dest\" is only used to store the
-   result, and does not supply arguments to \"f\" unless it is also
-   listed in the \"As\", as in \"broadcast!(f, A, A, B)\" to perform
-   \"A[:] = broadcast(f, A, B)\".
-
-"),
-
-("Base","bitbroadcast","bitbroadcast(f, As...)
-
-   Like \"broadcast\", but allocates a \"BitArray\" to store the
-   result, rather then an \"Array\".
-
-"),
-
-("Base","broadcast_function","broadcast_function(f)
-
-   Returns a function \"broadcast_f\" such that
-   \"broadcast_function(f)(As...) === broadcast(f, As...)\". Most
-   useful in the form \"const broadcast_f = broadcast_function(f)\".
-
-"),
-
-("Base","broadcast!_function","broadcast!_function(f)
-
-   Like \"broadcast_function\", but for \"broadcast!\".
-
-"),
-
-("Base","getindex","getindex(A, inds...)
-
-   Returns a subset of array \"A\" as specified by \"inds\", where
-   each \"ind\" may be an \"Int\", a \"Range\", or a \"Vector\".
-
-"),
-
-("Base","sub","sub(A, inds...)
-
-   Returns a SubArray, which stores the input \"A\" and \"inds\"
-   rather than computing the result immediately. Calling \"getindex\"
-   on a SubArray computes the indices on the fly.
-
-"),
-
-("Base","parent","parent(A)
-
-   Returns the \"parent array\" of an array view type (e.g.,
-   SubArray), or the array itself if it is not a view
-
-"),
-
-("Base","parentindexes","parentindexes(A)
-
-   From an array view \"A\", returns the corresponding indexes in the
-   parent
-
-"),
-
-("Base","slicedim","slicedim(A, d, i)
-
-   Return all the data of \"A\" where the index for dimension \"d\"
-   equals \"i\". Equivalent to \"A[:,:,...,i,:,:,...]\" where \"i\" is
-   in position \"d\".
-
-"),
-
-("Base","slice","slice(A, inds...)
-
-   Create a view of the given indexes of array \"A\", dropping
-   dimensions indexed with scalars.
-
-"),
-
-("Base","setindex!","setindex!(A, X, inds...)
-
-   Store values from array \"X\" within some subset of \"A\" as
-   specified by \"inds\".
-
-"),
-
-("Base","broadcast_getindex","broadcast_getindex(A, inds...)
-
-   Broadcasts the \"inds\" arrays to a common size like \"broadcast\",
-   and returns an array of the results \"A[ks...]\", where \"ks\" goes
-   over the positions in the broadcast.
-
-"),
-
-("Base","broadcast_setindex!","broadcast_setindex!(A, X, inds...)
-
-   Broadcasts the \"X\" and \"inds\" arrays to a common size and
-   stores the value from each position in \"X\" at the indices given
-   by the same positions in \"inds\".
-
-"),
-
-("Base","cat","cat(dim, A...)
-
-   Concatenate the input arrays along the specified dimension
-
-"),
-
-("Base","vcat","vcat(A...)
-
-   Concatenate along dimension 1
-
-"),
-
-("Base","hcat","hcat(A...)
-
-   Concatenate along dimension 2
-
-"),
-
-("Base","hvcat","hvcat(rows::(Int...), values...)
-
-   Horizontal and vertical concatenation in one call. This function is
-   called for block matrix syntax. The first argument specifies the
-   number of arguments to concatenate in each block row. For example,
-   \"[a b;c d e]\" calls \"hvcat((2,3),a,b,c,d,e)\".
-
-   If the first argument is a single integer \"n\", then all block
-   rows are assumed to have \"n\" block columns.
-
-"),
-
-("Base","flipdim","flipdim(A, d)
-
-   Reverse \"A\" in dimension \"d\".
-
-"),
-
-("Base","flipud","flipud(A)
-
-   Equivalent to \"flipdim(A,1)\".
-
-"),
-
-("Base","fliplr","fliplr(A)
-
-   Equivalent to \"flipdim(A,2)\".
-
-"),
-
-("Base","circshift","circshift(A, shifts)
-
-   Circularly shift the data in an array. The second argument is a
-   vector giving the amount to shift in each dimension.
-
-"),
-
-("Base","find","find(A)
-
-   Return a vector of the linear indexes of the non-zeros in \"A\"
-   (determined by \"A[i]!=0\").  A common use of this is to convert a
-   boolean array to an array of indexes of the \"true\" elements.
-
-"),
-
-("Base","find","find(f, A)
-
-   Return a vector of the linear indexes of  \"A\" where \"f\" returns
-   true.
-
-"),
-
-("Base","findn","findn(A)
-
-   Return a vector of indexes for each dimension giving the locations
-   of the non-zeros in \"A\" (determined by \"A[i]!=0\").
-
-"),
-
-("Base","findnz","findnz(A)
-
-   Return a tuple \"(I, J, V)\" where \"I\" and \"J\" are the row and
-   column indexes of the non-zero values in matrix \"A\", and \"V\" is
-   a vector of the non-zero values.
-
-"),
-
-("Base","findfirst","findfirst(A)
-
-   Return the index of the first non-zero value in \"A\" (determined
-   by \"A[i]!=0\").
-
-"),
-
-("Base","findfirst","findfirst(A, v)
-
-   Return the index of the first element equal to \"v\" in \"A\".
-
-"),
-
-("Base","findfirst","findfirst(predicate, A)
-
-   Return the index of the first element of \"A\" for which
-   \"predicate\" returns true.
-
-"),
-
-("Base","findnext","findnext(A, i)
-
-   Find the next index >= \"i\" of a non-zero element of \"A\", or
-   \"0\" if not found.
-
-"),
-
-("Base","findnext","findnext(predicate, A, i)
-
-   Find the next index >= \"i\" of an element of \"A\" for which
-   \"predicate\" returns true, or \"0\" if not found.
-
-"),
-
-("Base","findnext","findnext(A, v, i)
-
-   Find the next index >= \"i\" of an element of \"A\" equal to \"v\"
-   (using \"==\"), or \"0\" if not found.
-
-"),
-
-("Base","permutedims","permutedims(A, perm)
-
-   Permute the dimensions of array \"A\". \"perm\" is a vector
-   specifying a permutation of length \"ndims(A)\". This is a
-   generalization of transpose for multi-dimensional arrays. Transpose
-   is equivalent to \"permutedims(A,[2,1])\".
-
-"),
-
-("Base","ipermutedims","ipermutedims(A, perm)
-
-   Like \"permutedims()\", except the inverse of the given permutation
-   is applied.
-
-"),
-
-("Base","squeeze","squeeze(A, dims)
-
-   Remove the dimensions specified by \"dims\" from array \"A\"
-
-"),
-
-("Base","vec","vec(Array) -> Vector
-
-   Vectorize an array using column-major convention.
-
-"),
-
-("Base","promote_shape","promote_shape(s1, s2)
-
-   Check two array shapes for compatibility, allowing trailing
-   singleton dimensions, and return whichever shape has more
-   dimensions.
-
-"),
-
-("Base","checkbounds","checkbounds(array, indexes...)
-
-   Throw an error if the specified indexes are not in bounds for the
-   given array.
-
-"),
-
-("Base","randsubseq","randsubseq(A, p) -> Vector
-
-   Return a vector consisting of a random subsequence of the given
-   array \"A\", where each element of \"A\" is included (in order)
-   with independent probability \"p\".   (Complexity is linear in
-   \"p*length(A)\", so this function is efficient even if \"p\" is
-   small and \"A\" is large.)  Technically, this process is known as
-   \"Bernoulli sampling\" of \"A\".
-
-"),
-
-("Base","randsubseq!","randsubseq!(S, A, p)
-
-   Like \"randsubseq\", but the results are stored in \"S\" (which is
-   resized as needed).
-
-"),
-
-("Base","cumprod","cumprod(A[, dim])
-
-   Cumulative product along a dimension.
-
-"),
-
-("Base","cumprod!","cumprod!(B, A[, dim])
-
-   Cumulative product of \"A\" along a dimension, storing the result
-   in \"B\".
-
-"),
-
-("Base","cumsum","cumsum(A[, dim])
-
-   Cumulative sum along a dimension.
-
-"),
-
-("Base","cumsum!","cumsum!(B, A[, dim])
-
-   Cumulative sum of \"A\" along a dimension, storing the result in
-   \"B\".
-
-"),
-
-("Base","cumsum_kbn","cumsum_kbn(A[, dim])
-
-   Cumulative sum along a dimension, using the Kahan-Babuska-Neumaier
-   compensated summation algorithm for additional accuracy.
-
-"),
-
-("Base","cummin","cummin(A[, dim])
-
-   Cumulative minimum along a dimension.
-
-"),
-
-("Base","cummax","cummax(A[, dim])
-
-   Cumulative maximum along a dimension.
-
-"),
-
-("Base","diff","diff(A[, dim])
-
-   Finite difference operator of matrix or vector.
-
-"),
-
-("Base","gradient","gradient(F[, h])
-
-   Compute differences along vector \"F\", using \"h\" as the spacing
-   between points. The default spacing is one.
-
-"),
-
-("Base","rot180","rot180(A)
-
-   Rotate matrix \"A\" 180 degrees.
-
-"),
-
-("Base","rotl90","rotl90(A)
-
-   Rotate matrix \"A\" left 90 degrees.
-
-"),
-
-("Base","rotr90","rotr90(A)
-
-   Rotate matrix \"A\" right 90 degrees.
-
-"),
-
-("Base","reducedim","reducedim(f, A, dims, initial)
-
-   Reduce 2-argument function \"f\" along dimensions of \"A\".
-   \"dims\" is a vector specifying the dimensions to reduce, and
-   \"initial\" is the initial value to use in the reductions.
-
-   The associativity of the reduction is implementation-dependent; if
-   you need a particular associativity, e.g. left-to-right, you should
-   write your own loop. See documentation for \"reduce\".
-
-"),
-
-("Base","mapslices","mapslices(f, A, dims)
-
-   Transform the given dimensions of array \"A\" using function \"f\".
-   \"f\" is called on each slice of \"A\" of the form
-   \"A[...,:,...,:,...]\". \"dims\" is an integer vector specifying
-   where the colons go in this expression. The results are
-   concatenated along the remaining dimensions. For example, if
-   \"dims\" is \"[1,2]\" and A is 4-dimensional, \"f\" is called on
-   \"A[:,:,i,j]\" for all \"i\" and \"j\".
-
-"),
-
-("Base","sum_kbn","sum_kbn(A)
-
-   Returns the sum of all array elements, using the Kahan-Babuska-
-   Neumaier compensated summation algorithm for additional accuracy.
-
-"),
-
-("Base","cartesianmap","cartesianmap(f, dims)
-
-   Given a \"dims\" tuple of integers \"(m, n, ...)\", call \"f\" on
-   all combinations of integers in the ranges \"1:m\", \"1:n\", etc.
-
-   **Example**:
-
-      julia> cartesianmap(println, (2,2))
-      11
-      21
-      12
-      22
-
-"),
-
-("Base","bitpack","bitpack(A::AbstractArray{T, N}) -> BitArray
-
-   Converts a numeric array to a packed boolean array
-
-"),
-
-("Base","bitunpack","bitunpack(B::BitArray{N}) -> Array{Bool,N}
-
-   Converts a packed boolean array to an array of booleans
-
-"),
-
-("Base","flipbits!","flipbits!(B::BitArray{N}) -> BitArray{N}
-
-   Performs a bitwise not operation on B. See *~ operator*.
-
-"),
-
-("Base","rol","rol(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Left rotation operator.
-
-"),
-
-("Base","ror","ror(B::BitArray{1}, i::Integer) -> BitArray{1}
-
-   Right rotation operator.
-
-"),
-
-("Base","nthperm","nthperm(v, k)
-
-   Compute the kth lexicographic permutation of a vector.
-
-"),
-
-("Base","nthperm","nthperm(p)
-
-   Return the \"k\" that generated permutation \"p\". Note that
-   \"nthperm(nthperm([1:n], k)) == k\" for \"1 <= k <= factorial(n)\".
-
-"),
-
-("Base","nthperm!","nthperm!(v, k)
-
-   In-place version of \"nthperm()\".
-
-"),
-
-("Base","randperm","randperm(n)
-
-   Construct a random permutation of the given length.
-
-"),
-
-("Base","invperm","invperm(v)
-
-   Return the inverse permutation of v.
-
-"),
-
-("Base","isperm","isperm(v) -> Bool
-
-   Returns true if v is a valid permutation.
-
-"),
-
-("Base","permute!","permute!(v, p)
-
-   Permute vector \"v\" in-place, according to permutation \"p\".  No
-   checking is done to verify that \"p\" is a permutation.
-
-   To return a new permutation, use \"v[p]\".  Note that this is
-   generally faster than \"permute!(v,p)\" for large vectors.
-
-"),
-
-("Base","ipermute!","ipermute!(v, p)
-
-   Like permute!, but the inverse of the given permutation is applied.
-
-"),
-
-("Base","randcycle","randcycle(n)
-
-   Construct a random cyclic permutation of the given length.
-
-"),
-
-("Base","shuffle","shuffle(v)
-
-   Return a randomly permuted copy of \"v\".
-
-"),
-
-("Base","shuffle!","shuffle!(v)
-
-   In-place version of \"shuffle()\".
-
-"),
-
-("Base","reverse","reverse(v[, start=1[, stop=length(v)]])
-
-   Return a copy of \"v\" reversed from start to stop.
-
-"),
-
-("Base","reverse!","reverse!(v[, start=1[, stop=length(v)]]) -> v
-
-   In-place version of \"reverse()\".
-
-"),
-
-("Base","combinations","combinations(arr, n)
-
-   Generate all combinations of \"n\" elements from an indexable
-   object.  Because the number of combinations can be very large, this
-   function returns an iterator object. Use
-   \"collect(combinations(a,n))\" to get an array of all combinations.
-
-"),
-
-("Base","permutations","permutations(arr)
-
-   Generate all permutations of an indexable object.  Because the
-   number of permutations can be very large, this function returns an
-   iterator object. Use \"collect(permutations(a,n))\" to get an array
-   of all permutations.
-
-"),
-
-("Base","partitions","partitions(n)
-
-   Generate all integer arrays that sum to \"n\". Because the number
-   of partitions can be very large, this function returns an iterator
-   object. Use \"collect(partitions(n))\" to get an array of all
-   partitions. The number of partitions to generete can be efficiently
-   computed using \"length(partitions(n))\".
-
-"),
-
-("Base","partitions","partitions(n, m)
-
-   Generate all arrays of \"m\" integers that sum to \"n\". Because
-   the number of partitions can be very large, this function returns
-   an iterator object. Use \"collect(partitions(n,m))\" to get an
-   array of all partitions. The number of partitions to generete can
-   be efficiently computed using \"length(partitions(n,m))\".
-
-"),
-
-("Base","partitions","partitions(array)
-
-   Generate all set partitions of the elements of an array,
-   represented as arrays of arrays. Because the number of partitions
-   can be very large, this function returns an iterator object. Use
-   \"collect(partitions(array))\" to get an array of all partitions.
-   The number of partitions to generete can be efficiently computed
-   using \"length(partitions(array))\".
-
-"),
-
-("Base","partitions","partitions(array, m)
-
-   Generate all set partitions of the elements of an array into
-   exactly m subsets, represented as arrays of arrays. Because the
-   number of partitions can be very large, this function returns an
-   iterator object. Use \"collect(partitions(array,m))\" to get an
-   array of all partitions. The number of partitions into m subsets is
-   equal to the Stirling number of the second kind and can be
-   efficiently computed using \"length(partitions(array,m))\".
 
 "),
 
@@ -7226,6 +9030,856 @@ popdisplay(d::Display)
 
 "),
 
+("Base","bin","bin(n[, pad])
+
+   Convert an integer to a binary string, optionally specifying a
+   number of digits to pad to.
+
+"),
+
+("Base","hex","hex(n[, pad])
+
+   Convert an integer to a hexadecimal string, optionally specifying a
+   number of digits to pad to.
+
+"),
+
+("Base","dec","dec(n[, pad])
+
+   Convert an integer to a decimal string, optionally specifying a
+   number of digits to pad to.
+
+"),
+
+("Base","oct","oct(n[, pad])
+
+   Convert an integer to an octal string, optionally specifying a
+   number of digits to pad to.
+
+"),
+
+("Base","base","base(base, n[, pad])
+
+   Convert an integer to a string in the given base, optionally
+   specifying a number of digits to pad to. The base can be specified
+   as either an integer, or as a \"Uint8\" array of character values
+   to use as digit symbols.
+
+"),
+
+("Base","digits","digits(n[, base][, pad])
+
+   Returns an array of the digits of \"n\" in the given base,
+   optionally padded with zeros to a specified size. More significant
+   digits are at higher indexes, such that \"n ==
+   sum([digits[k]*base^(k-1) for k=1:length(digits)])\".
+
+"),
+
+("Base","bits","bits(n)
+
+   A string giving the literal bit representation of a number.
+
+"),
+
+("Base","parseint","parseint([type], str[, base])
+
+   Parse a string as an integer in the given base (default 10),
+   yielding a number of the specified type (default \"Int\").
+
+"),
+
+("Base","parsefloat","parsefloat([type], str)
+
+   Parse a string as a decimal floating point number, yielding a
+   number of the specified type.
+
+"),
+
+("Base","big","big(x)
+
+   Convert a number to a maximum precision representation (typically
+   \"BigInt\" or \"BigFloat\"). See \"BigFloat\" for information about
+   some pitfalls with floating-point numbers.
+
+"),
+
+("Base","bool","bool(x)
+
+   Convert a number or numeric array to boolean
+
+"),
+
+("Base","int","int(x)
+
+   Convert a number or array to the default integer type on your
+   platform. Alternatively, \"x\" can be a string, which is parsed as
+   an integer.
+
+"),
+
+("Base","uint","uint(x)
+
+   Convert a number or array to the default unsigned integer type on
+   your platform. Alternatively, \"x\" can be a string, which is
+   parsed as an unsigned integer.
+
+"),
+
+("Base","integer","integer(x)
+
+   Convert a number or array to integer type. If \"x\" is already of
+   integer type it is unchanged, otherwise it converts it to the
+   default integer type on your platform.
+
+"),
+
+("Base","signed","signed(x)
+
+   Convert a number to a signed integer
+
+"),
+
+("Base","unsigned","unsigned(x) -> Unsigned
+
+   Convert a number to an unsigned integer
+
+"),
+
+("Base","int8","int8(x)
+
+   Convert a number or array to \"Int8\" data type
+
+"),
+
+("Base","int16","int16(x)
+
+   Convert a number or array to \"Int16\" data type
+
+"),
+
+("Base","int32","int32(x)
+
+   Convert a number or array to \"Int32\" data type
+
+"),
+
+("Base","int64","int64(x)
+
+   Convert a number or array to \"Int64\" data type
+
+"),
+
+("Base","int128","int128(x)
+
+   Convert a number or array to \"Int128\" data type
+
+"),
+
+("Base","uint8","uint8(x)
+
+   Convert a number or array to \"Uint8\" data type
+
+"),
+
+("Base","uint16","uint16(x)
+
+   Convert a number or array to \"Uint16\" data type
+
+"),
+
+("Base","uint32","uint32(x)
+
+   Convert a number or array to \"Uint32\" data type
+
+"),
+
+("Base","uint64","uint64(x)
+
+   Convert a number or array to \"Uint64\" data type
+
+"),
+
+("Base","uint128","uint128(x)
+
+   Convert a number or array to \"Uint128\" data type
+
+"),
+
+("Base","float16","float16(x)
+
+   Convert a number or array to \"Float16\" data type
+
+"),
+
+("Base","float32","float32(x)
+
+   Convert a number or array to \"Float32\" data type
+
+"),
+
+("Base","float64","float64(x)
+
+   Convert a number or array to \"Float64\" data type
+
+"),
+
+("Base","float32_isvalid","float32_isvalid(x, out::Vector{Float32}) -> Bool
+
+   Convert a number or array to \"Float32\" data type, returning true
+   if successful. The result of the conversion is stored in
+   \"out[1]\".
+
+"),
+
+("Base","float64_isvalid","float64_isvalid(x, out::Vector{Float64}) -> Bool
+
+   Convert a number or array to \"Float64\" data type, returning true
+   if successful. The result of the conversion is stored in
+   \"out[1]\".
+
+"),
+
+("Base","float","float(x)
+
+   Convert a number, array, or string to a \"FloatingPoint\" data
+   type. For numeric data, the smallest suitable \"FloatingPoint\"
+   type is used. Converts strings to \"Float64\".
+
+   This function is not recommended for arrays. It is better to use a
+   more specific function such as \"float32\" or \"float64\".
+
+"),
+
+("Base","significand","significand(x)
+
+   Extract the significand(s) (a.k.a. mantissa), in binary
+   representation, of a floating-point number or array.
+
+      julia> significand(15.2)/15.2
+      0.125
+
+      julia> significand(15.2)*8
+      15.2
+
+"),
+
+("Base","exponent","exponent(x) -> Int
+
+   Get the exponent of a normalized floating-point number.
+
+"),
+
+("Base","complex64","complex64(r[, i])
+
+   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
+   \"i\" defaults to zero.
+
+"),
+
+("Base","complex128","complex128(r[, i])
+
+   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
+   \"i\" defaults to zero.
+
+"),
+
+("Base","complex","complex(r[, i])
+
+   Convert real numbers or arrays to complex. \"i\" defaults to zero.
+
+"),
+
+("Base","char","char(x)
+
+   Convert a number or array to \"Char\" data type
+
+"),
+
+("Base","bswap","bswap(n)
+
+   Byte-swap an integer
+
+"),
+
+("Base","num2hex","num2hex(f)
+
+   Get a hexadecimal string of the binary representation of a floating
+   point number
+
+"),
+
+("Base","hex2num","hex2num(str)
+
+   Convert a hexadecimal string to the floating point number it
+   represents
+
+"),
+
+("Base","hex2bytes","hex2bytes(s::ASCIIString)
+
+   Convert an arbitrarily long hexadecimal string to its binary
+   representation. Returns an Array{Uint8, 1}, i.e. an array of bytes.
+
+"),
+
+("Base","bytes2hex","bytes2hex(bin_arr::Array{Uint8, 1})
+
+   Convert an array of bytes to its hexadecimal representation. All
+   characters are in lower-case. Returns an ASCIIString.
+
+"),
+
+("Base","one","one(x)
+
+   Get the multiplicative identity element for the type of x (x can
+   also specify the type itself). For matrices, returns an identity
+   matrix of the appropriate size and type.
+
+"),
+
+("Base","zero","zero(x)
+
+   Get the additive identity element for the type of x (x can also
+   specify the type itself).
+
+"),
+
+("Base","pi","pi
+π
+
+   The constant pi
+
+"),
+
+("Base","im","im
+
+   The imaginary unit
+
+"),
+
+("Base","e","e
+
+   The constant e
+
+"),
+
+("Base","catalan","catalan
+
+   Catalan's constant
+
+"),
+
+("Base","γ","γ
+
+   Euler's constant
+
+"),
+
+("Base","φ","φ
+
+   The golden ratio
+
+"),
+
+("Base","Inf","Inf
+
+   Positive infinity of type Float64
+
+"),
+
+("Base","Inf32","Inf32
+
+   Positive infinity of type Float32
+
+"),
+
+("Base","Inf16","Inf16
+
+   Positive infinity of type Float16
+
+"),
+
+("Base","NaN","NaN
+
+   A not-a-number value of type Float64
+
+"),
+
+("Base","NaN32","NaN32
+
+   A not-a-number value of type Float32
+
+"),
+
+("Base","NaN16","NaN16
+
+   A not-a-number value of type Float16
+
+"),
+
+("Base","issubnormal","issubnormal(f) -> Bool
+
+   Test whether a floating point number is subnormal
+
+"),
+
+("Base","isfinite","isfinite(f) -> Bool
+
+   Test whether a number is finite
+
+"),
+
+("Base","isinf","isinf(f) -> Bool
+
+   Test whether a number is infinite
+
+"),
+
+("Base","isnan","isnan(f) -> Bool
+
+   Test whether a floating point number is not a number (NaN)
+
+"),
+
+("Base","inf","inf(f)
+
+   Returns positive infinity of the floating point type \"f\" or of
+   the same floating point type as \"f\"
+
+"),
+
+("Base","nan","nan(f)
+
+   Returns NaN (not-a-number) of the floating point type \"f\" or of
+   the same floating point type as \"f\"
+
+"),
+
+("Base","nextfloat","nextfloat(f)
+
+   Get the next floating point number in lexicographic order
+
+"),
+
+("Base","prevfloat","prevfloat(f) -> FloatingPoint
+
+   Get the previous floating point number in lexicographic order
+
+"),
+
+("Base","isinteger","isinteger(x) -> Bool
+
+   Test whether \"x\" or all its elements are numerically equal to
+   some integer
+
+"),
+
+("Base","isreal","isreal(x) -> Bool
+
+   Test whether \"x\" or all its elements are numerically equal to
+   some real number
+
+"),
+
+("Base","BigInt","BigInt(x)
+
+   Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
+   anything that can be converted to an \"Int\") or a \"String\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigInt\".
+
+"),
+
+("Base","BigFloat","BigFloat(x)
+
+   Create an arbitrary precision floating point number. \"x\" may be
+   an \"Integer\", a \"Float64\", a \"String\" or a \"BigInt\". The
+   usual mathematical operators are defined for this type, and results
+   are promoted to a \"BigFloat\". Note that because floating-point
+   numbers are not exactly-representable in decimal notation,
+   \"BigFloat(2.1)\" may not yield what you expect. You may prefer to
+   initialize constants using strings, e.g., \"BigFloat(\"2.1\")\".
+
+"),
+
+("Base","get_rounding","get_rounding(T)
+
+   Get the current floating point rounding mode for type \"T\". Valid
+   modes are \"RoundNearest\", \"RoundToZero\", \"RoundUp\",
+   \"RoundDown\", and \"RoundFromZero\" (\"BigFloat\" only).
+
+"),
+
+("Base","set_rounding","set_rounding(T, mode)
+
+   Set the rounding mode of floating point type \"T\". Note that this
+   may affect other types, for instance changing the rounding mode of
+   \"Float64\" will change the rounding mode of \"Float32\". See
+   \"get_rounding\" for available modes
+
+"),
+
+("Base","with_rounding","with_rounding(f::Function, T, mode)
+
+   Change the rounding mode of floating point type \"T\" for the
+   duration of \"f\". It is logically equivalent to:
+
+      old = get_rounding(T)
+      set_rounding(T, mode)
+      f()
+      set_rounding(T, old)
+
+   See \"get_rounding\" for available rounding modes.
+
+"),
+
+("Base","count_ones","count_ones(x::Integer) -> Integer
+
+   Number of ones in the binary representation of \"x\".
+
+      julia> count_ones(7)
+      3
+
+"),
+
+("Base","count_zeros","count_zeros(x::Integer) -> Integer
+
+   Number of zeros in the binary representation of \"x\".
+
+      julia> count_zeros(int32(2 ^ 16 - 1))
+      16
+
+"),
+
+("Base","leading_zeros","leading_zeros(x::Integer) -> Integer
+
+   Number of zeros leading the binary representation of \"x\".
+
+      julia> leading_zeros(int32(1))
+      31
+
+"),
+
+("Base","leading_ones","leading_ones(x::Integer) -> Integer
+
+   Number of ones leading the binary representation of \"x\".
+
+      julia> leading_ones(int32(2 ^ 32 - 2))
+      31
+
+"),
+
+("Base","trailing_zeros","trailing_zeros(x::Integer) -> Integer
+
+   Number of zeros trailing the binary representation of \"x\".
+
+      julia> trailing_zeros(2)
+      1
+
+"),
+
+("Base","trailing_ones","trailing_ones(x::Integer) -> Integer
+
+   Number of ones trailing the binary representation of \"x\".
+
+      julia> trailing_ones(3)
+      2
+
+"),
+
+("Base","isprime","isprime(x::Integer) -> Bool
+
+   Returns \"true\" if \"x\" is prime, and \"false\" otherwise.
+
+      julia> isprime(3)
+      true
+
+"),
+
+("Base","primes","primes(n)
+
+   Returns a collection of the prime numbers <= \"n\".
+
+"),
+
+("Base","isodd","isodd(x::Integer) -> Bool
+
+   Returns \"true\" if \"x\" is odd (that is, not divisible by 2), and
+   \"false\" otherwise.
+
+      julia> isodd(9)
+      true
+
+      julia> isodd(10)
+      false
+
+"),
+
+("Base","iseven","iseven(x::Integer) -> Bool
+
+   Returns \"true\" is \"x\" is even (that is, divisible by 2), and
+   \"false\" otherwise.
+
+      julia> iseven(10)
+      true
+
+      julia> iseven(9)
+      false
+
+"),
+
+("Base","precision","precision(num::FloatingPoint)
+
+   Get the precision of a floating point number, as defined by the
+   effective number of bits in the mantissa.
+
+"),
+
+("Base","get_bigfloat_precision","get_bigfloat_precision()
+
+   Get the precision (in bits) currently used for BigFloat arithmetic.
+
+"),
+
+("Base","set_bigfloat_precision","set_bigfloat_precision(x::Int64)
+
+   Set the precision (in bits) to be used to BigFloat arithmetic.
+
+"),
+
+("Base","with_bigfloat_precision","with_bigfloat_precision(f::Function, precision::Integer)
+
+   Change the BigFloat arithmetic precision (in bits) for the duration
+   of \"f\". It is logically equivalent to:
+
+      old = get_bigfloat_precision()
+      set_bigfloat_precision(precision)
+      f()
+      set_bigfloat_precision(old)
+
+"),
+
+("Base","srand","srand([rng], seed)
+
+   Seed the RNG with a \"seed\", which may be an unsigned integer or a
+   vector of unsigned integers. \"seed\" can even be a filename, in
+   which case the seed is read from a file. If the argument \"rng\" is
+   not provided, the default global RNG is seeded.
+
+"),
+
+("Base","MersenneTwister","MersenneTwister([seed])
+
+   Create a \"MersenneTwister\" RNG object. Different RNG objects can
+   have their own seeds, which may be useful for generating different
+   streams of random numbers.
+
+"),
+
+("Base","rand","rand() -> Float64
+
+   Generate a \"Float64\" random number uniformly in [0,1)
+
+"),
+
+("Base","rand!","rand!([rng], A)
+
+   Populate the array A with random number generated from the
+   specified RNG.
+
+"),
+
+("Base","rand","rand(rng::AbstractRNG[, dims...])
+
+   Generate a random \"Float64\" number or array of the size specified
+   by dims, using the specified RNG object. Currently,
+   \"MersenneTwister\" is the only available Random Number Generator
+   (RNG), which may be seeded using srand.
+
+"),
+
+("Base","rand","rand(dims or [dims...])
+
+   Generate a random \"Float64\" array of the size specified by dims
+
+"),
+
+("Base","rand","rand(Int32|Uint32|Int64|Uint64|Int128|Uint128[, dims...])
+
+   Generate a random integer of the given type. Optionally, generate
+   an array of random integers of the given type by specifying dims.
+
+"),
+
+("Base","rand","rand(r[, dims...])
+
+   Generate a random integer in the range \"r\" (for example, \"1:n\"
+   or \"0:2:10\"). Optionally, generate a random integer array.
+
+"),
+
+("Base","randbool","randbool([dims...])
+
+   Generate a random boolean value. Optionally, generate an array of
+   random boolean values.
+
+"),
+
+("Base","randbool!","randbool!(A)
+
+   Fill an array with random boolean values. A may be an \"Array\" or
+   a \"BitArray\".
+
+"),
+
+("Base","randn","randn([rng], dims or [dims...])
+
+   Generate a normally-distributed random number with mean 0 and
+   standard deviation 1. Optionally generate an array of normally-
+   distributed random numbers.
+
+"),
+
+("Base","randn!","randn!([rng], A::Array{Float64, N})
+
+   Fill the array A with normally-distributed (mean 0, standard
+   deviation 1) random numbers. Also see the rand function.
+
+"),
+
+("Base","Task","Task(func)
+
+   Create a \"Task\" (i.e. thread, or coroutine) to execute the given
+   function (which must be callable with no arguments). The task exits
+   when this function returns.
+
+"),
+
+("Base","yieldto","yieldto(task, args...)
+
+   Switch to the given task. The first time a task is switched to, the
+   task's function is called with no arguments. On subsequent
+   switches, \"args\" are returned from the task's last call to
+   \"yieldto\". This is a low-level call that only switches tasks, not
+   considering states or scheduling in any way.
+
+"),
+
+("Base","current_task","current_task()
+
+   Get the currently running Task.
+
+"),
+
+("Base","istaskdone","istaskdone(task) -> Bool
+
+   Tell whether a task has exited.
+
+"),
+
+("Base","consume","consume(task, values...)
+
+   Receive the next value passed to \"produce\" by the specified task.
+   Additional arguments may be passed, to be returned from the last
+   \"produce\" call in the producer.
+
+"),
+
+("Base","produce","produce(value)
+
+   Send the given value to the last \"consume\" call, switching to the
+   consumer task. If the next \"consume\" call passes any values, they
+   are returned by \"produce\".
+
+"),
+
+("Base","yield","yield()
+
+   Switch to the scheduler to allow another scheduled task to run. A
+   task that calls this function is still runnable, and will be
+   restarted immediately if there are no other runnable tasks.
+
+"),
+
+("Base","task_local_storage","task_local_storage(symbol)
+
+   Look up the value of a symbol in the current task's task-local
+   storage.
+
+"),
+
+("Base","task_local_storage","task_local_storage(symbol, value)
+
+   Assign a value to a symbol in the current task's task-local
+   storage.
+
+"),
+
+("Base","task_local_storage","task_local_storage(body, symbol, value)
+
+   Call the function \"body\" with a modified task-local storage, in
+   which \"value\" is assigned to \"symbol\"; the previous value of
+   \"symbol\", or lack thereof, is restored afterwards. Useful for
+   emulating dynamic scoping.
+
+"),
+
+("Base","Condition","Condition()
+
+   Create an edge-triggered event source that tasks can wait for.
+   Tasks that call \"wait\" on a \"Condition\" are suspended and
+   queued. Tasks are woken up when \"notify\" is later called on the
+   \"Condition\". Edge triggering means that only tasks waiting at the
+   time \"notify\" is called can be woken up. For level-triggered
+   notifications, you must keep extra state to keep track of whether a
+   notification has happened. The \"RemoteRef\" type does this, and so
+   can be used for level-triggered events.
+
+"),
+
+("Base","notify","notify(condition, val=nothing; all=true, error=false)
+
+   Wake up tasks waiting for a condition, passing them \"val\". If
+   \"all\" is true (the default), all waiting tasks are woken,
+   otherwise only one is. If \"error\" is true, the passed value is
+   raised as an exception in the woken tasks.
+
+"),
+
+("Base","schedule","schedule(t::Task, [val]; error=false)
+
+   Add a task to the scheduler's queue. This causes the task to run
+   constantly when the system is otherwise idle, unless the task
+   performs a blocking operation such as \"wait\".
+
+   If a second argument is provided, it will be passed to the task
+   (via the return value of \"yieldto\") when it runs again. If
+   \"error\" is true, the value is raised as an exception in the woken
+   task.
+
+"),
+
+("Base","@schedule","@schedule()
+
+   Wrap an expression in a Task and add it to the scheduler's queue.
+
+"),
+
+("Base","@task","@task()
+
+   Wrap an expression in a Task executing it, and return the Task.
+   This only creates a task, and does not run it.
+
+"),
+
+("Base","sleep","sleep(seconds)
+
+   Block the current task for a specified number of seconds. The
+   minimum sleep time is 1 millisecond or input of \"0.001\".
+
+"),
+
 ("Base","addprocs","addprocs(n; cman::ClusterManager=LocalManager()) -> List of process identifiers
 
    \"addprocs(4)\" will add 4 processes on the local machine. This can
@@ -7616,3007 +10270,6 @@ popdisplay(d::Display)
 
 "),
 
-("Base","run","run(command)
-
-   Run a command object, constructed with backticks. Throws an error
-   if anything goes wrong, including the process exiting with a non-
-   zero status.
-
-"),
-
-("Base","spawn","spawn(command)
-
-   Run a command object asynchronously, returning the resulting
-   \"Process\" object.
-
-"),
-
-("Base","DevNull","DevNull
-
-   Used in a stream redirect to discard all data written to it.
-   Essentially equivalent to /dev/null on Unix or NUL on Windows.
-   Usage: \"run(`cat test.txt` |> DevNull)\"
-
-"),
-
-("Base","success","success(command)
-
-   Run a command object, constructed with backticks, and tell whether
-   it was successful (exited with a code of 0). An exception is raised
-   if the process cannot be started.
-
-"),
-
-("Base","process_running","process_running(p::Process)
-
-   Determine whether a process is currently running.
-
-"),
-
-("Base","process_exited","process_exited(p::Process)
-
-   Determine whether a process has exited.
-
-"),
-
-("Base","kill","kill(p::Process, signum=SIGTERM)
-
-   Send a signal to a process. The default is to terminate the
-   process.
-
-"),
-
-("Base","open","open(command, mode::String=\"r\", stdio=DevNull)
-
-   Start running \"command\" asynchronously, and return a tuple
-   \"(stream,process)\".  If \"mode\" is \"\"r\"\", then \"stream\"
-   reads from the process's standard output and \"stdio\" optionally
-   specifies the process's standard input stream.  If \"mode\" is
-   \"\"w\"\", then \"stream\" writes to the process's standard input
-   and \"stdio\" optionally specifies the process's standard output
-   stream.
-
-"),
-
-("Base","open","open(f::Function, command, mode::String=\"r\", stdio=DevNull)
-
-   Similar to \"open(command, mode, stdio)\", but calls \"f(stream)\"
-   on the resulting read or write stream, then closes the stream and
-   waits for the process to complete.  Returns the value returned by
-   \"f\".
-
-"),
-
-("Base","readandwrite","readandwrite(command)
-
-   Starts running a command asynchronously, and returns a tuple
-   (stdout,stdin,process) of the output stream and input stream of the
-   process, and the process object itself.
-
-"),
-
-("Base","ignorestatus","ignorestatus(command)
-
-   Mark a command object so that running it will not throw an error if
-   the result code is non-zero.
-
-"),
-
-("Base","detach","detach(command)
-
-   Mark a command object so that it will be run in a new process
-   group, allowing it to outlive the julia process, and not have
-   Ctrl-C interrupts passed to it.
-
-"),
-
-("Base","setenv","setenv(command, env; dir=working_dir)
-
-   Set environment variables to use when running the given command.
-   \"env\" is either a dictionary mapping strings to strings, or an
-   array of strings of the form \"\"var=val\"\".
-
-   The \"dir\" keyword argument can be used to specify a working
-   directory for the command.
-
-"),
-
-("Base","|>","|>(command, command)
-|>(command, filename)
-|>(filename, command)
-
-   Redirect operator. Used for piping the output of a process into
-   another (first form) or to redirect the standard output/input of a
-   command to/from a file (second and third forms).
-
-   **Examples**:
-      * \"run(`ls` |> `grep xyz`)\"
-
-      * \"run(`ls` |> \"out.txt\")\"
-
-      * \"run(\"out.txt\" |> `grep xyz`)\"
-
-"),
-
-("Base",">>",">>(command, filename)
-
-   Redirect standard output of a process, appending to the destination
-   file.
-
-"),
-
-("Base",".>",".>(command, filename)
-
-   Redirect the standard error stream of a process.
-
-"),
-
-("Base","gethostname","gethostname() -> String
-
-   Get the local machine's host name.
-
-"),
-
-("Base","getipaddr","getipaddr() -> String
-
-   Get the IP address of the local machine, as a string of the form
-   \"x.x.x.x\".
-
-"),
-
-("Base","pwd","pwd() -> String
-
-   Get the current working directory.
-
-"),
-
-("Base","cd","cd(dir::String)
-
-   Set the current working directory.
-
-"),
-
-("Base","cd","cd(f[, dir])
-
-   Temporarily changes the current working directory (HOME if not
-   specified) and applies function f before returning.
-
-"),
-
-("Base","mkdir","mkdir(path[, mode])
-
-   Make a new directory with name \"path\" and permissions \"mode\".
-   \"mode\" defaults to 0o777, modified by the current file creation
-   mask.
-
-"),
-
-("Base","mkpath","mkpath(path[, mode])
-
-   Create all directories in the given \"path\", with permissions
-   \"mode\". \"mode\" defaults to 0o777, modified by the current file
-   creation mask.
-
-"),
-
-("Base","symlink","symlink(target, link)
-
-   Creates a symbolic link to \"target\" with the name \"link\".
-
-   Note: This function raises an error under operating systems that do not
-     support soft symbolic links, such as Windows XP.
-
-"),
-
-("Base","chmod","chmod(path, mode)
-
-   Change the permissions mode of \"path\" to \"mode\". Only integer
-   modes (e.g. 0o777) are currently supported.
-
-"),
-
-("Base","getpid","getpid() -> Int32
-
-   Get julia's process ID.
-
-"),
-
-("Base","time","time([t::TmStruct])
-
-   Get the system time in seconds since the epoch, with fairly high
-   (typically, microsecond) resolution. When passed a \"TmStruct\",
-   converts it to a number of seconds since the epoch.
-
-"),
-
-("Base","time_ns","time_ns()
-
-   Get the time in nanoseconds. The time corresponding to 0 is
-   undefined, and wraps every 5.8 years.
-
-"),
-
-("Base","strftime","strftime([format], time)
-
-   Convert time, given as a number of seconds since the epoch or a
-   \"TmStruct\", to a formatted string using the given format.
-   Supported formats are the same as those in the standard C library.
-
-"),
-
-("Base","strptime","strptime([format], timestr)
-
-   Parse a formatted time string into a \"TmStruct\" giving the
-   seconds, minute, hour, date, etc. Supported formats are the same as
-   those in the standard C library. On some platforms, timezones will
-   not be parsed correctly. If the result of this function will be
-   passed to \"time\" to convert it to seconds since the epoch, the
-   \"isdst\" field should be filled in manually. Setting it to \"-1\"
-   will tell the C library to use the current system settings to
-   determine the timezone.
-
-"),
-
-("Base","TmStruct","TmStruct([seconds])
-
-   Convert a number of seconds since the epoch to broken-down format,
-   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
-   \"year\", \"wday\", \"yday\", and \"isdst\".
-
-"),
-
-("Base","tic","tic()
-
-   Set a timer to be read by the next call to \"toc()\" or \"toq()\".
-   The macro call \"@time expr\" can also be used to time evaluation.
-
-"),
-
-("Base","toc","toc()
-
-   Print and return the time elapsed since the last \"tic()\".
-
-"),
-
-("Base","toq","toq()
-
-   Return, but do not print, the time elapsed since the last
-   \"tic()\".
-
-"),
-
-("Base","@time","@time()
-
-   A macro to execute an expression, printing the time it took to
-   execute and the total number of bytes its execution caused to be
-   allocated, before returning the value of the expression.
-
-"),
-
-("Base","@elapsed","@elapsed()
-
-   A macro to evaluate an expression, discarding the resulting value,
-   instead returning the number of seconds it took to execute as a
-   floating-point number.
-
-"),
-
-("Base","@allocated","@allocated()
-
-   A macro to evaluate an expression, discarding the resulting value,
-   instead returning the total number of bytes allocated during
-   evaluation of the expression.
-
-"),
-
-("Base","EnvHash","EnvHash() -> EnvHash
-
-   A singleton of this type provides a hash table interface to
-   environment variables.
-
-"),
-
-("Base","ENV","ENV
-
-   Reference to the singleton \"EnvHash\", providing a dictionary
-   interface to system environment variables.
-
-"),
-
-("Base","@unix","@unix()
-
-   Given \"@unix? a : b\", do \"a\" on Unix systems (including Linux
-   and OS X) and \"b\" elsewhere. See documentation for Handling
-   Platform Variations in the Calling C and Fortran Code section of
-   the manual.
-
-"),
-
-("Base","@osx","@osx()
-
-   Given \"@osx? a : b\", do \"a\" on OS X and \"b\" elsewhere. See
-   documentation for Handling Platform Variations in the Calling C and
-   Fortran Code section of the manual.
-
-"),
-
-("Base","@linux","@linux()
-
-   Given \"@linux? a : b\", do \"a\" on Linux and \"b\" elsewhere. See
-   documentation for Handling Platform Variations in the Calling C and
-   Fortran Code section of the manual.
-
-"),
-
-("Base","@windows","@windows()
-
-   Given \"@windows? a : b\", do \"a\" on Windows and \"b\" elsewhere.
-   See documentation for Handling Platform Variations in the Calling C
-   and Fortran Code section of the manual.
-
-"),
-
-("Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
-
-   Call function in C-exported shared library, specified by
-   \"(function name, library)\" tuple, where each component is a
-   String or :Symbol. Alternatively, ccall may be used to call a
-   function pointer returned by dlsym, but note that this usage is
-   generally discouraged to facilitate future static compilation. Note
-   that the argument type tuple must be a literal tuple, and not a
-   tuple-valued variable or expression.
-
-"),
-
-("Base","cglobal","cglobal((symbol, library) or ptr[, Type=Void])
-
-   Obtain a pointer to a global variable in a C-exported shared
-   library, specified exactly as in \"ccall\".  Returns a
-   \"Ptr{Type}\", defaulting to \"Ptr{Void}\" if no Type argument is
-   supplied.  The values can be read or written by \"unsafe_load\" or
-   \"unsafe_store!\", respectively.
-
-"),
-
-("Base","cfunction","cfunction(fun::Function, RetType::Type, (ArgTypes...))
-
-   Generate C-callable function pointer from Julia function. Type
-   annotation of the return value in the callback function is a must
-   for situations where Julia cannot infer the return type
-   automatically.
-
-   For example:
-
-      function foo()
-          # body
-
-          retval::Float64
-      end
-
-      bar = cfunction(foo, Float64, ())
-
-"),
-
-("Base","dlopen","dlopen(libfile::String[, flags::Integer])
-
-   Load a shared library, returning an opaque handle.
-
-   The optional flags argument is a bitwise-or of zero or more of
-   RTLD_LOCAL, RTLD_GLOBAL, RTLD_LAZY, RTLD_NOW, RTLD_NODELETE,
-   RTLD_NOLOAD, RTLD_DEEPBIND, and RTLD_FIRST.  These are converted to
-   the corresponding flags of the POSIX (and/or GNU libc and/or MacOS)
-   dlopen command, if possible, or are ignored if the specified
-   functionality is not available on the current platform.  The
-   default is RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL.  An important usage
-   of these flags, on POSIX platforms, is to specify
-   RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL in order for the library's
-   symbols to be available for usage in other shared libraries, in
-   situations where there are dependencies between shared libraries.
-
-"),
-
-("Base","dlopen_e","dlopen_e(libfile::String[, flags::Integer])
-
-   Similar to \"dlopen\", except returns a NULL pointer instead of
-   raising errors.
-
-"),
-
-("Base","RTLD_DEEPBIND","RTLD_DEEPBIND
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_FIRST","RTLD_FIRST
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_GLOBAL","RTLD_GLOBAL
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_LAZY","RTLD_LAZY
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_LOCAL","RTLD_LOCAL
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_NODELETE","RTLD_NODELETE
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_NOLOAD","RTLD_NOLOAD
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","RTLD_NOW","RTLD_NOW
-
-   Enum constant for dlopen. See your platform man page for details,
-   if applicable.
-
-"),
-
-("Base","dlsym","dlsym(handle, sym)
-
-   Look up a symbol from a shared library handle, return callable
-   function pointer on success.
-
-"),
-
-("Base","dlsym_e","dlsym_e(handle, sym)
-
-   Look up a symbol from a shared library handle, silently return NULL
-   pointer on lookup failure.
-
-"),
-
-("Base","dlclose","dlclose(handle)
-
-   Close shared library referenced by handle.
-
-"),
-
-("Base","find_library","find_library(names, locations)
-
-   Searches for the first library in \"names\" in the paths in the
-   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
-   that order) which can successfully be dlopen'd. On success, the
-   return value will be one of the names (potentially prefixed by one
-   of the paths in locations). This string can be assigned to a
-   \"global const\" and used as the library name in future
-   \"ccall\"'s. On failure, it returns the empty string.
-
-"),
-
-("Base","DL_LOAD_PATH","DL_LOAD_PATH
-
-   When calling \"dlopen\", the paths in this list will be searched
-   first, in order, before searching the system locations for a valid
-   library handle.
-
-"),
-
-("Base","c_malloc","c_malloc(size::Integer) -> Ptr{Void}
-
-   Call \"malloc\" from the C standard library.
-
-"),
-
-("Base","c_calloc","c_calloc(num::Integer, size::Integer) -> Ptr{Void}
-
-   Call \"calloc\" from the C standard library.
-
-"),
-
-("Base","c_realloc","c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
-
-   Call \"realloc\" from the C standard library.
-
-"),
-
-("Base","c_free","c_free(addr::Ptr)
-
-   Call \"free\" from the C standard library.
-
-"),
-
-("Base","unsafe_load","unsafe_load(p::Ptr{T}, i::Integer)
-
-   Load a value of type \"T\" from the address of the ith element
-   (1-indexed) starting at \"p\". This is equivalent to the C
-   expression \"p[i-1]\".
-
-"),
-
-("Base","unsafe_store!","unsafe_store!(p::Ptr{T}, x, i::Integer)
-
-   Store a value of type \"T\" to the address of the ith element
-   (1-indexed) starting at \"p\". This is equivalent to the C
-   expression \"p[i-1] = x\".
-
-"),
-
-("Base","unsafe_copy!","unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
-
-   Copy \"N\" elements from a source pointer to a destination, with no
-   checking. The size of an element is determined by the type of the
-   pointers.
-
-"),
-
-("Base","unsafe_copy!","unsafe_copy!(dest::Array, do, src::Array, so, N)
-
-   Copy \"N\" elements from a source array to a destination, starting
-   at offset \"so\" in the source and \"do\" in the destination
-   (1-indexed).
-
-"),
-
-("Base","copy!","copy!(dest, src)
-
-   Copy all elements from collection \"src\" to array \"dest\".
-   Returns \"dest\".
-
-"),
-
-("Base","copy!","copy!(dest, do, src, so, N)
-
-   Copy \"N\" elements from collection \"src\" starting at offset
-   \"so\", to array \"dest\" starting at offset \"do\". Returns
-   \"dest\".
-
-"),
-
-("Base","pointer","pointer(a[, index])
-
-   Get the native address of an array or string element. Be careful to
-   ensure that a julia reference to \"a\" exists as long as this
-   pointer will be used.
-
-"),
-
-("Base","pointer","pointer(type, int)
-
-   Convert an integer to a pointer of the specified element type.
-
-"),
-
-("Base","pointer_to_array","pointer_to_array(p, dims[, own])
-
-   Wrap a native pointer as a Julia Array object. The pointer element
-   type determines the array element type. \"own\" optionally
-   specifies whether Julia should take ownership of the memory,
-   calling \"free\" on the pointer when the array is no longer
-   referenced.
-
-"),
-
-("Base","pointer_from_objref","pointer_from_objref(obj)
-
-   Get the memory address of a Julia object as a \"Ptr\". The
-   existence of the resulting \"Ptr\" will not protect the object from
-   garbage collection, so you must ensure that the object remains
-   referenced for the whole time that the \"Ptr\" will be used.
-
-"),
-
-("Base","unsafe_pointer_to_objref","unsafe_pointer_to_objref(p::Ptr)
-
-   Convert a \"Ptr\" to an object reference. Assumes the pointer
-   refers to a valid heap-allocated Julia object. If this is not the
-   case, undefined behavior results, hence this function is considered
-   \"unsafe\" and should be used with care.
-
-"),
-
-("Base","disable_sigint","disable_sigint(f::Function)
-
-   Disable Ctrl-C handler during execution of a function, for calling
-   external code that is not interrupt safe. Intended to be called
-   using \"do\" block syntax as follows:
-
-      disable_sigint() do
-          # interrupt-unsafe code
-          ...
-      end
-
-"),
-
-("Base","reenable_sigint","reenable_sigint(f::Function)
-
-   Re-enable Ctrl-C handler during execution of a function.
-   Temporarily reverses the effect of \"disable_sigint\".
-
-"),
-
-("Base","errno","errno([code])
-
-   Get the value of the C library's \"errno\". If an argument is
-   specified, it is used to set the value of \"errno\".
-
-   The value of \"errno\" is only valid immediately after a \"ccall\"
-   to a C library routine that sets it. Specifically, you cannot call
-   \"errno\" at the next prompt in a REPL, because lots of code is
-   executed between prompts.
-
-"),
-
-("Base","systemerror","systemerror(sysfunc, iftrue)
-
-   Raises a \"SystemError\" for \"errno\" with the descriptive string
-   \"sysfunc\" if \"bool\" is true
-
-"),
-
-("Base","strerror","strerror(n)
-
-   Convert a system call error code to a descriptive string
-
-"),
-
-("Base","Cchar","Cchar
-
-   Equivalent to the native \"char\" c-type
-
-"),
-
-("Base","Cuchar","Cuchar
-
-   Equivalent to the native \"unsigned char\" c-type (Uint8)
-
-"),
-
-("Base","Cshort","Cshort
-
-   Equivalent to the native \"signed short\" c-type (Int16)
-
-"),
-
-("Base","Cushort","Cushort
-
-   Equivalent to the native \"unsigned short\" c-type (Uint16)
-
-"),
-
-("Base","Cint","Cint
-
-   Equivalent to the native \"signed int\" c-type (Int32)
-
-"),
-
-("Base","Cuint","Cuint
-
-   Equivalent to the native \"unsigned int\" c-type (Uint32)
-
-"),
-
-("Base","Clong","Clong
-
-   Equivalent to the native \"signed long\" c-type
-
-"),
-
-("Base","Culong","Culong
-
-   Equivalent to the native \"unsigned long\" c-type
-
-"),
-
-("Base","Clonglong","Clonglong
-
-   Equivalent to the native \"signed long long\" c-type (Int64)
-
-"),
-
-("Base","Culonglong","Culonglong
-
-   Equivalent to the native \"unsigned long long\" c-type (Uint64)
-
-"),
-
-("Base","Csize_t","Csize_t
-
-   Equivalent to the native \"size_t\" c-type (Uint)
-
-"),
-
-("Base","Cssize_t","Cssize_t
-
-   Equivalent to the native \"ssize_t\" c-type
-
-"),
-
-("Base","Cptrdiff_t","Cptrdiff_t
-
-   Equivalent to the native \"ptrdiff_t\" c-type (Int)
-
-"),
-
-("Base","Coff_t","Coff_t
-
-   Equivalent to the native \"off_t\" c-type
-
-"),
-
-("Base","Cwchar_t","Cwchar_t
-
-   Equivalent to the native \"wchar_t\" c-type (Int32)
-
-"),
-
-("Base","Cfloat","Cfloat
-
-   Equivalent to the native \"float\" c-type (Float32)
-
-"),
-
-("Base","Cdouble","Cdouble
-
-   Equivalent to the native \"double\" c-type (Float64)
-
-"),
-
-("Base","error","error(message::String)
-
-   Raise an error with the given message
-
-"),
-
-("Base","throw","throw(e)
-
-   Throw an object as an exception
-
-"),
-
-("Base","rethrow","rethrow([e])
-
-   Throw an object without changing the current exception backtrace.
-   The default argument is the current exception (if called within a
-   \"catch\" block).
-
-"),
-
-("Base","backtrace","backtrace()
-
-   Get a backtrace object for the current program point.
-
-"),
-
-("Base","catch_backtrace","catch_backtrace()
-
-   Get the backtrace of the current exception, for use within
-   \"catch\" blocks.
-
-"),
-
-("Base","assert","assert(cond[, text])
-
-   Raise an error if \"cond\" is false. Also available as the macro
-   \"@assert expr\".
-
-"),
-
-("Base","@assert","@assert()
-
-   Raise an error if \"cond\" is false. Preferred syntax for writings
-   assertions.
-
-"),
-
-("Base","ArgumentError","ArgumentError
-
-   The parameters given to a function call are not valid.
-
-"),
-
-("Base","BoundsError","BoundsError
-
-   An indexing operation into an array tried to access an out-of-
-   bounds element.
-
-"),
-
-("Base","EOFError","EOFError
-
-   No more data was available to read from a file or stream.
-
-"),
-
-("Base","ErrorException","ErrorException
-
-   Generic error type. The error message, in the *.msg* field, may
-   provide more specific details.
-
-"),
-
-("Base","KeyError","KeyError
-
-   An indexing operation into an \"Associative\" (\"Dict\") or \"Set\"
-   like object tried to access or delete a non-existent element.
-
-"),
-
-("Base","LoadError","LoadError
-
-   An error occurred while *including*, *requiring*, or *using* a
-   file. The error specifics should be available in the *.error*
-   field.
-
-"),
-
-("Base","MethodError","MethodError
-
-   A method with the required type signature does not exist in the
-   given generic function.
-
-"),
-
-("Base","ParseError","ParseError
-
-   The expression passed to the *parse* function could not be
-   interpreted as a valid Julia expression.
-
-"),
-
-("Base","ProcessExitedException","ProcessExitedException
-
-   After a client Julia process has exited, further attempts to
-   reference the dead child will throw this exception.
-
-"),
-
-("Base","SystemError","SystemError
-
-   A system call failed with an error code (in the \"errno\" global
-   variable).
-
-"),
-
-("Base","TypeError","TypeError
-
-   A type assertion failure, or calling an intrinsic function with an
-   incorrect argument type.
-
-"),
-
-("Base","Task","Task(func)
-
-   Create a \"Task\" (i.e. thread, or coroutine) to execute the given
-   function (which must be callable with no arguments). The task exits
-   when this function returns.
-
-"),
-
-("Base","yieldto","yieldto(task, args...)
-
-   Switch to the given task. The first time a task is switched to, the
-   task's function is called with no arguments. On subsequent
-   switches, \"args\" are returned from the task's last call to
-   \"yieldto\". This is a low-level call that only switches tasks, not
-   considering states or scheduling in any way.
-
-"),
-
-("Base","current_task","current_task()
-
-   Get the currently running Task.
-
-"),
-
-("Base","istaskdone","istaskdone(task) -> Bool
-
-   Tell whether a task has exited.
-
-"),
-
-("Base","consume","consume(task, values...)
-
-   Receive the next value passed to \"produce\" by the specified task.
-   Additional arguments may be passed, to be returned from the last
-   \"produce\" call in the producer.
-
-"),
-
-("Base","produce","produce(value)
-
-   Send the given value to the last \"consume\" call, switching to the
-   consumer task. If the next \"consume\" call passes any values, they
-   are returned by \"produce\".
-
-"),
-
-("Base","yield","yield()
-
-   Switch to the scheduler to allow another scheduled task to run. A
-   task that calls this function is still runnable, and will be
-   restarted immediately if there are no other runnable tasks.
-
-"),
-
-("Base","task_local_storage","task_local_storage(symbol)
-
-   Look up the value of a symbol in the current task's task-local
-   storage.
-
-"),
-
-("Base","task_local_storage","task_local_storage(symbol, value)
-
-   Assign a value to a symbol in the current task's task-local
-   storage.
-
-"),
-
-("Base","task_local_storage","task_local_storage(body, symbol, value)
-
-   Call the function \"body\" with a modified task-local storage, in
-   which \"value\" is assigned to \"symbol\"; the previous value of
-   \"symbol\", or lack thereof, is restored afterwards. Useful for
-   emulating dynamic scoping.
-
-"),
-
-("Base","Condition","Condition()
-
-   Create an edge-triggered event source that tasks can wait for.
-   Tasks that call \"wait\" on a \"Condition\" are suspended and
-   queued. Tasks are woken up when \"notify\" is later called on the
-   \"Condition\". Edge triggering means that only tasks waiting at the
-   time \"notify\" is called can be woken up. For level-triggered
-   notifications, you must keep extra state to keep track of whether a
-   notification has happened. The \"RemoteRef\" type does this, and so
-   can be used for level-triggered events.
-
-"),
-
-("Base","notify","notify(condition, val=nothing; all=true, error=false)
-
-   Wake up tasks waiting for a condition, passing them \"val\". If
-   \"all\" is true (the default), all waiting tasks are woken,
-   otherwise only one is. If \"error\" is true, the passed value is
-   raised as an exception in the woken tasks.
-
-"),
-
-("Base","schedule","schedule(t::Task, [val]; error=false)
-
-   Add a task to the scheduler's queue. This causes the task to run
-   constantly when the system is otherwise idle, unless the task
-   performs a blocking operation such as \"wait\".
-
-   If a second argument is provided, it will be passed to the task
-   (via the return value of \"yieldto\") when it runs again. If
-   \"error\" is true, the value is raised as an exception in the woken
-   task.
-
-"),
-
-("Base","@schedule","@schedule()
-
-   Wrap an expression in a Task and add it to the scheduler's queue.
-
-"),
-
-("Base","@task","@task()
-
-   Wrap an expression in a Task executing it, and return the Task.
-   This only creates a task, and does not run it.
-
-"),
-
-("Base","sleep","sleep(seconds)
-
-   Block the current task for a specified number of seconds. The
-   minimum sleep time is 1 millisecond or input of \"0.001\".
-
-"),
-
-("Base","Timer","Timer(f::Function)
-
-   Create a timer to call the given callback function. The callback is
-   passed one argument, the timer object itself. The timer can be
-   started and stopped with \"start_timer\" and \"stop_timer\".
-
-"),
-
-("Base","start_timer","start_timer(t::Timer, delay, repeat)
-
-   Start invoking the callback for a \"Timer\" after the specified
-   initial delay, and then repeating with the given interval. Times
-   are in seconds. If \"repeat\" is \"0\", the timer is only triggered
-   once.
-
-"),
-
-("Base","stop_timer","stop_timer(t::Timer)
-
-   Stop invoking the callback for a timer.
-
-"),
-
-("Base","module_name","module_name(m::Module) -> Symbol
-
-   Get the name of a module as a symbol.
-
-"),
-
-("Base","module_parent","module_parent(m::Module) -> Module
-
-   Get a module's enclosing module. \"Main\" is its own parent.
-
-"),
-
-("Base","current_module","current_module() -> Module
-
-   Get the *dynamically* current module, which is the module code is
-   currently being read from. In general, this is not the same as the
-   module containing the call to this function.
-
-"),
-
-("Base","fullname","fullname(m::Module)
-
-   Get the fully-qualified name of a module as a tuple of symbols. For
-   example, \"fullname(Base.Pkg)\" gives \"(:Base,:Pkg)\", and
-   \"fullname(Main)\" gives \"()\".
-
-"),
-
-("Base","names","names(x::Module[, all=false[, imported=false]])
-
-   Get an array of the names exported by a module, with optionally
-   more module globals according to the additional parameters.
-
-"),
-
-("Base","names","names(x::DataType)
-
-   Get an array of the fields of a data type.
-
-"),
-
-("Base","isconst","isconst([m::Module], s::Symbol) -> Bool
-
-   Determine whether a global is declared \"const\" in a given module.
-   The default module argument is \"current_module()\".
-
-"),
-
-("Base","isgeneric","isgeneric(f::Function) -> Bool
-
-   Determine whether a function is generic.
-
-"),
-
-("Base","function_name","function_name(f::Function) -> Symbol
-
-   Get the name of a generic function as a symbol, or \":anonymous\".
-
-"),
-
-("Base","function_module","function_module(f::Function, types) -> Module
-
-   Determine the module containing a given definition of a generic
-   function.
-
-"),
-
-("Base","functionloc","functionloc(f::Function, types)
-
-   Returns a tuple \"(filename,line)\" giving the location of a method
-   definition.
-
-"),
-
-("Base","functionlocs","functionlocs(f::Function, types)
-
-   Returns an array of the results of \"functionloc\" for all matching
-   definitions.
-
-"),
-
-("Base","gc","gc()
-
-   Perform garbage collection. This should not generally be used.
-
-"),
-
-("Base","gc_disable","gc_disable()
-
-   Disable garbage collection. This should be used only with extreme
-   caution, as it can cause memory use to grow without bound.
-
-"),
-
-("Base","gc_enable","gc_enable()
-
-   Re-enable garbage collection after calling \"gc_disable\".
-
-"),
-
-("Base","macroexpand","macroexpand(x)
-
-   Takes the expression x and returns an equivalent expression with
-   all macros removed (expanded).
-
-"),
-
-("Base","expand","expand(x)
-
-   Takes the expression x and returns an equivalent expression in
-   lowered form
-
-"),
-
-("Base","code_lowered","code_lowered(f, types)
-
-   Returns an array of lowered ASTs for the methods matching the given
-   generic function and type signature.
-
-"),
-
-("Base","@code_lowered","@code_lowered()
-
-   Evaluates the arguments to the function call, determines their
-   types, and calls the \"code_lowered\" function on the resulting
-   expression
-
-"),
-
-("Base","code_typed","code_typed(f, types)
-
-   Returns an array of lowered and type-inferred ASTs for the methods
-   matching the given generic function and type signature.
-
-"),
-
-("Base","@code_typed","@code_typed()
-
-   Evaluates the arguments to the function call, determines their
-   types, and calls the \"code_typed\" function on the resulting
-   expression
-
-"),
-
-("Base","code_llvm","code_llvm(f, types)
-
-   Prints the LLVM bitcodes generated for running the method matching
-   the given generic function and type signature to STDOUT.
-
-"),
-
-("Base","@code_llvm","@code_llvm()
-
-   Evaluates the arguments to the function call, determines their
-   types, and calls the \"code_llvm\" function on the resulting
-   expression
-
-"),
-
-("Base","code_native","code_native(f, types)
-
-   Prints the native assembly instructions generated for running the
-   method matching the given generic function and type signature to
-   STDOUT.
-
-"),
-
-("Base","@code_native","@code_native()
-
-   Evaluates the arguments to the function call, determines their
-   types, and calls the \"code_native\" function on the resulting
-   expression
-
-"),
-
-("Base","precompile","precompile(f, args::(Any..., ))
-
-   Compile the given function *f* for the argument tuple (of types)
-   *args*, but do not execute it.
-
-"),
-
-("Base.Collections","PriorityQueue{K,V}","PriorityQueue{K,V}([ord])
-
-   Construct a new PriorityQueue, with keys of type K and
-   values/priorites of type V. If an order is not given, the priority
-   queue is min-ordered using the default comparison for V.
-
-"),
-
-("Base.Collections","enqueue!","enqueue!(pq, k, v)
-
-   Insert the a key \"k\" into a priority queue \"pq\" with priority
-   \"v\".
-
-"),
-
-("Base.Collections","dequeue!","dequeue!(pq)
-
-   Remove and return the lowest priority key from a priority queue.
-
-"),
-
-("Base.Collections","peek","peek(pq)
-
-   Return the lowest priority key from a priority queue without
-   removing that key from the queue.
-
-"),
-
-("Base.Collections","heapify","heapify(v[, ord])
-
-   Return a new vector in binary heap order, optionally using the
-   given ordering.
-
-"),
-
-("Base.Collections","heapify!","heapify!(v[, ord])
-
-   In-place heapify.
-
-"),
-
-("Base.Collections","isheap","isheap(v[, ord])
-
-   Return true iff an array is heap-ordered according to the given
-   order.
-
-"),
-
-("Base.Collections","heappush!","heappush!(v, x[, ord])
-
-   Given a binary heap-ordered array, push a new element \"x\",
-   preserving the heap property. For efficiency, this function does
-   not check that the array is indeed heap-ordered.
-
-"),
-
-("Base.Collections","heappop!","heappop!(v[, ord])
-
-   Given a binary heap-ordered array, remove and return the lowest
-   ordered element. For efficiency, this function does not check that
-   the array is indeed heap-ordered.
-
-"),
-
-("Base","OS_NAME","OS_NAME
-
-   A symbol representing the name of the operating system. Possible
-   values are \":Linux\", \":Darwin\" (OS X), or \":Windows\".
-
-"),
-
-("Base","ARGS","ARGS
-
-   An array of the command line arguments passed to Julia, as strings.
-
-"),
-
-("Base","C_NULL","C_NULL
-
-   The C null pointer constant, sometimes used when calling external
-   code.
-
-"),
-
-("Base","CPU_CORES","CPU_CORES
-
-   The number of CPU cores in the system.
-
-"),
-
-("Base","WORD_SIZE","WORD_SIZE
-
-   Standard word size on the current machine, in bits.
-
-"),
-
-("Base","VERSION","VERSION
-
-   An object describing which version of Julia is in use.
-
-"),
-
-("Base","LOAD_PATH","LOAD_PATH
-
-   An array of paths (as strings) where the \"require\" function looks
-   for code.
-
-"),
-
-("Base","isblockdev","isblockdev(path) -> Bool
-
-   Returns \"true\" if \"path\" is a block device, \"false\"
-   otherwise.
-
-"),
-
-("Base","ischardev","ischardev(path) -> Bool
-
-   Returns \"true\" if \"path\" is a character device, \"false\"
-   otherwise.
-
-"),
-
-("Base","isdir","isdir(path) -> Bool
-
-   Returns \"true\" if \"path\" is a directory, \"false\" otherwise.
-
-"),
-
-("Base","isexecutable","isexecutable(path) -> Bool
-
-   Returns \"true\" if the current user has permission to execute
-   \"path\", \"false\" otherwise.
-
-"),
-
-("Base","isfifo","isfifo(path) -> Bool
-
-   Returns \"true\" if \"path\" is a FIFO, \"false\" otherwise.
-
-"),
-
-("Base","isfile","isfile(path) -> Bool
-
-   Returns \"true\" if \"path\" is a regular file, \"false\"
-   otherwise.
-
-"),
-
-("Base","islink","islink(path) -> Bool
-
-   Returns \"true\" if \"path\" is a symbolic link, \"false\"
-   otherwise.
-
-"),
-
-("Base","ispath","ispath(path) -> Bool
-
-   Returns \"true\" if \"path\" is a valid filesystem path, \"false\"
-   otherwise.
-
-"),
-
-("Base","isreadable","isreadable(path) -> Bool
-
-   Returns \"true\" if the current user has permission to read
-   \"path\", \"false\" otherwise.
-
-"),
-
-("Base","issetgid","issetgid(path) -> Bool
-
-   Returns \"true\" if \"path\" has the setgid flag set, \"false\"
-   otherwise.
-
-"),
-
-("Base","issetuid","issetuid(path) -> Bool
-
-   Returns \"true\" if \"path\" has the setuid flag set, \"false\"
-   otherwise.
-
-"),
-
-("Base","issocket","issocket(path) -> Bool
-
-   Returns \"true\" if \"path\" is a socket, \"false\" otherwise.
-
-"),
-
-("Base","issticky","issticky(path) -> Bool
-
-   Returns \"true\" if \"path\" has the sticky bit set, \"false\"
-   otherwise.
-
-"),
-
-("Base","iswritable","iswritable(path) -> Bool
-
-   Returns \"true\" if the current user has permission to write to
-   \"path\", \"false\" otherwise.
-
-"),
-
-("Base","homedir","homedir() -> String
-
-   Return the current user's home directory.
-
-"),
-
-("Base","dirname","dirname(path::String) -> String
-
-   Get the directory part of a path.
-
-"),
-
-("Base","basename","basename(path::String) -> String
-
-   Get the file name part of a path.
-
-"),
-
-("Base","@__FILE__","@__FILE__() -> String
-
-   \"@__FILE__\" expands to a string with the absolute path and file
-   name of the script being run. Returns \"nothing\" if run from a
-   REPL or an empty string if evaluated by \"julia -e <expr>\".
-
-"),
-
-("Base","isabspath","isabspath(path::String) -> Bool
-
-   Determines whether a path is absolute (begins at the root
-   directory).
-
-"),
-
-("Base","isdirpath","isdirpath(path::String) -> Bool
-
-   Determines whether a path refers to a directory (for example, ends
-   with a path separator).
-
-"),
-
-("Base","joinpath","joinpath(parts...) -> String
-
-   Join path components into a full path. If some argument is an
-   absolute path, then prior components are dropped.
-
-"),
-
-("Base","abspath","abspath(path::String) -> String
-
-   Convert a path to an absolute path by adding the current directory
-   if necessary.
-
-"),
-
-("Base","normpath","normpath(path::String) -> String
-
-   Normalize a path, removing \".\" and \"..\" entries.
-
-"),
-
-("Base","realpath","realpath(path::String) -> String
-
-   Canonicalize a path by expanding symbolic links and removing \".\"
-   and \"..\" entries.
-
-"),
-
-("Base","expanduser","expanduser(path::String) -> String
-
-   On Unix systems, replace a tilde character at the start of a path
-   with the current user's home directory.
-
-"),
-
-("Base","splitdir","splitdir(path::String) -> (String, String)
-
-   Split a path into a tuple of the directory name and file name.
-
-"),
-
-("Base","splitdrive","splitdrive(path::String) -> (String, String)
-
-   On Windows, split a path into the drive letter part and the path
-   part. On Unix systems, the first component is always the empty
-   string.
-
-"),
-
-("Base","splitext","splitext(path::String) -> (String, String)
-
-   If the last component of a path contains a dot, split the path into
-   everything before the dot and everything including and after the
-   dot. Otherwise, return a tuple of the argument unmodified and the
-   empty string.
-
-"),
-
-("Base","tempname","tempname()
-
-   Generate a unique temporary file path.
-
-"),
-
-("Base","tempdir","tempdir()
-
-   Obtain the path of a temporary directory (possibly shared with
-   other processes).
-
-"),
-
-("Base","mktemp","mktemp()
-
-   Returns \"(path, io)\", where \"path\" is the path of a new
-   temporary file and \"io\" is an open file object for this path.
-
-"),
-
-("Base","mktempdir","mktempdir()
-
-   Create a temporary directory and return its path.
-
-"),
-
-("Base.Graphics","Vec2","Vec2(x, y)
-
-   Creates a point in two dimensions
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
-
-   Creates a box in two dimensions with the given edges
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(objs...)
-
-   Creates a box in two dimensions that encloses all objects
-
-"),
-
-("Base.Graphics","width","width(obj)
-
-   Computes the width of an object
-
-"),
-
-("Base.Graphics","height","height(obj)
-
-   Computes the height of an object
-
-"),
-
-("Base.Graphics","xmin","xmin(obj)
-
-   Computes the minimum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","xmax","xmax(obj)
-
-   Computes the maximum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymin","ymin(obj)
-
-   Computes the minimum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymax","ymax(obj)
-
-   Computes the maximum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","diagonal","diagonal(obj)
-
-   Return the length of the diagonal of an object
-
-"),
-
-("Base.Graphics","aspect_ratio","aspect_ratio(obj)
-
-   Compute the height/width of an object
-
-"),
-
-("Base.Graphics","center","center(obj)
-
-   Return the point in the center of an object
-
-"),
-
-("Base.Graphics","xrange","xrange(obj)
-
-   Returns a tuple \"(xmin(obj), xmax(obj))\"
-
-"),
-
-("Base.Graphics","yrange","yrange(obj)
-
-   Returns a tuple \"(ymin(obj), ymax(obj))\"
-
-"),
-
-("Base.Graphics","rotate","rotate(obj, angle, origin) -> newobj
-
-   Rotates an object around origin by the specified angle (radians),
-   returning a new object of the same type.  Because of type-
-   constancy, this new object may not always be a strict geometric
-   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
-   the return is the smallest \"BoundingBox\" that encloses the
-   rotated input.
-
-"),
-
-("Base.Graphics","shift","shift(obj, dx, dy)
-
-   Returns an object shifted horizontally and vertically by the
-   indicated amounts
-
-"),
-
-("Base.Graphics","*","*(obj, s::Real)
-
-   Scale the width and height of a graphics object, keeping the center
-   fixed
-
-"),
-
-("Base.Graphics","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the smallest box containing both boxes
-
-"),
-
-("Base.Graphics","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the intersection, the largest box contained in both boxes
-
-"),
-
-("Base.Graphics","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
-
-   Returns a bounding box with all edges shifted by the indicated
-   amounts
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, x, y)
-
-   True if the given point is inside the box
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, point)
-
-   True if the given point is inside the box
-
-"),
-
-
-("Base","*","*(A, B)
-
-   Matrix multiplication
-
-"),
-
-("Base","\\","\\(A, B)
-
-   Matrix division using a polyalgorithm. For input matrices \"A\" and
-   \"B\", the result \"X\" is such that \"A*X == B\" when \"A\" is
-   square.  The solver that is used depends upon the structure of
-   \"A\".  A direct solver is used for upper- or lower triangular
-   \"A\".  For Hermitian \"A\" (equivalent to symmetric \"A\" for non-
-   complex \"A\") the \"BunchKaufman\" factorization is used.
-   Otherwise an LU factorization is used. For rectangular \"A\" the
-   result is the minimum-norm least squares solution computed by a
-   pivoted QR factorization of \"A\" and a rank estimate of A based on
-   the R factor. For sparse, square \"A\" the LU factorization (from
-   UMFPACK) is used.
-
-"),
-
-("Base","dot","dot(x, y)
-
-   Compute the dot product. For complex vectors, the first vector is
-   conjugated.
-
-"),
-
-("Base","cross","cross(x, y)
-
-   Compute the cross product of two 3-vectors.
-
-"),
-
-("Base","rref","rref(A)
-
-   Compute the reduced row echelon form of the matrix A.
-
-"),
-
-("Base","factorize","factorize(A)
-
-   Compute a convenient factorization (including LU, Cholesky, Bunch-
-   Kaufman, Triangular) of A, based upon the type of the input matrix.
-   The return value can then be reused for efficient solving of
-   multiple systems. For example: \"A=factorize(A); x=A\\\\b;
-   y=A\\\\C\".
-
-"),
-
-("Base","factorize!","factorize!(A)
-
-   \"factorize!\" is the same as \"factorize()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
-
-"),
-
-("Base","lu","lu(A) -> L, U, p
-
-   Compute the LU factorization of \"A\", such that \"A[p,:] = L*U\".
-
-"),
-
-("Base","lufact","lufact(A[, pivot=true]) -> F
-
-   Compute the LU factorization of \"A\". The return type of \"F\"
-   depends on the type of \"A\". In most cases, if \"A\" is a subtype
-   \"S\" of AbstractMatrix with an element type \"T`\" supporting
-   \"+\", \"-\", \"*\" and \"/\" the return type is \"LU{T,S{T}}\". If
-   pivoting is chosen (default) the element type should also support
-   \"abs\" and \"<\". When \"A\" is sparse and have element of type
-   \"Float32\", \"Float64\", \"Complex{Float32}\", or
-   \"Complex{Float64}\" the return type is \"UmfpackLU\". Some
-   examples are shown in the table below.
-
-      +-------------------------+---------------------------+------------------------------------------+
-      | Type of input \\\"A\\\"     | Type of output \\\"F\\\"      | Relationship between \\\"F\\\" and \\\"A\\\"     |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Matrix()\\\"            | \\\"LU\\\"                    | \\\"F[:L]*F[:U] == A[F[:p], :]\\\"           |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"Tridiagonal()\\\"       | \\\"LU{T,Tridiagonal{T}}\\\"  | N/A                                      |
-      +-------------------------+---------------------------+------------------------------------------+
-      | \\\"SparseMatrixCSC()\\\"   | \\\"UmfpackLU\\\"             | \\\"F[:L]*F[:U] == Rs .* A[F[:p], F[:q]]\\\" |
-      +-------------------------+---------------------------+------------------------------------------+
-
-   The individual components of the factorization \"F\" can be
-   accessed by indexing:
-
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      | Component   | Description                             | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-      +-------------+-----------------------------------------+--------+--------------------------+---------------+
-
-      +--------------------+--------+--------------------------+---------------+
-      | Supported function | \\\"LU\\\" | \\\"LU{T,Tridiagonal{T}}\\\" | \\\"UmfpackLU\\\" |
-      +--------------------+--------+--------------------------+---------------+
-      +--------------------+--------+--------------------------+---------------+
-      | \\\"\\\\\\\"             | ✓      | ✓                        | ✓             |
-      +--------------------+--------+--------------------------+---------------+
-      +--------------------+--------+--------------------------+---------------+
-      | \\\"det\\\"            | ✓      | ✓                        | ✓             |
-      +--------------------+--------+--------------------------+---------------+
-      +--------------------+--------+--------------------------+---------------+
-
-"),
-
-("Base","lufact!","lufact!(A) -> LU
-
-   \"lufact!\" is the same as \"lufact()\", but saves space by
-   overwriting the input A, instead of creating a copy.  For sparse
-   \"A\" the \"nzval\" field is not overwritten but the index fields,
-   \"colptr\" and \"rowval\" are decremented in place, converting from
-   1-based indices to 0-based indices.
-
-"),
-
-("Base","chol","chol(A[, LU]) -> F
-
-   Compute the Cholesky factorization of a symmetric positive definite
-   matrix \"A\" and return the matrix \"F\". If \"LU\" is \":L\"
-   (Lower), \"A = L*L'\". If \"LU\" is \":U\" (Upper), \"A = R'*R\".
-
-"),
-
-("Base","cholfact","cholfact(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
-
-   Compute the Cholesky factorization of a dense symmetric positive
-   (semi)definite matrix \"A\" and return either a \"Cholesky\" if
-   \"pivot=false\" or \"CholeskyPivoted\" if \"pivot=true\". \"LU\"
-   may be \":L\" for using the lower part or \":U\" for the upper
-   part. The default is to use \":U\". The triangular matrix can be
-   obtained from the factorization \"F\" with: \"F[:L]\" and
-   \"F[:U]\". The following functions are available for \"Cholesky\"
-   objects: \"size\", \"\\\", \"inv\", \"det\". For
-   \"CholeskyPivoted\" there is also defined a \"rank\". If
-   \"pivot=false\" a \"PosDefException\" exception is thrown in case
-   the matrix is not positive definite. The argument \"tol\"
-   determines the tolerance for determining the rank. For negative
-   values, the tolerance is the machine precision.
-
-"),
-
-("Base","cholfact","cholfact(A[, ll]) -> CholmodFactor
-
-   Compute the sparse Cholesky factorization of a sparse matrix \"A\".
-   If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
-   is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
-   fill-reducing permutation is used.  Methods for \"size\",
-   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
-   are available for \"CholmodFactor\" objects.  One of the solve
-   methods includes an integer argument that can be used to solve
-   systems involving parts of the factorization only.  The optional
-   boolean argument, \"ll\" determines whether the factorization
-   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
-   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
-   unit lower triangular and \"D\" is a non-negative vector.  The
-   default is LDL. The symbolic factorization can also be reused for
-   other matrices with the same structure as \"A\" by calling
-   \"cholfact!\".
-
-"),
-
-("Base","cholfact!","cholfact!(A, [LU,][pivot=false,][tol=-1.0]) -> Cholesky
-
-   \"cholfact!\" is the same as \"cholfact()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
-   \"cholfact!\" can also reuse the symbolic factorization from a
-   different matrix \"F\" with the same structure when used as:
-   \"cholfact!(F::CholmodFactor, A)\".
-
-"),
-
-("Base","ldltfact","ldltfact(A) -> LDLtFactorization
-
-   Compute a factorization of a positive definite matrix \"A\" such
-   that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
-   matrix and \"d\" is a vector with non-negative elements.
-
-"),
-
-("Base","qr","qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
-
-   Compute the (pivoted) QR factorization of \"A\" such that either
-   \"A = Q*R\" or \"A[:,p] = Q*R\". Also see \"qrfact\". The default
-   is to compute a thin factorization. Note that \"R\" is not extended
-   with zeros when the full \"Q\" is requested.
-
-"),
-
-("Base","qrfact","qrfact(A[, pivot=false]) -> F
-
-   Computes the QR factorization of \"A\". The return type of \"F\"
-   depends on the element type of \"A\" and whether pivoting is
-   specified (with \"pivot=true\").
-
-      +------------------+-------------------+-----------+---------------------------------------+
-      | Return type      | \\\"eltype(A)\\\"     | \\\"pivot\\\" | Relationship between \\\"F\\\" and \\\"A\\\"  |
-      +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QR\\\"           | not \\\"BlasFloat\\\" | either    | \\\"A==F[:Q]*F[:R]\\\"                    |
-      +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRCompactWY\\\"  | \\\"BlasFloat\\\"     | \\\"false\\\" | \\\"A==F[:Q]*F[:R]\\\"                    |
-      +------------------+-------------------+-----------+---------------------------------------+
-      | \\\"QRPivoted\\\"    | \\\"BlasFloat\\\"     | \\\"true\\\"  | \\\"A[:,F[:p]]==F[:Q]*F[:R]\\\"           |
-      +------------------+-------------------+-----------+---------------------------------------+
-
-   \"BlasFloat\" refers to any of: \"Float32\", \"Float64\",
-   \"Complex64\" or \"Complex128\".
-
-   The individual components of the factorization \"F\" can be
-   accessed by indexing:
-
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-      | Component   | Description                                   | \\\"QR\\\"             | \\\"QRCompactWY\\\"       | \\\"QRPivoted\\\"      |
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-      | \\\"F[:Q]\\\"   | \\\"Q\\\" (orthogonal/unitary) part of \\\"QR\\\"     | ✓ (\\\"QRPackedQ\\\")  | ✓ (\\\"QRCompactWYQ\\\")  | ✓ (\\\"QRPackedQ\\\")  |
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-      | \\\"F[:R]\\\"   | \\\"R\\\" (upper right triangular) part of \\\"QR\\\" | ✓                  | ✓                     | ✓                  |
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-      +-------------+-----------------------------------------------+--------------------+-----------------------+--------------------+
-
-   The following functions are available for the \"QR\" objects:
-   \"size\", \"\\\". When \"A\" is rectangular, \"\\\" will return a
-   least squares solution and if the solution is not unique, the one
-   with smallest norm is returned.
-
-   Multiplication with respect to either thin or full \"Q\" is
-   allowed, i.e. both \"F[:Q]*F[:R]\" and \"F[:Q]*A\" are supported. A
-   \"Q\" matrix can be converted into a regular matrix with \"full()\"
-   which has a named argument \"thin\".
-
-   Note: \"qrfact\" returns multiple types because LAPACK uses several
-     representations that minimize the memory storage requirements of
-     products of Householder elementary reflectors, so that the \"Q\"
-     and \"R\" matrices can be stored compactly rather as two separate
-     dense matrices.The data contained in \"QR\" or \"QRPivoted\" can
-     be used to construct the \"QRPackedQ\" type, which is a compact
-     representation of the rotation matrix:
-
-           Q = \\prod_{i=1}^{\\min(m,n)} (I - \\tau_i v_i v_i^T)
-
-     where \\tau_i is the scale factor and v_i is the projection
-     vector associated with the i^{th} Householder elementary
-     reflector.The data contained in \"QRCompactWY\" can be used to
-     construct the \"QRCompactWYQ\" type, which is a compact
-     representation of the rotation matrix
-
-           Q = I + Y T Y^T
-
-     where \"Y\" is m \\times r lower trapezoidal and \"T\" is r
-     \\times r upper triangular. The *compact WY* representation
-     [Schreiber1989] is not to be confused with the older, *WY*
-     representation [Bischof1987]. (The LAPACK documentation uses
-     \"V\" in lieu of \"Y\".)
-
-   [Bischof1987] C Bischof and C Van Loan, The WY representation for
-                 products of Householder matrices, SIAM J Sci Stat
-                 Comput 8 (1987), s2-s13. doi:10.1137/0908009
-
-   [Schreiber1989] R Schreiber and C Van Loan, A storage-efficient WY
-                   representation for products of Householder
-                   transformations, SIAM J Sci Stat Comput 10 (1989),
-                   53-57. doi:10.1137/0910005
-
-"),
-
-("Base","qrfact!","qrfact!(A[, pivot=false])
-
-   \"qrfact!\" is the same as \"qrfact()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
-
-"),
-
-("Base","bkfact","bkfact(A) -> BunchKaufman
-
-   Compute the Bunch-Kaufman [Bunch1977] factorization of a real
-   symmetric or complex Hermitian matrix \"A\" and return a
-   \"BunchKaufman\" object. The following functions are available for
-   \"BunchKaufman\" objects: \"size\", \"\\\", \"inv\", \"issym\",
-   \"ishermitian\".
-
-"),
-
-("Base","bkfact!","bkfact!(A) -> BunchKaufman
-
-   \"bkfact!\" is the same as \"bkfact()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
-
-"),
-
-("Base","sqrtm","sqrtm(A)
-
-   Compute the matrix square root of \"A\". If \"B = sqrtm(A)\", then
-   \"B*B == A\" within roundoff error.
-
-   \"sqrtm\" uses a polyalgorithm, computing the matrix square root
-   using Schur factorizations (\"schurfact()\") unless it detects the
-   matrix to be Hermitian or real symmetric, in which case it computes
-   the matrix square root from an eigendecomposition (\"eigfact()\").
-   In the latter situation for positive definite matrices, the matrix
-   square root has \"Real\" elements, otherwise it has \"Complex\"
-   elements.
-
-"),
-
-("Base","eig","eig(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> D, V
-
-   Computes eigenvalues and eigenvectors of \"A\". See \"eigfact()\"
-   for details on the \"balance\" keyword argument.
-
-   **Example**:
-
-      julia> eig(a = [1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
-      ([1.0,3.0,18.0],
-      3x3 Array{Float64,2}:
-       1.0  0.0  0.0
-       0.0  1.0  0.0
-       0.0  0.0  1.0)
-
-   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
-   the factorization to a tuple; where possible, using \"eigfact()\"
-   is recommended.
-
-"),
-
-("Base","eig","eig(A, B) -> D, V
-
-   Computes generalized eigenvalues and vectors of \"A\" with respect
-   to \"B\".
-
-   \"eig\" is a wrapper around \"eigfact()\", extracting all parts of
-   the factorization to a tuple; where possible, using \"eigfact()\"
-   is recommended.
-
-"),
-
-("Base","eigvals","eigvals(A,[irange,][vl,][vu])
-
-   Returns the eigenvalues of \"A\". If \"A\" is \"Symmetric()\",
-   \"Hermitian()\" or \"SymTridiagonal()\", it is possible to
-   calculate only a subset of the eigenvalues by specifying either a
-   \"UnitRange()\" \"irange\" covering indices of the sorted
-   eigenvalues, or a pair \"vl\" and \"vu\" for the lower and upper
-   boundaries of the eigenvalues.
-
-   For general non-symmetric matrices it is possible to specify how
-   the matrix is balanced before the eigenvector calculation. The
-   option \"permute=true\" permutes the matrix to become closer to
-   upper triangular, and \"scale=true\" scales the matrix by its
-   diagonal elements to make rows and columns more equal in norm. The
-   default is \"true\" for both options.
-
-"),
-
-("Base","eigmax","eigmax(A)
-
-   Returns the largest eigenvalue of \"A\".
-
-"),
-
-("Base","eigmin","eigmin(A)
-
-   Returns the smallest eigenvalue of \"A\".
-
-"),
-
-("Base","eigvecs","eigvecs(A, [eigvals,][permute=true,][scale=true]) -> Matrix
-
-   Returns a matrix \"M\" whose columns are the eigenvectors of \"A\".
-   (The \"k``th eigenvector can be obtained from the slice ``M[:,
-   k]\".) The \"permute\" and \"scale\" keywords are the same as for
-   \"eigfact()\".
-
-   For \"SymTridiagonal()\" matrices, if the optional vector of
-   eigenvalues \"eigvals\" is specified, returns the specific
-   corresponding eigenvectors.
-
-"),
-
-("Base","eigfact","eigfact(A,[irange,][vl,][vu,][permute=true,][scale=true]) -> Eigen
-
-   Computes the eigenvalue decomposition of \"A\", returning an
-   \"Eigen\" factorization object \"F\" which contains the eigenvalues
-   in \"F[:values]\" and the eigenvectors in the columns of the matrix
-   \"F[:vectors]\". (The \"k``th eigenvector can be obtained from the
-   slice ``F[:vectors][:, k]\".)
-
-   The following functions are available for \"Eigen\" objects:
-   \"inv\", \"det\".
-
-   If \"A\" is \"Symmetric()\", \"Hermitian()\" or
-   \"SymTridiagonal()\", it is possible to calculate only a subset of
-   the eigenvalues by specifying either a \"UnitRange()\" \"irange\"
-   covering indices of the sorted eigenvalues or a pair \"vl\" and
-   \"vu\" for the lower and upper boundaries of the eigenvalues.
-
-   For general nonsymmetric matrices it is possible to specify how the
-   matrix is balanced before the eigenvector calculation. The option
-   \"permute=true\" permutes the matrix to become closer to upper
-   triangular, and \"scale=true\" scales the matrix by its diagonal
-   elements to make rows and columns more equal in norm. The default
-   is \"true\" for both options.
-
-"),
-
-("Base","eigfact","eigfact(A, B) -> GeneralizedEigen
-
-   Computes the generalized eigenvalue decomposition of \"A\" and
-   \"B\", returning a \"GeneralizedEigen\" factorization object \"F\"
-   which contains the generalized eigenvalues in \"F[:values]\" and
-   the generalized eigenvectors in the columns of the matrix
-   \"F[:vectors]\". (The \"k``th generalized eigenvector can be
-   obtained from the slice ``F[:vectors][:, k]\".)
-
-"),
-
-("Base","eigfact!","eigfact!(A[, B])
-
-   Same as \"eigfact()\", but saves space by overwriting the input
-   \"A\" (and \"B\"), instead of creating a copy.
-
-"),
-
-("Base","hessfact","hessfact(A)
-
-   Compute the Hessenberg decomposition of \"A\" and return a
-   \"Hessenberg\" object. If \"F\" is the factorization object, the
-   unitary matrix can be accessed with \"F[:Q]\" and the Hessenberg
-   matrix with \"F[:H]\". When \"Q\" is extracted, the resulting type
-   is the \"HessenbergQ\" object, and may be converted to a regular
-   matrix with \"full()\".
-
-"),
-
-("Base","hessfact!","hessfact!(A)
-
-   \"hessfact!\" is the same as \"hessfact()\", but saves space by
-   overwriting the input A, instead of creating a copy.
-
-"),
-
-("Base","schurfact","schurfact(A) -> Schur
-
-   Computes the Schur factorization of the matrix \"A\". The (quasi)
-   triangular Schur factor can be obtained from the \"Schur\" object
-   \"F\" with either \"F[:Schur]\" or \"F[:T]\" and the
-   unitary/orthogonal Schur vectors can be obtained with
-   \"F[:vectors]\" or \"F[:Z]\" such that
-   \"A=F[:vectors]*F[:Schur]*F[:vectors]'\". The eigenvalues of \"A\"
-   can be obtained with \"F[:values]\".
-
-"),
-
-("Base","schurfact!","schurfact!(A)
-
-   Computer the Schur factorization of \"A\", overwriting \"A\" in the
-   process. See \"schurfact()\"
-
-"),
-
-("Base","schur","schur(A) -> Schur[:T], Schur[:Z], Schur[:values]
-
-   See \"schurfact()\"
-
-"),
-
-("Base","schurfact","schurfact(A, B) -> GeneralizedSchur
-
-   Computes the Generalized Schur (or QZ) factorization of the
-   matrices \"A\" and \"B\". The (quasi) triangular Schur factors can
-   be obtained from the \"Schur\" object \"F\" with \"F[:S]\" and
-   \"F[:T]\", the left unitary/orthogonal Schur vectors can be
-   obtained with \"F[:left]\" or \"F[:Q]\" and the right
-   unitary/orthogonal Schur vectors can be obtained with \"F[:right]\"
-   or \"F[:Z]\" such that \"A=F[:left]*F[:S]*F[:right]'\" and
-   \"B=F[:left]*F[:T]*F[:right]'\". The generalized eigenvalues of
-   \"A\" and \"B\" can be obtained with \"F[:alpha]./F[:beta]\".
-
-"),
-
-("Base","schur","schur(A, B) -> GeneralizedSchur[:S], GeneralizedSchur[:T], GeneralizedSchur[:Q], GeneralizedSchur[:Z]
-
-   See \"schurfact()\"
-
-"),
-
-("Base","svdfact","svdfact(A[, thin=true]) -> SVD
-
-   Compute the Singular Value Decomposition (SVD) of \"A\" and return
-   an \"SVD\" object. \"U\", \"S\", \"V\" and \"Vt\" can be obtained
-   from the factorization \"F\" with \"F[:U]\", \"F[:S]\", \"F[:V]\"
-   and \"F[:Vt]\", such that \"A = U*diagm(S)*Vt\". If \"thin\" is
-   \"true\", an economy mode decomposition is returned. The algorithm
-   produces \"Vt\" and hence \"Vt\" is more efficient to extract than
-   \"V\". The default is to produce a thin decomposition.
-
-"),
-
-("Base","svdfact!","svdfact!(A[, thin=true]) -> SVD
-
-   \"svdfact!\" is the same as \"svdfact()\", but saves space by
-   overwriting the input A, instead of creating a copy. If \"thin\" is
-   \"true\", an economy mode decomposition is returned. The default is
-   to produce a thin decomposition.
-
-"),
-
-("Base","svd","svd(A[, thin=true]) -> U, S, V
-
-   Wrapper around \"svdfact\" extracting all parts the factorization
-   to a tuple. Direct use of \"svdfact\" is therefore generally more
-   efficient. Computes the SVD of A, returning \"U\", vector \"S\",
-   and \"V\" such that \"A == U*diagm(S)*V'\". If \"thin\" is
-   \"true\", an economy mode decomposition is returned. The default is
-   to produce a thin decomposition.
-
-"),
-
-("Base","svdvals","svdvals(A)
-
-   Returns the singular values of \"A\".
-
-"),
-
-("Base","svdvals!","svdvals!(A)
-
-   Returns the singular values of \"A\", while saving space by
-   overwriting the input.
-
-"),
-
-("Base","svdfact","svdfact(A, B) -> GeneralizedSVD
-
-   Compute the generalized SVD of \"A\" and \"B\", returning a
-   \"GeneralizedSVD\" Factorization object \"F\", such that \"A =
-   F[:U]*F[:D1]*F[:R0]*F[:Q]'\" and \"B =
-   F[:V]*F[:D2]*F[:R0]*F[:Q]'\".
-
-"),
-
-("Base","svd","svd(A, B) -> U, V, Q, D1, D2, R0
-
-   Wrapper around \"svdfact\" extracting all parts the factorization
-   to a tuple. Direct use of \"svdfact\" is therefore generally more
-   efficient. The function returns the generalized SVD of \"A\" and
-   \"B\", returning \"U\", \"V\", \"Q\", \"D1\", \"D2\", and \"R0\"
-   such that \"A = U*D1*R0*Q'\" and \"B = V*D2*R0*Q'\".
-
-"),
-
-("Base","svdvals","svdvals(A, B)
-
-   Return only the singular values from the generalized singular value
-   decomposition of \"A\" and \"B\".
-
-"),
-
-("Base","triu","triu(M)
-
-   Upper triangle of a matrix.
-
-"),
-
-("Base","triu!","triu!(M)
-
-   Upper triangle of a matrix, overwriting \"M\" in the process.
-
-"),
-
-("Base","tril","tril(M)
-
-   Lower triangle of a matrix.
-
-"),
-
-("Base","tril!","tril!(M)
-
-   Lower triangle of a matrix, overwriting \"M\" in the process.
-
-"),
-
-("Base","diagind","diagind(M[, k])
-
-   A \"Range\" giving the indices of the \"k\"-th diagonal of the
-   matrix \"M\".
-
-"),
-
-("Base","diag","diag(M[, k])
-
-   The \"k\"-th diagonal of a matrix, as a vector. Use \"diagm\" to
-   construct a diagonal matrix.
-
-"),
-
-("Base","diagm","diagm(v[, k])
-
-   Construct a diagonal matrix and place \"v\" on the \"k\"-th
-   diagonal.
-
-"),
-
-("Base","scale","scale(A, b)
-
-"),
-
-("Base","scale","scale(b, A)
-
-   Scale an array \"A\" by a scalar \"b\", returning a new array.
-
-   If \"A\" is a matrix and \"b\" is a vector, then \"scale(A,b)\"
-   scales each column \"i\" of \"A\" by \"b[i]\" (similar to
-   \"A*diagm(b)\"), while \"scale(b,A)\" scales each row \"i\" of
-   \"A\" by \"b[i]\" (similar to \"diagm(b)*A\"), returning a new
-   array.
-
-   Note: for large \"A\", \"scale\" can be much faster than \"A .* b\"
-   or \"b .* A\", due to the use of BLAS.
-
-"),
-
-("Base","scale!","scale!(A, b)
-
-"),
-
-("Base","scale!","scale!(b, A)
-
-   Scale an array \"A\" by a scalar \"b\", similar to \"scale()\" but
-   overwriting \"A\" in-place.
-
-   If \"A\" is a matrix and \"b\" is a vector, then \"scale!(A,b)\"
-   scales each column \"i\" of \"A\" by \"b[i]\" (similar to
-   \"A*diagm(b)\"), while \"scale!(b,A)\" scales each row \"i\" of
-   \"A\" by \"b[i]\" (similar to \"diagm(b)*A\"), again operating in-
-   place on \"A\".
-
-"),
-
-("Base","Tridiagonal","Tridiagonal(dl, d, du)
-
-   Construct a tridiagonal matrix from the lower diagonal, diagonal,
-   and upper diagonal, respectively.  The result is of type
-   \"Tridiagonal\" and provides efficient specialized linear solvers,
-   but may be converted into a regular matrix with \"full()\".
-
-"),
-
-("Base","Bidiagonal","Bidiagonal(dv, ev, isupper)
-
-   Constructs an upper (\"isupper=true\") or lower (\"isupper=false\")
-   bidiagonal matrix using the given diagonal (\"dv\") and off-
-   diagonal (\"ev\") vectors.  The result is of type \"Bidiagonal\"
-   and provides efficient specialized linear solvers, but may be
-   converted into a regular matrix with \"full()\".
-
-"),
-
-("Base","SymTridiagonal","SymTridiagonal(d, du)
-
-   Construct a real symmetric tridiagonal matrix from the diagonal and
-   upper diagonal, respectively. The result is of type
-   \"SymTridiagonal\" and provides efficient specialized eigensolvers,
-   but may be converted into a regular matrix with \"full()\".
-
-"),
-
-("Base","Woodbury","Woodbury(A, U, C, V)
-
-   Construct a matrix in a form suitable for applying the Woodbury
-   matrix identity.
-
-"),
-
-("Base","rank","rank(M)
-
-   Compute the rank of a matrix.
-
-"),
-
-("Base","norm","norm(A[, p])
-
-   Compute the \"p\"-norm of a vector or the operator norm of a matrix
-   \"A\", defaulting to the \"p=2\"-norm.
-
-   For vectors, \"p\" can assume any numeric value (even though not
-   all values produce a mathematically valid vector norm). In
-   particular, \"norm(A, Inf)\" returns the largest value in
-   \"abs(A)\", whereas \"norm(A, -Inf)\" returns the smallest.
-
-   For matrices, valid values of \"p\" are \"1\", \"2\", or \"Inf\".
-   (Note that for sparse matrices, \"p=2\" is currently not
-   implemented.) Use \"vecnorm()\" to compute the Frobenius norm.
-
-"),
-
-("Base","vecnorm","vecnorm(A[, p])
-
-   For any iterable container \"A\" (including arrays of any
-   dimension) of numbers, compute the \"p\"-norm (defaulting to
-   \"p=2\") as if \"A\" were a vector of the corresponding length.
-
-   For example, if \"A\" is a matrix and \"p=2\", then this is
-   equivalent to the Frobenius norm.
-
-"),
-
-("Base","cond","cond(M[, p])
-
-   Condition number of the matrix \"M\", computed using the operator
-   \"p\"-norm. Valid values for \"p\" are \"1\", \"2\" (default), or
-   \"Inf\".
-
-"),
-
-("Base","condskeel","condskeel(M[, x, p])
-
-      \\kappa_S(M, p) & = \\left\\Vert \\left\\vert M \\right\\vert
-      \\left\\vert M^{-1} \\right\\vert  \\right\\Vert_p \\\\
-      \\kappa_S(M, x, p) & = \\left\\Vert \\left\\vert M \\right\\vert
-      \\left\\vert M^{-1} \\right\\vert \\left\\vert x \\right\\vert
-      \\right\\Vert_p
-
-   Skeel condition number \\kappa_S of the matrix \"M\", optionally
-   with respect to the vector \"x\", as computed using the operator
-   \"p\"-norm. \"p\" is \"Inf\" by default, if not provided. Valid
-   values for \"p\" are \"1\", \"2\", or \"Inf\".
-
-   This quantity is also known in the literature as the Bauer
-   condition number, relative condition number, or componentwise
-   relative condition number.
-
-"),
-
-("Base","trace","trace(M)
-
-   Matrix trace
-
-"),
-
-("Base","det","det(M)
-
-   Matrix determinant
-
-"),
-
-("Base","logdet","logdet(M)
-
-   Log of matrix determinant. Equivalent to \"log(det(M))\", but may
-   provide increased accuracy and/or speed.
-
-"),
-
-("Base","inv","inv(M)
-
-   Matrix inverse
-
-"),
-
-("Base","pinv","pinv(M)
-
-   Moore-Penrose pseudoinverse
-
-"),
-
-("Base","null","null(M)
-
-   Basis for nullspace of \"M\".
-
-"),
-
-("Base","repmat","repmat(A, n, m)
-
-   Construct a matrix by repeating the given matrix \"n\" times in
-   dimension 1 and \"m\" times in dimension 2.
-
-"),
-
-("Base","repeat","repeat(A, inner = Int[], outer = Int[])
-
-   Construct an array by repeating the entries of \"A\". The i-th
-   element of \"inner\" specifies the number of times that the
-   individual entries of the i-th dimension of \"A\" should be
-   repeated. The i-th element of \"outer\" specifies the number of
-   times that a slice along the i-th dimension of \"A\" should be
-   repeated.
-
-"),
-
-("Base","kron","kron(A, B)
-
-   Kronecker tensor product of two vectors or two matrices.
-
-"),
-
-("Base","blkdiag","blkdiag(A...)
-
-   Concatenate matrices block-diagonally. Currently only implemented
-   for sparse matrices.
-
-"),
-
-("Base","linreg","linreg(x, y) -> [a; b]
-
-   Linear Regression. Returns \"a\" and \"b\" such that \"a+b*x\" is
-   the closest line to the given points \"(x,y)\". In other words,
-   this function determines parameters \"[a, b]\" that minimize the
-   squared error between \"y\" and \"a+b*x\".
-
-   **Example**:
-
-      using PyPlot;
-      x = float([1:12])
-      y = [5.5; 6.3; 7.6; 8.8; 10.9; 11.79; 13.48; 15.02; 17.77; 20.81; 22.0; 22.99]
-      a, b = linreg(x,y) # Linear regression
-      plot(x, y, \"o\") # Plot (x,y) points
-      plot(x, [a+b*i for i in x]) # Plot the line determined by the linear regression
-
-"),
-
-("Base","linreg","linreg(x, y, w)
-
-   Weighted least-squares linear regression.
-
-"),
-
-("Base","expm","expm(A)
-
-   Matrix exponential.
-
-"),
-
-("Base","lyap","lyap(A, C)
-
-   Computes the solution \"X\" to the continuous Lyapunov equation
-   \"AX + XA' + C = 0\", where no eigenvalue of \"A\" has a zero real
-   part and no two eigenvalues are negative complex conjugates of each
-   other.
-
-"),
-
-("Base","sylvester","sylvester(A, B, C)
-
-   Computes the solution \"X\" to the Sylvester equation \"AX + XB + C
-   = 0\", where \"A\", \"B\" and \"C\" have compatible dimensions and
-   \"A\" and \"-B\" have no eigenvalues with equal real part.
-
-"),
-
-("Base","issym","issym(A) -> Bool
-
-   Test whether a matrix is symmetric.
-
-"),
-
-("Base","isposdef","isposdef(A) -> Bool
-
-   Test whether a matrix is positive definite.
-
-"),
-
-("Base","isposdef!","isposdef!(A) -> Bool
-
-   Test whether a matrix is positive definite, overwriting \"A\" in
-   the processes.
-
-"),
-
-("Base","istril","istril(A) -> Bool
-
-   Test whether a matrix is lower triangular.
-
-"),
-
-("Base","istriu","istriu(A) -> Bool
-
-   Test whether a matrix is upper triangular.
-
-"),
-
-("Base","ishermitian","ishermitian(A) -> Bool
-
-   Test whether a matrix is Hermitian.
-
-"),
-
-("Base","transpose","transpose(A)
-
-   The transposition operator (\".'\").
-
-"),
-
-("Base","ctranspose","ctranspose(A)
-
-   The conjugate transposition operator (\"'\").
-
-"),
-
-("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=1000, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
-
-   \"eigs\" computes eigenvalues \"d\" of \"A\" using Lanczos or
-   Arnoldi iterations for real symmetric or general nonsymmetric
-   matrices respectively. If \"B\" is provided, the generalized eigen-
-   problem is solved.  The following keyword arguments are supported:
-      * \"nev\": Number of eigenvalues
-
-      * \"ncv\": Number of Krylov vectors used in the computation;
-        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
-        problems and \"nev+2 <= ncv <= n\" for other problems; default
-        is \"ncv = max(20,2*nev+1)\".
-
-      * \"which\": type of eigenvalues to compute. See the note below.
-
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\"which\\\" | type of eigenvalues                                                                                                         |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":LM\\\"   | eigenvalues of largest magnitude (default)                                                                                  |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":SM\\\"   | eigenvalues of smallest magnitude                                                                                           |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":LR\\\"   | eigenvalues of largest real part                                                                                            |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":SR\\\"   | eigenvalues of smallest real part                                                                                           |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":LI\\\"   | eigenvalues of largest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                  |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":SI\\\"   | eigenvalues of smallest imaginary part (nonsymmetric or complex \\\"A\\\" only)                                                 |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-        | \\\":BE\\\"   | compute half of the eigenvalues from each end of the spectrum, biased in favor of the high end. (real symmetric \\\"A\\\" only) |
-        +-----------+-----------------------------------------------------------------------------------------------------------------------------+
-
-      * \"tol\": tolerance (tol \\le 0.0 defaults to
-        \"DLAMCH('EPS')\")
-
-      * \"maxiter\": Maximum number of iterations (default = 300)
-
-      * \"sigma\": Specifies the level shift used in inverse
-        iteration. If \"nothing\" (default), defaults to ordinary
-        (forward) iterations. Otherwise, find eigenvalues close to
-        \"sigma\" using shift and invert iterations.
-
-      * \"ritzvec\": Returns the Ritz vectors \"v\" (eigenvectors) if
-        \"true\"
-
-      * \"v0\": starting vector from which to start the iterations
-
-   \"eigs\" returns the \"nev\" requested eigenvalues in \"d\", the
-   corresponding Ritz vectors \"v\" (only if \"ritzvec=true\"), the
-   number of converged eigenvalues \"nconv\", the number of iterations
-   \"niter\" and the number of matrix vector multiplications
-   \"nmult\", as well as the final residual vector \"resid\".
-
-   Note: The \"sigma\" and \"which\" keywords interact: the description of
-     eigenvalues searched for by \"which\" do _not_ necessarily refer
-     to the eigenvalues of \"A\", but rather the linear operator
-     constructed by the specification of the iteration mode implied by
-     \"sigma\".
-
-     +-----------------+------------------------------------+------------------------------------+
-     | \\\"sigma\\\"       | iteration mode                     | \\\"which\\\" refers to eigenvalues of |
-     +-----------------+------------------------------------+------------------------------------+
-     | \\\"nothing\\\"     | ordinary (forward)                 | A                                  |
-     +-----------------+------------------------------------+------------------------------------+
-     | real or complex | inverse with level shift \\\"sigma\\\" | (A - \\\\sigma I )^{-1}              |
-     +-----------------+------------------------------------+------------------------------------+
-
-"),
-
-("Base","peakflops","peakflops(n; parallel=false)
-
-   \"peakflops\" computes the peak flop rate of the computer by using
-   BLAS double precision \"gemm!()\". By default, if no arguments are
-   specified, it multiplies a matrix of size \"n x n\", where \"n =
-   2000\". If the underlying BLAS is using multiple threads, higher
-   flop rates are realized. The number of BLAS threads can be set with
-   \"blas_set_num_threads(n)\".
-
-   If the keyword argument \"parallel\" is set to \"true\",
-   \"peakflops\" is run in parallel on all the worker processors. The
-   flop rate of the entire parallel computer is returned. When running
-   in parallel, only 1 BLAS thread is used. The argument \"n\" still
-   refers to the size of the problem that is solved on each processor.
-
-"),
-
-("Base.LinAlg.BLAS","dot","dot(n, X, incx, Y, incy)
-
-   Dot product of two vectors consisting of \"n\" elements of array
-   \"X\" with stride \"incx\" and \"n\" elements of array \"Y\" with
-   stride \"incy\".
-
-"),
-
-("Base.LinAlg.BLAS","dotu","dotu(n, X, incx, Y, incy)
-
-   Dot function for two complex vectors.
-
-"),
-
-("Base.LinAlg.BLAS","dotc","dotc(n, X, incx, U, incy)
-
-   Dot function for two complex vectors conjugating the first vector.
-
-"),
-
-("Base.LinAlg.BLAS","blascopy!","blascopy!(n, X, incx, Y, incy)
-
-   Copy \"n\" elements of array \"X\" with stride \"incx\" to array
-   \"Y\" with stride \"incy\".  Returns \"Y\".
-
-"),
-
-("Base.LinAlg.BLAS","nrm2","nrm2(n, X, incx)
-
-   2-norm of a vector consisting of \"n\" elements of array \"X\" with
-   stride \"incx\".
-
-"),
-
-("Base.LinAlg.BLAS","asum","asum(n, X, incx)
-
-   sum of the absolute values of the first \"n\" elements of array
-   \"X\" with stride \"incx\".
-
-"),
-
-("Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
-
-   Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
-
-"),
-
-("Base.LinAlg.BLAS","scal!","scal!(n, a, X, incx)
-
-   Overwrite \"X\" with \"a*X\".  Returns \"X\".
-
-"),
-
-("Base.LinAlg.BLAS","scal","scal(n, a, X, incx)
-
-   Returns \"a*X\".
-
-"),
-
-("Base.LinAlg.BLAS","syrk!","syrk!(uplo, trans, alpha, A, beta, C)
-
-   Rank-k update of the symmetric matrix \"C\" as \"alpha*A*A.' +
-   beta*C\" or \"alpha*A.'*A + beta*C\" according to whether \"trans\"
-   is 'N' or 'T'.  When \"uplo\" is 'U' the upper triangle of \"C\" is
-   updated ('L' for lower triangle).  Returns \"C\".
-
-"),
-
-("Base.LinAlg.BLAS","syrk","syrk(uplo, trans, alpha, A)
-
-   Returns either the upper triangle or the lower triangle, according
-   to \"uplo\" ('U' or 'L'), of \"alpha*A*A.'\" or \"alpha*A.'*A\",
-   according to \"trans\" ('N' or 'T').
-
-"),
-
-("Base.LinAlg.BLAS","herk!","herk!(uplo, trans, alpha, A, beta, C)
-
-   Methods for complex arrays only.  Rank-k update of the Hermitian
-   matrix \"C\" as \"alpha*A*A' + beta*C\" or \"alpha*A'*A + beta*C\"
-   according to whether \"trans\" is 'N' or 'T'.  When \"uplo\" is 'U'
-   the upper triangle of \"C\" is updated ('L' for lower triangle).
-   Returns \"C\".
-
-"),
-
-("Base.LinAlg.BLAS","herk","herk(uplo, trans, alpha, A)
-
-   Methods for complex arrays only.  Returns either the upper triangle
-   or the lower triangle, according to \"uplo\" ('U' or 'L'), of
-   \"alpha*A*A'\" or \"alpha*A'*A\", according to \"trans\" ('N' or
-   'T').
-
-"),
-
-("Base.LinAlg.BLAS","gbmv!","gbmv!(trans, m, kl, ku, alpha, A, x, beta, y)
-
-   Update vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'*x +
-   beta*y\" according to \"trans\" ('N' or 'T').  The matrix \"A\" is
-   a general band matrix of dimension \"m\" by \"size(A,2)\" with
-   \"kl\" sub-diagonals and \"ku\" super-diagonals. Returns the
-   updated \"y\".
-
-"),
-
-("Base.LinAlg.BLAS","gbmv","gbmv(trans, m, kl, ku, alpha, A, x, beta, y)
-
-   Returns \"alpha*A*x\" or \"alpha*A'*x\" according to \"trans\" ('N'
-   or 'T'). The matrix \"A\" is a general band matrix of dimension
-   \"m\" by \"size(A,2)\" with \"kl\" sub-diagonals and \"ku\" super-
-   diagonals.
-
-"),
-
-("Base.LinAlg.BLAS","sbmv!","sbmv!(uplo, k, alpha, A, x, beta, y)
-
-   Update vector \"y\" as \"alpha*A*x + beta*y\" where \"A\" is a a
-   symmetric band matrix of order \"size(A,2)\" with \"k\" super-
-   diagonals stored in the argument \"A\".  The storage layout for
-   \"A\" is described the reference BLAS module, level-2 BLAS at
-   http://www.netlib.org/lapack/explore-html/.
-
-   Returns the updated \"y\".
-
-"),
-
-("Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, alpha, A, x)
-
-   Returns \"alpha*A*x\" where \"A\" is a symmetric band matrix of
-   order \"size(A,2)\" with \"k\" super-diagonals stored in the
-   argument \"A\".
-
-"),
-
-("Base.LinAlg.BLAS","sbmv","sbmv(uplo, k, A, x)
-
-   Returns \"A*x\" where \"A\" is a symmetric band matrix of order
-   \"size(A,2)\" with \"k\" super-diagonals stored in the argument
-   \"A\".
-
-"),
-
-("Base.LinAlg.BLAS","gemm!","gemm!(tA, tB, alpha, A, B, beta, C)
-
-   Update \"C\" as \"alpha*A*B + beta*C\" or the other three variants
-   according to \"tA\" (transpose \"A\") and \"tB\".  Returns the
-   updated \"C\".
-
-"),
-
-("Base.LinAlg.BLAS","gemm","gemm(tA, tB, alpha, A, B)
-
-   Returns \"alpha*A*B\" or the other three variants according to
-   \"tA\" (transpose \"A\") and \"tB\".
-
-"),
-
-("Base.LinAlg.BLAS","gemm","gemm(tA, tB, A, B)
-
-   Returns \"A*B\" or the other three variants according to \"tA\"
-   (transpose \"A\") and \"tB\".
-
-"),
-
-("Base.LinAlg.BLAS","gemv!","gemv!(tA, alpha, A, x, beta, y)
-
-   Update the vector \"y\" as \"alpha*A*x + beta*y\" or \"alpha*A'x +
-   beta*y\" according to \"tA\" (transpose \"A\"). Returns the updated
-   \"y\".
-
-"),
-
-("Base.LinAlg.BLAS","gemv","gemv(tA, alpha, A, x)
-
-   Returns \"alpha*A*x\" or \"alpha*A'x\" according to \"tA\"
-   (transpose \"A\").
-
-"),
-
-("Base.LinAlg.BLAS","gemv","gemv(tA, A, x)
-
-   Returns \"A*x\" or \"A'x\" according to \"tA\" (transpose \"A\").
-
-"),
-
-("Base.LinAlg.BLAS","symm!","symm!(side, ul, alpha, A, B, beta, C)
-
-   Update \"C\" as \"alpha*A*B + beta*C\" or \"alpha*B*A + beta*C\"
-   according to \"side\". \"A\" is assumed to be symmetric.  Only the
-   \"ul\" triangle of \"A\" is used.  Returns the updated \"C\".
-
-"),
-
-("Base.LinAlg.BLAS","symm","symm(side, ul, alpha, A, B)
-
-   Returns \"alpha*A*B\" or \"alpha*B*A\" according to \"side\". \"A\"
-   is assumed to be symmetric.  Only the \"ul\" triangle of \"A\" is
-   used.
-
-"),
-
-("Base.LinAlg.BLAS","symm","symm(side, ul, A, B)
-
-   Returns \"A*B\" or \"B*A\" according to \"side\".  \"A\" is assumed
-   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
-
-"),
-
-("Base.LinAlg.BLAS","symm","symm(tA, tB, alpha, A, B)
-
-   Returns \"alpha*A*B\" or the other three variants according to
-   \"tA\" (transpose \"A\") and \"tB\".
-
-"),
-
-("Base.LinAlg.BLAS","symv!","symv!(ul, alpha, A, x, beta, y)
-
-   Update the vector \"y\" as \"alpha*A*x + beta*y\". \"A\" is assumed
-   to be symmetric.  Only the \"ul\" triangle of \"A\" is used.
-   Returns the updated \"y\".
-
-"),
-
-("Base.LinAlg.BLAS","symv","symv(ul, alpha, A, x)
-
-   Returns \"alpha*A*x\". \"A\" is assumed to be symmetric.  Only the
-   \"ul\" triangle of \"A\" is used.
-
-"),
-
-("Base.LinAlg.BLAS","symv","symv(ul, A, x)
-
-   Returns \"A*x\".  \"A\" is assumed to be symmetric.  Only the
-   \"ul\" triangle of \"A\" is used.
-
-"),
-
-("Base.LinAlg.BLAS","trmm!","trmm!(side, ul, tA, dA, alpha, A, B)
-
-   Update \"B\" as \"alpha*A*B\" or one of the other three variants
-   determined by \"side\" (A on left or right) and \"tA\" (transpose
-   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
-   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
-   Returns the updated \"B\".
-
-"),
-
-("Base.LinAlg.BLAS","trmm","trmm(side, ul, tA, dA, alpha, A, B)
-
-   Returns \"alpha*A*B\" or one of the other three variants determined
-   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
-   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
-   unit-triangular (the diagonal is assumed to be all ones).
-
-"),
-
-("Base.LinAlg.BLAS","trsm!","trsm!(side, ul, tA, dA, alpha, A, B)
-
-   Overwrite \"B\" with the solution to \"A*X = alpha*B\" or one of
-   the other three variants determined by \"side\" (A on left or right
-   of \"X\") and \"tA\" (transpose A). Only the \"ul\" triangle of
-   \"A\" is used.  \"dA\" indicates if \"A\" is unit-triangular (the
-   diagonal is assumed to be all ones).  Returns the updated \"B\".
-
-"),
-
-("Base.LinAlg.BLAS","trsm","trsm(side, ul, tA, dA, alpha, A, B)
-
-   Returns the solution to \"A*X = alpha*B\" or one of the other three
-   variants determined by \"side\" (A on left or right of \"X\") and
-   \"tA\" (transpose A). Only the \"ul\" triangle of \"A\" is used.
-   \"dA\" indicates if \"A\" is unit-triangular (the diagonal is
-   assumed to be all ones).
-
-"),
-
-("Base.LinAlg.BLAS","trmv!","trmv!(side, ul, tA, dA, alpha, A, b)
-
-   Update \"b\" as \"alpha*A*b\" or one of the other three variants
-   determined by \"side\" (A on left or right) and \"tA\" (transpose
-   A). Only the \"ul\" triangle of \"A\" is used.  \"dA\" indicates if
-   \"A\" is unit-triangular (the diagonal is assumed to be all ones).
-   Returns the updated \"b\".
-
-"),
-
-("Base.LinAlg.BLAS","trmv","trmv(side, ul, tA, dA, alpha, A, b)
-
-   Returns \"alpha*A*b\" or one of the other three variants determined
-   by \"side\" (A on left or right) and \"tA\" (transpose A). Only the
-   \"ul\" triangle of \"A\" is used.  \"dA\" indicates if \"A\" is
-   unit-triangular (the diagonal is assumed to be all ones).
-
-"),
-
-("Base.LinAlg.BLAS","trsv!","trsv!(ul, tA, dA, A, b)
-
-   Overwrite \"b\" with the solution to \"A*x = b\" or one of the
-   other two variants determined by \"tA\" (transpose A) and \"ul\"
-   (triangle of \"A\" used).  \"dA\" indicates if \"A\" is unit-
-   triangular (the diagonal is assumed to be all ones).  Returns the
-   updated \"b\".
-
-"),
-
-("Base.LinAlg.BLAS","trsv","trsv(ul, tA, dA, A, b)
-
-   Returns the solution to \"A*x = b\" or one of the other two
-   variants determined by \"tA\" (transpose A) and \"ul\" (triangle of
-   \"A\" is used.) \"dA\" indicates if \"A\" is unit-triangular (the
-   diagonal is assumed to be all ones).
-
-"),
-
-("Base.LinAlg.BLAS","blas_set_num_threads","blas_set_num_threads(n)
-
-   Set the number of threads the BLAS library should use.
-
-"),
-
 ("Base.Pkg","dir","dir() -> String
 
    Returns the absolute path of the package directory. This defaults
@@ -10873,9 +10526,9 @@ popdisplay(d::Display)
 ("Base.Profile","print","print([io::IO = STDOUT], data::Vector, lidict::Dict; format = :tree, combine = true, cols = tty_cols())
 
    Prints profiling results to \"io\". This variant is used to examine
-   results exported by a previous call to \"Profile.retrieve()\".
-   Supply the vector \"data\" of backtraces and a dictionary
-   \"lidict\" of line information.
+   results exported by a previous call to \"retrieve()\". Supply the
+   vector \"data\" of backtraces and a dictionary \"lidict\" of line
+   information.
 
 "),
 
@@ -10894,12 +10547,12 @@ popdisplay(d::Display)
 ("Base.Profile","fetch","fetch() -> data
 
    Returns a reference to the internal buffer of backtraces. Note that
-   subsequent operations, like \"Profile.clear()\", can affect
-   \"data\" unless you first make a copy. Note that the values in
-   \"data\" have meaning only on this machine in the current session,
-   because it depends on the exact memory addresses used in JIT-
-   compiling. This function is primarily for internal use;
-   \"Profile.retrieve()\" may be a better choice for most users.
+   subsequent operations, like \"clear()\", can affect \"data\" unless
+   you first make a copy. Note that the values in \"data\" have
+   meaning only on this machine in the current session, because it
+   depends on the exact memory addresses used in JIT-compiling. This
+   function is primarily for internal use; \"retrieve()\" may be a
+   better choice for most users.
 
 "),
 
@@ -10911,6 +10564,16 @@ popdisplay(d::Display)
    values that store the file name, function name, and line number.
    This function allows you to save profiling results for future
    analysis.
+
+"),
+
+("Base.Profile","clear_malloc_data","clear_malloc_data()
+
+   Clears any stored memory allocation data when running julia with \"
+   --track-allocation\".  Execute the command(s) you want to test (to
+   force JIT-compilation), then call \"clear_malloc_data()\". Then
+   execute your command(s) again, quit julia, and examine the
+   resulting \"*.mem\" files.
 
 "),
 
@@ -11028,152 +10691,618 @@ popdisplay(d::Display)
 
 "),
 
-("Base","sparse","sparse(I, J, V[, m, n, combine])
+("","length","length(s)
 
-   Create a sparse matrix \"S\" of dimensions \"m x n\" such that
-   \"S[I[k], J[k]] = V[k]\". The \"combine\" function is used to
-   combine duplicates. If \"m\" and \"n\" are not specified, they are
-   set to \"max(I)\" and \"max(J)\" respectively. If the \"combine\"
-   function is not supplied, duplicates are added by default.
+   The number of characters in string \"s\".
 
 "),
 
-("Base","sparsevec","sparsevec(I, V[, m, combine])
+("","sizeof","sizeof(s::String)
 
-   Create a sparse matrix \"S\" of size \"m x 1\" such that \"S[I[k]]
-   = V[k]\". Duplicates are combined using the \"combine\" function,
-   which defaults to \"+\" if it is not provided. In julia, sparse
-   vectors are really just sparse matrices with one column. Given
-   Julia's Compressed Sparse Columns (CSC) storage format, a sparse
-   column matrix with one column is sparse, whereas a sparse row
-   matrix with one row ends up being dense.
+   The number of bytes in string \"s\".
 
 "),
 
-("Base","sparsevec","sparsevec(D::Dict[, m])
+("","*","*(s, t)
 
-   Create a sparse matrix of size \"m x 1\" where the row values are
-   keys from the dictionary, and the nonzero values are the values
-   from the dictionary.
+   Concatenate strings. The \"*\" operator is an alias to this
+   function.
 
-"),
-
-("Base","issparse","issparse(S)
-
-   Returns \"true\" if \"S\" is sparse, and \"false\" otherwise.
+      julia> \"Hello \" * \"world\"
+      \"Hello world\"
 
 "),
 
-("Base","sparse","sparse(A)
+("","^","^(s, n)
 
-   Convert a dense matrix \"A\" into a sparse matrix.
+   Repeat \"n\" times the string \"s\". The \"^\" operator is an alias
+   to this function.
 
-"),
-
-("Base","sparsevec","sparsevec(A)
-
-   Convert a dense vector \"A\" into a sparse matrix of size \"m x
-   1\". In julia, sparse vectors are really just sparse matrices with
-   one column.
+      julia> \"Test \"^3
+      \"Test Test Test \"
 
 "),
 
-("Base","full","full(S)
+("","string","string(xs...)
 
-   Convert a sparse matrix \"S\" into a dense matrix.
-
-"),
-
-("Base","nnz","nnz(A)
-
-   Returns the number of stored (filled) elements in a sparse matrix.
+   Create a string from any values using the \"print\" function.
 
 "),
 
-("Base","spzeros","spzeros(m, n)
+("","repr","repr(x)
 
-   Create an empty sparse matrix of size \"m x n\".
-
-"),
-
-("Base","spones","spones(S)
-
-   Create a sparse matrix with the same structure as that of \"S\",
-   but with every nonzero element having the value \"1.0\".
+   Create a string from any value using the \"showall\" function.
 
 "),
 
-("Base","speye","speye(type, m[, n])
+("","bytestring","bytestring(::Ptr{Uint8}[, length])
 
-   Create a sparse identity matrix of specified type of size \"m x
-   m\". In case \"n\" is supplied, create a sparse identity matrix of
-   size \"m x n\".
-
-"),
-
-("Base","spdiagm","spdiagm(B, d[, m, n])
-
-   Construct a sparse diagonal matrix. \"B\" is a tuple of vectors
-   containing the diagonals and \"d\" is a tuple containing the
-   positions of the diagonals. In the case the input contains only one
-   diagonaly, \"B\" can be a vector (instead of a tuple) and \"d\" can
-   be the diagonal position (instead of a tuple), defaulting to 0
-   (diagonal). Optionally, \"m\" and \"n\" specify the size of the
-   resulting sparse matrix.
+   Create a string from the address of a C (0-terminated) string
+   encoded in ASCII or UTF-8. A copy is made; the ptr can be safely
+   freed. If \"length\" is specified, the string does not have to be
+   0-terminated.
 
 "),
 
-("Base","sprand","sprand(m, n, p[, rng])
+("","bytestring","bytestring(s)
 
-   Create a random \"m\" by \"n\" sparse matrix, in which the
-   probability of any element being nonzero is independently given by
-   \"p\" (and hence the mean density of nonzeros is also exactly
-   \"p\"). Nonzero values are sampled from the distribution specified
-   by \"rng\". The uniform distribution is used in case \"rng\" is not
-   specified.
+   Convert a string to a contiguous byte array representation
+   appropriate for passing it to C functions. The string will be
+   encoded as either ASCII or UTF-8.
 
 "),
 
-("Base","sprandn","sprandn(m, n, p)
+("","ascii","ascii(::Array{Uint8, 1})
 
-   Create a random \"m\" by \"n\" sparse matrix with the specified
-   (independent) probability \"p\" of any entry being nonzero, where
-   nonzero values are sampled from the normal distribution.
+   Create an ASCII string from a byte array.
 
 "),
 
-("Base","sprandbool","sprandbool(m, n, p)
+("","ascii","ascii(s)
 
-   Create a random \"m\" by \"n\" sparse boolean matrix with the
-   specified (independent) probability \"p\" of any entry being
-   \"true\".
-
-"),
-
-("Base","etree","etree(A[, post])
-
-   Compute the elimination tree of a symmetric sparse matrix \"A\"
-   from \"triu(A)\" and, optionally, its post-ordering permutation.
+   Convert a string to a contiguous ASCII string (all characters must
+   be valid ASCII characters).
 
 "),
 
-("Base","symperm","symperm(A, p)
+("","utf8","utf8(::Array{Uint8, 1})
 
-   Return the symmetric permutation of A, which is \"A[p,p]\". A
-   should be symmetric and sparse, where only the upper triangular
-   part of the matrix is stored. This algorithm ignores the lower
-   triangular part of the matrix. Only the upper triangular part of
-   the result is returned as well.
+   Create a UTF-8 string from a byte array.
 
 "),
 
-("Base","nonzeros","nonzeros(A)
+("","utf8","utf8(s)
 
-   Return a vector of the structural nonzero values in sparse matrix
-   \"A\". This includes zeros that are explicitly stored in the sparse
-   matrix. The returned vector points directly to the internal nonzero
-   storage of \"A\", and any modifications to the returned vector will
-   mutate \"A\" as well.
+   Convert a string to a contiguous UTF-8 string (all characters must
+   be valid UTF-8 characters).
+
+"),
+
+("","normalize_string","normalize_string(s, normalform::Symbol)
+
+   Normalize the string \"s\" according to one of the four \"normal
+   forms\" of the Unicode standard: \"normalform\" can be \":NFC\",
+   \":NFD\", \":NFKC\", or \":NFKD\".  Normal forms C (canonical
+   composition) and D (canonical decomposition) convert different
+   visually identical representations of the same abstract string into
+   a single canonical form, with form C being more compact.  Normal
+   forms KC and KD additionally canonicalize \"compatibility
+   equivalents\": they convert characters that are abstractly similar
+   but visually distinct into a single canonical choice (e.g. they
+   expand ligatures into the individual characters), with form KC
+   being more compact.
+
+   Alternatively, finer control and additional transformations may be
+   be obtained by calling *normalize_string(s; keywords...)*, where
+   any number of the following boolean keywords options (which all
+   default to \"false\" except for \"compose\") are specified:
+
+   * \"compose=false\": do not perform canonical composition
+
+   * \"decompose=true\": do canonical decomposition instead of
+     canonical composition (\"compose=true\" is ignored if present)
+
+   * \"compat=true\": compatibility equivalents are canonicalized
+
+   * \"casefold=true\": perform Unicode case folding, e.g. for case-
+     insensitive string comparison
+
+   * \"newline2lf=true\", \"newline2ls=true\", or
+     \"newline2ps=true\": convert various newline sequences (LF, CRLF,
+     CR, NEL) into a linefeed (LF), line-separation (LS), or
+     paragraph-separation (PS) character, respectively
+
+   * \"stripmark=true\": strip diacritical marks (e.g. accents)
+
+   * \"stripignore=true\": strip Unicode's \"default ignorable\"
+     characters (e.g. the soft hyphen or the left-to-right marker)
+
+   * \"stripcc=true\": strip control characters; horizontal tabs and
+     form feeds are converted to spaces; newlines are also converted
+     to spaces unless a newline-conversion flag was specified
+
+   * \"rejectna=true\": throw an error if unassigned code points are
+     found
+
+   * \"stable=true\": enforce Unicode Versioning Stability
+
+   For example, NFKC corresponds to the options \"compose=true,
+   compat=true, stable=true\".
+
+"),
+
+("","is_valid_ascii","is_valid_ascii(s) -> Bool
+
+   Returns true if the string or byte vector is valid ASCII, false
+   otherwise.
+
+"),
+
+("","is_valid_utf8","is_valid_utf8(s) -> Bool
+
+   Returns true if the string or byte vector is valid UTF-8, false
+   otherwise.
+
+"),
+
+("","is_valid_char","is_valid_char(c) -> Bool
+
+   Returns true if the given char or integer is a valid Unicode code
+   point.
+
+"),
+
+("","is_assigned_char","is_assigned_char(c) -> Bool
+
+   Returns true if the given char or integer is an assigned Unicode
+   code point.
+
+"),
+
+("","ismatch","ismatch(r::Regex, s::String) -> Bool
+
+   Test whether a string contains a match of the given regular
+   expression.
+
+"),
+
+("","match","match(r::Regex, s::String[, idx::Integer[, addopts]])
+
+   Search for the first match of the regular expression \"r\" in \"s\"
+   and return a RegexMatch object containing the match, or nothing if
+   the match failed. The matching substring can be retrieved by
+   accessing \"m.match\" and the captured sequences can be retrieved
+   by accessing \"m.captures\" The optional \"idx\" argument specifies
+   an index at which to start the search.
+
+"),
+
+("","eachmatch","eachmatch(r::Regex, s::String[, overlap::Bool=false])
+
+   Search for all matches of a the regular expression \"r\" in \"s\"
+   and return a iterator over the matches. If overlap is true, the
+   matching sequences are allowed to overlap indices in the original
+   string, otherwise they must be from distinct character ranges.
+
+"),
+
+("","matchall","matchall(r::Regex, s::String[, overlap::Bool=false]) -> Vector{String}
+
+   Return a vector of the matching substrings from eachmatch.
+
+"),
+
+("","lpad","lpad(string, n, p)
+
+   Make a string at least \"n\" characters long by padding on the left
+   with copies of \"p\".
+
+"),
+
+("","rpad","rpad(string, n, p)
+
+   Make a string at least \"n\" characters long by padding on the
+   right with copies of \"p\".
+
+"),
+
+("","search","search(string, chars[, start])
+
+   Search for the first occurance of the given characters within the
+   given string. The second argument may be a single character, a
+   vector or a set of characters, a string, or a regular expression
+   (though regular expressions are only allowed on contiguous strings,
+   such as ASCII or UTF-8 strings). The third argument optionally
+   specifies a starting index. The return value is a range of indexes
+   where the matching sequence is found, such that \"s[search(s,x)] ==
+   x\":
+
+   \"search(string, \"substring\")\" = \"start:end\" such that
+   \"string[start:end] == \"substring\"\", or \"0:-1\" if unmatched.
+
+   \"search(string, 'c')\"         = \"index\" such that
+   \"string[index] == 'c'\", or \"0\" if unmatched.
+
+"),
+
+("","rsearch","rsearch(string, chars[, start])
+
+   Similar to \"search\", but returning the last occurance of the
+   given characters within the given string, searching in reverse from
+   \"start\".
+
+"),
+
+("","searchindex","searchindex(string, substring[, start])
+
+   Similar to \"search\", but return only the start index at which the
+   substring is found, or 0 if it is not.
+
+"),
+
+("","rsearchindex","rsearchindex(string, substring[, start])
+
+   Similar to \"rsearch\", but return only the start index at which
+   the substring is found, or 0 if it is not.
+
+"),
+
+("","contains","contains(haystack, needle)
+
+   Determine whether the second argument is a substring of the first.
+
+"),
+
+("","replace","replace(string, pat, r[, n])
+
+   Search for the given pattern \"pat\", and replace each occurrence
+   with \"r\". If \"n\" is provided, replace at most \"n\"
+   occurrences.  As with search, the second argument may be a single
+   character, a vector or a set of characters, a string, or a regular
+   expression. If \"r\" is a function, each occurrence is replaced
+   with \"r(s)\" where \"s\" is the matched substring.
+
+"),
+
+("","split","split(string, [chars, [limit,] [include_empty]])
+
+   Return an array of substrings by splitting the given string on
+   occurrences of the given character delimiters, which may be
+   specified in any of the formats allowed by \"search\"'s second
+   argument (i.e. a single character, collection of characters,
+   string, or regular expression). If \"chars\" is omitted, it
+   defaults to the set of all space characters, and \"include_empty\"
+   is taken to be false. The last two arguments are also optional:
+   they are are a maximum size for the result and a flag determining
+   whether empty fields should be included in the result.
+
+"),
+
+("","rsplit","rsplit(string, [chars, [limit,] [include_empty]])
+
+   Similar to \"split\", but starting from the end of the string.
+
+"),
+
+("","strip","strip(string[, chars])
+
+   Return \"string\" with any leading and trailing whitespace removed.
+   If \"chars\" (a character, or vector or set of characters) is
+   provided, instead remove characters contained in it.
+
+"),
+
+("","lstrip","lstrip(string[, chars])
+
+   Return \"string\" with any leading whitespace removed. If \"chars\"
+   (a character, or vector or set of characters) is provided, instead
+   remove characters contained in it.
+
+"),
+
+("","rstrip","rstrip(string[, chars])
+
+   Return \"string\" with any trailing whitespace removed. If
+   \"chars\" (a character, or vector or set of characters) is
+   provided, instead remove characters contained in it.
+
+"),
+
+("","beginswith","beginswith(string, prefix | chars)
+
+   Returns \"true\" if \"string\" starts with \"prefix\". If the
+   second argument is a vector or set of characters, tests whether the
+   first character of \"string\" belongs to that set.
+
+"),
+
+("","endswith","endswith(string, suffix | chars)
+
+   Returns \"true\" if \"string\" ends with \"suffix\". If the second
+   argument is a vector or set of characters, tests whether the last
+   character of \"string\" belongs to that set.
+
+"),
+
+("","uppercase","uppercase(string)
+
+   Returns \"string\" with all characters converted to uppercase.
+
+"),
+
+("","lowercase","lowercase(string)
+
+   Returns \"string\" with all characters converted to lowercase.
+
+"),
+
+("","ucfirst","ucfirst(string)
+
+   Returns \"string\" with the first character converted to uppercase.
+
+"),
+
+("","lcfirst","lcfirst(string)
+
+   Returns \"string\" with the first character converted to lowercase.
+
+"),
+
+("","join","join(strings, delim[, last])
+
+   Join an array of \"strings\" into a single string, inserting the
+   given delimiter between adjacent strings. If \"last\" is given, it
+   will be used instead of \"delim\" between the last two strings. For
+   example, \"join([\"apples\", \"bananas\", \"pineapples\"], \", \",
+   \" and \") == \"apples, bananas and pineapples\"\".
+
+   \"strings\" can be any iterable over elements \"x\" which are
+   convertible to strings via \"print(io::IOBuffer, x)\".
+
+"),
+
+("","chop","chop(string)
+
+   Remove the last character from a string
+
+"),
+
+("","chomp","chomp(string)
+
+   Remove a trailing newline from a string
+
+"),
+
+("","ind2chr","ind2chr(string, i)
+
+   Convert a byte index to a character index
+
+"),
+
+("","chr2ind","chr2ind(string, i)
+
+   Convert a character index to a byte index
+
+"),
+
+("","isvalid","isvalid(str, i)
+
+   Tells whether index \"i\" is valid for the given string
+
+"),
+
+("","nextind","nextind(str, i)
+
+   Get the next valid string index after \"i\". Returns a value
+   greater than \"endof(str)\" at or after the end of the string.
+
+"),
+
+("","prevind","prevind(str, i)
+
+   Get the previous valid string index before \"i\". Returns a value
+   less than \"1\" at the beginning of the string.
+
+"),
+
+("","randstring","randstring(len)
+
+   Create a random ASCII string of length \"len\", consisting of
+   upper- and lower-case letters and the digits 0-9
+
+"),
+
+("","charwidth","charwidth(c)
+
+   Gives the number of columns needed to print a character.
+
+"),
+
+("","strwidth","strwidth(s)
+
+   Gives the number of columns needed to print a string.
+
+"),
+
+("","isalnum","isalnum(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is alphanumeric, or whether this is true
+   for all elements of a string.
+
+"),
+
+("","isalpha","isalpha(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is alphabetic, or whether this is true
+   for all elements of a string.
+
+"),
+
+("","isascii","isascii(c::Union(Char, String)) -> Bool
+
+   Tests whether a character belongs to the ASCII character set, or
+   whether this is true for all elements of a string.
+
+"),
+
+("","isblank","isblank(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is a tab or space, or whether this is
+   true for all elements of a string.
+
+"),
+
+("","iscntrl","iscntrl(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is a control character, or whether this
+   is true for all elements of a string.
+
+"),
+
+("","isdigit","isdigit(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is a numeric digit (0-9), or whether this
+   is true for all elements of a string.
+
+"),
+
+("","isgraph","isgraph(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is printable, and not a space, or whether
+   this is true for all elements of a string.
+
+"),
+
+("","islower","islower(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is a lowercase letter, or whether this is
+   true for all elements of a string.
+
+"),
+
+("","isprint","isprint(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is printable, including space, or whether
+   this is true for all elements of a string.
+
+"),
+
+("","ispunct","ispunct(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is printable, and not a space or
+   alphanumeric, or whether this is true for all elements of a string.
+
+"),
+
+("","isspace","isspace(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is any whitespace character, or whether
+   this is true for all elements of a string.
+
+"),
+
+("","isupper","isupper(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is an uppercase letter, or whether this
+   is true for all elements of a string.
+
+"),
+
+("","isxdigit","isxdigit(c::Union(Char, String)) -> Bool
+
+   Tests whether a character is a valid hexadecimal digit, or whether
+   this is true for all elements of a string.
+
+"),
+
+("","symbol","symbol(str) -> Symbol
+
+   Convert a string to a \"Symbol\".
+
+"),
+
+("","escape_string","escape_string(str::String) -> String
+
+   General escaping of traditional C and Unicode escape sequences. See
+   \"print_escaped()\" for more general escaping.
+
+"),
+
+("","unescape_string","unescape_string(s::String) -> String
+
+   General unescaping of traditional C and Unicode escape sequences.
+   Reverse of \"escape_string()\". See also \"print_unescaped()\".
+
+"),
+
+("","utf16","utf16(s)
+
+   Create a UTF-16 string from a byte array, array of \"Uint16\", or
+   any other string type.  (Data must be valid UTF-16.  Conversions of
+   byte arrays check for a byte-order marker in the first two bytes,
+   and do not include it in the resulting string.)
+
+   Note that the resulting \"UTF16String\" data is terminated by the
+   NUL codepoint (16-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf16(s)* conversion function.  If you have a \"Uint16\" array
+   \"A\" that is already NUL-terminated valid UTF-16 data, then you
+   can instead use *UTF16String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+"),
+
+("","utf16","utf16(::Union(Ptr{Uint16}, Ptr{Int16})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-16 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
+"),
+
+("","is_valid_utf16","is_valid_utf16(s) -> Bool
+
+   Returns true if the string or \"Uint16\" array is valid UTF-16.
+
+"),
+
+("","utf32","utf32(s)
+
+   Create a UTF-32 string from a byte array, array of \"Uint32\", or
+   any other string type.  (Conversions of byte arrays check for a
+   byte-order marker in the first four bytes, and do not include it in
+   the resulting string.)
+
+   Note that the resulting \"UTF32String\" data is terminated by the
+   NUL codepoint (32-bit zero), which is not treated as a character in
+   the string (so that it is mostly invisible in Julia); this allows
+   the string to be passed directly to external functions requiring
+   NUL-terminated data.  This NUL is appended automatically by the
+   *utf32(s)* conversion function.  If you have a \"Uint32\" array
+   \"A\" that is already NUL-terminated UTF-32 data, then you can
+   instead use *UTF32String(A)`* to construct the string without
+   making a copy of the data and treating the NUL as a terminator
+   rather than as part of the string.
+
+"),
+
+("","utf32","utf32(::Union(Ptr{Char}, Ptr{Uint32}, Ptr{Int32})[, length])
+
+   Create a string from the address of a NUL-terminated UTF-32 string.
+   A copy is made; the pointer can be safely freed. If \"length\" is
+   specified, the string does not have to be NUL-terminated.
+
+"),
+
+("","wstring","wstring(s)
+
+   This is a synonym for either \"utf32(s)\" or \"utf16(s)\",
+   depending on whether \"Cwchar_t\" is 32 or 16 bits, respectively.
+   The synonym \"WString\" for \"UTF32String\" or \"UTF16String\" is
+   also provided.
 
 "),
 

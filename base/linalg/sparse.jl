@@ -199,12 +199,12 @@ end
 function A_ldiv_B!(A::SparseMatrixCSC, b::AbstractVecOrMat)
     if iseltype(b, Complex); A = complex(A); end
 
-    if istril(A) 
-        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle 
+    if istril(A)
+        # TODO: Fix diagonal case. Diagonal(A.nzval) needs to handle
         # the case where there are zeros on the diagonal and error out.
         # It also does not work in the complex case. VBS.
         #if istriu(A); return A_ldiv_B!(Diagonal(A.nzval), b); end
-        return fwdTriSolve!(A, b) 
+        return fwdTriSolve!(A, b)
     end
     if istriu(A); return bwdTriSolve!(A, b); end
     return A_ldiv_B!(lufact(A),b)
@@ -223,11 +223,11 @@ function fwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     if nrowB != ncol
         throw(DimensionMismatch("A is $(ncol)X$(ncol) and B has length $(n)"))
     end
-   
+
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
-   
+
     joff = 0
     for k = 1:ncolB
         for j = 1:(nrowB-1)
@@ -261,7 +261,7 @@ function bwdTriSolve!(A::SparseMatrixCSC, B::AbstractVecOrMat)
     aa = A.nzval
     ja = A.rowval
     ia = A.colptr
-    
+
     joff = 0
     for k = 1:ncolB
         for j = nrowB:-1:2
@@ -589,14 +589,25 @@ inv(A::SparseMatrixCSC) = error("The inverse of a sparse matrix can often be den
 
 ## scale methods
 
+# Copy colptr and rowval from one SparseMatrix to another
+function copyinds!(C::SparseMatrixCSC, A::SparseMatrixCSC)
+    if C.colptr !== A.colptr
+        resize!(C.colptr, length(A.colptr))
+        copy!(C.colptr, A.colptr)
+    end
+    if C.rowval !== A.rowval
+        resize!(C.rowval, length(A.rowval))
+        copy!(C.rowval, A.rowval)
+    end
+end
+
 # multiply by diagonal matrix as vector
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, A::SparseMatrixCSC, b::Vector)
     m, n = size(A)
     (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
     numnz = nnz(A)
-    C.colptr = convert(Array{Ti}, A.colptr)
-    C.rowval = convert(Array{Ti}, A.rowval)
-    C.nzval = Array(Tv, numnz)
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[col]
     end
@@ -605,11 +616,10 @@ end
 
 function scale!{Tv,Ti}(C::SparseMatrixCSC{Tv,Ti}, b::Vector, A::SparseMatrixCSC)
     m, n = size(A)
-    (n==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
+    (m==length(b) && size(A)==size(C)) || throw(DimensionMismatch(""))
     numnz = nnz(A)
-    C.colptr = convert(Array{Ti}, A.colptr)
-    C.rowval = convert(Array{Ti}, A.rowval)
-    C.nzval = Array(Tv, numnz)
+    copyinds!(C, A)
+    resize!(C.nzval, length(A.nzval))
     for col = 1:n, p = A.colptr[col]:(A.colptr[col+1]-1)
         C.nzval[p] = A.nzval[p] * b[A.rowval[p]]
     end

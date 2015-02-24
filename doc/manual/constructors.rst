@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 **************
- Constructors  
+ Constructors
 **************
 
 Constructors [#]_ are functions that create new objects — specifically,

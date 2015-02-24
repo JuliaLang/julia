@@ -65,7 +65,7 @@ function evalrule(f, a,b, x,w,gw, nrm)
     else # odd: don't count x==0 twice in Gauss rule
         f0 = f(a + s)
         Ig += f0 * gw[end]
-        Ik += f0 * w[end] + 
+        Ik += f0 * w[end] +
               (f(a + (1+x[end-1])*s) + f(a + (1-x[end-1])*s)) * w[end-1]
     end
     Ik *= s
@@ -150,14 +150,14 @@ end
 
 # Gauss-Kronrod quadrature of f from a to b to c...
 
-function quadgk{T<:FloatingPoint}(f, a::T,b::T,c::T...; 
+function quadgk{T<:FloatingPoint}(f, a::T,b::T,c::T...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
 end
 
 function quadgk{T<:FloatingPoint}(f, a::Complex{T},
-                                  b::Complex{T},c::Complex{T}...; 
+                                  b::Complex{T},c::Complex{T}...;
                                   abstol=zero(T), reltol=sqrt(eps(T)),
                                   maxevals=10^7, order=7, norm=vecnorm)
     do_quadgk(f, [a, b, c...], order, T, abstol, reltol, maxevals, norm)
@@ -335,7 +335,7 @@ function kronrod{T<:FloatingPoint}(::Type{T}, n::Integer)
         b[j] = j / sqrt(4j^2 - o)
     end
     gw = T[ 2*eigvec1(b,x[i],n)[1]^2 for i = 2:2:n+1 ]
-    
+
     return (x, w, gw)
 end
 

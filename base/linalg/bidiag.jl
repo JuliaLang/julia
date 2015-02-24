@@ -36,7 +36,7 @@ promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(
 Tridiagonal{T}(M::Bidiagonal{T}) = convert(Tridiagonal{T}, M)
 function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal{T})
     z = zeros(T, size(A)[1]-1)
-    A.isupper ? Tridiagonal(A.ev, A.dv, z) : Tridiagonal(z, A.dv, A.ev)
+    A.isupper ? Tridiagonal(z, A.dv, A.ev) : Tridiagonal(A.ev, A.dv, z)
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
 

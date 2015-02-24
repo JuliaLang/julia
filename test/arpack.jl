@@ -44,12 +44,12 @@ begin
         (d,v) = eigs(apd, bpd, nev=3, tol=1e-8)
         @test_approx_eq_eps apd*v[:,2] d[2]*bpd*v[:,2] testtol
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-    
+
         # test (shift-and-)invert mode
         (d,v) = eigs(apd, nev=3, sigma=0)
         @test_approx_eq apd*v[:,3] d[3]*v[:,3]
         @test norm(v) > testtol # eigenvectors cannot be null vectors
-        
+
         (d,v) = eigs(apd, bpd, nev=3, sigma=0, tol=1e-8)
         @test_approx_eq_eps apd*v[:,1] d[1]*bpd*v[:,1] testtol
         @test norm(v) > testtol # eigenvectors cannot be null vectors
@@ -68,7 +68,7 @@ A6965 = [
         -1.0   0.0   0.0   0.0   0.0   0.0   7.0  1.0
         -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  -1.0  8.0
        ];
-       
+
 d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
 @test_approx_eq d[1] 2.5346936860350002
 @test_approx_eq real(d[2]) 2.6159972444834976
@@ -76,7 +76,7 @@ d, = eigs(A6965,which=:SM,nev=2,ncv=4,tol=eps())
 
 # Requires ARPACK 3.2 or a patched 3.1.5
 #T6965 = [ 0.9  0.05  0.05
-#          0.8  0.1   0.1 
+#          0.8  0.1   0.1
 #          0.7  0.1   0.2 ]
 #d,v,nconv = eigs(T6965,nev=1,which=:LM)
 #@test_approx_eq_eps T6965*v d[1]*v 1e-6

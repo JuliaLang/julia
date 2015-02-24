@@ -33,3 +33,6 @@ let # Issue 9160
         end
     end
 end
+
+#9915
+@test speye(2)\speye(2) == eye(2)

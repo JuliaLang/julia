@@ -30,7 +30,7 @@ function eigs(A, B;
     isgeneral && !isposdef(B) && throw(PosDefException(0))
     bmat = isgeneral ? "G" : "I"
     isshift = sigma !== nothing
-    
+
     if isa(which,String)
         warn("Use symbols instead of strings for specifying which eigenvalues to compute")
         which=symbol(which)
@@ -44,7 +44,7 @@ function eigs(A, B;
         sigma=zero(T)
         which=:LM
     end
-    
+
     if sigma != nothing && !iscmplx && isa(sigma,Complex)
         error("complex shifts for real problems are not yet supported")
     end
@@ -54,7 +54,7 @@ function eigs(A, B;
         length(v0)==n || throw(DimensionMismatch(""))
         eltype(v0)==T || error("Starting vector must have eltype $T")
     end
-    
+
     whichstr = "LM"
     if which == :BE
         whichstr = "BE"
@@ -98,9 +98,9 @@ function eigs(A, B;
     end
 
     # Compute the Ritz values and Ritz vectors
-    (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork, TOL) = 
+    (resid, v, ldv, iparam, ipntr, workd, workl, lworkl, rwork, TOL) =
        ARPACK.aupd_wrapper(T, matvecA, matvecB, solveSI, n, sym, iscmplx, bmat, nev, ncv, whichstr, tol, maxiter, mode, v0)
-    
+
     # Postprocessing to get eigenvalues and eigenvectors
     return ARPACK.eupd_wrapper(T, n, sym, iscmplx, bmat, nev, whichstr, ritzvec, TOL,
                                  resid, ncv, v, ldv, sigma, iparam, ipntr, workd, workl, lworkl, rwork)

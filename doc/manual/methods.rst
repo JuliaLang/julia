@@ -1,7 +1,7 @@
 .. _man-methods:
 
 *********
- Methods  
+ Methods
 *********
 
 Recall from :ref:`man-functions` that a function is an object
@@ -363,11 +363,11 @@ arguments:
     julia> g(x::Float64, y) = 2x + y;
 
     julia> g(x, y::Float64) = x + 2y;
-    Warning: New definition 
+    Warning: New definition
         g(Any,Float64) at none:1
-    is ambiguous with: 
+    is ambiguous with:
         g(Float64,Any) at none:1.
-    To fix, define 
+    To fix, define
         g(Float64,Float64)
     before the new definition.
 

@@ -142,7 +142,7 @@ function getindex{T<:Number}(::Type{T}, r1::Range, rs::Range...)
     return a
 end
 
-function fill!{T<:Union(Int8,Uint8)}(a::Array{T}, x::Integer)
+function fill!(a::Union(Array{Uint8}, Array{Int8}), x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Int32, Csize_t), a, x, length(a))
     return a
 end
@@ -340,6 +340,9 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
+        is(I,A) && (I = X)
+    elseif is(I,A)
+        I = copy(I)
     end
     for i in I
         A[i] = X[count]
@@ -571,7 +574,7 @@ function deleteat!(a::Vector, inds)
     q = p+1
     while !done(inds, s)
         (i,s) = next(inds, s)
-        if !(q <= i <= n) 
+        if !(q <= i <= n)
             i < q && error("indices must be unique and sorted")
             throw(BoundsError())
         end
@@ -764,7 +767,7 @@ end
 
 # familiar aliases for broadcasting operations of array ± scalar (#7226):
 (+)(A::AbstractArray{Bool},x::Bool) = A .+ x
-(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A 
+(+)(x::Bool,A::AbstractArray{Bool}) = x .+ A
 (-)(A::AbstractArray{Bool},x::Bool) = A .- x
 (-)(x::Bool,A::AbstractArray{Bool}) = x .- A
 (+)(A::AbstractArray,x::Number) = A .+ x
@@ -798,7 +801,7 @@ for f in (:+, :-)
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
-            return F        
+            return F
         end
     end
 end
@@ -1399,20 +1402,24 @@ symdiff(a, b, rest...) = symdiff(a, symdiff(b, rest...))
 _cumsum_type{T<:Number}(v::AbstractArray{T}) = typeof(+zero(T))
 _cumsum_type(v) = typeof(v[1]+v[1])
 
-for (f, fp, op) = ((:cumsum, :cumsum_pairwise, :+),
-                   (:cumprod, :cumprod_pairwise, :*) )
-    # in-place cumsum of c = s+v(i1:n), using pairwise summation as for sum
-    @eval function ($fp)(v::AbstractVector, c::AbstractVector, s, i1, n)
+for (f, fp, op) = ((:cumsum, :cumsum_pairwise!, :+),
+                   (:cumprod, :cumprod_pairwise!, :*) )
+    # in-place cumsum of c = s+v[range(i1,n)], using pairwise summation
+    @eval function ($fp){T}(v::AbstractVector, c::AbstractVector{T}, s, i1, n)
+        local s_::T # for sum(v[range(i1,n)]), i.e. sum without s
         if n < 128
-            @inbounds c[i1] = ($op)(s, v[i1])
+            @inbounds s_ = v[i1]
+            @inbounds c[i1] = ($op)(s, s_)
             for i = i1+1:i1+n-1
-                @inbounds c[i] = $(op)(c[i-1], v[i])
+                @inbounds s_ = $(op)(s_, v[i])
+                @inbounds c[i] = $(op)(s, s_)
             end
         else
-            n2 = div(n,2)
-            ($fp)(v, c, s, i1, n2)
-            ($fp)(v, c, c[(i1+n2)-1], i1+n2, n-n2)
+            n2 = n >> 1
+            s_ = ($fp)(v, c, s, i1, n2)
+            s_ = $(op)(s_, ($fp)(v, c, s + s_, i1+n2, n-n2))
         end
+        return s_
     end
 
     @eval function ($f)(v::AbstractVector)

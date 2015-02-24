@@ -625,7 +625,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               might be passed.
               Since every type x has its own type Type{x}, this would be
               excessive specialization for an Any slot.
-              
+
               TypeConstructors are problematic because they can be alternate
               representations of any type. Extensionally, TC == TC.body, but
               typeof(TC) != typeof(TC.body). This creates an ambiguity:
@@ -633,7 +633,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
               x::TypeConstructor matches the first but not the second, while
               also matching all other TypeConstructors. This means neither
               Type{TC} nor TypeConstructor is more specific.
-              
+
               To solve this, we identify "kind slots", which are slots
               for which some definition specifies a kind (e.g. DataType).
               Those tend to be in reflective functions that look at types
@@ -1028,16 +1028,16 @@ void print_func_loc(JL_STREAM *s, jl_lambda_info_t *li);
 
 /*
   warn about ambiguous method priorities
-  
+
   the relative priority of A and B is ambiguous if
   !subtype(A,B) && !subtype(B,A) && no corresponding tuple
   elements are disjoint.
-  
+
   for example, (AbstractArray, AbstractMatrix) and (AbstractMatrix, AbstractArray) are ambiguous.
   however, (AbstractArray, AbstractMatrix, Foo) and (AbstractMatrix, AbstractArray, Bar) are fine
   since Foo and Bar are disjoint, so there would be no confusion over
   which one to call.
-  
+
   There is also this kind of ambiguity: foo{T,S}(T, S) vs. foo(Any,Any)
   In this case jl_types_equal() is true, but one is jl_type_morespecific
   or jl_type_match_morespecific than the other.
@@ -1396,7 +1396,7 @@ JL_CALLABLE(jl_apply_generic)
     jl_function_t *mfunc = jl_method_table_assoc_exact(mt, args, nargs);
 
     if (mfunc != jl_bottom_func) {
-        if (mfunc->linfo != NULL && 
+        if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
@@ -1478,7 +1478,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
     else
         mfunc = jl_method_table_assoc_exact(m->invokes, args, nargs);
     if (mfunc != jl_bottom_func) {
-        if (mfunc->linfo != NULL && 
+        if (mfunc->linfo != NULL &&
             (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
@@ -1493,7 +1493,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         jl_tuple_t *tpenv=jl_null;
         jl_tuple_t *newsig=NULL;
         jl_tuple_t *tt=NULL;
-        JL_GC_PUSH3(&env, &newsig, &tt);
+        JL_GC_PUSH3(&tpenv, &newsig, &tt);
 
         if (m->invokes == JL_NULL) {
             m->invokes = new_method_table(mt->name);
@@ -1505,7 +1505,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
 
         newsig = (jl_tuple_t*)m->sig;
 
-        if (env != (jl_value_t*)jl_false) {
+        if (m->tvars != jl_null) {
             jl_value_t *ti =
                 lookup_match((jl_value_t*)tt, (jl_value_t*)m->sig, &tpenv, m->tvars);
             assert(ti != (jl_value_t*)jl_bottom_type);

@@ -50,17 +50,17 @@ For developers who need to wrap C libraries so that they can be called from Juli
 
 Julia's documentation is stored in the `doc` directory, and like everything else can be modified using `git`. However, for small changes one can also use GitHub's web interface:
 
-- Navigate to https://github.com/JuliaLang/julia 
-- Click `doc` 
+- Navigate to https://github.com/JuliaLang/julia
+- Click `doc`
 - If you want to modify an entry in the help for Julia's standard library, click `stdlib`
 - Pick the file you want to edit (for example, `base.rst`)
 - Select the `master` branch (if not browsing it already)
-- Click "Edit" 
-- Click on the icon that looks like a fullscreen symbol ("Zen" mode) 
+- Click "Edit"
+- Click on the icon that looks like a fullscreen symbol ("Zen" mode)
 - Search for the function you want to change
-- Make your changes 
-- Exit Zen mode 
-- Provide a title, and optionally a longer description of your change 
+- Make your changes
+- Exit Zen mode
+- Provide a title, and optionally a longer description of your change
 - Submit your change
 
 
@@ -78,7 +78,17 @@ Note: These instructions are for adding functionality to the base library. Usual
 
  3. Include your tests in `test/Makefile` and `test/runtests.jl`.
 
-Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git). Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a `Good to merge` message.
+Build as usual, and do `make clean testall` to test your contribution. If your contribution includes changes to Makefiles or external dependencies, make sure you can build Julia from a clean tree using `git clean -fdx` or equivalent (be careful – this command will delete any files lying around that aren't checked into git).
+
+Note: You can run specific test files with `make`:
+
+    make test-bitarray
+
+or with the `runtests.jl` script, e.g. to run `test/bitarray.jl` and `test/math.jl`:
+
+    ./usr/bin/julia test/runtests.jl bitarray math
+
+Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request with a [`Good to merge` message](http://blog.travis-ci.com/2012-09-04-pull-requests-just-got-even-more-awesome/).
 
 ##### General Formatting Guidelines For Julia code contributions
 

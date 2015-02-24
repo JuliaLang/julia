@@ -1,8 +1,8 @@
 .. _stdlib-linalg:
 
-*****************
- Linear Algebra
-****************
+**************
+Linear Algebra
+**************
 
 Standard Functions
 ------------------
@@ -69,7 +69,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
       ``F[:L]``   ``L`` (lower triangular) part of ``LU``    ✓                                     ✓
       ``F[:U]``   ``U`` (upper triangular) part of ``LU``    ✓                                     ✓
       ``F[:p]``   (right) permutation ``Vector``             ✓                                     ✓
-      ``F[:P]``   (right) permutation ``Matrix``             ✓              
+      ``F[:P]``   (right) permutation ``Matrix``             ✓
       ``F[:q]``   left permutation ``Vector``                                                      ✓
       ``F[:Rs]``  ``Vector`` of scaling factors                                                    ✓
       ``F[:(:)]`` ``(L,U,p,q,Rs)`` components                                                      ✓
@@ -111,7 +111,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: qr(A, [pivot=false,][thin=true]) -> Q, R, [p]
 
-   Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that ``R`` is not extended with zeros when the full ``Q`` is requested. 
+   Compute the (pivoted) QR factorization of ``A`` such that either ``A = Q*R`` or ``A[:,p] = Q*R``. Also see ``qrfact``. The default is to compute a thin factorization. Note that ``R`` is not extended with zeros when the full ``Q`` is requested.
 
 .. function:: qrfact(A,[pivot=false]) -> F
 
@@ -189,7 +189,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Computes eigenvalues and eigenvectors of ``A``. See :func:`eigfact` for
    details on the ``balance`` keyword argument.
-   
+
    .. doctest::
 
       julia> eig([1.0 0.0 0.0; 0.0 3.0 0.0; 0.0 0.0 18.0])
@@ -198,7 +198,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
        1.0  0.0  0.0
        0.0  1.0  0.0
        0.0  0.0  1.0)
-   
+
    ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
    factorization to a tuple; where possible, using :func:`eigfact` is
    recommended.
@@ -206,7 +206,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: eig(A, B) -> D, V
 
    Computes generalized eigenvalues and vectors of ``A`` with respect to ``B``.
-    
+
    ``eig`` is a wrapper around :func:`eigfact`, extracting all parts of the
    factorization to a tuple; where possible, using :func:`eigfact` is
    recommended.
@@ -248,7 +248,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    factorization object ``F`` which contains the eigenvalues in ``F[:values]``
    and the eigenvectors in the columns of the matrix ``F[:vectors]``. (The
    ``k``th eigenvector can be obtained from the slice ``F[:vectors][:, k]``.)
- 
+
    The following functions are available for ``Eigen`` objects: ``inv``,
    ``det``.
 
@@ -485,7 +485,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: linreg(x, y) -> [a; b]
 
-   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``. 
+   Linear Regression. Returns ``a`` and ``b`` such that ``a+b*x`` is the closest line to the given points ``(x,y)``. In other words, this function determines parameters ``[a, b]`` that minimize the squared error between ``y`` and ``a+b*x``.
 
    **Example**::
 
@@ -506,7 +506,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: lyap(A, C)
 
-   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other. 
+   Computes the solution ``X`` to the continuous Lyapunov equation ``AX + XA' + C = 0``, where no eigenvalue of ``A`` has a zero real part and no two eigenvalues are negative complex conjugates of each other.
 
 .. function:: sylvester(A, B, C)
 
@@ -570,8 +570,8 @@ Linear algebra functions in Julia are largely implemented by calling functions f
     * ``v0``: starting vector from which to start the iterations
 
    ``eigs`` returns the ``nev`` requested eigenvalues in ``d``, the corresponding Ritz vectors ``v`` (only if ``ritzvec=true``), the number of converged eigenvalues ``nconv``, the number of iterations ``niter`` and the number of matrix vector multiplications ``nmult``, as well as the final residual vector ``resid``.
-   
-   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``. 
+
+   .. note:: The ``sigma`` and ``which`` keywords interact: the description of eigenvalues searched for by ``which`` do _not_ necessarily refer to the eigenvalues of ``A``, but rather the linear operator constructed by the specification of the iteration mode implied by ``sigma``.
 
       =============== ================================== ==================================
       ``sigma``       iteration mode                     ``which`` refers to eigenvalues of
@@ -822,16 +822,16 @@ Usually a function has 4 methods defined, one each for ``Float64``,
 
 .. function:: trsv!(ul, tA, dA, A, b)
 
-   Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two 
-   variants determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` 
-   used).  ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed 
+   Overwrite ``b`` with the solution to ``A*x = b`` or one of the other two
+   variants determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A``
+   used).  ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed
    to be all ones).  Returns the updated ``b``.
 
 .. function:: trsv(ul, tA, dA, A, b)
 
-   Returns the solution to ``A*x = b`` or one of the other two variants 
-   determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` is used.) 
-   ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be 
+   Returns the solution to ``A*x = b`` or one of the other two variants
+   determined by ``tA`` (transpose A) and ``ul`` (triangle of ``A`` is used.)
+   ``dA`` indicates if ``A`` is unit-triangular (the diagonal is assumed to be
    all ones).
 
 

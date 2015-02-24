@@ -102,7 +102,7 @@ DLLEXPORT void *jl_eval_string(char *str)
 
 DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_is_null(jl_exception_in_transit) ? NULL : 
+    return jl_is_null(jl_exception_in_transit) ? NULL :
         jl_exception_in_transit;
 }
 

@@ -262,16 +262,16 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
-                          &m, &n, A, &lda, 
-                          jpvt, tau, work, &lwork, 
+                          &m, &n, A, &lda,
+                          jpvt, tau, work, &lwork,
                           rwork, info)
                 else
                     ccall(($(blasfunc(geqp3)), liblapack), Void,
                           (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{BlasInt}),
-                          &m, &n, A, &lda, 
-                          jpvt, tau, work, 
+                          &m, &n, A, &lda,
+                          jpvt, tau, work,
                           &lwork, info)
                 end
                 @lapackerror
@@ -293,10 +293,10 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             if n > 0
                 info = Array(BlasInt, 1)
                 ccall(($(blasfunc(geqrt)), liblapack), Void,
-                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}),
-                     &m, &n, &nb, A, 
+                     &m, &n, &nb, A,
                      &lda, T, &max(1,stride(T,2)), work,
                      info)
                 @lapackerror
@@ -409,14 +409,14 @@ function geqp3!{T<:BlasFloat}(A::StridedMatrix{T})
 end
 
 ## Complete orthogonaliztion tools
-for (tzrzf, ormrz, elty) in 
+for (tzrzf, ormrz, elty) in
     ((:dtzrzf_,:dormrz_,:Float64),
      (:stzrzf_,:sormrz_,:Float32),
      (:ztzrzf_,:zunmrz_,:Complex128),
      (:ctzrzf_,:cunmrz_,:Complex64))
     @eval begin
  #      *       SUBROUTINE ZTZRZF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
- #   22 * 
+ #   22 *
  #   23 *       .. Scalar Arguments ..
  #   24 *       INTEGER            INFO, LDA, LWORK, M, N
  #   25 *       ..
@@ -434,7 +434,7 @@ for (tzrzf, ormrz, elty) in
                 ccall(($(blasfunc(tzrzf)), liblapack), Void,
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &m, &n, A, &lda, 
+                    &m, &n, A, &lda,
                     tau, work, &lwork, info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -446,7 +446,7 @@ for (tzrzf, ormrz, elty) in
         end
    # 21 *       SUBROUTINE ZUNMRZ( SIDE, TRANS, M, N, K, L, A, LDA, TAU, C, LDC,
    # 22 *                          WORK, LWORK, INFO )
-   # 23 * 
+   # 23 *
    # 24 *       .. Scalar Arguments ..
    # 25 *       CHARACTER          SIDE, TRANS
    # 26 *       INTEGER            INFO, K, L, LDA, LDC, LWORK, M, N
@@ -468,9 +468,9 @@ for (tzrzf, ormrz, elty) in
                      Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{BlasInt}),
-                    &side, &trans, &m, &n, 
-                    &k, &l, A, &lda, 
-                    tau, C, &ldc, work, 
+                    &side, &trans, &m, &n,
+                    &k, &l, A, &lda,
+                    tau, C, &ldc, work,
                     &lwork, info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -603,7 +603,7 @@ for (gesvx, elty) in
         #     SUBROUTINE DGESVX( FACT, TRANS, N, NRHS, A, LDA, AF, LDAF, IPIV,
         #                        EQUED, R, C, B, LDB, X, LDX, RCOND, FERR, BERR,
         #                        WORK, IWORK, INFO )
-        # 
+        #
         #     .. Scalar Arguments ..
         #     CHARACTER          EQUED, FACT, TRANS
         #     INTEGER            INFO, LDA, LDAF, LDB, LDX, N, NRHS
@@ -613,7 +613,7 @@ for (gesvx, elty) in
         #     INTEGER            IPIV( * ), IWORK( * )
         #     DOUBLE PRECISION   A( LDA, * ), AF( LDAF, * ), B( LDB, * ),
         #    $                   BERR( * ), C( * ), FERR( * ), R( * ),
-        #    $                   WORK( * ), X( LDX, * 
+        #    $                   WORK( * ), X( LDX, *
         #
         function gesvx!(fact::BlasChar, trans::BlasChar, A::StridedMatrix{$elty},
                AF::StridedMatrix{$elty}, ipiv::Vector{BlasInt}, equed::BlasChar,
@@ -637,7 +637,7 @@ for (gesvx, elty) in
               &fact, &trans, &n, &nrhs, A, &lda, AF, &ldaf, ipiv, &equed, R, C, B,
               &ldb, X, &n, rcond, ferr, berr, work, iwork, info)
             @lapackerror
-            if info[1] == n+1 warn("Matrix is singular to working precision.") 
+            if info[1] == n+1 warn("Matrix is singular to working precision.")
             else @assertnonsingular
             end
             #WORK(1) contains the reciprocal pivot growth factor norm(A)/norm(U)
@@ -706,7 +706,7 @@ for (gesvx, elty, relty) in
     end
  end
 
-for (gelsd, gelsy, elty) in 
+for (gelsd, gelsy, elty) in
     ((:dgelsd_,:dgelsy_,:Float64),
      (:sgelsd_,:sgelsy_,:Float32))
     @eval begin
@@ -779,9 +779,9 @@ for (gelsd, gelsy, elty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
-                    &m, &n, &nrhs, A, 
-                    &lda, newB, &ldb, jpvt, 
-                    &rcond, rnk, work, &lwork, 
+                    &m, &n, &nrhs, A,
+                    &lda, newB, &ldb, jpvt,
+                    &rcond, rnk, work, &lwork,
                     info)
                 if i == 1
                     lwork = blas_int(work[1])
@@ -793,7 +793,7 @@ for (gelsd, gelsy, elty) in
         end
     end
 end
-for (gelsd, gelsy, elty, relty) in 
+for (gelsd, gelsy, elty, relty) in
     ((:zgelsd_,:zgelsy_,:Complex128,:Float64),
      (:cgelsd_,:cgelsy_,:Complex64,:Float32))
     @eval begin
@@ -870,9 +870,9 @@ for (gelsd, gelsy, elty, relty) in
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$relty}, Ptr{BlasInt}),
-                    &m, &n, &nrhs, A, 
-                    &lda, newB, &ldb, jpvt, 
-                    &rcond, rnk, work, &lwork, 
+                    &m, &n, &nrhs, A,
+                    &lda, newB, &ldb, jpvt,
+                    &rcond, rnk, work, &lwork,
                     rwork, info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -966,7 +966,7 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                 if cmplx
                     ccall(($(blasfunc(geev)), liblapack), Void,
                           (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
-                           Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, 
+                           Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                            Ptr{$relty}, Ptr{BlasInt}),
                           &jobvl, &jobvr, &n, A, &max(1,stride(A,2)), W, VL, &n, VR, &n,
@@ -1138,11 +1138,11 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &jobu, &jobv, &jobq, &m, 
-                    &n, &p, k, l, 
-                    A, &lda, B, &ldb, 
-                    alpha, beta, U, &ldu, 
-                    V, &ldv, Q, &ldq, 
+                    &jobu, &jobv, &jobq, &m,
+                    &n, &p, k, l,
+                    A, &lda, B, &ldb,
+                    alpha, beta, U, &ldu,
+                    V, &ldv, Q, &ldq,
                     work, rwork, iwork, info)
             else
                 ccall(($(blasfunc(ggsvd)), liblapack), Void,
@@ -1152,11 +1152,11 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &jobu, &jobv, &jobq, &m, 
-                    &n, &p, k, l, 
-                    A, &lda, B, &ldb, 
-                    alpha, beta, U, &ldu, 
-                    V, &ldv, Q, &ldq, 
+                    &jobu, &jobv, &jobq, &m,
+                    &n, &p, k, l,
+                    A, &lda, B, &ldb,
+                    alpha, beta, U, &ldu,
+                    V, &ldv, Q, &ldq,
                     work, iwork, info)
             end
             @lapackerror
@@ -1170,14 +1170,14 @@ for (geev, gesvd, gesdd, ggsvd, elty, relty) in
     end
 end
 ## Expert driver and generalized eigenvlua problem
-for (geevx, ggev, elty) in 
+for (geevx, ggev, elty) in
     ((:dgeevx_,:dggev_,:Float64),
      (:sgeevx_,:sggev_,:Float32))
     @eval begin
    #     SUBROUTINE DGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, WR, WI,
    #                          VL, LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM,
    #                          RCONDE, RCONDV, WORK, LWORK, IWORK, INFO )
-   # 
+   #
    #       .. Scalar Arguments ..
    #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
    #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
@@ -1215,11 +1215,11 @@ for (geevx, ggev, elty) in
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                   &balanc, &jobvl, &jobvr, &sense, 
-                   &n, A, &lda, wr, 
-                   wi, VL, &max(1,ldvl), VR, 
-                   &max(1,ldvr), ilo, ihi, scale, 
-                   abnrm, rconde, rcondv, work, 
+                   &balanc, &jobvl, &jobvr, &sense,
+                   &n, A, &lda, wr,
+                   wi, VL, &max(1,ldvl), VR,
+                   &max(1,ldvr), ilo, ihi, scale,
+                   abnrm, rconde, rcondv, work,
                    &lwork, iwork, info)
             lwork = convert(BlasInt, work[1])
             work = Array($elty, lwork)
@@ -1261,10 +1261,10 @@ for (geevx, ggev, elty) in
                      Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
-                    &jobvl, &jobvr, &n, A, 
-                    &lda, B, &ldb, alphar, 
-                    alphai, beta, vl, &ldvl, 
-                    vr, &ldvr, work, &lwork, 
+                    &jobvl, &jobvr, &n, A,
+                    &lda, B, &ldb, alphar,
+                    alphai, beta, vl, &ldvl,
+                    vr, &ldvr, work, &lwork,
                     info)
                 if i == 1
                     lwork = blas_int(work[1])
@@ -1276,14 +1276,14 @@ for (geevx, ggev, elty) in
         end
     end
 end
-for (geevx, ggev, elty, relty) in 
+for (geevx, ggev, elty, relty) in
     ((:zgeevx_,:zggev_,:Complex128,:Float64),
      (:cgeevx_,:cggev_,:Complex64,:Float32))
     @eval begin
   #     SUBROUTINE ZGEEVX( BALANC, JOBVL, JOBVR, SENSE, N, A, LDA, W, VL,
   #                          LDVL, VR, LDVR, ILO, IHI, SCALE, ABNRM, RCONDE,
   #                          RCONDV, WORK, LWORK, RWORK, INFO )
-  # 
+  #
   #       .. Scalar Arguments ..
   #       CHARACTER          BALANC, JOBVL, JOBVR, SENSE
   #       INTEGER            IHI, ILO, INFO, LDA, LDVL, LDVR, LWORK, N
@@ -1316,15 +1316,15 @@ for (geevx, ggev, elty, relty) in
             ccall(($(blasfunc(geevx)), liblapack), Void,
                   (Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8}, Ptr{Uint8},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
-                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty}, 
-                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, 
+                   Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                   Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty},
+                   Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$relty}, Ptr{BlasInt}),
-                   &balanc, &jobvl, &jobvr, &sense, 
-                   &n, A, &lda, w, 
-                   VL, &max(1,ldvl), VR, &max(1,ldvr), 
-                   ilo, ihi, scale, abnrm, 
-                   rconde, rcondv, work, &lwork, 
+                   &balanc, &jobvl, &jobvr, &sense,
+                   &n, A, &lda, w,
+                   VL, &max(1,ldvl), VR, &max(1,ldvr),
+                   ilo, ihi, scale, abnrm,
+                   rconde, rcondv, work, &lwork,
                    rwork, info)
             lwork = convert(BlasInt, work[1])
             work = Array($elty, lwork)
@@ -1363,12 +1363,12 @@ for (geevx, ggev, elty, relty) in
                 ccall(($(blasfunc(ggev)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
+                     Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                      Ptr{BlasInt}),
-                    &jobvl, &jobvr, &n, A, 
-                    &lda, B, &ldb, alpha, 
-                    beta, vl, &ldvl, vr, 
+                    &jobvl, &jobvr, &n, A,
+                    &lda, B, &ldb, alpha,
+                    beta, vl, &ldvl, vr,
                     &ldvr, work, &lwork, rwork,
                     info)
                 if i == 1
@@ -1388,7 +1388,7 @@ for (laic1, elty) in
      (:slaic1_,:Float32))
     @eval begin
    # 21 *       SUBROUTINE DLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
-   # 22 * 
+   # 22 *
    # 23 *       .. Scalar Arguments ..
    # 24 *       INTEGER            J, JOB
    # 25 *       DOUBLE PRECISION   C, GAMMA, S, SEST, SESTPR
@@ -1405,8 +1405,8 @@ for (laic1, elty) in
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                  Ptr{$elty}),
-                &job, &j, x, &sest, 
-                w, &gamma, sestpr, s, 
+                &job, &j, x, &sest,
+                w, &gamma, sestpr, s,
                 c)
             sestpr[1], s[1], c[1]
         end
@@ -1417,7 +1417,7 @@ for (laic1, elty, relty) in
      (:claic1_,:Complex64,:Float32))
     @eval begin
    # 21 *       SUBROUTINE ZLAIC1( JOB, J, X, SEST, W, GAMMA, SESTPR, S, C )
-   # 22 * 
+   # 22 *
    # 23 *       .. Scalar Arguments ..
    # 24 *       INTEGER            J, JOB
    # 25 *       DOUBLE PRECISION   SEST, SESTPR
@@ -1435,8 +1435,8 @@ for (laic1, elty, relty) in
                 (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$relty},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$relty}, Ptr{$elty},
                  Ptr{$elty}),
-                &job, &j, x, &sest, 
-                w, &gamma, sestpr, s, 
+                &job, &j, x, &sest,
+                w, &gamma, sestpr, s,
                 c)
             sestpr[1], s[1], c[1]
         end
@@ -1545,7 +1545,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                       &m, &n, &k, A, &max(1,stride(A,2)), tau, work, &lwork, info)
                 @lapackerror
-                if lwork < 0 
+                if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -1573,11 +1573,11 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                 ccall(($(blasfunc(orgqr)), liblapack), Void,
                       (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                        Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, &k, A, 
-                      &max(1,stride(A,2)), tau, work, &lwork, 
+                      &m, &n, &k, A,
+                      &max(1,stride(A,2)), tau, work, &lwork,
                       info)
                 @lapackerror
-                if lwork < 0 
+                if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -1602,7 +1602,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             nA    = size(A, 2)
             k     = length(tau)
             if side == 'L' && m != nA throw(DimensionMismatch("")) end
-            if side == 'R' && n != nA throw(DimensionMismatch("")) end            
+            if side == 'R' && n != nA throw(DimensionMismatch("")) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
@@ -1615,7 +1615,7 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
                       &side, &trans, &m, &n, &k, A, &max(1,stride(A,2)), tau,
                       C, &max(1,stride(C,2)), work, &lwork, info)
                 @lapackerror
-                if lwork < 0 
+                if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -1636,23 +1636,23 @@ for (orglq, orgqr, ormlq, ormqr, gemqrt, elty) in
             mA    = size(A, 1)
             k     = length(tau)
             if side == 'L' && m != mA throw(DimensionMismatch("")) end
-            if side == 'R' && n != mA throw(DimensionMismatch("")) end            
+            if side == 'R' && n != mA throw(DimensionMismatch("")) end
             if (side == 'L' && k > m) || (side == 'R' && k > n) throw(DimensionMismatch("invalid number of reflectors")) end
             work  = Array($elty, 1)
             lwork = blas_int(-1)
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(ormqr)), liblapack), Void,
-                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, 
-                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, 
-                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                      (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt},
+                       Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
+                       Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                        Ptr{BlasInt}),
-                      &side, &trans, &m, &n, 
+                      &side, &trans, &m, &n,
                       &k, A, &max(1,stride(A,2)), tau,
-                      C, &max(1, stride(C,2)), work, &lwork, 
+                      C, &max(1, stride(C,2)), work, &lwork,
                       info)
                 @lapackerror
-                if lwork < 0 
+                if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
@@ -1780,9 +1780,9 @@ for (posv, potrf, potri, potrs, pstrf, elty, rtyp) in
             ldb = max(1,stride(B,2))
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(potrs)), liblapack), Void,
-                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, 
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                     Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                   &uplo, &n, &nrhs, A, 
+                   &uplo, &n, &nrhs, A,
                    &lda, B, &ldb, info)
             @lapackerror
             return B
@@ -2056,7 +2056,7 @@ for (trcon, trevc, trrfs, elty) in
             iwork=Array(BlasInt, n)
             info=Array(BlasInt, 1)
             ccall(($(blasfunc(trrfs)), liblapack), Void,
-                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                 &uplo, &trans, &diag, &n,
@@ -2170,8 +2170,8 @@ for (trcon, trevc, trrfs, elty, relty) in
             rwork=Array($relty, n)
             info=Array(BlasInt, 1)
             ccall(($(blasfunc(trrfs)), liblapack), Void,
-                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
-                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                  Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty}, Ptr{BlasInt}),
                 &uplo, &trans, &diag, &n,
                 &nrhs, A, &max(1,stride(A,2)), B, &max(1,stride(B,2)), X, &max(1,stride(X,2)),
@@ -2202,7 +2202,7 @@ for (stev, stebz, stegr, stein, elty) in
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                   &job, &n, dv, ev, Zmat, &n, work, info)
-            @lapackerror 
+            @lapackerror
             dv, Zmat
         end
         #*  DSTEBZ computes the eigenvalues of a symmetric tridiagonal
@@ -2227,10 +2227,10 @@ for (stev, stebz, stegr, stein, elty) in
                 Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                 Ptr{BlasInt}, Ptr{BlasInt}),
-                &range, &order, &n, &vl, 
-                &vu, &il, &iu, &abstol, 
+                &range, &order, &n, &vl,
+                &vu, &il, &iu, &abstol,
                 dv, ev, m, nsplit,
-                w, iblock, isplit, work, 
+                w, iblock, isplit, work,
                 iwork, info)
                 @lapackerror
             w[1:m[1]], iblock[1:m[1]], isplit[1:nsplit[1]]
@@ -2324,7 +2324,7 @@ for (stev, stebz, stegr, stein, elty) in
                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{BlasInt}),
                 &n, dv, ev, &m, w, iblock, isplit, z, &ldz, work, iwork, ifail, info)
-            
+
             @lapackerror
             all(ifail.==0) || error("failed to converge eigenvectors:\n$(nonzeros(ifail))")
             z
@@ -2332,7 +2332,7 @@ for (stev, stebz, stegr, stein, elty) in
     end
 end
 stegr!(jobz::BlasChar, dv::Vector, ev::Vector) = stegr!(jobz, 'A', dv, ev, 0.0, 0.0, 0, 0)
-        
+
 # Allow user to skip specification of iblock and isplit
 stein!(dv::Vector, ev::Vector, w_in::Vector)=stein!(dv, ev, w_in, zeros(BlasInt,0), zeros(BlasInt,0))
 # Allow user to specify just one eigenvector to get in stein!
@@ -2476,7 +2476,7 @@ for (syconv, sysv, sytrf, sytri, sytrs, elty) in
             A
         end
         #       SUBROUTINE DSYTRS( UPLO, N, NRHS, A, LDA, IPIV, B, LDB, INFO )
-        #                        
+        #
         #       .. Scalar Arguments ..
         #       CHARACTER          UPLO
         #       INTEGER            INFO, LDA, LDB, N, NRHS
@@ -2506,7 +2506,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
      (:csyconv_,:chesv_,:chetrf_,:chetri_,:chetrs_,:Complex64, :Float32))
     @eval begin
    #   SUBROUTINE ZSYCONV( UPLO, WAY, N, A, LDA, IPIV, WORK, INFO )
-   # 22 * 
+   # 22 *
    # 23 *       .. Scalar Arguments ..
    # 24 *       CHARACTER          UPLO, WAY
    # 25 *       INTEGER            INFO, LDA, N
@@ -2655,7 +2655,7 @@ for (syconv, hesv, hetrf, hetri, hetrs, elty, relty) in
                   (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
                   &uplo, &n, &size(B,2), A, &max(1,stride(A,2)), ipiv, B, &max(1,stride(B,2)), info)
-            @lapackerror 
+            @lapackerror
             B
         end
     end
@@ -2842,14 +2842,14 @@ for (syev, syevr, sygvd, elty) in
         # *     ..
         # *     .. Array Arguments ..
         #       INTEGER            ISUPPZ( * ), IWORK( * )
-        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )    
+        #       DOUBLE PRECISION   A( LDA, * ), W( * ), WORK( * ), Z( LDZ, * )
         function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
             chkstride1(A)
             n = chksquare(A)
             if range == 'I'
                 1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
             end
-            if range == 'V' 
+            if range == 'V'
                 vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
             end
             lda = max(1,stride(A,2))
@@ -2870,17 +2870,17 @@ for (syev, syevr, sygvd, elty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
-                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{BlasInt}),
-                    &jobz, &range, &uplo, &n, 
-                    A, &lda, &vl, &vu, 
+                    &jobz, &range, &uplo, &n,
+                    A, &lda, &vl, &vu,
                     &il, &iu, &abstol, m,
                     w, Z, &ldz, isuppz,
-                    work, &lwork, iwork, &liwork, 
+                    work, &lwork, iwork, &liwork,
                     info)
                 @lapackerror
                 if lwork < 0
@@ -2891,8 +2891,8 @@ for (syev, syevr, sygvd, elty) in
                 end
             end
             w[1:m[1]], Z[:,1:(jobz == 'V' ? m[1] : 0)]
-        end    
-        syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)   
+        end
+        syevr!(jobz::BlasChar, A::StridedMatrix{$elty}) = syevr!(jobz, 'A', 'U', A, 0.0, 0.0, 0, 0, -1.0)
         # Generalized eigenproblem
 #           SUBROUTINE DSYGVD( ITYPE, JOBZ, UPLO, N, A, LDA, B, LDB, W, WORK,
 #      $                   LWORK, IWORK, LIWORK, INFO )
@@ -2920,9 +2920,9 @@ for (syev, syevr, sygvd, elty) in
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                      Ptr{BlasInt}, Ptr{BlasInt}),
-                    &itype, &jobz, &uplo, &n, 
-                    A, &lda, B, &ldb, 
-                    w, work, &lwork, iwork, 
+                    &itype, &jobz, &uplo, &n,
+                    A, &lda, B, &ldb,
+                    w, work, &lwork, iwork,
                     &liwork, info)
                 if i == 1
                     lwork = blas_int(work[1])
@@ -2938,11 +2938,11 @@ for (syev, syevr, sygvd, elty) in
     end
 end
 # Hermitian eigensolvers
-for (syev, syevr, sygvd, elty, relty) in 
+for (syev, syevr, sygvd, elty, relty) in
     ((:zheev_,:zheevr_,:zhegvd_,:Complex128,:Float64),
      (:cheev_,:cheevr_,:chegvd_,:Complex64,:Float32))
     @eval begin
-# SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )        
+# SUBROUTINE ZHEEV( JOBZ, UPLO, N, A, LDA, W, WORK, LWORK, RWORK, INFO )
 # *     .. Scalar Arguments ..
 #       CHARACTER          JOBZ, UPLO
 #       INTEGER            INFO, LDA, LWORK, N
@@ -2983,14 +2983,14 @@ for (syev, syevr, sygvd, elty, relty) in
 # *     .. Array Arguments ..
 #       INTEGER            ISUPPZ( * ), IWORK( * )
 #       DOUBLE PRECISION   RWORK( * ), W( * )
-#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * ) 
+#       COMPLEX*16         A( LDA, * ), WORK( * ), Z( LDZ, * )
         function syevr!(jobz::BlasChar, range::BlasChar, uplo::BlasChar, A::StridedMatrix{$elty}, vl::FloatingPoint, vu::FloatingPoint, il::Integer, iu::Integer, abstol::FloatingPoint)
             chkstride1(A)
             n = chksquare(A)
             if range == 'I'
                 1 <= il <= iu <= n || throw(ArgumentError("illegal choice of eigenvalue indices"))
             end
-            if range == 'V' 
+            if range == 'V'
                 vl < vu || throw(ArgumentError("lower boundary must be less than upper boundary"))
             end
             lda = max(1,stride(A,2))
@@ -3013,14 +3013,14 @@ for (syev, syevr, sygvd, elty, relty) in
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(syevr)), liblapack), Void,
-                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, 
+                    (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt},
                             Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                        &jobz, &range, &uplo, &n, 
-                    A, &lda, &vl, &vu, 
+                        &jobz, &range, &uplo, &n,
+                    A, &lda, &vl, &vu,
                     &il, &iu, &abstol, m,
                     w, Z, &ldz, isuppz,
                     work, &lwork, rwork, &lrwork,
@@ -3073,9 +3073,9 @@ for (syev, syevr, sygvd, elty, relty) in
                      Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{$relty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty},
                      Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}),
-                    &itype, &jobz, &uplo, &n, 
-                    A, &lda, B, &ldb, 
-                    w, work, &lwork, rwork, 
+                    &itype, &jobz, &uplo, &n,
+                    A, &lda, B, &ldb,
+                    w, work, &lwork, rwork,
                     &lrwork, iwork, &liwork, info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -3117,7 +3117,7 @@ for (bdsqr, relty, elty) in
             ccall(($(blasfunc(bdsqr)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                 Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}), 
+                Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
                 &uplo, &n, ncvt, &nru, &ncc,
                 d, e_, vt, &ldvt, u,
                 &ldu, c, &ldc, work, info)
@@ -3179,7 +3179,7 @@ for (bdsdc, elty) in
             q, iq, work, iwork, info)
 
             @lapackerror
-            compq=='N' ? d : (compq=='P' ? (d, q, iq) : (u, d, vt')) 
+            compq=='N' ? d : (compq=='P' ? (d, q, iq) : (u, d, vt'))
         end
     end
 end
@@ -3208,7 +3208,7 @@ for (gecon, elty) in
             iwork = Array(BlasInt, n)
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(gecon)), liblapack), Void,
-                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                  (Ptr{Uint8}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, iwork,
@@ -3242,7 +3242,7 @@ for (gecon, elty, relty) in
             rwork = Array($relty, 2n)
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(gecon)), liblapack), Void,
-                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                  (Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                    Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$relty},
                    Ptr{BlasInt}),
                   &normtype, &n, A, &lda, &anorm, rcond, work, rwork,
@@ -3277,8 +3277,8 @@ for (gehrd, elty) in
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
-                    &n, &ilo, &ihi, A, 
-                    &max(1,n), tau, work, &lwork, 
+                    &n, &ilo, &ihi, A,
+                    &max(1,n), tau, work, &lwork,
                     info)
                 @lapackerror
                 if lwork < 0
@@ -3316,8 +3316,8 @@ for (orghr, elty) in
                     (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                      Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt},
                      Ptr{BlasInt}),
-                    &n, &ilo, &ihi, A, 
-                    &max(1,n), tau, work, &lwork, 
+                    &n, &ilo, &ihi, A,
+                    &max(1,n), tau, work, &lwork,
                     info)
                 @lapackerror
                 if lwork < 0
@@ -3359,9 +3359,9 @@ for (gees, gges, elty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &'N', [], &n, 
+                    &jobvs, &'N', [], &n,
                         A, &max(1, n), sdim, wr,
-                        wi, vs, &ldvs, work, 
+                        wi, vs, &ldvs, work,
                         &lwork, [], info)
                 @lapackerror
                 if lwork < 0
@@ -3403,11 +3403,11 @@ for (gees, gges, elty) in
                         Ptr{$elty}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
                         Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{Void},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', [], 
-                    &n, A, &max(1,n), B, 
-                    &max(1,n), &sdim, alphar, alphai, 
-                    beta, vsl, &ldvsl, vsr, 
-                    &ldvsr, work, &lwork, [], 
+                    &jobvsl, &jobvsr, &'N', [],
+                    &n, A, &max(1,n), B,
+                    &max(1,n), &sdim, alphar, alphai,
+                    beta, vsl, &ldvsl, vsr,
+                    &ldvsr, work, &lwork, [],
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -3447,11 +3447,11 @@ for (gees, gges, elty, relty) in
                 ccall(($(blasfunc(gees)), liblapack), Void,
                     (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{Void}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty},
-                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, 
+                        Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$relty}, Ptr{Void}, Ptr{BlasInt}),
-                    &jobvs, &sort, [], &n, 
+                    &jobvs, &sort, [], &n,
                         A, &max(1, n), &sdim, w,
-                        vs, &ldvs, work, &lwork, 
+                        vs, &ldvs, work, &lwork,
                         rwork, [], info)
                 @lapackerror
                 if lwork < 0
@@ -3494,11 +3494,11 @@ for (gees, gges, elty, relty) in
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
                         Ptr{$elty}, Ptr{BlasInt}, Ptr{$relty}, Ptr{Void},
                         Ptr{BlasInt}),
-                    &jobvsl, &jobvsr, &'N', [], 
-                    &n, A, &max(1,n), B, 
-                    &max(1,n), &sdim, alpha, beta, 
-                    vsl, &ldvsl, vsr, &ldvsr, 
-                    work, &lwork, rwork, [], 
+                    &jobvsl, &jobvsr, &'N', [],
+                    &n, A, &max(1,n), B,
+                    &max(1,n), &sdim, alpha, beta,
+                    vsl, &ldvsl, vsr, &ldvsr,
+                    work, &lwork, rwork, [],
                     info)
                 if i == 1
                     lwork = blas_int(real(work[1]))
@@ -3572,7 +3572,7 @@ for (fn, elty) in ((:dpftri_, :Float64),
             ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{$elty},
                  Ptr{BlasInt}),
-                &transr, &uplo, &n, A, 
+                &transr, &uplo, &n, A,
                 info)
             @assertargsok
             @assertnonsingular
@@ -3639,9 +3639,9 @@ for (fn, elty) in ((:dtftri_, :Float64),
             n = int(div(sqrt(8length(A)), 2))
             info = Array(BlasInt, 1)
             ccall(($(blasfunc(fn)), liblapack), Void,
-                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, 
+                (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}),
-                &transr, &uplo, &diag, &n, 
+                &transr, &uplo, &diag, &n,
                 A, info)
             @assertargsok
             @assertnonsingular
@@ -3711,7 +3711,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
 
             scale = Array($relty, 1)
             info = Array(BlasInt, 1)
-            
+
             ccall(($(blasfunc(fn)), liblapack), Void,
                 (Ptr{BlasChar}, Ptr{BlasChar}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
                  Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
@@ -3719,7 +3719,7 @@ for (fn, elty, relty) in ((:dtrsyl_, :Float64, :Float64),
                 &transa, &transb, &isgn, &m, &n,
                 A, &lda, B, &ldb, C, &ldc,
                 scale, info)
-            @lapackerror 
+            @lapackerror
             C, scale[1]
         end
     end

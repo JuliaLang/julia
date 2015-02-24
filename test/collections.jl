@@ -487,3 +487,7 @@ for b in s; b; end
 
 @test isempty((1:4)[5:4])
 @test_throws BoundsError (1:10)[8:-1:-2]
+
+# == with last-bit set (groups.google.com/forum/#!topic/julia-users/vZNjiIEG_sY)
+s = IntSet(255)
+@test s == s

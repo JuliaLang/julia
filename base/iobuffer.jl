@@ -12,11 +12,11 @@ type IOBuffer <: IO
     ptr::Int # read (and maybe write) pointer
     mark::Int
 
-    IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) = 
+    IOBuffer(data::Vector{Uint8},readable::Bool,writable::Bool,seekable::Bool,append::Bool,maxsize::Int) =
         new(data,readable,writable,seekable,append,length(data),maxsize,1,-1)
 end
 
-function copy(b::IOBuffer) 
+function copy(b::IOBuffer)
     ret = IOBuffer(b.writable?copy(b.data):b.data,
                    b.readable,b.writable,b.seekable,b.append,b.maxsize)
     ret.size = b.size
@@ -94,7 +94,7 @@ function peek(from::IOBuffer)
         throw(EOFError())
     end
     return from.data[from.ptr]
-end    
+end
 
 read{T}(from::IOBuffer, ::Type{Ptr{T}}) = convert(Ptr{T}, read(from, Uint))
 
@@ -149,7 +149,7 @@ function compact(io::IOBuffer)
         ptr = io.ptr
         bytes_to_move = nb_available(io)
     end
-    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint), 
+    ccall(:memmove, Ptr{Void}, (Ptr{Void},Ptr{Void},Uint),
           io.data, pointer(io.data,ptr), bytes_to_move)
     io.size -= ptr - 1
     io.ptr -= ptr - 1
@@ -227,7 +227,7 @@ function takebuf_array(io::IOBuffer)
 end
 takebuf_string(io::IOBuffer) = bytestring(takebuf_array(io))
 
-function write(to::IOBuffer, from::IOBuffer) 
+function write(to::IOBuffer, from::IOBuffer)
     write(to, pointer(from.data,from.ptr), nb_available(from))
     from.ptr += nb_available(from)
 end

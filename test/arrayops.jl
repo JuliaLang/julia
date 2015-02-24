@@ -711,6 +711,9 @@ a = [1,3,5]
 b = [3,1,2]
 a[b] = a
 @test a == [3,5,1]
+a = [3,2,1]
+a[a] = [4,5,6]
+@test a == [6,5,4]
 
 # lexicographic comparison
 @test lexcmp([1.0], [1]) == 0
@@ -916,3 +919,8 @@ a = [ [ 1 0 0 ], [ 0 0 0 ] ]
 @test rotl90(a,4) == a
 @test rotr90(a,4) == a
 @test rot180(a,2) == a
+
+# issue #9648
+let x = fill(1.5f0, 10^7)
+    @test abs(1.5f7 - cumsum(x)[end]) < 3*eps(1.5f7)
+end

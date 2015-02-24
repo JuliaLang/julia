@@ -75,7 +75,7 @@
 ;; characters that can be in an operator
 (define opchar? (Set op-chars))
 ;; characters that can follow . in an operator
-(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%" c)))
+(define (dot-opchar? c) (and (char? c) (string.find ".*^/\\+-'<>!=%≥≤≠÷" c)))
 (define operator? (Set operators))
 
 (define reserved-words '(begin while if for try return break continue
@@ -376,7 +376,7 @@
 (define (skip-comment port)
   (define (skip-multiline-comment port count)
     (let ((c (read-char port)))
-      (if (eof-object? c) 
+      (if (eof-object? c)
           (error "incomplete: unterminated multi-line comment #= ... =#") ; NOTE: changing this may affect code in base/client.jl
           (begin (if (eqv? c #\=)
                      (let ((c (peek-char port)))

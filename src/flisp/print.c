@@ -313,20 +313,20 @@ static void print_pair(ios_t *f, value_t v)
             thistiny = tinyp(car_(v));
             ind = (((VPOS > lastv) ||
                     (HPOS>SCR_WIDTH/2 && !nextsmall && !thistiny && n>0)) ||
-                   
+
                    (HPOS > SCR_WIDTH-4) ||
-                   
+
                    (est!=-1 && (HPOS+est > SCR_WIDTH-2)) ||
-                   
+
                    ((head == LAMBDA) && !nextsmall) ||
-                   
+
                    (n > 0 && always) ||
-                   
+
                    (n == 2 && after3) ||
                    (n == 1 && after2) ||
 
                    (n_unindented >= 3 && !nextsmall) ||
-                   
+
                    (n == 0 && !smallp(head)));
         }
 
