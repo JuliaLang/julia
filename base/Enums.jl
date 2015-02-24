@@ -24,7 +24,9 @@ call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:val),x)})
 call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = throw(ArgumentError("invalid value for Enum $T, $n"))
 
 macro enum(T,syms...)
-    assert(!isempty(syms))
+    if isempty(syms)
+        throw(ArgumentError("no arguments given for Enum $T"))
+    end
     vals = Array((Symbol,Integer),0)
     lo = typemax(Int)
     hi = typemin(Int)
@@ -32,18 +34,26 @@ macro enum(T,syms...)
     enumT = typeof(i)
     hasexpr = false
     for s in syms
-        i += one(typeof(i))
         if isa(s,Symbol)
-            # pass
+            if i == typemax(typeof(i))
+                i = widen(i) + one(typeof(i))
+            else
+                i += one(typeof(i))
+            end
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
-               length(s.args) == 2 &&
-               isa(s.args[1],Symbol)
+               length(s.args) == 2 && isa(s.args[1],Symbol)
             i = eval(s.args[2]) # allow exprs, e.g. uint128"1"
             s = s.args[1]
             hasexpr = true
         else
-            error(string("invalid syntax in @enum: ",s))
+            throw(ArgumentError(string("invalid argument for Enum ", T, ", ", s)))
+        end
+        if !isa(i, Integer) || !isbits(i)
+            throw(ArgumentError("Invalid value for Enum $T, $s=$i. Enum values must be integer bits types."))
+        end
+        if !Base.isidentifier(s)
+            throw(ArgumentError("Invalid name for Enum $T, $s is not a valid identifier."))
         end
         push!(vals, (s,i))
         I = typeof(i)
