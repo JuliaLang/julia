@@ -291,6 +291,9 @@ const base64 = base64encode
 @deprecate (>>)(src::AbstractCmd,    dest::AbstractString) pipe(src, stdout=dest, append=true)
 @deprecate (.>>)(src::AbstractCmd,   dest::AbstractString) pipe(src, stderr=dest, append=true)
 
+# 10314
+@deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)
+
 # 0.4 discontinued functions
 
 function subtypetree(x::DataType, level=-1)
