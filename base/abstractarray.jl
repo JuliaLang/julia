@@ -1228,7 +1228,7 @@ end
 
 ##
 # generic map on any iterator
-function map(f, iters...)
+function mapc(f, iters...)
     result = []
     len = length(iters)
     states = [start(iters[idx]) for idx in 1:len]
@@ -1341,8 +1341,8 @@ function map_promote(f, A::AbstractArray)
 end
 
 ## 1 argument
-map!(f, A::AbstractArray) = map!(f, A, A)
-function map!(f, dest::AbstractArray, A::AbstractArray)
+mapc!(f, A::AbstractArray) = mapc!(f, A, A)
+function mapc!(f, dest::AbstractArray, A::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i])
     end
@@ -1368,7 +1368,7 @@ function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
     return dest
 end
 
-function map(f, A::AbstractArray)
+function mapc(f, A::AbstractArray)
     if isempty(A); return similar(A); end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1377,7 +1377,7 @@ function map(f, A::AbstractArray)
 end
 
 ## 2 argument
-function map!(f, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function mapc!(f, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i], B[i])
     end
@@ -1400,7 +1400,7 @@ function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray, B::Abstra
     return dest
 end
 
-function map(f, A::AbstractArray, B::AbstractArray)
+function mapc(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
         return similar(A, promote_type(eltype(A),eltype(B)), shp)
@@ -1412,7 +1412,7 @@ function map(f, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map!(f, dest::AbstractArray, As::AbstractArray...)
+function mapc!(f, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1440,7 +1440,7 @@ function map_to!{T}(f, offs, dest::AbstractArray{T}, As::AbstractArray...)
     return dest
 end
 
-function map(f, As::AbstractArray...)
+function mapc(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], promote_eltype(As...), shape)
@@ -1499,4 +1499,3 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
 end
 
 randsubseq{T}(A::AbstractArray{T}, p::Real) = randsubseq!(T[], A, p)
-

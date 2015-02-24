@@ -222,7 +222,29 @@ function length_checked_equal(args...)
     n
 end
 
-map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
+# Ambiguity resolution for map and friends. Most methods in Base use
+# the "c" (container) variant, and dispatch only on the container
+# type. Use map directly when you want to dispatch on f.
+map(f) = f()
+map(f, itr) = mapc(f, itr)
+map(f, itrA, itrB) = mapc(f, itrA, itrB)
+map(f, itr...) = mapc(f, itr...)
+map!(f, itr) = mapc!(f, itr)
+map!(f, dest, src) = mapc!(f, dest, src)
+map!(f, dest, src...) = mapc!(f, dest, src...)
+filter(f, itr) = filterc(f, itr)
+filter!(f, itr) = filterc!(f, itr)
+mapreduce(f, op, itr) = mapreducec(f, op, itr)
+mapreduce(f, op, v0, itr) = mapreducec(f, op, v0, itr)
+mapfoldl(f, op, itr) = mapfoldlc(f, op, itr)
+mapfoldr(f, op, itr) = mapfoldrc(f, op, itr)
+mapfoldl(f, op, v0, itr) = mapfoldlc(f, op, v0, itr)
+mapfoldr(f, op, v0, itr) = mapfoldrc(f, op, v0, itr)
+reduce(op, itr) = reducec(op, itr)
+reduce(op, v0, itr) = reducec(op, v0, itr)
+
+mapc(f) = f()
+mapc(f, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end

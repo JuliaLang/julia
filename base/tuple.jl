@@ -36,26 +36,24 @@ ntuple(f::Function, n::Integer) =
     n==5 ? (f(1),f(2),f(3),f(4),f(5),) :
     tuple(ntuple(n-2,f)..., f(n-1), f(n))
 
-# 0 argument function
-map(f::Callable) = f()
 # 1 argument function
-map(f::Callable, t::())                   = ()
-map(f::Callable, t::(Any,))               = (f(t[1]),)
-map(f::Callable, t::(Any, Any))           = (f(t[1]), f(t[2]))
-map(f::Callable, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
-map(f::Callable, t::Tuple)                = tuple(f(t[1]), map(f,tail(t))...)
+mapc(f, t::())                   = ()
+mapc(f, t::(Any,))               = (f(t[1]),)
+mapc(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
+mapc(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
+mapc(f, t::Tuple)                = tuple(f(t[1]), mapc(f,tail(t))...)
 # 2 argument function
-map(f::Callable, t::(),        s::())        = ()
-map(f::Callable, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
-map(f::Callable, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+mapc(f, t::(),        s::())        = ()
+mapc(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
+mapc(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
 # n argument function
 heads() = ()
 heads(t::Tuple, ts::Tuple...) = tuple(t[1], heads(ts...)...)
 tails() = ()
 tails(t::Tuple, ts::Tuple...) = tuple(tail(t), tails(ts...)...)
-map(f::Callable, ::(), ts::Tuple...) = ()
-map(f::Callable, ts::Tuple...) =
-    tuple(f(heads(ts...)...), map(f, tails(ts...)...)...)
+mapc(f, ::(), ts::Tuple...) = ()
+mapc(f, ts::Tuple...) =
+    tuple(f(heads(ts...)...), mapc(f, tails(ts...)...)...)
 
 ## comparison ##
 

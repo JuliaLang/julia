@@ -245,11 +245,11 @@ eachmatch(re::Regex, str::AbstractString) = RegexMatchIterator(re,str)
 
 # miscellaneous methods that depend on Regex being defined
 
-filter!(r::Regex, v) = filter!(x->ismatch(r,x), v)
-filter(r::Regex, v)  = filter(x->ismatch(r,x), v)
+filter!(r::Regex, v) = filterc!(x->ismatch(r,x), v)
+filter(r::Regex, v)  = filterc(x->ismatch(r,x), v)
 
-filter!(r::Regex, d::Dict) = filter!((k,v)->ismatch(r,k),d)
-filter(r::Regex,  d::Dict) = filter!(r,copy(d))
+filter!(r::Regex, d::Dict) = filterc!((k,v)->ismatch(r,k),d)
+filter(r::Regex,  d::Dict) = filterc!(r,copy(d))
 
 
 # Don't serialize the pointers
