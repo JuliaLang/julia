@@ -22,8 +22,6 @@ using Base.Test
 @test Fruit(2) == kiwi
 @test_throws ArgumentError Fruit(3)
 @test_throws ArgumentError Fruit(-1)
-@test Fruit(Val{Int8(0)}) == apple
-@test_throws ArgumentError Fruit(Val{3})
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
 @test_throws MethodError Fruit(0.0)
@@ -48,8 +46,8 @@ using Base.Test
 @test convert(BigInt,apple) == 0
 @test convert(Bool,apple) == false
 @test convert(Bool,orange) == true
-@test_throws InexactError convert(Bool,kiwi)
-@test names(Fruit) == [apple, orange, kiwi]
+@test convert(Bool,kiwi)
+@test names(Fruit) == [:apple, :orange, :kiwi]
 
 f(x::Fruit) = "hey, I'm a Fruit"
 @test f(apple) == "hey, I'm a Fruit"
@@ -159,5 +157,8 @@ end
 
 # we can't handle widening to BigInt's
 @test_throws ArgumentError eval(:(@enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)))
+
+# test for unique Enum values
+@test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
 
 end # module
