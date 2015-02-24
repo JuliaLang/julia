@@ -17,6 +17,7 @@ function test_approx_eq_vecs{S<:Real,T<:Real}(a::StridedVecOrMat{S}, b::StridedV
 end
 
 let n = 12 #Size of matrix problem to test
+    srand(123)
     debug && println("SymTridiagonal (symmetric tridiagonal) matrices")
     for relty in (Float32, Float64), elty in (relty, Complex{relty})
         debug && println("elty is $(elty), relty is $(relty)")
