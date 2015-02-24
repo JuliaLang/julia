@@ -160,4 +160,6 @@ end
 # we can't handle widening to BigInt's
 @test_throws ArgumentError eval(:(@enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)))
 
+# test for unique Enum values
+@test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
 end # module

@@ -50,10 +50,10 @@ macro enum(T,syms...)
             throw(ArgumentError(string("invalid argument for Enum ", T, ", ", s)))
         end
         if !isa(i, Integer) || !isbits(i)
-            throw(ArgumentError("Invalid value for Enum $T, $s=$i. Enum values must be integer bits types."))
+            throw(ArgumentError("invalid value for Enum $T, $s=$i. Enum values must be integer bits types."))
         end
         if !Base.isidentifier(s)
-            throw(ArgumentError("Invalid name for Enum $T, $s is not a valid identifier."))
+            throw(ArgumentError("invalid name for Enum $T, $s is not a valid identifier."))
         end
         push!(vals, (s,i))
         I = typeof(i)
@@ -61,7 +61,17 @@ macro enum(T,syms...)
         lo = min(lo, i)
         hi = max(hi, i)
     end
-    if !hasexpr
+    if hasexpr
+        seen = Dict{Integer,Symbol}()
+        for (sym,i) in vals
+            if haskey(seen, i)
+                i = convert(enumT,i)
+                throw(ArgumentError("@enum argument values must be unique, $(seen[i])=$i and $sym=$i"))
+            else
+                seen[i] = sym
+            end
+        end
+    else
         n = length(vals)
         enumT = n <= typemax(Int8) ? Int8 :
                 n <= typemax(Int16) ? Int16 :
