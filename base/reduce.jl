@@ -46,11 +46,11 @@ function mapfoldl_impl(f, op, v0, itr, i)
     end
 end
 
-mapfoldl(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
+mapfoldlc(f, op, v0, itr) = mapfoldl_impl(f, op, v0, itr, start(itr))
 
 mapfoldl(f, op::Function, v0, itr) = mapfoldl_impl(f, specialized_binary(op), v0, itr, start(itr))
 
-function mapfoldl(f, op, itr)
+function mapfoldlc(f, op, itr)
     i = start(itr)
     if done(itr, i)
         return Base.mr_empty(f, op, eltype(itr))
@@ -81,8 +81,8 @@ function mapfoldr_impl(f, op, v0, itr, i::Integer)
     end
 end
 
-mapfoldr(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
-mapfoldr(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1))
+mapfoldrc(f, op, v0, itr) = mapfoldr_impl(f, op, v0, itr, endof(itr))
+mapfoldrc(f, op, itr) = (i = endof(itr); mapfoldr_impl(f, op, f(itr[i]), itr, i-1))
 
 foldr(op, v0, itr) = mapfoldr(IdFun(), op, v0, itr)
 foldr(op, itr) = mapfoldr(IdFun(), op, itr)
@@ -112,8 +112,8 @@ function mapreduce_pairwise_impl(f, op, A::AbstractArray, ifirst::Int, ilast::In
     end
 end
 
-mapreduce(f, op, itr) = mapfoldl(f, op, itr)
-mapreduce(f, op, v0, itr) = mapfoldl(f, op, v0, itr)
+mapreducec(f, op, itr) = mapfoldlc(f, op, itr)
+mapreducec(f, op, v0, itr) = mapfoldlc(f, op, v0, itr)
 mapreduce_impl(f, op, A::AbstractArray, ifirst::Int, ilast::Int) =
     mapreduce_pairwise_impl(f, op, A, ifirst, ilast, 1024)
 
@@ -150,14 +150,14 @@ function _mapreduce{T}(f, op, A::AbstractArray{T})
     end
 end
 
-mapreduce(f, op, A::AbstractArray) = _mapreduce(f, op, A)
-mapreduce(f, op, a::Number) = f(a)
+mapreducec(f, op, A::AbstractArray) = _mapreduce(f, op, A)
+mapreducec(f, op, a::Number) = f(a)
 
 mapreduce(f, op::Function, A::AbstractArray) = _mapreduce(f, specialized_binary(op), A)
 
-reduce(op, v0, itr) = mapreduce(IdFun(), op, v0, itr)
-reduce(op, itr) = mapreduce(IdFun(), op, itr)
-reduce(op, a::Number) = a
+reducec(op, v0, itr) = mapreducec(IdFun(), op, v0, itr)
+reducec(op, itr) = mapreducec(IdFun(), op, itr)
+reducec(op, a::Number) = a
 
 
 ###### Specific reduction functions ######

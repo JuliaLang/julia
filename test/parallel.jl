@@ -37,7 +37,7 @@ map!(x->1, d)
 # Test mapreduce on DArrays
 begin
     # Test that the proper method exists on DArrays
-    sig = methods(mapreduce, (Function, Function, DArray))[1].sig
+    sig = methods(Base.mapreducec, (Any, Any, DArray))[1].sig
     @test sig[3] == DArray
 
     # Test that it is functionally equivalent to the standard method
