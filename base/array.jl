@@ -741,39 +741,32 @@ promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
-./{T<:Integer}(x::Integer, y::StridedArray{T}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{T<:Integer}(x::StridedArray{T}, y::Integer) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-
-./{T<:Integer}(x::Integer, y::StridedArray{Complex{T}}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{T<:Integer}(x::StridedArray{Complex{T}}, y::Integer) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-./{S<:Integer,T<:Integer}(x::Complex{S}, y::StridedArray{T}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{S<:Integer,T<:Integer}(x::StridedArray{S}, y::Complex{T}) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-
-# ^ is difficult, since negative exponents give a different type
-
-.^(x::Number, y::StridedArray) =
-    reshape([ x ^ y[i] for i=1:length(y) ], size(y))
-
-.^(x::StridedArray, y::Number      ) =
-    reshape([ x[i] ^ y for i=1:length(x) ], size(x))
+# Handle operations that return different types
+./(x::Number, Y::AbstractArray) =
+    reshape([ x ./ y for y in Y ], size(Y))
+./(X::AbstractArray, y::Number) =
+    reshape([ x ./ y for x in X ], size(X))
+.\(x::Number, Y::AbstractArray) =
+    reshape([ x .\ y for y in Y ], size(Y))
+.\(X::AbstractArray, y::Number) =
+    reshape([ x .\ y for x in X ], size(X))
+.^(x::Number, Y::AbstractArray) =
+    reshape([ x ^ y for y in Y ], size(Y))
+.^(X::AbstractArray, y::Number      ) =
+    reshape([ x ^ y for x in X ], size(X))
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
+        function ($f){S,T}(A::Range{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
-            for i=1:length(A)
-                @inbounds F[i] = ($f)(A[i], B[i])
+            i = 1
+            for (a,b) in zip(A,B)
+                @inbounds F[i] = ($f)(a, b)
+                i += 1
             end
             return F
         end
-        # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Range{T})
+        function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
@@ -782,7 +775,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
-        function ($f){S<:Real,T}(A::Range{S}, B::StridedArray{T})
+        function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
             F = similar(B, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
@@ -791,18 +784,25 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+            F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
+            for i=1:length(A)
+                @inbounds F[i] = ($f)(A[i], B[i])
+            end
+            return F
+        end
     end
 end
-for f in (:.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
-        function ($f){T}(A::Number, B::StridedArray{T})
+        function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)
                 @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f){T}(A::StridedArray{T}, B::Number)
+        function ($f){T}(A::AbstractArray{T}, B::Number)
             F = similar(A, promote_array_type(typeof(B),T))
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B)
