@@ -374,3 +374,13 @@ msk[2,1] = false
 sA = sub(A, :, :, 1)
 sA[msk] = 1.0
 @test sA[msk] == ones(countnz(msk))
+
+# bounds checking upon construction; see #4044, #10296
+@test_throws BoundsError sub(1:10, 8:11)
+A = reshape(1:20, 5, 4)
+sA = sub(A, 1:2, 1:3)
+@test_throws BoundsError sub(sA, 1:3, 1:3)
+@test_throws BoundsError sub(sA, 1:2, 1:4)
+sub(sA, 1:2, 1:2)
+@test_throws BoundsError sub(A, 17:23)
+sub(A, 17:20)
