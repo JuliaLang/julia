@@ -98,7 +98,7 @@ function utf32(p::Union(Ptr{Char}, Ptr{UInt32}, Ptr{Int32}))
     utf32(p, len)
 end
 
-function map(f::Function, s::UTF32String)
+function map(f, s::UTF32String)
     d = s.data
     out = similar(d)
     out[end] = char(0)

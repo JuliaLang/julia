@@ -821,7 +821,7 @@ end
 map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
 map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{UInt8}) = bytestring(a)
 
-function map(f::Function, s::AbstractString)
+function map(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s
@@ -834,7 +834,7 @@ function map(f::Function, s::AbstractString)
     map_result(s, takebuf_array(out))
 end
 
-function filter(f::Function, s::AbstractString)
+function filter(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s

@@ -1579,7 +1579,7 @@ map(f::Callable, A::BitArray, B::BitArray) = map(specialized_bitwise_binary(f), 
 map(f::BitFunctorUnary, A::BitArray) = map!(f, similar(A), A)
 map(f::BitFunctorBinary, A::BitArray, B::BitArray) = map!(f, similar(A), A, B)
 
-map!(f::Callable, A::BitArray) = map!(f, A, A)
+map!(f, A::BitArray) = map!(f, A, A)
 map!(f::Callable, dest::BitArray, A::BitArray) = map!(specialized_bitwise_unary(f), dest, A)
 map!(f::Callable, dest::BitArray, A::BitArray, B::BitArray) = map!(specialized_bitwise_binary(f), dest, A, B)
 
@@ -1607,7 +1607,7 @@ end
 
 ## Filter ##
 
-function filter(f::Function, Bs::BitArray)
+function filter(f, Bs::BitArray)
     boolmap::Array{Bool} = map(f, Bs)
     Bs[boolmap]
 end

@@ -54,11 +54,11 @@ done(z::Zip, st) = done(z.a,st[1]) | done(z.z,st[2])
 
 # filter
 
-immutable Filter{I}
-    flt::Function
+immutable Filter{F,I}
+    flt::F
     itr::I
 end
-filter(flt::Function, itr) = Filter(flt, itr)
+filter(flt, itr) = Filter(flt, itr)
 
 start(f::Filter) = start_filter(f.flt, f.itr)
 function start_filter(pred, itr)
