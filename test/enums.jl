@@ -4,6 +4,8 @@ using Base.Test
 
 @test_throws MethodError convert(Enum, 1.0)
 
+@test_throws ArgumentError eval(:(@enum Foo))
+
 @enum Fruit apple orange kiwi
 @test typeof(Fruit) == DataType
 @test isbits(Fruit)
@@ -79,16 +81,14 @@ end
 @test _neg4.val === -4
 @test _neg3.val === -3
 
-# currently allow silent overflow
-@enum Uint8Overflow ff=0xff overflowed
-@test ff.val === 0xff
-@test overflowed.val === 0x00
+@test_throws ArgumentError eval(:(@enum Test1 _zerofp=0.0))
+@test_throws ArgumentError eval(:(@enum Test11 _zerofp2=0.5))
+@test_throws ArgumentError eval(:(@enum Test111 _zerobi=BigInt(1)))
 
-@test_throws MethodError eval(:(@enum Test1 _zerofp=0.0))
-
-@test_throws InexactError eval(:(@enum Test11 _zerofp2=0.5))
 # can't use non-identifiers as enum members
-@test_throws ErrorException eval(:(@enum Test2 1=2))
+@test_throws ArgumentError eval(:(@enum(Test2, ?)))
+@test_throws ArgumentError eval(:(@enum Test22 1=2))
+
 # other Integer types of enum members
 @enum Test3 _one_Test3=0x01 _two_Test3=0x02 _three_Test3=0x03
 @test typeof(_one_Test3.val) <: UInt8
@@ -118,8 +118,8 @@ end
 @test _two_Test7.val === 0x02
 @test typeof(_zero_Test7.val) <: UInt8
 
-@test_throws MethodError eval(:(@enum Test8 _zero="zero"))
-@test_throws MethodError eval(:(@enum Test9 _zero='0'))
+@test_throws ArgumentError eval(:(@enum Test8 _zero="zero"))
+@test_throws ArgumentError eval(:(@enum Test9 _zero='0'))
 
 @enum Test8 _zero_Test8=zero(Int64)
 @test typeof(_zero_Test8.val) <: Int64
@@ -151,5 +151,13 @@ end
 @test Int(_one_Test11) == 3
 @test Int(_two_Test11) == 5
 @test Int(_three_Test11) == 6
+
+# test that the result val type is widened and we do not overflow
+@enum Uint8Overflow ff=0xff overflowed
+@test ff.val === widen(0xff)
+@test overflowed.val === (widen(0xff) + one(0xff))
+
+# we can't handle widening to BigInt's
+@test_throws ArgumentError eval(:(@enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)))
 
 end # module

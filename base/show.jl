@@ -267,6 +267,7 @@ function isidentifier(s::AbstractString)
     end
     return true
 end
+isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{UInt8},), s) != 0
 operator_precedence(s::Symbol) = int(ccall(:jl_operator_precedence,
