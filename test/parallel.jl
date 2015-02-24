@@ -42,7 +42,7 @@ begin
 
     # Test that it is functionally equivalent to the standard method
     for _ = 1:25, f = [x -> 2x, x -> x^2, x -> x^2 + 2x - 1], opt = [+, *]
-        n = rand(2:50)
+        n = rand(5:50)
         arr = rand(1:100, n)
         darr = distribute(arr)
 
