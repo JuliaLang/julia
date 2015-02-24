@@ -1298,9 +1298,9 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-filter(f::Function, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f::Function, a::Vector)
+function filter!(f, a::Vector)
     insrt = 1
     for curr = 1:length(a)
         if f(a[curr])
@@ -1312,7 +1312,7 @@ function filter!(f::Function, a::Vector)
     return a
 end
 
-function filter(f::Function, a::Vector)
+function filter(f, a::Vector)
     r = Array(eltype(a), 0)
     for i = 1:length(a)
         if f(a[i])

@@ -284,14 +284,14 @@ similar(S::SharedArray, T) = similar(S, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims)
 similar(S::SharedArray) = similar(S, eltype(S), size(S))
 
-map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
+map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
 
-reduce(f::Function, S::SharedArray) =
+reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
-function map!(f::Callable, S::SharedArray)
+function map!(f, S::SharedArray)
     @sync for p in procs(S)
         @spawnat p begin
             for idx in localindexes(S)
