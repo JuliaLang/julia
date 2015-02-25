@@ -7,8 +7,20 @@ abstract Enum
 Base.convert{T<:Integer}(::Type{T},x::Enum) = convert(T, x.val)
 Base.convert{T<:Enum}(::Type{T},x::Integer) = T(x)
 Base.start{T<:Enum}(::Type{T}) = 1
-Base.next{T<:Enum}(::Type{T},s) = Base.next(names(T),s)
-Base.done{T<:Enum}(::Type{T},s) = Base.done(names(T),s)
+# next, done defined per Enum
+
+# generate code to test whether expr is in the given set of values
+function membershiptest(expr, values)
+    lo, hi = extrema(values)
+    sv = sort(values)
+    if sv == [lo:hi;] || sv == [hi:-1:lo;]
+        :($lo <= $expr <= $hi)
+    elseif length(values) < 20
+        foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
+    else
+        :($expr in $(Set(values)))
+    end
+end
 
 macro enum(T,syms...)
     if isempty(syms)
@@ -25,15 +37,12 @@ macro enum(T,syms...)
     lo = typemax(Int)
     hi = typemin(Int)
     i = -1
-    prev = -1
-    first = true
     enumT = typeof(i)
     hasexpr = false
-    contiguous = true
     for s in syms
         if isa(s,Symbol)
             if i == typemax(typeof(i))
-                i = widen(i) + one(typeof(i))
+                i = widen(i) + one(i)
             else
                 i += one(i)
             end
@@ -57,11 +66,6 @@ macro enum(T,syms...)
         enumT = length(vals) == 1 ? I : promote_type(enumT,I)
         lo = min(lo, i)
         hi = max(hi, i)
-        if !first
-            contiguous &= (i == prev+1)
-        end
-        first = false
-        prev = i
     end
     if !hasexpr
         n = length(vals)
@@ -69,35 +73,37 @@ macro enum(T,syms...)
                 n <= typemax(Int16) ? Int16 :
                 n <= typemax(Int32) ? Int32 : Int64
     end
+    values = enumT[i[2] for i in vals]
+    if hasexpr && values != unique(values)
+        throw(ArgumentError("Values for Enum $typename are not unique."))
+    end
+    lo = convert(enumT, lo)
+    hi = convert(enumT, hi)
     vals = map(x->(x[1],convert(enumT,x[2])), vals)
     quotednames = map(x->Meta.quot(x[1]), vals)
-    all_instances = map(x->Expr(:call, T, x[2]), vals)
-    valueset = Set(map(x->x[2], vals))
     blk = quote
         # enum definition
         immutable $(esc(T)) <: Enum
             val::$enumT
             function $(esc(typename))(x::Integer)
-                $(if contiguous
-                    :($lo <= x <= $hi)
-                else
-                    :(x in $valueset)
-                end) || throw(ArgumentError(string("invalid value for Enum ",$(Meta.quot(typename)),", ",x)))
+                $(membershiptest(:x, values)) || throw(ArgumentError(string("invalid value for Enum ",$(Meta.quot(typename)),": ",x)))
                 new(x)
             end
         end
         Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
         Base.typemax{E<:$(esc(typename))}(x::Type{E}) = E($hi)
         Base.length{E<:$(esc(typename))}(x::Type{E}) = $(length(vals))
-        Base.names{E<:$(esc(typename))}(x::Type{E}) = tuple($(map(x->Expr(:call, :E, x[2]), vals)...))
-        function Base.show{E<:$(esc(typename))}(io::IO,x::E)
+        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(quotednames...)]
+        Base.next{E<:$(esc(typename))}(x::Type{E},s) = (E($values[s]),s+1)
+        Base.done{E<:$(esc(typename))}(x::Type{E},s) = s > $(length(values))
+        function Base.print{E<:$(esc(typename))}(io::IO,x::E)
             for (sym, i) in $vals
                 if i == x.val
                     print(io, sym); break
                 end
             end
-            print(io, "::", E)
         end
+        Base.show{E<:$(esc(typename))}(io::IO,x::E) = print(io, x, "::", E)
     end
     if isa(T,Symbol)
         for (sym,i) in vals
