@@ -22,8 +22,6 @@ using Base.Test
 @test Fruit(2) == kiwi
 @test_throws ArgumentError Fruit(3)
 @test_throws ArgumentError Fruit(-1)
-@test Fruit(Val{Int8(0)}) == apple
-@test_throws ArgumentError Fruit(Val{3})
 @test Fruit(0x00) == apple
 @test Fruit(big(0)) == apple
 @test_throws MethodError Fruit(0.0)
@@ -39,8 +37,8 @@ using Base.Test
 @test convert(Fruit,0) == apple
 @test convert(Fruit,1) == orange
 @test convert(Fruit,2) == kiwi
-@test_throws InexactError convert(Fruit,3)
-@test_throws InexactError convert(Fruit,-1)
+@test_throws ArgumentError convert(Fruit,3)
+@test_throws ArgumentError convert(Fruit,-1)
 @test convert(UInt8,apple) === 0x00
 @test convert(UInt16,orange) === 0x0001
 @test convert(UInt128,kiwi) === 0x00000000000000000000000000000002
@@ -48,8 +46,8 @@ using Base.Test
 @test convert(BigInt,apple) == 0
 @test convert(Bool,apple) == false
 @test convert(Bool,orange) == true
-@test_throws InexactError convert(Bool,kiwi)
-@test names(Fruit) == [apple, orange, kiwi]
+@test convert(Bool,kiwi)
+@test names(Fruit) == [:apple, :orange, :kiwi]
 
 f(x::Fruit) = "hey, I'm a Fruit"
 @test f(apple) == "hey, I'm a Fruit"
@@ -76,6 +74,7 @@ end
 @enum Negative _neg1=-1 _neg2=-2
 @test _neg1.val === -1
 @test _neg2.val === -2
+@test_throws InexactError convert(UInt8, _neg1)
 @enum Negative2 _neg5=-5 _neg4 _neg3
 @test _neg5.val === -5
 @test _neg4.val === -4
@@ -83,7 +82,8 @@ end
 
 @test_throws ArgumentError eval(:(@enum Test1 _zerofp=0.0))
 @test_throws ArgumentError eval(:(@enum Test11 _zerofp2=0.5))
-@test_throws ArgumentError eval(:(@enum Test111 _zerobi=BigInt(1)))
+@enum Test111 _zerobi=BigInt(1)
+@test integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
 @test_throws ArgumentError eval(:(@enum(Test2, ?)))
@@ -157,7 +157,14 @@ end
 @test ff.val === widen(0xff)
 @test overflowed.val === (widen(0xff) + one(0xff))
 
-# we can't handle widening to BigInt's
-@test_throws ArgumentError eval(:(@enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)))
+# widening to BigInt's
+@enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)
+@test integer(_one_Test13) == 340282366920938463463374607431768211456
+
+# test for unique Enum values
+@test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))
+
+@test repr(apple) == "apple::"*string(Fruit)
+@test string(apple) == "apple"
 
 end # module
