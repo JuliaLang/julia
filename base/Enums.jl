@@ -13,7 +13,7 @@ Base.start{T<:Enum}(::Type{T}) = 1
 function membershiptest(expr, values)
     lo, hi = extrema(values)
     sv = sort(values)
-    if sv == [lo:hi;] || sv == [hi:-1:lo;]
+    if sv == [lo:hi;]
         :($lo <= $expr <= $hi)
     elseif length(values) < 20
         foldl((x1,x2)->:($x1 || ($expr == $x2)), :($expr == $(values[1])), values[2:end])
@@ -21,6 +21,8 @@ function membershiptest(expr, values)
         :($expr in $(Set(values)))
     end
 end
+
+@noinline enum_argument_error(typename, x) = throw(ArgumentError(string("invalid value for Enum $(typename): $x")))
 
 macro enum(T,syms...)
     if isempty(syms)
@@ -53,13 +55,13 @@ macro enum(T,syms...)
             s = s.args[1]
             hasexpr = true
         else
-            throw(ArgumentError(string("invalid argument for Enum ", typename, ", ", s)))
+            throw(ArgumentError(string("invalid argument for Enum ", typename, ": ", s)))
         end
         if !isa(i, Integer)
-            throw(ArgumentError("Invalid value for Enum $typename, $s=$i. Enum values must be integers."))
+            throw(ArgumentError("invalid value for Enum $typename, $s=$i; values must be integers"))
         end
         if !Base.isidentifier(s)
-            throw(ArgumentError("Invalid name for Enum $typename, $s is not a valid identifier."))
+            throw(ArgumentError("invalid name for Enum $typename; \"$s\" is not a valid identifier."))
         end
         push!(vals, (s,i))
         I = typeof(i)
@@ -75,25 +77,24 @@ macro enum(T,syms...)
     end
     values = enumT[i[2] for i in vals]
     if hasexpr && values != unique(values)
-        throw(ArgumentError("Values for Enum $typename are not unique."))
+        throw(ArgumentError("values for Enum $typename are not unique"))
     end
     lo = convert(enumT, lo)
     hi = convert(enumT, hi)
     vals = map(x->(x[1],convert(enumT,x[2])), vals)
-    quotednames = map(x->Meta.quot(x[1]), vals)
     blk = quote
         # enum definition
         immutable $(esc(T)) <: Enum
             val::$enumT
             function $(esc(typename))(x::Integer)
-                $(membershiptest(:x, values)) || throw(ArgumentError(string("invalid value for Enum ",$(Meta.quot(typename)),": ",x)))
+                $(membershiptest(:x, values)) || enum_argument_error($(Meta.quot(typename)), x)
                 new(x)
             end
         end
         Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
         Base.typemax{E<:$(esc(typename))}(x::Type{E}) = E($hi)
         Base.length{E<:$(esc(typename))}(x::Type{E}) = $(length(vals))
-        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(quotednames...)]
+        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(map(x->Meta.quot(x[1]), vals)...)]
         Base.next{E<:$(esc(typename))}(x::Type{E},s) = (E($values[s]),s+1)
         Base.done{E<:$(esc(typename))}(x::Type{E},s) = s > $(length(values))
         function Base.print{E<:$(esc(typename))}(io::IO,x::E)
