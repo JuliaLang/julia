@@ -1628,7 +1628,7 @@ parsefloat(::Type{Float32}, x::AbstractString) = float32(x)
 for conv in (:float, :float32, :float64,
              :int, :int8, :int16, :int32, :int64,
              :uint, :uint8, :uint16, :uint32, :uint64)
-    @eval ($conv){S<:AbstractString}(a::AbstractArray{S}) = map($conv, a)
+    @eval ($conv){S<:AbstractString}(a::AbstractArray{S}) = map!($conv, similar(a,typeof($conv(0))), a)
 end
 
 # find the index of the first occurrence of a value in a byte array
