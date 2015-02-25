@@ -185,6 +185,10 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
+checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
+checked_sub(x::Integer, y::Integer) = checked_sub(promote(x,y)...)
+checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
+
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
@@ -218,3 +222,7 @@ fld1{T<:Real}(x::T, y::T) = no_op_err("fld1", T)
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
+
+checked_add{T<:Integer}(x::T, y::T) = no_op_err("checked_add", T)
+checked_sub{T<:Integer}(x::T, y::T) = no_op_err("checked_sub", T)
+checked_mul{T<:Integer}(x::T, y::T) = no_op_err("checked_mul", T)
