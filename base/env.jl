@@ -1,5 +1,3 @@
-## core libc calls ##
-
 @unix_only begin
     _getenv(var::AbstractString) = ccall(:getenv, Ptr{UInt8}, (Ptr{UInt8},), var)
     _hasenv(s::AbstractString) = _getenv(s) != C_NULL

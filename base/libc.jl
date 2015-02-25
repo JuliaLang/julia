@@ -1,3 +1,40 @@
+module Libc
+
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
+    errno, strerror, flush_cstdio, systemsleep, time,
+    MS_ASYNC, MS_INVALIDATE, MS_SYNC, mmap, munmap, msync
+
+include("errno.jl")
+
+## FILE ##
+
+immutable FILE
+    ptr::Ptr{Void}
+end
+
+modestr(s::IO) = modestr(isreadable(s), iswritable(s))
+modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
+
+function FILE(s::IO)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
+    systemerror("fdopen", FILEp == C_NULL)
+    seek(FILE(FILEp), position(s))
+end
+
+Base.convert(::Type{FILE}, s::IO) = FILE(s)
+
+function Base.seek(h::FILE, offset::Integer)
+    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
+                               h.ptr, offset, 0) != 0)
+    h
+end
+
+Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
+
+# flush C stdio output from external libraries
+flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+
 ## time-related functions ##
 
 # TODO: check for usleep errors?
@@ -68,7 +105,9 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     tm
 end
 
+# system date in seconds
 time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+time() = ccall(:clock_now, Float64, ())
 
 ## process-related functions ##
 
@@ -84,9 +123,78 @@ function gethostname()
     bytestring(pointer(hn))
 end
 
+## system error handling ##
+
+errno() = ccall(:jl_errno, Cint, ())
+errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
+strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
+strerror() = strerror(errno())
+
 ## Memory related ##
 
-c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
-c_malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
-c_realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
-c_calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
+realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
+calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+
+## mmap ##
+
+msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
+
+msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
+
+@unix_only begin
+# Low-level routines
+# These are needed for things like MAP_ANONYMOUS
+function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
+    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
+    # Check that none of the computations will overflow
+    if len < 0
+        throw(ArgumentError("requested size must be ≥ 0, got $len"))
+    end
+    if len > typemax(Int)-pagesize
+        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
+    end
+    # Set the offset to a page boundary
+    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
+    len_page::Int = (offset-offset_page) + len
+    # Mmap the file
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
+    # Also return a pointer that compensates for any adjustment in the offset
+    return p, Int(offset-offset_page)
+end
+
+function munmap(p::Ptr,len::Integer)
+    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
+end
+
+const MS_ASYNC = 1
+const MS_INVALIDATE = 2
+const MS_SYNC = 4
+function msync(p::Ptr, len::Integer, flags::Integer)
+    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
+end
+msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
+end
+
+
+@windows_only begin
+function munmap(viewhandle::Ptr, mmaphandle::Ptr)
+    status = Bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    status |= Bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
+    if !status
+        error("could not unmap view: $(FormatMessage())")
+    end
+end
+
+function msync(p::Ptr, len::Integer)
+    status = Bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
+    if !status
+        error("could not msync: $(FormatMessage())")
+    end
+end
+
+end
+
+end # module

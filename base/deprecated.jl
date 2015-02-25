@@ -100,8 +100,6 @@ const Range1 = UnitRange
 @deprecate set_bigfloat_rounding(r::RoundingMode) set_rounding(BigFloat,r)
 @deprecate get_bigfloat_rounding() get_rounding(BigFloat)
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
-eval(Sys, :(@deprecate shlib_list dllist))
-# Sys.shlib_ext is deprecated, renamed to Sys.dlext. Remove alias before release
 
 @deprecate degrees2radians deg2rad
 @deprecate radians2degrees rad2deg

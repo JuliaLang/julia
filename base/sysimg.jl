@@ -81,10 +81,6 @@ include("inference.jl")
 # For OS specific stuff in I/O
 include("osutils.jl")
 
-const DL_LOAD_PATH = ByteString[]
-@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib/julia")
-@osx_only push!(DL_LOAD_PATH, "@executable_path/../lib")
-
 # strings & printing
 include("char.jl")
 include("ascii.jl")
@@ -105,9 +101,9 @@ include("iostream.jl")
 
 # system & environment
 include("libc.jl")
+using .Libc: getpid, gethostname, errno, strerror, time
+include("libdl.jl")
 include("env.jl")
-include("errno.jl")
-using .Errno
 include("path.jl")
 include("intfuncs.jl")
 
