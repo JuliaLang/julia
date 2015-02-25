@@ -1,11 +1,3 @@
-immutable Nullable{T}
-    isnull::Bool
-    value::T
-
-    Nullable() = new(true)
-    Nullable(value::T) = new(false, value)
-end
-
 immutable NullException <: Exception
 end
 
