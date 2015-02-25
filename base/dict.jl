@@ -97,11 +97,13 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
         print(io, key)
         print(io, " => ")
 
-        val = sprint(show, v)
         if limit
+            val = with_output_limit(()->sprint(show, v))
             val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(io, v)
         end
-        print(io, val)
     end
 end
 
@@ -135,9 +137,13 @@ function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Boo
         print(io, "\n  ")
         limit && i >= rows && (print(io, "⋮"); break)
 
-        str = sprint(show, v)
-        limit && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
-        print(io, str)
+        if limit
+            str = with_output_limit(()->sprint(show, v))
+            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            print(io, str)
+        else
+            show(io, v)
+        end
     end
 end
 
