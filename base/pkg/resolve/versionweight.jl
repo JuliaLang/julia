@@ -48,7 +48,6 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     l0 = min(la, lb)
     l1 = max(la, lb)
     ld = la - lb
-    rv = Array(T, l1)
     @inbounds for i = 1:l0
         c = cmp(av[i], bv[i]); c != 0 && return c
     end
