@@ -41,7 +41,7 @@ toexpr(xs::Vector{Any}) = Expr(:cell1d, map(toexpr, xs)...)
 
 function deftoexpr(T)
     @eval function toexpr(md::$T)
-        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), names(T))...))
+        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(T))...))
     end
 end
 

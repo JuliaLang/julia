@@ -301,3 +301,6 @@ end
 # 8898
 @deprecate precision(x::DateTime) eps(x)
 @deprecate precision(x::Date) eps(x)
+
+@deprecate names(t::DataType) fieldnames(t)
+@deprecate names(v) fieldnames(v)

@@ -5,7 +5,7 @@ current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
 function fullname(m::Module)
     if m === Main
-        ()
+        return ()
     elseif module_parent(m) === m
         # not Main, but is its own parent, means a prior Main module
         n = ()
@@ -20,22 +20,32 @@ function fullname(m::Module)
         end
         return n
     else
-        tuple(fullname(module_parent(m))..., module_name(m))
+        return tuple(fullname(module_parent(m))..., module_name(m))
     end
 end
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
-names(t::DataType) = collect(t.names)
 
-function names(v)
+fieldnames(t::DataType) = collect(t.names)
+function fieldnames(v)
     t = typeof(v)
-    if isa(t,DataType)
-        return names(t)
-    else
-        throw(ArgumentError("cannot call names() on a non-composite type"))
+    if !isa(t,DataType)
+        throw(ArgumentError("cannot call fieldnames() on a non-composite type"))
     end
+    return fieldnames(t)
+end
+
+fieldname(t::DataType, i::Integer) = t.names[i]
+
+nfields(t::DataType) = length(t.names)
+function nfields(v)
+    t = typeof(v)
+    if !isa(DataType)
+        throw(ArgumentError("cannot call nfields() on a non-composite type"))
+    end
+    return nfields(t)
 end
 
 isconst(s::Symbol) =
@@ -49,7 +59,7 @@ object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # type predicates
 isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
-isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
+isstructtype(t::DataType) = nfields(t) != 0 || (t.size==0 && !t.abstract)
 isstructtype(x) = false
 isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
 isbits(t::Type) = false
@@ -60,7 +70,7 @@ typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b
 typeseq(a::ANY,b::ANY) = a<:b && b<:a
 
 function fieldoffsets(x::DataType)
-    offsets = Array(Int, length(x.names))
+    offsets = Array(Int, nfields(x))
     ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
     offsets
 end

@@ -1073,6 +1073,7 @@ export
 # types
     convert,
     fieldoffsets,
+    fieldnames,
     isleaftype,
     oftype,
     promote,
