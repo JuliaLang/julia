@@ -924,6 +924,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
     jl_resolve_sysimg_location(rel);
     // loads sysimg if available, and conditionally sets jl_options.cpu_target
     jl_preload_sysimg_so(jl_options.image_file);
+    if (jl_options.cpu_target == NULL)
+        jl_options.cpu_target = "native";
 
     jl_page_size = jl_getpagesize();
     uint64_t total_mem = uv_get_total_memory();
