@@ -1406,10 +1406,6 @@ void jl_preload_sysimg_so(const char *fname)
     // otherwise default to native.
     if (jl_sysimg_handle && jl_options.cpu_target == NULL)
         jl_options.cpu_target = (const char *)jl_dlsym(jl_sysimg_handle, "jl_sysimg_cpu_target");
-    else if (jl_options.cpu_target == NULL)
-        jl_options.cpu_target = "native";
-
-    return;
 }
 
 DLLEXPORT
