@@ -190,8 +190,14 @@ run(`rm tmp.mtx`)
 writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate complex Hermitian","3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
 @test sparse(CHOLMOD.Sparse("tmp.mtx")) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
 run(`rm tmp.mtx`)
+writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+@test_throws ArgumentError sparse(CHOLMOD.Sparse("tmp.mtx"))
+run(`rm tmp.mtx`)
 
 # test that Sparse(Ptr) constructor throws the right places
+@test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_Sparse{Float64,CHOLMOD.SuiteSparse_long}}, C_NULL))
+@test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_SparseVoid}, C_NULL))
+
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
 ### illegal dtype (for now but should be supprted at some point)
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
