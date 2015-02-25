@@ -14,44 +14,47 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange(start::T, step::S, stop::T)
-        if T<:FloatingPoint || S<:FloatingPoint
-            throw(ArgumentError("StepRange should not be used with floating point"))
-        end
-        z = zero(S)
-        step == z && throw(ArgumentError("step cannot be zero"))
-        step != step && throw(ArgumentError("step cannot be NaN"))
+        new(start, step, steprange_last(start,step,stop))
+    end
+end
 
-        if stop == start
-            last = stop
+# to make StepRange constructor inlineable, so optimizer can see `step` value
+function steprange_last{T}(start::T, step, stop)
+    if isa(start,FloatingPoint) || isa(step,FloatingPoint)
+        throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    z = zero(step)
+    step == z && throw(ArgumentError("step cannot be zero"))
+
+    if stop == start
+        last = stop
+    else
+        if (step > z) != (stop > start)
+            # empty range has a special representation where stop = start-1
+            # this is needed to avoid the wrap-around that can happen computing
+            # start - step, which leads to a range that looks very large instead
+            # of empty.
+            if step > z
+                last = start - one(stop-start)
+            else
+                last = start + one(stop-start)
+            end
         else
-            if (step > z) != (stop > start)
-                # empty range has a special representation where stop = start-1
-                # this is needed to avoid the wrap-around that can happen computing
-                # start - step, which leads to a range that looks very large instead
-                # of empty.
-                if step > z
-                    last = start - one(stop-start)
+            diff = stop - start
+            if T<:Signed && (diff > zero(diff)) != (stop > start)
+                # handle overflowed subtraction with unsigned rem
+                if diff > zero(diff)
+                    remain = -convert(T, unsigned(-diff) % step)
                 else
-                    last = start + one(stop-start)
+                    remain = convert(T, unsigned(diff) % step)
                 end
             else
-                diff = stop - start
-                if T<:Signed && (diff > zero(diff)) != (stop > start)
-                    # handle overflowed subtraction with unsigned rem
-                    if diff > zero(diff)
-                        remain = -convert(T, unsigned(-diff) % step)
-                    else
-                        remain = convert(T, unsigned(diff) % step)
-                    end
-                else
-                    remain = steprem(start,stop,step)
-                end
-                last = stop - remain
+                remain = steprem(start,stop,step)
             end
+            last = stop - remain
         end
-
-        new(start, step, last)
     end
+    last
 end
 
 steprem(start,stop,step) = (stop-start) % step
