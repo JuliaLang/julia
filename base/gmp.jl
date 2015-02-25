@@ -146,9 +146,9 @@ function convert(::Type{Int64}, x::BigInt)
     hi = int64(convert(Clong, x >> 32))
     hi << 32 | lo
 end
-convert(::Type{Int32}, n::BigInt) = int32(convert(Clong, n))
-convert(::Type{Int16}, n::BigInt) = int16(convert(Clong, n))
-convert(::Type{Int8}, n::BigInt) = int8(convert(Clong, n))
+convert(::Type{Int32}, n::BigInt) = convert(Int32,convert(Clong, n))
+convert(::Type{Int16}, n::BigInt) = convert(Int16,convert(Clong, n))
+convert(::Type{Int8}, n::BigInt) = convert(Int8,convert(Clong, n))
 
 function convert(::Type{Clong}, n::BigInt)
     fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
@@ -164,9 +164,9 @@ function convert(::Type{UInt64}, x::BigInt)
     hi = uint64(convert(Culong, x >> 32))
     hi << 32 | lo
 end
-convert(::Type{UInt32}, x::BigInt) = uint32(convert(Culong, x))
-convert(::Type{UInt16}, x::BigInt) = uint16(convert(Culong, x))
-convert(::Type{UInt8}, x::BigInt) = uint8(convert(Culong, x))
+convert(::Type{UInt32}, x::BigInt) = convert(UInt32,convert(Culong, x))
+convert(::Type{UInt16}, x::BigInt) = convert(UInt16,convert(Culong, x))
+convert(::Type{UInt8}, x::BigInt) = convert(UInt8,convert(Culong, x))
 
 function convert(::Type{Culong}, n::BigInt)
     fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
@@ -199,6 +199,14 @@ function convert(::Type{Float64}, n::BigInt)
 end
 convert(::Type{Float32}, n::BigInt) = float32(float64(n))
 convert(::Type{Float16}, n::BigInt) = float16(float64(n))
+
+rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
+
+rem{T<:Unsigned}(n::BigInt, ::Type{T}) = convert(T, n & typemax(T))
+function rem{T<:Integer}(n::BigInt, ::Type{T})
+    lo, hi = typemin(T), typemax(T)
+    convert(T, (n-lo) & (widen(hi)-widen(lo)) + lo)
+end
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
@@ -282,10 +290,10 @@ function -(c::CulongMax, x::BigInt)
     ccall((:__gmpz_ui_sub, :libgmp), Void, (Ptr{BigInt}, Culong, Ptr{BigInt}), &z, c, &x)
     return z
 end
-+(x::BigInt, c::ClongMax) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
-+(c::ClongMax, x::BigInt) = c < 0 ? -(x, convert(Culong, -c)) : x + convert(Culong, c)
--(x::BigInt, c::ClongMax) = c < 0 ? +(x, convert(Culong, -c)) : -(x, convert(Culong, c))
--(c::ClongMax, x::BigInt) = c < 0 ? -(x + convert(Culong, -c)) : -(convert(Culong, c), x)
++(x::BigInt, c::ClongMax) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
++(c::ClongMax, x::BigInt) = c < 0 ? -(x, -(c % Culong)) : x + convert(Culong, c)
+-(x::BigInt, c::ClongMax) = c < 0 ? +(x, -(c % Culong)) : -(x, convert(Culong, c))
+-(c::ClongMax, x::BigInt) = c < 0 ? -(x + -(c % Culong)) : -(convert(Culong, c), x)
 
 function *(x::BigInt, c::CulongMax)
     z = BigInt()

@@ -2359,3 +2359,31 @@ end
 @test map(cos, 3) == cos(3)
 @test map(tan, 3) == tan(3)
 @test map(log, 3) == log(3)
+
+@test_throws InexactError convert(Uint8, big(300))
+
+# issue #10311
+let n = 1
+    @test n//n + n//big(n)*im == 1//1 + 1//1*im
+end
+
+# BigInt - (small negative) is tricky because gmp only has gmpz_sub_ui
+@test big(-200) - int8(-128) == -72
+
+# n % Type
+for T in Any[Int16, Int32, UInt32, Int64, UInt64, BigInt]
+    if !(T <: Unsigned)
+        @test convert(T, -200) %  Int8 === int8(56)
+        @test convert(T, -200) % UInt8 === 0x38
+        @test convert(T, -300) %  Int8 === int8(-44)
+        @test convert(T, -300) % UInt8 === 0xd4
+        @test convert(T, -128) %  Int8 === int8(-128)
+        @test convert(T, -128) % UInt8 === 0x80
+    end
+    @test convert(T,  127) %  Int8 === int8(127)
+    @test convert(T,  127) % UInt8 === 0x7f
+    @test convert(T,  128) %  Int8 === int8(-128)
+    @test convert(T,  128) % UInt8 === 0x80
+    @test convert(T,  200) %  Int8 === int8(-56)
+    @test convert(T,  300) % UInt8 === 0x2c
+end
