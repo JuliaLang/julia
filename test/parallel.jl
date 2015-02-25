@@ -217,9 +217,9 @@ num_small_requests = 10000
 # test parallel sends of large arrays from multiple tasks to the same remote worker
 ntasks = 10
 rr_list = [RemoteRef() for x in 1:ntasks]
+a=ones(2*10^5);
 for rr in rr_list
     @async let rr=rr
-        a=ones(10^6);
         try
             for i in 1:10
                 @test a == remotecall_fetch(id_other, (x)->x, a)
