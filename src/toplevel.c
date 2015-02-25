@@ -37,8 +37,9 @@ void jl_add_standard_imports(jl_module_t *m)
     // using Base
     jl_module_using(m, jl_base_module);
     // importall Base.Operators
-    jl_module_importall(m, (jl_module_t*)jl_get_global(jl_base_module,
-                                                       jl_symbol("Operators")));
+    jl_module_t *opmod = (jl_module_t*)jl_get_global(jl_base_module, jl_symbol("Operators"));
+    if (opmod != NULL)
+        jl_module_importall(m, opmod);
 }
 
 jl_module_t *jl_new_main_module(void)
