@@ -275,3 +275,12 @@ Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert((Int...), d))
 Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
+
+immutable Nullable{T}
+    isnull::Bool
+    value::T
+
+    Nullable() = new(true)
+    Nullable(value::T) = new(false, value)
+end
+
