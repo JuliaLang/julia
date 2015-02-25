@@ -127,7 +127,7 @@ end
     p = ccall(:realpath, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
-    c_free(p)
+    Libc.free(p)
     return s
 end
 

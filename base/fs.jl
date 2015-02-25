@@ -70,12 +70,12 @@ uvtype(::File) = Base.UV_RAW_FD
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer,mode::Integer)
-    req = c_malloc(_sizeof_uv_fs)
+    req = Libc.malloc(_sizeof_uv_fs)
     ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{UInt8},Int32,Int32,Ptr{Void}),
                 eventloop(), req, f.path, flags,mode, C_NULL)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
-    c_free(req)
+    Libc.free(req)
     uv_error("open",ret)
     f.open = true
     f
@@ -189,19 +189,19 @@ function write{T}(f::File, a::Array{T})
 end
 
 function truncate(f::File, n::Integer)
-    req = Base.c_malloc(_sizeof_uv_fs)
+    req = Base.Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_ftruncate,Int32,(Ptr{Void},Ptr{Void},Int32,Int64,Ptr{Void}),
                 eventloop(),req,f.handle,n,C_NULL)
-    c_free(req)
+    Libc.free(req)
     uv_error("ftruncate", err)
     f
 end
 
 function futime(f::File, atime::Float64, mtime::Float64)
-    req = Base.c_malloc(_sizeof_uv_fs)
+    req = Base.Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_futime,Int32,(Ptr{Void},Ptr{Void},Int32,Float64,Float64,Ptr{Void}),
                 eventloop(),req,f.handle,atime,mtime,C_NULL)
-    c_free(req)
+    Libc.free(req)
     uv_error("futime", err)
     f
 end

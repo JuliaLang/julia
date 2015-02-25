@@ -121,14 +121,14 @@ type Pipe <: AsyncStream
         nothing,nothing,Condition())
 end
 function Pipe()
-    handle = c_malloc(_sizeof_uv_named_pipe)
+    handle = Libc.malloc(_sizeof_uv_named_pipe)
     try
         ret = Pipe(handle)
         associate_julia_struct(ret.handle,ret)
         finalizer(ret,uvfinalize)
         return init_pipe!(ret;readable=true)
     catch
-        c_free(handle)
+        Libc.free(handle)
         rethrow()
     end
 end
@@ -159,15 +159,15 @@ function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=f
 end
 
 function PipeServer()
-    handle = c_malloc(_sizeof_uv_named_pipe)
+    handle = Libc.malloc(_sizeof_uv_named_pipe)
     try
         ret = PipeServer(handle)
         associate_julia_struct(ret.handle,ret)
         finalizer(ret,uvfinalize)
         return init_pipe!(ret;readable=true)
     catch
-        c_free(handle)
-        c_free(handle-1)
+        Libc.free(handle)
+        Libc.free(handle-1)
         rethrow()
     end
 end
@@ -204,7 +204,7 @@ type TTY <: AsyncStream
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
-    handle = c_malloc(_sizeof_uv_tty)
+    handle = Libc.malloc(_sizeof_uv_tty)
     ret = TTY(handle)
     associate_julia_struct(handle,ret)
     finalizer(ret,uvfinalize)
@@ -440,7 +440,7 @@ type SingleAsyncWork <: AsyncWork
     handle::Ptr{Void}
     cb::Function
     function SingleAsyncWork(cb::Function)
-        this = new(c_malloc(_sizeof_uv_async), cb)
+        this = new(Libc.malloc(_sizeof_uv_async), cb)
         associate_julia_struct(this.handle, this)
         preserve_handle(this)
         err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
@@ -452,7 +452,7 @@ type Timer <: AsyncWork
     handle::Ptr{Void}
     cb::Function
     function Timer(cb::Function)
-        this = new(c_malloc(_sizeof_uv_timer), cb)
+        this = new(Libc.malloc(_sizeof_uv_timer), cb)
         # We don't want to set a julia struct, but we also
         # want to make sure there's no garbage data in the
         # ->data field
@@ -460,7 +460,7 @@ type Timer <: AsyncWork
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0
             #TODO: this codepath is currently not tested
-            c_free(this.handle)
+            Libc.free(this.handle)
             this.handle = C_NULL
             throw(UVError("uv_make_timer",err))
         end
@@ -548,7 +548,7 @@ end
 
 ## pipe functions ##
 function malloc_julia_pipe(x)
-    x.handle = c_malloc(_sizeof_uv_named_pipe)
+    x.handle = Libc.malloc(_sizeof_uv_named_pipe)
     associate_julia_struct(x.handle,x)
     finalizer(x,uvfinalize)
 end
@@ -734,7 +734,7 @@ end
 
 function uv_write(s::AsyncStream, p, n::Integer)
     check_open(s)
-    uvw = c_malloc(_sizeof_uv_write)
+    uvw = Libc.malloc(_sizeof_uv_write)
     try
         uv_req_set_data(uvw,C_NULL)
         err = ccall(:jl_uv_write,
@@ -750,7 +750,7 @@ function uv_write(s::AsyncStream, p, n::Integer)
         ct.state = :waiting
         stream_wait(ct)
     finally
-        c_free(uvw)
+        Libc.free(uvw)
     end
     return Int(n)
 end
@@ -929,7 +929,7 @@ end
 
 function connect!(sock::Pipe, path::AbstractString)
     @assert sock.status == StatusInit
-    req = c_malloc(_sizeof_uv_connect)
+    req = Libc.malloc(_sizeof_uv_connect)
     uv_req_set_data(req,C_NULL)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting

@@ -36,8 +36,6 @@ function flush(s::IOStream)
 end
 iswritable(s::IOStream) = Bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
 isreadable(s::IOStream) = Bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
-modestr(s::IO) = modestr(isreadable(s), iswritable(s))
-modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)
@@ -72,30 +70,6 @@ function position(s::IOStream)
 end
 
 eof(s::IOStream) = ccall(:ios_eof_blocking, Int32, (Ptr{Void},), s.ios)!=0
-
-# For interfacing with C FILE* functions
-
-
-immutable CFILE
-    ptr::Ptr{Void}
-end
-
-function CFILE(s::IO)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    systemerror("fdopen", FILEp == C_NULL)
-    seek(CFILE(FILEp), position(s))
-end
-
-convert(::Type{CFILE}, s::IO) = CFILE(s)
-
-function seek(h::CFILE, offset::Integer)
-    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
-                               h.ptr, offset, 0) != 0)
-    h
-end
-
-position(h::CFILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 
 ## constructing and opening streams ##
 
