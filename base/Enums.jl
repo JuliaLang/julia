@@ -94,9 +94,9 @@ macro enum(T,syms...)
         Base.typemin{E<:$(esc(typename))}(x::Type{E}) = E($lo)
         Base.typemax{E<:$(esc(typename))}(x::Type{E}) = E($hi)
         Base.length{E<:$(esc(typename))}(x::Type{E}) = $(length(vals))
-        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(map(x->Meta.quot(x[1]), vals)...)]
         Base.next{E<:$(esc(typename))}(x::Type{E},s) = (E($values[s]),s+1)
         Base.done{E<:$(esc(typename))}(x::Type{E},s) = s > $(length(values))
+        Base.names{E<:$(esc(typename))}(x::Type{E}) = [$(map(x->Meta.quot(x[1]), vals)...)]
         function Base.print{E<:$(esc(typename))}(io::IO,x::E)
             for (sym, i) in $vals
                 if i == x.val

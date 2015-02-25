@@ -126,8 +126,9 @@ function help(io::IO, fname::AbstractString, obj=0)
                     println(io)
                 end
             end
-            if length(obj.names) > 0
-                println(io, "  fields   : ", obj.names)
+            fields = fieldnames(obj)
+            if !isempty(fields)
+                println(io, "  fields   : ", fields)
             end
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()

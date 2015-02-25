@@ -26,12 +26,12 @@ let implemented = IntSet()
         # Create the types
         indextype = symbol("CartesianIndex_$N")
         if !in(N,implemented)
-            fieldnames = [symbol("I_$i") for i = 1:N]
-            fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+            fnames = [symbol("I_$i") for i = 1:N]
+            fields = [Expr(:(::), fnames[i], :Int) for i = 1:N]
             extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
             eval(extype)
-            argsleft = [Expr(:(::), fieldnames[i], :Real) for i = 1:N]
-            argsright = [Expr(:call,:to_index,fieldnames[i]) for i=1:N]
+            argsleft = [Expr(:(::), fnames[i], :Real) for i = 1:N]
+            argsright = [Expr(:call,:to_index,fnames[i]) for i=1:N]
             exconstructor = Expr(:(=),Expr(:call,:(Base.call),:(::Type{CartesianIndex{$N}}),argsleft...),Expr(:call,indextype,argsright...))
             eval(exconstructor)
             push!(implemented,N)

@@ -44,7 +44,7 @@ function complete_symbol(sym, ffunc)
             end
         else
             # We're now looking for a type
-            fields = t.names
+            fields = fieldnames(t)
             found = false
             for i in 1:length(fields)
                 s == fields[i] || continue
@@ -79,7 +79,7 @@ function complete_symbol(sym, ffunc)
         end
     else
         # Looking for a member of a type
-        fields = t.names
+        fields = fieldnames(t)
         for field in fields
             s = string(field)
             if startswith(s, name)

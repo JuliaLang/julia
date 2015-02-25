@@ -315,11 +315,12 @@ function serialize(s, x)
         return write_as_tag(s, x)
     end
     t = typeof(x)
+    nf = nfields(t)
     serialize_type(s, t)
-    if length(t.names)==0 && t.size>0
+    if nf == 0 && t.size > 0
         write(s, x)
     else
-        for i in 1:length(t.names)
+        for i in 1:nf
             if isdefined(x, i)
                 serialize(s, getfield(x, i))
             else
@@ -527,11 +528,11 @@ end
 
 # default DataType deserializer
 function deserialize(s, t::DataType)
-    if length(t.names)==0 && t.size>0
+    nf = nfields(t)
+    if nf == 0 && t.size > 0
         # bits type
         return read(s, t)
     end
-    nf = length(t.names)
     if nf == 0
         return ccall(:jl_new_struct, Any, (Any,Any...), t)
     elseif isbits(t)
@@ -552,7 +553,7 @@ function deserialize(s, t::DataType)
         end
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
-        for i in 1:length(t.names)
+        for i in 1:nf
             tag = int32(read(s, UInt8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
                 ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
