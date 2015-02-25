@@ -504,9 +504,6 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
     if (isvalid) {
         char *fname = ModuleInfo.LoadedImageName;
         DWORD64 fbase = ModuleInfo.BaseOfImage;
-#ifdef LLVM35
-        size_t msize = ModuleInfo.ImageSize;
-#endif
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC) {
             return;
@@ -566,10 +563,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
-#if defined(_OS_DARWIN_) || defined(_OS_WINDOWS_)
-#if defined(_OS_WINDOWS_)
-#define origerrorobj errorobj
-#endif
+#if defined(_OS_DARWIN_)
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                     StringRef((const char *)fbase, msize), "", false);
@@ -587,7 +581,6 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
-#if defined(_OS_DARWIN_)
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
@@ -622,8 +615,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
-#endif // ifdef _OS_DARWIN_
-#else // ifdef  _OS_DARWIN_ || _OS_WINDOWS_
+#else // ifdef _OS_DARWIN_
             // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
