@@ -1402,3 +1402,6 @@ gstr = Base.GenericString("12");
 @test checkbounds(gstr,1.0)==true
 
 @test ind2chr(gstr,2)==2
+
+# issue #10307
+@test typeof(int16(String[])) == Vector{Int16}
