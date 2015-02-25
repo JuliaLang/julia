@@ -4,24 +4,14 @@ export Enum, @enum
 
 abstract Enum
 
-function Base.convert{T<:Integer}(::Type{T},x::Enum)
-    (x.val < typemin(T) || x.val > typemax(T)) && throw(InexactError())
-    convert(T, x.val)
-end
+Base.convert{T<:Integer}(::Type{T},x::Enum) = convert(T, x.val)
 Base.convert(::Type{BigInt},x::Enum) = big(x.val)
 function Base.convert{T<:Enum}(::Type{T},x::Integer)
     (x < typemin(T).val || x > typemax(T).val) && throw(InexactError())
     T(x)
 end
 Base.start{T<:Enum}(::Type{T}) = 1
-Base.next{T<:Enum}(::Type{T},s) = Base.next(names(T),s)
-Base.done{T<:Enum}(::Type{T},s) = Base.done(names(T),s)
-
-# Pass Integer through to Enum constructor through Val{T}
-call{T<:Enum}(::Type{T},x::Integer) = T(Val{convert(fieldtype(T,:val),x)})
-
-# Catchall that errors when specific Enum(::Type{Val{n}}) hasn't been defined
-call{T<:Enum,n}(::Type{T},::Type{Val{n}}) = throw(ArgumentError("invalid value for Enum $T, $n"))
+# next, done defined per Enum
 
 macro enum(T,syms...)
     if isempty(syms)
@@ -36,9 +26,9 @@ macro enum(T,syms...)
     for s in syms
         if isa(s,Symbol)
             if i == typemax(typeof(i))
-                i = widen(i) + one(typeof(i))
+                i = widen(i) + one(i)
             else
-                i += one(typeof(i))
+                i += one(i)
             end
         elseif isa(s,Expr) &&
                (s.head == :(=) || s.head == :kw) &&
@@ -58,41 +48,63 @@ macro enum(T,syms...)
         push!(vals, (s,i))
         I = typeof(i)
         enumT = length(vals) == 1 ? I : promote_type(enumT,I)
-        lo = min(lo, i)
-        hi = max(hi, i)
+        lo = convert(enumT,min(lo, i))
+        hi = convert(enumT,max(hi, i))
     end
-    if !hasexpr
+    if hasexpr
+        seen = Dict{Integer,Symbol}()
+        for (sym,i) in vals
+            if haskey(seen, i)
+                i = convert(enumT,i)
+                throw(ArgumentError("@enum argument values must be unique, $(seen[i])=$i and $sym=$i"))
+            else
+                seen[i] = sym
+            end
+        end
+    else
         n = length(vals)
         enumT = n <= typemax(Int8) ? Int8 :
                 n <= typemax(Int16) ? Int16 :
                 n <= typemax(Int32) ? Int32 : Int64
     end
+    values = enumT[i[2] for i in vals]
+    if !hasexpr || length(lo:hi) == length(values)
+        cond = :(x > $(lo - 1) && x < $(hi + 1))
+    else
+        val_set = Set{enumT}(values)
+        cond = :(x in $val_set)
+    end
+    inner_constructor = :($(esc(T))(x::Integer) =  $cond ? new(convert($enumT,x)) : throw(ArgumentError("invalid value for Enum $($(esc(T))), $x")))
+    quotedsyms = [Meta.quot(i[1]) for i in vals]
     blk = quote
         # enum definition
-        immutable $(esc(T)) <: $(esc(Enum))
+        immutable $(esc(T)) <: Enum
             val::$(esc(enumT))
+            $inner_constructor
         end
+        # enum traits
         $(esc(:(Base.typemin)))(x::Type{$(esc(T))}) = $(esc(T))($lo)
         $(esc(:(Base.typemax)))(x::Type{$(esc(T))}) = $(esc(T))($hi)
         $(esc(:(Base.length)))(x::Type{$(esc(T))}) = $(length(vals))
-        $(esc(:(Base.names)))(x::Type{$(esc(T))}) = $(esc(T))[]
+        $(esc(:(Base.names)))(x::Type{$(esc(T))}) = [$(quotedsyms...)]
+        $(esc(:(Base.next)))(::Type{$(esc(T))},s) = ($(esc(T))($values[s]),s+1)
+        $(esc(:(Base.done)))(::Type{$(esc(T))},s) = s > $(length(values))
         function $(esc(:(Base.show))){T<:$(esc(T))}(io::IO,x::T)
             vals = $vals
             for (sym, i) in vals
                 i = convert($(esc(enumT)), i)
-                i == x.val && print(io, sym)
+                if i == x.val
+                    print(io, sym)
+                    break
+                end
             end
             print(io, "::", T.name)
         end
     end
     for (sym,i) in vals
         i = convert(enumT, i)
-        # add inner constructors to Enum type definition for specific Val{T} values
-        push!(blk.args[2].args[3].args, :($(esc(T))(::Type{Val{$i}}) = new($i)))
         # define enum member constants
         push!(blk.args, :(const $(esc(sym)) = $(esc(T))($i)))
-        # add enum member value to names(T) function
-        push!(blk.args[10].args[2].args[2].args, :($(esc(sym))))
     end
     push!(blk.args, :nothing)
     blk.head = :toplevel
