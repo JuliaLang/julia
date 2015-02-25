@@ -115,7 +115,14 @@ end
 
 type Sparse{Tv<:VTypes,Ti<:ITypes} <: AbstractSparseMatrix{Tv,Ti}
     p::Ptr{C_Sparse{Tv,Ti}}
+    function Sparse(ptr::Ptr{C_Sparse{Tv,Ti}})
+        if ptr == C_NULL
+            throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
+        end
+        new(ptr)
+    end
 end
+Sparse{Tv<:VTypes,Ti<:ITypes}(p::Ptr{C_Sparse{Tv,Ti}}) = Sparse{Tv,Ti}(p)
 
 # Factor
 
@@ -582,9 +589,13 @@ for Ti in IndexTypes
 
         # Autodetects the types
         function read_sparse(file::CFILE, ::Type{$Ti})
-            s = Sparse(ccall((@cholmod_name("read_sparse", $Ti), :libcholmod), Ptr{C_SparseVoid},
+            ptr = ccall((@cholmod_name("read_sparse", $Ti), :libcholmod), Ptr{C_SparseVoid},
                 (Ptr{Void}, Ptr{UInt8}),
-                    file.ptr, common($Ti)))
+                    file.ptr, common($Ti))
+            if ptr == C_NULL
+                throw(ArgumentError("sparse matrix construction failed. Check that input file is valid."))
+            end
+            s = Sparse(ptr)
             finalizer(s, free!)
             s
         end
@@ -667,6 +678,11 @@ Sparse{Tv<:VTypes,Ti<:ITypes}(A::Hermitian{Tv,SparseMatrixCSC{Tv,Ti}}) = Sparse(
 
 # Useful when reading in files, but not type stable
 function Sparse(p::Ptr{C_SparseVoid})
+
+    if p == C_NULL
+        throw(ArgumentError("sparse matrix construction failed for unknown reasons. Please submit a bug report."))
+    end
+
     s = unsafe_load(p)
 
     # Check integer type
