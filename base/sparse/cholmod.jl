@@ -725,7 +725,7 @@ end
 # default is Cint which is probably sufficient when converted from dense matrix
 Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
-function Sparse(filename::ASCIIString)
+function Sparse(filename::ByteString)
     f = open(filename)
     A = read_sparse(CFILE(f), SuiteSparse_long)
     close(f)
