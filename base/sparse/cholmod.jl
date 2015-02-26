@@ -726,10 +726,9 @@ end
 Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::ByteString)
-    f = open(filename)
-    A = read_sparse(CFILE(f), SuiteSparse_long)
-    close(f)
-    A
+    open(filename) do f
+        return read_sparse(CFILE(f), SuiteSparse_long)
+    end
 end
 
 ## convertion back to base Julia types
