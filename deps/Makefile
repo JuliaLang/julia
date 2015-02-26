@@ -1687,7 +1687,7 @@ compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
 patchelf-$(PATCHELF_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
+	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
