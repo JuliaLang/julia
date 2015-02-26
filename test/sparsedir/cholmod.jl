@@ -184,15 +184,31 @@ B = CHOLMOD.Sparse(SparseMatrixCSC{Float64,Int32}(sprandn(48, 48, 0.1))) # A has
 @test_approx_eq A*B sparse(A)*sparse(B)
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
-writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-@test sparse(CHOLMOD.Sparse("tmp.mtx")) == [1 0 0;0 1 0.5;0 0.5 1]
-run(`rm tmp.mtx`)
-writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate complex Hermitian","3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
-@test sparse(CHOLMOD.Sparse("tmp.mtx")) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
-run(`rm tmp.mtx`)
-writedlm("tmp.mtx", ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
-@test_throws ArgumentError sparse(CHOLMOD.Sparse("tmp.mtx"))
-run(`rm tmp.mtx`)
+let testfile = joinpath(tempdir(), "tmp.mtx")
+    try
+        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5;0 0.5 1]
+    finally
+        rm(testfile)
+    end
+end
+let testfile = joinpath(tempdir(), "tmp.mtx")
+    try
+        writedlm(testfile, ["%%MatrixMarket matrix coordinate complex Hermitian",
+                 "3 3 4","1 1 1.0 0.0","2 2 1.0 0.0","3 2 0.5 0.5","3 3 1.0 0.0"])
+        @test sparse(CHOLMOD.Sparse(testfile)) == [1 0 0;0 1 0.5-0.5im;0 0.5+0.5im 1]
+    finally
+        rm(testfile)
+    end
+end
+let testfile = joinpath(tempdir(), "tmp.mtx")
+    try
+        writedlm(testfile, ["%%MatrixMarket matrix coordinate real symmetric","%3 3 4","1 1 1","2 2 1","3 2 0.5","3 3 1"])
+        @test_throws ArgumentError sparse(CHOLMOD.Sparse(testfile))
+    finally
+        rm(testfile)
+    end
+end
 
 # test that Sparse(Ptr) constructor throws the right places
 @test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_Sparse{Float64,CHOLMOD.SuiteSparse_long}}, C_NULL))
