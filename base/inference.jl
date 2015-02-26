@@ -742,8 +742,17 @@ function abstract_call_gf(f, fargs, argtypes, e)
         # limit argument type tuple based on size of definition signature.
         # for example, given function f(T, Any...), limit to 3 arguments
         # instead of the default (MAX_TUPLETYPE_LEN)
+        sp = inference_stack
+        limit = false
+        # look at the stack to detect recursive calls with growing argument lists
+        while sp !== EmptyCallStack()
+            if linfo.ast === sp.ast && length(argtypes) > length(sp.types)
+                limit = true; break
+            end
+            sp = sp.prev
+        end
         ls = length(sig)
-        if ls > lsig+1 && !(isdefined(Main.Base,:promote_typeof) && f === Main.Base.promote_typeof)
+        if limit && ls > lsig+1 && !(isdefined(Main.Base,:promote_typeof) && f === Main.Base.promote_typeof)
             fst = sig[lsig+1]
             allsame = true
             # allow specializing on longer arglists if all the trailing
