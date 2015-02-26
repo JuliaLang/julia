@@ -12,7 +12,6 @@ notifications:
     webhooks:
         urls:
           - http://status.julialang.org/put/travis
-          - http://criid.ee.washington.edu:8000/travis-hook
           - http://julia.mit.edu:8000/travis-hook
 before_install:
     - if [ `uname` = "Linux" ]; then
