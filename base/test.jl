@@ -1,58 +1,112 @@
-module Test
+module BaseTest
 
-export @test, @test_fails, @test_throws, @test_approx_eq, @test_approx_eq_eps, @inferred
+export @test, @test_fails, @test_throws, 
+       @test_approx_eq, @test_approx_eq_eps, @inferred,
+       set_options, clear_results
 
 abstract Result
+
+#=
+Global state:
+Base.Test maintains tests results and some simple options in
+global variables. Accessor methods are provided so that
+packages may use the test results however they want, e.g. to
+display them in some different way.
+=#
+
+# By default, do not fail instantly.
+_fail_immediate = false
+
+# By default, store results of tests. The alternative is to 
+# store only the test outcomes, important if the test results
+# consume a significant amount of memory, or we're just in a
+# low memory environment.
+_store_results = true
+
+function set_options(; fail_immediate::Bool=nothing, 
+                       store_results::Bool=nothing)
+    global _fail_immediate
+    if fail_immediate != nothing
+        _fail_immediate = fail_immediate
+    end
+    global _store_results
+    if store_results != nothing
+        _store_results = store_results
+    end
+    nothing
+end
+
+_results_count = Dict(:success=>0,:failure=>0,:error=>0)
+_results       = Result[]
+
+function clear_results()
+    global _results_count, _results
+    _results_count = Dict(:success=>0,:failure=>0,:error=>0)
+    _results       = Result[]
+end
+
+#=
+Results:
+Store information about the tests that failed, and the
+way they failed.
+=#
 type Success <: Result
     expr
     resultexpr
 end
 Success(expr) = Success(expr, nothing)
+function do_result(r::Success)
+    _results_count[:success] += 1
+    _store_results && push!(_results, r)
+    return r
+end
+
 type Failure <: Result
     expr
     resultexpr
 end
 Failure(expr) = Failure(expr, nothing)
+function do_result(r::Failure)
+    if _fail_immediate
+        if r.resultexpr != nothing
+            error("test failed: $(r.resultexpr)\n in expression: $(r.expr)")
+        else
+            error("test failed in expression: $(r.expr)")
+        end
+    end
+    _results_count[:failure] += 1
+    _store_results && push!(_results, r)
+    return r
+end
+
 type Error <: Result
     expr
     err
     backtrace
 end
-
-default_handler(r::Success) = nothing
-function default_handler(r::Failure)
-    if r.resultexpr != nothing
-        error("test failed: $(r.resultexpr)\n in expression: $(r.expr)")
-    else
-        error("test failed in expression: $(r.expr)")
-    end
+function do_result(r::Error)
+    _fail_immediate && rethrow(r)
+    _results_count[:error] += 1
+    _store_results && push!(_results, r)
+    return r
 end
-default_handler(r::Error) = rethrow(r)
-
-handler() = get(task_local_storage(), :TEST_HANDLER, default_handler)
-
-with_handler(f::Function, handler) =
-    task_local_storage(f, :TEST_HANDLER, handler)
-
-import Base.showerror
-
-showerror(io::IO, r::Error) = showerror(io, r, [])
-function showerror(io::IO, r::Error, bt)
+Base.showerror(io::IO, r::Error) = showerror(io, r, [])
+function Base.showerror(io::IO, r::Error, bt)
     println(io, "test error in expression: $(r.expr)")
     showerror(io, r.err, r.backtrace)
 end
 
 function do_test(body,qex)
-    handler()(try
+    try
         rex, val = body()
-        val ? Success(qex, rex) : Failure(qex,rex)
+        do_result(val ? Success(qex, rex) : Failure(qex,rex))
     catch err
-        Error(qex,err,catch_backtrace())
-    end)
+        do_result(Error(qex,err,catch_backtrace()))
+    end
 end
 
 function do_test_throws(body, qex, bt, extype)
-    handler()(try
+    do_result()(try
         body()
         Failure(qex, "$qex did not throw $(extype == nothing ? "anything" : extype)")
     catch err
@@ -78,11 +132,13 @@ end
 
 macro test(ex)
     if typeof(ex) == Expr && ex.head == :comparison
+        # If the test is a comparison, we store the values of all
+        # terms in the comparison
         syms = [gensym() for i = 1:length(ex.args)]
         func_block = Expr(:block)
-        # insert assignment into a block
+        # Insert assignment into a block
         func_block.args = [:($(syms[i]) = $(esc(ex.args[i]))) for i = 1:length(ex.args)]
-        # finish the block with a return
+        # Finish the block with a return
         push!(func_block.args, Expr(:return, :(Expr(:comparison, $(syms...)), $(Expr(:comparison, syms...)))))
         :(do_test(()->($func_block), $(Expr(:quote,ex))))
     else
@@ -101,11 +157,6 @@ macro test_throws(args...)
         extype = args[1]
     end
     :(do_test_throws(()->($(esc(ex))),$(Expr(:quote,ex)),backtrace(),$(esc(extype))))
-end
-
-macro test_fails(ex)
-    Base.warn_once("@test_fails is deprecated, use @test_throws instead.")
-    :(@test_throws $ex Exception)
 end
 
 approx_full(x::AbstractArray) = x
