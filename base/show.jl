@@ -6,7 +6,8 @@ function show(io::IO, x::ANY)
     t = typeof(x)::DataType
     show(io, t)
     print(io, '(')
-    if t.names !== () || t.size==0
+    nf = nfields(t)
+    if nf != 0 || t.size==0
         recorded = false
         oid = object_id(x)
         shown_set = get(task_local_storage(), :SHOWNSET, nothing)
@@ -22,15 +23,15 @@ function show(io::IO, x::ANY)
                 push!(shown_set, oid)
                 recorded = true
 
-                n = length(t.names)
-                for i=1:n
-                    f = t.names[i]
+                nf = nfields(t)
+                for i=1:nf
+                    f = fieldname(t, i)
                     if !isdefined(x, f)
                         print(io, undef_ref_str)
                     else
                         show(io, x.(f))
                     end
-                    if i < n
+                    if i < nf
                         print(io, ',')
                     end
                 end
@@ -735,10 +736,10 @@ end
 function xdump(fn::Function, io::IO, x, n::Int, indent)
     T = typeof(x)
     print(io, T, " ")
-    if isa(T, DataType) && length(T.names) > 0
+    if isa(T, DataType) && nfields(T) > 0
         println(io)
         if n > 0
-            for field in T.names
+            for field in fieldnames(T)
                 if field != symbol("")    # prevents segfault if symbol is blank
                     print(io, indent, "  ", field, ": ")
                     if isdefined(x,field)
@@ -787,18 +788,19 @@ xdump(fn::Function, io::IO, x::Array, n::Int, indent) =
 xdump(fn::Function, io::IO, x::UnionType, n::Int, indent) = println(io, x)
 function xdump(fn::Function, io::IO, x::DataType, n::Int, indent)
     println(io, x, "::", typeof(x), " ", " <: ", super(x))
+    fields = fieldnames(x)
     if n > 0
-        for idx in 1:min(10,length(x.names))
-            if x.names[idx] != symbol("")    # prevents segfault if symbol is blank
-                print(io, indent, "  ", x.names[idx], "::")
+        for idx in 1:min(10, length(fields))
+            if fields[idx] != symbol("")    # prevents segfault if symbol is blank
+                print(io, indent, "  ", fields[idx], "::")
                 if isa(x.types[idx], DataType)
-                    xdump(fn, io, x.types[idx], n - 1, string(indent, "  "))
+                    xdump(fn, io, fieldtype(x,idx), n - 1, string(indent, "  "))
                 else
-                    println(io, x.types[idx])
+                    println(io, fieldtype(x,idx))
                 end
             end
         end
-        if length(x.names) > 10
+        if length(fields) > 10
             println(io, indent, "  ...")
         end
     end
@@ -816,7 +818,7 @@ function dumptype(io::IO, x, n::Int, indent)
     typargs(t) = split(string(t), "{")[1]
     # todo: include current module?
     for m in (Core, Base)
-        for s in names(m)
+        for s in fieldnames(m)
             if isdefined(m,s)
                 t = eval(m,s)
                 if isa(t, TypeConstructor)

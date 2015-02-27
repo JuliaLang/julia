@@ -195,6 +195,9 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * `names` for composite datatypes has been deprecated and
+    renamed to `fieldnames` ([#10332]).
+
   * The `Graphics` module has been removed from `Base` and is now a
     standalone package ([#10150], [#9862]).
 
