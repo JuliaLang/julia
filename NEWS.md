@@ -200,6 +200,9 @@ Deprecated or removed
   * `names` for composite datatypes has been deprecated and
     renamed to `fieldnames` ([#10332]).
 
+  * `DArray` functionality has been removed from `Base` and is now a
+    standalone package under the JuliaParallel umbrella organization ([#10333]).
+
   * The `Graphics` module has been removed from `Base` and is now a
     standalone package ([#10150], [#9862]).
 

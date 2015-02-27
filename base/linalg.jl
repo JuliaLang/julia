@@ -204,7 +204,6 @@ include("linalg/matmul.jl")
 include("linalg/lapack.jl")
 
 include("linalg/dense.jl")
-include("linalg/distributed.jl")
 include("linalg/tridiag.jl")
 include("linalg/triangular.jl")
 include("linalg/factorization.jl")

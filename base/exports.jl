@@ -41,7 +41,6 @@ export
     Complex128,
     Complex64,
     Complex32,
-    DArray,
     DenseMatrix,
     DenseVecOrMat,
     DenseVector,
@@ -105,8 +104,6 @@ export
     StridedVecOrMat,
     StridedVector,
     SubArray,
-    SubDArray,
-    SubOrDArray,
     SubString,
     Symmetric,
     SymTridiagonal,
@@ -1269,17 +1266,6 @@ export
     redisplay,
     HTML,
     Text,
-
-# distributed arrays
-    dfill,
-    distribute,
-    dones,
-    drand,
-    drandn,
-    dzeros,
-    localpart,
-    localindexes,
-    procs,
 
 # shared arrays
     sdata,
