@@ -1656,13 +1656,6 @@ function rsearch(a::ByteArray, b::Char, i::Integer)
 end
 rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
 
-# return a random string (often useful for temporary filenames/dirnames)
-let b = UInt8['0':'9';'A':'Z';'a':'z']
-    global randstring
-    randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
-    randstring() = randstring(8)
-end
-
 function hex2bytes(s::ASCIIString)
     len = length(s)
     iseven(len) || throw(ArgumentError("string length must be even: length($(repr(s))) == $len"))

@@ -793,9 +793,11 @@ Any[
 
 "),
 
-("Base","randperm","randperm(n)
+("Base","randperm","randperm([rng], n)
 
-   Construct a random permutation of the given length.
+   Construct a random permutation of length \"n\". The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
@@ -827,19 +829,22 @@ Any[
 
 "),
 
-("Base","randcycle","randcycle(n)
+("Base","randcycle","randcycle([rng], n)
 
-   Construct a random cyclic permutation of the given length.
-
-"),
-
-("Base","shuffle","shuffle(v)
-
-   Return a randomly permuted copy of \"v\".
+   Construct a random cyclic permutation of length \"n\". The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
-("Base","shuffle!","shuffle!(v)
+("Base","shuffle","shuffle([rng], v)
+
+   Return a randomly permuted copy of \"v\". The optional \"rng\"
+   argument specifies a random number generator, see *Random Numbers*.
+
+"),
+
+("Base","shuffle!","shuffle!([rng], v)
 
    In-place version of \"shuffle()\".
 
@@ -12493,10 +12498,12 @@ popdisplay(d::Display)
 
 "),
 
-("Base","randstring","randstring(len)
+("Base","randstring","randstring([rng], len=8)
 
    Create a random ASCII string of length \"len\", consisting of
-   upper- and lower-case letters and the digits 0-9
+   upper- and lower-case letters and the digits 0-9. The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
