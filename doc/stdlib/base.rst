@@ -955,10 +955,11 @@ Internals
 
    Disable garbage collection. This should be used only with extreme
    caution, as it can cause memory use to grow without bound.
+   Returns previous GC state.
 
 .. function:: gc_enable()
 
-   Re-enable garbage collection after calling :func:`gc_disable`.
+   Re-enable garbage collection after calling :func:`gc_disable`. Returns previous GC state.
 
 .. function:: macroexpand(x)
 

@@ -1948,8 +1948,18 @@ static void gc_verify(void)
 // collector entry point and control
 
 static int is_gc_enabled = 1;
-DLLEXPORT void jl_gc_enable(void)    { is_gc_enabled = 1; }
-DLLEXPORT void jl_gc_disable(void)   { is_gc_enabled = 0; }
+DLLEXPORT int jl_gc_enable(void)
+{
+    int prev = is_gc_enabled;
+    is_gc_enabled = 1;
+    return prev;
+}
+DLLEXPORT int jl_gc_disable(void)
+{
+    int prev = is_gc_enabled;
+    is_gc_enabled = 0;
+    return prev;
+}
 DLLEXPORT int jl_gc_is_enabled(void) { return is_gc_enabled; }
 
 DLLEXPORT int64_t jl_gc_total_bytes(void) { return total_allocd_bytes + allocd_bytes + collect_interval; }

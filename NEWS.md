@@ -111,6 +111,8 @@ Library improvements
 
   * Other improvements
 
+    * `gc_enable`, `gc_disable` returns previous GC state.
+
     * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
 
     * `convert` now checks for overflow when truncating integers or converting between
