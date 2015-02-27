@@ -251,9 +251,11 @@
    Get the previous valid string index before ``i``. Returns a value less than ``1`` at
    the beginning of the string.
 
-.. function:: randstring(len)
+.. function:: randstring([rng,] len=8)
 
-   Create a random ASCII string of length ``len``, consisting of upper- and lower-case letters and the digits 0-9
+   Create a random ASCII string of length ``len``, consisting of upper- and
+   lower-case letters and the digits 0-9. The optional ``rng`` argument
+   specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: charwidth(c)
 
