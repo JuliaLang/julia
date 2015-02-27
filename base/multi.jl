@@ -110,8 +110,8 @@ type WorkerConfig
     environ::Nullable{Dict}
 
     function WorkerConfig()
-        wc=new()
-        for n in names(WorkerConfig)
+        wc = new()
+        for n in fieldnames(WorkerConfig)
             T = eltype(fieldtype(WorkerConfig, n))
             setfield!(wc, n, Nullable{T}())
         end

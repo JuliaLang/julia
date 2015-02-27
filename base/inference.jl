@@ -343,7 +343,7 @@ const getfield_tfunc = function (A, s0, name)
                 end
             end
         end
-        for i=1:length(s.names)
+        for i=1:nfields(s)
             if is(s.names[i],fld)
                 R = s.types[i]
                 if s.parameters === ()
@@ -360,7 +360,7 @@ const getfield_tfunc = function (A, s0, name)
             return Bottom
         end
         i::Int = A[2]
-        if i < 1 || i > length(s.names)
+        if i < 1 || i > nfields(s)
             return Bottom
         end
         return s.types[i]
