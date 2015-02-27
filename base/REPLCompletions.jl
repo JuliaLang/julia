@@ -130,7 +130,7 @@ function complete_path(path::AbstractString, pos)
             push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
-    matches = UTF8String[replace(s, r" ", "\\ ") for s in matches]
+    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
     startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
     # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
     # hence we need to add one to get the first index. This is also correct when considering
