@@ -137,7 +137,8 @@ function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, m
     ind   = [1:2:nsv*2;]
     sval  = abs(ex[1][ind])
 
-    ritzvec || return (sval, ex[2], ex[3], ex[4], ex[5])
+    #The sort is necessary to work around #10329
+    ritzvec || return (sort!(sval, by=real, rev=true), ex[2], ex[3], ex[4], ex[5])
 
     # calculating singular vectors
     left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')
