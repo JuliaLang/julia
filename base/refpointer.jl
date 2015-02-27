@@ -14,13 +14,15 @@ type RefValue{T} <: Ref{T}
     RefValue() = new()
     RefValue(x) = new(x)
 end
-Base.convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
-Base.call{T}(::Type{Ref{T}}) = RefValue{T}()
+RefValue{T}(x::T) = RefValue{T}(x)
 
 Ref(x::Ref) = x
-Ref{T}(x::T) = RefValue{T}(x)
+Ref(x::Any) = RefValue(x)
 Ref{T}(x::Ptr{T}, i::Integer=1) = x + (i-1)*Core.sizeof(T)
 Ref(x, i::Integer) = (i != 1 && error("Object only has one element"); Ref(x))
+Base.call{T}(::Type{Ref{T}}) = RefValue{T}() # Ref{T}()
+Base.call{T}(::Type{Ref{T}}, x) = RefValue{T}(x) # Ref{T}(x)
+Base.convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
 
 function Base.cconvert{T}(P::Type{Ptr{T}}, b::RefValue{T})
     if isbits(T)
@@ -42,13 +44,16 @@ Base.cconvert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = Base.convert(Ptr{Void}, Ba
 pointer{T}(x::AbstractArray{T}) = cconvert(Ptr{T}, x)
 pointer{T}(x::AbstractArray{T}, i::Integer) = cconvert(Ptr{T},x) + (i-1)*elsize(x)
 
-immutable RefArray{T, A<:AbstractArray} <: Ref{T}
+immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A
     i::Int
-    RefArray(x,i) = (@assert(eltype(A) == T); new(x,i))
+    roots::R # should be either ::Void or ::Any
+    RefArray(x,i,roots=nothing) = (@assert(eltype(A) == T); new(x,i,roots))
 end
-Base.convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray{T,typeof(x)}(x, 1)
-Ref{T}(x::AbstractArray{T}, i::Integer=1) = RefArray{T,typeof(x)}(x, i)
+RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, 1, roots)
+RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, 1, nothing)
+Base.convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray(x, 1)
+Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
 function Base.cconvert{T}(P::Type{Ptr{T}}, b::RefArray{T})
     if isbits(T)
