@@ -1132,8 +1132,8 @@ extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
 
 void jl_gc_init(void);
 void jl_gc_setmark(jl_value_t *v);
-DLLEXPORT void jl_gc_enable(void);
-DLLEXPORT void jl_gc_disable(void);
+DLLEXPORT int jl_gc_enable(void);
+DLLEXPORT int jl_gc_disable(void);
 DLLEXPORT int jl_gc_is_enabled(void);
 DLLEXPORT int64_t jl_gc_total_bytes(void);
 DLLEXPORT uint64_t jl_gc_total_hrtime(void);

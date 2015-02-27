@@ -113,3 +113,11 @@ let # test the process title functions, issue #9957
     Sys.set_process_title(oldtitle)
     @test Sys.get_process_title() == oldtitle
 end
+
+
+# test gc_enable/disable
+@test gc_enable()
+@test gc_disable()
+@test gc_disable() == false
+@test gc_enable() == false
+@test gc_enable()
