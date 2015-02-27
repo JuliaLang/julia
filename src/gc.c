@@ -117,14 +117,14 @@ static region_t *find_region(void *ptr)
     }
     return NULL;
 }
-gcpage_t *page_metadata(void *data)
+static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data);
     int pg_idx = (GC_PAGE_DATA(data) - &r->pages[0][0])/GC_PAGE_SZ;
     return &r->meta[pg_idx];
 }
 
-char *page_age(gcpage_t *pg)
+static char *page_age(gcpage_t *pg)
 {
     return pg->ages;
 }
@@ -358,6 +358,7 @@ static inline int gc_setmark_big(void *o, int mark_mode)
     if (bits == GC_QUEUED || bits == GC_MARKED)
         mark_mode = GC_MARKED;
     if ((mark_mode == GC_MARKED) & (bits != GC_MARKED)) {
+        // Move hdr from big_objects list to big_objects_marked list
         *hdr->prev = hdr->next;
         if (hdr->next)
             hdr->next->prev = hdr->prev;
@@ -813,6 +814,8 @@ static int big_total;
 static int big_freed;
 static int big_reset;
 
+// Sweep list rooted at *pv, removing and freeing any unmarked objects.
+// Return pointer to last `next` field in the culled list.
 static bigval_t** sweep_big_list(int sweep_mask, bigval_t** pv)
 {
     bigval_t *v = *pv;
@@ -838,6 +841,7 @@ static bigval_t** sweep_big_list(int sweep_mask, bigval_t** pv)
             gc_bits(&v->_data) = bits;
         }
         else {
+            // Remove v from list and free it
             *pv = nxt;
             if (nxt)
                 nxt->prev = pv;
@@ -859,6 +863,7 @@ static void sweep_big(int sweep_mask)
     sweep_big_list(sweep_mask, &big_objects);
     if (sweep_mask == GC_MARKED) {
         bigval_t** last_next = sweep_big_list(sweep_mask, &big_objects_marked);
+        // Move all survivors from big_objects_marked list to big_objects list.
         if (big_objects)
             big_objects->prev = last_next;
         *last_next = big_objects;
