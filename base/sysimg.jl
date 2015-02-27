@@ -205,8 +205,7 @@ include("loading.jl")
 # Polling (requires multi.jl)
 include("poll.jl")
 
-# distributed arrays and memory-mapped arrays
-include("darray.jl")
+# memory-mapped and shared arrays
 include("mmap.jl")
 include("sharedarray.jl")
 
