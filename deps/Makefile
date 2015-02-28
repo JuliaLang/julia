@@ -1741,8 +1741,8 @@ endif
 
 clean-virtualenv:
 	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
-	-rm -f $(VIRTUALENV_TARGET)
-distclean-virtualenv:
+	-rm -rf $(VIRTUALENV_TARGET)
+distclean-virtualenv: clean-virtualenv
 	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
 
 get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz
