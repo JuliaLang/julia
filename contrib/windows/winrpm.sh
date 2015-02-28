@@ -83,7 +83,7 @@ for i in $toinstall; do
   checksum=$(echo $pkgi | $xp "/package/checksum/text()" -)
   eval $(echo $pkgi | $xp "/package/location/@href" -)
   echo "downloading $href"
-  retry_curl $url/$href > $href
+  ../deps/jldownload $href $url/$href
   echo "$checksum *$href" | sha256sum -c
   7z x -y $href
   cpiofile=$(basename $href | sed 's/.rpm$/.cpio/')
