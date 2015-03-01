@@ -327,6 +327,8 @@ Julia's package manager is designed so that when you have a package installed, y
 You are also able to make changes to packages, commit them using git, and easily contribute fixes and enhancements upstream.
 Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
 
+.. _man-pkg-dev-setup:
+
 Initial Setup
 -------------
 
@@ -377,17 +379,23 @@ called a *pull request* because you are asking to "pull" your changes
 into the project's main repository. Because the online repository
 can't see the code on your private machine, you first *push* your
 changes to a publicly-visible location, your own online *fork* of
-package (hosted on your own personal GitHub account).
+the package (hosted on your own personal GitHub account).
 
-In the description below, anything starting with ``Pkg.`` is meant to
-be typed at the Julia prompt; anything starting with ``git`` is meant
-to be typed at the command line.
+Let's assume you already have the ``Foo`` package installed.  In the
+description below, anything starting with ``Pkg.`` is meant to be
+typed at the Julia prompt; anything starting with ``git`` is meant to
+be typed in :ref:`julia's shell mode <man-shell-mode>` (or using the
+shell that comes with your operating system).  Within julia, you can
+combine these two modes::
 
-Let's assume you already have the ``Foo`` package installed and want
-to make changes.  While there are several possible approaches, here is
-one that is widely used:
+    julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
 
-- From within Julia, type ``Pkg.checkout("Foo")``. This ensures you're
+    shell> git command arguments...    # command will apply to Foo
+
+Now suppose you're ready to make some changes to ``Foo``.  While there
+are several possible approaches, here is one that is widely used:
+
+- From the Julia prompt, type ``Pkg.checkout("Foo")``. This ensures you're
   running the latest code (the ``master`` branch), rather than just
   whatever "official release" version you have installed. (If you're
   planning to fix a bug, at this point it's a good idea to check again
@@ -397,13 +405,13 @@ one that is widely used:
   an error ``Foo is dirty, bailing``, see :ref:`Dirty packages
   <man-pkg-dirty>` below.
 
-- Create a branch for your changes: from the command line (not within
-  Julia), navigate to the package folder (e.g.,
-  ``~/.julia/v0.4/Foo/``) and create a new branch using ``git
-  checkout -b <newbranch>``, where ``<newbranch>`` might be some
-  descriptive name (e.g., ``fixbar``). By creating a branch, you
-  ensure that you can easily go back and forth between your new work
-  and the current ``master`` branch (see
+- Create a branch for your changes: navigate to the package folder
+  (the one that julia reports from ``Pkg.dir("Foo")``) and (in shell
+  mode) create a new branch using ``git checkout -b <newbranch>``,
+  where ``<newbranch>`` might be some descriptive name (e.g.,
+  ``fixbar``). By creating a branch, you ensure that you can easily go
+  back and forth between your new work and the current ``master``
+  branch (see
   `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
 
   If you forget to do this step until after you've already made some
@@ -433,7 +441,7 @@ one that is widely used:
     approach, you do have to do some extra work to make :ref:`changes
     in the package code <man-workflow-tips>`.
 
-  Alternatively, run the tests from the command line with ``julia
+  Alternatively, run the tests from the shell with ``julia
   runtests.jl`` from within the package's ``test/`` folder.
 
 
@@ -441,10 +449,12 @@ one that is widely used:
 
 - Submit your changes: from within julia, type
   ``Pkg.submit("Foo")``. This will push your changes to your GitHub
-  fork, creating it if it doesn't already exist.  Julia will then give
-  you a hyperlink; open that link, edit the message, and then click
-  "submit." At that point, the package owner will be notified of your
-  changes and may initiate discussion.
+  fork, creating it if it doesn't already exist.  (If you encounter an
+  error, :ref:`make sure you've set up your SSH keys
+  <man-pkg-dev-setup>`.) Julia will then give you a hyperlink; open
+  that link, edit the message, and then click "submit." At that point,
+  the package owner will be notified of your changes and may initiate
+  discussion.
 
 - The package owner may make some suggestions for additional
   improvements.  To respond to those suggestions, you can easily
@@ -453,12 +463,12 @@ one that is widely used:
   starting a new branch):
 
   + If you've changed branches in the meantime, make sure you go back
-    to the same branch with ``git checkout fixbar`` (from the command
-    line) or ``Pkg.checkout("Foo", "fixbar")`` (from julia).
+    to the same branch with ``git checkout fixbar`` (from shell mode)
+    or ``Pkg.checkout("Foo", "fixbar")`` (from the julia prompt).
 
   + As above, make your changes, run the tests, and commit your changes.
 
-  + From the command line, type ``git push``.  This will add your new
+  + From the shell, type ``git push``.  This will add your new
     commit(s) to the same pull request; you should see them appear
     automatically on the page holding the discussion of your pull
     request.
@@ -473,7 +483,7 @@ Dirty packages
 
 If you can't change branches because the package manager complains
 that your package is dirty, it means you have some changes that have
-not been committed. From the command line, use ``git diff`` to see
+not been committed. From the shell, use ``git diff`` to see
 what these changes are; you can either discard them (``git checkout
 changedfile.jl``) or commit them before switching branches.  If you
 can't easily resolve the problems manually, as a last resort you can
@@ -499,7 +509,7 @@ following procedure:
 
 - Create a new branch. This branch will hold your changes.
 - Make sure everything is committed to this branch.
-- ``git checkout master``. If this fails, *do not* procede further
+- ``git checkout master``. If this fails, *do not* proceed further
   until you have resolved the problems, or you may lose your changes.
 - *Reset* ``master`` (your current branch) back to an earlier state
   with ``git reset --hard origin/master`` (see
@@ -538,7 +548,7 @@ a brief summary of the procedure is as follows:
   and create a new branch with ``git checkout -b fixbar_backup``.  Since
   you started from ``fixbar``, this will be a copy. Now go back to
   the one you intend to modify with ``git checkout fixbar``.
-- From the command line, type ``git rebase -i origin/master``.
+- From the shell, type ``git rebase -i origin/master``.
 - To combine commits, change ``pick`` to ``squash`` (for additional
   options, consult other sources). Save the file and close the editor
   window.
