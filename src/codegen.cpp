@@ -820,15 +820,16 @@ void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
 // --- native code info, and dump function to IR and ASM ---
 extern void RegisterJuliaJITEventListener();
 
-extern int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
+extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #ifdef USE_MCJIT
-    const object::ObjectFile **object);
+    const object::ObjectFile **object
 #else
-    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines);
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
 #endif
+    );
 
 extern "C"
-void jl_dump_function_asm(const char *Fptr, size_t Fsize,
+void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
 #ifdef USE_MCJIT
                           const object::ObjectFile *objectfile,
 #else
@@ -846,17 +847,17 @@ const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
         llvmf->print(stream);
     }
     else {
-        uint64_t symsize;
+        uint64_t symsize, slide;
 #ifdef USE_MCJIT
-        size_t fptr = (size_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+        uint64_t fptr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
         const object::ObjectFile *object;
 #else
-        size_t fptr = (size_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+        uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
         std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
 #endif
         assert(fptr != 0);
-        if (jl_get_llvmf_info(fptr, &symsize, &object))
-            jl_dump_function_asm((char *)fptr, symsize, object, fstream);
+        if (jl_get_llvmf_info(fptr, &symsize, &slide, &object))
+            jl_dump_function_asm(fptr, symsize, slide, object, fstream);
         else
             jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
         fstream.flush();

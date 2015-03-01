@@ -74,6 +74,9 @@ struct FuncInfo {
 struct ObjectInfo {
     const object::ObjectFile* object;
     size_t size;
+#ifdef LLVM36
+    size_t slide;
+#endif
 #ifdef _OS_DARWIN_
     const char *name;
 #endif
@@ -208,16 +211,21 @@ public:
 #ifdef LLVM36
         object::section_iterator Section = obj.section_begin();
         object::section_iterator EndSection = obj.section_end();
+        uint64_t SectionAddr = 0;
+        StringRef sName;
 #else
         object::section_iterator Section = obj.begin_sections();
         object::section_iterator EndSection = obj.end_sections();
         bool isText;
-#endif
 #ifndef _OS_LINUX_
         StringRef sName;
 #endif
+#endif
+
 #ifdef _OS_WINDOWS_
+#ifndef LLVM36
         uint64_t SectionAddr = 0;
+#endif
         uint64_t SectionSize = 0;
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #endif
@@ -296,13 +304,14 @@ public:
             if (Section == EndSection) continue;
 #if defined(LLVM36)
             if (!Section->isText()) continue;
+            Section->getName(sName);
+            SectionAddr = L.getSectionLoadAddress(sName);
+            Addr += SectionAddr;
 #else
             if (Section->isText(isText) || !isText) continue;
 #endif
 #ifdef _OS_DARWIN_
 #if defined(LLVM36)
-            Section->getName(sName);
-            Addr += L.getSectionLoadAddress(sName);
             sym_iter.getName(sName);
             if (sName[0] == '_') {
                 sName = sName.substr(1);
@@ -319,9 +328,6 @@ public:
 #elif defined(_OS_WINDOWS_)
 #if defined(LLVM36)
             SectionSize = Section->getSize();
-            Section->getName(sName);
-            SectionAddr = L.getSectionLoadAddress(sName);
-            Addr += SectionAddr;
 #else
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
@@ -345,6 +351,9 @@ public:
                 obj.getObjectFile();
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size
+#ifdef LLVM36
+                ,SectionAddr
+#endif
 #ifdef _OS_DARWIN_
                 ,strndup(sName.data(), sName.size())
 #endif
@@ -709,6 +718,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #else
 #ifdef LLVM36
         DIContext *context = DIContext::getDWARFContext(*it->second.object);
+        pointer -= (*it).second.slide;
 #else
         DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
 #endif
@@ -775,12 +785,13 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     jl_getDylibFunctionInfo(name,line,filename,pointer,fromC,skipC);
 }
 
-int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
+int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #ifdef USE_MCJIT
-    const object::ObjectFile **object)
+    const object::ObjectFile **object
 #else
-    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines)
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
 #endif
+    )
 {
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
@@ -789,6 +800,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     if (fit != fmap.end()) {
         *symsize = fit->second.lengthAdr;
         *lines = fit->second.lines;
+        *slide = 0;
         return 1;
     }
     return 0;
@@ -799,6 +811,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     if (fit != objmap.end()) {
         *symsize = fit->second.size;
         *object = fit->second.object;
+        *slide = fit->second.slide;
         return 1;
     }
     return 0;
