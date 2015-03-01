@@ -197,7 +197,7 @@ function merge(d::Associative, others::Associative...)
     merge!(Dict{K,V}(), d, others...)
 end
 
-function filter!(f::Function, d::Associative)
+function filter!(f, d::Associative)
     for (k,v) in d
         if !f(k,v)
             delete!(d,k)
@@ -205,7 +205,7 @@ function filter!(f::Function, d::Associative)
     end
     return d
 end
-filter(f::Function, d::Associative) = filter!(f,copy(d))
+filter(f, d::Associative) = filter!(f,copy(d))
 
 eltype{K,V}(::Type{Associative{K,V}}) = (K,V)
 

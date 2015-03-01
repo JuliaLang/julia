@@ -39,7 +39,7 @@ done(x::Number, state) = state
 isempty(x::Number) = false
 in(x::Number, y::Number) = x == y
 
-map(f::Callable, x::Number) = f(x)
+map(f, x::Number) = f(x)
 
 zero(x::Number) = oftype(x,0)
 zero{T<:Number}(::Type{T}) = convert(T,0)

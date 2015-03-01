@@ -1499,4 +1499,3 @@ function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
 end
 
 randsubseq{T}(A::AbstractArray{T}, p::Real) = randsubseq!(T[], A, p)
-
