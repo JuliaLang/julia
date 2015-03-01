@@ -350,7 +350,7 @@ condskeel{T<:Integer}(A::AbstractMatrix{T}, p::Real=Inf) = norm(abs(inv(float(A)
 condskeel(A::AbstractMatrix, x::AbstractVector, p::Real=Inf) = norm(abs(inv(A))*abs(A)*abs(x), p)
 condskeel{T<:Integer}(A::AbstractMatrix{T}, x::AbstractVector, p::Real=Inf) = norm(abs(inv(float(A)))*abs(A)*abs(x), p)
 
-function issym(A::AbstractMatrix)
+function _issym(A::AbstractMatrix)
     m, n = size(A)
     if m != n
         return false
@@ -365,7 +365,7 @@ end
 
 issym(x::Number) = true
 
-function ishermitian(A::AbstractMatrix)
+function _ishermitian(A::AbstractMatrix)
     m, n = size(A)
     if m != n
         return false
@@ -376,6 +376,37 @@ function ishermitian(A::AbstractMatrix)
         end
     end
     return true
+end
+
+ishermitian(A::AbstractMatrix) = _ishermitian(A::AbstractMatrix)
+issym(A::AbstractMatrix) = _issym(A::AbstractMatrix)
+
+for (f,t) in ((:ishermitian, :ctranspose),(:issym, :transpose))
+    eval(quote
+        # ishermitian and issym functions test whether norm(A - A', Inf)<tol*norm(A,Inf) for FloatingPoint matrices
+        function $f{T<:AbstractFloat}(A::Union{AbstractMatrix{Complex{T}}, AbstractMatrix{T}}, tol=eps(T)*norm(A,1))
+            # This is performed due to if tol==0. _issym/_ishermitian is a lot faster for exact equality.
+            tol == 0. && return $(symbol("_", f))(A)
+            m,n = size(A)
+            Tnorm = typeof(float(real(zero(T))))
+            Tsum = promote_type(Float64,Tnorm)
+            nrm_diff::Tsum = 0
+            nrm_A::Tsum = 0
+            @inbounds begin
+                for i = 1:m
+                    nrmi_diff::Tsum = 0
+                    nrmi_A::Tsum = 0
+                    for j = 1:n
+                        nrmi_diff += abs(A[i,j]-$t(A[j,i]))
+                        nrmi_A += abs(A[i,j])
+                    end
+                    nrm_diff = max(nrm_diff,nrmi_diff)
+                    nrm_A = max(nrm_A,nrmi_A)
+                end
+            end
+            return nrm_diff < tol*nrm_A
+        end
+    end)
 end
 
 ishermitian(x::Number) = (x == conj(x))

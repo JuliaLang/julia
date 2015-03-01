@@ -7211,9 +7211,9 @@ Given `@osx? a : b`, do `a` on OS X and `b` elsewhere. See documentation for Han
 :@osx
 
 doc"""
-    ishermitian(A) -> Bool
+    ishermitian(A; tol=eps(eltype(real(A)))*norm(A,1)) -> Bool
 
-Test whether a matrix is Hermitian.
+Test whether a matrix is Hermitian. The `tol` keyword is only used for matrices of floating point or `Complex{T<:AbstractFloat}` numbers, where it tests `norm(A - A', Inf) < tol*norm(A,Inf)`.
 """
 ishermitian
 
@@ -7345,9 +7345,9 @@ The arguments to a function or constructor are outside the valid domain.
 DomainError
 
 doc"""
-    issym(A) -> Bool
+    issym(A; tol=eps(eltype(real(A)))*norm(A,1)) -> Bool
 
-Test whether a matrix is symmetric.
+Test whether a matrix is symmetric. The `tol` keyword is only used for matrices of floating point or `Complex{T<:AbstractFloat}` numbers, where it tests `norm(A - A', Inf) < tol*norm(A,Inf)`.
 """
 issym
 
