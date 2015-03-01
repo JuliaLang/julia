@@ -447,7 +447,7 @@ are several possible approaches, here is one that is widely used:
 
 - Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
-- Submit your changes: from within julia, type
+- Submit your changes: from the julia prompt, type
   ``Pkg.submit("Foo")``. This will push your changes to your GitHub
   fork, creating it if it doesn't already exist.  (If you encounter an
   error, :ref:`make sure you've set up your SSH keys
@@ -573,8 +573,11 @@ going to have to do a *force push*:
   ``myfork``.
 
 
+Creating a new Package
+----------------------
+
 Guidelines for Naming a Package
--------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Package names should be sensible to most Julia users, *even to those who are
 not domain experts*.
@@ -620,8 +623,8 @@ not domain experts*.
 
   * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
 
-Generating a New Package
-------------------------
+Generating the package
+~~~~~~~~~~~~~~~~~~~~~~
 
 Suppose you want to create a new Julia package called ``FooBar``.
 To get started, do :func:`Pkg.generate(pkg,license) <Pkg.generate>` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
@@ -669,7 +672,7 @@ You will have to enable testing on the Travis website for your package repositor
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
 Making Your Package Available
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try it out.
 First you'll need to create the remote repository and push your code to it;
@@ -687,7 +690,7 @@ People you send this URL to can use :func:`Pkg.clone` to install the package and
 .. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
 
 Publishing Your Package
------------------------
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using :func:`Pkg.register`::
 
@@ -753,7 +756,7 @@ This is a good way to have people test out your packages as you work on them, be
 .. _man-manual-publish:
 
 Publishing METADATA manually
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+============================
 
 If :func:`Pkg.publish` fails you can follow these instructions to
 manually publish your package.
@@ -785,7 +788,7 @@ fork, and click the "pull request" link.
 Tagging Package Versions
 ------------------------
 
-Once you are ready to make an official version your package, you can tag and register it with the :func:`Pkg.tag` command::
+Once you are ready to make an official version your package---or release a new version of an established package---you can tag and register it with the :func:`Pkg.tag` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.1
