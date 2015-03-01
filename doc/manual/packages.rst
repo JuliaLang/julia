@@ -346,6 +346,147 @@ Once you do this, the package manager knows your GitHub user name and can config
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
+Making changes to an existing package
+-------------------------------------
+
+Documentation changes
+~~~~~~~~~~~~~~~~~~~~~
+
+If you want to improve the online documentation of a package, the
+easiest approach (at least for small changes) is to use GitHub's
+online editting functionality. First, navigate to the respository's
+GitHub "home page," find the file (e.g., ``README.md``) within the
+repository's folder structure, and click on it. You'll see the
+contents displayed, along with a small "pencil" icon in the upper
+right hand corner. Clicking that icon opens the file in edit mode.
+Make your changes, write a brief summary describing the changes you
+want to make (this is your *commit message*), and then hit "Propose
+file change."  Your changes will be submitted for consideration by the
+package owner(s).
+
+Code changes
+~~~~~~~~~~~~
+
+If you want to fix a bug or add new functionality, you want to be able
+to test your changes before you submit them for consideration. You
+also need to have an easy way to update your proposal in response to
+the package owner's feedback. Consequently, in this case the strategy
+is to work locally on your own machine; once you are satisfied with
+your changes, you submit them for consideration.  This process is
+called a *pull request* because you are asking to "pull" your changes
+into the project's main repository. Because the online repository
+can't see the code on your private machine, you first *push* your
+changes to a publicly-visible location, your own online *fork* of
+package (hosted on your own personal GitHub account).
+
+Let's assume you already have the ``Foo`` package installed and want
+to make changes.  While there are several possible approaches, here is
+one that is widely used:
+
+- From within Julia, type ``Pkg.checkout("Foo")``. This ensures you're
+  running the latest code (the ``master`` branch), rather than just
+  whatever "official release" version you have installed. (If you're
+  planning to fix a bug, at this point it's a good idea to check again
+  whether the bug has already been fixed by someone else. If it has,
+  you can request that a new official release be tagged so that the
+  fix gets distributed to the rest of the community.) If you receive
+  an error ``Foo is dirty, bailing``, see :ref:`Dirty packages
+  <man-pkg-dirty>` below.
+
+- Create a branch for your changes: from the command line (not within
+  Julia), navigate to the package folder (e.g.,
+  ``~/.julia/v0.4/Foo/``) and type ``git checkout -b <newbranch>``,
+  where ``<newbranch>`` might be some descriptive name (e.g.,
+  ``fixbar``). By creating a branch, you ensure that you can easily go
+  back and forth between your new work and the current ``master``
+  branch (see
+  `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
+
+  If you forget to do this step until after you've already made some
+  changes, don't worry: see :ref:`more detail about branching
+  <man-post-hoc-branching>` below.
+
+- Make your changes. Whether it's fixing a bug or adding new
+  functionality, in most cases your change should include updates to
+  both the ``src/`` and ``test/`` folders.  If you're fixing a bug,
+  add your minimal example demonstrating the bug (on the current code)
+  to the test suite; by contributing a test for the bug, you ensure
+  that the bug won't accidentally reappear at some later time due to
+  other changes.  If you're adding new functionality, creating tests
+  demonstrates to the package owner that you've made sure your code
+  works as intended.
+
+- Run the package's tests and make sure they pass.  Usually you can do
+  this by running a file probably called ``runtests.jl`` from inside
+  the ``test/`` folder, or use ``Pkg.test("Foo")``.
+
+- Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
+
+- Submit your changes: from within julia, type
+  ``Pkg.submit("Foo")``. This will push your changes to your GitHub
+  fork, creating it if it doesn't already exist.  Julia will then give
+  you a hyperlink; open that link, edit the message, and then click
+  "submit." At that point, the package owner will be notified of your
+  changes and may initiate discussion.
+
+- The package owner may make some suggestions for additional
+  improvements.  To respond to those suggestions, you can easily
+  update the pull request (this only works for changes that have not
+  already been merged; for merged pull requests, make new changes by
+  starting a new branch):
+
+  + If you've changed branches in the meantime, make sure you go back
+    to the same branch with ``git checkout fixbar`` (from the command
+    line) or ``Pkg.checkout("Foo", "fixbar")`` (from julia).
+
+  + As above, make your changes, run the tests, and commit your changes.
+
+  + From the command line, type ``git push``.  This will add your new
+    commit(s) to the same pull request; you should see them appear
+    automatically on the page holding the discussion of your pull
+    request.
+
+.. _man-pkg-dirty:
+
+Dirty packages
+~~~~~~~~~~~~~~
+
+If you can't change branches because the package manager complains
+that your package is dirty, it means you have some changes that have
+not been committed. From the command line, use ``git diff`` to see
+what these changes are; you can either discard them (``git checkout
+changedfile.jl``) or commit them before switching branches.  If you
+can't easily resolve the problems manually, as a last resort you can
+delete the entire `"Foo"` folder and reinstall a fresh copy with
+``Pkg.add("Foo")``. Naturally, this deletes any changes you've made.
+
+.. _man-post-hoc-branching:
+
+Making a branch *post hoc*
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Especially for newcomers to git, one often forgets to create a new
+branch until after some changes have already been made.  If you
+haven't yet staged or committed your changes, you can create a new
+branch with ``git checkout -b <newbranch>`` just as usual---git will
+kindly show you that some files have been modified and create the new
+branch for you.  *Your changes have not yet been committed to this new
+branch*, so the normal work rules still apply.
+
+However, if you've already made a commit to ``master`` but wish to go
+back to the official ``master`` (called ``origin/master``), use the
+following procedure:
+
+- Create a new branch. This branch will hold your changes.
+- Make sure everything is committed to this branch.
+- ``git checkout master``
+- *Reset* master back to an earlier state with ``git reset --hard
+  origin/master`` (see `<http://git-scm.com/blog>`_).
+
+This requires a bit more familiarity with git, so it's much better to
+create a branch at the outset.
+
+
 Guidelines for Naming a Package
 -------------------------------
 
@@ -705,4 +846,3 @@ various releases of Julia. Examples of runtime checks::
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
 See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
-
