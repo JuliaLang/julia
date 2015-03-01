@@ -354,7 +354,7 @@ Documentation changes
 
 If you want to improve the online documentation of a package, the
 easiest approach (at least for small changes) is to use GitHub's
-online editting functionality. First, navigate to the respository's
+online editing functionality. First, navigate to the respository's
 GitHub "home page," find the file (e.g., ``README.md``) within the
 repository's folder structure, and click on it. You'll see the
 contents displayed, along with a small "pencil" icon in the upper
@@ -379,6 +379,10 @@ can't see the code on your private machine, you first *push* your
 changes to a publicly-visible location, your own online *fork* of
 package (hosted on your own personal GitHub account).
 
+In the description below, anything starting with ``Pkg.`` is meant to
+be typed at the Julia prompt; anything starting with ``git`` is meant
+to be typed at the command line.
+
 Let's assume you already have the ``Foo`` package installed and want
 to make changes.  While there are several possible approaches, here is
 one that is widely used:
@@ -395,11 +399,11 @@ one that is widely used:
 
 - Create a branch for your changes: from the command line (not within
   Julia), navigate to the package folder (e.g.,
-  ``~/.julia/v0.4/Foo/``) and type ``git checkout -b <newbranch>``,
-  where ``<newbranch>`` might be some descriptive name (e.g.,
-  ``fixbar``). By creating a branch, you ensure that you can easily go
-  back and forth between your new work and the current ``master``
-  branch (see
+  ``~/.julia/v0.4/Foo/``) and create a new branch using ``git
+  checkout -b <newbranch>``, where ``<newbranch>`` might be some
+  descriptive name (e.g., ``fixbar``). By creating a branch, you
+  ensure that you can easily go back and forth between your new work
+  and the current ``master`` branch (see
   `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
 
   If you forget to do this step until after you've already made some
@@ -416,9 +420,22 @@ one that is widely used:
   demonstrates to the package owner that you've made sure your code
   works as intended.
 
-- Run the package's tests and make sure they pass.  Usually you can do
-  this by running a file probably called ``runtests.jl`` from inside
-  the ``test/`` folder, or use ``Pkg.test("Foo")``.
+- Run the package's tests and make sure they pass.  From
+  julia, you can do this in either of the following ways:
+
+  + ``Pkg.test("Foo")``: this will run your tests in a separate (new)
+    julia process.
+  + ``include("runtests.jl")`` from the package's ``test/`` folder (it's
+    possible the file has a different name, look for one that runs all
+    the tests): this allows you to run the tests repeatedly in the
+    same session without reloading all the package code; for packages
+    that take a while to load, this can be much faster. With this
+    approach, you do have to do some extra work to make :ref:`changes
+    in the package code <man-workflow-tips>`.
+
+  Alternatively, run the tests from the command line with ``julia
+  runtests.jl`` from within the package's ``test/`` folder.
+
 
 - Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
@@ -446,6 +463,9 @@ one that is widely used:
     automatically on the page holding the discussion of your pull
     request.
 
+  One potential type of change the owner may request is that you
+  squash your commits.  See :ref:`Squashing <man-pkg-squash>` below.
+
 .. _man-pkg-dirty:
 
 Dirty packages
@@ -457,7 +477,7 @@ not been committed. From the command line, use ``git diff`` to see
 what these changes are; you can either discard them (``git checkout
 changedfile.jl``) or commit them before switching branches.  If you
 can't easily resolve the problems manually, as a last resort you can
-delete the entire `"Foo"` folder and reinstall a fresh copy with
+delete the entire ``"Foo"`` folder and reinstall a fresh copy with
 ``Pkg.add("Foo")``. Naturally, this deletes any changes you've made.
 
 .. _man-post-hoc-branching:
@@ -479,12 +499,68 @@ following procedure:
 
 - Create a new branch. This branch will hold your changes.
 - Make sure everything is committed to this branch.
-- ``git checkout master``
-- *Reset* master back to an earlier state with ``git reset --hard
-  origin/master`` (see `<http://git-scm.com/blog>`_).
+- ``git checkout master``. If this fails, *do not* procede further
+  until you have resolved the problems, or you may lose your changes.
+- *Reset* ``master`` (your current branch) back to an earlier state
+  with ``git reset --hard origin/master`` (see
+  `<http://git-scm.com/blog/2011/07/11/reset.html>`_).
 
 This requires a bit more familiarity with git, so it's much better to
-create a branch at the outset.
+get in the habit of creating a branch at the outset.
+
+.. _man-pkg-squash:
+
+Squashing and rebasing
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. highlight:: none
+
+Depending on the tastes of the package owner (s)he may ask you to
+"squash" your commits. This is especially likely if your change is
+quite simple but your commit history looks like this::
+
+   WIP: add new 1-line whizbang function (currently breaks package)
+   Finish whizbang function
+   Fix typo in variable name
+   Oops, don't forget to supply default argument
+   Split into two 1-line functions
+   Rats, forgot to export the second function
+   ...
+
+.. highlight:: julia
+
+This gets into the territory of more advanced git usage, and you're
+encouraged to do some reading
+(`<http://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
+a brief summary of the procedure is as follows:
+
+- To protect yourself from error, start from your ``fixbar`` branch
+  and create a new branch with ``git checkout -b fixbar_backup``.  Since
+  you started from ``fixbar``, this will be a copy. Now go back to
+  the one you intend to modify with ``git checkout fixbar``.
+- From the command line, type ``git rebase -i origin/master``.
+- To combine commits, change ``pick`` to ``squash`` (for additional
+  options, consult other sources). Save the file and close the editor
+  window.
+- Edit the combined commit message.
+
+If the rebase goes badly, you can go back to the beginning to try
+again like this::
+
+   git checkout fixbar
+   git reset --hard fixbar_backup
+
+Now let's assume you've rebased successfully. Since your ``fixbar``
+repository has now diverged from the one in your GitHub fork, you're
+going to have to do a *force push*:
+
+- To make it easy to refer to your GitHub fork, create a "handle" for
+  it with ``git remote add myfork
+  https://github.com/myaccount/Foo.jl.git``, where the URL comes from
+  the "clone URL" on your GitHub fork's page.
+- Force-push to your fork with ``git push myfork +fixbar``. The `+`
+  indicates that this should replace the ``fixbar`` branch found at
+  ``myfork``.
 
 
 Guidelines for Naming a Package
