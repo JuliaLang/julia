@@ -68,6 +68,9 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `Dict(ks, vs)` is now `Dict(zip(ks, vs))` [#8521](https://github.com/JuliaLang/julia/pull/8521)
 
+## Nullable type
+* [`Nullable` types](http://julia.readthedocs.org/en/latest/manual/types/?highlight=nullable#nullable-types-representing-missing-values) and their associated operations.
+
 ## Developer tips
 
 If you're adding additional compatibility code to this package, the following shell script is useful for extracting the version number from a git commit SHA:

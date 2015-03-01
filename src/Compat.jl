@@ -173,4 +173,8 @@ end
 
 export @compat, @inline, @noinline
 
+if VERSION < v"0.4.0-dev+656"
+    include("nullable.jl")
+end
+
 end # module
