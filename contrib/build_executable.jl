@@ -216,7 +216,7 @@ function emit_cmain(cfile, exename, relocation)
             if (jl_exception_occurred())
             {
                 jl_show(jl_stderr_obj(), jl_exception_occurred());
-                JL_PRINTF(jl_stderr_stream(), \"\\n\");
+                jl_printf(jl_stderr_stream(), \"\\n\");
                 ret = 1;
             }
 
