@@ -322,7 +322,7 @@ void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
         return;
     }
 
-    unsigned OutputAsmVariant = 1; // GCC or ATT-style asm
+    unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
     bool ShowEncoding = false;
     bool ShowInst = false;
 
