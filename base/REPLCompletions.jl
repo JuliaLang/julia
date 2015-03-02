@@ -130,7 +130,7 @@ function complete_path(path::AbstractString, pos)
             push!(matches, id ? file * (@windows? "\\\\" : "/") : file)
         end
     end
-    matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
+    matches = UTF8String[replace(s, r"\s", whitespace_escape) for s in matches]
     return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
 end
 
@@ -232,6 +232,8 @@ include("latex_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const whitespace_chars = [" \t\n\r"...]
+whitespace_escape(s) = "\\"*s
+whitespace_unescape(s) = s[2:end]
 
 # Aux function to detect whether we're right after a
 # using or import keyword
@@ -269,13 +271,13 @@ function completions(string, pos)
     partial = string[1:pos]
     inc_tag = Base.incomplete_tag(parse(partial , raise=false))
     if inc_tag in [:cmd, :string]
-        m = match(r"[\t\n\r\"'`@\$><=;|&\{]| (?!\\)", reverse(partial))
+        m = match(r"[\"'`@\$><=;|&\{]|[\t\n\r ](?!\\)", reverse(partial))
         startpos = nextind(partial, reverseind(partial, m.offset))
         r = startpos:pos
-        paths, r, success = complete_path(replace(string[r], r"\\ ", " "), pos)
+        paths, r, success = complete_path(replace(string[r], r"\\\s", whitespace_unescape), pos)
         if inc_tag == :string &&
            length(paths) == 1 &&                              # Only close if there's a single choice,
-           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\ ", " ")) &&  # except if it's a directory
+           !isdir(replace(string[startpos:start(r)-1] * paths[1], r"\\\s", whitespace_unescape)) &&  # except if it's a directory
            (length(string) <= pos || string[pos+1] != '"')    # or there's already a " at the cursor.
             paths[1] *= "\""
         end
