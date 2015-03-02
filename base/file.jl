@@ -3,7 +3,7 @@
 function pwd()
     b = Array(UInt8,1024)
     len = Csize_t[length(b),]
-    uv_error(:getcwd, ccall(:uv_cwd, Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
+    uv_error(:getcwd, ccall((:uv_cwd,"libjulia"), Cint, (Ptr{UInt8}, Ptr{Csize_t}), b, len))
     bytestring(b[1:len[1]-1])
 end
 
