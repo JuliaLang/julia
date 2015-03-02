@@ -1028,3 +1028,28 @@ timesofar("linalg")
 # issue #7515
 @test sizeof(BitArray(64)) == 8
 @test sizeof(BitArray(65)) == 16
+
+#one
+@test bitunpack(one(BitMatrix(2,2))) == eye(2,2)
+@test_throws DimensionMismatch one(BitMatrix(2,3))
+
+#reshape
+a = trues(2,5)
+b = reshape(a,(5,2))
+@test b == trues(5,2)
+@test_throws DimensionMismatch reshape(a, (1,5))
+
+#resize!
+
+a = trues(5)
+@test_throws BoundsError resize!(a,-1)
+resize!(a, 3)
+@test a == trues(3)
+resize!(a, 5)
+@test a == append!(trues(3),falses(2))
+
+#flipbits!
+
+a = trues(5,5)
+flipbits!(a)
+@test a == falses(5,5)
