@@ -131,7 +131,11 @@ function complete_path(path::AbstractString, pos)
         end
     end
     matches = UTF8String[replace(s, r"\s", "\\ ") for s in matches]
-    return matches, nextind(path, pos - sizeof(prefix) - length(matchall(r" ", prefix))):pos, length(matches) > 0
+    startpos = pos - endof(prefix) + 1 - length(matchall(r" ", prefix))
+    # The pos - endof(prefix) + 1 is correct due to `endof(prefix)-endof(prefix)==0`,
+    # hence we need to add one to get the first index. This is also correct when considering
+    # pos, because pos is the `endof` a larger string which `endswith(path)==true`.
+    return matches, startpos:pos, length(matches) > 0
 end
 
 # Determines whether method_complete should be tried. It should only be done if
