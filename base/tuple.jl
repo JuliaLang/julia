@@ -1,10 +1,13 @@
 ## indexing ##
 
-length(t::Tuple) = tuplelen(t)
-endof(t::Tuple) = tuplelen(t)
-size(t::Tuple, d) = d==1 ? tuplelen(t) : throw(ArgumentError("invalid tuple dimension $d"))
-getindex(t::Tuple, i::Int) = tupleref(t, i)
-getindex(t::Tuple, i::Real) = tupleref(t, convert(Int, i))
+nfields(t::DataType) = t.types.length
+nfields(v) = typeof(v).types.length
+
+length(t::Tuple) = nfields(t)
+endof(t::Tuple) = length(t)
+size(t::Tuple, d) = d==1 ? length(t) : throw(ArgumentError("invalid tuple dimension $d"))
+getindex(t::Tuple, i::Int) = getfield(t, i)
+getindex(t::Tuple, i::Real) = getfield(t, convert(Int, i))
 getindex(t::Tuple, r::AbstractArray) = tuple([t[ri] for ri in r]...)
 getindex(t::Tuple, b::AbstractArray{Bool}) = getindex(t,find(b))
 
@@ -39,23 +42,22 @@ ntuple(f::Function, n::Integer) =
 # 0 argument function
 map(f) = f()
 # 1 argument function
-map(f, t::())                   = ()
-map(f, t::(Any,))               = (f(t[1]),)
-map(f, t::(Any, Any))           = (f(t[1]), f(t[2]))
-map(f, t::(Any, Any, Any))      = (f(t[1]), f(t[2]), f(t[3]))
-map(f, t::Tuple)                = tuple(f(t[1]), map(f,tail(t))...)
+map(f, t::Tuple{})              = ()
+map(f, t::Tuple{Any,})          = (f(t[1]),)
+map(f, t::Tuple{Any, Any})      = (f(t[1]), f(t[2]))
+map(f, t::Tuple{Any, Any, Any}) = (f(t[1]), f(t[2]), f(t[3]))
+map(f, t::Tuple)                = (f(t[1]), map(f,tail(t))...)
 # 2 argument function
-map(f, t::(),        s::())        = ()
-map(f, t::(Any,),    s::(Any,))    = (f(t[1],s[1]),)
-map(f, t::(Any,Any), s::(Any,Any)) = (f(t[1],s[1]), f(t[2],s[2]))
+map(f, t::Tuple{},        s::Tuple{})        = ()
+map(f, t::Tuple{Any,},    s::Tuple{Any,})    = (f(t[1],s[1]),)
+map(f, t::Tuple{Any,Any}, s::Tuple{Any,Any}) = (f(t[1],s[1]), f(t[2],s[2]))
 # n argument function
 heads() = ()
-heads(t::Tuple, ts::Tuple...) = tuple(t[1], heads(ts...)...)
+heads(t::Tuple, ts::Tuple...) = (t[1], heads(ts...)...)
 tails() = ()
-tails(t::Tuple, ts::Tuple...) = tuple(tail(t), tails(ts...)...)
-map(f, ::(), ts::Tuple...) = ()
-map(f, ts::Tuple...) =
-    tuple(f(heads(ts...)...), map(f, tails(ts...)...)...)
+tails(t::Tuple, ts::Tuple...) = (tail(t), tails(ts...)...)
+map(f, ::Tuple{}, ts::Tuple...) = ()
+map(f, ts::Tuple...) = (f(heads(ts...)...), map(f, tails(ts...)...)...)
 
 ## comparison ##
 
@@ -84,10 +86,10 @@ function ==(t1::Tuple, t2::Tuple)
 end
 
 const tuplehash_seed = UInt === UInt64 ? 0x77cfa1eef01bca90 : 0xf01bca90
-hash(::(), h::UInt) = h + tuplehash_seed
-hash(x::(Any,), h::UInt)    = hash(x[1], hash((), h))
-hash(x::(Any,Any), h::UInt) = hash(x[1], hash(x[2], hash((), h)))
-hash(x::Tuple, h::UInt)     = hash(x[1], hash(x[2], hash(tail(x), h)))
+hash( ::Tuple{}, h::UInt)        = h + tuplehash_seed
+hash(x::Tuple{Any,}, h::UInt)    = hash(x[1], hash((), h))
+hash(x::Tuple{Any,Any}, h::UInt) = hash(x[1], hash(x[2], hash((), h)))
+hash(x::Tuple, h::UInt)          = hash(x[1], hash(x[2], hash(tail(x), h)))
 
 function isless(t1::Tuple, t2::Tuple)
     n1, n2 = length(t1), length(t2)
@@ -102,11 +104,11 @@ end
 
 ## functions ##
 
-isempty(x::()) = true
+isempty(x::Tuple{}) = true
 isempty(x::Tuple) = false
 
 revargs() = ()
-revargs(x, r...) = tuple(revargs(r...)..., x)
+revargs(x, r...) = (revargs(r...)..., x)
 
 reverse(t::Tuple) = revargs(t...)
 
@@ -114,14 +116,14 @@ reverse(t::Tuple) = revargs(t...)
 
 # TODO: these definitions cannot yet be combined, since +(x...)
 # where x might be any tuple matches too many methods.
-sum(x::(Any, Any...)) = +(x...)
+sum(x::Tuple{Any, Any,...}) = +(x...)
 
 # NOTE: should remove, but often used on array sizes
-prod(x::()) = 1
-prod(x::(Any, Any...)) = *(x...)
+prod(x::Tuple{}) = 1
+prod(x::Tuple{Any, Any,...}) = *(x...)
 
-all(x::()) = true
-all(x::(Any, Any...)) = (&)(x...)
+all(x::Tuple{}) = true
+all(x::Tuple{Any, Any,...}) = (&)(x...)
 
-any(x::()) = false
-any(x::(Any, Any...)) = |(x...)
+any(x::Tuple{}) = false
+any(x::Tuple{Any, Any,...}) = |(x...)

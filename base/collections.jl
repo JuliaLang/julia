@@ -161,7 +161,7 @@ PriorityQueue{K,V}(ks::AbstractArray{K}, vs::AbstractArray{V},
 
 PriorityQueue{K,V}(kvs::Associative{K,V}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(kvs, o)
 
-PriorityQueue{K,V}(a::AbstractArray{(K,V)}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(a, o)
+PriorityQueue{K,V}(a::AbstractArray{Tuple{K,V}}, o::Ordering=Forward) = PriorityQueue{K,V,typeof(o)}(a, o)
 
 length(pq::PriorityQueue) = length(pq.xs)
 isempty(pq::PriorityQueue) = isempty(pq.xs)

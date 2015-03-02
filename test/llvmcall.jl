@@ -1,9 +1,9 @@
 using Base.llvmcall
 
-function add1234(x::(Int32,Int32,Int32,Int32))
+function add1234(x::Tuple{Int32,Int32,Int32,Int32})
     llvmcall("""%3 = add <4 x i32> %1, %0
-      ret <4 x i32> %3""",(Int32,Int32,Int32,Int32),
-      ((Int32,Int32,Int32,Int32),(Int32,Int32,Int32,Int32)),
+      ret <4 x i32> %3""",Tuple{Int32,Int32,Int32,Int32},
+      Tuple{Tuple{Int32,Int32,Int32,Int32},Tuple{Int32,Int32,Int32,Int32}},
         (Int32(1),Int32(2),Int32(3),Int32(4)),
       x)
 end
@@ -11,7 +11,7 @@ end
 function add1234(x::NTuple{4,Int64})
     llvmcall("""%3 = add <4 x i64> %1, %0
       ret <4 x i64> %3""",NTuple{4,Int64},
-      (NTuple{4,Int64},NTuple{4,Int64}),
+      Tuple{NTuple{4,Int64},NTuple{4,Int64}},
         (Int64(1),Int64(2),Int64(3),Int64(4)),
       x)
 end
@@ -27,7 +27,7 @@ baremodule PlusTest
 
     function +(x::Int32, y::Int32)
         llvmcall("""%3 = add i32 %1, %0
-                    ret i32 %3""", Int32, (Int32, Int32), x, y)
+                    ret i32 %3""", Int32, Tuple{Int32, Int32}, x, y)
     end
     @test Int32(1)+Int32(2)==Int32(3)
 end

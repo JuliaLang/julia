@@ -10,7 +10,7 @@ BUILDDIR ?= .
 
 SRCS = \
 	jltypes gf ast builtins module codegen disasm debuginfo interpreter \
-	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop
+	alloc dlload sys init task array dump toplevel jl_uv jlapi profile llvm-simdloop simplevector
 
 HEADERS = julia.h julia_internal.h julia_version.h options.h $(wildcard support/*.h) $(LIBUV_INC)/uv.h
 

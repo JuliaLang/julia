@@ -1,6 +1,6 @@
 ## 1-dimensional ranges ##
 
-typealias Dims (Int...)
+typealias Dims Tuple{Int,...}
 
 abstract Range{T} <: AbstractArray{T,1}
 
@@ -241,7 +241,7 @@ logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations
 
-similar(r::Range, T::Type, dims::(Integer...)) = Array(T, dims...)
+similar(r::Range, T::Type, dims::Tuple{Integer,...}) = Array(T, dims...)
 similar(r::Range, T::Type, dims::Dims) = Array(T, dims)
 
 size(r::Range) = (length(r),)

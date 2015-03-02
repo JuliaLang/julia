@@ -20,7 +20,7 @@ let i = 2
              QuoteNode, TopNode, TypeVar, Box, LambdaStaticData,
              Module, UndefRefTag, Task, ASCIIString, UTF8String,
              UTF16String, UTF32String, Float16,
-             :reserved9, :reserved10, :reserved11, :reserved12,
+             SimpleVector, :reserved10, :reserved11, :reserved12,
 
              (), Bool, Any, :Any, Bottom, :reserved21, :reserved22, Type,
              :Array, :TypeVar, :Box,
@@ -32,7 +32,7 @@ let i = 2
              :mul_float, :unbox, :box,
              :eq_int, :slt_int, :sle_int, :ne_int,
              :arrayset, :arrayref,
-             :Core, :Base, :reserved15, :reserved16,
+             :Core, :Base, svec(), :reserved16,
              :reserved17, :reserved18, :reserved19, :reserved20,
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
@@ -64,7 +64,7 @@ serialize(s, x::Bool) = write_as_tag(s, x)
 
 serialize(s, ::Ptr) = error("cannot serialize a pointer")
 
-serialize(s, ::()) = write(s, UInt8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
+serialize(s, ::Tuple{}) = write(s, UInt8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
 
 function serialize(s, t::Tuple)
     l = length(t)
@@ -77,6 +77,14 @@ function serialize(s, t::Tuple)
     end
     for i = 1:l
         serialize(s, t[i])
+    end
+end
+
+function serialize(s, v::SimpleVector)
+    writetag(s, SimpleVector)
+    write(s, Int32(length(v)))
+    for i = 1:length(v)
+        serialize(s, v[i])
     end
 end
 
@@ -272,9 +280,9 @@ function serialize_type_data(s, t)
     serialize(s, tname)
     mod = t.name.module
     serialize(s, mod)
-    if t.parameters !== ()
+    if length(t.parameters) > 0
         if isdefined(mod,tname) && is(t,eval(mod,tname))
-            serialize(s, ())
+            serialize(s, svec())
         else
             serialize(s, t.parameters)
         end
@@ -358,6 +366,11 @@ deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
 deserialize(s, ::Type{Symbol}) = symbol(read(s, UInt8, Int32(read(s, UInt8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, UInt8, read(s, Int32)))
+
+function deserialize(s, ::Type{SimpleVector})
+    n = read(s, Int32)
+    svec([ deserialize(s) for i=1:n ]...)
+end
 
 function deserialize(s, ::Type{Module})
     path = deserialize(s)
@@ -500,16 +513,12 @@ function deserialize(s, ::Type{DataType})
     name = deserialize(s)::Symbol
     mod = deserialize(s)::Module
     ty = eval(mod,name)
-    if ty.parameters === ()
-        params = ()
+    if length(ty.parameters) == 0
+        params = svec()
     else
         params = deserialize(s)
     end
-    if params === ()
-        t = ty
-    else
-        t = apply_type(ty, params...)
-    end
+    t = ty{params...}
     if form == 0
         return t
     end

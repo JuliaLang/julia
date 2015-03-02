@@ -143,11 +143,11 @@ jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, 
     return _new_array_(atype, ndims, dims, isunboxed, elsz);
 }
 
-jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *dims)
+jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_value_t *dims)
 {
     size_t i;
     jl_array_t *a;
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
 
     int ndimwords = jl_array_ndimwords(ndims);
     int tsz = JL_ARRAY_ALIGN(sizeof(jl_array_t) + ndimwords*sizeof(size_t) + sizeof(void*), 16);
@@ -176,7 +176,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
     data->isshared = 1;
 
     if (ndims == 1) {
-        size_t l = jl_unbox_long(jl_tupleref(dims,0));
+        size_t l = ((size_t*)jl_data_ptr(dims))[0];
 #ifdef STORE_ARRAY_LEN
         a->length = l;
 #endif
@@ -188,7 +188,7 @@ jl_array_t *jl_reshape_array(jl_value_t *atype, jl_array_t *data, jl_tuple_t *di
         size_t l=1;
         wideint_t prod;
         for(i=0; i < ndims; i++) {
-            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            adims[i] = ((size_t*)jl_data_ptr(dims))[i];
             prod = (wideint_t)l * (wideint_t)adims[i];
             if (prod > (wideint_t) MAXINTVAL)
                 jl_error("invalid Array dimensions");
@@ -246,16 +246,16 @@ jl_array_t *jl_ptr_to_array_1d(jl_value_t *atype, void *data, size_t nel,
     return a;
 }
 
-jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
+jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_value_t *dims,
                             int own_buffer)
 {
     size_t i, elsz, nel=1;
     jl_array_t *a;
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
     wideint_t prod;
 
     for(i=0; i < ndims; i++) {
-        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_tupleref(dims, i));
+        prod = (wideint_t)nel * (wideint_t)jl_unbox_long(jl_fieldref(dims, i));
         if (prod > (wideint_t) MAXINTVAL)
             jl_error("invalid Array dimensions");
         nel = prod;
@@ -299,19 +299,19 @@ jl_array_t *jl_ptr_to_array(jl_value_t *atype, void *data, jl_tuple_t *dims,
     else {
         size_t *adims = &a->nrows;
         for(i=0; i < ndims; i++) {
-            adims[i] = jl_unbox_long(jl_tupleref(dims, i));
+            adims[i] = jl_unbox_long(jl_fieldref(dims, i));
         }
     }
     return a;
 }
 
-jl_array_t *jl_new_array(jl_value_t *atype, jl_tuple_t *dims)
+jl_array_t *jl_new_array(jl_value_t *atype, jl_value_t *dims)
 {
-    size_t ndims = jl_tuple_len(dims);
+    size_t ndims = jl_nfields(dims);
     size_t *adims = (size_t*)alloca(ndims*sizeof(size_t));
     size_t i;
     for(i=0; i < ndims; i++)
-        adims[i] = jl_unbox_long(jl_tupleref(dims,i));
+        adims[i] = jl_unbox_long(jl_fieldref(dims,i));
     return _new_array(atype, ndims, adims);
 }
 
@@ -373,7 +373,7 @@ jl_value_t *jl_apply_array_type(jl_datatype_t *type, size_t dim)
 {
     jl_value_t *boxed_dim = jl_box_long(dim);
     JL_GC_PUSH1(&boxed_dim);
-    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_tuple2(type, boxed_dim));
+    jl_value_t *ret = jl_apply_type((jl_value_t*)jl_array_type, jl_svec2(type, boxed_dim));
     JL_GC_POP();
     return ret;
 }
@@ -399,28 +399,17 @@ JL_CALLABLE(jl_f_arraylen)
 
 JL_CALLABLE(jl_f_arraysize)
 {
-    if (nargs != 2) {
-        JL_NARGS(arraysize, 1, 1);
-    }
+    JL_NARGS(arraysize, 2, 2);
     JL_TYPECHK(arraysize, array, args[0]);
     jl_array_t *a = (jl_array_t*)args[0];
     size_t nd = jl_array_ndims(a);
-    if (nargs == 2) {
-        JL_TYPECHK(arraysize, long, args[1]);
-        int dno = jl_unbox_long(args[1]);
-        if (dno < 1)
-            jl_error("arraysize: dimension out of range");
-        if (dno > nd)
-            return jl_box_long(1);
-        return jl_box_long((&a->nrows)[dno-1]);
-    }
-    jl_tuple_t *d = jl_alloc_tuple(nd);
-    JL_GC_PUSH1(&d);
-    size_t i;
-    for(i=0; i < nd; i++)
-        jl_tupleset(d, i, jl_box_long(jl_array_dim(a,i)));
-    JL_GC_POP();
-    return (jl_value_t*)d;
+    JL_TYPECHK(arraysize, long, args[1]);
+    int dno = jl_unbox_long(args[1]);
+    if (dno < 1)
+        jl_error("arraysize: dimension out of range");
+    if (dno > nd)
+        return jl_box_long(1);
+    return jl_box_long((&a->nrows)[dno-1]);
 }
 
 jl_value_t *jl_arrayref(jl_array_t *a, size_t i)

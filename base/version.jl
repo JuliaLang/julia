@@ -4,10 +4,10 @@ immutable VersionNumber
     major::Int
     minor::Int
     patch::Int
-    prerelease::(Union(Int,ASCIIString)...)
-    build::(Union(Int,ASCIIString)...)
+    prerelease::Tuple{Union(Int,ASCIIString), ...}
+    build::Tuple{Union(Int,ASCIIString), ...}
 
-    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
+    function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::Tuple{Union(Int,ASCIIString), ...}, bld::Tuple{Union(Int,ASCIIString), ...})
         major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
         minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
         patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
@@ -106,8 +106,8 @@ ident_cmp(a::Int, b::ASCIIString) = isempty(b) ? +1 : -1
 ident_cmp(a::ASCIIString, b::Int) = isempty(a) ? -1 : +1
 ident_cmp(a::ASCIIString, b::ASCIIString) = cmp(a,b)
 
-function ident_cmp(A::(Union(Int,ASCIIString)...),
-                   B::(Union(Int,ASCIIString)...))
+function ident_cmp(A::Tuple{Union(Int,ASCIIString), ...},
+                   B::Tuple{Union(Int,ASCIIString), ...})
     i = start(A)
     j = start(B)
     while !done(A,i) && !done(B,i)

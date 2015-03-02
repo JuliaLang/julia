@@ -134,7 +134,7 @@ requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
 function installed(avail::Dict=available())
-    pkgs = Dict{ByteString,(VersionNumber,Bool)}()
+    pkgs = Dict{ByteString,Tuple{VersionNumber,Bool}}()
     for pkg in readdir()
         isinstalled(pkg) || continue
         ap = get(avail,pkg,Dict{VersionNumber,Available}())

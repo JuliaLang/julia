@@ -179,7 +179,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1, "
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Int, Int))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Int, Int})[1])
 @test length(c) == 3
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -187,7 +187,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(CompletionFoo.array,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Array{Int, 1}, Any))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Array{Int, 1}, Any})[1])
 @test length(c) == 2
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
@@ -195,7 +195,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test(1,1,1,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test, (Any, Any, Any))[1])
+@test c[1] == string(methods(CompletionFoo.test, Tuple{Any, Any, Any})[1])
 @test r == 1:18
 @test s[r] == "CompletionFoo.test"
 
@@ -215,7 +215,7 @@ c, r, res = test_complete(s)
 
 s = "prevind(\"θ\",1,"
 c, r, res = test_complete(s)
-@test c[1] == string(methods(prevind, (UTF8String, Int))[1])
+@test c[1] == string(methods(prevind, Tuple{UTF8String, Int})[1])
 @test r == 1:7
 @test s[r] == "prevind"
 
@@ -223,7 +223,7 @@ for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
     s = "(1, CompletionFoo.test2($arg,"
     c, r, res = test_complete(s)
     @test length(c) == 1
-    @test c[1] == string(methods(CompletionFoo.test2, (T,))[1])
+    @test c[1] == string(methods(CompletionFoo.test2, Tuple{T,})[1])
     @test r == 5:23
     @test s[r] == "CompletionFoo.test2"
 end
@@ -236,7 +236,7 @@ c, r, res = test_complete(s)
 s = "CompletionFoo.test3([1.,2.], 1.,"
 c, r, res = test_complete(s)
 @test !res
-@test c[1] == string(methods(CompletionFoo.test3, (Array{Float64, 1}, Float64))[1])
+@test c[1] == string(methods(CompletionFoo.test3, Tuple{Array{Float64, 1}, Float64})[1])
 @test r == 1:19
 @test s[r] == "CompletionFoo.test3"
 

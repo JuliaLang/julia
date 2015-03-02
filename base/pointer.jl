@@ -40,7 +40,7 @@ function pointer_to_array{T,N}(p::Ptr{T}, dims::NTuple{N,Integer}, own::Bool=fal
         end
         i += 1
     end
-    pointer_to_array(p, convert((Int...), dims), own)
+    pointer_to_array(p, convert(Tuple{Int,...}, dims), own)
 end
 unsafe_load(p::Ptr,i::Integer) = pointerref(p, Int(i))
 unsafe_load(p::Ptr) = unsafe_load(p, 1)

@@ -12,22 +12,26 @@ function argtype_decl(n, t) # -> (argname, argtype)
     if t === Any && !isempty(s)
         return s, ""
     end
-    if t <: Vararg && t !== Union() && t.parameters[1] === Any
-        return string(s, "..."), ""
+    if isvarargtype(t)
+        if t.parameters[1] === Any
+            return string(s, "..."), ""
+        else
+            return s, string(t.parameters[1], "...")
+        end
     end
     return s, string(t)
 end
 
 function arg_decl_parts(m::Method)
     tv = m.tvars
-    if !isa(tv,Tuple)
-        tv = (tv,)
+    if !isa(tv,SimpleVector)
+        tv = svec(tv)
     end
     li = m.func.code
     e = uncompressed_ast(li)
     argnames = e.args[1]
     s = symbol("?")
-    decls = [argtype_decl(get(argnames,i,s), m.sig[i]) for i=1:length(m.sig)]
+    decls = [argtype_decl(get(argnames,i,s), m.sig.parameters[i]) for i=1:length(m.sig.parameters)]
     return tv, decls, li.file, li.line
 end
 
@@ -55,8 +59,8 @@ function show_method_table(io::IO, mt::MethodTable, max::Int=-1, header::Bool=tr
     end
     d = mt.defs
     n = rest = 0
-    while !is(d,())
-        if max==-1 || n<max || (rest==0 && n==max && d.next === ())
+    while d !== nothing
+        if max==-1 || n<max || (rest==0 && n==max && d.next === nothing)
             println(io)
             show(io, d)
             n += 1
@@ -132,7 +136,7 @@ function writemime(io::IO, mime::MIME"text/html", mt::MethodTable)
     meths = n==1 ? "method" : "methods"
     print(io, "$n $meths for generic function <b>$name</b>:<ul>")
     d = mt.defs
-    while !is(d,())
+    while d !== nothing
         print(io, "<li> ")
         writemime(io, mime, d)
         d = d.next

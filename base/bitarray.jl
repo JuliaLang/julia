@@ -1808,7 +1808,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
         end
     end
     # just integers and no BitArrays -> general case
-    has_bitarray || return invoke(cat, (Integer, Any...), catdim, X...)
+    has_bitarray || return invoke(cat, Tuple{Integer, Any, ...}, catdim, X...)
     dimsX = map((a->isa(a,BitArray) ? size(a) : (1,)), X)
     ndimsX = map((a->isa(a,BitArray) ? ndims(a) : 1), X)
     d_max = maximum(ndimsX)
@@ -1842,7 +1842,7 @@ function cat(catdim::Integer, X::Union(BitArray, Integer)...)
     end
 
     ndimsC = max(catdim, d_max)
-    dimsC = ntuple(ndimsC, compute_dims)::(Int...)
+    dimsC = ntuple(ndimsC, compute_dims)::Tuple{Int,...}
     typeC = promote_type(map(x->isa(x,BitArray) ? eltype(x) : typeof(x), X)...)
     if !has_integer || typeC == Bool
         C = BitArray(dimsC)

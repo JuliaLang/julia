@@ -35,7 +35,7 @@ macro enum(T,syms...)
     else
         throw(ArgumentError("invalid type expression for enum $T"))
     end
-    vals = Array((Symbol,Integer),0)
+    vals = Array(Tuple{Symbol,Integer},0)
     lo = hi = 0
     i = -1
     enumT = typeof(i)

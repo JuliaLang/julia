@@ -223,7 +223,7 @@ show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
 function println(io::AsyncStream, xs...)
     lock(io.lock)
     try
-        invoke(println, tuple(IO, typeof(xs)...), io, xs...)
+        invoke(println, Tuple{IO, map(typeof,xs)...}, io, xs...)
     finally
         unlock(io.lock)
     end

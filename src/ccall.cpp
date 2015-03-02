@@ -434,9 +434,11 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
 
     void *fptr=NULL;
     char *f_name=NULL, *f_lib=NULL;
+    jl_value_t *t0 = NULL, *t1 = NULL;
+    JL_GC_PUSH3(&ptr, &t0, &t1);
     if (ptr != NULL) {
-        if (jl_is_tuple(ptr) && jl_tuple_len(ptr)==1) {
-            ptr = jl_tupleref(ptr,0);
+        if (jl_is_tuple(ptr) && jl_nfields(ptr)==1) {
+            ptr = jl_fieldref(ptr,0);
         }
         if (jl_is_symbol(ptr))
             f_name = ((jl_sym_t*)ptr)->name;
@@ -452,9 +454,9 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
         else if (jl_is_cpointer_type(jl_typeof(ptr))) {
             fptr = *(void**)jl_data_ptr(ptr);
         }
-        else if (jl_is_tuple(ptr) && jl_tuple_len(ptr)>1) {
-            jl_value_t *t0 = jl_tupleref(ptr,0);
-            jl_value_t *t1 = jl_tupleref(ptr,1);
+        else if (jl_is_tuple(ptr) && jl_nfields(ptr)>1) {
+            jl_value_t *t0 = jl_fieldref(ptr,0);
+            jl_value_t *t1 = jl_fieldref(ptr,1);
             if (jl_is_symbol(t0))
                 f_name = ((jl_sym_t*)t0)->name;
             else if (jl_is_byte_string(t0))
@@ -472,6 +474,7 @@ static native_sym_arg_t interpret_symbol_arg(jl_value_t *arg, jl_codectx_t *ctx,
             JL_TYPECHKS(fname, pointer, ptr);
         }
     }
+    JL_GC_POP();
     native_sym_arg_t r;
     r.jl_ptr = jl_ptr;
     r.fptr = fptr;
@@ -499,15 +502,15 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     if (nargs == 2) {
         JL_TRY {
             rt = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                               jl_tuple_data(ctx->sp),
-                                               jl_tuple_len(ctx->sp)/2);
+                                               jl_svec_data(ctx->sp),
+                                               jl_svec_len(ctx->sp)/2);
         }
         JL_CATCH {
             jl_rethrow_with_add("error interpreting cglobal type");
         }
 
         JL_TYPECHK(cglobal, type, rt);
-        rt = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type, jl_tuple1(rt));
+        rt = (jl_value_t*)jl_apply_type((jl_value_t*)jl_pointer_type, jl_svec1(rt));
     }
     else {
         rt = (jl_value_t*)jl_voidpointer_type;
@@ -557,16 +560,15 @@ static Value *emit_cglobal(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 // llvmcall(ir, (rettypes...), (argtypes...), args...)
 static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
-
     JL_NARGSV(llvmcall, 3)
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
-    jl_tuple_t *stt = NULL;
+    jl_svec_t *stt = NULL;
     JL_GC_PUSH4(&ir, &rt, &at, &stt);
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                            jl_tuple_data(ctx->sp),
-                                            jl_tuple_len(ctx->sp)/2);
+                                            jl_svec_data(ctx->sp),
+                                            jl_svec_len(ctx->sp)/2);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall return type");
@@ -575,8 +577,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                            jl_tuple_data(ctx->sp),
-                                            jl_tuple_len(ctx->sp)/2);
+                                            jl_svec_data(ctx->sp),
+                                            jl_svec_len(ctx->sp)/2);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting llvmcall argument tuple");
@@ -585,8 +587,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
     JL_TRY {
         ir  = jl_interpret_toplevel_expr_in(ctx->module, args[1],
-                                            jl_tuple_data(ctx->sp),
-                                            jl_tuple_len(ctx->sp)/2);
+                                            jl_svec_data(ctx->sp),
+                                            jl_svec_len(ctx->sp)/2);
     }
     JL_CATCH {
         jl_rethrow_with_add("error interpreting IR argument");
@@ -598,31 +600,28 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
     bool isString = jl_is_byte_string(ir);
     bool isPtr = jl_is_cpointer(ir);
-    if (!isString && !isPtr)
-    {
+    if (!isString && !isPtr) {
         jl_error("First argument to llvmcall must be a string or pointer to an LLVM Function");
     }
 
     JL_TYPECHK(llvmcall, type, rt);
-    JL_TYPECHK(llvmcall, tuple, at);
     JL_TYPECHK(llvmcall, type, at);
 
     std::stringstream ir_stream;
 
-    stt = jl_alloc_tuple(nargs - 3);
+    stt = jl_alloc_svec(nargs - 3);
 
-    for (size_t i = 0; i < nargs-3; ++i)
-    {
-        jl_tupleset(stt,i,expr_type(args[4+i],ctx));
+    for (size_t i = 0; i < nargs-3; ++i) {
+        jl_svecset(stt,i,expr_type(args[4+i],ctx));
     }
 
     // Generate arguments
     std::string arguments;
     llvm::raw_string_ostream argstream(arguments);
-    jl_tuple_t *tt = (jl_tuple_t*)at;
+    jl_svec_t *tt = ((jl_datatype_t*)at)->parameters;
     jl_value_t *rtt = rt;
 
-    size_t nargt = jl_tuple_len(tt);
+    size_t nargt = jl_svec_len(tt);
     Value **argvals = (Value**) alloca(nargt*sizeof(Value*));
     std::vector<llvm::Type*> argtypes;
     /*
@@ -630,13 +629,11 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
      * If the argument type is immutable (including bitstype), we pass the loaded llvm value
      * type. Otherwise we pass a pointer to a jl_value_t.
      */
-    for (size_t i = 0; i < nargt; ++i)
-    {
-        jl_value_t *tti = jl_tupleref(tt,i);
+    for (size_t i = 0; i < nargt; ++i) {
+        jl_value_t *tti = jl_svecref(tt,i);
         Type *t = julia_type_to_llvm(tti);
         argtypes.push_back(t);
-        if (4+i > nargs)
-        {
+        if (4+i > nargs) {
             jl_error("Missing arguments to llvmcall!");
         }
         jl_value_t *argi = args[4+i];
@@ -724,8 +721,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             assert(*it == f->getFunctionType()->getParamType(i));
 
 #ifdef USE_MCJIT
-        if (f->getParent() != jl_Module)
-        {
+        if (f->getParent() != jl_Module) {
             FunctionMover mover(jl_Module,f->getParent());
             f = mover.CloneFunction(f);
         }
@@ -736,8 +732,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (verifyFunction(*f,PrintMessageAction)) {
         #else
         llvm::raw_fd_ostream out(1,false);
-        if (verifyFunction(*f,&out))
-        {
+        if (verifyFunction(*f,&out)) {
         #endif
             f->dump();
             jl_error("Malformed LLVM Function");
@@ -795,9 +790,12 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
         std::vector<Type *> &fargt, std::vector<Type *> &fargt_sig,
         std::vector<bool> &inRegList,
         std::vector<bool> &byRefList, attr_type &attributes,
-        jl_value_t *rt, jl_tuple_t *tt)
+        jl_value_t *rt, jl_svec_t *tt)
 {
-    size_t nargt = jl_tuple_len(tt);
+    size_t nargt = jl_svec_len(tt);
+    if (nargt > 0 && jl_svecref(tt,nargt-1) == (jl_value_t*)dots_sym) {
+        nargt--;
+    }
     assert(rt && !jl_is_abstract_ref_type(rt));
 
 #if LLVM33
@@ -845,13 +843,11 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 #ifdef LLVM32
         paramattrs.push_back(AttrBuilder());
 #endif
-        jl_value_t *tti = jl_tupleref(tt,i);
-
+        jl_value_t *tti = jl_svecref(tt,i);
         if (jl_is_vararg_type(tti)) {
             current_isVa = true;
             tti = jl_tparam0(tti);
         }
-
         Type *t = NULL;
         if (jl_is_abstract_ref_type(tti)) {
             if (jl_is_typevar(jl_tparam0(tti)))
@@ -1006,8 +1002,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     else {
         JL_TRY {
             rt  = jl_interpret_toplevel_expr_in(ctx->module, args[2],
-                                                jl_tuple_data(ctx->sp),
-                                                jl_tuple_len(ctx->sp)/2);
+                                                jl_svec_data(ctx->sp),
+                                                jl_svec_len(ctx->sp)/2);
         }
         JL_CATCH {
             static_rt = false;
@@ -1029,7 +1025,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
     }
 
-    if (jl_is_tuple(rt)) {
+    if (jl_is_svec(rt)) {
         std::string msg = "in " + ctx->funcName +
             ": ccall: missing return type";
         jl_error(msg.c_str());
@@ -1059,8 +1055,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     {
         JL_TRY {
             at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
-                                                jl_tuple_data(ctx->sp),
-                                                jl_tuple_len(ctx->sp)/2);
+                                                jl_svec_data(ctx->sp),
+                                                jl_svec_len(ctx->sp)/2);
         }
         JL_CATCH {
             //jl_rethrow_with_add("error interpreting ccall argument tuple");
@@ -1070,9 +1066,9 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         }
     }
 
-    JL_TYPECHK(ccall, tuple, at);
-    JL_TYPECHK(ccall, type, at);
-    jl_tuple_t *tt = (jl_tuple_t*)at;
+    JL_TYPECHK(ccall, simplevector, at);
+    //JL_TYPECHK(ccall, type, at);
+    jl_svec_t *tt = (jl_svec_t*)at;
 
     // check for calling convention specifier
     CallingConv::ID cc = CallingConv::C;
@@ -1099,21 +1095,20 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     // some sanity checking and check whether there's a vararg
     size_t i;
-    size_t nargt = jl_tuple_len(tt);
+    size_t nargt = jl_svec_len(tt);
     for(i=0; i < nargt; i++) {
-        jl_value_t *tti = jl_tupleref(tt,i);
+        jl_value_t *tti = jl_svecref(tt,i);
         if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti))) {
             JL_GC_POP();
             emit_error("ccall: argument type Ptr should have an element type, Ptr{T}",ctx);
             return literal_pointer_val(jl_nothing);
         }
-        if (jl_is_vararg_type(tti)) {
+        if (jl_is_vararg_type(tti))
             isVa = true;
-        }
     }
 
-    if ((!isVa && jl_tuple_len(tt)  != (nargs-2)/2) ||
-        ( isVa && jl_tuple_len(tt)-1 > (nargs-2)/2))
+    if ((!isVa && nargt  != (nargs-2)/2) ||
+        ( isVa && nargt-1 > (nargs-2)/2))
         jl_error("ccall: wrong number of arguments to C function");
 
     // some special functions
@@ -1138,7 +1133,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt==1);
         jl_value_t *argi = args[4];
         bool addressOf = false;
-        jl_value_t *tti = jl_tupleref(tt,0);
+        jl_value_t *tti = jl_svecref(tt,0);
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
@@ -1151,13 +1146,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         if (addressOf)
             largty = jl_pvalue_llvmt;
         else
-            largty = julia_struct_to_llvm(jl_tupleref(tt, 0));
+            largty = julia_struct_to_llvm(jl_svecref(tt, 0));
         if (largty == jl_pvalue_llvmt) {
             ary = boxed(emit_expr(argi, ctx),ctx);
         }
         else {
             assert(!addressOf);
-            ary = emit_unbox(largty, emit_unboxed(argi, ctx), jl_tupleref(tt, 0));
+            ary = emit_unbox(largty, emit_unboxed(argi, ctx), jl_svecref(tt, 0));
         }
         JL_GC_POP();
         return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
@@ -1249,11 +1244,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         jl_value_t *jargty;
         if (isVa && ai >= nargt-1) {
             largty = fargt[nargt-1];
-            jargty = jl_tparam0(jl_tupleref(tt,nargt-1));
+            jargty = jl_tparam0(jl_svecref(tt,nargt-1));
         }
         else {
             largty = fargt[sret+ai];
-            jargty = jl_tupleref(tt,ai);
+            jargty = jl_svecref(tt,ai);
         }
 
         Value *arg;

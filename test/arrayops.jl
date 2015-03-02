@@ -117,7 +117,7 @@ b = [4, 6, 2, -7, 1]
 ind = findin(a, b)
 @test ind == [3,4]
 
-rt = Base.return_types(setindex!, (Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}))
+rt = Base.return_types(setindex!, Tuple{Array{Int32, 3}, UInt8, Vector{Int}, Float64, UnitRange{Int}})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 
 # get
@@ -731,7 +731,7 @@ fill!(S, 2)
 S = sub(A, 1:2, 3)
 fill!(S, 3)
 @test A == [1 1 3; 2 2 3; 1 1 1]
-rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
+rt = Base.return_types(fill!, Tuple{Array{Int32, 3}, UInt8})
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 A = Array(Union(UInt8,Int8), 3)
 fill!(A, UInt8(3))
@@ -839,14 +839,14 @@ Nmax = 3 # TODO: go up to CARTESIAN_DIMS+2 (currently this exposes problems)
 for N = 1:Nmax
     #indexing with (UnitRange, UnitRange, UnitRange)
     args = ntuple(N, d->UnitRange{Int})
-    @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N}]
-    @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == Any[BitArray{N}]
-    @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
+    @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N}]
+    @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == Any[BitArray{N}]
+    @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
     # Indexing with (UnitRange, UnitRange, Float64)
     args = ntuple(N, d->d<N ? UnitRange{Int} : Float64)
-    N > 1 && @test Base.return_types(getindex, tuple(Array{Float32, N}, args...)) == [Array{Float32, N-1}]
-    N > 1 && @test Base.return_types(getindex, tuple(BitArray{N}, args...)) == [BitArray{N-1}]
-    N > 1 && @test Base.return_types(setindex!, tuple(Array{Float32, N}, Array{Int, 1}, args...)) == [Array{Float32, N}]
+    N > 1 && @test Base.return_types(getindex, Tuple{Array{Float32, N}, args...}) == [Array{Float32, N-1}]
+    N > 1 && @test Base.return_types(getindex, Tuple{BitArray{N}, args...}) == [BitArray{N-1}]
+    N > 1 && @test Base.return_types(setindex!, Tuple{Array{Float32, N}, Array{Int, 1}, args...}) == [Array{Float32, N}]
 end
 
 # issue #6645 (32-bit)

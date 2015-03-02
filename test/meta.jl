@@ -54,7 +54,7 @@ _attach(val, ex) = pushmeta!(ex, :test, val)
     false
 end
 
-asts = code_lowered(dummy, ())
+asts = code_lowered(dummy, Tuple{})
 @test length(asts) == 1
 ast = asts[1]
 
