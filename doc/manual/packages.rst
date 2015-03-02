@@ -315,7 +315,7 @@ Documentation changes
 
 If you want to improve the online documentation of a package, the
 easiest approach (at least for small changes) is to use GitHub's
-online editing functionality. First, navigate to the respository's
+online editing functionality. First, navigate to the repository's
 GitHub "home page," find the file (e.g., ``README.md``) within the
 repository's folder structure, and click on it. You'll see the
 contents displayed, along with a small "pencil" icon in the upper
@@ -323,7 +323,7 @@ right hand corner. Clicking that icon opens the file in edit mode.
 Make your changes, write a brief summary describing the changes you
 want to make (this is your *commit message*), and then hit "Propose
 file change."  Your changes will be submitted for consideration by the
-package owner(s).
+package owner(s) and collaborators.
 
 Code changes
 ~~~~~~~~~~~~
@@ -344,7 +344,7 @@ Let's assume you already have the ``Foo`` package installed.  In the
 description below, anything starting with ``Pkg.`` is meant to be
 typed at the Julia prompt; anything starting with ``git`` is meant to
 be typed in :ref:`julia's shell mode <man-shell-mode>` (or using the
-shell that comes with your operating system).  Within julia, you can
+shell that comes with your operating system).  Within Julia, you can
 combine these two modes::
 
     julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
@@ -354,9 +354,9 @@ combine these two modes::
 Now suppose you're ready to make some changes to ``Foo``.  While there
 are several possible approaches, here is one that is widely used:
 
-- From the Julia prompt, type ``Pkg.checkout("Foo")``. This ensures you're
-  running the latest code (the ``master`` branch), rather than just
-  whatever "official release" version you have installed. (If you're
+- From the Julia prompt, type :func:`Pkg.checkout("Foo") <Pkg.checkout>`. This
+  ensures you're running the latest code (the ``master`` branch), rather than
+  just whatever "official release" version you have installed. (If you're
   planning to fix a bug, at this point it's a good idea to check again
   whether the bug has already been fixed by someone else. If it has,
   you can request that a new official release be tagged so that the
@@ -365,8 +365,8 @@ are several possible approaches, here is one that is widely used:
   <man-pkg-dirty>` below.
 
 - Create a branch for your changes: navigate to the package folder
-  (the one that julia reports from ``Pkg.dir("Foo")``) and (in shell
-  mode) create a new branch using ``git checkout -b <newbranch>``,
+  (the one that Julia reports from :func:`Pkg.dir("Foo") <Pkg.dir>`) and (in
+  shell mode) create a new branch using ``git checkout -b <newbranch>``,
   where ``<newbranch>`` might be some descriptive name (e.g.,
   ``fixbar``). By creating a branch, you ensure that you can easily go
   back and forth between your new work and the current ``master``
@@ -387,43 +387,40 @@ are several possible approaches, here is one that is widely used:
   demonstrates to the package owner that you've made sure your code
   works as intended.
 
-- Run the package's tests and make sure they pass.  From
-  julia, you can do this in either of the following ways:
+- Run the package's tests and make sure they pass. There are several ways to
+  run the tests:
 
-  + ``Pkg.test("Foo")``: this will run your tests in a separate (new)
-    julia process.
-  + ``include("runtests.jl")`` from the package's ``test/`` folder (it's
-    possible the file has a different name, look for one that runs all
-    the tests): this allows you to run the tests repeatedly in the
-    same session without reloading all the package code; for packages
-    that take a while to load, this can be much faster. With this
-    approach, you do have to do some extra work to make :ref:`changes
-    in the package code <man-workflow-tips>`.
-
-  Alternatively, run the tests from the shell with ``julia
-  runtests.jl`` from within the package's ``test/`` folder.
+  + From Julia, run :func:`Pkg.test("Foo") <Pkg.test>`: this will run your
+    tests in a separate (new) julia process.
+  + From Julia, ``include("runtests.jl")`` from the package's ``test/`` folder
+    (it's possible the file has a different name, look for one that runs all
+    the tests): this allows you to run the tests repeatedly in the same session
+    without reloading all the package code; for packages that take a while to
+    load, this can be much faster. With this approach, you do have to do some
+    extra work to make :ref:`changes in the package code <man-workflow-tips>`.
+  + From the shell, run ``julia runtests.jl`` from within the package's
+    ``test/`` folder.
 
 
 - Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
 
-- Submit your changes: from the julia prompt, type
-  ``Pkg.submit("Foo")``. This will push your changes to your GitHub
-  fork, creating it if it doesn't already exist.  (If you encounter an
-  error, :ref:`make sure you've set up your SSH keys
-  <man-pkg-dev-setup>`.) Julia will then give you a hyperlink; open
-  that link, edit the message, and then click "submit." At that point,
-  the package owner will be notified of your changes and may initiate
-  discussion.
+- Submit your changes: From the Julia prompt, type
+  :func:`Pkg.submit("Foo") <Pkg.submit>`. This will push your changes to your
+  GitHub fork, creating it if it doesn't already exist. (If you encounter an
+  error, :ref:`make sure you've set up your SSH keys <man-pkg-dev-setup>`.)
+  Julia will then give you a hyperlink; open that link, edit the message, and
+  then click "submit." At that point, the package owner will be notified of
+  your changes and may initiate discussion.
 
-- The package owner may make some suggestions for additional
-  improvements.  To respond to those suggestions, you can easily
-  update the pull request (this only works for changes that have not
-  already been merged; for merged pull requests, make new changes by
-  starting a new branch):
+- The package owner may suggest additional improvements. To respond to those
+  suggestions, you can easily update the pull request (this only works for
+  changes that have not already been merged; for merged pull requests, make new
+  changes by starting a new branch):
 
   + If you've changed branches in the meantime, make sure you go back
     to the same branch with ``git checkout fixbar`` (from shell mode)
-    or ``Pkg.checkout("Foo", "fixbar")`` (from the julia prompt).
+    or :func:`Pkg.checkout("Foo", "fixbar") <Pkg.checkout>` (from the Julia
+    prompt).
 
   + As above, make your changes, run the tests, and commit your changes.
 
@@ -447,7 +444,8 @@ what these changes are; you can either discard them (``git checkout
 changedfile.jl``) or commit them before switching branches.  If you
 can't easily resolve the problems manually, as a last resort you can
 delete the entire ``"Foo"`` folder and reinstall a fresh copy with
-``Pkg.add("Foo")``. Naturally, this deletes any changes you've made.
+:func:`Pkg.add("Foo") <Pkg.add>`. Naturally, this deletes any changes you've
+made.
 
 .. _man-post-hoc-branching:
 
