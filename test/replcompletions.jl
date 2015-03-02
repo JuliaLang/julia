@@ -359,6 +359,11 @@ let #test that it can auto complete with spaces in file/path
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
         end
+        # Test for issue #10324
+        s = "cd(\"$dir_space"
+        c,r = test_complete(s)
+        @test r == 5:15
+        @test s[r] ==  dir_space
     end
     rm(dir, recursive=true)
 end
