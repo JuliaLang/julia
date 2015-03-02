@@ -38,7 +38,7 @@ function newmethod(defs)
     keylen = -1
     key = nothing
     for def in defs
-        length(def.sig) > keylen && (keylen = length(def.sig); key = def)
+        length(def.sig.parameters) > keylen && (keylen = length(def.sig.parameters); key = def)
     end
     return key
 end

@@ -120,7 +120,7 @@ read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 
 read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, convert((Int...),tuple(d1,dims...)))
+    read(s, t, convert(Tuple{Int,...},tuple(d1,dims...)))
 
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 

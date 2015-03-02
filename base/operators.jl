@@ -17,8 +17,6 @@ isless(x::FloatingPoint, y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x
 isless(x::Real,          y::FloatingPoint) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 isless(x::FloatingPoint, y::Real         ) = (!isnan(x) & isnan(y)) | (signbit(x) & !signbit(y)) | (x < y)
 
-# avoid ambiguity with isequal(::Tuple, ::Tuple)
-==(T::(Type...), S::(Type...)) = typeseq(T, S)
 ==(T::Type, S::Type) = typeseq(T, S)
 
 ## comparison fallbacks ##
@@ -164,11 +162,7 @@ A_ldiv_Bt (a,b) = a\transpose(b)
 At_ldiv_Bt(a,b) = transpose(a)\transpose(b)
 
 
-oftype(x,c) = convert(typeof(x),c)
-
 widen{T<:Number}(x::T) = convert(widen(T), x)
-
-sizeof(x) = Core.sizeof(x)
 
 eltype(::Type) = Any
 eltype(::Type{Any}) = Any
@@ -184,23 +178,23 @@ copy(x::Union(Symbol,Number,AbstractString,Function,Tuple,LambdaStaticData,
 
 # array shape rules
 
-function promote_shape(a::(Int,), b::(Int,))
+function promote_shape(a::Tuple{Int,}, b::Tuple{Int,})
     if a[1] != b[1]
         throw(DimensionMismatch("dimensions must match"))
     end
     return a
 end
 
-function promote_shape(a::(Int,Int), b::(Int,))
+function promote_shape(a::Tuple{Int,Int}, b::Tuple{Int,})
     if a[1] != b[1] || a[2] != 1
         throw(DimensionMismatch("dimensions must match"))
     end
     return a
 end
 
-promote_shape(a::(Int,), b::(Int,Int)) = promote_shape(b, a)
+promote_shape(a::Tuple{Int,}, b::Tuple{Int,Int}) = promote_shape(b, a)
 
-function promote_shape(a::(Int, Int), b::(Int, Int))
+function promote_shape(a::Tuple{Int, Int}, b::Tuple{Int, Int})
     if a[1] != b[1] || a[2] != b[2]
         throw(DimensionMismatch("dimensions must match"))
     end
@@ -315,10 +309,10 @@ to_index(i1, i2)         = to_index(i1), to_index(i2)
 to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
 to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)
 to_index(I...) = to_index(I)
-to_index(I::(Any,))            = (to_index(I[1]), )
-to_index(I::(Any,Any,))        = (to_index(I[1]), to_index(I[2]))
-to_index(I::(Any,Any,Any))     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
-to_index(I::(Any,Any,Any,Any)) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
+to_index(I::Tuple{Any,})            = (to_index(I[1]), )
+to_index(I::Tuple{Any,Any,})        = (to_index(I[1]), to_index(I[2]))
+to_index(I::Tuple{Any,Any,Any})     = (to_index(I[1]), to_index(I[2]), to_index(I[3]))
+to_index(I::Tuple{Any,Any,Any,Any}) = (to_index(I[1]), to_index(I[2]), to_index(I[3]), to_index(I[4]))
 to_index(I::Tuple) = map(to_index, I)
 to_index(i) = error("invalid index: $i")
 

@@ -120,7 +120,7 @@ export
     # key types
     Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
-    AbstractArray, DenseArray,
+    SimpleVector, AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Symbol, Task, Array, WeakRef,
@@ -140,7 +140,7 @@ export
     GlobalRef, NewvarNode, GenSym,
     # object model functions
     fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
-    # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref,
+    # arraylen, arrayref, arrayset, arraysize,
     # _apply, kwcall,
     # sizeof    # not exported, to avoid conflicting with Base.sizeof
     # type reflection
@@ -270,11 +270,11 @@ TypeVar(n::Symbol, lb::ANY, ub::ANY) =
 TypeVar(n::Symbol, lb::ANY, ub::ANY, b::Bool) =
     ccall(:jl_new_typevar_, Any, (Any, Any, Any, Any), n, lb::Type, ub::Type, b)::TypeVar
 
-TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::Tuple, t::Type)
+TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any), p::SimpleVector, t::Type)
 
 Expr(args::ANY...) = _expr(args...)
 
-_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::$(Expr(:call, :(Core.apply_type), :Type, typ)), n::$argty) = $(Expr(:new, typ, :n))))
+_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::Type{$typ}, n::$argty) = $(Expr(:new, typ, :n))))
 _new(:LineNumberNode, :Int)
 _new(:LabelNode, :Int)
 _new(:GotoNode, :Int)
@@ -291,3 +291,5 @@ Task(f::ANY) = ccall(:jl_new_task, Any, (Any, Int), f::Function, 0)::Task
 # simple convert for use by constructors of types in Core
 convert(::Type{Any}, x::ANY) = x
 convert{T}(::Type{T}, x::T) = x
+cconvert(T::Type, x) = convert(T, x)
+unsafe_convert{T}(::Type{T}, x::T) = x

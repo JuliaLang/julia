@@ -52,8 +52,8 @@ function edit( m::Method )
 end
 
 edit(file::AbstractString) = edit(file, 1)
-edit(f::Callable)               = edit(functionloc(f)...)
-edit(f::Callable, t::(Type...)) = edit(functionloc(f,t)...)
+edit(f::Callable)          = edit(functionloc(f)...)
+edit(f::Callable, t::ANY)  = edit(functionloc(f,t)...)
 
 # terminal pager
 
@@ -63,8 +63,8 @@ function less(file::AbstractString, line::Integer)
 end
 
 less(file::AbstractString) = less(file, 1)
-less(f::Callable)               = less(functionloc(f)...)
-less(f::Callable, t::(Type...)) = less(functionloc(f,t)...)
+less(f::Callable)          = less(functionloc(f)...)
+less(f::Callable, t::ANY)  = less(functionloc(f,t)...)
 
 # clipboard copy and paste
 
@@ -197,7 +197,7 @@ versioninfo(verbose::Bool) = versioninfo(STDOUT,verbose)
 
 # displaying type-ambiguity warnings
 
-function code_warntype(io::IO, f, t::(Type...))
+function code_warntype(io::IO, f, t::ANY)
     global show_expr_type_emphasize
     state = show_expr_type_emphasize::Bool
     ct = code_typed(f, t)
@@ -217,9 +217,9 @@ function code_warntype(io::IO, f, t::(Type...))
     show_expr_type_emphasize::Bool = false
     nothing
 end
-code_warntype(f, t::(Type...)) = code_warntype(STDOUT, f, t)
+code_warntype(f, t::ANY) = code_warntype(STDOUT, f, t)
 
-typesof(args...) = map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)
+typesof(args...) = Tuple{map(a->(isa(a,Type) ? Type{a} : typeof(a)), args)...}
 
 function gen_call_with_extracted_types(fcn, ex0)
     if isa(ex0, Expr) &&

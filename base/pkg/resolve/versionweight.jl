@@ -99,7 +99,7 @@ end
 
 const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
 
-function VWPreBuild(ispre::Bool, desc::(Union(Int,ASCIIString)...))
+function VWPreBuild(ispre::Bool, desc::Tuple{Union(Int,ASCIIString),...})
     isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0

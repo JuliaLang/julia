@@ -201,7 +201,7 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
         }
     }
     if (jl_isbits(jt)) {
-        size_t nf = jl_tuple_len(bt->names), i;
+        size_t nf = jl_datatype_nfields(bt), i;
         size_t llvm_nf = 0;
         Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
         jl_value_t *f=NULL;
@@ -226,9 +226,20 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
         Type *t = julia_struct_to_llvm(jt);
         if (t == T_void || t->isEmptyTy())
             return UndefValue::get(NoopType);
-        StructType *st = dyn_cast<StructType>(t);
-        assert(st);
-        return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
+        if (t->isStructTy()) {
+            StructType *st = dyn_cast<StructType>(t);
+            assert(st);
+            return ConstantStruct::get(st, ArrayRef<Constant*>(fields,llvm_nf));
+        }
+        else if (t->isVectorTy()) {
+            return ConstantVector::get(ArrayRef<Constant*>(fields,llvm_nf));
+        }
+        else {
+            assert(t->isArrayTy());
+            ArrayType *at = dyn_cast<ArrayType>(t);
+            assert(at);
+            return ConstantArray::get(at, ArrayRef<Constant*>(fields,llvm_nf));
+        }
     }
     return NULL;
 }
@@ -238,22 +249,6 @@ static Value *emit_unboxed(jl_value_t *e, jl_codectx_t *ctx)
     Constant *c = julia_const_to_llvm(e);
     if (c) return mark_julia_type(c, jl_typeof(e));
     return emit_expr(e, ctx, false);
-}
-
-static Type *jl_llvmtuple_eltype(Type *tuple, jl_value_t *jt, size_t i)
-{
-    Type *ety = NULL;
-    if (tuple->isArrayTy())
-        ety = dyn_cast<ArrayType>(tuple)->getElementType();
-    else if (tuple->isVectorTy())
-        ety = dyn_cast<VectorType>(tuple)->getElementType();
-    else if (tuple == T_void)
-        ety = T_void;
-    else if (tuple->isStructTy())
-        ety = julia_type_to_llvm(jl_tupleref((jl_tuple_t*)jt,i));
-    else
-        assert(false);
-    return ety;
 }
 
 static Value *ghostValue(jl_value_t *ty);
@@ -287,22 +282,6 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         }
         return x;
     }
-    if ( (jt != NULL && jl_is_tuple(jt)) || to->isVectorTy() || to->isArrayTy() ||
-         (to->isStructTy() && dyn_cast<StructType>(to)->isLiteral()) ) {
-        assert(jt != 0);
-        assert(jl_is_tuple(jt));
-        assert(to != T_void);
-        Value *tpl = UndefValue::get(to);
-        for (size_t i = 0; i < jl_tuple_len(jt); ++i) {
-            Type *ety = jl_llvmtuple_eltype(to,jt,i);
-            if (ety == T_void)
-                continue;
-            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i),jt,NULL);
-            Value *elt = emit_unbox(ety,ref,jl_tupleref(jt,i));
-            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i),elt,jt,NULL);
-        }
-        return tpl;
-    }
     Value *p = data_pointer(x);
     if (to == T_int1) {
         // bools stored as int8, so an extra Trunc is needed to get an int1
@@ -316,7 +295,8 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         assert(to != T_void);
         return UndefValue::get(to);
     }
-    return builder.CreateLoad(builder.CreateBitCast(p, to->getPointerTo()), false);
+    // TODO: stricter alignment if possible
+    return builder.CreateAlignedLoad(builder.CreateBitCast(p, to->getPointerTo()), 1, false);
 }
 
 // unbox trying to determine type automatically
@@ -388,8 +368,8 @@ static Value *generic_unbox(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
         jl_value_t *bt=NULL;
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               jl_tuple_data(ctx->sp),
-                                               jl_tuple_len(ctx->sp)/2);
+                                               jl_svec_data(ctx->sp),
+                                               jl_svec_len(ctx->sp)/2);
         }
         JL_CATCH {
         }
@@ -418,8 +398,8 @@ static Value *generic_box(jl_value_t *targ, jl_value_t *x, jl_codectx_t *ctx)
     else {
         JL_TRY {
             bt = jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                               jl_tuple_data(ctx->sp),
-                                               jl_tuple_len(ctx->sp)/2);
+                                               jl_svec_data(ctx->sp),
+                                               jl_svec_len(ctx->sp)/2);
         }
         JL_CATCH {
         }
@@ -501,8 +481,8 @@ static Type *staticeval_bitstype(jl_value_t *targ, const char *fname, jl_codectx
 {
     jl_value_t *bt =
         jl_interpret_toplevel_expr_in(ctx->module, targ,
-                                      jl_tuple_data(ctx->sp),
-                                      jl_tuple_len(ctx->sp)/2);
+                                      jl_svec_data(ctx->sp),
+                                      jl_svec_len(ctx->sp)/2);
     if (!jl_is_bitstype(bt))
         jl_errorf("%s: expected bits type as first argument", fname);
     Type *to = julia_type_to_llvm(bt);
@@ -671,7 +651,8 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
-    return typed_load(thePtr, im1, ety, ctx, tbaa_user);
+    // TODO: alignment?
+    return typed_load(thePtr, im1, ety, ctx, tbaa_user, 1);
 }
 
 static Value *emit_runtime_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_codectx_t *ctx)
@@ -732,7 +713,8 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
             else
                 val = emit_unboxed(x,ctx);
         }
-        typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL);
+        // TODO: alignment?
+        typed_store(thePtr, im1, val, ety, ctx, tbaa_user, NULL, 1);
     }
     return mark_julia_type(thePtr, aty);
 }

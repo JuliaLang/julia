@@ -1565,14 +1565,14 @@ static int push_root(jl_value_t *v, int d, int bits)
     d++;
 
     // some values have special representations
-    if (vt == (jl_value_t*)jl_tuple_type) {
-        size_t l = jl_tuple_len(v);
-        MARK(v, bits = gc_setmark(v, l*sizeof(void*) + sizeof(jl_tuple_t), GC_MARKED_NOESC));
-        jl_value_t **data = ((jl_tuple_t*)v)->data;
+    if (vt == (jl_value_t*)jl_simplevector_type) {
+        size_t l = jl_svec_len(v);
+        MARK(v, bits = gc_setmark(v, l*sizeof(void*) + sizeof(jl_svec_t), GC_MARKED_NOESC));
+        jl_value_t **data = ((jl_svec_t*)v)->data;
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];
             if (elt != NULL) {
-                verify_parent2("tuple", v, &data[i], "elem(%d)", i);
+                verify_parent2("svec", v, &data[i], "elem(%d)", i);
                 refyoung |= gc_push_root(elt, d);
             }
         }
@@ -1664,11 +1664,11 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_datatype_t *dt = (jl_datatype_t*)vt;
         size_t dtsz;
         if (dt == jl_datatype_type)
-            dtsz = NWORDS(sizeof(jl_datatype_t) + jl_tuple_len(((jl_datatype_t*)v)->names)*sizeof(jl_fielddesc_t))*sizeof(void*);
+            dtsz = NWORDS(sizeof(jl_datatype_t) + jl_datatype_nfields(v)*sizeof(jl_fielddesc_t))*sizeof(void*);
         else
             dtsz = jl_datatype_size(dt);
         MARK(v, bits = gc_setmark(v, dtsz, GC_MARKED_NOESC));
-        int nf = (int)jl_tuple_len(dt->names);
+        int nf = (int)jl_datatype_nfields(dt);
         // TODO check if there is a perf improvement for objects with a lot of fields
         // int fdsz = sizeof(void*)*nf;
         // void** children = alloca(fdsz);
@@ -1788,10 +1788,11 @@ static void pre_mark(void)
     gc_push_root(jl_unprotect_stack_func, 0);
     gc_push_root(jl_bottom_func, 0);
     gc_push_root(jl_typetype_type, 0);
-    gc_push_root(jl_tupletype_type, 0);
 
     // constants
-    gc_push_root(jl_null, 0);
+    gc_push_root(jl_emptysvec, 0);
+    gc_push_root(jl_emptytuple, 0);
+    gc_push_root(jl_typeof(jl_emptytuple), 0);
     gc_push_root(jl_true, 0);
     gc_push_root(jl_false, 0);
 }

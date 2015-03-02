@@ -6,7 +6,7 @@ const secret_table_token = :__c782dbf1cf4d6a2e5e3865d7e95634f2e09b5902__
 
 haskey(d::Associative, k) = in(k,keys(d))
 
-function in(p::(Any,Any), a::Associative)
+function in(p::Tuple{Any,Any}, a::Associative)
     v = get(a,p[1],secret_table_token)
     !is(v, secret_table_token) && (v == p[2])
 end
@@ -149,8 +149,10 @@ end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
 isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
-eltype{D}(::Type{KeyIterator{D}}) = eltype(D)[1]
-eltype{D}(::Type{ValueIterator{D}}) = eltype(D)[2]
+_tt1{A,B}(::Type{Tuple{A,B}}) = A
+_tt2{A,B}(::Type{Tuple{A,B}}) = B
+eltype{D}(::Type{KeyIterator{D}}) = _tt1(eltype(D))
+eltype{D}(::Type{ValueIterator{D}}) = _tt2(eltype(D))
 
 start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
 done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
@@ -187,12 +189,13 @@ function merge!(d::Associative, others::Associative...)
     end
     return d
 end
+keytype{K,V}(::Associative{K,V}) = K
+valtype{K,V}(::Associative{K,V}) = V
 function merge(d::Associative, others::Associative...)
-    K, V = eltype(d)
+    K, V = keytype(d), valtype(d)
     for other in others
-        (Ko, Vo) = eltype(other)
-        K = promote_type(K, Ko)
-        V = promote_type(V, Vo)
+        K = promote_type(K, keytype(other))
+        V = promote_type(V, valtype(other))
     end
     merge!(Dict{K,V}(), d, others...)
 end
@@ -207,7 +210,7 @@ function filter!(f, d::Associative)
 end
 filter(f, d::Associative) = filter!(f,copy(d))
 
-eltype{K,V}(::Type{Associative{K,V}}) = (K,V)
+eltype{K,V}(::Type{Associative{K,V}}) = Tuple{K,V}
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
@@ -356,23 +359,23 @@ type Dict{K,V} <: Associative{K,V}
     end
 end
 Dict() = Dict{Any,Any}()
-Dict(kv::()) = Dict()
+Dict(kv::Tuple{}) = Dict()
 copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
 # TODO: this can probably be simplified using `eltype` as a THT (Tim Holy trait)
-Dict{K,V}(kv::((K,V)...,))               = Dict{K,V}(kv)
-Dict{K  }(kv::((K,Any)...,))             = Dict{K,Any}(kv)
-Dict{V  }(kv::((Any,V)...,))             = Dict{Any,V}(kv)
-Dict{K,V}(kv::(Pair{K,V}...,))           = Dict{K,V}(kv)
-Dict{K}  (kv::(Pair{K}...,))             = Dict{K,Any}(kv)
-Dict{V}  (kv::(Pair{TypeVar(:K),V}...,)) = Dict{Any,V}(kv)
-Dict     (kv::(Pair...,))                = Dict{Any,Any}(kv)
+Dict{K,V}(kv::Tuple{Tuple{K,V},...})          = Dict{K,V}(kv)
+Dict{K  }(kv::Tuple{Tuple{K,Any},...})        = Dict{K,Any}(kv)
+Dict{V  }(kv::Tuple{Tuple{Any,V},...})        = Dict{Any,V}(kv)
+Dict{K,V}(kv::Tuple{Pair{K,V},...})           = Dict{K,V}(kv)
+Dict{K}  (kv::Tuple{Pair{K},...})             = Dict{K,Any}(kv)
+Dict{V}  (kv::Tuple{Pair{TypeVar(:K),V},...}) = Dict{Any,V}(kv)
+Dict     (kv::Tuple{Pair,...})                = Dict{Any,Any}(kv)
 
-Dict{K,V}(kv::AbstractArray{(K,V)})     = Dict{K,V}(kv)
-Dict{K,V}(kv::AbstractArray{Pair{K,V}}) = Dict{K,V}(kv)
-Dict{K,V}(kv::Associative{K,V})         = Dict{K,V}(kv)
+Dict{K,V}(kv::AbstractArray{Tuple{K,V}}) = Dict{K,V}(kv)
+Dict{K,V}(kv::AbstractArray{Pair{K,V}})  = Dict{K,V}(kv)
+Dict{K,V}(kv::Associative{K,V})          = Dict{K,V}(kv)
 
 Dict{K,V}(ps::Pair{K,V}...)            = Dict{K,V}(ps)
 Dict{K}  (ps::Pair{K}...,)             = Dict{K,Any}(ps)
@@ -380,7 +383,7 @@ Dict{V}  (ps::Pair{TypeVar(:K),V}...,) = Dict{Any,V}(ps)
 Dict     (ps::Pair...)                 = Dict{Any,Any}(ps)
 
 Dict(kv) = dict_with_eltype(kv, eltype(kv))
-dict_with_eltype{K,V}(kv, ::Type{(K,V)}) = Dict{K,V}(kv)
+dict_with_eltype{K,V}(kv, ::Type{Tuple{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype{K,V}(kv, ::Type{Pair{K,V}}) = Dict{K,V}(kv)
 dict_with_eltype(kv, t) = Dict{Any,Any}(kv)
 
@@ -632,7 +635,7 @@ end
 #       therefore not be exported as-is: it's for internal use only.
 macro get!(h, key0, default)
     quote
-        K, V = eltype($(esc(h)))
+        K, V = keytype($(esc(h))), valtype($(esc(h)))
         key = convert(K, $(esc(key0)))
         if !isequal(key, $(esc(key0)))
             throw(ArgumentError(string($(esc(key0)), " is not a valid key for type ", K)))

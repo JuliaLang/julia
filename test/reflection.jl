@@ -10,13 +10,13 @@ function test_code_reflection(freflect, f, types)
 end
 
 println(STDERR, "The following 'Returned code...' warnings indicate normal behavior:")
-test_code_reflection(code_native, ismatch, (Regex, AbstractString))
-test_code_reflection(code_native, +, (Int, Int))
-test_code_reflection(code_native, +, (Array{Float32}, Array{Float32}))
+test_code_reflection(code_native, ismatch, Tuple{Regex, AbstractString})
+test_code_reflection(code_native, +, Tuple{Int, Int})
+test_code_reflection(code_native, +, Tuple{Array{Float32}, Array{Float32}})
 
-test_code_reflection(code_llvm, ismatch, (Regex, AbstractString))
-test_code_reflection(code_llvm, +, (Int, Int))
-test_code_reflection(code_llvm, +, (Array{Float32}, Array{Float32}))
+test_code_reflection(code_llvm, ismatch, Tuple{Regex, AbstractString})
+test_code_reflection(code_llvm, +, Tuple{Int, Int})
+test_code_reflection(code_llvm, +, Tuple{Array{Float32}, Array{Float32}})
 
 @test_throws Exception code_native(+, Int, Int)
 @test_throws Exception code_native(+, Array{Float32}, Array{Float32})
@@ -34,10 +34,10 @@ pos_stable(x) = x > 0 ? x : zero(x)
 pos_unstable(x) = x > 0 ? x : 0
 
 tag = Base.have_color ? Base.text_colors[:red] : "UNION"
-code_warntype(iob, pos_unstable, (Float64,))
+code_warntype(iob, pos_unstable, Tuple{Float64,})
 str = takebuf_string(iob)
 @test !isempty(search(str, tag))
-code_warntype(iob, pos_stable, (Float64,))
+code_warntype(iob, pos_stable, Tuple{Float64,})
 str = takebuf_string(iob)
 @test isempty(search(str, tag))
 
@@ -51,13 +51,13 @@ Base.getindex(A::Stable, i) = A.A[i]
 Base.getindex(A::Unstable, i) = A.A[i]
 
 tag = Base.have_color ? Base.text_colors[:red] : "ARRAY{FLOAT64,N}"
-code_warntype(iob, getindex, (Unstable{Float64},Int))
+code_warntype(iob, getindex, Tuple{Unstable{Float64},Int})
 str = takebuf_string(iob)
 @test !isempty(search(str, tag))
-code_warntype(iob, getindex, (Stable{Float64,2},Int))
+code_warntype(iob, getindex, Tuple{Stable{Float64,2},Int})
 str = takebuf_string(iob)
 @test isempty(search(str, tag))
-code_warntype(iob, getindex, (Stable{Float64},Int))
+code_warntype(iob, getindex, Tuple{Stable{Float64},Int})
 str = takebuf_string(iob)
 @test !isempty(search(str, tag))
 
@@ -74,7 +74,7 @@ end
 i10165(::DataType) = 0
 i10165{T,n}(::Type{AbstractArray{T,n}}) = 1
 @test i10165(AbstractArray{Int}) == 0
-@test which(i10165, (Type{AbstractArray{Int}},)).sig == (DataType,)
+@test which(i10165, Tuple{Type{AbstractArray{Int}},}).sig == Tuple{DataType,}
 
 # fullname
 @test fullname(Base) == (:Base,)
