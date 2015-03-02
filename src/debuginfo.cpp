@@ -633,9 +633,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #endif // ifdef _OS_DARWIN_
             if (errorobj) {
-#if LLVM36 && defined(_OS_WINDOWS_)
-                obj = errorobj.get().release();
-#elif LLVM36
+#if LLVM36
                 auto binary = errorobj.get().takeBinary();
                 obj = binary.first.release();
                 binary.second.release();
