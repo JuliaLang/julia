@@ -772,7 +772,7 @@ fork.
 repository on your local computer (in the terminal where USERNAME is
 your github username)::
 
-    cd ~/.julia/METADATA
+    cd ~/.julia/v0.4/METADATA
     git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
 
 3. push your changes to your fork::
