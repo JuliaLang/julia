@@ -3111,7 +3111,7 @@ end"))
     (let ((julia-program julia-file-path)
           (buffer (get-buffer-create "Julia")))
       (when (not (comint-check-proc "Julia"))
-            (make-comint-in-buffer "Julia" "Julia" julia-program julia-arguments))
+            (apply #'make-comint-in-buffer "Julia" "Julia" julia-program julia-arguments))
       (pop-to-buffer-same-window "Julia")
       (inferior-julia-mode)))
 
