@@ -3117,7 +3117,6 @@ end"))
 
 (defun inferior-julia--initialize ()
     "Helper function to initialize `inferior-julia'."
-    (setq comint-process-echoes t)
     (setq comint-use-prompt-regexp t))
 
 (define-derived-mode inferior-julia-mode comint-mode "Julia"
@@ -3127,6 +3126,7 @@ end"))
   (setq comint-prompt-read-only t)
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
   (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp)
+  (set (make-local-variable 'indent-line-function) 'julia-indent-line)
   (set-input-method "TeX"))
 
 (add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
