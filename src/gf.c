@@ -1855,12 +1855,20 @@ void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
     assert(jl_is_tuple(types));
     assert(jl_is_func(meth));
     assert(jl_is_mtable(jl_gf_mtable(gf)));
-    if (meth->linfo != NULL)
-        meth->linfo->name = jl_gf_name(gf);
+    JL_GC_PUSH1(&meth);
+    if (meth->linfo != NULL) {
+        jl_sym_t *n = jl_gf_name(gf);
+        if (meth->linfo->name != anonymous_sym && meth->linfo->name != n) {
+            // already used by another GF; make a copy (issue #10373)
+            meth = jl_instantiate_method(meth, jl_null);
+        }
+        meth->linfo->name = n;
+    }
     if (isstaged && tvars != jl_null) {
         all_p2c((jl_value_t*)meth->linfo, tvars);
     }
     (void)jl_method_table_insert(jl_gf_mtable(gf), types, meth, tvars, isstaged);
+    JL_GC_POP();
 }
 
 DLLEXPORT jl_tuple_t *jl_match_method(jl_value_t *type, jl_value_t *sig,

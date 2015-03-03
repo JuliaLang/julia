@@ -2198,3 +2198,18 @@ gc()
 redirect_stdout(OLD_STDOUT)
 close(file)
 end
+
+# issue #10373
+f10373(x) = x
+g10373(x) = x
+type newtype10373
+end
+let f
+    for f in (f10373,g10373)
+        f(x::newtype10373) = println("$f")
+    end
+end
+@test f10373.env.defs.func.code.name == :f10373
+@test f10373.env.defs.next.func.code.name == :f10373
+@test g10373.env.defs.func.code.name == :g10373
+@test g10373.env.defs.next.func.code.name == :g10373
