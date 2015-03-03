@@ -65,3 +65,21 @@ body.args = ast.args[3].args
 @test popmeta!(body, :nonexistent) == (false, [])
 
 end
+
+
+# tests to fully cover functions in base/meta.jl
+module MetaJLtest
+
+using Base.Test
+using Base.Meta
+
+@test isexpr(:(1+1),Set([:call]))
+@test isexpr(:(1+1),Vector([:call]))
+@test isexpr(1,:call)==false
+@test isexpr(:(1+1),:call,3)
+ioB = IOBuffer();
+show_sexpr(ioB,:(1+1))
+
+show_sexpr(ioB,QuoteNode(1),1)
+
+end
