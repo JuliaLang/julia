@@ -312,9 +312,7 @@ function publish(branch::String)
     ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     ahead_local == 0 && error("There are no METADATA changes to publish")
 
-    info("Validating METADATA")
-    check_metadata()
-    tags = Dict{ASCIIString,Vector{ASCIIString}}()
+    tags = Dict{ByteString,Vector{ASCIIString}}()
     Git.run(`update-index -q --really-refresh`, dir="METADATA")
     cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
@@ -335,6 +333,8 @@ function publish(branch::String)
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
     isempty(tags) && info("No new package versions to publish")
+    info("Validating METADATA")
+    check_metadata(Set(keys(tags)))
     @sync for pkg in sort!([keys(tags)...])
         @async begin
             forced = ASCIIString[]
@@ -583,7 +583,7 @@ function tag(pkg::String, ver::Union(Symbol,VersionNumber), force::Bool=false, c
     end
 end
 
-function check_metadata()
+function check_metadata(pkgs::Set{ByteString} = Set{ByteString}())
     avail = Read.available()
     deps, conflicts = Query.dependencies(avail)
 
@@ -591,7 +591,7 @@ function check_metadata()
         haskey(deps, p) || error("package $dp v$v requires a non-registered package: $p")
     end
 
-    problematic = Resolve.sanity_check(deps)
+    problematic = Resolve.sanity_check(deps, pkgs)
     if !isempty(problematic)
         msg = "packages with unsatisfiable requirements found:\n"
         for (p, vn, rp) in problematic
