@@ -77,9 +77,9 @@ using Base.Meta
 @test isexpr(:(1+1),Vector([:call]))
 @test isexpr(1,:call)==false
 @test isexpr(:(1+1),:call,3)
-show_sexpr(:(1+1))
-
 ioB = IOBuffer();
+show_sexpr(ioB,:(1+1))
+
 show_sexpr(ioB,QuoteNode(1),1)
 
 end
