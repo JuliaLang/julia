@@ -3095,6 +3095,41 @@ end"))
 (puthash "\\mtteight" "𝟾" julia-latexsubs)
 (puthash "\\mttnine" "𝟿" julia-latexsubs)
 
+;; Code for `inferior-julia-mode'
+(require 'comint)
+
+(defvar julia-file-path "/usr/bin/julia" "Path to the program used by `inferior-julia'.")
+
+(defvar julia-arguments '() "Commandline arguments to pass to `julia'.")
+
+(defvar inferior-julia-prompt-regexp "julia>"
+  "Prompt for `inferior-julia'.")
+
+(defun inferior-julia ()
+    "Run an inferior instance of `julia' inside Emacs."
+    (interactive)
+    (let ((julia-program julia-file-path)
+          (buffer (get-buffer-create "Julia")))
+      (when (not (comint-check-proc "Julia"))
+            (make-comint-in-buffer "Julia" "Julia" julia-program julia-arguments))
+      (pop-to-buffer-same-window "Julia")
+      (inferior-julia-mode)))
+
+(defun inferior-julia--initialize ()
+    "Helper function to initialize `inferior-julia'."
+    (setq comint-process-echoes t)
+    (setq comint-use-prompt-regexp t))
+
+(define-derived-mode inferior-julia-mode comint-mode "Julia"
+  "Major mode for `inferior-julia'."
+  nil "Julia"
+  (setq comint-prompt-regexp inferior-julia-prompt-regexp)
+  (setq comint-prompt-read-only t)
+  (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
+  (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp))
+
+(add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
+
 (provide 'julia-mode)
 
 ;; Local Variables:
