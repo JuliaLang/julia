@@ -3126,7 +3126,8 @@ end"))
   (setq comint-prompt-regexp inferior-julia-prompt-regexp)
   (setq comint-prompt-read-only t)
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
-  (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp))
+  (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp)
+  (set-input-method "TeX"))
 
 (add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
 
