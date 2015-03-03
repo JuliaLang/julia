@@ -232,26 +232,20 @@ LLVM_TAR=llvm-$(LLVM_VER).src.tar.xz
 endif
 
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(LLVM_VER), 3.5.0)
-LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.xz
-else
+ifeq ($(LLVM_VER), 3.3)
 LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.gz
-endif # LLVM_VER == 3.5.0
+else
+LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.xz
+endif # LLVM_VER == 3.3
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-ifeq ($(LLVM_VER), 3.0)
-LLVM_CLANG_TAR=clang-$(LLVM_VER).tar.gz
-LLVM_COMPILER_RT_TAR=
-else ifeq ($(LLVM_VER), 3.3)
+ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-else ifeq ($(LLVM_VER), 3.5.0)
+else
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.xz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.xz
-else
-LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
-LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
 endif # LLVM_VER
 else
 LLVM_CLANG_TAR=
