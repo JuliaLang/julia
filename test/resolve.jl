@@ -84,18 +84,18 @@ function reqs_from_data(reqs_data)
     end
     reqs
 end
-function sanity_tst(deps_data, expected_result)
+function sanity_tst(deps_data, expected_result; pkgs=[])
     deps = deps_from_data(deps_data)
     #println("deps=$deps")
     #println()
-    result = sanity_check(deps)
+    result = sanity_check(deps, Set(ByteString[pkgs...]))
     length(result) == length(expected_result) || return false
     for (p, vn, pp) in result
         in((p, vn), expected_result) || return  false
     end
     return true
 end
-sanity_tst(deps_data) = sanity_tst(deps_data, [])
+sanity_tst(deps_data; kw...) = sanity_tst(deps_data, []; kw...)
 
 function resolve_tst(deps_data, reqs_data)
     deps = deps_from_data(deps_data)
@@ -117,6 +117,9 @@ deps_data = Any[
 ]
 
 @test sanity_tst(deps_data)
+@test sanity_tst(deps_data, pkgs=["A", "B"])
+@test sanity_tst(deps_data, pkgs=["B"])
+@test sanity_tst(deps_data, pkgs=["A"])
 
 # require just B
 reqs_data = Any[
@@ -214,6 +217,7 @@ deps_data = Any[
 ]
 
 @test sanity_tst(deps_data, [("A", v"1")])
+@test sanity_tst(deps_data, [("A", v"1")], pkgs=["B"])
 
 # require B (must not give errors)
 reqs_data = Any[
@@ -236,6 +240,8 @@ deps_data = Any[
 ]
 
 @test sanity_tst(deps_data, [("A", v"2")])
+@test sanity_tst(deps_data, [("A", v"2")], pkgs=["B"])
+@test sanity_tst(deps_data, [("A", v"2")], pkgs=["C"])
 
 # require A, any version (must use the highest non-inconsistent)
 reqs_data = Any[
@@ -477,3 +483,48 @@ reqs_data = Any[
 want = resolve_tst(deps_data, reqs_data)
 @test want == Dict("A"=>v"2", "B"=>v"1.0.1", "C"=>v"1+BLD",
                    "D"=>v"2", "E"=>v"1", "F"=>v"2-rc.1")
+
+## DEPENDENCY SCHEME 11: FIVE PACKAGES, SAME AS SCHEMES 5 + 1, UNCONNECTED
+deps_data = Any[
+    ["A", v"1", "B", v"2"],
+    ["A", v"1", "C", v"2"],
+    ["A", v"2", "B", v"1", v"2"],
+    ["A", v"2", "C", v"1", v"2"],
+    ["B", v"1", "C", v"2"],
+    ["B", v"2", "C", v"2"],
+    ["C", v"1"],
+    ["C", v"2"],
+    ["D", v"1", "E", v"1"],
+    ["D", v"2", "E", v"2"],
+    ["E", v"1"],
+    ["E", v"2"]
+]
+
+@test sanity_tst(deps_data, [("A", v"2")])
+@test sanity_tst(deps_data, [("A", v"2")], pkgs=["B"])
+@test sanity_tst(deps_data, pkgs=["D"])
+@test sanity_tst(deps_data, pkgs=["E"])
+@test sanity_tst(deps_data, [("A", v"2")], pkgs=["B", "D"])
+
+# require A, any version (must use the highest non-inconsistent)
+reqs_data = Any[
+    ["A"]
+]
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2")
+
+# require just D: must bring in E
+reqs_data = Any[
+    ["D"]
+]
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("D"=>v"2", "E"=>v"2")
+
+
+# require A and D, must be the merge of the previous two cases
+reqs_data = Any[
+    ["A"],
+    ["D"]
+]
+want = resolve_tst(deps_data, reqs_data)
+@test want == Dict("A"=>v"1", "B"=>v"2", "C"=>v"2", "D"=>v"2", "E"=>v"2")
