@@ -1329,7 +1329,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
     end
     #dbg =
     #dotrace = true
-    local ast::Expr, tfunc_idx
+    local ast::Expr, tfunc_idx = -1
     curtype = Bottom
     redo = false
     # check cached t-functions
@@ -1355,8 +1355,46 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         return (linfo.ast, Any)
     end
 
-    ast0 = def.ast
+    (fulltree, result, rec) = typeinf_uncached(linfo, atypes, sparams, def, curtype, cop, true)
+    if fulltree === ()
+        return (fulltree,result)
+    end
 
+    if !redo
+        if is(def.tfunc,())
+            def.tfunc = []
+        end
+        tfarr = def.tfunc::Array{Any,1}
+        idx = -1
+        for i = 1:3:length(tfarr)
+            if typeseq(tfarr[i],atypes)
+                idx = i; break
+            end
+        end
+        if idx == -1
+            l = length(tfarr)
+            idx = l+1
+            resize!(tfarr, l+3)
+        end
+        tfarr[idx] = atypes
+        # in the "rec" state this tree will not be used again, so store
+        # just the return type in place of it.
+        tfarr[idx+1] = rec ? result : fulltree
+        tfarr[idx+2] = rec
+    else
+        def.tfunc[tfunc_idx] = rec ? result : fulltree
+        def.tfunc[tfunc_idx+1] = rec
+    end
+
+    return (fulltree, result)
+end
+
+typeinf_uncached(linfo, atypes::ANY, sparams::ANY; optimize=true) =
+    typeinf_uncached(linfo, atypes, sparams, linfo, Bottom, true, optimize)
+
+# compute an inferred (optionally optimized) AST without global effects (i.e. updating the cache)
+function typeinf_uncached(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple, def, curtype, cop, optimize)
+    ast0 = def.ast
     #if dbg
     #    print("typeinf ", linfo.name, " ", object_id(ast0), "\n")
     #end
@@ -1388,7 +1426,7 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
             end
             CYCLE_ID += 1
             #print("*==> ", f.result,"\n")
-            return ((),f.result)
+            return ((),f.result,true)
         end
         f = f.prev
     end
@@ -1674,45 +1712,35 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
 
     if !rec
         @assert fulltree.args[3].head === :body
-        if JLOptions().can_inline == 1
-            fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
-            # inlining can add variables
-            sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+        if optimize
+            if JLOptions().can_inline == 1
+                fulltree.args[3] = inlining_pass(fulltree.args[3], sv, fulltree)[1]
+                # inlining can add variables
+                sv.vars = append_any(f_argnames(fulltree), fulltree.args[2][1])
+            end
+            tuple_elim_pass(fulltree, sv)
+            tupleref_elim_pass(fulltree.args[3], sv)
+        else
+            call1_to_call(fulltree)
         end
-        tuple_elim_pass(fulltree, sv)
-        tupleref_elim_pass(fulltree.args[3], sv)
         linfo.inferred = true
         fulltree = ccall(:jl_compress_ast, Any, (Any,Any), def, fulltree)
     end
 
-    if !redo
-        if is(def.tfunc,())
-            def.tfunc = []
-        end
-        tfarr = def.tfunc::Array{Any,1}
-        idx = -1
-        for i = 1:3:length(tfarr)
-            if typeseq(tfarr[i],atypes)
-                idx = i; break
-            end
-        end
-        if idx == -1
-            l = length(tfarr)
-            idx = l+1
-            resize!(tfarr, l+3)
-        end
-        tfarr[idx] = atypes
-        # in the "rec" state this tree will not be used again, so store
-        # just the return type in place of it.
-        tfarr[idx+1] = rec ? frame.result : fulltree
-        tfarr[idx+2] = rec
-    else
-        def.tfunc[tfunc_idx] = rec ? frame.result : fulltree
-        def.tfunc[tfunc_idx+1] = rec
-    end
-
     inference_stack = (inference_stack::CallStack).prev
-    return (fulltree, frame.result)
+    return (fulltree, frame.result, rec)
+end
+
+function call1_to_call(e::Expr)
+    if e.head === :call1
+        e.head = :call
+    end
+    for a in e.args
+        if isa(a,Expr)
+            call1_to_call(a)
+        end
+    end
+    e
 end
 
 function record_var_type(e::Symbol, t::ANY, decls)
@@ -3263,12 +3291,17 @@ function replace_tupleref!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-code_typed(f, types::ANY) = code_typed(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...))
-function code_typed(f::Function, types::ANY)
+code_typed(f, types::ANY; optimize=true) =
+    code_typed(call, tuple(isa(f,Type)?Type{f}:typeof(f), types...), optimize=optimize)
+function code_typed(f::Function, types::ANY; optimize=true)
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
-        (tree, ty) = typeinf(linfo, x[1], x[2])
+        if optimize
+            (tree, ty) = typeinf(linfo, x[1], x[2])
+        else
+            (tree, ty) = typeinf_uncached(linfo, x[1], x[2], optimize=false)
+        end
         if !isa(tree,Expr)
             push!(asts, ccall(:jl_uncompress_ast, Any, (Any,Any), linfo, tree))
         else

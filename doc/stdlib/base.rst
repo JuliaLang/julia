@@ -977,9 +977,9 @@ Internals
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 
-.. function:: code_typed(f, types)
+.. function:: code_typed(f, types; optimize=true)
 
-   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature.
+   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The keyword argument ``optimize`` controls whether additional optimizations, such as inlining, are also applied.
 
 .. function:: @code_typed
 
