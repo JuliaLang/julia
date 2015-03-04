@@ -70,6 +70,9 @@ let T = TypeVar(:T,true)
     @test typeintersect(Type{(Bool,Int...)}, Type{(T,T...)}) === Bottom
 
     @test typeintersect((Rational{T},T), (Rational{Integer},Int)) === (Rational{Integer},Int)
+
+    @test typeintersect(Pair{T,Ptr{T}}, Pair{Ptr{S},S}) === Bottom
+    @test typeintersect((T,Ptr{T}), (Ptr{S},S)) === Bottom
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect((NTuple{N,Integer},NTuple{N,Integer}),

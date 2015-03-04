@@ -84,6 +84,9 @@ static int jl_has_typevars__(jl_value_t *v, int incl_wildcard, jl_tuple_t *p)
 {
     size_t i;
     if (jl_typeis(v, jl_tvar_type)) {
+        if (jl_has_typevars__(((jl_tvar_t*)v)->ub, incl_wildcard, p) ||
+            jl_has_typevars__(((jl_tvar_t*)v)->lb, incl_wildcard, p))
+            return 1;
         if (p != NULL) {
             size_t l = jl_tuple_len(p);
             for(i=0; i < l; i++) {
@@ -1224,7 +1227,11 @@ static jl_value_t *meet_tvar(jl_tvar_t *tv, jl_value_t *ty)
     if (jl_subtype((jl_value_t*)tv->lb, ty, 0)) {
         if (jl_is_leaf_type(ty) || !jl_is_type(ty))
             return ty;
-        return (jl_value_t*)jl_new_typevar(underscore_sym, tv->lb, ty);
+        jl_tvar_t *ntv = jl_new_typevar(underscore_sym, tv->lb, ty);
+        // TODO: this would be nice but causes some spurious ambiguity warnings
+        // due to typevars in covariant position, which we should simplify out somewhere.
+        //ntv->bound = tv->bound;
+        return (jl_value_t*)ntv;
     }
     return (jl_value_t*)jl_bottom_type;
 }
@@ -1399,12 +1406,13 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
                                           jl_tuple_t **penv, jl_tuple_t *tvars)
 {
     jl_value_t **rts;
-    JL_GC_PUSHARGS(rts, 1 + 2*MAX_CENV_SIZE);
-    memset(rts, 0, (1+2*MAX_CENV_SIZE)*sizeof(void*));
-    cenv_t eqc; eqc.n = 0; eqc.data = &rts[1];
-    cenv_t env; env.n = 0; env.data = &rts[1+MAX_CENV_SIZE];
+    JL_GC_PUSHARGS(rts, 2 + 2*MAX_CENV_SIZE);
+    memset(rts, 0, (2+2*MAX_CENV_SIZE)*sizeof(void*));
+    cenv_t eqc; eqc.n = 0; eqc.data = &rts[2];
+    cenv_t env; env.n = 0; env.data = &rts[2+MAX_CENV_SIZE];
     eqc.tvars = tvars; env.tvars = tvars;
     jl_value_t **pti = &rts[0];
+    jl_value_t **extraroot = &rts[1];
 
     has_ntuple_intersect_tuple = 0;
     JL_TRY {
@@ -1505,12 +1513,39 @@ jl_value_t *jl_type_intersection_matching(jl_value_t *a, jl_value_t *b,
           So we need to instantiate all the RHS's first.
         */
         for(int i=0; i < eqc.n; i+=2) {
+            jl_value_t *rhs = eqc.data[i+1];
+            int tvar = jl_is_typevar(rhs);
+            jl_value_t *rhs2 = rhs;
+            if (tvar && jl_has_typevars(((jl_tvar_t*)rhs)->ub)) {
+                rhs2 = ((jl_tvar_t*)rhs)->ub;
+            }
+            else tvar = 0;
             JL_TRY {
-                eqc.data[i+1] = jl_instantiate_type_with(eqc.data[i+1], eqc.data, eqc.n/2);
+                jl_value_t *inst = jl_instantiate_type_with(rhs2, eqc.data, eqc.n/2);
+                eqc.data[i+1] = inst;
+                if (tvar) {
+                    *extraroot = rhs;
+                    eqc.data[i+1] = (jl_value_t*)jl_new_typevar(underscore_sym, ((jl_tvar_t*)rhs)->lb, inst);
+                }
             }
             JL_CATCH {
             }
         }
+
+        // detect cycles; e.g. (T,Ptr{T}) ∩ (Ptr{S},S) == ⊥
+        jl_tuple_t *temptuple = jl_alloc_tuple(1);
+        *extraroot = (jl_value_t*)temptuple;
+        for(int i=0; i < eqc.n; i+=2) {
+            jl_value_t *var = eqc.data[i];
+            jl_value_t *val = eqc.data[i+1];
+            jl_tupleset(temptuple, 0, var);
+            if (val != var && jl_has_typevars_from(val, temptuple)) {
+                // var's RHS contains the var itself => unsatisfiable (e.g. T = Foo{T})
+                JL_GC_POP();
+                return (jl_value_t*)jl_bottom_type;
+            }
+        }
+
         JL_TRY {
             *pti = (jl_value_t*)jl_instantiate_type_with(*pti, eqc.data, eqc.n/2);
         }
