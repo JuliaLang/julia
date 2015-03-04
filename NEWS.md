@@ -197,6 +197,8 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * `push!(A)` has been deprecated, use `append!` instead of splatting arguments to `push!` ([#10400]).
+
   * `names` for composite datatypes has been deprecated and
     renamed to `fieldnames` ([#10332]).
 
