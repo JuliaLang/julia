@@ -9,7 +9,7 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
     for i in 1:manager.np
         sockname = tempname()
         try
-            cmd = `$(params[:exename]) --worker=custom $(@__FILE__) worker $sockname`
+            cmd = `$(params[:exename]) --worker=custom $(@__FILE__) udwrkr $sockname`
             io, pobj = open (cmd, "r")
 
             wconfig = WorkerConfig()
@@ -81,7 +81,7 @@ function print_worker_stdout(io, pid)
     end
 end
 
-if (length(ARGS) > 0) && (ARGS[1] == "worker")
+if (length(ARGS) > 0) && (ARGS[1] == "udwrkr")
     # script has been launched as a worker
     start_worker(ARGS[2])
 end
