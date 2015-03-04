@@ -578,16 +578,16 @@ function getaddrinfo(cb::Function, host::ASCIIString)
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
-function getaddrinfo(host::ASCIIString)
+function getaddrinfo(host::ASCIIString; addrtype::Type=IPv4)
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
     end
     ipaddresses = wait(c)
     isa(ipaddresses,UVError) && throw(ipaddresses)
-    return ipaddresses::Vector{IPAddr}
+    return filter(x -> isa(x, addrtype), ipaddresses)::Vector{IPAddr}
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString; addrtype::Type=IPv4) = getaddrinfo(ascii(host); addrtype=addrtype)
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
@@ -663,9 +663,21 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
         error("TCPSocket is not initialized")
     end
-    ipaddr = getaddrinfo(host)
+    ipaddresses = getaddrinfo(host)
     sock.status = StatusInit
-    connect!(sock,ipaddr,port)
+    lasterr = None
+    for ipaddr in ipaddresses
+        try
+            connect!(sock,ipaddr,port)
+            break
+        catch err
+            lasterr = err
+            continue
+        end
+    end
+    if lasterr != None
+        throw(lasterr)
+    end
     sock.status = StatusConnecting
     sock
 end
