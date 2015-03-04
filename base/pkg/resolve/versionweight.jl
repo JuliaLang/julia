@@ -60,7 +60,7 @@ function Base.cmp{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T})
     return cmp(a.rest, b.rest)
 end
 Base.isless{T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) < 0
-=={T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = a.v == b.v && a.rest == b.rest
+=={T}(a::HierarchicalValue{T}, b::HierarchicalValue{T}) = cmp(a,b) == 0
 
 Base.abs{T}(a::HierarchicalValue{T}) = HierarchicalValue(T[abs(x) for x in a.v], abs(a.rest))
 
@@ -97,8 +97,10 @@ immutable VWPreBuild
     w::HierarchicalValue{VWPreBuildItem}
 end
 
+const _vwprebuild_zero = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
+
 function VWPreBuild(ispre::Bool, desc::(Union(Int,ASCIIString)...))
-    isempty(desc) && return VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
+    isempty(desc) && return _vwprebuild_zero
     desc == ("",) && return VWPreBuild(ispre ? -1 : 1, HierarchicalValue(VWPreBuildItem[]))
     nonempty = ispre ? -1 : 0
     w = Array(VWPreBuildItem, length(desc))
@@ -109,25 +111,41 @@ function VWPreBuild(ispre::Bool, desc::(Union(Int,ASCIIString)...))
     end
     return VWPreBuild(nonempty, HierarchicalValue(w))
 end
-VWPreBuild() = VWPreBuild(0, HierarchicalValue(VWPreBuildItem))
+VWPreBuild() = _vwprebuild_zero
 
 Base.zero(::Type{VWPreBuild}) = VWPreBuild()
 
-Base.typemin(::Type{VWPreBuild}) = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
+const _vwprebuild_min = VWPreBuild(typemin(Int), typemin(HierarchicalValue{VWPreBuildItem}))
+Base.typemin(::Type{VWPreBuild}) = _vwprebuild_min
 
-Base.(:-)(a::VWPreBuild, b::VWPreBuild) = VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
-Base.(:+)(a::VWPreBuild, b::VWPreBuild) = VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
+function Base.(:-)(a::VWPreBuild, b::VWPreBuild)
+    b === _vwprebuild_zero && return a
+    a === _vwprebuild_zero && return -b
+    VWPreBuild(a.nonempty-b.nonempty, a.w-b.w)
+end
+function Base.(:+)(a::VWPreBuild, b::VWPreBuild)
+    b === _vwprebuild_zero && return a
+    a === _vwprebuild_zero && return b
+    VWPreBuild(a.nonempty+b.nonempty, a.w+b.w)
+end
 
-Base.(:-)(a::VWPreBuild) = VWPreBuild(-a.nonempty, -a.w)
+function Base.(:-)(a::VWPreBuild)
+    a === _vwprebuild_zero && return a
+    VWPreBuild(-a.nonempty, -a.w)
+end
 
-function Base.cmp(a::VWPreBuild, b::VWPreBuild)
+@inline function Base.cmp(a::VWPreBuild, b::VWPreBuild)
+    a === _vwprebuild_zero && b === _vwprebuild_zero && return 0
     c = cmp(a.nonempty, b.nonempty); c != 0 && return c
     return cmp(a.w, b.w)
 end
 Base.isless(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) < 0
 ==(a::VWPreBuild, b::VWPreBuild) = cmp(a,b) == 0
 
-Base.abs(a::VWPreBuild) = VWPreBuild(abs(a.nonempty), abs(a.w))
+function Base.abs(a::VWPreBuild)
+    a === _vwprebuild_zero && return a
+    VWPreBuild(abs(a.nonempty), abs(a.w))
+end
 
 # The numeric type used to determine how the different
 # versions of a package should be weighed
