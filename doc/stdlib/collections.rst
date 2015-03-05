@@ -800,7 +800,7 @@ Dequeues
 
 .. function:: push!(collection, items...) -> collection
 
-   Insert zero or more ``items`` at the end of ``collection``.
+   Insert one or more ``items`` at the end of ``collection``.
 
    .. doctest::
 
@@ -846,7 +846,7 @@ Dequeues
 
 .. function:: unshift!(collection, items...) -> collection
 
-   Insert zero or more ``items`` at the beginning of ``collection``.
+   Insert one or more ``items`` at the beginning of ``collection``.
 
    .. doctest::
 

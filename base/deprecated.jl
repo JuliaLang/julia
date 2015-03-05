@@ -307,3 +307,8 @@ end
 
 @deprecate names(t::DataType) fieldnames(t)
 @deprecate names(v) fieldnames(v)
+
+function push!(A)
+    depwarn("push!(A) has been deprecated", :push!)
+    A
+end
