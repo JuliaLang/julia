@@ -303,6 +303,7 @@ function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_
         copy!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(B)
     end
+    B
 end
 
 # TODO: It will be faster for large matrices to convert to float,
