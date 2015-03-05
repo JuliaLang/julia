@@ -197,7 +197,7 @@ function docm(meta, def)
 end
 
 function docm(ex)
-    haskey(keywords, ex) && return keywords[ex]
+    isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
     isexpr(ex, :->) && return docm(ex.args...)
     isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
     isexpr(ex, :macrocall) && (ex = namify(ex))

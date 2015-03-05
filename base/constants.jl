@@ -62,7 +62,7 @@ end
 <=(x::Rational,y::MathConst) = x < y
 
 
-hash(x::MathConst, h::UInt) = hash(object_id(x), h)
+hash(x::MathConst, h::UInt) = 3*object_id(x) - h
 
 -(x::MathConst) = -float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
