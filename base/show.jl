@@ -9,18 +9,17 @@ function show(io::IO, x::ANY)
     nf = nfields(t)
     if nf != 0 || t.size==0
         recorded = false
-        oid = object_id(x)
         shown_set = get(task_local_storage(), :SHOWNSET, nothing)
         if shown_set == nothing
-            shown_set = Set()
+            shown_set = ObjectIdDict()
             task_local_storage(:SHOWNSET, shown_set)
         end
 
         try
-            if oid in shown_set
+            if x in keys(shown_set)
                 print(io, "#= circular reference =#")
             else
-                push!(shown_set, oid)
+                shown_set[x] = true
                 recorded = true
 
                 nf = nfields(t)
@@ -40,7 +39,7 @@ function show(io::IO, x::ANY)
             rethrow(e)
 
         finally
-            if recorded delete!(shown_set, oid) end
+            if recorded; delete!(shown_set, x); end
         end
     else
         nb = t.size
@@ -493,7 +492,7 @@ function show_unquoted(io::IO, ex::Expr, indent::Int, prec::Int)
             end
 
         # unary operator (i.e. "!z")
-        elseif func in uni_ops && length(func_args) == 1
+        elseif isa(func,Symbol) && func in uni_ops && length(func_args) == 1
             show_unquoted(io, func, indent)
             if isa(func_args[1], Expr) || length(func_args) > 1
                 show_enclosed_list(io, '(', func_args, ",", ')', indent, func_prec)
