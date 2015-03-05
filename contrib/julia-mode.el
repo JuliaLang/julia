@@ -3098,9 +3098,24 @@ end"))
 ;; Code for `inferior-julia-mode'
 (require 'comint)
 
-(defvar julia-file-path "/usr/bin/julia" "Path to the program used by `inferior-julia'.")
+(defgroup julia
+  '()
+  "Julia Programming Language."
+  :group 'languages
+  :prefix "julia-")
 
-(defvar julia-arguments '() "Commandline arguments to pass to `julia'.")
+(defcustom julia-program "julia"
+  "Path to the program used by `inferior-julia'."
+  :type 'string
+  :group 'julia)
+
+(defcustom julia-arguments '()
+  "Commandline arguments to pass to `julia-program'."
+  :type 'string
+  :group 'julia)
+
+(defvar julia-prompt-regexp "julia>"
+  "Regexp for matching `inferior-julia' prompt.")
 
 (defvar inferior-julia-mode-map
   (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
@@ -3109,13 +3124,10 @@ end"))
     map)
   "Basic mode map for `inferior-julia-mode'.")
 
-(defvar inferior-julia-prompt-regexp "julia>"
-  "Prompt for `inferior-julia'.")
-
 (defun inferior-julia ()
     "Run an inferior instance of `julia' inside Emacs."
     (interactive)
-    (let ((julia-program julia-file-path)
+    (let ((julia-program julia-program)
           (buffer (get-buffer-create "Julia")))
       (when (not (comint-check-proc "Julia"))
             (apply #'make-comint-in-buffer "Julia" "Julia" julia-program julia-arguments))
@@ -3131,10 +3143,10 @@ end"))
 
 \\<inferior-julia-mode-map>"
   nil "Julia"
-  (setq comint-prompt-regexp inferior-julia-prompt-regexp)
+  (setq comint-prompt-regexp julia-prompt-regexp)
   (setq comint-prompt-read-only t)
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
-  (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp)
+  (set (make-local-variable 'paragraph-start) julia-prompt-regexp)
   (set (make-local-variable 'indent-line-function) 'julia-indent-line))
 
 (add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
