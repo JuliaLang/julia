@@ -167,7 +167,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
