@@ -138,7 +138,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             allowedp[vn] = vn in vs
         end
         @assert !isempty(allowedp)
-        @assert any(collect(values(allowedp)))
+        @assert any(values(allowedp))
     end
 
     filtered_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
@@ -299,27 +299,11 @@ end
 prune_versions(deps::Dict{ByteString,Dict{VersionNumber,Available}}) =
     prune_versions(Dict{ByteString,VersionSet}(), deps)
 
-# Build a subgraph incuding only the (direct and indirect) dependencies
-# of a given package set
-function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
-
-    np = length(deps)
-
-    staged = pkgs
-    allpkgs = pkgs
-    while !isempty(staged)
-        staged_next = Set{ByteString}()
-        for p in staged, a in values(deps[p]), rp in keys(a.requires)
-            if !(rp in allpkgs)
-                push!(staged_next, rp)
-            end
-        end
-        allpkgs = union(allpkgs, staged_next)
-        staged = staged_next
-    end
+# Build a graph restricted to a subset of the packages
+function subdeps(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
 
     sub_deps = Dict{ByteString,Dict{VersionNumber,Available}}()
-    for p in allpkgs
+    for p in pkgs
         haskey(sub_deps, p) || (sub_deps[p] = Dict{VersionNumber,Available}())
         sub_depsp = sub_deps[p]
         for (vn, a) in deps[p]
@@ -328,6 +312,57 @@ function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}
     end
 
     return sub_deps
+end
+
+# Build a subgraph incuding only the (direct and indirect) dependencies
+# of a given package set
+function dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
+
+    staged = pkgs
+    allpkgs = copy(pkgs)
+    while !isempty(staged)
+        staged_next = Set{ByteString}()
+        for p in staged, a in values(deps[p]), rp in keys(a.requires)
+            if !(rp in allpkgs)
+                push!(staged_next, rp)
+            end
+        end
+        union!(allpkgs, staged_next)
+        staged = staged_next
+    end
+
+    return subdeps(deps, allpkgs)
+end
+
+# Build a subgraph incuding only the (direct and indirect) dependencies and dependants
+# of a given package set
+function undirected_dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs::Set{ByteString})
+
+    graph = Dict{ByteString, Set{ByteString}}()
+
+    for (p,d) in deps
+        haskey(graph, p) || (graph[p] = Set{ByteString}())
+        for a in values(d), rp in keys(a.requires)
+            push!(graph[p], rp)
+            haskey(graph, rp) || (graph[rp] = Set{ByteString}())
+            push!(graph[rp], p)
+        end
+    end
+
+    staged = pkgs
+    allpkgs = copy(pkgs)
+    while !isempty(staged)
+        staged_next = Set{ByteString}()
+        for p in staged, rp in graph[p]
+            if !(rp in allpkgs)
+                push!(staged_next, rp)
+            end
+        end
+        union!(allpkgs, staged_next)
+        staged = staged_next
+    end
+
+    return subdeps(deps, allpkgs)
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
