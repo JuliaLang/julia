@@ -3102,6 +3102,13 @@ end"))
 
 (defvar julia-arguments '() "Commandline arguments to pass to `julia'.")
 
+(defvar inferior-julia-mode-map
+  (let ((map (nconc (make-sparse-keymap) comint-mode-map)))
+    ;; example definition
+    (define-key map (kbd "TAB") 'julia-latexsub-or-indent)
+    map)
+  "Basic mode map for `inferior-julia-mode'.")
+
 (defvar inferior-julia-prompt-regexp "julia>"
   "Prompt for `inferior-julia'.")
 
@@ -3120,14 +3127,15 @@ end"))
     (setq comint-use-prompt-regexp t))
 
 (define-derived-mode inferior-julia-mode comint-mode "Julia"
-  "Major mode for `inferior-julia'."
+  "Major mode for `inferior-julia'.
+
+\\<inferior-julia-mode-map>"
   nil "Julia"
   (setq comint-prompt-regexp inferior-julia-prompt-regexp)
   (setq comint-prompt-read-only t)
   (set (make-local-variable 'font-lock-defaults) '(julia-font-lock-keywords t))
   (set (make-local-variable 'paragraph-start) inferior-julia-prompt-regexp)
-  (set (make-local-variable 'indent-line-function) 'julia-indent-line)
-  (set-input-method "TeX"))
+  (set (make-local-variable 'indent-line-function) 'julia-indent-line))
 
 (add-hook 'inferior-julia-mode-hook 'inferior-julia--initialize)
 
