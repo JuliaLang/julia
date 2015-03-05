@@ -190,7 +190,7 @@ stagedfunction _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N
     end
 end
 
-mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = _mapreducedim!(f, op, R, A)
+mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = (_mapreducedim!(f, op, R, A); R)
 
 to_op(op) = op
 function to_op(op::Function)
@@ -201,7 +201,7 @@ function to_op(op::Function)
 end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) =
-    _mapreducedim!(f, to_op(op), R, A)
+    (_mapreducedim!(f, to_op(op), R, A); R)
 
 reducedim!{RT}(op, R::AbstractArray{RT}, A::AbstractArray) =
     mapreducedim!(IdFun(), op, R, A, zero(RT))
