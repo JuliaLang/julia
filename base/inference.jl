@@ -646,8 +646,14 @@ let stagedcache=Dict{Any,Any}()
         elseif haskey(stagedcache,(m,tt,env))
             return stagedcache[(m,tt,env)].code
         else
-            f=ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
-            stagedcache[(m,tt,env)]=f
+            if !isleaftype(tt)
+                # don't call staged functions on abstract types.
+                # (see issues #8504, #10230)
+                # we can't guarantee that their type behavior is monotonic.
+                error()
+            end
+            f = ccall(:jl_instantiate_staged,Any,(Any,Any,Any),m,tt,env)
+            stagedcache[(m,tt,env)] = f
             return f.code
         end
     end
