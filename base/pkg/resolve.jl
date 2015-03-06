@@ -11,33 +11,36 @@ export resolve, sanity_check
 # Use the max-sum algorithm to resolve packages dependencies
 function resolve(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
-    # init structures
+    # init interface structures
     interface = Interface(reqs, deps)
 
-    graph = Graph(interface)
-    msgs = Messages(interface, graph)
+    # attempt trivial solution first
+    ok, sol = greedysolver(interface)
+    if !ok
+        # trivial solution failed, use maxsum solver
+        graph = Graph(interface)
+        msgs = Messages(interface, graph)
 
-    # find solution
-    local sol::Vector{Int}
-    try
-        sol = maxsum(graph, msgs)
-    catch err
-        if isa(err, UnsatError)
-            p = interface.pkgs[err.info]
-            msg = "unsatisfiable package requirements detected: " *
-                  "no feasible version could be found for package: $p"
-            if msgs.num_nondecimated != graph.np
-                msg *= "\n  (you may try increasing the value of the" *
-                       "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
+        try
+            sol = maxsum(graph, msgs)
+        catch err
+            if isa(err, UnsatError)
+                p = interface.pkgs[err.info]
+                msg = "unsatisfiable package requirements detected: " *
+                      "no feasible version could be found for package: $p"
+                if msgs.num_nondecimated != graph.np
+                    msg *= "\n  (you may try increasing the value of the" *
+                           "\n   JULIA_PKGRESOLVE_ACCURACY environment variable)"
+                end
+                error(msg)
             end
-            error(msg)
+            rethrow(err)
         end
-        rethrow(err)
-    end
 
-    # verify solution (debug code) and enforce its optimality
-    verify_solution(sol, interface)
-    enforce_optimality!(sol, interface)
+        # verify solution (debug code) and enforce its optimality
+        @assert verify_solution(sol, interface)
+        enforce_optimality!(sol, interface)
+    end
 
     # return the solution as a Dict mapping package_name => sha1
     return compute_output_dict(sol, interface)
@@ -86,22 +89,32 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
         end
 
         sub_reqs = Dict{ByteString,VersionSet}(p=>VersionSet([vn, nvn]))
-        sub_deps = Query.prune_dependencies(sub_reqs, deps)
-
+        sub_deps = Query.filter_dependencies(sub_reqs, deps)
         interface = Interface(sub_reqs, sub_deps)
-
-        graph = Graph(interface)
-        msgs = Messages(interface, graph)
 
         red_pkgs = interface.pkgs
         red_np = interface.np
         red_spp = interface.spp
         red_pvers = interface.pvers
 
-        local sol::Vector{Int}
-        try
-            sol = maxsum(graph, msgs)
-            verify_solution(sol, interface)
+        ok, sol = greedysolver(interface)
+
+        if !ok
+            try
+                graph = Graph(interface)
+                msgs = Messages(interface, graph)
+                sol = maxsum(graph, msgs)
+                ok = verify_solution(sol, interface)
+                @assert ok
+            catch err
+                isa(err, UnsatError) || rethrow(err)
+                pp = red_pkgs[err.info]
+                for vneq in eq_classes[p][vn]
+                    push!(problematic, (p, vneq, pp))
+                end
+            end
+        end
+        if ok
             let
                 p0 = interface.pdict[p]
                 svn = red_pvers[p0][sol[p0]]
@@ -116,12 +129,6 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
                 end
             end
             checked[i] = true
-        catch err
-            isa(err, UnsatError) || rethrow(err)
-            pp = red_pkgs[err.info]
-            for vneq in eq_classes[p][vn]
-                push!(problematic, (p, vneq, pp))
-            end
         end
         i += 1
     end
