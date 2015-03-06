@@ -3124,6 +3124,7 @@ end"))
     map)
   "Basic mode map for `inferior-julia-mode'.")
 
+;;;###autoload
 (defun inferior-julia ()
     "Run an inferior instance of `julia' inside Emacs."
     (interactive)
