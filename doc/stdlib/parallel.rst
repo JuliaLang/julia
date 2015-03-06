@@ -202,7 +202,7 @@ General Parallel Computing Support
 
    * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
 
-   * ``Task``: Wait for a ``Task`` to finish, returning its result value.
+   * ``Task``: Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``).
 
    * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 

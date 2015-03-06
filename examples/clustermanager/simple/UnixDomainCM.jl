@@ -69,7 +69,9 @@ end
 
 function manage(manager::UnixDomainCM, id::Int, config::WorkerConfig, op)
     if op == :deregister
-        rm(get(config.userdata)[:sockname])
+        try
+            rm(get(config.userdata)[:sockname])
+        end
     end
     nothing
 end
