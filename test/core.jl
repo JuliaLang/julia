@@ -1270,6 +1270,13 @@ end
 i4645(x) = (println(zz); zz = x; zz)
 @test_throws UndefVarError i4645(4)
 
+# more undef var errors
+function test_undef_var_9898(a)
+    a1 = a1
+    a
+end
+@test_throws UndefVarError test_undef_var_9898(1)
+
 # issue #4505
 let
     g4505{X}(::X) = 0

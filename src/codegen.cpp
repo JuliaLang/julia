@@ -2880,12 +2880,22 @@ static Value *emit_var(jl_sym_t *sym, jl_value_t *ty, jl_codectx_t *ctx, bool is
     return emit_checked_var(bp, sym, ctx, vi.isVolatile);
 }
 
-static Value* emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, bool used, jl_codectx_t *ctx) {
+static Value *emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bool isVolatile, bool used, jl_codectx_t *ctx) {
     Value *rval;
     jl_value_t *rt = expr_type(r,ctx);
     if (bp != NULL) {
         if ((jl_is_symbol(r) || jl_is_symbolnode(r) || jl_is_gensym(r)) && rt == jl_bottom_type) {
             // sometimes x = y::Union() occurs
+            if (!jl_is_gensym(r)) {
+                jl_sym_t *s;
+                if (jl_is_symbolnode(r))
+                    s = jl_symbolnode_sym(r);
+                else
+                    s = (jl_sym_t*)r;
+                jl_varinfo_t &vi = ctx->vars[s];
+                if (vi.usedUndef)
+                    builder.CreateCall(prepare_call(jlundefvarerror_func), literal_pointer_val((jl_value_t*)s));
+            }
             return UndefValue::get(bp->getType()->getContainedType(0));
         }
         Type *vt = bp->getType();
