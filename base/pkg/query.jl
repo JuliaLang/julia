@@ -157,7 +157,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
     # While we're at it, we also collect all dependencies into alldeps
-    alldeps = Set{(ByteString,VersionSet)}()
+    alldeps = Dict{ByteString,Set{VersionSet}}()
     for (p, fdepsp) in filtered_deps
 
         # Extract unique dependencies lists (aka classes), thereby
@@ -165,8 +165,9 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
         uniqdepssets = unique(values(fdepsp))
 
         # Store all dependencies seen so far for later use
-        for a in uniqdepssets, r in a.requires
-            push!(alldeps, r)
+        for a in uniqdepssets, (rp,rvs) in a.requires
+            haskey(alldeps, rp) || (alldeps[rp] = Set{VersionSet}())
+            push!(alldeps[rp], rvs)
         end
 
         # If the package has just one version, it's uninteresting
@@ -191,7 +192,7 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
     end
 
     # Produce dependency patterns.
-    for (p,vs) in alldeps
+    for (p,vss) in alldeps, vs in vss
         # packages with just one version, or dependencies
         # which do not distiguish between versions, are not
         # interesting

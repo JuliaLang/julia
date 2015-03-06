@@ -69,9 +69,10 @@ type Interface
         for (p,depsp) in deps
             p0 = pdict[p]
             vdict0 = vdict[p0]
+            pvers0 = pvers[p0]
             for vn in keys(depsp)
-                for v0 in 1:length(pvers[p0])
-                    if pvers[p0][v0] == vn
+                for v0 in 1:length(pvers0)
+                    if pvers0[v0] == vn
                         vdict0[vn] = v0
                         break
                     end
