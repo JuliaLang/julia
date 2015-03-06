@@ -39,6 +39,8 @@ type REPLBackend
     ans
 end
 
+in_eval = false
+
 function eval_user_input(ast::ANY, backend::REPLBackend)
     iserr, lasterr, bt = false, (), nothing
     while true
@@ -51,7 +53,9 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
                 eval(Main, :(ans = $(Any[ans])[1]))
+                global in_eval = true
                 value = eval(Main, ast)
+                in_eval = false
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
             end

@@ -94,7 +94,7 @@ function task_done_hook(t::Task)
     else
         if err && !handled
             if isa(result,InterruptException) && isdefined(REPL,:interactive_task) &&
-                REPL.interactive_task.state == :waiting && isempty(Workqueue)
+                REPL.interactive_task.state == :waiting && isempty(Workqueue) && REPL.in_eval
                 throwto(REPL.interactive_task, result)
             end
             let bt = catch_backtrace()
