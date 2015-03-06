@@ -87,7 +87,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     if length(machine_bind) > 1
         exeflags = `--bind-to $(machine_bind[2]) $exeflags`
     end
-    exeflags = `$exeflags --worker=default`
+    exeflags = `$exeflags --worker`
 
     machine_def = machine_bind[1]
     machine_def = split(machine_def, ':')
@@ -184,7 +184,7 @@ function launch(manager::LocalManager, params::Dict, launched::Array, c::Conditi
 
     for i in 1:manager.np
         io, pobj = open(detach(
-            setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker=default`, dir=dir)), "r")
+            setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io

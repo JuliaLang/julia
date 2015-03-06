@@ -1206,6 +1206,7 @@ export
     addprocs,
     ClusterManager,
     fetch,
+    init_worker,
     interrupt,
     isready,
     launch,
