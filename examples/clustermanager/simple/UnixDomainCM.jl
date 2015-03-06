@@ -9,7 +9,7 @@ function launch(manager::UnixDomainCM, params::Dict, launched::Array, c::Conditi
     for i in 1:manager.np
         sockname = tempname()
         try
-            cmd = `$(params[:exename]) --worker=custom $(@__FILE__) udwrkr $sockname`
+            cmd = `$(params[:exename]) $(@__FILE__) udwrkr $sockname`
             io, pobj = open (cmd, "r")
 
             wconfig = WorkerConfig()
@@ -68,11 +68,12 @@ function start_worker(sockname)
 end
 
 function manage(manager::UnixDomainCM, id::Int, config::WorkerConfig, op)
-    if op == :deregister
-        try
-            rm(get(config.userdata)[:sockname])
-        end
-    end
+    # Does not seem to be required, filesystem entry cleanup is happening automatically on process exit
+#     if op == :deregister
+#         try
+#             rm(get(config.userdata)[:sockname])
+#         end
+#     end
     nothing
 end
 

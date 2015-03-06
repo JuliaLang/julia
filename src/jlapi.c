@@ -42,9 +42,7 @@ DLLEXPORT void jl_init_with_image(const char *julia_home_dir, const char *image_
     //TODO: these should be part of Multi.__init__()
     //currently, we have them here since we may not want them
     //getting unconditionally set from Base.__init__()
-    jl_eval_string("Base.init_parallel()");
-    jl_eval_string("Base.init_bind_addr(Base.JLOptions())");
-    jl_eval_string("Base.init_head_sched()");
+    jl_eval_string("Base.init_parallel(Base.JLOptions())");
     jl_exception_clear();
 }
 
