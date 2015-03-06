@@ -130,6 +130,20 @@ function greedysolver(interface::Interface)
     # initialize solution: all uninstalled
     sol = [spp[p0] for p0 = 1:np]
 
+    # set up required packages to their highest allowed versions
+    for (rp,rvs) in reqs
+        rp0 = pdict[rp]
+        # look for the highest version which satisfies the requirements
+        rv = spp[rp0] - 1
+        while rv > 0
+            rvn = pvers[rp0][rv]
+            rvn in rvs && break
+            rv -= 1
+        end
+        @assert rv > 0
+        sol[rp0] = rv
+    end
+
     # we start from required packages and explore the graph
     # following dependencies
     staged = Set{ByteString}(keys(reqs))
@@ -139,10 +153,7 @@ function greedysolver(interface::Interface)
         staged_next = Set{ByteString}()
         for p in staged
             p0 = pdict[p]
-            # set the package state to installed in case it wasn't
-            # (the latter case should only happen for required packages, and
-            # in then we use the maximum available version)
-            sol[p0] = min(sol[p0], spp[p0] - 1)
+            @assert sol[p0] < spp[p0]
             vn = pvers[p0][sol[p0]]
             a = deps[p][vn]
 
