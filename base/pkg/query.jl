@@ -111,17 +111,10 @@ function check_requirements(reqs::Requires, deps::Dict{ByteString,Dict{VersionNu
     end
 end
 
-# Reduce the number of versions by creating equivalence classes, and retaining
-# only the highest version for each equivalence class.
-# Two versions are equivalent if:
-#   1) They appear together as dependecies of another package (i.e. for each
-#      dependency relation, they are both required or both not required)
-#   2) They have the same dependencies
-# Also, if there are explicitly required packages, dicards all versions outside
+# If there are explicitly required packages, dicards all versions outside
 # the allowed range (checking for impossible ranges while at it).
-function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
-
-    np = length(deps)
+# This is a pre-pruning step, so it also creates some structures which are later used by pruning
+function filter_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
 
     # To each version in each package, we associate a BitVector.
     # It is going to hold a pattern such that all versions with
@@ -153,6 +146,20 @@ function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber
             fdepsp[vn] = a
         end
     end
+
+    return filtered_deps, allowed, vmask
+end
+
+# Reduce the number of versions by creating equivalence classes, and retaining
+# only the highest version for each equivalence class.
+# Two versions are equivalent if:
+#   1) They appear together as dependecies of another package (i.e. for each
+#      dependency relation, they are both required or both not required)
+#   2) They have the same dependencies
+# Preliminarily calls filter_versions.
+function prune_versions(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+
+    filtered_deps, allowed, vmask = filter_versions(reqs, deps)
 
     # For each package, we examine the dependencies of its versions
     # and put together those which are equal.
@@ -364,6 +371,13 @@ function undirected_dependencies_subset(deps::Dict{ByteString,Dict{VersionNumber
     end
 
     return subdeps(deps, allpkgs)
+end
+
+function filter_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})
+    deps = dependencies_subset(deps, Set{ByteString}(keys(reqs)))
+    deps, _, _ = filter_versions(reqs, deps)
+
+    return deps
 end
 
 function prune_dependencies(reqs::Requires, deps::Dict{ByteString,Dict{VersionNumber,Available}})

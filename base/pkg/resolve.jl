@@ -89,8 +89,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
         end
 
         sub_reqs = Dict{ByteString,VersionSet}(p=>VersionSet([vn, nvn]))
-        sub_deps = Query.prune_dependencies(sub_reqs, deps)
-
+        sub_deps = Query.filter_dependencies(sub_reqs, deps)
         interface = Interface(sub_reqs, sub_deps)
 
         red_pkgs = interface.pkgs
@@ -99,6 +98,7 @@ function sanity_check(deps::Dict{ByteString,Dict{VersionNumber,Available}}, pkgs
         red_pvers = interface.pvers
 
         ok, sol = greedysolver(interface)
+
         if !ok
             try
                 graph = Graph(interface)
