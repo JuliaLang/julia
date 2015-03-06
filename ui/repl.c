@@ -56,7 +56,8 @@ static const char opts[]  =
     " -J, --sysimage <file>     Start up with the given system image file\n"
     " -C, --cpu-target <target> Limit usage of cpu features up to <target>\n\n"
 
-    " -p, --procs <n>           Run n local processes\n"
+    " -p, --procs {N|auto}      Integer value N launches N additional local worker processes\n"
+    "                           'auto' launches as many workers as the number of local cores\n"
     " --machinefile <file>      Run processes on hosts listed in <file>\n\n"
 
     " -i                        Force isinteractive() to be true\n"
@@ -186,9 +187,14 @@ void parse_opts(int *argcp, char ***argvp)
             break;
         case 'p': // procs
             errno = 0;
-            jl_options.nprocs = strtol(optarg, &endptr, 10);
-            if (errno != 0 || optarg == endptr || *endptr != 0 || jl_options.nprocs < 1)
-                jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+            if (!strcmp(optarg,"auto")) {
+                jl_options.nprocs = jl_cpu_cores();
+            }
+            else {
+                jl_options.nprocs = strtol(optarg, &endptr, 10);
+                if (errno != 0 || optarg == endptr || *endptr != 0 || jl_options.nprocs < 1)
+                    jl_errorf("julia: -p,--procs=<n> must be an integer >= 1\n");
+            }
             break;
         case opt_machinefile:
             jl_options.machinefile = strdup(optarg);

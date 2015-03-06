@@ -115,7 +115,8 @@ those available for the ``perl`` and ``ruby`` programs::
      -J, --sysimage <file>     Start up with the given system image file
      -C, --cpu-target <target> Limit usage of cpu features up to <target>
 
-     -p, --procs <n>           Run n local processes
+     -p, --procs {N|auto}      Integer value N launches N additional local worker processes
+                               'auto' launches as many workers as the number of local cores
      --machinefile <file>      Run processes on hosts listed in <file>
 
      -i                        Force isinteractive() to be true

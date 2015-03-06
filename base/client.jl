@@ -270,7 +270,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             # load ~/.julia_history file
             history_file = bool(opts.historyfile)
             # add processors
-            if opts.nprocs > 1
+            if opts.nprocs > 0
                 addprocs(opts.nprocs)
             end
             # load processes from machine file
