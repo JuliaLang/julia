@@ -463,9 +463,10 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->fptr = &jl_trampoline;
     li->roots = NULL;
     li->functionObject = NULL;
+    li->specFunctionObject = NULL;
     li->cFunctionObject = NULL;
     li->functionID = 0;
-    li->cFunctionID = 0;
+    li->specFunctionID = 0;
     li->specTypes = NULL;
     li->inferred = 0;
     li->inInference = 0;

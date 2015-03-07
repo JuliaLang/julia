@@ -215,3 +215,8 @@ function function_module(f, types)
     end
     m[1].func.code.module
 end
+
+#
+
+type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
+field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)

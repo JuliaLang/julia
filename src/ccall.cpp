@@ -195,8 +195,8 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 #endif
     }
 
-    BasicBlock *dlsym_lookup = BasicBlock::Create(getGlobalContext(), "dlsym"),
-               *ccall_bb = BasicBlock::Create(getGlobalContext(), "ccall");
+    BasicBlock *dlsym_lookup = BasicBlock::Create(jl_LLVMContext, "dlsym"),
+               *ccall_bb = BasicBlock::Create(jl_LLVMContext, "ccall");
     builder.CreateCondBr(builder.CreateICmpNE(builder.CreateLoad(llvmgv), initnul), ccall_bb, dlsym_lookup);
 
     ctx->f->getBasicBlockList().push_back(dlsym_lookup);
@@ -218,21 +218,56 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
     return builder.CreatePointerCast(llvmf,funcptype);
 }
 
+// --- ABI Implementations ---
+// Partially based on the LDC ABI implementations licensed under the BSD 3-clause license
+
+#if defined ABI_LLVM
+#  include "abi_llvm.cpp"
+#elif defined _P64
+#  if defined _OS_WINDOWS_
+#    include "abi_win64.cpp"
+#  else
+#    include "abi_x86_64.cpp"
+#  endif
+#else
+#  include "abi_x86.cpp"
+#endif
+
+Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)
+{
+    if(preferred_llvm_type(ty,isret) == NULL || target_type == NULL || target_type == v->getType())
+        return v;
+
+    assert(!v->getType()->isPointerTy());
+
+    // LLVM doesn't allow us to cast values directly, so
+    // we need to use this alloca trick
+    Value *mem = builder.CreateAlloca(target_type);
+    builder.CreateStore(v,builder.CreateBitCast(mem,v->getType()->getPointerTo()));
+    return builder.CreateLoad(mem);
+}
+
+// --- argument passing and scratch space utilities ---
+
 static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
-                              jl_value_t *argex, bool addressOf,
+                              jl_value_t *aty, bool addressOf,
+                              bool byRef, bool inReg,
+                              bool needCopy,
                               int argn, jl_codectx_t *ctx,
                               bool *needStackRestore)
 {
     Type *vt = jv->getType();
+
+    // We're passing any
     if (ty == jl_pvalue_llvmt) {
         return boxed(jv,ctx);
     }
-    if (ty == vt && !addressOf) {
+    if (ty == vt && !addressOf && !byRef) {
         return jv;
     }
     if (vt != jl_pvalue_llvmt) {
-        // argument value is passed unboxed
-        if (addressOf) {
+        // argument value is unboxed
+        if (addressOf || (byRef && inReg)) {
             if (ty->isPointerTy() && ty->getContainedType(0)==vt) {
                 // pass the address of an alloca'd thing, not a box
                 // since those are immutable.
@@ -247,9 +282,30 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                  (vt->isPointerTy() && ty->isPointerTy())) {
             if (vt->getPrimitiveSizeInBits() ==
                 ty->getPrimitiveSizeInBits()) {
-                return builder.CreateBitCast(jv, ty);
+                if (!byRef) {
+                    return builder.CreateBitCast(jv, ty);
+                }
+                else {
+                    *needStackRestore = true;
+                    Value *mem = builder.CreateAlloca(ty);
+                    builder.CreateStore(jv,builder.CreateBitCast(mem,vt->getPointerTo()));
+                    return mem;
+                }
             }
         }
+        else if (vt->isStructTy())
+        {
+            if (!byRef) {
+                return jv;
+            }
+            else {
+                *needStackRestore = true;
+                Value *mem = builder.CreateAlloca(vt);
+                builder.CreateStore(jv,mem);
+                return mem;
+            }
+        }
+
         emit_error("ccall: argument type did not match declaration", ctx);
     }
     if (jl_is_tuple(jt)) {
@@ -258,7 +314,6 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     if (jl_is_cpointer_type(jt) && addressOf) {
         assert(ty->isPointerTy());
         jl_value_t *ety = jl_tparam0(jt);
-        jl_value_t *aty = expr_type(argex, ctx);
         if (aty != ety && ety != (jl_value_t*)jl_any_type && jt != (jl_value_t*)jl_voidpointer_type) {
             std::stringstream msg;
             msg << "ccall argument ";
@@ -320,7 +375,6 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
     if (addressOf)
         jl_error("ccall: unexpected & on argument"); // the only "safe" thing to emit here is the expected struct
     assert(jl_is_datatype(jt));
-    jl_value_t *aty = expr_type(argex, ctx);
     if (aty != jt) {
         std::stringstream msg;
         msg << "ccall argument ";
@@ -328,9 +382,20 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         emit_typecheck(jv, jt, msg.str(), ctx);
     }
     Value *p = data_pointer(jv);
-    return builder.CreateLoad(builder.CreateBitCast(p,
-                                                    PointerType::get(ty,0)),
-                              false);
+    Value *pjv = builder.CreatePointerCast(p, PointerType::get(ty,0));
+    if (byRef) {
+        if(!needCopy)
+            return pjv;
+        else {
+            *needStackRestore = true;
+            Value *mem = builder.CreateAlloca(ty);
+            builder.CreateMemCpy(mem,pjv,(uint64_t)jl_datatype_size(jt),(uint64_t)((jl_datatype_t*)jt)->alignment);
+            return mem;
+        }
+    }
+    else {
+        return builder.CreateLoad(pjv,false);
+    }
 }
 
 static jl_value_t *jl_signed_type=NULL;
@@ -591,8 +656,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             make_gcroot(arg, ctx);
         }
 #endif
-        bool mightNeedTempSpace = false;
-        argvals[i] = julia_to_native(t,tti,arg,argi,false,i,ctx,&mightNeedTempSpace);
+        argvals[i] = julia_to_native(t, tti, arg, expr_type(argi, ctx), false, false, false, false, i, ctx, NULL);
     }
 
     Function *f;
@@ -714,6 +778,197 @@ static Value *mark_or_box_ccall_result(Value *result, jl_value_t *rt_expr, jl_va
     return mark_julia_type(result, rt);
 }
 
+#ifdef LLVM33
+    typedef AttributeSet attr_type;
+#else
+    typedef AttrListPtr attr_type;
+#endif
+
+static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
+        std::vector<Type *> &fargt, std::vector<Type *> &fargt_sig,
+        std::vector<bool> &inRegList,
+        std::vector<bool> &byRefList, attr_type &attributes,
+        jl_value_t *rt, jl_tuple_t *tt)
+{
+    size_t nargt = jl_tuple_len(tt);
+    assert(rt && !jl_is_abstract_ref_type(rt));
+
+#if LLVM33
+    AttrBuilder retattrs;
+    std::vector<AttrBuilder> paramattrs;
+#else
+    AttrBuilder retattrs;
+    std::vector<AttrBuilder> paramattrs;
+    std::vector<AttributeWithIndex> attrs;
+#endif
+    AbiState abi = default_abi_state;
+    sret = 0;
+
+    if (type_is_ghost(*lrt)) {
+        *prt = *lrt = T_void;
+    } else {
+        *prt = preferred_llvm_type(rt,true);
+        if (*prt == NULL)
+            *prt = *lrt;
+
+        if (jl_is_datatype(rt) && !jl_is_abstracttype(rt) && use_sret(&abi, rt)) {
+#if LLVM33
+            paramattrs.push_back(AttrBuilder());
+            paramattrs[0].clear();
+            paramattrs[0].addAttribute(Attribute::StructRet);
+#elif LLVM32
+            paramattrs.push_back(AttrBuilder());
+            paramattrs[0].clear();
+            paramattrs[0].addAttribute(Attributes::StructRet);
+#else
+            attrs.push_back(AttributeWithIndex::get(1, Attribute::StructRet));
+#endif
+            fargt.push_back(PointerType::get(*prt, 0));
+            fargt_sig.push_back(PointerType::get(*prt, 0));
+            sret = 1;
+        }
+    }
+
+    size_t i;
+    bool current_isVa = false;
+    for(i = 0; i < nargt; i++) {
+#ifdef LLVM32
+        paramattrs.push_back(AttrBuilder());
+#endif
+        jl_value_t *tti = jl_tupleref(tt,i);
+
+        if (jl_is_vararg_type(tti)) {
+            current_isVa = true;
+            tti = jl_tparam0(tti);
+        }
+
+        Type *t = NULL;
+        if (jl_is_abstract_ref_type(tti)) {
+            if (jl_is_typevar(jl_tparam0(tti)))
+                jl_error("ccall: argument type Ref should have an element type, not Ref{T}");
+            tti = (jl_value_t*)jl_voidpointer_type;
+            t = T_pint8;
+        }
+        else {
+            if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti)))
+                jl_error("ccall: argument type Ptr should have an element type, not Ptr{T}");
+            if (jl_is_bitstype(tti)) {
+                // see pull req #978. need to annotate signext/zeroext for
+                // small integer arguments.
+                jl_datatype_t *bt = (jl_datatype_t*)tti;
+                if (bt->size < 4) {
+                    if (jl_signed_type == NULL) {
+                        jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
+                    }
+#ifdef LLVM33
+                    Attribute::AttrKind av;
+#elif defined(LLVM32)
+                    Attributes::AttrVal av;
+#else
+                    Attribute::AttrConst av;
+#endif
+#if defined(LLVM32) && !defined(LLVM33)
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attributes::SExt;
+                    else
+                        av = Attributes::ZExt;
+#else
+                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
+                        av = Attribute::SExt;
+                    else
+                        av = Attribute::ZExt;
+#endif
+#ifdef LLVM32
+                    paramattrs[i+sret].addAttribute(av);
+#else
+                    attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
+#endif
+                }
+            }
+
+            t = julia_struct_to_llvm(tti);
+            if (t == NULL || t == T_void) {
+                JL_GC_POP();
+                std::stringstream msg;
+                msg << "ccall: the type of argument ";
+                msg << i+1;
+                msg << " doesn't correspond to a C type";
+                return msg.str();
+            }
+        }
+
+        // Whether the ABI needs us to pass this by ref and/or in registers
+        // Valid combinations are:
+        bool byRefAttr = false;
+
+        // Whether or not LLVM wants us to emit a pointer to the data
+        bool byRef = false;
+
+        // Whether or not to pass this in registers
+        bool inReg = false;
+
+        if(jl_is_datatype(tti) && !jl_is_abstracttype(tti))
+            needPassByRef(&abi, tti, &byRef, &inReg, &byRefAttr);
+
+        // Add the appropriate LLVM parameter attributes
+        // Note that even though the LLVM argument is called ByVal
+        // this really means that the thing we're passing is pointing to
+        // the thing we want to pass by value
+#if LLVM33
+        if(byRefAttr)
+            paramattrs[i+sret].addAttribute(Attribute::ByVal);
+        if(inReg)
+            paramattrs[i+sret].addAttribute(Attribute::InReg);
+#elif LLVM32
+        if(byRefAttr)
+            paramattrs[i+sret].addAttribute(Attributes::ByVal);
+        if(inReg)
+            paramattrs[i+sret].addAttribute(Attributes::InReg);
+#else
+        if(byRefAttr)
+            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::ByVal));
+        if(inReg)
+            attrs.push_back(AttributeWithIndex::get(i+sret+1, Attribute::InReg));
+#endif
+
+        byRefList.push_back(byRef);
+        inRegList.push_back(inReg);
+
+        fargt.push_back(t);
+
+        Type *pat = preferred_llvm_type(tti,false);
+        if (pat != NULL)
+            t = pat;
+        else if (byRef)
+            t = PointerType::get(t,0);
+
+        if(!current_isVa) {
+            fargt_sig.push_back(t);
+        }
+
+    }
+
+#ifdef LLVM33
+    if(retattrs.hasAttributes())
+        attributes = AttributeSet::get(jl_LLVMContext, AttributeSet::ReturnIndex, retattrs);
+    for(i = 0; i < nargt+sret; ++i)
+        if(paramattrs[i].hasAttributes())
+            attributes = attributes.addAttributes(jl_LLVMContext, i+1,
+                    AttributeSet::get(jl_LLVMContext, i+1, paramattrs[i]));
+#elif LLVM32
+    if(retattrs.hasAttributes())
+        attrs.push_back(AttributeWithIndex::get(0, Attributes::get(jl_LLVMContext, retattrs)));
+    for(i = 0; i < nargt+sret; ++i)
+        if(paramattrs[i].hasAttributes())
+            attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext, paramattrs[i])));
+    attributes = AttrListPtr::get(jl_LLVMContext, ArrayRef<AttributeWithIndex>(attrs));
+#else
+    attributes = AttrListPtr::get(attrs.data(), attrs.size());
+#endif
+    return "";
+}
+
+
 // ccall(pointer, rettype, (argtypes...), args...)
 static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 {
@@ -729,6 +984,8 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     fptr = symarg.fptr;
     f_name = symarg.f_name;
     f_lib = symarg.f_lib;
+    bool isVa = false;
+
     if (f_name == NULL && fptr == NULL && jl_ptr == NULL) {
         JL_GC_POP();
         emit_error("ccall: null function pointer", ctx);
@@ -765,6 +1022,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             }
         }
     }
+
     if (jl_is_tuple(rt)) {
         std::string msg = "in " + ctx->funcName +
             ": ccall: missing return type";
@@ -775,8 +1033,13 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     if (jl_is_abstract_ref_type(rt)) {
         if (jl_tparam0(rt) == (jl_value_t*)jl_any_type)
-            jl_error("ccall: return type Box{Any} is invalid. use Ptr{Any} instead.");
+            jl_error("ccall: return type Ref{Any} is invalid. use Ptr{Any} instead.");
         rt = (jl_value_t*)jl_any_type; // convert return type to jl_value_t*
+    }
+
+    if (jl_is_array_type(rt)) {
+        // `Array` used as return type just returns a julia object reference
+        rt = (jl_value_t*)jl_any_type;
     }
 
     JL_TYPECHK(ccall, type, rt);
@@ -804,89 +1067,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     JL_TYPECHK(ccall, tuple, at);
     JL_TYPECHK(ccall, type, at);
     jl_tuple_t *tt = (jl_tuple_t*)at;
-    std::vector<Type *> fargt(0);
-    std::vector<Type *> fargt_sig(0);
-#if LLVM33
-    std::vector<AttrBuilder> paramattrs;
-#else
-    AttrBuilder retattrs;
-    std::vector<AttrBuilder> paramattrs;
-    std::vector<AttributeWithIndex> attrs;
-#endif
-    int sret = 0;
-    size_t i;
-    bool isVa = false;
-    size_t nargt = jl_tuple_len(tt);
 
-    for(i=0; i < nargt; i++) {
-#if LLVM32 || LLVM33
-        paramattrs.push_back(AttrBuilder());
-#endif
-        jl_value_t *tti = jl_tupleref(tt,i);
-
-        if (jl_is_vararg_type(tti)) {
-            isVa = true;
-            tti = jl_tparam0(tti);
-        }
-
-        Type *t = NULL;
-        if (jl_is_abstract_ref_type(tti)) {
-            tti = jl_tparam0(tti);
-            if (jl_is_typevar(tti))
-                jl_error("ccall: argument type Ref should have an element type, not Ref{_<:T}");
-            t = T_pint8;
-        }
-        else {
-            if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti)))
-                jl_error("ccall: argument type Ptr should have an element type, not Ptr{_<:T}");
-            if (jl_is_bitstype(tti)) {
-                // see pull req #978. need to annotate signext/zeroext for
-                // small integer arguments.
-                jl_datatype_t *bt = (jl_datatype_t*)tti;
-                if (bt->size < 4) {
-                    if (jl_signed_type == NULL) {
-                        jl_signed_type = jl_get_global(jl_core_module,jl_symbol("Signed"));
-                    }
-#if LLVM33
-                    Attribute::AttrKind av;
-#elif LLVM32
-                    Attributes::AttrVal av;
-#else
-                    Attribute::AttrConst av;
-#endif
-#if LLVM32 && !LLVM33
-                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                        av = Attributes::SExt;
-                    else
-                        av = Attributes::ZExt;
-#else
-                    if (jl_signed_type && jl_subtype(tti, jl_signed_type, 0))
-                        av = Attribute::SExt;
-                    else
-                        av = Attribute::ZExt;
-#endif
-#if LLVM32 || LLVM33
-                    paramattrs[i+sret].addAttribute(av);
-#else
-                    attrs.push_back(AttributeWithIndex::get(i+1+sret, av));
-#endif
-                }
-            }
-            t = julia_struct_to_llvm(tti);
-            if (t == NULL || t == T_void) {
-                JL_GC_POP();
-                std::stringstream msg;
-                msg << "ccall: the type of argument ";
-                msg << i+1;
-                msg << " doesn't correspond to a C type";
-                emit_error(msg.str(), ctx);
-                return literal_pointer_val(jl_nothing);
-            }
-        }
-        fargt.push_back(t);
-        if (!isVa)
-            fargt_sig.push_back(t);
-    }
     // check for calling convention specifier
     CallingConv::ID cc = CallingConv::C;
     jl_value_t *last = args[nargs];
@@ -907,6 +1088,21 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         else if (lhd == jl_symbol("thiscall")) {
             cc = CallingConv::X86_ThisCall;
             nargs--;
+        }
+    }
+
+    // some sanity checking and check whether there's a vararg
+    size_t i;
+    size_t nargt = jl_tuple_len(tt);
+    for(i=0; i < nargt; i++) {
+        jl_value_t *tti = jl_tupleref(tt,i);
+        if (jl_is_cpointer_type(tti) && jl_is_typevar(jl_tparam0(tti))) {
+            JL_GC_POP();
+            emit_error("ccall: argument type Ptr should have an element type, Ptr{T}",ctx);
+            return literal_pointer_val(jl_nothing);
+        }
+        if (jl_is_vararg_type(tti)) {
+            isVa = true;
         }
     }
 
@@ -934,15 +1130,19 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         assert(nargt==1);
         jl_value_t *argi = args[4];
         bool addressOf = false;
+        jl_value_t *tti = jl_tupleref(tt,0);
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
-        } else if (jl_is_abstract_ref_type(jl_tupleref(tt,0))) {
-            if (!jl_is_cpointer_type(expr_type(argi, 0)))
-                addressOf = true;
+        } else if (jl_is_abstract_ref_type(tti)) {
+            tti = (jl_value_t*)jl_voidpointer_type;
         }
         Value *ary;
-        Type *largty = fargt[0];
+        Type *largty;
+        if (addressOf)
+            largty = jl_pvalue_llvmt;
+        else
+            largty = julia_struct_to_llvm(jl_tupleref(tt, 0));
         if (largty == jl_pvalue_llvmt) {
             ary = boxed(emit_expr(argi, ctx),ctx);
         } else {
@@ -978,46 +1178,77 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         savespot = &_savespot;
     }
 
+    std::vector<Type*> fargt(0);
+    std::vector<Type*> fargt_sig(0);
+    std::vector<bool> inRegList(0);
+    std::vector<bool> byRefList(0);
+    attr_type attrs;
+    Type *prt = NULL;
+    int sret = 0;
+    std::string err_msg = generate_func_sig(&lrt, &prt, sret, fargt, fargt_sig, inRegList, byRefList, attrs, rt, tt);
+    if(!err_msg.empty()) {
+        JL_GC_POP();
+        emit_error(err_msg,ctx);
+        return literal_pointer_val(jl_nothing);
+    }
+
     // emit arguments
     Value **argvals = (Value**) alloca(((nargs-3)/2 + sret)*sizeof(Value*));
-    Value *result;
+    Value *result = NULL;
+
+    // First, if the ABI requires us to provide the space for the return
+    // argument, allocate the box and store that as the first argument type
     if (sret) {
-        assert(jl_is_structtype(rt));
-        result = builder.CreateCall(
-                prepare_call(jlallocobj_func),
-                ConstantInt::get(T_size,
-                    sizeof(void*)+((jl_datatype_t*)rt)->size));
-        //TODO: Fill type pointer fields with C_NULL's
-        builder.CreateStore(
-                literal_pointer_val((jl_value_t*)rt),
-                emit_nthptr_addr(result, (size_t)0));
-        argvals[0] = builder.CreateBitCast(
-                emit_nthptr_addr(result, (size_t)1),
-                fargt_sig[0]);
+        result = emit_newsym(rt,1,NULL,ctx);
+        assert(result != NULL && "Type was not concrete");
+        if (!result->getType()->isPointerTy()) {
+            Value *mem = builder.CreateAlloca(lrt);
+            builder.CreateStore(result, mem);
+            result = mem;
+            argvals[0] = result;
+        } else {
+            argvals[0] = builder.CreateBitCast(emit_nthptr_addr(result, (size_t)1), fargt_sig[0]);
+        }
     }
+
+    // save argument depth until after we're done emitting arguments
     int last_depth = ctx->argDepth;
+
+    // number of parameters to the c function
     bool needStackRestore = false;
     for(i=4; i < nargs+1; i+=2) {
+        // Current C function parameter
         size_t ai = (i-4)/2;
+
+        // Julia (expression) value of current parameter
         jl_value_t *argi = args[i];
+
+        // pass the address of the argument rather than the argument itself
         bool addressOf = false;
         if (jl_is_expr(argi) && ((jl_expr_t*)argi)->head == amp_sym) {
             addressOf = true;
             argi = jl_exprarg(argi,0);
         }
+
+        // LLVM type of the current parameter
         Type *largty;
+
+        // Julia type of the current parameter
         jl_value_t *jargty;
         if (isVa && ai >= nargt-1) {
             largty = fargt[nargt-1];
             jargty = jl_tparam0(jl_tupleref(tt,nargt-1));
         }
         else {
-            largty = fargt[ai];
+            largty = fargt[sret+ai];
             jargty = jl_tupleref(tt,ai);
         }
+
         Value *arg;
         bool needroot = false;
         if (jl_is_abstract_ref_type(jargty)) {
+            if (addressOf)
+                emit_error("ccall: & on a Ref{T} argument is invalid", ctx);
             arg = emit_unboxed((jl_value_t*)argi, ctx);
             if (arg->getType() == jl_pvalue_llvmt) {
                 emit_cpointercheck(arg, "ccall: argument to Ref{T} is not a pointer", ctx);
@@ -1058,8 +1289,11 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 #endif
 
         bool nSR=false;
-        argvals[ai+sret] = julia_to_native(largty, jargty, arg, argi, addressOf,
-                                           ai+1, ctx, &nSR);
+        argvals[ai + sret] = llvm_type_rewrite(
+                julia_to_native(largty, jargty, arg, expr_type(argi, ctx), addressOf, byRefList[ai], inRegList[ai],
+                    need_private_copy(jargty, byRefList[ai]), ai + 1, ctx, &nSR),
+                fargt_sig.size() > ai + sret ? fargt_sig[ai + sret] : preferred_llvm_type(jargty, false),
+                jargty, false);
         needStackRestore |= nSR;
     }
 
@@ -1068,7 +1302,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     // keep this close to the function call, so that the compiler can
     // optimize the global pointer load in the common case
     Value *llvmf;
-    FunctionType *functype = FunctionType::get(lrt, fargt_sig, isVa);
+    FunctionType *functype = FunctionType::get(sret?T_void:prt, fargt_sig, isVa);
 
     if (jl_ptr != NULL) {
         null_pointer_check(jl_ptr,ctx);
@@ -1120,26 +1354,22 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             instList.push_front((Instruction*)stacksave);
     }
 
+    //llvmf->dump();
+    //for (std::vector<Value *>::iterator it = argvals.begin() ; it != argvals.end(); ++it)
+    //    (*it)->dump();
+
     // the actual call
     Value *ret = builder.CreateCall(prepare_call(llvmf),
                                     ArrayRef<Value*>(&argvals[0],(nargs-3)/2+sret));
-
-    attr_type attributes;
-#ifdef LLVM33
-    for(i = 0; i < nargt+sret; ++i)
-        if (paramattrs[i].hasAttributes())
-            attributes = attributes.addAttributes(jl_LLVMContext,i+1,
-                    AttributeSet::get(jl_LLVMContext,i+1,paramattrs[i]));
+#if LLVM33
+    ((CallInst*)ret)->setAttributes(attrs);
 #elif LLVM32
-    for(i = 0; i < nargt+sret; ++i)
-        if (paramattrs[i].hasAttributes())
-            attrs.push_back(AttributeWithIndex::get(i+1, Attributes::get(jl_LLVMContext,paramattrs[i])));
-    attributes = AttrListPtr::get(getGlobalContext(), ArrayRef<AttributeWithIndex>(attrs));
+    ((CallInst*)ret)->setAttributes(AttrListPtr::get(jl_LLVMContext, ArrayRef<AttributeWithIndex>(attrs)));
 #else
     attributes = AttrListPtr::get(attrs.data(),attrs.size());
+    ((CallInst*)ret)->setAttributes(attributes);
 #endif
 
-    ((CallInst*)ret)->setAttributes(attributes);
     if (cc != CallingConv::C)
         ((CallInst*)ret)->setCallingConv(cc);
     if (!sret)
@@ -1160,21 +1390,39 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     }
 
     JL_GC_POP();
-    if (!sret && lrt == T_void)
-        return literal_pointer_val((jl_value_t*)jl_nothing);
-    if (lrt->isStructTy()) {
-        //jl_printf(JL_STDERR, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
-        assert(jl_is_structtype(rt));
-        Value *strct =
-            builder.CreateCall(prepare_call(jlallocobj_func),
-                               ConstantInt::get(T_size,
-                                    sizeof(void*)+((jl_datatype_t*)rt)->size));
-        builder.CreateStore(literal_pointer_val((jl_value_t*)rt),
-                            emit_nthptr_addr(strct, (size_t)0));
-        builder.CreateStore(result,
-                            builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1),
-                                                  PointerType::get(lrt,0)));
-        return mark_julia_type(strct, rt);
+    // Finally we need to box the result into julia type
+    // However, if we have already created a box for the return
+    // type because we the ABI required us to pass a pointer (sret),
+    // then we do not need to do this.
+    if (!sret) {
+        if (lrt == T_void)
+            result = literal_pointer_val((jl_value_t*)jl_nothing);
+        else if (lrt->isStructTy()) {
+            //fprintf(stderr, "ccall rt: %s -> %s\n", f_name, ((jl_tag_type_t*)rt)->name->name->name);
+            assert(jl_is_structtype(rt));
+
+            Value *newsym = emit_newsym(rt,1,NULL,ctx);
+            assert(newsym != NULL && "Type was not concrete");
+            if (newsym->getType()->isPointerTy()) {
+                builder.CreateStore(result,builder.CreateBitCast(emit_nthptr_addr(newsym, (size_t)1), prt->getPointerTo()));
+                result = newsym;
+            } else if (lrt != prt) {
+                result = llvm_type_rewrite(result,lrt,rt,true);
+            }
+            // otherwise it's fine to pass this by value. Technically we could do alloca/store/load,
+            // but why should we?
+
+        } else {
+            if(prt->getPrimitiveSizeInBits() == lrt->getPrimitiveSizeInBits()) {
+                result = builder.CreateBitCast(result,lrt);
+            }
+            else {
+                assert(0 && "Unimplemented"); //XXX: ?
+            }
+        }
+    } else {
+        if (result->getType() != jl_pvalue_llvmt)
+            result = builder.CreateLoad(result);
     }
 
     return mark_or_box_ccall_result(result, args[2], rt, static_rt, ctx);

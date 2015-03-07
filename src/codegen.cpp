@@ -592,9 +592,9 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 
 // --- entry point ---
 //static int n_emit=0;
-static Function *emit_function(jl_lambda_info_t *lam, bool cstyle);
+static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bool cstyle);
 //static int n_compile=0;
-static Function *to_function(jl_lambda_info_t *li, bool cstyle)
+static Function *to_function(jl_lambda_info_t *li, bool force_specialized, bool cstyle)
 {
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
@@ -604,12 +604,14 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     nested_compile = true;
     Function *f = NULL;
     JL_TRY {
-        f = emit_function(li, cstyle);
+        f = emit_function(li, force_specialized, cstyle);
         //jl_printf(JL_STDOUT, "emit %s\n", li->name->name);
         //n_emit++;
     }
     JL_CATCH {
         li->functionObject = NULL;
+        li->cFunctionObject = NULL;
+        li->specFunctionObject = NULL;
         li->cFunctionObject = NULL;
         nested_compile = last_n_c;
         if (old != NULL) {
@@ -719,11 +721,20 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
             (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->cFunctionObject);
 #endif
         }
+        if (li->specFunctionObject != NULL) {
+#ifdef USE_MCJIT
+            (void)jl_ExecutionEngine->getFunctionAddress(((Function*)li->specFunctionObject)->getName());
+#else
+            (void)jl_ExecutionEngine->getPointerToFunction((Function*)li->specFunctionObject);
+#endif
+        }
         JL_SIGATOMIC_END();
         if (!imaging_mode) {
             llvmf->deleteBody();
             if (li->cFunctionObject != NULL)
                 ((Function*)li->cFunctionObject)->deleteBody();
+          if (li->specFunctionObject != NULL)
+            ((Function*)li->specFunctionObject)->deleteBody();
         }
     }
     f->fptr = li->fptr;
@@ -735,7 +746,7 @@ extern "C" void jl_compile(jl_function_t *f)
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
         li->inCompile = 1;
-        (void)to_function(li, false);
+        (void)to_function(li, false, false);
         li->inCompile = 0;
     }
 }
@@ -746,7 +757,7 @@ void jl_cstyle_compile(jl_function_t *f)
     if (li->cFunctionObject == NULL) {
         // objective: assign li->cFunctionObject
         li->inCompile = 1;
-        (void)to_function(li, true);
+        (void)to_function(li, true, true);
         li->inCompile = 0;
     }
 }
@@ -900,13 +911,13 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
         }
     }
     if (sf->fptr == &jl_trampoline) {
-        if (!getwrapper && sf->linfo->cFunctionObject != NULL)
-            llvmf = (Function*)sf->linfo->cFunctionObject;
+        if (!getwrapper && sf->linfo->specFunctionObject != NULL)
+            llvmf = (Function*)sf->linfo->specFunctionObject;
         else
             llvmf = (Function*)sf->linfo->functionObject;
     }
     else {
-        llvmf = to_function(sf->linfo, false);
+        llvmf = to_function(sf->linfo, false, false);
     }
     return llvmf;
 }
@@ -1514,50 +1525,6 @@ static Value *emit_boxed_rooted(jl_value_t *e, jl_codectx_t *ctx)
     return v;
 }
 
-// if ptr is NULL this emits a write barrier _back_
-static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
-{
-    /*    builder.CreateCall2(wbfunc, builder.CreateBitCast(parent, jl_pvalue_llvmt), builder.CreateBitCast(ptr, jl_pvalue_llvmt));
-          return;*/
-    parent = builder.CreateBitCast(parent, T_psize);
-    Value* parent_type = builder.CreateLoad(parent);
-    Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
-
-    // the branch hint does not seem to make it to the generated code
-    //builder.CreateCall2(expect_func, parent_marked, ConstantInt::get(T_int1, 0));
-    Value* parent_marked = builder.CreateICmpEQ(parent_mark_bits, ConstantInt::get(T_size, 1));
-
-    BasicBlock* cont = BasicBlock::Create(getGlobalContext(), "cont");
-    BasicBlock* barrier_may_trigger = BasicBlock::Create(getGlobalContext(), "wb_may_trigger", ctx->f);
-    BasicBlock* barrier_trigger = BasicBlock::Create(getGlobalContext(), "wb_trigger", ctx->f);
-    builder.CreateCondBr(parent_marked, barrier_may_trigger, cont);
-
-    builder.SetInsertPoint(barrier_may_trigger);
-    Value* ptr_mark_bit = builder.CreateAnd(builder.CreateLoad(builder.CreateBitCast(ptr, T_psize)), 1);
-    Value* ptr_not_marked = builder.CreateICmpEQ(ptr_mark_bit, ConstantInt::get(T_size, 0));
-    builder.CreateCondBr(ptr_not_marked, barrier_trigger, cont);
-    builder.SetInsertPoint(barrier_trigger);
-    builder.CreateCall(prepare_call(queuerootfun), builder.CreateBitCast(parent, jl_pvalue_llvmt));
-    builder.CreateBr(cont);
-    ctx->f->getBasicBlockList().push_back(cont);
-    builder.SetInsertPoint(cont);
-}
-
-static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
-{
-    BasicBlock *cont;
-    Value *not_null = builder.CreateICmpNE(ptr, V_null);
-    BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
-    cont = BasicBlock::Create(getGlobalContext(), "cont");
-    builder.CreateCondBr(not_null, if_not_null, cont);
-    builder.SetInsertPoint(if_not_null);
-    emit_write_barrier(ctx, parent, ptr);
-    builder.CreateBr(cont);
-    ctx->f->getBasicBlockList().push_back(cont);
-    builder.SetInsertPoint(cont);
-}
-
-
 // --- lambda ---
 
 static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
@@ -1757,30 +1724,6 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
                                         ConstantInt::get(T_int32,2));
     ctx->argDepth = argStart;
     return result;
-}
-
-static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
-                          Value *rhs, jl_codectx_t *ctx, bool checked, bool wb)
-{
-    if (sty->mutabl || !checked) {
-        Value *addr =
-            builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
-                              ConstantInt::get(T_size, sty->fields[idx].offset + sizeof(void*)));
-        jl_value_t *jfty = jl_tupleref(sty->types, idx);
-        if (sty->fields[idx].isptr) {
-            rhs = boxed(rhs, ctx);
-            builder.CreateStore(rhs,
-                                builder.CreateBitCast(addr, jl_ppvalue_llvmt));
-            if (wb) emit_checked_write_barrier(ctx, strct, rhs);
-        }
-        else {
-            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx, sty->mutabl ? tbaa_user : tbaa_immut, strct);
-        }
-    }
-    else {
-        // TODO: better error
-        emit_error("type is immutable", ctx);
-    }
 }
 
 // emit code for is (===). rt1 and rt2 are the julia types of the arguments,
@@ -2534,12 +2477,12 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
                                         jl_codectx_t *ctx)
 {
     Value *result;
-    if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->cFunctionObject!=NULL) {
+    if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->specFunctionObject!=NULL) {
         // emit specialized call site
-        Function *cf = (Function*)f->linfo->cFunctionObject;
+        Function *cf = (Function*)f->linfo->specFunctionObject;
         FunctionType *cft = cf->getFunctionType();
         size_t nfargs = cft->getNumParams();
-        Value **argvals = (Value**)alloca(nfargs*sizeof(Value*));
+        Value **argvals = (Value**) alloca(nfargs*sizeof(Value*));
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
@@ -3244,92 +3187,10 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     else if (head == new_sym) {
         jl_value_t *ty = expr_type(args[0], ctx);
         size_t nargs = jl_array_len(ex->args);
-        if (jl_is_type_type(ty) && jl_is_datatype(jl_tparam0(ty)) &&
+        if (jl_is_type_type(ty) &&
+            jl_is_datatype(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
-            ty = jl_tparam0(ty);
-            jl_datatype_t *sty = (jl_datatype_t*)ty;
-            size_t nf = jl_tuple_len(sty->names);
-            if (nf > 0) {
-                if (jl_isbits(sty)) {
-                    Type *lt = julia_type_to_llvm(ty);
-                    if (lt == T_void)
-                        return mark_julia_type(UndefValue::get(NoopType),ty);
-                    Value *strct = UndefValue::get(lt);
-                    size_t na = nargs-1 < nf ? nargs-1 : nf;
-                    unsigned idx = 0;
-                    for(size_t i=0; i < na; i++) {
-                        jl_value_t *jtype = jl_tupleref(sty->types,i);
-                        Type *fty = julia_type_to_llvm(jtype);
-                        if (type_is_ghost(fty))
-                            continue;
-                        Value *fval = emit_unbox(fty, emit_unboxed(args[i+1],ctx), jtype);
-                        if (fty == T_int1)
-                            fval = builder.CreateZExt(fval, T_int8);
-                        strct = builder.
-                            CreateInsertValue(strct, fval, ArrayRef<unsigned>(&idx,1));
-                        idx++;
-                    }
-                    return mark_julia_type(strct,ty);
-                }
-                Value *f1 = NULL;
-                size_t j = 0;
-                int fieldStart = ctx->argDepth;
-                bool needroots = false;
-                for(size_t i=1; i < nargs; i++) {
-                    needroots |= might_need_root(args[i]);
-                }
-                if (nf > 0 && sty->fields[0].isptr && nargs>1) {
-                    // emit first field before allocating struct to save
-                    // a couple store instructions. avoids initializing
-                    // the first field to NULL, and sometimes the GC root
-                    // for the new struct.
-                    Value *fval = emit_expr(args[1],ctx);
-                    f1 = boxed(fval,ctx);
-                    j++;
-                    if (might_need_root(args[1]) || fval->getType() != jl_pvalue_llvmt)
-                        make_gcroot(f1, ctx);
-                }
-                Value *strct = emit_allocobj(sizeof(void*)+sty->size);
-                builder.CreateStore(literal_pointer_val((jl_value_t*)ty),
-                                    emit_nthptr_addr(strct, (size_t)0));
-                if (f1) {
-                    if (!jl_subtype(expr_type(args[1],ctx), jl_t0(sty->types), 0))
-                        emit_typecheck(f1, jl_t0(sty->types), "new", ctx);
-                    emit_setfield(sty, strct, 0, f1, ctx, false, false);
-                    ctx->argDepth = fieldStart;
-                    if (nf > 1 && needroots)
-                        make_gcroot(strct, ctx);
-                }
-                else if (nf > 0 && needroots) {
-                    make_gcroot(strct, ctx);
-                }
-                for(size_t i=j; i < nf; i++) {
-                    if (sty->fields[i].isptr) {
-                        emit_setfield(sty, strct, i, V_null, ctx, false, false);
-                    }
-                }
-                for(size_t i=j+1; i < nargs; i++) {
-                    Value *rhs = emit_expr(args[i],ctx);
-                    if (sty->fields[i-1].isptr && rhs->getType() != jl_pvalue_llvmt &&
-                        !needroots) {
-                        // if this struct element needs boxing and we haven't rooted
-                        // the struct, root it now.
-                        make_gcroot(strct, ctx);
-                        needroots = true;
-                    }
-                    if (rhs->getType() == jl_pvalue_llvmt) {
-                        if (!jl_subtype(expr_type(args[i],ctx), jl_tupleref(sty->types,i-1), 0))
-                            emit_typecheck(rhs, jl_tupleref(sty->types,i-1), "new", ctx);
-                    }
-                    emit_setfield(sty, strct, i-1, rhs, ctx, false, false);
-                }
-                ctx->argDepth = fieldStart;
-                return strct;
-            }
-            else {
-                // 0 fields, singleton
-                return literal_pointer_val(jl_new_struct_uninit((jl_datatype_t*)ty));
-            }
+            return emit_newsym(jl_tparam0(ty),nargs,args,ctx);
         }
         Value *typ = emit_expr(args[0], ctx);
         return emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);
@@ -3629,7 +3490,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 {
     std::stringstream funcName;
     const std::string &fname = f->getName().str();
-    funcName << "jlcall_";
+    funcName << "jlapi_";
     if (fname.compare(0, 6, "julia_") == 0)
         funcName << fname.substr(6);
     else
@@ -3694,7 +3555,7 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 }
 
 // cstyle = compile with c-callable signature, not jlcall
-static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
+static Function *emit_function(jl_lambda_info_t *lam, bool force_specialized, bool cstyle)
 {
     // step 1. unpack AST and allocate codegen context for this function
     jl_expr_t *ast = (jl_expr_t*)lam->ast;
@@ -3823,7 +3684,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
     Function *f = NULL;
 
     bool specsig = false;
-    if (cstyle && !va && !hasCapt) {
+    if (force_specialized && !va && !hasCapt) {
         specsig = true;
     }
     else {
@@ -3878,14 +3739,134 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                              imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
                              funcName.str(), m);
         addComdat(f);
-        if (lam->cFunctionObject == NULL) {
-            lam->cFunctionObject = (void*)f;
-            lam->cFunctionID = jl_assign_functionID(f);
+        if (lam->specFunctionObject == NULL) {
+            lam->specFunctionObject = (void*)f;
+            lam->specFunctionID = jl_assign_functionID(f);
         }
         if (lam->functionObject == NULL) {
             Function *fwrap = gen_jlcall_wrapper(lam, ast, f);
             lam->functionObject = (void*)fwrap;
             lam->functionID = jl_assign_functionID(fwrap);
+        }
+        if (cstyle && lam->cFunctionObject == NULL) {
+            // Generate a c-callable wrapper
+            Type *crt = julia_struct_to_llvm(jlrettype);
+            if (crt == NULL)
+                jl_error("cfunction: return type doesn't correspond to a C type");
+            size_t i;
+            size_t nargt = jl_tuple_len(lam->specTypes);
+            for(i=0; i < nargt; i++) {
+                jl_value_t *tti = jl_tupleref(lam->specTypes,i);
+                if (tti == (jl_value_t*)jl_pointer_type) {
+                    jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
+                }
+            }
+
+            std::vector<Type*> fargt(0);
+            std::vector<Type*> fargt_sig(0);
+            std::vector<bool> inRegList(0);
+            std::vector<bool> byRefList(0);
+            attr_type attrs;
+            Type *prt = NULL;
+            int sret = 0;
+            std::string err_msg = generate_func_sig(&crt, &prt, sret, fargt, fargt_sig, inRegList, byRefList, attrs, jlrettype, lam->specTypes);
+            if (!err_msg.empty())
+                jl_error(err_msg.c_str());
+
+            funcName.str("");
+            funcName << "jlcapi_" << lam->name->name << "_" << globalUnique;
+            Function *cw = Function::Create(FunctionType::get(sret ? T_void : prt, fargt_sig, false),
+                    imaging_mode ? GlobalVariable::InternalLinkage : GlobalVariable::ExternalLinkage,
+                    funcName.str(), m);
+            cw->setAttributes(attrs);
+
+            BasicBlock *b0 = BasicBlock::Create(jl_LLVMContext, "top", cw);
+
+            builder.SetInsertPoint(b0);
+            DebugLoc noDbg;
+            builder.SetCurrentDebugLocation(noDbg);
+
+            // Alright, let's do this!
+            // let's first emit the arguments
+            size_t nargs = jl_tuple_len(lam->specTypes);
+            std::vector<Value*> args;
+            Function::arg_iterator AI = cw->arg_begin();
+            Value *sretPtr = NULL;
+            if (sret)
+                sretPtr = AI++; //const Argument &fArg = *AI++;
+
+            for (size_t i=0; i < nargs; i++) {
+                jl_value_t *jty = jl_tupleref(lam->specTypes,i);
+                Value *v = AI++;
+                Value *val = NULL;
+                if (fargt[i+sret] == fargt_sig[i+sret]) {
+                    val = v;
+                }
+                else {
+                    // undo whatever we did to this poor argument
+                    val = llvm_type_rewrite(v, fargt[i+sret], jl_tupleref(lam->specTypes,i), false);
+                }
+                // and perhaps box it if necessary
+                Type *t = julia_type_to_llvm(jty);
+                if (byRefList[i]) {
+                    val = builder.CreateLoad(val,false);
+                }
+                if (t != fargt[i+sret]) {
+                    if (t == jl_pvalue_llvmt) {
+                        if (byRefList[i])
+                            v = builder.CreateLoad(v,false);
+                        Value *mem = emit_newsym(jty, 1, NULL, &ctx);
+                        if (!mem->getType()->isPointerTy()) {
+                           assert(type_is_ghost(t) && mem->getType() == t);
+                        }
+                        else {
+                            builder.CreateStore(val, builder.CreateBitCast(
+                                emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
+                        }
+                        val = builder.CreateBitCast(mem, jl_pvalue_llvmt);
+                    }
+                    else {
+                        assert(0);
+                    }
+                }
+
+                args.push_back(val);
+            }
+
+            Value *r = builder.CreateCall(f, ArrayRef<Value*>(args));
+
+            if (type_is_ghost(crt)) {
+                assert(type_is_ghost(prt));
+                builder.CreateRetVoid();
+            }
+            else {
+                Value *v = julia_to_native(crt, jlrettype, r, jlrettype, 0, false, false, false, 0, &ctx, NULL);
+                if (!sret) {
+                    builder.CreateRet(llvm_type_rewrite(v, prt, jlrettype, true));
+                }
+                else {
+                    Value *sretVal = llvm_type_rewrite(v, fargt_sig[0], jlrettype, true);
+                    builder.CreateStore(sretVal, sretPtr);
+                    builder.CreateRetVoid();
+                }
+            }
+
+#ifdef JL_DEBUG_BUILD
+#ifdef LLVM35
+            llvm::raw_fd_ostream out(1,false);
+#endif
+            if (
+#ifdef LLVM35
+                verifyFunction(*cw,&out)
+#else
+                verifyFunction(*cw,PrintMessageAction)
+#endif
+            ) {
+                cw->dump();
+                abort();
+            }
+#endif
+            lam->cFunctionObject = (void*)cw;
         }
     }
     else {
@@ -4614,9 +4595,9 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                                            Function::ExternalLinkage, funcName, jl_Module);
 #endif
 
-            if (lam->cFunctionObject == NULL) {
-                lam->cFunctionObject = (void*)f;
-                lam->cFunctionID = jl_assign_functionID(f);
+        if (lam->specFunctionObject == NULL) {
+            lam->specFunctionObject = (void*)f;
+            lam->specFunctionID = jl_assign_functionID(f);
             }
             add_named_global(f, (void*)fptr);
         }
