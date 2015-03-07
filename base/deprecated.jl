@@ -303,8 +303,9 @@ end
 
 function unsafe_convert{P}(::Type{P}, x)
     P<:Ptr || throw(MethodError(unsafe_convert, (Type{P}, x)))
+    ret = convert(P, x) # attempt the call first, so we only print the depwarn if it can even succeed
     depwarn("convert(::Type{Ptr}, ::$(typeof(x))) methods should be converted to be methods of unsafe_convert", :unsafe_convert)
-    return convert(P, x)
+    return ret
 end
 
 function convert{T}(::Type{Ptr{T}}, x::Integer)
