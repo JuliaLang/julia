@@ -431,6 +431,37 @@ end
 
 ## Unary arithmetic and boolean operators
 
+macro _unary_op_nz2z_z2z(op,A,Tv,Ti)
+    esc(quote
+        nfilledA = nnz($A)
+        colptrB = Array($Ti, $A.n+1)
+        rowvalB = Array($Ti, nfilledA)
+        nzvalB = Array($Tv, nfilledA)
+
+        nzvalA = $A.nzval
+        colptrA = $A.colptr
+        rowvalA = $A.rowval
+
+        k = 0 # number of additional zeros introduced by op(A)
+        @inbounds for i = 1 : $A.n
+            colptrB[i] = colptrA[i] - k
+            for j = colptrA[i] : colptrA[i+1]-1
+                opAj = $(op)(nzvalA[j])
+                if opAj == 0
+                    k += 1
+                else
+                    rowvalB[j - k] = rowvalA[j]
+                    nzvalB[j - k] = opAj
+                end
+            end
+        end
+        colptrB[end] = $A.colptr[end] - k
+        deleteat!(rowvalB, colptrB[end]:nfilledA)
+        deleteat!(nzvalB, colptrB[end]:nfilledA)
+        return SparseMatrixCSC($A.m, $A.n, colptrB, rowvalB, nzvalB)
+    end) # quote
+end
+
 # Operations that may map nonzeros to zero, and zero to zero
 # Result is sparse
 for op in (:ceil, :floor, :trunc, :round,
@@ -439,60 +470,21 @@ for op in (:ceil, :floor, :trunc, :round,
            :sinpi, :cosc,
            :sind, :tand, :asind, :atand)
     @eval begin
-        function ($op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti})
-            nfilledA = nnz(A)
-            colptrB = Array(Ti, A.n+1)
-            rowvalB = Array(Ti, nfilledA)
-            nzvalB = Array(Tv, nfilledA)
-
-            k = 0 # number of additional zeros introduced by op(A)
-            @inbounds for i = 1 : A.n
-                colptrB[i] = A.colptr[i] - k
-                for j = A.colptr[i] : A.colptr[i+1]-1
-                    opAj = $(op)(A.nzval[j])
-                    if opAj == 0
-                        k += 1
-                    else
-                        rowvalB[j - k] = A.rowval[j]
-                        nzvalB[j - k] = opAj
-                    end
-                end
-            end
-            colptrB[end] = A.colptr[end] - k
-            deleteat!(rowvalB, colptrB[end]:nfilledA)
-            deleteat!(nzvalB, colptrB[end]:nfilledA)
-            return SparseMatrixCSC(A.m, A.n, colptrB, rowvalB, nzvalB)
-        end
+        $(op){Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}) = @_unary_op_nz2z_z2z($op,A,Tv,Ti)
     end # quote
 end # macro
 
+for op in (:real, :imag)
+    @eval begin
+        ($op){Tv<:Complex,Ti}(A::SparseMatrixCSC{Tv,Ti}) = @_unary_op_nz2z_z2z($op,A,Tv.parameters[1],Ti)
+    end # quote
+end # macro
+real{Tv<:Number,Ti}(A::SparseMatrixCSC{Tv,Ti}) = copy(A)
+imag{Tv<:Number,Ti}(A::SparseMatrixCSC{Tv,Ti}) = spzeros(Tv, Ti, A.m, A.n)
+
 for op in (:ceil, :floor, :trunc, :round)
     @eval begin
-        function ($op){T,Tv,Ti}(::Type{T},A::SparseMatrixCSC{Tv,Ti})
-            nfilledA = nnz(A)
-            colptrB = Array(Ti, A.n+1)
-            rowvalB = Array(Ti, nfilledA)
-            nzvalB = Array(T, nfilledA)
-
-            k = 0 # number of additional zeros introduced by op(A)
-            @inbounds for i = 1 : A.n
-                colptrB[i] = A.colptr[i] - k
-                for j = A.colptr[i] : A.colptr[i+1]-1
-                    opAj = $(op)(A.nzval[j])
-                    if opAj == 0
-                        k += 1
-                    else
-                        rowvalB[j - k] = A.rowval[j]
-                        nzvalB[j - k] = opAj
-                    end
-                end
-            end
-            colptrB[end] = A.colptr[end] - k
-            deleteat!(rowvalB, colptrB[end]:nfilledA)
-            deleteat!(nzvalB, colptrB[end]:nfilledA)
-            return SparseMatrixCSC(A.m, A.n, colptrB, rowvalB, nzvalB)
-        end
-
+        ($op){T,Tv,Ti}(::Type{T},A::SparseMatrixCSC{Tv,Ti}) = @_unary_op_nz2z_z2z($op,A,T,Ti)
     end # quote
 end # macro
 
@@ -500,7 +492,7 @@ end # macro
 
 # Operations that map nonzeros to nonzeros, and zeros to zeros
 # Result is sparse
-for op in (:-, :abs, :abs2, :log1p, :expm1)
+for op in (:-, :log1p, :expm1)
     @eval begin
 
         function ($op)(A::SparseMatrixCSC)
@@ -513,6 +505,26 @@ for op in (:-, :abs, :abs2, :log1p, :expm1)
             return B
         end
 
+    end
+end
+
+function abs{Tv<:Complex,Ti}(A::SparseMatrixCSC{Tv,Ti})
+    T = Tv.parameters[1]
+    (T <: Integer) && (T = (T <: BigInt) ? BigFloat : Float64)
+    @_unary_op_nz2z_z2z(abs,A,T,Ti)
+end
+abs2{Tv<:Complex,Ti}(A::SparseMatrixCSC{Tv,Ti}) = @_unary_op_nz2z_z2z(abs2,A,Tv.parameters[1],Ti)
+for op in (:abs, :abs2)
+    @eval begin
+        function ($op){Tv<:Number,Ti}(A::SparseMatrixCSC{Tv,Ti})
+            B = similar(A)
+            nzvalB = B.nzval
+            nzvalA = A.nzval
+            @simd for i=1:length(nzvalB)
+                @inbounds nzvalB[i] = ($op)(nzvalA[i])
+            end
+            return B
+        end
     end
 end
 
