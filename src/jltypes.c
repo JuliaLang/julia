@@ -331,7 +331,7 @@ static void extend_(jl_value_t *var, jl_value_t *val, cenv_t *soln, int allow,
 {
     if (!allow && var == val)
         return;
-    if (!ordered && val < var && is_btv(val) && is_btv(var)) {
+    if (!ordered && val < var && jl_is_typevar(val)) {
         jl_value_t *temp = val;
         val = var;
         var = temp;
@@ -734,8 +734,8 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
             }
             if (!jl_is_typevar(both))
                 both = (jl_value_t*)jl_new_typevar(underscore_sym, jl_bottom_type, both);
-            extend((jl_value_t*)a, both, penv);
-            extend((jl_value_t*)b, both, penv);
+            extend_ordered((jl_value_t*)a, both, penv);
+            extend_ordered((jl_value_t*)b, both, penv);
         }
         extend((jl_value_t*)a, b, eqc);
     }
@@ -755,15 +755,15 @@ static jl_value_t *intersect_typevar(jl_tvar_t *a, jl_value_t *b,
                 break;
             }
         }
-        extend((jl_value_t*)a, b, penv);
+        extend_ordered((jl_value_t*)a, b, penv);
         if (jl_is_typevar(b)) {
             JL_GC_POP();
             return (jl_value_t*)a;
         }
         else {
             new_b = jl_new_typevar(underscore_sym, jl_bottom_type, b);
-            extend((jl_value_t*)new_b, b, penv);
-            extend((jl_value_t*)new_b, (jl_value_t*)a, penv);
+            extend_ordered((jl_value_t*)new_b, b, penv);
+            extend_ordered((jl_value_t*)new_b, (jl_value_t*)a, penv);
             JL_GC_POP();
             return (jl_value_t*)new_b;
         }
@@ -896,7 +896,7 @@ static jl_value_t *jl_type_intersect(jl_value_t *a, jl_value_t *b,
                         }
                         if (i >= penv->n) {
                             temp = jl_box_long(alen-1);
-                            extend(lenvar, temp, penv);
+                            extend_ordered(lenvar, temp, penv);
                         }
                     }
                 }
