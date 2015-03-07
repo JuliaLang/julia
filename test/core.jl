@@ -2223,3 +2223,9 @@ end
 @test f10373.env.defs.next.func.code.name == :f10373
 @test g10373.env.defs.func.code.name == :g10373
 @test g10373.env.defs.next.func.code.name == :g10373
+
+# issue #7221
+f7221{T<:Number}(::T) = 1
+f7221(::BitArray) = 2
+f7221(::AbstractVecOrMat) = 3
+@test f7221(trues(1)) == 2
