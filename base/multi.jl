@@ -722,7 +722,7 @@ fetch_ref(rid) = wait_full(lookup_ref(rid))
 fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
-# storing a value to a Ref
+# storing a value to a RemoteRef
 function put!(rv::RemoteValue, val::ANY)
     wait_empty(rv)
     rv.result = val
@@ -772,7 +772,7 @@ function deliver_result(sock::IO, msg, oid, value)
     end
 end
 
-# notify waiters that a certain job has finished or Ref has been emptied
+# notify waiters that a certain job has finished or RemoteRef has been emptied
 notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
 notify_empty(rv::RemoteValue) = notify(rv.empty)
 

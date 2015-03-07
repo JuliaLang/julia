@@ -472,7 +472,7 @@ end
 close(t::Timer) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
-    uv.handle = 0
+    uv.handle = C_NULL
     uv.status = StatusClosed
     if isa(uv.closecb, Function)
         uv.closecb(uv)

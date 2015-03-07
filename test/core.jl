@@ -787,7 +787,7 @@ end
 begin
     local X, p
     X = FooBar[ FooBar(3,1), FooBar(4,4) ]
-    p = convert(Ptr{FooBar}, X)
+    p = pointer(X)
     @test unsafe_load(p, 2) == FooBar(4,4)
     unsafe_store!(p, FooBar(7,3), 1)
     @test X[1] == FooBar(7,3)
@@ -1290,7 +1290,7 @@ type Z4681
     x::Ptr{Void}
     Z4681() = new(C_NULL)
 end
-Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
 @test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479

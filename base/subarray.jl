@@ -415,11 +415,11 @@ function subarray_linearindexing_dim{A<:AbstractArray}(::Type{A}, It::Tuple)
     LD
 end
 
-convert{T,N,P<:Array,I<:(RangeIndex...)}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
+unsafe_convert{T,N,P<:Array,I<:(RangeIndex...)}(::Type{Ptr{T}}, V::SubArray{T,N,P,I}) =
     pointer(V.parent) + (V.first_index-1)*sizeof(T)
 
-convert{T,N,P<:Array,I<:(RangeIndex...)}(::Type{Ptr{Void}}, V::SubArray{T,N,P,I}) =
-    convert(Ptr{Void}, convert(Ptr{T}, V))
+unsafe_convert{T,N,P<:Array,I<:(RangeIndex...)}(::Type{Ptr{Void}}, V::SubArray{T,N,P,I}) =
+    convert(Ptr{Void}, unsafe_convert(Ptr{T}, V))
 
 pointer(V::SubArray, i::Int) = pointer(V, ind2sub(size(V), i))
 

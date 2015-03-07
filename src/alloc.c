@@ -54,6 +54,7 @@ jl_datatype_t *jl_typeerror_type;
 jl_datatype_t *jl_methoderror_type;
 jl_datatype_t *jl_loaderror_type;
 jl_datatype_t *jl_undefvarerror_type;
+jl_datatype_t *jl_ref_type;
 jl_datatype_t *jl_pointer_type;
 jl_datatype_t *jl_void_type;
 jl_datatype_t *jl_voidpointer_type;
