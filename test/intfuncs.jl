@@ -114,5 +114,4 @@ let ptr = Ptr{Void}(typemax(UInt))
         @test ptr == Ptr{Void}(T(ptr))
         @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
     end
-    @test ptr == Ptr{Void}(Int8(-1)) # signed values are sign-extended to Int
 end

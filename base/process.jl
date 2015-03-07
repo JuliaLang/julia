@@ -85,9 +85,8 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-# Not actually a pointer, but that's how we pass it through the C API
-# so it's fine
-uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd)
+# Not actually a pointer, but that's how we pass it through the C API so it's fine
+uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
 typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
@@ -199,7 +198,7 @@ type ProcessChain
 end
 typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
-function _jl_spawn(cmd::Ptr{UInt8}, argv::Ptr{Ptr{UInt8}}, loop::Ptr{Void}, pp::Process,
+function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
     proc = c_malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
@@ -220,7 +219,7 @@ end
 function uvfinalize(proc::Process)
     proc.handle != C_NULL && ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     disassociate_julia_struct(proc)
-    proc.handle = 0
+    proc.handle = C_NULL
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
@@ -232,7 +231,7 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::In
 end
 
 function _uv_hook_close(proc::Process)
-    proc.handle = 0
+    proc.handle = C_NULL
     if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
 end
@@ -339,10 +338,9 @@ function spawn(pc::ProcessChainOrNot, cmd::Cmd, stdios::StdIOSet, exitcb::Callba
     loop = eventloop()
     pp = Process(cmd, C_NULL, stdios[1], stdios[2], stdios[3]);
     @setup_stdio
-    ptrs = _jl_pre_exec(cmd.exec)
     pp.exitcb = exitcb
     pp.closecb = closecb
-    pp.handle = _jl_spawn(ptrs[1], convert(Ptr{Ptr{UInt8}}, ptrs), loop, pp,
+    pp.handle = _jl_spawn(cmd.exec[1], cmd.exec, loop, pp,
                           in, out, err)
     @cleanup_stdio
     if isa(pc, ProcessChain)
@@ -555,21 +553,6 @@ function process_status(s::Process)
     #process_stopped (s) ? "ProcessStopped("*string(process_stop_signal(s))*")" :
     process_exited  (s) ? "ProcessExited("*string(s.exitcode)*")" :
     error("process status error")
-end
-
-# WARNING: do not call this and keep the returned array of pointers
-# around longer than the args vector and then use array of pointers.
-# this could cause a segfault. this is really just for use by the
-# spawn function below so that we can exec more efficiently.
-#
-function _jl_pre_exec(args::Vector{ByteString})
-    isempty(args) && throw(ArgumentError("exec called with no arguments"))
-    ptrs = Array(Ptr{UInt8}, length(args)+1)
-    for i = 1:length(args)
-        ptrs[i] = args[i].data
-    end
-    ptrs[length(args)+1] = C_NULL
-    return ptrs
 end
 
 ## implementation of `cmd` syntax ##

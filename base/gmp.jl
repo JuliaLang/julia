@@ -82,7 +82,7 @@ function Base.parseint_nocheck(::Type{BigInt}, s::AbstractString, base::Int)
     z = BigInt()
     err = ccall((:__gmpz_set_str, :libgmp),
                Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
-               &z, convert(Ptr{UInt8},SubString(s,i)), base)
+               &z, SubString(s,i), base)
     err == 0 || throw(ArgumentError("invalid BigInt: $(repr(s))"))
     return sgn < 0 ? -z : z
 end

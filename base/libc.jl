@@ -28,7 +28,7 @@ type TmStruct
         t = floor(t)
         tm = TmStruct()
         # TODO: add support for UTC via gmtime_r()
-        ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Void}), &t, &tm)
+        ccall(:localtime_r, Ptr{TmStruct}, (Ptr{Int}, Ptr{TmStruct}), &t, &tm)
         return tm
     end
 end
@@ -37,18 +37,18 @@ strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
     timestr = Array(UInt8, 128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{Void}),
+    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
     end
-    bytestring(convert(Ptr{UInt8},timestr))
+    bytestring(pointer(timestr), n)
 end
 
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}),
+    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{TmStruct}),
               timestr, fmt, &tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be
@@ -62,13 +62,13 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
         if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
-            ccall(:mktime, Int, (Ptr{Void},), &tm)
+            ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
         end
     end
     tm
 end
 
-time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{Void},), &tm))
+time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
 
 ## process-related functions ##
 
@@ -81,7 +81,7 @@ function gethostname()
     @unix_only err=ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     systemerror("gethostname", err != 0)
-    bytestring(convert(Ptr{UInt8},hn))
+    bytestring(pointer(hn))
 end
 
 ## Memory related ##

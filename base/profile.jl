@@ -98,7 +98,7 @@ immutable LineInfo
     file::ByteString
     line::Int
     fromC::Bool
-    ip::Int
+    ip::Int64 # large enough that this struct can be losslessly read on any machine (32 or 64 bit)
 end
 
 const UNKNOWN = LineInfo("?", "?", -1, true, 0)
@@ -130,15 +130,15 @@ len_data() = convert(Int, ccall(:jl_profile_len_data, Csize_t, ()))
 
 maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 
-function lookup(ip::UInt)
+function lookup(ip::Ptr{Void})
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 5
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int(info[5]))
+        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int64(info[5]))
     else
         return UNKNOWN
     end
 end
-lookup(ip::Ptr{Void}) = lookup(UInt(ip))
+lookup(ip::UInt) = lookup(convert(Ptr{Void},ip))
 
 error_codes = Dict{Int,ASCIIString}(
     -1=>"cannot specify signal action for profiling",
