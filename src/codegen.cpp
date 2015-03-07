@@ -617,7 +617,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
     }
     assert(f != NULL);
     nested_compile = last_n_c;
-#ifdef JL_DEBUG_BUILD
+    //#ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
 #endif
@@ -631,7 +631,7 @@ static Function *to_function(jl_lambda_info_t *li, bool cstyle)
         f->dump();
         abort();
     }
-#endif
+    //#endif
     FPM->run(*f);
     //n_compile++;
     // print out the function's LLVM code
@@ -754,8 +754,8 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
     }
     JL_TYPECHK(jl_function_ptr, tuple, argt);
     JL_TYPECHK(jl_function_ptr, type, argt);
-    if (jl_is_gf(f) && (rt == NULL || jl_is_leaf_type(rt)) && jl_is_leaf_type(argt)) {
-        jl_function_t *ff = jl_get_specialization(f, (jl_tuple_t*)argt);
+    if ((rt == NULL || jl_is_leaf_type(rt)) && jl_is_leaf_type(argt)) {
+        jl_function_t *ff = jl_is_gf(f) ? jl_get_specialization(f, (jl_tuple_t*)argt) : f;
         if (ff != NULL && ff->env==(jl_value_t*)jl_null && ff->linfo != NULL) {
             if (ff->linfo->cFunctionObject == NULL) {
                 jl_cstyle_compile(ff);
@@ -781,11 +781,12 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
                         }
                     }
                 }
-                return (Function*)ff->linfo->cFunctionObject;
             }
         }
+        return (Function*)f->linfo->cFunctionObject;
     }
-    jl_error("function is not yet c-callable");
+    //jl_static_show(JL_STDOUT, (jl_value_t*)jl_uncompress_ast(f->linfo, f->linfo->ast));
+    //    jl_error("function is not yet c-callable");
     return NULL;
 }
 
@@ -794,12 +795,14 @@ extern "C" DLLEXPORT
 void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 {
     Function *llvmf = jl_cfunction_object(f, rt, argt);
-    assert(llvmf);
+    if (llvmf) {
 #ifdef USE_MCJIT
-    return (void*)(intptr_t)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+        return (void*)jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
 #else
-    return jl_ExecutionEngine->getPointerToFunction(llvmf);
+        return jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
+    }
+    return NULL;
 }
 
 // export a C-callable entry point for a function, with a given name
@@ -1338,7 +1341,7 @@ static void simple_escape_analysis(jl_value_t *expr, bool esc, jl_codectx_t *ctx
                         if (ff->fptr == jl_f_tuplelen ||
                             ff->fptr == jl_f_tupleref ||
                             (ff->fptr == jl_f_apply && alen==4 &&
-                             expr_type(jl_exprarg(e,2),ctx) == (jl_value_t*)jl_function_type)) {
+                             jl_is_functype(expr_type(jl_exprarg(e,2),ctx)))) {
                             esc = false;
                         }
                     }
@@ -1592,17 +1595,20 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         capt = jl_lam_capt((jl_expr_t*)ast);
     else
         capt = (jl_array_t*)((jl_lambda_info_t*)expr)->capt;
-    if (capt == NULL || jl_array_dim0(capt) == 0) {
+    // disabled for now
+    // we should check if the args & ret types are statically known
+    // and lift only in that case
+    if (0 && (capt == NULL || jl_array_dim0(capt) == 0)) {
         // no captured vars; lift
         jl_value_t *fun =
             (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null,
-                                        (jl_lambda_info_t*)expr);
+                                        (jl_lambda_info_t*)expr, NULL, NULL);
         jl_add_linfo_root(ctx->linfo, fun);
         return literal_pointer_val(fun);
     }
 
     int argStart = ctx->argDepth;
-    size_t clen = jl_array_dim0(capt);
+    size_t clen = capt ? jl_array_dim0(capt) : 0;
     Value **captured = (Value**) alloca((1+clen)*sizeof(Value*));
     captured[0] = ConstantInt::get(T_size, clen);
     for(i=0; i < clen; i++) {
@@ -1640,16 +1646,24 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         }
         captured[i+1] = val;
     }
+    if (!jl_is_expr(ast)) ast = jl_uncompress_ast((jl_lambda_info_t*)expr, ast);
+
     Value *env_tuple;
     env_tuple = builder.CreateCall(prepare_call(jlntuple_func),
                                    ArrayRef<Value*>(&captured[0],
                                                     1+clen));
     ctx->argDepth = argStart;
     make_gcroot(env_tuple, ctx);
-    Value *result = builder.CreateCall3(prepare_call(jlclosure_func),
+    Value *argtypes = emit_expr((jl_value_t*)jl_lam_argtypes((jl_expr_t*)ast), ctx);
+    jl_expr_t *retexpr = jl_lam_retsigty((jl_expr_t*)ast);
+    Value *retty = retexpr ? emit_expr((jl_value_t*)retexpr, ctx) : literal_pointer_val((jl_value_t*)jl_any_type);
+    make_gcroot(argtypes, ctx);
+    make_gcroot(retty, ctx);
+    Value *result = builder.CreateCall5(prepare_call(jlclosure_func),
                                         Constant::getNullValue(T_pint8),
-                                        env_tuple, literal_pointer_val(expr));
-    ctx->argDepth--;
+                                        env_tuple, literal_pointer_val(expr),
+                                        argtypes, retty);
+    ctx->argDepth = argStart;
     return result;
 }
 
@@ -2034,7 +2048,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         }
     }
     else if (f->fptr == &jl_f_apply && nargs==3 && ctx->vaStack &&
-             symbol_eq(args[3], ctx->vaName) && expr_type(args[2],ctx) == (jl_value_t*)jl_function_type) {
+             symbol_eq(args[3], ctx->vaName) && jl_is_functype(expr_type(args[2],ctx))) {
         Value *theF = emit_expr(args[2],ctx);
         Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func, jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
@@ -2528,26 +2542,49 @@ static Value *emit_jlcall(Value *theFptr, Value *theF, jl_value_t **args,
 
 static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *theFptr,
                                         bool specialized,
-                                        jl_value_t **args, size_t nargs,
+                                        jl_value_t **args, size_t nargs, jl_value_t* expr,
                                         jl_codectx_t *ctx)
 {
     Value *result;
-    if (f!=NULL && specialized && f->linfo!=NULL && f->linfo->cFunctionObject!=NULL) {
+    jl_value_t *specTypes = NULL;
+    jl_value_t *retType = NULL;
+    JL_GC_PUSH2(&specTypes, &retType);
+    Function *cf = NULL; // compile time Function target
+    Value *rcf = NULL; // runtime function pointer target
+    if (1) {
+        if (specialized && f != NULL && f->linfo != NULL && f->linfo->cFunctionObject != NULL) {
+            // statically known function
+            cf = (Function*)f->linfo->cFunctionObject;
+            specTypes = (jl_value_t*)f->linfo->specTypes;
+            retType = jl_ast_rettype(f->linfo, f->linfo->ast);
+        } else {
+            jl_value_t* ftype = expr_type(expr, ctx);
+            if (jl_is_functype(ftype)) {
+                // statically known function type
+                specTypes = jl_tparam0(ftype);
+                retType = jl_tparam1(ftype);
+                if (!jl_is_leaf_type(specTypes) || !jl_is_leaf_type(retType)) {
+                    specTypes = NULL; retType = NULL;
+                } else {
+                    rcf = emit_nthptr(theF, 4, tbaa_func);
+                }
+            }
+        }
+    }
+    if (specTypes != NULL && retType != NULL && (rcf != NULL || cf != NULL)) {
         // emit specialized call site
-        Function *cf = (Function*)f->linfo->cFunctionObject;
-        FunctionType *cft = cf->getFunctionType();
-        size_t nfargs = cft->getNumParams();
-        Value **argvals = (Value**)alloca(nfargs*sizeof(Value*));
+        Value **argvals = (Value**)alloca(nargs*sizeof(Value*));
+        Type **argtypes = (Type**)alloca(nargs*sizeof(Type*));
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
-            Type *at = cft->getParamType(idx);
-            Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
+            Type *et = julia_type_to_llvm(jl_tupleref(specTypes,i));
+            argtypes[idx] = et;
             if (et == T_void || et->isEmptyTy()) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
                 continue;
             }
-            if (at == jl_pvalue_llvmt) {
+            if (et == jl_pvalue_llvmt) {
                 Value *origval = emit_expr(args[i+1], ctx);
                 argvals[idx] = boxed(origval,ctx,expr_type(args[i+1],ctx));
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
@@ -2559,28 +2596,37 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
                 }
             }
             else {
-                assert(at == et);
-                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx),
-                                          jl_tupleref(f->linfo->specTypes,i));
+                //                assert(at == et);
+                argvals[idx] = emit_unbox(et, emit_unboxed(args[i+1], ctx),
+                                          jl_tupleref(specTypes,i));
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
         }
-        assert(idx == nfargs);
-        result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0],nfargs));
-        result = mark_julia_type(result, jl_ast_rettype(f->linfo, f->linfo->ast));
+        size_t nfargs = idx;
+        if (cf) {
+            result = builder.CreateCall(prepare_call(cf), ArrayRef<Value*>(&argvals[0],nfargs));
+        } else {
+            FunctionType *fty = FunctionType::get(julia_type_to_llvm(retType),
+                                                  ArrayRef<Type*>(&argtypes[0],nfargs), false);
+            rcf = builder.CreateBitCast(rcf, PointerType::get(fty,0));
+            result = builder.CreateCall(rcf, ArrayRef<Value*>(&argvals[0],nfargs));
+        }
+        result = mark_julia_type(result, retType);
     }
     else {
         result = emit_jlcall(theFptr, theF, &args[1], nargs, ctx);
     }
+    JL_GC_POP();
     return result;
 }
 
 static Value *emit_is_function(Value *x, jl_codectx_t *ctx)
 {
     Value *xty = emit_typeof(x);
+    Value *xtyname = emit_nthptr(xty, 1, tbaa_user);
     Value *isfunc =
-        builder.CreateICmpEQ(xty, literal_pointer_val((jl_value_t*)jl_function_type));
+        builder.CreateICmpEQ(xtyname, literal_pointer_val((jl_value_t*)jl_function_typename));
     return isfunc;
 }
 
@@ -2613,7 +2659,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
     }
 
     hdtype = expr_type(a0, ctx);
-    definitely_function |= (hdtype == (jl_value_t*)jl_function_type);
+    definitely_function |= jl_is_functype(hdtype);
     definitely_not_function |= (jl_is_leaf_type(hdtype) && !definitely_function);
 
     assert(!(definitely_function && definitely_not_function));
@@ -2631,7 +2677,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         }
         else {
             theF = literal_pointer_val((jl_value_t*)f);
-            result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, ctx);
+            result = emit_call_function_object(f, theF, theFptr, true, args-1, nargs+1, a0, ctx);
         }
     }
     else if (definitely_function) {
@@ -2652,7 +2698,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
         else {
             theF = literal_pointer_val((jl_value_t*)f);
         }
-        result = emit_call_function_object(f, theF, theFptr, specialized, args, nargs, ctx);
+        result = emit_call_function_object(f, theF, theFptr, specialized, args, nargs, a0, ctx);
     }
     else {
         // either direct function, or use call(), based on run-time branch
@@ -5009,6 +5055,8 @@ static void init_julia_llvm_env(Module *m)
 
     std::vector<Type*> args4(0);
     args4.push_back(T_pint8);
+    args4.push_back(jl_pvalue_llvmt);
+    args4.push_back(jl_pvalue_llvmt);
     args4.push_back(jl_pvalue_llvmt);
     args4.push_back(jl_pvalue_llvmt);
     jlclosure_func =

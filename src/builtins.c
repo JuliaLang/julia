@@ -1096,7 +1096,8 @@ static void add_builtin(const char *name, jl_value_t *v)
 static void add_builtin_func(const char *name, jl_fptr_t f)
 {
     add_builtin(name, (jl_value_t*)
-                jl_new_closure(f, (jl_value_t*)jl_symbol(name), NULL));
+                jl_new_closure(f, (jl_value_t*)jl_symbol(name), NULL,
+                               NULL, NULL));
 }
 
 void jl_init_primitives(void)

@@ -3265,18 +3265,18 @@ void jl_init_types(void)
                         jl_tuple(2, jl_tuple_type, jl_any_type),
                         0, 0, 0);
 
+    tv = jl_tuple2(tvar("A"),tvar("R"));
     jl_function_type =
-        jl_new_datatype(jl_symbol("Function"), jl_any_type, jl_null,
-                        jl_tuple(3, jl_symbol("fptr"), jl_symbol("env"),
-                                 jl_symbol("code")),
-                        jl_tuple(3, jl_any_type, jl_any_type,
-                                 jl_lambda_info_type),
+        jl_new_datatype(jl_symbol("Function"), jl_any_type, tv,
+                        jl_tuple(4, jl_symbol("fptr"), jl_symbol("env"),
+                                 jl_symbol("code"), jl_symbol("fptrSpec")),
+                        jl_tuple(4, jl_any_type, jl_any_type,
+                                 jl_lambda_info_type, jl_long_type),
                         0, 1, 0);
+    jl_function_typename = jl_function_type->name;
 
     jl_tupleset(jl_method_type->types, 4, jl_function_type);
     jl_tupleset(jl_lambda_info_type->types, 6, jl_function_type);
-
-    jl_bottom_func = jl_new_closure(jl_f_no_function, (jl_value_t*)JL_NULL, NULL);
 
     jl_intrinsic_type = jl_new_bitstype((jl_value_t*)jl_symbol("IntrinsicFunction"),
                                         jl_any_type, jl_null, 32);
@@ -3305,6 +3305,9 @@ void jl_init_types(void)
     //jl_tupleset(jl_datatype_type->types, 10, jl_int32_type);
     jl_tupleset(jl_function_type->types, 0, pointer_void);
     jl_tupleset(jl_tvar_type->types, 3, (jl_value_t*)jl_bool_type);
+    jl_function_any_type =
+        (jl_value_t*)jl_apply_type((jl_value_t*)jl_function_type, jl_tuple2(jl_tuple_type, jl_any_type));
+    jl_bottom_func = jl_new_closure(jl_f_no_function, (jl_value_t*)JL_NULL, NULL, NULL, NULL);
 
     jl_compute_field_offsets(jl_datatype_type);
     jl_compute_field_offsets(jl_typename_type);
@@ -3376,6 +3379,7 @@ void jl_init_types(void)
     meta_sym = jl_symbol("meta");
     arrow_sym = jl_symbol("->");
     ldots_sym = jl_symbol("...");
+    typeassert_sym = jl_symbol("typeassert");
 }
 
 #ifdef __cplusplus

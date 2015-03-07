@@ -405,8 +405,8 @@ function deserialize(s, ::Type{Function})
     end
     env = deserialize(s)
     linfo = deserialize(s)
-    ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any),
-          C_NULL, env, linfo)::Function
+    ccall(:jl_new_closure, Any, (Ptr{Void}, Any, Any, Any, Any),
+          C_NULL, env, linfo, C_NULL, C_NULL)::Function
 end
 
 function deserialize(s, ::Type{LambdaStaticData})

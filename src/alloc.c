@@ -19,6 +19,8 @@ jl_tvar_t     *jl_typetype_tvar;
 jl_datatype_t *jl_typetype_type;
 jl_value_t    *jl_ANY_flag;
 jl_datatype_t *jl_function_type;
+jl_typename_t *jl_function_typename;
+jl_value_t *jl_function_any_type=NULL;
 jl_datatype_t *jl_box_type;
 jl_value_t *jl_box_any_type;
 jl_typename_t *jl_box_typename;
@@ -96,6 +98,7 @@ jl_sym_t *fastmath_sym;
 jl_sym_t *simdloop_sym; jl_sym_t *meta_sym;
 jl_sym_t *arrow_sym; jl_sym_t *ldots_sym;
 jl_sym_t *inert_sym;
+jl_sym_t *typeassert_sym;
 
 typedef struct {
     int64_t a;
@@ -430,13 +433,40 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
 }
 
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
-                                        jl_lambda_info_t *linfo)
+                                        jl_lambda_info_t *linfo,
+                                        jl_value_t *argsig, jl_value_t *retsig)
 {
-    jl_function_t *f = (jl_function_t*)alloc_4w();
-    f->type = (jl_value_t*)jl_function_type;
+    jl_function_t *f = (jl_function_t*)allocobj(5*sizeof(void*));
     f->fptr = (fptr!=NULL ? fptr : linfo->fptr);
     f->env = env;
     f->linfo = linfo;
+    f->fptrSpec = NULL;
+    f->type = (jl_value_t*)jl_function_any_type;
+    if (argsig == NULL || retsig == NULL) {
+    } else {
+        jl_tuple_t *sp = NULL;
+        JL_GC_PUSH2(&f, &sp);
+        sp = jl_tuple2(argsig, retsig);
+        f->type = jl_apply_type((jl_value_t*)jl_function_type, sp);
+        gc_wb(f, f->type);
+        // the following doesn't work yet
+        if (f->linfo->specTypes != NULL) {
+            assert(jl_egal(f->linfo->specTypes, argsig));
+        }
+        else {
+            f->linfo->specTypes = argsig;
+            gc_wb(f->linfo, argsig);
+        }
+        if (jl_is_leaf_type(argsig) && !linfo->inInference && !linfo->inCompile) {
+            if (!f->linfo->inferred) jl_type_infer(f->linfo, argsig, f->linfo);
+            f->fptrSpec = jl_function_ptr(f, retsig, argsig);
+        }
+        JL_GC_POP();
+        /*if (!f->fptrSpec) {
+            f->type = jl_function_any_type;
+            f->linfo = linfo;
+        }*/
+    }
     return f;
 }
 

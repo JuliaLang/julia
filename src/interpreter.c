@@ -103,6 +103,26 @@ static void check_can_assign_type(jl_binding_t *b)
         jl_errorf("invalid redefinition of constant %s", b->name->name);
 }
 
+static jl_value_t *eval_lambda(jl_lambda_info_t* li, jl_value_t **locals, size_t nl, int typed, int ngensym)
+{
+    jl_value_t *ast = li->ast, *argsig=NULL, *retsig = NULL;
+    JL_GC_PUSH3(&ast, &argsig, &retsig);
+    if (typed) {
+        if (!jl_is_expr(li->ast)) ast = jl_uncompress_ast(li, li->ast);
+        argsig = eval((jl_value_t*)jl_lam_argtypes((jl_expr_t*)ast), locals, nl, ngensym);
+        ast = (jl_value_t*)jl_lam_retsigty((jl_expr_t*)ast);
+        retsig = ast ? eval(ast, locals, nl, ngensym) : (jl_value_t*)jl_any_type;
+    }
+    if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
+        li->ast = jl_compress_ast(li, li->ast);
+        gc_wb(li, li->ast);
+    }
+    jl_value_t *clos = (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li,
+                                                   argsig, retsig);
+    JL_GC_POP();
+    return clos;
+}
+
 static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ngensym)
 {
     if (jl_is_symbol(e)) {
@@ -149,12 +169,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
             return jl_f_get_field(NULL, gfargs, 2);
         }
         if (jl_is_lambda_info(e)) {
-            jl_lambda_info_t *li = (jl_lambda_info_t*)e;
-            if (jl_boot_file_loaded && li->ast && jl_is_expr(li->ast)) {
-                li->ast = jl_compress_ast(li, li->ast);
-                gc_wb(li, li->ast);
-            }
-            return (jl_value_t*)jl_new_closure(NULL, (jl_value_t*)jl_null, li);
+            return eval_lambda((jl_lambda_info_t*)e, locals, nl, 1, ngensym);
         }
         if (jl_is_linenode(e)) {
             jl_lineno = jl_linenode_line(e);
@@ -300,8 +315,10 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         atypes = eval(args[1], locals, nl, ngensym);
         if (jl_is_lambda_info(args[2])) {
             jl_check_static_parameter_conflicts((jl_lambda_info_t*)args[2], (jl_tuple_t*)jl_t1(atypes), fname);
+            meth = eval_lambda((jl_lambda_info_t*)args[2], locals, nl, 0, ngensym);
+        } else {
+            meth = eval(args[2], locals, nl, ngensym);
         }
-        meth = eval(args[2], locals, nl, ngensym);
         jl_method_def(fname, bp, bp_owner, b, (jl_tuple_t*)atypes, (jl_function_t*)meth, args[3], NULL, kw);
         JL_GC_POP();
         return *bp;

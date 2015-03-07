@@ -924,6 +924,15 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
         # TODO: call() case
         return Any
     end
+    # TODO investigate why this makes bootstrap fail. probably a simple mistake.
+#=    if isa(f,Function)
+        ft = typeof(f)
+        if isleaftype(ft)
+            argtt = tuple(argtypes...)
+            argtt <: ft.parameters[1] || return Bottom
+            return ft.parameters[2]
+        end
+    end=#
     if !isa(f,Function) && !isa(f,IntrinsicFunction) && _iisdefined(:call)
         call_func = _ieval(:call)
         if isa(call_func,Function)
@@ -953,6 +962,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     end
     called = e.args[1]
     func = isconstantfunc(called, sv)
+#    _print(("ABS E CALL ", e, "\n"))
     if is(func,false)
         if isa(called, LambdaStaticData)
             # called lambda expression (let)
@@ -960,7 +970,14 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
                                   true)
             return result
         end
+
         ft = abstract_eval(called, vtypes, sv)
+        if ft <: Function && isleaftype(ft)
+            argtt = tuple(argtypes...)
+            argtt <: ft.parameters[1] || return Bottom
+            return ft.parameters[2]
+        end
+
         if !(Function <: ft) && _iisdefined(:call)
             call_func = _ieval(:call)
             if isa(call_func,Function)
@@ -972,6 +989,24 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     #print("call ", e.args[1], argtypes, " ")
     f = _ieval(func)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
+end
+
+function abstract_eval_lambda(e::ANY, vtypes, sv::StaticVarInfo)
+    tt = abstract_eval(ccall(:jl_lam_argtypes, Any, (Any,), e), vtypes, sv)
+    if isa(tt, Tuple)
+        aty = map(t -> isType(t) ? t.parameters[1] : Any, tt)
+    else
+        aty = Tuple
+    end
+    rtptr = ccall(:jl_lam_retsigty, Ptr{Void}, (Any,), e)
+    if rtptr == C_NULL
+        rt = Any
+    else
+        rt = abstract_eval(Intrinsics.pointertoref(unbox(Ptr{Void},rtptr)),
+                           vtypes, sv)
+        rt = isType(rt) ? rt.parameters[1] : Any
+    end
+    Function{aty, rt}
 end
 
 function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
@@ -986,7 +1021,9 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     elseif isa(e,GenSym)
         return abstract_eval_gensym(e::GenSym, sv)
     elseif isa(e,LambdaStaticData)
-        return Function
+        #isa(e.ast, Expr) ||
+#        return Function
+        return abstract_eval_lambda(e.ast, vtypes, sv)
     elseif isa(e,GetfieldNode)
         return abstract_eval_global(e.value::Module, e.name)
     end

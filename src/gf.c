@@ -307,7 +307,7 @@ jl_function_t *jl_instantiate_method(jl_function_t *f, jl_tuple_t *sp)
 {
     if (f->linfo == NULL)
         return f;
-    jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL);
+    jl_function_t *nf = jl_new_closure(f->fptr, f->env, NULL, NULL, NULL);
     JL_GC_PUSH1(&nf);
     nf->linfo = jl_add_static_parameters(f->linfo, sp);
     gc_wb(nf, nf->linfo);
@@ -327,7 +327,7 @@ static jl_function_t *with_appended_env(jl_function_t *meth, jl_tuple_t *sparams
         jl_tupleset(temp, i, jl_tupleref(sparams,i*2+1));
     }
     temp = (jl_value_t*)jl_tuple_append((jl_tuple_t*)meth->env, (jl_tuple_t*)temp);
-    meth = jl_new_closure(meth->fptr, temp, meth->linfo);
+    meth = jl_new_closure(meth->fptr, temp, meth->linfo, NULL, NULL);
     JL_GC_POP();
     return meth;
 }
@@ -335,7 +335,7 @@ static jl_function_t *with_appended_env(jl_function_t *meth, jl_tuple_t *sparams
 // make a new method that calls the generated code from the given linfo
 jl_function_t *jl_reinstantiate_method(jl_function_t *f, jl_lambda_info_t *li)
 {
-    return jl_new_closure(NULL, f->env, li);
+    return jl_new_closure(NULL, f->env, li, NULL, NULL);
 }
 
 static
@@ -859,7 +859,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             if (method->env == (jl_value_t*)jl_null)
                 newmeth = unspec;
             else
-                newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo);
+                newmeth = jl_new_closure(unspec->fptr, method->env, unspec->linfo, NULL, NULL);
 
             if (sparams != jl_null) {
                 newmeth = with_appended_env(newmeth, sparams);
@@ -1612,7 +1612,7 @@ static void _compile_all(jl_module_t *m, htable_t *h)
             jl_value_t *el = jl_cellref(m->constant_table,i);
             if (jl_is_lambda_info(el)) {
                 jl_lambda_info_t *li = (jl_lambda_info_t*)el;
-                jl_function_t *func = jl_new_closure(li->fptr, (jl_value_t*)jl_null, li);
+                jl_function_t *func = jl_new_closure(li->fptr, (jl_value_t*)jl_null, li, NULL, NULL);
                 li->unspecialized = func;
                 gc_wb(li, func);
                 precompile_unspecialized(func, NULL, jl_null);
@@ -1836,7 +1836,7 @@ void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name)
 
 jl_function_t *jl_new_generic_function(jl_sym_t *name)
 {
-    jl_function_t *f = jl_new_closure(jl_apply_generic, NULL, NULL);
+    jl_function_t *f = jl_new_closure(jl_apply_generic, NULL, NULL, NULL, NULL);
     JL_GC_PUSH1(&f);
     jl_initialize_generic_function(f, name);
     JL_GC_POP();
@@ -1845,7 +1845,7 @@ jl_function_t *jl_new_generic_function(jl_sym_t *name)
 
 DLLEXPORT jl_function_t *jl_new_gf_internal(jl_value_t *env)
 {
-    return jl_new_closure(jl_apply_generic, env, NULL);
+    return jl_new_closure(jl_apply_generic, env, NULL, NULL, NULL);
 }
 
 void jl_add_method(jl_function_t *gf, jl_tuple_t *types, jl_function_t *meth,
