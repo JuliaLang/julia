@@ -81,7 +81,7 @@ end
 function installed_version(pkg::AbstractString, avail::Dict=available(pkg))
     ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
-    vers = [keys(filter((ver,info)->info.sha1==head, avail))...]
+    vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
     cache = Cache.path(pkg)
     cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)

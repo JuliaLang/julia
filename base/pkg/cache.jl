@@ -26,7 +26,7 @@ function mkcachedir()
 end
 
 
-function prefetch{S<:AbstractString}(pkg::AbstractString, url::AbstractString, sha1s::Vector{S})
+function prefetch(pkg::AbstractString, url::AbstractString, sha1s::Vector)
     isdir(".cache") || mkcachedir()
     cache = path(pkg)
     if !isdir(cache)
