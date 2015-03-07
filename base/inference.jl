@@ -112,7 +112,20 @@ t_func[fpiseq] = (2, 2, cmp_tfunc)
 t_func[fpislt] = (2, 2, cmp_tfunc)
 t_func[nan_dom_err] = (2, 2, (a, b)->a)
 t_func[eval(Core.Intrinsics,:ccall)] =
-    (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] : Any))
+    (3, Inf, function(fptr, rt, at, a...)
+        if !isType(rt)
+            return Any
+        end
+        t = rt.parameters[1]
+        if isa(t,DataType) && is((t::DataType).name,Ref.name)
+            t = t.parameters[1]
+            if is(t,Any)
+                return Union() # a return type of Box{Any} is invalid
+            end
+            return t
+        end
+        return t
+    end)
 t_func[eval(Core.Intrinsics,:llvmcall)] =
     (3, Inf, (fptr, rt, at, a...)->(isType(rt) ? rt.parameters[1] :
                                     isa(rt,Tuple) ? map(x->x.parameters[1],rt) : Any))
@@ -2119,8 +2132,7 @@ function is_pure_builtin(f)
              f === Intrinsics.pointerset || # this one is never effect-free
              f === Intrinsics.ccall ||      # this one is never effect-free
              f === Intrinsics.llvmcall ||   # this one is never effect-free
-             f === Intrinsics.jl_alloca ||  # this one is volatile, TODO: possibly also effect-free?
-             f === Intrinsics.pointertoref) # this one is volatile
+             f === Intrinsics.jl_alloca)
             return true
         end
     end
@@ -2364,7 +2376,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
     if incompletematch
         cost *= 4
     end
-    if is(f, next) || is(f, done)
+    if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
         cost /= 4
     end
     if !inline_worthy(body, cost)

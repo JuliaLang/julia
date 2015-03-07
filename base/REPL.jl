@@ -259,7 +259,7 @@ end
 
 immutable LatexCompletions <: CompletionProvider; end
 
-bytestring_beforecursor(buf::IOBuffer) = bytestring(pointer(buf.data), buf.ptr-1)
+bytestring_beforecursor(buf::IOBuffer) = bytestring(buf.data[1:buf.ptr-1])
 
 function complete_line(c::REPLCompletionProvider, s)
     partial = bytestring_beforecursor(s.input_buffer)

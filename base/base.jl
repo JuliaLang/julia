@@ -52,16 +52,15 @@ convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
+# conversions used by ccall
+ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
+ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
+ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
-ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
-ptr_arg_convert(::Type{Ptr{Void}}, x) = x
-
-# conversion used by ccall
-cconvert(T, x) = convert(T, x)
-# use the code in ccall.cpp to safely allocate temporary pointer arrays
-cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
-# convert strings to ByteString to pass as pointers
-cconvert{P<:Union(Int8,UInt8)}(::Type{Ptr{P}}, s::AbstractString) = bytestring(s)
+cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
+cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
+unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
 reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
