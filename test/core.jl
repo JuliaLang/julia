@@ -2229,3 +2229,9 @@ f7221{T<:Number}(::T) = 1
 f7221(::BitArray) = 2
 f7221(::AbstractVecOrMat) = 3
 @test f7221(trues(1)) == 2
+
+# issue #9232
+arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
+result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
+# this gave a "type too large", but not reliably
+@test length(code_typed(result_type9232, (Type{TypeVar(:_, Union(Float32,Float64))}, Type{TypeVar(:T2, Number)}))) == 1
