@@ -184,7 +184,8 @@ end
 try_include(path::AbstractString) = isfile(path) && include(path)
 
 # initialize the local proc network address / port
-function init_bind_addr(opts::JLOptions)
+function init_bind_addr()
+    opts = JLOptions()
     if opts.bindto != C_NULL
         bind_to = split(bytestring(opts.bindto), ":")
         bind_addr = string(parseip(bind_to[1]))
@@ -247,7 +248,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                 exit(0)
             end
             # startup worker
-            if bool(opts.worker)
+            if Bool(opts.worker)
                 start_worker() # does not return
             end
             # load file immediately on all processors
@@ -378,11 +379,11 @@ function early_init()
     end
 end
 
-function init_parallel(opts)
+function init_parallel()
     start_gc_msgs_task()
     atexit(terminate_all_workers)
 
-    init_bind_addr(opts)
+    init_bind_addr()
 
     # start in "head node" mode, if worker, will override later.
     global PGRP
@@ -398,7 +399,6 @@ import .REPL
 function _start()
     opts = JLOptions()
     try
-        init_parallel(opts)
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
 
         local term
