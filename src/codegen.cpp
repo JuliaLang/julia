@@ -2938,6 +2938,7 @@ static void emit_assignment(jl_value_t *l, jl_value_t *r, jl_codectx_t *ctx)
 {
     if (jl_is_gensym(l)) {
         ssize_t idx = ((jl_gensym_t*)l)->id;
+        assert(idx >= 0);
         assert(!ctx->gensym_assigned.at(idx));
         Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the memvalue (if isbits)
         jl_value_t *gensym_types = jl_lam_gensyms(ctx->ast);
@@ -3024,6 +3025,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
     if (jl_is_gensym(expr)) {
         if (!valuepos) return NULL;
         ssize_t idx = ((jl_gensym_t*)expr)->id;
+        assert(idx >= 0);
         assert(ctx->gensym_assigned.at(idx));
         Value *bp = ctx->gensym_SAvalues.at(idx); // at this point, gensym_SAvalues[idx] actually contains the SAvalue
         if (bp == NULL || type_is_ghost(bp->getType())) {
@@ -3809,6 +3811,7 @@ static Function *emit_function(jl_lambda_info_t *lam, bool cstyle)
                 }
             }
             if (jl_is_gensym(lhs)) {
+                assert(((jl_gensym_t*)lhs)->id >= 0);
                 gensym_initExpr.at(((jl_gensym_t*)lhs)->id) = jl_exprarg(st,1);
             }
         }

@@ -760,7 +760,7 @@ DLLEXPORT jl_value_t *jl_box_uint64(uint64_t x);
 DLLEXPORT jl_value_t *jl_box_float32(float x);
 DLLEXPORT jl_value_t *jl_box_float64(double x);
 DLLEXPORT jl_value_t *jl_box_voidpointer(void *x);
-DLLEXPORT jl_value_t *jl_box_gensym(ssize_t x);
+DLLEXPORT jl_value_t *jl_box_gensym(size_t x);
 DLLEXPORT jl_value_t *jl_box8 (jl_datatype_t *t, int8_t  x);
 DLLEXPORT jl_value_t *jl_box16(jl_datatype_t *t, int16_t x);
 DLLEXPORT jl_value_t *jl_box32(jl_datatype_t *t, int32_t x);

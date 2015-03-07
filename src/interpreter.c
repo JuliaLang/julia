@@ -127,8 +127,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     }
     if (jl_is_gensym(e)) {
         ssize_t genid = ((jl_gensym_t*)e)->id;
-        if (genid > ngensym || genid < 0)
-            return NULL;
+        if (genid >= ngensym || genid < 0)
+            jl_error("access to invalid GenSym location");
         else
             return locals[nl*2 + genid];
     }
@@ -221,8 +221,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_value_t *rhs = eval(args[1], locals, nl, ngensym);
         if (jl_is_gensym(sym)) {
             ssize_t genid = ((jl_gensym_t*)sym)->id;
-            if (genid > ngensym || genid < 0)
-                jl_errorf("illegal attempt to assign to non-existent GenSym location");
+            if (genid >= ngensym || genid < 0)
+                jl_error("assignment to invalid GenSym location");
             locals[nl*2 + genid] = rhs;
             gc_wb(jl_current_module, rhs); // not sure about jl_current_module
             return rhs;
