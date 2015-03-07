@@ -903,7 +903,6 @@ export
     searchindex,
     show,
     showall,
-    showarray,
     showcompact,
     showerror,
     split,
