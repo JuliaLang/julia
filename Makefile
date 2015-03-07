@@ -78,7 +78,7 @@ julia-ui-%: julia-src-%
 julia-sysimg-% : julia-ui-% julia-base
 	@$(MAKE) $(QUIET_MAKE) LD_LIBRARY_PATH=$(build_libdir):$(LD_LIBRARY_PATH) JULIA_EXECUTABLE="$(JULIA_EXECUTABLE_$*)" $(build_private_libdir)/sys.$(SHLIB_EXT)
 
-julia-debug julia-release : julia-% : julia-sysimg-% julia-symlink-%
+julia-debug julia-release : julia-% : julia-symlink-% julia-sysimg-%
 
 debug release : % : julia-%
 
