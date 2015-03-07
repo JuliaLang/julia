@@ -239,7 +239,7 @@ General I/O
 
 .. function:: truncate(file,n)
 
-   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\0'
+   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\\0'
    if the file or buffer is grown
 
 .. function:: skipchars(stream, predicate; linecomment::Char)
@@ -249,7 +249,7 @@ General I/O
 .. function:: countlines(io,[eol::Char])
 
    Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first
-   argument. EOL markers other than '\n' are supported by passing them as the second argument.
+   argument. EOL markers other than '\\n' are supported by passing them as the second argument.
 
 .. function:: PipeBuffer()
 
@@ -400,7 +400,7 @@ Text I/O
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``\n``. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
-.. function:: writedlm(f, A, delim='\t')
+.. function:: writedlm(f, A, delim='\\t')
 
    Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``).
 

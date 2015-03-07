@@ -1060,7 +1060,9 @@ Any[
 
 ("Base","spzeros","spzeros(m, n)
 
-   Create an empty sparse matrix of size \"m x n\".
+   Create a sparse matrix of size \"m x n\". This sparse matrix will
+   not contain any nonzero values. No storage will be allocated for
+   nonzero values during construction.
 
 "),
 
@@ -2113,14 +2115,14 @@ Any[
 
 "),
 
-("Base","Base","Base.set_process_title(title::AbstractString)
+("Base","Sys","Sys.set_process_title(title::AbstractString)
 
    Set the process title. No-op on some operating systems. (not
    exported)
 
 "),
 
-("Base","Base","Base.get_process_title()
+("Base","Sys","Sys.get_process_title()
 
    Get the process title. On some systems, will always return empty
    string. (not exported)
@@ -2594,13 +2596,15 @@ Any[
 ("Base","gc_disable","gc_disable()
 
    Disable garbage collection. This should be used only with extreme
-   caution, as it can cause memory use to grow without bound.
+   caution, as it can cause memory use to grow without bound. Returns
+   previous GC state.
 
 "),
 
 ("Base","gc_enable","gc_enable()
 
    Re-enable garbage collection after calling \"gc_disable()\".
+   Returns previous GC state.
 
 "),
 
@@ -2632,10 +2636,12 @@ Any[
 
 "),
 
-("Base","code_typed","code_typed(f, types)
+("Base","code_typed","code_typed(f, types; optimize=true)
 
    Returns an array of lowered and type-inferred ASTs for the methods
-   matching the given generic function and type signature.
+   matching the given generic function and type signature. The keyword
+   argument \"optimize\" controls whether additional optimizations,
+   such as inlining, are also applied.
 
 "),
 
@@ -4078,7 +4084,7 @@ Any[
 
 ("Base","push!","push!(collection, items...) -> collection
 
-   Insert zero or more \"items\" at the end of \"collection\".
+   Insert one or more \"items\" at the end of \"collection\".
 
       julia> push!([1, 2, 3], 4, 5, 6)
       6-element Array{Int64,1}:
@@ -4123,7 +4129,7 @@ Any[
 
 ("Base","unshift!","unshift!(collection, items...) -> collection
 
-   Insert zero or more \"items\" at the beginning of \"collection\".
+   Insert one or more \"items\" at the beginning of \"collection\".
 
       julia> unshift!([1, 2, 3, 4], 5, 6)
       6-element Array{Int64,1}:
@@ -5827,7 +5833,7 @@ Millisecond(v)
 ("Base","truncate","truncate(file, n)
 
    Resize the file or buffer given by the first argument to exactly
-   *n* bytes, filling previously unallocated space with '0' if the
+   *n* bytes, filling previously unallocated space with '\\0' if the
    file or buffer is grown
 
 "),
@@ -5846,8 +5852,8 @@ Millisecond(v)
 
    Read io until the end of the stream/file and count the number of
    non-empty lines. To specify a file pass the filename as the first
-   argument. EOL markers other than 'n' are supported by passing them
-   as the second argument.
+   argument. EOL markers other than '\\n' are supported by passing
+   them as the second argument.
 
 "),
 
@@ -6104,7 +6110,7 @@ Millisecond(v)
 
 "),
 
-("Base","writedlm","writedlm(f, A, delim='t')
+("Base","writedlm","writedlm(f, A, delim='\\t')
 
    Write \"A\" (a vector, matrix or an iterable collection of iterable
    rows) as text to \"f\" (either a filename string or an \"IO\"
@@ -11475,7 +11481,8 @@ popdisplay(d::Display)
      or failure.
 
    * \"Task\": Wait for a \"Task\" to finish, returning its result
-     value.
+     value. If the task fails with an exception, the exception is
+     propagated (re-thrown in the task that called \"wait\").
 
    * \"RawFD\": Wait for changes on a file descriptor (see *poll_fd*
      for keyword arguments and return code)
@@ -11625,89 +11632,6 @@ popdisplay(d::Display)
       @sync @parallel for var = range
           body
       end
-
-"),
-
-("Base","DArray","DArray(init, dims[, procs, dist])
-
-   Construct a distributed array. The parameter \"init\" is a function
-   that accepts a tuple of index ranges. This function should allocate
-   a local chunk of the distributed array and initialize it for the
-   specified indices. \"dims\" is the overall size of the distributed
-   array. \"procs\" optionally specifies a vector of process IDs to
-   use. If unspecified, the array is distributed over all worker
-   processes only. Typically, when running in distributed mode, i.e.,
-   \"nprocs() > 1\", this would mean that no chunk of the distributed
-   array exists on the process hosting the interactive julia prompt.
-   \"dist\" is an integer vector specifying how many chunks the
-   distributed array should be divided into in each dimension.
-
-   For example, the \"dfill\" function that creates a distributed
-   array and fills it with a value \"v\" is implemented as:
-
-   \"dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)\"
-
-"),
-
-("Base","dzeros","dzeros(dims, ...)
-
-   Construct a distributed array of zeros. Trailing arguments are the
-   same as those accepted by \"DArray()\".
-
-"),
-
-("Base","dones","dones(dims, ...)
-
-   Construct a distributed array of ones. Trailing arguments are the
-   same as those accepted by \"DArray()\".
-
-"),
-
-("Base","dfill","dfill(x, dims, ...)
-
-   Construct a distributed array filled with value \"x\". Trailing
-   arguments are the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","drand","drand(dims, ...)
-
-   Construct a distributed uniform random array. Trailing arguments
-   are the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","drandn","drandn(dims, ...)
-
-   Construct a distributed normal random array. Trailing arguments are
-   the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","distribute","distribute(a)
-
-   Convert a local array to distributed.
-
-"),
-
-("Base","localpart","localpart(d)
-
-   Get the local piece of a distributed array. Returns an empty array
-   if no local part exists on the calling process.
-
-"),
-
-("Base","localindexes","localindexes(d)
-
-   A tuple describing the indexes owned by the local process. Returns
-   a tuple with empty ranges if no local part exists on the calling
-   process.
-
-"),
-
-("Base","procs","procs(d)
-
-   Get the vector of processes storing pieces of \"d\".
 
 "),
 
