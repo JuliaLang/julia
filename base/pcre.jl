@@ -57,7 +57,7 @@ function info{T}(
     regex::Ptr{Void},
     extra::Ptr{Void}, what::Integer, ::Type{T}
 )
-    buf = Array(UInt8,sizeof(T))
+    buf = zeros(UInt8,sizeof(T))
     ret = ccall((:pcre_fullinfo, :libpcre), Int32,
                 (Ptr{Void}, Ptr{Void}, Int32, Ptr{UInt8}),
                 regex, extra, what, buf)
@@ -71,7 +71,7 @@ function info{T}(
 end
 
 function config{T}(what::Integer, ::Type{T})
-    buf = Array(UInt8, sizeof(T))
+    buf = zeros(UInt8, sizeof(T))
     ret = ccall((:pcre_config, :libpcre), Int32,
                 (Int32, Ptr{UInt8}),
                 what, buf)
@@ -84,7 +84,8 @@ end
 
 function compile(pattern::AbstractString, options::Integer)
     errstr = Array(Ptr{UInt8},1)
-    erroff = Array(Int32,1)
+    errstr[1] = C_NULL
+    erroff = zeros(Int32,1)
     re_ptr = ccall((:pcre_compile, :libpcre), Ptr{Void},
                     (Ptr{UInt8}, Int32, Ptr{Ptr{UInt8}}, Ptr{Int32}, Ptr{UInt8}),
                     pattern, options, errstr, erroff, C_NULL)
@@ -100,6 +101,7 @@ end
 function study(regex::Ptr{Void}, options::Integer)
     # NOTE: options should always be zero in current PCRE
     errstr = Array(Ptr{UInt8},1)
+    errstr[1] = C_NULL
     extra = ccall((:pcre_study, :libpcre), Ptr{Void},
                   (Ptr{Void}, Int32, Ptr{Ptr{UInt8}}),
                   regex, options, errstr)

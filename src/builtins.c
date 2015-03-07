@@ -730,9 +730,9 @@ DLLEXPORT void *jl_array_ptr(jl_array_t *a)
 {
     return a->data;
 }
-DLLEXPORT void *jl_value_ptr(jl_value_t *a)
+DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 {
-    return (void*)a;
+    return a;
 }
 
 // printing -------------------------------------------------------------------
@@ -1156,6 +1156,7 @@ void jl_init_primitives(void)
     add_builtin("IntrinsicFunction", (jl_value_t*)jl_intrinsic_type);
     add_builtin("Function", (jl_value_t*)jl_function_type);
     add_builtin("LambdaStaticData", (jl_value_t*)jl_lambda_info_type);
+    add_builtin("Ref", (jl_value_t*)jl_ref_type);
     add_builtin("Ptr", (jl_value_t*)jl_pointer_type);
     add_builtin("Box", (jl_value_t*)jl_box_type);
     add_builtin("Task", (jl_value_t*)jl_task_type);
@@ -1200,13 +1201,15 @@ static size_t jl_show_tuple(JL_STREAM *out, jl_tuple_t *t, char *opn, char *cls,
     return n;
 }
 
-#define MAX_DEPTH 5
+#define MAX_DEPTH 25
 
 size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
 {
     // mimic jl_show, but never calling a julia method
     size_t n = 0;
-    if(depth > MAX_DEPTH) return 0; // cheap way of bailing out of cycles
+    if(depth > MAX_DEPTH) { // cheap way of bailing out of cycles
+        return jl_printf(out, "•");
+    }
     depth++;
     if (v == NULL) {
         n += jl_printf(out, "#<null>");

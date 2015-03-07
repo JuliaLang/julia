@@ -324,7 +324,7 @@ end
 function uvfinalize(uv)
     close(uv)
     disassociate_julia_struct(uv)
-    uv.handle = 0
+    uv.handle = C_NULL
 end
 
 isreadable(io::TCPSocket) = true
@@ -395,11 +395,11 @@ function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket)
         close(uv)
     end
     disassociate_julia_struct(uv)
-    uv.handle = 0
+    uv.handle = C_NULL
 end
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = 0
+    sock.handle = C_NULL
     sock.status = StatusClosed
     notify(sock.closenotify)
     notify(sock.sendnotify)
@@ -593,7 +593,8 @@ const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32
 
 function getipaddr()
     addr = Array(Ptr{UInt8},1)
-    count = Array(Int32,1)
+    addr[1] = C_NULL
+    count = zeros(Int32,1)
     lo_present = false
     err = ccall(:jl_uv_interface_addresses,Int32,(Ptr{Ptr{UInt8}},Ptr{Int32}),addr,count)
     addr, count = addr[1],count[1]
