@@ -49,8 +49,8 @@ immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
     roots::R # should be either ::Void or ::Any
     RefArray(x,i,roots=nothing) = (@assert(eltype(A) == T); new(x,i,roots))
 end
-RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, 1, roots)
-RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, 1, nothing)
+RefArray{T}(x::AbstractArray{T},i::Int,roots::Any) = RefArray{T,typeof(x),Any}(x, i, roots)
+RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeof(x),Void}(x, i, nothing)
 Base.convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
