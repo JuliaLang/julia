@@ -16,6 +16,12 @@ template<class T>
 static T* addComdat(T *G) { return G; }
 #endif
 
+static Value *tbaa_decorate(MDNode* md, Instruction* load_or_store)
+{
+    load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
+    return load_or_store;
+}
+
 // Fixing up references to other modules for MCJIT
 static GlobalVariable *prepare_global(GlobalVariable *G)
 {
@@ -413,6 +419,13 @@ static Value *literal_pointer_val(jl_value_t *p)
     // also, try to give it a nice name for gdb, for easy identification
     if (p == NULL)
         return ConstantPointerNull::get((PointerType*)jl_pvalue_llvmt);
+    // some common constant values
+    if (p == jl_false)
+        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlfalse_var)));
+    if (p == jl_true)
+        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jltrue_var)));
+    if (p == (jl_value_t*)jl_null)
+        return tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlnull_var)));
     if (!imaging_mode)
         return literal_static_pointer_val(p, jl_pvalue_llvmt);
     if (jl_is_datatype(p)) {
@@ -762,11 +775,6 @@ static Value *mark_julia_type(Value *v, jl_value_t *jt)
 #endif
     ((Instruction*)v)->setMetadata("julia_type", mdn);
     return v;
-}
-
-static Value *tbaa_decorate(MDNode* md, Instruction* load_or_store) {
-    load_or_store->setMetadata( llvm::LLVMContext::MD_tbaa, md );
-    return load_or_store;
 }
 
 // --- generating various error checks ---
