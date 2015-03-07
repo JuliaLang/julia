@@ -179,7 +179,9 @@ static MDBuilder *mbuilder;
 static std::map<int, std::string> argNumberStrings;
 static FunctionPassManager *FPM;
 
-#ifdef LLVM35
+#ifdef LLVM37
+// No DataLayout pass needed anymore.
+#elif LLVM35
 static DataLayoutPass *jl_data_layout;
 #elif defined(LLVM32)
 static DataLayout *jl_data_layout;
@@ -457,7 +459,9 @@ void jl_dump_objfile(char *fname, int jit_model)
 #else
     PM.add(new TargetLibraryInfoWrapperPass(Triple(jl_TargetMachine->getTargetTriple())));
 #endif
-#ifdef LLVM36
+#ifdef LLVM37
+// No DataLayout pass needed anymore.
+#elif LLVM36
     PM.add(new DataLayoutPass());
 #elif LLVM35
     PM.add(new DataLayoutPass(*jl_ExecutionEngine->getDataLayout()));
@@ -656,7 +660,10 @@ static void jl_setup_module(Module *m, bool add)
     m->addModuleFlag(llvm::Module::Error, "Debug Info Version",
         llvm::DEBUG_METADATA_VERSION);
 #endif
-#ifdef LLVM36
+#ifdef LLVM37
+    if (jl_ExecutionEngine)
+        m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+#elif LLVM36
     if (jl_ExecutionEngine)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
@@ -5185,7 +5192,9 @@ static void init_julia_llvm_env(Module *m)
     // set up optimization passes
     FPM = new FunctionPassManager(m);
 
-#ifdef LLVM36
+#ifdef LLVM37
+// No DataLayout pass needed anymore.
+#elif LLVM36
     jl_data_layout = new llvm::DataLayoutPass();
 #elif LLVM35
     jl_data_layout = new llvm::DataLayoutPass(*jl_ExecutionEngine->getDataLayout());
@@ -5194,7 +5203,10 @@ static void init_julia_llvm_env(Module *m)
 #else
     jl_data_layout = new TargetData(*jl_ExecutionEngine->getTargetData());
 #endif
+
+#ifndef LLVM37
     FPM->add(jl_data_layout);
+#endif
 
 #ifdef __has_feature
 #   if __has_feature(address_sanitizer)
@@ -5417,7 +5429,7 @@ extern "C" void jl_init_codegen(void)
     assert(jl_TargetMachine);
 #if defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
-#elif defined(LLVM35)
+#elif defined(LLVM35) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout());
 #else
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
@@ -5435,7 +5447,10 @@ extern "C" void jl_init_codegen(void)
     jl_ExecutionEngine->DisableLazyCompilation();
     mbuilder = new MDBuilder(getGlobalContext());
 
-#ifdef LLVM36
+#ifdef LLVM37
+    m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+#elif LLVM36
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
