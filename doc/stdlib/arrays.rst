@@ -710,7 +710,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: spzeros(m,n)
 
-   Create an empty sparse matrix of size ``m x n``.
+   Create a sparse matrix of size ``m x n``. This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
 
 .. function:: spones(S)
 
