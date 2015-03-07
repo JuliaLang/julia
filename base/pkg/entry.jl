@@ -82,7 +82,7 @@ available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
 function available(pkg::AbstractString)
     avail = Read.available(pkg)
     if !isempty(avail) || Read.isinstalled(pkg)
-        return sort!([keys(avail)...])
+        return sort!(collect(keys(avail)))
     end
     error("$pkg is not a package (not registered or installed)")
 end
@@ -106,7 +106,7 @@ function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    required = sort!([keys(reqs)...])
+    required = sort!(collect(keys(reqs)))
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
@@ -114,7 +114,7 @@ function status(io::IO; pkgname::AbstractString = "")
             showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
-    additional = sort!([keys(instd)...])
+    additional = sort!(collect(keys(instd)))
     if !isempty(additional)
         showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
@@ -203,7 +203,7 @@ function free(pkg::AbstractString)
     isempty(avail) && error("$pkg cannot be freed – not a registered package")
     Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
     info("Freeing $pkg")
-    vers = sort!([keys(avail)...], rev=true)
+    vers = sort!(collect(keys(avail)), rev=true)
     while true
         for ver in vers
             sha1 = avail[ver].sha1
@@ -252,7 +252,7 @@ function update(branch::AbstractString)
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    @sync for pkg in filter!(Read.isinstalled,[keys(avail)...])
+    @sync for pkg in filter!(Read.isinstalled,collect(keys(avail)))
         @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
@@ -279,7 +279,7 @@ function update(branch::AbstractString)
     info("Computing changes...")
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
     # Don't use instd here since it may have changed
-    updatehook(sort!([keys(installed())...]))
+    updatehook(sort!(collect(keys(installed()))))
 end
 
 function pull_request(dir::AbstractString, commit::AbstractString="", url::AbstractString="")
@@ -337,7 +337,7 @@ function publish(branch::AbstractString)
     isempty(tags) && info("No new package versions to publish")
     info("Validating METADATA")
     check_metadata(Set(keys(tags)))
-    @sync for pkg in sort!([keys(tags)...])
+    @sync for pkg in sort!(collect(keys(tags)))
         @async begin
             forced = ASCIIString[]
             unforced = ASCIIString[]
@@ -489,7 +489,7 @@ function register(pkg::AbstractString, url::AbstractString)
             open(io->println(io,url), path, "w")
             Git.run(`add $path`)
         end
-        vers = sort!([keys(versions)...])
+        vers = sort!(collect(keys(versions)))
         for ver in vers
             info("Tagging $pkg v$ver")
             write_tag_metadata(pkg,ver,versions[ver])
@@ -643,7 +643,7 @@ function build(pkgs::Vector)
      - build a single package by running its `deps/build.jl` script
     """)
 end
-build() = build(sort!([keys(installed())...]))
+build() = build(sort!(collect(keys(installed()))))
 
 function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
     for pkg in pkgs
