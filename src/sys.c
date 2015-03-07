@@ -544,6 +544,19 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
 #endif
 }
 
+DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
+{
+    if(field > jl_tuple_len(ty->names))
+        jl_error("This type does not have that many fields");
+    return ty->fields[field].offset;
+}
+
+DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
+{
+    return ty->alignment;
+}
+
+
 // Dynamic Library interrogation
 
 #ifdef __APPLE__

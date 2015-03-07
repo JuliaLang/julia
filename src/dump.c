@@ -662,7 +662,7 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->unspecialized);
         // save functionObject pointers
         write_int32(s, li->functionID);
-        write_int32(s, li->cFunctionID);
+        write_int32(s, li->specFunctionID);
     }
     else if (jl_typeis(v, jl_module_type)) {
         jl_serialize_module(s, (jl_module_t*)v);
@@ -1122,11 +1122,12 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->fptr = &jl_trampoline;
         li->functionObject = NULL;
         li->cFunctionObject = NULL;
+        li->specFunctionObject = NULL;
         li->inInference = 0;
         li->inCompile = 0;
         li->unspecialized = (jl_function_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
         li->functionID = 0;
-        li->cFunctionID = 0;
+        li->specFunctionID = 0;
         int32_t cfunc_llvm, func_llvm;
         func_llvm = read_int32(s);
         cfunc_llvm = read_int32(s);

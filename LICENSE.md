@@ -70,6 +70,7 @@ The following components of Julia's standard library have separate licenses:
 Julia builds the following libraries by default, but does not use them itself:
 
 - [RMATH](http://www.r-project.org/Licenses/)
+- [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE)
 
 
 Julia's build process uses the following external tools:
