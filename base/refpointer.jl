@@ -4,8 +4,7 @@ Base.eltype{T}(x::Type{Ref{T}}) = T
 Base.convert{T}(::Type{Ref{T}}, x::Ref{T}) = x
 
 # create Ref objects for general object conversion
-Base.cconvert_gcroot{T}(::Type{Ref{T}}, x) = convert(Ref{T}, x)
-Base.cconvert{T}(::Type{Ref{T}}, x) = cconvert(Ptr{T}, x)
+Base.unsafe_convert{T}(::Type{Ref{T}}, x) = unsafe_convert(Ptr{T}, x)
 
 ### Methods for a Ref object that can store a single value of any type
 
@@ -24,25 +23,25 @@ Base.call{T}(::Type{Ref{T}}) = RefValue{T}() # Ref{T}()
 Base.call{T}(::Type{Ref{T}}, x) = RefValue{T}(x) # Ref{T}(x)
 Base.convert{T}(::Type{Ref{T}}, x) = RefValue{T}(x)
 
-function Base.cconvert{T}(P::Type{Ptr{T}}, b::RefValue{T})
+function Base.unsafe_convert{T}(P::Type{Ptr{T}}, b::RefValue{T})
     if isbits(T)
         return convert(P, data_pointer_from_objref(b))
     else
         return convert(P, data_pointer_from_objref(b.x))
     end
 end
-function Base.cconvert(P::Type{Ptr{Any}}, b::RefValue{Any})
+function Base.unsafe_convert(P::Type{Ptr{Any}}, b::RefValue{Any})
     return convert(P, data_pointer_from_objref(b))
 end
-Base.cconvert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = Base.convert(Ptr{Void}, Base.cconvert(Ptr{T}, b))
+Base.unsafe_convert{T}(::Type{Ptr{Void}}, b::RefValue{T}) = Base.convert(Ptr{Void}, Base.unsafe_convert(Ptr{T}, b))
 
 ### Methods for a Ref object that is backed by an array at index i
 
 # note: the following type definitions don't mean any AbstractArray is convertible to
 # a data Ref. they just map the array element type to the pointer type for
 # convenience in cases that work.
-pointer{T}(x::AbstractArray{T}) = cconvert(Ptr{T}, x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = cconvert(Ptr{T},x) + (i-1)*elsize(x)
+pointer{T}(x::AbstractArray{T}) = unsafe_convert(Ptr{T}, x)
+pointer{T}(x::AbstractArray{T}, i::Integer) = unsafe_convert(Ptr{T},x) + (i-1)*elsize(x)
 
 immutable RefArray{T, A<:AbstractArray, R} <: Ref{T}
     x::A
@@ -55,17 +54,17 @@ RefArray{T}(x::AbstractArray{T},i::Int=1,roots::Void=nothing) = RefArray{T,typeo
 Base.convert{T}(::Type{Ref{T}}, x::AbstractArray{T}) = RefArray(x, 1)
 Ref(x::AbstractArray, i::Integer=1) = RefArray(x, i)
 
-function Base.cconvert{T}(P::Type{Ptr{T}}, b::RefArray{T})
+function Base.unsafe_convert{T}(P::Type{Ptr{T}}, b::RefArray{T})
     if isbits(T)
         convert(P, pointer(b.x, b.i))
     else
         convert(P, data_pointer_from_objref(b.x[b.i]))
     end
 end
-function Base.cconvert(P::Type{Ptr{Any}}, b::RefArray{Any})
+function Base.unsafe_convert(P::Type{Ptr{Any}}, b::RefArray{Any})
     return convert(P, pointer(b.x, b.i))
 end
-Base.cconvert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = Base.convert(Ptr{Void}, Base.cconvert(Ptr{T}, b))
+Base.unsafe_convert{T}(::Type{Ptr{Void}}, b::RefArray{T}) = Base.convert(Ptr{Void}, Base.unsafe_convert(Ptr{T}, b))
 
 ###
 

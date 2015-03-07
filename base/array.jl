@@ -30,16 +30,16 @@ function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
         ptrs = Array(P, length(a)+1)
         roots = Array(Any, length(a))
         for i = 1:length(a)
-            root = cconvert_gcroot(P, a[i])
-            ptrs[i] = cconvert(P, root)::P
+            root = cconvert(P, a[i])
+            ptrs[i] = unsafe_convert(P, root)::P
             roots[i] = root
         end
         ptrs[length(a)+1] = C_NULL
         return RefArray(ptrs,1,roots)
     end
 end
-cconvert_gcroot{P<:Ptr,T<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array{T}) = a
-cconvert_gcroot{P<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array) = Ref{P}(a)
+cconvert{P<:Ptr,T<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array{T}) = a
+cconvert{P<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array) = Ref{P}(a)
 
 size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)

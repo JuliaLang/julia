@@ -85,9 +85,8 @@ uvhandle(x::Ptr) = x
 uvtype(::Ptr) = UV_STREAM
 uvtype(::DevNullStream) = UV_STREAM
 
-# Not actually a pointer, but that's how we pass it through the C API
-# so it's fine
-uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd)
+# Not actually a pointer, but that's how we pass it through the C API so it's fine
+uvhandle(x::RawFD) = convert(Ptr{Void}, x.fd % UInt)
 uvtype(x::RawFD) = UV_RAW_FD
 
 typealias Redirectable Union(UVStream, FS.File, FileRedirect, DevNullStream, IOStream, RawFD)
@@ -220,7 +219,7 @@ end
 function uvfinalize(proc::Process)
     proc.handle != C_NULL && ccall(:jl_close_uv, Void, (Ptr{Void},), proc.handle)
     disassociate_julia_struct(proc)
-    proc.handle = 0
+    proc.handle = C_NULL
 end
 
 function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::Int32)
@@ -232,7 +231,7 @@ function _uv_hook_return_spawn(proc::Process, exit_status::Int64, termsignal::In
 end
 
 function _uv_hook_close(proc::Process)
-    proc.handle = 0
+    proc.handle = C_NULL
     if isa(proc.closecb, Function) proc.closecb(proc) end
     notify(proc.closenotify)
 end

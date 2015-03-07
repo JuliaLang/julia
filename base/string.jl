@@ -646,7 +646,7 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-function cconvert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
+function unsafe_convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
     if s.offset+s.endof < endof(s.string)
         throw(ArgumentError("a SubString must coincide with the end of the original string to be convertible to pointer"))
     end

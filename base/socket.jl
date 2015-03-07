@@ -324,7 +324,7 @@ end
 function uvfinalize(uv)
     close(uv)
     disassociate_julia_struct(uv)
-    uv.handle = 0
+    uv.handle = C_NULL
 end
 
 isreadable(io::TCPSocket) = true
@@ -395,11 +395,11 @@ function uvfinalize(uv::Union(TTY,Pipe,PipeServer,TCPServer,TCPSocket,UDPSocket)
         close(uv)
     end
     disassociate_julia_struct(uv)
-    uv.handle = 0
+    uv.handle = C_NULL
 end
 
 function _uv_hook_close(sock::UDPSocket)
-    sock.handle = 0
+    sock.handle = C_NULL
     sock.status = StatusClosed
     notify(sock.closenotify)
     notify(sock.sendnotify)

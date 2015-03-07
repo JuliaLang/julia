@@ -63,8 +63,9 @@ end
 
 isopen(f::Union(File,AsyncFile)) = f.open
 
+# Not actually a pointer, but that's how we pass it through the C API so it's fine
+uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
 uvtype(::File) = Base.UV_RAW_FD
-uvhandle(file::File) = file.handle
 
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 

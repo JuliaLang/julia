@@ -301,6 +301,21 @@ function subtypetree(x::DataType, level=-1)
     (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 end
 
+function unsafe_convert{P}(::Type{P}, x)
+    P<:Ptr || throw(MethodError(unsafe_convert, (Type{P}, x)))
+    depwarn("convert(::Type{Ptr}, ::$(typeof(x))) methods should be converted to be methods of unsafe_convert", :unsafe_convert)
+    return convert(P, x)
+end
+
+function convert{T}(::Type{Ptr{T}}, x::Integer)
+    depwarn("converting integers to pointers is discontinued", :convert)
+    box(Ptr{T},unbox(UInt,UInt(x)))
+end
+function convert{T}(::Type{Ptr{T}}, x::Signed)
+    depwarn("converting signed numbers to pointers is discontinued", :convert)
+    box(Ptr{T},unbox(Int,Int(x)))
+end
+
 # 8898
 @deprecate precision(x::DateTime) eps(x)
 @deprecate precision(x::Date) eps(x)

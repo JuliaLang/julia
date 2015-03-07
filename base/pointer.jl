@@ -7,24 +7,24 @@ convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,UInt(x)))
-convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,Int(x)))
+convert{T}(::Type{Ptr{T}}, x::UInt) = box(Ptr{T},unbox(UInt,UInt(x)))
+convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(Int,Int(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
 convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
 # object to pointer (when used with ccall)
-cconvert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
-cconvert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-cconvert(::Type{Ptr{UInt8}}, s::ByteString) = cconvert(Ptr{UInt8}, s.data)
-cconvert(::Type{Ptr{Int8}}, s::ByteString) = cconvert(Ptr{Int8}, s.data)
+unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
+unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
+unsafe_convert(::Type{Ptr{UInt8}}, s::ByteString) = unsafe_convert(Ptr{UInt8}, s.data)
+unsafe_convert(::Type{Ptr{Int8}}, s::ByteString) = unsafe_convert(Ptr{Int8}, s.data)
 # convert strings to ByteString to pass as pointers
-cconvert_gcroot(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
-cconvert_gcroot(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
+cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
+cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
-cconvert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-cconvert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
+unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)

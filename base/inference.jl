@@ -2376,7 +2376,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
     if incompletematch
         cost *= 4
     end
-    if is(f, next) || is(f, done) || is(f, cconvert) || is(f, cconvert_gcroot)
+    if is(f, next) || is(f, done) || is(f, unsafe_convert) || is(f, cconvert)
         cost /= 4
     end
     if !inline_worthy(body, cost)
