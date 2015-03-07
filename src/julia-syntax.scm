@@ -1011,8 +1011,8 @@
             (let* ((g (make-jlgensym))
                    (isamp (and (pair? a) (eq? (car a) '&)))
                    (a (if isamp (cadr a) a))
-                   (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert_gcroot 'cconvert_gcroot)) ,ty ,a)) stmts))
-                   (ca `(call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,g)))
+                   (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
+                   (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
               (loop (if isseq F (cdr F)) (cdr A) stmts
                     (list* g (if isamp `(& ,ca) ca) C))))))))
 

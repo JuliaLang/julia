@@ -1290,7 +1290,7 @@ type Z4681
     x::Ptr{Void}
     Z4681() = new(C_NULL)
 end
-Base.convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
+Base.unsafe_convert(::Type{Ptr{Z4681}},b::Z4681) = b.x
 @test_throws TypeError ccall(:printf,Int,(Ptr{UInt8},Ptr{Z4681}),"",Z4681())
 
 # issue #4479
