@@ -124,6 +124,9 @@ map!(x->1, d)
 
 @test fill!(d, 1) == ones(10, 10)
 @test fill!(d, 2.) == fill(2, 10, 10)
+@test d[:] == fill(2, 100)
+@test d[:,1] == fill(2, 10)
+@test d[1,:] == fill(2, 1, 10)
 
 # Boundary cases where length(S) <= length(pids)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
