@@ -868,7 +868,7 @@ SIBOX_FUNC(int32,  int32_t, 2)
 UIBOX_FUNC(uint16, uint16_t, 2)
 UIBOX_FUNC(uint32, uint32_t, 2)
 UIBOX_FUNC(char,   uint32_t, 2)
-UIBOX_FUNC(gensym, ssize_t, 2)
+UIBOX_FUNC(gensym, size_t, 2)
 #ifdef _P64
 SIBOX_FUNC(int64,  int64_t, 2)
 UIBOX_FUNC(uint64, uint64_t, 2)
