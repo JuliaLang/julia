@@ -2517,9 +2517,7 @@ static int jl_type_morespecific_(jl_value_t *a, jl_value_t *b, int invariant)
                 return 1;
             }
         }
-        if (!jl_is_typevar(b))
-            return 0;
-        return 1;
+        return 0;
     }
 
     if (jl_is_type_type(a) && !invariant) {
