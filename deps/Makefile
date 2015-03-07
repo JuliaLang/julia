@@ -515,6 +515,8 @@ ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
 endif
 endif
+else ifeq ($(LLVM_VER),3.6.0)
+	cd llvm-3.6.0 && patch -p1 < ../zerosign-llvm-3.6.0.patch
 endif
 	touch -c $@
 
