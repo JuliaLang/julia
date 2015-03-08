@@ -37,7 +37,7 @@ function sizehint!(s::IntSet, top::Integer)
         olsz = length(s.bits)
         if olsz < lim
             resize!(s.bits, lim)
-            fill = s.fill1s ? uint32(-1) : uint32(0)
+            fill = s.fill1s ? UInt32(-1) : UInt32(0)
             for i=(olsz+1):lim; s.bits[i] = fill; end
         end
         s.limit = top
@@ -50,13 +50,13 @@ function push!(s::IntSet, n::Integer)
         if s.fill1s
             return s
         else
-            lim = int(n + div(n,2))
+            lim = Int(n + div(n,2))
             sizehint!(s, lim)
         end
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
     end
-    s.bits[n>>5 + 1] |= (uint32(1)<<(n&31))
+    s.bits[n>>5 + 1] |= (UInt32(1)<<(n&31))
     return s
 end
 
@@ -70,13 +70,13 @@ end
 function pop!(s::IntSet, n::Integer, deflt)
     if n >= s.limit
         if s.fill1s
-            lim = int(n + div(n,2))
+            lim = Int(n + div(n,2))
             sizehint!(s, lim)
         else
             return deflt
         end
     end
-    mask = uint32(1)<<(n&31)
+    mask = UInt32(1)<<(n&31)
     idx = n>>5 + 1
     b = s.bits[idx]
     if (b&mask)==0; return deflt; end
@@ -117,12 +117,12 @@ end
 
 function symdiff!(s::IntSet, n::Integer)
     if n >= s.limit
-        lim = int(n + dim(n,2))
+        lim = Int(n + dim(n,2))
         sizehint!(s, lim)
     elseif n < 0
         throw(ArgumentError("IntSet elements cannot be negative"))
     end
-    s.bits[n>>5 + 1] $= (uint32(1)<<(n&31))
+    s.bits[n>>5 + 1] $= (UInt32(1)<<(n&31))
     return s
 end
 
@@ -146,17 +146,17 @@ function in(n::Integer, s::IntSet)
     elseif n < 0
         return false
     else
-        (s.bits[n>>5 + 1] & (uint32(1)<<(n&31))) != 0
+        (s.bits[n>>5 + 1] & (UInt32(1)<<(n&31))) != 0
     end
 end
 
-start(s::IntSet) = int64(0)
+start(s::IntSet) = Int64(0)
 done(s::IntSet, i) = (!s.fill1s && next(s,i)[1] >= s.limit) || i == typemax(Int)
 function next(s::IntSet, i)
     if i >= s.limit
-        n = int64(i)
+        n = Int64(i)
     else
-        n = int64(ccall(:bitvector_next, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, i, s.limit))
+        n = Int64(ccall(:bitvector_next, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, i, s.limit))
     end
     (n, n+1)
 end
@@ -186,7 +186,7 @@ function last(s::IntSet)
     throw(ArgumentError("set has no last element"))
 end
 
-length(s::IntSet) = int(ccall(:bitvector_count, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)) +
+length(s::IntSet) = Int(ccall(:bitvector_count, UInt64, (Ptr{UInt32}, UInt64, UInt64), s.bits, 0, s.limit)) +
     (s.fill1s ? typemax(Int) - s.limit : 0)
 
 
@@ -201,7 +201,7 @@ function union!(s::IntSet, s2::IntSet)
     end
     if s2.fill1s
         for n=lim+1:length(s.bits)
-            s.bits[n] = uint32(-1)
+            s.bits[n] = UInt32(-1)
         end
     end
     s.fill1s |= s2.fill1s
@@ -222,7 +222,7 @@ function intersect!(s::IntSet, s2::IntSet)
     end
     if !s2.fill1s
         for n=lim+1:length(s.bits)
-            s.bits[n] = uint32(0)
+            s.bits[n] = UInt32(0)
         end
     end
     s.fill1s &= s2.fill1s
@@ -272,7 +272,7 @@ function ==(s1::IntSet, s2::IntSet)
             return false
         end
     end
-    filln = s1.fill1s ? uint32(-1) : uint32(0)
+    filln = s1.fill1s ? UInt32(-1) : UInt32(0)
     if lim1 > lim2
         for i = lim2:lim1
             if s1.bits[i] != filln

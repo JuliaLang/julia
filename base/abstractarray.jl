@@ -206,7 +206,7 @@ function squeeze(A::AbstractArray, dims::Dims)
     reshape(A, d::typeof(_sub(size(A), dims)))
 end
 
-squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (int(dim),))
+squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
 function copy!(dest::AbstractArray, src)
     i = 1
@@ -347,73 +347,15 @@ isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##
 
-for (f,t) in ((:char,   Char),
-              (:int,    Int),
-              (:int8,   Int8),
-              (:int16,  Int16),
-              (:int32,  Int32),
-              (:int64,  Int64),
-              (:int128, Int128),
-              (:uint,   UInt),
-              (:uint8,  UInt8),
-              (:uint16, UInt16),
-              (:uint32, UInt32),
-              (:uint64, UInt64),
-              (:uint128,UInt128))
-    @eval begin
-        ($f)(x::AbstractArray{$t}) = x
-        ($f)(x::AbstractArray{$t}) = x
-
-        function ($f)(x::AbstractArray)
-            y = similar(x,$t)
-            i = 1
-            for e in x
-                y[i] = ($f)(e)
-                i += 1
-            end
-            y
-        end
-    end
-end
-
-for (f,t) in ((:integer, Integer),
-              (:unsigned, Unsigned))
-    @eval begin
-        ($f){T<:$t}(x::AbstractArray{T}) = x
-        ($f){T<:$t}(x::AbstractArray{T}) = x
-
-        function ($f)(x::AbstractArray)
-            y = similar(x,typeof(($f)(one(eltype(x)))))
-            i = 1
-            for e in x
-                y[i] = ($f)(e)
-                i += 1
-            end
-            y
-        end
-    end
-end
-
-big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
-big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
-big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
-
-bool(x::AbstractArray{Bool}) = x
-bool(x::AbstractArray) = copy!(similar(x,Bool), x)
-
 convert{T,N  }(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
 convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
 convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(AbstractArray{T,N}, A)
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
-for (f,T) in ((:float16,    Float16),
-              (:float32,    Float32),
-              (:float64,    Float64),
-              (:complex64,  Complex64),
-              (:complex128, Complex128))
-    @eval ($f){S,N}(x::AbstractArray{S,N}) = convert(AbstractArray{$T,N}, x)
-end
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
 
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
@@ -434,17 +376,22 @@ end
 
 full(x::AbstractArray) = x
 
+map{T}(::Type{T}, a::AbstractArray{T})  = a
+map{T}(::Type{T}, a::AbstractArray)     = convert(AbstractArray{T}, a)
+map(::Type{Integer},  a::AbstractArray) = convert(AbstractArray{typeof(Integer(one(eltype(a))))}, a)
+map(::Type{Signed},   a::AbstractArray) = convert(AbstractArray{typeof(Signed(one(eltype(a))))}, a)
+map(::Type{Unsigned}, a::AbstractArray) = convert(AbstractArray{typeof(Unsigned(one(eltype(a))))}, a)
+
 ## range conversions ##
 
-for fn in _numeric_conversion_func_names
+map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
+map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
+map{T<:FloatingPoint}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+
+for fn in (:float,:big)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
-    end
-end
-
-for fn in (:float,:float16,:float32,:float64,:big)
-    @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
@@ -502,7 +449,7 @@ function flipdim(A::AbstractArray, d::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += int(size(A,i)==1 || i==d)
+        nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension
@@ -1031,24 +978,24 @@ function repmat(a::AbstractVector, m::Int)
 end
 
 sub2ind(dims) = 1
-sub2ind(dims, i::Integer) = int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, int(i), int(j))
+sub2ind(dims, i::Integer) = Int(i)
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, Int(i), Int(j))
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, int(i0),int(i1),int(i2))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, Int(i0),Int(i1),Int(i2))
 sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(dims, int(i0),int(i1),int(i2),int(i3))
+    sub2ind(dims, Int(i0),Int(i1),Int(i2),Int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
 function sub2ind(dims, I::Integer...)
     ndims = length(dims)
-    index = int(I[1])
+    index = Int(I[1])
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
-        index += (int(I[k])-1) * stride
+        index += (Int(I[k])-1) * stride
     end
     return index
 end
@@ -1084,7 +1031,7 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     return tuple(ind, sub...)
 end
 
-ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
+ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, Int(ind))
 ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
 ind2sub(dims::(Integer,Integer), ind::Int) =

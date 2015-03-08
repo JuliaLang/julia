@@ -212,11 +212,11 @@ let smallint = (Int === Int64 ?
     global length
 
     function length{T <: smallint}(r::StepRange{T})
-        isempty(r) && return int(0)
-        div(int(r.stop)+int(r.step) - int(r.start), int(r.step))
+        isempty(r) && return Int(0)
+        div(Int(r.stop)+Int(r.step) - Int(r.start), Int(r.step))
     end
 
-    length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
+    length{T <: smallint}(r::UnitRange{T}) = Int(r.stop) - Int(r.start) + 1
 end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
@@ -554,4 +554,4 @@ function in(x, r::Range)
 end
 
 in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
-in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(int(x) - int(first(r)), step(r)) == 0)
+in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)

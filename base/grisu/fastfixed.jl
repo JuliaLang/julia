@@ -86,13 +86,13 @@ function fillfractionals(fractionals, exponent,
             digit = fractionals >> point
             buffer[len] = 0x30 + digit
             len += 1
-            fractionals -= uint64(digit) << point
+            fractionals -= UInt64(digit) << point
         end
         if ((fractionals >> (point - 1)) & 1) == 1
             len, decimal_point = roundup(buffer, len, decimal_point)
         end
     else
-        fract128 = uint128(fractionals) << 64
+        fract128 = UInt128(fractionals) << 64
         fract128 = shift(fract128,-exponent - 64)
         point = 128
         for i = 1:fractional_count
@@ -110,21 +110,21 @@ function fillfractionals(fractionals, exponent,
     return len, decimal_point
 end
 
-low(x) = uint64(x&0xffffffffffffffff)
-high(x) = uint64(x >>> 64)
-bitat(x::UInt128,y) = y >= 64 ? (int32(high(x) >> (y-64)) & 1) : (int32(low(x) >> y) & 1)
+low(x) = UInt64(x&0xffffffffffffffff)
+high(x) = UInt64(x >>> 64)
+bitat(x::UInt128,y) = y >= 64 ? (Int32(high(x) >> (y-64)) & 1) : (Int32(low(x) >> y) & 1)
 function divrem2(x,power)
     h = high(x)
     l = low(x)
     if power >= 64
-        result = int32(h >> (power - 64))
-        h -= uint64(result) << (power - 64)
-        return result, (uint128(h) << 64) + l
+        result = Int32(h >> (power - 64))
+        h -= UInt64(result) << (power - 64)
+        return result, (UInt128(h) << 64) + l
     else
         part_low::UInt64 = l >> power
         part_high::UInt64 = h << (64 - power)
-        result = int32(part_low + part_high)
-        return result, uint128(l - (part_low << power))
+        result = Int32(part_low + part_high)
+        return result, UInt128(l - (part_low << power))
     end
 end
 function shift(x::UInt128,amt)
@@ -139,13 +139,13 @@ function shift(x::UInt128,amt)
         h <<= -amt
         h += l >> (64 + amt)
         l <<= -amt
-        return (uint128(h) << 64) + l
+        return (UInt128(h) << 64) + l
     else
         h = high(x); l = low(x)
         l >>= amt
         l += h << (64 - amt)
         h >>= amt
-        return (uint128(h) << 64) + l
+        return (UInt128(h) << 64) + l
     end
 end
 
@@ -175,7 +175,7 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
     fractional_count > 20 && return false, 0, 0, buffer
     len = 1
     if exponent + kDoubleSignificandSize > 64
-        kFive17 = divisor = int64(5)^17
+        kFive17 = divisor = Int64(5)^17
         divisor_power = 17
         dividend = significand
         if exponent > divisor_power
@@ -200,18 +200,18 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
         if integrals > 0xFFFFFFFF
             len = filldigits64(integrals,buffer,len)
         else
-            len = filldigits32(uint32(integrals),buffer,len)
+            len = filldigits32(integrals%UInt32,buffer,len)
         end
         decimal_point = len-1
         len, decimal_point = fillfractionals(fractionals,exponent,fractional_count,
-                                                    buffer,len, decimal_point)
+                                             buffer,len, decimal_point)
     elseif exponent < -128
         len = 1
         decimal_point = -fractional_count
     else
         decimal_point = 0
         len, decimal_point = fillfractionals(significand,exponent,fractional_count,
-                                                    buffer,len, decimal_point)
+                                             buffer,len, decimal_point)
     end
     len, decimal_point = trimzeros(buffer,len,decimal_point)
     buffer[len] = 0

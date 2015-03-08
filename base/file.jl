@@ -123,7 +123,7 @@ function tempdir()
     resize!(temppath,lentemppath+1)
     return utf8(UTF16String(temppath))
 end
-tempname(uunique::UInt32=uint32(0)) = tempname(tempdir(), uunique)
+tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 function tempname(temppath::AbstractString,uunique::UInt32)
     tname = Array(UInt16,32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}),

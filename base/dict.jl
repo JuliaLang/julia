@@ -403,7 +403,7 @@ convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
-    write(s, int32(length(t)))
+    write(s, Int32(length(t)))
     for (k,v) in t
         serialize(s, k)
         serialize(s, v)

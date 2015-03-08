@@ -25,7 +25,7 @@ function init(; n::Union(Void,Integer) = nothing, delay::Union(Void,Float64) = n
     n_cur = ccall(:jl_profile_maxlen_data, Csize_t, ())
     delay_cur = ccall(:jl_profile_delay_nsec, UInt64, ())/10^9
     if n == nothing && delay == nothing
-        return int(n_cur), delay_cur
+        return Int(n_cur), delay_cur
     end
     nnew = (n == nothing) ? n_cur : n
     delaynew = (delay == nothing) ? delay_cur : delay
@@ -122,7 +122,7 @@ start_timer() = ccall(:jl_profile_start_timer, Cint, ())
 
 stop_timer() = ccall(:jl_profile_stop_timer, Void, ())
 
-is_running() = bool(ccall(:jl_profile_is_running, Cint, ()))
+is_running() = Bool(ccall(:jl_profile_is_running, Cint, ()))
 
 get_data_pointer() = convert(Ptr{UInt}, ccall(:jl_profile_get_data, Ptr{UInt8}, ()))
 
@@ -133,7 +133,7 @@ maxlen_data() = convert(Int, ccall(:jl_profile_maxlen_data, Csize_t, ()))
 function lookup(ip::Ptr{Void})
     info = ccall(:jl_lookup_code_address, Any, (Ptr{Void},Cint), ip, false)
     if length(info) == 5
-        return LineInfo(string(info[1]), string(info[2]), int(info[3]), info[4], int64(info[5]))
+        return LineInfo(string(info[1]), string(info[2]), Int(info[3]), info[4], Int64(info[5]))
     else
         return UNKNOWN
     end

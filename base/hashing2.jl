@@ -56,10 +56,10 @@ function hash(x::Real, h::UInt)
         right = trailing_zeros(num) + pow
         if -1074 <= right
             if 0 <= right && left <= 64
-                left <= 63                     && return hash(int64(num) << int(pow), h)
-                signbit(num) == signbit(den)   && return hash(uint64(num) << int(pow), h)
+                left <= 63                     && return hash(Int64(num) << Int(pow), h)
+                signbit(num) == signbit(den)   && return hash(UInt64(num) << Int(pow), h)
             end # typemin(Int64) handled by Float64 case
-            left <= 1024 && left - right <= 53 && return hash(ldexp(float64(num),pow), h)
+            left <= 1024 && left - right <= 53 && return hash(ldexp(Float64(num),pow), h)
         end
     end
 
@@ -100,9 +100,9 @@ function decompose(x::Float16)
     n = reinterpret(UInt16, x)
     s = (n & 0x03ff) % Int16
     e = (n & 0x7c00 >> 10) % Int
-    s |= int16(e != 0) << 10
+    s |= Int16(e != 0) << 10
     d = ifelse(signbit(x), -1, 1)
-    int(s), int(e - 25 + (e == 0)), d
+    Int(s), Int(e - 25 + (e == 0)), d
 end
 
 function decompose(x::Float32)
@@ -111,9 +111,9 @@ function decompose(x::Float32)
     n = reinterpret(UInt32, x)
     s = (n & 0x007fffff) % Int32
     e = (n & 0x7f800000 >> 23) % Int
-    s |= int32(e != 0) << 23
+    s |= Int32(e != 0) << 23
     d = ifelse(signbit(x), -1, 1)
-    int(s), int(e - 150 + (e == 0)), d
+    Int(s), Int(e - 150 + (e == 0)), d
 end
 
 function decompose(x::Float64)
@@ -122,20 +122,20 @@ function decompose(x::Float64)
     n = reinterpret(UInt64, x)
     s = (n & 0x000fffffffffffff) % Int64
     e = (n & 0x7ff0000000000000 >> 52) % Int
-    s |= int64(e != 0) << 52
+    s |= Int64(e != 0) << 52
     d = ifelse(signbit(x), -1, 1)
-    s, int(e - 1075 + (e == 0)), d
+    s, Int(e - 1075 + (e == 0)), d
 end
 
 function decompose(x::BigFloat)
     isnan(x) && return big(0), 0, 0
     isinf(x) && return big(x.sign), 0, 0
-    x == 0 && return big(0), 0, int(x.sign)
+    x == 0 && return big(0), 0, Int(x.sign)
     s = BigInt()
     ccall((:__gmpz_realloc2, :libgmp), Void, (Ptr{BigInt}, Culong), &s, x.prec)
     s.size = -fld(-x.prec,(sizeof(Culong)<<3))
     ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, Csize_t), s.d, x.d, s.size*sizeof(Culong))
-    s, int(x.exp - x.prec), int(x.sign)
+    s, Int(x.exp - x.prec), Int(x.sign)
 end
 
 ## streamlined hashing for smallish rational types ##

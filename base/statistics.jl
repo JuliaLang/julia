@@ -51,7 +51,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
             S = S + (value - M) * (value - new_M)
             M = new_M
         end
-        return S / (count - int(corrected))
+        return S / (count - Int(corrected))
     elseif isa(mean, Number) # mean provided
         # Cannot use a compensated version, e.g. the one from
         # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
@@ -64,7 +64,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
             count += 1
             sum2 += (value - mean)^2
         end
-        return sum2 / (count - int(corrected))
+        return sum2 / (count - Int(corrected))
     else
         throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
     end
@@ -73,14 +73,14 @@ end
 function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    return sumabs2(A) / (n - int(corrected))
+    return sumabs2(A) / (n - Int(corrected))
 end
 
 function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(length(A), length(r)) - int(corrected)
+        rn = div(length(A), length(r)) - Int(corrected)
         scale!(sumabs2!(R, A; init=true), convert(S, 1/rn))
     end
     return R
@@ -136,15 +136,15 @@ end
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - int(corrected)))
-    return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
+    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - Int(corrected)))
+    return centralize_sumabs2(A, m, 1, n) / (n - Int(corrected))
 end
 
 function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(length(A), length(R)) - int(corrected)
+        rn = div(length(A), length(R)) - Int(corrected)
         scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
     end
     return R
@@ -244,16 +244,16 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - Int(corrected))
 
 covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
-    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - int(corrected)))
+    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
 
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
-    unscaled_covzm(x, y) / (length(x) - int(corrected))
+    unscaled_covzm(x, y) / (length(x) - Int(corrected))
 
 covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) =
-    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
+    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
 
 # covm (with provided mean)
 

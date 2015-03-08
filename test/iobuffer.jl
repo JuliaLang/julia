@@ -48,7 +48,7 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
 @test_throws ArgumentError truncate(io,0)
-@test_throws ArgumentError write(io,uint8(0))
+@test_throws ArgumentError write(io,UInt8(0))
 @test_throws ArgumentError write(io,UInt8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
@@ -94,7 +94,7 @@ write(io,[1,2,3])
 @test ioslength(io) == 75
 @test length(io.data) == 75
 skip(io,1)
-@test write(io,uint8(104)) == 1
+@test write(io,UInt8(104)) == 1
 skip(io,3)
 @test write(io,"apples".data) == 3
 skip(io,71)

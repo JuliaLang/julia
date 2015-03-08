@@ -172,7 +172,7 @@ function ndigits0z(x::UInt128)
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
-    return n + ndigits0z(uint64(x))
+    return n + ndigits0z(UInt64(x))
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
@@ -208,14 +208,14 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
 ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
+ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
@@ -287,7 +287,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin

@@ -734,7 +734,7 @@ fill!(S, 3)
 rt = Base.return_types(fill!, (Array{Int32, 3}, UInt8))
 @test length(rt) == 1 && rt[1] == Array{Int32, 3}
 A = Array(Union(UInt8,Int8), 3)
-fill!(A, uint8(3))
+fill!(A, UInt8(3))
 @test A == [0x03, 0x03, 0x03]
 # Issue #9964
 A = Array(Vector{Float64}, 2)
@@ -772,7 +772,7 @@ X = [ i+2j for i=1:5, j=1:5 ]
 @test isequal(ones(2,3) * ones(2,3)', [3. 3.; 3. 3.])
 @test isequal([ [1,2] for i=1:2, : ], [1 2; 1 2])
 # where element type is a Union. try to confuse type inference.
-foo32_64(x) = (x<2) ? int32(x) : int64(x)
+foo32_64(x) = (x<2) ? Int32(x) : Int64(x)
 boo32_64() = [ foo32_64(i) for i=1:2 ]
 let a36 = boo32_64()
     @test a36[1]==1 && a36[2]==2

@@ -9,19 +9,19 @@ end
 # Tags
 create_serialization_stream() do s
     Base.writetag(s, Bool)
-    @test takebuf_array(s)[end] == uint8(Base.ser_tag[Bool])
+    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
 end
 
 create_serialization_stream() do s
     Base.write_as_tag(s, Bool)
-    @test takebuf_array(s)[end] == uint8(Base.ser_tag[Bool])
+    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
 end
 
 create_serialization_stream() do s
     Base.write_as_tag(s, Symbol)
     data = takebuf_array(s)
     @test data[end-1] == 0x00
-    @test data[end] == uint8(Base.ser_tag[Symbol])
+    @test data[end] == UInt8(Base.ser_tag[Symbol])
 end
 
 # Boolean & Empty & Nothing

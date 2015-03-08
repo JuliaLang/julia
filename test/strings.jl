@@ -133,17 +133,17 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # integer parsing
-@test is(parseint(Int32,"0",36),int32(0))
-@test is(parseint(Int32,"1",36),int32(1))
-@test is(parseint(Int32,"9",36),int32(9))
-@test is(parseint(Int32,"A",36),int32(10))
-@test is(parseint(Int32,"a",36),int32(10))
-@test is(parseint(Int32,"B",36),int32(11))
-@test is(parseint(Int32,"b",36),int32(11))
-@test is(parseint(Int32,"F",36),int32(15))
-@test is(parseint(Int32,"f",36),int32(15))
-@test is(parseint(Int32,"Z",36),int32(35))
-@test is(parseint(Int32,"z",36),int32(35))
+@test is(parseint(Int32,"0",36),Int32(0))
+@test is(parseint(Int32,"1",36),Int32(1))
+@test is(parseint(Int32,"9",36),Int32(9))
+@test is(parseint(Int32,"A",36),Int32(10))
+@test is(parseint(Int32,"a",36),Int32(10))
+@test is(parseint(Int32,"B",36),Int32(11))
+@test is(parseint(Int32,"b",36),Int32(11))
+@test is(parseint(Int32,"F",36),Int32(15))
+@test is(parseint(Int32,"f",36),Int32(15))
+@test is(parseint(Int32,"Z",36),Int32(35))
+@test is(parseint(Int32,"z",36),Int32(35))
 
 @test parseint("0") == 0
 @test parseint("-0") == 0
@@ -1404,4 +1404,4 @@ gstr = Base.GenericString("12");
 @test ind2chr(gstr,2)==2
 
 # issue #10307
-@test typeof(int16(String[])) == Vector{Int16}
+@test typeof(Int16(String[])) == Vector{Int16}

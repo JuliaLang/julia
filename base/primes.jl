@@ -25,7 +25,7 @@ function primesmask(s::AbstractVector{Bool})
     return s
 end
 primesmask(n::Int) = primesmask(falses(n))
-primesmask(n::Integer) = n <= typemax(Int) ? primesmask(int(n)) :
+primesmask(n::Integer) = n <= typemax(Int) ? primesmask(Int(n)) :
     throw(ArgumentError("requested number of primes must be ≤ $(typemax(Int)), got $n"))
 
 primes(n::Union(Integer,AbstractVector{Bool})) = find(primesmask(n))
@@ -67,9 +67,9 @@ witnesses(n::Union(UInt64,Int64)) =
                               (2,325,9375,28178,450775,9780504,1795265022)
 
 isprime(n::UInt128) =
-    n <= typemax(UInt64) ? isprime(uint64(n)) : isprime(BigInt(n))
+    n <= typemax(UInt64) ? isprime(UInt64(n)) : isprime(BigInt(n))
 isprime(n::Int128) = n < 2 ? false :
-    n <= typemax(Int64)  ? isprime(int64(n))  : isprime(BigInt(n))
+    n <= typemax(Int64)  ? isprime(Int64(n))  : isprime(BigInt(n))
 
 # TODO: faster factorization algorithms?
 
