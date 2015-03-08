@@ -5,11 +5,11 @@
     _hasenv(s::AbstractString) = _getenv(s) != C_NULL
 end
 @windows_only begin
-const ERROR_ENVVAR_NOT_FOUND = uint32(203)
-const FORMAT_MESSAGE_ALLOCATE_BUFFER = uint32(0x100)
-const FORMAT_MESSAGE_FROM_SYSTEM = uint32(0x1000)
-const FORMAT_MESSAGE_IGNORE_INSERTS = uint32(0x200)
-const FORMAT_MESSAGE_MAX_WIDTH_MASK = uint32(0xFF)
+const ERROR_ENVVAR_NOT_FOUND = UInt32(203)
+const FORMAT_MESSAGE_ALLOCATE_BUFFER = UInt32(0x100)
+const FORMAT_MESSAGE_FROM_SYSTEM = UInt32(0x1000)
+const FORMAT_MESSAGE_IGNORE_INSERTS = UInt32(0x200)
+const FORMAT_MESSAGE_MAX_WIDTH_MASK = UInt32(0xFF)
 GetLastError() = ccall(:GetLastError,stdcall,UInt32,())
 function FormatMessage(e=GetLastError())
     lpMsgBuf = Array(Ptr{UInt16})

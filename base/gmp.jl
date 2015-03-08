@@ -98,7 +98,7 @@ function BigInt(x::Union(Culong,UInt32))
     return z
 end
 
-BigInt(x::Bool) = BigInt(uint(x))
+BigInt(x::Bool) = BigInt(UInt(x))
 
 function BigInt(x::Float64)
     !isinteger(x) && throw(InexactError())
@@ -117,7 +117,7 @@ function BigInt(x::Integer)
         b = BigInt(0)
         shift = 0
         while x < -1
-            b += BigInt(~uint32(x&0xffffffff))<<shift
+            b += BigInt(~UInt32(x&0xffffffff))<<shift
             x >>= 32
             shift += 32
         end
@@ -129,7 +129,7 @@ function BigInt(x::Integer)
         b = BigInt(0)
         shift = 0
         while x > 0
-            b += BigInt(uint32(x&0xffffffff))<<shift
+            b += BigInt(UInt32(x&0xffffffff))<<shift
             x >>>= 32
             shift += 32
         end
@@ -142,8 +142,8 @@ convert(::Type{BigInt}, x::Float16) = BigInt(x)
 convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
 function convert(::Type{Int64}, x::BigInt)
-    lo = int64(convert(Culong, x & typemax(UInt32)))
-    hi = int64(convert(Clong, x >> 32))
+    lo = Int64(convert(Culong, x & typemax(UInt32)))
+    hi = Int64(convert(Clong, x >> 32))
     hi << 32 | lo
 end
 convert(::Type{Int32}, n::BigInt) = convert(Int32,convert(Clong, n))
@@ -160,8 +160,8 @@ function convert(::Type{Clong}, n::BigInt)
 end
 
 function convert(::Type{UInt64}, x::BigInt)
-    lo = uint64(convert(Culong, x & typemax(UInt32)))
-    hi = uint64(convert(Culong, x >> 32))
+    lo = UInt64(convert(Culong, x & typemax(UInt32)))
+    hi = UInt64(convert(Culong, x >> 32))
     hi << 32 | lo
 end
 convert(::Type{UInt32}, x::BigInt) = convert(UInt32,convert(Culong, x))
@@ -179,19 +179,19 @@ end
 
 if sizeof(Int32) == sizeof(Clong)
     function convert(::Type{UInt128}, x::BigInt)
-        uint128(uint(x>>>96))<<96 +
-        uint128(uint((x>>>64) & typemax(UInt32)))<<64 +
-        uint128(uint((x>>>32) & typemax(UInt32)))<<32 +
-        uint128(uint(x & typemax(UInt32)))
+        UInt128(UInt(x>>>96))<<96 +
+        UInt128(UInt((x>>>64) & typemax(UInt32)))<<64 +
+        UInt128(UInt((x>>>32) & typemax(UInt32)))<<32 +
+        UInt128(UInt(x & typemax(UInt32)))
     end
 end
 if sizeof(Int64) == sizeof(Clong)
     function convert(::Type{UInt128}, x::BigInt)
-        uint128(uint(x>>>64))<<64 +
-        uint128(uint(x & typemax(UInt64)))
+        UInt128(UInt(x>>>64))<<64 +
+        UInt128(UInt(x & typemax(UInt64)))
     end
 end
-convert(::Type{Int128}, x::BigInt) = copysign(int128(uint128(abs(x))),x)
+convert(::Type{Int128}, x::BigInt) = copysign(UInt128(abs(x))%Int128,x)
 
 function convert(::Type{Float64}, n::BigInt)
     # TODO: this should round to nearest but instead rounds to zero
@@ -337,10 +337,10 @@ end
 
 >>>(x::BigInt, c::Int32) = x >> c
 
-trailing_zeros(x::BigInt) = int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
-trailing_ones(x::BigInt) = int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+trailing_zeros(x::BigInt) = Int(ccall((:__gmpz_scan1, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
+trailing_ones(x::BigInt) = Int(ccall((:__gmpz_scan0, :libgmp), Culong, (Ptr{BigInt}, Culong), &x, 0))
 
-count_ones(x::BigInt) = int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
+count_ones(x::BigInt) = Int(ccall((:__gmpz_popcount, :libgmp), Culong, (Ptr{BigInt},), &x))
 
 function divrem(x::BigInt, y::BigInt)
     z1 = BigInt()
@@ -458,7 +458,7 @@ function binomial(n::BigInt, k::UInt)
     ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
     return z
 end
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, uint(k))
+binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
@@ -489,21 +489,21 @@ hex(n::BigInt) = base(16, n)
 function base(b::Integer, n::BigInt)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
     p = ccall((:__gmpz_get_str,:libgmp), Ptr{UInt8}, (Ptr{UInt8}, Cint, Ptr{BigInt}), C_NULL, b, &n)
-    len = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
+    len = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), p))
     ASCIIString(pointer_to_array(p,len,true))
 end
 
 function ndigits0z(x::BigInt, b::Integer=10)
     b < 2 && throw(DomainError())
     if ispow2(b)
-        int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
+        Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, b))
     else
         # non-base 2 mpz_sizeinbase might return an answer 1 too big
         # use property that log(b, x) < ndigits(x, b) <= log(b, x) + 1
-        n = int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
+        n = Int(ccall((:__gmpz_sizeinbase,:libgmp), Culong, (Ptr{BigInt}, Int32), &x, 2))
         lb = log2(b) # assumed accurate to <1ulp (true for openlibm)
         q,r = divrem(n,lb)
-        iq = int(q)
+        iq = Int(q)
         maxerr = q*eps(lb) # maximum error in remainder
         if r-1.0 < maxerr
             abs(x) >= big(b)^iq ? iq+1 : iq

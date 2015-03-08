@@ -37,52 +37,52 @@ max_float32 = 0x7f7fffff
 
 ordered = 0x0123456789ABCDEF
 diy_fp  = Grisu.Float(reinterpret(Float64,ordered))
-@test uint64(0x12) - uint64(0x3FF) - 52 == uint64(diy_fp.e)
+@test UInt64(0x12) - UInt64(0x3FF) - 52 == UInt64(diy_fp.e)
 # The 52 mantissa bits, plus the implicit 1 in bit 52 as a UINT64.
 @test 0x0013456789ABCDEF== diy_fp.s
 
 min_double64 = 0x0000000000000001
 diy_fp  = Grisu.Float(reinterpret(Float64,min_double64))
-@test -uint64(0x3FF) - int64(52) + int64(1) == uint64(diy_fp.e)
+@test -UInt64(0x3FF) - Int64(52) + Int64(1) == UInt64(diy_fp.e)
 # This is a denormal so no hidden bit.
 @test 1 == diy_fp.s
 
 max_double64 = 0x7fefffffffffffff
 diy_fp  = Grisu.Float(reinterpret(Float64,max_double64))
-@test 0x7FE - 0x3FF - 52 == uint64(diy_fp.e)
+@test 0x7FE - 0x3FF - 52 == UInt64(diy_fp.e)
 @test 0x001fffffffffffff== diy_fp.s
 
 ordered = 0x01234567
 diy_fp  = Grisu.Float(reinterpret(Float32,ordered))
-@test uint64(0x2) - uint64(0x7F) - 23 == uint64(diy_fp.e)
+@test UInt64(0x2) - UInt64(0x7F) - 23 == UInt64(diy_fp.e)
 # The 23 mantissa bits, plus the implicit 1 in bit 24 as a uint32_t.
-@test 0xA34567 == uint64(diy_fp.s)
+@test 0xA34567 == UInt64(diy_fp.s)
 
 min_float32 = 0x00000001
 diy_fp  = Grisu.Float(reinterpret(Float32,min_float32))
-@test -uint64(0x7F) - 23 + 1 == uint64(diy_fp.e)
+@test -UInt64(0x7F) - 23 + 1 == UInt64(diy_fp.e)
 # This is a denormal so no hidden bit.
-@test 1 == uint64(diy_fp.s)
+@test 1 == UInt64(diy_fp.s)
 
 max_float32 = 0x7f7fffff
 diy_fp  = Grisu.Float(reinterpret(Float32,max_float32))
-@test 0xFE - 0x7F - 23 == uint64(diy_fp.e)
-@test 0x00ffffff == uint64(diy_fp.s)
+@test 0xFE - 0x7F - 23 == UInt64(diy_fp.e)
+@test 0x00ffffff == UInt64(diy_fp.s)
 
 ordered = 0x0123456789ABCDEF
 diy_fp  = Grisu.normalize(Grisu.Float(reinterpret(Float64,ordered)))
-@test uint64(0x12) - uint64(0x3FF) - 52 - 11 == uint64(diy_fp.e)
+@test UInt64(0x12) - UInt64(0x3FF) - 52 - 11 == UInt64(diy_fp.e)
 @test 0x0013456789ABCDEF<< 11 == diy_fp.s
 
 min_double64 = 0x0000000000000001
 diy_fp  = Grisu.normalize(Grisu.Float(reinterpret(Float64,min_double64)))
-@test -uint64(0x3FF) - 52 + 1 - 63 == uint64(diy_fp.e)
+@test -UInt64(0x3FF) - 52 + 1 - 63 == UInt64(diy_fp.e)
 # This is a denormal so no hidden bit.
 @test 0x8000000000000000== diy_fp.s
 
 max_double64 = 0x7fefffffffffffff
 diy_fp  = Grisu.normalize(Grisu.Float(reinterpret(Float64,max_double64)))
-@test 0x7FE - 0x3FF - 52 - 11 == uint64(diy_fp.e)
+@test 0x7FE - 0x3FF - 52 - 11 == UInt64(diy_fp.e)
 @test (0x001fffffffffffff<< 11) == diy_fp.s
 
 min_double64 = 0x0000000000000001
@@ -127,7 +127,7 @@ boundary_minus, boundary_plus = Grisu.normalizedbound(reinterpret(Float64,min_do
 # Therefore its boundaries are at the same distance.
 @test diy_fp.s - boundary_minus.s == boundary_plus.s - diy_fp.s
 # Denormals have their boundaries much closer.
-@test (uint64(1) << 62) == diy_fp.s - boundary_minus.s
+@test (UInt64(1) << 62) == diy_fp.s - boundary_minus.s
 
 smallest_normal64 = 0x0010000000000000
 diy_fp = Grisu.normalize(reinterpret(Float64,smallest_normal64))
@@ -157,7 +157,7 @@ boundary_minus, boundary_plus = Grisu.normalizedbound(reinterpret(Float64,max_do
 @test diy_fp.s - boundary_minus.s == boundary_plus.s - diy_fp.s
 @test (1 << 10) == diy_fp.s - boundary_minus.s
 
-kOne64 = uint64(1)
+kOne64 = UInt64(1)
 diy_fp  = Grisu.normalize(Grisu.Float(float32(1.5)))
 boundary_minus, boundary_plus = Grisu.normalizedbound(float32(1.5))
 @test diy_fp.e == boundary_minus.e

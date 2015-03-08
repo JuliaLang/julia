@@ -1,16 +1,16 @@
 module SPQR
 
 # ordering options */
-const ORDERING_FIXED   = int32(0)
-const ORDERING_NATURAL = int32(1)
-const ORDERING_COLAMD  = int32(2)
-const ORDERING_GIVEN   = int32(3) # only used for C/C++ interface
-const ORDERING_CHOLMOD = int32(4) # CHOLMOD best-effort (COLAMD, METIS,...)
-const ORDERING_AMD     = int32(5) # AMD(A'*A)
-const ORDERING_METIS   = int32(6) # metis(A'*A)
-const ORDERING_DEFAULT = int32(7) # SuiteSparseQR default ordering
-const ORDERING_BEST    = int32(8) # try COLAMD, AMD, and METIS; pick best
-const ORDERING_BESTAMD = int32(9) # try COLAMD and AMD; pick best#
+const ORDERING_FIXED   = Int32(0)
+const ORDERING_NATURAL = Int32(1)
+const ORDERING_COLAMD  = Int32(2)
+const ORDERING_GIVEN   = Int32(3) # only used for C/C++ interface
+const ORDERING_CHOLMOD = Int32(4) # CHOLMOD best-effort (COLAMD, METIS,...)
+const ORDERING_AMD     = Int32(5) # AMD(A'*A)
+const ORDERING_METIS   = Int32(6) # metis(A'*A)
+const ORDERING_DEFAULT = Int32(7) # SuiteSparseQR default ordering
+const ORDERING_BEST    = Int32(8) # try COLAMD, AMD, and METIS; pick best
+const ORDERING_BESTAMD = Int32(9) # try COLAMD and AMD; pick best#
 
 # Let [m n] = size of the matrix after pruning singletons.  The default
 # ordering strategy is to use COLAMD if m <= 2*n.  Otherwise, AMD(A'A) is
@@ -18,20 +18,20 @@ const ORDERING_BESTAMD = int32(9) # try COLAMD and AMD; pick best#
 # the best of AMD and METIS.  METIS is not tried if it isn't installed.
 
 # tol options
-const DEFAULT_TOL = int32(-2) # if tol <= -2, the default tol is used
-const NO_TOL      = int32(-1) # if -2 < tol < 0, then no tol is used
+const DEFAULT_TOL = Int32(-2) # if tol <= -2, the default tol is used
+const NO_TOL      = Int32(-1) # if -2 < tol < 0, then no tol is used
 
 # for qmult, method can be 0,1,2,3:
-const QTX = int32(0)
-const QX  = int32(1)
-const XQT = int32(2)
-const XQ  = int32(3)
+const QTX = Int32(0)
+const QX  = Int32(1)
+const XQT = Int32(2)
+const XQ  = Int32(3)
 
 # system can be 0,1,2,3:  Given Q*R=A*E from SuiteSparseQR_factorize:
-const RX_EQUALS_B    = int32(0) # solve R*X=B      or X = R\B
-const RETX_EQUALS_B  = int32(1) # solve R*E'*X=B   or X = E*(R\B)
-const RTX_EQUALS_B   = int32(2) # solve R'*X=B     or X = R'\B
-const RTX_EQUALS_ETB = int32(3) # solve R'*X=E'*B  or X = R'\(E'*B)
+const RX_EQUALS_B    = Int32(0) # solve R*X=B      or X = R\B
+const RETX_EQUALS_B  = Int32(1) # solve R*E'*X=B   or X = E*(R\B)
+const RTX_EQUALS_B   = Int32(2) # solve R'*X=B     or X = R'\B
+const RTX_EQUALS_ETB = Int32(3) # solve R'*X=E'*B  or X = R'\(E'*B)
 
 
 using Base.SparseMatrix: SparseMatrixCSC

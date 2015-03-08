@@ -775,7 +775,7 @@ begin
     @test aa == a
     aa = pointer_to_array(pointer(a), uint(length(a)))
     @test aa == a
-    aa = pointer_to_array(pointer(a), uint16(length(a)))
+    aa = pointer_to_array(pointer(a), UInt16(length(a)))
     @test aa == a
     @test_throws ErrorException pointer_to_array(pointer(a), -3)
 end
@@ -937,7 +937,7 @@ end
 # issue #2169
 let
     i2169{T}(a::Array{T}) = typemin(T)
-    @test invoke(i2169,(Array,),Int8[1]) === int8(-128)
+    @test invoke(i2169,(Array,),Int8[1]) === Int8(-128)
 end
 
 # issue #2365
@@ -1100,9 +1100,9 @@ function foo4075(f::Foo4075, s::Symbol)
     x
 end
 
-@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+@test isa(foo4075(Foo4075(Int64(1),2.0),:y), Float64)
 # very likely to segfault the second time if this is broken
-@test isa(foo4075(Foo4075(int64(1),2.0),:y), Float64)
+@test isa(foo4075(Foo4075(Int64(1),2.0),:y), Float64)
 
 # issue #3167
 function foo(x)
@@ -1239,8 +1239,8 @@ function f4528(A, B)
         reinterpret(UInt64, B)
     end
 end
-@test f4528(false, int32(12)) === nothing
-@test_throws ErrorException f4528(true, int32(12))
+@test f4528(false, Int32(12)) === nothing
+@test_throws ErrorException f4528(true, Int32(12))
 
 # issue #4518
 f4518(x, y::Union(Int32,Int64)) = 0
@@ -1250,7 +1250,7 @@ f4518(x::ASCIIString, y::Union(Int32,Int64)) = 1
 # issue #4581
 bitstype 64 Date4581{T}
 let
-    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,int64(1234)))
+    x = Intrinsics.box(Date4581{Int}, Intrinsics.unbox(Int64,Int64(1234)))
     xs = Date4581[x]
     ys = copy(xs)
     @test ys !== xs
@@ -1262,7 +1262,7 @@ function f6591(d)
     Intrinsics.box(Int64, d)
     (f->f(d))(identity)
 end
-let d = Intrinsics.box(Date4581{Int}, int64(1))
+let d = Intrinsics.box(Date4581{Int}, Int64(1))
     @test isa(f6591(d), Date4581)
 end
 
@@ -1384,7 +1384,7 @@ f5150(T) = Array(Rational{T},1)
 # issue #5165
 bitstype 64 T5165{S}
 make_t(x::Int64) = Base.box(T5165{Void}, Base.unbox(Int64, x))
-xs5165 = T5165[make_t(int64(1))]
+xs5165 = T5165[make_t(Int64(1))]
 b5165 = IOBuffer()
 for x in xs5165
     println(b5165, x)   # segfaulted
@@ -1455,11 +1455,11 @@ end
 # issue #5142
 bitstype 64 Int5142
 function h5142(a::Bool)
-    x=a ? (int64(0),reinterpret(Int5142,int64(0))) : (int64(1),reinterpret(Int5142,int64(1)))
+    x=a ? (Int64(0),reinterpret(Int5142,Int64(0))) : (Int64(1),reinterpret(Int5142,Int64(1)))
     x[2]::Int5142
 end
 function h5142(a::Int)
-    x=(int64(0),reinterpret(Int5142,int64(0)))
+    x=(Int64(0),reinterpret(Int5142,Int64(0)))
     x[a]::Int5142
 end
 h5142(true)
@@ -1468,7 +1468,7 @@ h5142(2)
 
 bitstype 8 Int5142b
 function h5142b(a::Int)
-    x=((int8(1),int8(2)),(reinterpret(Int5142b,int8(3)),reinterpret(Int5142b,int8(4))))
+    x=((Int8(1),Int8(2)),(reinterpret(Int5142b,Int8(3)),reinterpret(Int5142b,Int8(4))))
     x[a]::(Int8,Int8)
 end
 h5142b(1)
@@ -1497,7 +1497,7 @@ end
 function f5457(obj_ptr::Ptr{Float64}, f)
     new_obj = convert(Float64, f(1.0))
     unsafe_store!(obj_ptr, new_obj)
-    return int32(1)
+    return Int32(1)
 end
 let
     a = [1.0]
@@ -1755,7 +1755,7 @@ obj = ObjMember(DateRange6387{Int64}())
 
 function v6387{T}(r::Range{T})
     a = Array(T,1)
-    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,int64(1)))
+    a[1] = Intrinsics.box(Date6387{Int64}, Intrinsics.unbox(Int64,Int64(1)))
     a
 end
 

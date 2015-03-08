@@ -7,10 +7,10 @@
 @test binomial(2,-1) == 0
 
 #Issue 6154
-@test binomial(int32(34), int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
-@test binomial(int64(67), int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
-@test binomial(int128(131), int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
-@test_throws InexactError binomial(int64(67), int64(30))
+@test binomial(Int32(34), Int32(15)) == binomial(BigInt(34), BigInt(15)) == 1855967520
+@test binomial(Int64(67), Int64(29)) == binomial(BigInt(67), BigInt(29)) == 7886597962249166160
+@test binomial(Int128(131), Int128(62)) == binomial(BigInt(131), BigInt(62)) == 157311720980559117816198361912717812000
+@test_throws InexactError binomial(Int64(67), Int64(30))
 
 p = shuffle([1:1000;])
 @test isperm(p)
@@ -65,11 +65,11 @@ end
 @test factorial(big(100), (80)) == 1303995018204712451095685346159820800000
 #Issue 9950
 @test_throws OverflowError factorial(1000,80)
-@test factorial(int64(20)) == 2432902008176640000
+@test factorial(Int64(20)) == 2432902008176640000
 # issue #6579
-@test_throws OverflowError factorial(int64(21))
-@test typeof(factorial(int8(2))) == typeof(factorial(int8(1)))
+@test_throws OverflowError factorial(Int64(21))
+@test typeof(factorial(Int8(2))) == typeof(factorial(Int8(1)))
 if Int === Int32
-    @test factorial(int32(12)) === int32(479001600)
-    @test_throws OverflowError factorial(int32(13))
+    @test factorial(Int32(12)) === Int32(479001600)
+    @test_throws OverflowError factorial(Int32(13))
 end

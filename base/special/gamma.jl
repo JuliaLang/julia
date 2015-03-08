@@ -284,7 +284,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
             end
             throw(DomainError()) # or return NaN?
         end
-        nx = int(xf)
+        nx = Int(xf)
         n = ceil(Int,cutoff - nx)
         ζ += inv_oftype(ζ, z)^s
         for ν = -nx:-1:1
@@ -343,13 +343,13 @@ end
 for (f,T) in ((float32,Float32), (float16,Float16))
     @eval begin
         zeta(s::Integer, z::Union($T,Complex{$T})) =
-            $f(zeta(int(s), float64(z)))
+            $f(zeta(Int(s), float64(z)))
         zeta(s::Union(Float64,Complex{Float64}), z::Union($T,Complex{$T})) =
             zeta(s, float64(z))
         zeta(s::Number, z::Union($T,Complex{$T})) =
             $f(zeta(float64(s), float64(z)))
         polygamma(m::Integer, z::Union($T,Complex{$T})) =
-            $f(polygamma(int(m), float64(z)))
+            $f(polygamma(Int(m), float64(z)))
         digamma(z::Union($T,Complex{$T})) =
             $f(digamma(float64(z)))
         trigamma(z::Union($T,Complex{$T})) =
@@ -357,7 +357,7 @@ for (f,T) in ((float32,Float32), (float16,Float16))
     end
 end
 
-zeta(s::Integer, z::Number) = zeta(int(s), float64(z))
+zeta(s::Integer, z::Number) = zeta(Int(s), float64(z))
 zeta(s::Number, z::Number) = zeta(float64(s), float64(z))
 for f in (:digamma, :trigamma)
     @eval begin

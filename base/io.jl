@@ -6,7 +6,7 @@
 
 ## byte-order mark, ntoh & hton ##
 
-const ENDIAN_BOM = reinterpret(UInt32,uint8([1:4;]))[1]
+const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]
 
 if ENDIAN_BOM == 0x01020304
     ntoh(x) = x
@@ -36,7 +36,7 @@ if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
         sz = sizeof(x)
         for n = sz:-1:1
-            write(s, uint8((x>>>((n-1)<<3))))
+            write(s, (x>>>((n-1)<<3))%UInt8)
         end
         sz
     end
@@ -44,13 +44,13 @@ else
     function write(s::IO, x::Integer)
         sz = sizeof(x)
         for n = 1:sz
-            write(s, uint8((x>>>((n-1)<<3))))
+            write(s, (x>>>((n-1)<<3))%UInt8)
         end
         sz
     end
 end
 
-write(s::IO, x::Bool)    = write(s, uint8(x))
+write(s::IO, x::Bool)    = write(s, UInt8(x))
 write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
 write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
 write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
@@ -66,22 +66,22 @@ end
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
     if c < 0x80
-        write(s, uint8(c))
+        write(s, c%UInt8)
         return 1
     elseif c < 0x800
-        write(s, uint8(( c >> 6          ) | 0xC0))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 6          ) | 0xC0)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 2
     elseif c < 0x10000
-        write(s, uint8(( c >> 12         ) | 0xE0))
-        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 12         ) | 0xE0)%UInt8)
+        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 3
     elseif c < 0x110000
-        write(s, uint8(( c >> 18         ) | 0xF0))
-        write(s, uint8(((c >> 12) & 0x3F ) | 0x80))
-        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 18         ) | 0xF0)%UInt8)
+        write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
+        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 4
     else
         return write(s, '\ufffd')
@@ -97,7 +97,7 @@ end
 
 function write(io::IO, s::Symbol)
     pname = unsafe_convert(Ptr{UInt8}, s)
-    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 
 # all subtypes should implement this
@@ -135,7 +135,7 @@ end
 function read(s::IO, ::Type{Char})
     ch = read(s, UInt8)
     if ch < 0x80
-        return char(ch)
+        return Char(ch)
     end
 
     # mimic utf8.next function
@@ -148,12 +148,12 @@ function read(s::IO, ::Type{Char})
     end
     c += ch
     c -= Base.utf8_offset[trailing+1]
-    char(c)
+    Char(c)
 end
 
 function readuntil(s::IO, delim::Char)
-    if delim < char(0x80)
-        data = readuntil(s, uint8(delim))
+    if delim < Char(0x80)
+        data = readuntil(s, delim%UInt8)
         enc = byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)
     end

@@ -7,7 +7,7 @@ srand(0); rand(); x = rand(384);
 @test rand(UInt32) >= 0
 @test -10 <= rand(-10:-5) <= -5
 @test -10 <= rand(-10:5) <= 5
-@test minimum([rand(int32(1):int32(7^7)) for i = 1:100000]) > 0
+@test minimum([rand(Int32(1):Int32(7^7)) for i = 1:100000]) > 0
 @test(typeof(rand(false:true)) == Bool)
 
 @test length(randn(4, 5)) == 20
@@ -72,11 +72,11 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt
 end
 
 if sizeof(Int32) < sizeof(Int)
-    r = rand(int32(-1):typemax(Int32))
+    r = rand(Int32(-1):typemax(Int32))
     @test typeof(r) == Int32
     @test -1 <= r <= typemax(Int32)
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(uint64(1:k)).u for k in 13 .+ int64(2).^(32:62)])
-    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(int64(1:k)).u for k in 13 .+ int64(2).^(32:61)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(32:62)])
+    @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(32:61)])
 
 end
 
@@ -97,10 +97,10 @@ end
 
 # Test ziggurat tables
 ziggurat_table_size = 256
-nmantissa           = int64(2)^51 # one bit for the sign
+nmantissa           = Int64(2)^51 # one bit for the sign
 ziggurat_nor_r      = BigFloat("3.65415288536100879635194725185604664812733315920964488827246397029393565706474")
 nor_section_area    = ziggurat_nor_r*exp(-ziggurat_nor_r^2/2) + erfc(ziggurat_nor_r/sqrt(BigFloat(2)))*sqrt(big(π)/2)
-emantissa           = int64(2)^52
+emantissa           = Int64(2)^52
 ziggurat_exp_r      = BigFloat("7.69711747013104971404462804811408952334296818528283253278834867283241051210533")
 exp_section_area    = (ziggurat_exp_r + 1)*exp(-ziggurat_exp_r)
 
@@ -138,7 +138,7 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
         x1 = x
     end
 
-    ki[2] = uint64(0)
+    ki[2] = UInt64(0)
 
     # Zigurrat tables for the exponential distribution
     x1 = ziggurat_exp_r
@@ -182,17 +182,17 @@ randmtzig_fill_ziggurat_tables()
 
 seed = rand(UInt) #leave state nondeterministic as above
 srand(seed)
-r = int64(rand(int32(97:122)))
+r = map(Int64,rand(map(Int32,97:122)))
 srand(seed)
-@test r == rand(int64(97:122))
+@test r == rand(map(Int64,97:122))
 
 srand(seed)
-r = uint64(rand(uint32(97:122)))
+r = map(UInt64,rand(map(UInt32,97:122)))
 srand(seed)
-@test r == rand(uint64(97:122))
+@test r == rand(map(UInt64,97:122))
 
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(uint64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
-@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(int64(1:k)).u for k in 13 .+ int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
+@test all([div(0x000100000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(1:30)])
 
 import Base.Random: uuid4, UUID
 

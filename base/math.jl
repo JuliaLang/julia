@@ -187,28 +187,28 @@ function exponent(x::Float64)
     if x==0 || !isfinite(x)
         throw(DomainError())
     end
-    int(ccall((:ilogb,libm), Int32, (Float64,), x))
+    Int(ccall((:ilogb,libm), Int32, (Float64,), x))
 end
 function exponent(x::Float32)
     if x==0 || !isfinite(x)
         throw(DomainError())
     end
-    int(ccall((:ilogbf,libm), Int32, (Float32,), x))
+    Int(ccall((:ilogbf,libm), Int32, (Float32,), x))
 end
 @vectorize_1arg Real exponent
 
-ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, int32(e))
-ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, int32(e))
+ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
+ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
 # TODO: vectorize ldexp
 
 function frexp(x::Float64)
     xu = reinterpret(UInt64,x)
-    k = int(xu >> 52) & 0x07ff
+    k = Int(xu >> 52) & 0x07ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 1.8014398509481984e16 # 0x1p54, normalise significand
         xu = reinterpret(UInt64,x)
-        k = int(xu >> 52) & 0x07ff - 54
+        k = Int(xu >> 52) & 0x07ff - 54
     elseif k == 0x07ff # NaN or Inf
         return x,0
     end
@@ -218,12 +218,12 @@ function frexp(x::Float64)
 end
 function frexp(x::Float32)
     xu = reinterpret(UInt32,x)
-    k = int(xu >> 23) & 0x00ff
+    k = Int(xu >> 23) & 0x00ff
     if k == 0 # x is subnormal
         x == zero(x) && return x,0
         x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
         xu = reinterpret(UInt32,x)
-        k = int(xu >> 23) & 0x00ff - 25
+        k = Int(xu >> 23) & 0x00ff - 25
     elseif k == 0x00ff # NaN or Inf
         return x,0
     end
@@ -259,9 +259,9 @@ end
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
 ^(x::Float64, y::Integer) =
-    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,int32(y))))
+    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,Int32(y))))
 ^(x::Float32, y::Integer) =
-    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,int32(y))))
+    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,Int32(y))))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01

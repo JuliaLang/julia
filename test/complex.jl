@@ -767,4 +767,4 @@ end
 @test float16(1)^im === Complex32(1) === float16(1)+float16(0)im
 
 # issue/PR #10148
-@test typeof(int8(1) - im) == Complex{Int8}
+@test typeof(Int8(1) - im) == Complex{Int8}

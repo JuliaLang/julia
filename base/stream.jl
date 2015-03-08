@@ -20,7 +20,7 @@ unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandle
 #Wrapper for an OS file descriptor (on both Unix and Windows)
 immutable RawFD
     fd::Int32
-    RawFD(fd::Integer) = new(int32(fd))
+    RawFD(fd::Integer) = new(fd)
     RawFD(fd::RawFD) = fd
 end
 
@@ -198,7 +198,7 @@ type TTY <: AsyncStream
             false,Condition(),
             false,Condition(),
             nothing,nothing,Condition())
-        @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+        @windows_only tty.ispty = Bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
         tty
     end
 end
@@ -219,9 +219,9 @@ end
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
 isreadable(io::Union(Pipe,TTY)) =
-    bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
+    Bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
 iswritable(io::Union(Pipe,TTY)) =
-    bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+    Bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
 
 nb_available(stream::UVStream) = nb_available(stream.buffer)
 
@@ -357,14 +357,14 @@ end
 ## BUFFER ##
 ## Allocate a simple buffer
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, int(recommended_size))
+    ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
 function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::UInt)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
-    (buf,uint(size))
+    (buf,UInt(size))
 end
 
 function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::UInt)
@@ -378,7 +378,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
+            nreadable = (stream.line_buffered ? Int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
             if nreadable > 0
                 more = stream.readcb(stream, nreadable)
             else
@@ -503,7 +503,7 @@ function start_timer(timer::Timer, timeout::Real, repeat::Real)
     preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},UInt64,UInt64),
-          timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
+          timer.handle, uv_jl_asynccb::Ptr{Void}, UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
 end
 
 function stop_timer(timer::Timer)
@@ -604,7 +604,7 @@ end
 close_pipe_sync(p::Pipe) = (ccall(:uv_pipe_close_sync,Void,(Ptr{Void},),p.handle); p.status = StatusClosed)
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-_uv_hook_isopen(stream) = int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
+_uv_hook_isopen(stream) = Int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
 
 function close(stream::Union(AsyncStream,UVServer))
     if isopen(stream) && stream.status != StatusClosing
@@ -625,9 +625,9 @@ function start_reading(stream::AsyncStream)
         stream.status = StatusActive
         ret
     elseif stream.status == StatusActive
-        int32(0)
+        Int32(0)
     else
-        int32(-1)
+        Int32(-1)
     end
 end
 function start_reading(stream::AsyncStream, cb::Function)
@@ -647,9 +647,9 @@ function stop_reading(stream::AsyncStream)
         stream.status = StatusOpen
         ret
     elseif stream.status == StatusOpen
-        int32(0)
+        Int32(0)
     else
-        int32(-1)
+        Int32(-1)
     end
 end
 
@@ -822,7 +822,7 @@ write(s::AsyncStream, b::UInt8) = write(s, [b])
 write(s::AsyncStream, c::Char) = write(s, string(c))
 function write{T}(s::AsyncStream, a::Array{T})
     if isbits(T)
-        n = uint(length(a)*sizeof(T))
+        n = UInt(length(a)*sizeof(T))
         return buffer_or_write(s, pointer(a), n);
     else
         check_open(s)
@@ -847,7 +847,7 @@ end
 type UVError <: Exception
     prefix::AbstractString
     code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,int32(code))
+    UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 
 struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{UInt8},(Int32,),err.code))

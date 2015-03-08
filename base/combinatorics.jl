@@ -35,10 +35,10 @@ factorial(n::UInt128) = factorial_lookup(n, _fact_table128, 34)
 factorial(n::Union(Int64,UInt64)) = factorial_lookup(n, _fact_table64, 20)
 
 if Int === Int32
-factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(int32(n))
+factorial(n::Union(Int8,UInt8,Int16,UInt16)) = factorial(Int32(n))
 factorial(n::Union(Int32,UInt32)) = factorial_lookup(n, _fact_table64, 12)
 else
-factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(int64(n))
+factorial(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32)) = factorial(Int64(n))
 end
 
 function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
@@ -626,7 +626,7 @@ function nextprod(a::Vector{Int}, x)
         end
     end
     best = mx[end] < best ? mx[end] : best
-    return int(best)  # could overflow, but best to have predictable return type
+    return Int(best)  # could overflow, but best to have predictable return type
 end
 
 # For a list of integers i1, i2, i3, find the largest
@@ -639,7 +639,7 @@ function prevprod(a::Vector{Int}, x)
     k = length(a)
     v = ones(Int, k)                  # current value of each counter
     mx = [nextpow(ai,x) for ai in a]  # allow each counter to exceed p (sentinel)
-    first = int(prevpow(a[1], x))     # start at best case in first factor
+    first = Int(prevpow(a[1], x))     # start at best case in first factor
     v[1] = first
     p::widen(Int) = first
     best = p
@@ -667,5 +667,5 @@ function prevprod(a::Vector{Int}, x)
         end
     end
     best = x >= p > best ? p : best
-    return int(best)
+    return Int(best)
 end

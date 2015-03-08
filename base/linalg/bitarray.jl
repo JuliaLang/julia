@@ -141,7 +141,7 @@ function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
 
     delta_k = k1 - k0
 
-    z = uint64(0)
+    z = UInt64(0)
     u = ~z
     if delta_k == 0
         msk_0 = (u << l0) & ~(u << l1 << 1)

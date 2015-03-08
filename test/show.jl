@@ -89,7 +89,7 @@ end
         nc = num_bit_chunks(n)
         chunks = Array(UInt64, nc)
         if nc > 0
-            chunks[end] = uint64(0)
+            chunks[end] = UInt64(0)
         end
         b = new(chunks, n)
         if N != 1
@@ -138,7 +138,7 @@ end"""
     if ks1 >= ks0 + delta_kd
         chunk_s1 = glue_src_bitchunks(src, ks0 + delta_kd, ks1, msk_s0, ls0)
     else
-        chunk_s1 = uint64(0)
+        chunk_s1 = UInt64(0)
     end
     chunk_s = (chunk_s0 >>> (63 - ld0) >>> 1) | (chunk_s1 << ld0)
     dest[kd1] = (dest[kd1] & msk_d1) | (chunk_s & ~msk_d1)

@@ -115,7 +115,7 @@ function study(regex::Ptr{Void}, options::Integer)
     extra
 end
 
-study(re::Ptr{Void}) = study(re, int32(0))
+study(re::Ptr{Void}) = study(re, Int32(0))
 
 free_study(extra::Ptr{Void}) =
     ccall((:pcre_free_study, :libpcre), Void, (Ptr{Void},), extra)

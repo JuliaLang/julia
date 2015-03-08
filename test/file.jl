@@ -185,15 +185,15 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = mmap_array(UInt8, (11,), s)
 @test c == "Hello World".data
-c = mmap_array(UInt8, (uint16(11),), s)
+c = mmap_array(UInt8, (UInt16(11),), s)
 @test c == "Hello World".data
-@test_throws ArgumentError mmap_array(UInt8, (int16(-11),), s)
+@test_throws ArgumentError mmap_array(UInt8, (Int16(-11),), s)
 @test_throws ArgumentError mmap_array(UInt8, (typemax(UInt),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
 c = mmap_array(UInt8, (11,), s)
-c[5] = uint8('x')
+c[5] = UInt8('x')
 msync(c)
 close(s)
 s = open(file, "r")

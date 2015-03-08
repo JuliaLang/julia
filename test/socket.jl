@@ -156,8 +156,8 @@ end
 begin
     a = UDPSocket()
     b = UDPSocket()
-    bind(a, ip"::1", uint16(port))
-    bind(b, ip"::1", uint16(port+1))
+    bind(a, ip"::1", UInt16(port))
+    bind(b, ip"::1", UInt16(port+1))
 
     tsk = @async begin
         @test begin

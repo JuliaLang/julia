@@ -56,7 +56,7 @@ macro isok(A)
 end
 
 # check the size of SuiteSparse_long
-if int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
+if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32, )
     typealias UMFITypes Union(Int32)
 else

@@ -123,7 +123,7 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
     end
   end
 
-#isless(x::Char, y::Integer) = isless(uint32(x), y)
+#isless(x::Char, y::Integer) = isless(UInt32(x), y)
   for x in upperchars
     @test isless(x, 91) == true
   end
@@ -144,7 +144,7 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
     @test isless(x, 131088) == true
   end
 
-#isless(x::Integer, y::Char) = isless(x, uint32(y))
+#isless(x::Integer, y::Char) = isless(x, UInt32(y))
   for x in upperchars
     @test isless(64, x) == true
   end

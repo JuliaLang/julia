@@ -60,11 +60,11 @@ let
 end
 
 function airy(k::Int, z::Complex128)
-    id = int32(k==1 || k==3)
+    id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, int32(1))
+        return _airy(z, id, Int32(1))
     elseif k == 2 || k == 3
-        return _biry(z, id, int32(1))
+        return _biry(z, id, Int32(1))
     else
         error("invalid argument")
     end
@@ -90,11 +90,11 @@ airy(k::Number, z::Complex) = airy(convert(Int,k), complex128(z))
 @vectorize_2arg Number airy
 
 function airyx(k::Int, z::Complex128)
-    id = int32(k==1 || k==3)
+    id = Int32(k==1 || k==3)
     if k == 0 || k == 1
-        return _airy(z, id, int32(2))
+        return _airy(z, id, Int32(2))
     elseif k == 2 || k == 3
-        return _biry(z, id, int32(2))
+        return _biry(z, id, Int32(2))
     else
         error("invalid argument")
     end
@@ -188,40 +188,40 @@ end
 function besselh(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
         s = (k == 1) ? 1 : -1
-        return _besselh(-nu,int32(k),z,int32(1)) * complex(cospi(nu),-s*sinpi(nu))
+        return _besselh(-nu,Int32(k),z,Int32(1)) * complex(cospi(nu),-s*sinpi(nu))
     end
-    return _besselh(nu,int32(k),z,int32(1))
+    return _besselh(nu,Int32(k),z,Int32(1))
 end
 
 function besselhx(nu::Float64, k::Integer, z::Complex128)
     if nu < 0
         s = (k == 1) ? 1 : -1
-        return _besselh(-nu,int32(k),z,int32(2)) * complex(cospi(nu),-s*sinpi(nu))
+        return _besselh(-nu,Int32(k),z,Int32(2)) * complex(cospi(nu),-s*sinpi(nu))
     end
-    return _besselh(nu,int32(k),z,int32(2))
+    return _besselh(nu,Int32(k),z,Int32(2))
 end
 
 function besseli(nu::Float64, z::Complex128)
     if nu < 0
-        return _besseli(-nu,z,int32(1)) - 2_besselk(-nu,z,int32(1))*sinpi(nu)/pi
+        return _besseli(-nu,z,Int32(1)) - 2_besselk(-nu,z,Int32(1))*sinpi(nu)/pi
     else
-        return _besseli(nu,z,int32(1))
+        return _besseli(nu,z,Int32(1))
     end
 end
 
 function besselix(nu::Float64, z::Complex128)
     if nu < 0
-        return _besseli(-nu,z,int32(2)) - 2_besselk(-nu,z,int32(2))*exp(-abs(real(z))-z)*sinpi(nu)/pi
+        return _besseli(-nu,z,Int32(2)) - 2_besselk(-nu,z,Int32(2))*exp(-abs(real(z))-z)*sinpi(nu)/pi
     else
-        return _besseli(nu,z,int32(2))
+        return _besseli(nu,z,Int32(2))
     end
 end
 
 function besselj(nu::Float64, z::Complex128)
     if nu < 0
-        return _besselj(-nu,z,int32(1))*cospi(nu) + _bessely(-nu,z,int32(1))*sinpi(nu)
+        return _besselj(-nu,z,Int32(1))*cospi(nu) + _bessely(-nu,z,Int32(1))*sinpi(nu)
     else
-        return _besselj(nu,z,int32(1))
+        return _besselj(nu,z,Int32(1))
     end
 end
 
@@ -235,29 +235,29 @@ besselj(nu::Integer, x::Float32) = typemin(Int32) <= nu <= typemax(Int32) ?
 
 function besseljx(nu::Float64, z::Complex128)
     if nu < 0
-        return _besselj(-nu,z,int32(2))*cospi(nu) + _bessely(-nu,z,int32(2))*sinpi(nu)
+        return _besselj(-nu,z,Int32(2))*cospi(nu) + _bessely(-nu,z,Int32(2))*sinpi(nu)
     else
-        return _besselj(nu,z,int32(2))
+        return _besselj(nu,z,Int32(2))
     end
 end
 
-besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(1))
+besselk(nu::Float64, z::Complex128) = _besselk(abs(nu), z, Int32(1))
 
-besselkx(nu::Float64, z::Complex128) = _besselk(abs(nu), z, int32(2))
+besselkx(nu::Float64, z::Complex128) = _besselk(abs(nu), z, Int32(2))
 
 function bessely(nu::Float64, z::Complex128)
     if nu < 0
-        return _bessely(-nu,z,int32(1))*cospi(nu) - _besselj(-nu,z,int32(1))*sinpi(nu)
+        return _bessely(-nu,z,Int32(1))*cospi(nu) - _besselj(-nu,z,Int32(1))*sinpi(nu)
     else
-        return _bessely(nu,z,int32(1))
+        return _bessely(nu,z,Int32(1))
     end
 end
 
 function besselyx(nu::Float64, z::Complex128)
     if nu < 0
-        return _bessely(-nu,z,int32(2))*cospi(nu) - _besselj(-nu,z,int32(2))*sinpi(nu)
+        return _bessely(-nu,z,Int32(2))*cospi(nu) - _besselj(-nu,z,Int32(2))*sinpi(nu)
     else
-        return _bessely(nu,z,int32(2))
+        return _bessely(nu,z,Int32(2))
     end
 end
 
@@ -300,7 +300,7 @@ end
 function besselj(nu::FloatingPoint, x::FloatingPoint)
     if isinteger(nu)
         if typemin(Int32) <= nu <= typemax(Int32)
-            return besselj(int(nu), x)
+            return besselj(Int(nu), x)
         end
     elseif x < 0
         throw(DomainError())
@@ -340,7 +340,7 @@ function bessely(nu::Real, x::FloatingPoint)
         throw(DomainError())
     end
     if isinteger(nu) && typemin(Int32) <= nu <= typemax(Int32)
-        return bessely(int(nu), x)
+        return bessely(Int(nu), x)
     end
     oftype(x, real(bessely(float64(nu), complex128(x))))
 end

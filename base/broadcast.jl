@@ -107,8 +107,8 @@ function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
     ind = 1
     nc = min(bitcache_chunks, length(Bc)-bind+1)
     for i = 1:nc
-        u = uint64(1)
-        c = uint64(0)
+        u = UInt64(1)
+        c = UInt64(0)
         for j = 1:64
             C[ind] && (c |= u)
             ind += 1

@@ -8,7 +8,7 @@
 ## required core functionality ##
 
 endof(s::ASCIIString) = length(s.data)
-getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
+getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? Char(x) : '\ufffd')
 
 ## overload methods for efficiency ##
 
@@ -17,8 +17,8 @@ sizeof(s::ASCIIString) = sizeof(s.data)
 getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-search(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? search(s.data,uint8(c),i) : 0
-rsearch(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? rsearch(s.data,uint8(c),i) : 0
+search(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
+rsearch(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? rsearch(s.data,c%UInt8,i) : 0
 
 function string(c::ASCIIString...)
     if length(c) == 1
@@ -58,10 +58,10 @@ end
 function uppercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'a' <= char(d[i]) <= 'z'
+        if 'a' <= Char(d[i]) <= 'z'
             td = copy(d)
             for j = i:length(td)
-                if 'a' <= char(td[j]) <= 'z'
+                if 'a' <= Char(td[j]) <= 'z'
                     td[j] -= 32
                 end
             end
@@ -73,10 +73,10 @@ end
 function lowercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'A' <= char(d[i]) <= 'Z'
+        if 'A' <= Char(d[i]) <= 'Z'
             td = copy(d)
             for j = i:length(td)
-                if 'A' <= char(td[j]) <= 'Z'
+                if 'A' <= Char(td[j]) <= 'Z'
                     td[j] += 32
                 end
             end

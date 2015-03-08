@@ -34,7 +34,7 @@ function test_read(slval)
 
     dout = Array(UInt8, 1)
     @test 1 == ccall(:read, Csize_t, (Cint, Ptr{UInt8},Csize_t), pipe_fds[1], dout, 1)
-    @test dout[1] == int8('A')
+    @test dout[1] == Int8('A')
 
     @test slval <= t_elapsed
 end

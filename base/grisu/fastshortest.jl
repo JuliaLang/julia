@@ -40,16 +40,16 @@ function digitgen(low,w,high,buffer)
     fractionals = too_high.s & (one.s-1)
     divisor, kappa = bigpowten(integrals, 64 + one.e)
     len = 1
-    rest = uint64(0)
+    rest = UInt64(0)
     while kappa > 0
         digit = div(integrals,divisor)
         buffer[len] = 0x30 + digit
         len += 1
         integrals %= divisor
         kappa -= 1
-        rest = (uint64(integrals) << -one.e) + fractionals
+        rest = (UInt64(integrals) << -one.e) + fractionals
         if rest < unsafe_interval.s
-            r, kappa = roundweed(buffer, len, rest, uint64(divisor) << -one.e,
+            r, kappa = roundweed(buffer, len, rest, UInt64(divisor) << -one.e,
                         unit,kappa,(too_high - w).s,unsafe_interval.s)
             return r, kappa, len
         end

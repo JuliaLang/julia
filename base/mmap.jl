@@ -34,7 +34,7 @@ function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
     p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
     systemerror("memory mapping failed", reinterpret(Int,p) == -1)
     # Also return a pointer that compensates for any adjustment in the offset
-    return p, int(offset-offset_page)
+    return p, Int(offset-offset_page)
 end
 
 # Before mapping, grow the file to sufficient size
@@ -52,7 +52,7 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
     filelen = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, 0, SEEK_END)
     systemerror("lseek", filelen < 0)
     if (filelen < offset + len)
-        systemerror("pwrite", ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, UInt, FileOffset), fd, int8([0]), 1, offset + len - 1) < 1)
+        systemerror("pwrite", ccall(:jl_pwrite, Cssize_t, (Cint, Ptr{Void}, UInt, FileOffset), fd, Int8[0], 1, offset + len - 1) < 1)
     end
     cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
     systemerror("lseek", cpos < 0)
@@ -109,7 +109,7 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     else
         pmap, delta = mmap(len, prot, flags, fd(s), offset)
     end
-    A = pointer_to_array(convert(Ptr{T}, uint(pmap)+delta), dims)
+    A = pointer_to_array(convert(Ptr{T}, UInt(pmap)+delta), dims)
     finalizer(A,x->munmap(pmap,len+delta))
     return A
 end
@@ -129,7 +129,7 @@ end
 function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedMemSpec), offset::FileOffset)
     if isa(s,IO)
         hdl = _get_osfhandle(RawFD(fd(s))).handle
-        if int(hdl) == -1
+        if Int(hdl) == -1
             error("could not get handle for file to map: $(FormatMessage())")
         end
         name = C_NULL
@@ -177,15 +177,15 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedM
 end
 
 function munmap(viewhandle::Ptr, mmaphandle::Ptr)
-    status = bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
-    status |= bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
+    status = Bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    status |= Bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
     if !status
         error("could not unmap view: $(FormatMessage())")
     end
 end
 
 function msync(p::Ptr, len::Integer)
-    status = bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
+    status = Bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
     if !status
         error("could not msync: $(FormatMessage())")
     end
