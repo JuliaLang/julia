@@ -1356,11 +1356,9 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
         n += jl_printf(out, "%s::", jl_symbolnode_sym(v)->name);
         n += jl_static_show_x(out, jl_symbolnode_type(v), depth);
     }
-    else if (jl_is_getfieldnode(v)) {
-        n += jl_static_show_x(out, jl_getfieldnode_val(v), depth);
-        n += jl_printf(out, ".%s", jl_getfieldnode_name(v)->name);
-        n += jl_printf(out, "::");
-        n += jl_static_show_x(out, jl_getfieldnode_type(v), depth);
+    else if (jl_is_globalref(v)) {
+        n += jl_static_show_x(out, (jl_value_t*)jl_globalref_mod(v), depth);
+        n += jl_printf(out, ".%s", jl_globalref_name(v)->name);
     }
     else if (jl_is_labelnode(v)) {
         n += jl_printf(out, "%d:", jl_labelnode_label(v));

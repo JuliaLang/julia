@@ -143,9 +143,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         return v;
     }
     if (!jl_is_expr(e)) {
-        if (jl_is_getfieldnode(e)) {
-            jl_value_t *v = eval(jl_getfieldnode_val(e), locals, nl, ngensym);
-            jl_value_t *gfargs[2] = {v, (jl_value_t*)jl_getfieldnode_name(e)};
+        if (jl_is_globalref(e)) {
+            jl_value_t *gfargs[2] = {(jl_value_t*)jl_globalref_mod(e), (jl_value_t*)jl_globalref_name(e)};
             return jl_f_get_field(NULL, gfargs, 2);
         }
         if (jl_is_lambda_info(e)) {
