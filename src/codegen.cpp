@@ -1125,11 +1125,10 @@ jl_value_t *jl_static_eval(jl_value_t *ex, void *ctx_, jl_module_t *mod,
         return NULL;
     jl_module_t *m = NULL;
     jl_sym_t *s = NULL;
-    if (jl_is_getfieldnode(ex)) {
-        m = (jl_module_t*)jl_static_eval(jl_fieldref(ex,0),ctx,mod,sp,ast,sparams,allow_alloc);
-        s = (jl_sym_t*)jl_fieldref(ex,1);
-        if (m && jl_is_module(m) && s && jl_is_symbol(s)) {
-            jl_binding_t *b = jl_get_binding(m, s);
+    if (jl_is_globalref(ex)) {
+        s = (jl_sym_t*)jl_globalref_name(ex);
+        if (s && jl_is_symbol(s)) {
+            jl_binding_t *b = jl_get_binding(jl_globalref_mod(ex), s);
             if (b && b->constp)
                 return b->value;
         }
@@ -1240,10 +1239,6 @@ static bool local_var_occurs(jl_value_t *e, jl_sym_t *s)
             if (local_var_occurs(jl_exprarg(ex,i),s))
                 return true;
         }
-    }
-    else if (jl_is_getfieldnode(e)) {
-        if (local_var_occurs(jl_fieldref(e,0),s))
-            return true;
     }
     return false;
 }
@@ -3081,9 +3076,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         }
         return NULL;
     }
-    if (jl_is_getfieldnode(expr)) {
-        return emit_getfield(jl_fieldref(expr,0),
-                             (jl_sym_t*)jl_fieldref(expr,1), ctx);
+    if (jl_is_globalref(expr)) {
+        return emit_getfield((jl_value_t*)jl_globalref_mod(expr), jl_globalref_name(expr), ctx);
     }
     if (jl_is_topnode(expr)) {
         jl_sym_t *var = (jl_sym_t*)jl_fieldref(expr,0);

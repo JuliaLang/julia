@@ -374,7 +374,7 @@ extern DLLEXPORT jl_value_t *jl_array_any_type;
 extern DLLEXPORT jl_value_t *jl_array_symbol_type;
 extern DLLEXPORT jl_datatype_t *jl_expr_type;
 extern DLLEXPORT jl_datatype_t *jl_symbolnode_type;
-extern DLLEXPORT jl_datatype_t *jl_getfieldnode_type;
+extern DLLEXPORT jl_datatype_t *jl_globalref_type;
 extern DLLEXPORT jl_datatype_t *jl_linenumbernode_type;
 extern DLLEXPORT jl_datatype_t *jl_labelnode_type;
 extern DLLEXPORT jl_datatype_t *jl_gotonode_type;
@@ -528,9 +528,8 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_linenode_line(x) (((ptrint_t*)x)[1])
 #define jl_labelnode_label(x) (((ptrint_t*)x)[1])
 #define jl_gotonode_label(x) (((ptrint_t*)x)[1])
-#define jl_getfieldnode_val(s) (jl_fieldref(s,0))
-#define jl_getfieldnode_name(s) ((jl_sym_t*)jl_fieldref(s,1))
-#define jl_getfieldnode_type(s) (jl_fieldref(s,2))
+#define jl_globalref_mod(s) ((jl_module_t*)jl_fieldref(s,0))
+#define jl_globalref_name(s) ((jl_sym_t*)jl_fieldref(s,1))
 
 #define jl_tparam0(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 0)
 #define jl_tparam1(t) jl_tupleref(((jl_datatype_t*)(t))->parameters, 1)
@@ -583,7 +582,7 @@ STATIC_INLINE jl_value_t *jl_cellset(void *a, size_t i, void *x)
 #define jl_is_gensym(v)      jl_typeis(v,jl_gensym_type)
 #define jl_is_expr(v)        jl_typeis(v,jl_expr_type)
 #define jl_is_symbolnode(v)  jl_typeis(v,jl_symbolnode_type)
-#define jl_is_getfieldnode(v)  jl_typeis(v,jl_getfieldnode_type)
+#define jl_is_globalref(v)   jl_typeis(v,jl_globalref_type)
 #define jl_is_labelnode(v)   jl_typeis(v,jl_labelnode_type)
 #define jl_is_gotonode(v)    jl_typeis(v,jl_gotonode_type)
 #define jl_is_quotenode(v)   jl_typeis(v,jl_quotenode_type)

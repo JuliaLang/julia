@@ -578,8 +578,8 @@ function isconstantfunc(f::ANY, sv::StaticVarInfo)
         m = _basemod()
         return isconst(m, f.name) && isdefined(m, f.name) && f
     end
-    if isa(f,GetfieldNode) && isa(f.value,Module)
-        M = f.value; s = f.name
+    if isa(f,GlobalRef)
+        M = f.mod; s = f.name
         return isdefined(M,s) && isconst(M,s) && f
     end
     if isa(f,Expr) && (is(f.head,:call) || is(f.head,:call1))
@@ -1000,8 +1000,8 @@ function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
         return abstract_eval_gensym(e::GenSym, sv)
     elseif isa(e,LambdaStaticData)
         return Function
-    elseif isa(e,GetfieldNode)
-        return abstract_eval_global(e.value::Module, e.name)
+    elseif isa(e,GlobalRef)
+        return abstract_eval_global(e.mod, e.name)
     end
 
     if !isa(e,Expr)
@@ -1980,9 +1980,9 @@ function _sym_repl(s::Union(Symbol,GenSym), from1, from2, to1, to2, deflt)
 end
 
 # return an expr to evaluate "from.sym" in module "to"
-function resolve_relative(sym, locals, args, from, to, typ, orig)
+function resolve_relative(sym, locals, args, from, to, orig)
     if sym in locals || sym in args
-        return GetfieldNode(from, sym, typ)
+        return GlobalRef(from, sym)
     end
     if is(from,to)
         return orig
@@ -1998,7 +1998,7 @@ function resolve_relative(sym, locals, args, from, to, typ, orig)
             return TopNode(sym)
         end
     end
-    return GetfieldNode(from, sym, typ)
+    return GlobalRef(from, sym)
 end
 
 # annotate symbols with their original module for inlining
@@ -2008,7 +2008,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
         if contains_is(env1, s) || contains_is(env2, s)
             return s
         end
-        return resolve_relative(s, locals, args, from, to, Any, s)
+        return resolve_relative(s, locals, args, from, to, s)
     end
     if isa(e,SymbolNode)
         s = e::SymbolNode
@@ -2016,7 +2016,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
         if contains_is(env1, name) || contains_is(env2, name)
             return s
         end
-        return resolve_relative(name, locals, args, from, to, s.typ, s)
+        return resolve_relative(name, locals, args, from, to, s)
     end
     if !isa(e,Expr)
         return e
@@ -2027,7 +2027,7 @@ function resolve_globals(e::ANY, locals, args, from, to, env1, env2)
         # on the LHS of assignments, so we make sure not to put
         # something else there
         e2 = resolve_globals(e.args[1]::Union(Symbol,GenSym), locals, args, from, to, env1, env2)
-        if isa(e2, GetfieldNode)
+        if isa(e2, GlobalRef)
             # abort when trying to inline a function which assigns to a global
             # variable in a different module, since `Mod.X=V` isn't allowed
             throw(e2)
@@ -2096,8 +2096,8 @@ function exprtype(x::ANY, sv::StaticVarInfo)
         return Type{x}
     elseif isa(x,LambdaStaticData)
         return Function
-    elseif isa(x,GetfieldNode)
-        return (x::GetfieldNode).typ
+    elseif isa(x,GlobalRef)
+        return abstract_eval_global(x.mod, (x::GlobalRef).name)
     else
         return typeof(x)
     end
@@ -2495,7 +2495,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
         try
             body = resolve_globals(body, enc_vars, enclosing_ast.args[1], mfrom, mto, args, spnames)
         catch ex
-            if isa(ex,GetfieldNode)
+            if isa(ex,GlobalRef)
                 return NF
             end
             rethrow(ex)
@@ -2887,7 +2887,7 @@ function inlining_pass(e::Expr, sv, ast)
             end
             if f1===false || !(isa(f,Function) || isa(f,IntrinsicFunction))
                 f = _ieval(:call)
-                e.args = Any[is_global(sv,:call) ? (:call) : GetfieldNode((inference_stack::CallStack).mod, :call, Function), e.args...]
+                e.args = Any[is_global(sv,:call) ? (:call) : GlobalRef((inference_stack::CallStack).mod, :call), e.args...]
             end
 
             if is(f, ^) || is(f, .^)

@@ -136,7 +136,7 @@ export
     StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GetfieldNode, NewvarNode,
+    GlobalRef, NewvarNode,
     # object model functions
     fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref,
@@ -231,10 +231,9 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
-type GetfieldNode
-    value
+immutable GlobalRef
+    mod::Module
     name::Symbol
-    typ
 end
 
 immutable ASCIIString <: DirectIndexString
