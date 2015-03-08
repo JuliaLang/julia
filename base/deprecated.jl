@@ -296,23 +296,23 @@ const base64 = base64encode
 
 # 0.4 discontinued functions
 
-function subtypetree(x::DataType, level=-1)
+@noinline function subtypetree(x::DataType, level=-1)
     depwarn("`subtypetree` is discontinued", :subtypetree)
     (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 end
 
-function unsafe_convert{P}(::Type{P}, x)
+@noinline function unsafe_convert{P}(::Type{P}, x)
     P<:Ptr || throw(MethodError(unsafe_convert, (Type{P}, x)))
     ret = convert(P, x) # attempt the call first, so we only print the depwarn if it can even succeed
     depwarn("convert(::Type{Ptr}, ::$(typeof(x))) methods should be converted to be methods of unsafe_convert", :unsafe_convert)
     return ret
 end
 
-function convert{T}(::Type{Ptr{T}}, x::Integer)
+@noinline function convert{T}(::Type{Ptr{T}}, x::Integer)
     depwarn("converting integers to pointers is discontinued", :convert)
     box(Ptr{T},unbox(UInt,UInt(x)))
 end
-function convert{T}(::Type{Ptr{T}}, x::Signed)
+@noinline function convert{T}(::Type{Ptr{T}}, x::Signed)
     depwarn("converting signed numbers to pointers is discontinued", :convert)
     box(Ptr{T},unbox(Int,Int(x)))
 end
