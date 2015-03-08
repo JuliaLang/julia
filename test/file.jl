@@ -331,6 +331,38 @@ write(af, "This is indeed a test")
 bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+
+    @test_throws ArgumentError cp(src, dst)
+end
+
+# Recursive copy
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+    touch(joinpath(src, "foo"))
+    mkdir(joinpath(src, "bar"))
+    touch(joinpath(src, "bar", "qux"))
+
+    cp(src, dst, recursive=true)
+    @test isfile(joinpath(dst, "foo"))
+    @test isfile(joinpath(dst, "bar", "qux"))
+end
+
+# issue #10434
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+
+    try cp(src, dst) end
+    @test !ispath(dst)
+end
+
 # issue #8698
 cfile = joinpath(dir, "c.txt")
 open(cfile, "w") do cf
