@@ -817,7 +817,9 @@ static std::string generate_func_sig(Type **lrt, Type **prt, int &sret,
 #if LLVM33
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
+#if !defined(_OS_WINDOWS_) || defined(LLVM35)
             paramattrs[0].addAttribute(Attribute::StructRet);
+#endif
 #elif LLVM32
             paramattrs.push_back(AttrBuilder());
             paramattrs[0].clear();
