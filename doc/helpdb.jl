@@ -226,8 +226,8 @@ Any[
 ("Base","reinterpret","reinterpret(type, A)
 
    Change the type-interpretation of a block of memory. For example,
-   \"reinterpret(Float32, uint32(7))\" interprets the 4 bytes
-   corresponding to \"uint32(7)\" as a \"Float32\". For arrays, this
+   \"reinterpret(Float32, UInt32(7))\" interprets the 4 bytes
+   corresponding to \"UInt32(7)\" as a \"Float32\". For arrays, this
    constructs an array with the same binary data as the given array,
    but with the specified element type.
 
@@ -419,18 +419,6 @@ Any[
 ("Base","flipdim","flipdim(A, d)
 
    Reverse \"A\" in dimension \"d\".
-
-"),
-
-("Base","flipud","flipud(A)
-
-   Equivalent to \"flipdim(A,1)\".
-
-"),
-
-("Base","fliplr","fliplr(A)
-
-   Equivalent to \"flipdim(A,2)\".
 
 "),
 
@@ -1968,9 +1956,9 @@ Any[
 
    Only valid in the context of an Expr returned from a macro.
    Prevents the macro hygiene pass from turning embedded variables
-   into gensym variables. See the *Non-Standard AbstractString
-   Literals* section of the Metaprogramming chapter of the manual for
-   more details and examples.
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -2707,19 +2695,27 @@ Any[
 
 "),
 
-("Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
+("Base","ccall","ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
    Call function in C-exported shared library, specified by
-   \"(function name, library)\" tuple, where each component is a
-   AbstractString or :Symbol. Alternatively, ccall may be used to call
-   a function pointer returned by dlsym, but note that this usage is
-   generally discouraged to facilitate future static compilation. Note
-   that the argument type tuple must be a literal tuple, and not a
-   tuple-valued variable or expression.
+   \"(function name, library)\" tuple, where each component is an
+   AbstractString or :Symbol.
+
+   Note that the argument type tuple must be a literal tuple, and not
+   a tuple-valued variable or expression. Alternatively, ccall may
+   also be used to call a function pointer, such as one returned by
+   dlsym.
+
+   Each \"ArgumentValue\" to the \"ccall\" will be converted to the
+   corresponding \"ArgumentType\", by automatic insertion of calls to
+   \"unsafe_convert(ArgumentType, cconvert(ArgumentType,
+   ArgumentValue))\". (see also the documentation for each of these
+   functions for further details). In most cases, this simply results
+   in a call to \"convert(ArgumentType, ArgumentValue)\"
 
 "),
 
-("Base","cglobal","cglobal((symbol, library) or ptr[, Type=Void])
+("Base","cglobal","cglobal((symbol, library)[, type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared
    library, specified exactly as in \"ccall\".  Returns a
@@ -2729,7 +2725,7 @@ Any[
 
 "),
 
-("Base","cfunction","cfunction(fun::Function, RetType::Type, (ArgTypes...))
+("Base","cfunction","cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    Generate C-callable function pointer from Julia function. Type
    annotation of the return value in the callback function is a must
@@ -2748,7 +2744,7 @@ Any[
 
 "),
 
-("Base","dlopen","dlopen(libfile::AbstractString[, flags::Integer])
+("Base","dlopen","dlopen(library_file::AbstractString[, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -2767,7 +2763,7 @@ Any[
 
 "),
 
-("Base","dlopen_e","dlopen_e(libfile::AbstractString[, flags::Integer])
+("Base","dlopen_e","dlopen_e(library_file::AbstractString[, flags::Integer])
 
    Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
    of raising errors.
@@ -2886,11 +2882,56 @@ Any[
 
    Call \"realloc\" from the C standard library.
 
+   See warning in \"c_free\" documentation regarding only using this
+   on memory originally obtained from \"c_malloc\".
+
 "),
 
 ("Base","c_free","c_free(addr::Ptr)
 
-   Call \"free\" from the C standard library.
+   Call \"free\" from the C standard library. Only use this on memory
+   obtained from \"c_malloc\", not on pointers retrieved from other C
+   libraries. \"Ptr\" objects obtained from C libraries should be
+   freed by the free functions defined in that library, to avoid
+   assertion failures if multiple \"libc\" libraries exist on the
+   system.
+
+"),
+
+("Base","unsafe_convert","unsafe_convert(T, x)
+
+   Convert \"x\" to a value of type \"T\"
+
+   In cases where \"convert\" would need to take a Julia object and
+   turn it into a \"Ptr\", this function should be used to define and
+   perform that conversion.
+
+   Be careful to ensure that a julia reference to \"x\" exists as long
+   as the result of this function will be used. Accordingly, the
+   argument \"x\" to this function should never be an expression, only
+   a variable name or field reference. For example, \"x=a.b.c\" is
+   acceptable, but \"x=[a,b,c]\" is not.
+
+   The \"unsafe\" prefix on this function indicates that using the
+   result of this function after the \"x\" argument to this function
+   is no longer accessible to the program may cause undefined
+   behavior, including program corruption or segfaults, at any later
+   time.
+
+"),
+
+("Base","cconvert","cconvert(T, x)
+
+   Convert \"x\" to a value of type \"T\", typically by calling
+   \"convert(T,x)\"
+
+   In cases where \"x\" cannot be safely converted to \"T\", unlike
+   \"convert\", \"cconvert\" may return an object of a type different
+   from \"T\", which however is suitable for \"unsafe_convert\" to
+   handle.
+
+   Neither \"convert\" nor \"cconvert\" should take a Julia object and
+   turn it into a \"Ptr\".
 
 "),
 
@@ -2900,6 +2941,11 @@ Any[
    (1-indexed) starting at \"p\". This is equivalent to the C
    expression \"p[i-1]\".
 
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointer >>``<<p` to ensure that it is valid.
+   Incorrect usage may segfault your program or return garbage
+   answers, in the same manner as C.
+
 "),
 
 ("Base","unsafe_store!","unsafe_store!(p::Ptr{T}, x, i::Integer)
@@ -2907,6 +2953,11 @@ Any[
    Store a value of type \"T\" to the address of the ith element
    (1-indexed) starting at \"p\". This is equivalent to the C
    expression \"p[i-1] = x\".
+
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointer >>``<<p` to ensure that it is valid.
+   Incorrect usage may corrupt or segfault your program, in the same
+   manner as C.
 
 "),
 
@@ -2916,6 +2967,11 @@ Any[
    checking. The size of an element is determined by the type of the
    pointers.
 
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointers \"dest\" and \"src\" to ensure that
+   they are valid. Incorrect usage may corrupt or segfault your
+   program, in the same manner as C.
+
 "),
 
 ("Base","unsafe_copy!","unsafe_copy!(dest::Array, do, src::Array, so, N)
@@ -2923,6 +2979,11 @@ Any[
    Copy \"N\" elements from a source array to a destination, starting
    at offset \"so\" in the source and \"do\" in the destination
    (1-indexed).
+
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed to ensure that N is inbounds on either array.
+   Incorrect usage may corrupt or segfault your program, in the same
+   manner as C.
 
 "),
 
@@ -2941,21 +3002,19 @@ Any[
 
 "),
 
-("Base","pointer","pointer(a[, index])
+("Base","pointer","pointer(array[, index])
 
    Get the native address of an array or string element. Be careful to
    ensure that a julia reference to \"a\" exists as long as this
-   pointer will be used.
+   pointer will be used. This function is \"unsafe\" like
+   \"unsafe_convert\".
+
+   Calling \"Ref(array[, index])\" is generally preferable to this
+   function.
 
 "),
 
-("Base","pointer","pointer(type, int)
-
-   Convert an integer to a pointer of the specified element type.
-
-"),
-
-("Base","pointer_to_array","pointer_to_array(p, dims[, own])
+("Base","pointer_to_array","pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    Wrap a native pointer as a Julia Array object. The pointer element
    type determines the array element type. \"own\" optionally
@@ -2965,7 +3024,7 @@ Any[
 
 "),
 
-("Base","pointer_from_objref","pointer_from_objref(obj)
+("Base","pointer_from_objref","pointer_from_objref(object_instance)
 
    Get the memory address of a Julia object as a \"Ptr\". The
    existence of the resulting \"Ptr\" will not protect the object from
@@ -2996,13 +3055,6 @@ Any[
 
 "),
 
-("Base","reenable_sigint","reenable_sigint(f::Function)
-
-   Re-enable Ctrl-C handler during execution of a function.
-   Temporarily reverses the effect of \"disable_sigint\".
-
-"),
-
 ("Base","errno","errno([code])
 
    Get the value of the C library's \"errno\". If an argument is
@@ -3022,9 +3074,40 @@ Any[
 
 "),
 
-("Base","strerror","strerror(n)
+("Base","strerror","strerror(errno)
 
    Convert a system call error code to a descriptive string
+
+"),
+
+("Base","Ptr{T}","Ptr{T}
+
+   A simple pointer to an arbitrary memory location. The type objects
+   expected at the memory location is represented by the type
+   parameter. However, no guarantee is made or implied that the memory
+   is actually valid, or that it actually represents the data of the
+   specified type.
+
+   \"C_NULL\" represents a generic, invalid or \"NULL\" pointer.
+
+"),
+
+("Base","Ref{T}","Ref{T}
+
+   Effectively, this represents and creates a managed pointer. The
+   type of objects it can contain is specified by the type parameter.
+   This type is guaranteed to point to valid, Julia-allocated memory
+   of the correct type (per the type parameter).
+
+   When passed to a *ccall* argument (either as a *Ptr* or *Ref*
+   type), the *Ref* object will be implicitly converted to a pointer
+   to the data region of that type.
+
+   The \"Ref\" type is useful for creating garbage-collector safe
+   pointers and returning values from a function (esp. a c-function),
+   for example.
+
+   There is no generic invalid or \"NULL\" Ref object.
 
 "),
 
@@ -6260,16 +6343,16 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","reprmime","reprmime(mime, x)
 
-   Returns a \"AbstractString\" or \"Vector{UInt8}\" containing the
+   Returns an \"AbstractString\" or \"Vector{UInt8}\" containing the
    representation of \"x\" in the requested \"mime\" type, as written
    by \"writemime\" (throwing a \"MethodError\" if no appropriate
-   \"writemime\" is available).  A \"AbstractString\" is returned for
+   \"writemime\" is available).  An \"AbstractString\" is returned for
    MIME types with textual representations (such as \"\"text/html\"\"
    or \"\"application/postscript\"\"), whereas binary data is returned
    as \"Vector{UInt8}\".  (The function \"istext(mime)\" returns
    whether or not Julia treats a given \"mime\" type as text.)
 
-   As a special case, if \"x\" is a \"AbstractString\" (for textual
+   As a special case, if \"x\" is an \"AbstractString\" (for textual
    MIME types) or a \"Vector{UInt8}\" (for binary MIME types), the
    \"reprmime\" function assumes that \"x\" is already in the
    requested \"mime\" format and simply returns \"x\".
@@ -6278,9 +6361,10 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","stringmime","stringmime(mime, x)
 
-   Returns a \"AbstractString\" containing the representation of \"x\"
-   in the requested \"mime\" type.  This is similar to \"reprmime\"
-   except that binary data is base64-encoded as an ASCII string.
+   Returns an \"AbstractString\" containing the representation of
+   \"x\" in the requested \"mime\" type.  This is similar to
+   \"reprmime\" except that binary data is base64-encoded as an ASCII
+   string.
 
 "),
 
@@ -10523,36 +10607,6 @@ popdisplay(d::Display)
 
 "),
 
-("Base","bool","bool(x)
-
-   Convert a number or numeric array to boolean
-
-"),
-
-("Base","int","int(x)
-
-   Convert a number or array to the default integer type on your
-   platform. Alternatively, \"x\" can be a string, which is parsed as
-   an integer.
-
-"),
-
-("Base","uint","uint(x)
-
-   Convert a number or array to the default unsigned integer type on
-   your platform. Alternatively, \"x\" can be a string, which is
-   parsed as an unsigned integer.
-
-"),
-
-("Base","integer","integer(x)
-
-   Convert a number or array to integer type. If \"x\" is already of
-   integer type it is unchanged, otherwise it converts it to the
-   default integer type on your platform.
-
-"),
-
 ("Base","signed","signed(x)
 
    Convert a number to a signed integer. If the argument is unsigned,
@@ -10565,84 +10619,6 @@ popdisplay(d::Display)
    Convert a number to an unsigned integer. If the argument is signed,
    it is reinterpreted as unsigned without checking for negative
    values.
-
-"),
-
-("Base","int8","int8(x)
-
-   Convert a number or array to \"Int8\" data type
-
-"),
-
-("Base","int16","int16(x)
-
-   Convert a number or array to \"Int16\" data type
-
-"),
-
-("Base","int32","int32(x)
-
-   Convert a number or array to \"Int32\" data type
-
-"),
-
-("Base","int64","int64(x)
-
-   Convert a number or array to \"Int64\" data type
-
-"),
-
-("Base","int128","int128(x)
-
-   Convert a number or array to \"Int128\" data type
-
-"),
-
-("Base","uint8","uint8(x)
-
-   Convert a number or array to \"UInt8\" data type
-
-"),
-
-("Base","uint16","uint16(x)
-
-   Convert a number or array to \"UInt16\" data type
-
-"),
-
-("Base","uint32","uint32(x)
-
-   Convert a number or array to \"UInt32\" data type
-
-"),
-
-("Base","uint64","uint64(x)
-
-   Convert a number or array to \"UInt64\" data type
-
-"),
-
-("Base","uint128","uint128(x)
-
-   Convert a number or array to \"UInt128\" data type
-
-"),
-
-("Base","float16","float16(x)
-
-   Convert a number or array to \"Float16\" data type
-
-"),
-
-("Base","float32","float32(x)
-
-   Convert a number or array to \"Float32\" data type
-
-"),
-
-("Base","float64","float64(x)
-
-   Convert a number or array to \"Float64\" data type
 
 "),
 
@@ -10668,9 +10644,6 @@ popdisplay(d::Display)
    type. For numeric data, the smallest suitable \"FloatingPoint\"
    type is used. Converts strings to \"Float64\".
 
-   This function is not recommended for arrays. It is better to use a
-   more specific function such as \"float32\" or \"float64\".
-
 "),
 
 ("Base","significand","significand(x)
@@ -10692,29 +10665,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","complex64","complex64(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
-   \"i\" defaults to zero.
-
-"),
-
-("Base","complex128","complex128(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
-   \"i\" defaults to zero.
-
-"),
-
 ("Base","complex","complex(r[, i])
 
    Convert real numbers or arrays to complex. \"i\" defaults to zero.
-
-"),
-
-("Base","char","char(x)
-
-   Convert a number or array to \"Char\" data type
 
 "),
 
@@ -10937,7 +10890,7 @@ popdisplay(d::Display)
 ("Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
-   anything that can be converted to an \"Int\") or a
+   anything that can be converted to an \"Int\") or an
    \"AbstractString\". The usual mathematical operators are defined
    for this type, and results are promoted to a \"BigInt\".
 
@@ -10946,7 +10899,7 @@ popdisplay(d::Display)
 ("Base","BigFloat","BigFloat(x)
 
    Create an arbitrary precision floating point number. \"x\" may be
-   an \"Integer\", a \"Float64\", a \"AbstractString\" or a
+   an \"Integer\", a \"Float64\", an \"AbstractString\" or a
    \"BigInt\". The usual mathematical operators are defined for this
    type, and results are promoted to a \"BigFloat\". Note that because
    floating-point numbers are not exactly-representable in decimal
@@ -11000,7 +10953,7 @@ popdisplay(d::Display)
 
    Number of zeros in the binary representation of \"x\".
 
-      julia> count_zeros(int32(2 ^ 16 - 1))
+      julia> count_zeros(Int32(2 ^ 16 - 1))
       16
 
 "),
@@ -11009,7 +10962,7 @@ popdisplay(d::Display)
 
    Number of zeros leading the binary representation of \"x\".
 
-      julia> leading_zeros(int32(1))
+      julia> leading_zeros(Int32(1))
       31
 
 "),
@@ -11018,7 +10971,7 @@ popdisplay(d::Display)
 
    Number of ones leading the binary representation of \"x\".
 
-      julia> leading_ones(uint32(2 ^ 32 - 2))
+      julia> leading_ones(UInt32(2 ^ 32 - 2))
       31
 
 "),
