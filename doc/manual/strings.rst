@@ -183,10 +183,10 @@ You can do comparisons and a limited amount of arithmetic with
     julia> 'A' + 1
     'B'
 
-:obj:`AbstractString` Basics
-----------------------------
+String Basics
+-------------
 
-:obj:`AbstractString` literals are delimited by double quotes or triple double quotes:
+String literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
@@ -544,8 +544,8 @@ Some other useful functions include:
 
 .. _man-non-standard-string-literals:
 
-Non-Standard AbstractString Literals
-------------------------------------
+Non-Standard String Literals
+----------------------------
 
 There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not

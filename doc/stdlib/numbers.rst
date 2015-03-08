@@ -335,13 +335,13 @@ General Number Functions and Constants
 
 .. function:: BigInt(x)
 
-   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or a ``AbstractString``.
+   Create an arbitrary precision integer. ``x`` may be an ``Int`` (or anything that can be converted to an ``Int``) or an ``AbstractString``.
    The usual mathematical operators are defined for this type, and results are promoted to a ``BigInt``.
 
 .. function:: BigFloat(x)
 
    Create an arbitrary precision floating point number. ``x`` may be
-   an ``Integer``, a ``Float64``, a ``AbstractString`` or a ``BigInt``. The
+   an ``Integer``, a ``Float64``, an ``AbstractString`` or a ``BigInt``. The
    usual mathematical operators are defined for this type, and results
    are promoted to a ``BigFloat``. Note that because floating-point
    numbers are not exactly-representable in decimal notation,
