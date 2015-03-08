@@ -152,11 +152,14 @@ uninitialized array and passing a pointer to its data to the C function.
 Creating C-Compatible Julia Function Pointers
 ---------------------------------------------
 
-It is possible to pass Julia functions to native functions that accept function
-pointer arguments by creating function pointers via the `cfunction` function.
+It is possible to pass Julia functions to native c-functions that accept
+function pointer arguments. For example, to match c-prototypes of the form::
 
-Finally, you can use ``cfunction`` to actually generate a call to the
-Julia library function. Arguments to ``cfunction`` are as follows:
+    typedef returntype (*functiontype)(argumenttype,...)
+
+The function `cfunction` generates the c-compatible function pointer for
+a call to a Julia Julia library function.
+Arguments to ``cfunction`` are as follows:
 
 1. A Julia Function
 
