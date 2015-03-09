@@ -1036,6 +1036,15 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     global cluster_manager
     cluster_manager = manager
     disable_threaded_libs()
+
+    # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
+    assert(nprocs() <= 1)
+    assert(isempty(PGRP.refs))
+    assert(isempty(client_refs))
+
+    # System is started in head node mode, cleanup entries related to the same
+    empty!(PGRP.workers)
+    empty!(map_pid_wrkr)
 end
 
 

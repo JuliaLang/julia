@@ -136,7 +136,7 @@ void parse_opts(int *argcp, char ***argvp)
         { "math-mode",       required_argument, 0, opt_math_mode },
         // hidden command line options
         { "build",           required_argument, 0, 'b' },
-        { "worker",          optional_argument, 0, opt_worker },
+        { "worker",          no_argument,       0, opt_worker },
         { "bind-to",         required_argument, 0, opt_bind_to },
         { "lisp",            no_argument,       &lisp_prompt, 1 },
         { 0, 0, 0, 0 }
@@ -329,15 +329,7 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.image_file = NULL;
             break;
         case opt_worker:
-            if (optarg != NULL)
-                if (!strcmp(optarg,"default"))
-                    jl_options.worker = JL_OPTIONS_WORKER_DEFAULT;
-                else if (!strcmp(optarg,"custom"))
-                    jl_options.worker = JL_OPTIONS_WORKER_CUSTOM;
-                else
-                    jl_errorf("julia: invalid argument to --worker={default|custom} (%s)\n", optarg);
-            else
-                jl_options.worker = JL_OPTIONS_WORKER_DEFAULT;
+            jl_options.worker = 1;
             break;
         case opt_bind_to:
             jl_options.bindto = strdup(optarg);

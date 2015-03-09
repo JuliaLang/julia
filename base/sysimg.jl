@@ -305,6 +305,7 @@ function __init__()
     fdwatcher_init()
     early_init()
     init_load_path()
+    init_parallel()
 end
 
 include("precompile.jl")
