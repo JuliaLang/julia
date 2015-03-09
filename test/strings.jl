@@ -65,10 +65,10 @@ end
 
 for i = 0:0x7f, p = ["","\0","x","xxx","\x7f","\uFF","\uFFF",
                      "\uFFFF","\U10000","\U10FFF","\U10FFFF"]
-    c = char(i)
+    c = Char(i)
     cp = string(c,p)
-    op = string(char(div(i,8)), oct(i%8), p)
-    hp = string(char(div(i,16)), hex(i%16), p)
+    op = string(Char(div(i,8)), oct(i%8), p)
+    hp = string(Char(div(i,16)), hex(i%16), p)
     @test string(unescape_string(string("\\",oct(i,1),p))) == cp
     @test string(unescape_string(string("\\",oct(i,2),p))) == cp
     @test string(unescape_string(string("\\",oct(i,3),p))) == cp
@@ -228,9 +228,9 @@ parsehex(s) = parseint(s,16)
 @test parseint("0o1234") == 0o1234
 @test parseint("0b1011") == 0b1011
 @test parseint("-1234") == -1234
-@test parseint("-0x1234") == -int(0x1234)
-@test parseint("-0o1234") == -int(0o1234)
-@test parseint("-0b1011") == -int(0b1011)
+@test parseint("-0x1234") == -Int(0x1234)
+@test parseint("-0o1234") == -Int(0o1234)
+@test parseint("-0b1011") == -Int(0b1011)
 
 ## FIXME: #4905, do these tests for Int128/UInt128!
 for T in (Int8, Int16, Int32, Int64)
@@ -928,12 +928,12 @@ bin_val = hex2bytes("07bf")
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
-@test float64(RevString("64")) === 46.0
+@test parsefloat(Float64,RevString("64")) === 46.0
 
 # issue #6772
 @test float(SubString("10",1,1)) === 1.0
 @test float(SubString("1 0",1,1)) === 1.0
-@test float32(SubString("10",1,1)) === 1.0f0
+@test parsefloat(Float32,SubString("10",1,1)) === 1.0f0
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
@@ -1023,7 +1023,7 @@ end
 # issue #6027
 let
     # make symbol with invalid char
-    sym = symbol(char(0xdcdb))
+    sym = symbol(Char(0xdcdb))
     @test string(sym) == "\udcdb"
     @test expand(sym) === sym
     @test parse("\udcdb = 1",1,raise=false)[1] == Expr(:error, "invalid character \"\udcdb\"")
@@ -1199,11 +1199,11 @@ let
         @test iscntrl(c) == false
     end
 
-    NBSP = char(0x0000A0)
-    ENSPACE = char(0x002002)
-    EMSPACE = char(0x002003)
-    THINSPACE = char(0x002009)
-    ZWSPACE = char(0x002060)
+    NBSP = Char(0x0000A0)
+    ENSPACE = Char(0x002002)
+    EMSPACE = Char(0x002003)
+    THINSPACE = Char(0x002009)
+    ZWSPACE = Char(0x002060)
 
     uspace = [ENSPACE, EMSPACE, THINSPACE]
     aspace = [' ']
@@ -1222,9 +1222,9 @@ let
 
     @test isspace(ZWSPACE) == false # zero-width space
 
-    acontrol = [ char(0x001c), char(0x001d), char(0x001e), char(0x001f)]
-    latincontrol = [ char(0x0080), char(0x0085) ]
-    ucontrol = [ char(0x200E), char(0x202E) ]
+    acontrol = [ Char(0x001c), Char(0x001d), Char(0x001e), Char(0x001f)]
+    latincontrol = [ Char(0x0080), Char(0x0085) ]
+    ucontrol = [ Char(0x200E), Char(0x202E) ]
 
     for c in vcat(acontrol, acntrl_space, latincontrol)
         @test iscntrl(c) == true
@@ -1234,7 +1234,7 @@ let
     end
 
     for c in ucontrol  #non-latin1 controls
-        if c!=char(0x0085)
+        if c!=Char(0x0085)
             @test iscntrl(c) == false
             @test isspace(c) == false
             @test isalnum(c) == false
@@ -1266,7 +1266,7 @@ end
 @test isdigit("23435")==true
 @test isalnum("23435")==true
 @test isalpha("23435")==false
-@test iscntrl( string(char(0x0080))) == true
+@test iscntrl( string(Char(0x0080))) == true
 @test ispunct( "‡؟჻") ==true
 
 @test isxdigit('0') == true
@@ -1337,12 +1337,12 @@ end
 # float(SubString) wasn't tolerant of trailing whitespace, which was different
 # to "normal" strings. This also checks we aren't being too tolerant and allowing
 # any arbitrary trailing characters.
-@test float64("1\n") == 1.0
-@test float64(split("0,1\n",","))[2] == 1.0
-@test_throws ArgumentError float64(split("0,1 X\n",","))[2]
-@test float32("1\n") == 1.0
-@test float32(split("0,1\n",","))[2] == 1.0
-@test_throws ArgumentError float32(split("0,1 X\n",","))[2]
+@test parsefloat(Float64,"1\n") == 1.0
+@test [parsefloat(Float64,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parsefloat(Float64,split("0,1 X\n",",")[2])
+@test parsefloat(Float32,"1\n") == 1.0
+@test [parsefloat(Float32,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parsefloat(Float32,split("0,1 X\n",",")[2])
 
 #more ascii tests
 @test convert(ASCIIString, UInt8[32,107,75], "*") == " kK"
@@ -1374,7 +1374,7 @@ immutable tstStringType <: AbstractString
 end
 tstr = tstStringType("12");
 @test_throws ErrorException endof(tstr)
-@test_throws ErrorException next(tstr, bool(1))
+@test_throws ErrorException next(tstr, Bool(1))
 
 gstr = Base.GenericString("12");
 @test typeof(string(gstr))==Base.GenericString
@@ -1384,10 +1384,10 @@ gstr = Base.GenericString("12");
 @test convert(Array{Char,1}, gstr) ==['1';'2']
 @test convert(Symbol, gstr)==symbol("12")
 
-@test getindex(gstr, bool(1))=='1'
+@test getindex(gstr, Bool(1))=='1'
 @test getindex(gstr, 1.0)=='1'
-@test getindex(gstr,bool(1):bool(1))=="1"
-@test getindex(gstr,AbstractVector([bool(1):bool(1);]))=="1"
+@test getindex(gstr,Bool(1):Bool(1))=="1"
+@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
 @test symbol(gstr)==symbol("12")
 
@@ -1395,13 +1395,13 @@ gstr = Base.GenericString("12");
 
 @test length(Base.GenericString(""))==0
 
-@test getindex(gstr,AbstractVector([bool(1):bool(1);]))=="1"
+@test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
-@test nextind(AbstractArray([bool(1):bool(1);]),1)==2
+@test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
 
 @test checkbounds(gstr,1.0)==true
 
 @test ind2chr(gstr,2)==2
 
 # issue #10307
-@test typeof(Int16(String[])) == Vector{Int16}
+@test typeof(map(Int16,String[])) == Vector{Int16}

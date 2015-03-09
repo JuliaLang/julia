@@ -160,7 +160,7 @@ kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    isinteger(p) && return A^integer(real(p))
+    isinteger(p) && return A^Integer(real(p))
 
     chksquare(A)
     v, X = eig(A)

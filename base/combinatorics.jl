@@ -45,8 +45,8 @@ function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
     n < 0 && throw(DomainError())
     n == 0 && return Inf
     n <= 2 && return 1.0
-    n > 20 && return gamma(float64(n))
-    @inbounds return float64(_fact_table64[n-1])
+    n > 20 && return gamma(Float64(n))
+    @inbounds return Float64(_fact_table64[n-1])
 end
 
 function factorial(n::Integer)

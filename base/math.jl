@@ -354,10 +354,10 @@ function mod2pi(x::Float64) # or modtau(x)
     end
 end
 
-mod2pi(x::Float32) = float32(mod2pi(float64(x)))
-mod2pi(x::Int32) = mod2pi(float64(x))
+mod2pi(x::Float32) = Float32(mod2pi(Float64(x)))
+mod2pi(x::Int32) = mod2pi(Float64(x))
 function mod2pi(x::Int64)
-  fx = float64(x)
+  fx = Float64(x)
   fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end

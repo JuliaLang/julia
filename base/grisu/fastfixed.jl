@@ -168,7 +168,7 @@ function trimzeros(buffer, len, decimal_point)
 end
 
 function fastfixedtoa(v,mode,fractional_count,buffer)
-    v = float64(v)
+    v = Float64(v)
     significand::UInt64 = _significand(v)
     exponent = _exponent(v)
     exponent > 20 && return false, 0, 0, buffer

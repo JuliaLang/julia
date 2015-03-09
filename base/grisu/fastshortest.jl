@@ -73,7 +73,7 @@ function digitgen(low,w,high,buffer)
 end
 
 function fastshortest(v,buffer=Array(UInt8,17))
-    f = normalize(float64(v))
+    f = normalize(Float64(v))
     bound_minus, bound_plus = normalizedbound(v)
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)

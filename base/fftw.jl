@@ -399,8 +399,8 @@ end
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
 complexfloat{T<:fftwComplex}(X::StridedArray{T}) = X
 complexfloat{T<:fftwReal}(X::StridedArray{T}) = complex(X)
-complexfloat{T<:Real}(X::StridedArray{T}) = complex128(X)
-complexfloat{T<:Complex}(X::StridedArray{T}) = complex128(X)
+complexfloat{T<:Real}(X::StridedArray{T}) = map(Complex128,X)
+complexfloat{T<:Complex}(X::StridedArray{T}) = map(Complex128,X)
 
 # In the Julia interface, a "plan" is just a function that executes
 # an efficient FFT of fixed size/strides/alignment.  For each FFT function

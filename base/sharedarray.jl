@@ -49,7 +49,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be < 32 characters
-        shm_seg_name = string("/jl", getpid(), (time() * 10^9)%Int64)
+        shm_seg_name = string("/jl", getpid(), round(Int64,time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)

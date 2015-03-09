@@ -278,14 +278,14 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
-==(x::Float32, y::Union(Int32,UInt32)) = float64(x)==float64(y)
-==(x::Union(Int32,UInt32), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,UInt32)) = Float64(x)==Float64(y)
+==(x::Union(Int32,UInt32), y::Float32) = Float64(x)==Float64(y)
 
-<(x::Float32, y::Union(Int32,UInt32)) = float64(x)<float64(y)
-<(x::Union(Int32,UInt32), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<Float64(y)
+<(x::Union(Int32,UInt32), y::Float32) = Float64(x)<Float64(y)
 
-<=(x::Float32, y::Union(Int32,UInt32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,UInt32), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<=Float64(y)
+<=(x::Union(Int32,UInt32), y::Float32) = Float64(x)<=Float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))

@@ -216,7 +216,7 @@ function length_checked_equal(args...)
     n
 end
 
-map(f, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
+map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end

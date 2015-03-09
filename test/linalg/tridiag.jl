@@ -29,7 +29,7 @@ let n = 12 #Size of matrix problem to test
         end
 
         A = SymTridiagonal(a, b)
-        fA = (elty <: Complex ? complex128:float64)(full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
 
         debug && println("Idempotent tests")
         for func in (conj, transpose, ctranspose)
@@ -73,7 +73,7 @@ let n = 12 #Size of matrix problem to test
         end
 
         B = SymTridiagonal(a, b)
-        fB = (elty <: Complex ? complex128 : float64)(full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
 
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)
@@ -93,7 +93,7 @@ let n = 12 #Size of matrix problem to test
         end
 
         A = Tridiagonal(a, b, c)
-        fA = (elty <: Complex ? complex128:float64)(full(A))
+        fA = map(elty <: Complex ? Complex128 : Float64, full(A))
 
         debug && println("Simple unary functions")
         for func in (det, inv)
@@ -118,7 +118,7 @@ let n = 12 #Size of matrix problem to test
 
 
         B = Tridiagonal(a, b, c)
-        fB = (elty <: Complex ? complex128:float64)(full(B))
+        fB = map(elty <: Complex ? Complex128 : Float64, full(B))
 
         for op in (+, -, *)
             @test_approx_eq full(op(A, B)) op(fA, fB)

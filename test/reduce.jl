@@ -32,7 +32,7 @@
 # sum
 
 @test sum(Int8[]) === 0
-@test sum(Int[]) === int(0)
+@test sum(Int[]) === Int(0)
 @test sum(Float64[]) === 0.0
 
 @test sum(Int8(3)) === Int8(3)

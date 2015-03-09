@@ -164,10 +164,10 @@ function randmtzig_fill_ziggurat_tables() # Operates on the global arrays
     end
     ke[2] = zero(UInt64)
 
-    wi[:] = float64(wib)
-    fi[:] = float64(fib)
-    we[:] = float64(web)
-    fe[:] = float64(feb)
+    wi[:] = wib
+    fi[:] = fib
+    we[:] = web
+    fe[:] = feb
     return nothing
 end
 randmtzig_fill_ziggurat_tables()
@@ -234,10 +234,10 @@ let mt = MersenneTwister(0)
         rand!(mt, A)
         rand!(mt, B)
         @test A[end] == Any[21,0x7b,17385,0x3086,-1574090021,0xadcb4460,6797283068698303107,0x4e91c9c4d4f5f759,
-                            -3482609696641744459568613291754091152,float16(0.03125),0.68733835f0][i]
+                            -3482609696641744459568613291754091152,Float16(0.03125),0.68733835f0][i]
 
         @test B[end] == Any[49,0x65,-3725,0x719d,814246081,0xdf61843a,-3010919637398300844,0x61b367cf8810985d,
-                            -33032345278809823492812856023466859769,float16(0.95),0.51829386f0][i]
+                            -33032345278809823492812856023466859769,Float16(0.95),0.51829386f0][i]
     end
 
     srand(mt,0)

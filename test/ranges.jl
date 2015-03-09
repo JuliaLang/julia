@@ -106,8 +106,8 @@ end
 @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
 @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-@test 0 in uint(0):100:typemax(Uint)
-@test last(uint(0):100:typemax(Uint)) in uint(0):100:typemax(Uint)
+@test 0 in UInt(0):100:typemax(Uint)
+@test last(UInt(0):100:typemax(Uint)) in UInt(0):100:typemax(Uint)
 @test -9223372036854775790 in -9223372036854775790:100:9223372036854775710
 @test -9223372036854775690 in -9223372036854775790:100:9223372036854775710
 @test -90 in -9223372036854775790:100:9223372036854775710
@@ -325,9 +325,9 @@ for s in 3:100
     @test length(typemax(Int):-s:typemin(Int)) == length(big(typemax(Int)):big(-s):big(typemin(Int)))
 end
 
-@test length(uint(1):uint(1):uint(0)) == 0
-@test length(typemax(UInt):uint(1):(typemax(UInt)-1)) == 0
-@test length(typemax(UInt):uint(2):(typemax(UInt)-1)) == 0
+@test length(UInt(1):UInt(1):UInt(0)) == 0
+@test length(typemax(UInt):UInt(1):(typemax(UInt)-1)) == 0
+@test length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == 0
 @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 
 # issue #6364

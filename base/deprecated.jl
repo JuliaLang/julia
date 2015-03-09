@@ -295,28 +295,34 @@ const base64 = base64encode
 @deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)
 
 # 1470
-@deprecate integer (s::AbstractString)  parseint(Int,s)
+@deprecate integer(s::AbstractString)   parseint(Int,s)
 @deprecate unsigned(s::AbstractString)  parseint(UInt,s)
-@deprecate int     (s::AbstractString)  parseint(Int,s)
-@deprecate uint    (s::AbstractString)  parseint(UInt,s)
-@deprecate int8    (s::AbstractString)  parseint(Int8,s)
-@deprecate uint8   (s::AbstractString)  parseint(UInt8,s)
-@deprecate int16   (s::AbstractString)  parseint(Int16,s)
-@deprecate uint16  (s::AbstractString)  parseint(UInt16,s)
-@deprecate int32   (s::AbstractString)  parseint(Int32,s)
-@deprecate uint32  (s::AbstractString)  parseint(UInt32,s)
-@deprecate int64   (s::AbstractString)  parseint(Int64,s)
-@deprecate uint64  (s::AbstractString)  parseint(UInt64,s)
-@deprecate int128  (s::AbstractString)  parseint(Int128,s)
-@deprecate uint128 (s::AbstractString)  parseint(UInt128,s)
-@deprecate float64(s::AbstractString)   parsefloat(Float64, s)
-@deprecate float32(s::AbstractString)   parsefloat(Float32, s)
+@deprecate int(s::AbstractString)       parseint(Int,s)
+@deprecate uint(s::AbstractString)      parseint(UInt,s)
+@deprecate int8(s::AbstractString)      parseint(Int8,s)
+@deprecate uint8(s::AbstractString)     parseint(UInt8,s)
+@deprecate int16(s::AbstractString)     parseint(Int16,s)
+@deprecate uint16(s::AbstractString)    parseint(UInt16,s)
+@deprecate int32(s::AbstractString)     parseint(Int32,s)
+@deprecate uint32(s::AbstractString)    parseint(UInt32,s)
+@deprecate int64(s::AbstractString)     parseint(Int64,s)
+@deprecate uint64(s::AbstractString)    parseint(UInt64,s)
+@deprecate int128(s::AbstractString)    parseint(Int128,s)
+@deprecate uint128(s::AbstractString)   parseint(UInt128,s)
+@deprecate float64(s::AbstractString)   parsefloat(Float64,s)
+@deprecate float32(s::AbstractString)   parsefloat(Float32,s)
 
-for (f,t) in ((:char, Char), (:bool, Bool), (:integer, Integer), (:signed, Signed),
+for (f,t) in ((:integer, Integer), (:signed, Signed),
               (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
               (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
               (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64),
-              (:uint128, UInt128), (:float16, Float16), (:float32, Float32),
+              (:uint128, UInt128))
+    @eval begin
+        @deprecate $f(x::AbstractArray) round($t, x)
+    end
+end
+
+for (f,t) in ((:char, Char), (:bool, Bool), (:float16, Float16), (:float32, Float32),
               (:float64, Float64), (:complex64, Complex64), (:complex128, Complex128))
     @eval begin
         @deprecate $f(x::AbstractArray) map($t, x)
@@ -324,11 +330,10 @@ for (f,t) in ((:char, Char), (:bool, Bool), (:integer, Integer), (:signed, Signe
 end
 
 const convert_funcs_and_types =
-    ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned), (:int, Int),
-     (:int8, Int8), (:int16, Int16), (:int32, Int32), (:int64, Int64),
-     (:int128, Int128), (:uint, UInt), (:uint8, UInt8), (:uint16, UInt16),
-     (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128), (:float16, Float16),
-     (:float32, Float32), (:float64, Float64))
+    ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned), (:int, Int), (:int8, Int8),
+     (:int16, Int16), (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
+     (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128),
+     (:float16, Float16), (:float32, Float32), (:float64, Float64))
 
 for (f,t) in convert_funcs_and_types
      @eval begin
@@ -337,9 +342,9 @@ for (f,t) in convert_funcs_and_types
      end
 end
 
-for (fn,t) in ((:float16,:Float16),(:float32,:Float32),(:float64,:Float64))
+for (f,t) in ((:float16,:Float16),(:float32,:Float32),(:float64,:Float64))
     @eval begin
-        @deprecate $fn(r::FloatRange) map($t, r)
+        @deprecate $f(r::FloatRange) map($t, r)
     end
 end
 

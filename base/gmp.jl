@@ -107,7 +107,7 @@ function BigInt(x::Float64)
     return z
 end
 
-BigInt(x::Union(Float16,Float32)) = BigInt(float64(x))
+BigInt(x::Union(Float16,Float32)) = BigInt(Float64(x))
 
 function BigInt(x::Integer)
     if x < 0
@@ -197,8 +197,8 @@ function convert(::Type{Float64}, n::BigInt)
     # TODO: this should round to nearest but instead rounds to zero
     ccall((:__gmpz_get_d, :libgmp), Float64, (Ptr{BigInt},), &n)
 end
-convert(::Type{Float32}, n::BigInt) = float32(float64(n))
-convert(::Type{Float16}, n::BigInt) = float16(float64(n))
+convert(::Type{Float32}, n::BigInt) = Float32(Float64(n))
+convert(::Type{Float16}, n::BigInt) = Float16(Float64(n))
 
 rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
 

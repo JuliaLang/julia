@@ -189,7 +189,7 @@ end
 
 fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
 fftwcopy{T<:Real}(X::StridedArray{T}) = float(X)
-fftwcopy{T<:Complex}(X::StridedArray{T}) = complex128(X)
+fftwcopy{T<:Complex}(X::StridedArray{T}) = map(Complex128,X)
 
 for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                          (:dct!, :r2r!, :X, :fftwNumber))
