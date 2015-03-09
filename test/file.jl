@@ -43,7 +43,7 @@ let skew = 10  # allow 10s skew
     mdir  = mtime(dir)
     @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
 end
-#@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+#@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 @unix_only @test islink(link) == true
@@ -185,15 +185,15 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = mmap_array(UInt8, (11,), s)
 @test c == "Hello World".data
-c = mmap_array(UInt8, (uint16(11),), s)
+c = mmap_array(UInt8, (UInt16(11),), s)
 @test c == "Hello World".data
-@test_throws ArgumentError mmap_array(UInt8, (int16(-11),), s)
+@test_throws ArgumentError mmap_array(UInt8, (Int16(-11),), s)
 @test_throws ArgumentError mmap_array(UInt8, (typemax(UInt),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
 c = mmap_array(UInt8, (11,), s)
-c[5] = uint8('x')
+c[5] = UInt8('x')
 msync(c)
 close(s)
 s = open(file, "r")

@@ -83,7 +83,7 @@ stagedfunction sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
         end
         if k < N && I[k] <: Real
             push!(Itypes, UnitRange{Int})
-            push!(Iexprs, :(int(I[$k]):int(I[$k])))
+            push!(Iexprs, :(Int(I[$k]):Int(I[$k])))
         else
             push!(Itypes, I[k])
             push!(Iexprs, :(I[$k]))
@@ -199,7 +199,7 @@ stagedfunction sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, 
             if k < N && I[k] <: Real
                 # convert scalar to a range
                 sym = gensym()
-                push!(preexprs, :($sym = reindex(V.indexes[$j], int(I[$k]))))
+                push!(preexprs, :($sym = reindex(V.indexes[$j], Int(I[$k]))))
                 push!(indexexprs, :($sym:$sym))
                 push!(Itypes, UnitRange{Int})
             elseif k < length(I) || k == NV || j == length(IV)

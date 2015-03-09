@@ -2,7 +2,7 @@
 
 # TODO: check for usleep errors?
 @unix_only systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32,s*1e6))
-@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return int32(0))
+@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return Int32(0))
 
 type TmStruct
     sec::Int32
@@ -68,7 +68,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     tm
 end
 
-time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
 
 ## process-related functions ##
 

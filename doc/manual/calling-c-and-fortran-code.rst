@@ -218,7 +218,7 @@ array matches ``T``, and the address of the first element is passed.
 This is done in order to avoid copying arrays unnecessarily.
 
 Therefore, if an ``Array`` contains data in the wrong format, it will
-have to be explicitly converted using a call such as ``int32(a)``.
+have to be explicitly converted using a call such as ``Vector{Int32}(a)``.
 
 To pass an array ``A`` as a pointer of a different type *without*
 converting the data beforehand (for example, to pass a ``Float64`` array

@@ -160,7 +160,7 @@ kron(a::Vector, b::Matrix)=kron(reshape(a,length(a),1),b)
 ^(A::Matrix, p::Integer) = p < 0 ? inv(A^-p) : Base.power_by_squaring(A,p)
 
 function ^(A::Matrix, p::Number)
-    isinteger(p) && return A^integer(real(p))
+    isinteger(p) && return A^Integer(real(p))
 
     chksquare(A)
     v, X = eig(A)
@@ -249,10 +249,10 @@ function expm!{T<:BlasFloat}(A::StridedMatrix{T})
     end
 
     if ilo > 1       # apply lower permutations in reverse order
-        for j in (ilo-1):-1:1 rcswap!(j, int(scale[j]), X) end
+        for j in (ilo-1):-1:1 rcswap!(j, Int(scale[j]), X) end
     end
     if ihi < n       # apply upper permutations in forward order
-        for j in (ihi+1):n    rcswap!(j, int(scale[j]), X) end
+        for j in (ihi+1):n    rcswap!(j, Int(scale[j]), X) end
     end
     X
 end

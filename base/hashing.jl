@@ -54,14 +54,14 @@ end
 ## hashing small, built-in numeric types ##
 
 hx(a::UInt64, b::Float64, h::UInt) = hash_uint64((3a + reinterpret(UInt64,b)) - h)
-const hx_NaN = hx(uint64(0), NaN, uint(0  ))
+const hx_NaN = hx(UInt64(0), NaN, UInt(0  ))
 
-hash(x::UInt64,  h::UInt) = hx(x, float64(x), h)
-hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), float64(x), h)
+hash(x::UInt64,  h::UInt) = hx(x, Float64(x), h)
+hash(x::Int64,   h::UInt) = hx(reinterpret(UInt64,abs(x)), Float64(x), h)
 hash(x::Float64, h::UInt) = isnan(x) ? (hx_NaN $ h) : hx(box(UInt64,fptoui(unbox(Float64,abs(x)))), x, h)
 
-hash(x::Union(Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32), h::UInt) = hash(int64(x), h)
-hash(x::Float32, h::UInt) = hash(float64(x), h)
+hash(x::Union(Bool,Char,Int8,UInt8,Int16,UInt16,Int32,UInt32), h::UInt) = hash(Int64(x), h)
+hash(x::Float32, h::UInt) = hash(Float64(x), h)
 
 ## hashing complex numbers ##
 

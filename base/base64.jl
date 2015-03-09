@@ -32,10 +32,10 @@ end
 
 const b64chars = ['A':'Z';'a':'z';'0':'9';'+';'/']
 
-const base64_pad = uint8('=')
+const base64_pad = UInt8('=')
 
 function b64(x::UInt8, y::UInt8, z::UInt8)
-    n = int(x)<<16 | int(y)<<8 | int(z)
+    n = Int(x)<<16 | Int(y)<<8 | Int(z)
     b64chars[(n >> 18) + 1],
     b64chars[(n >> 12) & 0b111111 + 1],
     b64chars[(n >> 6) & 0b111111 + 1],
@@ -56,7 +56,7 @@ const sentinel = typemax(UInt8)
 const revb64chars = fill(sentinel, 256)
 # Fill revb64chars
 for (val, ch) in enumerate(b64chars)
-    revb64chars[uint8(ch)] = uint8(val - 1)
+    revb64chars[UInt8(ch)] = UInt8(val - 1)
 end
 
 #Decode a block of at least 2 and at most 4 bytes, received in encvec

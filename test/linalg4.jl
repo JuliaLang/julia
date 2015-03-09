@@ -66,14 +66,14 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         debug && println("Linear solver")
         Tfull = full(T)
-        condT = cond(complex128(Tfull))
+        condT = cond(map(Complex128,Tfull))
         x = T \ b
         tx = Tfull \ b
         @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
 
         debug && println("Eigensystems")
         d1, v1 = eig(T)
-        d2, v2 = eig((elty<:Complex?complex128:float64)(Tfull))
+        d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
         @test_approx_eq isupper?d1:reverse(d1) d2
         if elty <: Real
             test_approx_eq_vecs(v1, isupper?v2:v2[:,n:-1:1])

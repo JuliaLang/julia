@@ -8,7 +8,7 @@ import Base: _default_delims
 export countlines, readdlm, readcsv, writedlm, writecsv
 
 
-const invalid_dlm = char(0xfffffffe)
+const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
 countlines(nameorfile) = countlines(nameorfile, '\n')
@@ -27,7 +27,7 @@ function countlines(io::IO, eol::Char)
     while !eof(io)
         nb = readbytes!(io, a)
         for i=1:nb
-            if char(a[i]) == eol
+            if Char(a[i]) == eol
                 preceded_by_eol = true
             elseif preceded_by_eol
                 preceded_by_eol = false
@@ -59,7 +59,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(UInt8, (int(fsz),), io)
+        mmap_array(UInt8, (Int(fsz),), io)
     end
 end
 
@@ -98,7 +98,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, st
     if length(offsets) < offidx
         offlen = offs_chunk_size * length(oarr)
         if (offlen + offs_chunk_size) > dlmoffsets.thresh
-            est_tot = int(offlen * dlmoffsets.bufflen / endpos)
+            est_tot = Int(offlen * dlmoffsets.bufflen / endpos)
             if (est_tot - offlen) > offs_chunk_size    # allow another chunk
                 # abandon offset collection
                 dlmoffsets.oarr = Vector{Int}[]
@@ -112,7 +112,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, st
     end
     offsets[offidx] = row
     offsets[offidx+1] = col
-    offsets[offidx+2] = int(quoted)
+    offsets[offidx+2] = Int(quoted)
     offsets[offidx+3] = startpos
     offsets[offidx+4] = endpos
     dlmoffsets.offidx = offidx + 5
@@ -159,7 +159,7 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
     tmp64 = dlmstore.tmp64
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
-    (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
+    (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
     sval = quoted ? SubString(sbuff, startpos+1, endpos-1) : SubString(sbuff, startpos, endpos)
 
     if drow > 0
@@ -297,7 +297,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         while idx <= length(offsets)
             row = offsets[idx]
             col = offsets[idx+1]
-            quoted = bool(offsets[idx+2])
+            quoted = Bool(offsets[idx+2])
             startpos = offsets[idx+3]
             endpos = offsets[idx+4]
 
@@ -321,15 +321,15 @@ colval{T<:Char, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::In
 colval{S<:AbstractString}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
-    dlm_parse(s.data, uint8(uint32(eol)), uint8(uint32(dlm)), uint8(uint32(qchar)), uint8(uint32(cchar)),
+    dlm_parse(s.data, UInt32(eol)%UInt8, UInt32(dlm)%UInt8, UInt32(qchar)%UInt8, UInt32(cchar)%UInt8,
               ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
 end
 
 function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler)
     all_ascii = (D <: UInt8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
-    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
+    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, eol%UInt8, dlm%UInt8, qchar%UInt8, cchar%UInt8, ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
     ncols = nrows = col = 0
-    is_default_dlm = (dlm == uint32(invalid_dlm) % D)
+    is_default_dlm = (dlm == UInt32(invalid_dlm) % D)
     error_str = ""
     # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment, 5: skipstart
     state = (skipstart > 0) ? 5 : 0
@@ -341,16 +341,16 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
         was_cr = false
         while idx <= slen
             val,idx = next(dbuff, idx)
-            if (is_eol = (char(val) == char(eol)))
+            if (is_eol = (Char(val) == Char(eol)))
                 is_dlm = is_comment = is_cr = is_quote = false
-            elseif (is_dlm = (is_default_dlm ? in(char(val), _default_delims) : (char(val) == char(dlm))))
+            elseif (is_dlm = (is_default_dlm ? in(Char(val), _default_delims) : (Char(val) == Char(dlm))))
                 is_comment = is_cr = is_quote = false
-            elseif (is_quote = (char(val) == char(qchar)))
+            elseif (is_quote = (Char(val) == Char(qchar)))
                 is_comment = is_cr = false
-            elseif (is_comment = (char(val) == char(cchar)))
+            elseif (is_comment = (Char(val) == Char(cchar)))
                 is_cr = false
             else
-                is_cr = (char(eol) == '\n') && (char(val) == '\r')
+                is_cr = (Char(eol) == '\n') && (Char(val) == '\r')
             end
 
             if 2 == state   # unquoted field
@@ -447,7 +447,7 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
                     col = 0
                     state = 4
                 elseif (is_cr && was_cr) || !is_cr
-                    error_str = escape_string("unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)")
+                    error_str = escape_string("unexpected character '$(Char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break
                 end
             elseif 5 == state # skip start

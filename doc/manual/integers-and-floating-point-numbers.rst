@@ -292,7 +292,7 @@ Values can be converted to ``Float32`` easily:
 
 .. doctest::
 
-    julia> float32(-1.5)
+    julia> Float32(-1.5)
     -1.5f0
 
     julia> typeof(ans)
@@ -319,10 +319,10 @@ only as a storage format. In calculations they'll be converted to ``Float32``:
 
 .. doctest::
 
-    julia> sizeof(float16(4.))
+    julia> sizeof(Float16(4.))
     2
 
-    julia> 2*float16(4.)
+    julia> 2*Float16(4.)
     8.0f0
 
 

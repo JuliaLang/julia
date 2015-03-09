@@ -59,7 +59,7 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
         write(io, typed ? infstr : "Inf")
         return
     end
-    typed && isa(x,Float16) && write(io, "float16(")
+    typed && isa(x,Float16) && write(io, "Float16(")
     len,pt,neg,buffer = grisu(x,mode,n)
     pdigits = pointer(buffer)
     if mode == PRECISION

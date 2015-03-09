@@ -113,7 +113,7 @@ show(io::IO, n::Signed) = (write(io, dec(n)); nothing)
 show(io::IO, n::Unsigned) = print(io, "0x", hex(n,sizeof(n)<<1))
 print(io::IO, n::Unsigned) = print(io, dec(n))
 
-show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(unsigned(p), WORD_SIZE>>2))")
+show{T}(io::IO, p::Ptr{T}) = print(io, typeof(p), " @0x$(hex(UInt(p), WORD_SIZE>>2))")
 
 function show(io::IO, p::Pair)
     show(io, p.first)
@@ -270,8 +270,7 @@ end
 isidentifier(s::Symbol) = isidentifier(string(s))
 
 isoperator(s::Symbol) = ccall(:jl_is_operator, Cint, (Ptr{UInt8},), s) != 0
-operator_precedence(s::Symbol) = int(ccall(:jl_operator_precedence,
-                                           Cint, (Ptr{UInt8},), s))
+operator_precedence(s::Symbol) = Int(ccall(:jl_operator_precedence, Cint, (Ptr{UInt8},), s))
 operator_precedence(x::Any) = 0 # fallback for generic expression nodes
 const prec_power = operator_precedence(:(^))
 

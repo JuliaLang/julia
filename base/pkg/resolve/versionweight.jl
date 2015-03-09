@@ -167,7 +167,7 @@ VersionWeight() = VersionWeight(0)
 VersionWeight(vn::VersionNumber, uninstall=false) =
     VersionWeight(vn.major, vn.minor, vn.patch,
                   VWPreBuild(true, vn.prerelease), VWPreBuild(false, vn.build),
-                  int(uninstall))
+                  Int(uninstall))
 
 Base.zero(::Type{VersionWeight}) = VersionWeight()
 

@@ -11,9 +11,9 @@ using Base.Test
 @test isbits(Fruit)
 @test typeof(apple) <: Fruit <: Enum
 @test typeof(apple.val) <: Int8
-@test int(apple) == 0
-@test int(orange) == 1
-@test int(kiwi) == 2
+@test Int(apple) == 0
+@test Int(orange) == 1
+@test Int(kiwi) == 2
 @test apple.val === Int8(0)
 @test orange.val === Int8(1)
 @test kiwi.val === Int8(2)
@@ -64,7 +64,7 @@ end
 @enum(QualityofFrenchFood, ReallyGood)
 @test length(QualityofFrenchFood) == 1
 @test typeof(ReallyGood) <: QualityofFrenchFood <: Enum
-@test int(ReallyGood) == 0
+@test Int(ReallyGood) == 0
 
 @enum Binary _zero=0 _one=1 _two=10 _three=11
 @test _zero.val === 0
@@ -83,7 +83,7 @@ end
 @test_throws ArgumentError eval(:(@enum Test1 _zerofp=0.0))
 @test_throws ArgumentError eval(:(@enum Test11 _zerofp2=0.5))
 @enum Test111 _zerobi=BigInt(1)
-@test integer(_zerobi) == 1
+@test Integer(_zerobi) == 1
 
 # can't use non-identifiers as enum members
 @test_throws ArgumentError eval(:(@enum(Test2, ?)))
@@ -159,7 +159,7 @@ end
 
 # widening to BigInt's
 @enum(Test13, _zero_Test13=0xffffffffffffffffffffffffffffffff, _one_Test13)
-@test integer(_one_Test13) == 340282366920938463463374607431768211456
+@test Integer(_one_Test13) == 340282366920938463463374607431768211456
 
 # test for unique Enum values
 @test_throws ArgumentError eval(:(@enum(Test14, _zero_Test14, _one_Test14, _two_Test14=0)))

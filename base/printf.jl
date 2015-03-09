@@ -207,11 +207,11 @@ function print_exp_e(out, exp::Integer)
             print(out, exp)
             return
         end
-        write(out, char('0'+d))
+        write(out, Char('0'+d))
     end
     exp = rem(exp,100)
-    write(out, char('0'+div(exp,10)))
-    write(out, char('0'+rem(exp,10)))
+    write(out, Char('0'+div(exp,10)))
+    write(out, Char('0'+rem(exp,10)))
 end
 
 function print_exp_a(out, exp::Integer)
@@ -575,7 +575,7 @@ function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     #  (-): left justify
     #
     @gensym x
-    blk = Expr(:block, :($x = char($x)))
+    blk = Expr(:block, :($x = Char($x)))
     if width > 1 && !('-' in flags)
         p = '0' in flags ? '0' : ' '
         push!(blk.args, pad(width-1, :($width-charwidth($x)), p))
@@ -652,7 +652,7 @@ macro handle_zero(ex)
     quote
         if $(esc(ex)) == 0
             DIGITS[1] = '0'
-            return int32(1), int32(1), $(esc(:neg))
+            return Int32(1), Int32(1), $(esc(:neg))
         end
     end
 end
@@ -671,11 +671,11 @@ ini_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true
 
 
 # fallbacks for Real types without explicit decode_* implementation
-decode_oct(d::Real) = decode_oct(integer(d))
-decode_0ct(d::Real) = decode_0ct(integer(d))
-decode_dec(d::Real) = decode_dec(integer(d))
-decode_hex(d::Real) = decode_hex(integer(d))
-decode_HEX(d::Real) = decode_HEX(integer(d))
+decode_oct(d::Real) = decode_oct(Integer(d))
+decode_0ct(d::Real) = decode_0ct(Integer(d))
+decode_dec(d::Real) = decode_dec(Integer(d))
+decode_hex(d::Real) = decode_hex(Integer(d))
+decode_HEX(d::Real) = decode_HEX(Integer(d))
 
 handlenegative(d::Unsigned) = (false, d)
 function handlenegative(d::Integer)
@@ -695,7 +695,7 @@ function decode_oct(d::Integer)
         x >>= 3
         i -= 1
     end
-    return int32(pt), int32(pt), neg
+    return Int32(pt), Int32(pt), neg
 end
 
 function decode_0ct(d::Integer)
@@ -707,7 +707,7 @@ function decode_0ct(d::Integer)
         x >>= 3
         i -= 1
     end
-    return int32(pt), int32(pt), neg
+    return Int32(pt), Int32(pt), neg
 end
 
 function decode_dec(d::Integer)
@@ -719,7 +719,7 @@ function decode_dec(d::Integer)
         x = div(x,10)
         i -= 1
     end
-    return int32(pt), int32(pt), neg
+    return Int32(pt), Int32(pt), neg
 end
 
 function decode_hex(d::Integer, symbols::Array{UInt8,1})
@@ -731,7 +731,7 @@ function decode_hex(d::Integer, symbols::Array{UInt8,1})
         x >>= 4
         i -= 1
     end
-    return int32(pt), int32(pt), neg
+    return Int32(pt), Int32(pt), neg
 end
 
 const hex_symbols = "0123456789abcdef".data
@@ -748,7 +748,7 @@ function decode(b::Int, x::BigInt)
     ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
           (Ptr{UInt8}, Cint, Ptr{BigInt}), DIGITS, b, &x)
     neg && (x.size = -x.size)
-    return int32(pt), int32(pt), neg
+    return Int32(pt), Int32(pt), neg
 end
 decode_oct(x::BigInt) = decode(8, x)
 decode_dec(x::BigInt) = decode(10, x)
@@ -759,7 +759,7 @@ function decode_0ct(x::BigInt)
     neg = x.size < 0
     DIGITS[1] = '0'
     if x.size == 0
-        return int32(1), int32(1), neg
+        return Int32(1), Int32(1), neg
     end
     pt = Base.ndigits0z(x, 8) + 1
     length(DIGITS) < pt+1 && resize!(DIGITS, pt+1)
@@ -768,7 +768,7 @@ function decode_0ct(x::BigInt)
     ccall((:__gmpz_get_str, :libgmp), Ptr{UInt8},
           (Ptr{UInt8}, Cint, Ptr{BigInt}), p, 8, &x)
     neg && (x.size = -x.size)
-    return neg, int32(pt), int32(pt)
+    return neg, Int32(pt), Int32(pt)
 end
 
 ### decoding functions directly used by printf generated code ###
@@ -788,18 +788,18 @@ end
 function decode_dec(x::SmallFloatingPoint)
     if x == 0.0
         DIGITS[1] = '0'
-        return (int32(1), int32(1), false)
+        return (Int32(1), Int32(1), false)
     end
     len,pt,neg,buffer = grisu(x,Grisu.FIXED,0)
     if len == 0
         DIGITS[1] = '0'
-        return (int32(1), int32(1), false)
+        return (Int32(1), Int32(1), false)
     else
         for i = len+1:pt
             DIGITS[i] = '0'
         end
     end
-    return int32(len), int32(pt), neg
+    return Int32(len), Int32(pt), neg
 end
 # TODO: implement decode_oct, decode_0ct, decode_hex, decode_HEX for SmallFloatingPoint
 
@@ -819,9 +819,9 @@ function fix_dec(x::SmallFloatingPoint, n::Int)
     len,pt,neg,buffer = grisu(x,Grisu.FIXED,n)
     if len == 0
         DIGITS[1] = '0'
-        return (int32(1), int32(1), neg)
+        return (Int32(1), Int32(1), neg)
     end
-    return int32(len), int32(pt), neg
+    return Int32(len), Int32(pt), neg
 end
 
 ## ini decoding functions ##
@@ -868,17 +868,17 @@ end
 function ini_dec(x::SmallFloatingPoint, n::Int)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
-        return int32(1), int32(1), signbit(x)
+        return Int32(1), Int32(1), signbit(x)
     else
         len,pt,neg,buffer = grisu(x,Grisu.PRECISION,n)
     end
-    return int32(len), int32(pt), neg
+    return Int32(len), Int32(pt), neg
 end
 
 function ini_dec(x::BigInt, n::Int)
     if x.size == 0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
-        return int32(1), int32(1), false
+        return Int32(1), Int32(1), false
     end
     d = Base.ndigits0z(x)
     if d <= n
@@ -902,10 +902,10 @@ ini_hex(x::Real, n::Int, symbols::Array{UInt8,1}) = ini_hex(float(x), n, symbols
 ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
 
 function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
-    x = float64(x)
+    x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
-        return int32(1), int32(0), signbit(x)
+        return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
         sigbits = 4*min(n-1,13)
@@ -922,15 +922,15 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
             i -= 1
         end
         # pt is the binary exponent
-        return int32(n), int32(p-1), x < 0.0
+        return Int32(n), Int32(p-1), x < 0.0
     end
 end
 
 function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
-    x = float64(x)
+    x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
-        return int32(1), int32(0), signbit(x)
+        return Int32(1), Int32(0), signbit(x)
     else
         s, p = frexp(x)
         s *= 2.0
@@ -943,7 +943,7 @@ function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
             u >>= 4
         end
         # pt is the binary exponent
-        return int32(n), int32(p-1), x < 0.0
+        return Int32(n), Int32(p-1), x < 0.0
     end
 end
 
@@ -978,7 +978,7 @@ function bigfloat_printf(out, d, flags::ASCIIString, width::Int, precision::Int,
     end
     write(fmt, 'R')
     write(fmt, c)
-    write(fmt, uint8(0))
+    write(fmt, UInt8(0))
     printf_fmt = takebuf_array(fmt)
     @assert length(printf_fmt) == fmt_len
     bufsiz = length(DIGITS) - 1

@@ -142,13 +142,13 @@ Ac_ldiv_Bc{T<:BlasComplex,S<:StridedMatrix}(A::LU{T,S}, B::StridedVecOrMat{T}) =
 function det{T,S}(A::LU{T,S})
     n = chksquare(A)
     A.info > 0 && return zero(typeof(A.factors[1]))
-    return prod(diag(A.factors)) * (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
+    return prod(diag(A.factors)) * (Bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T))
 end
 
 function logdet2{T<:Real,S}(A::LU{T,S})  # return log(abs(det)) and sign(det)
     n = chksquare(A)
     dg = diag(A.factors)
-    s = (bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
+    s = (Bool(sum(A.ipiv .!= 1:n) % 2) ? -one(T) : one(T)) * prod(sign(dg))
     sum(log(abs(dg))), s
 end
 
@@ -161,7 +161,7 @@ end
 function logdet{T<:Complex,S}(A::LU{T,S})
     n = chksquare(A)
     s = sum(log(diag(A.factors)))
-    if bool(sum(A.ipiv .!= 1:n) % 2)
+    if Bool(sum(A.ipiv .!= 1:n) % 2)
         s = Complex(real(s), imag(s)+π)
     end
     r, a = reim(s)

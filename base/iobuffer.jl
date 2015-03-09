@@ -66,7 +66,7 @@ function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
     return a
 end
 
-read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, int(nb))
+read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, Int(nb))
 function read!(from::IOBuffer, p::Ptr, nb::Int)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
@@ -237,7 +237,7 @@ function write(to::IOBuffer, from::IOBuffer)
     from.ptr += nb_available(from)
 end
 
-write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
+write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, Int(nb))
 function write(to::IOBuffer, p::Ptr, nb::Int)
     to.writable || throw(ArgumentError("write failed, IOBuffer is not writeable"))
     ensureroom(to, nb)

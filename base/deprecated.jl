@@ -36,7 +36,7 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if bool(JLOptions().depwarn)
+    if Bool(JLOptions().depwarn)
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
@@ -293,6 +293,129 @@ const base64 = base64encode
 
 # 10314
 @deprecate filter!(r::Regex, d::Dict) filter!((k,v)->ismatch(r,k), d)
+
+# 1470
+@deprecate integer(s::AbstractString)   parseint(Int,s)
+@deprecate unsigned(s::AbstractString)  parseint(UInt,s)
+@deprecate int(s::AbstractString)       parseint(Int,s)
+@deprecate uint(s::AbstractString)      parseint(UInt,s)
+@deprecate int8(s::AbstractString)      parseint(Int8,s)
+@deprecate uint8(s::AbstractString)     parseint(UInt8,s)
+@deprecate int16(s::AbstractString)     parseint(Int16,s)
+@deprecate uint16(s::AbstractString)    parseint(UInt16,s)
+@deprecate int32(s::AbstractString)     parseint(Int32,s)
+@deprecate uint32(s::AbstractString)    parseint(UInt32,s)
+@deprecate int64(s::AbstractString)     parseint(Int64,s)
+@deprecate uint64(s::AbstractString)    parseint(UInt64,s)
+@deprecate int128(s::AbstractString)    parseint(Int128,s)
+@deprecate uint128(s::AbstractString)   parseint(UInt128,s)
+@deprecate float64(s::AbstractString)   parsefloat(Float64,s)
+@deprecate float32(s::AbstractString)   parsefloat(Float32,s)
+
+for (f,t) in ((:integer, Integer), (:signed, Signed),
+              (:unsigned, Unsigned), (:int, Int), (:int8, Int8), (:int16, Int16),
+              (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
+              (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64),
+              (:uint128, UInt128))
+    @eval begin
+        @deprecate $f(x::AbstractArray) round($t, x)
+    end
+end
+
+for (f,t) in ((:char, Char), (:bool, Bool), (:float16, Float16), (:float32, Float32),
+              (:float64, Float64), (:complex64, Complex64), (:complex128, Complex128))
+    @eval begin
+        @deprecate $f(x::AbstractArray) map($t, x)
+    end
+end
+
+const convert_funcs_and_types =
+    ((:integer, Integer), (:signed, Signed), (:unsigned, Unsigned), (:int, Int), (:int8, Int8),
+     (:int16, Int16), (:int32, Int32), (:int64, Int64), (:int128, Int128), (:uint, UInt),
+     (:uint8, UInt8), (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128),
+     (:float16, Float16), (:float32, Float32), (:float64, Float64))
+
+for (f,t) in convert_funcs_and_types
+     @eval begin
+         @deprecate $f(r::StepRange) map($t, r)
+         @deprecate $f(r::UnitRange) map($t, r)
+     end
+end
+
+for (f,t) in ((:float16,:Float16),(:float32,:Float32),(:float64,:Float64))
+    @eval begin
+        @deprecate $f(r::FloatRange) map($t, r)
+    end
+end
+
+@deprecate int(x)  Int(x)
+@deprecate uint(x) UInt(x)
+
+@deprecate bool(x::Number)  Bool(x)
+
+@deprecate char(x)                 Char(x)
+@deprecate char(x::FloatingPoint)  Char(round(UInt32,x))
+@deprecate integer(x::Char)        Int(x)
+
+@deprecate complex128(r::Real, i::Real)  Complex128(r, i)
+@deprecate complex128(z)                 Complex128(z)
+@deprecate complex64(r::Real, i::Real)   Complex64(r, i)
+@deprecate complex64(z)                  Complex64(z)
+@deprecate complex32(r::Real, i::Real)   Complex32(r, i)
+@deprecate complex32(z)                  Complex32(z)
+
+for (f,t) in convert_funcs_and_types
+    @eval begin
+        @deprecate $f(z::Complex)  Complex($t(real(z)), $t(imag(z)))
+    end
+end
+
+@deprecate float16(x) Float16(x)
+@deprecate float32(x) Float32(x)
+@deprecate float64(x) Float64(x)
+
+@deprecate int8(x)   Int8(x)
+@deprecate int16(x)  Int16(x)
+@deprecate int32(x)  Int32(x)
+@deprecate int64(x)  Int64(x)
+@deprecate int128(x) Int128(x)
+
+@deprecate uint8(x)           UInt8(x)
+@deprecate uint8(x::Integer)  x % UInt8
+@deprecate uint8(x::Bool)     UInt8(x)
+
+@deprecate uint16(x)  UInt16(x)
+@deprecate uint32(x)  UInt32(x)
+@deprecate uint64(x)  UInt64(x)
+@deprecate uint128(x) UInt128(x)
+
+@deprecate integer(x) Integer(x)
+
+for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:Uint64),
+              (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
+              (:int128,:Int128), (:uint128,:UInt128), (:signed,:Int), (:unsigned,:UInt),
+              (:integer,:Int), (:int,:Int), (:uint,:UInt))
+    @eval begin
+        @deprecate ($f)(x::FloatingPoint)  round($t,x)
+        @deprecate ($f)(x::Rational)       round($t,x)
+    end
+end
+
+@deprecate integer(x::Ptr)   convert(UInt, x)
+@deprecate unsigned(x::Ptr)  convert(UInt, x)
+
+for (f,t) in ((:int,    Int), (:int8,   Int8), (:int16,  Int16), (:int32,  Int32),
+              (:int64,  Int64), (:int128, Int128), (:uint,   UInt), (:uint8,  UInt8),
+              (:uint16, UInt16), (:uint32, UInt32), (:uint64, UInt64), (:uint128,UInt128))
+    @eval begin
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parseint($t,s) for s in a]
+    end
+end
+for (f,t) in ((:float32, Float32), (:float64, Float64))
+    @eval begin
+        @deprecate ($f){S<:AbstractString}(a::AbstractArray{S}) [parsefloat($t,s) for s in a]
+    end
+end
 
 # 0.4 discontinued functions
 

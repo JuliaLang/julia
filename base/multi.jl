@@ -961,7 +961,7 @@ function start_worker(out::IO)
 
     init_worker()
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(uint16(9009))
+        (actual_port,sock) = listenany(UInt16(9009))
         LPROC.bind_port = actual_port
     else
         sock = listen(LPROC.bind_port)
@@ -1026,7 +1026,7 @@ function parse_connection_info(str)
     if m != nothing
         (m.captures[2], parseint(Int16, m.captures[1]))
     else
-        ("", int16(-1))
+        ("", Int16(-1))
     end
 end
 

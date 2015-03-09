@@ -132,10 +132,10 @@ end
 function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
-        zid = int(bytestring(ZMQ.recv(manager.sub)))
+        zid = parseint(bytestring(ZMQ.recv(manager.sub)))
         assert(zid == manager.zid_self)
 
-        from_zid = int(bytestring(ZMQ.recv(manager.sub)))
+        from_zid = parseint(bytestring(ZMQ.recv(manager.sub)))
         mtype = bytestring(ZMQ.recv(manager.sub))
 
         #println("$zid received message of type $mtype from $from_zid")

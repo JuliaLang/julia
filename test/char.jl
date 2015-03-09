@@ -9,60 +9,54 @@ plane2_cjkpart1 = ['𠀀', '𠀁', '𠀂', '𠀃', '𠀄', '𠀅', '𠀆', '𠀇
 
 testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_cjkpart1]
 
-#char(x::FloatingPoint) = char(round(UInt32,x))
-  @test char(1.00000001) == '\x01' #Round down
-  @test char(1.49999999) == '\x01' #Round down
-  @test char(1.5) == '\x02' #Round Up
-  @test char(1.99999999) ==  '\x02' #Round Up
-
-#integer(x::Char) = int(x)
+#Integer(x::Char) = Int(x)
   #tests ASCII 48 - 57
   counter = 48
   for x in numberchars
-    @test integer(x) == counter
+    @test Integer(x) == counter
     counter += 1
   end
 
   #tests ASCII 65 - 90
   counter = 65
   for x in upperchars
-    @test integer(x) == counter
+    @test Integer(x) == counter
     counter += 1
   end
 
   #tests ASCII 97 - 122
   counter = 97
   for x in lowerchars
-    @test integer(x) == counter
+    @test Integer(x) == counter
     counter += 1
   end
 
   #tests Unicode plane 1: 127136 - 127150
   counter = 127136
   for x in plane1_playingcards
-    @test integer(x) == counter
+    @test Integer(x) == counter
     counter += 1
   end
 
   #tests Unicode plane 2: 131072 - 131087
   counter = 131072
   for x in plane2_cjkpart1
-    @test integer(x) == counter
+    @test Integer(x) == counter
     counter += 1
   end
 
 #convert(::Type{Char}, x::Float16) = char(convert(UInt32, x))
 #convert(::Type{Char}, x::Float32) = char(convert(UInt32, x))
 #convert(::Type{Char}, x::Float64) = char(convert(UInt32, x))
-  @test convert(Char, float16(1)) == convert(Char, float32(1)) == convert(Char, float64(1)) == '\x01'
-  @test convert(Char, float16(2)) == convert(Char, float32(2)) == convert(Char, float64(2)) == '\x02'
-  @test convert(Char, float16(3)) == convert(Char, float32(3)) == convert(Char, float64(3)) == '\x03'
-  @test convert(Char, float16(4)) == convert(Char, float32(4)) == convert(Char, float64(4)) == '\x04'
-  @test convert(Char, float16(5)) == convert(Char, float32(5)) == convert(Char, float64(5)) == '\x05'
-  @test convert(Char, float16(6)) == convert(Char, float32(6)) == convert(Char, float64(6)) == '\x06'
-  @test convert(Char, float16(7)) == convert(Char, float32(7)) == convert(Char, float64(7)) == '\x07'
-  @test convert(Char, float16(8)) == convert(Char, float32(8)) == convert(Char, float64(8)) == '\x08'
-  @test convert(Char, float16(9)) == convert(Char, float32(9)) == convert(Char, float64(9)) == '\x09'
+  @test convert(Char, Float16(1)) == convert(Char, Float32(1)) == convert(Char, Float64(1)) == '\x01'
+  @test convert(Char, Float16(2)) == convert(Char, Float32(2)) == convert(Char, Float64(2)) == '\x02'
+  @test convert(Char, Float16(3)) == convert(Char, Float32(3)) == convert(Char, Float64(3)) == '\x03'
+  @test convert(Char, Float16(4)) == convert(Char, Float32(4)) == convert(Char, Float64(4)) == '\x04'
+  @test convert(Char, Float16(5)) == convert(Char, Float32(5)) == convert(Char, Float64(5)) == '\x05'
+  @test convert(Char, Float16(6)) == convert(Char, Float32(6)) == convert(Char, Float64(6)) == '\x06'
+  @test convert(Char, Float16(7)) == convert(Char, Float32(7)) == convert(Char, Float64(7)) == '\x07'
+  @test convert(Char, Float16(8)) == convert(Char, Float32(8)) == convert(Char, Float64(8)) == '\x08'
+  @test convert(Char, Float16(9)) == convert(Char, Float32(9)) == convert(Char, Float64(9)) == '\x09'
 
 #size(c::Char) = ()
   for x in testarrays
@@ -123,7 +117,7 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
     end
   end
 
-#isless(x::Char, y::Integer) = isless(uint32(x), y)
+#isless(x::Char, y::Integer) = isless(UInt32(x), y)
   for x in upperchars
     @test isless(x, 91) == true
   end
@@ -144,7 +138,7 @@ testarrays = [numberchars; lowerchars; upperchars; plane1_playingcards; plane2_c
     @test isless(x, 131088) == true
   end
 
-#isless(x::Integer, y::Char) = isless(x, uint32(y))
+#isless(x::Integer, y::Char) = isless(x, UInt32(y))
   for x in upperchars
     @test isless(64, x) == true
   end

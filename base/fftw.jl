@@ -18,34 +18,34 @@ const libfftwf = Base.libfftwf_name
 
 ## Direction of FFT
 
-const FORWARD = int32(-1)
-const BACKWARD = int32(1)
+const FORWARD = Int32(-1)
+const BACKWARD = Int32(1)
 
 ## FFTW Flags from fftw3.h
 
-const MEASURE         = uint32(0)
-const DESTROY_INPUT   = uint32(1 << 0)
-const UNALIGNED       = uint32(1 << 1)
-const CONSERVE_MEMORY = uint32(1 << 2)
-const EXHAUSTIVE      = uint32(1 << 3)   # NO_EXHAUSTIVE is default
-const PRESERVE_INPUT  = uint32(1 << 4)   # cancels DESTROY_INPUT
-const PATIENT         = uint32(1 << 5)   # IMPATIENT is default
-const ESTIMATE        = uint32(1 << 6)
-const WISDOM_ONLY     = uint32(1 << 21)
+const MEASURE         = UInt32(0)
+const DESTROY_INPUT   = UInt32(1 << 0)
+const UNALIGNED       = UInt32(1 << 1)
+const CONSERVE_MEMORY = UInt32(1 << 2)
+const EXHAUSTIVE      = UInt32(1 << 3)   # NO_EXHAUSTIVE is default
+const PRESERVE_INPUT  = UInt32(1 << 4)   # cancels DESTROY_INPUT
+const PATIENT         = UInt32(1 << 5)   # IMPATIENT is default
+const ESTIMATE        = UInt32(1 << 6)
+const WISDOM_ONLY     = UInt32(1 << 21)
 
 ## R2R transform kinds
 
-const R2HC    = int32(0)
-const HC2R    = int32(1)
-const DHT     = int32(2)
-const REDFT00 = int32(3)
-const REDFT01 = int32(4)
-const REDFT10 = int32(5)
-const REDFT11 = int32(6)
-const RODFT00 = int32(7)
-const RODFT01 = int32(8)
-const RODFT10 = int32(9)
-const RODFT11 = int32(10)
+const R2HC    = Int32(0)
+const HC2R    = Int32(1)
+const DHT     = Int32(2)
+const REDFT00 = Int32(3)
+const REDFT01 = Int32(4)
+const REDFT10 = Int32(5)
+const REDFT11 = Int32(6)
+const RODFT00 = Int32(7)
+const RODFT01 = Int32(8)
+const RODFT10 = Int32(9)
+const RODFT11 = Int32(10)
 
 # FFTW floating-point types:
 
@@ -282,7 +282,7 @@ function fix_kinds(region, kinds)
             kinds = k
         end
     else
-        kinds = int32([kinds...])
+        kinds = Int32[kinds...]
     end
     for i = 1:length(kinds)
         if kinds[i] < 0 || kinds[i] > 10
@@ -399,8 +399,8 @@ end
 # (FIXME: is there a way to use the Julia promotion rules more cleverly here?)
 complexfloat{T<:fftwComplex}(X::StridedArray{T}) = X
 complexfloat{T<:fftwReal}(X::StridedArray{T}) = complex(X)
-complexfloat{T<:Real}(X::StridedArray{T}) = complex128(X)
-complexfloat{T<:Complex}(X::StridedArray{T}) = complex128(X)
+complexfloat{T<:Real}(X::StridedArray{T}) = map(Complex128,X)
+complexfloat{T<:Complex}(X::StridedArray{T}) = map(Complex128,X)
 
 # In the Julia interface, a "plan" is just a function that executes
 # an efficient FFT of fixed size/strides/alignment.  For each FFT function

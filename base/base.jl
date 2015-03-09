@@ -73,7 +73,7 @@ end
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
-    SystemError(p::AbstractString, e::Integer) = new(p, int32(e))
+    SystemError(p::AbstractString, e::Integer) = new(p, e)
     SystemError(p::AbstractString) = new(p, errno())
 end
 
@@ -138,11 +138,6 @@ end
 ccall(:jl_get_system_hooks, Void, ())
 
 
-int(x) = convert(Int, x)
-int(x::Int) = x
-uint(x) = convert(UInt, x)
-uint(x::UInt) = x
-
 # index colon
 type Colon
 end
@@ -162,8 +157,8 @@ end
 finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
 gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
-gc_enable() = bool(ccall(:jl_gc_enable, Cint, ()))
-gc_disable() = bool(ccall(:jl_gc_disable, Cint, ()))
+gc_enable() = Bool(ccall(:jl_gc_enable, Cint, ()))
+gc_disable() = Bool(ccall(:jl_gc_disable, Cint, ()))
 
 bytestring(str::ByteString) = str
 
@@ -221,7 +216,7 @@ function length_checked_equal(args...)
     n
 end
 
-map(f, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
+map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 macro thunk(ex); :(()->$(esc(ex))); end
 macro L_str(s); s; end

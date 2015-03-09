@@ -10,8 +10,8 @@
 @test length(1:0) == 0
 @test length(0.0:-0.5) == 0
 @test length(1:2:0) == 0
-L32 = linspace(int32(1), int32(4), 4)
-L64 = linspace(int64(1), int64(4), 4)
+L32 = linspace(Int32(1), Int32(4), 4)
+L64 = linspace(Int64(1), Int64(4), 4)
 @test L32[1] == 1 && L64[1] == 1
 @test L32[2] == 2 && L64[2] == 2
 @test L32[3] == 3 && L64[3] == 3
@@ -106,8 +106,8 @@ end
 @test intersect(reverse(typemin(Int):2:typemax(Int)),typemin(Int):2:typemax(Int)) == reverse(typemin(Int):2:typemax(Int))
 @test intersect(typemin(Int):2:typemax(Int),reverse(typemin(Int):2:typemax(Int))) == typemin(Int):2:typemax(Int)
 
-@test 0 in uint(0):100:typemax(Uint)
-@test last(uint(0):100:typemax(Uint)) in uint(0):100:typemax(Uint)
+@test 0 in UInt(0):100:typemax(Uint)
+@test last(UInt(0):100:typemax(Uint)) in UInt(0):100:typemax(Uint)
 @test -9223372036854775790 in -9223372036854775790:100:9223372036854775710
 @test -9223372036854775690 in -9223372036854775790:100:9223372036854775710
 @test -90 in -9223372036854775790:100:9223372036854775710
@@ -125,7 +125,7 @@ end
 
 r = 0.0:0.01:1.0
 @test (r[30] in r)
-r = (-4*int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
+r = (-4*Int64(maxintfloat(is(Int,Int32) ? Float32 : Float64))):5
 @test (3 in r)
 @test (3.0 in r)
 
@@ -183,13 +183,13 @@ let s = 0
 
     # loops past typemax(Int)
     n = 0
-    s = int128(0)
+    s = Int128(0)
     for i = typemax(UInt64)-2:typemax(UInt64)
         n += 1
         s += i
     end
     @test n == 3
-    @test s == 3*int128(typemax(UInt64)) - 3
+    @test s == 3*Int128(typemax(UInt64)) - 3
 
     # loops over empty ranges
     s = 0
@@ -199,7 +199,7 @@ let s = 0
     @test s == 0
 
     s = 0
-    for i = int128(typemax(Int128)):int128(typemin(Int128))
+    for i = Int128(typemax(Int128)):Int128(typemin(Int128))
         s += 1
     end
     @test s == 0
@@ -207,11 +207,11 @@ end
 
 # sums (see #5798)
 if WORD_SIZE == 64
-    @test sum(int128(1:10^18)) == div(10^18 * (int128(10^18)+1), 2)
-    @test sum(int128(1:10^18-1)) == div(10^18 * (int128(10^18)-1), 2)
+    @test sum(Int128(1):10^18) == div(10^18 * (Int128(10^18)+1), 2)
+    @test sum(Int128(1):10^18-1) == div(10^18 * (Int128(10^18)-1), 2)
 else
-    @test sum(int64(1:10^9)) == div(10^9 * (int64(10^9)+1), 2)
-    @test sum(int64(1:10^9-1)) == div(10^9 * (int64(10^9)-1), 2)
+    @test sum(Int64(1):10^9) == div(10^9 * (Int64(10^9)+1), 2)
+    @test sum(Int64(1):10^9-1) == div(10^9 * (Int64(10^9)-1), 2)
 end
 
 # operations with scalars
@@ -289,8 +289,8 @@ end
 
 # comparing and hashing ranges
 let
-    Rs = Range[1:2, int32(1:3:17), int64(1:3:17), 1:0, 17:-3:0,
-               0.0:0.1:1.0, float32(0.0:0.1:1.0)]
+    Rs = Range[1:2, map(Int32,1:3:17), map(Int64,1:3:17), 1:0, 17:-3:0,
+               0.0:0.1:1.0, map(Float32,0.0:0.1:1.0)]
     for r in Rs
         ar = collect(r)
         @test r != ar
@@ -325,9 +325,9 @@ for s in 3:100
     @test length(typemax(Int):-s:typemin(Int)) == length(big(typemax(Int)):big(-s):big(typemin(Int)))
 end
 
-@test length(uint(1):uint(1):uint(0)) == 0
-@test length(typemax(UInt):uint(1):(typemax(UInt)-1)) == 0
-@test length(typemax(UInt):uint(2):(typemax(UInt)-1)) == 0
+@test length(UInt(1):UInt(1):UInt(0)) == 0
+@test length(typemax(UInt):UInt(1):(typemax(UInt)-1)) == 0
+@test length(typemax(UInt):UInt(2):(typemax(UInt)-1)) == 0
 @test length((typemin(Int)+3):5:(typemin(Int)+1)) == 0
 
 # issue #6364
@@ -377,8 +377,8 @@ end
 # issue #7709
 @test length(map(identity, 0x01:0x05)) == 5
 @test length(map(identity, 0x0001:0x0005)) == 5
-@test length(map(identity, uint64(1):uint64(5))) == 5
-@test length(map(identity, uint128(1):uint128(5))) == 5
+@test length(map(identity, UInt64(1):UInt64(5))) == 5
+@test length(map(identity, UInt128(1):UInt128(5))) == 5
 
 # mean/median
 for f in (mean, median)

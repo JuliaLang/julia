@@ -6,13 +6,13 @@ types = Any[
 ]
 vals = vcat(
     typemin(Int64),
-    -int64(maxintfloat(Float64))+Int64[-4:1;],
+    -Int64(maxintfloat(Float64))+Int64[-4:1;],
     typemin(Int32),
-    -integer(maxintfloat(Float32))+(-4:1),
+    -Integer(maxintfloat(Float32))+(-4:1),
     -2:2,
-    integer(maxintfloat(Float32))+(-1:4),
+    Integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
-    int64(maxintfloat(Float64))+Int64[-1:4;],
+    Int64(maxintfloat(Float64))+Int64[-1:4;],
     typemax(Int64),
 )
 
@@ -51,8 +51,8 @@ for T=types, S=types, x=vals
 end
 
 # issue #8619
-@test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
-@test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
+@test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
 # issue #9264
 @test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))

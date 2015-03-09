@@ -662,7 +662,7 @@ write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 ### Keymap Support
 
 normalize_key(key::Char) = string(key)
-normalize_key(key::Integer) = normalize_key(char(key))
+normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     '\0' in key && error("Matching \\0 not currently supported.")
     buf = IOBuffer()
@@ -944,7 +944,7 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    AnyDict([char(i) => nothing for i=vcat(1:26, 28:31)]), # Ignore control characters by default
+    AnyDict([Char(i) => nothing for i=vcat(1:26, 28:31)]), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
         "\e*" => nothing,
         "\e[*" => nothing,

@@ -90,7 +90,7 @@ function copy(a::Array)
 end
 
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
-    nel = int(div(length(a)*sizeof(S),sizeof(T)))
+    nel = Int(div(length(a)*sizeof(S),sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
@@ -251,7 +251,7 @@ linspace(start::Integer, stop::Integer, n::Integer) =
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
     T = typeof(start)
-    a = Array(T, int(n))
+    a = Array(T, Int(n))
     if n == 1
         a[1] = start
         return a
@@ -960,7 +960,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
 
     nnd = 0
     for i = 1:nd
-        nnd += int(size(A,i)==1 || i==d)
+        nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension

@@ -339,8 +339,8 @@ for f in (:+, :-)
                 FloatRange{T}($f(r1.start,r2.start), $f(r1.step,r2.step),
                               len, divisor1)
             else
-                d1 = int(divisor1)
-                d2 = int(divisor2)
+                d1 = Int(divisor1)
+                d2 = Int(divisor2)
                 d = lcm(d1,d2)
                 s1 = div(d,d1)
                 s2 = div(d,d2)

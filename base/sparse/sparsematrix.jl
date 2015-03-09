@@ -12,10 +12,10 @@ type SparseMatrixCSC{Tv,Ti<:Integer} <: AbstractSparseMatrix{Tv,Ti}
 end
 
 SparseMatrixCSC{Tv,Ti}(m::Integer, n::Integer, colptr::Vector{Ti}, rowval::Vector{Ti}, nzval::Vector{Tv}) =
-    SparseMatrixCSC(int(m), int(n), colptr, rowval, nzval)
+    SparseMatrixCSC(Int(m), Int(n), colptr, rowval, nzval)
 
 size(S::SparseMatrixCSC) = (S.m, S.n)
-nnz(S::SparseMatrixCSC) = int(S.colptr[end]-1)
+nnz(S::SparseMatrixCSC) = Int(S.colptr[end]-1)
 countnz(S::SparseMatrixCSC) = countnz(S.nzval)
 
 nonzeros(S::SparseMatrixCSC) = S.nzval
@@ -287,19 +287,19 @@ end
 
 ## sparse() can take its inputs in unsorted order (the parent method is now in jlsparse.jl)
 
-dimlub(I) = length(I)==0 ? 0 : int(maximum(I)) #least upper bound on required sparse matrix dimension
+dimlub(I) = length(I)==0 ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
 
 sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), +)
 
 sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J), +)
 
-sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), int(m), int(n), +)
+sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), +)
 
-sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, int(m), int(n), +)
+sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), +)
 
-sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, int(m), int(n), |)
+sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), |)
 
-sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), int(m), int(n), combine)
+sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
 
 function find(S::SparseMatrixCSC)
     sz = size(S)
@@ -364,8 +364,8 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
     N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
 
     I, J = Array(Int, 0), Array(Int, 0) # indices of nonzero elements
-    sizehint!(I, int(N*density))
-    sizehint!(J, int(N*density))
+    sizehint!(I, round(Int,N*density))
+    sizehint!(J, round(Int,N*density))
 
     # density of nonzero columns:
     L = log1p(-density)
@@ -381,7 +381,7 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
         # except given that at least one is nonzero (via Bayes' rule);
         # carefully rearranged to avoid excessive roundoff errors.
         k = ceil(log(colsparsity + rand()*coldensity) * L)
-        ik = k < 1 ? 1 : k > m ? m : int(k) # roundoff-error/underflow paranoia
+        ik = k < 1 ? 1 : k > m ? m : Int(k) # roundoff-error/underflow paranoia
         randsubseq!(rows, 1:m-ik, density)
         push!(rows, m-ik+1)
         append!(I, rows)
@@ -418,7 +418,7 @@ eye(S::SparseMatrixCSC) = speye(S)
 function speye(T::Type, m::Integer, n::Integer)
     x = min(m,n)
     rowval = [1:x;]
-    colptr = [rowval; fill(int(x+1), n+1-x)]
+    colptr = [rowval; fill(Int(x+1), n+1-x)]
     nzval  = ones(T, x)
     return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
@@ -881,8 +881,8 @@ getindex(A::SparseMatrixCSC, I::(Integer,Integer)) = getindex(A, I[1], I[2])
 
 function getindex{T}(A::SparseMatrixCSC{T}, i0::Integer, i1::Integer)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
-    r1 = int(A.colptr[i1])
-    r2 = int(A.colptr[i1+1]-1)
+    r1 = Int(A.colptr[i1])
+    r2 = Int(A.colptr[i1+1]-1)
     (r1 > r2) && return zero(T)
     r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
     ((r1 > r2) || (A.rowval[r1] != i0)) ? zero(T) : A.nzval[r1]
@@ -1334,8 +1334,8 @@ function setindex!{T,Ti}(A::SparseMatrixCSC{T,Ti}, v, i0::Integer, i1::Integer)
     i1 = convert(Ti, i1)
     if !(1 <= i0 <= A.m && 1 <= i1 <= A.n); throw(BoundsError()); end
     v = convert(T, v)
-    r1 = int(A.colptr[i1])
-    r2 = int(A.colptr[i1+1]-1)
+    r1 = Int(A.colptr[i1])
+    r2 = Int(A.colptr[i1+1]-1)
     if v == 0 #either do nothing or delete entry if it exists
         if r1 <= r2
             r1 = searchsortedfirst(A.rowval, i0, r1, r2, Forward)
@@ -1691,8 +1691,8 @@ function setindex!{Tv,Ti}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractMatrix{Bool})
     r1 = r2 = 0
 
     @inbounds for col in 1:A.n
-        r1 = int(colptrA[col])
-        r2 = int(colptrA[col+1]-1)
+        r1 = Int(colptrA[col])
+        r2 = Int(colptrA[col+1]-1)
 
         for row in 1:A.m
             if I[row, col]
@@ -1801,8 +1801,8 @@ function setindex!{Tv,Ti,T<:Real}(A::SparseMatrixCSC{Tv,Ti}, x, I::AbstractVecto
         v = isa(x, AbstractArray) ? x[sxidx] : x
 
         if col > lastcol
-            r1 = int(colptrA[col])
-            r2 = int(colptrA[col+1] - 1)
+            r1 = Int(colptrA[col])
+            r2 = Int(colptrA[col+1] - 1)
 
             # copy from last position till current column
             if (nadd > 0) || (ndel > 0)
@@ -2135,7 +2135,7 @@ spdiagm(B::AbstractVector, d::Number=0) = spdiagm((B,), (d,))
 ## expand a colptr or rowptr into a dense index vector
 function expandptr{T<:Integer}(V::Vector{T})
     if V[1] != 1 throw(ArgumentError("first index must be one")) end
-    res = similar(V, (int64(V[end]-1),))
+    res = similar(V, (Int64(V[end]-1),))
     for i in 1:(length(V)-1), j in V[i]:(V[i+1] - 1) res[j] = i end
     res
 end
@@ -2154,8 +2154,8 @@ done(d::SpDiagIterator, j) = j > d.n
 
 function next{Tv}(d::SpDiagIterator{Tv}, j)
     A = d.A
-    r1 = int(A.colptr[j])
-    r2 = int(A.colptr[j+1]-1)
+    r1 = Int(A.colptr[j])
+    r2 = Int(A.colptr[j+1]-1)
     (r1 > r2) && (return (zero(Tv), j+1))
     r1 = searchsortedfirst(A.rowval, j, r1, r2, Forward)
     (((r1 > r2) || (A.rowval[r1] != j)) ? zero(Tv) : A.nzval[r1], j+1)

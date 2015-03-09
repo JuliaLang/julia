@@ -153,7 +153,7 @@ end
 function ssh_tunnel(user, host, bind_addr, port, sshflags)
     localp = next_tunnel_port()
     ntries = cnt = 100
-    while !success(detach(`ssh -T -a -x -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(int(port)) sleep 60`)) && cnt > 0
+    while !success(detach(`ssh -T -a -x -o ExitOnForwardFailure=yes -f $sshflags $(user)@$host -L $localp:$bind_addr:$(Int(port)) sleep 60`)) && cnt > 0
         localp = next_tunnel_port()
         cnt -= 1
     end
@@ -280,9 +280,9 @@ end
 function connect_to_worker(host::AbstractString, port::Integer)
     # Connect to the loopback port if requested host has the same ipaddress as self.
     if host == string(LPROC.bind_addr)
-        s = connect("127.0.0.1", uint16(port))
+        s = connect("127.0.0.1", UInt16(port))
     else
-        s = connect(host, uint16(port))
+        s = connect(host, UInt16(port))
     end
 
     # Avoid calling getaddrinfo if possible - involves a DNS lookup
@@ -301,7 +301,7 @@ end
 
 
 function connect_to_worker(host::AbstractString, bind_addr::AbstractString, port::Integer, tunnel_user::AbstractString, sshflags)
-    s = connect("localhost", ssh_tunnel(tunnel_user, host, bind_addr, uint16(port), sshflags))
+    s = connect("localhost", ssh_tunnel(tunnel_user, host, bind_addr, UInt16(port), sshflags))
     (s, bind_addr)
 end
 

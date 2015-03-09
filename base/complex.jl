@@ -44,20 +44,6 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
-complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
-complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
-complex128(z) = complex128(real(z), imag(z))
-complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
-complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
-complex64(z) = complex64(real(z), imag(z))
-complex32(r::Float16, i::Float16) = Complex{Float16}(r, i)
-complex32(r::Real, i::Real) = complex32(float16(r),float16(i))
-complex32(z) = complex32(real(z), imag(z))
-
-for fn in _numeric_conversion_func_names
-    @eval $fn(z::Complex) = Complex($fn(real(z)),$fn(imag(z)))
-end
-
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)

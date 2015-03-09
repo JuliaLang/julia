@@ -37,8 +37,8 @@ let i = 2
              false, true, nothing, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
              12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27,
              28, 29, 30, 31, 32]
-        ser_tag[t] = int32(i)
-        deser_tag[int32(i)] = t
+        ser_tag[t] = Int32(i)
+        deser_tag[Int32(i)] = t
         i += 1
     end
 end
@@ -50,30 +50,30 @@ const EMPTY_TUPLE_TAG = ser_tag[()]
 const ZERO_TAG = ser_tag[0]
 const INT_TAG = ser_tag[Int]
 
-writetag(s, x) = write(s, uint8(ser_tag[x]))
+writetag(s, x) = write(s, UInt8(ser_tag[x]))
 
 function write_as_tag(s, x)
     t = ser_tag[x]
     if t < VALUE_TAGS
-        write(s, uint8(0))
+        write(s, UInt8(0))
     end
-    write(s, uint8(t))
+    write(s, UInt8(t))
 end
 
 serialize(s, x::Bool) = write_as_tag(s, x)
 
 serialize(s, ::Ptr) = error("cannot serialize a pointer")
 
-serialize(s, ::()) = write(s, uint8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
+serialize(s, ::()) = write(s, UInt8(EMPTY_TUPLE_TAG)) # write_as_tag(s, ())
 
 function serialize(s, t::Tuple)
     l = length(t)
     if l <= 255
         writetag(s, Tuple)
-        write(s, uint8(l))
+        write(s, UInt8(l))
     else
         writetag(s, LongTuple)
-        write(s, int32(l))
+        write(s, Int32(l))
     end
     for i = 1:l
         serialize(s, t[i])
@@ -85,13 +85,13 @@ function serialize(s, x::Symbol)
         return write_as_tag(s, x)
     end
     pname = unsafe_convert(Ptr{UInt8}, x)
-    ln = int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
+    ln = Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname))
     if ln <= 255
         writetag(s, Symbol)
-        write(s, uint8(ln))
+        write(s, UInt8(ln))
     else
         writetag(s, LongSymbol)
-        write(s, int32(ln))
+        write(s, Int32(ln))
     end
     write(s, pname, ln)
 end
@@ -103,14 +103,14 @@ function serialize_array_data(s, a)
         count = 1
         for i = 2:length(a)
             if a[i] != last || count == 127
-                write(s, uint8((uint8(last)<<7) | count))
+                write(s, UInt8((UInt8(last)<<7) | count))
                 last = a[i]
                 count = 1
             else
                 count += 1
             end
         end
-        write(s, uint8((uint8(last)<<7) | count))
+        write(s, UInt8((UInt8(last)<<7) | count))
     else
         write(s, a)
     end
@@ -154,10 +154,10 @@ function serialize(s, e::Expr)
     l = length(e.args)
     if l <= 255
         writetag(s, Expr)
-        write(s, uint8(l))
+        write(s, UInt8(l))
     else
         writetag(s, LongExpr)
-        write(s, int32(l))
+        write(s, Int32(l))
     end
     serialize(s, e.head)
     serialize(s, e.typ)
@@ -190,7 +190,7 @@ function serialize(s, f::Function)
     end
     if isa(name,Symbol)
         if isdefined(Base,name) && is(f,eval(Base,name))
-            write(s, uint8(0))
+            write(s, UInt8(0))
             serialize(s, name)
             return
         end
@@ -203,18 +203,18 @@ function serialize(s, f::Function)
         if mod !== ()
             if isdefined(mod,name) && is(f,eval(mod,name))
                 # toplevel named func
-                write(s, uint8(2))
+                write(s, UInt8(2))
                 serialize(s, mod)
                 serialize(s, name)
                 return
             end
         end
-        write(s, uint8(3))
+        write(s, UInt8(3))
         serialize(s, f.env)
     else
         linfo = f.code
         @assert isa(linfo,LambdaStaticData)
-        write(s, uint8(1))
+        write(s, UInt8(1))
         serialize(s, f.env)
         serialize(s, linfo)
     end
@@ -229,7 +229,7 @@ function lambda_number(l::LambdaStaticData)
     end
     # a hash function that always gives the same number to the same
     # object on the same machine, and is unique over all machines.
-    ln = lnumber_salt+(uint64(myid())<<44)
+    ln = lnumber_salt+(UInt64(myid())<<44)
     lnumber_salt += 1
     lambda_numbers[l] = ln
     return ln
@@ -285,7 +285,7 @@ function serialize(s, t::DataType)
         write_as_tag(s, t)
     else
         writetag(s, DataType)
-        write(s, uint8(0))
+        write(s, UInt8(0))
         serialize_type_data(s, t)
     end
 end
@@ -295,17 +295,17 @@ function serialize_type(s, t::DataType)
         writetag(s, t)
     else
         writetag(s, DataType)
-        write(s, uint8(1))
+        write(s, UInt8(1))
         serialize_type_data(s, t)
     end
 end
 
 function serialize(s, n::Int)
     if 0 <= n <= 32
-        write(s, uint8(ZERO_TAG+n))
+        write(s, UInt8(ZERO_TAG+n))
         return
     end
-    write(s, uint8(INT_TAG))
+    write(s, UInt8(INT_TAG))
     write(s, n)
     nothing
 end
@@ -333,18 +333,18 @@ end
 ## deserializing values ##
 
 function deserialize(s)
-    handle_deserialize(s, int32(read(s, UInt8)))
+    handle_deserialize(s, Int32(read(s, UInt8)))
 end
 
 function handle_deserialize(s, b)
     if b == 0
-        return deser_tag[int32(read(s, UInt8))]
+        return deser_tag[Int32(read(s, UInt8))]
     end
     tag = deser_tag[b]
     if b >= VALUE_TAGS
         return tag
     elseif is(tag,Tuple)
-        len = int32(read(s, UInt8))
+        len = Int32(read(s, UInt8))
         return deserialize_tuple(s, len)
     elseif is(tag,LongTuple)
         len = read(s, Int32)
@@ -355,7 +355,7 @@ end
 
 deserialize_tuple(s, len) = ntuple(len, i->deserialize(s))
 
-deserialize(s, ::Type{Symbol}) = symbol(read(s, UInt8, int32(read(s, UInt8))))
+deserialize(s, ::Type{Symbol}) = symbol(read(s, UInt8, Int32(read(s, UInt8))))
 deserialize(s, ::Type{LongSymbol}) = symbol(read(s, UInt8, read(s, Int32)))
 
 function deserialize(s, ::Type{Module})
@@ -444,7 +444,7 @@ function deserialize(s, ::Type{Array})
         if elty !== Bool && isbits(elty)
             return read!(s, Array(elty, d1))
         end
-        dims = (int(d1),)
+        dims = (Int(d1),)
     else
         dims = convert(Dims, d1)::Dims
     end
@@ -455,7 +455,7 @@ function deserialize(s, ::Type{Array})
             i = 1
             while i <= n
                 b = read(s, UInt8)
-                v = bool(b>>7)
+                v = Bool(b>>7)
                 count = b&0x7f
                 nxt = i+count
                 while i < nxt
@@ -469,7 +469,7 @@ function deserialize(s, ::Type{Array})
     end
     A = Array(elty, dims)
     for i = 1:length(A)
-        tag = int32(read(s, UInt8))
+        tag = Int32(read(s, UInt8))
         if tag==0 || !is(deser_tag[tag], UndefRefTag)
             A[i] = handle_deserialize(s, tag)
         end
@@ -477,7 +477,7 @@ function deserialize(s, ::Type{Array})
     return A
 end
 
-deserialize(s, ::Type{Expr})     = deserialize_expr(s, int32(read(s, UInt8)))
+deserialize(s, ::Type{Expr})     = deserialize_expr(s, Int32(read(s, UInt8)))
 deserialize(s, ::Type{LongExpr}) = deserialize_expr(s, read(s, Int32))
 
 function deserialize_expr(s, len)
@@ -554,7 +554,7 @@ function deserialize(s, t::DataType)
     else
         x = ccall(:jl_new_struct_uninit, Any, (Any,), t)
         for i in 1:nf
-            tag = int32(read(s, UInt8))
+            tag = Int32(read(s, UInt8))
             if tag==0 || !is(deser_tag[tag], UndefRefTag)
                 ccall(:jl_set_nth_field, Void, (Any, Csize_t, Any), x, i-1, handle_deserialize(s, tag))
             end

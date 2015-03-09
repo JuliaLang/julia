@@ -139,14 +139,14 @@ end
 _repl_start = Condition()
 
 syntax_deprecation_warnings(warn::Bool) =
-    bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
+    Bool(ccall(:jl_parse_depwarn, Cint, (Cint,), warn))
 
 function parse_input_line(s::AbstractString)
     # s = bytestring(s)
     # (expr, pos) = parse(s, 1)
     # (ex, pos) = ccall(:jl_parse_string, Any,
     #                   (Ptr{UInt8},Int32,Int32),
-    #                   s, int32(pos)-1, 1)
+    #                   s, pos-1, 1)
     # if !is(ex,())
     #     throw(ParseError("extra input after end of expression"))
     # end
@@ -205,7 +205,7 @@ function init_bind_addr(opts::JLOptions)
     end
     global LPROC
     LPROC.bind_addr = bind_addr
-    LPROC.bind_port = uint16(bind_port)
+    LPROC.bind_port = UInt16(bind_port)
 end
 
 # NOTE: This set of required arguments need to be kept in sync with the required arguments defined in ui/repl.c
@@ -242,12 +242,12 @@ let reqarg = Set(UTF8String["--home",          "-H",
         color_set = false
         while true
             # show julia VERSION and quit
-            if bool(opts.version)
+            if Bool(opts.version)
                 println(STDOUT, "julia version ", VERSION)
                 exit(0)
             end
             # startup worker
-            if bool(opts.worker)
+            if Bool(opts.worker)
                 assert(opts.worker == 1 || opts.worker == 2)
                 # if default, start worker process otherwise if custom pass through
                 if opts.worker == 1
@@ -259,7 +259,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                 require(bytestring(opts.load))
             end
             # show banner
-            quiet = bool(opts.quiet)
+            quiet = Bool(opts.quiet)
             # load ~/.juliarc file
             if opts.startupfile == 1
                 load_juliarc()
@@ -268,7 +268,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                 startup = false
             end
             # load ~/.julia_history file
-            history_file = bool(opts.historyfile)
+            history_file = Bool(opts.historyfile)
             # add processors
             if opts.nprocs > 0
                 addprocs(opts.nprocs)
@@ -277,7 +277,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             if opts.machinefile != C_NULL
                 addprocs(load_machine_file(bytestring(opts.machinefile)))
             end
-            global is_interactive = bool(opts.isinteractive)
+            global is_interactive = Bool(opts.isinteractive)
             # REPL color
             if opts.color == 0
                 color_set = false
@@ -372,7 +372,7 @@ function load_machine_file(path::AbstractString)
     for line in split(readall(path),'\n'; keep=false)
         s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
-            cnt = isnumber(s[1]) ? int(s[1]) : symbol(s[1])
+            cnt = isnumber(s[1]) ? parseint(s[1]) : symbol(s[1])
             push!(machines,(s[2], cnt))
         else
             push!(machines,line)
@@ -409,7 +409,7 @@ function _start()
         init_parallel()
         init_bind_addr(opts)
         # if this process is not a worker, schedule head process
-        bool(opts.worker) || init_head_sched()
+        Bool(opts.worker) || init_head_sched()
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
 
         local term
