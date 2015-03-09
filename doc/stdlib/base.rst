@@ -713,25 +713,13 @@ System
 
    Get julia's process ID.
 
-.. function:: time([t::TmStruct])
+.. function:: time()
 
-   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution. When passed a ``TmStruct``, converts it to a number of seconds since the epoch.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 .. function:: time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-
-.. function:: strftime([format], time)
-
-   Convert time, given as a number of seconds since the epoch or a ``TmStruct``, to a formatted string using the given format. Supported formats are the same as those in the standard C library.
-
-.. function:: strptime([format], timestr)
-
-   Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
-
-.. function:: TmStruct([seconds])
-
-   Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``, ``year``, ``wday``, ``yday``, and ``isdst``.
 
 .. function:: tic()
 

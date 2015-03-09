@@ -421,6 +421,24 @@ end
 @deprecate flipud(A::AbstractArray) flipdim(A, 1)
 @deprecate fliplr(A::AbstractArray) flipdim(A, 2)
 
+@deprecate strftime     Libc.strftime
+@deprecate strptime     Libc.strptime
+@deprecate flush_cstdio Libc.flush_cstdio
+@deprecate mmap         Libc.mmap
+@deprecate c_free       Libc.free
+@deprecate c_malloc     Libc.malloc
+@deprecate c_calloc     Libc.calloc
+@deprecate c_realloc    Libc.realloc
+@deprecate errno        Libc.errno
+@deprecate strerror     Libc.strerror
+
+@deprecate dlclose      Libdl.dlclose
+@deprecate dlopen       Libdl.dlopen
+@deprecate dlopen_e     Libdl.dlopen_e
+@deprecate dlsym        Libdl.dlsym
+@deprecate dlsym_e      Libdl.dlsym_e
+@deprecate find_library Libdl.find_library
+
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)
