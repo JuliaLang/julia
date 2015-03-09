@@ -220,7 +220,7 @@ The general syntax for indexing into an n-dimensional array A is::
 
 where each I\_k may be:
 
-1. A scalar value
+1. A scalar integer
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
 4. A boolean vector

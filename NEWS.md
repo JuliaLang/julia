@@ -203,6 +203,8 @@ Library improvements
 Deprecated or removed
 ---------------------
 
+  * indexing with Reals that are not subtypes of Integers (Rationals, FloatingPoint, etc.) has been deprecated ([#10458]).
+
   * `push!(A)` has been deprecated, use `append!` instead of splatting arguments to `push!` ([#10400]).
 
   * `names` for composite datatypes has been deprecated and

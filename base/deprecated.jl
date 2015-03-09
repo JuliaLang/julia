@@ -451,3 +451,26 @@ function push!(A)
     depwarn("push!(A) has been deprecated", :push!)
     A
 end
+
+# 10458
+to_index_nodep(i::Real) = convert(Int,i)::Int
+
+function to_index(i::Real)
+    depwarn("indexing with non Integer Reals is deprecated", :to_index)
+    to_index_nodep(i)
+end
+
+function to_index{T<:Real}(r::UnitRange{T})
+    depwarn("indexing with non Integer UnitRanges is deprecated", :to_index)
+    to_index_nodep(first(r)):to_index_nodep(last(r))
+end
+
+function to_index{T<:Real}(r::StepRange{T})
+    depwarn("indexing with non Integer StepRanges is deprecated", :to_index)
+    to_index_nodep(first(r)):to_index_nodep(step(r)):to_index_nodep(last(r))
+end
+
+function to_index{T<:Real}(A::AbstractArray{T})
+    depwarn("indexing with non Integer AbstractArrays is deprecated", :to_index)
+    Int[to_index_nodep(x) for x in A]
+end
