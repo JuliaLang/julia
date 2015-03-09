@@ -43,8 +43,8 @@ for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
-    d[idxf] = float64(idxf)
-    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == float64(idxf)); D[idxl] = float64(idxl); D[idxl];  end, d,idxf,idxl)
+    d[idxf] = Float64(idxf)
+    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == Float64(idxf)); D[idxl] = Float64(idxl); D[idxl];  end, d,idxf,idxl)
     @test d[idxl] == rv
 end
 
@@ -193,7 +193,7 @@ if haskey(ENV, "PTEST_FULL")
     s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
     ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(char(x)), s.data)])
+    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
     # retry, on error exit
     res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=true);

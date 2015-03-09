@@ -77,7 +77,7 @@ p1s = [
 p2s = [
     "Nullable(false)",
     "Nullable('\0')",
-    "Nullable(float16(0.0))",
+    "Nullable(Float16(0.0))",
     "Nullable(0.0f0)",
     "Nullable(0.0)",
     "Nullable(0)",
@@ -94,7 +94,7 @@ p2s = [
 p3s = [
     "Nullable(true)",
     "Nullable('\x01')",
-    "Nullable(float16(1.0))",
+    "Nullable(Float16(1.0))",
     "Nullable(1.0f0)",
     "Nullable(1.0)",
     "Nullable(1)",

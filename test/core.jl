@@ -773,7 +773,7 @@ begin
     @test aa == a
     aa = pointer_to_array(pointer(a), (length(a),))
     @test aa == a
-    aa = pointer_to_array(pointer(a), uint(length(a)))
+    aa = pointer_to_array(pointer(a), UInt(length(a)))
     @test aa == a
     aa = pointer_to_array(pointer(a), UInt16(length(a)))
     @test aa == a

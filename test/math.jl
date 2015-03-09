@@ -88,7 +88,7 @@ for x in logspace(-200, -0.01)
     @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
     @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
     if x > 1e-20
-        xf = float32(x)
+        xf = Float32(x)
         @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
         @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
         @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
@@ -175,13 +175,13 @@ y33 = bessely(3,3.)
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
-    @test_approx_eq f(0,1) f(0,complex128(1))
-    @test_approx_eq f(0,1) f(0,complex64(1))
+    @test_approx_eq f(0,1) f(0,Complex128(1))
+    @test_approx_eq f(0,1) f(0,Complex64(1))
 end
 
 # scaled bessel[ijky] and hankelh[12]
 for x in (1.0, 0.0, -1.0), y in (1.0, 0.0, -1.0), nu in (1.0, 0.0, -1.0)
-    z = complex128(x + y * im)
+    z = Complex128(x + y * im)
     z == zero(z) || @test_approx_eq hankelh1x(nu, z) hankelh1(nu, z) * exp(-z * im)
     z == zero(z) || @test_approx_eq hankelh2x(nu, z) hankelh2(nu, z) * exp(z * im)
     (nu < 0 && z == zero(z)) || @test_approx_eq besselix(nu, z) besseli(nu, z) * exp(-abs(real(z)))

@@ -167,10 +167,11 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
                 else
                     @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
                 end
+                @eval rem(x::($from), ::Type{$to}) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
+                @eval rem(x::($from), ::Type{$to}) = convert($to,x)
             end
-            @eval rem(x::($from), ::Type{$to}) = convert($to,x)
         else
             if !(issubtype(from,Signed) === issubtype(to,Signed))
                 # raise InexactError if x's top bit is set
@@ -230,8 +231,8 @@ convert(::Type{Unsigned}, x::Float64) = convert(UInt,x)
 convert(::Type{Unsigned}, x::Char)    = convert(UInt,x)
 convert(::Type{Unsigned}, x::Bool)    = convert(UInt,x)
 
-convert(::Type{Integer}, x::Float32) = convert(Int,x)
-convert(::Type{Integer}, x::Float64) = convert(Int,x)
+convert(::Type{Integer}, x::Integer) = x
+convert(::Type{Integer}, x::Union(Real,Char)) = convert(Signed,x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x
@@ -245,12 +246,20 @@ floor{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
 
 ## integer construction ##
 
-macro int128_str(str)
-    parseint(Int128,str)
+macro int128_str(x)
+    if isa(x,AbstractString)
+        parseint(Int128,x)
+    else
+        Int128(x)
+    end
 end
 
-macro uint128_str(str)
-    parseint(UInt128,str)
+macro uint128_str(x)
+    if isa(x,AbstractString)
+        parseint(UInt128,x)
+    else
+        UInt128(x)
+    end
 end
 
 macro bigint_str(str)

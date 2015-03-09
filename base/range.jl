@@ -185,11 +185,11 @@ step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 
 function length(r::StepRange)
-    n = integer(div(r.stop+r.step - r.start, r.step))
+    n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::UnitRange) = integer(r.stop - r.start + 1)
-length(r::FloatRange) = integer(r.len)
+length(r::UnitRange) = Integer(r.stop - r.start + 1)
+length(r::FloatRange) = Integer(r.len)
 
 function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)

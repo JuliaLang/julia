@@ -671,11 +671,11 @@ ini_HEX(out, d, flags::ASCIIString, width::Int, precision::Int, c::Char) = (true
 
 
 # fallbacks for Real types without explicit decode_* implementation
-decode_oct(d::Real) = decode_oct(integer(d))
-decode_0ct(d::Real) = decode_0ct(integer(d))
-decode_dec(d::Real) = decode_dec(integer(d))
-decode_hex(d::Real) = decode_hex(integer(d))
-decode_HEX(d::Real) = decode_HEX(integer(d))
+decode_oct(d::Real) = decode_oct(Integer(d))
+decode_0ct(d::Real) = decode_0ct(Integer(d))
+decode_dec(d::Real) = decode_dec(Integer(d))
+decode_hex(d::Real) = decode_hex(Integer(d))
+decode_HEX(d::Real) = decode_HEX(Integer(d))
 
 handlenegative(d::Unsigned) = (false, d)
 function handlenegative(d::Integer)
@@ -902,7 +902,7 @@ ini_hex(x::Real, n::Int, symbols::Array{UInt8,1}) = ini_hex(float(x), n, symbols
 ini_hex(x::Real, symbols::Array{UInt8,1}) = ini_hex(float(x), symbols)
 
 function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
-    x = float64(x)
+    x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', n)
         return Int32(1), Int32(0), signbit(x)
@@ -927,7 +927,7 @@ function ini_hex(x::SmallFloatingPoint, n::Int, symbols::Array{UInt8,1})
 end
 
 function ini_hex(x::SmallFloatingPoint, symbols::Array{UInt8,1})
-    x = float64(x)
+    x = Float64(x)
     if x == 0.0
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), DIGITS, '0', 1)
         return Int32(1), Int32(0), signbit(x)

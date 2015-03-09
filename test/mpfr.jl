@@ -17,7 +17,7 @@ y = BigFloat(BigFloat(12))
 @test_approx_eq x y
 y = BigFloat("12")
 @test_approx_eq x y
-y = BigFloat(float32(12.))
+y = BigFloat(Float32(12.))
 @test_approx_eq x y
 y = BigFloat(12//1)
 @test_approx_eq x y
@@ -139,8 +139,8 @@ y = BigFloat(1)
 @test typeof(convert(BigFloat, 0.5)) == BigFloat
 @test convert(BigFloat, 40) == BigFloat("40")
 @test typeof(convert(BigFloat, 40)) == BigFloat
-@test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
-@test typeof(convert(BigFloat, float32(0.5))) == BigFloat
+@test convert(BigFloat, Float32(0.5)) == BigFloat("0.5")
+@test typeof(convert(BigFloat, Float32(0.5))) == BigFloat
 @test convert(BigFloat, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
 @test typeof(convert(BigFloat, BigInt("9223372036854775808"))) == BigFloat
 @test convert(FloatingPoint, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
@@ -148,8 +148,8 @@ y = BigFloat(1)
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
-@test convert(Float32, BigFloat(0.5)) == float32(0.5)
-@test convert(Float16, BigFloat(0.5)) == float16(0.5)
+@test convert(Float32, BigFloat(0.5)) == Float32(0.5)
+@test convert(Float16, BigFloat(0.5)) == Float16(0.5)
 
 # exponent
 x = BigFloat(0)
@@ -442,7 +442,7 @@ with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), Int16(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), -72) == ldexp(24.5, -72)
     @test ldexp(BigFloat(24.5), Int16(-72)) == ldexp(24.5, -72)
-    @test ldexp(BigFloat(24.5), uint(72)) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 

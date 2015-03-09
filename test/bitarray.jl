@@ -480,7 +480,7 @@ for m1 = 1 : v1 + 1
             @test b == i
             b2 = copy(b1)
             i2 = copy(i1)
-            i3 = int(bitrand(v2))
+            i3 = map(Int,bitrand(v2))
             b = splice!(b2, m1:m2, i3)
             i = splice!(i2, m1:m2, i3)
             @test isequal(bitunpack(b2), i2)
@@ -510,7 +510,7 @@ for m1 = 1 : v1
         @test b == i
         b2 = copy(b1)
         i2 = copy(i1)
-        i3 = int(bitrand(v2))
+        i3 = map(Int,bitrand(v2))
         b = splice!(b2, m1:m2, i3)
         i = splice!(i2, m1:m2, i3)
         @test isequal(bitunpack(b2), i2)
@@ -588,7 +588,7 @@ b2 = trues(n1, n2)
 while true
     global b1
     b1 = bitrand(n1, n1)
-    if abs(det(float64(b1))) > 1e-6
+    if abs(det(Array{Float64}(b1))) > 1e-6
         break
     end
 end
@@ -632,7 +632,7 @@ f2 = 1.0 .+ rand(n1, n2)
 b2 = bitrand(n1, n2)
 i1 = rand(1:10)
 u1 = UInt8(i1)
-f1 = float64(i1)
+f1 = Float64(i1)
 ci1 = complex(i1)
 cu1 = complex(u1)
 cf1 = complex(f1)
@@ -652,9 +652,9 @@ cf1 = complex(f1)
 @check_bit_operation (.*)(u1, b2) Matrix{UInt8}
 
 for (x1,t1) = [(f1, Float64),
-              (ci1, Complex{Int}),
-              (cu1, Complex{UInt8}),
-              (cf1, Complex128)]
+               (ci1, Complex{Int}),
+               (cu1, Complex{UInt8}),
+               (cf1, Complex128)]
     @check_bit_operation (.+)(x1, b2)  Matrix{t1}
     @check_bit_operation (.-)(x1, b2)  Matrix{t1}
     @check_bit_operation (.*)(x1, b2) Matrix{t1}
@@ -705,7 +705,7 @@ b2 = bitrand(n1, n2)
 b1 = bitrand(n1, n2)
 i2 = rand(1:10)
 u2 = UInt8(i2)
-f2 = float64(i2)
+f2 = Float64(i2)
 ci2 = complex(i2)
 cu2 = complex(u2)
 cf2 = complex(f2)

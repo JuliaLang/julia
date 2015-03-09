@@ -376,11 +376,9 @@ end
 
 full(x::AbstractArray) = x
 
-map{T}(::Type{T}, a::AbstractArray{T})  = a
-map{T}(::Type{T}, a::AbstractArray)     = convert(AbstractArray{T}, a)
-map(::Type{Integer},  a::AbstractArray) = convert(AbstractArray{typeof(Integer(one(eltype(a))))}, a)
-map(::Type{Signed},   a::AbstractArray) = convert(AbstractArray{typeof(Signed(one(eltype(a))))}, a)
-map(::Type{Unsigned}, a::AbstractArray) = convert(AbstractArray{typeof(Unsigned(one(eltype(a))))}, a)
+map(::Type{Integer},  a::Array) = map!(Integer, similar(a,typeof(Integer(one(eltype(a))))), a)
+map(::Type{Signed},   a::Array) = map!(Signed, similar(a,typeof(Signed(one(eltype(a))))), a)
+map(::Type{Unsigned}, a::Array) = map!(Unsigned, similar(a,typeof(Unsigned(one(eltype(a))))), a)
 
 ## range conversions ##
 
@@ -468,7 +466,7 @@ end
 flipud(A::AbstractArray) = flipdim(A, 1)
 fliplr(A::AbstractArray) = flipdim(A, 2)
 
-circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [Integer(shiftamt)])
 function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
     I = ()
     for i=1:N
@@ -1316,7 +1314,9 @@ function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
 end
 
 function map(f, A::AbstractArray)
-    if isempty(A); return similar(A); end
+    if isempty(A)
+        return isa(f,Type) ? similar(A,f) : similar(A)
+    end
     first = f(A[1])
     dest = similar(A, typeof(first))
     dest[1] = first

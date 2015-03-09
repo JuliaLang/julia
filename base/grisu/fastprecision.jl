@@ -58,7 +58,7 @@ function digitgen(w,buffer,requested_digits=1000)
 end
 
 function fastprecision(v,requested_digits,buffer=Array(UInt8,100))
-    f = normalize(float64(v))
+    f = normalize(Float64(v))
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)
     cp = binexp_cache(ten_mk_min_exp,ten_mk_max_exp)

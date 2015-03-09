@@ -121,7 +121,7 @@ function safe_cov(x, y, zm::Bool, cr::Bool)
         x = x .- mean(x)
         y = y .- mean(y)
     end
-    dot(vec(x), vec(y)) / (n - int(cr))
+    dot(vec(x), vec(y)) / (n - Int(cr))
 end
 
 X = [1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.]'

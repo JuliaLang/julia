@@ -58,7 +58,7 @@ function sin_kernel(x::DoubleFloat32)
     w = z*z
     r = S3+z*S4
     s = z*x.hi
-    float32((x.hi + s*(S1+z*S2)) + s*w*r)
+    Float32((x.hi + s*(S1+z*S2)) + s*w*r)
 end
 
 function cos_kernel(x::DoubleFloat32)
@@ -70,7 +70,7 @@ function cos_kernel(x::DoubleFloat32)
     z = x.hi*x.hi
     w = z*z
     r = C2+z*C3
-    float32(((1.0+z*C0) + w*C1) + (w*z)*r)
+    Float32(((1.0+z*C0) + w*C1) + (w*z)*r)
 end
 
 # fallback methods
@@ -92,7 +92,7 @@ function mulpi_ext(x::Float64)
 
     DoubleFloat64(y_hi,y_lo)
 end
-mulpi_ext(x::Float32) = DoubleFloat32(pi*float64(x))
+mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
 mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
@@ -229,7 +229,7 @@ function deg2rad_ext(x::Float64)
 
     DoubleFloat64(y_hi,y_lo)
 end
-deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(float64(x)))
+deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)

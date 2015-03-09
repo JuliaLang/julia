@@ -12,7 +12,7 @@ u16 = utf16(u8)
 # UTF32
 u32 = utf32(u8)
 @test sizeof(u32) == 16
-@test length(u32.data) == 5 && u32.data[end] == char(0)
+@test length(u32.data) == 5 && u32.data[end] == Char(0)
 @test length(u32) == 4
 @test utf8(u32) == u8
 @test collect(u8) == collect(u32)

@@ -68,7 +68,7 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
     tm
 end
 
-time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
 
 ## process-related functions ##
 

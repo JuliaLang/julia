@@ -152,7 +152,7 @@ function hash{T<:Integer64}(x::Rational{T}, h::UInt)
         den >>= pow
         pow = -pow
         if den == 1 && abs(num) < 9007199254740992
-            return hash(ldexp(float64(num),pow))
+            return hash(ldexp(Float64(num),pow))
         end
     end
     h = hash_integer(den, h)
@@ -163,4 +163,4 @@ end
 
 ## hashing Float16s ##
 
-hash(x::Float16, h::UInt) = hash(float64(x), h)
+hash(x::Float16, h::UInt) = hash(Float64(x), h)

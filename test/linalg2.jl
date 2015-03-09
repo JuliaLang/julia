@@ -190,7 +190,7 @@ l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
 @test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(float64(float(a)))
+@test_approx_eq det(a) det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
@@ -198,7 +198,7 @@ H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
 Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
 with_bigfloat_precision(2^10) do
-    @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
+    @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100
 end
 
 # Test balancing in eigenvector calculations
