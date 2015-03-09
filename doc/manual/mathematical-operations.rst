@@ -95,10 +95,10 @@ Here are some examples with bitwise operators:
     julia> 123 $ 234
     145
 
-    julia> ~uint32(123)
+    julia> ~UInt32(123)
     0xffffff84
 
-    julia> ~uint8(123)
+    julia> ~UInt8(123)
     0x84
 
 Updating operators

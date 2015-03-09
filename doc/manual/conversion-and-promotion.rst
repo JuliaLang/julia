@@ -292,7 +292,7 @@ This allows calls like the following to work:
 
 .. doctest::
 
-    julia> Rational(int8(15),int32(-5))
+    julia> Rational(Int8(15),Int32(-5))
     -3//1
 
     julia> typeof(ans)

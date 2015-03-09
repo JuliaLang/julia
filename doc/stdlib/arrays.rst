@@ -151,7 +151,7 @@ Constructors
 
 .. function:: reinterpret(type, A)
 
-   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, uint32(7))`` interprets the 4 bytes corresponding to ``uint32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
+   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
 .. function:: eye(n)
 

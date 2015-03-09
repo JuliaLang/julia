@@ -60,22 +60,6 @@ Data Formats
 
    Convert a number to a maximum precision representation (typically ``BigInt`` or ``BigFloat``). See ``BigFloat`` for information about some pitfalls with floating-point numbers.
 
-.. function:: bool(x)
-
-   Convert a number or numeric array to boolean
-
-.. function:: int(x)
-
-   Convert a number or array to the default integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an integer.
-
-.. function:: uint(x)
-
-   Convert a number or array to the default unsigned integer type on your platform. Alternatively, ``x`` can be a string, which is parsed as an unsigned integer.
-
-.. function:: integer(x)
-
-   Convert a number or array to integer type. If ``x`` is already of integer type it is unchanged, otherwise it converts it to the default integer type on your platform.
-
 .. function:: signed(x)
 
    Convert a number to a signed integer. If the argument is unsigned, it is reinterpreted as signed without checking for overflow.
@@ -83,59 +67,6 @@ Data Formats
 .. function:: unsigned(x) -> Unsigned
 
    Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
-
-.. function:: int8(x)
-
-   Convert a number or array to ``Int8`` data type
-
-.. function:: int16(x)
-
-   Convert a number or array to ``Int16`` data type
-
-.. function:: int32(x)
-
-   Convert a number or array to ``Int32`` data type
-
-.. function:: int64(x)
-
-   Convert a number or array to ``Int64`` data type
-
-.. function:: int128(x)
-
-   Convert a number or array to ``Int128`` data type
-
-.. function:: uint8(x)
-
-   Convert a number or array to ``UInt8`` data type
-
-.. function:: uint16(x)
-
-   Convert a number or array to ``UInt16`` data type
-
-.. function:: uint32(x)
-
-   Convert a number or array to ``UInt32`` data type
-
-.. function:: uint64(x)
-
-   Convert a number or array to ``UInt64`` data type
-
-.. function:: uint128(x)
-
-   Convert a number or array to ``UInt128`` data type
-
-.. function:: float16(x)
-
-   Convert a number or array to ``Float16`` data type
-
-.. function:: float32(x)
-
-   Convert a number or array to ``Float32`` data type
-
-.. function:: float64(x)
-
-   Convert a number or array to ``Float64`` data type
-
 .. function:: float32_isvalid(x, out::Vector{Float32}) -> Bool
 
    Convert a number or array to ``Float32`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
@@ -147,8 +78,6 @@ Data Formats
 .. function:: float(x)
 
    Convert a number, array, or string to a ``FloatingPoint`` data type. For numeric data, the smallest suitable ``FloatingPoint`` type is used. Converts strings to ``Float64``.
-
-   This function is not recommended for arrays. It is better to use a more specific function such as ``float32`` or ``float64``.
 
 .. function:: significand(x)
 
@@ -166,21 +95,9 @@ Data Formats
 
    Get the exponent of a normalized floating-point number.
 
-.. function:: complex64(r, [i])
-
-   Convert to ``r + i*im`` represented as a ``Complex64`` data type. ``i`` defaults to zero.
-
-.. function:: complex128(r, [i])
-
-   Convert to ``r + i*im`` represented as a ``Complex128`` data type. ``i`` defaults to zero.
-
 .. function:: complex(r, [i])
 
    Convert real numbers or arrays to complex. ``i`` defaults to zero.
-
-.. function:: char(x)
-
-   Convert a number or array to ``Char`` data type
 
 .. function:: bswap(n)
 
@@ -389,7 +306,7 @@ Integers
 
    .. doctest::
 
-      julia> count_zeros(int32(2 ^ 16 - 1))
+      julia> count_zeros(Int32(2 ^ 16 - 1))
       16
 
 .. function:: leading_zeros(x::Integer) -> Integer
@@ -398,7 +315,7 @@ Integers
 
    .. doctest::
 
-      julia> leading_zeros(int32(1))
+      julia> leading_zeros(Int32(1))
       31
 
 .. function:: leading_ones(x::Integer) -> Integer
@@ -407,7 +324,7 @@ Integers
 
    .. doctest::
 
-      julia> leading_ones(uint32(2 ^ 32 - 2))
+      julia> leading_ones(UInt32(2 ^ 32 - 2))
       31
 
 .. function:: trailing_zeros(x::Integer) -> Integer
