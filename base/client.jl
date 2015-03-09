@@ -184,7 +184,8 @@ end
 try_include(path::AbstractString) = isfile(path) && include(path)
 
 # initialize the local proc network address / port
-function init_bind_addr(opts::JLOptions)
+function init_bind_addr()
+    opts = JLOptions()
     if opts.bindto != C_NULL
         bind_to = split(bytestring(opts.bindto), ":")
         bind_addr = string(parseip(bind_to[1]))
@@ -248,11 +249,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # startup worker
             if Bool(opts.worker)
-                assert(opts.worker == 1 || opts.worker == 2)
-                # if default, start worker process otherwise if custom pass through
-                if opts.worker == 1
-                    start_worker() # does not return
-                end
+                start_worker() # does not return
             end
             # load file immediately on all processors
             if opts.load != C_NULL
@@ -345,17 +342,6 @@ function init_load_path()
     push!(LOAD_PATH,abspath(JULIA_HOME,"..","share","julia","site",vers))
 end
 
-# start local process as head "master" process with process id  1
-# register this process as a local worker
-function init_head_sched()
-    # start in "head node" mode
-    global PGRP
-    global LPROC
-    LPROC.id = 1
-    assert(length(PGRP.workers) == 0)
-    register_worker(LPROC)
-end
-
 function load_juliarc()
     # If the user built us with a specific Base.SYSCONFDIR, check that location first for a juliarc.jl file
     #   If it is not found, then continue on to the relative path based on JULIA_HOME
@@ -393,11 +379,18 @@ function early_init()
     end
 end
 
-# starts the gc message task (for distrubuted gc) and
-# registers worker process termination method
 function init_parallel()
     start_gc_msgs_task()
     atexit(terminate_all_workers)
+
+    init_bind_addr()
+
+    # start in "head node" mode, if worker, will override later.
+    global PGRP
+    global LPROC
+    LPROC.id = 1
+    assert(length(PGRP.workers) == 0)
+    register_worker(LPROC)
 end
 
 import .Terminals
@@ -406,10 +399,6 @@ import .REPL
 function _start()
     opts = JLOptions()
     try
-        init_parallel()
-        init_bind_addr(opts)
-        # if this process is not a worker, schedule head process
-        Bool(opts.worker) || init_head_sched()
         (quiet,repl,startup,color_set,history_file) = process_options(opts,copy(ARGS))
 
         local term

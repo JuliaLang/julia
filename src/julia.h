@@ -1480,9 +1480,6 @@ extern DLLEXPORT jl_options_t jl_options;
 #define JL_OPTIONS_FAST_MATH_OFF 2
 #define JL_OPTIONS_FAST_MATH_DEFAULT 0
 
-#define JL_OPTIONS_WORKER_DEFAULT 1
-#define JL_OPTIONS_WORKER_CUSTOM 2
-
 // Version information
 #include "julia_version.h"
 
