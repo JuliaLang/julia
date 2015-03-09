@@ -101,7 +101,7 @@ include("iostream.jl")
 
 # system & environment
 include("libc.jl")
-using .Libc: getpid, gethostname, errno, strerror, time
+using .Libc: getpid, gethostname, time, msync
 include("libdl.jl")
 include("env.jl")
 include("path.jl")

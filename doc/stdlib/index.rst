@@ -25,4 +25,6 @@
    collections
    test
    c
+   libc
+   libdl
    profile
