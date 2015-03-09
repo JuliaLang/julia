@@ -680,12 +680,21 @@ end
 #Rounding complex numbers
 # Superfluous tuple splatting in return arguments is a work around for 32-bit systems (#10027)
 #Requires two different RoundingModes for the real and imaginary components
+
+if WORD_SIZE==32
 function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
     Complex((round(real(z), RoundingMode{MR}()),
-            round(imag(z), RoundingMode{MI}()))...)
+             round(imag(z), RoundingMode{MI}()))...)
+end
+round(z::Complex) = Complex((round(real(z)), round(imag(z)))...)
+else
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex(round(real(z), RoundingMode{MR}()),
+            round(imag(z), RoundingMode{MI}()))
+end
+round(z::Complex) = Complex(round(real(z)), round(imag(z)))
 end
 
-round(z::Complex) = Complex((round(real(z)), round(imag(z)))...)
 @vectorize_1arg Complex round
 
 function round(z::Complex, digits::Integer, base::Integer=10)
@@ -696,4 +705,3 @@ end
 float{T<:FloatingPoint}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 @vectorize_1arg Complex float
-
