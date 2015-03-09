@@ -244,6 +244,9 @@ Deprecated or removed
   * The operators `|>`, `.>`, `>>`, and `.>>` as used for process I/O redirection
     are replaced with the `pipe` function ([#5349]).
 
+  * `flipud(A)` and `fliplr(A)` have been deprecated in favor of `flipdim(A, 1)` and
+    `flipdim(A, 2)`, respectively ([#10446]).
+
 Julia v0.3.0 Release Notes
 ==========================
 
