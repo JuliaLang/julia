@@ -267,14 +267,6 @@ Indexing, Assignment, and Concatenation
 
    Reverse ``A`` in dimension ``d``.
 
-.. function:: flipud(A)
-
-   Equivalent to ``flipdim(A,1)``.
-
-.. function:: fliplr(A)
-
-   Equivalent to ``flipdim(A,2)``.
-
 .. function:: circshift(A,shifts)
 
    Circularly shift the data in an array. The second argument is a vector giving the amount to shift in each dimension.
