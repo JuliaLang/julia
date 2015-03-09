@@ -123,7 +123,7 @@ reducedim_init(f::Union(IdFun,AbsFun,Abs2Fun), op::AddFun, A::AbstractArray{Bool
 has_fast_linear_indexing(a::AbstractArray) = false
 has_fast_linear_indexing(a::Array) = true
 
-function check_reducdims(R, A)
+function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
     #
     # It returns an integer value value (useful for choosing implementation)
@@ -156,7 +156,7 @@ end
 
 stagedfunction _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
     quote
-        lsiz = check_reducdims(R, A)
+        lsiz = check_reducedims(R,A)
         isempty(A) && return R
         @nextract $N sizeR d->size(R,d)
         sizA1 = size(A, 1)
