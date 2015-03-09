@@ -144,7 +144,7 @@ noteworthy differences:
   ``for (i in c(1, 2, 3))`` and ``if i == 1`` instead of ``if (i == 1)``.
 - Julia does not treat the numbers ``0`` and ``1`` as Booleans.
   You cannot write ``if (1)`` in Julia, because ``if`` statements accept only
-  booleans. Instead, you can write ``if true``, ``if bool(1)``, or ``if 1==1``.
+  booleans. Instead, you can write ``if true``, ``if Bool(1)``, or ``if 1==1``.
 - Julia does not provide ``nrow`` and ``ncol``. Instead, use ``size(M, 1)``
   for ``nrow(M)`` and ``size(M, 2)`` for ``ncol(M)``.
 - Julia is careful to distinguish scalars, vectors and matrices.  In R,

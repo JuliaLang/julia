@@ -36,8 +36,7 @@ macro enum(T,syms...)
         throw(ArgumentError("invalid type expression for enum $T"))
     end
     vals = Array((Symbol,Integer),0)
-    lo = typemax(Int)
-    hi = typemin(Int)
+    lo = hi = 0
     i = -1
     enumT = typeof(i)
     hasexpr = false
@@ -65,9 +64,14 @@ macro enum(T,syms...)
         end
         push!(vals, (s,i))
         I = typeof(i)
-        enumT = length(vals) == 1 ? I : promote_type(enumT,I)
-        lo = min(lo, i)
-        hi = max(hi, i)
+        if length(vals) == 1
+            enumT = I
+            lo = hi = i
+        else
+            enumT = promote_type(enumT,I)
+            lo = min(lo, i)
+            hi = max(hi, i)
+        end
     end
     if !hasexpr
         n = length(vals)

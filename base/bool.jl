@@ -6,9 +6,6 @@ convert(::Type{Bool}, x::Real) = (x!=0)
 # promote Bool to any other numeric type
 promote_rule{T<:Number}(::Type{Bool}, ::Type{T}) = T
 
-bool(x::Bool) = x
-bool(x::Number) = convert(Bool, x)
-
 typemin(::Type{Bool}) = false
 typemax(::Type{Bool}) = true
 
@@ -31,11 +28,11 @@ abs2(x::Bool) = x
 
 ## do arithmetic as Int ##
 
-+(x::Bool) =  int(x)
--(x::Bool) = -int(x)
++(x::Bool) =  Int(x)
+-(x::Bool) = -Int(x)
 
-+(x::Bool, y::Bool) = int(x) + int(y)
--(x::Bool, y::Bool) = int(x) - int(y)
++(x::Bool, y::Bool) = Int(x) + Int(y)
+-(x::Bool, y::Bool) = Int(x) - Int(y)
 *(x::Bool, y::Bool) = x & y
 ^(x::Bool, y::Bool) = x | !y
 ^(x::Integer, y::Bool) = ifelse(y, x, one(x))

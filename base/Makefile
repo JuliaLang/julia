@@ -16,13 +16,13 @@ all: pcre_h.jl errno_h.jl build_h.jl.phony fenv_constants.jl file_constants.jl u
 
 pcre_h.jl:
 ifeq ($(USE_SYSTEM_PCRE), 1)
-	@$(call PRINT_PERL, $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@)
+	@$(call PRINT_PERL, $(CPP) -dM $(shell $(PCRE_CONFIG) --prefix)/include/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = Int32($$2)"' | sort > $@)
 else
-	@$(call PRINT_PERL, $(CPP) -dM $(build_includedir)/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = int32($$2)"' | sort > $@)
+	@$(call PRINT_PERL, $(CPP) -dM $(build_includedir)/pcre.h | perl -nle '/^\s*#define\s+PCRE_(\w*)\s*\(?($(PCRE_CONST))\)?\s*$$/ and print "const $$1 = Int32($$2)"' | sort > $@)
 endif
 
 errno_h.jl:
-	@$(call PRINT_PERL, echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)
+	@$(call PRINT_PERL, echo '#include "errno.h"' | $(CPP) -dM - | perl -nle 'print "const $$1 = Int32($$2)" if /^#define\s+(E\w+)\s+(\d+)\s*$$/' | sort > $@)
 
 fenv_constants.jl: ../src/fenv_constants.h
 	@$(PRINT_PERL) $(CPP_STDOUT) -DJULIA -I../deps/openlibm/include ../src/fenv_constants.h | tail -n 8 | perl -ple 's/\sFE_UN\w+/ 0x10/g; s/\sFE_O\w+/ 0x08/g; s/\sFE_DI\w+/ 0x04/g; s/\sFE_INV\w+/ 0x01/g; s/\sFE_TON\w+/ 0x00/g; s/\sFE_UP\w+/ 0x800/g; s/\sFE_DO\w+/ 0x400/g; s/\sFE_TOW\w+/ 0xc00/g' > $@

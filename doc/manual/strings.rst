@@ -93,17 +93,17 @@ convert an integer value back to a :obj:`Char` just as easily:
 
 .. doctest::
 
-    julia> char(120)
+    julia> Char(120)
     'x'
 
 Not all integer values are valid Unicode code points, but for
-performance, the :func:`char` conversion does not check that every character
+performance, the :func:`Char` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
 valid code point, use the :func:`is_valid_char` function:
 
 .. doctest::
 
-    julia> char(0x110000)
+    julia> Char(0x110000)
     '\U110000'
 
     julia> is_valid_char(0x110000)
@@ -142,25 +142,25 @@ also be used:
 
 .. doctest::
 
-    julia> int('\0')
+    julia> Int('\0')
     0
 
-    julia> int('\t')
+    julia> Int('\t')
     9
 
-    julia> int('\n')
+    julia> Int('\n')
     10
 
-    julia> int('\e')
+    julia> Int('\e')
     27
 
-    julia> int('\x7f')
+    julia> Int('\x7f')
     127
 
-    julia> int('\177')
+    julia> Int('\177')
     127
 
-    julia> int('\xff')
+    julia> Int('\xff')
     255
 
 You can do comparisons and a limited amount of arithmetic with

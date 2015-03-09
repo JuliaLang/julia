@@ -643,7 +643,7 @@ GeneralizedSVD{T}(U::AbstractMatrix{T}, V::AbstractMatrix{T}, Q::AbstractMatrix{
 
 function svdfact!{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T})
     U, V, Q, a, b, k, l, R = LAPACK.ggsvd!('U', 'V', 'Q', A, B)
-    GeneralizedSVD(U, V, Q, a, b, int(k), int(l), R)
+    GeneralizedSVD(U, V, Q, a, b, Int(k), Int(l), R)
 end
 svdfact{T<:BlasFloat}(A::StridedMatrix{T}, B::StridedMatrix{T}) = svdfact!(copy(A),copy(B))
 svdfact{TA,TB}(A::StridedMatrix{TA}, B::StridedMatrix{TB}) = (S = promote_type(Float32,typeof(one(TA)/norm(one(TA))),TB); svdfact!(S != TA ? convert(AbstractMatrix{S},A) : copy(A), S != TB ? convert(AbstractMatrix{S},B) : copy(B)))

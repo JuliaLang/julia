@@ -4,7 +4,7 @@ function normalizedexponent(significand, exponent::Int32)
         significand <<= 1
         exponent -= 1
     end
-    return int32(exponent)
+    return Int32(exponent)
 end
 
 function bignumdtoa(v,mode,requested_digits::Int,buffer)

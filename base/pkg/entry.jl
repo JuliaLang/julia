@@ -310,7 +310,7 @@ function publish(branch::AbstractString)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
     Git.run(`fetch -q`, dir="METADATA")
-    ahead_remote, ahead_local = map(int,split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
+    ahead_remote, ahead_local = map(parseint,split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
     ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     ahead_local == 0 && error("There are no METADATA changes to publish")
 

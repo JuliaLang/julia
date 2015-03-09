@@ -14,18 +14,18 @@ immutable StatStruct
 end
 
 StatStruct(buf::Union(Vector{UInt8},Ptr{UInt8})) = StatStruct(
-     uint(ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf)),
-     uint(ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf)),
-     uint(ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf)),
-      int(ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf)),
-     uint(ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf)),
-     uint(ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf)),
-     uint(ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf)),
-    int64(ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf)),
-    int64(ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf)),
-    int64(ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf)),
-          ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
-          ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
+    ccall(:jl_stat_dev,     UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_ino,     UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_mode,    UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_nlink,   UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_uid,     UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_gid,     UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_rdev,    UInt32,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_size,    UInt64,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_blksize, UInt64,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_blocks,  UInt64,  (Ptr{UInt8},), buf),
+    ccall(:jl_stat_mtime,   Float64, (Ptr{UInt8},), buf),
+    ccall(:jl_stat_ctime,   Float64, (Ptr{UInt8},), buf),
 )
 
 show(io::IO, st::StatStruct) = print(io, "StatStruct(mode=$(oct(st.mode,6)), size=$(st.size))")
@@ -75,9 +75,9 @@ issticky(st::StatStruct) = (st.mode & 0o1000) > 0
   iswritable(st::StatStruct) = (st.mode & 0o222) > 0
 isexecutable(st::StatStruct) = (st.mode & 0o111) > 0
 
-uperm(st::StatStruct) = uint8(st.mode >> 6) & 0x7
-gperm(st::StatStruct) = uint8(st.mode >> 3) & 0x7
-operm(st::StatStruct) = uint8(st.mode     ) & 0x7
+uperm(st::StatStruct) = UInt8((st.mode >> 6) & 0x7)
+gperm(st::StatStruct) = UInt8((st.mode >> 3) & 0x7)
+operm(st::StatStruct) = UInt8((st.mode     ) & 0x7)
 
 # mode predicate methods for file names
 

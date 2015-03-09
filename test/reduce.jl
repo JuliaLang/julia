@@ -32,14 +32,14 @@
 # sum
 
 @test sum(Int8[]) === 0
-@test sum(Int[]) === int(0)
+@test sum(Int[]) === Int(0)
 @test sum(Float64[]) === 0.0
 
-@test sum(int8(3)) === int8(3)
+@test sum(Int8(3)) === Int8(3)
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([int8(3)]) === 3
+@test sum([Int8(3)]) === 3
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -60,14 +60,14 @@ fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0
-@test sumabs([int8(-2)]) === 2
+@test sumabs([Int8(-2)]) === 2
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
 @test_approx_eq sumabs(a) sum(abs(a))
 @test_approx_eq sumabs(b) sum(abs(b))
 
 @test sumabs2(Float64[]) === 0.0
-@test sumabs2([int8(-2)]) === 4
+@test sumabs2([Int8(-2)]) === 4
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
 @test_approx_eq sumabs2(a) sum(abs2(a))
@@ -107,7 +107,7 @@ end
 @test prod(Float64[]) === 1.0
 
 @test prod([3]) === 3
-@test prod([int8(3)]) === 3
+@test prod([Int8(3)]) === 3
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -238,5 +238,5 @@ end
 @test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
 @test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
-@test sum(collect(uint8(0:255))) == 32640
-@test sum(collect(uint8(254:255))) == 509
+@test sum(collect(map(UInt8,0:255))) == 32640
+@test sum(collect(map(UInt8,254:255))) == 509

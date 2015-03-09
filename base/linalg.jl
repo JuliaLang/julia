@@ -153,10 +153,10 @@ typealias BlasComplex Union(Complex128,Complex64)
 
 if USE_BLAS64
     typealias BlasInt Int64
-    blas_int(x) = int64(x)
+    blas_int(x) = Int64(x)
 else
     typealias BlasInt Int32
-    blas_int(x) = int32(x)
+    blas_int(x) = Int32(x)
 end
 
 #Check that stride of matrix/vector is 1

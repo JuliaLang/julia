@@ -92,6 +92,7 @@ done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
 done
+sed -i 's/int32/Int32/g' base/pcre_h.jl
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary

@@ -14,7 +14,7 @@ type Regex
 
     function Regex(pattern::AbstractString, options::Integer)
         pattern = bytestring(pattern)
-        options = int32(options)
+        options = Int32(options)
         if (options & ~PCRE.OPTIONS_MASK) != 0
             throw(ArgumentError("invalid regex options: $options"))
         end
@@ -114,7 +114,7 @@ end
 
 call(r::Regex, s) = ismatch(r, s)
 
-function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Int32=int32(0))
+function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Int32=Int32(0))
     opts = re.options & PCRE.EXECUTE_MASK | add_opts
     compile(re)
     if !PCRE.exec(re.regex, re.extra, str, idx-1, opts, re.ovec)
@@ -128,7 +128,7 @@ function match(re::Regex, str::UTF8String, idx::Integer, add_opts::Int32=int32(0
     RegexMatch(mat, cap, re.ovec[1]+1, off)
 end
 
-match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Int32=int32(0)) =
+match(re::Regex, str::Union(ByteString,SubString), idx::Integer, add_opts::Int32=Int32(0)) =
     match(re, utf8(str), idx, add_opts)
 
 match(r::Regex, s::AbstractString) = match(r, s, start(s))
@@ -140,7 +140,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
     extra = re.extra
     n = length(str.data)
     matches = SubString{UTF8String}[]
-    offset = int32(0)
+    offset = Int32(0)
     opts = re.options & PCRE.EXECUTE_MASK
     opts_nonempty = opts | PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART
     prevempty = false
@@ -154,7 +154,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
 
         if result < 0
             if prevempty && offset < n
-                offset = int32(nextind(str, offset + 1) - 1)
+                offset = Int32(nextind(str, offset + 1) - 1)
                 prevempty = false
                 continue
             else
@@ -166,7 +166,7 @@ function matchall(re::Regex, str::UTF8String, overlap::Bool=false)
         prevempty = offset == ovec[2]
         if overlap
             if !prevempty
-                offset = int32(ovec[1]+1)
+                offset = Int32(ovec[1]+1)
             end
         else
             offset = ovec[2]
@@ -202,7 +202,7 @@ immutable RegexMatchIterator
 end
 compile(itr::RegexMatchIterator) = (compile(itr.regex); itr)
 eltype(::Type{RegexMatchIterator}) = RegexMatch
-start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, int32(0))
+start(itr::RegexMatchIterator) = match(itr.regex, itr.string, 1, Int32(0))
 done(itr::RegexMatchIterator, prev_match) = (prev_match == nothing)
 
 # Assumes prev_match is not nothing
@@ -219,10 +219,10 @@ function next(itr::RegexMatchIterator, prev_match)
         offset = prev_match.offset + endof(prev_match.match)
     end
 
-    opts_nonempty = int32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
+    opts_nonempty = Int32(PCRE.ANCHORED | PCRE.NOTEMPTY_ATSTART)
     while true
         mat = match(itr.regex, itr.string, offset,
-                    prevempty ? opts_nonempty : int32(0))
+                    prevempty ? opts_nonempty : Int32(0))
 
         if mat === nothing
             if prevempty && offset <= length(itr.string.data)

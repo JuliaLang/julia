@@ -68,6 +68,12 @@ Language changes
     macro. Instead, the string is first unindented and then `x_str` is invoked,
     as if the string had been single-quoted ([#10228]).
 
+  * Numeric conversion functions whose names are lower-case versions of type
+    names have been removed. To convert a scalar, use the type name, e.g.
+    `Int32(x)`. To convert an array to a different element type, use
+    `Array{T}(x)`, `map(T,x)`, or `round(T,x)`. To parse a string as an integer
+    or floating-point number, use `parseint` or `parsefloat` ([#1470], [#6211]).
+
 Compiler improvements
 ---------------------
 
@@ -963,6 +969,7 @@ Too numerous to mention.
 [#987]: https://github.com/JuliaLang/julia/issues/987
 [#1195]: https://github.com/JuliaLang/julia/issues/1195
 [#1268]: https://github.com/JuliaLang/julia/issues/1268
+[#1470]: https://github.com/JuliaLang/julia/issues/1470
 [#1484]: https://github.com/JuliaLang/julia/issues/1484
 [#1539]: https://github.com/JuliaLang/julia/issues/1539
 [#1571]: https://github.com/JuliaLang/julia/issues/1571
@@ -1131,6 +1138,7 @@ Too numerous to mention.
 [#6169]: https://github.com/JuliaLang/julia/issues/6169
 [#6179]: https://github.com/JuliaLang/julia/issues/6179
 [#6197]: https://github.com/JuliaLang/julia/issues/6197
+[#6211]: https://github.com/JuliaLang/julia/issues/6211
 [#6212]: https://github.com/JuliaLang/julia/issues/6212
 [#6270]: https://github.com/JuliaLang/julia/issues/6270
 [#6273]: https://github.com/JuliaLang/julia/issues/6273
@@ -1235,10 +1243,15 @@ Too numerous to mention.
 [#9734]: https://github.com/JuliaLang/julia/issues/9734
 [#9745]: https://github.com/JuliaLang/julia/issues/9745
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
+[#9862]: https://github.com/JuliaLang/julia/issues/9862
 [#9957]: https://github.com/JuliaLang/julia/issues/9957
 [#10024]: https://github.com/JuliaLang/julia/issues/10024
 [#10031]: https://github.com/JuliaLang/julia/issues/10031
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
 [#10117]: https://github.com/JuliaLang/julia/issues/10117
+[#10150]: https://github.com/JuliaLang/julia/issues/10150
 [#10180]: https://github.com/JuliaLang/julia/issues/10180
 [#10228]: https://github.com/JuliaLang/julia/issues/10228
+[#10332]: https://github.com/JuliaLang/julia/issues/10332
+[#10333]: https://github.com/JuliaLang/julia/issues/10333
+[#10400]: https://github.com/JuliaLang/julia/issues/10400

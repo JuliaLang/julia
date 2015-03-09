@@ -12,7 +12,7 @@ println(xs...) = println(STDOUT, xs...)
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")
 next(s::AbstractString, i::Int) = error("you must implement next(", typeof(s), ",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)
-next(s::AbstractString, i::Integer) = next(s,int(i))
+next(s::AbstractString, i::Integer) = next(s,Int(i))
 
 ## conversion of general objects to strings ##
 
@@ -56,9 +56,9 @@ convert(::Type{Symbol}, s::AbstractString) = symbol(s)
 start(s::AbstractString) = 1
 done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
-getindex(s::AbstractString, i::Integer) = s[int(i)]
+getindex(s::AbstractString, i::Integer) = s[Int(i)]
 getindex(s::AbstractString, x::Real) = s[to_index(x)]
-getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[int(first(r)):int(last(r))]
+getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
@@ -233,7 +233,7 @@ function _searchindex(s, t, i)
 end
 
 function _search_bloom_mask(c)
-    uint64(1) << (c & 63)
+    UInt64(1) << (c & 63)
 end
 
 function _searchindex(s::Array, t::Array, i)
@@ -253,7 +253,7 @@ function _searchindex(s::Array, t::Array, i)
         return 0
     end
 
-    bloom_mask = uint64(0)
+    bloom_mask = UInt64(0)
     skip = n - 1
     tlast = t[end]
     for j in 1:n
@@ -385,7 +385,7 @@ function _rsearchindex(s::Array, t::Array, k)
         return 0
     end
 
-    bloom_mask = uint64(0)
+    bloom_mask = UInt64(0)
     skip = n - 1
     tfirst = t[1]
     for j in n:-1:1
@@ -524,7 +524,7 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
 # faster comparisons for byte strings and symbols
 
 cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
-cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
+cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
 
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
@@ -537,12 +537,12 @@ startswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (UInt32,), c)))
+charwidth(c::Char) = max(0,Int(ccall(:wcwidth, Int32, (UInt32,), c)))
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
+strwidth(s::ByteString) = Int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
-isascii(c::Char) = c < char(0x80)
+isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
 isascii(s::ASCIIString) = true
 
@@ -581,7 +581,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
 end
 SubString{T<:AbstractString}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
-SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, int(i), int(j))
+SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
@@ -597,7 +597,7 @@ sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : next(s,s.endof)[2]-1
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
 function length(s::SubString{UTF8String})
-    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
+    return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
                                       pointer(s), next(s,s.endof)[2]-1))
 end
 
@@ -876,7 +876,7 @@ function print_escaped(io, s::AbstractString, esc::AbstractString)
         c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
         c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[int(c)-6]) :
+        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
         isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
@@ -934,9 +934,9 @@ function print_unescaped(io, s::AbstractString)
                     throw(ArgumentError("\\x used with no following hex digits in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
-                    write(io, uint8(n))
+                    write(io, UInt8(n))
                 else
-                    print(io, char(n))
+                    print(io, Char(n))
                 end
             elseif '0' <= c <= '7'
                 k = 1
@@ -949,7 +949,7 @@ function print_unescaped(io, s::AbstractString)
                 if n > 255
                     throw(ArgumentError("octal escape sequence out of range"))
                 end
-                write(io, uint8(n))
+                write(io, UInt8(n))
             else
                 print(io, c == 'a' ? '\a' :
                           c == 'b' ? '\b' :
@@ -1565,25 +1565,10 @@ parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
     parseint_nocheck(T, s, base, base <= 36 ? 10 : 36)
 
 parseint{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
-    2 <= base <= 62 ? parseint_nocheck(T,s,int(base)) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    2 <= base <= 62 ? parseint_nocheck(T,s,Int(base)) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 parseint{T<:Integer}(::Type{T}, s::AbstractString) = parseint_nocheck(T,s,0)
 parseint(s::AbstractString, base::Integer) = parseint(Int,s,base)
 parseint(s::AbstractString) = parseint_nocheck(Int,s,0)
-
-integer (s::AbstractString) = int(s)
-unsigned(s::AbstractString) = uint(s)
-int     (s::AbstractString) = parseint(Int,s)
-uint    (s::AbstractString) = parseint(UInt,s)
-int8    (s::AbstractString) = parseint(Int8,s)
-uint8   (s::AbstractString) = parseint(UInt8,s)
-int16   (s::AbstractString) = parseint(Int16,s)
-uint16  (s::AbstractString) = parseint(UInt16,s)
-int32   (s::AbstractString) = parseint(Int32,s)
-uint32  (s::AbstractString) = parseint(UInt32,s)
-int64   (s::AbstractString) = parseint(Int64,s)
-uint64  (s::AbstractString) = parseint(UInt64,s)
-int128  (s::AbstractString) = parseint(Int128,s)
-uint128 (s::AbstractString) = parseint(UInt128,s)
 
 ## stringifying integers more efficiently ##
 
@@ -1604,32 +1589,26 @@ float32_isvalid(s::SubString, out::Array{Float32,1}) =
 begin
     local tmp::Array{Float64,1} = Array(Float64,1)
     local tmpf::Array{Float32,1} = Array(Float32,1)
-    global float64, float32
-    function float64(s::AbstractString)
+    global parsefloat
+    function parsefloat(::Type{Float64}, s::AbstractString)
         if !float64_isvalid(s, tmp)
-            throw(ArgumentError("float64(::AbstractString): invalid number format $(repr(s))"))
+            throw(ArgumentError("parsefloat(Float64,::AbstractString): invalid number format $(repr(s))"))
         end
         return tmp[1]
     end
 
-    function float32(s::AbstractString)
+    function parsefloat(::Type{Float32}, s::AbstractString)
         if !float32_isvalid(s, tmpf)
-            throw(ArgumentError("float32(::AbstractString): invalid number format $(repr(s))"))
+            throw(ArgumentError("parsefloat(Float32,::AbstractString): invalid number format $(repr(s))"))
         end
         return tmpf[1]
     end
 end
 
-float(x::AbstractString) = float64(x)
-parsefloat(x::AbstractString) = float64(x)
-parsefloat(::Type{Float64}, x::AbstractString) = float64(x)
-parsefloat(::Type{Float32}, x::AbstractString) = float32(x)
+float(x::AbstractString) = parsefloat(x)
+parsefloat(x::AbstractString) = parsefloat(Float64,x)
 
-for conv in (:float, :float32, :float64,
-             :int, :int8, :int16, :int32, :int64,
-             :uint, :uint8, :uint16, :uint32, :uint64)
-    @eval ($conv){S<:AbstractString}(a::AbstractArray{S}) = map!($conv, similar(a,typeof($conv(0))), a)
-end
+float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
 # find the index of the first occurrence of a value in a byte array
 
@@ -1645,11 +1624,11 @@ function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     end
     p = pointer(a)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : int(q-p+1)
+    q == C_NULL ? 0 : Int(q-p+1)
 end
 function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
-        search(a,uint8(b),i)
+        search(a,UInt8(b),i)
     else
         search(a,string(b).data,i).start
     end
@@ -1666,11 +1645,11 @@ function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i
     end
     p = pointer(a)
     q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : int(q-p+1)
+    q == C_NULL ? 0 : Int(q-p+1)
 end
 function rsearch(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
-        rsearch(a,uint8(b),i)
+        rsearch(a,UInt8(b),i)
     else
         rsearch(a,string(b).data,i).start
     end
@@ -1678,7 +1657,7 @@ end
 rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
 
 # return a random string (often useful for temporary filenames/dirnames)
-let b = uint8(['0':'9';'A':'Z';'a':'z'])
+let b = UInt8['0':'9';'A':'Z';'a':'z']
     global randstring
     randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
     randstring() = randstring(8)

@@ -11,8 +11,8 @@ export normalize_string, graphemes, is_valid_char, is_assigned_char,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c) = (0x0 <= c <= 0x110000) && bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
-is_valid_char(c::Char) = is_valid_char(uint32(c))
+is_valid_char(c) = (0x0 <= c <= 0x110000) && Bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
+is_valid_char(c::Char) = is_valid_char(UInt32(c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -118,7 +118,7 @@ end
 
 # returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
 function category_code(c)
-    uint32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
+    UInt32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
     return unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (Int32,), c))
 end
 
@@ -145,12 +145,12 @@ function isalnum(c::Char)
 end
 
 # following C++ only control characters from the Latin-1 subset return true
-iscntrl(c::Char) = (c <= char(0x1f) || char(0x7f) <= c <= char(0x9f))
+iscntrl(c::Char) = (c <= Char(0x1f) || Char(0x7f) <= c <= Char(0x9f))
 
 ispunct(c::Char) = (UTF8PROC_CATEGORY_PC <= category_code(c) <= UTF8PROC_CATEGORY_PO)
 
 # 0x85 is the Unicode Next Line (NEL) character
-isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == char(0x85) || category_code(c)==UTF8PROC_CATEGORY_ZS
+isspace(c::Char) = c == ' ' || '\t' <= c <='\r' || c == Char(0x85) || category_code(c)==UTF8PROC_CATEGORY_ZS
 
 isprint(c::Char) = (UTF8PROC_CATEGORY_LU <= category_code(c) <= UTF8PROC_CATEGORY_ZS)
 

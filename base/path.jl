@@ -108,7 +108,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 @windows_only realpath(path::AbstractString) = realpath(utf16(path))
 @windows_only function realpath(path::UTF16String)
-    p = uint32((sizeof(path)>>2) + 1)
+    p = UInt32((sizeof(path)>>2) + 1)
     while true
         buflength = p
         buf = zeros(UInt16,buflength)

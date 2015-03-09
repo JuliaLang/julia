@@ -95,12 +95,12 @@ C = Array(Int, size(A, 1), size(B, 2))
 v = [1,2,3]
 C = Array(Int, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
-vf = float64(v)
+vf = map(Float64,v)
 C = Array(Float64, 3, 3)
 @test A_mul_Bt!(C, v, v) == v*v'
 
 # matrix algebra with subarrays of floats (stride != 1)
-A = reshape(float64(1:20),5,4)
+A = reshape(map(Float64,1:20),5,4)
 Aref = A[1:2:end,1:2:end]
 Asub = sub(A, 1:2:5, 1:2:4)
 b = [1.2,-2.5]
@@ -115,7 +115,7 @@ Asub = sub(Ai, 1:2:5, 1:2:4)
 
 # syrk & herk
 A = reshape(1:1503, 501, 3).-750.0
-res = float64([135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759])
+res = Float64[135228751 9979252 -115270247; 9979252 10481254 10983256; -115270247 10983256 137236759]
 @test At_mul_B(A, A) == res
 @test A_mul_Bt(A',A') == res
 cutoff = 501
@@ -189,7 +189,7 @@ A2 = A^2
 # test sparse matrix norms
 Ac = sprandn(10,10,.1) + im* sprandn(10,10,.1)
 Ar = sprandn(10,10,.1)
-Ai = int(ceil(Ar*100))
+Ai = ceil(Int,Ar*100)
 @test_approx_eq norm(Ac,1)     norm(full(Ac),1)
 @test_approx_eq norm(Ac,Inf)   norm(full(Ac),Inf)
 @test_approx_eq vecnorm(Ac)    vecnorm(full(Ac))

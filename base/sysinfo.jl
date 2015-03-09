@@ -24,11 +24,9 @@ global CPU_CORES
 
 function init_sysinfo()
     # set CPU core count
-    global const CPU_CORES = int(
-        haskey(ENV,"JULIA_CPU_CORES") ?
-        ENV["JULIA_CPU_CORES"] :
-        ccall(:jl_cpu_cores, Int32, ())
-    )
+    global const CPU_CORES =
+        haskey(ENV,"JULIA_CPU_CORES") ? parseint(ENV["JULIA_CPU_CORES"]) :
+                                        Int(ccall(:jl_cpu_cores, Int32, ()))
     global const SC_CLK_TCK = ccall(:jl_SC_CLK_TCK, Clong, ())
     global const cpu_name = ccall(:jl_get_cpu_name, ByteString, ())
 end
@@ -194,7 +192,7 @@ function dllist()
 
         # start at 1 instead of 0 to skip self
         for i in 1:numImages-1
-            name = bytestring(ccall(:_dyld_get_image_name, Ptr{UInt8}, (UInt32,), uint32(i)))
+            name = bytestring(ccall(:_dyld_get_image_name, Ptr{UInt8}, (UInt32,), i))
             push!(dynamic_libraries, name)
         end
     end

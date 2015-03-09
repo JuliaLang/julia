@@ -53,17 +53,14 @@ unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
 pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
 data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}+Core.sizeof(Int)
 
-integer(x::Ptr) = convert(UInt, x)
-unsigned(x::Ptr) = convert(UInt, x)
-
 eltype{T}(::Type{Ptr{T}}) = T
 
 ## limited pointer arithmetic & comparison ##
 
-==(x::Ptr, y::Ptr) = uint(x) == uint(y)
-isless(x::Ptr, y::Ptr) = isless(uint(x), uint(y))
--(x::Ptr, y::Ptr) = uint(x) - uint(y)
+==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
+isless(x::Ptr, y::Ptr) = isless(UInt(x), UInt(y))
+-(x::Ptr, y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, (uint(x) + (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, (uint(x) - (y % UInt) % UInt))
++(x::Ptr, y::Integer) = oftype(x, (UInt(x) + (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, (UInt(x) - (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x

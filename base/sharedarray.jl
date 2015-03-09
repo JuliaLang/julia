@@ -49,7 +49,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be < 32 characters
-        shm_seg_name = string("/jl", getpid(), int64(time() * 10^9))
+        shm_seg_name = string("/jl", getpid(), round(Int64,time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -331,9 +331,9 @@ function print_shmem_limits(slen)
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
 
-        shmmax_MB = div(int(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = int(split(readall(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(int(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parseint(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
+        page_size = parseint(split(readall(`getconf PAGE_SIZE`))[end])
+        shmall_MB = div(parseint(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

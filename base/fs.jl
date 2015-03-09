@@ -212,7 +212,7 @@ function read(f::File, ::Type{UInt8})
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)
-    return uint8(ret)
+    return ret%UInt8
 end
 
 function read!{T}(f::File, a::Array{T}, nel=length(a))
@@ -249,9 +249,9 @@ function readbytes(f::File)
     a
 end
 
-const SEEK_SET = int32(0)
-const SEEK_CUR = int32(1)
-const SEEK_END = int32(2)
+const SEEK_SET = Int32(0)
+const SEEK_CUR = Int32(1)
+const SEEK_END = Int32(2)
 
 function position(f::File)
     ret = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)

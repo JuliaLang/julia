@@ -105,10 +105,7 @@ convert(::Type{FloatingPoint}, x::UInt32)  = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::UInt64)  = convert(Float64, x) # LOSSY
 convert(::Type{FloatingPoint}, x::UInt128) = convert(Float64, x) # LOSSY
 
-float16(x) = convert(Float16, x)
-float32(x) = convert(Float32, x)
-float64(x) = convert(Float64, x)
-float(x)   = convert(FloatingPoint, x)
+float(x) = convert(FloatingPoint, x)
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -125,7 +122,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
-    k = int(xu >> 52) & 0x07ff - 1075
+    k = Int(xu >> 52) & 0x07ff - 1075
     xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -139,7 +136,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float32)
     xu = reinterpret(UInt32,x)
-    k = int(xu >> 23) & 0x00ff - 150
+    k = Int(xu >> 23) & 0x00ff - 150
     xu = (xu & 0x007f_ffff) | 0x0080_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -281,14 +278,14 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
-==(x::Float32, y::Union(Int32,UInt32)) = float64(x)==float64(y)
-==(x::Union(Int32,UInt32), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,UInt32)) = Float64(x)==Float64(y)
+==(x::Union(Int32,UInt32), y::Float32) = Float64(x)==Float64(y)
 
-<(x::Float32, y::Union(Int32,UInt32)) = float64(x)<float64(y)
-<(x::Union(Int32,UInt32), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<Float64(y)
+<(x::Union(Int32,UInt32), y::Float32) = Float64(x)<Float64(y)
 
-<=(x::Float32, y::Union(Int32,UInt32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,UInt32), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<=Float64(y)
+<=(x::Union(Int32,UInt32), y::Float32) = Float64(x)<=Float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))

@@ -187,8 +187,8 @@ testModPi()
 @test_approx_eq mod2pi(10)          mod(10,2pi)
 @test_approx_eq mod2pi(-10)         mod(-10,2pi)
 @test_approx_eq mod2pi(355)         3.1416227979431572
-@test_approx_eq mod2pi(int32(355))  3.1416227979431572
+@test_approx_eq mod2pi(Int32(355))  3.1416227979431572
 @test_approx_eq mod2pi(355.0)       3.1416227979431572
 @test_approx_eq mod2pi(355.0f0)     3.1416228f0
-@test mod2pi(int64(2)^60) == mod2pi(2.0^60)
-@test_throws ArgumentError mod2pi(int64(2)^60-1)
+@test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
+@test_throws ArgumentError mod2pi(Int64(2)^60-1)

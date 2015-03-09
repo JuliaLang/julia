@@ -72,7 +72,7 @@ Handle excess argument diversity in the caller
 Instead of::
 
     function foo(x, y)
-        x = int(x); y = int(y)
+        x = Int(x); y = Int(y)
         ...
     end
     foo(x, y)
@@ -82,7 +82,7 @@ use::
     function foo(x::Int, y::Int)
         ...
     end
-    foo(int(x), int(y))
+    foo(Int(x), Int(y))
 
 This is better style because ``foo`` does not really accept numbers of all
 types; it really needs ``Int`` s.

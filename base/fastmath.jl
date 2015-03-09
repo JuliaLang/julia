@@ -218,7 +218,7 @@ end
 # builtins
 
 pow_fast{T<:FloatTypes}(x::T, y::Integer) =
-    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,int32(y))))
+    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,Int32(y))))
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic

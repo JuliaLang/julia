@@ -122,7 +122,7 @@ function make_seed()
     catch
         println(STDERR, "Entropy pool not available to seed RNG; using ad-hoc entropy sources.")
         seed = reinterpret(UInt64, time())
-        seed = hash(seed, uint64(getpid()))
+        seed = hash(seed, UInt64(getpid()))
         try
         seed = hash(seed, parseint(UInt64, readall(pipe(`ifconfig`, `sha1sum`))[1:40], 16))
         end
@@ -144,7 +144,7 @@ end
 
 function make_seed(filename::AbstractString, n::Integer)
     open(filename) do io
-        a = Array(UInt32, int(n))
+        a = Array(UInt32, Int(n))
         read!(io, a)
         a
     end
@@ -191,7 +191,7 @@ rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
 rand(dims::Integer...) = rand(convert((Int...), dims))
 rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
-rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(int(d1), convert((Int...), dims)...))
+rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert((Int...), dims)...))
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
@@ -253,7 +253,7 @@ rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
 rand(r::AbstractRNG, dims::Integer...) = rand(r, convert((Int...), dims))
 
 rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(int(d1), convert((Int...), dims)...))
+rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert((Int...), dims)...))
 # note: the above method would trigger an ambiguity warning if d1 was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop
@@ -1078,7 +1078,7 @@ const ziggurat_exp_r      = 7.6971174701310497140446280481
 @inline function randn(rng::AbstractRNG=GLOBAL_RNG)
     @inbounds begin
         r = rand_ui52(rng)
-        rabs = int64(r>>1) # One bit for the sign
+        rabs = Int64(r>>1) # One bit for the sign
         idx = rabs & 0xFF
         x = ifelse(r % Bool, -rabs, rabs)*wi[idx+1]
         rabs < ki[idx+1] && return x # 99.3% of the time we return here 1st try
@@ -1169,7 +1169,7 @@ function Base.convert(::Type{UUID}, s::AbstractString)
         throw(ArgumentError("Malformed UUID string"))
     end
 
-    u = uint128(0)
+    u = UInt128(0)
     for i in [1:8; 10:13; 15:18; 20:23; 25:36]
         u <<= 4
         d = s[i]-'0'

@@ -17,7 +17,7 @@ y = BigFloat(BigFloat(12))
 @test_approx_eq x y
 y = BigFloat("12")
 @test_approx_eq x y
-y = BigFloat(float32(12.))
+y = BigFloat(Float32(12.))
 @test_approx_eq x y
 y = BigFloat(12//1)
 @test_approx_eq x y
@@ -139,8 +139,8 @@ y = BigFloat(1)
 @test typeof(convert(BigFloat, 0.5)) == BigFloat
 @test convert(BigFloat, 40) == BigFloat("40")
 @test typeof(convert(BigFloat, 40)) == BigFloat
-@test convert(BigFloat, float32(0.5)) == BigFloat("0.5")
-@test typeof(convert(BigFloat, float32(0.5))) == BigFloat
+@test convert(BigFloat, Float32(0.5)) == BigFloat("0.5")
+@test typeof(convert(BigFloat, Float32(0.5))) == BigFloat
 @test convert(BigFloat, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
 @test typeof(convert(BigFloat, BigInt("9223372036854775808"))) == BigFloat
 @test convert(FloatingPoint, BigInt("9223372036854775808")) == BigFloat("9223372036854775808")
@@ -148,8 +148,8 @@ y = BigFloat(1)
 
 # convert from
 @test convert(Float64, BigFloat(0.5)) == 0.5
-@test convert(Float32, BigFloat(0.5)) == float32(0.5)
-@test convert(Float16, BigFloat(0.5)) == float16(0.5)
+@test convert(Float32, BigFloat(0.5)) == Float32(0.5)
+@test convert(Float16, BigFloat(0.5)) == Float16(0.5)
 
 # exponent
 x = BigFloat(0)
@@ -439,10 +439,10 @@ end
 # ldexp
 with_bigfloat_precision(53) do
     @test ldexp(BigFloat(24.5), 72) == ldexp(24.5, 72)
-    @test ldexp(BigFloat(24.5), int16(72)) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), Int16(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), -72) == ldexp(24.5, -72)
-    @test ldexp(BigFloat(24.5), int16(-72)) == ldexp(24.5, -72)
-    @test ldexp(BigFloat(24.5), uint(72)) == ldexp(24.5, 72)
+    @test ldexp(BigFloat(24.5), Int16(-72)) == ldexp(24.5, -72)
+    @test ldexp(BigFloat(24.5), UInt(72)) == ldexp(24.5, 72)
     @test ldexp(BigFloat(24.5), 0x48) == ldexp(24.5, 72)
 end
 
@@ -467,60 +467,60 @@ c = BigInt("123456789012345678901234567891")
 @test trunc(Integer,x) == y
 @test typeof(trunc(Integer,x)) == BigInt
 
-@test ceil(Int64, x) == int64(z)
+@test ceil(Int64, x) == Int64(z)
 @test typeof(ceil(Int64, x)) == Int64
-@test floor(Int64, x) == int64(y)
+@test floor(Int64, x) == Int64(y)
 @test typeof(floor(Int64, x)) == Int64
-@test trunc(Int64, x) == int64(y)
+@test trunc(Int64, x) == Int64(y)
 @test typeof(trunc(Int64, x)) == Int64
 
-@test ceil(Int32, x) == int32(z)
+@test ceil(Int32, x) == Int32(z)
 @test typeof(ceil(Int32, x)) == Int32
-@test floor(Int32, x) == int32(y)
+@test floor(Int32, x) == Int32(y)
 @test typeof(floor(Int32, x)) == Int32
-@test trunc(Int32, x) == int32(y)
+@test trunc(Int32, x) == Int32(y)
 @test typeof(trunc(Int32, x)) == Int32
 
-@test ceil(Int16, x) == int16(z)
+@test ceil(Int16, x) == Int16(z)
 @test typeof(ceil(Int16, x)) == Int16
-@test floor(Int16, x) == int16(y)
+@test floor(Int16, x) == Int16(y)
 @test typeof(floor(Int16, x)) == Int16
-@test trunc(Int16, x) == int16(y)
+@test trunc(Int16, x) == Int16(y)
 @test typeof(trunc(Int16, x)) == Int16
 
-#@test ceil(Int8, x) == int8(z)
+#@test ceil(Int8, x) == Int8(z)
 #@test typeof(ceil(Int8, x)) == Int8
-#@test floor(Int8, x) == int8(y)
+#@test floor(Int8, x) == Int8(y)
 #@test typeof(floor(Int8, x)) == Int8
-#@test trunc(Int8, x) == int8(y)
+#@test trunc(Int8, x) == Int8(y)
 #@test typeof(trunc(Int8, x)) == Int8
 
-@test ceil(UInt64, x) == uint64(z)
+@test ceil(UInt64, x) == UInt64(z)
 @test typeof(ceil(UInt64, x)) == UInt64
-@test floor(UInt64, x) == uint64(y)
+@test floor(UInt64, x) == UInt64(y)
 @test typeof(floor(UInt64, x)) == UInt64
-@test trunc(UInt64, x) == uint64(y)
+@test trunc(UInt64, x) == UInt64(y)
 @test typeof(trunc(UInt64, x)) == UInt64
 
-@test ceil(UInt32, x) == uint32(z)
+@test ceil(UInt32, x) == UInt32(z)
 @test typeof(ceil(UInt32, x)) == UInt32
-@test floor(UInt32, x) == uint32(y)
+@test floor(UInt32, x) == UInt32(y)
 @test typeof(floor(UInt32, x)) == UInt32
-@test trunc(UInt32, x) == uint32(y)
+@test trunc(UInt32, x) == UInt32(y)
 @test typeof(trunc(UInt32, x)) == UInt32
 
-@test ceil(UInt16, x) == uint16(z)
+@test ceil(UInt16, x) == UInt16(z)
 @test typeof(ceil(UInt16, x)) == UInt16
-@test floor(UInt16, x) == uint16(y)
+@test floor(UInt16, x) == UInt16(y)
 @test typeof(floor(UInt16, x)) == UInt16
-@test trunc(UInt16, x) == uint16(y)
+@test trunc(UInt16, x) == UInt16(y)
 @test typeof(trunc(UInt16, x)) == UInt16
 
-#@test ceil(UInt8, x) == uint8(z)
+#@test ceil(UInt8, x) == UInt8(z)
 #@test typeof(ceil(UInt8, x)) == UInt8
-#@test floor(UInt8, x) == uint8(y)
+#@test floor(UInt8, x) == UInt8(y)
 #@test typeof(floor(UInt8, x)) == UInt8
-#@test trunc(UInt8, x) == uint8(y)
+#@test trunc(UInt8, x) == UInt8(y)
 #@test typeof(trunc(UInt8, x)) == UInt8
 
 @test ceil(Integer,a) == c
@@ -549,34 +549,34 @@ c = BigInt("123456789012345678901234567891")
 # Signed addition
 a = BigFloat("123456789012345678901234567890")
 b = BigFloat("123456789012345678901234567891")
-@test a+int8(1) == b
-@test a+int16(1) == b
-@test a+int32(1) == b
-@test a+int64(1) == b
-@test int8(1)+ a == b
-@test int16(1)+a == b
-@test int32(1)+a == b
-@test int64(1)+a == b
-@test b+int8(-1) == a
-@test b+int16(-1) == a
-@test b+int32(-1) == a
-@test b+int64(-1) == a
-@test int8(-1)+ b == a
-@test int16(-1)+b == a
-@test int32(-1)+b == a
-@test int64(-1)+b == a
+@test a+Int8(1) == b
+@test a+Int16(1) == b
+@test a+Int32(1) == b
+@test a+Int64(1) == b
+@test Int8(1)+ a == b
+@test Int16(1)+a == b
+@test Int32(1)+a == b
+@test Int64(1)+a == b
+@test b+Int8(-1) == a
+@test b+Int16(-1) == a
+@test b+Int32(-1) == a
+@test b+Int64(-1) == a
+@test Int8(-1)+ b == a
+@test Int16(-1)+b == a
+@test Int32(-1)+b == a
+@test Int64(-1)+b == a
 
 # Unsigned addition
 @test a+true == b
-@test a+uint8(1) == b
-@test a+uint16(1) == b
-@test a+uint32(1) == b
-@test a+uint64(1) == b
+@test a+UInt8(1) == b
+@test a+UInt16(1) == b
+@test a+UInt32(1) == b
+@test a+UInt64(1) == b
 @test true+a == b
-@test uint8(1)+ a == b
-@test uint16(1)+a == b
-@test uint32(1)+a == b
-@test uint64(1)+a == b
+@test UInt8(1)+ a == b
+@test UInt16(1)+a == b
+@test UInt32(1)+a == b
+@test UInt64(1)+a == b
 
 # Float64 addition
 @test a + 1.0f0 == b
@@ -589,34 +589,34 @@ b = BigFloat("123456789012345678901234567891")
 @test BigInt(1) + a == b
 
 # Signed subtraction
-@test b-int8(1) == a
-@test b-int16(1) == a
-@test b-int32(1) == a
-@test b-int64(1) == a
-@test int8(1)- b == -a
-@test int16(1)-b == -a
-@test int32(1)-b == -a
-@test int64(1)-b == -a
-@test a-int8(-1) == b
-@test a-int16(-1) == b
-@test a-int32(-1) == b
-@test a-int64(-1) == b
-@test int8(-1)- a == -b
-@test int16(-1)-a == -b
-@test int32(-1)-a == -b
-@test int64(-1)-a == -b
+@test b-Int8(1) == a
+@test b-Int16(1) == a
+@test b-Int32(1) == a
+@test b-Int64(1) == a
+@test Int8(1)- b == -a
+@test Int16(1)-b == -a
+@test Int32(1)-b == -a
+@test Int64(1)-b == -a
+@test a-Int8(-1) == b
+@test a-Int16(-1) == b
+@test a-Int32(-1) == b
+@test a-Int64(-1) == b
+@test Int8(-1)- a == -b
+@test Int16(-1)-a == -b
+@test Int32(-1)-a == -b
+@test Int64(-1)-a == -b
 
 # Unsigned subtraction
 @test b-true == a
-@test b-uint8(1) == a
-@test b-uint16(1) == a
-@test b-uint32(1) == a
-@test b-uint64(1) == a
+@test b-UInt8(1) == a
+@test b-UInt16(1) == a
+@test b-UInt32(1) == a
+@test b-UInt64(1) == a
 @test true-b == -a
-@test uint8(1)- b == -a
-@test uint16(1)-b == -a
-@test uint32(1)-b == -a
-@test uint64(1)-b == -a
+@test UInt8(1)- b == -a
+@test UInt16(1)-b == -a
+@test UInt32(1)-b == -a
+@test UInt64(1)-b == -a
 
 # Float64 subtraction
 @test b - 1.0f0 == a
@@ -629,34 +629,34 @@ b = BigFloat("123456789012345678901234567891")
 @test BigInt(1) - b == -a
 
 # Signed multiplication
-@test a*int8(1) == a
-@test a*int16(1) == a
-@test a*int32(1) == a
-@test a*int64(1) == a
-@test int8(1)* a == a
-@test int16(1)*a == a
-@test int32(1)*a == a
-@test int64(1)*a == a
-@test a*int8(-1) == -a
-@test a*int16(-1) == -a
-@test a*int32(-1) == -a
-@test a*int64(-1) == -a
-@test int8(-1)* a == -a
-@test int16(-1)*a == -a
-@test int32(-1)*a == -a
-@test int64(-1)*a == -a
+@test a*Int8(1) == a
+@test a*Int16(1) == a
+@test a*Int32(1) == a
+@test a*Int64(1) == a
+@test Int8(1)* a == a
+@test Int16(1)*a == a
+@test Int32(1)*a == a
+@test Int64(1)*a == a
+@test a*Int8(-1) == -a
+@test a*Int16(-1) == -a
+@test a*Int32(-1) == -a
+@test a*Int64(-1) == -a
+@test Int8(-1)* a == -a
+@test Int16(-1)*a == -a
+@test Int32(-1)*a == -a
+@test Int64(-1)*a == -a
 
 # Unsigned multiplication
 @test a*true == a
-@test a*uint8(1) == a
-@test a*uint16(1) == a
-@test a*uint32(1) == a
-@test a*uint64(1) == a
+@test a*UInt8(1) == a
+@test a*UInt16(1) == a
+@test a*UInt32(1) == a
+@test a*UInt64(1) == a
 @test true*a == a
-@test uint8(1)* a == a
-@test uint16(1)*a == a
-@test uint32(1)*a == a
-@test uint64(1)*a == a
+@test UInt8(1)* a == a
+@test UInt16(1)*a == a
+@test UInt32(1)*a == a
+@test UInt64(1)*a == a
 
 # Float64 multiplication
 @test a * 1.0f0 == a
@@ -674,34 +674,34 @@ c = BigInt("61728394506172839450617283945")
 d = BigFloat("1606938044258990275541962092341162602522202993782792835301376")
 f = BigFloat("6.223015277861141707144064053780124240590252168721167133101116614789698834035383e-61")
 
-@test a/int8(2) == c
-@test a/int16(2) == c
-@test a/int32(2) == c
-@test a/int64(2) == c
-@test int8(1)/ d == f
-@test int16(1)/d == f
-@test int32(1)/d == f
-@test int64(1)/d == f
-@test a/int8(-2) == -c
-@test a/int16(-2) == -c
-@test a/int32(-2) == -c
-@test a/int64(-2) == -c
-@test int8(-1)/ d == -f
-@test int16(-1)/d == -f
-@test int32(-1)/d == -f
-@test int64(-1)/d == -f
+@test a/Int8(2) == c
+@test a/Int16(2) == c
+@test a/Int32(2) == c
+@test a/Int64(2) == c
+@test Int8(1)/ d == f
+@test Int16(1)/d == f
+@test Int32(1)/d == f
+@test Int64(1)/d == f
+@test a/Int8(-2) == -c
+@test a/Int16(-2) == -c
+@test a/Int32(-2) == -c
+@test a/Int64(-2) == -c
+@test Int8(-1)/ d == -f
+@test Int16(-1)/d == -f
+@test Int32(-1)/d == -f
+@test Int64(-1)/d == -f
 
 # Unsigned division
 @test a/true == a
-@test a/uint8(2) == c
-@test a/uint16(2) == c
-@test a/uint32(2) == c
-@test a/uint64(2) == c
+@test a/UInt8(2) == c
+@test a/UInt16(2) == c
+@test a/UInt32(2) == c
+@test a/UInt64(2) == c
 @test true/d == f
-@test uint8(1)/ d == f
-@test uint16(1)/d == f
-@test uint32(1)/d == f
-@test uint64(1)/d == f
+@test UInt8(1)/ d == f
+@test UInt16(1)/d == f
+@test UInt32(1)/d == f
+@test UInt64(1)/d == f
 
 # Float64 division
 @test a / 2.0f0 == c
@@ -764,18 +764,18 @@ g = BigFloat("1234567891.123")
 
 tol = 1e-3
 
-@test_approx_eq_eps f+int8(1) g tol
-@test_approx_eq_eps f+int16(1) g tol
-@test_approx_eq_eps f+int32(1) g tol
-@test_approx_eq_eps f+int64(1) g tol
-@test_approx_eq_eps f+int128(1) g tol
+@test_approx_eq_eps f+Int8(1) g tol
+@test_approx_eq_eps f+Int16(1) g tol
+@test_approx_eq_eps f+Int32(1) g tol
+@test_approx_eq_eps f+Int64(1) g tol
+@test_approx_eq_eps f+Int128(1) g tol
 
 @test_approx_eq_eps f+true g tol
-@test_approx_eq_eps f+uint8(1) g tol
-@test_approx_eq_eps f+uint16(1) g tol
-@test_approx_eq_eps f+uint32(1) g tol
-@test_approx_eq_eps f+uint64(1) g tol
-@test_approx_eq_eps f+uint128(1) g tol
+@test_approx_eq_eps f+UInt8(1) g tol
+@test_approx_eq_eps f+UInt16(1) g tol
+@test_approx_eq_eps f+UInt32(1) g tol
+@test_approx_eq_eps f+UInt64(1) g tol
+@test_approx_eq_eps f+UInt128(1) g tol
 
 @test_approx_eq_eps f+BigInt(1) g tol
 
@@ -795,9 +795,9 @@ tol = 1e-3
 @test typemax(UInt128) * big(1.0) == big(typemax(UInt128))
 
 # issue #3399
-i1 = BigInt(10)^int32(1000)
+i1 = BigInt(10)^Int32(1000)
 i2 = BigInt("10000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000")
-f = BigFloat(10)^int32(1000)
+f = BigFloat(10)^Int32(1000)
 @test i1 != i2
 @test i1 != f
 @test i2 != f

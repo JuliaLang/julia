@@ -760,11 +760,11 @@ end
 @test round(float(Complex(π, e)),3) == Complex(3.142, 2.718)
 
 # Complex32 arithmetic #10003
-@test float16(1)+float16(1)im === Complex32(1, 1)
-@test float16(1)-float16(1)im === float16(1)+float16(-1)im === Complex32(1, -1)
-@test float16(1)*im === Complex32(im)
-@test float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
-@test float16(1)^im === Complex32(1) === float16(1)+float16(0)im
+@test Float16(1)+Float16(1)im === Complex32(1, 1)
+@test Float16(1)-Float16(1)im === Float16(1)+Float16(-1)im === Complex32(1, -1)
+@test Float16(1)*im === Complex32(im)
+@test Float16(1)/im === 1.0f0/im === Complex(0.0, -1.0)
+@test Float16(1)^im === Complex32(1) === Float16(1)+Float16(0)im
 
 # issue/PR #10148
-@test typeof(int8(1) - im) == Complex{Int8}
+@test typeof(Int8(1) - im) == Complex{Int8}

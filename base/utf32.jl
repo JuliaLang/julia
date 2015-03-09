@@ -4,7 +4,7 @@ immutable UTF32String <: DirectIndexString
     data::Array{Char,1} # includes 32-bit NULL termination after string chars
 
     function UTF32String(a::Array{Char,1})
-        if length(a) < 1 || a[end] != char(0)
+        if length(a) < 1 || a[end] != Char(0)
             throw(ArgumentError("UTF32String data must be NULL-terminated"))
         end
         new(a)
@@ -18,14 +18,14 @@ length(s::UTF32String) = length(s.data) - 1
 function utf32(c::Integer...)
     a = Array(Char, length(c) + 1)
     for i = 1:length(c)
-        a[i] = char(c[i])
+        a[i] = Char(c[i])
     end
-    a[end] = char(0)
+    a[end] = Char(0)
     UTF32String(a)
 end
 
 utf32(x) = convert(UTF32String, x)
-convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, char(0)])
+convert(::Type{UTF32String}, c::Char) = UTF32String(Char[c, Char(0)])
 convert(::Type{UTF32String}, s::UTF32String) = s
 
 function convert(::Type{UTF32String}, s::AbstractString)
@@ -34,14 +34,14 @@ function convert(::Type{UTF32String}, s::AbstractString)
     for c in s
         a[i += 1] = c
     end
-    a[end] = char(0) # NULL terminate
+    a[end] = Char(0) # NULL terminate
     UTF32String(a)
 end
 
 function convert(::Type{UTF32String}, data::AbstractVector{Char})
     len = length(data)
     d = Array(Char, len + 1)
-    d[end] = char(0) # NULL terminate
+    d[end] = Char(0) # NULL terminate
     UTF32String(copy!(d,1, data,1, len))
 end
 
@@ -74,10 +74,10 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
     length(bytes) & 3 != 0 && throw(ArgumentError("need multiple of 4 bytes"))
     data = reinterpret(Char, bytes)
     # check for byte-order mark (BOM):
-    if data[1] == char(0x0000feff) # native byte order
+    if data[1] == Char(0x0000feff) # native byte order
         d = Array(Char, length(data))
         copy!(d,1, data, 2, length(data)-1)
-    elseif data[1] == char(0xfffe0000) # byte-swapped
+    elseif data[1] == Char(0xfffe0000) # byte-swapped
         d = Array(Char, length(data))
         for i = 2:length(data)
             d[i-1] = bswap(data[i])
@@ -86,7 +86,7 @@ function convert(T::Type{UTF32String}, bytes::AbstractArray{UInt8})
         d = Array(Char, length(data) + 1)
         copy!(d, 1, data, 1, length(data)) # assume native byte order
     end
-    d[end] = char(0) # NULL terminate
+    d[end] = Char(0) # NULL terminate
     UTF32String(d)
 end
 
@@ -101,7 +101,7 @@ end
 function map(f, s::UTF32String)
     d = s.data
     out = similar(d)
-    out[end] = char(0)
+    out[end] = Char(0)
 
     for i = 1:(length(d)-1)
         c2 = f(d[i])

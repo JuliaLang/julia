@@ -24,7 +24,7 @@ end
             (100004,100005,100006)) == (200005,200007,200009)
 
 # maps of strings (character arrays) -- string.jl
-@test map((c)->char(c+1), "abcDEF") == "bcdEFG"
+@test map((c)->Char(c+1), "abcDEF") == "bcdEFG"
 
 # filter -- array.jl
 @test isequal(filter(x->(x>1), [0 1 2 3 2 1 0]), [2, 3, 2])
@@ -49,7 +49,7 @@ let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = []
     for (number, letter) in zip(eachline(zeb), letters)
-        push!(res, (int(strip(number)), letter))
+        push!(res, (parseint(strip(number)), letter))
     end
     @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
 end
