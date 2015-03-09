@@ -163,7 +163,7 @@ function xcorr(u, v)
     elseif sv < su
         v = [v;zeros(eltype(v),su-sv)]
     end
-    flipud(conv(flipud(u), v))
+    flipdim(conv(flipdim(u, 1), v), 1)
 end
 
 fftshift(x) = circshift(x, div([size(x)...],2))

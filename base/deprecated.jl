@@ -417,6 +417,9 @@ for (f,t) in ((:float32, Float32), (:float64, Float64))
     end
 end
 
+@deprecate flipud(A::AbstractArray) flipdim(A, 1)
+@deprecate fliplr(A::AbstractArray) flipdim(A, 2)
+
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)

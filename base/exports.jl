@@ -519,8 +519,6 @@ export
     findnz,
     first,
     flipdim,
-    fliplr,
-    flipud,
     gradient,
     hcat,
     hvcat,
