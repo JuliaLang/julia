@@ -357,8 +357,8 @@ for elty in (Float64, Complex{Float64})
 
     # Factor
     @test_throws ArgumentError cholfact(A1)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -1.0)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(full(A1 + A1'))I)
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -2eigmax(full(A1 + A1')))
     @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
     @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1', -2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
