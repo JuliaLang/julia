@@ -352,7 +352,7 @@ public:
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size
 #ifdef LLVM36
-                ,SectionAddr
+                ,(size_t)SectionAddr
 #endif
 #ifdef _OS_DARWIN_
                 ,strndup(sName.data(), sName.size())

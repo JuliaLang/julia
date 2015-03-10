@@ -27,6 +27,10 @@ for exceptions.
 > OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
 > WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
 
+Julia includes code from the following projects, which have their own licenses:
+- [LDC](https://github.com/ldc-developers/ldc/blob/master/LICENSE) (for ccall/cfunction ABI definitions)
+- [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT) (for getopt implementations on Windows)
+- [NetBSD](http://www.netbsd.org/about/redistribution.html) (for setjmp/longjmp implementations on Windows)
 
 The Julia language links to the following external libraries, which have their
 own licenses:
@@ -52,7 +56,6 @@ their own licenses:
 - [GMP](http://gmplib.org/manual/Copying.html#Copying)
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING)
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying)
-- [MUSL](http://git.musl-libc.org/cgit/musl/tree/COPYRIGHT)
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE)
 - [LAPACK](http://netlib.org/lapack/LICENSE.txt)
 - [PCRE](http://www.pcre.org/licence.txt)

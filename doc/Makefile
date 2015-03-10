@@ -1,5 +1,6 @@
 # Makefile for Sphinx documentation
-#
+
+default: helpdb.jl html
 
 # You can set these variables from the command line.
 SPHINXOPTS    =
@@ -17,10 +18,8 @@ JULIA_ENV     = $(JULIAHOME)/deps/julia-env
 ACTIVATE      = $(JULIA_ENV)/bin/activate
 SPHINX_BUILD  = $(JULIA_ENV)/bin/sphinx-build
 
-$(JULIA_ENV):
+$(ACTIVATE):
 	$(MAKE) -C $(JULIAHOME)/deps install-virtualenv
-
-$(ACTIVATE): $(JULIA_ENV)
 	touch -c $@
 
 $(SPHINX_BUILD): $(ACTIVATE) requirements.txt

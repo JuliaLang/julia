@@ -1268,6 +1268,7 @@ void jl_get_builtin_hooks(void)
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
     jl_globalref_type = (jl_datatype_t*)core("GlobalRef");
+    jl_signed_type = (jl_datatype_t*)core("Signed");
 
     jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
                                         jl_tuple2(jl_uint8_type,
@@ -1284,6 +1285,7 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
     jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
+    jl_complex_type = (jl_datatype_t*)basemod("Complex");
 }
 
 DLLEXPORT void jl_exit_on_sigint(int on) {exit_on_sigint = on;}

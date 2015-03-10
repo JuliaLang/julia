@@ -1,5 +1,3 @@
-@unix_only if WORD_SIZE == 64
-# TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
@@ -7,7 +5,6 @@ for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
         ($fname)(z::Complex64) = Complex64(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), Complex128(z), Float64(eps(Float32))))
         ($fname)(z::Complex) = ($fname)(Complex128(z))
     end
-end
 end
 for f in (:erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
