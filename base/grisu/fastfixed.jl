@@ -171,8 +171,8 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
     v = Float64(v)
     significand::UInt64 = _significand(v)
     exponent = _exponent(v)
-    exponent > 20 && return false, 0, 0, buffer
-    fractional_count > 20 && return false, 0, 0, buffer
+    exponent > 20 && return false, 0, 0
+    fractional_count > 20 && return false, 0, 0
     len = 1
     if exponent + kDoubleSignificandSize > 64
         kFive17 = divisor = Int64(5)^17
@@ -218,5 +218,5 @@ function fastfixedtoa(v,mode,fractional_count,buffer)
     if (len-1) == 0
         decimal_point = -fractional_count
     end
-    return true, len, decimal_point, buffer
+    return true, len, decimal_point
 end
