@@ -243,7 +243,7 @@
         # interrupt-unsafe code
         ...
     end
-5
+
 .. function:: reenable_sigint(f::Function)
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily

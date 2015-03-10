@@ -4,12 +4,12 @@ Julia v0.4.0 Release Notes
 New language features
 ---------------------
 
-  * Function-call overloading: for arbitrary objects `x` (not of type
+  * Function call overloading: for arbitrary objects `x` (not of type
     `Function`), `x(...)` is transformed into `call(x, ...)`, and `Base.call`
     can be overloaded as desired.  Constructors are now a special case of
-    this mechanism, which allows e.g. constructors for abstract types
-    and typealiases.  `T(...)` falls back to `convert(T, x)`, so all
-    `convert` methods implicitly define a constructor ([#8712], [#2403]).
+    this mechanism, which allows e.g. constructors for abstract types.
+    `T(...)` falls back to `convert(T, x)`, so all `convert` methods implicitly
+    define a constructor ([#8712], [#2403]).
 
   * Unicode version 7 is now supported for identifiers etcetera ([#7917]).
 
@@ -24,16 +24,43 @@ New language features
     and macros in packages and user code ([#8791]). Type `?@doc` at the repl
     to see the current syntax and more information.
 
-  * Enums are now supported through the `@enum EnumName EnumValue1 EnumValue2` syntax. Enum member values also support abitrary value assignment by the `@enum EnumName EnumValue1=1 EnumValue2=10 EnumValue3=20` syntax.
-
 Language changes
 ----------------
 
-  * cfunction breaking syntax changes, ccall improved generalized argument conversion,
-    and Ref type addition. See the section below on [Improvements to ccall and cfunction, and Ref]
+  * Significant improvements to `ccall` and `cfunction`
 
-  * `convert(Ptr, x::Any)` is now generally deprecated, replaced by `unsafe_convert`.
-    (You can still explicitly `convert` one pointer type into another if needed.)
+    * As a safer alternative to creating pointers (`Ptr`), the managed reference type
+      `Ref` has been added. A `Ref` points to the data contained by a value in an
+      abstract sense, and in a way that is GC-safe. For example, `Ref(2)` points to
+      a storage location that contains the integer `2`, and `Ref(array,3)` points
+      to the third element of an array. A `Ref` can be automatically converted to a
+      native pointer when passed to a `ccall`.
+
+    * When passing a by-reference argument to `ccall`, you can now write `Ref(x)`
+      instead of `&x`. Alternatively, you can declare the argument type to be
+      `Ref{T}` instead of `T`, and just pass `x`.
+
+    * `ccall` is now lowered to call `unsafe_convert(T, cconvert(T, x))` on each
+      argument. `cconvert` falls back to `convert`, but can be used to convert an
+      argument to an arbitrarily-different representation more suitable for passing
+      to C. `unsafe_convert` then handles conversions to `Ptr`.
+
+    * `ccall` and `cfunction` now support correctly passing and returning structs,
+      following the platform ABI.
+      It is essential to declare argument and return types accurately.
+      For example, a C `int` must be passed as a 32-bit integer type (e.g. `Int32`,
+      or another 32-bit `bitstype`).
+      A `Float32` or an `immutable` struct with a size of 32 bits is not equivalent.
+
+    * `cfunction` arguments of struct-like Julia types are now passed by value.
+      If `Ref{T}` is used as a `cfunction` argument type, it will look up the
+      method applicable to `T`, but pass the argument by reference (as Julia functions
+      usually do). However, this should only be used for objects allocated by Julia,
+      and for `isbits` types.
+
+  * `convert(Ptr,x)` is deprecated for most types, replaced by `unsafe_convert`.
+    You can still `convert` between pointer types, and between pointers and `Int`
+    or `UInt`.
 
   * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
     ([#3737], [#2488], [#8599]).
@@ -74,12 +101,6 @@ Language changes
     macro. Instead, the string is first unindented and then `x_str` is invoked,
     as if the string had been single-quoted ([#10228]).
 
-  * Numeric conversion functions whose names are lower-case versions of type
-    names have been removed. To convert a scalar, use the type name, e.g.
-    `Int32(x)`. To convert an array to a different element type, use
-    `Array{T}(x)`, `map(T,x)`, or `round(T,x)`. To parse a string as an integer
-    or floating-point number, use `parseint` or `parsefloat` ([#1470], [#6211]).
-
 Compiler improvements
 ---------------------
 
@@ -98,6 +119,8 @@ Library improvements
 
   * New multidimensional iterators and index types for efficient
     iteration over general AbstractArrays
+
+  * Enums are now supported through the `@enum EnumName EnumValue1 EnumValue2` syntax. Enum member values also support abitrary value assignment by the `@enum EnumName EnumValue1=1 EnumValue2=10 EnumValue3=20` syntax.
 
   * `LinAlg` improvements
 
@@ -200,7 +223,7 @@ Library improvements
     * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
 
     * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
-  across all numeric types ([#9133], [#9198]).
+      across all numeric types ([#9133], [#9198]).
 
     * Rational arithmetic throws errors on overflow ([#8672]).
 
@@ -231,9 +254,9 @@ Deprecated or removed
   * `{...}` syntax is deprecated in favor of `Any[...]` ([#8578]).
 
   * `itrunc`, `ifloor`, `iceil` and `iround` are deprecated in favour of
-  `trunc{T<:Integer}(T,x)`, `floor{T<:Integer}(T,x)`, etc.. `trunc` is now
-  always bound-checked;`Base.unsafe_trunc` provides the old unchecked `itrunc`
-  behaviour ([#9133]).
+    `trunc{T<:Integer}(T,x)`, `floor{T<:Integer}(T,x)`, etc.. `trunc` is now
+    always bound-checked;`Base.unsafe_trunc` provides the old unchecked `itrunc`
+    behaviour ([#9133]).
 
   * `squeeze` now requires that passed dimension(s) are an `Int` or tuple of `Int`s;
     calling `squeeze` with an arbitrary iterator is deprecated ([#9271]).
@@ -253,35 +276,11 @@ Deprecated or removed
   * `flipud(A)` and `fliplr(A)` have been deprecated in favor of `flipdim(A, 1)` and
     `flipdim(A, 2)`, respectively ([#10446]).
 
-Improvements to ccall and cfunction, and Ref
---------------------------------------------
-
-  * a `Ref` abstract type was added, as a general replacement for the `&` special-syntax.
-    when converting arguments to `Ref`, the result will be a pointer to a Julia gc-managed
-    memory location of the appropriate type.
-    Create a `Ref` object wrapper around a value to create a gc-stable reference to it.
-
-  * cfunction syntax has been altered to be exactly the reverse of ccall
-    - all types are passed by-value (no implied `*` on the argument), and will be
-      copied to a new Julia object to match the calling convention of the Julia function
-    - wrapping a type in `Ref{T}` will look up the method applicable to `T`,
-      but pass it by-reference to a `jl_value_t*`-typed argument. however,
-      note that it should only be used on memory allocated in Julia and known isbits types
-    - isbits types are unaffected by this change, however other types need to be wrapped
-      in ``Ref{...}`` to retain the old behavior
-
-  * ccall now respects the platform ABI.
-    For portability, it is essential that your ccall/cfunction argument and return
-    types are declared correctly.
-    For example, if the type is one of the native C numeric types (such as `int`),
-    you must pass it exactly as a 32-bit integer type (for example: `bitstype 32 Int32`).
-    A Float32 or a `[immutable] type` struct with a size of 32-bits is not equivalent.
-
-  * Lowering of ccall arguments now calls ``unsafe_convert(T, cconvert(T, x))``,
-    instead of just ``cconvert(T,x)``. Accordingly, "unsafe" operations, like Array-to-Ptr,
-    have been moved from methods of ``convert`` to methods of ``unsafe_convert``.
-
-  * Updated documentation at [ccall chapter] in the manual
+  * Numeric conversion functions whose names are lower-case versions of type
+    names have been removed. To convert a scalar, use the type name, e.g.
+    `Int32(x)`. To convert an array to a different element type, use
+    `Array{T}(x)`, `map(T,x)`, or `round(T,x)`. To parse a string as an integer
+    or floating-point number, use `parseint` or `parsefloat` ([#1470], [#6211]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -993,12 +992,10 @@ Bugfixes and performance updates
 Too numerous to mention.
 
 [packages chapter]: http://docs.julialang.org/en/latest/manual/packages/
-[ccall chapter]: http://docs.julialang.org/en/latest/manual/calling-c-and-fortran-code/
 [sorting functions]: http://docs.julialang.org/en/latest/stdlib/sort/
 [pairwise summation]: https://en.wikipedia.org/wiki/Pairwise_summation
 [a448e080]: https://github.com/JuliaLang/julia/commit/a448e080dc736c7fb326426dfcb2528be36973d3
 [5e3f074b]: https://github.com/JuliaLang/julia/commit/5e3f074b9173044a0a4219f9b285879ff7cec041
-[Improvements to ccall and cfunction, and Ref]: #improvements-to-ccall-and-cfunction-and-ref
 <!--- generated by NEWS-update.jl: -->
 [#13]: https://github.com/JuliaLang/julia/issues/13
 [#69]: https://github.com/JuliaLang/julia/issues/69
