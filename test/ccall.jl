@@ -78,24 +78,24 @@ function foos1(s::Struct1)
     s
 end
 
-ci32 = Complex{Int32}(int32(10),int32(31))
+ci32 = Complex{Int32}(Int32(10),Int32(31))
 ba = ccall((:test_2a, "./libccalltest"), Complex{Int32}, (Complex{Int32},), ci32)
 bb = ccall((:test_2b, "./libccalltest"), Complex{Int32}, (Complex{Int32},), ci32)
 @test ba == bb == ci32 + 1 - 2im
-@test ci32 == Complex{Int32}(int32(10),int32(31))
+@test ci32 == Complex{Int32}(Int32(10),Int32(31))
 
-ci64 = Complex{Int64}(int64(20),int64(51))
+ci64 = Complex{Int64}(Int64(20),Int64(51))
 ba = ccall((:test_3a, "./libccalltest"), Complex{Int64}, (Complex{Int64},), ci64)
 bb = ccall((:test_3b, "./libccalltest"), Complex{Int64}, (Complex{Int64},), ci64)
 bc = ccall((:test_128, "./libccalltest"), Complex{Int64}, (Complex{Int64},), ci64)
 @test ba == bb == ci64 + 1 - 2im
 @test bc == ci64 + 1
-@test ci64 == Complex{Int64}(int64(20),int64(51))
+@test ci64 == Complex{Int64}(Int64(20),Int64(51))
 
-i128 = int128(0x7f00123456789abc)<<64 + typemax(UInt64)
+i128 = Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
 b = ccall((:test_128, "./libccalltest"), Int128, (Int128,), i128)
 @test b == i128 + 1
-@test i128 == int128(0x7f00123456789abc)<<64 + typemax(UInt64)
+@test i128 == Int128(0x7f00123456789abc)<<64 + typemax(UInt64)
 
 type Struct_Big
     x::Int
@@ -104,14 +104,14 @@ type Struct_Big
 end
 ==(a::Struct_Big,b::Struct_Big) = a.x == b.x && a.y == b.y && a.z == b.z
 copy(a::Struct_Big) = Struct_Big(a.x, a.y, a.z)
-sbig = Struct_Big(424,-5,int8('Z'))
+sbig = Struct_Big(424,-5,Int8('Z'))
 
 a = copy(sbig)
 b = ccall((:test_big, "./libccalltest"), Struct_Big, (Struct_Big,), a)
 @test a.x == sbig.x && a.y == sbig.y && a.z == sbig.z
 @test b.x == sbig.x + 1
 @test b.y == sbig.y - 2
-@test b.z == sbig.z - int('A')
+@test b.z == sbig.z - Int('A')
 
 verbose && flush_cstdio()
 verbose && println("Testing cfunction roundtrip: ")
