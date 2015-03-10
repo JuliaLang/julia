@@ -70,7 +70,20 @@ end
 
 # The following use Unix command line facilites
 
-cp(src::AbstractString, dst::AbstractString) = FS.sendfile(src, dst)
+function cp(src::AbstractString, dst::AbstractString; recursive::Bool=false)
+    if islink(src) || !isdir(src)
+        FS.sendfile(src, dst)
+    elseif recursive
+        mkdir(dst)
+        for p in readdir(src)
+            cp(joinpath(src, p), joinpath(dst, p), recursive=recursive)
+        end
+    else
+        throw(ArgumentError(string("'$src' is a directory. ",
+            "Use `cp(src, dst, recursive=true)` ",
+            "to copy directories recursively.")))
+    end
+end
 mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
 
 function touch(path::AbstractString)
