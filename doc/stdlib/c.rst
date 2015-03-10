@@ -4,17 +4,24 @@
  C Interface
 *************
 
-.. function:: ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
+.. function:: ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
-   Call function in C-exported shared library, specified by ``(function name, library)`` tuple, where each component is an ``AbstractString`` or ``Symbol``. Alternatively,
-   ccall may be used to call a function pointer returned by dlsym, but note that this usage is generally discouraged to facilitate future static compilation.
+   Call function in C-exported shared library, specified by ``(function name, library)`` tuple,
+   where each component is an AbstractString or :Symbol.
+
    Note that the argument type tuple must be a literal tuple, and not a tuple-valued variable or expression.
+   Alternatively, ccall may also be used to call a function pointer, such as one returned by dlsym.
 
-.. function:: cglobal((symbol, library) or ptr [, Type=Void])
+   Each ``ArgumentValue`` to the ``ccall`` will be converted to the corresponding ``ArgumentType``,
+   by automatic insertion of calls to ``unsafe_convert(ArgumentType, cconvert(ArgumentType, ArgumentValue))``.
+   (see also the documentation for each of these functions for further details).
+   In most cases, this simply results in a call to ``convert(ArgumentType, ArgumentValue)``
+
+.. function:: cglobal((symbol, library) [, type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared library, specified exactly as in ``ccall``.  Returns a ``Ptr{Type}``, defaulting to ``Ptr{Void}`` if no Type argument is supplied.  The values can be read or written by ``unsafe_load`` or ``unsafe_store!``, respectively.
 
-.. function:: cfunction(fun::Function, RetType::Type, (ArgTypes...))
+.. function:: cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    Generate C-callable function pointer from Julia function. Type annotation of the return value in the
    callback function is a must for situations where Julia cannot infer the return type automatically.
@@ -30,7 +37,7 @@
    	bar = cfunction(foo, Float64, ())
 
 
-.. function:: dlopen(libfile::AbstractString [, flags::Integer])
+.. function:: dlopen(library_file::AbstractString [, flags::Integer])
 
    Load a shared library, returning an opaque handle.
 
@@ -46,7 +53,7 @@
    symbols to be available for usage in other shared libraries, in
    situations where there are dependencies between shared libraries.
 
-.. function:: dlopen_e(libfile::AbstractString [, flags::Integer])
+.. function:: dlopen_e(library_file::AbstractString [, flags::Integer])
 
    Similar to :func:`dlopen`, except returns a ``NULL`` pointer instead of raising errors.
 
@@ -118,29 +125,77 @@
 
    Call ``realloc`` from the C standard library.
 
+   See warning in ``c_free`` documentation regarding only using this on memory originally obtained from ``c_malloc``.
+
 .. function:: c_free(addr::Ptr)
 
-   Call ``free`` from the C standard library.
+   Call ``free`` from the C standard library. Only use this on memory obtained from ``c_malloc``,
+   not on pointers retrieved from other C libraries.
+   ``Ptr`` objects obtained from C libraries should be freed by the free functions defined in that library,
+   to avoid assertion failures if multiple ``libc`` libraries exist on the system.
+
+.. function:: unsafe_convert(T,x)
+
+   Convert "x" to a value of type "T"
+
+   In cases where ``convert`` would need to take a Julia object and turn it into a ``Ptr``,
+   this function should be used to define and perform that conversion.
+
+   Be careful to ensure that a julia reference to ``x`` exists as long as the result of this function will be used.
+   Accordingly, the argument ``x`` to this function should never be an expression,
+   only a variable name or field reference.
+   For example, ``x=a.b.c`` is acceptable, but ``x=[a,b,c]`` is not.
+
+   The ``unsafe`` prefix on this function indicates that using the result of this function
+   after the ``x`` argument to this function is no longer accessible to the program may cause
+   undefined behavior, including program corruption or segfaults, at any later time.
+
+.. function:: cconvert(T,x)
+
+   Convert "x" to a value of type "T", typically by calling ``convert(T,x)``
+
+   In cases where "x" cannot be safely converted to "T", unlike ``convert``,
+   ``cconvert`` may return an object of a type different from "T",
+   which however is suitable for ``unsafe_convert`` to handle.
+
+   Neither ``convert`` nor ``cconvert`` should take a Julia object and turn it into a ``Ptr``.
 
 .. function:: unsafe_load(p::Ptr{T},i::Integer)
 
+
    Load a value of type ``T`` from the address of the ith element (1-indexed)
    starting at ``p``. This is equivalent to the C expression ``p[i-1]``.
+
+   The ``unsafe`` prefix on this function indicates that no validation is performed
+   on the pointer ``p` to ensure that it is valid. Incorrect usage may segfault
+   your program or return garbage answers, in the same manner as C.
 
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
    Store a value of type ``T`` to the address of the ith element (1-indexed)
    starting at ``p``. This is equivalent to the C expression ``p[i-1] = x``.
 
+   The ``unsafe`` prefix on this function indicates that no validation is performed
+   on the pointer ``p` to ensure that it is valid. Incorrect usage may corrupt or segfault
+   your program, in the same manner as C.
+
 .. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
    Copy ``N`` elements from a source pointer to a destination, with no checking. The
    size of an element is determined by the type of the pointers.
 
+   The ``unsafe`` prefix on this function indicates that no validation is performed
+   on the pointers ``dest`` and ``src`` to ensure that they are valid.
+   Incorrect usage may corrupt or segfault your program, in the same manner as C.
+
 .. function:: unsafe_copy!(dest::Array, do, src::Array, so, N)
 
    Copy ``N`` elements from a source array to a destination, starting at offset ``so``
    in the source and ``do`` in the destination (1-indexed).
+
+   The ``unsafe`` prefix on this function indicates that no validation is performed
+   to ensure that N is inbounds on either array. Incorrect usage may corrupt or segfault
+   your program, in the same manner as C.
 
 .. function:: copy!(dest, src)
 
@@ -151,24 +206,22 @@
    Copy ``N`` elements from collection ``src`` starting at offset ``so``, to
    array ``dest`` starting at offset ``do``. Returns ``dest``.
 
-.. function:: pointer(a[, index])
+.. function:: pointer(array [, index])
 
    Get the native address of an array or string element. Be careful to
    ensure that a julia reference to ``a`` exists as long as this
-   pointer will be used.
+   pointer will be used. This function is "unsafe" like ``unsafe_convert``.
 
-.. function:: pointer(type, int)
+   Calling ``Ref(array[, index])`` is generally preferable to this function.
 
-   Convert an integer to a pointer of the specified element type.
-
-.. function:: pointer_to_array(p, dims[, own])
+.. function:: pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    Wrap a native pointer as a Julia Array object. The pointer element type determines
    the array element type. ``own`` optionally specifies whether Julia should take
    ownership of the memory, calling ``free`` on the pointer when the array is no
    longer referenced.
 
-.. function:: pointer_from_objref(obj)
+.. function:: pointer_from_objref(object_instance)
 
    Get the memory address of a Julia object as a ``Ptr``. The existence of the resulting
    ``Ptr`` will not protect the object from garbage collection, so you must ensure
@@ -190,7 +243,7 @@
         # interrupt-unsafe code
         ...
     end
-
+5
 .. function:: reenable_sigint(f::Function)
 
    Re-enable Ctrl-C handler during execution of a function. Temporarily
@@ -209,9 +262,34 @@
 
    Raises a ``SystemError`` for ``errno`` with the descriptive string ``sysfunc`` if ``bool`` is true
 
-.. function:: strerror(n)
+.. function:: strerror(errno)
 
    Convert a system call error code to a descriptive string
+
+.. data:: Ptr{T}
+
+   A simple pointer to an arbitrary memory location.
+   The type objects expected at the memory location is represented by the type parameter.
+   However, no guarantee is made or implied that the memory is actually valid,
+   or that it actually represents the data of the specified type.
+
+   ``C_NULL`` represents a generic, invalid or "NULL" pointer.
+
+.. data:: Ref{T}
+
+   Effectively, this represents and creates a managed pointer.
+   The type of objects it can contain is specified by the type parameter.
+   This type is guaranteed to point to valid, Julia-allocated memory
+   of the correct type (per the type parameter).
+
+   When passed to a `ccall` argument (either as a `Ptr` or `Ref` type),
+   the `Ref` object will be implicitly converted to a pointer to the
+   data region of that type.
+
+   The ``Ref`` type is useful for creating garbage-collector safe pointers and
+   returning values from a function (esp. a c-function), for example.
+
+   There is no generic invalid or "NULL" Ref object.
 
 .. data:: Cchar
 

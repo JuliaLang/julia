@@ -590,12 +590,13 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     size_t n = 0;
     while (n < maxsize) {
 #ifndef _CPU_X86_64_
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
         if (!result)
             break;
-        data[n++] = (intptr_t)stk.AddrPC.Offset;
 #else
+        data[n++] = (intptr_t)Context->Rip;
         DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), Context->Rip);
         if (!ImageBase)
             break;
@@ -622,7 +623,6 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         }
         if (!Context->Rip)
             break;
-        data[n++] = (intptr_t)Context->Rip;
 #endif
     }
 #if !defined(_CPU_X86_64_)

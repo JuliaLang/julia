@@ -125,9 +125,10 @@ export
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
     Module, Symbol, Task, Array, GenSym,
     # numeric types
-    Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
-    Int32, Int64, Int128, Ref, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
-    UInt64, UInt128, Unsigned,
+    Real, Complex, Number, Integer, Bool, Ref, Ptr,
+    FloatingPoint, Float16, Float32, Float64,
+    Signed, Int, Int8, Int16, Int32, Int64, Int128,
+    Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
