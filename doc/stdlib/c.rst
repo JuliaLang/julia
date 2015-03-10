@@ -268,28 +268,21 @@
 
 .. data:: Ptr{T}
 
-   A simple pointer to an arbitrary memory location.
-   The type objects expected at the memory location is represented by the type parameter.
-   However, no guarantee is made or implied that the memory is actually valid,
-   or that it actually represents the data of the specified type.
-
-   ``C_NULL`` represents a generic, invalid or "NULL" pointer.
+   A memory address referring to data of type ``T``.
+   However, there is no guarantee that the memory is actually valid,
+   or that it actually represents data of the specified type.
 
 .. data:: Ref{T}
 
-   Effectively, this represents and creates a managed pointer.
-   The type of objects it can contain is specified by the type parameter.
+   An object that safely references data of type ``T``.
    This type is guaranteed to point to valid, Julia-allocated memory
-   of the correct type (per the type parameter).
+   of the correct type. The underlying data is protected from freeing by
+   the garbage collector as long as the ``Ref`` itself is referenced.
 
-   When passed to a `ccall` argument (either as a `Ptr` or `Ref` type),
-   the `Ref` object will be implicitly converted to a pointer to the
-   data region of that type.
+   When passed as a ``ccall`` argument (either as a ``Ptr`` or ``Ref`` type),
+   a ``Ref`` object will be converted to a native pointer to the data it references.
 
-   The ``Ref`` type is useful for creating garbage-collector safe pointers and
-   returning values from a function (esp. a c-function), for example.
-
-   There is no generic invalid or "NULL" Ref object.
+   There is no invalid (NULL) ``Ref``.
 
 .. data:: Cchar
 
