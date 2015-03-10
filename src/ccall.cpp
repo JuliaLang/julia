@@ -223,18 +223,21 @@ static Value *runtime_sym_lookup(PointerType *funcptype, char *f_lib, char *f_na
 
 #if defined ABI_LLVM
 #  include "abi_llvm.cpp"
-#elif defined _P64
+#elif defined _CPU_X86_64_
 #  if defined _OS_WINDOWS_
 #    include "abi_win64.cpp"
 #  else
 #    include "abi_x86_64.cpp"
 #  endif
-#else
+#elif defined _CPU_X86_
 #  if defined _OS_WINDOWS_
 #    include "abi_win32.cpp"
 #  else
 #    include "abi_x86.cpp"
 #  endif
+#else
+#  warning "ccall is defaulting to llvm ABI, since no platform ABI has been defined for this CPU/OS combination"
+#  include "abi_llvm.cpp"
 #endif
 
 Value *llvm_type_rewrite(Value *v, Type *target_type, jl_value_t *ty, bool isret)
