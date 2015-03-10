@@ -163,10 +163,44 @@ range(a::FloatingPoint, st::FloatingPoint, len::Integer) = FloatRange(a,st,len,o
 range(a::Real, st::FloatingPoint, len::Integer) = FloatRange(float(a), st, len, one(st))
 range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, one(a))
 
-linrange(a::Real, b::Real, len::Integer) =
-    len >= 2           ? range(a, (b-a)/(len-1), len) :
-    len == 1 && a == b ? range(a, zero((b-a)/(len-1)), 1) :
-                         throw(ArgumentError("invalid range length"))
+## linspace and logspace
+
+immutable LinSpace{T<:FloatingPoint} <: Range{T}
+    start::T
+    stop::T
+    len::Int
+    divisor::T
+end
+LinSpace(start::FloatingPoint, stop::FloatingPoint, len::Real, divisor::Real) =
+    LinSpace{promote_type(typeof(start),typeof(stop),typeof(divisor))}(start,stop,len,divisor)
+
+function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
+    0 <= len || error("invalid length: linspace($start, $stop, $len)")
+    1 != len || start == stop || error("start != stop with len == 1: linspace($start, $stop, $len)")
+    n = len - 1
+    a0, b = rat(start)
+    a = convert(T,a0)
+    if 0 < n && a/convert(T,b) == start
+        c0, d = rat(stop)
+        c = convert(T,c0)
+        if c/convert(T,d) == stop
+            e = lcm(b,d)
+            a *= div(e,b)
+            c *= div(e,d)
+            ne = convert(T,n*e)
+            if a*n/ne == start && c*n/ne == stop
+                return LinSpace(a, c, len, ne)
+            end
+        end
+    end
+    return LinSpace(start, stop, len, max(1,n))
+end
+linspace(start::Real, stop::Real, len::Real) =
+    linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., Int(len))
+
+show(io::IO, r::LinSpace) = print(io, "linspace($(first(r)),$(last(r)),$(length(r)))")
+
+logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
 ## interface implementations
 
@@ -178,11 +212,13 @@ size(r::Range) = (length(r),)
 isempty(r::StepRange) =
     (r.start != r.stop) & ((r.step > zero(r.step)) != (r.stop > r.start))
 isempty(r::UnitRange) = r.start > r.stop
-isempty(r::FloatRange) = length(r)==0
+isempty(r::FloatRange) = length(r) == 0
+isempty(r::LinSpace) = length(r) == 0
 
 step(r::StepRange) = r.step
 step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
+step(r::LinSpace) = (r.stop - r.start)/r.divisor
 
 function length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
@@ -190,6 +226,7 @@ function length(r::StepRange)
 end
 length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
+length(r::LinSpace) = r.len
 
 function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)
@@ -220,11 +257,13 @@ let smallint = (Int === Int64 ?
 end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
-first(r::FloatRange) = r.start/r.divisor
+first{T}(r::FloatRange{T}) = convert(T, r.start/r.divisor)
+first{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.start/r.divisor)
 
 last{T}(r::StepRange{T}) = r.stop
 last(r::UnitRange) = r.stop
 last{T}(r::FloatRange{T}) = convert(T, (r.start + (r.len-1)*r.step)/r.divisor)
+last{T}(r::LinSpace{T}) = convert(T, (r.len-1)*r.stop/r.divisor)
 
 minimum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : first(r)
 maximum(r::UnitRange) = isempty(r) ? throw(ArgumentError("range must be non-empty")) : last(r)
@@ -241,8 +280,14 @@ copy(r::Range) = r
 ## iteration
 
 start(r::FloatRange) = 0
-next{T}(r::FloatRange{T}, i::Int) = (convert(T, (r.start + i*r.step)/r.divisor), i+1)
-done(r::FloatRange, i::Int) = (length(r) <= i)
+done(r::FloatRange, i::Int) = length(r) <= i
+next{T}(r::FloatRange{T}, i::Int) =
+    (convert(T, (r.start + i*r.step)/r.divisor), i+1)
+
+start(r::LinSpace) = 1
+done(r::LinSpace, i::Int) = length(r) < i
+next{T}(r::LinSpace{T}, i::Int) =
+    (convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor), i+1)
 
 # NOTE: For ordinal ranges, we assume start+step might be from a
 # lifted domain (e.g. Int8+Int8 => Int); use that for iterating.
@@ -267,6 +312,10 @@ end
 function getindex{T}(r::FloatRange{T}, i::Integer)
     1 <= i <= length(r) || throw(BoundsError())
     convert(T, (r.start + (i-1)*r.step)/r.divisor)
+end
+function getindex{T}(r::LinSpace{T}, i::Integer)
+    1 <= i <= length(r) || throw(BoundsError())
+    convert(T, ((r.len-i)*r.start + (i-1)*r.stop)/r.divisor)
 end
 
 function check_indexingrange(s, r)
