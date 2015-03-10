@@ -64,6 +64,7 @@ export
     IO,
     IOBuffer,
     IOStream,
+    LinSpace,
     LocalProcess,
     LowerTriangular,
     MathConst,
