@@ -99,7 +99,7 @@ centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
 stagedfunction centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     quote
         # following the implementation of _mapreducedim! at base/reducedim.jl
-        lsiz = check_reducdims(R, A)
+        lsiz = check_reducedims(R,A)
         isempty(R) || fill!(R, zero(S))
         isempty(A) && return R
         @nextract $N sizeR d->size(R,d)
