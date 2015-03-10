@@ -1023,7 +1023,7 @@ static void typed_store(Value *ptr, Value *idx_0based, Value *rhs,
         rhs = emit_unbox(elty, rhs, jltype);
     else {
         rhs = boxed(rhs,ctx);
-        if(parent != NULL) emit_write_barrier(ctx, parent, rhs);
+        if (parent != NULL) emit_write_barrier(ctx, parent, rhs);
     }
     Value *data;
     if (ptr->getType()->getContainedType(0) != elty)
@@ -1860,7 +1860,7 @@ static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx,
     }
 }
 
-static Value *emit_newsym(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
+static Value *emit_new_struct(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_codectx_t *ctx)
 {
     assert(jl_is_datatype(ty));
     assert(jl_is_leaf_type(ty));
@@ -1913,7 +1913,7 @@ static Value *emit_newsym(jl_value_t *ty, size_t nargs, jl_value_t **args, jl_co
         if (f1) {
             if (!jl_subtype(expr_type(args[1],ctx), jl_t0(sty->types), 0))
                 emit_typecheck(f1, jl_t0(sty->types), "new", ctx);
-                    emit_setfield(sty, strct, 0, f1, ctx, false, false);
+            emit_setfield(sty, strct, 0, f1, ctx, false, false);
             ctx->argDepth = fieldStart;
             if (nf > 1 && needroots)
                 make_gcroot(strct, ctx);

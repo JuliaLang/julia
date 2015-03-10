@@ -3235,7 +3235,7 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
         if (jl_is_type_type(ty) &&
             jl_is_datatype(jl_tparam0(ty)) &&
             jl_is_leaf_type(jl_tparam0(ty))) {
-            return emit_newsym(jl_tparam0(ty),nargs,args,ctx);
+            return emit_new_struct(jl_tparam0(ty),nargs,args,ctx);
         }
         Value *typ = emit_expr(args[0], ctx);
         return emit_jlcall(jlnew_func, typ, &args[1], nargs-1, ctx);
@@ -3627,7 +3627,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         }
     }
 
-
     // Alright, let's do this!
     // let's first emit the arguments
     std::vector<Value*> args;
@@ -3666,7 +3665,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         Type *at = specsig ? theFptr->getFunctionType()->getParamType(i) : jl_pvalue_llvmt;
         if (val->getType() != at) {
             if (at == jl_pvalue_llvmt) {
-                Value *mem = emit_newsym(jargty, 1, NULL, &ctx);
+                Value *mem = emit_new_struct(jargty, 1, NULL, &ctx);
                 if (mem->getType() == jl_pvalue_llvmt) {
                     builder.CreateStore(val, builder.CreateBitCast(
                                 emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
@@ -4127,7 +4126,8 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
         if (!specsig) {
             subrty = jl_di_func_sig;
-        } else {
+        }
+        else {
             llvm::DIArray EltTypeArray;
 #ifdef LLVM36
             std::vector<Metadata*> ditypes(0);
@@ -4135,9 +4135,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
             std::vector<Value*> ditypes(0);
 #endif
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-                if(ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost)
+                if (ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost)
                     continue;
-               ditypes.push_back(julia_type_to_di(jl_tupleref(lam->specTypes,i),ctx.dbuilder,false));
+                ditypes.push_back(julia_type_to_di(jl_tupleref(lam->specTypes,i),ctx.dbuilder,false));
             }
 #ifdef LLVM36
             subrty = ctx.dbuilder->createSubroutineType(fil,ctx.dbuilder->getOrCreateTypeArray(ditypes));
@@ -4326,9 +4326,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 Value *lv = mark_julia_type(builder.CreateAlloca(vtype, 0), jt);
                 ctx.gensym_SAvalues.at(i) = lv;
             }
-        } else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
+        }
+        else if (is_stable_expr(gensym_initExpr.at(i), &ctx)) {
             gensym_initExpr.at(i) = NULL;
-        } else {
+        }
+        else {
             n_roots++;
         }
     }
@@ -4774,7 +4776,7 @@ extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 #else
     box->type = jl_box_any_type;
 #endif
-    if(v) gc_wb(box, v);
+    if (v) gc_wb(box, v);
     ((jl_value_t**)box)[1] = v;
     return box;
 }
@@ -5607,17 +5609,3 @@ extern "C" void jl_init_codegen(void)
 
     typeToTypeId = jl_alloc_cell_1d(16);
 }
-
-/*
-maybe this reads the dwarf info for a MachineFunction:
-
-MCContext &mc = Details.MF->getContext()
-DenseMap<const MCSection*,MCLineSection*> &secs = mc.getMCLineSectionOrder();
-std::vector<const MCSection*> &sec2line = mc.getMCLineSections();
-MCLineSection *line = sec2line[secs[0]];
-const MCLineEntryCollection *lec = line->getMCLineEntries();
-MCLineEntryCollection::iterator it = lec->begin();
-
-addr = (*it).getLabel()->getVariableValue()
-line = (*it).getLine()
-*/
