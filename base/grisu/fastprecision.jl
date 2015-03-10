@@ -65,5 +65,5 @@ function fastprecision(v,requested_digits,buffer=Array(UInt8,100))
     scaled_w = f * cp
     r, kappa, len = digitgen(scaled_w,buffer,requested_digits)
     decimal_exponent = -cp.de + kappa
-    return r, len, decimal_exponent+len-1, buffer
+    return r, len, decimal_exponent+len-1
 end

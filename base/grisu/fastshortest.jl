@@ -84,5 +84,5 @@ function fastshortest(v,buffer=Array(UInt8,17))
     r, kappa, len = digitgen(scaled_bound_minus,scaled_w,
                              scaled_bound_plus,buffer)
     decimal_exponent = -cp.de + kappa
-    return r, len, decimal_exponent+len-1, buffer
+    return r, len, decimal_exponent+len-1
 end

@@ -14,6 +14,7 @@ end
 const bufsize = 500
 buffer = Array(UInt8,bufsize);
 fill!(buffer,0);
+bignums = [Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum(),Grisu.Bignums.Bignum()]
 
 # Start by checking the byte-order.
 ordered = 0x0123456789ABCDEF
@@ -220,44 +221,44 @@ boundary_minus, boundary_plus = Grisu.normalizedbound(reinterpret(Float32,max_fl
 
 #fastshortest
 min_double = 5e-324
-status,len,point,buffer = Grisu.fastshortest(min_double, buffer)
+status,len,point = Grisu.fastshortest(min_double, buffer)
 @test status
 @test "5" == trimrep(buffer)
 @test -323 == point
 fill!(buffer,0);
 
 max_double = 1.7976931348623157e308
-status,len,point,buffer = Grisu.fastshortest(max_double, buffer)
+status,len,point = Grisu.fastshortest(max_double, buffer)
 @test status
 @test "17976931348623157" == trimrep(buffer)
 @test 309 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(4294967272.0, buffer)
+status,len,point = Grisu.fastshortest(4294967272.0, buffer)
 @test status
 @test "4294967272" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(4.1855804968213567e298, buffer)
+status,len,point = Grisu.fastshortest(4.1855804968213567e298, buffer)
 @test status
 @test "4185580496821357" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(5.5626846462680035e-309, buffer)
+status,len,point = Grisu.fastshortest(5.5626846462680035e-309, buffer)
 @test status
 @test "5562684646268003" == trimrep(buffer)
 @test -308 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(2147483648.0, buffer)
+status,len,point = Grisu.fastshortest(2147483648.0, buffer)
 @test status
 @test "2147483648" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(3.5844466002796428e+298, buffer)
+status,len,point = Grisu.fastshortest(3.5844466002796428e+298, buffer)
 @test !status  # Not all Grisu.fastshortest variants manage to compute this number.
 if status
   @test "35844466002796428" == trimrep(buffer)
@@ -267,7 +268,7 @@ end
 
 smallest_normal64 = 0x0010000000000000
 v = reinterpret(Float64,smallest_normal64)
-status,len,point,buffer = Grisu.fastshortest(v,  buffer)
+status,len,point = Grisu.fastshortest(v,  buffer)
 if status
   @test "22250738585072014" == trimrep(buffer)
   @test -307 == point
@@ -276,7 +277,7 @@ end
 
 largest_denormal64 = 0x000FFFFFFFFFFFFF
 v = reinterpret(Float64,largest_denormal64)
-status,len,point,buffer = Grisu.fastshortest(v,  buffer)
+status,len,point = Grisu.fastshortest(v,  buffer)
 if status
   @test "2225073858507201" == trimrep(buffer)
   @test -307 == point
@@ -285,50 +286,50 @@ end
 
 
 min_float = Float32(1e-45)
-status,len,point,buffer = Grisu.fastshortest(min_float, buffer)
+status,len,point = Grisu.fastshortest(min_float, buffer)
 @test status
 @test "1" == trimrep(buffer)
 @test -44 == point
 fill!(buffer,0);
 
 max_float = 3.4028234f38 #Float32(3.4028234e38)
-status,len,point,buffer = Grisu.fastshortest(max_float, buffer)
+status,len,point = Grisu.fastshortest(max_float, buffer)
 @test status
 @test "34028235" == trimrep(buffer)
 @test 39 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(4294967272.0), buffer)
+status,len,point = Grisu.fastshortest(Float32(4294967272.0), buffer)
 @test status
 @test "42949673" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(3.32306998946228968226e+35), buffer)
+status,len,point = Grisu.fastshortest(Float32(3.32306998946228968226e+35), buffer)
 @test status
 @test "332307" == trimrep(buffer)
 @test 36 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(1.2341e-41), buffer)
+status,len,point = Grisu.fastshortest(Float32(1.2341e-41), buffer)
 @test status
 @test "12341" == trimrep(buffer)
 @test -40 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(3.3554432e7), buffer)
+status,len,point = Grisu.fastshortest(Float32(3.3554432e7), buffer)
 @test status
 @test "33554432" == trimrep(buffer)
 @test 8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(3.26494756798464e14), buffer)
+status,len,point = Grisu.fastshortest(Float32(3.26494756798464e14), buffer)
 @test status
 @test "32649476" == trimrep(buffer)
 @test 15 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastshortest(Float32(3.91132223637771935344e37), buffer)
+status,len,point = Grisu.fastshortest(Float32(3.91132223637771935344e37), buffer)
 if status  # Not all Grisu.fastshortest variants manage to compute this number.
   @test "39113222" == trimrep(buffer)
   @test 38 == point
@@ -337,7 +338,7 @@ end
 
 smallest_normal32 = 0x00800000
 v = reinterpret(Float32,smallest_normal32)
-status,len,point,buffer = Grisu.fastshortest(v,  buffer)
+status,len,point = Grisu.fastshortest(v,  buffer)
 if status
   @test "11754944" == trimrep(buffer)
   @test -37 == point
@@ -346,20 +347,20 @@ end
 
 largest_denormal32 = 0x007FFFFF
 v = reinterpret(Float32,largest_denormal32)
-status,len,point,buffer = Grisu.fastshortest(v,  buffer)
+status,len,point = Grisu.fastshortest(v,  buffer)
 @test status
 @test "11754942" == trimrep(buffer)
 @test -37 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(1.0, 3, buffer)
+status,len,point = Grisu.fastprecision(1.0, 3, buffer)
 @test status
 @test 3 >= len-1
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(1.5, 10, buffer)
+status,len,point = Grisu.fastprecision(1.5, 10, buffer)
 if status
   @test 10 >= len-1
   @test "15" == trimrep(buffer)
@@ -368,20 +369,20 @@ if status
 end
 
 min_double = 5e-324
-status,len,point,buffer = Grisu.fastprecision(min_double, 5,buffer)
+status,len,point = Grisu.fastprecision(min_double, 5,buffer)
 @test status
 @test "49407" == trimrep(buffer)
 @test -323 == point
 fill!(buffer,0);
 
 max_double = 1.7976931348623157e308
-status,len,point,buffer = Grisu.fastprecision(max_double, 7,buffer)
+status,len,point = Grisu.fastprecision(max_double, 7,buffer)
 @test status
 @test "1797693" == trimrep(buffer)
 @test 309 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(4294967272.0, 14,buffer)
+status,len,point = Grisu.fastprecision(4294967272.0, 14,buffer)
 if status
   @test 14 >= len-1
   @test "4294967272" == trimrep(buffer)
@@ -389,25 +390,25 @@ if status
   fill!(buffer,0);
 end
 
-status,len,point,buffer = Grisu.fastprecision(4.1855804968213567e298, 17,buffer)
+status,len,point = Grisu.fastprecision(4.1855804968213567e298, 17,buffer)
 @test status
 @test "41855804968213567" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(5.5626846462680035e-309, 1,buffer)
+status,len,point = Grisu.fastprecision(5.5626846462680035e-309, 1,buffer)
 @test status
 @test "6" == trimrep(buffer)
 @test -308 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(2147483648.0, 5,buffer)
+status,len,point = Grisu.fastprecision(2147483648.0, 5,buffer)
 @test status
 @test "21475" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(3.5844466002796428e+298, 10,buffer)
+status,len,point = Grisu.fastprecision(3.5844466002796428e+298, 10,buffer)
 @test status
 @test 10 >= len-1
 @test "35844466" == trimrep(buffer)
@@ -416,7 +417,7 @@ fill!(buffer,0);
 
 smallest_normal64 = 0x0010000000000000
 v = reinterpret(Float64,smallest_normal64)
-status,len,point,buffer = Grisu.fastprecision(v, 17, buffer)
+status,len,point = Grisu.fastprecision(v, 17, buffer)
 @test status
 @test "22250738585072014" == trimrep(buffer)
 @test -307 == point
@@ -424,7 +425,7 @@ fill!(buffer,0);
 
 largest_denormal64 = 0x000FFFFFFFFFFFFF
 v = reinterpret(Float64,largest_denormal64)
-status,len,point,buffer = Grisu.fastprecision(v, 17, buffer)
+status,len,point = Grisu.fastprecision(v, 17, buffer)
 @test status
 @test 20 >= len-1
 @test "22250738585072009" == trimrep(buffer)
@@ -432,831 +433,871 @@ status,len,point,buffer = Grisu.fastprecision(v, 17, buffer)
 fill!(buffer,0);
 
 v = 3.3161339052167390562200598e-237
-status,len,point,buffer = Grisu.fastprecision(v, 18, buffer)
+status,len,point = Grisu.fastprecision(v, 18, buffer)
 @test status
 @test "331613390521673906" == trimrep(buffer)
 @test -236 == point
 fill!(buffer,0);
 
 v = 7.9885183916008099497815232e+191
-status,len,point,buffer = Grisu.fastprecision(v, 4, buffer)
+status,len,point = Grisu.fastprecision(v, 4, buffer)
 @test status
 @test "7989" == trimrep(buffer)
 @test 192 == point
 fill!(buffer,0);
 
 #fastfixedtoa
-status,len,point,buffer = Grisu.fastfixedtoa(1.0, 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(1.0, 0,1, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.0, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(1.0, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.0, 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(1.0, 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0xFFFFFFFF, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(0xFFFFFFFF, 0,5, buffer)
 @test "4294967295" == bytestring(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(4294967296.0, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(4294967296.0, 0,5, buffer)
 @test "4294967296" == bytestring(pointer(buffer)) #todo
 @test 10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e21, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(1e21, 0,5, buffer)
 @test "1" == bytestring(pointer(buffer)) #todo extra '0's
 @test 22 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(999999999999999868928.00, 0,2, buffer)
+status,len,point = Grisu.fastfixedtoa(999999999999999868928.00, 0,2, buffer)
 @test "999999999999999868928" == bytestring(pointer(buffer)) #todo extra '0'
 @test 21 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(6.9999999999999989514240000e+21, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(6.9999999999999989514240000e+21, 0,5, buffer)
 @test "6999999999999998951424" == bytestring(pointer(buffer)) #todo short several '9's
 @test 22 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.5, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(1.5, 0,5, buffer)
 @test "15" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.55, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(1.55, 0,5, buffer)
 @test "155" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.55, 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(1.55, 0,1, buffer)
 @test "16" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.00000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(1.00000001, 0,15, buffer)
 @test "100000001" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.1, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.1, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.01, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.01, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.001, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.001, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0001, 0,10, buffer) #todo
+status,len,point = Grisu.fastfixedtoa(0.0001, 0,10, buffer) #todo
 @test "1" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00001, 0,10, buffer) #todo
+status,len,point = Grisu.fastfixedtoa(0.00001, 0,10, buffer) #todo
 @test "1" == bytestring(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000001, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000001, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000001, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000001, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000001, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000001, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000001, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000001, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000001, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000001, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000001, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000001, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000000001, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000000001, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000000000000001, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000000000000001, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.10000000004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.10000000004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.01000000004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.01000000004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00100000004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00100000004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00010000004, 0,10, buffer) #todo
+status,len,point = Grisu.fastfixedtoa(0.00010000004, 0,10, buffer) #todo
 @test "1" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00001000004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00001000004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000100004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000100004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000010004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000010004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000001004, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000001004, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000104, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000104, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000001000004, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000001000004, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000100004, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000100004, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000010004, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000010004, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000001004, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000001004, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000000104, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000000104, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000001000004, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000001000004, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000100004, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000100004, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000010004, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000010004, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000001004, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000001004, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000000104, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000000104, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000000014, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000000014, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.10000000006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.10000000006, 0,10, buffer)
 @test "1000000001" == bytestring(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.01000000006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.01000000006, 0,10, buffer)
 @test "100000001" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00100000006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00100000006, 0,10, buffer)
 @test "10000001" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00010000006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00010000006, 0,10, buffer)
 @test "1000001" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00001000006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00001000006, 0,10, buffer)
 @test "100001" == bytestring(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000100006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000100006, 0,10, buffer)
 @test "10001" == bytestring(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000010006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000010006, 0,10, buffer)
 @test "1001" == bytestring(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000001006, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000001006, 0,10, buffer)
 @test "101" == bytestring(pointer(buffer))
 @test -7 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000000106, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000000106, 0,10, buffer)
 @test "11" == bytestring(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000001000006, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000001000006, 0,15, buffer)
 @test "100001" == bytestring(pointer(buffer))
 @test -9 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000100006, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000100006, 0,15, buffer)
 @test "10001" == bytestring(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000010006, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000010006, 0,15, buffer)
 @test "1001" == bytestring(pointer(buffer))
 @test -11 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000001006, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000001006, 0,15, buffer)
 @test "101" == bytestring(pointer(buffer))
 @test -12 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000000000000106, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000000000000106, 0,15, buffer)
 @test "11" == bytestring(pointer(buffer))
 @test -13 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000001000006, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000001000006, 0,20, buffer)
 @test "100001" == bytestring(pointer(buffer))
 @test -14 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000100006, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000100006, 0,20, buffer)
 @test "10001" == bytestring(pointer(buffer))
 @test -15 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000010006, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000010006, 0,20, buffer)
 @test "1001" == bytestring(pointer(buffer))
 @test -16 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000001006, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000001006, 0,20, buffer)
 @test "101" == bytestring(pointer(buffer))
 @test -17 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000000106, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000000106, 0,20, buffer)
 @test "11" == bytestring(pointer(buffer))
 @test -18 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000000000000000016, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000000000000000016, 0,20, buffer)
 @test "2" == bytestring(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.6, 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(0.6, 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.96, 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(0.96, 0,1, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.996, 0,2, buffer)
+status,len,point = Grisu.fastfixedtoa(0.996, 0,2, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.9996, 0,3, buffer)
+status,len,point = Grisu.fastfixedtoa(0.9996, 0,3, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.99996, 0,4, buffer)
+status,len,point = Grisu.fastfixedtoa(0.99996, 0,4, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.999996, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(0.999996, 0,5, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.9999996, 0,6, buffer)
+status,len,point = Grisu.fastfixedtoa(0.9999996, 0,6, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.99999996, 0,7, buffer)
+status,len,point = Grisu.fastfixedtoa(0.99999996, 0,7, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.999999996, 0,8, buffer)
+status,len,point = Grisu.fastfixedtoa(0.999999996, 0,8, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.9999999996, 0,9, buffer)
+status,len,point = Grisu.fastfixedtoa(0.9999999996, 0,9, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.99999999996, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(0.99999999996, 0,10, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.999999999996, 0,11, buffer)
+status,len,point = Grisu.fastfixedtoa(0.999999999996, 0,11, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.9999999999996, 0,12, buffer)
+status,len,point = Grisu.fastfixedtoa(0.9999999999996, 0,12, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.99999999999996, 0,13, buffer)
+status,len,point = Grisu.fastfixedtoa(0.99999999999996, 0,13, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.999999999999996, 0,14, buffer)
+status,len,point = Grisu.fastfixedtoa(0.999999999999996, 0,14, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.9999999999999996, 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(0.9999999999999996, 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00999999999999996, 0,16, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00999999999999996, 0,16, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000999999999999996, 0,17, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000999999999999996, 0,17, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.0000999999999999996, 0,18, buffer)
+status,len,point = Grisu.fastfixedtoa(0.0000999999999999996, 0,18, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.00000999999999999996, 0,19, buffer)
+status,len,point = Grisu.fastfixedtoa(0.00000999999999999996, 0,19, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.000000999999999999996, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(0.000000999999999999996, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(323423.234234, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(323423.234234, 0,10, buffer)
 @test "323423234234" == bytestring(pointer(buffer))
 @test 6 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(12345678.901234, 0,4, buffer)
+status,len,point = Grisu.fastfixedtoa(12345678.901234, 0,4, buffer)
 @test "123456789012" == bytestring(pointer(buffer))
 @test 8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(98765.432109, 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(98765.432109, 0,5, buffer)
 @test "9876543211" == bytestring(pointer(buffer))
 @test 5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(42, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(42, 0,20, buffer)
 @test "42" == bytestring(pointer(buffer))
 @test 2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(0.5, 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(0.5, 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-23, 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-23, 0,10, buffer)
 @test "" == bytestring(pointer(buffer))
 @test -10 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-123, 0,2, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-123, 0,2, buffer)
 @test "" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-123, 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-123, 0,0, buffer)
 @test "" == bytestring(pointer(buffer))
 @test 0 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-23, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-23, 0,20, buffer)
 @test "" == bytestring(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-21, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-21, 0,20, buffer)
 @test "" == bytestring(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1e-22, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(1e-22, 0,20, buffer)
 @test "" == bytestring(pointer(buffer))
 @test -20 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(6e-21, 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(6e-21, 0,20, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test -19 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(9.1193616301674545152000000e+19, 0,0,buffer)
+status,len,point = Grisu.fastfixedtoa(9.1193616301674545152000000e+19, 0,0,buffer)
 @test "91193616301674545152" == bytestring(pointer(buffer))
 @test 20 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(4.8184662102767651659096515e-04, 0,19,buffer)
+status,len,point = Grisu.fastfixedtoa(4.8184662102767651659096515e-04, 0,19,buffer)
 @test "4818466210276765" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1.9023164229540652612705182e-23, 0,8,buffer)
+status,len,point = Grisu.fastfixedtoa(1.9023164229540652612705182e-23, 0,8,buffer)
 @test "" == bytestring(pointer(buffer))
 @test -8 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(1000000000000000128.0, 0,0,buffer)
+status,len,point = Grisu.fastfixedtoa(1000000000000000128.0, 0,0,buffer)
 @test "1000000000000000128" == bytestring(pointer(buffer))
 @test 19 == point
 fill!(buffer,0);
 
 #bignumdtoa
-status,len,point,buffer = Grisu.bignumdtoa(1.0, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(1.0, Grisu.SHORTEST, 0, buffer,bignums)
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(1.0, Grisu.FIXED, 3, buffer)
+status,len,point = Grisu.bignumdtoa(1.0, Grisu.FIXED, 3, buffer,bignums)
 @test 3 >= len - 1 - point
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(1.0, Grisu.PRECISION, 3, buffer)
+status,len,point = Grisu.bignumdtoa(1.0, Grisu.PRECISION, 3, buffer,bignums)
 @test 3 >= len - 1
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(1.5, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(1.5, Grisu.SHORTEST, 0, buffer,bignums)
 @test "15" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(1.5, Grisu.FIXED, 10, buffer)
+status,len,point = Grisu.bignumdtoa(1.5, Grisu.FIXED, 10, buffer,bignums)
 @test 10 >= len - 1 - point
 @test "15" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(1.5, Grisu.PRECISION, 10, buffer)
+status,len,point = Grisu.bignumdtoa(1.5, Grisu.PRECISION, 10, buffer,bignums)
 @test 10 >= len - 1
 @test "15" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 min_double = 5e-324
-status,len,point,buffer = Grisu.bignumdtoa(min_double, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(min_double, Grisu.SHORTEST, 0, buffer,bignums)
 @test "5" == trimrep(buffer)
 @test -323 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(min_double, Grisu.FIXED, 5, buffer)
+status,len,point = Grisu.bignumdtoa(min_double, Grisu.FIXED, 5, buffer,bignums)
 @test 5 >= len - 1 - point
 @test "" == trimrep(buffer)
 
-status,len,point,buffer = Grisu.bignumdtoa(min_double, Grisu.PRECISION, 5, buffer)
+status,len,point = Grisu.bignumdtoa(min_double, Grisu.PRECISION, 5, buffer,bignums)
 @test 5 >= len - 1
 @test "49407" == trimrep(buffer)
 @test -323 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 max_double = 1.7976931348623157e308
-status,len,point,buffer = Grisu.bignumdtoa(max_double, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(max_double, Grisu.SHORTEST, 0, buffer,bignums)
 @test "17976931348623157" == trimrep(buffer)
 @test 309 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(max_double, Grisu.PRECISION, 7, buffer)
+status,len,point = Grisu.bignumdtoa(max_double, Grisu.PRECISION, 7, buffer,bignums)
 @test 7 >= len - 1
 @test "1797693" == trimrep(buffer)
 @test 309 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4294967272.0, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(4294967272.0, Grisu.SHORTEST, 0, buffer,bignums)
 @test "4294967272" == bytestring(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4294967272.0, Grisu.FIXED, 5, buffer)
+status,len,point = Grisu.bignumdtoa(4294967272.0, Grisu.FIXED, 5, buffer,bignums)
 @test "429496727200000" == bytestring(pointer(buffer))
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4294967272.0, Grisu.PRECISION, 14, buffer)
+status,len,point = Grisu.bignumdtoa(4294967272.0, Grisu.PRECISION, 14, buffer,bignums)
 @test 14 >= len - 1
 @test "4294967272" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4.1855804968213567e298, Grisu.SHORTEST, 0,buffer)
+status,len,point = Grisu.bignumdtoa(4.1855804968213567e298, Grisu.SHORTEST, 0,buffer,bignums)
 @test "4185580496821357" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4.1855804968213567e298, Grisu.PRECISION, 20,buffer)
+status,len,point = Grisu.bignumdtoa(4.1855804968213567e298, Grisu.PRECISION, 20,buffer,bignums)
 @test 20 >= len - 1
 @test "41855804968213567225" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(5.5626846462680035e-309, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(5.5626846462680035e-309, Grisu.SHORTEST, 0, buffer,bignums)
 @test "5562684646268003" == trimrep(buffer)
 @test -308 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(5.5626846462680035e-309, Grisu.PRECISION, 1, buffer)
+status,len,point = Grisu.bignumdtoa(5.5626846462680035e-309, Grisu.PRECISION, 1, buffer,bignums)
 @test 1 >= len - 1
 @test "6" == trimrep(buffer)
 @test -308 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(2147483648.0, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(2147483648.0, Grisu.SHORTEST, 0, buffer,bignums)
 @test "2147483648" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(2147483648.0, Grisu.FIXED, 2, buffer)
+status,len,point = Grisu.bignumdtoa(2147483648.0, Grisu.FIXED, 2, buffer,bignums)
 @test 2 >= len - 1 - point
 @test "2147483648" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(2147483648.0, Grisu.PRECISION, 5, buffer)
+status,len,point = Grisu.bignumdtoa(2147483648.0, Grisu.PRECISION, 5, buffer,bignums)
 @test 5 >= len - 1
 @test "21475" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(3.5844466002796428e+298, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(3.5844466002796428e+298, Grisu.SHORTEST, 0, buffer,bignums)
 @test "35844466002796428" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(3.5844466002796428e+298, Grisu.PRECISION, 10, buffer)
+status,len,point = Grisu.bignumdtoa(3.5844466002796428e+298, Grisu.PRECISION, 10, buffer,bignums)
 @test 10 >= len - 1
 @test "35844466" == trimrep(buffer)
 @test 299 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = reinterpret(Float64,0x0010000000000000)
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer,bignums)
 @test "22250738585072014" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.PRECISION, 20, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.PRECISION, 20, buffer,bignums)
 @test 20 >= len - 1
 @test "22250738585072013831" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = reinterpret(Float64,0x000FFFFFFFFFFFFF)
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer,bignums)
 @test "2225073858507201" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.PRECISION, 20, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.PRECISION, 20, buffer,bignums)
 @test 20 >= len - 1
 @test "2225073858507200889" == trimrep(buffer)
 @test -307 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(4128420500802942e-24, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(4128420500802942e-24, Grisu.SHORTEST, 0, buffer,bignums)
 @test "4128420500802942" == trimrep(buffer)
 @test -8 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = 3.9292015898194142585311918e-10;
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer,bignums)
 @test "39292015898194143" == trimrep(buffer)
 
 v = 4194304.0;
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.FIXED, 5, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.FIXED, 5, buffer,bignums)
 @test 5 >= len - 1 - point
 @test "4194304" == trimrep(buffer)
 
 v = 3.3161339052167390562200598e-237;
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.PRECISION, 19, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.PRECISION, 19, buffer,bignums)
 @test 19 >= len - 1
 @test "3316133905216739056" == trimrep(buffer)
 @test -236 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = 7.9885183916008099497815232e+191;
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.PRECISION, 4, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.PRECISION, 4, buffer,bignums)
 @test 4 >= len - 1
 @test "7989" == trimrep(buffer)
 @test 192 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = 1.0000000000000012800000000e+17;
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.FIXED, 1, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.FIXED, 1, buffer,bignums)
 @test 1 >= len - 1 - point
 @test "100000000000000128" == trimrep(buffer)
 @test 18 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 
 min_float = Float32(1e-45)
-status,len,point,buffer = Grisu.bignumdtoa(min_float, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(min_float, Grisu.SHORTEST, 0, buffer,bignums)
 @test "1" == trimrep(buffer)
 @test -44 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 max_float = Float32(3.4028234e38)
-status,len,point,buffer = Grisu.bignumdtoa(max_float, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(max_float, Grisu.SHORTEST, 0, buffer,bignums)
 @test "34028235" == trimrep(buffer)
 @test 39 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(4294967272.0), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(4294967272.0), Grisu.SHORTEST, 0, buffer,bignums)
 @test "42949673" == trimrep(buffer)
 @test 10 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(3.32306998946228968226e+35), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(3.32306998946228968226e+35), Grisu.SHORTEST, 0, buffer,bignums)
 @test "332307" == trimrep(buffer)
 @test 36 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(1.2341e-41), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(1.2341e-41), Grisu.SHORTEST, 0, buffer,bignums)
 @test "12341" == trimrep(buffer)
 @test -40 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(3.3554432e7), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(3.3554432e7), Grisu.SHORTEST, 0, buffer,bignums)
 @test "33554432" == trimrep(buffer)
 @test 8 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(3.26494756798464e14), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(3.26494756798464e14), Grisu.SHORTEST, 0, buffer,bignums)
 @test "32649476" == trimrep(buffer)
 @test 15 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
-status,len,point,buffer = Grisu.bignumdtoa(Float32(3.91132223637771935344e37), Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(Float32(3.91132223637771935344e37), Grisu.SHORTEST, 0, buffer,bignums)
 @test "39113222" == trimrep(buffer)
 @test 38 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = reinterpret(Float32,0x00800000)
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer,bignums)
 @test "11754944" == trimrep(buffer)
 @test -37 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 v = reinterpret(Float32,0x007FFFFF)
-status,len,point,buffer = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer)
+status,len,point = Grisu.bignumdtoa(v, Grisu.SHORTEST, 0, buffer,bignums)
 @test "11754942" == trimrep(buffer)
 @test -37 == point
 fill!(buffer,0);
+map(x->Grisu.Bignums.zero!(x),bignums)
 
 #Float16
 min_double = realmin(Float16)
-status,len,point,buffer = Grisu.fastshortest(min_double,buffer)
+status,len,point = Grisu.fastshortest(min_double,buffer)
 @test status
 @test "6104" == trimrep(buffer)
 @test -4 == point
 fill!(buffer,0);
 
 max_double = realmax(Float16)
-status,len,point,buffer = Grisu.fastshortest(max_double,buffer)
+status,len,point = Grisu.fastshortest(max_double,buffer)
 @test status
 @test "655" == trimrep(buffer)
 @test 5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(Float16(1.0), 3, buffer)
+status,len,point = Grisu.fastprecision(Float16(1.0), 3, buffer)
 @test status
 @test 3 >= len-1
 @test "1" == trimrep(buffer)
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastprecision(Float16(1.5), 10, buffer)
+status,len,point = Grisu.fastprecision(Float16(1.5), 10, buffer)
 if status
   @test 10 >= len-1
   @test "15" == trimrep(buffer)
@@ -1264,122 +1305,122 @@ if status
   fill!(buffer,0);
 end
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.0), 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,1, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.0), 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.0), 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.0), 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.5), 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.5), 0,5, buffer)
 @test "15" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.55), 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.55), 0,5, buffer)
 @test "15498" == bytestring(pointer(buffer)) #todo
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.55), 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.55), 0,1, buffer)
 @test "15" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(1.00000001), 0,15, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(1.00000001), 0,15, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.1), 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.1), 0,10, buffer)
 @test "999755859" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.01), 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.01), 0,10, buffer)
 @test "100021362" == bytestring(pointer(buffer))
 @test -1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.001), 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.001), 0,10, buffer)
 @test "10004044" == bytestring(pointer(buffer))
 @test -2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.0001), 0,10, buffer) #todo
+status,len,point = Grisu.fastfixedtoa(Float16(0.0001), 0,10, buffer) #todo
 @test "1000166" == bytestring(pointer(buffer))
 @test -3 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.00001), 0,10, buffer) #todo
+status,len,point = Grisu.fastfixedtoa(Float16(0.00001), 0,10, buffer) #todo
 @test "100136" == bytestring(pointer(buffer))
 @test -4 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.000001), 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.000001), 0,10, buffer)
 @test "10133" == bytestring(pointer(buffer))
 @test -5 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.0000001), 0,10, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.0000001), 0,10, buffer)
 @test "1192" == bytestring(pointer(buffer))
 @test -6 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.6), 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.6), 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.96), 0,1, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.96), 0,1, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.996), 0,2, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.996), 0,2, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.9996), 0,3, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.9996), 0,3, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.99996), 0,4, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.99996), 0,4, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.999996), 0,5, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.999996), 0,5, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.9999996), 0,6, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.9999996), 0,6, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.99999996), 0,7, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.99999996), 0,7, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(42), 0,20, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(42), 0,20, buffer)
 @test "42" == bytestring(pointer(buffer))
 @test 2 == point
 fill!(buffer,0);
 
-status,len,point,buffer = Grisu.fastfixedtoa(Float16(0.5), 0,0, buffer)
+status,len,point = Grisu.fastfixedtoa(Float16(0.5), 0,0, buffer)
 @test "1" == bytestring(pointer(buffer))
 @test 1 == point
 fill!(buffer,0);
