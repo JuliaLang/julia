@@ -82,7 +82,8 @@ end
 
 if VERSION < v"0.4.0-dev+3413"
     # based on pipe in base/process.jl:
-    function pipe(src::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+    import Base: AbstractCmd, Redirectable
+    function pipe(cmd::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
         if append && stdout === nothing && stderr === nothing
             error("append set to true, but no output redirections specified")
         end
