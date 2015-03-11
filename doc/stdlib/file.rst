@@ -107,7 +107,7 @@
 
 .. function:: cp(src::AbstractString,dst::AbstractString; recursive=false)
 
-   Copy a file from `src` to `dest`. Passing ``recursive=true`` will enable 
+   Copy a file from `src` to `dest`. Passing ``recursive=true`` will enable
    recursive copying of directories.
 
 .. function:: download(url,[localfile])
