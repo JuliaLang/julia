@@ -93,3 +93,6 @@ end
 @test CartesianTest.f(1,2,3) == (1,2,3)
 @test CartesianTest.f(1,2,3,4) == (1,2,3,4)
 @test CartesianTest.f(1,2,3,4,5) == (1,2,3,4,5)
+
+@test readall(pipe(`echo hello`, `sort`)) == "hello\n"
+@test success(pipe(`true`, `true`))

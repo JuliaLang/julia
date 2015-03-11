@@ -60,6 +60,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `beginswith` is now `startswith` [#9583](https://github.com/JuliaLang/julia/pull/9583)
 
+* `|>`, `>>`, `.>`, and `.>>` are now `pipe` [#10211](https://github.com/JuliaLang/julia/pull/10211)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

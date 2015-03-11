@@ -80,6 +80,29 @@ if VERSION < v"0.4.0-dev+2014"
     export sizehint!
 end
 
+if VERSION < v"0.4.0-dev+3413"
+    # based on pipe in base/process.jl:
+    function pipe(src::AbstractCmd; stdin=nothing, stdout=nothing, stderr=nothing, append::Bool=false)
+        if append && stdout === nothing && stderr === nothing
+            error("append set to true, but no output redirections specified")
+        end
+        if stdin !== nothing
+            cmd = stdin |> cmd
+        end
+        if stdout !== nothing
+            cmd = append ? cmd >> stdout : cmd |> stdout
+        end
+        if stderr !== nothing
+            cmd = append ? cmd .>> stderr : cmd .> stderr
+        end
+        return cmd
+    end
+    pipe(cmd::AbstractCmd, dest) = pipe(cmd, stdout=dest)
+    pipe(src::Union(Redirectable,AbstractString), cmd::AbstractCmd) = pipe(cmd, stdin=src)
+    pipe(a, b, c, d...) = pipe(pipe(a,b), c, d...)
+    export pipe
+end
+
 function rewrite_dict(ex)
     length(ex.args) == 1 && return ex
 
