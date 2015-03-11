@@ -809,7 +809,11 @@ int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
     if (fit != objmap.end()) {
         *symsize = fit->second.size;
         *object = fit->second.object;
+#ifdef LLVM36
         *slide = fit->second.slide;
+#else
+        *slide = 0;
+#endif
         return 1;
     }
     return 0;
