@@ -695,3 +695,14 @@ for T in (Int, Float16, Float32, Float64, BigInt, BigFloat)
         @test abs2(S) == abs2(D)
     end
 end
+
+# issue #10407
+@test maximum(spzeros(5, 5)) == 0.0
+@test minimum(spzeros(5, 5)) == 0.0
+
+# issue #10411
+for (m,n) in ((2,-2),(-2,2),(-2,-2))
+    @test_throws ArgumentError spzeros(m,n)
+    @test_throws ArgumentError speye(m,n)
+    @test_throws ArgumentError sprand(m,n,0.2)
+end
