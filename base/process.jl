@@ -293,7 +293,7 @@ macro setup_stdio()
         close_in,close_out,close_err = false,false,false
         in,out,err = stdios
         if isa(stdios[1], Pipe)
-            if stdios[1].handle == C_NULL
+            if stdios[1].status == StatusUninit
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[1], FileRedirect)
@@ -303,7 +303,7 @@ macro setup_stdio()
             in = FS.File(RawFD(fd(stdios[1])))
         end
         if isa(stdios[2], Pipe)
-            if stdios[2].handle == C_NULL
+            if stdios[2].status == StatusUninit
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[2], FileRedirect)
@@ -313,7 +313,7 @@ macro setup_stdio()
             out = FS.File(RawFD(fd(stdios[2])))
         end
         if isa(stdios[3], Pipe)
-            if stdios[3].handle == C_NULL
+            if stdios[3].status == StatusUninit
                 error("pipes passed to spawn must be initialized")
             end
         elseif isa(stdios[3], FileRedirect)
