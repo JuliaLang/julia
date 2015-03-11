@@ -713,7 +713,11 @@
      (parse-RtoL s parse-comma is-prec-assignment?) lno)))
 
 ; parse-eq* is used where commas are special, for example in an argument list
-(define (parse-eq* s)   (parse-RtoL s parse-cond  is-prec-assignment?))
+(define (parse-eq* s)
+  (let ((lno (input-port-line (ts:port s))))
+    (short-form-function-loc
+     (parse-RtoL s parse-cond is-prec-assignment?) lno)))
+
 ; parse-comma is needed for commas outside parens, for example a = b,c
 (define (parse-comma s) (parse-Nary s parse-cond  '(#\,) 'tuple '() #f))
 (define (parse-or s)    (parse-LtoR s parse-and   is-prec-lazy-or?))
