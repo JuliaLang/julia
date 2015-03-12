@@ -4,6 +4,12 @@
 @test sort(['a':'z';], rev=true) == ['z':-1:'a';]
 @test sortperm([2,3,1]) == [3,1,2]
 @test sortperm!([1,2,3], [2,3,1]) == [3,1,2]
+let s = sub([1,2,3,4], 1:3)
+    r = sortperm!(s, [2,3,1])
+    @test r == [3,1,2]
+    @test r === s
+end
+@test_throws ArgumentError sortperm!(sub([1,2,3,4], 1:4), [2,3,1])
 @test !issorted([2,3,1])
 @test issorted([1,2,3])
 @test reverse([2,3,1]) == [1,3,2]
@@ -80,10 +86,15 @@ a = rand(1:10000, 1000)
 for alg in [InsertionSort, MergeSort]
     b = sort(a, alg=alg)
     @test issorted(b)
+
     ix = sortperm(a, alg=alg)
     b = a[ix]
     @test issorted(b)
     @test a[ix] == b
+
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg)
+    b = a[ix][1:100]
+    @test issorted(b)
 
     sortperm!(ix, a, alg=alg)
     b = a[ix]
@@ -97,6 +108,10 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, rev=true)
     @test a[ix] == b
 
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), alg=alg, rev=true)
+    b = a[ix][1:100]
+    @test issorted(b, rev=true)
+
     sortperm!(ix, a, alg=alg, rev=true)
     b = a[ix]
     @test issorted(b, rev=true)
@@ -109,7 +124,12 @@ for alg in [InsertionSort, MergeSort]
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
+    sortperm!(sub(ix, 1:100), sub(a, 1:100), by=x->1/x)
+    b = a[ix][1:100]
+    @test issorted(b, by=x->1/x)
+
     sortperm!(ix, a, alg=alg, by=x->1/x)
+    b = a[ix]
     @test issorted(b, by=x->1/x)
     @test a[ix] == b
 
