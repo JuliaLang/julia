@@ -178,6 +178,32 @@ if VERSION < v"0.4.0-dev+2485"
     export startswith
 end
 
+if VERSION < v"0.4.0-dev+3732"
+    const calltypes = Dict{Symbol,Symbol}([(:Integer,:integer),
+                                           (:Signed,:signed),
+                                           (:Unsigned,:unsigned),
+                                           (:Int,:int),
+                                           (:Int8,:int8),
+                                           (:Int16,:int16),
+                                           (:Int32,:int32),
+                                           (:Int64,:int64),
+                                           (:Int128,:int128),
+                                           (:UInt,:uint),
+                                           (:UInt8,:uint8),
+                                           (:UInt16,:uint16),
+                                           (:UInt32,:uint32),
+                                           (:UInt64,:uint64),
+                                           (:UInt128,:uint128),
+                                           (:Float16,:float16),
+                                           (:Float32,:float32),
+                                           (:Float64,:float64),
+                                           (:Complex32,:complex32),
+                                           (:Complex64,:complex64),
+                                           (:Complex128,:complex128),
+                                           (:Char,:char),
+                                           (:Bool,:bool)])
+end
+
 function _compat(ex::Expr)
     if ex.head == :call
         f = ex.args[1]
@@ -185,6 +211,8 @@ function _compat(ex::Expr)
             ex = rewrite_dict(ex)
         elseif VERSION < v"0.4.0-dev+129" && (f == :split || f == :rsplit) && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
             ex = rewrite_split(ex, f)
+        elseif VERSION < v"0.4.0-dev+3732" && haskey(calltypes, f) && length(ex.args) > 1
+            ex.args[1] = calltypes[f]
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)
