@@ -40,6 +40,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `@compat rsplit(str, splitter; keywords...)` - the Julia 0.4-style keyword-based `rsplit` function
 
+* `@compat Float64(x)`, `@compat UInt8(x)`,  - the Julia 0.4-style numeric types constructor.
+
 ## Type Aliases
 
 * `typealias AbstractString String` - `String` has been renamed to `AbstractString` [#8872](https://github.com/JuliaLang/julia/pull/8872)
