@@ -3,10 +3,12 @@ include("table.jl")
 @breaking true ->
 function fencedcode(stream::IO, block::MD, config::Config)
     startswith(stream, "```", padding = true) || return false
-    flavor = strip(readline(stream))
+    trailing = strip(readline(stream))
+    flavor = lstrip(trailing, '`')
+    n = 3 + length(trailing) - length(flavor)
     buffer = IOBuffer()
     while !eof(stream)
-        startswith(stream, "```") && break
+        startswith(stream, "`" ^ n) && break
         write(buffer, readline(stream))
     end
     push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
