@@ -86,6 +86,10 @@ function term(io::IO, br::LineBreak, columns)
    println(io)
 end
 
+function term(io::IO, br::HorizontalRule, columns)
+   println(io, " " ^ margin, "-" ^ (columns - 2margin))
+end
+
 term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)
 
 # Inline Content

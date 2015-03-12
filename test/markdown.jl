@@ -33,12 +33,20 @@ foo
 @test md"#title" |> plain == "# title\n"
 @test md"## section" |> plain == "## section\n"
 @test md"## section `foo`" |> plain == "## section `foo`\n"
+@test md"""Hello
+
+---
+World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 
 # HTML output
 
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
 @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
 @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
+@test md"""Hello
+
+---
+World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
 
 # Interpolation / Custom types
 

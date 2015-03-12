@@ -64,6 +64,10 @@ function html(io::IO, md::List)
     end
 end
 
+function html(io::IO, md::HorizontalRule)
+    tag(io, :hr)
+end
+
 html(io::IO, x) = tohtml(io, x)
 
 # Inline elements
