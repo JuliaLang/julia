@@ -36,6 +36,10 @@ function plain(io::IO, list::List)
     end
 end
 
+function plain(io::IO, md::HorizontalRule)
+    println(io, "–" ^ 3)
+end
+
 plain(io::IO, x) = tohtml(io, x)
 
 # Inline elements
