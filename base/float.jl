@@ -416,3 +416,23 @@ Rounding.set_rounding_raw(Float64, Rounding.JL_FE_TONEAREST)
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
 bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
+
+# bit patterns
+reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64,x)
+reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32,x)
+
+sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
+exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
+exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
+exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
+significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
+
+sign_mask(::Type{Float32}) =        0x8000_0000
+exponent_mask(::Type{Float32}) =    0x7f80_0000
+exponent_one(::Type{Float32}) =     0x3f80_0000
+exponent_half(::Type{Float32}) =    0x3f00_0000
+significand_mask(::Type{Float32}) = 0x007f_ffff
+
+significand_bits{T<:FloatingPoint}(::Type{T}) = trailing_ones(significand_mask(T))
+exponent_bits{T<:FloatingPoint}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
+exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))
