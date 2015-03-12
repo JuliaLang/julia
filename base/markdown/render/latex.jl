@@ -80,7 +80,7 @@ function latexinline(io::IO, md::Vector)
 end
 
 function latexinline(io::IO, md::String)
-    print(io, md)
+    latexesc(io, md)
 end
 
 function latexinline(io::IO, md::Bold)
@@ -118,8 +118,21 @@ function latexinline(io::IO, md::Link)
     print(io, "}")
 end
 
+const _latexescape_chars = Dict{Char, String}(
+   '~'=>"{\\sim}", '^'=>"\\^{}", '\\'=>"{\\textbackslash}")
+for ch in "&%\$#_{}"
+    _latexescape_chars[ch] = "\\$ch"
+end
+
+function latexesc(io, s::String)
+    for ch in s
+        print(io, get(_latexescape_chars, ch, ch))
+    end
+end
+
 latex(md) = sprint(latex, md)
 latexinline(md) = sprint(latexinline, md)
+latexesc(s) = sprint(latexesc, s)
 
 writemime(io::IO, ::MIME"text/latex", md::MD) = latex(io, md)
 #writemime(io::IO, ::MIME"text/latex", md::MD) = writemime(io, "text/plain", md)
