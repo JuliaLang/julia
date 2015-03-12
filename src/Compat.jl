@@ -212,7 +212,10 @@ function _compat(ex::Expr)
         elseif VERSION < v"0.4.0-dev+129" && (f == :split || f == :rsplit) && length(ex.args) >= 4 && isexpr(ex.args[4], :kw)
             ex = rewrite_split(ex, f)
         elseif VERSION < v"0.4.0-dev+3732" && haskey(calltypes, f) && length(ex.args) > 1
-            ex.args[1] = calltypes[f]
+            T = ex.args[1]
+            ex = Expr(:(::), Expr(:call, :convert, T, ex.args[2:end]...), T)
+        elseif VERSION < v"0.4.0-dev+3732" && (f == :map && haskey(calltypes, ex.args[2]) && length(ex.args) > 2)
+            ex = Expr(:call, calltypes[ex.args[2]], ex.args[3:end]...)
         end
     end
     return Expr(ex.head, map(_compat, ex.args)...)

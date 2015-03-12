@@ -123,13 +123,12 @@ let convert_funcs_and_types =
                 continue
             end
             x = fill(x, 10)
-            r1 = eval(:(@compat($t($x))))
+            r1 = eval(:(@compat map($t, $x)))
             r2 = df(x)
             @test r1 == r2
             @test typeof(r1) === typeof(r2)
         end
     end
-
     @test (@compat Bool(1))
     @test !(@compat Bool(0))
 end
