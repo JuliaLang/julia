@@ -22,6 +22,12 @@ else
     error("seriously? what is this machine?")
 end
 
+NumberOrChar = Union(Number,Char)
+@vectorize_1arg NumberOrChar ntoh
+@vectorize_1arg NumberOrChar hton
+@vectorize_1arg NumberOrChar ltoh
+@vectorize_1arg NumberOrChar htol
+
 isreadonly(s) = isreadable(s) && !iswritable(s)
 
 ## binary I/O ##
