@@ -5,18 +5,40 @@ reduced_dims(a::AbstractArray, region) = reduced_dims(size(a), region)
 
 # for reductions that keep 0 dims as 0
 reduced_dims0(a::AbstractArray, region) = reduced_dims0(size(a), region)
-reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int) = (d == 1 ? tuple(rd, siz[d+1:N]...) :
-                                                        d == N ? tuple(siz[1:N-1]..., rd) :
-                                                        1 < d < N ? tuple(siz[1:d-1]..., rd, siz[d+1:N]...) :
-                                                        siz)::typeof(siz)
+
+function reduced_dims{N}(siz::NTuple{N,Int}, d::Int, rd::Int)
+    if d < 1
+        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    elseif d == 1
+        return tuple(rd, siz[d+1:N]...)::typeof(siz)
+    elseif 1 < d < N
+        return tuple(siz[1:d-1]..., rd, siz[d+1:N]...)::typeof(siz)
+    elseif d == N
+        return tuple(siz[1:N-1]..., rd)::typeof(siz)
+    else
+        return siz
+    end
+end
 reduced_dims{N}(siz::NTuple{N,Int}, d::Int) = reduced_dims(siz, d, 1)
-reduced_dims0{N}(siz::NTuple{N,Int}, d::Int) = 1 <= d <= N ? reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1)) : siz
+
+function reduced_dims0{N}(siz::NTuple{N,Int}, d::Int)
+    if d < 1
+        throw(ArgumentError("dimension must be ≥ 1, got $d"))
+    elseif d <= N
+        return reduced_dims(siz, d, (siz[d] == 0 ? 0 : 1))
+    else
+        return siz
+    end
+end
 
 function reduced_dims{N}(siz::NTuple{N,Int}, region)
     rsiz = [siz...]
     for i in region
-        if 1 <= i <= N
-            rsiz[i] = 1
+        d = convert(Int, i)::Int
+        if d < 1
+            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
+        elseif d <= N
+            rsiz[d] = 1
         end
     end
     tuple(rsiz...)::typeof(siz)
@@ -25,8 +47,11 @@ end
 function reduced_dims0{N}(siz::NTuple{N,Int}, region)
     rsiz = [siz...]
     for i in region
-        if i <= i <= N
-            rsiz[i] = (rsiz[i] == 0 ? 0 : 1)
+        d = convert(Int, i)::Int
+        if d < 1
+            throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
+        elseif d <= N
+            rsiz[d] = (rsiz[d] == 0 ? 0 : 1)
         end
     end
     tuple(rsiz...)::typeof(siz)
@@ -292,18 +317,48 @@ function gen_findreduction_body(N, f::Function)
     end
 end
 
-stagedfunction _findmin!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})
+# findmin
+stagedfunction _findmin!{T,N}(Rval::AbstractArray,
+                              Rind::AbstractArray,
+                              A::AbstractArray{T,N})
     gen_findreduction_body(N, <)
 end
-findmin!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmin!(initarray!(rval, typemax(R), init), rind, A)
-findmin{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
-                  _findmin!(reducedim_initarray0(A, region, typemax(T)), zeros(Int,reduced_dims0(A,region)), A)
 
-stagedfunction _findmax!{T,N}(Rval::AbstractArray, Rind::AbstractArray, A::AbstractArray{T,N})
+function findmin!{R}(rval::AbstractArray{R},
+                     rind::AbstractArray,
+                     A::AbstractArray;
+                     init::Bool=true)
+    _findmin!(initarray!(rval, typemax(R), init), rind, A)
+end
+
+function findmin{T}(A::AbstractArray{T}, region)
+    if isempty(A)
+        return (similar(A, reduced_dims0(A, region)),
+                zeros(Int, reduced_dims0(A, region)))
+    end
+    return (_findmin!(reducedim_initarray0(A, region, typemax(T)),
+            zeros(Int, reduced_dims0(A, region)), A))
+end
+
+# findmax
+stagedfunction _findmax!{T,N}(Rval::AbstractArray,
+                              Rind::AbstractArray,
+                              A::AbstractArray{T,N})
     gen_findreduction_body(N, >)
 end
-findmax!{R}(rval::AbstractArray{R}, rind::AbstractArray, A::AbstractArray; init::Bool=true) = _findmax!(initarray!(rval, typemin(R), init), rind, A)
-findmax{T}(A::AbstractArray{T}, region) =
-    isempty(A) ? (similar(A,reduced_dims0(A,region)), zeros(Int,reduced_dims0(A,region))) :
-                  _findmax!(reducedim_initarray0(A, region, typemin(T)), zeros(Int,reduced_dims0(A,region)), A)
+
+function findmax!{R}(rval::AbstractArray{R},
+                     rind::AbstractArray,
+                     A::AbstractArray;
+                     init::Bool=true)
+    _findmax!(initarray!(rval, typemin(R), init), rind, A)
+end
+
+function findmax{T}(A::AbstractArray{T}, region)
+    if isempty(A)
+        return (similar(A, reduced_dims0(A,region)),
+                zeros(Int, reduced_dims0(A,region)))
+    end
+    return (_findmax!(reducedim_initarray0(A, region, typemin(T)),
+            zeros(Int, reduced_dims0(A, region)), A))
+end
