@@ -15,7 +15,7 @@ function choosetests(choices = [])
     testnames = [
         "linalg", "core", "keywordargs", "numbers", "strings",
         "dates", "dict", "hashing", "remote", "iobuffer", "staged",
-        "arrayops", "subarray", "reduce", "reducedim", "random",
+        "arrayops", "subarray", "reshapedarray", "reduce", "reducedim", "random",
         "intfuncs", "simdloop", "blas", "fft", "dsp", "sparse",
         "bitarray", "copy", "math", "fastmath", "functional",
         "operators", "path", "ccall",

@@ -614,7 +614,9 @@ immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
 end
 UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
 
-# Enable when #10477 is fixed
+# Special type to handle div by 1
+immutable MultiplicativeInverse1{T} <: MultiplicativeInverse{T} end
+
 # div{T}(a::Integer, b::SignedMultiplicativeInverse{T})   = div(convert(T, a), b)
 # div{T}(a::Integer, b::UnsignedMultiplicativeInverse{T}) = div(convert(T, a), b)
 # rem{T}(a::Integer, b::MultiplicativeInverse{T})         = rem(convert(T, a), b)
@@ -630,14 +632,18 @@ function div{T}(a::T, b::UnsignedMultiplicativeInverse{T})
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     x >>> b.shift
 end
+div{T}(a, ::MultiplicativeInverse1{T}) = convert(T, a)
 
 rem{T}(a::T, b::MultiplicativeInverse{T}) =
     a - div(a, b)*b.divisor
+rem{T}(a, ::MultiplicativeInverse1{T}) = zero(T)
 
 function divrem{T}(a::T, b::MultiplicativeInverse{T})
     d = div(a, b)
     (d, a - d*b.divisor)
 end
+divrem{T}(a, ::MultiplicativeInverse1{T}) = (convert(T, a), zero(T))
 
-multiplicativeinverse(x::Signed) = SignedMultiplicativeInverse(x)
-multiplicativeinverse(x::Unsigned) = UnsignedMultiplicativeInverse(x)
+# Type unstable!
+multiplicativeinverse(x::Signed) = x == 1 ? MultiplicativeInverse1{typeof(x)}() : SignedMultiplicativeInverse(x)
+multiplicativeinverse(x::Unsigned) = x == 1 ? MultiplicativeInverse1{typeof(x)}() : UnsignedMultiplicativeInverse(x)
