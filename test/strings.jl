@@ -1385,7 +1385,6 @@ gstr = Base.GenericString("12");
 @test convert(Symbol, gstr)==symbol("12")
 
 @test getindex(gstr, Bool(1))=='1'
-@test getindex(gstr, 1.0)=='1'
 @test getindex(gstr,Bool(1):Bool(1))=="1"
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
@@ -1398,8 +1397,6 @@ gstr = Base.GenericString("12");
 @test getindex(gstr,AbstractVector([Bool(1):Bool(1);]))=="1"
 
 @test nextind(AbstractArray([Bool(1):Bool(1);]),1)==2
-
-@test checkbounds(gstr,1.0)==true
 
 @test ind2chr(gstr,2)==2
 

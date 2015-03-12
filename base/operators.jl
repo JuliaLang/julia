@@ -301,16 +301,16 @@ end
 
 # convert to integer index
 to_index(i::Int) = i
-to_index(i::Real) = convert(Int,i)::Int
+to_index(i::Integer) = convert(Int,i)::Int
 to_index(r::UnitRange{Int}) = r
 to_index(r::Range{Int}) = r
 to_index(I::UnitRange{Bool}) = find(I)
 to_index(I::Range{Bool}) = find(I)
-to_index{T<:Real}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
-to_index{T<:Real}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
+to_index{T<:Integer}(r::UnitRange{T}) = to_index(first(r)):to_index(last(r))
+to_index{T<:Integer}(r::StepRange{T}) = to_index(first(r)):to_index(step(r)):to_index(last(r))
 to_index(I::AbstractArray{Bool}) = find(I)
 to_index(A::AbstractArray{Int}) = A
-to_index{T<:Real}(A::AbstractArray{T}) = [to_index(x) for x in A]
+to_index{T<:Integer}(A::AbstractArray{T}) = [to_index(x) for x in A]
 to_index(i1, i2)         = to_index(i1), to_index(i2)
 to_index(i1, i2, i3)     = to_index(i1), to_index(i2), to_index(i3)
 to_index(i1, i2, i3, i4) = to_index(i1), to_index(i2), to_index(i3), to_index(i4)

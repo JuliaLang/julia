@@ -893,11 +893,6 @@ function pr8622()
 end
 @test pr8622() == [0,3,1,0]
 
-# commit b718cbc72e90, getindex(::Number, ::Real)
-b718cbc = 5
-@test b718cbc[1.0] == 5
-@test_throws InexactError b718cbc[1.1]
-
 #6828 - size of specific dimensions
 a = Array(Float64, 10)
 @test size(a) == (10,)
