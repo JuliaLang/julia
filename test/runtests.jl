@@ -96,3 +96,40 @@ end
 
 @test readall(pipe(`echo hello`, `sort`)) == "hello\n"
 @test success(pipe(`true`, `true`))
+
+let convert_funcs_and_types =
+    ((integer, :Integer), (signed, :Signed), (unsigned, :Unsigned),
+     (int, :Int), (int8, :Int8), (int16, :Int16), (int32, :Int32),
+     (int64, :Int64), (int128, :Int128), (uint, :UInt),
+     (uint8, :UInt8), (uint16, :UInt16), (uint32, :UInt32),
+     (uint64, :UInt64), (uint128, :UInt128),
+     (float16, :Float16), (float32, :Float32), (float64, :Float64),
+     (complex32,:Complex32), (complex64,:Complex64),(complex128,:Complex128),
+     (char,:Char))
+
+    for (df,t) in convert_funcs_and_types
+        x = @compat UInt8(10)
+        r1 = eval(:(@compat($t($x))))
+        ty = eval(t)
+        if ty.abstract
+            @test issubtype(typeof(r1),ty)
+        else
+            @test typeof(r1) === ty
+        end
+        if VERSION <  v"0.4.0-dev+3732"
+            r2 = df(x)
+            @test r1 === r2
+            if t === :Signed || t === :Complex32
+                continue
+            end
+            x = fill(x, 10)
+            r1 = eval(:(@compat($t($x))))
+            r2 = df(x)
+            @test r1 == r2
+            @test typeof(r1) === typeof(r2)
+        end
+    end
+
+    @test (@compat Bool(1))
+    @test !(@compat Bool(0))
+end
