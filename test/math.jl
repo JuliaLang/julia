@@ -1,8 +1,30 @@
 # frexp,ldexp,significand,exponent
-@test frexp(12.8) == (0.8,4)
-@test ldexp(0.8,4) == 12.8
-@test significand(12.8) == 1.6
-@test exponent(12.8) == 3
+for T in (Float16,Float32,Float64)
+    for z in (zero(T),-zero(T))
+        frexp(z) === (z,0)
+        significand(z) === z
+        @test_throws DomainError exponent(z)
+    end
+
+    for (a,b) in [(T(12.8),T(0.8)),
+                  (prevfloat(realmin(T)), nextfloat(one(T),-2)),
+                  (nextfloat(zero(T),3), T(0.75)),
+                  (nextfloat(zero(T)), T(0.5))]
+
+        n = Int(log2(a/b))
+        @test frexp(a) == (b,n)
+        @test ldexp(b,n) == a
+        @test ldexp(a,-n) == b
+        @test significand(a) == 2b
+        @test exponent(a) == n-1
+
+        @test frexp(-a) == (-b,n)
+        @test ldexp(-b,n) == -a
+        @test ldexp(-a,-n) == -b
+        @test significand(-a) == -2b
+        @test exponent(-a) == n-1
+    end
+end
 
 for T in (Int, Float64, BigFloat)
     @test_approx_eq deg2rad(T(180)) 1pi
