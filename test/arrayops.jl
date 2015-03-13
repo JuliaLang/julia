@@ -1054,3 +1054,38 @@ end
 # PR #10164
 @test eltype(Array{Int}) == Int
 @test eltype(Array{Int,1}) == Int
+
+
+# fill some coverage gaps in array.jl
+# function complex{T<:Real}(A::Real, B::Array{T})
+@test complex(0, [0, 0, 0]) == [0+0im, 0+0im, 0+0im]
+@test complex(0, [0.0, 0.0, 0.0]) == [0.0+0.0im, 0.0+0.0im, 0.0+0.0im]
+
+# function complex{T<:Real}(A::Array{T<:Real,N},B::Real)
+@test complex([0, 0, 0], 0) == [0+0im, 0+0im, 0+0im]
+@test complex([0.0, 0.0, 0.0], 0) == [0.0+0.0im, 0.0+0.0im, 0.0+0.0im]
+
+@test find(1) == [1]
+@test find(1.0) == [1.0]
+@test find(0) == []
+
+@test find(isfinite,1) == [1]
+@test find(isfinite,Inf) == []
+
+#findn() retrieves the inputs used to create the sparse matrix.
+@test findn([]) == []
+@test findn([1,0,1,0]) == [1,3]
+
+@test findn([0 0; 0 0]) == ([],[])
+@test findn([0 1; 0 0]) == ([1],[2])
+@test findn([0 0 1; 1 0 0]) == ([2,1],[1,3])
+@test findn([0 1.0; 0 0]) == ([1],[2])
+@test findn([1 1 0 1]) == ( [1,1,1], [1,2,4] )
+
+@test transpose!([0,0,0], [1 0 1]) == [1,0,1]
+@test transpose!([0 0 0], [1,0,1]) == [1 0 1]
+
+
+
+
+
