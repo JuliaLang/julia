@@ -11,7 +11,7 @@ The Julia standard library contains a range of functions and macros appropriate 
 
 Some general notes:
 
-* Except for functions in built-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`, :mod:`~Base.Graphics`,
+* Except for functions in built-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`,
   :mod:`~Base.Test` and :mod:`~Base.Profile`), all functions documented here are directly available for use in programs.
 * To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
 * Alternatively, ``using Module`` will import all exported ``Module`` functions into the current namespace.

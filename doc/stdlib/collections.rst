@@ -561,7 +561,6 @@ Indexable Collections
 Fully implemented by:
 
 - :obj:`Array`
-- :obj:`DArray`
 - :obj:`BitArray`
 - :obj:`AbstractArray`
 - :obj:`SubArray`
