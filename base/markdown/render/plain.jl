@@ -29,8 +29,8 @@ function plain(io::IO, p::Paragraph)
 end
 
 function plain(io::IO, list::List)
-    for item in list.items
-        print(io, "  * ")
+    for (i, item) in enumerate(list.items)
+        print(io, list.ordered ? "$i. " : "  * ")
         plaininline(io, item)
         println(io)
     end
