@@ -177,7 +177,7 @@ scale!{T<:Base.LinAlg.BlasReal}(X::Array{T}, s::Complex) = error("scale!: Cannot
 @deprecate rsplit(x,y,l::Integer) rsplit(x,y;limit=l)
 @deprecate rsplit(x,y,k::Bool) rsplit(x,y;keep=k)
 
-export UdpSocket
+export UdpSocket, TcpSocket, IpAddr
 const TcpSocket = TCPSocket
 const UdpSocket = UDPSocket
 const IpAddr = IPAddr
