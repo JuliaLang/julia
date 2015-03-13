@@ -340,7 +340,11 @@ void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
     MCCodeEmitter *CE = 0;
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
+#ifdef LLVM37
+        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
+#else
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+#endif
 #ifdef LLVM34
         MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
 #else
