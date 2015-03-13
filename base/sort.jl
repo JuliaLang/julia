@@ -355,23 +355,46 @@ defalg(v::AbstractArray) = DEFAULT_STABLE
 defalg{T<:Number}(v::AbstractArray{T}) = DEFAULT_UNSTABLE
 
 sort!(v::AbstractVector, alg::Algorithm, order::Ordering) = sort!(v,1,length(v),alg,order)
-sort!(v::AbstractVector; alg::Algorithm=defalg(v),
-    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
+
+function sort!(v::AbstractVector;
+               alg::Algorithm=defalg(v),
+               lt::Function=isless,
+               by::Function=identity,
+               rev::Bool=false,
+               order::Ordering=Forward)
     sort!(v, alg, ord(lt,by,rev,order))
+end
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
 
 ## sortperm: the permutation to sort an array ##
 
-sortperm(v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
-    lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward) =
-    sort!([1:length(v);], alg, Perm(ord(lt,by,rev,order),v))
+function sortperm(v::AbstractVector;
+                  alg::Algorithm=DEFAULT_UNSTABLE,
+                  lt::Function=isless,
+                  by::Function=identity,
+                  rev::Bool=false,
+                  order::Ordering=Forward)
+    sort!(collect(1:length(v)), alg, Perm(ord(lt,by,rev,order),v))
+end
 
-function sortperm!{I<:Integer}(x::Vector{I}, v::AbstractVector; alg::Algorithm=DEFAULT_UNSTABLE,
-                               lt::Function=isless, by::Function=identity, rev::Bool=false, order::Ordering=Forward,
+function sortperm!{I<:Integer}(x::AbstractVector{I}, v::AbstractVector;
+                               alg::Algorithm=DEFAULT_UNSTABLE,
+                               lt::Function=isless,
+                               by::Function=identity,
+                               rev::Bool=false,
+                               order::Ordering=Forward,
                                initialized::Bool=false)
-    length(x) != length(v) && throw(ArgumentError("Index vector must be the same length as the source vector."))
-    !initialized && @inbounds for i = 1:length(v); x[i] = i; end
+    lx = length(x)
+    lv = length(v)
+    if lx != lv
+        throw(ArgumentError("index vector must be the same length as the source vector, $lx != $lv"))
+    end
+    if !initialized
+        @inbounds for i = 1:lv
+            x[i] = i
+        end
+    end
     sort!(x, alg, Perm(ord(lt,by,rev,order),v))
 end
 
