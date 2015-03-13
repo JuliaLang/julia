@@ -409,7 +409,7 @@ static value_t julia_to_scm(jl_value_t *v)
 static void array_to_list(jl_array_t *a, value_t *pv)
 {
     if (jl_array_len(a) > 300000)
-        lerror(MemoryError, "expression too large");
+        lerror(OutOfMemoryError, "expression too large");
     value_t temp;
     for(long i=jl_array_len(a)-1; i >= 0; i--) {
         *pv = fl_cons(FL_NIL, *pv);

@@ -133,7 +133,7 @@ export
     Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
-    InexactError, InterruptException, MemoryError, OverflowError,
+    InexactError, InterruptException, OutOfMemoryError, OverflowError,
     StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
@@ -215,7 +215,7 @@ immutable DivideError        <: Exception end
 immutable DomainError        <: Exception end
 immutable OverflowError      <: Exception end
 immutable InexactError       <: Exception end
-immutable MemoryError        <: Exception end
+immutable OutOfMemoryError   <: Exception end
 immutable StackOverflowError <: Exception end
 immutable UndefRefError      <: Exception end
 immutable UndefVarError      <: Exception
