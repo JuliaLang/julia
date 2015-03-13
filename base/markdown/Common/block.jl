@@ -119,25 +119,35 @@ type List
     items::Vector{Any}
     ordered::Bool
 
-    List(x::AbstractVector) = new(x)
+    List(x::AbstractVector, b::Bool) = new(x, b)
+    List(x::AbstractVector) = new(x, false)
+    List(b::Bool) = new(Any[], b)
 end
 
 List(xs...) = List(vcat(xs...))
 
-const bullets = ["* ", "• ", "+ ", "- "]
+const bullets = "*•+-"
+const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 
 # Todo: ordered lists, inline formatting
 function list(stream::IO, block::MD, config::Config)
     withstream(stream) do
         skipwhitespace(stream)
-        startswith(stream, bullets) || return false
-        the_list = List()
+        b = startswith(stream, num_or_bullets)
+        (b == nothing || b == "") && return false
+        ordered = !(b[1] in bullets)
+        if ordered
+            b = b[end - 1] == '.' ? r"^\d+\. " : r"^\d+\) "
+            # TODO start value
+        end
+        the_list = List(ordered)
+
         buffer = IOBuffer()
         fresh_line = false
         while !eof(stream)
             if fresh_line
                 skipwhitespace(stream)
-                if startswith(stream, bullets)
+                if startswith(stream, b) != ""
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
