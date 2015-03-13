@@ -179,29 +179,32 @@ if VERSION < v"0.4.0-dev+2485"
 end
 
 if VERSION < v"0.4.0-dev+3732"
-    const calltypes = Dict{Symbol,Symbol}([(:Integer,:integer),
-                                           (:Signed,:signed),
-                                           (:Unsigned,:unsigned),
-                                           (:Int,:int),
-                                           (:Int8,:int8),
-                                           (:Int16,:int16),
-                                           (:Int32,:int32),
-                                           (:Int64,:int64),
-                                           (:Int128,:int128),
-                                           (:UInt,:uint),
-                                           (:UInt8,:uint8),
-                                           (:UInt16,:uint16),
-                                           (:UInt32,:uint32),
-                                           (:UInt64,:uint64),
-                                           (:UInt128,:uint128),
-                                           (:Float16,:float16),
-                                           (:Float32,:float32),
-                                           (:Float64,:float64),
-                                           (:Complex32,:complex32),
-                                           (:Complex64,:complex64),
-                                           (:Complex128,:complex128),
-                                           (:Char,:char),
-                                           (:Bool,:bool)])
+    const calltypes = Dict{Symbol,Symbol}()
+    for (k,v) in [(:Integer,:integer),
+                   (:Signed,:signed),
+                   (:Unsigned,:unsigned),
+                   (:Int,:int),
+                   (:Int8,:int8),
+                   (:Int16,:int16),
+                   (:Int32,:int32),
+                   (:Int64,:int64),
+                   (:Int128,:int128),
+                   (:UInt,:uint),
+                   (:UInt8,:uint8),
+                   (:UInt16,:uint16),
+                   (:UInt32,:uint32),
+                   (:UInt64,:uint64),
+                   (:UInt128,:uint128),
+                   (:Float16,:float16),
+                   (:Float32,:float32),
+                   (:Float64,:float64),
+                   (:Complex32,:complex32),
+                   (:Complex64,:complex64),
+                   (:Complex128,:complex128),
+                   (:Char,:char),
+                   (:Bool,:bool)]
+        calltypes[k] = v
+    end
 end
 
 function _compat(ex::Expr)
