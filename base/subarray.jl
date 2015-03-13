@@ -3,7 +3,7 @@ typealias ViewIndex Union(Int, NonSliceIndex)
 typealias RangeIndex Union(Int, Range{Int}, UnitRange{Int}, Colon)
 
 # LD is the last dimension up through which this object has efficient
-# linear indexing. If LD==N, then the object itself has efficient
+# linear indexing. If LD==length(I), then the object itself has efficient
 # linear indexing.
 immutable SubArray{T,N,P<:AbstractArray,I<:(ViewIndex...),LD} <: AbstractArray{T,N}
     parent::P
@@ -40,28 +40,45 @@ function _slice(A, I)
     slice_unsafe(A, I)
 end
 
-stagedfunction slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
+# The most complicated part of this is matching the axes between the
+# input index tuples (denoted by J), the index tuples that get stored
+# in the view (denoted by I), and the overall dimensionality of the
+# view.
+# The complexities increase when you create a view-of-a-view, because
+# then there is also the index tuple of the parent view (denoted IV)
+# to consider.
+#
+# Examples:
+#    S1 = sub(A::Matrix, 2, 3:5)    ndims(S1) == length(I) == length(J) == 2
+#    S2 = slice(A::Matrix, 2, 3:5)  ndims(S2) == 1, length(I) == length(J) == 2
+#    S3 = sub(A::Matrix, 4:17)      ndims(S3) == length(I) == length(J) == 1
+#    S4 = sub(S2, 1:2)              ndims(S4) == length(J) == 1, length(I) == 2
+# S3 addresses the trailing dimensions of the parent by linear indexing.
+# For S4, J[1] corresponds to I[2], because of the slice along
+# dimension 1 in S2
+
+stagedfunction slice_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
-    for k = 1:length(I)
-        i = I[k]
-        if !(i <: Real)
+    for Jindex = 1:length(J)
+        j = J[Jindex]
+        if !(j <: Real)
             N += 1
-            push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :A, :I))
+            push!(sizeexprs, dimsizeexpr(j, Jindex, length(J), :A, :J))
         end
     end
     dims = :(tuple($(sizeexprs...)))
-    LD = subarray_linearindexing_dim(A, I)
-    strideexpr = stride1expr(A, I, :A, :I, LD)
-    exfirst = first_index_expr(:A, :I, length(I))
+    LD = subarray_linearindexing_dim(A, J)
+    strideexpr = stride1expr(A, J, :A, :J, LD)
+    exfirst = first_index_expr(:A, :J, length(J))
     quote
         $exfirst
-        SubArray{$T,$N,$A,$I,$LD}(A, I, $dims, f, $strideexpr)
+        SubArray{$T,$N,$A,$J,$LD}(A, J, $dims, f, $strideexpr)
     end
 end
 
 # Conventional style (drop trailing singleton dimensions, keep any
-# other singletons)
+# other singletons by converting them to ranges, e.g., 3:3)
 sub(A::AbstractArray, I::ViewIndex...) = _sub(A, I)
 sub(A::AbstractArray, I::(ViewIndex...)) = _sub(A, I)
 function _sub(A, I)
@@ -69,32 +86,33 @@ function _sub(A, I)
     sub_unsafe(A, I)
 end
 
-stagedfunction sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, I::IndTypes)
+stagedfunction sub_unsafe{T,NP,IndTypes}(A::AbstractArray{T,NP}, J::IndTypes)
     sizeexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
     Iexprs = Array(Any, 0)
-    N = length(I)
-    while N > 0 && I[N] <: Real
+    N = length(J)
+    while N > 0 && J[N] <: Real
         N -= 1
     end
-    for k = 1:length(I)
-        if k <= N
-            push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :A, :I))
+    for Jindex = 1:length(J)
+        j = J[Jindex]
+        if Jindex <= N
+            push!(sizeexprs, dimsizeexpr(j, Jindex, length(J), :A, :J))
         end
-        if k < N && I[k] <: Real
+        if Jindex < N && j <: Real
             push!(Itypes, UnitRange{Int})
-            push!(Iexprs, :(Int(I[$k]):Int(I[$k])))
+            push!(Iexprs, :(Int(J[$Jindex]):Int(J[$Jindex])))
         else
-            push!(Itypes, I[k])
-            push!(Iexprs, :(I[$k]))
+            push!(Itypes, j)
+            push!(Iexprs, :(J[$Jindex]))
         end
     end
     dims = :(tuple($(sizeexprs...)))
     Iext = :(tuple($(Iexprs...)))
     It = tuple(Itypes...)
-    LD = subarray_linearindexing_dim(A, I)
-    strideexpr = stride1expr(A, I, :A, :I, LD)
-    exfirst = first_index_expr(:A, :I, length(It))
+    LD = subarray_linearindexing_dim(A, J)
+    strideexpr = stride1expr(A, J, :A, :J, LD)
+    exfirst = first_index_expr(:A, :J, length(It))
     quote
         $exfirst
         SubArray{$T,$N,$A,$It,$LD}(A, $Iext, $dims, f, $strideexpr)
@@ -103,68 +121,87 @@ end
 
 # Constructing from another SubArray
 # This "pops" the old SubArray and creates a more compact one
-stagedfunction slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
+stagedfunction slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
     N = 0
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
-    k = 0  # index into I
-    LD, die_next_vector, Ilast, isLDdone = 0, false, Void, false  # for linear indexing inference
-    for j = 1:length(IV)
-        if IV[j] <: Real
-            push!(indexexprs, :(V.indexes[$j]))
-            push!(Itypes, IV[j])
+    # The next two Ints, if nonzero, record information about the place
+    # in the index tuple at which trailing dimensions got packed into a
+    # single Vector{Int}. For stride1 computation, we need to keep track
+    # of whether the index that triggered this had uniform stride.
+    #   Iindex_lin is the spot in the resulting index tuple
+    #   Jindex_lin is the corresponding spot in the input index tuple
+    Iindex_lin = Jindex_lin = 0
+    # Linear indexing inference makes use of the following variables:
+    #   LD: the last dimension up through which linear indexing is efficient
+    #   isLDdone: true if we've quit incrementing LD
+    #   die_next_vector: if true, stop incrementing LD on the next
+    #      "extended" input index
+    #   jprev: holds the previous input index type
+    LD, die_next_vector, jprev, isLDdone = 0, false, Void, false  # for linear indexing inference
+    Jindex = 0
+    for IVindex = 1:length(IV)
+        iv = IV[IVindex]
+        if iv <: Real
+            push!(indexexprs, :(V.indexes[$IVindex]))
+            push!(Itypes, iv)
             if !isLDdone
                 LD += 1
             end
         else
-            k += 1
+            Jindex += 1
+            j = J[Jindex]
+            if Jindex < length(J) || Jindex == NV || IVindex == length(IV)
+                if !(j <: Real)
+                    N += 1
+                    push!(sizeexprs, dimsizeexpr(j, Jindex, length(J), :V, :J))
+                end
+                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(Itypes, rangetype(iv, j))
+            else
+                # We have a linear index that spans more than one
+                # dimension of the parent
+                N += 1
+                push!(sizeexprs, dimsizeexpr(j, Jindex, length(J), :V, :J))
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
+                push!(Itypes, Array{Int, 1})
+                Iindex_lin = length(Itypes)
+                Jindex_lin = Jindex
+                break
+            end
             if !isLDdone
                 if LD < PLD
                     LD += 1
-                    Ilast, LD, die_next_vector, isdone = nextLD(Ilast, I[k], LD, die_next_vector)
+                    jprev, LD, die_next_vector, isdone = nextLD(jprev, j, LD, die_next_vector)
                     isLDdone |= isdone
                 else
-                    if I[k] <: Real
+                    if j <: Real
                         LD += 1
                     else
                         isLDdone = true
                     end
                 end
             end
-            if k < length(I) || k == NV || j == length(IV)
-                if !(I[k] <: Real)
-                    N += 1
-                    push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :V, :I))
-                end
-                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
-                push!(Itypes, rangetype(IV[j], I[k]))
-            else
-                # We have a linear index that spans more than one dimension of the parent
-                N += 1
-                push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :V, :I))
-                push!(indexexprs, :(merge_indexes(V, V.indexes[$j:end], size(V.parent)[$j:end], I[$k])))
-                push!(Itypes, Array{Int, 1})
-                break
-            end
         end
     end
-    for i = k+1:length(I)
-        if !(I[i] <: Real)
+    for Jind = Jindex+1:length(J)
+        j = J[Jind]
+        if !(j <: Real)
             N += 1
-            push!(sizeexprs, dimsizeexpr(I[i], i, length(I), :V, :I))
+            push!(sizeexprs, dimsizeexpr(j, Jind, length(J), :V, :J))
             isLDdone = true
         elseif !isLDdone
             LD += 1
         end
-        push!(indexexprs, :(I[$i]))
-        push!(Itypes, I[i])
+        push!(indexexprs, :(J[$Jind]))
+        push!(Itypes, j)
     end
     Inew = :(tuple($(indexexprs...)))
     dims = :(tuple($(sizeexprs...)))
     It = tuple(Itypes...)
     LD = max(LD, subarray_linearindexing_dim(PV, It))
-    strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD)
+    strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD, :J, Iindex_lin, Jindex_lin)
     exfirst = first_index_expr(:(V.parent), :Inew, length(It))
     quote
         Inew = $Inew
@@ -173,52 +210,59 @@ stagedfunction slice_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}
     end
 end
 
-stagedfunction sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, I::IndTypes)
-    N = length(I)
-    while N > 0 && I[N] <: Real
+stagedfunction sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, J::IndTypes)
+    N = length(J)
+    while N > 0 && J[N] <: Real
         N -= 1
     end
     sizeexprs = Array(Any, 0)
     indexexprs = Array(Any, 0)
     Itypes = Array(Any, 0)
+    ItypesLD = Array(Any, 0)
     preexprs = Array(Any, 0)
-    k = 0
-    LD, die_next_vector, Ilast, isLDdone = 0, false, Void, false  # for linear indexing inference
-    for j = 1:length(IV)
-        if IV[j] <: Real
-            push!(indexexprs, :(V.indexes[$j]))
-            push!(Itypes, IV[j])
+    LD, die_next_vector, jprev, isLDdone = 0, false, Void, false
+    Jindex = 0
+    for IVindex = 1:length(IV)
+        iv = IV[IVindex]
+        if iv <: Real
+            push!(indexexprs, :(V.indexes[$IVindex]))
+            push!(Itypes, iv)
+            push!(ItypesLD, iv)
             if !isLDdone
                 LD += 1
             end
         else
-            k += 1
-            if k <= N
-                push!(sizeexprs, dimsizeexpr(I[k], k, length(I), :V, :I))
+            Jindex += 1
+            j = J[Jindex]
+            if Jindex <= N
+                push!(sizeexprs, dimsizeexpr(j, Jindex, length(J), :V, :J))
             end
-            if k < N && I[k] <: Real
+            if Jindex < N && j <: Real
                 # convert scalar to a range
                 sym = gensym()
-                push!(preexprs, :($sym = reindex(V.indexes[$j], Int(I[$k]))))
+                push!(preexprs, :($sym = reindex(V.indexes[$IVindex], Int(J[$Jindex]))))
                 push!(indexexprs, :($sym:$sym))
                 push!(Itypes, UnitRange{Int})
-            elseif k < length(I) || k == NV || j == length(IV)
+                push!(ItypesLD, j)
+            elseif Jindex < length(J) || Jindex == NV || IVindex == length(IV)
                 # simple indexing
-                push!(indexexprs, :(reindex(V.indexes[$j], I[$k])))
-                push!(Itypes, rangetype(IV[j], I[k]))
+                push!(indexexprs, :(reindex(V.indexes[$IVindex], J[$Jindex])))
+                push!(Itypes, rangetype(iv, j))
+                push!(ItypesLD, Itypes[end])
             else
                 # We have a linear index that spans more than one dimension of the parent
-                push!(indexexprs, :(merge_indexes(V, V.indexes[$j:end], size(V.parent)[$j:end], I[$k])))
+                push!(indexexprs, :(merge_indexes(V, V.indexes[$IVindex:end], size(V.parent)[$IVindex:end], J[$Jindex], $Jindex)))
                 push!(Itypes, Array{Int, 1})
+                push!(ItypesLD, Itypes[end])
                 break
             end
             if !isLDdone
                 if LD < PLD
                     LD += 1
-                    Ilast, LD, die_next_vector, isdone = nextLD(Ilast, I[k], LD, die_next_vector)
+                    jprev, LD, die_next_vector, isdone = nextLD(jprev, j, LD, die_next_vector)
                     isLDdone |= isdone
                 else
-                    if I[k] <: Real
+                    if j <: Real
                         LD += 1
                     else
                         isLDdone = true
@@ -227,18 +271,21 @@ stagedfunction sub_unsafe{T,NV,PV,IV,PLD,IndTypes}(V::SubArray{T,NV,PV,IV,PLD}, 
             end
         end
     end
-    for i = k+1:length(I)
-        if i <= N
-            push!(sizeexprs, dimsizeexpr(I[i], i, length(I), :V, :I))
+    for Jind = Jindex+1:length(J)
+        j = J[Jind]
+        if Jind <= N
+            push!(sizeexprs, dimsizeexpr(j, Jind, length(J), :V, :J))
         end
-        push!(indexexprs, :(I[$i]))
-        push!(Itypes, I[i])
+        push!(indexexprs, :(J[$Jind]))
+        push!(Itypes, j)
+        push!(ItypesLD, Itypes[end])
     end
     Inew = :(tuple($(indexexprs...)))
     dims = :(tuple($(sizeexprs...)))
     It = tuple(Itypes...)
+    ItLD = tuple(ItypesLD...)
     LD = max(LD, subarray_linearindexing_dim(PV, It))
-    strideexpr = stride1expr(PV, It, :(V.parent), :Inew, LD)
+    strideexpr = stride1expr(PV, ItLD, :(V.parent), :Inew, LD)
     preex = isempty(preexprs) ? nothing : Expr(:block, preexprs...)
     exfirst = first_index_expr(:(V.parent), :Inew, length(It))
     quote
@@ -294,6 +341,7 @@ getindex(::Colon, i) = i
 
 step(::Colon) = 1
 first(::Colon) = 1
+in(::Int, ::Colon) = true
 
 ## Strides
 stagedfunction strides{T,N,P,I}(V::SubArray{T,N,P,I})
@@ -315,7 +363,7 @@ end
 
 stride(V::SubArray, d::Integer) = d <= ndims(V) ? strides(V)[d] : strides(V)[end] * size(V)[end]
 
-function stride1expr(Atype::Type, Itypes::Tuple, Aexpr, Inewsym, LD)
+function stride1expr(Atype::Type, Itypes::Tuple, Aexpr, Isym, LD, Jsym=Isym, Iindex_lin=0, Jindex_lin=0)
     if LD == 0
         return 0
     end
@@ -325,12 +373,19 @@ function stride1expr(Atype::Type, Itypes::Tuple, Aexpr, Inewsym, LD)
         if I <: Real
             ex = :($ex * size($Aexpr, $d))
         else
-            ex = :($ex * step($Inewsym[$d]))
+            if d == Iindex_lin
+                ex = :($ex * step_sa($Jsym[$Jindex_lin]))
+            else
+                ex = :($ex * step($Isym[$d]))
+            end
             break
         end
     end
     ex
 end
+
+step_sa(arg) = step(arg)
+step_sa(::Integer) = 1
 
 # This might be conservative, but better safe than sorry
 function iscontiguous{T,N,P,I,LD}(::Type{SubArray{T,N,P,I,LD}})
@@ -373,20 +428,20 @@ function first_index_expr(Asym, Isym::Symbol, n::Int)
 end
 
 # Detecting whether one can support fast linear indexing
-function nextLD(Ilast, I, LD, die_next_vector)
+function nextLD(jprev, j, LD, die_next_vector)
     isdone = false
-    if I <: Real
-        if Ilast != Void && !(Ilast <: Real)
+    if j <: Real
+        if jprev != Void && !(jprev <: Real)
             die_next_vector = true
         end
-    elseif die_next_vector || I <: Vector
+    elseif die_next_vector || j <: Vector
         LD -= 1
         isdone = true
-    elseif I == Colon
-    elseif I <: UnitRange
+    elseif j == Colon
+    elseif j <: UnitRange
         die_next_vector = true
-    elseif I <: Range
-        if !(Ilast == Void || Ilast <: Real)
+    elseif j <: Range
+        if !(jprev == Void || jprev <: Real)
             LD -= 1
             isdone = true
         end
@@ -394,20 +449,20 @@ function nextLD(Ilast, I, LD, die_next_vector)
     else
         error("This shouldn't happen (linear indexing inference)")
     end
-    Ilast = I
-    return Ilast, LD, die_next_vector, isdone
+    jprev = j
+    return jprev, LD, die_next_vector, isdone
 end
 
 function subarray_linearindexing_dim{A<:AbstractArray}(::Type{A}, It::Tuple)
     isa(Base.linearindexing(A), Base.LinearSlow) && return 0
     isempty(It) && return 0
-    Ilast = Void
+    jprev = Void
     LD = 0
     die_next_vector = false
     while LD < length(It)
         LD += 1
         I = It[LD]
-        Ilast, LD, die_next_vector, isdone = nextLD(Ilast, I, LD, die_next_vector)
+        jprev, LD, die_next_vector, isdone = nextLD(jprev, I, LD, die_next_vector)
         if isdone
             break
         end
