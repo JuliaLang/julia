@@ -1079,9 +1079,13 @@ function isposdef{Tv<:VTypes,Ti}(A::SparseMatrixCSC{Tv,Ti})
     if !ishermitian(A)
         return false
     end
-    f = cholfact(A)
-    s = unsafe_load(f.p)
-    return s.minor == size(A,1)
+    try
+        f = cholfact(A)
+    catch e
+        isa(e, LinAlg.PosDefException) || e
+        return false
+    end
+    true
 end
 
 function issym(A::Sparse)

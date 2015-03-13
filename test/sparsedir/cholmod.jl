@@ -385,6 +385,7 @@ for elty in (Float64, Complex{Float64})
     @test_approx_eq logdet(ldltfact(A1pd)) logdet(full(A1pd))
     @test isposdef(A1pd)
     @test !isposdef(A1)
+    @test !isposdef(A1 + A1')
     if elty <: Real
         @test CHOLMOD.issym(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
