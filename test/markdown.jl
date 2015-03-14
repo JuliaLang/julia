@@ -22,6 +22,15 @@ foo
 ```
 """ == MD(Code("julia", "foo"))
 
+@test md"""
+* one
+* two
+
+1. pirate
+2. ninja
+3. zombie""" == Markdown.MD([Markdown.List(["one", "two"]),
+                             Markdown.List(["pirate", "ninja", "zombie"], true)])
+
 @test md"Foo [bar]" == MD(Paragraph("Foo [bar]"))
 @test md"Foo [bar](baz)" != MD(Paragraph("Foo [bar](baz)"))
 @test md"Foo \[bar](baz)" == MD(Paragraph("Foo [bar](baz)"))
@@ -37,6 +46,8 @@ foo
 # HTML output
 
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
+@test md"1. Hello" |> html == "<ol><li>Hello</li>\n</ol>\n"
+@test md"* World" |> html == "<ul><li>World</li>\n</ul>\n"
 @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
 @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
 
