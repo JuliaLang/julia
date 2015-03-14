@@ -119,7 +119,7 @@ function cpu_info()
         cpus[i] = CPUinfo(unsafe_load(UVcpus[1],i))
     end
     ccall(:uv_free_cpu_info, Void, (Ptr{UV_cpu_info_t}, Int32), UVcpus[1], count[1])
-    cpus
+    return cpus
 end
 
 function uptime()
@@ -165,16 +165,13 @@ const shlib_ext = dlext
     end
 
     # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback( di_ptr::Ptr{dl_phdr_info}, size::Csize_t, dynamic_libraries_ptr::Ptr{Array{AbstractString,1}} )
-        di = unsafe_load(di_ptr)
-
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
         # Skip over objects without a path (as they represent this own object)
         name = bytestring(di.name)
         if !isempty(name)
-            dynamic_libraries = unsafe_pointer_to_objref( dynamic_libraries_ptr )
-            push!(dynamic_libraries, name )
+            push!(dynamic_libraries, name)
         end
-        convert(Cint, 0)::Cint
+        return convert(Cint, 0)::Cint
     end
 end #@linux_only
 
@@ -183,8 +180,8 @@ function dllist()
 
     @linux_only begin
         const callback = cfunction(dl_phdr_info_callback, Cint,
-                                   (Ptr{dl_phdr_info}, Csize_t, Ptr{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ptr{Void}), callback, pointer_from_objref(dynamic_libraries))
+                                   (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Any), callback, dynamic_libraries)
     end
 
     @osx_only begin
@@ -201,7 +198,7 @@ function dllist()
         ccall(:jl_dllist, Cint, (Any,), dynamic_libraries)
     end
 
-    dynamic_libraries
+    return dynamic_libraries
 end
 
 function dlpath( handle::Ptr{Void} )
@@ -211,7 +208,7 @@ function dlpath( handle::Ptr{Void} )
     return s
 end
 
-function dlpath{T<:Union(AbstractString, Symbol)}(libname::T)
+function dlpath(libname::Union(AbstractString,Symbol))
     handle = dlopen(libname)
     path = dlpath(handle)
     dlclose(handle)
@@ -222,7 +219,7 @@ function get_process_title()
     buf = zeros(Uint8, 512)
     err = ccall(:uv_get_process_title, Cint, (Ptr{Uint8}, Cint), buf, 512)
     uv_error("get_process_title", err)
-    bytestring(pointer(buf))
+    return bytestring(pointer(buf))
 end
 function set_process_title(title::AbstractString)
     err = ccall(:uv_set_process_title, Cint, (Ptr{UInt8},), bytestring(title))
