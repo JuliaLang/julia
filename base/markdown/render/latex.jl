@@ -66,6 +66,10 @@ function writemime(io::IO, ::MIME"text/latex", md::List)
     end
 end
 
+function writemime(io::IO, ::MIME"text/latex", md::HorizontalRule)
+    println(io, "\\rule{\\textwidth}{1pt}")
+end
+
 # Inline elements
 
 function writemime(io::IO, ::MIME"text/latex", md::Plain)
