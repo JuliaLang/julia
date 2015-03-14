@@ -112,3 +112,12 @@ stagedfunction f9088(x, a=5)
     :(x+a)
 end
 @test f9088(7) == 12
+
+# issue #10502
+stagedfunction f10502(x...)
+    :($x)
+end
+f10502() = ()
+@test f10502(1) == (Int,)
+@test f10502(1,2) == (Int,Int)
+@test f10502(1,2,3) == (Int,Int,Int)
