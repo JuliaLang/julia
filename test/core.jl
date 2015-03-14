@@ -2247,4 +2247,5 @@ let x,y,f
     y = f() # invoke llvm constant folding
     @test Int(0x468ace) === Int(y)
     @test x !== y
+    @test string(y) == "Int24(0x468ace)"
 end
