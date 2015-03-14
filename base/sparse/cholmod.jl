@@ -21,13 +21,26 @@ using Base.SparseMatrix: AbstractSparseMatrix, SparseMatrixCSC, increment, indty
 
 include("cholmod_h.jl")
 
+### These offsets are defined in SuiteSparse_wrapper.c
+const common_size = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
+
+const cholmod_com_offsets = Array(Csize_t, 19)
+ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
+    Void, (Ptr{Csize_t},), cholmod_com_offsets)
+
+const common_supernodal = (1:4) + cholmod_com_offsets[4]
+const common_final_ll = (1:4) + cholmod_com_offsets[7]
+const common_print = (1:4) + cholmod_com_offsets[13]
+const common_itype = (1:4) + cholmod_com_offsets[18]
+const common_dtype = (1:4) + cholmod_com_offsets[19]
+
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm) end
 
 for Ti in IndexTypes
     @eval begin
         function common(::Type{$Ti})
-            a = fill(0xff, cholmod_com_sz)
+            a = fill(0xff, common_size)
             @isok ccall((@cholmod_name "start" $Ti
                 , :libcholmod), Cint, (Ptr{UInt8},), a)
             set_print_level(a, 0) # no printing from CHOLMOD by default
@@ -36,15 +49,66 @@ for Ti in IndexTypes
     end
 end
 
-### These offsets are defined in SuiteSparse_wrapper.c
-const cholmod_com_offsets = Array(Csize_t, 19)
-ccall((:jl_cholmod_common_offsets, :libsuitesparse_wrapper),
-      Void, (Ptr{Csize_t},), cholmod_com_offsets)
-const common_supernodal = (1:4) + cholmod_com_offsets[4]
-const common_final_ll = (1:4) + cholmod_com_offsets[7]
-const common_print = (1:4) + cholmod_com_offsets[13]
-const common_itype = (1:4) + cholmod_com_offsets[18]
-const common_dtype = (1:4) + cholmod_com_offsets[19]
+const version_array = Array(Cint, 3)
+if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
+    ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
+else
+    ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
+end
+const version = VersionNumber(version_array...)
+
+function __init__()
+    if dlsym(dlopen("libcholmod"), :cholmod_version) == C_NULL
+        warn("""
+
+            CHOLMOD version incompatibility
+
+            Julia was compiled with CHOLMOD version $version, but is currently linked with a
+            version older than 2.1.0. This might cause Julia to terminate when working with
+            sparse matrices for operations involving factorization of a matrix, e.g. solving
+            systems of equations with \\.
+
+            It is recommended that you either upgrade the package that provides CHOLMOD or
+            download the OS X or generic Linux binary from www.julialang.org, which is
+            shipped with the correct versions of all dependencies.
+        """)
+    else
+        tmp = Array(Cint, 3)
+        ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
+        ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), tmp)
+        if tmp != version_array
+            warn("""
+
+                CHOLMOD version incompatibility
+
+                Julia was compiled with CHOLMOD version $version, but is currently linked
+                with version $(VersionNumber(tmp...)). This might cause Julia to terminate when working
+                with sparse matrices for operations involving factorization of a matrix,
+                e.g. solving systems of equations with \\.
+
+                It is recommended that you either upgrade the package that provides CHOLMOD
+                or download the OS X or generic Linux binary from www.julialang.org, which
+                is shipped with the correct versions of all dependencies.
+            """)
+        end
+    end
+
+    intsize = Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,()))
+    if intsize != 4length(IndexTypes)
+        warn("""
+
+            CHOLMOD integer size incompatibility
+
+            Julia was compiled with a version of CHOLMOD that supported $(32length(IndexTypes)) bit integers,
+            but is currently linked with version that supports $(8intsize) integers. This might
+            cause Julia to terminate when working with sparse matrices for operations
+            involving factorization of a matrix, e.g. solving systems of equations with \\.
+
+            This problem can be fixed by downloading the OS X or generic Linux binary from
+            www.julialang.org, which are shipped with the correct versions of all dependencies.
+        """)
+    end
+end
 
 function set_print_level(cm::Array{UInt8}, lev::Integer)
     cm[common_print] = reinterpret(UInt8, [Int32(lev)])
