@@ -125,6 +125,11 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
+#ifdef LLVM33
+    #define LLVM_FP(a,b) APFloat(a,b)
+#else
+    #define LLVM_FP(a,b) APFloat(b,true)
+#endif
 static Constant *julia_const_to_llvm(jl_value_t *e)
 {
     jl_value_t *jt = jl_typeof(e);
@@ -135,37 +140,65 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
 
     if (e == jl_true)
         return ConstantInt::get(T_int1, 1);
-    else if (e == jl_false)
+    if (e == jl_false)
         return ConstantInt::get(T_int1, 0);
 
+    if (jl_is_cpointer_type(jt))
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, jl_unbox_long(e)), julia_type_to_llvm((jl_value_t*)bt));
     if (jl_is_bitstype(jt)) {
         int nb = jl_datatype_size(bt);
-        //APInt copies the data (but only as much as needed, so it doesn't matter if ArrayRef extends too far)
-        APInt val = APInt(8*nb,ArrayRef<uint64_t>((uint64_t*)jl_data_ptr(e),(nb+7)/8));
-        if (jl_is_float(e)) {
-#ifdef LLVM33
-            #define LLVM_FP(a,b) APFloat(a,b)
-#else
-            #define LLVM_FP(a,b) APFloat(b,true)
-#endif
+        //TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
+        switch (nb) {
+        case 1: {
+            uint8_t data8 = *(uint8_t*)jl_data_ptr(e);
+            return ConstantInt::get(T_int8, data8);
+                }
+        case 2: {
+            uint16_t data16 = *(uint16_t*)jl_data_ptr(e);
 #ifndef DISABLE_FLOAT16
-            if (nb == 2)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val));
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
+            }
+#endif
+            return ConstantInt::get(T_int16, data16);
+                }
+        case 4: {
+            uint32_t data32 = *(uint32_t*)jl_data_ptr(e);
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
+            }
+            return ConstantInt::get(T_int32, data32);
+                }
+        case 8: {
+            uint64_t data64 = *(uint64_t*)jl_data_ptr(e);
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
+            }
+            return ConstantInt::get(T_int64, data64);
+                }
+        default:
+            size_t nw = (nb+sizeof(uint64_t)-1)/sizeof(uint64_t);
+            uint64_t *data = (uint64_t*)jl_data_ptr(e);
+            APInt val;
+#if !defined(_P64)
+            // malloc may not be 16-byte aligned on P32,
+            // but we must ensure that llvm's uint64_t reads don't fall
+            // off the end of a page
+            // where 16-byte alignment requirement == (8-byte typetag) % (uint64_t ArrayRef access)
+            if (nb % 16 != 0) {
+                uint64_t *data_a64 = (uint64_t*)alloca(sizeof(uint64_t)*nw);
+                memcpy(data_a64, data, nb);
+                val = APInt(8*nb, ArrayRef<uint64_t>(data_a64, nw));
+            }
             else
 #endif
-            if (nb == 4)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val));
-            else if (nb == 8)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val));
-            else if (nb == 16)
+            val = APInt(8*nb, ArrayRef<uint64_t>(data, nw));
+            if (nb == 16 && jl_is_float(e)) {
                 return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val));
-            // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
+                // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
+            }
+            return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         }
-        Constant *asInt = ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
-        if (jl_is_cpointer_type(jt)) {
-            return ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt));
-        }
-        return asInt;
     }
     else if (jl_isbits(jt)) {
         size_t nf = jl_tuple_len(bt->names), i;
