@@ -2235,3 +2235,16 @@ arithtype9232{T<:Real}(::Type{T},::Type{T}) = arithtype9232(T)
 result_type9232{T1<:Number,T2<:Number}(::Type{T1}, ::Type{T2}) = arithtype9232(T1, T2)
 # this gave a "type too large", but not reliably
 @test length(code_typed(result_type9232, (Type{TypeVar(:_, Union(Float32,Float64))}, Type{TypeVar(:T2, Number)}))) == 1
+
+# test functionality of non-power-of-2 bitstype constants
+bitstype 24 Int24
+Int24(x::Int) = Intrinsics.box(Int24,Intrinsics.trunc_int(Int24,Intrinsics.unbox(Int,x)))
+Int(x::Int24) = Intrinsics.box(Int,Intrinsics.zext_int(Int,Intrinsics.unbox(Int24,x)))
+let x,y,f
+    x = Int24(Int(0x12345678)) # create something (via truncation)
+    @test Int(0x345678) === Int(x)
+    function f() Int24(Int(0x02468ace)) end
+    y = f() # invoke llvm constant folding
+    @test Int(0x468ace) === Int(y)
+    @test x !== y
+end
