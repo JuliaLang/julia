@@ -856,8 +856,6 @@ function postprocess!(dict::Dict)
     # needs to be done first for every branch
     if haskey(dict, '\0')
         add_specialisations(dict, dict, 1)
-    else
-        dict['\0'] = (args...)->error("Unrecognized input")
     end
     for (k,v) in dict
         k == '\0' && continue
@@ -1573,7 +1571,17 @@ function prompt!(term, prompt, s = init_state(term, prompt))
         activate(prompt, s, term)
         while true
             map = keymap(s, prompt)
-            state = match_input(map, s)(s, keymap_data(s, prompt))
+            fcn = match_input(map, s)
+            # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
+            # try/catch block
+            local state
+            try
+                state = fcn(s, keymap_data(s, prompt))
+            catch e
+                warn("Caught an exception in the keymap:")
+                warn(e)
+                state = :done
+            end
             if state == :abort
                 stop_reading(term)
                 return buffer(s), false, false

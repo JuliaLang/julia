@@ -31,8 +31,6 @@ void jl_(void *jl_value);
 extern "C" {
 #endif
 
-#pragma pack(push, 1)
-
 typedef struct {
     union {
         uintptr_t header;
@@ -153,8 +151,6 @@ typedef struct _bigval_t {
 #define BVOFFS (offsetof(bigval_t, _data)/sizeof(void*))
 #define bigval_header(data) ((bigval_t*)((char*)(data) - BVOFFS*sizeof(void*)))
 
-#pragma pack(pop)
-
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
 
@@ -170,7 +166,7 @@ static size_t collect_interval;
 static int64_t allocd_bytes;
 
 #define N_POOLS 42
-static __attribute__((aligned (64))) pool_t norm_pools[N_POOLS];
+static pool_t norm_pools[N_POOLS];
 #define pools norm_pools
 
 static bigval_t *big_objects = NULL;
@@ -337,11 +333,12 @@ static inline void objprofile_count(void* ty, int old, int sz)
 #endif
 }
 
-static inline void gc_setmark_other(void *o, int mark_mode)
-{
-    _gc_setmark(o, mark_mode);
-    verify_val(o);
-}
+//static inline void gc_setmark_other(jl_value_t *v, int mark_mode) // unused function
+//{
+//    jl_typetag_t *o = jl_typetagof(v);
+//    _gc_setmark(o, mark_mode);
+//    verify_val(o);
+//}
 
 #define inc_sat(v,s) v = (v) >= s ? s : (v)+1
 
@@ -747,8 +744,7 @@ static void run_finalizers(void)
     while (to_finalize.len > 0) {
         f = arraylist_pop(&to_finalize);
         o = arraylist_pop(&to_finalize);
-        int ok = 1;run_finalizer((jl_value_t*)o, (jl_value_t*)f);
-        assert(ok); (void)ok;
+        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
     }
     JL_GC_POP();
 }
@@ -968,7 +964,7 @@ static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
     return beg;
 }
 
-static __attribute__((noinline)) void  add_page(pool_t *p)
+static __attribute__((noinline)) void add_page(pool_t *p)
 {
     char *data = (char*)malloc_page();
     if (data == NULL)
@@ -981,7 +977,7 @@ static __attribute__((noinline)) void  add_page(pool_t *p)
     p->newpages = fl;
 }
 
-static inline  void *__pool_alloc(pool_t* p, int osize, int end_offset)
+static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
 {
     gcval_t *v, *end;
     if (__unlikely((allocd_bytes += osize) >= 0)) {
@@ -1000,6 +996,7 @@ static inline  void *__pool_alloc(pool_t* p, int osize, int end_offset)
             // we only update pg's fields when the freelist changes page
             // since pg's metadata is likely not in cache
             gcpage_t* pg = page_metadata(v);
+            assert(pg->osize == p->osize);
             pg->nfree = 0;
             pg->allocd = 1;
             if (next)
@@ -1019,6 +1016,7 @@ static inline  void *__pool_alloc(pool_t* p, int osize, int end_offset)
     } else {
         // like in the freelist case, only update the page metadata when it is full
         gcpage_t* pg = page_metadata(v);
+        assert(pg->osize == p->osize);
         pg->nfree = 0;
         pg->allocd = 1;
         p->newpages = v->next;
@@ -1259,7 +1257,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     return pfl;
 }
 
-extern void jl_unmark_symbols(void);
+//extern void jl_unmark_symbols(void);
 
 static void gc_sweep_once(int sweep_mask)
 {
@@ -1281,8 +1279,8 @@ static void gc_sweep_once(int sweep_mask)
     jl_printf(JL_STDOUT, "GC sweep big %.2f (freed %d/%d with %d rst)\n", (clock_now() - t0)*1000, big_freed, big_total, big_reset);
     t0 = clock_now();
 #endif
-    if (sweep_mask == GC_MARKED)
-        jl_unmark_symbols();
+    //if (sweep_mask == GC_MARKED)
+    //    jl_unmark_symbols();
 #ifdef GC_TIME
     jl_printf(JL_STDOUT, "GC sweep symbols %.2f\n", (clock_now() - t0)*1000);
 #endif
@@ -1340,7 +1338,7 @@ int max_msp = 0;
 
 static arraylist_t tasks;
 static arraylist_t rem_bindings;
-static arraylist_t _remset[2];
+static arraylist_t _remset[2]; // contains jl_value_t*
 static arraylist_t *remset = &_remset[0];
 static arraylist_t *last_remset = &_remset[1];
 void reset_remset(void)
@@ -1615,7 +1613,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         refyoung = GC_MARKED_NOESC;
     }
     else if(vt == (jl_value_t*)jl_symbol_type) {
-        gc_setmark_other(v, GC_MARKED); // symbols have their own allocator
+        //gc_setmark_other(v, GC_MARKED); // symbols have their own allocator and are never freed
     }
     else if(
 #ifdef GC_VERIFY

@@ -75,12 +75,3 @@ end
 macro isok(A)
     :($A == TRUE || throw(CHOLMODException("")))
 end
-
-const version_array = Array(Cint, 3)
-if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
-    ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
-else
-    ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
-end
-const version = VersionNumber(version_array...)
-const cholmod_com_sz = ccall((:jl_cholmod_common_size,:libsuitesparse_wrapper),Int,())
