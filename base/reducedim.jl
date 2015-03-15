@@ -151,12 +151,13 @@ has_fast_linear_indexing(a::Array) = true
 function check_reducedims(R, A)
     # Check whether R has compatible dimensions w.r.t. A for reduction
     #
-    # It returns an integer value value (useful for choosing implementation)
+    # It returns an integer value (useful for choosing implementation)
     # - If it reduces only along leading dimensions, e.g. sum(A, 1) or sum(A, (1, 2)),
     #   it returns the length of the leading slice. For the two examples above,
     #   it will be size(A, 1) or size(A, 1) * size(A, 2).
     # - Otherwise, e.g. sum(A, 2) or sum(A, (1, 3)), it returns 0.
     #
+    ndims(R) <= ndims(A) || throw(DimensionMismatch("Cannot reduce $(ndims(A))-dimensional array to $(ndims(R)) dimensions"))
     lsiz = 1
     had_nonreduc = false
     for i = 1:ndims(A)
@@ -179,40 +180,39 @@ function check_reducedims(R, A)
     return lsiz
 end
 
-stagedfunction _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
-    quote
-        lsiz = check_reducedims(R,A)
-        isempty(A) && return R
-        @nextract $N sizeR d->size(R,d)
-        sizA1 = size(A, 1)
+function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
+    lsiz = check_reducedims(R,A)
+    isempty(A) && return R
+    sizA1 = size(A, 1)
 
-        if has_fast_linear_indexing(A) && lsiz > 16
-            # use mapreduce_impl, which is probably better tuned to achieve higher performance
-            nslices = div(length(A), lsiz)
-            ibase = 0
-            for i = 1:nslices
-                @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
-                ibase += lsiz
-            end
-        elseif size(R, 1) == 1 && sizA1 > 1
-            # keep the accumulator as a local variable when reducing along the first dimension
-            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                @inbounds r = (@nref $N R j)
-                for i_1 = 1:sizA1
-                    @inbounds v = f(@nref $N A i)
-                    r = op(r, v)
-                end
-                @inbounds (@nref $N R j) = r
-            end
-        else
-            # general implementation
-            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                @inbounds v = f(@nref $N A i)
-                @inbounds (@nref $N R j) = op((@nref $N R j), v)
-            end
+    if has_fast_linear_indexing(A) && lsiz > 16
+        # use mapreduce_impl, which is probably better tuned to achieve higher performance
+        nslices = div(length(A), lsiz)
+        ibase = 0
+        for i = 1:nslices
+            @inbounds R[i] = op(R[i], mapreduce_impl(f, op, A, ibase+1, ibase+lsiz))
+            ibase += lsiz
         end
-        return R
+    elseif size(R, 1) == 1 && sizA1 > 1
+        # keep the accumulator as a local variable when reducing along the first dimension
+        sizeR1 = size_skip1(size(R), A)
+        sizeA1 = size_skip1(size(A), A)
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(sizeR1, IA)
+            r = R[1,IR]
+            for i = 1:size(A, 1)
+                r = op(r, f(A[i, IA]))
+            end
+            R[1,IR] = r
+        end
+    else
+        sizeR = CartesianIndex{N}(size(R))
+        @inbounds for IA in eachindex(A)
+            IR = min(IA, sizeR)
+            R[IR] = op(R[IR], f(A[IA]))
+        end
     end
+    return R
 end
 
 mapreducedim!(f, op, R::AbstractArray, A::AbstractArray) = (_mapreducedim!(f, op, R, A); R)
@@ -274,61 +274,55 @@ end
 
 ##### findmin & findmax #####
 
-# Generate the body for a reduction function reduce!(f, Rval, Rind, A), using a comparison operator f
-# Rind contains the index of A from which Rval was taken
-function gen_findreduction_body(N, f::Function)
-    F = Expr(:quote, f)
-    quote
-        (isempty(Rval) || isempty(A)) && return Rval, Rind
-        for i = 1:$N
-            (size(Rval, i) == size(A, i) || size(Rval, i) == 1) || throw(DimensionMismatch("Find-reduction on array of size $(size(A)) with output of size $(size(Rval))"))
-            size(Rval, i) == size(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must be of the same size"))
-        end
-        @nexprs $N d->(sizeR_d = size(Rval,d))
-        # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
-        # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
-        k = 0
-        @inbounds if size(Rval, 1) < size(A, 1)
-            @nloops $N i d->(d>1? (1:size(A,d)) : (1:1)) d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                tmpRv = (@nref $N Rval j)
-                tmpRi = (@nref $N Rind j)
-                for i_1 = 1:size(A,1)
-                    k += 1
-                    tmpAv = (@nref $N A i)
-                    if ($F)(tmpAv, tmpRv)
-                        tmpRv = tmpAv
-                        tmpRi = k
-                    end
-                end
-                (@nref $N Rval j) = tmpRv
-                (@nref $N Rind j) = tmpRi
-            end
-        else
-            @nloops $N i A d->(j_d = sizeR_d==1 ? 1 : i_d) begin
-                k += 1
-                tmpAv = (@nref $N A i)
-                if ($F)(tmpAv, (@nref $N Rval j))
-                    (@nref $N Rval j) = tmpAv
-                    (@nref $N Rind j) = k
-                end
-            end
-        end
-        Rval, Rind
+function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
+    (isempty(Rval) || isempty(A)) && return Rval, Rind
+    (ndims(Rval) <= N && ndims(Rind) <= N) || throw(DimensionMismatch("Cannot find-reduce $(ndims(A))-dimensional array to $(ndims(Rval)),$(ndims(Rind)) dimensions"))
+    for i = 1:N
+        (size(Rval, i) == size(A, i) || size(Rval, i) == 1) || throw(DimensionMismatch("Find-reduction on array of size $(size(A)) with output of size $(size(Rval))"))
+        size(Rval, i) == size(Rind, i) || throw(DimensionMismatch("Find-reduction: outputs must be of the same size"))
     end
+    # If we're reducing along dimension 1, for efficiency we can make use of a temporary.
+    # Otherwise, keep the result in Rval/Rind so that we traverse A in storage order.
+    k = 0
+    if size(Rval, 1) < size(A, 1)
+        sizeR1 = size_skip1(size(Rval), A)
+        sizeA1 = size_skip1(size(A), A)
+        @inbounds for IA in CartesianRange(sizeA1)
+            IR = min(sizeR1, IA)
+            tmpRv = Rval[1,IR]
+            tmpRi = Rind[1,IR]
+            for i = 1:size(A,1)
+                k += 1
+                tmpAv = A[i,IA]
+                if f(tmpAv, tmpRv)
+                    tmpRv = tmpAv
+                    tmpRi = k
+                end
+            end
+            Rval[1,IR] = tmpRv
+            Rind[1,IR] = tmpRi
+        end
+    else
+        sizeR = CartesianIndex(size(Rval))
+        @inbounds for IA in eachindex(A)
+            IR = min(sizeR, IA)
+            k += 1
+            tmpAv = A[IA]
+            if f(tmpAv, Rval[IR])
+                Rval[IR] = tmpAv
+                Rind[IR] = k
+            end
+        end
+    end
+    Rval, Rind
 end
 
 # findmin
-stagedfunction _findmin!{T,N}(Rval::AbstractArray,
-                              Rind::AbstractArray,
-                              A::AbstractArray{T,N})
-    gen_findreduction_body(N, <)
-end
-
 function findmin!{R}(rval::AbstractArray{R},
                      rind::AbstractArray,
                      A::AbstractArray;
                      init::Bool=true)
-    _findmin!(initarray!(rval, typemax(R), init), rind, A)
+    findminmax!(LessFun(), initarray!(rval, typemax(R), init), rind, A)
 end
 
 function findmin{T}(A::AbstractArray{T}, region)
@@ -336,22 +330,16 @@ function findmin{T}(A::AbstractArray{T}, region)
         return (similar(A, reduced_dims0(A, region)),
                 zeros(Int, reduced_dims0(A, region)))
     end
-    return (_findmin!(reducedim_initarray0(A, region, typemax(T)),
-            zeros(Int, reduced_dims0(A, region)), A))
+    return findminmax!(LessFun(), reducedim_initarray0(A, region, typemax(T)),
+            zeros(Int, reduced_dims0(A, region)), A)
 end
 
 # findmax
-stagedfunction _findmax!{T,N}(Rval::AbstractArray,
-                              Rind::AbstractArray,
-                              A::AbstractArray{T,N})
-    gen_findreduction_body(N, >)
-end
-
 function findmax!{R}(rval::AbstractArray{R},
                      rind::AbstractArray,
                      A::AbstractArray;
                      init::Bool=true)
-    _findmax!(initarray!(rval, typemin(R), init), rind, A)
+    findminmax!(MoreFun(), initarray!(rval, typemin(R), init), rind, A)
 end
 
 function findmax{T}(A::AbstractArray{T}, region)
@@ -359,6 +347,11 @@ function findmax{T}(A::AbstractArray{T}, region)
         return (similar(A, reduced_dims0(A,region)),
                 zeros(Int, reduced_dims0(A,region)))
     end
-    return (_findmax!(reducedim_initarray0(A, region, typemin(T)),
-            zeros(Int, reduced_dims0(A, region)), A))
+    return findminmax!(MoreFun(), reducedim_initarray0(A, region, typemin(T)),
+            zeros(Int, reduced_dims0(A, region)), A)
 end
+
+size_skip1{T}(dims::(), Aref::AbstractArray{T,0}) = CartesianIndex(())
+size_skip1{T,N}(dims::NTuple{N,Int}, Aref::AbstractArray{T,N}) = CartesianIndex(skip1(dims...))
+@inline size_skip1{T,M,N}(dims::NTuple{M,Int}, Aref::AbstractArray{T,N}) = size_skip1(tuple(dims..., 1), Aref)
+skip1(x, t...) = t

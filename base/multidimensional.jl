@@ -18,7 +18,13 @@ stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Real})
     indextype = gen_cartesian(N)
     return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-Base.call{N}(::Type{CartesianIndex{N}},index::Real...) = CartesianIndex(index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Real...)
+    length(index) == N && return :(CartesianIndex(index))
+    length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
+    args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
+    :(CartesianIndex(tuple($(args...))))
+end
+Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Real}) = CartesianIndex{N}(index...)
 
 let implemented = IntSet()
     global gen_cartesian
