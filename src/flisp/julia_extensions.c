@@ -166,7 +166,7 @@ static char *normalize(char *s)
     if (newlen > buflen) {
         buflen = newlen * 2;
         buf = realloc(buf, buflen);
-        if (!buf) lerror(MemoryError, "error allocating UTF8 buffer");
+        if (!buf) lerror(OutOfMemoryError, "error allocating UTF8 buffer");
     }
     result = utf8proc_decompose((uint8_t*)s,0, (int32_t*)buf,result, options);
     if (result < 0) goto error;
