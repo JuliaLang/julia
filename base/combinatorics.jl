@@ -104,39 +104,6 @@ function binomial{T<:Integer}(n::T, k::T)
 end
 
 ## other ordering related functions ##
-
-function shuffle!(a::AbstractVector)
-    for i = length(a):-1:2
-        j = rand(1:i)
-        a[i], a[j] = a[j], a[i]
-    end
-    return a
-end
-
-shuffle(a::AbstractVector) = shuffle!(copy(a))
-
-function randperm(n::Integer)
-    a = Array(typeof(n), n)
-    a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(1:i)
-        a[i] = a[j]
-        a[j] = i
-    end
-    return a
-end
-
-function randcycle(n::Integer)
-    a = Array(typeof(n), n)
-    a[1] = 1
-    @inbounds for i = 2:n
-        j = rand(1:i-1)
-        a[i] = a[j]
-        a[j] = i
-    end
-    return a
-end
-
 function nthperm!(a::AbstractVector, k::Integer)
     k -= 1 # make k 1-indexed
     k < 0 && throw(ArgumentError("permutation k must be ≥ 0, got $k"))

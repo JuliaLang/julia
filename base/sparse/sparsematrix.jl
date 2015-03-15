@@ -364,13 +364,13 @@ function findnz{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     return (I, J, V)
 end
 
-function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
-                   rng::Function,::Type{T}=eltype(rng(1)))
+
+
+import Base.Random.GLOBAL_RNG
+function sprand_IJ(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint)
     ((m < 0) || (n < 0)) && throw(ArgumentError("invalid Array dimensions"))
     0 <= density <= 1 || throw(ArgumentError("$density not in [0,1]"))
     N = n*m
-    N == 0 && return spzeros(T,m,n)
-    N == 1 && return rand() <= density ? sparse(rng(1)) : spzeros(T,1,1)
 
     I, J = Array(Int, 0), Array(Int, 0) # indices of nonzero elements
     sizehint!(I, round(Int,N*density))
@@ -380,18 +380,18 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
     L = log1p(-density)
     coldensity = -expm1(m*L) # = 1 - (1-density)^m
     colsparsity = exp(m*L) # = 1 - coldensity
-    L = 1/L
+    iL = 1/L
 
     rows = Array(Int, 0)
-    for j in randsubseq(1:n, coldensity)
+    for j in randsubseq(r, 1:n, coldensity)
         # To get the right statistics, we *must* have a nonempty column j
         # even if p*m << 1.   To do this, we use an approach similar to
         # the one in randsubseq to compute the expected first nonzero row k,
         # except given that at least one is nonzero (via Bayes' rule);
         # carefully rearranged to avoid excessive roundoff errors.
-        k = ceil(log(colsparsity + rand()*coldensity) * L)
+        k = ceil(log(colsparsity + rand(r)*coldensity) * iL)
         ik = k < 1 ? 1 : k > m ? m : Int(k) # roundoff-error/underflow paranoia
-        randsubseq!(rows, 1:m-ik, density)
+        randsubseq!(r, rows, 1:m-ik, density)
         push!(rows, m-ik+1)
         append!(I, rows)
         nrows = length(rows)
@@ -401,13 +401,37 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
             J[i] = j
         end
     end
-    return sparse_IJ_sorted!(I, J, rng(length(I)), m, n, +)  # it will never need to combine
+    I, J
 end
 
-sprand(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,rand,Float64)
-sprandn(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,randn,Float64)
-truebools(n::Integer) = ones(Bool, n)
-sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprand(m,n,density,truebools,Bool)
+function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint,
+                rfn::Function, ::Type{T}=eltype(rfn(r,1)))
+    N = m*n
+    N == 0 && return spzeros(T,m,n)
+    N == 1 && return rand(r) <= density ? sparse(rfn(r,1)) : spzeros(T,1,1)
+
+    I,J = sprand_IJ(r, m, n, density)
+    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
+end
+
+function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
+                rfn::Function, ::Type{T}=eltype(rfn(1)))
+    N = m*n
+    N == 0 && return spzeros(T,m,n)
+    N == 1 && return rand() <= density ? sparse(rfn(1)) : spzeros(T,1,1)
+
+    I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
+    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
+end
+
+sprand(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint) = sprand(r,m,n,density,rand,Float64)
+sprand(m::Integer, n::Integer, density::FloatingPoint) = sprand(GLOBAL_RNG,m,n,density)
+sprandn(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint) = sprand(r,m,n,density,randn,Float64)
+sprandn( m::Integer, n::Integer, density::FloatingPoint) = sprandn(GLOBAL_RNG,m,n,density)
+
+truebools(r::AbstractRNG, n::Integer) = ones(Bool, n)
+sprandbool(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint) = sprand(r,m,n,density,truebools,Bool)
+sprandbool(m::Integer, n::Integer, density::FloatingPoint) = sprandbool(GLOBAL_RNG,m,n,density)
 
 spones{T}(S::SparseMatrixCSC{T}) =
      SparseMatrixCSC(S.m, S.n, copy(S.colptr), copy(S.rowval), ones(T, S.colptr[end]-1))

@@ -410,6 +410,8 @@ The `BigFloat` type implements arbitrary-precision floating-point arithmetic usi
        f()
        set_bigfloat_precision(old)
 
+.. _random-numbers:
+
 Random Numbers
 --------------
 

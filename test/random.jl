@@ -312,3 +312,33 @@ let bins = [prevfloat(0.0):0.25:1.0;]
         end
     end
 end
+
+# test reproducility of methods
+let mta = MersenneTwister(42), mtb = MersenneTwister(42)
+
+    @test rand(mta) == rand(mtb)
+    @test rand(mta,10) == rand(mtb,10)
+    @test randn(mta) == randn(mtb)
+    @test randn(mta,10) == randn(mtb,10)
+    @test randexp(mta) == randexp(mtb)
+    @test randexp(mta,10) == randexp(mtb,10)
+    @test rand(mta,1:100) == rand(mtb,1:100)
+    @test rand(mta,1:10,10) == rand(mtb,1:10,10)
+    @test rand(mta,Bool) == rand(mtb,Bool)
+    @test bitrand(mta,10) == bitrand(mtb,10)
+
+    @test randstring(mta) == randstring(mtb)
+    @test randstring(mta,10) == randstring(mtb,10)
+
+    @test randsubseq(mta,1:10,0.4) == randsubseq(mtb,1:10,0.4)
+    @test randsubseq!(mta,Int[],1:10,0.4) == randsubseq!(mtb,Int[],1:10,0.4)
+
+    @test shuffle(mta,collect(1:10)) == shuffle(mtb,collect(1:10))
+    @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
+
+    @test randperm(mta,10) == randperm(mtb,10)
+    @test randcycle(mta,10) == randcycle(mtb,10)
+
+    @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
+    @test sprand(mta,10,10,0.3) == sprand(mtb,10,10,0.3)
+end
