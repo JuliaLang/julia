@@ -49,19 +49,23 @@ end
 
 function html(io::IO, md::BlockQuote)
     withtag(io, :blockquote) do
-        html(io, block.content)
+        html(io, md.content)
     end
 end
 
 function html(io::IO, md::List)
-    withtag(io, :ul) do
+    withtag(io, md.ordered ? :ol : :ul) do
         for item in md.items
             withtag(io, :li) do
                 htmlinline(io, item)
-                println(io)
             end
+            println(io)
         end
     end
+end
+
+function html(io::IO, md::HorizontalRule)
+    tag(io, :hr)
 end
 
 html(io::IO, x) = tohtml(io, x)

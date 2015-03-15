@@ -44,7 +44,7 @@ function show(io::IO, x::ANY)
     else
         nb = t.size
         print(io, "0x")
-        p = pointer_from_objref(x) + sizeof(Ptr{Void})
+        p = data_pointer_from_objref(x)
         for i=nb-1:-1:0
             print(io, hex(unsafe_load(convert(Ptr{UInt8}, p+i)), 2))
         end
