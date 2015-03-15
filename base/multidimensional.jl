@@ -51,15 +51,27 @@ getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
     N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
 end
+stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayref(A, i)) : :(@ncall $(N+1) Base.arrayref A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
+end
+stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayset(A, convert($T,v), i)) : :(@ncall $(N+1) Base.arrayset A convert($T,v) d->(d == 1 ? i : index[d-1]))
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
     :(@nref $N A d->index[d])
 end
+stagedfunction getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
+    :(@nref $(N+1) A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
     :((@nref $N A d->index[d]) = v)
+end
+stagedfunction setindex!{N}(A::AbstractArray, v, i::Integer, index::CartesianIndex{N})
+    :((@nref $(N+1) A d->(d == 1 ? i : index[d-1])) = v)
 end
 
 # arithmetic, min/max
