@@ -181,7 +181,7 @@ function dllist()
     @linux_only begin
         const callback = cfunction(dl_phdr_info_callback, Cint,
                                    (Ref{dl_phdr_info}, Csize_t, Ref{Array{AbstractString,1}} ))
-        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Any), callback, dynamic_libraries)
+        ccall(:dl_iterate_phdr, Cint, (Ptr{Void}, Ref{Array{AbstractString,1}}), callback, dynamic_libraries)
     end
 
     @osx_only begin
