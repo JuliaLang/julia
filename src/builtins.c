@@ -39,21 +39,14 @@ DLLEXPORT void NORETURN jl_error(const char *str)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
-DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
+static void NORETURN jl_vexceptionf(jl_datatype_t *exception_type, const char *fmt, va_list args)
 {
-    va_list args;
-    va_start(args, fmt);
-
-    if (jl_errorexception_type == NULL) {
+    if (exception_type == NULL) {
         jl_vprintf(JL_STDERR, fmt, args);
         jl_exit(1);
     }
-
     char *str = NULL;
     int ok = vasprintf(&str, fmt, args);
-
-    va_end(args);
-
     jl_value_t *msg;
     if (ok < 0) {  // vasprintf failed
         msg = jl_cstr_to_string("internal error: could not display error message");
@@ -63,20 +56,23 @@ DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
         free(str);
     }
     JL_GC_PUSH1(&msg);
-    jl_throw(jl_new_struct(jl_errorexception_type, msg));
+    jl_throw(jl_new_struct(exception_type, msg));
+}
+
+DLLEXPORT void NORETURN jl_errorf(const char *fmt, ...)
+{
+    va_list args;
+    va_start(args, fmt);
+    jl_vexceptionf(jl_errorexception_type, fmt, args);
+    va_end(args);
 }
 
 DLLEXPORT void NORETURN jl_exceptionf(jl_datatype_t *exception_type, const char *fmt, ...)
 {
     va_list args;
-    ios_t buf;
-    ios_mem(&buf, 0);
     va_start(args, fmt);
-    ios_vprintf(&buf, fmt, args);
+    jl_vexceptionf(exception_type, fmt, args);
     va_end(args);
-    jl_value_t *msg = jl_takebuf_string(&buf);
-    JL_GC_PUSH1(&msg);
-    jl_throw(jl_new_struct(exception_type, msg));
 }
 
 void NORETURN jl_too_few_args(const char *fname, int min)
