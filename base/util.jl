@@ -268,3 +268,37 @@ function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
 end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
+
+# Lock object during function execution. Recursive calls by the same task is OK.
+const LOCK_MODE_ADVISORY=1
+const adv_locks_map = Dict{UInt64, Tuple}()
+function lock(f::Function, o::Any; mode=LOCK_MODE_ADVISORY)
+    # Currently only advisory locks are supported.
+    t = current_task()
+    release_lock = true
+    oid = object_id(o)
+    while true
+        if !haskey(adv_locks_map, oid)
+            adv_locks_map[oid] = (t, Condition()); break
+        else
+            (locked_by, c) = adv_locks_map[oid]
+            if t == locked_by
+                release_lock = false; break
+            end
+            wait(c)
+        end
+    end
+
+    try
+        f(o)
+    finally
+        if release_lock
+            (_, c) = pop!(adv_locks_map, oid)
+            notify(c)
+        end
+    end
+end
+
+
+
+
