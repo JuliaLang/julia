@@ -98,7 +98,7 @@ end
     end
 
     # This callback function called by dl_iterate_phdr() on Linux
-    function dl_phdr_info_callback(di_ptr::dl_phdr_info, size::Csize_t, dynamic_libraries_ptr::Array{AbstractString,1})
+    function dl_phdr_info_callback(di::dl_phdr_info, size::Csize_t, dynamic_libraries::Array{AbstractString,1})
         # Skip over objects without a path (as they represent this own object)
         name = bytestring(di.name)
         if !isempty(name)
