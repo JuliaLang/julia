@@ -214,7 +214,7 @@ void bounds_error(char *fname, value_t arr, value_t ind) __attribute__ ((__noret
 void fl_savestate(fl_exception_context_t *_ctx);
 void fl_restorestate(fl_exception_context_t *_ctx);
 
-extern value_t ArgError, IOError, KeyError, MemoryError, EnumerationError;
+extern value_t ArgError, IOError, KeyError, OutOfMemoryError, EnumerationError;
 extern value_t UnboundError;
 
 static inline void argcount(char *fname, uint32_t nargs, uint32_t c)

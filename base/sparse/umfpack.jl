@@ -23,7 +23,7 @@ function umferror(status::Integer)
      elseif status==UMFPACK_WARNING_determinant_overflow
          throw(MatrixIllConditionedException("The determinant overflowed"))
      elseif status==UMFPACK_ERROR_out_of_memory
-         throw(MemoryError())
+         throw(OutOfMemoryError())
      elseif status==UMFPACK_ERROR_invalid_Numeric_object
          throw(ArgumentError("Invalid UMFPack numeric object"))
      elseif status==UMFPACK_ERROR_invalid_Symbolic_object
