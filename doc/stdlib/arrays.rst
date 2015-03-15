@@ -523,9 +523,10 @@ Combinatorics
 
    In-place version of :func:`nthperm`.
 
-.. function:: randperm(n)
+.. function:: randperm([rng,] n)
 
-   Construct a random permutation of the given length.
+   Construct a random permutation of length ``n``. The optional ``rng`` argument
+   specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: invperm(v)
 
@@ -547,15 +548,19 @@ Combinatorics
 
    Like permute!, but the inverse of the given permutation is applied.
 
-.. function:: randcycle(n)
+.. function:: randcycle([rng,] n)
 
-   Construct a random cyclic permutation of the given length.
+   Construct a random cyclic permutation of length ``n``. The optional ``rng``
+   argument specifies a random number generator, see :ref:`Random Numbers
+   <random-numbers>`.
 
-.. function:: shuffle(v)
+.. function:: shuffle([rng,] v)
 
-   Return a randomly permuted copy of ``v``.
+   Return a randomly permuted copy of ``v``. The optional ``rng`` argument
+   specifies a random number generator, see :ref:`Random Numbers
+   <random-numbers>`.
 
-.. function:: shuffle!(v)
+.. function:: shuffle!([rng,] v)
 
    In-place version of :func:`shuffle`.
 
@@ -716,9 +721,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand(m,n,p[,rng])
+.. function:: sprand([rng,] m,n,p [,rfn])
 
-   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rng``. The uniform distribution is used in case ``rng`` is not specified.
+   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: sprandn(m,n,p)
 

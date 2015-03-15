@@ -8,7 +8,12 @@ export srand,
        randn, randn!,
        randexp, randexp!,
        bitrand,
-       AbstractRNG, RNG, MersenneTwister, RandomDevice
+       randstring,
+       randsubseq,randsubseq!,
+       shuffle,shuffle!,
+       randperm, randcycle,
+       AbstractRNG, RNG, MersenneTwister, RandomDevice,
+       GLOBAL_RNG
 
 
 abstract AbstractRNG
@@ -1192,5 +1197,96 @@ function Base.repr(u::UUID)
 end
 
 Base.show(io::IO, u::UUID) = write(io, Base.repr(u))
+
+# return a random string (often useful for temporary filenames/dirnames)
+let b = UInt8['0':'9';'A':'Z';'a':'z']
+    global randstring
+    randstring(r::AbstractRNG, n::Int) = ASCIIString(b[rand(r, 1:length(b), n)])
+    randstring(r::AbstractRNG) = randstring(r,8)
+    randstring(n::Int) = randstring(GLOBAL_RNG, n)
+    randstring() = randstring(GLOBAL_RNG)
+end
+
+
+
+# Fill S (resized as needed) with a random subsequence of A, where
+# each element of A is included in S with independent probability p.
+# (Note that this is different from the problem of finding a random
+#  size-m subset of A where m is fixed!)
+function randsubseq!(r::AbstractRNG, S::AbstractArray, A::AbstractArray, p::Real)
+    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
+    n = length(A)
+    p == 1 && return copy!(resize!(S, n), A)
+    empty!(S)
+    p == 0 && return S
+    nexpected = p * length(A)
+    sizehint!(S, round(Int,nexpected + 5*sqrt(nexpected)))
+    if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
+        for i = 1:n
+            rand(r) <= p && push!(S, A[i])
+        end
+    else
+        # Skip through A, in order, from each element i to the next element i+s
+        # included in S. The probability that the next included element is
+        # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
+        # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
+        # from this probability distribution via the discrete inverse-transform
+        # method: s = ceil(F^{-1}(u)) where u = rand(), which is simply
+        # s = ceil(log(rand()) / log1p(-p)).
+        # -log(rand()) is an exponential variate, so can use randexp().
+        L = -1 / log1p(-p) # L > 0
+        i = 0
+        while true
+            s = randexp(r) * L
+            s >= n - i && return S # compare before ceil to avoid overflow
+            push!(S, A[i += ceil(Int,s)])
+        end
+        # [This algorithm is similar in spirit to, but much simpler than,
+        #  the one by Vitter for a related problem in "Faster methods for
+        #  random sampling," Comm. ACM Magazine 7, 703-718 (1984).]
+    end
+    return S
+end
+randsubseq!(S::AbstractArray, A::AbstractArray, p::Real) = randsubseq!(GLOBAL_RNG, S, A, p)
+
+randsubseq{T}(r::AbstractRNG, A::AbstractArray{T}, p::Real) = randsubseq!(r, T[], A, p)
+randsubseq(A::AbstractArray, p::Real) = randsubseq(GLOBAL_RNG, A, p)
+
+
+function shuffle!(r::AbstractRNG, a::AbstractVector)
+    for i = length(a):-1:2
+        j = rand(r, 1:i)
+        a[i], a[j] = a[j], a[i]
+    end
+    return a
+end
+shuffle!(a::AbstractVector) = shuffle!(GLOBAL_RNG, a)
+
+shuffle(r::AbstractRNG, a::AbstractVector) = shuffle!(r, copy(a))
+shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
+
+function randperm(r::AbstractRNG, n::Integer)
+    a = Array(typeof(n), n)
+    a[1] = 1
+    @inbounds for i = 2:n
+        j = rand(r, 1:i)
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+randperm(n::Integer) = randperm(GLOBAL_RNG, n)
+
+function randcycle(r::AbstractRNG, n::Integer)
+    a = Array(typeof(n), n)
+    a[1] = 1
+    @inbounds for i = 2:n
+        j = rand(r, 1:i-1)
+        a[i] = a[j]
+        a[j] = i
+    end
+    return a
+end
+randcycle(n::Integer) = randcycle(GLOBAL_RNG, n)
 
 end # module
