@@ -969,8 +969,7 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     if is(func,false)
         if isa(called, LambdaStaticData)
             # called lambda expression (let)
-            (_, result) = typeinf(called, argtypes, called.sparams, called,
-                                  true)
+            (_, result) = typeinf(called, argtypes, called.sparams, called)
             return result
         end
         ft = abstract_eval(called, vtypes, sv)
@@ -1336,13 +1335,13 @@ function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
     global inference_stack
     last = inference_stack
     inference_stack = EmptyCallStack()
-    result = typeinf(linfo, atypes, sparams, def, true)
+    result = typeinf(linfo, atypes, sparams, def, true, true)
     inference_stack = last
     return result
 end
 
-typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true)
-typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true)
+typeinf(linfo,atypes::ANY,sparams::ANY) = typeinf(linfo,atypes,sparams,linfo,true,false)
+typeinf(linfo,atypes::ANY,sparams::ANY,def) = typeinf(linfo,atypes,sparams,def,true,false)
 
 CYCLE_ID = 1
 
@@ -1351,7 +1350,7 @@ CYCLE_ID = 1
 
 # def is the original unspecialized version of a method. we aggregate all
 # saved type inference data there.
-function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
+function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop, needtree)
     if linfo.module === Core
         atypes = Tuple
     end
@@ -1373,8 +1372,17 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
                     curtype = code
                     break
                 end
-                curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
-                return (code, curtype)
+                if isa(code,Type)
+                    curtype = code
+                    # sometimes just a return type is stored here. if a full AST
+                    # is not needed, we can return it.
+                    if !needtree
+                        return (nothing, code)
+                    end
+                else
+                    curtype = ccall(:jl_ast_rettype, Any, (Any,Any), def, code)
+                    return (code, curtype)
+                end
             end
         end
     end
@@ -1861,7 +1869,7 @@ function eval_annotate(e::ANY, vtypes::ANY, sv::StaticVarInfo, decls, clo, undef
         fargs = e.args[2:end]
         argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
         # recur inside inner functions once we have all types
-        tr,ty = typeinf(called, argtypes, called.sparams, called, false)
+        tr,ty = typeinf(called, argtypes, called.sparams, called, false, true)
         called.ast = tr
     end
     return e
@@ -2351,7 +2359,7 @@ function inlineable(f::ANY, e::Expr, atypes::Tuple, sv::StaticVarInfo, enclosing
         incompletematch = false
     end
 
-    (ast, ty) = typeinf(linfo, methargs, meth[2]::Tuple, linfo)
+    (ast, ty) = typeinf(linfo, methargs, meth[2]::Tuple, linfo, true, true)
     if is(ast,())
         return NF
     end
@@ -3325,7 +3333,7 @@ function code_typed(f::Function, types::ANY; optimize=true)
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
         if optimize
-            (tree, ty) = typeinf(linfo, x[1], x[2])
+            (tree, ty) = typeinf(linfo, x[1], x[2], linfo, true, true)
         else
             (tree, ty) = typeinf_uncached(linfo, x[1], x[2], optimize=false)
         end
