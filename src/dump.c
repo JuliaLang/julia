@@ -657,10 +657,26 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v)
         jl_serialize_value(s, (jl_value_t*)li->sparams);
         // don't save cached type info for code in the Core module, because
         // it might reference types in the old Base module.
-        if (li->module == jl_core_module)
+        if (li->module == jl_core_module) {
             jl_serialize_value(s, (jl_value_t*)jl_null);
-        else
+        }
+        else {
+            jl_array_t *tf = (jl_array_t*)li->tfunc;
+            // go through the t-func cache, replacing ASTs with just return
+            // types for abstract argument types. these ASTs are generally
+            // not needed (e.g. they don't get inlined).
+            if (tf && jl_typeis(tf, jl_array_any_type)) {
+                size_t i, l = jl_array_len(tf);
+                for(i=0; i < l; i += 3) {
+                    if (!jl_is_leaf_type(jl_cellref(tf,i))) {
+                        jl_value_t *ast = jl_cellref(tf,i+1);
+                        if (ast && jl_is_array(ast) && jl_array_len(ast) > 500)
+                            jl_cellset(tf, i+1, jl_ast_rettype(li, (jl_value_t*)ast));
+                    }
+                }
+            }
             jl_serialize_value(s, (jl_value_t*)li->tfunc);
+        }
         jl_serialize_value(s, (jl_value_t*)li->name);
         jl_serialize_value(s, (jl_value_t*)li->specTypes);
         jl_serialize_value(s, (jl_value_t*)li->specializations);
