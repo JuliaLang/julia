@@ -622,7 +622,7 @@
                                    ,else)))
                           (if (null? restkw)
                               ;; if no rest kw, give error for unrecognized
-                              `(call (top error) "unrecognized keyword argument \"" ,elt  "\"")
+                              `(call (top kwerr) ,elt)
                               ;; otherwise add to rest keywords
                               `(ccall 'jl_cell_1d_push Void (tuple Any Any)
                                       ,rkw (tuple ,elt
