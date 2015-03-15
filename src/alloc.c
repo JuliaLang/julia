@@ -160,10 +160,7 @@ static jl_value_t *jl_new_bits_internal(jl_value_t *dt, void *data, size_t *len)
     if (bt == jl_int32_type)   return jl_box_int32(*(int32_t*)data);
     if (bt == jl_float64_type) return jl_box_float64(*(double*)data);
 
-    jl_value_t *v =
-        (jl_value_t*)allocobj((NWORDS(LLT_ALIGN(nb,sizeof(void*)))+1)*
-                              sizeof(void*));
-    v->type = (jl_value_t*)bt;
+    jl_value_t *v = (jl_value_t*)newobj((jl_value_t*)bt, NWORDS(nb));
     switch (nb) {
     case  1: *(int8_t*)   jl_data_ptr(v) = *(int8_t*)data;    break;
     case  2: *(int16_t*)  jl_data_ptr(v) = *(int16_t*)data;   break;
@@ -251,7 +248,7 @@ jl_value_t *jl_get_nth_field(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     assert(i < jl_tuple_len(st->names));
-    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    size_t offs = jl_field_offset(st,i);
     if (st->fields[i].isptr) {
         return *(jl_value_t**)((char*)v + offs);
     }
@@ -263,7 +260,7 @@ jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
     if (i >= jl_tuple_len(st->names))
         jl_bounds_error_int(v, i+1);
-    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    size_t offs = jl_field_offset(st,i);
     if (st->fields[i].isptr) {
         jl_value_t *fval = *(jl_value_t**)((char*)v + offs);
         if (fval == NULL)
@@ -276,7 +273,7 @@ jl_value_t *jl_get_nth_field_checked(jl_value_t *v, size_t i)
 void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    size_t offs = jl_field_offset(st,i);
     if (st->fields[i].isptr) {
         *(jl_value_t**)((char*)v + offs) = rhs;
         if(rhs != NULL) gc_wb(v, rhs);
@@ -289,7 +286,7 @@ void jl_set_nth_field(jl_value_t *v, size_t i, jl_value_t *rhs)
 int jl_field_isdefined(jl_value_t *v, size_t i)
 {
     jl_datatype_t *st = (jl_datatype_t*)jl_typeof(v);
-    size_t offs = jl_field_offset(st,i) + sizeof(void*);
+    size_t offs = jl_field_offset(st,i);
     if (st->fields[i].isptr) {
         return *(jl_value_t**)((char*)v + offs) != NULL;
     }
@@ -320,7 +317,7 @@ DLLEXPORT jl_value_t *jl_new_structv(jl_datatype_t *type, jl_value_t **args, uin
     }
     for(size_t i=na; i < nf; i++) {
         if (type->fields[i].isptr)
-            *(jl_value_t**)((char*)jv+jl_field_offset(type,i)+sizeof(void*)) = NULL;
+            *(jl_value_t**)((char*)jl_data_ptr(jv)+jl_field_offset(type,i)) = NULL;
     }
     return jv;
 }
@@ -330,7 +327,7 @@ DLLEXPORT jl_value_t *jl_new_struct_uninit(jl_datatype_t *type)
     if (type->instance != NULL) return type->instance;
     jl_value_t *jv = newstruct(type);
     if (type->size > 0)
-        memset(&((void**)jv)[1], 0, type->size);
+        memset(jl_data_ptr(jv), 0, type->size);
     return jv;
 }
 
@@ -359,11 +356,11 @@ DLLEXPORT jl_tuple_t *jl_tuplev(size_t n, jl_value_t **v)
 jl_tuple_t *jl_tuple1(void *a)
 {
 #ifdef OVERLAP_TUPLE_LEN
-    jl_tuple_t *t = (jl_tuple_t*)alloc_2w();
+    jl_tuple_t *t = (jl_tuple_t*)alloc_1w();
 #else
-    jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
+    jl_tuple_t *t = (jl_tuple_t*)alloc_2w();
 #endif
-    t->type = (jl_value_t*)jl_tuple_type;
+    jl_set_typeof(t, jl_tuple_type);
     jl_tuple_set_len_unsafe(t, 1);
     jl_tupleset(t, 0, a);
     return t;
@@ -372,11 +369,11 @@ jl_tuple_t *jl_tuple1(void *a)
 jl_tuple_t *jl_tuple2(void *a, void *b)
 {
 #ifdef OVERLAP_TUPLE_LEN
-    jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
+    jl_tuple_t *t = (jl_tuple_t*)alloc_2w();
 #else
-    jl_tuple_t *t = (jl_tuple_t*)alloc_4w();
+    jl_tuple_t *t = (jl_tuple_t*)alloc_3w();
 #endif
-    t->type = (jl_value_t*)jl_tuple_type;
+    jl_set_typeof(t, jl_tuple_type);
     jl_tuple_set_len_unsafe(t, 2);
     jl_tupleset(t, 0, a);
     jl_tupleset(t, 1, b);
@@ -433,8 +430,8 @@ jl_tuple_t *jl_tuple_fill(size_t n, jl_value_t *v)
 DLLEXPORT jl_function_t *jl_new_closure(jl_fptr_t fptr, jl_value_t *env,
                                         jl_lambda_info_t *linfo)
 {
-    jl_function_t *f = (jl_function_t*)alloc_4w();
-    f->type = (jl_value_t*)jl_function_type;
+    jl_function_t *f = (jl_function_t*)alloc_3w(); assert(NWORDS(sizeof(jl_function_t))==3);
+    jl_set_typeof(f, jl_function_type);
     f->fptr = (fptr!=NULL ? fptr : linfo->fptr);
     f->env = env;
     f->linfo = linfo;
@@ -446,7 +443,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
 {
     jl_lambda_info_t *li =
         (jl_lambda_info_t*)newobj((jl_value_t*)jl_lambda_info_type,
-                                  LAMBDA_INFO_NW);
+                                  NWORDS(sizeof(jl_lambda_info_t)));
     li->ast = ast;
     li->file = null_sym;
     li->line = 0;
@@ -498,23 +495,23 @@ static jl_sym_t *mk_symbol(const char *str)
 #endif
     jl_sym_t *sym;
     size_t len = strlen(str);
-    size_t nb = (sizeof(jl_sym_t)+len+1+7)&-8;
+    size_t nb = (sizeof(jl_typetag_t)+sizeof(jl_sym_t)+len+1+7)&-8;
 
     if (nb >= SYM_POOL_SIZE) {
         jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum length");
     }
 
 #ifdef MEMDEBUG
-    sym = (jl_sym_t*)malloc(nb);
+    sym = (jl_sym_t*)((jl_typetag_t*)malloc(nb))->value;
 #else
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
-    sym = (jl_sym_t*)pool_ptr;
+    sym = (jl_sym_t*)((jl_typetag_t*)malloc(nb))->value;
     pool_ptr += nb;
 #endif
-    sym->type = (jl_value_t*)jl_sym_type;
+    jl_set_typeof(sym, jl_sym_type);
     sym->left = sym->right = NULL;
     sym->hash = hash_symbol(str, len);
     strcpy(&sym->name[0], str);
@@ -524,7 +521,7 @@ static jl_sym_t *mk_symbol(const char *str)
 static void unmark_symbols_(jl_sym_t *root)
 {
     while (root != NULL) {
-        root->type = (jl_value_t*)(((uptrint_t)root->type)&~3UL);
+        jl_set_typeof(root, jl_sym_type);
         unmark_symbols_(root->left);
         root = root->right;
     }
@@ -618,7 +615,7 @@ DLLEXPORT jl_sym_t *jl_tagged_gensym(const char *str, int32_t len)
 
 jl_typename_t *jl_new_typename(jl_sym_t *name)
 {
-    jl_typename_t *tn=(jl_typename_t*)newobj((jl_value_t*)jl_typename_type, 6);
+    jl_typename_t *tn=(jl_typename_t*)newobj((jl_value_t*)jl_typename_type, NWORDS(sizeof(jl_typename_t)));
     tn->name = name;
     tn->module = jl_current_module;
     tn->primary = NULL;
@@ -640,8 +637,7 @@ jl_datatype_t *jl_new_uninitialized_datatype(size_t nfields)
 {
     return (jl_datatype_t*)
         newobj((jl_value_t*)jl_datatype_type,
-               NWORDS(sizeof(jl_datatype_t) - sizeof(void*) +
-                      nfields*sizeof(jl_fielddesc_t)));
+               NWORDS(sizeof(jl_datatype_t) + nfields*sizeof(jl_fielddesc_t)));
 }
 
 void jl_compute_field_offsets(jl_datatype_t *st)
@@ -765,7 +761,7 @@ jl_datatype_t *jl_new_bitstype(jl_value_t *name, jl_datatype_t *super,
 
 jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 {
-    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,1);
+    jl_uniontype_t *t = (jl_uniontype_t*)newobj((jl_value_t*)jl_uniontype_type,NWORDS(sizeof(jl_uniontype_t)));
     // don't make unions of 1 type; Union(T)==T
     assert(jl_tuple_len(types) != 1);
     t->types = types;
@@ -776,7 +772,7 @@ jl_uniontype_t *jl_new_uniontype(jl_tuple_t *types)
 
 jl_typector_t *jl_new_type_ctor(jl_tuple_t *params, jl_value_t *body)
 {
-    jl_typector_t *tc = (jl_typector_t*)newobj((jl_value_t*)jl_typector_type,2);
+    jl_typector_t *tc = (jl_typector_t*)newobj((jl_value_t*)jl_typector_type,NWORDS(sizeof(jl_typector_t)));
     tc->parameters = params;
     tc->body = body;
     return (jl_typector_t*)tc;
@@ -790,7 +786,7 @@ jl_value_t *jl_box##nb(jl_datatype_t *t, int##nb##_t x)        \
     assert(jl_isbits(t));                                      \
     assert(jl_datatype_size(t) == sizeof(x));                  \
     jl_value_t *v = (jl_value_t*)alloc_##nw##w();              \
-    v->type = (jl_value_t*)t;                                  \
+    jl_set_typeof(v, t);                                       \
     *(int##nb##_t*)jl_data_ptr(v) = x;                         \
     return v;                                                  \
 }
@@ -828,7 +824,7 @@ UNBOX_FUNC(gensym, ssize_t)
 jl_value_t *pfx##_##typ(c_type x)                 \
 {                                                 \
     jl_value_t *v = (jl_value_t*)alloc_##nw##w(); \
-    v->type = (jl_value_t*)jl_##typ##_type;       \
+    jl_set_typeof(v, jl_##typ##_type);            \
     *(c_type*)jl_data_ptr(v) = x;                 \
     return v;                                     \
 }
@@ -850,7 +846,7 @@ jl_value_t *jl_box_##typ(c_type x)                      \
     if ((u##c_type)idx < (u##c_type)NBOX_C)             \
         return boxed_##typ##_cache[idx];                \
     jl_value_t *v = (jl_value_t*)alloc_##nw##w();       \
-    v->type = (jl_value_t*)jl_##typ##_type;             \
+    jl_set_typeof(v, jl_##typ##_type);                  \
     *(c_type*)jl_data_ptr(v) = x;                       \
     return v;                                           \
 }
@@ -861,7 +857,7 @@ jl_value_t *jl_box_##typ(c_type x)                 \
     if (x < NBOX_C)                                \
         return boxed_##typ##_cache[x];             \
     jl_value_t *v = (jl_value_t*)alloc_##nw##w();  \
-    v->type = (jl_value_t*)jl_##typ##_type;        \
+    jl_set_typeof(v, jl_##typ##_type);             \
     *(c_type*)jl_data_ptr(v) = x;                  \
     return v;                                      \
 }
@@ -954,8 +950,8 @@ jl_expr_t *jl_exprn(jl_sym_t *head, size_t n)
 {
     jl_array_t *ar = n==0 ? (jl_array_t*)jl_an_empty_cell : jl_alloc_cell_1d(n);
     JL_GC_PUSH1(&ar);
-    jl_expr_t *ex = (jl_expr_t*)alloc_4w();
-    ex->type = (jl_value_t*)jl_expr_type;
+    jl_expr_t *ex = (jl_expr_t*)alloc_3w(); assert(NWORDS(sizeof(jl_expr_t))==3);
+    jl_set_typeof(ex, jl_expr_type);
     ex->head = head;
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;
@@ -971,8 +967,8 @@ JL_CALLABLE(jl_f_new_expr)
     JL_GC_PUSH1(&ar);
     for(size_t i=0; i < nargs-1; i++)
         jl_cellset(ar, i, args[i+1]);
-    jl_expr_t *ex = (jl_expr_t*)alloc_4w();
-    ex->type = (jl_value_t*)jl_expr_type;
+    jl_expr_t *ex = (jl_expr_t*)alloc_3w(); assert(NWORDS(sizeof(jl_expr_t))==3);
+    jl_set_typeof(ex, jl_expr_type);
     ex->head = (jl_sym_t*)args[0];
     ex->args = ar;
     ex->etype = (jl_value_t*)jl_any_type;

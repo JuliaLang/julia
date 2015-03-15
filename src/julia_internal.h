@@ -13,22 +13,22 @@ STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
     jl_value_t *jv = NULL;
     switch (nfields) {
     case 1:
-        jv = (jl_value_t*)alloc_2w(); break;
+        jv = (jl_value_t*)alloc_1w(); break;
     case 2:
-        jv = (jl_value_t*)alloc_3w(); break;
+        jv = (jl_value_t*)alloc_2w(); break;
     case 3:
-        jv = (jl_value_t*)alloc_4w(); break;
+        jv = (jl_value_t*)alloc_3w(); break;
     default:
-        jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
+        jv = (jl_value_t*)allocobj(nfields * sizeof(void*));
     }
-    jv->type = type;
+    jl_set_typeof(jv, type);
     return jv;
 }
 
 STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 {
-    jl_value_t *jv = (jl_value_t*)allocobj(sizeof(void*) + type->size);
-    jv->type = (jl_value_t*)type;
+    jl_value_t *jv = (jl_value_t*)allocobj(type->size);
+    jl_set_typeof(jv, type);
     return jv;
 }
 
