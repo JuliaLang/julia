@@ -35,7 +35,10 @@
 
 ;;; Code:
 
-(require 'cl) ;; incf, decf, plusp
+;; We can't use cl-lib whilst supporting Emacs 23 users who don't use
+;; ELPA.
+(with-no-warnings
+  (require 'cl)) ;; incf, decf, plusp
 
 (defvar julia-mode-hook nil)
 
@@ -412,19 +415,19 @@ before point. Returns nil if we're not within nested parens."
     (when (>= point-offset 0)
       (move-to-column (+ (current-indentation) point-offset)))))
 
+(defmacro julia--should-indent (from to)
+  "Assert that we indent text FROM producing text TO in `julia-mode'."
+  `(with-temp-buffer
+     (julia-mode)
+     (insert ,from)
+     (indent-region (point-min) (point-max))
+     (should (equal (buffer-substring-no-properties (point-min) (point-max))
+                    ,to))))
+
 ;; Emacs 23.X doesn't include ert, so we ignore any errors that occur
 ;; when we define tests.
 (ignore-errors
   (require 'ert)
-
-  (defmacro julia--should-indent (from to)
-    "Assert that we indent text FROM producing text TO in `julia-mode'."
-    `(with-temp-buffer
-       (julia-mode)
-       (insert ,from)
-       (indent-region (point-min) (point-max))
-       (should (equal (buffer-substring-no-properties (point-min) (point-max))
-                      ,to))))
 
   (ert-deftest julia--test-indent-if ()
     "We should indent inside if bodies."
