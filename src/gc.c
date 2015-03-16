@@ -12,7 +12,9 @@
 #define FREE_PAGES_EAGER
 #include <stdlib.h>
 #include <string.h>
+#ifndef _MSC_VER
 #include <strings.h>
+#endif
 #include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -41,7 +43,9 @@ typedef struct {
     };
     // Work around a bug affecting gcc up to (at least) version 4.4.7
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
+#ifndef _MSC_VER
     int _dummy[0];
+#endif
     char data[];
 } buff_t;
 
@@ -80,7 +84,7 @@ typedef struct _gcpage_t {
 
 // contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
 // uses a very naive allocator (see malloc_page & free_page)
-#ifdef _P64
+#if defined(_P64) && !defined(_MSC_VER)
 #define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
 #else
 #define REGION_PG_COUNT 8*4096 // 512M
@@ -461,7 +465,7 @@ static inline void *malloc_a16(size_t sz)
 
 #endif
 
-static __attribute__((noinline)) void *malloc_page(void)
+static NOINLINE void *malloc_page(void)
 {
     void *ptr = (void*)0;
     int i;
@@ -471,7 +475,7 @@ static __attribute__((noinline)) void *malloc_page(void)
         heap = heaps[heap_i];
         if (heap == NULL) {
 #ifdef _OS_WINDOWS_
-            char* mem = VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
+            char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
             char* mem = (char*)mmap(0, sizeof(region_t) + GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
@@ -510,7 +514,7 @@ static __attribute__((noinline)) void *malloc_page(void)
 #ifdef __MINGW32__
     int j = __builtin_ffs(heap->freemap[i]) - 1;
 #elif _MSC_VER
-    int j;
+    unsigned long j;
     _BitScanForward(&j, heap->freemap[i]);
 #else
     int j = ffs(heap->freemap[i]) - 1;
@@ -780,7 +784,7 @@ void jl_finalize(jl_value_t *o)
 
 // big value list
 
-static __attribute__((noinline)) void *alloc_big(size_t sz)
+static NOINLINE void *alloc_big(size_t sz)
 {
     maybe_collect();
     size_t offs = BVOFFS*sizeof(void*);
@@ -964,7 +968,7 @@ static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
     return beg;
 }
 
-static __attribute__((noinline)) void add_page(pool_t *p)
+static NOINLINE void add_page(pool_t *p)
 {
     char *data = (char*)malloc_page();
     if (data == NULL)
@@ -1413,7 +1417,7 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
     }
 }
 
-__attribute__((noinline)) static int gc_mark_module(jl_module_t *m, int d)
+NOINLINE static int gc_mark_module(jl_module_t *m, int d)
 {
     size_t i;
     int refyoung = 0;
@@ -1479,7 +1483,7 @@ static void mark_task_stacks(void) {
 }
 #endif
 
-__attribute__((noinline)) static void gc_mark_task(jl_task_t *ta, int d)
+NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 {
     if (ta->parent) gc_push_root(ta->parent, d);
     if (ta->last) gc_push_root(ta->last, d);
@@ -1545,12 +1549,13 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_array_t *a = (jl_array_t*)v;
         int todo = !(bits & GC_MARKED);
         if (a->pooled)
-            MARK(a,
 #ifdef MEMDEBUG
-                 bits = gc_setmark_big(a, GC_MARKED_NOESC);
+#define _gc_setmark_pool gc_setmark_big
 #else
-                 bits = gc_setmark_pool(a, GC_MARKED_NOESC);
+#define _gc_setmark_pool gc_setmark_pool
 #endif
+            MARK(a,
+                 bits = _gc_setmark_pool(a, GC_MARKED_NOESC);
                  if (a->how == 2 && todo) {
                      objprofile_count(MATY, gc_bits(a) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(a) == GC_MARKED)
