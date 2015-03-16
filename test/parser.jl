@@ -35,3 +35,7 @@ macro test999_str(args...); args; end
 @test test999"""
     a
     b""" == ("a\nb",)
+
+# issue #5997
+@test_throws ParseError parse(": x")
+@test_throws ParseError parse("d[: 2]")

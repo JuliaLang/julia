@@ -1732,7 +1732,9 @@
                       (or (not (symbol? nxt))
                           (ts:space? s)))
                  ':
-                 (list 'quote (parse-atom- s)))))
+		 (if (ts:space? s)
+		     (error "space not allowed after \":\" used for quoting")
+		     (list 'quote (parse-atom- s))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
