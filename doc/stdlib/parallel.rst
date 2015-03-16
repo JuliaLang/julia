@@ -23,6 +23,10 @@ Tasks
 
    Tell whether a task has exited.
 
+.. function:: istaskstarted(task) -> Bool
+
+   Tell whether a task has started executing.
+
 .. function:: consume(task, values...)
 
    Receive the next value passed to ``produce`` by the specified task.
