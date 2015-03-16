@@ -386,7 +386,7 @@ Types
 
    .. doctest::
 
-      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+      julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
@@ -903,7 +903,7 @@ Reflection
    Get an array of the names exported by a module, with optionally more module
    globals according to the additional parameters.
 
-.. function:: names(x::DataType)
+.. function:: fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
 
