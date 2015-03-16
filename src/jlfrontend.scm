@@ -166,8 +166,14 @@
 
 (define (jl-parse-file s)
   (trycatch
-   (begin (jl-parser-set-stream s (open-input-file s))
-          #t)
+   (let ((b (buffer))
+	 (f (open-input-file s)))
+     ;; read whole file first to avoid problems with concurrent modification (issue #10497)
+     (io.copy b f)
+     (io.close f)
+     (io.seek b 0)
+     (begin (jl-parser-set-stream s b)
+	    #t))
    (lambda (e) #f)))
 
 (define *filename-stack* '())
