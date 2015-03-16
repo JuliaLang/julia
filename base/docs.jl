@@ -408,7 +408,7 @@ avgdistance(xs) =
 function fuzzyscore(needle, haystack)
     score = 0.
     is, acro = bestmatch(needle, haystack)
-    score += (acro?2:1)length(is) # Matched characters
+    score += (acro?2:1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
