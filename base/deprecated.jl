@@ -244,9 +244,9 @@ const Uint128 = UInt128
 @deprecate iround(x)              round(Integer,x)
 @deprecate iround{T}(::Type{T},x) round(T,x)
 
-export Base64Pipe, base64
+export Base64Pipe
 const Base64Pipe = Base64EncodePipe
-const base64 = base64encode
+@deprecate base64 base64encode
 
 @deprecate prevind(a::Any, i::Integer)   i-1
 @deprecate nextind(a::Any, i::Integer)   i+1

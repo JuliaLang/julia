@@ -144,6 +144,7 @@ General Number Functions and Constants
    The imaginary unit
 
 .. data:: e
+          eu
 
    The constant e
 
@@ -152,10 +153,12 @@ General Number Functions and Constants
    Catalan's constant
 
 .. data:: γ
+          eulergamma
 
    Euler's constant
 
 .. data:: φ
+          golden
 
    The golden ratio
 
