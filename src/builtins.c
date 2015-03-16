@@ -39,6 +39,8 @@ DLLEXPORT void NORETURN jl_error(const char *str)
     jl_throw(jl_new_struct(jl_errorexception_type, msg));
 }
 
+extern int vasprintf(char **str, const char *fmt, va_list ap);
+
 static void NORETURN jl_vexceptionf(jl_datatype_t *exception_type, const char *fmt, va_list args)
 {
     if (exception_type == NULL) {
