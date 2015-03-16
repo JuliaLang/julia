@@ -104,7 +104,7 @@ function tempname()
     p = ccall(:tempnam, Ptr{UInt8}, (Ptr{UInt8},Ptr{UInt8}), d, "julia")
     systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
-    c_free(p)
+    Libc.free(p)
     return s
 end
 
@@ -164,7 +164,7 @@ function mktempdir()
         if ret == 0
             return filename
         end
-        systemerror(:mktempdir, errno()!=EEXIST)
+        systemerror(:mktempdir, Libc.errno()!=EEXIST)
         seed += 1
     end
 end

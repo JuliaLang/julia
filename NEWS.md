@@ -284,6 +284,9 @@ Deprecated or removed
     `Array{T}(x)`, `map(T,x)`, or `round(T,x)`. To parse a string as an integer
     or floating-point number, use `parseint` or `parsefloat` ([#1470], [#6211]).
 
+  * Low-level functions from the C library and dynamic linker have been moved to
+    modules `Libc` and `Libdl`, respectively ([#10328]).
+
 Julia v0.3.0 Release Notes
 ==========================
 

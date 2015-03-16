@@ -50,7 +50,7 @@ for Ti in IndexTypes
 end
 
 const version_array = Array(Cint, 3)
-if dlsym(dlopen("libcholmod"), :cholmod_version) != C_NULL
+if Libdl.dlsym(Libdl.dlopen("libcholmod"), :cholmod_version) != C_NULL
     ccall((:cholmod_version, :libcholmod), Cint, (Ptr{Cint},), version_array)
 else
     ccall((:jl_cholmod_version, :libsuitesparse_wrapper), Cint, (Ptr{Cint},), version_array)
@@ -58,7 +58,7 @@ end
 const version = VersionNumber(version_array...)
 
 function __init__()
-    if dlsym(dlopen("libcholmod"), :cholmod_version) == C_NULL
+    if Libdl.dlsym(Libdl.dlopen("libcholmod"), :cholmod_version) == C_NULL
         warn("""
 
             CHOLMOD version incompatibility
@@ -652,7 +652,7 @@ for Ti in IndexTypes
         end
 
         # Autodetects the types
-        function read_sparse(file::CFILE, ::Type{$Ti})
+        function read_sparse(file::Libc.FILE, ::Type{$Ti})
             ptr = ccall((@cholmod_name("read_sparse", $Ti), :libcholmod), Ptr{C_SparseVoid},
                 (Ptr{Void}, Ptr{UInt8}),
                     file.ptr, common($Ti))
@@ -791,7 +791,7 @@ Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::ByteString)
     open(filename) do f
-        return read_sparse(CFILE(f), SuiteSparse_long)
+        return read_sparse(Libc.FILE(f), SuiteSparse_long)
     end
 end
 

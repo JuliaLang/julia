@@ -100,8 +100,6 @@ const Range1 = UnitRange
 @deprecate set_bigfloat_rounding(r::RoundingMode) set_rounding(BigFloat,r)
 @deprecate get_bigfloat_rounding() get_rounding(BigFloat)
 @deprecate with_bigfloat_rounding(f::Function, r::RoundingMode) with_rounding(f::Function, BigFloat, r)
-eval(Sys, :(@deprecate shlib_list dllist))
-# Sys.shlib_ext is deprecated, renamed to Sys.dlext. Remove alias before release
 
 @deprecate degrees2radians deg2rad
 @deprecate radians2degrees rad2deg
@@ -422,6 +420,24 @@ end
 
 @deprecate flipud(A::AbstractArray) flipdim(A, 1)
 @deprecate fliplr(A::AbstractArray) flipdim(A, 2)
+
+@deprecate strftime     Libc.strftime
+@deprecate strptime     Libc.strptime
+@deprecate flush_cstdio Libc.flush_cstdio
+@deprecate mmap         Libc.mmap
+@deprecate c_free       Libc.free
+@deprecate c_malloc     Libc.malloc
+@deprecate c_calloc     Libc.calloc
+@deprecate c_realloc    Libc.realloc
+@deprecate errno        Libc.errno
+@deprecate strerror     Libc.strerror
+
+@deprecate dlclose      Libdl.dlclose
+@deprecate dlopen       Libdl.dlopen
+@deprecate dlopen_e     Libdl.dlopen_e
+@deprecate dlsym        Libdl.dlsym
+@deprecate dlsym_e      Libdl.dlsym_e
+@deprecate find_library Libdl.find_library
 
 # 0.4 discontinued functions
 

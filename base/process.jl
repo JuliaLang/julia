@@ -200,7 +200,7 @@ typealias ProcessChainOrNot Union(Bool,ProcessChain)
 
 function _jl_spawn(cmd, argv, loop::Ptr{Void}, pp::Process,
                    in, out, err)
-    proc = c_malloc(_sizeof_uv_process)
+    proc = Libc.malloc(_sizeof_uv_process)
     error = ccall(:jl_spawn, Int32,
         (Ptr{UInt8}, Ptr{Ptr{UInt8}}, Ptr{Void}, Ptr{Void}, Any, Int32,
          Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Void}, Int32, Ptr{Ptr{UInt8}}, Ptr{UInt8}),
@@ -245,8 +245,8 @@ end
 function spawn(pc::ProcessChainOrNot, cmds::OrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
     out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
-    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)
@@ -267,8 +267,8 @@ end
 function spawn(pc::ProcessChainOrNot, cmds::ErrOrCmds, stdios::StdIOSet, exitcb::Callback, closecb::Callback)
     out_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
     in_pipe = box(Ptr{Void}, Intrinsics.jl_alloca(_sizeof_uv_named_pipe))
-    #out_pipe = c_malloc(_sizeof_uv_named_pipe)
-    #in_pipe = c_malloc(_sizeof_uv_named_pipe)
+    #out_pipe = Libc.malloc(_sizeof_uv_named_pipe)
+    #in_pipe = Libc.malloc(_sizeof_uv_named_pipe)
     link_pipe(in_pipe, false, out_pipe, false)
     if pc == false
         pc = ProcessChain(stdios)

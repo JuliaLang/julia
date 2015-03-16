@@ -58,7 +58,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # NOTE: this test only holds true when there is a sys.{dll,dylib,so} shared library present.
     # The tests are also limited to unix platforms at the moment because loading the system image
     # not turned on for Window's binary builds at the moment.
-    @unix_only if dlopen_e(splitext(bytestring(Base.JLOptions().image_file))[1]) != C_NULL
+    @unix_only if Libdl.dlopen_e(splitext(bytestring(Base.JLOptions().image_file))[1]) != C_NULL
         @test !success(`$exename -C invalidtarget`)
         @test !success(`$exename --cpu-target=invalidtarget`)
     end
