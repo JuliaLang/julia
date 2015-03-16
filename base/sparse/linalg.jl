@@ -681,7 +681,7 @@ function factorize(A::SparseMatrixCSC)
             try
                 return cholfact(A)
             catch e
-                isa(e, PosDefException) || e
+                isa(e, PosDefException) || rethrow(e)
                 return ldltfact(A)
             end
         end
@@ -695,7 +695,7 @@ function factorize{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}})
     try
         return cholfact(A)
     catch e
-        isa(e, PosDefException) || e
+        isa(e, PosDefException) || rethrow(e)
         return ldltfact(A)
     end
 end
@@ -703,7 +703,7 @@ function factorize{Ti}(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Fl
     try
         return cholfact(A)
     catch e
-        isa(e, PosDefException) || e
+        isa(e, PosDefException) || rethrow(e)
         return ldltfact(A)
     end
 end

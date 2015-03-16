@@ -1146,7 +1146,7 @@ function isposdef{Tv<:VTypes,Ti}(A::SparseMatrixCSC{Tv,Ti})
     try
         f = cholfact(A)
     catch e
-        isa(e, LinAlg.PosDefException) || e
+        isa(e, LinAlg.PosDefException) || rethrow(e)
         return false
     end
     true
