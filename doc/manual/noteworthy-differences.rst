@@ -42,13 +42,13 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   second dimension ("horizontally"), use spaces as in ``[x y z]``. To
   construct block matrices (concatenating in the first two dimensions),
   the syntax ``[a b; c d]`` is used to avoid confusion. In Julia v0.4, the
-  concatenation syntax ``[x, [y, z]]`` is deprecated in favor of ``[x; [y, z]``.
+  concatenation syntax ``[x, [y, z]]`` is deprecated in favor of ``[x; [y, z]]``.
 - In Julia, ``a:b`` and ``a:b:c`` construct :obj:`Range` objects. To construct
-  a full vector like in MATLAB, use :func:`linspace`, or use brackets like in
-  ``[a:b]``.
-- Julia functions return values using the ``return`` keyword instead of by
-  listing names of variables to return in the function definition (see
-  :ref:`man-return-keyword` for details).
+  a full vector like in MATLAB, use :func:`collect(a:b) <collect>` or
+  :func:`linspace`.
+- Functions in Julia return values from their last expression or the ``return``
+  keyword instead of listing the names of variables to return in the function
+  definition (see :ref:`man-return-keyword` for details).
 - A Julia script may contain any number of functions, and all definitions will
   be externally visible when the file is loaded. Function definitions can be
   loaded from files outside the current working directory.
@@ -89,7 +89,7 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   last expression issued in an interactive session. In Julia, unlike MATLAB,
   ``ans`` is not set when Julia code is run in non-interactive mode.
 - Julia's ``type``\ s do not support dynamically adding fields at runtime,
-  unlike MATLAB's ``class``\ es. Instead, use a :obj`Dict`.
+  unlike MATLAB's ``class``\ es. Instead, use a :obj:`Dict`.
 
 Noteworthy differences from R
 -----------------------------
