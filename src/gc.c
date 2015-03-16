@@ -306,9 +306,13 @@ static void add_lostval_parent(jl_value_t* parent)
         }                                                               \
     } while(0);
 
+#define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
+
 #else
 #define verify_val(v)
-#define verify_parent(ty,obj,slot,args...)
+#define verify_parent1(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2)
 #endif
 
 #ifdef OBJPROFILE
@@ -1408,7 +1412,7 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
         else {
             for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL) {
-                    verify_parent("task", ta, &rts[i], "stack(%d)", i);
+                    verify_parent2("task", ta, &rts[i], "stack(%d)", i);
                     gc_push_root(rts[i], d);
                 }
             }
@@ -1428,10 +1432,10 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
             gc_setmark_buf(b, gc_bits(m));
 #ifdef GC_VERIFY
             void* vb = gc_val_buf(b);
-            verify_parent("module", m, &vb, "binding_buff");
+            verify_parent1("module", m, &vb, "binding_buff");
 #endif
             if (b->value != NULL) {
-                verify_parent("module", m, &b->value, "binding(%s)", b->name->name);
+                verify_parent2("module", m, &b->value, "binding(%s)", b->name->name);
                 refyoung |= gc_push_root(b->value, d);
             }
             if (b->type != (jl_value_t*)jl_any_type) {
@@ -1447,7 +1451,7 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
         refyoung |= gc_push_root(m->usings.items[i], d);
     }
     if (m->constant_table) {
-        verify_parent("module", m, &m->constant_table, "constant_table");
+        verify_parent1("module", m, &m->constant_table, "constant_table");
         refyoung |= gc_push_root(m->constant_table, d);
     }
     return refyoung;
@@ -1540,7 +1544,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];
             if (elt != NULL) {
-                verify_parent("tuple", v, &data[i], "elem(%d)", i);
+                verify_parent2("tuple", v, &data[i], "elem(%d)", i);
                 refyoung |= gc_push_root(elt, d);
             }
         }
@@ -1581,7 +1585,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         else if (a->how == 1) {
 #ifdef GC_VERIFY
             void* val_buf = gc_val_buf((char*)a->data - a->offset*a->elsize);
-            verify_parent("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
+            verify_parent1("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
 #endif
             gc_setmark_buf((char*)a->data - a->offset*a->elsize, gc_bits(v));
         }
@@ -1597,7 +1601,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                 for(size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
                     if (elt != NULL) {
-                        verify_parent("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
+                        verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
                         refyoung |= gc_push_root(elt, d);
                     }
                     // try to split large array marking (incremental mark TODO)
@@ -1641,7 +1645,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                 jl_value_t **slot = (jl_value_t**)((char*)v + fields[i].offset + sizeof(void*));
                 jl_value_t *fld = *slot;
                 if (fld) {
-                    verify_parent("object", v, slot, "field(%d)", i);
+                    verify_parent2("object", v, slot, "field(%d)", i);
                     //children[ci++] = fld;
                     refyoung |= gc_push_root(fld, d);
                 }
