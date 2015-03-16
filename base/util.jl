@@ -1,7 +1,6 @@
 # timing
 
-# system date in seconds
-time() = ccall(:clock_now, Float64, ())
+# time() in libc.jl
 
 # high-resolution relative time, in nanoseconds
 time_ns() = ccall(:jl_hrtime, UInt64, ())

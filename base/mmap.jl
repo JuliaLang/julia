@@ -3,39 +3,16 @@
 # Arrays
 mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO) = mmap_array(T, dims, s, position(s))
 
-msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
-
 # BitArrays
 mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream, offset::FileOffset) =
     mmap_bitarray(dims, s, offset)
 mmap_bitarray{N}(::Type{Bool}, dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 mmap_bitarray{N}(dims::NTuple{N,Integer}, s::IOStream) = mmap_bitarray(dims, s, position(s))
 
-msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
-
 ### UNIX implementation ###
 
 @unix_only begin
-# Low-level routines
-# These are needed for things like MAP_ANONYMOUS
-function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
-    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
-    # Check that none of the computations will overflow
-    if len < 0
-        throw(ArgumentError("requested size must be ≥ 0, got $len"))
-    end
-    if len > typemax(Int)-pagesize
-        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
-    end
-    # Set the offset to a page boundary
-    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
-    len_page::Int = (offset-offset_page) + len
-    # Mmap the file
-    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
-    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
-    # Also return a pointer that compensates for any adjustment in the offset
-    return p, Int(offset-offset_page)
-end
+# Higher-level functions
 
 # Before mapping, grow the file to sufficient size
 # (Required if you're going to write to a new memory-mapped file)
@@ -56,22 +33,9 @@ function mmap_grow(len::Integer, prot::Integer, flags::Integer, fd::Integer, off
     end
     cpos = ccall(:jl_lseek, FileOffset, (Cint, FileOffset, Cint), fd, cpos, SEEK_SET)
     systemerror("lseek", cpos < 0)
-    return mmap(len, prot, flags, fd, offset)
+    return Libc.mmap(len, prot, flags, fd, offset)
 end
 
-function munmap(p::Ptr,len::Integer)
-    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
-end
-
-const MS_ASYNC = 1
-const MS_INVALIDATE = 2
-const MS_SYNC = 4
-function msync(p::Ptr, len::Integer, flags::Integer)
-    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
-end
-msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
-
-# Higher-level functions
 # Determine a stream's read/write mode, and return prot & flags
 # appropriate for mmap
 # We could use isreadonly here, but it's worth checking that it's readable too
@@ -107,10 +71,10 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::IO, offset::File
     if iswrite && grow
         pmap, delta = mmap_grow(len, prot, flags, fd(s), offset)
     else
-        pmap, delta = mmap(len, prot, flags, fd(s), offset)
+        pmap, delta = Libc.mmap(len, prot, flags, fd(s), offset)
     end
     A = pointer_to_array(convert(Ptr{T}, UInt(pmap)+delta), dims)
-    finalizer(A,x->munmap(pmap,len+delta))
+    finalizer(A,x->Libc.munmap(pmap,len+delta))
     return A
 end
 
@@ -172,23 +136,8 @@ function mmap_array{T,N}(::Type{T}, dims::NTuple{N,Integer}, s::Union(IO,SharedM
         error("could not create mapping view: $(FormatMessage())")
     end
     A = pointer_to_array(convert(Ptr{T}, viewhandle+offset-offset_page), dims)
-    finalizer(A, x->munmap(viewhandle, mmaphandle))
+    finalizer(A, x->Libc.munmap(viewhandle, mmaphandle))
     return A
-end
-
-function munmap(viewhandle::Ptr, mmaphandle::Ptr)
-    status = Bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
-    status |= Bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
-    if !status
-        error("could not unmap view: $(FormatMessage())")
-    end
-end
-
-function msync(p::Ptr, len::Integer)
-    status = Bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
-    if !status
-        error("could not msync: $(FormatMessage())")
-    end
 end
 
 end

@@ -1,7 +1,6 @@
 ## IP ADDRESS HANDLING ##
 abstract IPAddr
 
-
 Base.isless{T<:IPAddr}(a::T, b::T) = isless(a.host, b.host)
 
 immutable IPv4 <: IPAddr
@@ -275,14 +274,14 @@ type TCPSocket <: Socket
     )
 end
 function TCPSocket()
-    this = TCPSocket(c_malloc(_sizeof_uv_tcp))
+    this = TCPSocket(Libc.malloc(_sizeof_uv_tcp))
     associate_julia_struct(this.handle,this)
     finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
         #TODO: this codepath is not currently tested
-        c_free(this.handle)
+        Libc.free(this.handle)
         this.handle = C_NULL
         throw(UVError("failed to create tcp socket",err))
     end
@@ -306,14 +305,14 @@ type TCPServer <: UVServer
     )
 end
 function TCPServer()
-    this = TCPServer(c_malloc(_sizeof_uv_tcp))
+    this = TCPServer(Libc.malloc(_sizeof_uv_tcp))
     associate_julia_struct(this.handle, this)
     finalizer(this,uvfinalize)
     err = ccall(:uv_tcp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     if err != 0
         #TODO: this codepath is not currently tested
-        c_free(this.handle)
+        Libc.free(this.handle)
         this.handle = C_NULL
         throw(UVError("failed to create tcp server",err))
     end
@@ -375,14 +374,14 @@ type UDPSocket <: Socket
     )
 end
 function UDPSocket()
-    this = UDPSocket(c_malloc(_sizeof_uv_udp))
+    this = UDPSocket(Libc.malloc(_sizeof_uv_udp))
     associate_julia_struct(this.handle, this)
     err = ccall(:uv_udp_init,Cint,(Ptr{Void},Ptr{Void}),
                   eventloop(),this.handle)
     finalizer(this, uvfinalize)
     if err != 0
         #TODO: this codepath is not currently tested
-        c_free(this.handle)
+        Libc.free(this.handle)
         this.handle = C_NULL
         throw(UVError("failed to create udp socket",err))
     end
@@ -472,7 +471,7 @@ function setopt(sock::UDPSocket; multicast_loop = nothing, multicast_ttl=nothing
     end
 end
 
-_uv_hook_alloc_buf(sock::UDPSocket,size::UInt) = (c_malloc(size),size)
+_uv_hook_alloc_buf(sock::UDPSocket,size::UInt) = (Libc.malloc(size),size)
 
 function _recv_start(sock::UDPSocket)
     if ccall(:uv_is_active,Cint,(Ptr{Void},),sock.handle) == 0
@@ -501,7 +500,7 @@ end
 function _uv_hook_recv(sock::UDPSocket, nread::Int, buf_addr::Ptr{Void}, buf_size::UInt, addr::Ptr{Void}, flags::Int32)
     # C signature documented as (*uv_udp_recv_cb)(...)
     if flags & UV_UDP_PARTIAL > 0
-        c_free(buf_addr)
+        Libc.free(buf_addr)
         notify_error(sock.recvnotify,"Partial message received")
     end
 

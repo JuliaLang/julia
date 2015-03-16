@@ -74,7 +74,7 @@ type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
     SystemError(p::AbstractString, e::Integer) = new(p, e)
-    SystemError(p::AbstractString) = new(p, errno())
+    SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 
 type TypeError <: Exception
