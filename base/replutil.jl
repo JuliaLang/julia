@@ -251,16 +251,18 @@ function show_method_candidates(io::IO, ex::MethodError)
     end
     if length(lines) != 0 # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
-            println(io, "\nClosest candidates are:")
+            println(io)
+            print(io, "Closest candidates are:")
             sort!(lines, by = x -> -x[2])
             i = 0
             for line in lines
+                println(io)
                 if i >= 3
-                    println(io, "  ...")
+                    print(io, "  ...")
                     break
                 end
                 i += 1
-                println(io, takebuf_string(line[1]))
+                print(io, takebuf_string(line[1]))
             end
         end
     end
