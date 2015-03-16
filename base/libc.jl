@@ -15,11 +15,16 @@ end
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
-function FILE(s::IO)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
+function FILE(fd, mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
     systemerror("fdopen", FILEp == C_NULL)
-    seek(FILE(FILEp), position(s))
+    FILE(FILEp)
+end
+
+function FILE(s::IO)
+    f = FILE(fd(s),modestr(s))
+    seek(f, position(s))
 end
 
 Base.convert(::Type{FILE}, s::IO) = FILE(s)
