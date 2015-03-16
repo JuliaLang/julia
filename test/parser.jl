@@ -39,3 +39,15 @@ macro test999_str(args...); args; end
 # issue #5997
 @test_throws ParseError parse(": x")
 @test_throws ParseError parse("d[: 2]")
+
+# issue #6770
+@test_throws ParseError parse("x.3")
+
+# issue #8763
+@test_throws ParseError parse("sqrt(16)2")
+@test_throws ParseError parse("x' y")
+@test_throws ParseError parse("x 'y")
+@test parse("x'y") == Expr(:call, :*, Expr(symbol("'"), :x), :y)
+
+# issue #8301
+@test_throws ParseError parse("&*s")

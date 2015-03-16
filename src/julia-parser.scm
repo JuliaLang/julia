@@ -803,15 +803,18 @@
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
 (define (juxtapose? expr t)
-  (and (not (operator? t))
-       (not (operator? expr))
+  (and (or (number? expr)
+           (large-number? expr)
+	   (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
+	   ;; to allow x'y as a special case
+	   #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
+		(not (memv t '(#\( #\[ #\{))))
+	   )
+       (not (operator? t))
        (not (memq t reserved-words))
        (not (closing-token? t))
        (not (newline? t))
-       (not (and (pair? expr) (eq? (car expr) '...)))
-       (or (number? expr)
-           (large-number? expr)
-           (not (memv t '(#\( #\[ #\{))))))
+       (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
 
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
@@ -986,7 +989,10 @@
                            `(macrocall (|.| ,ex (quote ,(cadr name)))
                                        ,@(cddr name))
                            `(|.| ,ex (quote ,name))))))))
-            ((|.'| |'|) (take-token s)
+            ((|.'| |'|)
+	     (if (ts:space? s)
+		 (error (string "space not allowed before \"" t "\"")))
+	     (take-token s)
              (loop (list t ex)))
             ((#\{ )   (take-token s)
              (loop (list* 'curly ex
