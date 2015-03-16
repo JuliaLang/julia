@@ -164,7 +164,7 @@ function mktempdir()
         if ret == 0
             return filename
         end
-        systemerror(:mktempdir, Libc.errno()!=EEXIST)
+        systemerror(:mktempdir, Libc.errno()!=Libc.Errno.EEXIST)
         seed += 1
     end
 end
