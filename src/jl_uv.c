@@ -29,6 +29,11 @@
 #include "support/ios.h"
 #include "uv.h"
 
+#if defined(_COMPILER_MICROSOFT_) && !defined(write)
+#include <io.h>
+#define write _write
+#endif
+
 #ifdef __cplusplus
 #include <cstring>
 extern "C" {

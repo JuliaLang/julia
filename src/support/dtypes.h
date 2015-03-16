@@ -37,10 +37,6 @@
 
 #endif /* !_COMPILER_MINGW_ */
 
-#if defined(_COMPILER_MICROSOFT_)
-#define isnan _isnan
-#endif /* _COMPILER_MICROSOFT_ */
-
 #endif /* _OS_WINDOWS_ */
 
 
