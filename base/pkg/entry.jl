@@ -245,7 +245,7 @@ function update(branch::String)
         end
         # TODO: handle merge conflicts
         Base.with_env("GIT_MERGE_AUTOEDIT","no") do
-            Git.run(`pull -q`, out=DevNull)
+            Git.run(`pull --rebase -q`, out=DevNull)
         end
     end
     avail = Read.available()
