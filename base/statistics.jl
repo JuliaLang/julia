@@ -93,6 +93,8 @@ immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
 end
 call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+centralize_sumabs2(A::AbstractArray, m::Number) =
+    mapreduce(CentralizedAbs2Fun(m), AddFun(), A)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
@@ -137,7 +139,7 @@ function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
     n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - Int(corrected)))
-    return centralize_sumabs2(A, m, 1, n) / (n - Int(corrected))
+    return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
 function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
