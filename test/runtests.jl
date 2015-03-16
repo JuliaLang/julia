@@ -132,3 +132,14 @@ let convert_funcs_and_types =
     @test (@compat Bool(1))
     @test !(@compat Bool(0))
 end
+
+type Test3609
+    a
+    b
+end
+
+if VERSION < v"0.4.0-dev+3609"
+    let v = Test3609(1,2)
+        @test fieldnames(Test3609) == fieldnames(v) == Symbol[:a, :b]
+    end
+end

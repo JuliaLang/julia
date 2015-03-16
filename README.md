@@ -64,6 +64,8 @@ Currently, the `@compat` macro supports the following syntaxes:
 
 * `|>`, `>>`, `.>`, and `.>>` are now `pipe` [#10211](https://github.com/JuliaLang/julia/pull/10211)
 
+* `names(::DataType)` is now renamed to `fieldnames` [#10332](https://github.com/JuliaLang/julia/pull/10332)
+
 ## New macros
 
 * `@inline` and `@noinline` have been added. On 0.3, these are "no-ops," meaning they don't actually do anything.

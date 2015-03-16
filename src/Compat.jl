@@ -178,6 +178,18 @@ if VERSION < v"0.4.0-dev+2485"
     export startswith
 end
 
+if VERSION < v"0.4.0-dev+3609"
+    fieldnames(x::DataType) = collect(x.names)
+    function fieldnames(v)
+        t = typeof(v)
+        if !isa(t, DataType)
+            throw(ArgumentError("cannot call fieldnames() on a non-composite type"))
+        end
+        return fieldnames(t)
+    end
+    export fieldnames
+end
+
 if VERSION < v"0.4.0-dev+3732"
     const calltypes = Dict{Symbol,Symbol}()
     for (k,v) in [(:Integer,:integer),
