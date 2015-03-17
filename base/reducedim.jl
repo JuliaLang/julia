@@ -200,14 +200,14 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         @inbounds for IA in CartesianRange(sizeA1)
             IR = min(sizeR1, IA)
             r = R[1,IR]
-            for i = 1:size(A, 1)
+            @simd for i = 1:size(A, 1)
                 r = op(r, f(A[i, IA]))
             end
             R[1,IR] = r
         end
     else
         sizeR = CartesianIndex{N}(size(R))
-        @inbounds for IA in eachindex(A)
+        @inbounds @simd for IA in eachindex(A)
             IR = min(IA, sizeR)
             R[IR] = op(R[IR], f(A[IA]))
         end
