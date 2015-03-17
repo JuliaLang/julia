@@ -218,9 +218,6 @@ end
 
 map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
-macro thunk(ex); :(()->$(esc(ex))); end
-macro L_str(s); s; end
-
 function precompile(f::ANY, args::Tuple)
     if isa(f,DataType)
         args = tuple(Type{f}, args...)

@@ -34,7 +34,7 @@ end
 let
     try
         assert(false)
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test isempty(ex.msg)
@@ -43,7 +43,7 @@ end
 let
     try
         assert(false, "this is a test")
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test ex.msg == "this is a test"
@@ -59,7 +59,7 @@ end
 let
     try
         @assert 1 == 2
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test contains(ex.msg, "1 == 2")
@@ -69,7 +69,7 @@ end
 let
     try
         @assert 1 == 2 "this is a test"
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test ex.msg == "this is a test"
@@ -79,7 +79,7 @@ end
 let
     try
         @assert 1 == 2 "this is a test" "this is another test"
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test ex.msg == "this is a test"
@@ -89,7 +89,7 @@ end
 let
     try
         @assert 1 == 2 :random_object
-        @unexpected
+        error("unexpected")
     catch ex
         @test isa(ex, AssertionError)
         @test !contains(ex.msg,  "1 == 2")

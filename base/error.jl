@@ -19,10 +19,6 @@
 error(s::AbstractString) = throw(ErrorException(s))
 error(s...) = throw(ErrorException(string(s...)))
 
-macro unexpected()
-    :(error("unexpected branch reached"))
-end
-
 rethrow() = ccall(:jl_rethrow, Void, ())::Bottom
 rethrow(e) = ccall(:jl_rethrow_other, Void, (Any,), e)::Bottom
 backtrace() = ccall(:jl_backtrace_from_here, Array{Ptr{Void},1}, ())
