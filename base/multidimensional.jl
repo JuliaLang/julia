@@ -14,17 +14,17 @@ linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 # CartesianIndex
 abstract CartesianIndex{N}
 
-stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Integer})
     indextype = gen_cartesian(N)
     return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Real...)
+stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
     length(index) == N && return :(CartesianIndex(index))
     length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
     args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
     :(CartesianIndex(tuple($(args...))))
 end
-Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Real}) = CartesianIndex{N}(index...)
+Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
 
 let implemented = IntSet()
     global gen_cartesian
@@ -36,7 +36,7 @@ let implemented = IntSet()
             fields = [Expr(:(::), fnames[i], :Int) for i = 1:N]
             extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
             eval(extype)
-            argsleft = [Expr(:(::), fnames[i], :Real) for i = 1:N]
+            argsleft = [Expr(:(::), fnames[i], :Integer) for i = 1:N]
             argsright = [Expr(:call,:to_index,fnames[i]) for i=1:N]
             exconstructor = Expr(:(=),Expr(:call,:(Base.call),:(::Type{CartesianIndex{$N}}),argsleft...),Expr(:call,indextype,argsright...))
             eval(exconstructor)
