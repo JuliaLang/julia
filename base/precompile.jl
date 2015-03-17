@@ -309,7 +309,7 @@ precompile(Base.occurs_outside_tupleref, (Function, Symbol, Base.StaticVarInfo, 
 precompile(Base.occurs_undef, (Symbol, Expr))
 precompile(Base.open, (ASCIIString, ASCIIString))
 precompile(Base.parse_input_line, (ASCIIString,))
-precompile(Base.parseint, (Type{Int}, ASCIIString, Int))
+precompile(Base.parse, (Type{Int}, ASCIIString, Int))
 precompile(Base.peek, (Base.IOBuffer,))
 precompile(Base.pop!, (Array{Any,1},))
 precompile(Base.position, (IOBuffer,))

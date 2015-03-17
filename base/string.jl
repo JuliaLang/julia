@@ -1475,16 +1475,15 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
+function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
+    a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
     d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    d
+    convert(T, d)
 end
-parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
-parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::AbstractString, i::Int=start(s))
     done(s,i) && (return Char(0), 0, 0)
@@ -1602,13 +1601,11 @@ tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
     2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
 
-function parseint{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
+function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
     (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     get(tryparse_internal(T, s, base, true))
 end
-parseint{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
-parseint(s::AbstractString, base::Integer) = parseint(Int,s,base)
-parseint(s::AbstractString) = parseint(Int,s)
+parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
 
 ## stringifying integers more efficiently ##
 
@@ -1627,10 +1624,7 @@ function parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString)
     isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
 
-parsefloat{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString) = parse(T,s)
-
 float(x::AbstractString) = parse(Float64,x)
-parsefloat(x::AbstractString) = parse(Float64,x)
 
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 

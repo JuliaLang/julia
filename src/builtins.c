@@ -903,22 +903,22 @@ DLLEXPORT jl_nullable_float32_t jl_try_strtof(char *str)
 
 DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
 {
-	jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
-	if(0 == nf.isnull) {
-		*out = nf.value;
-		return 0;
-	}
-	return 1;
+    jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
+    if (0 == nf.isnull) {
+        *out = nf.value;
+        return 0;
+    }
+    return 1;
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)
 {
-	jl_nullable_float32_t nf = jl_try_strtof(str);
-	if(0 == nf.isnull) {
-		*out = nf.value;
-		return 0;
-	}
-	return 1;
+    jl_nullable_float32_t nf = jl_try_strtof(str);
+    if (0 == nf.isnull) {
+        *out = nf.value;
+        return 0;
+    }
+    return 1;
 }
 
 // showing --------------------------------------------------------------------

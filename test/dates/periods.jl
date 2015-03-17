@@ -238,7 +238,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
 @test_throws ArgumentError Dates.Year("1.0")
-@test Dates.Year(parsefloat("1.0")) == y
+@test Dates.Year(parse(Float64,"1.0")) == y
 
 dt = Dates.DateTime(2014)
 @test typeof(Dates.Year(dt)) <: Dates.Year
