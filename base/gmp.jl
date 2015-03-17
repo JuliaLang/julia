@@ -3,7 +3,7 @@ module GMP
 export BigInt
 
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
-             binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
+             cmp, convert, div, divrem, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
              sum, trailing_zeros, trailing_ones, count_ones, base, parseint, tryparse_internal,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
@@ -453,20 +453,6 @@ function sum(arr::AbstractArray{BigInt})
     end
     return n
 end
-
-function factorial(x::BigInt)
-    x.size < 0 && return BigInt(0)
-    z = BigInt()
-    ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
-    return z
-end
-
-function binomial(n::BigInt, k::UInt)
-    z = BigInt()
-    ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
-    return z
-end
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 
 ==(x::BigInt, y::BigInt) = cmp(x,y) == 0
 ==(x::BigInt, i::Integer) = cmp(x,i) == 0
