@@ -160,3 +160,16 @@ for T in (Complex64, Complex128, Complex{BigFloat})
                        (@eval $f($third, $half)))
     end
 end
+
+# issue #10544
+let a = ones(2,2), b = ones(2,2)
+    @test isapprox((@fastmath a[1] += 2.0), b[1] += 2.0)
+    @test isapprox((@fastmath a[2] -= 2.0), b[2] -= 2.0)
+    @test isapprox((@fastmath a[1,1] *= 2.0), b[1,1] *= 2.0)
+    @test isapprox((@fastmath a[2,2] /= 2.0), b[2,2] /= 2.0)
+    @test isapprox((@fastmath a[1,2] ^= 2.0), b[1,2] ^= 2.0)
+
+    # test fallthrough for unsupported ops
+    c = 0
+    @test Bool((@fastmath c |= 1))
+end
