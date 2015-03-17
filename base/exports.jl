@@ -166,14 +166,8 @@ export
     CPU_CORES,
     ENDIAN_BOM,
     ENV,
-    Inf,
-    Inf16,
-    Inf32,
     JULIA_HOME,
     LOAD_PATH,
-    NaN,
-    NaN16,
-    NaN32,
     OS_NAME,
     STDERR,
     STDIN,
@@ -182,6 +176,12 @@ export
     WORD_SIZE,
 
 # Mathematical constants
+    Inf,
+    Inf16,
+    Inf32,
+    NaN,
+    NaN16,
+    NaN32,
     im,
     π, pi,
     e, eu,
@@ -231,8 +231,8 @@ export
     >=,
     ≥,
     >>,
-    #.>>,
-    #.<<,
+    .>>,
+    .<<,
     >>>,
     \,
     ^,
@@ -1314,24 +1314,38 @@ export
     isnull,
 
 # Macros
+    # parser internal
     @__FILE__,
-    @b_str,
-    @r_str,
-    @v_str,
-    @text_str,
-    @html_str,
     @int128_str,
     @uint128_str,
     @bigint_str,
-    @mstr,
-    @unexpected,
-    @assert,
-    @cmd,
+    @mstr,   # triple-quoted strings
+    @cmd,    # `commands`
+
+    # notation for certain types
+    @b_str,  # byte vector
+    @r_str,  # regex
+    @v_str,  # version number
+
+    # documentation
+    @text_str,
+    @html_str,
+    @doc,
+    @doc_str,
+
+    # output
+    @show,
+    @printf,
+    @sprintf,
+
+    # profiling
     @time,
     @timed,
     @elapsed,
     @allocated,
     @profile,
+
+    # reflection
     @which,
     @edit,
     @less,
@@ -1340,6 +1354,8 @@ export
     @code_lowered,
     @code_llvm,
     @code_native,
+
+    # platform-conditional code
     @windows,
     @unix,
     @osx,
@@ -1350,33 +1366,37 @@ export
     @linux_only,
     @windowsxp_only,
     @non_windowsxp_only,
+
+    # tasks
     @schedule,
     @sync,
     @async,
+    @task,
+
+    # multiprocessing
     @spawn,
     @spawnat,
     @fetch,
     @fetchfrom,
     @everywhere,
     @parallel,
+
+    # metaprogramming utilities
     @gensym,
     @eval,
-    @task,
-    @thunk,
     @vectorize_1arg,
     @vectorize_2arg,
-    @show,
-    @printf,
-    @sprintf,
     @deprecate,
+
+    # performance annotations
     @boundscheck,
     @inbounds,
     @fastmath,
     @simd,
-    @label,
-    @goto,
     @inline,
     @noinline,
-    @doc,
-    @doc_str,
-    @enum
+
+    @assert,
+    @enum,
+    @label,
+    @goto
