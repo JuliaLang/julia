@@ -190,7 +190,7 @@ function init_bind_addr()
         bind_to = split(bytestring(opts.bindto), ":")
         bind_addr = string(parseip(bind_to[1]))
         if length(bind_to) > 1
-            bind_port = parseint(bind_to[2])
+            bind_port = parse(Int,bind_to[2])
         else
             bind_port = 0
         end
@@ -358,7 +358,7 @@ function load_machine_file(path::AbstractString)
     for line in split(readall(path),'\n'; keep=false)
         s = map!(strip, split(line,'*'; keep=false))
         if length(s) > 1
-            cnt = isnumber(s[1]) ? parseint(s[1]) : symbol(s[1])
+            cnt = isnumber(s[1]) ? parse(Int,s[1]) : symbol(s[1])
             push!(machines,(s[2], cnt))
         else
             push!(machines,line)

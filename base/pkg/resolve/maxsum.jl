@@ -21,7 +21,7 @@ type MaxSumParams
                  # step
 
     function MaxSumParams()
-        accuracy = parseint(get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
+        accuracy = parse(Int,get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
         if accuracy <= 0
             error("JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end

@@ -148,15 +148,15 @@ function parseipv4(str)
                 if length(f) > 8 # 2+(3*2) - prevent parseint from overflowing on 32bit
                     throw(ArgumentError("IPv4 field too large"))
                 end
-                r = parseint(f[3:end],16)
+                r = parse(Int,f[3:end],16)
             else
                 if length(f) > 9 # 1+8 - prevent parseint from overflowing on 32bit
                     throw(ArgumentError("IPv4 field too large"))
                 end
-                r = parseint(f,8)
+                r = parse(Int,f,8)
             end
         else
-            r = parseint(f,10)
+            r = parse(Int,f,10)
         end
         if i != length(fields)
             if r < 0 || r > 255
@@ -189,7 +189,7 @@ function parseipv6fields(fields,num_fields)
             cf -= 1
             continue
         end
-        ret |= UInt128(parseint(f,16))<<(cf*16)
+        ret |= UInt128(parse(Int,f,16))<<(cf*16)
         cf -= 1
     end
     ret

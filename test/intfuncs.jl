@@ -93,7 +93,7 @@
 @test isqrt(5) == 2
 # issue #4884
 @test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == parseint(Int128,"13043817825332782212")
+@test isqrt(typemax(Int128)) == parse(Int128,"13043817825332782212")
 @test isqrt(Int128(typemax(Int64))^2-1) == 9223372036854775806
 @test isqrt(0) == 0
 for i = 1:1000

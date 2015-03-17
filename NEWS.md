@@ -282,10 +282,14 @@ Deprecated or removed
     names have been removed. To convert a scalar, use the type name, e.g.
     `Int32(x)`. To convert an array to a different element type, use
     `Array{T}(x)`, `map(T,x)`, or `round(T,x)`. To parse a string as an integer
-    or floating-point number, use `parseint` or `parsefloat` ([#1470], [#6211]).
+    or floating-point number, use `parse` ([#1470], [#6211]).
 
   * Low-level functions from the C library and dynamic linker have been moved to
     modules `Libc` and `Libdl`, respectively ([#10328]).
+
+  * The functions `parseint`, `parsefloat`, `float32_isvalid`, and `float64_isvalid`
+    have been replaced by `parse` and `tryparse` with a type argument
+    ([#3631], [#5704], [#9487], [#10543]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -1070,6 +1074,7 @@ Too numerous to mention.
 [#3483]: https://github.com/JuliaLang/julia/issues/3483
 [#3523]: https://github.com/JuliaLang/julia/issues/3523
 [#3605]: https://github.com/JuliaLang/julia/issues/3605
+[#3631]: https://github.com/JuliaLang/julia/issues/3631
 [#3649]: https://github.com/JuliaLang/julia/issues/3649
 [#3665]: https://github.com/JuliaLang/julia/issues/3665
 [#3688]: https://github.com/JuliaLang/julia/issues/3688
@@ -1158,6 +1163,7 @@ Too numerous to mention.
 [#5671]: https://github.com/JuliaLang/julia/issues/5671
 [#5677]: https://github.com/JuliaLang/julia/issues/5677
 [#5703]: https://github.com/JuliaLang/julia/issues/5703
+[#5704]: https://github.com/JuliaLang/julia/issues/5704
 [#5726]: https://github.com/JuliaLang/julia/issues/5726
 [#5737]: https://github.com/JuliaLang/julia/issues/5737
 [#5748]: https://github.com/JuliaLang/julia/issues/5748
@@ -1278,6 +1284,7 @@ Too numerous to mention.
 [#9425]: https://github.com/JuliaLang/julia/issues/9425
 [#9434]: https://github.com/JuliaLang/julia/issues/9434
 [#9452]: https://github.com/JuliaLang/julia/issues/9452
+[#9487]: https://github.com/JuliaLang/julia/issues/9487
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
 [#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
@@ -1295,6 +1302,10 @@ Too numerous to mention.
 [#10150]: https://github.com/JuliaLang/julia/issues/10150
 [#10180]: https://github.com/JuliaLang/julia/issues/10180
 [#10228]: https://github.com/JuliaLang/julia/issues/10228
+[#10328]: https://github.com/JuliaLang/julia/issues/10328
 [#10332]: https://github.com/JuliaLang/julia/issues/10332
 [#10333]: https://github.com/JuliaLang/julia/issues/10333
 [#10400]: https://github.com/JuliaLang/julia/issues/10400
+[#10446]: https://github.com/JuliaLang/julia/issues/10446
+[#10458]: https://github.com/JuliaLang/julia/issues/10458
+[#10543]: https://github.com/JuliaLang/julia/issues/10543

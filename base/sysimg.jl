@@ -107,6 +107,8 @@ include("env.jl")
 include("path.jl")
 include("intfuncs.jl")
 
+# nullable types
+include("nullable.jl")
 
 # I/O
 include("task.jl")
@@ -162,7 +164,6 @@ include("collections.jl")
 # Combinatorics
 include("sort.jl")
 importall .Sort
-include("combinatorics.jl")
 
 # version
 include("version.jl")
@@ -176,6 +177,8 @@ big(n::Integer) = convert(BigInt,n)
 big(x::FloatingPoint) = convert(BigFloat,x)
 big(q::Rational) = big(num(q))//big(den(q))
 
+include("combinatorics.jl")
+
 # more hashing definitions
 include("hashing2.jl")
 
@@ -187,9 +190,6 @@ importall .Random
 # (s)printf macros
 include("printf.jl")
 importall .Printf
-
-# nullable types
-include("nullable.jl")
 
 # concurrency and parallelism
 include("serialize.jl")

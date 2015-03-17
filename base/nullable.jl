@@ -17,9 +17,9 @@ convert(   ::Type{Nullable   }, ::Void) = Nullable{Union()}()
 
 function show{T}(io::IO, x::Nullable{T})
     if x.isnull
-        @printf(io, "Nullable{%s}()", repr(T))
+        print(io, "Nullable{"); show(io, T); print(io, "}()")
     else
-        @printf(io, "Nullable(%s)", repr(x.value))
+        print(io, "Nullable("); show(io, x.value); print(io, ")")
     end
 end
 
