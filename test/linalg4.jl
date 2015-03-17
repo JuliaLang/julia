@@ -89,7 +89,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 test_approx_eq_vecs(u1, u2)
                 test_approx_eq_vecs(v1, v2)
             end
-            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1'-Tfull))
+            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1' - Tfull))
+            @inferred svdvals(T)
+            @inferred svd(T)
         end
 
         debug && println("Binary operations")
