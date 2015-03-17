@@ -1634,15 +1634,6 @@ parsefloat(x::AbstractString) = parse(Float64,x)
 
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
-function float_isvalid{T<:Union(Float32,Float64)}(s::AbstractString, out::Array{T,1})
-    tf = tryparse(T, s)
-    isnull(tf) || (out[1] = get(tf))
-    !isnull(tf)
-end
-
-float32_isvalid(s::AbstractString, out::Array{Float32,1}) = float_isvalid(s, out)
-float64_isvalid(s::AbstractString, out::Array{Float64,1}) = float_isvalid(s, out)
-
 # find the index of the first occurrence of a value in a byte array
 
 typealias ByteArray Union(Array{UInt8,1},Array{Int8,1})
