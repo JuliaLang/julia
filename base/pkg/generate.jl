@@ -14,9 +14,9 @@ function git_contributors(dir::AbstractString, n::Int=typemax(Int))
         m == nothing && continue
         commits, name, email = m.captures
         if haskey(contrib,email)
-            contrib[email][1] += Int(commits)
+            contrib[email][1] += parse(Int,commits)
         else
-            contrib[email] = [Int(commits),name]
+            contrib[email] = [parse(Int,commits), name]
         end
     end
     names = Dict()
