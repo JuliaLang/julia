@@ -1494,6 +1494,17 @@ DLLEXPORT extern int jl_ver_patch(void);
 DLLEXPORT extern int jl_ver_is_release(void);
 DLLEXPORT extern const char* jl_ver_string(void);
 
+// nullable struct representations
+typedef struct {
+    uint8_t isnull;
+    double value;
+} jl_nullable_float64_t;
+
+typedef struct {
+    uint8_t isnull;
+    float value;
+} jl_nullable_float32_t;
+
 #ifdef __cplusplus
 }
 #endif

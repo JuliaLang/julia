@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, parseint,
+             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
              prevpow2, nextpow2, ndigits0z, widen, signed
 
@@ -74,17 +74,25 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 BigInt(x::BigInt) = x
-BigInt(s::AbstractString) = parseint(BigInt,s)
+BigInt(s::AbstractString) = parse(BigInt,s)
 
-function Base.parseint_nocheck(::Type{BigInt}, s::AbstractString, base::Int)
+function tryparse_internal(::Type{BigInt}, s::AbstractString, base::Int, raise::Bool)
+    _n = Nullable{BigInt}()
     s = bytestring(s)
     sgn, base, i = Base.parseint_preamble(true,s,base)
+    if i == 0
+        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        return _n
+    end
     z = BigInt()
     err = ccall((:__gmpz_set_str, :libgmp),
                Int32, (Ptr{BigInt}, Ptr{UInt8}, Int32),
                &z, SubString(s,i), base)
-    err == 0 || throw(ArgumentError("invalid BigInt: $(repr(s))"))
-    return sgn < 0 ? -z : z
+    if err != 0
+        raise && throw(ArgumentError("invalid BigInt: $(repr(s))"))
+        return _n
+    end
+    Nullable(sgn < 0 ? -z : z)
 end
 
 function BigInt(x::Union(Clong,Int32))
@@ -217,7 +225,7 @@ function serialize(s, n::BigInt)
     serialize(s, base(62,n))
 end
 
-deserialize(s, ::Type{BigInt}) = Base.parseint_nocheck(BigInt, deserialize(s), 62)
+deserialize(s, ::Type{BigInt}) = get(tryparse_internal(BigInt, deserialize(s), 62, true))
 
 # Binary ops
 for (fJ, fC) in ((:+, :add), (:-,:sub), (:*, :mul),

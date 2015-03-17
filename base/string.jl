@@ -1475,19 +1475,18 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
+function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
+    a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
     d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    d
+    convert(T, d)
 end
-parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
-parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
 
 function parseint_next(s::AbstractString, i::Int=start(s))
-    done(s,i) && throw(ArgumentError("premature end of integer: $(repr(s))"))
+    done(s,i) && (return Char(0), 0, 0)
     j = i
     c, i = next(s,i)
     c, i, j
@@ -1495,9 +1494,12 @@ end
 
 function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
     c, i, j = parseint_next(s)
+
     while isspace(c)
         c, i, j = parseint_next(s,i)
     end
+    (j == 0) && (return 0, 0, 0)
+
     sgn = 1
     if signed
         if c == '-' || c == '+'
@@ -1505,9 +1507,12 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
             c, i, j = parseint_next(s,i)
         end
     end
+
     while isspace(c)
         c, i, j = parseint_next(s,i)
     end
+    (j == 0) && (return 0, 0, 0)
+
     if base == 0
         if c == '0' && !done(s,i)
             c, i = next(s,i)
@@ -1522,23 +1527,40 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
     return sgn, base, j
 end
 
-function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a::Int)
+safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
+safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
+                                      (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
+                                      ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
+
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a::Int, raise::Bool)
+    _n = Nullable{T}()
     sgn, base, i = parseint_preamble(T<:Signed,s,base)
+    if i == 0
+        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        return _n
+    end
     c, i = parseint_next(s,i)
+    if i == 0
+        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        return _n
+    end
+
     base = convert(T,base)
-    ## FIXME: remove 128-bit specific code once 128-bit div doesn't rely on BigInt
-    m::T = T===UInt128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
+    m::T = div(typemax(T)-base+1,base)
     n::T = 0
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+        if d >= base
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+            return _n
+        end
         n *= base
         n += d
         if done(s,i)
             n *= sgn
-            return n
+            return Nullable{T}(n)
         end
         c, i = next(s,i)
         isspace(c) && break
@@ -1546,29 +1568,44 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
         d::T = '0' <= c <= '9' ? c-'0'    :
-               'A' <= c <= 'Z' ? c-'A'+10 :
-               'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+        'A' <= c <= 'Z' ? c-'A'+10 :
+            'a' <= c <= 'z' ? c-'a'+a  : base
+        if d >= base
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+            return _n
+        end
         (T <: Signed) && (d *= sgn)
-        n = checked_mul(n,base)
-        n = checked_add(n,d)
-        done(s,i) && return n
+
+        safe_n = safe_mul(n, base)
+        isnull(safe_n) || (safe_n = safe_add(get(safe_n), d))
+        if isnull(safe_n)
+            raise && throw(OverflowError())
+            return _n
+        end
+        n = get(safe_n)
+        done(s,i) && return Nullable{T}(n)
         c, i = next(s,i)
     end
     while !done(s,i)
         c, i = next(s,i)
-        isspace(c) || throw(ArgumentError("extra characters after whitespace in $(repr(s))"))
+        if !isspace(c)
+            raise && throw(ArgumentError("extra characters after whitespace in $(repr(s))"))
+            return _n
+        end
     end
-    return n
+    return Nullable{T}(n)
 end
-parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
-    parseint_nocheck(T, s, base, base <= 36 ? 10 : 36)
+tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
+    tryparse_internal(T, s, base, base <= 36 ? 10 : 36, raise)
+tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
+    2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
 
-parseint{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
-    2 <= base <= 62 ? parseint_nocheck(T,s,Int(base)) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-parseint{T<:Integer}(::Type{T}, s::AbstractString) = parseint_nocheck(T,s,0)
-parseint(s::AbstractString, base::Integer) = parseint(Int,s,base)
-parseint(s::AbstractString) = parseint_nocheck(Int,s,0)
+function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
+    (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    get(tryparse_internal(T, s, base, true))
+end
+parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
 
 ## stringifying integers more efficiently ##
 
@@ -1576,37 +1613,18 @@ string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 
-float64_isvalid(s::AbstractString, out::Array{Float64,1}) =
-    ccall(:jl_strtod, Int32, (Ptr{UInt8},Ptr{Float64}), s, out) == 0
-float32_isvalid(s::AbstractString, out::Array{Float32,1}) =
-    ccall(:jl_strtof, Int32, (Ptr{UInt8},Ptr{Float32}), s, out) == 0
+tryparse(::Type{Float64}, s::AbstractString) = ccall(:jl_try_strtod, Nullable{Float64}, (Ptr{UInt8},), s)
+tryparse(::Type{Float64}, s::SubString) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
 
-float64_isvalid(s::SubString, out::Array{Float64,1}) =
-    ccall(:jl_substrtod, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
-float32_isvalid(s::SubString, out::Array{Float32,1}) =
-    ccall(:jl_substrtof, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+tryparse(::Type{Float32}, s::AbstractString) = ccall(:jl_try_strtof, Nullable{Float32}, (Ptr{UInt8},), s)
+tryparse(::Type{Float32}, s::SubString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
 
-begin
-    local tmp::Array{Float64,1} = Array(Float64,1)
-    local tmpf::Array{Float32,1} = Array(Float32,1)
-    global parsefloat
-    function parsefloat(::Type{Float64}, s::AbstractString)
-        if !float64_isvalid(s, tmp)
-            throw(ArgumentError("parsefloat(Float64,::AbstractString): invalid number format $(repr(s))"))
-        end
-        return tmp[1]
-    end
-
-    function parsefloat(::Type{Float32}, s::AbstractString)
-        if !float32_isvalid(s, tmpf)
-            throw(ArgumentError("parsefloat(Float32,::AbstractString): invalid number format $(repr(s))"))
-        end
-        return tmpf[1]
-    end
+function parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString)
+    nf = tryparse(T, s)
+    isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
 
-float(x::AbstractString) = parsefloat(x)
-parsefloat(x::AbstractString) = parsefloat(Float64,x)
+float(x::AbstractString) = parse(Float64,x)
 
 float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 

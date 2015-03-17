@@ -189,6 +189,6 @@ function tty_size()
             return size(os)
         end
     end
-    return (parseint(get(ENV,"LINES","24")),
-            parseint(get(ENV,"COLUMNS","80")))
+    return (parse(Int,get(ENV,"LINES","24")),
+            parse(Int,get(ENV,"COLUMNS","80")))
 end

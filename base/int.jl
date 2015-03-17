@@ -248,7 +248,7 @@ floor{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
 
 macro int128_str(x)
     if isa(x,AbstractString)
-        parseint(Int128,x)
+        parse(Int128,x)
     else
         Int128(x)
     end
@@ -256,7 +256,7 @@ end
 
 macro uint128_str(x)
     if isa(x,AbstractString)
-        parseint(UInt128,x)
+        parse(UInt128,x)
     else
         UInt128(x)
     end

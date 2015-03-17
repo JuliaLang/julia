@@ -96,7 +96,7 @@ function slotparse(slot::Slot{Month},x)
         return Month(MONTHTOVALUE[slot.locale][lowercase(x)])
     end
 end
-slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(parsefloat("."*x)*1000.0) : throw(SLOTERROR)
+slotparse(slot::Slot{Millisecond},x) = !ismatch(r"[^0-9\s]",x) ? slot.period(Base.parse(Float64,"."*x)*1000.0) : throw(SLOTERROR)
 slotparse(slot::Slot{DayOfWeekSlot},x) = nothing
 
 function getslot(x,slot::DelimitedSlot,df,cursor)

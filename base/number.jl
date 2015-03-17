@@ -45,3 +45,5 @@ zero(x::Number) = oftype(x,0)
 zero{T<:Number}(::Type{T}) = convert(T,0)
 one(x::Number)  = oftype(x,1)
 one{T<:Number}(::Type{T}) = convert(T,1)
+
+factorial(x::Number) = gamma(x + 1) # fallback for x not Integer

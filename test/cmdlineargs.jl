@@ -99,8 +99,8 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # --startup-file
     let JL_OPTIONS_STARTUPFILE_ON = 1,
         JL_OPTIONS_STARTUPFILE_OFF = 2
-        @test parseint(readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
-        @test parseint(readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
+        @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=yes`)) == JL_OPTIONS_STARTUPFILE_ON
+        @test parse(Int,readchomp(`$exename -E "Base.JLOptions().startupfile" --startup-file=no`)) == JL_OPTIONS_STARTUPFILE_OFF
     end
     @test !success(`$exename --startup-file=false`)
 
@@ -127,9 +127,9 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     let JL_OPTIONS_CHECK_BOUNDS_DEFAULT = 0,
         JL_OPTIONS_CHECK_BOUNDS_ON = 1,
         JL_OPTIONS_CHECK_BOUNDS_OFF = 2
-        @test parseint(readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"`)) == JL_OPTIONS_CHECK_BOUNDS_DEFAULT
-        @test parseint(readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)" --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
-        @test parseint(readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)" --check-bounds=no`)) == JL_OPTIONS_CHECK_BOUNDS_OFF
+        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)"`)) == JL_OPTIONS_CHECK_BOUNDS_DEFAULT
+        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)" --check-bounds=yes`)) == JL_OPTIONS_CHECK_BOUNDS_ON
+        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().check_bounds)" --check-bounds=no`)) == JL_OPTIONS_CHECK_BOUNDS_OFF
     end
     # check-bounds takes yes/no as argument
     @test !success(`$exename -E "exit(0)" --check-bounds=false`)
@@ -149,9 +149,9 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # --fast-math
     let JL_OPTIONS_FAST_MATH_DEFAULT = 0,
         JL_OPTIONS_FAST_MATH_OFF = 2
-        @test parseint(readchomp(`$exename -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parseint(readchomp(`$exename --math-mode=user -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
-        @test parseint(readchomp(`$exename --math-mode=ieee -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
+        @test parse(Int,readchomp(`$exename -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
+        @test parse(Int,readchomp(`$exename --math-mode=user -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_DEFAULT
+        @test parse(Int,readchomp(`$exename --math-mode=ieee -E "Int(Base.JLOptions().fast_math)"`)) == JL_OPTIONS_FAST_MATH_OFF
     end
     # --math-mode takes ieee/user as argument
     @test !success(`$exename --math-mode=fast`)
