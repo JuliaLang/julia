@@ -1252,7 +1252,7 @@ end
 
 
 # using promote_type
-function promote_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
+function promote_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, do a type promotion and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1284,14 +1284,14 @@ end
 
 ## 1 argument
 map!(f, A::AbstractArray) = map!(f, A, A)
-function map!(f, dest::AbstractArray, A::AbstractArray)
+function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i])
     end
     return dest
 end
 
-function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray)
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1321,14 +1321,14 @@ function map(f, A::AbstractArray)
 end
 
 ## 2 argument
-function map!(f, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i], B[i])
     end
     return dest
 end
 
-function map_to!{T}(f, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
     @inbounds for i = offs:length(A)
         el = f(A[i], B[i])
         S = typeof(el)
@@ -1356,7 +1356,7 @@ function map(f, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map!(f, dest::AbstractArray, As::AbstractArray...)
+function map!{F}(f::F, dest::AbstractArray, As::AbstractArray...)
     n = length(As[1])
     i = 1
     ith = a->a[i]
@@ -1366,7 +1366,7 @@ function map!(f, dest::AbstractArray, As::AbstractArray...)
     return dest
 end
 
-function map_to!{T}(f, offs, dest::AbstractArray{T}, As::AbstractArray...)
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, As::AbstractArray...)
     local i
     ith = a->a[i]
     @inbounds for i = offs:length(As[1])
