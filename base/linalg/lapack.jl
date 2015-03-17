@@ -3212,7 +3212,7 @@ for (bdsdc, elty) in
             q, iq, work, iwork, info)
 
             @lapackerror
-            compq=='N' ? d : (compq=='P' ? (d, q, iq) : (u, d, vt'))
+            d, e, u, vt, q, iq
         end
     end
 end
