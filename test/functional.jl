@@ -2,7 +2,11 @@
 
 # map -- array.jl
 @test isequal(map((x)->"$x"[end:end], 9:11), ["9", "0", "1"])
-# TODO: @test map!()
+# TODO: @test map!() much more thoroughly
+let a = [1.0, 2.0]
+    map!(sin, a)
+    @test isequal(a, sin([1.0, 2.0]))
+end
 # map -- ranges.jl
 @test isequal(map(i->sqrt(i), 1:5), [sqrt(i) for i in 1:5])
 @test isequal(map(i->sqrt(i), 2:6), [sqrt(i) for i in 2:6])

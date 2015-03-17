@@ -1283,7 +1283,7 @@ function map_promote(f, A::AbstractArray)
 end
 
 ## 1 argument
-map!(f, A::AbstractArray) = map!(f, A, A)
+map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
 function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
     for i = 1:length(A)
         dest[i] = f(A[i])
