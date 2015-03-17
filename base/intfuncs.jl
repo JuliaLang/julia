@@ -333,3 +333,41 @@ function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
     s = (s + div(x,s)) >> 1
     s*s > x ? s-1 : s
 end
+
+function factorial(n::Integer)
+    n < 0 && throw(DomainError())
+    local f::typeof(n*n), i::typeof(n*n)
+    f = 1
+    for i = 2:n
+        f *= i
+    end
+    return f
+end
+
+function binomial{T<:Integer}(n::T, k::T)
+    k < 0 && return zero(T)
+    sgn = one(T)
+    if n < 0
+        n = -n + k -1
+        if isodd(k)
+            sgn = -sgn
+        end
+    end
+    k > n && return zero(T)
+    (k == 0 || k == n) && return sgn
+    k == 1 && return sgn*n
+    if k > (n>>1)
+        k = (n - k)
+    end
+    x::T = nn = n - k + 1
+    nn += 1
+    rr = 2
+    while rr <= k
+        xt = div(widemul(x, nn), rr)
+        x = xt
+        x == xt || throw(OverflowError())
+        rr += 1
+        nn += 1
+    end
+    convert(T, copysign(x, sgn))
+end

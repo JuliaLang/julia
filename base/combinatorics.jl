@@ -49,18 +49,6 @@ function gamma(n::Union(Int8,UInt8,Int16,UInt16,Int32,UInt32,Int64,UInt64))
     @inbounds return Float64(_fact_table64[n-1])
 end
 
-function factorial(n::Integer)
-    n < 0 && throw(DomainError())
-    local f::typeof(n*n), i::typeof(n*n)
-    f = 1
-    for i = 2:n
-        f *= i
-    end
-    return f
-end
-
-factorial(x::Number) = gamma(x + 1) # fallback for x not Integer
-
 # computes n!/k!
 function factorial{T<:Integer}(n::T, k::T)
     if k < 0 || n < 0 || k > n
@@ -74,58 +62,6 @@ function factorial{T<:Integer}(n::T, k::T)
     return f
 end
 factorial(n::Integer, k::Integer) = factorial(promote(n, k)...)
-
-function factorial(x::BigInt)
-    x.size < 0 && return BigInt(0)
-    z = BigInt()
-    ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
-    return z
-end
-
-function factorial(x::BigFloat)
-    if x < 0 || !isinteger(x)
-        throw(DomainError())
-    end
-    ui = convert(Culong, x)
-    z = BigFloat()
-    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Int32), &z, ui, MPFR.ROUNDING_MODE[end])
-    return z
-end
-
-function binomial{T<:Integer}(n::T, k::T)
-    k < 0 && return zero(T)
-    sgn = one(T)
-    if n < 0
-        n = -n + k -1
-        if isodd(k)
-            sgn = -sgn
-        end
-    end
-    k > n && return zero(T)
-    (k == 0 || k == n) && return sgn
-    k == 1 && return sgn*n
-    if k > (n>>1)
-        k = (n - k)
-    end
-    x::T = nn = n - k + 1
-    nn += 1
-    rr = 2
-    while rr <= k
-        xt = div(widemul(x, nn), rr)
-        x = xt
-        x == xt || throw(OverflowError())
-        rr += 1
-        nn += 1
-    end
-    convert(T, copysign(x, sgn))
-end
-
-function binomial(n::BigInt, k::UInt)
-    z = BigInt()
-    ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
-    return z
-end
-binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 
 ## other ordering related functions ##
 function nthperm!(a::AbstractVector, k::Integer)

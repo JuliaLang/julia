@@ -9,7 +9,7 @@ export
 import
     Base: (*), +, -, /, <, <=, ==, >, >=, ^, besselj, besselj0, besselj1, bessely,
         bessely0, bessely1, ceil, cmp, convert, copysign, deg2rad,
-        exp, exp2, exponent, floor, fma, hypot, isinteger,
+        exp, exp2, exponent, factorial, floor, fma, hypot, isinteger,
         isfinite, isinf, isnan, ldexp, log, log2, log10, max, min, mod, modf,
         nextfloat, prevfloat, promote_rule, rad2deg, rem, round, show,
         showcompact, sum, sqrt, string, print, trunc, precision, exp10, expm1,
@@ -474,6 +474,16 @@ function bessely(n::Integer, x::BigFloat)
     end
     z = BigFloat()
     ccall((:mpfr_yn, :libmpfr), Int32, (Ptr{BigFloat}, Clong, Ptr{BigFloat}, Int32), &z, n, &x, ROUNDING_MODE[end])
+    return z
+end
+
+function factorial(x::BigFloat)
+    if x < 0 || !isinteger(x)
+        throw(DomainError())
+    end
+    ui = convert(Culong, x)
+    z = BigFloat()
+    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Int32), &z, ui, ROUNDING_MODE[end])
     return z
 end
 
