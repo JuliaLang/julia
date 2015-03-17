@@ -43,7 +43,7 @@ typedef struct {
     };
     // Work around a bug affecting gcc up to (at least) version 4.4.7
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
-#ifndef _MSC_VER
+#if !defined(_COMPILER_MICROSOFT_)
     int _dummy[0];
 #endif
     char data[];
@@ -84,7 +84,7 @@ typedef struct _gcpage_t {
 
 // contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
 // uses a very naive allocator (see malloc_page & free_page)
-#if defined(_P64) && !defined(_MSC_VER)
+#if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
 #define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
 #else
 #define REGION_PG_COUNT 8*4096 // 512M
@@ -515,9 +515,9 @@ static NOINLINE void *malloc_page(void)
     if (heaps_ub[heap_i] < i)
         heaps_ub[heap_i] = i;
 
-#ifdef __MINGW32__
+#if defined(_COMPILER_MINGW_)
     int j = __builtin_ffs(heap->freemap[i]) - 1;
-#elif _MSC_VER
+#elif defined(_COMPILER_MICROSOFT_)
     unsigned long j;
     _BitScanForward(&j, heap->freemap[i]);
 #else
