@@ -99,9 +99,11 @@ function make_fastmath(expr::Expr)
             inds = tuple(var.args[2:end]...)
             arrvar = gensym()
             indvars = tuple([gensym() for i in inds]...)
-            expr = :($arrvar = $arr
-                     $indvars = $inds
-                     $(arrvar)[indvars] = $(op)($(arrvar)[$indvars], $rhs))
+            expr = quote
+                $(Expr(:(=), arrvar, arr))
+                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
+                $(arrvar)[$(indvars...)] = $(op)($(arrvar)[$(indvars...)], $rhs)
+            end
         end
     end
     Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
