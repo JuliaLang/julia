@@ -733,7 +733,8 @@ DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 
 // printing -------------------------------------------------------------------
 
-int substr_isspace(char *p, char *pend) {
+int substr_isspace(char *p, char *pend)
+{
     while (p != pend) {
         if (!isspace((unsigned char)*p)) {
             return 0;
@@ -743,7 +744,8 @@ int substr_isspace(char *p, char *pend) {
     return 1;
 }
 
-int str_isspace(char *p) {
+int str_isspace(char *p)
+{
     while (*p != '\0') {
         if (!isspace((unsigned char)*p)) {
             return 0;
@@ -812,22 +814,22 @@ DLLEXPORT jl_nullable_float64_t jl_try_strtod(char *str)
 
 DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
 {
-	jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
-	if(0 == nd.isnull) {
-		*out = nd.value;
-		return 0;
-	}
-	return 1;
+    jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
+    if (0 == nd.isnull) {
+        *out = nd.value;
+        return 0;
+    }
+    return 1;
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
 {
-	jl_nullable_float64_t nd = jl_try_strtod(str);
-	if(0 == nd.isnull) {
-		*out = nd.value;
-		return 0;
-	}
-	return 1;
+    jl_nullable_float64_t nd = jl_try_strtod(str);
+    if (0 == nd.isnull) {
+        *out = nd.value;
+        return 0;
+    }
+    return 1;
 }
 
 // MSVC pre-2013 did not define HUGE_VALF
