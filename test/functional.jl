@@ -53,7 +53,7 @@ let zeb     = IOBuffer("1\n2\n3\n4\n5\n"),
     letters = ['a', 'b', 'c', 'd', 'e'],
     res     = []
     for (number, letter) in zip(eachline(zeb), letters)
-        push!(res, (parseint(strip(number)), letter))
+        push!(res, (parse(Int,strip(number)), letter))
     end
     @test res == [(1, 'a'), (2, 'b'), (3, 'c'), (4, 'd'), (5, 'e')]
 end

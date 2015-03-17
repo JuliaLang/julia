@@ -133,34 +133,34 @@ end
 @test "\x0F" == unescape_string("\\x0F")
 
 # integer parsing
-@test is(parseint(Int32,"0",36),Int32(0))
-@test is(parseint(Int32,"1",36),Int32(1))
-@test is(parseint(Int32,"9",36),Int32(9))
-@test is(parseint(Int32,"A",36),Int32(10))
-@test is(parseint(Int32,"a",36),Int32(10))
-@test is(parseint(Int32,"B",36),Int32(11))
-@test is(parseint(Int32,"b",36),Int32(11))
-@test is(parseint(Int32,"F",36),Int32(15))
-@test is(parseint(Int32,"f",36),Int32(15))
-@test is(parseint(Int32,"Z",36),Int32(35))
-@test is(parseint(Int32,"z",36),Int32(35))
+@test is(parse(Int32,"0",36),Int32(0))
+@test is(parse(Int32,"1",36),Int32(1))
+@test is(parse(Int32,"9",36),Int32(9))
+@test is(parse(Int32,"A",36),Int32(10))
+@test is(parse(Int32,"a",36),Int32(10))
+@test is(parse(Int32,"B",36),Int32(11))
+@test is(parse(Int32,"b",36),Int32(11))
+@test is(parse(Int32,"F",36),Int32(15))
+@test is(parse(Int32,"f",36),Int32(15))
+@test is(parse(Int32,"Z",36),Int32(35))
+@test is(parse(Int32,"z",36),Int32(35))
 
-@test parseint("0") == 0
-@test parseint("-0") == 0
-@test parseint("1") == 1
-@test parseint("-1") == -1
-@test parseint("9") == 9
-@test parseint("-9") == -9
-@test parseint("10") == 10
-@test parseint("-10") == -10
-@test parseint(Int64,"3830974272") == 3830974272
-@test parseint(Int64,"-3830974272") == -3830974272
-@test parseint('3') == 3
-@test parseint('3', 8) == 3
+@test parse(Int,"0") == 0
+@test parse(Int,"-0") == 0
+@test parse(Int,"1") == 1
+@test parse(Int,"-1") == -1
+@test parse(Int,"9") == 9
+@test parse(Int,"-9") == -9
+@test parse(Int,"10") == 10
+@test parse(Int,"-10") == -10
+@test parse(Int64,"3830974272") == 3830974272
+@test parse(Int64,"-3830974272") == -3830974272
+@test parse(Int,'3') == 3
+@test parse(Int,'3', 8) == 3
 
-parsebin(s) = parseint(s,2)
-parseoct(s) = parseint(s,8)
-parsehex(s) = parseint(s,16)
+parsebin(s) = parse(Int,s,2)
+parseoct(s) = parse(Int,s,8)
+parsehex(s) = parse(Int,s,16)
 
 @test parsebin("0") == 0
 @test parsebin("-0") == 0
@@ -202,49 +202,49 @@ parsehex(s) = parseint(s,16)
 @test parsehex("-10") == -16
 @test parsehex("0BADF00D") == 195948557
 @test parsehex("-0BADF00D") == -195948557
-@test parseint(Int64,"BADCAB1E",16) == 3135023902
-@test parseint(Int64,"-BADCAB1E",16) == -3135023902
-@test parseint(Int64,"CafeBabe",16) == 3405691582
-@test parseint(Int64,"-CafeBabe",16) == -3405691582
-@test parseint(Int64,"DeadBeef",16) == 3735928559
-@test parseint(Int64,"-DeadBeef",16) == -3735928559
+@test parse(Int64,"BADCAB1E",16) == 3135023902
+@test parse(Int64,"-BADCAB1E",16) == -3135023902
+@test parse(Int64,"CafeBabe",16) == 3405691582
+@test parse(Int64,"-CafeBabe",16) == -3405691582
+@test parse(Int64,"DeadBeef",16) == 3735928559
+@test parse(Int64,"-DeadBeef",16) == -3735928559
 
-@test parseint("2\n") == 2
-@test parseint("   2 \n ") == 2
-@test parseint(" 2 ") == 2
-@test parseint("2 ") == 2
-@test parseint(" 2") == 2
-@test parseint("+2\n") == 2
-@test parseint("-2") == -2
-@test_throws ArgumentError parseint("   2 \n 0")
-@test_throws ArgumentError parseint("2x")
-@test_throws ArgumentError parseint("-")
+@test parse(Int,"2\n") == 2
+@test parse(Int,"   2 \n ") == 2
+@test parse(Int," 2 ") == 2
+@test parse(Int,"2 ") == 2
+@test parse(Int," 2") == 2
+@test parse(Int,"+2\n") == 2
+@test parse(Int,"-2") == -2
+@test_throws ArgumentError parse(Int,"   2 \n 0")
+@test_throws ArgumentError parse(Int,"2x")
+@test_throws ArgumentError parse(Int,"-")
 
-@test parseint('a') == 10
-@test_throws ArgumentError parseint(typemax(Char))
+@test parse(Int,'a') == 10
+@test_throws ArgumentError parse(Int,typemax(Char))
 
-@test parseint("1234") == 1234
-@test parseint("0x1234") == 0x1234
-@test parseint("0o1234") == 0o1234
-@test parseint("0b1011") == 0b1011
-@test parseint("-1234") == -1234
-@test parseint("-0x1234") == -Int(0x1234)
-@test parseint("-0o1234") == -Int(0o1234)
-@test parseint("-0b1011") == -Int(0b1011)
+@test parse(Int,"1234") == 1234
+@test parse(Int,"0x1234") == 0x1234
+@test parse(Int,"0o1234") == 0o1234
+@test parse(Int,"0b1011") == 0b1011
+@test parse(Int,"-1234") == -1234
+@test parse(Int,"-0x1234") == -Int(0x1234)
+@test parse(Int,"-0o1234") == -Int(0o1234)
+@test parse(Int,"-0b1011") == -Int(0b1011)
 
 ## FIXME: #4905, do these tests for Int128/UInt128!
 for T in (Int8, Int16, Int32, Int64)
-    @test parseint(T,string(typemin(T))) == typemin(T)
-    @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws OverflowError parseint(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
+    @test parse(T,string(typemin(T))) == typemin(T)
+    @test parse(T,string(typemax(T))) == typemax(T)
+    @test_throws OverflowError parse(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
 for T in (UInt8,UInt16,UInt32,UInt64)
-    @test parseint(T,string(typemin(T))) == typemin(T)
-    @test parseint(T,string(typemax(T))) == typemax(T)
-    @test_throws ArgumentError parseint(T,string(big(typemin(T))-1))
-    @test_throws OverflowError parseint(T,string(big(typemax(T))+1))
+    @test parse(T,string(typemin(T))) == typemin(T)
+    @test parse(T,string(typemax(T))) == typemax(T)
+    @test_throws ArgumentError parse(T,string(big(typemin(T))-1))
+    @test_throws OverflowError parse(T,string(big(typemax(T))+1))
 end
 
 # string manipulation
@@ -928,17 +928,17 @@ bin_val = hex2bytes("07bf")
 
 # issue #4586
 @test rsplit(RevString("ailuj"),'l') == ["ju","ia"]
-@test parsefloat(Float64,RevString("64")) === 46.0
+@test parse(Float64,RevString("64")) === 46.0
 
 # issue #6772
 @test float(SubString("10",1,1)) === 1.0
 @test float(SubString("1 0",1,1)) === 1.0
-@test parsefloat(Float32,SubString("10",1,1)) === 1.0f0
+@test parse(Float32,SubString("10",1,1)) === 1.0f0
 
 for T = (UInt8,Int8,UInt16,Int16,UInt32,Int32,UInt64,Int64,UInt128,Int128,BigInt),
     b = 2:62, _ = 1:10
     n = T != BigInt ? rand(T) : BigInt(rand(Int128))
-    @test parseint(T,base(b,n),b) == n
+    @test parse(T,base(b,n),b) == n
 end
 
 # normalize_string (Unicode normalization etc.):
@@ -1337,12 +1337,12 @@ end
 # float(SubString) wasn't tolerant of trailing whitespace, which was different
 # to "normal" strings. This also checks we aren't being too tolerant and allowing
 # any arbitrary trailing characters.
-@test parsefloat(Float64,"1\n") == 1.0
-@test [parsefloat(Float64,x) for x in split("0,1\n",",")][2] == 1.0
-@test_throws ArgumentError parsefloat(Float64,split("0,1 X\n",",")[2])
-@test parsefloat(Float32,"1\n") == 1.0
-@test [parsefloat(Float32,x) for x in split("0,1\n",",")][2] == 1.0
-@test_throws ArgumentError parsefloat(Float32,split("0,1 X\n",",")[2])
+@test parse(Float64,"1\n") == 1.0
+@test [parse(Float64,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parse(Float64,split("0,1 X\n",",")[2])
+@test parse(Float32,"1\n") == 1.0
+@test [parse(Float32,x) for x in split("0,1\n",",")][2] == 1.0
+@test_throws ArgumentError parse(Float32,split("0,1 X\n",",")[2])
 
 #more ascii tests
 @test convert(ASCIIString, UInt8[32,107,75], "*") == " kK"

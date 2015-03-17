@@ -10,7 +10,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
-    @eval $p(x::AbstractString) = $p(parseint(Int64,x))
+    @eval $p(x::AbstractString) = $p(Base.parse(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end

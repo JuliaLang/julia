@@ -512,3 +512,11 @@ function float64_isvalid(s::AbstractString, out::Array{Float64,1})
     depwarn("float64_isvalid is deprecated, use tryparse(Float64,s) instead", :float64_isvalid)
     float_isvalid(s, out)
 end
+
+@deprecate parsefloat(s::AbstractString) parse(Float64,s)
+@deprecate parsefloat(T, s)              parse(T, s)
+
+@deprecate parseint(s)                parse(Int, s)
+@deprecate parseint(s,base)           parse(Int, s, base)
+@deprecate parseint(T::Type, s)       parse(T, s)
+@deprecate parseint(T::Type, s, base) parse(T, s, base)

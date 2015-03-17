@@ -5,7 +5,7 @@ export BigInt
 import Base: *, +, -, /, <, <<, >>, >>>, <=, ==, >, >=, ^, (~), (&), (|), ($),
              binomial, cmp, convert, div, divrem, factorial, fld, gcd, gcdx, lcm, mod,
              ndigits, promote_rule, rem, show, isqrt, string, isprime, powermod,
-             sum, trailing_zeros, trailing_ones, count_ones, base, parseint, tryparse_internal,
+             sum, trailing_zeros, trailing_ones, count_ones, base, tryparse_internal,
              serialize, deserialize, bin, oct, dec, hex, isequal, invmod,
              prevpow2, nextpow2, ndigits0z, widen, signed
 
@@ -74,7 +74,7 @@ widen(::Type{BigInt})  = BigInt
 signed(x::BigInt) = x
 
 BigInt(x::BigInt) = x
-BigInt(s::AbstractString) = parseint(BigInt,s)
+BigInt(s::AbstractString) = parse(BigInt,s)
 
 function tryparse_internal(::Type{BigInt}, s::AbstractString, base::Int, raise::Bool)
     _n = Nullable{BigInt}()
