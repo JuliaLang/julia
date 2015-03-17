@@ -3,7 +3,7 @@
 # usage: jldownload [<output-filename>] <url>
 #
 
-MIRROR_HOST=http://d304tytmzqn1fl.cloudfront.net
+CACHE_HOST=https://cache.e.ip.saba.us
 
 WGET=$(which wget 2>/dev/null)
 CURL=$(which curl 2>/dev/null)
@@ -26,8 +26,7 @@ else
     exit 1
 fi
 
-MIRROR_BASENAME=`basename $1`
-MIRROR_URL="$MIRROR_HOST/$MIRROR_BASENAME"
+CACHE_URL="$CACHE_HOST/$URL"
 
 if [ -x "$CURL" ] && $CURL -V >/dev/null; then
     GETURL="$CURL $CURL_OPTS"
@@ -41,12 +40,8 @@ else
     exit 1
 fi
 
-if [ -z "$JLDOWNLOAD_PREFER_MIRROR" ]; then
-    $GETURL $URL || $GETURL $MIRROR_URL
-else
-    # Still try downloading from the original URL if the mirror fails.
-    # User may want to get around a single failure, only to run into a dep
-    # that we haven't mirrored yet, so better to be safe than sorry and try 
-    # the original URL in that case
-    $GETURL $MIRROR_URL || $GETURL $URL
-fi
+# Try to get from the cache if it is possible.  Note that the cache will
+# forward to the original URL if it has not cached this download yet, or
+# if the URL is not cacheable.  We fallback to directly querying the
+# uncached URL to protect against cache service downtime
+$GETURL $CACHE_URL || $GETURL $URL

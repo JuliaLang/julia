@@ -1396,7 +1396,7 @@
 	     (if (eqv? (require-token s) closer)
 		 (loop lst nxt)
 		 (let ((params (parse-arglist s closer)))
-		   `(vcat ,@params ,@lst ,nxt))))
+		   `(vcat ,@params ,@(reverse lst) ,nxt))))
 	    ((#\] #\})
 	     (error (string "unexpected \"" t "\"")))
 	    (else

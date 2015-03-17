@@ -74,7 +74,7 @@ macro evalpoly(z, p...)
              :(s = x*x + y*y),
              as...,
              :($ai * t + $b))
-    R = Expr(:macrocall, symbol("@horner"), esc(z), p...)
+    R = Expr(:macrocall, symbol("@horner"), esc(z), map(esc, p)...)
     :(isa($(esc(z)), Complex) ? $C : $R)
 end
 

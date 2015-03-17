@@ -73,6 +73,8 @@ In addition to function names, complete function calls may be entered to see whi
 
 Help mode can be exited by pressing backspace at the beginning of the line.
 
+.. _man-shell-mode:
+
 Shell mode
 ~~~~~~~~~~
 

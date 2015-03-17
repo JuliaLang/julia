@@ -1,3 +1,11 @@
+Julia v0.3.7 Release Notes
+==========================
+
+Library improvements
+--------------------
+
+  * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
+
 Julia v0.3.4 Release Notes
 ==========================
 
