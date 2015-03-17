@@ -75,6 +75,23 @@ function factorial{T<:Integer}(n::T, k::T)
 end
 factorial(n::Integer, k::Integer) = factorial(promote(n, k)...)
 
+function factorial(x::BigInt)
+    x.size < 0 && return BigInt(0)
+    z = BigInt()
+    ccall((:__gmpz_fac_ui, :libgmp), Void, (Ptr{BigInt}, Culong), &z, x)
+    return z
+end
+
+function factorial(x::BigFloat)
+    if x < 0 || !isinteger(x)
+        throw(DomainError())
+    end
+    ui = convert(Culong, x)
+    z = BigFloat()
+    ccall((:mpfr_fac_ui, :libmpfr), Int32, (Ptr{BigFloat}, Culong, Int32), &z, ui, MPFR.ROUNDING_MODE[end])
+    return z
+end
+
 function binomial{T<:Integer}(n::T, k::T)
     k < 0 && return zero(T)
     sgn = one(T)
@@ -102,6 +119,13 @@ function binomial{T<:Integer}(n::T, k::T)
     end
     convert(T, copysign(x, sgn))
 end
+
+function binomial(n::BigInt, k::UInt)
+    z = BigInt()
+    ccall((:__gmpz_bin_ui, :libgmp), Void, (Ptr{BigInt}, Ptr{BigInt}, Culong), &z, &n, k)
+    return z
+end
+binomial(n::BigInt, k::Integer) = k < 0 ? BigInt(0) : binomial(n, UInt(k))
 
 ## other ordering related functions ##
 function nthperm!(a::AbstractVector, k::Integer)

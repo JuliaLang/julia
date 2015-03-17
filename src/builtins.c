@@ -733,13 +733,34 @@ DLLEXPORT jl_value_t *jl_value_ptr(jl_value_t *a)
 
 // printing -------------------------------------------------------------------
 
-DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
+int substr_isspace(char *p, char *pend) {
+    while (p != pend) {
+        if (!isspace((unsigned char)*p)) {
+            return 0;
+        }
+        p++;
+    }
+    return 1;
+}
+
+int str_isspace(char *p) {
+    while (*p != '\0') {
+        if (!isspace((unsigned char)*p)) {
+            return 0;
+        }
+        p++;
+    }
+    return 1;
+}
+
+DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, int len)
 {
     char *p;
-    errno = 0;
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
+
+    errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = (char*)malloc(len+1);
@@ -748,38 +769,65 @@ DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
         bstr = newstr;
         pend = bstr+len;
     }
-    *out = strtod_c(bstr, &p);
-    if (p == bstr ||
-        (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
+    double out = strtod_c(bstr, &p);
+
+    if (errno==ERANGE && (out==0 || out==HUGE_VAL || out==-HUGE_VAL)) {
         err = 1;
-    // Deal with case where the substring might be something like "1 ",
-    // which is OK, and "1 X", which we don't allow.
-    while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            err = 1;
-            break;
-        }
-        p++;
     }
+    else if (p == bstr) {
+        err = 1;
+    }
+    else {
+        // Deal with case where the substring might be something like "1 ",
+        // which is OK, and "1 X", which we don't allow.
+        err = substr_isspace(p, pend) ? 0 : 1;
+    }
+
     if (bstr != str+offset)
         free(bstr);
-    return err;
+
+    return (jl_nullable_float64_t){(uint8_t)err, out};
+}
+
+DLLEXPORT jl_nullable_float64_t jl_try_strtod(char *str)
+{
+    char *p;
+    int err = 0;
+
+    errno = 0;
+    double out = strtod_c(str, &p);
+
+    if (errno==ERANGE && (out==0 || out==HUGE_VAL || out==-HUGE_VAL)) {
+        err = 1;
+    }
+    else if (p == str) {
+        err = 1;
+    }
+    else {
+        err = str_isspace(p) ? 0 : 1;
+    }
+
+    return (jl_nullable_float64_t){(uint8_t)err, out};
+}
+
+DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
+{
+	jl_nullable_float64_t nd = jl_try_substrtod(str, offset, len);
+	if(0 == nd.isnull) {
+		*out = nd.value;
+		return 0;
+	}
+	return 1;
 }
 
 DLLEXPORT int jl_strtod(char *str, double *out)
 {
-    char *p;
-    errno = 0;
-    *out = strtod_c(str, &p);
-    if (p == str ||
-        (errno==ERANGE && (*out==0 || *out==HUGE_VAL || *out==-HUGE_VAL)))
-        return 1;
-    while (*p != '\0') {
-        if (!isspace((unsigned char)*p))
-            return 1;
-        p++;
-    }
-    return 0;
+	jl_nullable_float64_t nd = jl_try_strtod(str);
+	if(0 == nd.isnull) {
+		*out = nd.value;
+		return 0;
+	}
+	return 1;
 }
 
 // MSVC pre-2013 did not define HUGE_VALF
@@ -787,13 +835,14 @@ DLLEXPORT int jl_strtod(char *str, double *out)
 #define HUGE_VALF (1e25f * 1e25f)
 #endif
 
-DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
+DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, int len)
 {
     char *p;
-    errno = 0;
     char *bstr = str+offset;
     char *pend = bstr+len;
     int err = 0;
+
+    errno = 0;
     if (!(*pend == '\0' || isspace((unsigned char)*pend) || *pend == ',')) {
         // confusing data outside substring. must copy.
         char *newstr = (char*)malloc(len+1);
@@ -803,46 +852,71 @@ DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
         pend = bstr+len;
     }
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-    *out = (float)strtod_c(bstr, &p);
+    float out = (float)strtod_c(bstr, &p);
 #else
-    *out = strtof_c(bstr, &p);
+    float out = strtof_c(bstr, &p);
 #endif
 
-    if (p == bstr ||
-        (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
+    if (errno==ERANGE && (out==0 || out==HUGE_VALF || out==-HUGE_VALF)) {
         err = 1;
-    // Deal with case where the substring might be something like "1 ",
-    // which is OK, and "1 X", which we don't allow.
-    while (p != pend) {
-        if (!isspace((unsigned char)*p)) {
-            err = 1;
-            break;
-        }
-        p++;
     }
+    else if (p == bstr) {
+        err = 1;
+    }
+    else {
+        // Deal with case where the substring might be something like "1 ",
+        // which is OK, and "1 X", which we don't allow.
+        err = substr_isspace(p, pend) ? 0 : 1;
+    }
+
     if (bstr != str+offset)
         free(bstr);
-    return err;
+
+    return (jl_nullable_float32_t){(uint8_t)err, out};
+}
+
+DLLEXPORT jl_nullable_float32_t jl_try_strtof(char *str)
+{
+    char *p;
+    int err = 0;
+
+    errno = 0;
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+    float out = (float)strtod_c(str, &p);
+#else
+    float out = strtof_c(str, &p);
+#endif
+    if (errno==ERANGE && (out==0 || out==HUGE_VALF || out==-HUGE_VALF)) {
+        err = 1;
+    }
+    else if (p == str) {
+        err = 1;
+    }
+    else {
+        err = str_isspace(p) ? 0 : 1;
+    }
+
+    return (jl_nullable_float32_t){(uint8_t)err, out};
+}
+
+DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
+{
+	jl_nullable_float32_t nf = jl_try_substrtof(str, offset, len);
+	if(0 == nf.isnull) {
+		*out = nf.value;
+		return 0;
+	}
+	return 1;
 }
 
 DLLEXPORT int jl_strtof(char *str, float *out)
 {
-    char *p;
-    errno = 0;
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-    *out = (float)strtod_c(str, &p);
-#else
-    *out = strtof_c(str, &p);
-#endif
-    if (p == str ||
-        (errno==ERANGE && (*out==0 || *out==HUGE_VALF || *out==-HUGE_VALF)))
-        return 1;
-    while (*p != '\0') {
-        if (!isspace((unsigned char)*p))
-            return 1;
-        p++;
-    }
-    return 0;
+	jl_nullable_float32_t nf = jl_try_strtof(str);
+	if(0 == nf.isnull) {
+		*out = nf.value;
+		return 0;
+	}
+	return 1;
 }
 
 // showing --------------------------------------------------------------------

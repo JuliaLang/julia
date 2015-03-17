@@ -496,3 +496,19 @@ function to_index{T<:Real}(A::AbstractArray{T})
     depwarn("indexing with non Integer AbstractArrays is deprecated", :to_index)
     Int[to_index_nodep(x) for x in A]
 end
+
+function float_isvalid{T<:Union(Float32,Float64)}(s::AbstractString, out::Array{T,1})
+    tf = tryparse(T, s)
+    isnull(tf) || (out[1] = get(tf))
+    !isnull(tf)
+end
+
+function float32_isvalid(s::AbstractString, out::Array{Float32,1})
+    depwarn("float32_isvalid is deprecated, use tryparse(Float32,s) instead", :float32_isvalid)
+    float_isvalid(s, out)
+end
+
+function float64_isvalid(s::AbstractString, out::Array{Float64,1})
+    depwarn("float64_isvalid is deprecated, use tryparse(Float64,s) instead", :float64_isvalid)
+    float_isvalid(s, out)
+end

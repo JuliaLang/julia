@@ -343,6 +343,7 @@ export
     fldmod,
     flipsign,
     float,
+    tryparse,
     floor,
     fma,
     frexp,
