@@ -48,13 +48,15 @@ Data Formats
 
    A string giving the literal bit representation of a number.
 
-.. function:: parseint([type], str, [base])
+.. function:: parse(type, str, [base])
 
-   Parse a string as an integer in the given base (default 10), yielding a number of the specified type (default ``Int``).
+   Parse a string as a number. If the type is an integer type, then a base can be specified (the default is 10). If the type is a floating point type, the string is parsed as a decimal floating point number.
+   If the string does not contain a valid number, an error is raised.
 
-.. function:: parsefloat([type], str)
+.. function:: tryparse(type, str, [base])
 
-   Parse a string as a decimal floating point number, yielding a number of the specified type.
+   Like ``parse``, but returns a ``Nullable`` of the requested type.
+   The result will be null if the string does not contain a valid number.
 
 .. function:: big(x)
 
@@ -67,13 +69,6 @@ Data Formats
 .. function:: unsigned(x) -> Unsigned
 
    Convert a number to an unsigned integer. If the argument is signed, it is reinterpreted as unsigned without checking for negative values.
-.. function:: float32_isvalid(x, out::Vector{Float32}) -> Bool
-
-   Convert a number or array to ``Float32`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
-
-.. function:: float64_isvalid(x, out::Vector{Float64}) -> Bool
-
-   Convert a number or array to ``Float64`` data type, returning true if successful. The result of the conversion is stored in ``out[1]``.
 
 .. function:: float(x)
 
