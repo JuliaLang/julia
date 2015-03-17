@@ -166,8 +166,8 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             chkstride1(A)
             m, n  = size(A)
             k     = min(m, n)
-            d     = similar(A, $elty, k)
-            s     = similar(A, $elty, k)
+            d     = similar(A, $relty, k)
+            e     = similar(A, $relty, k)
             tauq  = similar(A, $elty, k)
             taup  = similar(A, $elty, k)
             work  = Array($elty, 1)
@@ -175,17 +175,19 @@ for (gebrd, gelqf, geqlf, geqrf, geqp3, geqrt, geqrt3, gerqf, getrf, elty, relty
             info  = Array(BlasInt, 1)
             for i in 1:2
                 ccall(($(blasfunc(gebrd)), liblapack), Void,
-                      (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
-                       Ptr{$elty}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
-                       Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
-                      &m, &n, A, &max(1,stride(A,2)), d, s, tauq, taup, work, &lwork, info)
+                    (Ptr{BlasInt}, Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt},
+                     Ptr{$relty}, Ptr{$relty}, Ptr{$elty}, Ptr{$elty},
+                     Ptr{$elty}, Ptr{BlasInt}, Ptr{BlasInt}),
+                     &m, &n, A, &max(1,stride(A,2)),
+                     d, e, tauq, taup,
+                     work, &lwork, info)
                 @lapackerror
                 if lwork < 0
                     lwork = blas_int(real(work[1]))
                     work = Array($elty, lwork)
                 end
             end
-            tauq, taup
+            A, d, e, tauq, taup
         end
         # SUBROUTINE DGELQF( M, N, A, LDA, TAU, WORK, LWORK, INFO )
         # *     .. Scalar Arguments ..
@@ -3140,23 +3142,23 @@ for (bdsqr, relty, elty) in
             end
 
             # Allocate
-            work = Array($elty, 4n)
+            work = Array($relty, 4n)
             info = Array(BlasInt,1)
 
             ccall(($(blasfunc(bdsqr)), liblapack), Void,
                 (Ptr{UInt8}, Ptr{BlasInt}, Ptr{BlasInt}, Ptr{BlasInt},
-                 Ptr{BlasInt}, Ptr{$elty}, Ptr{$elty}, Ptr{$elty},
+                 Ptr{BlasInt}, Ptr{$relty}, Ptr{$relty}, Ptr{$elty},
                  Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}, Ptr{$elty},
-                 Ptr{BlasInt}, Ptr{$elty}, Ptr{BlasInt}),
+                 Ptr{BlasInt}, Ptr{$relty}, Ptr{BlasInt}),
                 &uplo, &n, &ncvt, &nru,
                 &ncc, d, e_, Vt,
-                &ldvt, U, &ldu, C, &ldc,
-                work, info)
+                &ldvt, U, &ldu, C,
+                &ldc, work, info)
 
             @lapackerror
             d, Vt, U, C #singular values in descending order, P**T * VT, U * Q, Q**T * C
         end
-   end
+    end
 end
 
 #Defined only for real types
