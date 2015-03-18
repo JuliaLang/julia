@@ -1276,6 +1276,8 @@ For consistency across Julia, the call site should always pass a
 ``Val`` type rather than creating an instance, i.e., use
 ``foo(Val{:bar})`` rather than ``foo(Val{:bar}())``.
 
+.. _man-nullable-types:
+
 Nullable Types: Representing Missing Values
 -------------------------------------------
 
