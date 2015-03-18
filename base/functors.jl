@@ -40,6 +40,12 @@ call(::MaxFun, x, y) = scalarmax(x,y)
 immutable MinFun <: Func{2} end
 call(::MinFun, x, y) = scalarmin(x, y)
 
+immutable LessFun <: Func{2} end
+call(::LessFun, x, y) = x < y
+
+immutable MoreFun <: Func{2} end
+call(::MoreFun, x, y) = x > y
+
 # a fallback unspecialized functor that allows code using functors to not care
 # whether they were able to specialize on the function value or not
 immutable UnspecializedFun{N,T<:Callable} <: Func{N}

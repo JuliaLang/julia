@@ -14,11 +14,17 @@ linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 # CartesianIndex
 abstract CartesianIndex{N}
 
-stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Integer})
     indextype = gen_cartesian(N)
     return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-Base.call{N}(::Type{CartesianIndex{N}},index::Real...) = CartesianIndex(index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
+    length(index) == N && return :(CartesianIndex(index))
+    length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
+    args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
+    :(CartesianIndex(tuple($(args...))))
+end
+Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
 
 let implemented = IntSet()
     global gen_cartesian
@@ -30,7 +36,7 @@ let implemented = IntSet()
             fields = [Expr(:(::), fnames[i], :Int) for i = 1:N]
             extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
             eval(extype)
-            argsleft = [Expr(:(::), fnames[i], :Real) for i = 1:N]
+            argsleft = [Expr(:(::), fnames[i], :Integer) for i = 1:N]
             argsright = [Expr(:call,:to_index,fnames[i]) for i=1:N]
             exconstructor = Expr(:(=),Expr(:call,:(Base.call),:(::Type{CartesianIndex{$N}}),argsleft...),Expr(:call,indextype,argsright...))
             eval(exconstructor)
@@ -51,15 +57,27 @@ getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
     N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
 end
+stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayref(A, i)) : :(@ncall $(N+1) Base.arrayref A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
+end
+stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayset(A, convert($T,v), i)) : :(@ncall $(N+1) Base.arrayset A convert($T,v) d->(d == 1 ? i : index[d-1]))
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
     :(@nref $N A d->index[d])
 end
+stagedfunction getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
+    :(@nref $(N+1) A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
     :((@nref $N A d->index[d]) = v)
+end
+stagedfunction setindex!{N}(A::AbstractArray, v, i::Integer, index::CartesianIndex{N})
+    :((@nref $(N+1) A d->(d == 1 ? i : index[d-1])) = v)
 end
 
 # arithmetic, min/max
