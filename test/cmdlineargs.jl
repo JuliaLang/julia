@@ -172,4 +172,7 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
             rm(testfile)
         end
     end
+
+    # issue #10562
+    @test readchomp(`$exename -e 'println(ARGS);' ''`) == "UTF8String[\"\"]"
 end
