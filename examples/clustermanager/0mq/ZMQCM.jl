@@ -240,7 +240,7 @@ function start_worker(zid)
         if streams == nothing
             # First time..
             (r_s, w_s) = setup_connection(from_zid, REMOTE_INITIATED)
-            process_messages(r_s, w_s)
+            Base.process_messages(r_s, w_s)
         else
             (r_s, w_s, t_r) = streams
         end
