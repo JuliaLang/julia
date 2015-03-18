@@ -161,7 +161,7 @@ typedef struct _jl_lambda_info_t {
     // flag telling if inference is running on this function
     // used to avoid infinite recursion
     int8_t inInference : 1;
-    int8_t inCompile : 1;
+    int16_t compileDepth;
     jl_fptr_t fptr;             // jlcall entry point
     void *functionObject;       // jlcall llvm Function
     void *cFunctionList;        // c callable llvm Functions
@@ -1014,7 +1014,7 @@ DLLEXPORT const char *jl_lookup_soname(const char *pfx, size_t n);
 #endif
 
 // compiler
-void jl_compile(jl_function_t *f);
+void jl_compile(jl_function_t *f, int iscall);
 DLLEXPORT jl_value_t *jl_toplevel_eval(jl_value_t *v);
 DLLEXPORT jl_value_t *jl_toplevel_eval_in(jl_module_t *m, jl_value_t *ex);
 jl_value_t *jl_eval_global_var(jl_module_t *m, jl_sym_t *e);

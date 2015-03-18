@@ -470,7 +470,7 @@ jl_lambda_info_t *jl_new_lambda_info(jl_value_t *ast, jl_tuple_t *sparams)
     li->specTypes = NULL;
     li->inferred = 0;
     li->inInference = 0;
-    li->inCompile = 0;
+    li->compileDepth = 0;
     li->unspecialized = NULL;
     li->specializations = NULL;
     li->name = anonymous_sym;

@@ -165,7 +165,6 @@ extern void _chkstk(void);
 // llvm state
 DLLEXPORT LLVMContext &jl_LLVMContext = getGlobalContext();
 static IRBuilder<> builder(getGlobalContext());
-static bool nested_compile=false;
 DLLEXPORT ExecutionEngine *jl_ExecutionEngine;
 static TargetMachine *jl_TargetMachine;
 #ifdef USE_MCJIT
@@ -602,14 +601,15 @@ static void jl_rethrow_with_add(const char *fmt, ...)
 //static int n_emit=0;
 static Function *emit_function(jl_lambda_info_t *lam);
 //static int n_compile=0;
+static int compile_depth=0;
+static int depth_barrier=0;
 static Function *to_function(jl_lambda_info_t *li)
 {
     JL_SIGATOMIC_BEGIN();
     assert(!li->inInference);
-    BasicBlock *old = nested_compile ? builder.GetInsertBlock() : NULL;
+    BasicBlock *old = compile_depth>0 ? builder.GetInsertBlock() : NULL;
     DebugLoc olddl = builder.getCurrentDebugLocation();
-    bool last_n_c = nested_compile;
-    nested_compile = true;
+    compile_depth++;
     Function *f = NULL;
     JL_TRY {
         f = emit_function(li);
@@ -620,7 +620,8 @@ static Function *to_function(jl_lambda_info_t *li)
         li->functionObject = NULL;
         li->specFunctionObject = NULL;
         li->cFunctionList = NULL;
-        nested_compile = last_n_c;
+        //nested_compile = last_n_c;
+        compile_depth--;
         if (old != NULL) {
             builder.SetInsertPoint(old);
             builder.SetCurrentDebugLocation(olddl);
@@ -629,7 +630,8 @@ static Function *to_function(jl_lambda_info_t *li)
         jl_rethrow_with_add("error compiling %s", li->name->name);
     }
     assert(f != NULL);
-    nested_compile = last_n_c;
+    //nested_compile = last_n_c;
+    compile_depth--;
 #ifdef JL_DEBUG_BUILD
 #ifdef LLVM35
     llvm::raw_fd_ostream out(1,false);
@@ -759,14 +761,18 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
     f->fptr = li->fptr;
 }
 
-extern "C" void jl_compile(jl_function_t *f)
+extern "C" void jl_compile(jl_function_t *f, int iscall)
 {
     jl_lambda_info_t *li = f->linfo;
     if (li->functionObject == NULL) {
         // objective: assign li->functionObject
-        li->inCompile = 1;
+        li->compileDepth = compile_depth+1;
+        int last_barrier = depth_barrier;
+        if (iscall)
+            depth_barrier = compile_depth+1;
         (void)to_function(li);
-        li->inCompile = 0;
+        depth_barrier = last_barrier;
+        li->compileDepth = 0;
     }
 }
 
@@ -942,12 +948,12 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
     Function *llvmf;
     if (getwrapper || sf->linfo->specTypes == NULL) {
         if (sf->linfo->functionObject == NULL) {
-            jl_compile(sf);
+            jl_compile(sf,0);
         }
     }
     else {
         if (sf->linfo->specFunctionObject == NULL) {
-            jl_compile(sf);
+            jl_compile(sf,0);
         }
     }
     if (sf->fptr == &jl_trampoline) {
@@ -1895,7 +1901,8 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                   }
                 */
                 f = jl_get_specialization(f, aty);
-                if (f != NULL) {
+                if (f != NULL && (f->linfo->compileDepth == 0 ||
+                                  f->linfo->compileDepth >= depth_barrier)) {
                     assert(f->linfo->functionObject != NULL);
                     *theFptr = (Value*)f->linfo->functionObject;
                     *theF = f;
@@ -3612,7 +3619,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     lam->cFunctionList = list2;
 
     // See whether this function is specsig or jlcall
-    jl_compile(ff);
+    jl_compile(ff, 0);
     bool specsig;
     Function *theFptr;
     if (lam->specFunctionObject != NULL) {

@@ -985,7 +985,7 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
             }
         }
     }
-    jl_compile(f);
+    jl_compile(f, 1);
     // this assertion is probably not correct; the fptr could have been assigned
     // by a recursive invocation from inference above.
     //assert(f->fptr == &jl_trampoline);

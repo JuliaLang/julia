@@ -1500,7 +1500,7 @@ jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types)
     if (sf->linfo->functionObject == NULL) {
         if (sf->fptr != &jl_trampoline)
             return NULL;
-        jl_compile(sf);
+        jl_compile(sf,0);
     }
     return sf;
 }
@@ -1671,7 +1671,7 @@ JL_CALLABLE(jl_apply_generic)
 
     if (mfunc != jl_bottom_func) {
         if (mfunc->linfo != NULL &&
-            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
+            (mfunc->linfo->inInference || mfunc->linfo->compileDepth)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
             jl_lambda_info_t *li = mfunc->linfo;
@@ -1766,7 +1766,7 @@ jl_value_t *jl_gf_invoke(jl_function_t *gf, jl_tuple_t *types,
         mfunc = jl_method_table_assoc_exact(m->invokes, args, nargs);
     if (mfunc != jl_bottom_func) {
         if (mfunc->linfo != NULL &&
-            (mfunc->linfo->inInference || mfunc->linfo->inCompile)) {
+            (mfunc->linfo->inInference || mfunc->linfo->compileDepth)) {
             // if inference is running on this function, return a copy
             // of the function to be compiled without inference and run.
             jl_lambda_info_t *li = mfunc->linfo;

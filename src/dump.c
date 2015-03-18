@@ -1156,7 +1156,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         li->cFunctionList = NULL;
         li->specFunctionObject = NULL;
         li->inInference = 0;
-        li->inCompile = 0;
+        li->compileDepth = 0;
         li->unspecialized = (jl_function_t*)jl_deserialize_value(s, (jl_value_t**)&li->unspecialized);
         li->functionID = 0;
         li->specFunctionID = 0;
