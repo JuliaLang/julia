@@ -1194,7 +1194,6 @@ export
     nprocs,
     nworkers,
     pmap,
-    process_messages,
     procs,
     put!,
     remotecall,
