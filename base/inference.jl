@@ -14,6 +14,7 @@ type StaticVarInfo
     cenv::ObjectIdDict   # types of closed vars
     vars::Array{Any,1}   # names of args and locals
     gensym_types::Array{Any,1} # types of the GenSym's in this function
+    vinfo::Array{Any,1}  # variable properties
     label_counter::Int   # index of the current highest label for this function
     fedbackvars::ObjectIdDict
 end
@@ -63,6 +64,14 @@ end
 is_local(sv::StaticVarInfo, s::GenSym) = true
 is_local(sv::StaticVarInfo, s::Symbol) = contains_is(sv.vars, s)
 is_closed(sv::StaticVarInfo, s::Symbol) = haskey(sv.cenv, s)
+function is_assigned_inner(sv::StaticVarInfo, s::Symbol)
+    for vi in sv.vinfo
+        if vi[1] === s
+            return (vi[3]&4) != 0
+        end
+    end
+    return false
+end
 is_global(sv::StaticVarInfo, s::Symbol) =
     !is_local(sv,s) && !is_closed(sv,s) && !is_static_parameter(sv,s)
 
@@ -1547,7 +1556,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple
 
     # types of closed vars
     cenv = ObjectIdDict()
-    for vi = ((ast.args[2][3])::Array{Any,1})
+    for vi in (ast.args[2][3])::Array{Any,1}
         vi::Array{Any,1}
         vname = vi[1]
         vtype = vi[2]
@@ -1571,7 +1580,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple
     gensym_init = Any[ NF for i = 1:length(gensym_uses) ]
     gensym_types = copy(gensym_init)
 
-    sv = StaticVarInfo(sparams, cenv, vars, gensym_types, length(labels), ObjectIdDict())
+    sv = StaticVarInfo(sparams, cenv, vars, gensym_types, vinflist, length(labels), ObjectIdDict())
     frame.sv = sv
 
     recpts = IntSet()  # statements that depend recursively on our value
@@ -2153,15 +2162,17 @@ end
 function effect_free(e::ANY, sv, allow_volatile::Bool)
     if isa(e,SymbolNode)
         allow_volatile && return true
-        if is_global(sv, (e::SymbolNode).name)
+        if is_assigned_inner(sv, (e::SymbolNode).name) || is_global(sv, (e::SymbolNode).name)
             return false
         end
+        return true
     end
     if isa(e,Symbol)
         allow_volatile && return true
-        if is_global(sv, e::Symbol)
+        if is_assigned_inner(sv, e::Symbol) || is_global(sv, e::Symbol)
             return false
         end
+        return true
     end
     if isa(e,Number) || isa(e,AbstractString) || isa(e,GenSym) ||
         isa(e,TopNode) || isa(e,QuoteNode) || isa(e,Type) || isa(e,Tuple)
