@@ -977,9 +977,17 @@ static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
-static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype) {
+static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype)
+{
     // p = (jl_value_t**)v; *(ptype)&p[n]
     Value *vptr = emit_nthptr_addr(v, n);
+    return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
+}
+
+static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype)
+{
+    // p = (jl_value_t**)v; *(ptype)&p[n]
+    Value *vptr = emit_nthptr_addr(v, idx);
     return tbaa_decorate(tbaa,builder.CreateLoad(builder.CreateBitCast(vptr,ptype), false));
 }
 
@@ -1372,10 +1380,9 @@ static Value *emit_arraysize(Value *t, Value *dim)
     int o = 3;
 #endif
 #endif
-    Value *dbits =
-        emit_nthptr(t, builder.CreateAdd(dim,
-                                         ConstantInt::get(dim->getType(), o)), tbaa_arraysize);
-    return builder.CreatePtrToInt(dbits, T_size);
+    return emit_nthptr_recast(t, builder.CreateAdd(dim,
+                                                   ConstantInt::get(dim->getType(), o)),
+                              tbaa_arraysize, T_psize);
 }
 
 static jl_arrayvar_t *arrayvar_for(jl_value_t *ex, jl_codectx_t *ctx)
@@ -1402,7 +1409,7 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 2);
+    Value *addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 2);
     return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
