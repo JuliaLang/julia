@@ -232,7 +232,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                             "--bind-to"])
     global process_options
     function process_options(opts::JLOptions, args::Vector{UTF8String})
-        if !isempty(args) && (arg = first(args); arg[1] == '-' && in(arg, reqarg))
+        if !isempty(args) && (arg = first(args); !isempty(arg) && arg[1] == '-' && in(arg, reqarg))
             println(STDERR, "julia: option `$arg` is missing an argument")
             exit(1)
         end
@@ -305,7 +305,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             # load file
             if !isempty(args)
-                if args[1][1] != '-'
+                if !isempty(args[1]) && args[1][1] != '-'
                     if startup
                         load_juliarc()
                         startup = false
