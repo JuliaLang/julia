@@ -190,6 +190,14 @@ if VERSION < v"0.4.0-dev+3609"
     export fieldnames
 end
 
+if VERSION < v"0.4.0-dev+3874"
+    Base.parse{T<:Integer}(::Type{T}, c::Char) = parseint(T, c)
+    Base.parse{T<:Integer}(::Type{T}, c::Char, base::Integer) = parseint(T, c, base)
+    Base.parse{T<:Integer}(::Type{T}, s::AbstractString) = parseint(T, s)
+    Base.parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) = parseint(T, s, base)
+    Base.parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString) = parsefloat(T, s)
+end
+
 if VERSION < v"0.4.0-dev+3732"
     const calltypes = Dict{Symbol,Symbol}()
     for (k,v) in [(:Integer,:integer),

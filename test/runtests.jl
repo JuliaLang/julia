@@ -143,3 +143,10 @@ if VERSION < v"0.4.0-dev+3609"
         @test fieldnames(Test3609) == fieldnames(v) == Symbol[:a, :b]
     end
 end
+
+@test parse(Int8, '9') == convert(Int8, 9)
+@test parse(Int, 'a', 16) == 10
+@test parse(Int, "200") == 200
+@test parse(Int16, "1101", 2) == convert(Int16, 13)
+@test parse(Float64, "222") == 222.0
+@test parse(Float32, "1.1") == convert(Float32, 1.1)
