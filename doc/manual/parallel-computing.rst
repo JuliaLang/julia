@@ -721,7 +721,7 @@ awareness of 0MQ being used as the transport layer.
 When using custom transports:
     - julia workers must NOT be started with ``--worker``. Starting with ``--worker`` will result in the newly launched
       workers defaulting to the TCP/IP socket transport implementation
-    - For every logical connection with a worker, ``process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
+    - For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
       This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
     - ``init_worker(manager::FooManager)`` MUST be called as part of worker process initializaton
     - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
