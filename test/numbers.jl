@@ -926,6 +926,18 @@ end
 @test !(Float32(pi,RoundDown) > pi)
 @test !(Float32(pi,RoundUp) < pi)
 
+# issue #6365
+for T in (Float32, Float64)
+    for i = 9007199254740992:9007199254740996
+        @test T(i) == T(BigFloat(i))
+        @test T(-i) == T(BigFloat(-i))
+        for r in (RoundNearest,RoundUp,RoundDown,RoundToZero)
+            @test T(i,r) == T(BigFloat(i),r)
+            @test T(-i,r) == T(BigFloat(-i),r)
+        end
+    end
+end
+
 @test prevfloat(big(pi)) < pi
 @test nextfloat(big(pi)) > pi
 @test !(prevfloat(big(pi)) > pi)
