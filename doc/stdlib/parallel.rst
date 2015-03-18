@@ -343,3 +343,52 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
    the SharedArray
+
+Cluster Manager Interface
+-------------------------
+    This interface provides a mechanism to launch and manage Julia workers on different cluster environments.
+    LocalManager, for launching additional workers on the same host and SSHManager, for launching on remote
+    hosts via ssh are present in Base. TCP/IP sockets are used to connect and transport messages
+    between processes. It is possible for Cluster Managers to provide a different transport.
+
+.. function:: launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
+
+    Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry
+    to ``launched`` and notify ``launch_ntfy``. The function MUST exit once all workers, requested by ``manager`` have been launched.
+    ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
+
+.. function:: manage(manager::ClusterManager, pid::Int, config::WorkerConfig. op::Symbol)
+    Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
+    with appropriate ``op`` values:
+
+      - with ``:register``/``:deregister`` when a worker is added / removed
+        from the Julia worker pool.
+      - with ``:interrupt`` when ``interrupt(workers)`` is called. The
+        :class:`ClusterManager` should signal the appropriate worker with an
+        interrupt signal.
+      - with ``:finalize`` for cleanup purposes.
+
+.. function:: kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
+    Implemented by cluster managers. It is called on the master process, by ``rmprocs``. It should cause the remote worker specified
+    by ``pid`` to exit. ``Base.exit(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+
+.. function:: init_worker(manager::FooManager)
+
+    Called by cluster managers implementing custom transports. It initializes a newly launched process as a worker.
+    Command line argument ``--worker`` has the effect of initializing a process as a worker using TCP/IP sockets
+    for transport.
+
+.. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
+
+    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``,
+    specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read
+    off ``instrm``, while messages to be sent to ``pid`` will be written to ``outstrm``. The custom transport implementation
+    must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)``
+    sets up TCP/IP socket connections in-between workers.
+
+
+.. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
+    Called by cluster managers  using custom transports. It should be called when the custom transport implementation receives the
+    first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two
+    AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
+

@@ -63,7 +63,7 @@ function start_worker(sockname)
     srvr = listen(ascii(sockname))
     while true
         sock = accept(srvr)
-        process_messages(sock, sock)
+        Base.process_messages(sock, sock)
     end
 end
 
