@@ -1428,7 +1428,8 @@ function typeinf(linfo::LambdaStaticData,atypes::Tuple,sparams::Tuple, def, cop)
         cenv[vname] = vtype
         s[1][vname] = vtype
     end
-    for vi = ((ast.args[2][2])::Array{Any,1})
+    vinflist = (ast.args[2][2])::Array{Any,1}
+    for vi in vinflist
         vi::Array{Any,1}
         if (vi[3]&4)!=0
             # variables assigned by inner functions are treated like
