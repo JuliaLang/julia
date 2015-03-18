@@ -661,7 +661,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Nothing),1}:
+    3-element Array{Union(SubString{UTF8String},Void),1}:
      "a"
      "c"
      "d"
@@ -682,7 +682,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Nothing),1}:
+    3-element Array{Union(SubString{UTF8String},Void),1}:
      "a"
      nothing
      "d"
