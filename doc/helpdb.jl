@@ -1753,7 +1753,7 @@ Any[
    For example, we could use it in the following manner to summarize
    information about a struct type:
 
-      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+      julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
@@ -1952,9 +1952,8 @@ Any[
 
 ("Base","evalfile","evalfile(path::AbstractString)
 
-   Evaluate all expressions in the given file, and return the value of
-   the last one. No other processing (path searching, fetching from
-   node 1, etc.) is performed.
+   Load the file using \"include\", evaluate all expressions, and
+   return the value of the last one.
 
 "),
 
@@ -2213,11 +2212,10 @@ Any[
 
 "),
 
-("Base","time","time([t::TmStruct])
+("Base","time","time()
 
    Get the system time in seconds since the epoch, with fairly high
-   (typically, microsecond) resolution. When passed a \"TmStruct\",
-   converts it to a number of seconds since the epoch.
+   (typically, microsecond) resolution.
 
 "),
 
@@ -2225,35 +2223,6 @@ Any[
 
    Get the time in nanoseconds. The time corresponding to 0 is
    undefined, and wraps every 5.8 years.
-
-"),
-
-("Base","strftime","strftime([format], time)
-
-   Convert time, given as a number of seconds since the epoch or a
-   \"TmStruct\", to a formatted string using the given format.
-   Supported formats are the same as those in the standard C library.
-
-"),
-
-("Base","strptime","strptime([format], timestr)
-
-   Parse a formatted time string into a \"TmStruct\" giving the
-   seconds, minute, hour, date, etc. Supported formats are the same as
-   those in the standard C library. On some platforms, timezones will
-   not be parsed correctly. If the result of this function will be
-   passed to \"time\" to convert it to seconds since the epoch, the
-   \"isdst\" field should be filled in manually. Setting it to \"-1\"
-   will tell the C library to use the current system settings to
-   determine the timezone.
-
-"),
-
-("Base","TmStruct","TmStruct([seconds])
-
-   Convert a number of seconds since the epoch to broken-down format,
-   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
-   \"year\", \"wday\", \"yday\", and \"isdst\".
 
 "),
 
@@ -2535,7 +2504,7 @@ Any[
 
 "),
 
-("Base","names","names(x::DataType)
+("Base","fieldnames","fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
 
@@ -2750,160 +2719,6 @@ Any[
 
 "),
 
-("Base","dlopen","dlopen(library_file::AbstractString[, flags::Integer])
-
-   Load a shared library, returning an opaque handle.
-
-   The optional flags argument is a bitwise-or of zero or more of
-   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
-   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
-   \"RTLD_FIRST\".  These are converted to the corresponding flags of
-   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
-   possible, or are ignored if the specified functionality is not
-   available on the current platform.  The default is
-   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
-   these flags, on POSIX platforms, is to specify
-   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
-   symbols to be available for usage in other shared libraries, in
-   situations where there are dependencies between shared libraries.
-
-"),
-
-("Base","dlopen_e","dlopen_e(library_file::AbstractString[, flags::Integer])
-
-   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
-   of raising errors.
-
-"),
-
-("Base","RTLD_DEEPBIND","RTLD_DEEPBIND
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_FIRST","RTLD_FIRST
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_GLOBAL","RTLD_GLOBAL
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_LAZY","RTLD_LAZY
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_LOCAL","RTLD_LOCAL
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NODELETE","RTLD_NODELETE
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NOLOAD","RTLD_NOLOAD
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NOW","RTLD_NOW
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","dlsym","dlsym(handle, sym)
-
-   Look up a symbol from a shared library handle, return callable
-   function pointer on success.
-
-"),
-
-("Base","dlsym_e","dlsym_e(handle, sym)
-
-   Look up a symbol from a shared library handle, silently return NULL
-   pointer on lookup failure.
-
-"),
-
-("Base","dlclose","dlclose(handle)
-
-   Close shared library referenced by handle.
-
-"),
-
-("Base","find_library","find_library(names, locations)
-
-   Searches for the first library in \"names\" in the paths in the
-   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
-   that order) which can successfully be dlopen'd. On success, the
-   return value will be one of the names (potentially prefixed by one
-   of the paths in locations). This string can be assigned to a
-   \"global const\" and used as the library name in future
-   \"ccall\"'s. On failure, it returns the empty string.
-
-"),
-
-("Base","DL_LOAD_PATH","DL_LOAD_PATH
-
-   When calling \"dlopen\", the paths in this list will be searched
-   first, in order, before searching the system locations for a valid
-   library handle.
-
-"),
-
-("Base","c_malloc","c_malloc(size::Integer) -> Ptr{Void}
-
-   Call \"malloc\" from the C standard library.
-
-"),
-
-("Base","c_calloc","c_calloc(num::Integer, size::Integer) -> Ptr{Void}
-
-   Call \"calloc\" from the C standard library.
-
-"),
-
-("Base","c_realloc","c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
-
-   Call \"realloc\" from the C standard library.
-
-   See warning in \"c_free\" documentation regarding only using this
-   on memory originally obtained from \"c_malloc\".
-
-"),
-
-("Base","c_free","c_free(addr::Ptr)
-
-   Call \"free\" from the C standard library. Only use this on memory
-   obtained from \"c_malloc\", not on pointers retrieved from other C
-   libraries. \"Ptr\" objects obtained from C libraries should be
-   freed by the free functions defined in that library, to avoid
-   assertion failures if multiple \"libc\" libraries exist on the
-   system.
-
-"),
-
 ("Base","unsafe_convert","unsafe_convert(T, x)
 
    Convert \"x\" to a value of type \"T\"
@@ -3068,28 +2883,10 @@ Any[
 
 "),
 
-("Base","errno","errno([code])
-
-   Get the value of the C library's \"errno\". If an argument is
-   specified, it is used to set the value of \"errno\".
-
-   The value of \"errno\" is only valid immediately after a \"ccall\"
-   to a C library routine that sets it. Specifically, you cannot call
-   \"errno\" at the next prompt in a REPL, because lots of code is
-   executed between prompts.
-
-"),
-
 ("Base","systemerror","systemerror(sysfunc, iftrue)
 
    Raises a \"SystemError\" for \"errno\" with the descriptive string
    \"sysfunc\" if \"bool\" is true
-
-"),
-
-("Base","strerror","strerror(errno)
-
-   Convert a system call error code to a descriptive string
 
 "),
 
@@ -5678,13 +5475,6 @@ Millisecond(v)
 
 "),
 
-("Base","flush_cstdio","flush_cstdio()
-
-   Flushes the C \"stdout\" and \"stderr\" streams (which may have
-   been written to by external C code).
-
-"),
-
 ("Base","close","close(stream)
 
    Close an I/O stream. Performs a \"flush\" first.
@@ -6478,56 +6268,6 @@ popdisplay(d::Display)
 
 "),
 
-("Base","msync","msync(ptr, len[, flags])
-
-   Forces synchronization of the \"mmap()\"ped memory region from
-   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
-   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
-   your platform man page for specifics. The flags argument is not
-   valid on Windows.
-
-   You may not need to call \"msync\", because synchronization is
-   performed at intervals automatically by the operating system.
-   However, you can call this directly if, for example, you are
-   concerned about losing the result of a long-running calculation.
-
-"),
-
-("Base","MS_ASYNC","MS_ASYNC
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","MS_SYNC","MS_SYNC
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","MS_INVALIDATE","MS_INVALIDATE
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","mmap","mmap(len, prot, flags, fd, offset)
-
-   Low-level interface to the \"mmap\" system call. See the man page.
-
-"),
-
-("Base","munmap","munmap(pointer, len)
-
-   Low-level interface for unmapping memory (see the man page). With
-   \"mmap_array()\" you do not need to call this directly; the memory
-   is unmapped for you when the array goes out of scope.
-
-"),
-
 ("Base","connect","connect([host], port) -> TcpSocket
 
    Connect to the host \"host\" on port \"port\"
@@ -6707,6 +6447,271 @@ popdisplay(d::Display)
    The 32-bit byte-order-mark indicates the native byte order of the
    host machine. Little-endian machines will contain the value
    0x04030201. Big-endian machines will contain the value 0x01020304.
+
+"),
+
+("Libc","malloc","malloc(size::Integer) -> Ptr{Void}
+
+   Call \"malloc\" from the C standard library.
+
+"),
+
+("Libc","calloc","calloc(num::Integer, size::Integer) -> Ptr{Void}
+
+   Call \"calloc\" from the C standard library.
+
+"),
+
+("Libc","realloc","realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+
+   Call \"realloc\" from the C standard library.
+
+   See warning in the documentation for \"free\" regarding only using
+   this on memory originally obtained from \"malloc\".
+
+"),
+
+("Libc","free","free(addr::Ptr)
+
+   Call \"free\" from the C standard library. Only use this on memory
+   obtained from \"malloc\", not on pointers retrieved from other C
+   libraries. \"Ptr\" objects obtained from C libraries should be
+   freed by the free functions defined in that library, to avoid
+   assertion failures if multiple \"libc\" libraries exist on the
+   system.
+
+"),
+
+("Libc","errno","errno([code])
+
+   Get the value of the C library's \"errno\". If an argument is
+   specified, it is used to set the value of \"errno\".
+
+   The value of \"errno\" is only valid immediately after a \"ccall\"
+   to a C library routine that sets it. Specifically, you cannot call
+   \"errno\" at the next prompt in a REPL, because lots of code is
+   executed between prompts.
+
+"),
+
+("Libc","strerror","strerror(n)
+
+   Convert a system call error code to a descriptive string
+
+"),
+
+("Libc","time","time(t::TmStruct)
+
+   Converts a \"TmStruct\" struct to a number of seconds since the
+   epoch.
+
+"),
+
+("Libc","strftime","strftime([format], time)
+
+   Convert time, given as a number of seconds since the epoch or a
+   \"TmStruct\", to a formatted string using the given format.
+   Supported formats are the same as those in the standard C library.
+
+"),
+
+("Libc","strptime","strptime([format], timestr)
+
+   Parse a formatted time string into a \"TmStruct\" giving the
+   seconds, minute, hour, date, etc. Supported formats are the same as
+   those in the standard C library. On some platforms, timezones will
+   not be parsed correctly. If the result of this function will be
+   passed to \"time\" to convert it to seconds since the epoch, the
+   \"isdst\" field should be filled in manually. Setting it to \"-1\"
+   will tell the C library to use the current system settings to
+   determine the timezone.
+
+"),
+
+("Libc","TmStruct","TmStruct([seconds])
+
+   Convert a number of seconds since the epoch to broken-down format,
+   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
+   \"year\", \"wday\", \"yday\", and \"isdst\".
+
+"),
+
+("Libc","flush_cstdio","flush_cstdio()
+
+   Flushes the C \"stdout\" and \"stderr\" streams (which may have
+   been written to by external C code).
+
+"),
+
+("Libc","msync","msync(ptr, len[, flags])
+
+   Forces synchronization of the \"mmap()\"ped memory region from
+   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
+   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
+   your platform man page for specifics. The flags argument is not
+   valid on Windows.
+
+   You may not need to call \"msync\", because synchronization is
+   performed at intervals automatically by the operating system.
+   However, you can call this directly if, for example, you are
+   concerned about losing the result of a long-running calculation.
+
+"),
+
+("Libc","MS_ASYNC","MS_ASYNC
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","MS_SYNC","MS_SYNC
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","MS_INVALIDATE","MS_INVALIDATE
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","mmap","mmap(len, prot, flags, fd, offset)
+
+   Low-level interface to the \"mmap\" system call. See the man page.
+
+"),
+
+("Libc","munmap","munmap(pointer, len)
+
+   Low-level interface for unmapping memory (see the man page). With
+   \"mmap_array()\" you do not need to call this directly; the memory
+   is unmapped for you when the array goes out of scope.
+
+"),
+
+("Libdl","dlopen","dlopen(libfile::AbstractString[, flags::Integer])
+
+   Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
+   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
+   \"RTLD_FIRST\".  These are converted to the corresponding flags of
+   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
+   possible, or are ignored if the specified functionality is not
+   available on the current platform.  The default is
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
+   these flags, on POSIX platforms, is to specify
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
+
+"),
+
+("Libdl","dlopen_e","dlopen_e(libfile::AbstractString[, flags::Integer])
+
+   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
+   of raising errors.
+
+"),
+
+("Libdl","RTLD_DEEPBIND","RTLD_DEEPBIND
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_FIRST","RTLD_FIRST
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_GLOBAL","RTLD_GLOBAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_LAZY","RTLD_LAZY
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_LOCAL","RTLD_LOCAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NODELETE","RTLD_NODELETE
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NOLOAD","RTLD_NOLOAD
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NOW","RTLD_NOW
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","dlsym","dlsym(handle, sym)
+
+   Look up a symbol from a shared library handle, return callable
+   function pointer on success.
+
+"),
+
+("Libdl","dlsym_e","dlsym_e(handle, sym)
+
+   Look up a symbol from a shared library handle, silently return NULL
+   pointer on lookup failure.
+
+"),
+
+("Libdl","dlclose","dlclose(handle)
+
+   Close shared library referenced by handle.
+
+"),
+
+("Libdl","find_library","find_library(names, locations)
+
+   Searches for the first library in \"names\" in the paths in the
+   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
+   that order) which can successfully be dlopen'd. On success, the
+   return value will be one of the names (potentially prefixed by one
+   of the paths in locations). This string can be assigned to a
+   \"global const\" and used as the library name in future
+   \"ccall\"'s. On failure, it returns the empty string.
+
+"),
+
+("Libdl","DL_LOAD_PATH","DL_LOAD_PATH
+
+   When calling \"dlopen\", the paths in this list will be searched
+   first, in order, before searching the system locations for a valid
+   library handle.
 
 "),
 
@@ -10591,17 +10596,21 @@ popdisplay(d::Display)
 
 "),
 
-("Base","parseint","parseint([type], str[, base])
+("Base","parse","parse(type, str[, base])
 
-   Parse a string as an integer in the given base (default 10),
-   yielding a number of the specified type (default \"Int\").
+   Parse a string as a number. If the type is an integer type, then a
+   base can be specified (the default is 10). If the type is a
+   floating point type, the string is parsed as a decimal floating
+   point number. If the string does not contain a valid number, an
+   error is raised.
 
 "),
 
-("Base","parsefloat","parsefloat([type], str)
+("Base","tryparse","tryparse(type, str[, base])
 
-   Parse a string as a decimal floating point number, yielding a
-   number of the specified type.
+   Like \"parse\", but returns a \"Nullable\" of the requested type.
+   The result will be null if the string does not contain a valid
+   number.
 
 "),
 
@@ -10625,22 +10634,6 @@ popdisplay(d::Display)
    Convert a number to an unsigned integer. If the argument is signed,
    it is reinterpreted as unsigned without checking for negative
    values.
-
-"),
-
-("Base","float32_isvalid","float32_isvalid(x, out::Vector{Float32}) -> Bool
-
-   Convert a number or array to \"Float32\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
-
-"),
-
-("Base","float64_isvalid","float64_isvalid(x, out::Vector{Float64}) -> Bool
-
-   Convert a number or array to \"Float64\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
 
 "),
 
@@ -11745,7 +11738,7 @@ golden
 
 "),
 
-("Base.Pkg","installed","installed(pkg) -> Nothing | VersionNumber
+("Base.Pkg","installed","installed(pkg) -> Void | VersionNumber
 
    If \"pkg\" is installed, return the installed version number,
    otherwise return \"nothing\".
