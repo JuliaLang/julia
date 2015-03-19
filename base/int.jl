@@ -524,15 +524,15 @@ unsigned_type(::Int32) = UInt32
 unsigned_type(::Int64) = UInt64
 unsigned_type(::Int128) = UInt128
 
-abstract MultiplicativeInverse{T}
+abstract FastDivInteger{T}
 
-immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
+immutable SignedFastDivInteger{T<:Signed} <: FastDivInteger{T}
     divisor::T
     multiplier::T
     addmul::Int8
     shift::UInt8
 
-    function SignedMultiplicativeInverse(d::T)
+    function SignedFastDivInteger(d::T)
         ut = unsigned_type(d)
         signedmin = reinterpret(ut, typemin(d))
 
@@ -566,15 +566,15 @@ immutable SignedMultiplicativeInverse{T<:Signed} <: MultiplicativeInverse{T}
         new(d, m, d > 0 && m < 0 ? Int8(1) : d < 0 && m > 0 ? Int8(-1) : Int8(0), UInt8(s))
     end
 end
-SignedMultiplicativeInverse(x::Signed) = SignedMultiplicativeInverse{typeof(x)}(x)
+SignedFastDivInteger(x::Signed) = SignedFastDivInteger{typeof(x)}(x)
 
-immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
+immutable UnsignedFastDivInteger{T<:Unsigned} <: FastDivInteger{T}
     divisor::T
     multiplier::T
     add::Bool
     shift::UInt8
 
-    function UnsignedMultiplicativeInverse(d::T)
+    function UnsignedFastDivInteger(d::T)
         (d == 0 || d == 1) && error("cannot compute magic for d == $d")
         u2 = convert(T, 2)
         add = false
@@ -612,42 +612,42 @@ immutable UnsignedMultiplicativeInverse{T<:Unsigned} <: MultiplicativeInverse{T}
         new(d, m % T, add, s % UInt8)
     end
 end
-UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeof(x)}(x)
+UnsignedFastDivInteger(x::Unsigned) = UnsignedFastDivInteger{typeof(x)}(x)
 
 # Special type to handle div by 1
-immutable MultiplicativeInverse1{T} <: MultiplicativeInverse{T} end
+immutable FastDivInteger1{T} <: FastDivInteger{T} end
 
-(*)(a::MultiplicativeInverse, b::MultiplicativeInverse) = a.divisor*b.divisor
-(*)(a::Number, b::MultiplicativeInverse) = a*b.divisor
-(*)(a::MultiplicativeInverse, b::Number) = a.divisor*b
+(*)(a::FastDivInteger, b::FastDivInteger) = a.divisor*b.divisor
+(*)(a::Number, b::FastDivInteger) = a*b.divisor
+(*)(a::FastDivInteger, b::Number) = a.divisor*b
 
-# div{T}(a::Integer, b::SignedMultiplicativeInverse{T})   = div(convert(T, a), b)
-# div{T}(a::Integer, b::UnsignedMultiplicativeInverse{T}) = div(convert(T, a), b)
-# rem{T}(a::Integer, b::MultiplicativeInverse{T})         = rem(convert(T, a), b)
-# divrem{T}(a::Integer, b::MultiplicativeInverse{T})      = divrem(convert(T, a), b)
+# div{T}(a::Integer, b::SignedFastDivInteger{T})   = div(convert(T, a), b)
+# div{T}(a::Integer, b::UnsignedFastDivInteger{T}) = div(convert(T, a), b)
+# rem{T}(a::Integer, b::FastDivInteger{T})         = rem(convert(T, a), b)
+# divrem{T}(a::Integer, b::FastDivInteger{T})      = divrem(convert(T, a), b)
 
-function div{T}(a::T, b::SignedMultiplicativeInverse{T})
+function div{T}(a::T, b::SignedFastDivInteger{T})
     x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
     x += (a*b.addmul) % T
     (signbit(x) + (x >> b.shift)) % T
 end
-function div{T}(a::T, b::UnsignedMultiplicativeInverse{T})
+function div{T}(a::T, b::UnsignedFastDivInteger{T})
     x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
     x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
     x >>> b.shift
 end
-div{T}(a, ::MultiplicativeInverse1{T}) = convert(T, a)
+div{T}(a, ::FastDivInteger1{T}) = convert(T, a)
 
-rem{T}(a::T, b::MultiplicativeInverse{T}) =
+rem{T}(a::T, b::FastDivInteger{T}) =
     a - div(a, b)*b.divisor
-rem{T}(a, ::MultiplicativeInverse1{T}) = zero(T)
+rem{T}(a, ::FastDivInteger1{T}) = zero(T)
 
-function divrem{T}(a::T, b::MultiplicativeInverse{T})
+function divrem{T}(a::T, b::FastDivInteger{T})
     d = div(a, b)
     (d, a - d*b.divisor)
 end
-divrem{T}(a, ::MultiplicativeInverse1{T}) = (convert(T, a), zero(T))
+divrem{T}(a, ::FastDivInteger1{T}) = (convert(T, a), zero(T))
 
 # Type unstable!
-multiplicativeinverse(x::Signed) = x == 1 ? MultiplicativeInverse1{typeof(x)}() : SignedMultiplicativeInverse(x)
-multiplicativeinverse(x::Unsigned) = x == 1 ? MultiplicativeInverse1{typeof(x)}() : UnsignedMultiplicativeInverse(x)
+call(::Type{FastDivInteger}, x::Signed) = x == 1 ? FastDivInteger1{typeof(x)}() : SignedFastDivInteger(x)
+call(::Type{FastDivInteger}, x::Unsigned) = x == 1 ? FastDivInteger1{typeof(x)}() : UnsignedFastDivInteger(x)

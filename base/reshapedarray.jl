@@ -2,10 +2,10 @@ module Reshaped
 
 import Base: getindex, ind2sub, linearindexing, reshape, similar, size
 # just using, not overloading:
-import Base: LinearFast, LinearSlow, MultiplicativeInverse, multiplicativeinverse, tail
+import Base: LinearFast, LinearSlow, FastDivInteger, FastDivInteger1, tail
 
 # Remapping a block of In dimensions of the parent array to Out dimensions of the view
-immutable IndexMD{In,Out,MI<:(MultiplicativeInverse...)}
+immutable IndexMD{In,Out,MI<:(FastDivInteger...)}
     invstride_parent::MI
     dims_view::NTuple{Out,Int}
 end
@@ -128,14 +128,14 @@ dimstrides(s::Dims) = dimstrides((1,), s)
 dimstrides(t::Tuple, ::()) = t
 @inline dimstrides(t::Tuple, sz::Dims) = dimstrides(tuple(t..., t[end]*sz[1]), tail(sz))
 
-@inline ind2sub(dims::(MultiplicativeInverse,), ind::Integer) = ind
-@inline ind2sub(dims::(MultiplicativeInverse,MultiplicativeInverse), ind::Integer) = begin
+ind2sub(dims::(FastDivInteger,), ind::Integer) = ind
+@inline ind2sub(dims::(FastDivInteger,FastDivInteger), ind::Integer) = begin
     dv, rm = divrem(ind-1,dims[1])
     rm+1, dv+1
 end
-@inline ind2sub(dims::(MultiplicativeInverse,MultiplicativeInverse,MultiplicativeInverse...), ind::Integer) = begin
+@inline ind2sub(dims::(FastDivInteger,FastDivInteger,FastDivInteger...), ind::Integer) = begin
     dv, rm = divrem(ind-1,dims[1])
-    tuple(rm+1, ind2sub(Base.tail(dims),dv+1)...)
+    tuple(rm+1, ind2sub(tail(dims),dv+1)...)
 end
 
 end
