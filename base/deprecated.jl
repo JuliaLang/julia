@@ -513,6 +513,8 @@ function float64_isvalid(s::AbstractString, out::Array{Float64,1})
     float_isvalid(s, out)
 end
 
+export float32_isvalid, float64_isvalid
+
 @deprecate parsefloat(s::AbstractString) parse(Float64,s)
 @deprecate parsefloat(T, s)              parse(T, s)
 
