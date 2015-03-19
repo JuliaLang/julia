@@ -127,12 +127,9 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     return pkgreq
 end
 
-function requires_list(pkg::AbstractString, avail::Dict=available(pkg))
-    reqs = filter!(Reqs.read(requires_path(pkg,avail))) do line
-        isa(line,Reqs.Requirement)
-    end
-    map(req->req.package, reqs)
-end
+requires_list(pkg::AbstractString, avail::Dict=available(pkg)) =
+    collect(keys(Reqs.parse(requires_path(pkg,avail))))
+
 requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 
