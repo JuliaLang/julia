@@ -139,6 +139,15 @@ Make sure that [Travis](http://www.travis-ci.org) greenlights the pull request w
      `git rebase --whitespace=fix HEAD~1`.
    - To remove whitespace relative to the `master` branch, run
      `git rebase --whitespace=fix master`.
+ - We recommend you run the following commands from the root of your Julia repository to set up git commit hooks:
+
+   ```
+   ln -s ../../contrib/check-whitespace.sh .git/hooks/pre-commit
+   ln -s ../../contrib/git/prepare-commit-msg.jl .git/hooks/prepare-commit-msg
+   ln -s ../../contrib/git/commit-msg.jl .git/hooks/commit-msg
+   ```
+
+   The `pre-commit` hook checks for trailing whitespace before creating a commit. The `prepare-commit-msg` hook determines whether only documentation files have been modified, and if so, adds `[ci skip]` to the commit message. The `commit-msg` hook replaces @ with ＠ (`\uff20`) when it encounters macros defined in Base or Base.Test to avoid triggering GitHub notifications.
 
 ## Getting help
 
