@@ -36,7 +36,11 @@ answer_color(::AbstractREPL) = ""
 type REPLBackend
     repl_channel::RemoteRef
     response_channel::RemoteRef
+    in_eval::Bool
     ans
+    backend_task::Task
+    REPLBackend(repl_channel, response_channel, in_eval, ans) =
+        new(repl_channel, response_channel, in_eval, ans)
 end
 
 function eval_user_input(ast::ANY, backend::REPLBackend)
@@ -50,7 +54,9 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
                 ans = backend.ans
                 # note: value wrapped in a non-syntax value to avoid evaluating
                 # possibly-invalid syntax (issue #6763).
+                backend.in_eval = true
                 eval(Main, :(ans = $(Any[ans])[1]))
+                backend.in_eval = false
                 value = eval(Main, ast)
                 backend.ans = value
                 put!(backend.response_channel, (value, nothing))
@@ -68,8 +74,8 @@ function eval_user_input(ast::ANY, backend::REPLBackend)
 end
 
 function start_repl_backend(repl_channel::RemoteRef, response_channel::RemoteRef)
-    backend = REPLBackend(repl_channel, response_channel, nothing)
-    global interactive_task = @schedule begin
+    backend = REPLBackend(repl_channel, response_channel, false, nothing)
+    backend.backend_task = @schedule begin
         # include looks at this to determine the relative include path
         # nothing means cwd
         while true
@@ -153,8 +159,9 @@ end
 function run_repl(repl::AbstractREPL)
     repl_channel = RemoteRef()
     response_channel = RemoteRef()
-    start_repl_backend(repl_channel, response_channel)
+    backend = start_repl_backend(repl_channel, response_channel)
     run_frontend(repl, REPLBackendRef(repl_channel,response_channel))
+    backend
 end
 
 ## BasicREPL ##
