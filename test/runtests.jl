@@ -131,6 +131,15 @@ let convert_funcs_and_types =
     end
     @test (@compat Bool(1))
     @test !(@compat Bool(0))
+
+    # issue #54
+    c = @compat Complex128(1)
+    @test c.re == 1
+    @test c.im == 0
+
+    c = @compat Complex128(1,1)
+    @test c.re == 1
+    @test c.im == 1
 end
 
 type Test3609
