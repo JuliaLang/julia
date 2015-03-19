@@ -464,16 +464,18 @@ Iterable Collections
    :func:`mapreduce` is functionally equivalent to calling ``reduce(op,
    v0, map(f, itr))``, but will in general execute faster since no
    intermediate collection needs to be created. See documentation for
-   :func:`reduce` and ``map``.
+   :func:`reduce` and :func:`map`.
 
    .. doctest::
 
       julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
       14
 
-   The associativity of the reduction is implementation-dependent. Use
-   :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed left or
-   right associativity.
+   The associativity of the reduction is implementation-dependent.
+   Additionally, some implementations may reuse the return value of
+   ``f`` for elements that appear multiple times in ``itr``.
+   Use :func:`mapfoldl` or :func:`mapfoldr` instead for guaranteed
+   left or right associativity and invocation of ``f`` for every value.
 
 .. function:: mapreduce(f, op, itr)
 

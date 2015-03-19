@@ -245,12 +245,12 @@ const × = cross
 include("broadcast.jl")
 importall .Broadcast
 
+# statistics
+include("statistics.jl")
+
 # sparse matrices and sparse linear algebra
 include("sparse.jl")
 importall .SparseMatrix
-
-# statistics
-include("statistics.jl")
 
 # signal processing
 include("fftw.jl")

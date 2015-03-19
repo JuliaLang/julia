@@ -178,12 +178,46 @@ b = randn(3)
 @test scale(0.5, dA) == scale!(0.5, copy(sA))
 
 # reductions
-@test sum(se33)[1] == 3.0
-@test sum(se33, 1) == [1.0 1.0 1.0]
-@test sum(se33, 2) == [1.0 1.0 1.0]'
-@test prod(se33)[1] == 0.0
-@test prod(se33, 1) == [0.0 0.0 0.0]
-@test prod(se33, 2) == [0.0 0.0 0.0]'
+pA = sparse(rand(3, 7))
+
+for arr in (se33, sA, pA)
+    for f in (sum, prod, minimum, maximum, var)
+        farr = full(arr)
+        @test_approx_eq f(arr) f(farr)
+        @test_approx_eq f(arr, 1) f(farr, 1)
+        @test_approx_eq f(arr, 2) f(farr, 2)
+        @test_approx_eq f(arr, (1, 2)) [f(farr)]
+        @test isequal(f(arr, 3), f(farr, 3))
+    end
+end
+
+for f in (sum, prod, minimum, maximum)
+    # Test with a map function that maps to non-zero
+    for arr in (se33, sA, pA)
+        @test_approx_eq f(x->x+1, arr) f(arr+1)
+    end
+
+    # case where f(0) would throw
+    @test_approx_eq f(x->sqrt(x-1), pA+1) f(sqrt(pA))
+    # these actually throw due to #10533
+    # @test_approx_eq f(x->sqrt(x-1), pA+1, 1) f(sqrt(pA), 1)
+    # @test_approx_eq f(x->sqrt(x-1), pA+1, 2) f(sqrt(pA), 2)
+    # @test_approx_eq f(x->sqrt(x-1), pA+1, 3) f(pA)
+end
+
+# empty cases
+@test sum(sparse(Int[])) === 0
+@test prod(sparse(Int[])) === 1
+@test_throws ArgumentError minimum(sparse(Int[]))
+@test_throws ArgumentError maximum(sparse(Int[]))
+@test var(sparse(Int[])) === NaN
+
+for f in (sum, prod, minimum, maximum, var)
+    @test isequal(f(spzeros(0, 1), 1), f(Array(Int, 0, 1), 1))
+    @test isequal(f(spzeros(0, 1), 2), f(Array(Int, 0, 1), 2))
+    @test isequal(f(spzeros(0, 1), (1, 2)), f(Array(Int, 0, 1), (1, 2)))
+    @test isequal(f(spzeros(0, 1), 3), f(Array(Int, 0, 1), 3))
+end
 
 # spdiagm
 @test full(spdiagm((ones(2), ones(2)), (0, -1), 3, 3)) ==
