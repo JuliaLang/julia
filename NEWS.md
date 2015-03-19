@@ -229,6 +229,8 @@ Library improvements
 
     * Added Base.get_process_title / Base.set_process_title. ([#9957])
 
+    * `readavailable` returns a byte vector instead of a string.
+
 Deprecated or removed
 ---------------------
 

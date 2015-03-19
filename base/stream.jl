@@ -714,7 +714,7 @@ function readavailable(this::AsyncStream)
     buf = this.buffer
     @assert buf.seekable == false
     wait_readnb(this,1)
-    takebuf_string(buf)
+    takebuf_array(buf)
 end
 
 function readuntil(this::AsyncStream,c::UInt8)
