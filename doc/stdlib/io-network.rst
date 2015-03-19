@@ -256,7 +256,7 @@ General I/O
 
 .. function:: readavailable(stream)
 
-   Read all available data on the stream, blocking the task only if no data is available.
+   Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``.
 
 
 Text I/O
