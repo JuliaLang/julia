@@ -357,7 +357,8 @@ Cluster Manager Interface
     to ``launched`` and notify ``launch_ntfy``. The function MUST exit once all workers, requested by ``manager`` have been launched.
     ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
 
-.. function:: manage(manager::ClusterManager, pid::Int, config::WorkerConfig. op::Symbol)
+.. function:: manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
+    
     Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
     with appropriate ``op`` values:
 
@@ -368,9 +369,10 @@ Cluster Manager Interface
         interrupt signal.
       - with ``:finalize`` for cleanup purposes.
 
-.. function:: kill(manager::ClusterManager, pid::Int, config::WorkerConfig)
+.. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
+    
     Implemented by cluster managers. It is called on the master process, by ``rmprocs``. It should cause the remote worker specified
-    by ``pid`` to exit. ``Base.exit(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+    by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
 
 .. function:: init_worker(manager::FooManager)
 
@@ -388,7 +390,8 @@ Cluster Manager Interface
 
 
 .. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
-    Called by cluster managers  using custom transports. It should be called when the custom transport implementation receives the
+    
+    Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the
     first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two
     AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
 
