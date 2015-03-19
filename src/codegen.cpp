@@ -2026,7 +2026,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
         Value *theF = emit_expr(args[2],ctx);
         Value *theFptr = emit_nthptr_recast(
                 theF,
-                offsetof(jl_function_t,fptr)/sizeof(void*),
+                (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)),
                 tbaa_func,
                 jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
@@ -2632,7 +2632,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
 #endif
             // extract pieces of the function object
             // TODO: try extractvalue instead
-            theFptr = emit_nthptr_recast(theFunc, offsetof(jl_function_t,fptr)/sizeof(void*), tbaa_func, jl_pfptr_llvmt);
+            theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
             theF = theFunc;
         }
         else {
@@ -2666,7 +2666,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
             myargs = builder.CreateGEP(ctx->argTemp,
                                        ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
         }
-        theFptr = emit_nthptr_recast(theFunc, offsetof(jl_function_t,fptr)/sizeof(void*), tbaa_func, jl_pfptr_llvmt);
+        theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
         Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
                                         ConstantInt::get(T_int32,nargs));
         builder.CreateBr(mergeBB1);

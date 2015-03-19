@@ -910,7 +910,7 @@ static jl_value_t *jl_deserialize_datatype(ios_t *s, int pos, jl_value_t **loc)
         arraylist_push(&flagref_list, (void*)(uptrint_t)pos);
         if (has_instance) {
             arraylist_push(&flagref_list, dt);
-            arraylist_push(&flagref_list, &jl_typetagof(dt->instance)->type);
+            arraylist_push(&flagref_list, &jl_astaggedvalue(dt->instance)->type);
             arraylist_push(&flagref_list, (void*)(uptrint_t)-1);
         }
     }
@@ -1074,7 +1074,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
             }
         }
         if (mode == MODE_MODULE) {
-            aty = jl_deserialize_value(s, &jl_typetagof(a)->type);
+            aty = jl_deserialize_value(s, &jl_astaggedvalue(a)->type);
             assert(aty == jl_typeof(a));
         }
         return (jl_value_t*)a;
@@ -1311,7 +1311,7 @@ static jl_value_t *jl_deserialize_value_(ios_t *s, jl_value_t *vtag, jl_value_t 
         }
         // TODO: put WeakRefs on the weak_refs list
         if (mode == MODE_MODULE) {
-            dt = (jl_datatype_t*)jl_deserialize_value(s, &jl_typetagof(v)->type);
+            dt = (jl_datatype_t*)jl_deserialize_value(s, &jl_astaggedvalue(v)->type);
             assert((jl_value_t*)dt == jl_typeof(v));
         }
         return v;

@@ -343,7 +343,7 @@ static inline void objprofile_count(void* ty, int old, int sz)
 
 //static inline void gc_setmark_other(jl_value_t *v, int mark_mode) // unused function
 //{
-//    jl_typetag_t *o = jl_typetagof(v);
+//    jl_taggedvalue_t *o = jl_astaggedvalue(v);
 //    _gc_setmark(o, mark_mode);
 //    verify_val(o);
 //}
@@ -418,8 +418,8 @@ static inline int gc_setmark_pool(void *o, int mark_mode)
 
 static inline int gc_setmark(jl_value_t *v, int sz, int mark_mode)
 {
-    jl_typetag_t *o = jl_typetagof(v);
-    sz += sizeof(jl_typetag_t);
+    jl_taggedvalue_t *o = jl_astaggedvalue(v);
+    sz += sizeof(jl_taggedvalue_t);
 #ifdef MEMDEBUG
     return gc_setmark_big(o, mark_mode);
 #endif
@@ -610,7 +610,7 @@ void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_
 {
     maybe_collect();
 
-    if (gc_bits(jl_typetagof(owner)) == GC_MARKED) {
+    if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
         perm_scanned_bytes += sz - oldsz;
         live_bytes += sz - oldsz;
     }
@@ -686,9 +686,9 @@ static void sweep_weak_refs(void)
         return;
     do {
         wr = (jl_weakref_t*)lst[n];
-        if (gc_marked(jl_typetagof(wr))) {
+        if (gc_marked(jl_astaggedvalue(wr))) {
             // weakref itself is alive
-            if (!gc_marked(jl_typetagof(wr->value)))
+            if (!gc_marked(jl_astaggedvalue(wr->value)))
                 wr->value = (jl_value_t*)jl_nothing;
             n++;
         }
@@ -942,7 +942,7 @@ static void sweep_malloced_arrays(void)
     mallocarray_t **pma = &mallocarrays;
     while (ma != NULL) {
         mallocarray_t *nxt = ma->next;
-        if (gc_marked(jl_typetagof(ma->a))) {
+        if (gc_marked(jl_astaggedvalue(ma->a))) {
             pma = &ma->next;
         }
         else {
@@ -1361,7 +1361,7 @@ void reset_remset(void)
 
 DLLEXPORT void gc_queue_root(jl_value_t *ptr)
 {
-    jl_typetag_t *o = jl_typetagof(ptr);
+    jl_taggedvalue_t *o = jl_astaggedvalue(ptr);
     assert(gc_bits(o) != GC_QUEUED);
     gc_bits(o) = GC_QUEUED;
     arraylist_push(remset, ptr);
@@ -1379,7 +1379,7 @@ static int push_root(jl_value_t *v, int d, int);
 static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 {
     assert(v != NULL);
-    jl_typetag_t* o = jl_typetagof(v);
+    jl_taggedvalue_t* o = jl_astaggedvalue(v);
     verify_val(o);
     int bits = gc_bits(o);
     if (!gc_marked(o)) {
@@ -1391,7 +1391,7 @@ static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
 {
     //    int64_t s = perm_scanned_bytes;
-    jl_typetag_t *o = jl_typetagof(v);
+    jl_taggedvalue_t *o = jl_astaggedvalue(v);
     if (!gc_marked(o)) {
         //        objprofile_count(jl_typeof(v), 1, 16);
 #ifdef MEMDEBUG
@@ -1436,7 +1436,7 @@ NOINLINE static int gc_mark_module(jl_module_t *m, int d)
     for(i=1; i < m->bindings.size; i+=2) {
         if (table[i] != HT_NOTFOUND) {
             jl_binding_t *b = (jl_binding_t*)table[i];
-            gc_setmark_buf(b, gc_bits(jl_typetagof(m)));
+            gc_setmark_buf(b, gc_bits(jl_astaggedvalue(m)));
 #ifdef GC_VERIFY
             void* vb = gc_val_buf(b);
             verify_parent1("module", m, &vb, "binding_buff");
@@ -1468,7 +1468,7 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
     if (ta->stkbuf != NULL || ta == jl_current_task) {
         if (ta->stkbuf != NULL) {
-            gc_setmark_buf(ta->stkbuf, gc_bits(jl_typetagof(ta)));
+            gc_setmark_buf(ta->stkbuf, gc_bits(jl_astaggedvalue(ta)));
         }
 #ifdef COPY_STACKS
         ptrint_t offset;
@@ -1558,7 +1558,7 @@ static int push_root(jl_value_t *v, int d, int bits)
     }
     else if (((jl_datatype_t*)(vt))->name == jl_array_typename) {
         jl_array_t *a = (jl_array_t*)v;
-        jl_typetag_t *o = jl_typetagof(v);
+        jl_taggedvalue_t *o = jl_astaggedvalue(v);
         int todo = !(bits & GC_MARKED);
         if (a->pooled)
 #ifdef MEMDEBUG
@@ -1693,10 +1693,10 @@ static void visit_mark_stack_inc(int mark_mode)
 {
     while(mark_sp > 0 && !should_timeout()) {
         jl_value_t* v = mark_stack[--mark_sp];
-        assert(gc_bits(jl_typetagof(v)) == GC_QUEUED ||
-               gc_bits(jl_typetagof(v)) == GC_MARKED ||
-               gc_bits(jl_typetagof(v)) == GC_MARKED_NOESC);
-        push_root(v, 0, gc_bits(jl_typetagof(v)));
+        assert(gc_bits(jl_astaggedvalue(v)) == GC_QUEUED ||
+               gc_bits(jl_astaggedvalue(v)) == GC_MARKED ||
+               gc_bits(jl_astaggedvalue(v)) == GC_MARKED_NOESC);
+        push_root(v, 0, gc_bits(jl_astaggedvalue(v)));
     }
 }
 
@@ -1777,9 +1777,9 @@ static void post_mark(arraylist_t *list, int dryrun)
     for(size_t i=0; i < list->len; i+=2) {
         jl_value_t *v = (jl_value_t*)list->items[i];
         jl_value_t *fin = (jl_value_t*)list->items[i+1];
-        int isfreed = !gc_marked(jl_typetagof(v));
+        int isfreed = !gc_marked(jl_astaggedvalue(v));
         gc_push_root(fin, 0);
-        int isold = list == &finalizer_list && gc_bits(jl_typetagof(v)) == GC_MARKED && gc_bits(jl_typetagof(fin)) == GC_MARKED;
+        int isold = list == &finalizer_list && gc_bits(jl_astaggedvalue(v)) == GC_MARKED && gc_bits(jl_astaggedvalue(fin)) == GC_MARKED;
         if (!dryrun && (isfreed || isold)) {
             // remove from this list
             if (i < list->len - 2) {
@@ -2086,7 +2086,7 @@ void jl_gc_collect(int full)
         for(int i = 0; i < last_remset->len; i++) {
             jl_value_t *item = (jl_value_t*)last_remset->items[i];
             objprofile_count(jl_typeof(item), 2, 0);
-            gc_bits(jl_typetagof(item)) = GC_MARKED;
+            gc_bits(jl_astaggedvalue(item)) = GC_MARKED;
         }
         for (int i = 0; i < rem_bindings.len; i++) {
             void *ptr = rem_bindings.items[i];
@@ -2206,7 +2206,7 @@ void jl_gc_collect(int full)
             // so that we don't trigger the barrier again on them.
             if (sweep_mask == GC_MARKED_NOESC) {
                 for (int i = 0; i < remset->len; i++) {
-                    gc_bits(jl_typetagof(remset->items[i])) = GC_QUEUED;
+                    gc_bits(jl_astaggedvalue(remset->items[i])) = GC_QUEUED;
                 }
                 for (int i = 0; i < rem_bindings.len; i++) {
                     void *ptr = rem_bindings.items[i];
@@ -2309,7 +2309,7 @@ void *reallocb(void *b, size_t sz)
     }
 }
 
-#define jl_valueof(v) (((jl_typetag_t*)(v))->value)
+#define jl_valueof(v) (((jl_taggedvalue_t*)(v))->value)
 
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
@@ -2530,7 +2530,7 @@ static void big_obj_stats(void)
 
     mallocarray_t *ma = mallocarrays;
     while (ma != NULL) {
-        if (gc_marked(jl_typetagof(ma->a))) {
+        if (gc_marked(jl_astaggedvalue(ma->a))) {
             nused++;
             nbytes += array_nbytes(ma->a);
         }
