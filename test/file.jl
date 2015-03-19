@@ -388,11 +388,12 @@ rm(cfile)
 
 function test_LibcFILE(FILEp)
     buf = Array(UInt8, 8)
-    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp.ptr)
+    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
     @test bytestring(buf) == "Hello, w"
     @test position(FILEp) == 8
     seek(FILEp, 5)
     @test position(FILEp) == 5
+    close(FILEp)
 end
 
 f = open(file, "w")
@@ -404,7 +405,6 @@ close(f)
 @unix_only f = RawFD(ccall(:open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
 @windows_only f = RawFD(ccall(:_open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
 test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
-ccall(:close, Void, (Cint,), f)
 
 ############
 # Clean up #

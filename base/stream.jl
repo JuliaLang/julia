@@ -1,6 +1,8 @@
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
 include("uv_constants.jl")
 
+import .Libc: RawFD, dup
+
 ## types ##
 typealias Callback Union(Function,Bool)
 
@@ -16,15 +18,6 @@ const uvhandles = ObjectIdDict()
 
 preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)+1
 unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
-
-#Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable RawFD
-    fd::Int32
-    RawFD(fd::Integer) = new(fd)
-    RawFD(fd::RawFD) = fd
-end
-
-convert(::Type{Int32}, fd::RawFD) = fd.fd
 
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
@@ -943,11 +936,6 @@ function connect(sock::AsyncStream, args...)
 end
 
 connect(path::AbstractString) = connect(Pipe(),path)
-
-dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
-dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
-    ccall((@windows? :_dup2 : :dup2),Int32,
-    (Int32,Int32),src.fd,target.fd))
 
 _fd(x::IOStream) = RawFD(fd(x))
 @unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
