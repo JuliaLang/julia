@@ -443,7 +443,7 @@ The ``AbstractArray`` type includes anything vaguely array-like, and
 implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
-generally implement at least :func:`size(A) <size>` (returing an ``Int`` tuple),
+generally implement at least :func:`size(A) <size>` (returning an ``Int`` tuple),
 :func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>`;
 mutable arrays should also implement :func:`setindex!`.  It
 is recommended that these operations have nearly constant time complexity,
