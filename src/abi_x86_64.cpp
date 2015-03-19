@@ -234,6 +234,9 @@ Type *preferred_llvm_type(jl_value_t *ty, bool isret)
         default:
             assert(0 && "Unexpected cl.classes[0]");
     }
+    // Silence GCC
+    assert(0);
+    return NULL;
 }
 
 bool need_private_copy(jl_value_t *ty, bool isRef)
