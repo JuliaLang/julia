@@ -21,6 +21,10 @@
 	<array>
 		<dict>
 			<key>include</key>
+			<string>#symbol</string>
+		</dict>
+		<dict>
+			<key>include</key>
 			<string>#operator</string>
 		</dict>
 		<dict>
@@ -34,6 +38,10 @@
 		<dict>
 			<key>include</key>
 			<string>#bracket</string>
+		</dict>
+		<dict>
+			<key>include</key>
+			<string>#type_decl</string>
 		</dict>
 		<dict>
 			<key>include</key>
