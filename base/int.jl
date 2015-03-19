@@ -617,6 +617,10 @@ UnsignedMultiplicativeInverse(x::Unsigned) = UnsignedMultiplicativeInverse{typeo
 # Special type to handle div by 1
 immutable MultiplicativeInverse1{T} <: MultiplicativeInverse{T} end
 
+(*)(a::MultiplicativeInverse, b::MultiplicativeInverse) = a.divisor*b.divisor
+(*)(a::Number, b::MultiplicativeInverse) = a*b.divisor
+(*)(a::MultiplicativeInverse, b::Number) = a.divisor*b
+
 # div{T}(a::Integer, b::SignedMultiplicativeInverse{T})   = div(convert(T, a), b)
 # div{T}(a::Integer, b::UnsignedMultiplicativeInverse{T}) = div(convert(T, a), b)
 # rem{T}(a::Integer, b::MultiplicativeInverse{T})         = rem(convert(T, a), b)

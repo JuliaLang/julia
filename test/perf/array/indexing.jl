@@ -77,6 +77,8 @@ function makearrays{T}(::Type{T}, sz)
     Asub = sub(B, 1:sz[1], 2:sz[2]+1)
     RS = reshape(ArrayLS([1:L;]), sz)
     RF = reshape(ArrayLF([1:L;]), sz)
-    (A, AS, AF, Astrd, Astrd1, Asub, RS, RF)
+    RLS = reshape(ArrayLS(A), (L,))
+    RLF = reshape(ArrayLF(A), (L,))
+    (A, AS, AF, Astrd, Astrd1, Asub, RS, RF, RLS, RLF)
 end
 

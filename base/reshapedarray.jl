@@ -9,7 +9,7 @@ immutable IndexMD{In,Out,MI<:(MultiplicativeInverse...)}
     invstride_parent::MI
     dims_view::NTuple{Out,Int}
 end
-IndexMD(mi, dims) = IndexMD{length(mi)+1,length(dims),typeof(mi)}(mi, dims)
+IndexMD(mi, dims) = IndexMD{length(mi),length(dims),typeof(mi)}(mi, dims)
 
 typealias ReshapeIndex Union(Colon, IndexMD)
 
@@ -39,8 +39,7 @@ function reshape(p::(AbstractArray,LinearSlow), dims::Dims)
             if ip-iplast == iv-ivlast == 1
                 push!(indexes, Colon())
             else
-                pdims = size(parent)[iplast:ip-1]
-                mi = map(multiplicativeinverse, dimstrides(pdims)[2:end-1])
+                mi = map(multiplicativeinverse, size(parent)[iplast:ip-1])
                 imd = IndexMD(mi, dims[ivlast:iv-1])
                 push!(indexes, imd)
             end
@@ -129,21 +128,14 @@ dimstrides(s::Dims) = dimstrides((1,), s)
 dimstrides(t::Tuple, ::()) = t
 @inline dimstrides(t::Tuple, sz::Dims) = dimstrides(tuple(t..., t[end]*sz[1]), tail(sz))
 
-@inline function ind2sub{T}(mi::(MultiplicativeInverse{T},), ind::Integer)
-    dr = divrem(ind-1, mi[end])
-    dr[2]+1, dr[1]+1
+@inline ind2sub(dims::(MultiplicativeInverse,), ind::Integer) = ind
+@inline ind2sub(dims::(MultiplicativeInverse,MultiplicativeInverse), ind::Integer) = begin
+    dv, rm = divrem(ind-1,dims[1])
+    rm+1, dv+1
 end
-@inline function ind2sub{N,T<:MultiplicativeInverse}(mi::NTuple{N,T}, ind::Integer)
-    dr = divrem(ind-1, mi[end])
-    ind2sub(mi[1:end-1], (dr[1]+1,), dr[2])
-end
-@inline function ind2sub{N,T<:MultiplicativeInverse}(mi::NTuple{N,T}, sub::Dims, ind0::Integer)
-    dr = divrem(ind0, mi[end])   # ind0 is zero-based
-    ind2sub(mi[1:end-1], tuple(dr[1]+1, sub...), dr[2])
-end
-@inline function ind2sub{T}(mi::(MultiplicativeInverse{T},), sub::Dims, ind0::Integer)
-    dr = divrem(ind0, mi[end])
-    tuple(dr[2]+1, dr[1]+1, sub...)
+@inline ind2sub(dims::(MultiplicativeInverse,MultiplicativeInverse,MultiplicativeInverse...), ind::Integer) = begin
+    dv, rm = divrem(ind-1,dims[1])
+    tuple(rm+1, ind2sub(Base.tail(dims),dv+1)...)
 end
 
 end
