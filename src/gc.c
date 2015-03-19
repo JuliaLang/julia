@@ -1388,28 +1388,84 @@ void jl_gc_setmark(jl_value_t *v) // TODO rename this as it is misleading now
     //    perm_scanned_bytes = s;
 }
 
-static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int d)
+static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, char *bottom, char* top, int d)
 {
+    // this function assumes !_stack_grows_up
+    int verify = (ta != (jl_value_t*)jl_root_task);
+    ptrint_t offset = (ptrint_t)top - (ptrint_t)jl_stackbase;
     while (s != NULL) {
-        s = (jl_gcframe_t*)((char*)s + offset);
         jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        assert(!verify || ((char*)s + offset < top && (char*)s + offset >= bottom));
+        s = (jl_gcframe_t*)((char*)s + offset); // this part of the stack has been relocated
         size_t nr = s->nroots>>1;
         if (s->nroots & 1) {
             for(size_t i=0; i < nr; i++) {
-                jl_value_t **ptr = (jl_value_t**)((char*)rts[i] + offset);
+                jl_value_t ***pptr = &rts[i];
+                assert(!verify || ((char*)pptr + offset < top && (char*)pptr + offset >= bottom));
+                pptr = (jl_value_t***)((char*)pptr + offset); // this part of the stack has been relocated
+                jl_value_t **ptr = *pptr;
+                assert(!verify || ((char*)ptr + offset < top && (char*)ptr + offset >= bottom));
+                ptr = (jl_value_t**)((char*)ptr + offset); // this part of the stack has been relocated
                 if (*ptr != NULL)
                     gc_push_root(*ptr, d);
             }
         }
         else {
             for(size_t i=0; i < nr; i++) {
-                if (rts[i] != NULL) {
+                jl_value_t **ptr = (jl_value_t**)&rts[i];
+                assert(!verify || ((char*)ptr + offset < top && (char*)ptr + offset >= bottom));
+                ptr = (jl_value_t**)((char*)ptr + offset); // this part of the stack has been relocated
+                if (*ptr != NULL) {
                     verify_parent("task", ta, &rts[i], "stack(%d)", i);
-                    gc_push_root(rts[i], d);
+                    gc_push_root(*ptr, d);
                 }
             }
         }
         s = s->prev;
+    }
+}
+
+static void gc_mark_offset_root_stack(jl_value_t* ta, jl_gcframe_t *s, char *bottom, char* top, int d)
+{
+    // this function assumes !_stack_grows_up
+    ptrint_t offset = (ptrint_t)top - (ptrint_t)jl_stackbase;
+    while (s != NULL) {
+        jl_value_t ***rts = (jl_value_t***)(((void**)s)+2);
+        size_t *pnr = &s->nroots; assert((char*)pnr == (char*)s);
+        if ((char*)pnr + offset < top && (char*)pnr + offset >= bottom)
+            pnr = (size_t*)((char*)pnr + offset); // this part of the stack has been relocated
+        //else
+        //    return gc_mark_stack(ta, s, (char*)s, jl_stackbase, d); // the rest of the stack hasn't been relocated
+        size_t nr = *pnr;
+        if (nr & 1) {
+            nr >>= 1;
+            for(size_t i=0; i < nr; i++) {
+                jl_value_t ***pptr = &rts[i];
+                if ((char*)pptr + offset < top && (char*)pptr + offset >= bottom)
+                    pptr = (jl_value_t***)((char*)pptr + offset); // this part of the stack has been relocated
+                jl_value_t **ptr = *pptr;
+                if ((char*)ptr + offset < top && (char*)ptr + offset >= bottom)
+                    ptr = (jl_value_t**)((char*)ptr + offset); // this part of the stack has been relocated
+                if (*ptr != NULL)
+                    gc_push_root(*ptr, d);
+            }
+        }
+        else {
+            nr >>= 1;
+            for(size_t i=0; i < nr; i++) {
+                jl_value_t **ptr = (jl_value_t**)&rts[i];
+                if ((char*)ptr + offset < top && (char*)ptr + offset >= bottom)
+                    ptr = (jl_value_t**)((char*)ptr + offset); // this part of the stack has been relocated
+                if (*ptr != NULL) {
+                    verify_parent("task", ta, &rts[i], "stack(%d)", i);
+                    gc_push_root(*ptr, d);
+                }
+            }
+        }
+        jl_gcframe_t **ps = &s->prev;
+        if ((char*)ps + offset < top && (char*)ps + offset >= bottom)
+            ps = (jl_gcframe_t**)((char*)ps + offset); // this part of the stack has been relocated
+        s = *ps;
     }
 }
 
@@ -1451,24 +1507,29 @@ __attribute__((noinline)) static int gc_mark_module(jl_module_t *m, int d)
 
 static void gc_mark_task_stack(jl_task_t *ta, int d)
 {
-    if (ta->stkbuf != NULL || ta == jl_current_task) {
-        if (ta->stkbuf != NULL) {
-            gc_setmark_buf(ta->stkbuf, gc_bits(ta));
-        }
+    if (ta->stkbuf != NULL)
+        gc_setmark_buf(ta->stkbuf, gc_bits(ta));
+
+    if (ta == jl_current_task) {
+        gc_mark_stack((jl_value_t*)ta, jl_pgcstack, NULL, jl_stackbase, d);
+    }
 #ifdef COPY_STACKS
-        ptrint_t offset;
-        if (ta == jl_current_task) {
-            offset = 0;
-            gc_mark_stack((jl_value_t*)ta, jl_pgcstack, offset, d);
+    else if (ta->stkbuf) {
+        if (ta == jl_root_task) {
+            if (ta->ssize > 0)
+                gc_mark_offset_root_stack((jl_value_t*)ta, ta->gcstack, ta->stkbuf, ta->stkbuf + ta->ssize, d);
+            else
+                gc_mark_stack((jl_value_t*)ta, ta->gcstack, NULL, jl_stackbase, d); // no part of this stack has been relocated
         }
         else {
-            offset = (char *)ta->stkbuf - ((char *)jl_stackbase - ta->ssize);
-            gc_mark_stack((jl_value_t*)ta, ta->gcstack, offset, d);
+            gc_mark_stack((jl_value_t*)ta, ta->gcstack, ta->stkbuf, ta->stkbuf + ta->ssize, d);
         }
-#else
-        gc_mark_stack((jl_value_t*)ta, ta->gcstack, 0, d);
-#endif
     }
+#else
+    else if (ta->gcstack) {
+        gc_mark_stack((jl_value_t*)ta, ta->gcstack, ta->stkbuf, ta->stkbuf + ta->ssize, d);
+    }
+#endif
 }
 
 #if 0

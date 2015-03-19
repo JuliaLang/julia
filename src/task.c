@@ -166,7 +166,7 @@ static void NOINLINE save_stack(jl_task_t *t)
     if (t->state == done_sym || t->state == failed_sym)
         return;
     volatile char *_x;
-    size_t nb = (char*)jl_stackbase - (char*)&_x;
+    size_t nb = (char*)jl_stackbase > (char*)&_x ? (char*)jl_stackbase - (char*)&_x : 0;
     char *buf;
     if (t->stkbuf == NULL || t->bufsz < nb) {
         buf = (char*)allocb(nb);
@@ -252,7 +252,7 @@ DLLEXPORT void julia_init(JL_IMAGE_SEARCH rel)
     _julia_init(rel);
 #ifdef COPY_STACKS
     char __stk;
-    jl_stackbase = (char*)(((uptrint_t)&__stk + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
+    jl_stackbase = (char*)(((uptrint_t)&__stk - 4096 + sizeof(__stk))&-16); // also ensures stackbase is 16-byte aligned
     set_base_ctx(&__stk); // separate function, to record the size of a stack frame
 #endif
 }
