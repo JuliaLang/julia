@@ -57,7 +57,7 @@ and finalization.
 `jl_init_frontend()
 <https://github.com/JuliaLang/julia/blob/master/src/ast.c#L119>`_
 loads and initialises a pre-compiled femptolisp image containing
-the scanner/paser;
+the scanner/parser;
 
 `jl_init_types()
 <https://github.com/JuliaLang/julia/blob/master/src/jltypes.c#L2887>`_
