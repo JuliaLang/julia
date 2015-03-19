@@ -12,7 +12,9 @@
 #define FREE_PAGES_EAGER
 #include <stdlib.h>
 #include <string.h>
+#ifndef _MSC_VER
 #include <strings.h>
+#endif
 #include <assert.h>
 #include "julia.h"
 #include "julia_internal.h"
@@ -41,7 +43,9 @@ typedef struct {
     };
     // Work around a bug affecting gcc up to (at least) version 4.4.7
     // https://gcc.gnu.org/bugzilla/show_bug.cgi?id=36839
+#if !defined(_COMPILER_MICROSOFT_)
     int _dummy[0];
+#endif
     char data[];
 } buff_t;
 
@@ -80,7 +84,7 @@ typedef struct _gcpage_t {
 
 // contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
 // uses a very naive allocator (see malloc_page & free_page)
-#ifdef _P64
+#if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
 #define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
 #else
 #define REGION_PG_COUNT 8*4096 // 512M
@@ -302,9 +306,13 @@ static void add_lostval_parent(jl_value_t* parent)
         }                                                               \
     } while(0);
 
+#define verify_parent1(ty,obj,slot,arg1) verify_parent(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2) verify_parent(ty,obj,slot,arg1,arg2)
+
 #else
 #define verify_val(v)
-#define verify_parent(ty,obj,slot,args...)
+#define verify_parent1(ty,obj,slot,arg1)
+#define verify_parent2(ty,obj,slot,arg1,arg2)
 #endif
 
 #ifdef OBJPROFILE
@@ -461,7 +469,7 @@ static inline void *malloc_a16(size_t sz)
 
 #endif
 
-static __attribute__((noinline)) void *malloc_page(void)
+static NOINLINE void *malloc_page(void)
 {
     void *ptr = (void*)0;
     int i;
@@ -471,7 +479,7 @@ static __attribute__((noinline)) void *malloc_page(void)
         heap = heaps[heap_i];
         if (heap == NULL) {
 #ifdef _OS_WINDOWS_
-            char* mem = VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
+            char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
             char* mem = (char*)mmap(0, sizeof(region_t) + GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
@@ -507,10 +515,10 @@ static __attribute__((noinline)) void *malloc_page(void)
     if (heaps_ub[heap_i] < i)
         heaps_ub[heap_i] = i;
 
-#ifdef __MINGW32__
+#if defined(_COMPILER_MINGW_)
     int j = __builtin_ffs(heap->freemap[i]) - 1;
-#elif _MSC_VER
-    int j;
+#elif defined(_COMPILER_MICROSOFT_)
+    unsigned long j;
     _BitScanForward(&j, heap->freemap[i]);
 #else
     int j = ffs(heap->freemap[i]) - 1;
@@ -780,7 +788,7 @@ void jl_finalize(jl_value_t *o)
 
 // big value list
 
-static __attribute__((noinline)) void *alloc_big(size_t sz)
+static NOINLINE void *alloc_big(size_t sz)
 {
     maybe_collect();
     size_t offs = BVOFFS*sizeof(void*);
@@ -964,7 +972,7 @@ static inline gcval_t *reset_page(pool_t *p, gcpage_t *pg, gcval_t *fl)
     return beg;
 }
 
-static __attribute__((noinline)) void add_page(pool_t *p)
+static NOINLINE void add_page(pool_t *p)
 {
     char *data = (char*)malloc_page();
     if (data == NULL)
@@ -1404,7 +1412,7 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
         else {
             for(size_t i=0; i < nr; i++) {
                 if (rts[i] != NULL) {
-                    verify_parent("task", ta, &rts[i], "stack(%d)", i);
+                    verify_parent2("task", ta, &rts[i], "stack(%d)", i);
                     gc_push_root(rts[i], d);
                 }
             }
@@ -1413,7 +1421,7 @@ static void gc_mark_stack(jl_value_t* ta, jl_gcframe_t *s, ptrint_t offset, int 
     }
 }
 
-__attribute__((noinline)) static int gc_mark_module(jl_module_t *m, int d)
+NOINLINE static int gc_mark_module(jl_module_t *m, int d)
 {
     size_t i;
     int refyoung = 0;
@@ -1424,10 +1432,10 @@ __attribute__((noinline)) static int gc_mark_module(jl_module_t *m, int d)
             gc_setmark_buf(b, gc_bits(m));
 #ifdef GC_VERIFY
             void* vb = gc_val_buf(b);
-            verify_parent("module", m, &vb, "binding_buff");
+            verify_parent1("module", m, &vb, "binding_buff");
 #endif
             if (b->value != NULL) {
-                verify_parent("module", m, &b->value, "binding(%s)", b->name->name);
+                verify_parent2("module", m, &b->value, "binding(%s)", b->name->name);
                 refyoung |= gc_push_root(b->value, d);
             }
             if (b->type != (jl_value_t*)jl_any_type) {
@@ -1443,7 +1451,7 @@ __attribute__((noinline)) static int gc_mark_module(jl_module_t *m, int d)
         refyoung |= gc_push_root(m->usings.items[i], d);
     }
     if (m->constant_table) {
-        verify_parent("module", m, &m->constant_table, "constant_table");
+        verify_parent1("module", m, &m->constant_table, "constant_table");
         refyoung |= gc_push_root(m->constant_table, d);
     }
     return refyoung;
@@ -1479,7 +1487,7 @@ static void mark_task_stacks(void) {
 }
 #endif
 
-__attribute__((noinline)) static void gc_mark_task(jl_task_t *ta, int d)
+NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 {
     if (ta->parent) gc_push_root(ta->parent, d);
     if (ta->last) gc_push_root(ta->last, d);
@@ -1536,7 +1544,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         for(size_t i=0; i < l; i++) {
             jl_value_t *elt = data[i];
             if (elt != NULL) {
-                verify_parent("tuple", v, &data[i], "elem(%d)", i);
+                verify_parent2("tuple", v, &data[i], "elem(%d)", i);
                 refyoung |= gc_push_root(elt, d);
             }
         }
@@ -1545,12 +1553,13 @@ static int push_root(jl_value_t *v, int d, int bits)
         jl_array_t *a = (jl_array_t*)v;
         int todo = !(bits & GC_MARKED);
         if (a->pooled)
-            MARK(a,
 #ifdef MEMDEBUG
-                 bits = gc_setmark_big(a, GC_MARKED_NOESC);
+#define _gc_setmark_pool gc_setmark_big
 #else
-                 bits = gc_setmark_pool(a, GC_MARKED_NOESC);
+#define _gc_setmark_pool gc_setmark_pool
 #endif
+            MARK(a,
+                 bits = _gc_setmark_pool(a, GC_MARKED_NOESC);
                  if (a->how == 2 && todo) {
                      objprofile_count(MATY, gc_bits(a) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(a) == GC_MARKED)
@@ -1576,7 +1585,7 @@ static int push_root(jl_value_t *v, int d, int bits)
         else if (a->how == 1) {
 #ifdef GC_VERIFY
             void* val_buf = gc_val_buf((char*)a->data - a->offset*a->elsize);
-            verify_parent("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
+            verify_parent1("array", v, &val_buf, "buffer ('loc' addr is meaningless)");
 #endif
             gc_setmark_buf((char*)a->data - a->offset*a->elsize, gc_bits(v));
         }
@@ -1592,7 +1601,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                 for(size_t i=0; i < l; i++) {
                     jl_value_t *elt = ((jl_value_t**)data)[i];
                     if (elt != NULL) {
-                        verify_parent("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
+                        verify_parent2("array", v, &((jl_value_t**)data)[i], "elem(%d)", i);
                         refyoung |= gc_push_root(elt, d);
                     }
                     // try to split large array marking (incremental mark TODO)
@@ -1636,7 +1645,7 @@ static int push_root(jl_value_t *v, int d, int bits)
                 jl_value_t **slot = (jl_value_t**)((char*)v + fields[i].offset + sizeof(void*));
                 jl_value_t *fld = *slot;
                 if (fld) {
-                    verify_parent("object", v, slot, "field(%d)", i);
+                    verify_parent2("object", v, slot, "field(%d)", i);
                     //children[ci++] = fld;
                     refyoung |= gc_push_root(fld, d);
                 }

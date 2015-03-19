@@ -160,6 +160,10 @@ extern void _chkstk(void);
 #endif
 }
 
+#if defined(_COMPILER_MICROSOFT_) && !defined(__alignof__)
+#define __alignof__ __alignof
+#endif
+
 #define DISABLE_FLOAT16
 
 // llvm state
@@ -791,7 +795,7 @@ static Function *jl_cfunction_object(jl_function_t *f, jl_value_t *rt, jl_value_
 
     uint64_t isref = 0; // bit vector of which argument types are a subtype of Type{Ref{T}}
     jl_value_t *sigt; // type signature with Ref{} annotations removed
-    JL_GC_PUSH(&sigt);
+    JL_GC_PUSH1(&sigt);
     sigt = (jl_value_t*)jl_alloc_tuple(nargs);
     for (i = 0; i < nargs; i++) {
         jl_value_t *ati = jl_tupleref(argt, i);
