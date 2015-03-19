@@ -403,6 +403,7 @@ function _start()
 
         local term
         global active_repl
+        global active_repl_backend
         if repl
             if !isa(STDIN,TTY)
                 global is_interactive |= !isa(STDIN,Union(File,IOStream))
@@ -441,7 +442,7 @@ function _start()
                     end
                 end
             else
-                REPL.run_repl(active_repl)
+                active_repl_backend = REPL.run_repl(active_repl)
             end
         end
     catch err
