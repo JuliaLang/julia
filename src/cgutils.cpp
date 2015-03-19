@@ -78,11 +78,18 @@ static inline void add_named_global(GlobalValue *gv, void *addr)
 // --- string constants ---
 static std::map<const std::string, GlobalVariable*> stringConstants;
 
+extern "C" {
+    extern int jl_in_inference;
+}
+
 static GlobalVariable *stringConst(const std::string &txt)
 {
     GlobalVariable *gv = stringConstants[txt];
     static int strno = 0;
-    if (gv == NULL) {
+    // in inference, we can not share string constants between
+    // modules as there might be multiple compiles on the stack
+    // with calls in between them.
+    if (gv == NULL || jl_in_inference) {
         std::stringstream ssno;
         std::string vname;
         ssno << strno;
@@ -102,6 +109,7 @@ static GlobalVariable *stringConst(const std::string &txt)
                                                        txt.length()+1)),
 #endif
                                 vname);
+        gv->setUnnamedAddr(true);
         stringConstants[txt] = gv;
         strno++;
     }
