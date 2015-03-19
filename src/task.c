@@ -152,7 +152,7 @@ jl_gcframe_t *jl_pgcstack = NULL;
 #ifdef COPY_STACKS
 static jl_jmp_buf * volatile jl_jmp_target;
 
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
 void *jl_stackbase;
