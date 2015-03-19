@@ -36,16 +36,16 @@ function reshape(p::(AbstractArray,LinearSlow), dims::Dims)
     ip = iv = 2
     while ip <= length(stridep) || iv <= length(stridev)
         if stridep[ip] == stridev[iv]
-            if ip-iplast == iv-ivlast == 1
+            if ip-iplast <= 1 && iv-ivlast == 1
                 push!(indexes, Colon())
             else
-                mi = map(multiplicativeinverse, size(parent)[iplast:ip-1])
+                mi = map(FastDivInteger, size(parent)[iplast:ip-1])
                 imd = IndexMD(mi, dims[ivlast:iv-1])
                 push!(indexes, imd)
             end
             iplast = ip
             ivlast = iv
-            ip += 1
+            ip += (ip < length(stridep) || iv == length(stridev))  # for consuming trailing 1s in dims
             iv += 1
         elseif stridep[ip] < stridev[iv]
             ip += 1
@@ -59,7 +59,7 @@ end
 function reshape(p::(AbstractArray,LinearFast), dims::Dims)
     parent = p[1]
     prod(dims) == length(parent) || throw(DimensionMismatch("Must have the same number of elements"))
-    ReshapedArray(parent, (IndexMD((), dims),), dims)
+    ReshapedArray(parent, (IndexMD((FastDivInteger1{Int}(),), dims),), dims)
 end
 
 reshape(parent::ReshapedArray, dims::Dims) = reshape(parent.parent, dims)
@@ -105,14 +105,14 @@ stagedfunction getindex{T,N,P,I}(A::ReshapedArray{T,N,P,I}, indexes::Real...)
         for i = 1:npc[end]
             j = findlast(npc .< i)
             di = i - npc[j]
-            push!(argsout, :(tindex[$j][$di]))
+            push!(argsout, Expr(:..., :(tindex[$j][$di])))
         end
     end
     meta = Expr(:meta, :inline)
     ex = length(argsin) == 1 ?
         quote
             $meta
-            getindex(A.parent, $(argsin...))
+            getindex(A.parent, $(argsin...)...)
         end :
         quote
             $meta
