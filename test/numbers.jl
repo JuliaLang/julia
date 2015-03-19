@@ -2395,7 +2395,7 @@ for divisor in 1:254
     divisor == 128 && continue
     for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64, Int64)
         (divisor == 128 && T == Int8) && continue  # abs will fail
-        mi = Base.multiplicativeinverse(divisor % T)
+        mi = Base.FastDivInteger(divisor % T)
         divisorT = divisor % T
         for dividend in -101:101
             dividendT = dividend % T
@@ -2406,4 +2406,4 @@ for divisor in 1:254
     end
 end
 
-@test_throws ErrorException Base.multiplicativeinverse(0)
+@test_throws ErrorException Base.FastDivInteger(0)

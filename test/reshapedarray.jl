@@ -1,3 +1,6 @@
+module TestReshaped
+
+using Base.Test
 import Base.Reshaped
 
 abstract MyArray{T,N} <: AbstractArray{T,N}
@@ -105,3 +108,5 @@ R = reshape(S, (6,6))
 @test indextype(R) <: (Reshaped.IndexMD{3,2},)
 @test R == reshape(Sc, (6,6))
 @test myeq(R, reshape(Sc, (6,6)))
+
+end
