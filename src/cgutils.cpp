@@ -978,13 +978,6 @@ static Value *emit_nthptr(Value *v, size_t n, MDNode *tbaa)
     return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
 }
 
-static Value *emit_nthptr(Value *v, Value *idx, MDNode *tbaa)
-{
-    // p = (jl_value_t**)v; p[n]
-    Value *vptr = emit_nthptr_addr(v, idx);
-    return tbaa_decorate(tbaa,builder.CreateLoad(vptr, false));
-}
-
 static Value *emit_nthptr_recast(Value *v, size_t n, MDNode *tbaa, Type* ptype)
 {
     // p = (jl_value_t**)v; *(ptype)&p[n]
