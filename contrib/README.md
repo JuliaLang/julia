@@ -6,7 +6,6 @@ Installation
 |[ build_executable.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/build_executable.jl) | Support building       standalone executables |
 |[ build_sysimg.jl ](https://github.com/JuliaLang/julia/blob/master/contrib/build_sysimg.jl) | Build a system image binary |
 |[ check-whitespace.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/check-whitespace.sh) | Check for trailing white space |                                                                                                                 
-|[ filterDupLibs.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/filterDupLibs.sh) | script to filter out         duplicate libraries |
 |[ fixup-libgfortran.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libgfortran.sh) | Include libgfortran  and libquadmath for installations |
 |[ fixup-libstdc++.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/fixup-libstdc++.sh) | Include libstdc++ for    installations |
 |[ install.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/install.sh) | installation script with different       permissions |
