@@ -1,5 +1,5 @@
 ***********************************
-Initialisation of the Julia runtime
+Initialization of the Julia runtime
 ***********************************
 
 How does the Julia runtime execute :code:`julia -e 'println("Hello World!")'` ?
