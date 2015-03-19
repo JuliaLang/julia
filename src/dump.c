@@ -5,14 +5,18 @@
 #include <string.h>
 #include <assert.h>
 
-#include "valgrind.h"
-
 #include "julia.h"
 #include "julia_internal.h"
 #include "builtin_proto.h"
 
 #ifndef _OS_WINDOWS_
 #include <dlfcn.h>
+#endif
+
+#ifndef _COMPILER_MICROSOFT_
+#include "valgrind.h"
+#else
+#define RUNNING_ON_VALGRIND 0
 #endif
 
 #ifdef __cplusplus
