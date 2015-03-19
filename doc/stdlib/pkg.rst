@@ -70,7 +70,7 @@ to use them, you'll need to prefix each function call with an explicit ``Pkg.``,
 
    Returns a dictionary mapping installed package names to the installed version number of each package.
 
-.. function:: installed(pkg) -> Nothing | VersionNumber
+.. function:: installed(pkg) -> Void | VersionNumber
 
    If ``pkg`` is installed, return the installed version number, otherwise return ``nothing``.
 

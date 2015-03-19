@@ -121,11 +121,18 @@ Avoid strange type Unions
 Types such as ``Union(Function,AbstractString)`` are often a sign that some design
 could be cleaner.
 
-Try to avoid nullable fields
-----------------------------
+Avoid type Unions in fields
+---------------------------
 
-When using ``x::Union(Nothing,T)``, ask whether the option for ``x`` to be
-``nothing`` is really necessary. Here are some alternatives to consider:
+When creating a type such as::
+
+    type MyType
+        ...
+        x::Union(Void,T)
+    end
+
+ask whether the option for ``x`` to be ``nothing`` (of type ``Void``)
+is really necessary. Here are some alternatives to consider:
 
 - Find a safe default value to initialize ``x`` with
 - Introduce another type that lacks ``x``
@@ -133,6 +140,9 @@ When using ``x::Union(Nothing,T)``, ask whether the option for ``x`` to be
 - Determine whether there is a simple rule for when ``x`` is ``nothing``.
   For example, often the field will start as ``nothing`` but get initialized at
   some well-defined point. In that case, consider leaving it undefined at first.
+- If ``x`` really needs to hold no value at some times, define it as
+  ``::Nullable{T}`` instead, as this guarantees type-stability in the code
+  accessing this field (see :ref:`Nullable types <man-nullable-types>`)
 
 Avoid elaborate container types
 -------------------------------
