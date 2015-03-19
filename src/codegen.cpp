@@ -3527,9 +3527,15 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         Instruction *after = ctx->argSpaceInits;
 
         for(size_t i=0; i < (size_t)ctx->maxDepth; i++) {
+#ifdef LLVM37
+            Instruction *argTempi =
+                GetElementPtrInst::Create(NULL,newgcframe,
+                                          ConstantInt::get(T_int32, i+ctx->argSpaceOffs+2));
+#else
             Instruction *argTempi =
                 GetElementPtrInst::Create(newgcframe,
                                           ConstantInt::get(T_int32, i+ctx->argSpaceOffs+2));
+#endif
             instList.insertAfter(after, argTempi);
             after = new StoreInst(V_null, argTempi);
             instList.insertAfter(argTempi, after);
