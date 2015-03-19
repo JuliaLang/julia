@@ -495,20 +495,20 @@ static jl_sym_t *mk_symbol(const char *str)
 #endif
     jl_sym_t *sym;
     size_t len = strlen(str);
-    size_t nb = (sizeof(jl_typetag_t)+sizeof(jl_sym_t)+len+1+7)&-8;
+    size_t nb = (sizeof(jl_taggedvalue_t)+sizeof(jl_sym_t)+len+1+7)&-8;
 
     if (nb >= SYM_POOL_SIZE) {
         jl_exceptionf(jl_argumenterror_type, "Symbol length exceeds maximum length");
     }
 
 #ifdef MEMDEBUG
-    sym = (jl_sym_t*)((jl_typetag_t*)malloc(nb))->value;
+    sym = (jl_sym_t*)((jl_taggedvalue_t*)malloc(nb))->value;
 #else
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
-    sym = (jl_sym_t*)((jl_typetag_t*)malloc(nb))->value;
+    sym = (jl_sym_t*)((jl_taggedvalue_t*)malloc(nb))->value;
     pool_ptr += nb;
 #endif
     jl_set_typeof(sym, jl_sym_type);

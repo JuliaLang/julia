@@ -81,13 +81,13 @@ typedef struct {
         };
     };
     jl_value_t value[0];
-} jl_typetag_t;
+} jl_taggedvalue_t;
 
-#define jl_typetagof__MACRO(v) container_of((v),jl_typetag_t,value)
-#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_typetagof__MACRO(v)->type_bits&~(size_t)3))
-#define jl_typetagof jl_typetagof__MACRO
+#define jl_astaggedvalue__MACRO(v) container_of((v),jl_taggedvalue_t,value)
+#define jl_typeof__MACRO(v) ((jl_value_t*)(jl_astaggedvalue__MACRO(v)->type_bits&~(size_t)3))
+#define jl_astaggedvalue jl_astaggedvalue__MACRO
 #define jl_typeof jl_typeof__MACRO
-#define jl_set_typeof(v,t) (jl_typetagof(v)->type = (jl_value_t*)(t))
+#define jl_set_typeof(v,t) (jl_astaggedvalue(v)->type = (jl_value_t*)(t))
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
 typedef struct _jl_sym_t {
@@ -456,29 +456,29 @@ void gc_setmark_buf(void *buf, int);
 
 static inline void gc_wb_binding(jl_binding_t *bnd, void *val) // val isa jl_value_t*
 {
-    if (__unlikely((*((uintptr_t*)bnd-1) & 1) == 1 && (*(uintptr_t*)jl_typetagof(val) & 1) == 0))
+    if (__unlikely((*((uintptr_t*)bnd-1) & 1) == 1 && (*(uintptr_t*)jl_astaggedvalue(val) & 1) == 0))
         gc_queue_binding(bnd);
 }
 
 static inline void gc_wb(void *parent, void *ptr) // parent and ptr isa jl_value_t*
 {
-    if (__unlikely((*((uintptr_t*)jl_typetagof(parent)) & 1) == 1 &&
-                   (*((uintptr_t*)jl_typetagof(ptr)) & 1) == 0))
+    if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1 &&
+                   (*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 0))
         gc_queue_root((jl_value_t*)parent);
 }
 
 static inline void gc_wb_buf(void *parent, void *bufptr) // parent isa jl_value_t*
 {
     // if parent is marked and buf is not
-    if (__unlikely((*((uintptr_t*)jl_typetagof(parent)) & 1) == 1))
+    if (__unlikely((*((uintptr_t*)jl_astaggedvalue(parent)) & 1) == 1))
         //                   (*((uintptr_t*)bufptr) & 3) != 1))
-        gc_setmark_buf(bufptr, *(uintptr_t*)jl_typetagof(parent) & 3);
+        gc_setmark_buf(bufptr, *(uintptr_t*)jl_astaggedvalue(parent) & 3);
 }
 
 static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 {
     // if ptr is marked
-    if(__unlikely((*((uintptr_t*)jl_typetagof(ptr)) & 1) == 1)) {
+    if(__unlikely((*((uintptr_t*)jl_astaggedvalue(ptr)) & 1) == 1)) {
         gc_queue_root((jl_value_t*)ptr);
     }
 }
@@ -487,8 +487,8 @@ static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
 // object accessors -----------------------------------------------------------
 
 #ifdef OVERLAP_TUPLE_LEN
-#define jl_tuple_len(t)   (jl_typetagof(t)->length)
-#define jl_tuple_set_len_unsafe(t,n) (jl_typetagof(t)->length=(n))
+#define jl_tuple_len(t)   (jl_astaggedvalue(t)->length)
+#define jl_tuple_set_len_unsafe(t,n) (jl_astaggedvalue(t)->length=(n))
 #else
 #define jl_tuple_len(t)   (((jl_tuple_t*)(t))->length)
 #define jl_tuple_set_len_unsafe(t,n) (((jl_tuple_t*)(t))->length=(n))
@@ -1216,7 +1216,7 @@ STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
 STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
 #define allocb(nb)    malloc(nb)
-#define allocobj(nb)  (((jl_typetag_t*)malloc((nb)+sizeof(jl_typetag_t)))->value)
+#define allocobj(nb)  (((jl_taggedvalue_t*)malloc((nb)+sizeof(jl_taggedvalue_t)))->value)
 #endif
 
 // async signal handling ------------------------------------------------------

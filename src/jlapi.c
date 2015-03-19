@@ -278,9 +278,9 @@ DLLEXPORT const char* jl_ver_string(void)
 }
 
 // Create function versions of some useful macros
-#undef jl_typetagof
-DLLEXPORT jl_typetag_t *jl_typetagof(jl_value_t *v) {
-    return jl_typetagof__MACRO(v);
+#undef jl_astaggedvalue
+DLLEXPORT jl_taggedvalue_t *jl_astaggedvalue(jl_value_t *v) {
+    return jl_astaggedvalue__MACRO(v);
 }
 
 #undef jl_typeof

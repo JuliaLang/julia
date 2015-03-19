@@ -821,7 +821,7 @@ static Value *emit_nthptr_recast(Value *v, Value *idx, MDNode *tbaa, Type *ptype
 
 static Value *emit_typeptr_addr(Value *p)
 {
-   ssize_t offset = offsetof(jl_typetag_t,type) - offsetof(jl_typetag_t,value);
+   ssize_t offset = offsetof(jl_taggedvalue_t,type) - offsetof(jl_taggedvalue_t,value);
    offset /= (signed)sizeof(jl_value_t*); // important: division must be signed
    return emit_nthptr_addr(p, offset);
 }
@@ -1152,7 +1152,7 @@ static Value *emit_tuplelen(Value *t,jl_value_t *jt)
         return builder.CreateLShr(builder.CreatePtrToInt(lenbits, T_int64),
                                   ConstantInt::get(T_int32, 52));
 #else
-        return emit_nthptr_recast(t, offsetof(jl_tuple_t,length)/sizeof(jl_value_t*), tbaa_tuplelen, T_psize);
+        return emit_nthptr_recast(t, (ssize_t)(offsetof(jl_tuple_t,length)/sizeof(jl_value_t*)), tbaa_tuplelen, T_psize);
 #endif
     }
     else { //unboxed
