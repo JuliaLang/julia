@@ -663,6 +663,13 @@ for Ti in IndexTypes
             finalizer(s, free!)
             s
         end
+
+        function read_sparse(file::IO, T)
+            cfile = Libc.FILE(file)
+            s = read_sparse(cfile, T)
+            close(cfile)
+            s
+        end
     end
 end
 
@@ -791,7 +798,7 @@ Sparse(A::Dense) = dense_to_sparse(A, Cint)
 Sparse(L::Factor) = factor_to_sparse!(copy(L))
 function Sparse(filename::ByteString)
     open(filename) do f
-        return read_sparse(Libc.FILE(f), SuiteSparse_long)
+        return read_sparse(f, SuiteSparse_long)
     end
 end
 
