@@ -330,7 +330,7 @@ However, this code will not initialize all of ``a``, since each
 process will have a separate copy of it. Parallel for loops like these
 must be avoided. Fortunately, distributed arrays can be used to get
 around this limitation (see the
-`DistributedArrays.jl <https://github.com/JuliaParallel/DistributedArrays.jl>`
+`DistributedArrays.jl <https://github.com/JuliaParallel/DistributedArrays.jl>`_
 package).
 
 Using "outside" variables in parallel loops is perfectly reasonable if
