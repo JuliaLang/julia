@@ -94,7 +94,7 @@ function task_done_hook(t::Task)
     else
         if err && !handled
             if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
-                active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) && 
+                active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) &&
                 active_repl_backend.in_eval
                 throwto(active_repl_backend.backend_task, result)
             end
