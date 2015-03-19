@@ -23,6 +23,19 @@ function ReshapedArray(parent::AbstractArray, indexes::(ReshapeIndex...), dims)
     ReshapedArray{eltype(parent),length(dims),typeof(parent),typeof(indexes)}(parent, indexes, dims)
 end
 
+# Since ranges are immutable and are frequently used to build arrays, treat them as a special case.
+function reshape(a::Range, dims::Dims)
+    if prod(dims) != length(a)
+        throw(DimensionMismatch("new dimensions $(dims) must be consistent with array size $(length(a))"))
+    end
+    A = Array(eltype(a), dims)
+    k = 0
+    for item in a
+        A[k+=1] = item
+    end
+    A
+end
+
 reshape(parent::AbstractArray, dims::Dims) = reshape((parent, linearindexing(parent)), dims)
 
 function reshape(p::(AbstractArray,LinearSlow), dims::Dims)
