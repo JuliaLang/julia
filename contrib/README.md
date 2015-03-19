@@ -29,12 +29,10 @@ Editors  + Debuggers
 |[ ctags ](https://github.com/JuliaLang/julia/blob/master/contrib/ctags) | Add more keywords to ctags regex search tool |
 |[ debug_bootstrap.gdb ](https://github.com/JuliaLang/julia/blob/master/contrib/debug_bootstrap.gdb) | bootstrap process      using the debug build |
 |[ filterArgs.sh ](https://github.com/JuliaLang/julia/blob/master/contrib/filterArgs.sh) | Update library search code to use  only tokens that start with -L |
-|[ install-tmbundle ](https://github.com/JuliaLang/julia/blob/master/contrib/install-tmbundle) | TextMate bundle install      script |
 |[ julia.hrc ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.hrc) | Julia syntax highlighting definition for   Colorer |
 |[ julia.lang ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.lang) | GtkSourceView (GTK+ framework) for       multiline text editing config file |
 |[ julia-mode.el ](https://github.com/JuliaLang/julia/blob/master/contrib/julia-mode.el) | Emacs Julia mode config file |
 |[ Julia_Notepad++.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/Julia_Notepad++.xml) | Notepad++ config file |
-|[ Julia.tmbundle/ ](https://github.com/JuliaLang/julia/blob/master/contrib/Julia.tmbundle/) | TextMate support files |
 |[ julia.xml ](https://github.com/JuliaLang/julia/blob/master/contrib/julia.xml) | KDE editors Kate and Kwrite config file |
 |[ Notepad++_2_Julia.ahk ](https://github.com/JuliaLang/julia/blob/master/contrib/Notepad++_2_Julia.ahk) | Auto Hotkey for    Notepad++ config file |
 |[ README.ackrc.txt ](https://github.com/JuliaLang/julia/blob/master/contrib/README.ackrc.txt) | README for ackrc config file |
