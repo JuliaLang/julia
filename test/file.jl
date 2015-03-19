@@ -47,6 +47,7 @@ end
 
 # test links
 @unix_only @test islink(link) == true
+@unix_only @test Base.FS.readlink(link) == file
 @non_windowsxp_only begin
     @test islink(dirlink) == true
     @test isdir(dirlink) == true

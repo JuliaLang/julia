@@ -23,6 +23,7 @@ export File,
        rename,
        sendfile,
        symlink,
+       readlink,
        chmod,
        futime,
        JL_O_WRONLY,
@@ -162,6 +163,18 @@ end
 end
 @windowsxp_only symlink(p::AbstractString, np::AbstractString) =
     error("WindowsXP does not support soft symlinks")
+
+function readlink(path::AbstractString)
+    req = Libc.malloc(_sizeof_uv_fs)
+    ret = ccall(:uv_fs_readlink, Int32,
+        (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}),
+        eventloop(), req, path, C_NULL)
+    tgt = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{Cchar}, (Ptr{Void}, ), req))
+    ccall(:uv_fs_req_cleanup, Void, (Ptr{Void}, ), req)
+    Libc.free(req)
+    uv_error("readlink", ret)
+    tgt
+end
 
 function chmod(p::AbstractString, mode::Integer)
     err = ccall(:jl_fs_chmod, Int32, (Ptr{UInt8}, Cint), p, mode)
