@@ -93,9 +93,10 @@ function task_done_hook(t::Task)
         yieldto(nexttask, result)
     else
         if err && !handled
-            if isa(result,InterruptException) && isdefined(REPL,:interactive_task) &&
-                REPL.interactive_task.state == :waiting && isempty(Workqueue)
-                throwto(REPL.interactive_task, result)
+            if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+                active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) &&
+                active_repl_backend.in_eval
+                throwto(active_repl_backend.backend_task, result)
             end
             let bt = catch_backtrace()
                 # run a new task to print the error for us
