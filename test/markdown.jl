@@ -58,6 +58,7 @@ World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 
 ---
 World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
+@test md"`escape</code>`" |> html == "<p><code>escape&lt;/code&gt;</code></p>\n"
 
 # Latex output
 book = md"""
@@ -89,7 +90,20 @@ ref(fft)
 writemime(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
 
-@test md"Behaves like $(ref(fft))" == md"Behaves like fft (see Julia docs)"
+#writemime(io::IO, m::MIME"text/html", r::Reference) =
+#    Markdown.withtag(io, :a, :href=>"test") do
+#        Markdown.htmlesc(io, Markdown.plaininline(r))
+#    end
+
+fft_ref = md"Behaves like $(ref(fft))"
+@test plain(fft_ref) == "Behaves like fft (see Julia docs)\n"
+@test html(fft_ref) == "<p>Behaves like fft &#40;see Julia docs&#41;</p>\n"
+
+writemime(io::IO, m::MIME"text/html", r::Reference) =
+    Markdown.withtag(io, :a, :href=>"test") do
+        Markdown.htmlesc(io, Markdown.plaininline(r))
+    end
+@test html(fft_ref) == "<p>Behaves like <a href=\"test\">fft &#40;see Julia docs&#41;</a></p>\n"
 
 
 @test md"""
