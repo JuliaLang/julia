@@ -29,7 +29,7 @@ The 10,000 foot view of the whole process is as follows:
 
 1. The user starts `julia`
 2. The C function `main()` from `ui/repl.c` gets called.
-   This funcion processes the command line arguments, filling in the `jl_compileropts` struct and setting the variable :code:`ARGS`.
+   This function processes the command line arguments, filling in the `jl_compileropts` struct and setting the variable :code:`ARGS`.
    It then initializes Julia (by calling `julia_init in task.c <https://github.com/JuliaLang/julia/blob/master/src/task.c>`_,
    which may load a previously compiled sysimg_).
    Finally, it passes off control to Julia by calling `Base._start() <https://github.com/JuliaLang/julia/blob/master/base/client.jl>`_.
@@ -42,9 +42,9 @@ The 10,000 foot view of the whole process is as follows:
 #. Each fragment of code (or AST), is handed off to `eval` to turn into results.
 #. `eval` takes each code fragment and tries to run it in `jl_toplevel_eval_flex() <https://github.com/JuliaLang/julia/blob/master/src/toplevel.c>`_.
 #. `jl_toplevel_eval_flex` decides whether the code is a "toplevel" action (such as `using` or `module`), which would be invalid inside a function.
-   If so, it passes off the code to the toplevel interpretor.
+   If so, it passes off the code to the toplevel interpreter.
 #. `jl_toplevel_eval_flex` then expands_ the code to eliminate any macros and to "lower" the AST to make it simpler to execute.
-#. `jl_toplevel_eval_flex` then uses some simple heuristics to decide whether to JIT compiler the AST or to interprete it directly.
+#. `jl_toplevel_eval_flex` then uses some simple heuristics to decide whether to JIT compiler the AST or to interpret it directly.
 #. The bulk of the work to interpret code is handled by `eval in interpreter.c <https://github.com/JuliaLang/julia/blob/master/src/interpreter.c>`_.
 #. If instead, the code is compiled, the bulk of the work is handled by `codegen.cpp`.
    Whenever a Julia function is called for the first time with a given set of argument types, `type inference`_ will be run on that function.
@@ -69,14 +69,14 @@ The code in `ast.c <https://github.com/JuliaLang/julia/blob/master/src/ast.c>`_ 
 The other relevant files at this stage are `julia-parser.scm <https://github.com/JuliaLang/julia/blob/master/src/julia-parser.scm>`_,
 which handles tokenizing Julia code and turning it into an AST,
 and `julia-syntax.scm <https://github.com/JuliaLang/julia/blob/master/src/julia-syntax.scm>`_,
-which handles transforming complex AST representations into simpler, "lowered" AST representations which are more suitible for analysis and execution.
+which handles transforming complex AST representations into simpler, "lowered" AST representations which are more suitable for analysis and execution.
 
 .. _expands:
 
 Macro Expansion
 ---------------
 
-When the eval encounters a macro, it expands that AST node before attempting to evalutate the expression.
+When the eval encounters a macro, it expands that AST node before attempting to evaluate the expression.
 Macro expansion involves a handoff from eval (in Julia), to the parser function `jl-macroexpand` (written in `flisp`)
 to the Julia macro itself (written in - what else - `Julia`) via `fl_invoke_julia_macro`, and back.
 
@@ -89,7 +89,7 @@ Type Inference
 --------------
 
 Type inference is implemented in Julia by `typeinf() in inference.jl <https://github.com/JuliaLang/julia/blob/master/base/inference.jl>`_.
-Type inference is the process of examing a Julia function and determining bounds for the types of each of its variables,
+Type inference is the process of examining a Julia function and determining bounds for the types of each of its variables,
 as well as bounds on the type of the return value from the function.
 This enables may future optimizations, such as unboxing of known immutable values,
 and compile-time hoisting of various run-time operations such as computing field offsets and function pointers.
@@ -164,7 +164,7 @@ Other parts of codegen are handled by various helper files:
   Handles the ccall and llvmcall FFI, along with various `abi_*.cpp` files
 
 `intrinsics.cpp <https://github.com/JuliaLang/julia/blob/master/src/intrinsics.cpp>`_
-  Handles the emmission of various low-level intrinsic functions
+  Handles the emission of various low-level intrinsic functions
 
 .. _sysimg:
 
