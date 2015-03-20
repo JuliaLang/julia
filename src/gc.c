@@ -1567,7 +1567,7 @@ static int push_root(jl_value_t *v, int d, int bits)
 #define _gc_setmark_pool gc_setmark_pool
 #endif
             MARK(a,
-                 bits = _gc_setmark_pool(a, GC_MARKED_NOESC);
+                 bits = _gc_setmark_pool(o, GC_MARKED_NOESC);
                  if (a->how == 2 && todo) {
                      objprofile_count(MATY, gc_bits(o) == GC_MARKED, array_nbytes(a));
                      if (gc_bits(o) == GC_MARKED)
