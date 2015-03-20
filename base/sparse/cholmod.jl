@@ -666,9 +666,9 @@ for Ti in IndexTypes
 
         function read_sparse(file::IO, T)
             cfile = Libc.FILE(file)
-            s = read_sparse(cfile, T)
-            close(cfile)
-            s
+            try return read_sparse(cfile, T)
+            finally close(cfile)
+            end
         end
     end
 end
