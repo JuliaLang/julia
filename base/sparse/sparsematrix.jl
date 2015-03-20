@@ -1988,7 +1988,7 @@ function spdiagm_internal(B, d)
     end
     I = Array(Int, ncoeffs)
     J = Array(Int, ncoeffs)
-    V = Array(eltype(B[1]), ncoeffs)
+    V = Array(promote_type(map(eltype, B)...), ncoeffs)
     id = 0
     i = 0
     for vec in B
