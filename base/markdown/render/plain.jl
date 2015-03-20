@@ -40,8 +40,6 @@ function plain(io::IO, md::HorizontalRule)
     println(io, "–" ^ 3)
 end
 
-plain(io::IO, x) = tohtml(io, x)
-
 # Inline elements
 
 plaininline(x) = sprint(plaininline, x)
