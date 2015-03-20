@@ -22,7 +22,7 @@ Next `parse_opts()
 is called to process command line options. Note that parse_opts()
 only deals with options that affect code generation or early initialisation. Other
 options are handled later by `process_options() in base/client.jl
-<https://github.com/JuliaLang/julia/blob/master/base/client.jl#L214>`_
+<https://github.com/JuliaLang/julia/blob/master/base/client.jl#L214>`_.
 
 parse_opts() stores command line options in the `global jl_compileropts
 struct
