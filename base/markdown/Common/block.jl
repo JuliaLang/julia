@@ -138,7 +138,7 @@ const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 # Todo: ordered lists, inline formatting
 function list(stream::IO, block::MD, config::Config)
     withstream(stream) do
-        skipwhitespace(stream)
+        startswith(stream, r"^ ?")
         b = startswith(stream, num_or_bullets)
         (b == nothing || b == "") && return false
         ordered = !(b[1] in bullets)
@@ -152,8 +152,8 @@ function list(stream::IO, block::MD, config::Config)
         fresh_line = false
         while !eof(stream)
             if fresh_line
-                skipwhitespace(stream)
-                if startswith(stream, b) != ""
+                startswith(stream, r"^ ?")
+                if startswith(stream, b) in [false, ""]
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
@@ -202,7 +202,7 @@ function horizontalrule(stream::IO, block::MD, config::Config)
                return false
            end
        end
-       is_hr = (n ≥ 3 && rule in "*-")
+       is_hr = (n ≥ 3 && rule in "*-_")
        is_hr && push!(block, HorizontalRule())
        return is_hr
    end

@@ -87,11 +87,12 @@ end
 function html(io::IO, md::List)
     withtag(io, md.ordered ? :ol : :ul) do
         for item in md.items
+            println(io)
             withtag(io, :li) do
                 htmlinline(io, item)
             end
-            println(io)
         end
+        println(io)
     end
 end
 
