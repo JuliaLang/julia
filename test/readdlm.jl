@@ -197,3 +197,8 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     writedlm(i18n_buff, i18n_arr, '\t')
     @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
+
+@test isequaldlm(readcsv(IOBuffer("1,22222222222222222222222222222222222222,0x3,10e6\n2000.1,true,false,-10.34"), Any),
+    reshape(Any[1,2000.1,Float64(22222222222222222222222222222222222222),true,0x3,false,10e6,-10.34], 2, 4), Any)
+
+@test isequaldlm(readcsv(IOBuffer("-9223355253176920979,9223355253176920979"), Int64), Int64[-9223355253176920979  9223355253176920979], Int64)

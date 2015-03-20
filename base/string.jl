@@ -1485,18 +1485,18 @@ function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
     convert(T, d)
 end
 
-function parseint_next(s::AbstractString, i::Int=start(s))
-    done(s,i) && (return Char(0), 0, 0)
-    j = i
-    c, i = next(s,i)
-    c, i, j
+function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
+    (0 < startpos <= endpos) || (return Char(0), 0, 0)
+    j = startpos
+    c, startpos = next(s,startpos)
+    c, startpos, j
 end
 
-function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
-    c, i, j = parseint_next(s)
+function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
+    c, i, j = parseint_next(s, startpos, endpos)
 
     while isspace(c)
-        c, i, j = parseint_next(s,i)
+        c, i, j = parseint_next(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
@@ -1504,12 +1504,12 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
     if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i, j = parseint_next(s,i)
+            c, i, j = parseint_next(s,i,endpos)
         end
     end
 
     while isspace(c)
-        c, i, j = parseint_next(s,i)
+        c, i, j = parseint_next(s,i,endpos)
     end
     (j == 0) && (return 0, 0, 0)
 
@@ -1518,7 +1518,7 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
             c, i = next(s,i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_next(s,i)
+                c, i, j = parseint_next(s,i,endpos)
             end
         else
             base = 10
@@ -1527,21 +1527,30 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
     return sgn, base, j
 end
 
+function tryparse_internal{S<:ByteString}(::Type{Bool}, sbuff::S, startpos::Int, endpos::Int, raise::Bool)
+    len = endpos-startpos+1
+    p = pointer(sbuff)+startpos-1
+    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
+    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
+    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
+    Nullable{Bool}()
+end
+
 safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
 safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
                                       (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
                                       ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
 
-function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a::Int, raise::Bool)
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, a::Int, raise::Bool)
     _n = Nullable{T}()
-    sgn, base, i = parseint_preamble(T<:Signed,s,base)
+    sgn, base, i = parseint_preamble(T<:Signed, base, s, startpos, endpos)
     if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return _n
     end
-    c, i = parseint_next(s,i)
+    c, i = parseint_next(s,i,endpos)
     if i == 0
-        raise && throw(ArgumentError("premature end of integer: $(repr(s))"))
+        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
         return _n
     end
 
@@ -1553,12 +1562,12 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, 
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+a  : base
         if d >= base
-            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return _n
         end
         n *= base
         n += d
-        if done(s,i)
+        if i > endpos
             n *= sgn
             return Nullable{T}(n)
         end
@@ -1571,7 +1580,7 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, 
         'A' <= c <= 'Z' ? c-'A'+10 :
             'a' <= c <= 'z' ? c-'a'+a  : base
         if d >= base
-            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
             return _n
         end
         (T <: Signed) && (d *= sgn)
@@ -1583,20 +1592,22 @@ function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, 
             return _n
         end
         n = get(safe_n)
-        done(s,i) && return Nullable{T}(n)
+        (i > endpos) && return Nullable{T}(n)
         c, i = next(s,i)
     end
-    while !done(s,i)
+    while i <= endpos
         c, i = next(s,i)
         if !isspace(c)
-            raise && throw(ArgumentError("extra characters after whitespace in $(repr(s))"))
+            raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
             return _n
         end
     end
     return Nullable{T}(n)
 end
 tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
-    tryparse_internal(T, s, base, base <= 36 ? 10 : 36, raise)
+    tryparse_internal(T,s,start(s),length(s),base,raise)
+tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool) =
+    tryparse_internal(T, s, startpos, endpos, base, base <= 36 ? 10 : 36, raise)
 tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
     2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
 tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
