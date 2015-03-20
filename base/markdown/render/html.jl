@@ -79,6 +79,7 @@ end
 
 function html(io::IO, md::BlockQuote)
     withtag(io, :blockquote) do
+        println(io)
         html(io, md.content)
     end
 end
