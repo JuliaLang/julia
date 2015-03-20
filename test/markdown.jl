@@ -91,6 +91,15 @@ writemime(io::IO, m::MIME"text/plain", r::Reference) =
 
 @test md"Behaves like $(ref(fft))" == md"Behaves like fft (see Julia docs)"
 
+
+@test md"""
+````julia
+foo()
+````""" == md"""
+```julia
+foo()
+```"""
+
 # GH tables
 @test md"""
     a  | b
