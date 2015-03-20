@@ -1472,7 +1472,6 @@ typedef struct {
     int8_t malloc_log;
     int8_t opt_level;
     int8_t check_bounds;
-    int    int_literals;
     int8_t dumpbitcode;
     int8_t depwarn;
     int8_t can_inline;

@@ -106,7 +106,6 @@ jl_options_t jl_options = { 0,    // version
                             0,    // malloc_log
                             0,    // opt_level
                             JL_OPTIONS_CHECK_BOUNDS_DEFAULT, // check_bounds
-                            0,    // int_literals
                             JL_OPTIONS_DUMPBITCODE_OFF, // dump_bitcode
                             1,    // depwarn
                             1,    // can_inline
