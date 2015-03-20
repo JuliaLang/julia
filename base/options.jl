@@ -22,7 +22,6 @@ immutable JLOptions
     malloc_log::Int8
     opt_level::Int8
     check_bounds::Int8
-    int_literals::Cint
     dumpbitcode::Int8
     depwarn::Int8
     can_inline::Int8
