@@ -310,9 +310,9 @@ static Function *jlenter_func;
 static Function *jlleave_func;
 static Function *jlegal_func;
 static Function *jlallocobj_func;
+static Function *jlalloc1w_func;
 static Function *jlalloc2w_func;
 static Function *jlalloc3w_func;
-static Function *jlalloc4w_func;
 static Function *jl_alloc_tuple_func;
 static Function *jlsubtype_func;
 static Function *setjmp_func;
@@ -349,7 +349,7 @@ static Function *show_execution_point_func;
 static std::vector<Type *> two_pvalue_llvmt;
 static std::vector<Type *> three_pvalue_llvmt;
 
-extern "C" DLLEXPORT void gc_wb_slow(void* parent, void* ptr)
+extern "C" DLLEXPORT void gc_wb_slow(jl_value_t* parent, jl_value_t* ptr)
 {
     gc_wb(parent, ptr);
 }
@@ -1628,9 +1628,9 @@ static Value *emit_lambda_closure(jl_value_t *expr, jl_codectx_t *ctx)
         if (vari.closureidx != -1) {
             int idx = vari.closureidx;
 #ifdef OVERLAP_TUPLE_LEN
-            val = emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen);
+            val = emit_nthptr((Value*)ctx->envArg, idx, tbaa_tuplelen);
 #else
-            val = emit_nthptr((Value*)ctx->envArg, idx+2, tbaa_tuplelen);
+            val = emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen);
 #endif
         }
         else {
@@ -1713,8 +1713,7 @@ static Value *emit_getfield(jl_value_t *expr, jl_sym_t *name, jl_codectx_t *ctx)
             if (strct->getType() == jl_pvalue_llvmt) {
                 Value *addr =
                     builder.CreateGEP(builder.CreateBitCast(strct, T_pint8),
-                                      ConstantInt::get(T_size,
-                                                       sty->fields[idx].offset + sizeof(void*)));
+                                      ConstantInt::get(T_size, sty->fields[idx].offset));
                 JL_GC_POP();
                 MDNode *tbaa = sty->mutabl ? tbaa_user : tbaa_immut;
                 if (sty->fields[idx].isptr) {
@@ -2025,7 +2024,11 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
     else if (f->fptr == &jl_f_apply && nargs==3 && ctx->vaStack &&
              symbol_eq(args[3], ctx->vaName) && expr_type(args[2],ctx) == (jl_value_t*)jl_function_type) {
         Value *theF = emit_expr(args[2],ctx);
-        Value *theFptr = emit_nthptr_recast(theF,1, tbaa_func, jl_pfptr_llvmt);
+        Value *theFptr = emit_nthptr_recast(
+                theF,
+                (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)),
+                tbaa_func,
+                jl_pfptr_llvmt);
         Value *nva = emit_n_varargs(ctx);
 #ifdef _P64
         nva = builder.CreateTrunc(nva, T_int32);
@@ -2062,7 +2065,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (idx > 0 && (idx < tlen || (idx == tlen && !isseqt))) {
                     // known to be in bounds
                     JL_GC_POP();
-                    return emit_tupleref(arg1,ConstantInt::get(T_size,idx),tty,ctx);
+                    return emit_tupleref(arg1,ConstantInt::get(T_size,idx-1),tty,ctx);
                 }
                 if (idx==0 || (!isseqt && idx > tlen)) {
                     // known to be out of bounds
@@ -2092,9 +2095,9 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 unbox = true;
                 jl_add_linfo_root(ctx->linfo, tty);
             }
-            emit_bounds_check(arg1, unbox ? tty : NULL, idx, tlen, ctx);
+            Value *idx0 = emit_bounds_check(arg1, unbox ? tty : NULL, idx, tlen, ctx);
             JL_GC_POP();
-            return emit_tupleref(arg1,idx,tty,ctx);
+            return emit_tupleref(arg1,idx0,tty,ctx);
         }
     }
     else if (f->fptr == &jl_f_tuple) {
@@ -2132,7 +2135,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                         }
                         assert(tpl != NULL);
                         Value *elt = emit_unbox(ety,emit_unboxed(args[i+1],ctx),jl_tupleref(rt1,i));
-                        tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,rt1,ctx);
+                        tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i),elt,rt1,ctx);
                     }
                     JL_GC_POP();
                     if (ty->isEmptyTy())
@@ -2150,15 +2153,15 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             make_gcroot(arg1, ctx);
         bool rooted = false;
 #ifdef OVERLAP_TUPLE_LEN
-        size_t nwords = nargs+1;
+        size_t nwords = nargs;
 #else
-        size_t nwords = nargs+2;
+        size_t nwords = nargs+1;
 #endif
         Value *tup = emit_allocobj(sizeof(void*)*nwords);
 #ifdef OVERLAP_TUPLE_LEN
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 0));
 #else
-        builder.CreateStore(arg1, emit_nthptr_addr(tup, 2));
+        builder.CreateStore(arg1, emit_nthptr_addr(tup, 1));
         emit_write_barrier(ctx, tup, arg1);
 #endif
         ctx->argDepth = last_depth;
@@ -2167,22 +2170,14 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             CreateStore(builder.
                         CreateOr(builder.CreatePtrToInt(literal_pointer_val((jl_value_t*)jl_tuple_type), T_int64),
                                  ConstantInt::get(T_int64, nargs<<52)),
-                        builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)0),
-                                              T_pint64));
+                        builder.CreateBitCast(emit_typeptr_addr(tup), T_pint64));
 #else
-        builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type),
-                            emit_nthptr_addr(tup, (size_t)0));
+        builder.CreateStore(literal_pointer_val((jl_value_t*)jl_tuple_type), emit_typeptr_addr(tup));
         builder.CreateStore(ConstantInt::get(T_size, nargs),
-                            builder.CreateBitCast(emit_nthptr_addr(tup, (size_t)1), T_psize));
-#endif
-#ifdef OVERLAP_TUPLE_LEN
-        size_t offs = 1;
-#else
-        size_t offs = 2;
+                            builder.CreateBitCast(tup, T_psize));
 #endif
         for(i=1; i < nargs; i++) {
-            builder.CreateStore(V_null,
-                                emit_nthptr_addr(tup, i+offs));
+            builder.CreateStore(V_null, emit_nthptr_addr(tup, i+TUPLE_DATA_OFFSET));
         }
         for(i=1; i < nargs; i++) {
             if (might_need_root(args[i+1]) && !rooted) {
@@ -2195,7 +2190,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 rooted = true;
             }
             Value *argi = boxed(argval,ctx);
-            builder.CreateStore(argi, emit_nthptr_addr(tup, i+offs));
+            builder.CreateStore(argi, emit_nthptr_addr(tup, i+TUPLE_DATA_OFFSET));
             emit_write_barrier(ctx, tup, argi);
         }
         ctx->argDepth = last_depth;
@@ -2364,12 +2359,10 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                 if (llvm_st == jl_pvalue_llvmt) {
                     if (is_structtype_all_pointers(stt)) {
                         idx = emit_bounds_check(strct, NULL, idx, ConstantInt::get(T_size, nfields), ctx);
-                        Value *fld =
-                            tbaa_decorate(tbaa_user, builder.
-                            CreateLoad(builder.
-                                       CreateGEP(builder.
-                                                 CreateBitCast(strct, jl_ppvalue_llvmt),
-                                                 builder.CreateAdd(idx,ConstantInt::get(T_size,1)))));
+                        Value *fld = tbaa_decorate(tbaa_user, builder.CreateLoad(
+                                    builder.CreateGEP(
+                                        builder.CreateBitCast(strct, jl_ppvalue_llvmt),
+                                        idx)));
                         if ((unsigned)stt->ninitialized != jl_tuple_len(stt->types)) {
                             null_pointer_check(fld, ctx);
                         }
@@ -2397,7 +2390,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                     // frobbing the stack
                     Value *fld;
                     if (nfields == 0) {
-                        emit_bounds_check(tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlnull_var))),
+                        idx = emit_bounds_check(tbaa_decorate(tbaa_const, builder.CreateLoad(prepare_global(jlnull_var))),
                                 NULL, idx, ConstantInt::get(T_size, nfields), ctx);
                         fld = UndefValue::get(jl_pvalue_llvmt);
                     }
@@ -2413,8 +2406,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
                             jl_add_linfo_root(ctx->linfo, (jl_value_t*)stt);
                         }
                         idx = emit_bounds_check(tempSpace, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
-                        Value *ptr = builder.CreateGEP(tempSpace, ConstantInt::get(T_size, 0));
-                        fld = typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
+                        fld = typed_load(tempSpace, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
                         builder.CreateCall(Intrinsic::getDeclaration(jl_Module,Intrinsic::stackrestore),
                                            stacksave);
                     }
@@ -2640,7 +2632,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
 #endif
             // extract pieces of the function object
             // TODO: try extractvalue instead
-            theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
+            theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
             theF = theFunc;
         }
         else {
@@ -2674,7 +2666,7 @@ static Value *emit_call(jl_value_t **args, size_t arglen, jl_codectx_t *ctx, jl_
             myargs = builder.CreateGEP(ctx->argTemp,
                                        ConstantInt::get(T_size, argStart+1+ctx->argSpaceOffs));
         }
-        theFptr = emit_nthptr_recast(theFunc, 1, tbaa_func, jl_pfptr_llvmt);
+        theFptr = emit_nthptr_recast(theFunc, (ssize_t)(offsetof(jl_function_t,fptr)/sizeof(void*)), tbaa_func, jl_pfptr_llvmt);
         Value *r1 = builder.CreateCall3(prepare_call(theFptr), theFunc, myargs,
                                         ConstantInt::get(T_int32,nargs));
         builder.CreateBr(mergeBB1);
@@ -2764,21 +2756,21 @@ static Value *var_binding_pointer(jl_sym_t *s, jl_binding_t **pbnd,
         assert(((Value*)ctx->envArg)->getType() == jl_pvalue_llvmt);
         if (isBoxed(s, ctx)) {
 #ifdef OVERLAP_TUPLE_LEN
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen), 1);
+            return builder.CreatePointerCast(emit_nthptr((Value*)ctx->envArg, idx, tbaa_tuplelen), jl_ppvalue_llvmt);
 #else
-            return emit_nthptr_addr(emit_nthptr((Value*)ctx->envArg, idx+2, tbaa_tuplelen), 1);
+            return builder.CreatePointerCast(emit_nthptr((Value*)ctx->envArg, idx+1, tbaa_tuplelen), jl_ppvalue_llvmt);
 #endif
         }
 #ifdef OVERLAP_TUPLE_LEN
-        return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
+        return emit_nthptr_addr((Value*)ctx->envArg, idx);
 #else
-        return emit_nthptr_addr((Value*)ctx->envArg, idx+2);
+        return emit_nthptr_addr((Value*)ctx->envArg, idx+1);
 #endif
     }
     Value *l = vi.memvalue;
     if (l == NULL) return NULL;
     if (isBoxed(s, ctx)) {
-        return emit_nthptr_addr(builder.CreateLoad(l,false), 1);
+        return builder.CreatePointerCast(builder.CreateLoad(l,false), jl_ppvalue_llvmt);
     }
     return l;
 }
@@ -2902,9 +2894,8 @@ static Value *emit_assignment(Value *bp, jl_value_t *r, jl_value_t *declType, bo
         }
         else {
             rval = boxed(emit_expr(r, ctx, true),ctx,rt);
-            if (!is_stack(bp)) {
-                Value* box = builder.CreateGEP(bp, ConstantInt::get(T_size, -1));
-                emit_write_barrier(ctx, box, rval);
+            if (!is_stack(bp)) { // bp is a jl_box_t*
+                emit_write_barrier(ctx, bp, rval);
             }
         }
         if (builder.GetInsertBlock()->getTerminator() == NULL) {
@@ -3189,8 +3180,8 @@ static Value *emit_expr(jl_value_t *expr, jl_codectx_t *ctx, bool isboxed,
             }
             else {
                 bp = var_binding_pointer((jl_sym_t*)mn, &bnd, false, ctx);
-                if (isBoxed((jl_sym_t*)mn, ctx)) {
-                    bp_owner = builder.CreateBitCast(emit_nthptr_addr(bp, -1), jl_pvalue_llvmt);
+                if (isBoxed((jl_sym_t*)mn, ctx)) { // bp is a jl_box_t*
+                    bp_owner = builder.CreateBitCast(bp, jl_pvalue_llvmt);
                 }
             }
         }
@@ -3653,7 +3644,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
         if (isref & (2<<i)) {
             if (!jl_isbits(jargty)) {
                 val = builder.CreatePointerCast(val, jl_pvalue_llvmt);
-                val = builder.CreateConstGEP1_32(val, (unsigned)-1); // rewind to type-tag
             }
             else {
                 Type *t = julia_type_to_llvm(jargty);
@@ -3677,8 +3667,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
             if (at == jl_pvalue_llvmt) {
                 Value *mem = emit_new_struct(jargty, 1, NULL, &ctx);
                 if (mem->getType() == jl_pvalue_llvmt) {
-                    builder.CreateStore(val, builder.CreateBitCast(
-                                emit_nthptr_addr(mem, (size_t)1), val->getType()->getPointerTo()));
+                    builder.CreateStore(val, builder.CreateBitCast(mem, val->getType()->getPointerTo()));
                     val = mem;
                 }
                 else {
@@ -3727,7 +3716,6 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     finalize_gc_frame(&ctx);
 
     if (isref&1) {
-        //r = builder.CreateConstGEP1_32(r, 1); // skip type-tag -- broken if you do, broken if you don't
         builder.CreateRet(r);
     }
     else {
@@ -4347,7 +4335,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // fetch env out of function object if we need it
     if (hasCapt) {
-        ctx.envArg = emit_nthptr(fArg, 2, tbaa_func);
+        ctx.envArg = emit_nthptr(fArg, offsetof(jl_function_t,env)/sizeof(jl_value_t*), tbaa_func);
     }
 
     // step 8. set up GC frame
@@ -4780,14 +4768,10 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
 
 extern "C" DLLEXPORT jl_value_t *jl_new_box(jl_value_t *v)
 {
-    jl_value_t *box = (jl_value_t*)alloc_2w();
-#ifdef OVERLAP_TUPLE_LEN
-    box->type = (size_t)jl_box_any_type;
-#else
-    box->type = jl_box_any_type;
-#endif
-    if (v) gc_wb(box, v);
-    ((jl_value_t**)box)[1] = v;
+    jl_value_t *box = (jl_value_t*)alloc_1w();
+    jl_set_typeof(box, jl_box_any_type);
+    // if (v) gc_wb(box, v); // write block not needed: box was just allocated
+    box->fieldptr[0] = v;
     return box;
 }
 
@@ -4911,9 +4895,9 @@ static void init_julia_llvm_env(Module *m)
     assert(jl_func_sig != NULL);
     jl_pfptr_llvmt = PointerType::get(PointerType::get(jl_func_sig, 0), 0);
 
-    Type* vaelts[] = {valueStructElts[0], T_pint8
+    Type* vaelts[] = {T_pint8
 #ifdef STORE_ARRAY_LEN
-                                        , T_size
+                      , T_size
 #endif
     };
     Type* jl_array_llvmt =
@@ -5114,13 +5098,14 @@ static void init_julia_llvm_env(Module *m)
         jlcall_func_to_llvm("jl_apply_generic", (void*)&jl_apply_generic, m);
     jlgetfield_func = jlcall_func_to_llvm("jl_f_get_field", (void*)&jl_f_get_field, m);
 
-    std::vector<Type *> wbargs(0);
-    wbargs.push_back(jl_pvalue_llvmt);
-    wbargs.push_back(jl_pvalue_llvmt);
     queuerootfun = Function::Create(FunctionType::get(T_void, args_1ptr, false),
                                     Function::ExternalLinkage,
                                     "gc_queue_root", m);
     add_named_global(queuerootfun, (void*)&gc_queue_root);
+
+    std::vector<Type *> wbargs(0);
+    wbargs.push_back(jl_pvalue_llvmt);
+    wbargs.push_back(jl_pvalue_llvmt);
     wbfunc = Function::Create(FunctionType::get(T_void, wbargs, false),
                               Function::ExternalLinkage,
                               "gc_wb_slow", m);
@@ -5256,6 +5241,12 @@ static void init_julia_llvm_env(Module *m)
     add_named_global(jlallocobj_func, (void*)&allocobj);
 
     std::vector<Type*> empty_args(0);
+    jlalloc1w_func =
+        Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
+                         Function::ExternalLinkage,
+                         "alloc_1w", m);
+    add_named_global(jlalloc1w_func, (void*)&alloc_1w);
+
     jlalloc2w_func =
         Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
                          Function::ExternalLinkage,
@@ -5267,12 +5258,6 @@ static void init_julia_llvm_env(Module *m)
                          Function::ExternalLinkage,
                          "alloc_3w", m);
     add_named_global(jlalloc3w_func, (void*)&alloc_3w);
-
-    jlalloc4w_func =
-        Function::Create(FunctionType::get(jl_pvalue_llvmt, empty_args, false),
-                         Function::ExternalLinkage,
-                         "alloc_4w", m);
-    add_named_global(jlalloc4w_func, (void*)&alloc_4w);
 
     std::vector<Type*> atargs(0);
     atargs.push_back(T_size);
