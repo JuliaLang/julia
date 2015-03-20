@@ -126,14 +126,14 @@ function term(io::IO, md::Table, columns)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Table)
+function latex(io::IO, md::Table)
     wrapblock(io, "tabular") do
         align = md.align
         println(io, "{$(join(align, " | "))}")
         for (i, row) in enumerate(md.rows)
             for (j, cell) in enumerate(row)
                 j != 1 && print(io, " & ")
-                latex_inline(io, cell)
+                latexinline(io, cell)
             end
             println(io, " \\\\")
             if i == 1

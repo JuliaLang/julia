@@ -59,6 +59,23 @@ World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 ---
 World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
 
+# Latex output
+book = md"""
+# Title
+
+Some discussion
+
+> A quote
+
+## Section *important*
+
+Some **bolded**
+
+- list1
+- list2
+"""
+@test latex(book) == "\\section{Title}\nSome discussion\n\\begin{quote}\nA quote\n\\end{quote}\n\\subsection{Section \\emph{important}}\nSome \\textbf{bolded}\n\\begin{itemize}\n\\item list1\n\\item list2\n\\end{itemize}\n"
+
 # Interpolation / Custom types
 
 type Reference
