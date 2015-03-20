@@ -32,22 +32,11 @@ end
 function term(io::IO, md::List, columns)
     for (i, point) in enumerate(md.items)
         print(io, " "^2margin, md.ordered ? "$i. " : "•  ")
-        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2), i = 2margin+2) do io
+        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
+                          i = 2margin+2) do io
             terminline(io, point)
         end
     end
-end
-
-function term(io::IO, md::Header{1}, columns)
-    _term_header(io, md, '=', columns)
-end
-
-function term(io::IO, md::Header{2}, columns)
-    _term_header(io, md, '–', columns)
-end
-
-function term(io::IO, md::Header{3}, columns)
-    _term_header(io, md, '-', columns)
 end
 
 function _term_header(io::IO, md, char, columns)
@@ -64,13 +53,12 @@ function _term_header(io::IO, md, char, columns)
     end
 end
 
+const _header_underlines = collect("≡=–-⋅ ")
+# TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
 function term{l}(io::IO, md::Header{l}, columns)
-    with_output_format(:bold, io) do io
-        print(io, "#"^l, " ")
-        terminline(io, md.text)
-        println(io)
-    end
+    underline = _header_underlines[l]
+    _term_header(io, md, underline, columns)
 end
 
 function term(io::IO, md::Code, columns)
