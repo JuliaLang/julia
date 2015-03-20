@@ -22,7 +22,7 @@ extern "C" {
 static jl_methtable_t *new_method_table(jl_sym_t *name)
 {
     jl_methtable_t *mt = (jl_methtable_t*)allocobj(sizeof(jl_methtable_t));
-    mt->type = (jl_value_t*)jl_methtable_type;
+    jl_set_typeof(mt, jl_methtable_type);
     mt->name = name;
     mt->defs = (jl_methlist_t*)JL_NULL;
     mt->cache = (jl_methlist_t*)JL_NULL;
@@ -1291,7 +1291,7 @@ jl_methlist_t *jl_method_list_insert(jl_methlist_t **pml, jl_tuple_t *type,
         l = l->next;
     }
     jl_methlist_t *newrec = (jl_methlist_t*)allocobj(sizeof(jl_methlist_t));
-    newrec->type = (jl_value_t*)jl_method_type;
+    jl_set_typeof(newrec, jl_method_type);
     newrec->sig = type;
     newrec->tvars = tvars;
     newrec->va = (jl_tuple_len(type) > 0 &&

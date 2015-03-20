@@ -328,7 +328,7 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
         }
         if (jl_is_mutable_datatype(ety)) {
             // no copy, just reference the data field
-            return builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
+            return builder.CreateBitCast(jv, ty);
         }
         else if (jl_is_immutable_datatype(ety) && jt != (jl_value_t*)jl_voidpointer_type) {
             // yes copy
@@ -338,12 +338,12 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
             else
                 nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
                                 builder.CreateGEP(builder.CreatePointerCast(emit_typeof(jv), T_pint32),
-                                    ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/4)),
+                                    ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
                                 false));
             *needStackRestore = true;
             AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
             ai->setAlignment(16);
-            builder.CreateMemCpy(ai, builder.CreateBitCast(emit_nthptr_addr(jv, (size_t)1), T_pint8), nbytes, 1);
+            builder.CreateMemCpy(ai, builder.CreateBitCast(jv, T_pint8), nbytes, 1);
             return builder.CreateBitCast(ai, ty);
         }
         // emit maybe copy
@@ -360,16 +360,16 @@ static Value *julia_to_native(Type *ty, jl_value_t *jt, Value *jv,
                 T_int1);
         builder.CreateCondBr(ismutable, mutableBB, immutableBB);
         builder.SetInsertPoint(mutableBB);
-        Value *p1 = builder.CreatePointerCast(emit_nthptr_addr(jv, (size_t)1), ty); // skip type tag field
+        Value *p1 = builder.CreatePointerCast(jv, ty);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(immutableBB);
         Value *nbytes = tbaa_decorate(tbaa_datatype, builder.CreateLoad(
                     builder.CreateGEP(builder.CreatePointerCast(jvt, T_pint32),
-                        ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/4)),
+                        ConstantInt::get(T_size, offsetof(jl_datatype_t,size)/sizeof(int32_t))),
                     false));
         AllocaInst *ai = builder.CreateAlloca(T_int8, nbytes);
         ai->setAlignment(16);
-        builder.CreateMemCpy(ai, builder.CreatePointerCast(emit_nthptr_addr(jv, (size_t)1), T_pint8), nbytes, 1);
+        builder.CreateMemCpy(ai, builder.CreatePointerCast(jv, T_pint8), nbytes, 1);
         Value *p2 = builder.CreatePointerCast(ai, ty);
         builder.CreateBr(afterBB);
         builder.SetInsertPoint(afterBB);
@@ -1158,7 +1158,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             ary = emit_unbox(largty, emit_unboxed(argi, ctx), jl_tupleref(tt, 0));
         }
         JL_GC_POP();
-        return mark_or_box_ccall_result(builder.CreateBitCast(emit_nthptr_addr(ary, addressOf?1:0), lrt),
+        return mark_or_box_ccall_result(builder.CreateBitCast(ary, lrt),
                                         args[2], rt, static_rt, ctx);
     }
     if (fptr == (void *) &jl_is_leaf_type ||
@@ -1217,7 +1217,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             argvals[0] = result;
         }
         else {
-            argvals[0] = builder.CreateBitCast(emit_nthptr_addr(result, (size_t)1), fargt_sig[0]);
+            argvals[0] = builder.CreateBitCast(result, fargt_sig[0]);
         }
     }
 
@@ -1414,7 +1414,7 @@ static Value *emit_ccall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
             Value *newst = emit_new_struct(rt,1,NULL,ctx);
             assert(newst != NULL && "Type was not concrete");
             if (newst->getType()->isPointerTy()) {
-                builder.CreateStore(result,builder.CreateBitCast(emit_nthptr_addr(newst, (size_t)1), prt->getPointerTo()));
+                builder.CreateStore(result,builder.CreateBitCast(newst, prt->getPointerTo()));
                 result = newst;
             }
             else if (lrt != prt) {
