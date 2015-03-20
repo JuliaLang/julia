@@ -255,7 +255,14 @@ function runtests(A::SubArray, I...)
     test_cartesian(S, C)
     test_mixed(S, C)
     # slice
-    S = slice(A, I...)
+    try
+        S = slice(A, I...)
+    catch err
+        @show typeof(A)
+        @show A.indexes
+        @show I
+        rethrow(err)
+    end
     ldc = getLD(S)
     ldc <= ld || err_li(S, ld, size(C))
     test_linear(S, C)
@@ -295,28 +302,55 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 
 ######### Tests #########
 
+testfull = Bool(parseint(get(ENV, "JULIA_TESTFULL", "0")))
+
 ### Views from Arrays ###
 
 index5 = (2, :, 2:5, 1:2:5, [4,1,5])  # all work with at least size 5
 index25 = (8, :, 2:11, 12:3:22, [4,1,5,9])
 index125 = (113, :, 85:121, 2:15:92, [99,14,103])
 
-let A = reshape(1:5*7*11, 11, 7, 5)
-    runviews(A, index5, index25, index125)
+if testfull
+    let A = reshape(1:5*7*11, 11, 7, 5)
+        runviews(A, index5, index25, index125)
+    end
 end
 
 ### Views from views ###
 
-# "outer" indexes create snips that have at least size 5 along each dimension, with the exception of Int-slicing
+# "outer" indexes create snips that have at least size 5 along each dimension,
+# with the exception of Int-slicing
 oindex = (:, 6, 3:7, 13:-2:1, [8,4,6,12,5,7])
 
-let B = reshape(1:13^3, 13, 13, 13)
-    for o3 in oindex, o2 in oindex, o1 in oindex
-        sliceB = slice(B, o1, o2, o3)
-        runviews(sliceB, index5, index25, index125)
+if testfull
+    let B = reshape(1:13^3, 13, 13, 13)
+        for o3 in oindex, o2 in oindex, o1 in oindex
+            sliceB = slice(B, o1, o2, o3)
+            runviews(sliceB, index5, index25, index125)
+        end
     end
 end
 
+if !testfull
+    let B = reshape(1:13^3, 13, 13, 13)
+        for oind in ((:,:,:),
+                     (:,:,6),
+                     (:,6,:),
+                     (6,:,:),
+                     (:,3:7,:),
+                     (3:7,:,:),
+                     (3:7,6,:),
+                     (3:7,6,6),
+                     (6,3:7,3:7),
+                     (13:-2:1,:,:),
+                     ([8,4,6,12,5,7],:,3:7),
+                     (6,6,[8,4,6,12,5,7]))
+            runtests(B, oind...)
+            sliceB = slice(B, oind)
+            runviews(sliceB, index5, index25, index125)
+        end
+    end
+end
 
 ####### "Classical" tests #######
 
