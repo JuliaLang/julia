@@ -3,7 +3,7 @@
 module DataFmt
 
 importall Base
-import Base: _default_delims
+import Base: _default_delims, tryparse_internal
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 
@@ -137,7 +137,6 @@ type DLMStore{T,S<:ByteString} <: DLMHandler
     sbuff::S
     auto::Bool
     eol::Char
-    tmp64::Array{Float64,1}
 end
 
 function DLMStore{T,S<:ByteString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
@@ -145,7 +144,7 @@ function DLMStore{T,S<:ByteString}(::Type{T}, dims::NTuple{2,Integer}, has_heade
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
 _chrinstr(sbuff::ByteString, chr::UInt8, startpos::Int, endpos::Int) = (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
@@ -158,7 +157,6 @@ function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int
     lastrow = dlmstore.lastrow
     cells::Array{T,2} = dlmstore.data
     sbuff::S = dlmstore.sbuff
-    tmp64 = dlmstore.tmp64
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
     (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
@@ -189,9 +187,9 @@ function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int
         # fill data
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff,startpos,endpos), r"\"\"", "\"")
-            fail = colval(unescaped, 1, length(unescaped), cells, drow, col, tmp64)
+            fail = colval(unescaped, 1, length(unescaped), cells, drow, col)
         else
-            fail = colval(sbuff, startpos, endpos, cells, drow, col, tmp64)
+            fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
         if fail
             sval = SubString(sbuff,startpos,endpos)
@@ -204,9 +202,9 @@ function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int
         # fill header
         if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
             unescaped = replace(SubString(sbuff,startpos,endpos), r"\"\"", "\"")
-            colval(unescaped, 1, length(unescaped), dlmstore.hdr, 1, col, tmp64)
+            colval(unescaped, 1, length(unescaped), dlmstore.hdr, 1, col)
         else
-            colval(sbuff, startpos,endpos, dlmstore.hdr, 1, col, tmp64)
+            colval(sbuff, startpos,endpos, dlmstore.hdr, 1, col)
         end
     end
 
@@ -304,6 +302,8 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
     idx = 1
     offidx = 1
     offsets = offarr[1]
+    row = 0
+    col = 0
     try
         dh = DLMStore(T, dims, has_header, sbuff, auto, eol)
         while idx <= length(offsets)
@@ -320,40 +320,52 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         return result(dh)
     catch ex
         isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
-        rethrow(ex)
+        error("at row $row, column $col : $ex")
     end
 end
 
-
-function colval{T<:Bool, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1})
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
+    n = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{T<:Integer, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+    n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+colval{T<:AbstractString, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) = ((cells[row,col] = SubString(sbuff,startpos,endpos)); false)
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int)
+    # if array is of Any type, attempt parsing only the most common types: Int, Bool, Float64 and fallback to SubString
     len = endpos-startpos+1
-    if (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), pointer(sbuff)+startpos-1, pointer("true"), 4))
-        cells[row,col] = true
-        return false
-    elseif (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), pointer(sbuff)+startpos-1, pointer("false"), 5))
-        cells[row,col] = false
-        return false
+    if len > 0
+        # check Inteter
+        ni64 = tryparse_internal(Int, sbuff, startpos, endpos, 0, false)
+        isnull(ni64) || (cells[row,col] = get(ni64); return false)
+
+        # check Bool
+        nb = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+        isnull(nb) || (cells[row,col] = get(nb); return false)
+
+        # check float64
+        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+        isnull(nf64) || (cells[row,col] = get(nf64); return false)
     end
-    true
-end
-function colval{T<:Number, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1})
-    if 0 == ccall(:jl_substrtod, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float64}), sbuff, startpos-1, endpos-startpos+1, tmp64)
-        cells[row,col] = tmp64[1]
-        return false
-    end
-    true
-end
-colval{T<:AbstractString, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = SubString(sbuff,startpos,endpos)); false)
-function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int, tmp64::Array{Float64,1})
-    if 0 == ccall(:jl_substrtod, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float64}), sbuff, startpos-1, endpos-startpos+1, tmp64)
-        cells[row,col] = tmp64[1]
-    else
-        cells[row,col] = SubString(sbuff, startpos, endpos)
-    end
+    cells[row,col] = SubString(sbuff, startpos, endpos)
     false
 end
-colval{T<:Char, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((startpos==endpos) ? ((cells[row,col] = next(sbuff,startpos)[1]); false) : true)
-colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
+colval{T<:Char, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) = ((startpos==endpos) ? ((cells[row,col] = next(sbuff,startpos)[1]); false) : true)
+colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
     dlm_parse(s.data, UInt32(eol)%UInt8, UInt32(dlm)%UInt8, UInt32(qchar)%UInt8, UInt32(cchar)%UInt8,
