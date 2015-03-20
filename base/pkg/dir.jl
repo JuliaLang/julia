@@ -21,9 +21,10 @@ path(pkg::AbstractString...) = normpath(path(),pkg...)
 
 function cd(f::Function, args...; kws...)
     dir = path()
-    if !isdir(dir)
+    metadata_dir = joinpath(dir, "METADATA")
+    if !isdir(metadata_dir)
         !haskey(ENV,"JULIA_PKGDIR") ? init() :
-            error("package directory $dir doesn't exist; run Pkg.init() to create it.")
+            error("Package metadata directory $metadata_dir doesn't exist; run Pkg.init() to initialize it.")
     end
     Base.cd(()->f(args...; kws...), dir)
 end
@@ -34,9 +35,10 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
     end
     dir = path()
     info("Initializing package repository $dir")
-    if isdir(joinpath(dir,"METADATA"))
+    metadata_dir = joinpath(dir, "METADATA")
+    if isdir(metadata_dir)
         info("Package directory $dir is already initialized.")
-        Git.set_remote_url(meta, dir=joinpath(dir,"METADATA"))
+        Git.set_remote_url(meta, dir=metadata_dir)
         return
     end
     try
@@ -53,7 +55,7 @@ function init(meta::AbstractString=DEFAULT_META, branch::AbstractString=META_BRA
             end
         end
     catch e
-        ispath(dir) && rm(dir, recursive=true)
+        ispath(metadata_dir) && rm(metadata_dir, recursive=true)
         rethrow(e)
     end
 end
