@@ -103,17 +103,17 @@ BlockQuote() = BlockQuote([])
 function blockquote(stream::IO, block::MD, config::Config)
     withstream(stream) do
         buffer = IOBuffer()
-        while startswith(stream, ">")
+        empty = true
+        while startswith(stream, r"^ {0,3}>") != ""
             startswith(stream, " ")
             write(buffer, readline(stream))
+            empty = false
         end
+        empty && return false
+
         md = takebuf_string(buffer)
-        if !isempty(md)
-            push!(block, BlockQuote(parse(md, flavor = config).content))
-            return true
-        else
-            return false
-        end
+        push!(block, BlockQuote(parse(md, flavor = config).content))
+        return true
     end
 end
 
