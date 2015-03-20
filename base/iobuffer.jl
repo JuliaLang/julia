@@ -109,7 +109,9 @@ nb_available(io::IOBuffer) = io.size - io.ptr + 1
 position(io::IOBuffer) = io.ptr-1
 
 function skip(io::IOBuffer, n::Integer)
-    io.ptr = min(io.ptr + n, io.size+1)
+    seekto = io.ptr + n
+    n < 0 && return seek(io, seekto) # Does error checking
+    io.ptr = min(seekto, io.size+1)
     return io
 end
 
@@ -118,7 +120,11 @@ function seek(io::IOBuffer, n::Integer)
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
-    io.ptr = min(n+1, io.size+1)
+    # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
+    #       of an IOBuffer), so that would need to be fixed in order to throw an error here
+    #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n+1
+    io.ptr = max(min(n+1, io.size+1), 1)
     return io
 end
 
