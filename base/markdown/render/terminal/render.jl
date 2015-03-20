@@ -39,14 +39,26 @@ function term(io::IO, md::List, columns)
 end
 
 function term(io::IO, md::Header{1}, columns)
-    _term_header(io, md, '=', columns)
+    _term_header(io, md, '#', columns)
 end
 
 function term(io::IO, md::Header{2}, columns)
-    _term_header(io, md, '–', columns)
+    _term_header(io, md, '=', columns)
 end
 
 function term(io::IO, md::Header{3}, columns)
+    _term_header(io, md, '–', columns)
+end
+
+function term(io::IO, md::Header{4}, columns)
+    _term_header(io, md, '*', columns)
+end
+
+function term(io::IO, md::Header{5}, columns)
+    _term_header(io, md, '~', columns)
+end
+
+function term(io::IO, md::Header{6}, columns)
     _term_header(io, md, '-', columns)
 end
 
