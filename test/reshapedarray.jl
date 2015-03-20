@@ -33,7 +33,6 @@ CC = reshape([1:16;], (2,4,2))
 @test isa(CC, Array)
 
 for AT in (ArrayLF, ArrayLS)
-    @show AT
     A = reshape(AT([1:15;]), (3, 5))
     @test indextype(A) <: (Reshaped.IndexMD{1,2},)
     @test A == AA

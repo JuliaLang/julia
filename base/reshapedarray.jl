@@ -118,14 +118,19 @@ stagedfunction getindex{T,N,P,I}(A::ReshapedArray{T,N,P,I}, indexes::Real...)
         for i = 1:npc[end]
             j = findlast(npc .< i)
             di = i - npc[j]
-            push!(argsout, Expr(:..., :(tindex[$j][$di])))
+            push!(argsout, :(tindex[$j][$di]))
+        end
+    else
+        for i = 1:npc[end]
+            push!(argsout, :(tindex[$i]))
         end
     end
     meta = Expr(:meta, :inline)
     ex = length(argsin) == 1 ?
         quote
             $meta
-            getindex(A.parent, $(argsin...)...)
+            tindex = $(argsin...)
+            getindex(A.parent, $(argsout...))
         end :
         quote
             $meta
