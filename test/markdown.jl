@@ -9,18 +9,21 @@ import Base: writemime
 @test md"foo" == MD(Paragraph("foo"))
 @test md"foo *bar* baz" == MD(Paragraph(["foo ", Italic("bar"), " baz"]))
 
-@test md"#title" == MD(Header{1}("title"))
+@test md"#no title" == MD(Paragraph(["#no title"]))
+@test md"# title" == MD(Header{1}("title"))
 @test md"## section" == MD(Header{2}("section"))
 @test md"# title *foo* `bar` **baz**" ==
     MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")]))
 
 @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
-# @test md"**foo *bar* baz**" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
+@test md"*foo **bar** baz*" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
 
 @test md"""```julia
 foo
 ```
 """ == MD(Code("julia", "foo"))
+@test md"``code```more code``" == MD(Any[Paragraph(Any[Code("","code```more code")])])
+@test md"``code``````more code``" == MD(Any[Paragraph(Any[Code("","code``````more code")])])
 
 @test md"""
 * one
@@ -39,7 +42,7 @@ foo
 
 @test md"foo" |> plain == "foo\n"
 @test md"foo *bar* baz" |> plain == "foo *bar* baz\n"
-@test md"#title" |> plain == "# title\n"
+@test md"# title" |> plain == "# title\n"
 @test md"## section" |> plain == "## section\n"
 @test md"## section `foo`" |> plain == "## section `foo`\n"
 @test md"""Hello
@@ -50,8 +53,14 @@ World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 # HTML output
 
 @test md"foo *bar* baz" |> html == "<p>foo <em>bar</em> baz</p>\n"
-@test md"1. Hello" |> html == "<ol><li>Hello</li>\n</ol>\n"
-@test md"* World" |> html == "<ul><li>World</li>\n</ul>\n"
+@test md"something ***" |> html == "<p>something ***</p>\n"
+@test md"# h1## " |> html == "<h1>h1##</h1>\n"
+@test md"## h2 ### " |> html == "<h2>h2</h2>\n"
+@test md"###### h6" |> html == "<h6>h6</h6>\n"
+@test md"####### h7" |> html == "<p>####### h7</p>\n"
+@test md"   >" |> html == "<blockquote>\n</blockquote>\n"
+@test md"1. Hello" |> html == "<ol>\n<li>Hello</li>\n</ol>\n"
+@test md"* World" |> html == "<ul>\n<li>World</li>\n</ul>\n"
 @test md"# title *blah*" |> html == "<h1>title <em>blah</em></h1>\n"
 @test md"## title *blah*" |> html == "<h2>title <em>blah</em></h2>\n"
 @test md"""Hello
@@ -89,11 +98,6 @@ ref(fft)
 
 writemime(io::IO, m::MIME"text/plain", r::Reference) =
     print(io, "$(r.ref) (see Julia docs)")
-
-#writemime(io::IO, m::MIME"text/html", r::Reference) =
-#    Markdown.withtag(io, :a, :href=>"test") do
-#        Markdown.htmlesc(io, Markdown.plaininline(r))
-#    end
 
 fft_ref = md"Behaves like $(ref(fft))"
 @test plain(fft_ref) == "Behaves like fft (see Julia docs)\n"

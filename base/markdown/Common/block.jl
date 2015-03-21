@@ -49,10 +49,10 @@ function hashheader(stream::IO, md::MD, config::Config)
     end
 
     if level > 6
-        skip(stream, -level)
+        skip(stream, -level-1)
         return false
     elseif !eof(stream) && (c = read(stream, Char); !(c in " \n"))
-        skip(stream, -level-length(string(c).data))
+        skip(stream, -level-length(string(c).data)-1)
         return false
     end
 
@@ -152,12 +152,12 @@ function list(stream::IO, block::MD, config::Config)
         fresh_line = false
         while !eof(stream)
             if fresh_line
-                startswith(stream, r"^ ?")
-                if startswith(stream, b) in [false, ""]
+                startswith(stream, " ")
+                if !(startswith(stream, b) in [false, ""])
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
-                    write(buffer, ' ')
+                    write(buffer, '\n')
                 end
                 fresh_line = false
             else
