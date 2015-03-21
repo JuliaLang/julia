@@ -49,7 +49,7 @@ function _term_header(io::IO, md, char, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        println(io, string(char) ^ line_width)
+        char != ' ' && println(io, string(char) ^ line_width)
     end
 end
 
