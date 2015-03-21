@@ -488,7 +488,7 @@ ISX86=1
 else ifeq ($(ARCH),x86_64)
 BINARY=64
 ISX86=1
-else ifeq ($(ARCH),arm)
+else ifneq (,$(findstring arm,$(ARCH)))
 ISX86=0
 else ifneq (,$(findstring powerpc,$(ARCH)))
 ISX86=0
