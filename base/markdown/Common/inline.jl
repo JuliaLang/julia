@@ -28,7 +28,7 @@ end
 
 @trigger '`' ->
 function inline_code(stream::IO)
-    result = parse_inline_wrapper(stream, "`")
+    result = parse_inline_wrapper(stream, "`"; rep=true)
     return result == nothing ? nothing : Code(result)
 end
 
