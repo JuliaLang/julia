@@ -4,5 +4,5 @@ include("inline.jl")
 @flavor common [list, indentcode, blockquote, hashheader, horizontalrule,
                 paragraph,
 
-                linebreak, escapes, en_dash, inline_code,
+                linebreak, escapes, inline_code,
                 asterisk_bold, asterisk_italic, image, link]
