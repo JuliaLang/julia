@@ -70,9 +70,9 @@ end
 
 let i = 0
     for j = countfrom(0, 2)
-	@test j == i*2
-	i += 1
-	i <= 10 || break
+        @test j == i*2
+        i += 1
+        i <= 10 || break
     end
 end
 
@@ -83,16 +83,16 @@ let t = take(0:2:8, 10), i = 0
     @test length(collect(t)) == 5
 
     for j = t
-	@test j == i*2
-	i += 1
+        @test j == i*2
+        i += 1
     end
     @test i == 5
 end
 
 let i = 0
     for j = take(0:2:100, 10)
-	@test j == i*2
-	i += 1
+        @test j == i*2
+        i += 1
     end
     @test i == 10
 end
@@ -102,8 +102,8 @@ end
 
 let i = 0
     for j = drop(0:2:10, 2)
-	@test j == (i+2)*2
-	i += 1
+        @test j == (i+2)*2
+        i += 1
     end
     @test i == 4
 end
@@ -113,9 +113,9 @@ end
 
 let i = 0
     for j = cycle(0:3)
-	@test j == i % 4
-	i += 1
-	i <= 10 || break
+        @test j == i % 4
+        i += 1
+        i <= 10 || break
     end
 end
 
@@ -124,15 +124,15 @@ end
 
 let i = 0
     for j = repeated(1, 10)
-	@test j == 1
-	i += 1
+        @test j == 1
+        i += 1
     end
     @test i == 10
 end
 let i = 0
     for j = repeated(1)
-	@test j == 1
-	i += 1
-	i <= 10 || break
+        @test j == 1
+        i += 1
+        i <= 10 || break
     end
 end
