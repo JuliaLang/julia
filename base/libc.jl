@@ -6,6 +6,22 @@ export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, ca
 
 include("errno.jl")
 
+## RawFD ##
+
+#Wrapper for an OS file descriptor (on both Unix and Windows)
+immutable RawFD
+    fd::Int32
+    RawFD(fd::Integer) = new(fd)
+    RawFD(fd::RawFD) = fd
+end
+
+Base.convert(::Type{Int32}, fd::RawFD) = fd.fd
+
+dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
+dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
+    ccall((@windows? :_dup2 : :dup2),Int32,
+    (Int32,Int32),src.fd,target.fd))
+
 ## FILE ##
 
 immutable FILE
@@ -15,13 +31,21 @@ end
 modestr(s::IO) = modestr(isreadable(s), iswritable(s))
 modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
 
-function FILE(s::IO)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
+function FILE(fd, mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
     systemerror("fdopen", FILEp == C_NULL)
-    seek(FILE(FILEp), position(s))
+    FILE(FILEp)
 end
 
+function FILE(s::IO)
+    f = FILE(dup(RawFD(fd(s))),modestr(s))
+    seek(f, position(s))
+    f
+end
+
+Base.unsafe_convert(T::Union(Type{Ptr{Void}},Type{Ptr{FILE}}), f::FILE) = convert(T, f.ptr)
+Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Void},), f.ptr) != 0)
 Base.convert(::Type{FILE}, s::IO) = FILE(s)
 
 function Base.seek(h::FILE, offset::Integer)

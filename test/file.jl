@@ -386,18 +386,25 @@ rm(cfile)
 # FILE* interface #
 ###################
 
+function test_LibcFILE(FILEp)
+    buf = Array(UInt8, 8)
+    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
+    @test bytestring(buf) == "Hello, w"
+    @test position(FILEp) == 8
+    seek(FILEp, 5)
+    @test position(FILEp) == 5
+    close(FILEp)
+end
+
 f = open(file, "w")
 write(f, "Hello, world!")
 close(f)
 f = open(file, "r")
-FILEp = convert(Libc.FILE, f)
-buf = Array(UInt8, 8)
-str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp.ptr)
-@test bytestring(buf) == "Hello, w"
-@test position(FILEp) == 8
-seek(FILEp, 5)
-@test position(FILEp) == 5
+test_LibcFILE(convert(Libc.FILE, f))
 close(f)
+@unix_only f = RawFD(ccall(:open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
+@windows_only f = RawFD(ccall(:_open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
+test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
 ############
 # Clean up #
