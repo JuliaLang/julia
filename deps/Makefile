@@ -77,7 +77,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifeq ($(shell which patchelf 2>/dev/null),)
+ifeq ($(USE_SYSTEM_PATCHELF), 0)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
