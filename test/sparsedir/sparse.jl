@@ -740,3 +740,6 @@ for (m,n) in ((2,-2),(-2,2),(-2,-2))
     @test_throws ArgumentError speye(m,n)
     @test_throws ArgumentError sprand(m,n,0.2)
 end
+
+# promotion in spdiagm
+@test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
