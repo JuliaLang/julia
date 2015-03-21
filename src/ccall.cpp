@@ -560,7 +560,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     JL_NARGSV(llvmcall, 3)
     jl_value_t *rt = NULL, *at = NULL, *ir = NULL;
-    JL_GC_PUSH3(&ir, &rt, &at);
+    jl_tuple_t *stt = NULL;
+    JL_GC_PUSH4(&ir, &rt, &at, &stt);
     {
     JL_TRY {
         at  = jl_interpret_toplevel_expr_in(ctx->module, args[3],
@@ -608,7 +609,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
 
     std::stringstream ir_stream;
 
-    jl_tuple_t *stt = jl_alloc_tuple(nargs - 3);
+    stt = jl_alloc_tuple(nargs - 3);
 
     for (size_t i = 0; i < nargs-3; ++i)
     {
