@@ -18,7 +18,7 @@ import
         cosh, sinh, tanh, sech, csch, coth, acosh, asinh, atanh, atan2,
         serialize, deserialize, cbrt, typemax, typemin, unsafe_trunc,
         realmin, realmax, get_rounding, set_rounding, maxintfloat, widen,
-        significand, frexp
+        significand, frexp, parse
 
 import Base.Rounding: get_rounding_raw, set_rounding_raw
 
@@ -77,13 +77,13 @@ function BigFloat(x::BigInt)
     return z
 end
 
-function BigFloat(x::AbstractString, base::Int)
+function parse(::Type{BigFloat}, s::AbstractString, base::Int=10)
     z = BigFloat()
-    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, x, base, ROUNDING_MODE[end])
-    err == 0 || throw("incorrectly formatted number \"$x\"")
+    err = ccall((:mpfr_set_str, :libmpfr), Int32, (Ptr{BigFloat}, Ptr{UInt8}, Int32, Int32), &z, s, base, ROUNDING_MODE[end])
+    err == 0 || throw(ArgumentError("invalid number format $(repr(s)) for BigFloat"))
     return z
 end
-BigFloat(x::AbstractString) = BigFloat(x, 10)
+BigFloat(x::AbstractString) = parse(BigFloat,x)
 
 BigFloat(x::Integer) = BigFloat(BigInt(x))
 
