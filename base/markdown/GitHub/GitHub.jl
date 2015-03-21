@@ -12,18 +12,23 @@ function fencedcode(stream::IO, block::MD, config::Config)
 
     # inline code block
     if contains(flavor, string(ch) ^ n)
+        #TODO edge case where this is a string(ch) ^ (n + 1)
         seek(stream, start)
         return false
     end
 
     buffer = IOBuffer()
     while !eof(stream)
+        line_start = position(stream)
         if startswith(stream, string(ch) ^ n)
-            push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
-            return true
-        else
-            write(buffer, readline(stream))
+            if !startswith(stream, string(ch))
+                push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                return true
+            else
+                seek(stream, line_start)
+            end
         end
+        write(buffer, readline(stream))
     end
     seek(stream, start)
     return false
