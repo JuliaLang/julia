@@ -2318,7 +2318,7 @@ void *reallocb(void *b, size_t sz)
 
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
-    sz += sizeof(void*);
+    sz += sizeof(jl_taggedvalue_t);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2330,39 +2330,29 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
 
 DLLEXPORT jl_value_t *alloc_1w(void)
 {
+    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*);
 #ifdef MEMDEBUG
-    return jl_valueof(alloc_big(2*sizeof(void*)));
+    return jl_valueof(alloc_big(sz));
 #endif
-#ifdef _P64
-    return jl_valueof(_pool_alloc(&pools[2], 2*sizeof(void*)));
-#else
-    return jl_valueof(_pool_alloc(&pools[0], 2*sizeof(void*)));
-#endif
+    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
 DLLEXPORT jl_value_t *alloc_2w(void)
 {
+    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 2;
 #ifdef MEMDEBUG
-    return jl_valueof(alloc_big(3*sizeof(void*)));
+    return jl_valueof(alloc_big(sz));
 #endif
-#ifdef _P64
-    return jl_valueof(_pool_alloc(&pools[4], 3*sizeof(void*)));
-#else
-    return jl_valueof(_pool_alloc(&pools[1], 3*sizeof(void*)));
-#endif
-
+    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
 DLLEXPORT jl_value_t *alloc_3w(void)
 {
+    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 3;
 #ifdef MEMDEBUG
-    return jl_valueof(alloc_big(4*sizeof(void*)));
+    return jl_valueof(alloc_big(sz));
 #endif
-#ifdef _P64
-    return jl_valueof(_pool_alloc(&pools[6], 4*sizeof(void*)));
-#else
-    return jl_valueof(pool_alloc(&pools[2]));
-#endif
+    return jl_valueof(_pool_alloc(&pools[szclass(sz)], sz));
 }
 
 #ifdef GC_FINAL_STATS
