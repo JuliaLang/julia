@@ -1,6 +1,6 @@
 # SHA-XYZ INITIAL HASH VALUES AND CONSTANTS
 # Hash constant words K for SHA-256:
-const K256 = Uint32[
+const K256 = UInt32[
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5,
     0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
     0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3,
@@ -20,7 +20,7 @@ const K256 = Uint32[
 ]
 
 # Initial hash value H for SHA-224:
-const sha224_initial_hash_value = Uint32[
+const sha224_initial_hash_value = UInt32[
     0xc1059ed8,
     0x367cd507,
     0x3070dd17,
@@ -32,7 +32,7 @@ const sha224_initial_hash_value = Uint32[
 ]
 
 
-const sha256_initial_hash_value = Uint32[
+const sha256_initial_hash_value = UInt32[
     0x6a09e667,
     0xbb67ae85,
     0x3c6ef372,
@@ -44,7 +44,7 @@ const sha256_initial_hash_value = Uint32[
 ]
 
 # Hash constant words K for SHA-384 and SHA-512:
-const K512 = Uint64[
+const K512 = UInt64[
     0x428a2f98d728ae22, 0x7137449123ef65cd,
     0xb5c0fbcfec4d3b2f, 0xe9b5dba58189dbbc,
     0x3956c25bf348b538, 0x59f111f1b605d019,
@@ -88,7 +88,7 @@ const K512 = Uint64[
 ]
 
 # Initial hash value H for SHA-384
-const sha384_initial_hash_value = Uint64[
+const sha384_initial_hash_value = UInt64[
     0xcbbb9d5dc1059ed8,
     0x629a292a367cd507,
     0x9159015a3070dd17,
@@ -100,7 +100,7 @@ const sha384_initial_hash_value = Uint64[
 ]
 
 # Initial hash value H for SHA-512
-const sha512_initial_hash_value = Uint64[
+const sha512_initial_hash_value = UInt64[
     0x6a09e667f3bcc908,
     0xbb67ae8584caa73b,
     0x3c6ef372fe94f82b,
