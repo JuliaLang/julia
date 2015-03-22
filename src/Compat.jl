@@ -263,4 +263,28 @@ if VERSION < v"0.4.0-dev+656"
     include("nullable.jl")
 end
 
+if VERSION < v"0.4.0-dev+3844"
+    @eval module Libc
+        const FILE = Base.CFILE
+        const calloc = Base.c_calloc
+        const free = Base.c_free
+        const malloc = Base.c_malloc
+        const realloc = Base.c_realloc
+        using Base: munmap, systemsleep
+        export FILE, MS_ASYNC, MS_INVALIDATE, MS_SYNC, TmStruct, calloc, errno,
+               flush_cstdio, free, gethostname, getpid, malloc, mmap, msync,
+               munmap, realloc, strerror, strftime, strptime, systemsleep,
+               time
+    end
+    @eval module Libdl
+        using Base.Sys: dlext, dllist, dlpath
+        export DL_LOAD_PATH, RTLD_DEEPBIND, RTLD_FIRST, RTLD_GLOBAL, RTLD_LAZY,
+               RTLD_LOCAL, RTLD_NODELETE, RTLD_NOLOAD, RTLD_NOW, dlclose, dlext,
+               dllist, dlopen, dlopen_e, dlpath, dlsym, dlsym_e, find_library
+    end
+    export Libc, Libdl
+else
+    import Base: Libc, Libdl
+end
+
 end # module
