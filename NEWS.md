@@ -933,4 +933,5 @@ Too numerous to mention.
 [#7464]: https://github.com/JuliaLang/julia/issues/7464
 [#7513]: https://github.com/JuliaLang/julia/issues/7513
 [#7647]: https://github.com/JuliaLang/julia/issues/7647
+[#8560]: https://github.com/JuliaLang/julia/issues/8560
 [#9161]: https://github.com/JuliaLang/julia/issues/9161
