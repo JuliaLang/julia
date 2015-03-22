@@ -302,7 +302,7 @@ runviews{T}(SB::AbstractArray{T,0}, indexN, indexNN, indexNNN) = nothing
 
 ######### Tests #########
 
-testfull = Bool(parseint(get(ENV, "JULIA_TESTFULL", "0")))
+testfull = Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
 ### Views from Arrays ###
 
