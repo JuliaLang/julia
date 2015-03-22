@@ -148,57 +148,37 @@ convert(::Type{BigInt}, x::Integer) = BigInt(x)
 convert(::Type{BigInt}, x::Float16) = BigInt(x)
 convert(::Type{BigInt}, x::FloatingPoint) = BigInt(x)
 
-function convert(::Type{Int64}, x::BigInt)
-    lo = Int64(convert(Culong, x & typemax(UInt32)))
-    hi = Int64(convert(Clong, x >> 32))
-    hi << 32 | lo
-end
-convert(::Type{Int32}, n::BigInt) = convert(Int32,convert(Clong, n))
-convert(::Type{Int16}, n::BigInt) = convert(Int16,convert(Clong, n))
-convert(::Type{Int8}, n::BigInt) = convert(Int8,convert(Clong, n))
 
-function convert(::Type{Clong}, n::BigInt)
-    fits = ccall((:__gmpz_fits_slong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
-    if fits
-        ccall((:__gmpz_get_si, :libgmp), Clong, (Ptr{BigInt},), &n)
+rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
+function rem{T<:Union(Unsigned,Signed)}(x::BigInt, ::Type{T})
+    u = zero(T)
+    for l = 1:min(abs(x.size), cld(sizeof(T),sizeof(Limb)))
+        u += (unsafe_load(x.d,l)%T) << ((sizeof(Limb)<<3)*(l-1))
+    end
+    x.size < 0 ? -u : u
+end
+
+function convert{T<:Unsigned}(::Type{T}, x::BigInt)
+    if sizeof(T) < sizeof(Limb)
+        convert(T, convert(Limb,x))
     else
-        throw(InexactError())
+        0 <= x.size <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        x % T
     end
 end
 
-function convert(::Type{UInt64}, x::BigInt)
-    lo = UInt64(convert(Culong, x & typemax(UInt32)))
-    hi = UInt64(convert(Culong, x >> 32))
-    hi << 32 | lo
-end
-convert(::Type{UInt32}, x::BigInt) = convert(UInt32,convert(Culong, x))
-convert(::Type{UInt16}, x::BigInt) = convert(UInt16,convert(Culong, x))
-convert(::Type{UInt8}, x::BigInt) = convert(UInt8,convert(Culong, x))
-
-function convert(::Type{Culong}, n::BigInt)
-    fits = ccall((:__gmpz_fits_ulong_p, :libgmp), Int32, (Ptr{BigInt},), &n) != 0
-    if fits
-        ccall((:__gmpz_get_ui, :libgmp), Culong, (Ptr{BigInt},), &n)
+function convert{T<:Signed}(::Type{T}, x::BigInt)
+    n = abs(x.size)
+    if sizeof(T) < sizeof(Limb)
+        SLimb = typeof(Signed(one(Limb)))
+        convert(T, convert(SLimb, x))
     else
-        throw(InexactError())
+        0 <= n <= cld(sizeof(T),sizeof(Limb)) || throw(InexactError())
+        y = x % T
+        (x.size > 0) $ (y > 0) && throw(InexactError()) # catch overflow
+        y
     end
 end
-
-if sizeof(Int32) == sizeof(Clong)
-    function convert(::Type{UInt128}, x::BigInt)
-        UInt128(UInt(x>>>96))<<96 +
-        UInt128(UInt((x>>>64) & typemax(UInt32)))<<64 +
-        UInt128(UInt((x>>>32) & typemax(UInt32)))<<32 +
-        UInt128(UInt(x & typemax(UInt32)))
-    end
-end
-if sizeof(Int64) == sizeof(Clong)
-    function convert(::Type{UInt128}, x::BigInt)
-        UInt128(UInt(x>>>64))<<64 +
-        UInt128(UInt(x & typemax(UInt64)))
-    end
-end
-convert(::Type{Int128}, x::BigInt) = copysign(UInt128(abs(x))%Int128,x)
 
 
 function call(::Type{Float64}, n::BigInt, ::RoundingMode{:ToZero})
@@ -242,15 +222,6 @@ end
 convert(::Type{Float64}, n::BigInt) = Float64(n,RoundNearest)
 convert(::Type{Float32}, n::BigInt) = Float32(n,RoundNearest)
 convert(::Type{Float16}, n::BigInt) = Float16(n,RoundNearest)
-
-rem(x::BigInt, ::Type{Bool}) = ((x&1)!=0)
-
-rem{T<:Unsigned}(n::BigInt, ::Type{T}) = convert(T, n & typemax(T))
-function rem{T<:Integer}(n::BigInt, ::Type{T})
-    lo, hi = typemin(T), typemax(T)
-    convert(T, (n-lo) & (widen(hi)-widen(lo)) + lo)
-end
-
 
 promote_rule{T<:Integer}(::Type{BigInt}, ::Type{T}) = BigInt
 
