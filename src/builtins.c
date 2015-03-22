@@ -790,7 +790,8 @@ DLLEXPORT jl_nullable_float64_t jl_try_substrtod(char *str, size_t offset, int l
     if (bstr != str+offset)
         free(bstr);
 
-    return (jl_nullable_float64_t){(uint8_t)err, out};
+    jl_nullable_float64_t ret = {(uint8_t)err, out};
+    return ret;
 }
 
 DLLEXPORT jl_nullable_float64_t jl_try_strtod(char *str)
@@ -811,7 +812,8 @@ DLLEXPORT jl_nullable_float64_t jl_try_strtod(char *str)
         err = str_isspace(p) ? 0 : 1;
     }
 
-    return (jl_nullable_float64_t){(uint8_t)err, out};
+    jl_nullable_float64_t ret = {(uint8_t)err, out};
+    return ret;
 }
 
 DLLEXPORT int jl_substrtod(char *str, size_t offset, int len, double *out)
@@ -876,7 +878,8 @@ DLLEXPORT jl_nullable_float32_t jl_try_substrtof(char *str, size_t offset, int l
     if (bstr != str+offset)
         free(bstr);
 
-    return (jl_nullable_float32_t){(uint8_t)err, out};
+    jl_nullable_float32_t ret = {(uint8_t)err, out};
+    return ret;
 }
 
 DLLEXPORT jl_nullable_float32_t jl_try_strtof(char *str)
@@ -900,7 +903,8 @@ DLLEXPORT jl_nullable_float32_t jl_try_strtof(char *str)
         err = str_isspace(p) ? 0 : 1;
     }
 
-    return (jl_nullable_float32_t){(uint8_t)err, out};
+    jl_nullable_float32_t ret = {(uint8_t)err, out};
+    return ret;
 }
 
 DLLEXPORT int jl_substrtof(char *str, int offset, int len, float *out)
