@@ -363,33 +363,35 @@ end
 # the corresponding cartesian index into the parent, and then uses
 # dims to convert back to a linear index into the parent array.
 #
-# However, a common case is linindex::UnitRange.
-# Since div is slow and in(j::Int, linindex::UnitRange) is fast,
+# However, a common case is linindex::Range.
+# Since div is slow and in(j::Int, linindex::Range) is fast,
 # it can be much faster to generate all possibilities and
 # then test whether the corresponding linear index is in linindex.
 # One exception occurs when only a small subset of the total
 # is desired, in which case we fall back to the div-based algorithm.
-stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange{Int})
-    N = length(indexes)
+#stagedfunction merge_indexes{T<:Integer}(V, parentindexes::NTuple, parentdims::Dims, linindex::Union(Colon,Range{T}), lindim)
+stagedfunction merge_indexes_in{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+    N = length(parentindexes)   # number of parent axes we're merging
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
+    lengthexpr = linindex == Colon ? (:(prod(size(V)[lindim:end]))) : (:(length(linindex)))
+    L = symbol(string("Istride_", N+1))  # length of V's trailing dimensions
     quote
-        n = length(linindex)
-        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
-        L = 1
-        dimoffset = ndims(V.parent) - length(dims)
-        Base.Cartesian.@nexprs $N d->(L *= dimsize(V.parent, d+dimoffset, I_d))
-        if n < 0.1L   # this has not been carefully tuned
-            return merge_indexes_div(V, indexes, dims, linindex)
+        n = $lengthexpr
+        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
+        pdimoffset = ndims(V.parent) - length(parentdims)
+        Istride_1 = 1   # parentindexes strides
+        Base.Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
+        Istridet = Base.Cartesian.@ntuple $(N+1) d->Istride_d
+        if n < 0.1*$L   # this has not been carefully tuned
+            return merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
         end
         Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
-        Istride_1 = 1   # indexes strides
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V, d+dimoffset, I_d))
-        Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into indexes
+        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
+        Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into parentindexes
         Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
         k = 0
         index = Array(Int, n)
-        Base.Cartesian.@nloops $N i d->(1:dimsize(V, d+dimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
+        Base.Cartesian.@nloops $N i d->(1:dimsize(V.parent, d+pdimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
             if in(counter_0, linindex)
                 index[k+=1] = offset_0
             end
@@ -397,27 +399,35 @@ stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange
         index
     end
 end
-merge_indexes(V, indexes::NTuple, dims::Dims, linindex) = merge_indexes_div(V, indexes, dims, linindex)
+
+# HACK: dispatch seemingly wasn't working properly
+function merge_indexes(V, parentindexes::NTuple, parentdims::Dims, linindex, lindim)
+    if isa(linindex, Colon) || isa(linindex, Range)
+        return merge_indexes_in(V, parentindexes, parentdims, linindex, lindim)
+    end
+    merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
+end
 
 # This could be written as a regular function, but performance
 # will be better using Cartesian macros to avoid the heap and
 # an extra loop.
-stagedfunction merge_indexes_div(V, indexes::NTuple, dims::Dims, linindex)
-    N = length(indexes)
+stagedfunction merge_indexes_div{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+    N = length(parentindexes)
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     Istride_N = symbol("Istride_$N")
+    lengthexpr = :(length(linindex))
     quote
-        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
+        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
         Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
-        Istride_1 = 1   # indexes strides
-        dimoffset = ndims(V.parent) - length(dims)
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+dimoffset, I_d))
-        n = length(linindex)
-        L = $(Istride_N) * dimsize(V.parent, $N+dimoffset, indexes[end])
+        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
+        Istride_1 = 1   # parentindexes strides
+        pdimoffset = ndims(V.parent) - length(parentdims)
+        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
+        n = $lengthexpr
+        L = $(Istride_N) * dimsize(V.parent, $N+pdimoffset, parentindexes[end])
         index = Array(Int, n)
         for i = 1:n
-            k = linindex[i] # k is the indexes-centered linear index
+            k = linindex[i] # k is the parentindexes-centered linear index
             1 <= k <= L || throw(BoundsError())
             k -= 1
             j = 0  # j will be the new parent-centered linear index
