@@ -76,6 +76,7 @@ const latex_symbols = Dict(
     "\\pppprime" => "⁗",
     "\\backpprime" => "‶",
     "\\backppprime" => "‷",
+    "\\e" => "ℯ",
 
     # Superscripts
     "\\^0" => "⁰",

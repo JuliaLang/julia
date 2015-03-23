@@ -184,7 +184,7 @@ export
     NaN32,
     im,
     π, pi,
-    e, eu,
+    ℯ, eu,
     γ, eulergamma,
     catalan,
     φ, golden,

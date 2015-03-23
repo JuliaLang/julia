@@ -138,10 +138,10 @@ General Number Functions and Constants
 
    The imaginary unit
 
-.. data:: e
+.. data:: ℯ
           eu
 
-   The constant e
+   The constant e (base of natural logarithm, a.k.a Euler's number or Napier's constant)
 
 .. data:: catalan
 
