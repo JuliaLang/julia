@@ -412,13 +412,12 @@ rem_knuth(a::UInt, b::UInt) = a % (b + (b == 0)) + a * (b == 0)
 rem_knuth{T<:Unsigned}(a::T, b::T) = b != 0 ? a % b : a
 
 # maximum multiple of k <= 2^bits(T) decremented by one,
-# that is 0xFFFFFFFF if k = typemax(T) - typemin(T) with intentional underflow
-maxmultiple(k::UInt32) = (div(0x0000000100000000,k + (k == 0))*k - 1) % UInt32
-maxmultiple(k::UInt64) = (div(0x00000000000000010000000000000000, k + (k == 0))*k - 1) % UInt64
-# maximum multiple of k within 1:typemax(UInt128)
-maxmultiple(k::UInt128) = div(typemax(UInt128), k + (k == 0))*k - 1
-# maximum multiple of k within 1:2^32 or 1:2^64, depending on size
-maxmultiplemix(k::UInt64) = (div((k >> 32 != 0)*0x0000000000000000FFFFFFFF00000000 + 0x0000000100000000, k + (k == 0))*k - 1) % UInt64
+# that is 0xFFFF...FFFF if k = typemax(T) - typemin(T) with intentional underflow
+# see http://stackoverflow.com/questions/29182036/integer-arithmetic-add-1-to-uint-max-and-divide-by-n-without-overflow
+maxmultiple{T<:Unsigned}(k::T) = (div(typemax(T) - k + one(k), k + (k == 0))*k + k - one(k))::T
+
+# maximum multiple of k within 1:2^32 or 1:2^64 decremented by one, depending on size
+maxmultiplemix(k::UInt64) = if k >> 32 != 0; maxmultiple(k); else (div(0x0000000100000000, k + (k == 0))*k - one(k))::Uint64; end
 
 abstract RangeGenerator
 
