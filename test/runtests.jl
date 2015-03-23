@@ -167,3 +167,10 @@ end
 for x in [:RTLD_LOCAL,:RTLD_GLOBAL,:find_library,:dlsym,:RTLD_LAZY,:RTLD_NODELETE,:DL_LOAD_PATH,:RTLD_NOW,:Libdl,:dlext,:dlsym_e,:RTLD_FIRST,:dlopen,:dllist,:dlpath,:RTLD_NOLOAD,:dlclose,:dlopen_e,:RTLD_DEEPBIND]
     Libdl.(x)
 end
+
+# Test unsafe_convert
+type A; end
+x = "abc"
+@test bytestring(Compat.unsafe_convert(Ptr{UInt8}, x)) == x
+Compat.unsafe_convert(::Ptr{A}, x) = x
+@test Compat.unsafe_convert(pointer([A()]), 1) == 1
