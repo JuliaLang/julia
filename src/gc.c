@@ -65,14 +65,15 @@ typedef struct _gcval_t {
 // pool page metadata
 typedef struct _gcpage_t {
     struct {
-        uint16_t pool_n : 8;
+        uint16_t pool_n : 8; // index (into norm_pool) of pool that owns this page
         uint16_t allocd : 1; // true if an allocation happened in this page since last sweep
         uint16_t gc_bits : 2; // this is a bitwise | of all gc_bits in this page
     };
-    uint16_t nfree;
-    uint16_t osize;
-    uint16_t fl_begin_offset;
-    uint16_t fl_end_offset;
+    uint16_t nfree; // number of free objects in this page.
+                    // invalid if pool that owns this page is allocating objects from this page.
+    uint16_t osize; // size of each object in this page
+    uint16_t fl_begin_offset; // offset of first free object in this page
+    uint16_t fl_end_offset;   // offset of last free object in this page
     char *data;
     char *ages;
 } gcpage_t;
@@ -82,40 +83,40 @@ typedef struct _gcpage_t {
 // round an address inside a gcpage's data to its begining
 #define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
 
-// contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ blocks
-// uses a very naive allocator (see malloc_page & free_page)
+// A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
+// It uses a very naive allocator (see malloc_page & free_page)
 #if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
 #define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
 #else
 #define REGION_PG_COUNT 8*4096 // 512M
 #endif
-#define HEAP_COUNT 8
+#define REGION_COUNT 8
 
 typedef struct {
     uint32_t freemap[REGION_PG_COUNT/32];
     char pages[REGION_PG_COUNT][GC_PAGE_SZ];
     gcpage_t meta[REGION_PG_COUNT];
 } region_t;
-static region_t *heaps[HEAP_COUNT] = {NULL};
-// store a lower bound of the first free block in each region
-static int heaps_lb[HEAP_COUNT] = {0};
-// an upper bound of the last non-free block
-static int heaps_ub[HEAP_COUNT] = {REGION_PG_COUNT/32-1};
+static region_t *regions[REGION_COUNT] = {NULL};
+// store a lower bound of the first free page in each region
+static int regions_lb[REGION_COUNT] = {0};
+// an upper bound of the last non-free page
+static int regions_ub[REGION_COUNT] = {REGION_PG_COUNT/32-1};
 
 typedef struct _pool_t {
-    gcval_t *freelist;
-    gcval_t *newpages;
-    uint16_t end_offset; // avoid to compute this at each allocation
-    uint16_t osize;
-    uint16_t nfree;
+    gcval_t *freelist;   // root of list of free objects
+    gcval_t *newpages;   // root of list of chunks of free objects
+    uint16_t end_offset; // stored to avoid computing it at each allocation
+    uint16_t osize;      // size of objects in this pool
+    uint16_t nfree;      // number of free objects in page pointed into by free_list
 } pool_t;
 
 static region_t *find_region(void *ptr)
 {
-    // on 64bit systems we could probably use a single region and get rid of this loop
-    for (int i = 0; i < HEAP_COUNT && heaps[i]; i++) {
-        if ((char*)ptr >= (char*)heaps[i] && (char*)ptr <= (char*)heaps[i] + sizeof(region_t))
-            return heaps[i];
+    // on 64bit systems we could probably use a single region and remove this loop
+    for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
+        if ((char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
+            return regions[i];
     }
     return NULL;
 }
@@ -475,11 +476,11 @@ static NOINLINE void *malloc_page(void)
 {
     void *ptr = (void*)0;
     int i;
-    region_t* heap;
-    int heap_i = 0;
-    while(heap_i < HEAP_COUNT) {
-        heap = heaps[heap_i];
-        if (heap == NULL) {
+    region_t* region;
+    int region_i = 0;
+    while(region_i < REGION_COUNT) {
+        region = regions[region_i];
+        if (region == NULL) {
 #ifdef _OS_WINDOWS_
             char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
@@ -490,44 +491,44 @@ static NOINLINE void *malloc_page(void)
                 jl_printf(JL_STDERR, "could not allocate pools\n");
                 abort();
             }
-            heap = (region_t*)((char*)GC_PAGE_DATA(mem + REGION_PG_COUNT/8 + GC_PAGE_SZ - 1) - REGION_PG_COUNT/8);
-            heaps[heap_i] = heap;
+            region = (region_t*)((char*)GC_PAGE_DATA(mem + REGION_PG_COUNT/8 + GC_PAGE_SZ - 1) - REGION_PG_COUNT/8);
+            regions[region_i] = region;
 #ifdef _OS_WINDOWS_
-            VirtualAlloc(heap->freemap, REGION_PG_COUNT/8, MEM_COMMIT, PAGE_READWRITE);
-            VirtualAlloc(heap->meta, REGION_PG_COUNT*sizeof(gcpage_t), MEM_COMMIT, PAGE_READWRITE);
+            VirtualAlloc(region->freemap, REGION_PG_COUNT/8, MEM_COMMIT, PAGE_READWRITE);
+            VirtualAlloc(region->meta, REGION_PG_COUNT*sizeof(gcpage_t), MEM_COMMIT, PAGE_READWRITE);
 #endif
-            memset(heap->freemap, 0xff, REGION_PG_COUNT/8);
+            memset(region->freemap, 0xff, REGION_PG_COUNT/8);
         }
-        for(i = heaps_lb[heap_i]; i < REGION_PG_COUNT/32; i++) {
-            if (heap->freemap[i]) break;
+        for(i = regions_lb[region_i]; i < REGION_PG_COUNT/32; i++) {
+            if (region->freemap[i]) break;
         }
         if (i == REGION_PG_COUNT/32) {
-            // heap full
-            heap_i++;
+            // region full
+            region_i++;
             continue;
         }
         break;
     }
-    if (heap_i >= HEAP_COUNT) {
-        jl_printf(JL_STDERR, "increase HEAP_COUNT or allocate less memory\n");
+    if (region_i >= REGION_COUNT) {
+        jl_printf(JL_STDERR, "increase REGION_COUNT or allocate less memory\n");
         abort();
     }
-    if (heaps_lb[heap_i] < i)
-        heaps_lb[heap_i] = i;
-    if (heaps_ub[heap_i] < i)
-        heaps_ub[heap_i] = i;
+    if (regions_lb[region_i] < i)
+        regions_lb[region_i] = i;
+    if (regions_ub[region_i] < i)
+        regions_ub[region_i] = i;
 
 #if defined(_COMPILER_MINGW_)
-    int j = __builtin_ffs(heap->freemap[i]) - 1;
+    int j = __builtin_ffs(region->freemap[i]) - 1;
 #elif defined(_COMPILER_MICROSOFT_)
     unsigned long j;
-    _BitScanForward(&j, heap->freemap[i]);
+    _BitScanForward(&j, region->freemap[i]);
 #else
-    int j = ffs(heap->freemap[i]) - 1;
+    int j = ffs(region->freemap[i]) - 1;
 #endif
 
-    heap->freemap[i] &= ~(uint32_t)(1 << j);
-    ptr = heap->pages[i*32 + j];
+    region->freemap[i] &= ~(uint32_t)(1 << j);
+    ptr = region->pages[i*32 + j];
 #ifdef _OS_WINDOWS_
     VirtualAlloc(ptr, GC_PAGE_SZ, MEM_COMMIT, PAGE_READWRITE);
 #endif
@@ -540,22 +541,22 @@ static void free_page(void *p)
 {
     int pg_idx = -1;
     int i;
-    for(i = 0; i < HEAP_COUNT && heaps[i] != NULL; i++) {
-        pg_idx = ((char*)p - (char*)&heaps[i]->pages[0])/GC_PAGE_SZ;
+    for(i = 0; i < REGION_COUNT && regions[i] != NULL; i++) {
+        pg_idx = ((char*)p - (char*)&regions[i]->pages[0])/GC_PAGE_SZ;
         if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
     }
-    assert(i < HEAP_COUNT && heaps[i] != NULL);
-    region_t *heap = heaps[i];
+    assert(i < REGION_COUNT && regions[i] != NULL);
+    region_t *region = regions[i];
     uint32_t msk = (uint32_t)(1 << ((pg_idx % 32)));
-    assert(!(heap->freemap[pg_idx/32] & msk));
-    heap->freemap[pg_idx/32] ^= msk;
-    free(heap->meta[pg_idx].ages);
+    assert(!(region->freemap[pg_idx/32] & msk));
+    region->freemap[pg_idx/32] ^= msk;
+    free(region->meta[pg_idx].ages);
 #ifdef _OS_WINDOWS_
     VirtualFree(p, GC_PAGE_SZ, MEM_DECOMMIT);
 #else
     madvise(p, GC_PAGE_SZ, MADV_DONTNEED);
 #endif
-    if (heaps_lb[i] > pg_idx/32) heaps_lb[i] = pg_idx/32;
+    if (regions_lb[i] > pg_idx/32) regions_lb[i] = pg_idx/32;
     current_pg_count--;
 }
 
@@ -1024,7 +1025,7 @@ static inline void *__pool_alloc(pool_t* p, int osize, int end_offset)
     if (__likely(v != end)) {
         p->newpages = (gcval_t*)((char*)v + osize);
     } else {
-        // like in the freelist case, only update the page metadata when it is full
+        // like the freelist case, but only update the page metadata when it is full
         gcpage_t* pg = page_metadata(v);
         assert(pg->osize == p->osize);
         pg->nfree = 0;
@@ -1086,9 +1087,9 @@ static int freed_pages = 0;
 static int lazy_freed_pages = 0;
 static int page_done = 0;
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl,int,int);
-static void sweep_pool_region(int heap_i, int sweep_mask)
+static void sweep_pool_region(int region_i, int sweep_mask)
 {
-    region_t* heap = heaps[heap_i];
+    region_t* region = regions[region_i];
     gcval_t **pfl[N_POOLS];
 
     // update metadata of pages that were pointed to by freelist or newpages from a pool
@@ -1114,14 +1115,14 @@ static void sweep_pool_region(int heap_i, int sweep_mask)
 
     // the actual sweeping
     int ub = 0;
-    int lb = heaps_lb[heap_i];
-    for (int pg_i = 0; pg_i <= heaps_ub[heap_i]; pg_i++) {
-        uint32_t line = heap->freemap[pg_i];
+    int lb = regions_lb[region_i];
+    for (int pg_i = 0; pg_i <= regions_ub[region_i]; pg_i++) {
+        uint32_t line = region->freemap[pg_i];
         if (!!~line) {
             ub = pg_i;
             for (int j = 0; j < 32; j++) {
                 if (!((line >> j) & 1)) {
-                    gcpage_t *pg = &heap->meta[pg_i*32 + j];
+                    gcpage_t *pg = &region->meta[pg_i*32 + j];
                     int p_n = pg->pool_n;
                     pool_t *p = &norm_pools[p_n];
                     int osize = pg->osize;
@@ -1130,10 +1131,10 @@ static void sweep_pool_region(int heap_i, int sweep_mask)
             }
         } else if (pg_i < lb) lb = pg_i;
     }
-    heaps_ub[heap_i] = ub;
-    heaps_lb[heap_i] = lb;
+    regions_ub[region_i] = ub;
+    regions_lb[region_i] = lb;
 
-    // cache back pg->nfree in the pool_t
+    // null out terminal pointers of free lists and cache back pg->nfree in the pool_t
     int i = 0;
     for (pool_t* p = norm_pools; p < norm_pools + N_POOLS; p++) {
         *pfl[i++] = NULL;
@@ -1143,6 +1144,7 @@ static void sweep_pool_region(int heap_i, int sweep_mask)
     }
 }
 
+// Returns pointer to terminal pointer of list rooted at *pfl.
 static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_mask, int osize)
 {
 #ifdef FREE_PAGES_EAGER
@@ -1167,7 +1169,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
         // if we are doing a quick sweep and nothing has been allocated inside since last sweep
         // we can skip it
         if (sweep_mask == GC_MARKED_NOESC && !pg->allocd) {
-            // the position of the freelist begin/end in this page is stored in it's metadata
+            // the position of the freelist begin/end in this page is stored in its metadata
             if (pg->fl_begin_offset != (uint16_t)-1) {
                 *pfl = (gcval_t*)PAGE_PFL_BEG(pg);
                 pfl = prev_pfl = PAGE_PFL_END(pg);
@@ -1309,8 +1311,8 @@ static int gc_sweep_inc(int sweep_mask)
     page_done = 0;
     int finished = 1;
 
-    for (int i = 0; i < HEAP_COUNT; i++) {
-        if (heaps[i])
+    for (int i = 0; i < REGION_COUNT; i++) {
+        if (regions[i])
             /*finished &= */sweep_pool_region(i, sweep_mask);
     }
 
@@ -1841,7 +1843,7 @@ static void post_mark(arraylist_t *list, int dryrun)
 static arraylist_t bits_save[4];
 
 // set all mark bits to bits
-// record the state of the heap and can replay it in restore()
+// record the state of the region and can replay it in restore()
 // restore _must_ be called as this will overwrite parts of the
 // freelist in pools
 static void clear_mark(int bits)
@@ -1864,15 +1866,15 @@ static void clear_mark(int bits)
             v = v->next;
         }
     }
-    for (int h = 0; h < HEAP_COUNT; h++) {
-        region_t* heap = heaps[h];
-        if (!heap) break;
+    for (int h = 0; h < REGION_COUNT; h++) {
+        region_t* region = regions[h];
+        if (!region) break;
         for (int pg_i = 0; pg_i < REGION_PG_COUNT/32; pg_i++) {
-            uint32_t line = heap->freemap[pg_i];
+            uint32_t line = region->freemap[pg_i];
             if (!!~line) {
                 for (int j = 0; j < 32; j++) {
                     if (!((line >> j) & 1)) {
-                        gcpage_t *pg = page_metadata(heap->pages[pg_i*32 + j]);
+                        gcpage_t *pg = page_metadata(region->pages[pg_i*32 + j]);
                         pool_t *pool = &norm_pools[pg->pool_n];
                         pv = (gcval_t*)pg->data;
                         char *lim = (char*)pv + GC_PAGE_SZ - pool->osize;
@@ -2374,7 +2376,7 @@ void jl_print_gc_stats(JL_STREAM *s)
                   (total_fin_time*100)/total_gc_time);
     }
     int i = 0;
-    while (i < HEAP_COUNT && heaps[i]) i++;
+    while (i < REGION_COUNT && regions[i]) i++;
     jl_printf(s, "max allocated regions : %d\n", i);
     struct mallinfo mi = mallinfo();
     jl_printf(s, "malloc size\t%d MB\n", mi.uordblks/1024/1024);
