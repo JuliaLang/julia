@@ -462,7 +462,7 @@ type Timer <: AsyncWork
     end
 end
 
-close(t::Timer) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+close(t::AsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     uv.handle = C_NULL
@@ -474,7 +474,8 @@ function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     try notify(uv.readnotify) end
     try notify(uv.connectnotify) end
 end
-_uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
+_uv_hook_close(uv::Timer) = (uv.handle = C_NULL; nothing)
+_uv_hook_close(uv::SingleAsyncWork) = (uv.handle = C_NULL; unpreserve_handle(uv); nothing)
 
 # This serves as a common callback for all async classes
 function _uv_hook_asynccb(async::AsyncWork)
