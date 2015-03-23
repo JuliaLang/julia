@@ -311,6 +311,8 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
     return ζ
 end
 
+const ζ = zeta
+
 function polygamma(m::Integer, z::Union(Float64,Complex{Float64}))
 
     m == 0 && return digamma(z)
