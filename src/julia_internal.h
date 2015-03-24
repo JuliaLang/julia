@@ -102,7 +102,7 @@ void jl_init_tasks(void *stack, size_t ssize);
 void jl_init_serializer(void);
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
-extern void *jl_stackbase;
+extern JL_THREAD void *jl_stackbase;
 #endif
 
 void jl_dump_bitcode(char *fname);
