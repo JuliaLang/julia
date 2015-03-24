@@ -141,7 +141,7 @@ if ! [ -e $f ]; then
 fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
+echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
 
 if [ -n "$APPVEYOR" ]; then
   for i in make.exe touch.exe msys-intl-8.dll msys-iconv-2.dll; do
