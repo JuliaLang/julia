@@ -83,7 +83,7 @@ typedef struct {
 #ifdef _P64
     uintptr_t realign16;
 #endif
-    jl_value_t value[0];
+    jl_value_t value;
 } jl_taggedvalue_t;
 
 #define jl_astaggedvalue__MACRO(v) container_of((v),jl_taggedvalue_t,value)
