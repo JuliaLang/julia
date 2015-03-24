@@ -2316,7 +2316,7 @@ void *reallocb(void *b, size_t sz)
     }
 }
 
-#define jl_valueof(v) (((jl_taggedvalue_t*)(v))->value)
+#define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
 
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {

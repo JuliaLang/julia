@@ -1703,14 +1703,14 @@ jl_module_t *jl_restore_new_module(const char *fname)
         jl_value_t **loc = (jl_value_t**)flagref_list.items[i++];
         int offs = (int)(intptr_t)flagref_list.items[i++];
         if (t != dt) {
-            jl_set_typeof(dt, (ptrint_t)2); // invalidate the old value to help catch errors
+            jl_set_typeof(dt, (void*)(ptrint_t)2); // invalidate the old value to help catch errors
             if ((jl_value_t*)dt == o) {
                 if (loc) *loc = (jl_value_t*)t;
                 if (offs > 0) backref_list.items[offs] = t;
             }
         }
         if (t->instance != v) {
-            jl_set_typeof(v, (ptrint_t)1); // invalidate the old value to help catch errors
+            jl_set_typeof(v, (void*)(ptrint_t)1); // invalidate the old value to help catch errors
             if (v == o) {
                 if (loc) *loc = v;
                 if (offs > 0) backref_list.items[offs] = v;
