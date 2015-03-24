@@ -6,7 +6,7 @@ export @printf, @sprintf
 const SmallFloatingPoint = Union(Float64,Float32,Float16)
 const SmallNumber = Union(SmallFloatingPoint,Base.Signed64,Base.Unsigned64,UInt128,Int128)
 
-function gen(s::AbstractString)
+@hygienic function gen(s::AbstractString)
     args = []
     blk = Expr(:block, :(local neg, pt, len, exp, do_out, args))
     for x in parse(s)
@@ -133,7 +133,7 @@ end
 
 ### printf formatter generation ###
 
-function special_handler(flags::ASCIIString, width::Int)
+@hygienic function special_handler(flags::ASCIIString, width::Int)
     @gensym x
     blk = Expr(:block)
     pad = '-' in flags ? rpad : lpad
@@ -148,7 +148,7 @@ function special_handler(flags::ASCIIString, width::Int)
     x, ex, blk
 end
 
-function pad(m::Int, n, c::Char)
+@hygienic function pad(m::Int, n, c::Char)
     if m <= 1
         :($n > 0 && write(out,$c))
     else
@@ -221,7 +221,7 @@ function print_exp_a(out, exp::Integer)
 end
 
 
-function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print integer:
     #  [dDiu]: print decimal digits
     #  [o]:    print octal digits
@@ -239,18 +239,18 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     prefix = ""
     if lowercase(c)=='o'
-        fn = '#' in flags ? :decode_0ct : :decode_oct
+        fn = '#' in flags ? quote decode_0ct end : quote decode_oct end
     elseif c=='x'
         '#' in flags && (prefix = "0x")
-        fn = :decode_hex
+        fn = quote decode_hex end
     elseif c=='X'
         '#' in flags && (prefix = "0X")
-        fn = :decode_HEX
+        fn = quote decode_HEX end
     else
-        fn = :decode_dec
+        fn = quote decode_dec end
     end
     push!(blk.args, :((do_out, args) = $fn(out, $x, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -302,7 +302,7 @@ function gen_d(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print to fixed trailing precision
     #  [fF]: the only choice
     #
@@ -317,7 +317,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # interpret the number
     if precision < 0; precision = 6; end
     push!(blk.args, :((do_out, args) = fix_dec(out, $x, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -364,7 +364,7 @@ function gen_f(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in scientific form:
     #  [e]: use 'e' to introduce exponent
     #  [E]: use 'E' to introduce exponent
@@ -381,7 +381,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     if precision < 0; precision = 6; end
     ndigits = min(precision+1,length(DIGITS)-1)
     push!(blk.args, :((do_out, args) = ini_dec(out,$x,$ndigits, $flags, $width, $precision, $c)))
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, pt, neg) = args))
@@ -458,7 +458,7 @@ function gen_e(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print float in hexadecimal format
     #  [a]: lowercase hex float, e.g. -0x1.cfp-2
     #  [A]: uppercase hex float, e.g. -0X1.CFP-2
@@ -473,10 +473,10 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     x, ex, blk = special_handler(flags,width)
     if c == 'A'
         hexmark, expmark = "0X", "P"
-        fn = :ini_HEX
+        fn = quote ini_HEX end
     else
         hexmark, expmark = "0x", "p"
-        fn = :ini_hex
+        fn = quote ini_hex end
     end
     # if no precision, print max non-zero
     if precision < 0
@@ -485,7 +485,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
         ndigits = min(precision+1,length(DIGITS)-1)
         push!(blk.args, :((do_out, args) = $fn(out,$x,$ndigits, $flags, $width, $precision, $c)))
     end
-    ifblk = Expr(:if, :do_out, Expr(:block))
+    ifblk = Expr(:if, quote do_out end, Expr(:block))
     push!(blk.args, ifblk)
     blk = ifblk.args[2]
     push!(blk.args, :((len, exp, neg) = args))
@@ -566,7 +566,7 @@ function gen_a(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Real), ex
 end
 
-function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a character:
     #  [cC]: both the same for us (Unicode)
     #
@@ -587,7 +587,7 @@ function gen_c(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Integer), blk
 end
 
-function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_s(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print a string:
     #  [sS]: both the same for us (Unicode)
     #
@@ -622,7 +622,7 @@ end
 
 # TODO: faster pointer printing.
 
-function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     # print pointer:
     #  [p]: the only option
     #
@@ -642,7 +642,7 @@ function gen_p(flags::ASCIIString, width::Int, precision::Int, c::Char)
     :(($x)::Ptr), blk
 end
 
-function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
+@hygienic function gen_g(flags::ASCIIString, width::Int, precision::Int, c::Char)
     error("printf \"%g\" format specifier not implemented")
 end
 
@@ -994,7 +994,7 @@ is_str_expr(ex) =
     isa(ex,Expr) && (ex.head == :string || (ex.head == :macrocall && isa(ex.args[1],Symbol) &&
     endswith(string(ex.args[1]),"str")))
 
-function _printf(macroname, io, fmt, args)
+@hygienic function _printf(macroname, io, fmt, args)
     isa(fmt, AbstractString) || throw(ArgumentError("$macroname: format must be a plain static string (no interpolation or prefix)"))
     sym_args, blk = gen(fmt)
 
@@ -1045,7 +1045,7 @@ end
 macro printf(args...)
     !isempty(args) || throw(ArgumentError("@printf: called with no arguments"))
     if isa(args[1], AbstractString) || is_str_expr(args[1])
-        _printf("@printf", :STDOUT, args[1], args[2:end])
+        _printf("@printf", quote STDOUT end, args[1], args[2:end])
     else
         (length(args) >= 2 && (isa(args[2], AbstractString) || is_str_expr(args[2]))) ||
             throw(ArgumentError("@printf: first or second argument must be a format string"))

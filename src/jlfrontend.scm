@@ -80,7 +80,7 @@
         ((and (pair? e) (eq? (car e) 'global) (every symbol? (cdr e)))
          e)
         (else
-         (let ((ex0 (julia-expand-macros e)))
+         (let ((ex0 (julia-expand-macros e #f)))
            (if (and (pair? ex0) (eq? (car ex0) 'toplevel))
                `(toplevel ,@(map expand-toplevel-expr (cdr ex0)))
                (let* ((ex (julia-expand01 ex0))
@@ -229,7 +229,7 @@
 (define (jl-macroexpand expr)
   (reset-gensyms)
   (parser-wrap (lambda ()
-                 (julia-expand-macros expr))))
+                 (julia-expand-macros expr #f))))
 
 ; run whole frontend on a string. useful for testing.
 (define (fe str)

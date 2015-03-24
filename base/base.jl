@@ -251,7 +251,8 @@ function precompile(f::ANY, args::Tuple)
     end
 end
 
-esc(e::ANY) = Expr(:escape, e)
+# Neuter esc but for convenience don't remove it yet - it's deprecated
+esc(e::ANY) = e
 
 macro boundscheck(yesno,blk)
     # hack: use this syntax since it avoids introducing line numbers
@@ -264,12 +265,22 @@ macro inbounds(blk)
     :(@boundscheck false $(esc(blk)))
 end
 
-macro label(name::Symbol)
-    Expr(:symboliclabel, name)
+macro label(name)
+    isa(name, Expr) &&
+        (name.head === :.) &&
+        isa(name.args[2], Expr) &&
+        (name.args[2].head === :quote) &&
+        (name = name.args[2].args[1]) # remove any macro hygiene
+    Expr(:symboliclabel, name::Symbol)
 end
 
-macro goto(name::Symbol)
-    Expr(:symbolicgoto, name)
+macro goto(name)
+    isa(name, Expr) &&
+        (name.head === :.) &&
+        isa(name.args[2], Expr) &&
+        (name.args[2].head === :quote) &&
+        (name = name.args[2].args[1]) # remove any macro hygiene
+    Expr(:symbolicgoto, name::Symbol)
 end
 
 call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
