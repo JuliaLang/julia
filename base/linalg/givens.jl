@@ -35,76 +35,10 @@ realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
 realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
-# derived from LAPACK's dlartg
-# Copyright:
-# Univ. of Tennessee
-# Univ. of California Berkeley
-# Univ. of Colorado Denver
-# NAG Ltd.
-function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
-    zeropar = zero(T)
-    onepar = one(T)
-    twopar = 2one(T)
-
-    safmin = realmin(T)
-    epspar = eps(T)
-    safmn2 = realmin2(T)
-    safmx2 = onepar/safmn2
-
-    if g == 0
-        cs = onepar
-        sn = zeropar
-        r = f
-    elseif f == 0
-        cs = zeropar
-        sn = onepar
-        r = g
-    else
-        f1 = f
-        g1 = g
-        scalepar = max(abs(f1), abs(g1))
-        if scalepar >= safmx2
-            count = 0
-            while true
-                count += 1
-                f1 *= safmn2
-                g1 *= safmn2
-                scalepar = max(abs(f1), abs(g1))
-                if scalepar < safmx2 break end
-            end
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-            for i = 1:count
-                r *= safmx2
-            end
-        elseif scalepar <= safmn2
-            count = 0
-            while true
-                count += 1
-                f1 *= safmx2
-                g1 *= safmx2
-                scalepar = max(abs(f1), abs(g1))
-                if scalepar > safmn2 break end
-            end
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-            for i = 1:count
-                r *= safmn2
-            end
-        else
-            r = sqrt(f1*f1 + g1*g1)
-            cs = f1/r
-            sn = g1/r
-        end
-        if abs(f) > abs(g) && cs < 0
-            cs = -cs
-            sn = -sn
-            r = -r
-        end
-    end
-    return cs, sn, r
+function givensAlgorithm(f::Real, g::Real)
+    h = hypot(f,g)
+    hi = inv(h)
+    f*hi, g*hi, h
 end
 
 # derived from LAPACK's zlartg
