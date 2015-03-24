@@ -141,24 +141,24 @@ static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-DLLEXPORT jl_task_t * volatile jl_current_task;
-jl_task_t *jl_root_task;
-jl_value_t * volatile jl_task_arg_in_transit;
-jl_value_t *jl_exception_in_transit;
+DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
+JL_THREAD jl_task_t *jl_root_task;
+JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
+JL_THREAD jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
-jl_gcframe_t *jl_pgcstack = NULL;
+JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
 #ifdef COPY_STACKS
-static jl_jmp_buf * volatile jl_jmp_target;
+static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
 #if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
-void *jl_stackbase;
+JL_THREAD void *jl_stackbase;
 
 #ifndef ASM_COPY_STACKS
-static jl_jmp_buf jl_base_ctx; // base context of stack
+static JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
 #endif
 
 static void NOINLINE save_stack(jl_task_t *t)
