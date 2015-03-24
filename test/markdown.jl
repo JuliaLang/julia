@@ -69,6 +69,13 @@ World""" |> plain == "Hello\n\n–––\n\nWorld\n"
 World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
 @test md"`escape</code>`" |> html == "<p><code>escape&lt;/code&gt;</code></p>\n"
 
+@test md"""
+    code1
+
+    code2
+""" |> html == "<pre><code>code1\n\ncode2</code></pre>\n" # single code block
+
+
 # Latex output
 book = md"""
 # Title
