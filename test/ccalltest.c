@@ -118,7 +118,7 @@ complex_t ctest(complex_t a) {
 complex double cgtest(complex double a) {
     //Unpack a ComplexPair{Float64} struct
     if (verbose) fprintf(stderr,"%g + %g i\n", creal(a), cimag(a));
-    a += 1 - 2i;
+    a += 1 - (2.0*i);
     return a;
 }
 
