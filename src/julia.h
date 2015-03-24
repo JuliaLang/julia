@@ -1234,6 +1234,11 @@ STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
 #define allocobj(nb)  (((jl_taggedvalue_t*)malloc((nb)+sizeof(jl_taggedvalue_t)))->value)
 #endif
 
+#define JL_GC_RETURN(expr...) do {              \
+        JL_GC_POP();                            \
+        return expr;                            \
+    } while (0)
+
 // async signal handling ------------------------------------------------------
 
 #include <signal.h>
