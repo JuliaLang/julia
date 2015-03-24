@@ -101,8 +101,6 @@ type Pipe <: AsyncStream
     closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
-    lock_task::Nullable{Task}
-    lock_wait::Condition
     Pipe(handle) = new(
         handle,
         StatusUninit,
@@ -111,7 +109,7 @@ type Pipe <: AsyncStream
         false,Condition(),
         false,Condition(),
         false,Condition(),
-        nothing,nothing,Condition())
+        nothing)
 end
 function Pipe()
     handle = Libc.malloc(_sizeof_uv_named_pipe)
@@ -179,8 +177,6 @@ type TTY <: AsyncStream
     closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
-    lock_task::Nullable{Task}
-    lock_wait::Condition
     @windows_only ispty::Bool
     function TTY(handle)
         tty = new(
@@ -190,7 +186,7 @@ type TTY <: AsyncStream
             PipeBuffer(),
             false,Condition(),
             false,Condition(),
-            nothing,nothing,Condition())
+            nothing)
         @windows_only tty.ispty = Bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
         tty
     end
@@ -788,28 +784,6 @@ end
 
 buffer_writes(s::AsyncStream, bufsize=SZ_UNBUFFERED_IO) = (s.sendbuf=PipeBuffer(bufsize); s)
 
-# Locks an asyncstream. Recursive calls by the same task is OK.
-function lock(f::Function, s::AsyncStream)
-    t = current_task()
-    release_lock = true
-    while true
-        if isnull(s.lock_task)
-            s.lock_task = t; break
-        else
-            if get(s.lock_task) == t
-                release_lock = false; break
-            end
-            wait(s.lock_wait)
-        end
-    end
-
-    f(s)
-    if release_lock
-        s.lock_task = nothing
-        notify(s.lock_wait)
-    end
-end
-
 ## low-level calls ##
 
 write(s::AsyncStream, b::UInt8) = write(s, [b])
@@ -983,10 +957,8 @@ type BufferStream <: AsyncStream
     close_c::Condition
     is_open::Bool
     buffer_writes::Bool
-    lock_task::Nullable{Task}
-    lock_wait::Condition
 
-    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false, nothing, Condition())
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false)
 end
 
 isopen(s::BufferStream) = s.is_open
