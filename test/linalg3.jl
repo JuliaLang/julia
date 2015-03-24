@@ -73,11 +73,13 @@ Bi = B+(2.5*im).*A[[2,1,3],[2,3,1]]
 @test A_mul_Bc(Ai, Bi) == [-20.25+15.5im -28.75-54.5im 22.25+68.5im; -12.25+13im -15.5+75im -23+27im; 18.25+im 1.5+94.5im -27-54.5im]
 @test Ac_mul_Bc(Ai, Bi) == [1+2im 20.75+9im -44.75+42im; 19.5+17.5im -54-36.5im 51-14.5im; 13+7.5im 11.25+31.5im -43.25-14.5im]
 
-# Generic integer matrix multiplication
+# Generic integer and Any matrix multiplication
 A = [1 2 3; 4 5 6] .- 3
 B = [2 -2; 3 -5; -4 7]
 @test A*B == [-7 9; -4 9]
 @test At_mul_Bt(A, B) == [-6 -11 15; -6 -13 18; -6 -15 21]
+AAny = convert(Array{Any}, A)
+@test AAny*B == [-7 9; -4 9]
 A = ones(Int, 2, 100)
 B = ones(Int, 100, 3)
 @test A*B == [100 100 100; 100 100 100]
