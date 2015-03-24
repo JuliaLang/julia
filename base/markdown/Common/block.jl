@@ -42,7 +42,7 @@ Header(s) = Header(s, 1)
 
 @breaking true ->
 function hashheader(stream::IO, md::MD, config::Config)
-    startswith(stream, "#") || return false
+    startswith(stream, r"^ {0,3}#") != "" || return false
     level = 1
     while startswith(stream, "#")
         level += 1
@@ -79,8 +79,14 @@ Code(code) = Code("", code)
 function indentcode(stream::IO, block::MD, config::Config)
     withstream(stream) do
         buffer = IOBuffer()
-        while startswith(stream, "    ") || startswith(stream, "\t")
-            write(buffer, readline(stream))
+        while !eof(stream)
+            if startswith(stream, "    ") || startswith(stream, "\t")
+                write(buffer, readline(stream))
+            elseif blankline(stream)
+                write(buffer, '\n')
+            else
+                break
+            end
         end
         code = takebuf_string(buffer)
         !isempty(code) && (push!(block, Code(chomp(code))); return true)
@@ -138,7 +144,7 @@ const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 # Todo: ordered lists, inline formatting
 function list(stream::IO, block::MD, config::Config)
     withstream(stream) do
-        startswith(stream, r"^ ?")
+        startswith(stream, r"^ {0,3}")
         b = startswith(stream, num_or_bullets)
         (b == nothing || b == "") && return false
         ordered = !(b[1] in bullets)
@@ -152,12 +158,12 @@ function list(stream::IO, block::MD, config::Config)
         fresh_line = false
         while !eof(stream)
             if fresh_line
-                startswith(stream, " ")
+                sp = startswith(stream, r"^ {0,3}")
                 if !(startswith(stream, b) in [false, ""])
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
-                    write(buffer, '\n')
+                    write(buffer, '\n', sp)
                 end
                 fresh_line = false
             else

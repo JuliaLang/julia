@@ -46,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
     l = readline(io) |> chomp
     length(l) == 0 && return allowempty
 
-    result = false
+    result = true
     for c in l
         c in whitespace && (allow_whitespace ? continue : (result = false; break))
         c in chars && (result = true; continue)
