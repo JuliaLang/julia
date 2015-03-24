@@ -56,8 +56,12 @@ extern "C" {
 
 // core data types ------------------------------------------------------------
 
+#ifndef _COMPILER_MICROSOFT_
 #define JL_DATA_TYPE \
     struct _jl_value_t *fieldptr0[0];
+#else
+#define JL_DATA_TYPE
+#endif
 
 typedef struct _jl_value_t {
     JL_DATA_TYPE
