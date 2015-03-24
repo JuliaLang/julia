@@ -86,7 +86,7 @@ for elty in (Float32,Float64)
         end
     end
 end
-A_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(y, 'N', A, x)
+A_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(mminit!(y, 'N', A, x), 'N', A, x)
 
 function At_mul_B{T<:BlasFloat,S}(A::StridedMatrix{T}, x::StridedVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
@@ -97,7 +97,7 @@ function At_mul_B{T,S}(A::StridedMatrix{T}, x::StridedVector{S})
     At_mul_B!(similar(x,TS,size(A,2)), A, x)
 end
 At_mul_B!{T<:BlasFloat}(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) = gemv!(y, 'T', A, x)
-At_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(y, 'T', A, x)
+At_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(mminit!(y, 'T', A, x), 'T', A, x)
 
 function Ac_mul_B{T<:BlasFloat,S}(A::StridedMatrix{T}, x::StridedVector{S})
     TS = promote_type(arithtype(T),arithtype(S))
@@ -110,7 +110,7 @@ end
 
 Ac_mul_B!{T<:BlasReal}(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) = At_mul_B!(y, A, x)
 Ac_mul_B!{T<:BlasComplex}(y::StridedVector{T}, A::StridedVecOrMat{T}, x::StridedVector{T}) = gemv!(y, 'C', A, x)
-Ac_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(y, 'C', A, x)
+Ac_mul_B!(y::StridedVector, A::StridedVecOrMat, x::StridedVector) = generic_matvecmul!(mminit!(y, 'C', A, x), 'C', A, x)
 
 # Matrix-matrix multiplication
 
@@ -129,14 +129,14 @@ for elty in (Float32,Float64)
         end
     end
 end
-A_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'N', 'N', A, B)
+A_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'N', 'N', A, B), 'N', 'N', A, B)
 
 function At_mul_B{T,S}(A::AbstractMatrix{T}, B::StridedMatrix{S})
     TS = promote_type(arithtype(T), arithtype(S))
     At_mul_B!(similar(B, TS, (size(A,2), size(B,2))), A, B)
 end
 At_mul_B!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = is(A,B) ? syrk_wrapper!(C, 'T', A) : gemm_wrapper!(C, 'T', 'N', A, B)
-At_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'T', 'N', A, B)
+At_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'T', 'N', A, B), 'T', 'N', A, B)
 
 function A_mul_Bt{T,S}(A::AbstractMatrix{T}, B::StridedMatrix{S})
     TS = promote_type(arithtype(T), arithtype(S))
@@ -153,14 +153,14 @@ for elty in (Float32,Float64)
         end
     end
 end
-A_mul_Bt!(C::StridedVecOrMat, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'N', 'T', A, B)
+A_mul_Bt!(C::StridedVecOrMat, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'N', 'T', A, B), 'N', 'T', A, B)
 
 function At_mul_Bt{T,S}(A::AbstractMatrix{T}, B::StridedVecOrMat{S})
     TS = promote_type(arithtype(T), arithtype(S))
     At_mul_Bt!(similar(B, TS, (size(A,2), size(B,1))), A, B)
 end
 At_mul_Bt!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = gemm_wrapper!(C, 'T', 'T', A, B)
-At_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'T', 'T', A, B)
+At_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'T', 'T', A, B), 'T', 'T', A, B)
 
 Ac_mul_B{T<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{T}) = At_mul_B(A, B)
 Ac_mul_B!{T<:BlasReal}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = At_mul_B!(C, A, B)
@@ -169,7 +169,7 @@ function Ac_mul_B{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
     Ac_mul_B!(similar(B, TS, (size(A,2), size(B,2))), A, B)
 end
 Ac_mul_B!{T<:BlasComplex}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = is(A,B) ? herk_wrapper!(C,'C',A) : gemm_wrapper!(C,'C', 'N', A, B)
-Ac_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'C', 'N', A, B)
+Ac_mul_B!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'C', 'N', A, B), 'C', 'N', A, B)
 
 A_mul_Bc{T<:BlasFloat,S<:BlasReal}(A::StridedMatrix{T}, B::StridedMatrix{S}) = A_mul_Bt(A, B)
 A_mul_Bc!{T<:BlasFloat,S<:BlasReal}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{S}) = A_mul_Bt!(C, A, B)
@@ -178,13 +178,13 @@ function A_mul_Bc{T,S}(A::StridedMatrix{T}, B::StridedMatrix{S})
     A_mul_Bc!(similar(B,TS,(size(A,1),size(B,1))),A,B)
 end
 A_mul_Bc!{T<:BlasComplex}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = is(A,B) ? herk_wrapper!(C, 'N', A) : gemm_wrapper!(C, 'N', 'C', A, B)
-A_mul_Bc!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'N', 'C', A, B)
+A_mul_Bc!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'N', 'C', A, B), 'N', 'C', A, B)
 
 Ac_mul_Bc{T,S}(A::AbstractMatrix{T}, B::StridedMatrix{S}) = Ac_mul_Bc!(similar(B, promote_type(arithtype(T), arithtype(S)), (size(A,2), size(B,1))), A, B)
 Ac_mul_Bc!{T<:BlasFloat}(C::StridedMatrix{T}, A::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = gemm_wrapper!(C, 'C', 'C', A, B)
-Ac_mul_Bc!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'C', 'C', A, B)
+Ac_mul_Bc!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'C', 'C', A, B), 'C', 'C', A, B)
 Ac_mul_Bt{T,S}(A::AbstractMatrix{T}, B::StridedMatrix{S}) = Ac_mul_Bt(similar(B, promote_type(arithtype(A), arithtype(B)), (size(A,2), size(B,1))), A, B)
-Ac_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(C, 'C', 'T', A, B)
+Ac_mul_Bt!(C::StridedMatrix, A::StridedVecOrMat, B::StridedVecOrMat) = generic_matmatmul!(mminit!(C, 'C', 'T', A, B), 'C', 'T', A, B)
 
 # Supporting functions for matrix multiplication
 
@@ -212,7 +212,7 @@ function gemv!{T<:BlasFloat}(y::StridedVector{T}, tA::Char, A::StridedVecOrMat{T
     mA == 0 && return y
     nA == 0 && return fill!(y,0)
     stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return BLAS.gemv!(tA, one(T), A, x, zero(T), y)
-    return generic_matvecmul!(y, tA, A, x)
+    return generic_matvecmul!(fill!(y, 0), tA, A, x)
 end
 
 function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T})
@@ -230,7 +230,7 @@ function syrk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
     if mA == 3 && nA == 3; return matmul3x3!(C,tA,tAt,A,A); end
 
     stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return copytri!(BLAS.syrk!('U', tA, one(T), A, zero(T), C), 'U')
-    return generic_matmatmul!(C, tA, tAt, A, A)
+    return generic_matmatmul!(fill!(C, 0), tA, tAt, A, A)
 end
 
 function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVecOrMat{T})
@@ -251,7 +251,7 @@ function herk_wrapper!{T<:BlasFloat}(C::StridedMatrix{T}, tA::Char, A::StridedVe
     #    C = Array(T, mA, mA)
 
     stride(A, 1) == 1 && stride(A, 2) >= size(A, 1) && return copytri!(BLAS.herk!('U', tA, one(T), A, zero(T), C), 'U', true)
-    return generic_matmatmul!(C,tA, tAt, A, A)
+    return generic_matmatmul!(fill!(C, 0),tA, tAt, A, A)
 end
 
 function gemm_wrapper{T<:BlasFloat}(tA::Char, tB::Char,
@@ -279,7 +279,7 @@ function gemm_wrapper!{T<:BlasFloat}(C::StridedVecOrMat{T}, tA::Char, tB::Char,
     if mA == 3 && nA == 3 && nB == 3; return matmul3x3!(C,tA,tB,A,B); end
 
     stride(A, 1) == stride(B, 1) == 1 && stride(A, 2) >= size(A, 1) && stride(B, 2) >= size(B, 1) && return BLAS.gemm!(tA, tB, one(T), A, B, zero(T), C)
-    generic_matmatmul!(C, tA, tB, A, B)
+    generic_matmatmul!(fill!(C, 0), tA, tB, A, B)
 end
 
 # blas.jl defines matmul for floats; other integer and mixed precision
@@ -317,14 +317,13 @@ function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     mA, nA = lapack_size(tA, A)
     mB==nA || throw(DimensionMismatch("*"))
     mA==length(C) || throw(DimensionMismatch("*"))
-    z = zero(R)
 
     Astride = size(A, 1)
 
     if tA == 'T'  # fastest case
         for k = 1:mA
             aoffs = (k-1)*Astride
-            s = z
+            s = C[k]
             for i = 1:nA
                 s += A[aoffs+i].'B[i]
             end
@@ -333,14 +332,13 @@ function generic_matvecmul!{T,S,R}(C::AbstractVector{R}, tA, A::AbstractVecOrMat
     elseif tA == 'C'
         for k = 1:mA
             aoffs = (k-1)*Astride
-            s = z
+            s = C[k]
             for i = 1:nA
                 s += A[aoffs+i]'B[i]
             end
             C[k] = s
         end
     else # tA == 'N'
-        fill!(C, z)
         for k = 1:mB
             aoffs = (k-1)*Astride
             b = B[k]
@@ -356,7 +354,7 @@ function generic_matmatmul{T,S}(tA, tB, A::AbstractVecOrMat{T}, B::AbstractMatri
     mA, nA = lapack_size(tA, A)
     mB, nB = lapack_size(tB, B)
     C = similar(B, promote_type(arithtype(T),arithtype(S)), mA, nB)
-    generic_matmatmul!(C, tA, tB, A, B)
+    generic_matmatmul!(mminit!(C, tA, tB, A, B), tA, tB, A, B)
 end
 
 const tilebufsize = 10800  # Approximately 32k/3
@@ -380,8 +378,6 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         Atile = pointer_to_array(convert(Ptr{R}, pointer(Abuf)), sz)
         Btile = pointer_to_array(convert(Ptr{R}, pointer(Bbuf)), sz)
 
-        z = zero(R)
-
         if mA < tile_size && nA < tile_size && nB < tile_size
             Base.copy_transpose!(Atile, 1:nA, 1:mA, tA, A, 1:mA, 1:nA)
             copy!(Btile, 1:mB, 1:nB, tB, B, 1:mB, 1:nB)
@@ -389,8 +385,8 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 boff = (j-1)*tile_size
                 for i = 1:mA
                     aoff = (i-1)*tile_size
-                    s = z
-                    for k = 1:nA
+                    s = C[i,j]
+                    @simd for k = 1:nA
                         s += Atile[aoff+k] * Btile[boff+k]
                     end
                     C[i,j] = s
@@ -404,7 +400,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 for ib = 1:tile_size:mA
                     ilim = min(ib+tile_size-1,mA)
                     ilen = ilim-ib+1
-                    fill!(Ctile, z)
+                    copy!(Ctile, 1:ilen, 1:jlen, C, ib:ilim, jb:jlim)
                     for kb = 1:tile_size:nA
                         klim = min(kb+tile_size-1,mB)
                         klen = klim-kb+1
@@ -414,11 +410,11 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                             bcoff = (j-1)*tile_size
                             for i = 1:ilen
                                 aoff = (i-1)*tile_size
-                                s = z
-                                for k = 1:klen
+                                s = Ctile[bcoff+i]
+                                @simd for k = 1:klen
                                     s += Atile[aoff+k] * Btile[bcoff+k]
                                 end
-                                Ctile[bcoff+i] += s
+                                Ctile[bcoff+i] = s
                             end
                         end
                     end
@@ -431,7 +427,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         if tA == 'N'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[1, j]
+                    Ctmp = C[i,j] + A[i, 1]*B[1, j]
                     for k = 2:nA
                         Ctmp += A[i, k]*B[k, j]
                     end
@@ -439,7 +435,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[j, 1].'
+                    Ctmp = C[i,j] + A[i, 1]*B[j, 1].'
                     for k = 2:nA
                         Ctmp += A[i, k]*B[j, k].'
                     end
@@ -447,7 +443,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[i, 1]*B[j, 1]'
+                    Ctmp = C[i,j] + A[i, 1]*B[j, 1]'
                     for k = 2:nA
                         Ctmp += A[i, k]*B[j, k]'
                     end
@@ -457,7 +453,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         elseif tA == 'T'
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[1, j]
+                    Ctmp = C[i,j] + A[1, i].'B[1, j]
                     for k = 2:nA
                         Ctmp += A[k, i].'B[k, j]
                     end
@@ -465,7 +461,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[j, 1].'
+                    Ctmp = C[i,j] + A[1, i].'B[j, 1].'
                     for k = 2:nA
                         Ctmp += A[k, i].'B[j, k].'
                     end
@@ -473,7 +469,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i].'B[j, 1]'
+                    Ctmp = C[i,j] + A[1, i].'B[j, 1]'
                     for k = 2:nA
                         Ctmp += A[k, i].'B[j, k]'
                     end
@@ -483,7 +479,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
         else
             if tB == 'N'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[1, j]
+                    Ctmp = C[i,j] + A[1, i]'B[1, j]
                     for k = 2:nA
                         Ctmp += A[k, i]'B[k, j]
                     end
@@ -491,7 +487,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             elseif tB == 'T'
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[j, 1].'
+                    Ctmp = C[i,j] + A[1, i]'B[j, 1].'
                     for k = 2:nA
                         Ctmp += A[k, i]'B[j, k].'
                     end
@@ -499,7 +495,7 @@ function generic_matmatmul!{T,S,R}(C::AbstractVecOrMat{R}, tA, tB, A::AbstractVe
                 end
             else
                 for i = 1:mA, j = 1:nB
-                    Ctmp = A[1, i]'B[j, 1]'
+                    Ctmp = C[i,j] + A[1, i]'B[j, 1]'
                     for k = 2:nA
                         Ctmp += A[k, i]'B[j, k]'
                     end
@@ -587,4 +583,52 @@ function matmul3x3!{T,S,R}(C::AbstractMatrix{R}, tA, tB, A::AbstractMatrix{T}, B
     C[3,3] = A31*B13 + A32*B23 + A33*B33
 
     C
+end
+
+mminit!(A) = fill!(A, 0)
+function mminit!{T<:AbstractArray}(A::AbstractArray{T})
+    for a in A
+        mminit!(a)
+    end
+    A
+end
+mminit!{T<:Number}(A::AbstractArray{T}, ::Char, ::AbstractArray, ::AbstractArray) = mminit!(A)
+mminit!{T<:Number}(A::AbstractArray{T}, ::Char, ::Char, ::AbstractArray, ::AbstractArray) = mminit!(A)
+
+function mminit!{T}(C::AbstractArray{T}, tA::Char, A::AbstractArray, b::AbstractArray)
+    if T <: AbstractArray
+        if !isempty(A) && !isempty(b)
+            a = getel1(tA, A)
+            z = mminit!(a*b[1])
+            for I in eachindex(C)
+                C[I] = copy(z)
+            end
+        end
+    else
+        fill!(C, 0)  # cross our fingers and hope
+    end
+    C
+end
+
+function mminit!{T}(C::AbstractArray{T}, tA::Char, tB::Char, A::AbstractArray, B::AbstractArray)
+    if T <: AbstractArray
+        if !isempty(A) && !isempty(B)
+            a = getel1(tA, A)
+            b = getel1(tB, B)
+            z = mminit!(a*b)
+            for I in eachindex(C)
+                C[I] = copy(z)
+            end
+        end
+    else
+        fill!(C, 0)
+    end
+    C
+end
+
+function getel1(tA, A)
+    a = tA == 'N' ? A[1] :
+        tA == 'T' ? A[1].' :
+        tA == 'C' ? A[1]' : error(tA, " not recognized as a Lapack Char")
+    a
 end
