@@ -175,8 +175,14 @@ LinSpace(start::FloatingPoint, stop::FloatingPoint, len::Real, divisor::Real) =
     LinSpace{promote_type(typeof(start),typeof(stop),typeof(divisor))}(start,stop,len,divisor)
 
 function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
-    0 <= len || error("invalid length: linspace($start, $stop, $len)")
-    1 != len || start == stop || error("start != stop with len == 1: linspace($start, $stop, $len)")
+    0 <= len || error("linspace($start, $stop, $len): negative length")
+    if len == 0
+        return LinSpace(-start, -stop, -1, convert(T,2))
+    end
+    if len == 1
+        start == stop || error("linspace($start, $stop, $len): endpoints differ")
+        return LinSpace(-start, -start, 0, one(T))
+    end
     n = len - 1
     a0, b = rat(start)
     a = convert(T,a0)
@@ -218,7 +224,7 @@ isempty(r::LinSpace) = length(r) == 0
 step(r::StepRange) = r.step
 step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
-step(r::LinSpace) = (r.stop - r.start)/r.divisor
+step{T}(r::LinSpace{T}) = ifelse(r.len <= 0, convert(T,NaN), (r.stop-r.start)/r.divisor)
 
 function length(r::StepRange)
     n = Integer(div(r.stop+r.step - r.start, r.step))
@@ -226,7 +232,7 @@ function length(r::StepRange)
 end
 length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
-length(r::LinSpace) = r.len
+length(r::LinSpace) = r.len + signbit(r.len - 1)
 
 function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)
