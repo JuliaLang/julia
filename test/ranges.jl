@@ -275,7 +275,7 @@ for T = (Float32, Float64,),# BigFloat),
     vals  = T[a:s:a+(n-1)*s;]./den
     r = start:step:stop
     @test [r;] == vals
-    n == 1 || @test [linspace(start, stop, length(r));] == vals
+    @test [linspace(start, stop, length(r));] == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]
