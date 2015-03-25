@@ -200,6 +200,90 @@ keywords[:...] = doc"""
       add(7, 1:100..., 1000:1100...) # 111107
   """
 
+keywords[symbol(";")] = doc"""
+  `;` has a similar role in Julia as in many C-like languages,
+  and is used to delimit the end of the previous statement.
+  `;` is not necessary after new lines, but can be used to
+  seperate statements on a single line or to join statements into
+  a single expression:
+
+      function foo()
+        println("Hello, "); println("World!")
+        return true
+      end
+
+      foo() = (println("Hello, World!"); true)
+
+    `;` is also used to suppress output in the REPL and similar
+    interfaces.
+  """
+
+keywords[:ccall] = doc"""
+      ccall((symbol, library) or function_pointer, ReturnType,
+            (ArgumentType1, ...),
+            ArgumentValue1, ...)
+
+  Call function in C-exported shared library, specified by
+  `(function name, library)` tuple, where each component is a string
+  or symbol.
+
+  Note that the argument type tuple must be a literal tuple, and not
+  a tuple-valued variable or expression. Alternatively, `ccall` may
+  also be used to call a function pointer, such as one returned by
+  `dlsym`.
+
+  Each `ArgumentValue` to the `ccall` will be converted to the
+  corresponding `ArgumentType`, by automatic insertion of calls to
+  `unsafe_convert(ArgumentType, cconvert(ArgumentType,
+  ArgumentValue))`. (See also the documentation for each of these
+  functions for further details.) In most cases, this simply results
+  in a call to `convert(ArgumentType, ArgumentValue)`.
+  """
+
+keywords[:begin] = doc"""
+  `begin...end` denotes a block of code.
+
+      begin
+        println("Hello, ")
+        println("World!")
+      end
+
+  Usually `begin` will not be necessary, since keywords
+  such as `function` and `let` implicitly begin blocks of
+  code. See also `;`.
+  """
+
+keywords[:type] = doc"""
+  At their most basic, Julia types are specified as a name
+  and a set of fields.
+
+      type Point
+        x
+        y
+      end
+
+  Fields can have type restrictions, which may be parametised:
+
+      type Point{X}
+        x::X
+        y::Float64
+      end
+
+  Type can also declare an abstract super type via `<:` syntax:
+
+      type Point <: AbstractPoint
+        ...
+
+  See the manual for more details, such as information on
+  inner constructors.
+  """
+
+keywords[:immutable] = doc"""
+  `immutable` acts in the same way as `type`, but declares
+  that the fields of the type may not be set after construction.
+  See `type` and the manual for more information.
+  """
+
 @doc doc"""
   Executes an expression, printing the time it took to
   execute and the total number of bytes its execution caused to be
