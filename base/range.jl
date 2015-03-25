@@ -201,7 +201,7 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
     end
     return LinSpace(start, stop, len, max(1,n))
 end
-linspace(start::Real, stop::Real, len::Real) =
+linspace(start::Real, stop::Real, len::Real=50) =
     linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., Int(len))
 
 show(io::IO, r::LinSpace) = print(io, "linspace($(first(r)),$(last(r)),$(length(r)))")
