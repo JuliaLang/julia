@@ -73,3 +73,11 @@ if Int === Int32
     @test factorial(Int32(12)) === Int32(479001600)
     @test_throws OverflowError factorial(Int32(13))
 end
+
+@test_throws ArgumentError parity([0])
+@test_throws ArgumentError parity([1,2,3,3])
+@test levicivita([1,1,2,3]) == 0
+@test levicivita([1]) == 1 && parity([1]) == 0
+@test map(levicivita, collect(permutations([1,2,3]))) == [1, -1, -1, 1, 1, -1]
+@test let p = [3, 4, 6, 10, 5, 2, 1, 7, 8, 9]; levicivita(p) == 1 && parity(p) == 0; end
+@test let p = [4, 3, 6, 10, 5, 2, 1, 7, 8, 9]; levicivita(p) == -1 && parity(p) == 1; end

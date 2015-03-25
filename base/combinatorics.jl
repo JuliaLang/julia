@@ -596,3 +596,48 @@ function prevprod(a::Vector{Int}, x)
     best = x >= p > best ? p : best
     return Int(best)
 end
+
+const levicivita_lut = cat(3, [0 0  0;  0 0 1; 0 -1 0],
+                              [0 0 -1;  0 0 0; 1  0 0],
+                              [0 1  0; -1 0 0; 0  0 0])
+
+# Levi-Civita symbol of a permutation.
+# The parity is computed by using the fact that a permutation is odd if and
+# only if the number of even-length cycles is odd.
+# Returns 1 is the permutarion is even, -1 if it is odd and 0 otherwise.
+function levicivita{T<:Integer}(p::AbstractVector{T})
+    n = length(p)
+
+    if n == 3
+        @inbounds valid = (0 < p[1] <= 3) * (0 < p[2] <= 3) * (0 < p[3] <= 3)
+        return valid ? levicivita_lut[p[1], p[2], p[3]] : 0
+    end
+
+    todo = trues(n)
+    first = 1
+    cycles = flips = 0
+
+    while cycles + flips < n
+        first = findnext(todo, first)
+        (todo[first] $= true) && return 0
+        j = p[first]
+        (0 < j <= n) || return 0
+        cycles += 1
+        while j ≠ first
+            (todo[j] $= true) && return 0
+            j = p[j]
+            (0 < j <= n) || return 0
+            flips += 1
+        end
+    end
+
+    return iseven(flips) ? 1 : -1
+end
+
+# Computes the parity of a permutation using the levicivita function,
+# so you can ask iseven(parity(p)). If p is not a permutation throws an error.
+function parity{T<:Integer}(p::AbstractVector{T})
+    epsilon = levicivita(p)
+    epsilon == 0 && throw(ArgumentError("Not a permutation"))
+    epsilon == 1 ? 0 : 1
+end
