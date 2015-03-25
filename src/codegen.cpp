@@ -4247,7 +4247,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // before we get to loading local variables
         for(i=0; i < nreq; i++) {
             jl_sym_t *s = jl_decl_var(jl_cellref(largs,i));
-            if (ctx.vars[s].dinfo != NULL) {
+            if (ctx.vars[s].dinfo != (MDNode*)NULL) {
                 SmallVector<int64_t, 9> addr;
                 addr.push_back(llvm::dwarf::DW_OP_plus);
                 addr.push_back(argIdx * sizeof(void*));
