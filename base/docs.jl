@@ -32,10 +32,6 @@ function doc(obj)
     end
 end
 
-function doc(obj::Union(Symbol, AbstractString))
-    doc(current_module().(symbol(obj)))
-end
-
 # Function / Method support
 
 function newmethod(defs)
