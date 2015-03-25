@@ -54,6 +54,22 @@ extern "C" {
 #define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
 #endif
 
+// threading ------------------------------------------------------------------
+
+// WARNING: Threading support is incomplete.  Changing the 1 to a 0 will break Julia.
+// Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
+// of what eventual threading support will change.
+#if 1
+// Definition for compiling non-thread-safe Julia.
+#  define JL_THREAD
+#elif !defined(_OS_WINDOWS_)
+// Definition for compiling Julia on platforms with GCC __thread.
+#  define JL_THREAD __thread
+#else
+// Definition for compiling Julia on Windows
+#  define JL_THREAD __declspec(thread)
+#endif
+
 // core data types ------------------------------------------------------------
 
 #ifndef _COMPILER_MICROSOFT_
@@ -1147,7 +1163,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT jl_gcframe_t *jl_pgcstack;
+extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
@@ -1295,9 +1311,9 @@ typedef struct _jl_task_t {
     jl_module_t *current_module;
 } jl_task_t;
 
-extern DLLEXPORT jl_task_t * volatile jl_current_task;
-extern DLLEXPORT jl_task_t *jl_root_task;
-extern DLLEXPORT jl_value_t *jl_exception_in_transit;
+extern DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
+extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
+extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
