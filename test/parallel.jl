@@ -176,14 +176,15 @@ end
 
 @test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
 
-# TODO: The below block should be always enabled but the error is printed by the event loop
 
-# Hence in the event of any relevant changes to the parallel codebase,
-# please define an ENV variable PTEST_FULL and ensure that the below block is
-# executed successfully before committing/merging
+# The below block of tests are usually run only on local development systems, since:
+# - addprocs tests are memory intensive
+# - ssh addprocs requires sshd to be running locally with passwordless login enabled.
+# - includes some tests that print errors
+# The test block is enabled by defining env JULIA_TESTFULL=1
 
-if haskey(ENV, "PTEST_FULL")
-    print("\n\nSTART of parallel tests that print errors\n")
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    print("\n\nTesting correct error handling in pmap call. Please ignore printed errors when specified.\n")
 
     # make sure exceptions propagate when waiting on Tasks
     @test_throws ErrorException (@sync (@async error("oops")))
@@ -196,37 +197,28 @@ if haskey(ENV, "PTEST_FULL")
     @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=true);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
     @test length(res) < length(ups)
     @test isa(res[1], Exception)
 
     # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=true);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
     @test length(res) < length(ups)
     @test isa(res[1], Exception)
 
     # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=false);
+    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
     @test length(res) == length(ups)
     @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=false);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
 
-    print("\n\nEND of parallel tests that print errors\n")
+    print("\n\nPassed all pmap tests that print errors.\n")
 
 @unix_only begin
-    #Issue #9951
-    hosts=[]
-    for i in 1:30
-        push!(hosts, "localhost", string(getipaddr()), "127.0.0.1")
-    end
-
-    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
-    new_pids = remotecall_fetch(1, addprocs, hosts)
-#    print("Added workers $new_pids\n\n")
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(p, workers))
@@ -243,21 +235,37 @@ if haskey(ENV, "PTEST_FULL")
         @test :ok == remotecall_fetch(1, (p)->rmprocs(p; waitfor=5.0), new_pids)
     end
 
+    print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
+    print("Please ensure sshd is running locally with passwordless login enabled.\n")
+
+    sshflags = `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR `
+    #Issue #9951
+    hosts=[]
+    localhost_aliases = ["localhost", string(getipaddr()), "127.0.0.1"]
+    num_workers = parse(Int,(get(ENV, "JULIA_ADDPROCS_NUM", "9")))
+
+    for i in 1:(num_workers/length(localhost_aliases))
+        append!(hosts, localhost_aliases)
+    end
+
+    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
+    new_pids = remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), hosts, sshflags)
+    @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with :auto\n")
-    new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags))
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
-    print("\nMixed ssh addprocs with numbers\n")
-    new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
+    print("\nMixed ssh addprocs with numeric counts\n")
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), [("localhost", 2), ("127.0.0.1", 2), "localhost"], sshflags))
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, ()->addprocs([("localhost", 2)]; tunnel=true)))
-    @test length(new_pids) == 2
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", 9)], sshflags))
+    @test length(new_pids) == 9
     test_n_remove_pids(new_pids)
 
 end
