@@ -190,7 +190,8 @@ function list(stream::IO, block::MD, config::Config)
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
-                    write(buffer, '\n', sp)
+                    # TODO write a newline here, and deal with nested
+                    write(buffer, ' ', sp)
                 end
                 fresh_line = false
             else

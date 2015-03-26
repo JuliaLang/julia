@@ -36,7 +36,7 @@ function skipblank(io::IO)
 end
 
 """
-Returns true if the line contains only (and
+Returns true if the line contains only (and, unless allowempty,
 at least one of) the characters given.
 """
 function linecontains(io::IO, chars; allow_whitespace = true,
@@ -46,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
     l = readline(io) |> chomp
     length(l) == 0 && return allowempty
 
-    result = true
+    result = allowempty
     for c in l
         c in whitespace && (allow_whitespace ? continue : (result = false; break))
         c in chars && (result = true; continue)
