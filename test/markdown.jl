@@ -11,6 +11,10 @@ import Base: writemime
 
 @test md"#no title" == MD(Paragraph(["#no title"]))
 @test md"# title" == MD(Header{1}("title"))
+@test md"""
+  #
+  empty
+  """ == MD(Header{1}(""), Paragraph("empty"))
 @test md"## section" == MD(Header{2}("section"))
 @test md"# title *foo* `bar` **baz**" ==
     MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")]))
@@ -162,4 +166,3 @@ t = """a   |   b
 1   |   2
 """
 @test plain(Markdown.parse(t)) == t
-
