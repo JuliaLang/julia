@@ -109,7 +109,7 @@ function indentcode(stream::IO, block::MD, config::Config)
             end
         end
         code = takebuf_string(buffer)
-        !isempty(code) && (push!(block, Code(chomp(code))); return true)
+        !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
     end
 end
@@ -130,7 +130,7 @@ function blockquote(stream::IO, block::MD, config::Config)
     withstream(stream) do
         buffer = IOBuffer()
         empty = true
-        while startswith(stream, r"^ {0,3}>") != ""
+        while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
             write(buffer, readline(stream))
             empty = false
@@ -164,7 +164,7 @@ const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 # Todo: ordered lists, inline formatting
 function list(stream::IO, block::MD, config::Config)
     withstream(stream) do
-        startswith(stream, r"^ {0,3}")
+        eatindent(stream) || return false
         b = startswith(stream, num_or_bullets)
         (b == nothing || b == "") && return false
         ordered = !(b[1] in bullets)

@@ -155,6 +155,11 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
     end
 end
 
+# TODO: refactor this. If we're going to assume
+# the delimiter is a single character + a minimum
+# repeat we may as well just pass that into the
+# function.
+
 """
 Parse a symmetrical delimiter which wraps words.
 i.e. `*word word*` but not `*word * word`.
@@ -167,13 +172,13 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
         if position(stream) >= 1
             # check the previous byte isn't a delimiter
             skip(stream, -2)
-            (read(stream, UInt8) in delimiter.data) && return nothing
+            (read(stream, Char) in delimiter) && return nothing
         end
         n = nmin
         startswith(stream, delimiter^n) || return nothing
         while startswith(stream, delimiter); n += 1; end
         !rep && n > nmin && return nothing
-        !eof(stream) && peek(stream) in whitespace.data && return nothing
+        !eof(stream) && peek(stream) in whitespace && return nothing
 
         buffer = IOBuffer()
         while !eof(stream)
