@@ -43,17 +43,15 @@ Header(s) = Header(s, 1)
 @breaking true ->
 function hashheader(stream::IO, md::MD, config::Config)
     withstream(stream) do
-        startswith(stream, r"^ {0,3}#") != "" || return false
-        level = 1
+        eatindent(stream) || return false
+        level = 0
         while startswith(stream, '#') level += 1 end
+        level < 1 || level > 6 && return false
 
         c = ' '
-        if level > 6
-            return false
         # Allow empty headers, but require a space
-        elseif !eof(stream) && (c = read(stream, Char); !(c in " \n"))
+        !eof(stream) && (c = read(stream, Char); !(c in " \n")) &&
             return false
-        end
 
         if c != '\n' # Empty header
           h = readline(stream) |> strip

@@ -116,6 +116,19 @@ function withstream(f, stream)
 end
 
 """
+Consume the standard allowed markdown indent of
+three spaces. Returns false if there are more than
+three present.
+"""
+function eatindent(io::IO, n = 3)
+    withstream(io) do
+        m = 0
+        while startswith(io, ' ') m += 1 end
+        return m <= n
+    end
+end
+
+"""
 Read the stream until startswith(stream, delim)
 The delimiter is consumed but not included.
 Returns nothing and resets the stream if delim is
