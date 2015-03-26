@@ -2,36 +2,32 @@ include("table.jl")
 
 @breaking true ->
 function fencedcode(stream::IO, block::MD, config::Config)
-    start = position(stream)
-    startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
-    skip(stream, -2)
-    ch = read(stream, Char)
-    trailing = strip(readline(stream))
-    flavor = lstrip(trailing, ch)
-    n = 3 + length(trailing) - length(flavor)
+    withstream(stream) do
+        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
+        skip(stream, -2)
+        ch = read(stream, Char)
+        trailing = strip(readline(stream))
+        flavor = lstrip(trailing, ch)
+        n = 3 + length(trailing) - length(flavor)
 
-    # inline code block
-    if contains(flavor, string(ch) ^ n)
-        #TODO edge case where this is a string(ch) ^ (n + 1)
-        seek(stream, start)
+        # inline code block
+        ch in flavor && return false
+
+        buffer = IOBuffer()
+        while !eof(stream)
+            line_start = position(stream)
+            if startswith(stream, string(ch) ^ n)
+                if !startswith(stream, string(ch))
+                    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    return true
+                else
+                    seek(stream, line_start)
+                end
+            end
+            write(buffer, readline(stream))
+        end
         return false
     end
-
-    buffer = IOBuffer()
-    while !eof(stream)
-        line_start = position(stream)
-        if startswith(stream, string(ch) ^ n)
-            if !startswith(stream, string(ch))
-                push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
-                return true
-            else
-                seek(stream, line_start)
-            end
-        end
-        write(buffer, readline(stream))
-    end
-    seek(stream, start)
-    return false
 end
 
 function github_paragraph(stream::IO, md::MD, config::Config)

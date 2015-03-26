@@ -42,27 +42,50 @@ Header(s) = Header(s, 1)
 
 @breaking true ->
 function hashheader(stream::IO, md::MD, config::Config)
-    startswith(stream, r"^ {0,3}#") != "" || return false
-    level = 1
-    while startswith(stream, "#")
-        level += 1
-    end
+    withstream(stream) do
+        startswith(stream, r"^ {0,3}#") != "" || return false
+        level = 1
+        while startswith(stream, "#")
+            level += 1
+        end
 
-    if level > 6
-        skip(stream, -level-1)
-        return false
-    elseif !eof(stream) && (c = read(stream, Char); !(c in " \n"))
-        skip(stream, -level-length(string(c).data)-1)
-        return false
-    end
+        if level > 6
+            return false
+        elseif !eof(stream) && (c = read(stream, Char); !(c in " \n"))
+            return false
+        end
 
-    h = readline(stream) |> chomp
-    h = strip(h)
-    h = match(r"(.*?)( +#+)?$", h).captures[1]
-    buffer = IOBuffer()
-    print(buffer, h)
-    push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
-    return true
+        h = readline(stream) |> chomp
+        h = strip(h)
+        h = match(r"(.*?)( +#+)?$", h).captures[1]
+        buffer = IOBuffer()
+        print(buffer, h)
+        push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+        return true
+    end
+end
+
+function setextheader(stream::IO, md::MD, config::Config)
+    withstream(stream) do
+        startswith(stream, r"^ {0,3}")
+        startswith(stream, " ") && return false
+        header = readline(stream) |> strip
+        header == "" && return false
+
+        startswith(stream, r"^ {0,3}")
+        startswith(stream, " ") && return false
+        underline = readline(stream) |> strip
+        length(underline) < 3 && return false
+        u = underline[1]
+        u in "-=" || return false
+        for c in underline[2:end]
+            c != u && return false
+        end
+        level = (u == '=') ? 1 : 2
+
+        push!(md.content, Header(parseinline(header, config), level))
+        return true
+    end
 end
 
 # ––––
@@ -156,8 +179,12 @@ function list(stream::IO, block::MD, config::Config)
 
         buffer = IOBuffer()
         fresh_line = false
+        has_hr = false
         while !eof(stream)
             if fresh_line
+                # TODO should config affect this?
+                ishorizontalrule(stream) && (has_hr = true; break)
+
                 sp = startswith(stream, r"^ {0,3}")
                 if !(startswith(stream, b) in [false, ""])
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
@@ -183,6 +210,7 @@ function list(stream::IO, block::MD, config::Config)
         end
         push!(the_list.items, parseinline(takebuf_string(buffer), config))
         push!(block, the_list)
+        has_hr && push!(block, HorizontalRule())
         return true
     end
 end
@@ -195,21 +223,31 @@ type HorizontalRule
 end
 
 function horizontalrule(stream::IO, block::MD, config::Config)
-   withstream(stream) do
-       n, rule = 0, ' '
-       while !eof(stream)
-           char = read(stream, Char)
-           char == '\n' && break
-           isspace(char) && continue
-           if n==0 || char==rule
-               rule = char
-               n += 1
-           else
-               return false
-           end
-       end
-       is_hr = (n ≥ 3 && rule in "*-_")
-       is_hr && push!(block, HorizontalRule())
-       return is_hr
-   end
+    is_hr = ishorizontalrule(stream)
+    is_hr && push!(block, HorizontalRule())
+    return is_hr
+end
+
+const _hrules = "*-_"
+
+function ishorizontalrule(stream::IO)
+    withstream(stream) do
+        startswith(stream, r"^ {0,3}")
+        eof(stream) && return false
+        rule = read(stream, Char)
+        rule in _hrules || return false
+
+        n = 1
+        while !eof(stream)
+            ch = read(stream, Char)
+            ch == '\n' && break
+            isspace(ch) && continue
+            if ch == rule
+                n += 1
+            else
+                return false
+            end
+        end
+        n ≥ 3
+    end
 end
