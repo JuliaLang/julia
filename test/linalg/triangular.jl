@@ -162,40 +162,40 @@ for elty1 in (Float32, Float64, Complex64, Complex128, BigFloat, Int)
                 @test_approx_eq full(A1/A2) full(A1)/full(A2)
 
             end
+        end
 
-            for eltyB in (Float32, Float64, Complex64, Complex128)
-                B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
+        for eltyB in (Float32, Float64, Complex64, Complex128)
+            B = convert(Matrix{eltyB}, elty1 <: Complex ? real(A1)*ones(n, n) : A1*ones(n, n))
 
-                debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
+            debug && println("elty1: $elty1, A1: $t1, B: $eltyB")
 
-                # Triangular-dense Matrix/vector multiplication
-                @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
-                @test_approx_eq A1*B full(A1)*B
-                @test_approx_eq A1'B[:,1] full(A1)'B[:,1]
-                @test_approx_eq A1'B full(A1)'B
-                @test_approx_eq A1*B' full(A1)*B'
-                @test_approx_eq B*A1 B*full(A1)
-                @test_approx_eq B[:,1]'A1 B[:,1]'full(A1)
-                @test_approx_eq B'A1 B'full(A1)
-                @test_approx_eq B*A1' B*full(A1)'
-                @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
-                @test_approx_eq B'A1' B'full(A1)'
+            # Triangular-dense Matrix/vector multiplication
+            @test_approx_eq A1*B[:,1] full(A1)*B[:,1]
+            @test_approx_eq A1*B full(A1)*B
+            @test_approx_eq A1'B[:,1] full(A1)'B[:,1]
+            @test_approx_eq A1'B full(A1)'B
+            @test_approx_eq A1*B' full(A1)*B'
+            @test_approx_eq B*A1 B*full(A1)
+            @test_approx_eq B[:,1]'A1 B[:,1]'full(A1)
+            @test_approx_eq B'A1 B'full(A1)
+            @test_approx_eq B*A1' B*full(A1)'
+            @test_approx_eq B[:,1]'A1' B[:,1]'full(A1)'
+            @test_approx_eq B'A1' B'full(A1)'
 
-                # ... and division
-                @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
-                @test_approx_eq A1\B full(A1)\B
-                @test_approx_eq A1'\B[:,1] full(A1)'\B[:,1]
-                @test_approx_eq A1'\B full(A1)'\B
-                @test_approx_eq A1\B' full(A1)\B'
-                @test_approx_eq A1'\B' full(A1)'\B'
-                @test_approx_eq B/A1 B/full(A1)
-                @test_approx_eq B/A1' B/full(A1)'
-                @test_approx_eq B'/A1 B'/full(A1)
-                @test_approx_eq B'/A1' B'/full(A1)'
+            # ... and division
+            @test_approx_eq A1\B[:,1] full(A1)\B[:,1]
+            @test_approx_eq A1\B full(A1)\B
+            @test_approx_eq A1'\B[:,1] full(A1)'\B[:,1]
+            @test_approx_eq A1'\B full(A1)'\B
+            @test_approx_eq A1\B' full(A1)\B'
+            @test_approx_eq A1'\B' full(A1)'\B'
+            @test_approx_eq B/A1 B/full(A1)
+            @test_approx_eq B/A1' B/full(A1)'
+            @test_approx_eq B'/A1 B'/full(A1)
+            @test_approx_eq B'/A1' B'/full(A1)'
 
-                # Error bounds
-                elty1 != BigFloat && errorbounds(A1, A1\B, B)
-            end
+            # Error bounds
+            elty1 != BigFloat && errorbounds(A1, A1\B, B)
         end
     end
 end
