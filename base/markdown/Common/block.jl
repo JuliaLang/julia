@@ -54,13 +54,13 @@ function hashheader(stream::IO, md::MD, config::Config)
             return false
 
         if c != '\n' # Empty header
-          h = readline(stream) |> strip
-          h = match(r"(.*?)( +#+)?$", h).captures[1]
-          buffer = IOBuffer()
-          print(buffer, h)
-          push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+            h = readline(stream) |> strip
+            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            buffer = IOBuffer()
+            print(buffer, h)
+            push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
         else
-          push!(md.content, Header("", level))
+            push!(md.content, Header("", level))
         end
         return true
     end
@@ -68,20 +68,16 @@ end
 
 function setextheader(stream::IO, md::MD, config::Config)
     withstream(stream) do
-        startswith(stream, r"^ {0,3}")
-        startswith(stream, " ") && return false
+        eatindent(stream) || return false
         header = readline(stream) |> strip
         header == "" && return false
 
-        startswith(stream, r"^ {0,3}")
-        startswith(stream, " ") && return false
+        eatindent(stream) || return false
         underline = readline(stream) |> strip
         length(underline) < 3 && return false
         u = underline[1]
         u in "-=" || return false
-        for c in underline[2:end]
-            c != u && return false
-        end
+        all(c -> c == u, underline) || return false
         level = (u == '=') ? 1 : 2
 
         push!(md.content, Header(parseinline(header, config), level))
