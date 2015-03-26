@@ -157,6 +157,11 @@ foo()
                                                           ["hgh",Bold("jhj"),"ge"],
                                                           "f"]],
                                                   [:l, :r, :r]))
+@test md"""
+no|table
+no error
+""" == MD([Paragraph(Any["no|table no error"])])
+
 t = """a   |   b
 :-- | --:
 1   |   2
