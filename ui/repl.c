@@ -78,7 +78,6 @@ static const char opts[]  =
     " -O, --optimize\n"
     "                           Run time-intensive code optimizations\n"
     " --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)\n"
-    " --int-literals={32|64}    Select integer literal size independent of platform\n"
     " --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)\n"
     " --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings\n"
     " --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)\n";
@@ -94,7 +93,6 @@ void parse_opts(int *argcp, char ***argvp)
            opt_code_coverage,
            opt_track_allocation,
            opt_check_bounds,
-           opt_int_literals,
            opt_dump_bitcode,
            opt_depwarn,
            opt_inline,
@@ -129,7 +127,6 @@ void parse_opts(int *argcp, char ***argvp)
         { "track-allocation",optional_argument, 0, opt_track_allocation },
         { "optimize",        no_argument,       0, 'O' },
         { "check-bounds",    required_argument, 0, opt_check_bounds },
-        { "int-literals",    required_argument, 0, opt_int_literals },
         { "dump-bitcode",    required_argument, 0, opt_dump_bitcode },
         { "depwarn",         required_argument, 0, opt_depwarn },
         { "inline",          required_argument, 0, opt_inline },
@@ -283,14 +280,6 @@ void parse_opts(int *argcp, char ***argvp)
                 jl_options.check_bounds = JL_OPTIONS_CHECK_BOUNDS_OFF;
             else
                 jl_errorf("julia: invalid argument to --check-bounds={yes|no} (%s)\n", optarg);
-            break;
-        case opt_int_literals:
-            if (!strcmp(optarg,"32"))
-                jl_options.int_literals = 32;
-            else if (!strcmp(optarg,"64"))
-                jl_options.int_literals = 64;
-            else
-                jl_errorf("julia: invalid argument to --int-literals={32|64} (%s)\n", optarg);
             break;
         case opt_dump_bitcode:
             if (!strcmp(optarg,"yes"))

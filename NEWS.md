@@ -293,6 +293,8 @@ Deprecated or removed
     have been replaced by `parse` and `tryparse` with a type argument
     ([#3631], [#5704], [#9487], [#10543]).
 
+  * the --int-literals compiler option is no longer accepted.
+
 Julia v0.3.0 Release Notes
 ==========================
 
