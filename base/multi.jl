@@ -183,18 +183,10 @@ end
 
 function flush_gc_msgs()
     for w in (PGRP::ProcessGroup).workers
-        try
-            if isa(w,Worker)
-                k = w::Worker
-                if k.gcflag
-                    flush_gc_msgs(k)
-                end
-            end
-        catch e
-            global rmprocset
-            # Ignore any errors, if worker is terminating.
-            if !(w.id in rmprocset)
-                rethrow(e)
+        if isa(w,Worker) && isopen(w.w_stream)
+            k = w::Worker
+            if k.gcflag
+                flush_gc_msgs(k)
             end
         end
     end
