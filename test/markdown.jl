@@ -14,6 +14,12 @@ import Base: writemime
 @test md"## section" == MD(Header{2}("section"))
 @test md"# title *foo* `bar` **baz**" ==
     MD(Header{1}(["title ", Italic("foo")," ",Code("bar")," ",Bold("baz")]))
+@test md"""
+h1
+===""" == md"# h1"
+@test md"""
+h2
+   ---""" == md"## h2"
 
 @test md"**foo *bar* baz**" == MD(Paragraph(Bold(["foo ", Italic("bar"), " baz"])))
 @test md"*foo **bar** baz*" == MD(Paragraph(Italic(["foo ", Bold("bar"), " baz"])))
@@ -75,6 +81,17 @@ World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
     code2
 """ |> html == "<pre><code>code1\n\ncode2</code></pre>\n" # single code block
 
+@test md"""
+- Foo
+ ---
+- Bar""" |> html == "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n<ul>\n<li>Bar</li>\n</ul>\n"
+@test md"""
+h1
+===
+h2
+---
+not
+== =""" |> html == "<h1>h1</h1>\n<h2>h2</h2>\n<p>not &#61;&#61; &#61;</p>\n"
 
 # Latex output
 book = md"""
