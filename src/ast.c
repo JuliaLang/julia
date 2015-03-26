@@ -243,20 +243,14 @@ static jl_value_t *scm_to_julia_(value_t e, int eo)
             }
             i64 = conv_to_int64(cp_data(cp), nt);
         }
-        if (
 #ifdef _P64
-            jl_options.int_literals==32
+        return (jl_value_t*)jl_box_int64(i64);
 #else
-            jl_options.int_literals!=64
-#endif
-            ) {
-            if (i64 > (int64_t)S32_MAX || i64 < (int64_t)S32_MIN)
-                return (jl_value_t*)jl_box_int64(i64);
-            return (jl_value_t*)jl_box_int32((int32_t)i64);
-        }
-        else {
+        if (i64 > (int64_t)S32_MAX || i64 < (int64_t)S32_MIN)
             return (jl_value_t*)jl_box_int64(i64);
-        }
+        else
+            return (jl_value_t*)jl_box_int32((int32_t)i64);
+#endif
     }
     if (issymbol(e)) {
         if (e == true_sym)

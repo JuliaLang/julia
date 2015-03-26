@@ -139,7 +139,6 @@ those available for the ``perl`` and ``ruby`` programs::
     -O, --optimize
                               Run time-intensive code optimizations
     --check-bounds={yes|no}   Emit bounds checks always or never (ignoring declarations)
-    --int-literals={32|64}    Select integer literal size independent of platform
     --dump-bitcode={yes|no}   Dump bitcode for the system image (used with --build)
     --depwarn={yes|no}        Enable or disable syntax and method deprecation warnings
     --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
