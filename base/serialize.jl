@@ -166,8 +166,9 @@ function serialize(s, e::Expr)
 end
 
 function serialize_mod_names(s, m::Module)
-    if m !== Main
-        serialize_mod_names(s, module_parent(m))
+    p = module_parent(m)
+    if m !== p
+        serialize_mod_names(s, p)
         serialize(s, module_name(m))
     end
 end
