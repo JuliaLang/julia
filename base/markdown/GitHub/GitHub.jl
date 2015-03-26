@@ -2,17 +2,32 @@ include("table.jl")
 
 @breaking true ->
 function fencedcode(stream::IO, block::MD, config::Config)
-    startswith(stream, "```", padding = true) || return false
-    trailing = strip(readline(stream))
-    flavor = lstrip(trailing, '`')
-    n = 3 + length(trailing) - length(flavor)
-    buffer = IOBuffer()
-    while !eof(stream)
-        startswith(stream, "`" ^ n) && break
-        write(buffer, readline(stream))
+    withstream(stream) do
+        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
+        skip(stream, -2)
+        ch = read(stream, Char)
+        trailing = strip(readline(stream))
+        flavor = lstrip(trailing, ch)
+        n = 3 + length(trailing) - length(flavor)
+
+        # inline code block
+        ch in flavor && return false
+
+        buffer = IOBuffer()
+        while !eof(stream)
+            line_start = position(stream)
+            if startswith(stream, string(ch) ^ n)
+                if !startswith(stream, string(ch))
+                    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    return true
+                else
+                    seek(stream, line_start)
+                end
+            end
+            write(buffer, readline(stream))
+        end
+        return false
     end
-    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
-    return true
 end
 
 function github_paragraph(stream::IO, md::MD, config::Config)

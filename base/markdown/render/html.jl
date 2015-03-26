@@ -65,8 +65,10 @@ end
 
 function html(io::IO, code::Code)
     withtag(io, :pre) do
-        withtag(io, :code) do
+        maybe_lang = code.language != "" ? Any[:class=>"language-$(code.language)"] : []
+        withtag(io, :code, maybe_lang...) do
             htmlesc(io, code.code)
+            # TODO should print newline if this is longer than one line ?
         end
     end
 end
@@ -79,6 +81,7 @@ end
 
 function html(io::IO, md::BlockQuote)
     withtag(io, :blockquote) do
+        println(io)
         html(io, md.content)
     end
 end
@@ -86,11 +89,12 @@ end
 function html(io::IO, md::List)
     withtag(io, md.ordered ? :ol : :ul) do
         for item in md.items
+            println(io)
             withtag(io, :li) do
                 htmlinline(io, item)
             end
-            println(io)
         end
+        println(io)
     end
 end
 
