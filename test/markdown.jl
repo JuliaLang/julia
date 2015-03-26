@@ -85,10 +85,10 @@ World""" |> html == "<p>Hello</p>\n<hr />\n<p>World</p>\n"
     code2
 """ |> html == "<pre><code>code1\n\ncode2</code></pre>\n" # single code block
 
-@test md"""
-- Foo
- ---
-- Bar""" |> html == "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n<ul>\n<li>Bar</li>\n</ul>\n"
+# @test md"""
+# - Foo
+#  ---
+# - Bar""" |> html == "<ul>\n<li>Foo</li>\n</ul>\n<hr />\n<ul>\n<li>Bar</li>\n</ul>\n"
 @test md"""
 h1
 ===
