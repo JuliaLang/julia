@@ -186,20 +186,25 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
     n = len - 1
     a0, b = rat(start)
     a = convert(T,a0)
-    if 0 < n && a/convert(T,b) == start
+    if a/convert(T,b) == start
         c0, d = rat(stop)
         c = convert(T,c0)
         if c/convert(T,d) == stop
             e = lcm(b,d)
             a *= div(e,b)
             c *= div(e,d)
-            ne = convert(T,n*e)
-            if a*n/ne == start && c*n/ne == stop
-                return LinSpace(a, c, len, ne)
+            s, p = frexp(convert(T,n*e))
+            p = one(p) << p
+            a /= p; c /= p
+            if a*n/s == start && c*n/s == stop
+                return LinSpace(a, c, len, s)
             end
         end
     end
-    return LinSpace(start, stop, len, max(1,n))
+    s, p = frexp(convert(T,n))
+    p = one(p) << p
+    start /= p; stop /= p
+    return LinSpace(start, stop, len, s)
 end
 linspace(start::Real, stop::Real, len::Real=50) =
     linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., Int(len))
