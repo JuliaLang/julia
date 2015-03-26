@@ -2401,3 +2401,8 @@ for T in Any[Int16, Int32, UInt32, Int64, UInt64, BigInt]
 end
 
 @test_throws InexactError UInt128(-1)
+
+for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
+    @test_throws InexactError T(big(typemax(T))+1)
+    @test_throws InexactError T(big(typemin(T))-1)
+end
