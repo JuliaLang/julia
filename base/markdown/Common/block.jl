@@ -45,22 +45,25 @@ function hashheader(stream::IO, md::MD, config::Config)
     withstream(stream) do
         startswith(stream, r"^ {0,3}#") != "" || return false
         level = 1
-        while startswith(stream, "#")
-            level += 1
-        end
+        while startswith(stream, '#') level += 1 end
 
+        c = ' '
         if level > 6
             return false
+        # Allow empty headers, but require a space
         elseif !eof(stream) && (c = read(stream, Char); !(c in " \n"))
             return false
         end
 
-        h = readline(stream) |> chomp
-        h = strip(h)
-        h = match(r"(.*?)( +#+)?$", h).captures[1]
-        buffer = IOBuffer()
-        print(buffer, h)
-        push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+        if c != '\n' # Empty header
+          h = readline(stream) |> strip
+          h = match(r"(.*?)( +#+)?$", h).captures[1]
+          buffer = IOBuffer()
+          print(buffer, h)
+          push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+        else
+          push!(md.content, Header("", level))
+        end
         return true
     end
 end
