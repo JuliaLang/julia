@@ -132,6 +132,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
                 else
                     count -= 1
                     write(buffer, delimiter)
+                    continue
                 end
             end
             char = read(stream, Char)
