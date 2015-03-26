@@ -42,20 +42,46 @@ Header(s) = Header(s, 1)
 
 @breaking true ->
 function hashheader(stream::IO, md::MD, config::Config)
-    startswith(stream, "#") || return false
-    level = 1
-    while startswith(stream, "#")
-        level += 1
-    end
-    h = readline(stream) |> chomp
-    h = match(r"\s*(.*)(?<![#\s])", h).captures[1]
-    buffer = IOBuffer()
-    print(buffer, h)
-    if !isempty(h)
-        push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+    withstream(stream) do
+        eatindent(stream) || return false
+        level = 0
+        while startswith(stream, '#') level += 1 end
+        level < 1 || level > 6 && return false
+
+        c = ' '
+        # Allow empty headers, but require a space
+        !eof(stream) && (c = read(stream, Char); !(c in " \n")) &&
+            return false
+
+        if c != '\n' # Empty header
+            h = readline(stream) |> strip
+            h = match(r"(.*?)( +#+)?$", h).captures[1]
+            buffer = IOBuffer()
+            print(buffer, h)
+            push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+        else
+            push!(md.content, Header("", level))
+        end
         return true
-    else
-        return false
+    end
+end
+
+function setextheader(stream::IO, md::MD, config::Config)
+    withstream(stream) do
+        eatindent(stream) || return false
+        header = readline(stream) |> strip
+        header == "" && return false
+
+        eatindent(stream) || return false
+        underline = readline(stream) |> strip
+        length(underline) < 3 && return false
+        u = underline[1]
+        u in "-=" || return false
+        all(c -> c == u, underline) || return false
+        level = (u == '=') ? 1 : 2
+
+        push!(md.content, Header(parseinline(header, config), level))
+        return true
     end
 end
 
@@ -73,11 +99,17 @@ Code(code) = Code("", code)
 function indentcode(stream::IO, block::MD, config::Config)
     withstream(stream) do
         buffer = IOBuffer()
-        while startswith(stream, "    ") || startswith(stream, "\t")
-            write(buffer, readline(stream))
+        while !eof(stream)
+            if startswith(stream, "    ") || startswith(stream, "\t")
+                write(buffer, readline(stream))
+            elseif blankline(stream)
+                write(buffer, '\n')
+            else
+                break
+            end
         end
         code = takebuf_string(buffer)
-        !isempty(code) && (push!(block, Code(chomp(code))); return true)
+        !isempty(code) && (push!(block, Code(rstrip(code))); return true)
         return false
     end
 end
@@ -97,17 +129,17 @@ BlockQuote() = BlockQuote([])
 function blockquote(stream::IO, block::MD, config::Config)
     withstream(stream) do
         buffer = IOBuffer()
-        while startswith(stream, ">")
+        empty = true
+        while eatindent(stream) && startswith(stream, '>')
             startswith(stream, " ")
             write(buffer, readline(stream))
+            empty = false
         end
+        empty && return false
+
         md = takebuf_string(buffer)
-        if !isempty(md)
-            push!(block, BlockQuote(parse(md, flavor = config).content))
-            return true
-        else
-            return false
-        end
+        push!(block, BlockQuote(parse(md, flavor = config).content))
+        return true
     end
 end
 
@@ -132,7 +164,7 @@ const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 # Todo: ordered lists, inline formatting
 function list(stream::IO, block::MD, config::Config)
     withstream(stream) do
-        skipwhitespace(stream)
+        eatindent(stream) || return false
         b = startswith(stream, num_or_bullets)
         (b == nothing || b == "") && return false
         ordered = !(b[1] in bullets)
@@ -146,12 +178,13 @@ function list(stream::IO, block::MD, config::Config)
         fresh_line = false
         while !eof(stream)
             if fresh_line
-                skipwhitespace(stream)
-                if startswith(stream, b) != ""
+                sp = startswith(stream, r"^ {0,3}")
+                if !(startswith(stream, b) in [false, ""])
                     push!(the_list.items, parseinline(takebuf_string(buffer), config))
                     buffer = IOBuffer()
                 else
-                    write(buffer, ' ')
+                    # TODO write a newline here, and deal with nested
+                    write(buffer, ' ', sp)
                 end
                 fresh_line = false
             else
