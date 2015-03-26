@@ -174,12 +174,6 @@ similar{T}(a::AbstractArray{T}, dims::Dims)   = similar(a, T, dims)
 similar{T}(a::AbstractArray{T}, dims::Int...) = similar(a, T, dims)
 similar   (a::AbstractArray, T, dims::Int...) = similar(a, T, dims)
 
-function reshape(a::AbstractArray, dims::Dims)
-    if prod(dims) != length(a)
-        throw(ArgumentError("dimensions must be consistent with array size"))
-    end
-    copy!(similar(a, dims), a)
-end
 reshape(a::AbstractArray, dims::Int...) = reshape(a, dims)
 
 vec(a::AbstractArray) = reshape(a,length(a))

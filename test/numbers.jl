@@ -2401,3 +2401,21 @@ for T in Any[Int16, Int32, UInt32, Int64, UInt64, BigInt]
 end
 
 @test_throws InexactError UInt128(-1)
+
+# multiplicative inverses
+for divisor in 1:254
+    divisor == 128 && continue
+    for T in (UInt8, Int8, UInt16, Int16, UInt32, Int32, UInt64, Int64)
+        (divisor == 128 && T == Int8) && continue  # abs will fail
+        mi = Base.FastDivInteger(divisor % T)
+        divisorT = divisor % T
+        for dividend in -101:101
+            dividendT = dividend % T
+            @test div(dividendT, mi) == div(dividendT, divisorT)
+            @test rem(dividendT, mi) == rem(dividendT, divisorT)
+            @test divrem(dividendT, mi) == divrem(dividendT, divisorT)
+        end
+    end
+end
+
+@test_throws ErrorException Base.FastDivInteger(0)

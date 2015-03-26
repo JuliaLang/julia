@@ -514,3 +514,140 @@ checked_mul(x::Int128, y::Int128) = x * y
 checked_add(x::UInt128, y::UInt128) = x + y
 checked_sub(x::UInt128, y::UInt128) = x - y
 checked_mul(x::UInt128, y::UInt128) = x * y
+
+
+## A faster alternative to div if the dividend is reused many times
+
+unsigned_type(::Int8) = UInt8
+unsigned_type(::Int16) = UInt16
+unsigned_type(::Int32) = UInt32
+unsigned_type(::Int64) = UInt64
+unsigned_type(::Int128) = UInt128
+
+abstract FastDivInteger{T}
+
+immutable SignedFastDivInteger{T<:Signed} <: FastDivInteger{T}
+    divisor::T
+    multiplier::T
+    addmul::Int8
+    shift::UInt8
+
+    function SignedFastDivInteger(d::T)
+        ut = unsigned_type(d)
+        signedmin = reinterpret(ut, typemin(d))
+
+        ad::ut = abs(d)
+        ad <= 1 && error("cannot compute magic for d == $d")
+        t::ut = signedmin + signbit(d)
+        anc::ut = t - 1 - rem(t, ad)   # absolute value of nc
+        p = sizeof(d)*8 - 1            # initialize p
+        q1::ut, r1::ut = divrem(signedmin, anc)
+        q2::ut, r2::ut = divrem(signedmin, ad)
+        while true
+            p += 1
+            q1 *= 2                    # update q1 = 2p/abs(nc)
+            r1 *= 2                    # update r1 = rem(2p/abs(nc))
+            if r1 >= anc               # must be unsigned comparison
+                q1 += 1
+                r1 -= anc
+            end
+            q2 *= 2                    # update q2 = 2p/abs(d)
+            r2 *= 2                    # update r2 = rem(2p/abs(d))
+            if r2 >= ad                # must be unsigned comparison
+                q2 += 1
+                r2 -= ad
+            end
+            delta::ut = ad - r2
+            (q1 < delta || (q1 == delta && r1 == 0)) || break
+        end
+
+        m = flipsign((q2 + 1) % T, d)    # resulting magic number
+        s = p - sizeof(d)*8                   # resulting shift
+        new(d, m, d > 0 && m < 0 ? Int8(1) : d < 0 && m > 0 ? Int8(-1) : Int8(0), UInt8(s))
+    end
+end
+SignedFastDivInteger(x::Signed) = SignedFastDivInteger{typeof(x)}(x)
+
+immutable UnsignedFastDivInteger{T<:Unsigned} <: FastDivInteger{T}
+    divisor::T
+    multiplier::T
+    add::Bool
+    shift::UInt8
+
+    function UnsignedFastDivInteger(d::T)
+        (d == 0 || d == 1) && error("cannot compute magic for d == $d")
+        u2 = convert(T, 2)
+        add = false
+        signedmin::typeof(d) = one(d) << (sizeof(d)*8-1)
+        signedmax::typeof(d) = signedmin - 1
+        allones = (zero(d) - 1) % T
+
+        nc::typeof(d) = allones - rem(convert(T, allones - d), d)
+        p = 8*sizeof(d) - 1                    # initialize p
+        q1::typeof(d), r1::typeof(d) = divrem(signedmin, nc)
+        q2::typeof(d), r2::typeof(d) = divrem(signedmax, d)
+        while true
+            p += 1
+            if r1 >= convert(T, nc - r1)
+                q1 = q1 + q1 + T(1)     # update q1
+                r1 = r1 + r1 - nc       # update r1
+            else
+                q1 = q1 + q1            # update q1
+                r1 = r1 + r1            # update r1
+            end
+            if convert(T, r2 + T(1)) >= convert(T, d - r2)
+                add |= q2 >= signedmax
+                q2 = q2 + q2 + 1        # update q2
+                r2 = r2 + r2 + T(1) - d # update r2
+            else
+                add |= q2 >= signedmin
+                q2 = q2 + q2            # update q2
+                r2 = r2 + r2 + T(1)     # update r2
+            end
+            delta::typeof(d) = d - 1 - r2
+            (p < sizeof(d)*16 && (q1 < delta || (q1 == delta && r1 == 0))) || break
+        end
+        m = q2 + 1                   # resulting magic number
+        s = p - sizeof(d)*8 - add    # resulting shift
+        new(d, m % T, add, s % UInt8)
+    end
+end
+UnsignedFastDivInteger(x::Unsigned) = UnsignedFastDivInteger{typeof(x)}(x)
+
+# Special type to handle div by 1
+immutable FastDivInteger1{T} <: FastDivInteger{T} end
+
+(*)(a::FastDivInteger, b::FastDivInteger) = a.divisor*b.divisor
+(*)(a::Number, b::FastDivInteger) = a*b.divisor
+(*)(a::FastDivInteger, b::Number) = a.divisor*b
+
+# div{T}(a::Integer, b::SignedFastDivInteger{T})   = div(convert(T, a), b)
+# div{T}(a::Integer, b::UnsignedFastDivInteger{T}) = div(convert(T, a), b)
+# rem{T}(a::Integer, b::FastDivInteger{T})         = rem(convert(T, a), b)
+# divrem{T}(a::Integer, b::FastDivInteger{T})      = divrem(convert(T, a), b)
+
+function div{T}(a::T, b::SignedFastDivInteger{T})
+    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+    x += (a*b.addmul) % T
+    (signbit(x) + (x >> b.shift)) % T
+end
+function div{T}(a::T, b::UnsignedFastDivInteger{T})
+    x = ((widen(a)*b.multiplier) >>> sizeof(a)*8) % T
+    x = ifelse(b.add, convert(T, convert(T, (convert(T, a - x) >>> 1)) + x), x)
+    x >>> b.shift
+end
+div{T}(a, ::FastDivInteger1{T}) = convert(T, a)
+
+rem{T}(a::T, b::FastDivInteger{T}) =
+    a - div(a, b)*b.divisor
+rem{T}(a, ::FastDivInteger1{T}) = zero(T)
+
+function divrem{T}(a::T, b::FastDivInteger{T})
+    d = div(a, b)
+    (d, a - d*b.divisor)
+end
+divrem{T}(a, ::FastDivInteger1{T}) = (convert(T, a), zero(T))
+
+# Type unstable!
+call(::Type{FastDivInteger}, x::Signed) = x == 1 ? FastDivInteger1{typeof(x)}() : SignedFastDivInteger(x)
+call(::Type{FastDivInteger}, x::Unsigned) = x == 1 ? FastDivInteger1{typeof(x)}() : UnsignedFastDivInteger(x)

@@ -1,9 +1,9 @@
 JULIAHOME = $(abspath ../..)
 include ../../Make.inc
 
-all: micro kernel cat shootout blas lapack simd sort spell sparse
+all: micro kernel cat shootout blas lapack simd sort spell sparse array
 
-micro kernel cat shootout blas lapack simd sort spell sparse:
+micro kernel cat shootout blas lapack simd sort spell sparse array:
 	@$(MAKE) $(QUIET_MAKE) -C shootout
 ifneq ($(OS),WINNT)
 	@$(call spawn,$(JULIA_EXECUTABLE)) $@/perf.jl | perl -nle '@_=split/,/; printf "%-18s %8.3f %8.3f %8.3f %8.3f\n", $$_[1], $$_[2], $$_[3], $$_[4], $$_[5]'
@@ -31,4 +31,4 @@ clean:
 	$(MAKE) -C micro $@
 	$(MAKE) -C shootout $@
 
-.PHONY: micro kernel cat shootout blas lapack simd sort spell sparse clean
+.PHONY: micro kernel cat shootout blas lapack simd sort spell sparse array clean
