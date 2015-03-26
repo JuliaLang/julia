@@ -53,7 +53,7 @@ function github_table(stream::IO, md::MD, config::Config)
                 push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
             end
         end
-        length(rows) == 0 && return false
+        length(rows) <= 1 && return false
         push!(md, Table(rows, align))
         return true
     end
