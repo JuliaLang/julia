@@ -23,7 +23,7 @@ function interp(stream::IO, md::MD)
     end
 end
 
-function blockinterp(stream::IO, md::MD, config::Config)
+function blockinterp(stream::IO, md::MD)
     withstream(stream) do
         ex = interpinner(stream)
         if ex ≡ nothing

@@ -80,10 +80,13 @@ function parse(stream::IO, block::MD, config::Config; breaking = false)
     skipblank(stream)
     eof(stream) && return false
     for parser in (breaking ? config.breaking : [config.breaking; config.regular])
-        parser(stream, block, config) && return true
+        parser(stream, block) && return true
     end
     return false
 end
+
+parse(stream::IO, block::MD; breaking = false) =
+  parse(stream, block, config(block), breaking = breaking)
 
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])

@@ -8,7 +8,7 @@ function tex(stream::IO, md::MD)
     return result == nothing ? nothing : LaTeX(result)
 end
 
-function blocktex(stream::IO, md::MD, config::Config)
+function blocktex(stream::IO, md::MD)
     withstream(stream) do
         ex = tex(stream, md)
         if ex ≡ nothing

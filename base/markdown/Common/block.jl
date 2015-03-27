@@ -8,7 +8,7 @@ end
 
 Paragraph() = Paragraph([])
 
-function paragraph(stream::IO, md::MD, config::Config)
+function paragraph(stream::IO, md::MD)
     buffer = IOBuffer()
     p = Paragraph()
     push!(md, p)
@@ -16,7 +16,7 @@ function paragraph(stream::IO, md::MD, config::Config)
     while !eof(stream)
         char = read(stream, Char)
         if char == '\n' || char == '\r'
-            if blankline(stream) || parse(stream, md, config, breaking = true)
+            if blankline(stream) || parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, ' ')
@@ -41,7 +41,7 @@ Header(s, level::Int) = Header{level}(s)
 Header(s) = Header(s, 1)
 
 @breaking true ->
-function hashheader(stream::IO, md::MD, config::Config)
+function hashheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
         level = 0
@@ -66,7 +66,7 @@ function hashheader(stream::IO, md::MD, config::Config)
     end
 end
 
-function setextheader(stream::IO, md::MD, config::Config)
+function setextheader(stream::IO, md::MD)
     withstream(stream) do
         eatindent(stream) || return false
         header = readline(stream) |> strip
@@ -96,7 +96,7 @@ end
 
 Code(code) = Code("", code)
 
-function indentcode(stream::IO, block::MD, config::Config)
+function indentcode(stream::IO, block::MD)
     withstream(stream) do
         buffer = IOBuffer()
         while !eof(stream)
@@ -126,7 +126,7 @@ BlockQuote() = BlockQuote([])
 
 # TODO: Laziness
 @breaking true ->
-function blockquote(stream::IO, block::MD, config::Config)
+function blockquote(stream::IO, block::MD)
     withstream(stream) do
         buffer = IOBuffer()
         empty = true
@@ -138,7 +138,7 @@ function blockquote(stream::IO, block::MD, config::Config)
         empty && return false
 
         md = takebuf_string(buffer)
-        push!(block, BlockQuote(parse(md, flavor = config).content))
+        push!(block, BlockQuote(parse(md, flavor = config(block)).content))
         return true
     end
 end
@@ -162,7 +162,7 @@ const bullets = "*•+-"
 const num_or_bullets = r"^(\*|•|\+|-|\d+(\.|\))) "
 
 # Todo: ordered lists, inline formatting
-function list(stream::IO, block::MD, config::Config)
+function list(stream::IO, block::MD)
     withstream(stream) do
         eatindent(stream) || return false
         b = startswith(stream, num_or_bullets)
@@ -215,7 +215,7 @@ end
 type HorizontalRule
 end
 
-function horizontalrule(stream::IO, block::MD, config::Config)
+function horizontalrule(stream::IO, block::MD)
    withstream(stream) do
        n, rule = 0, ' '
        while !eof(stream)
