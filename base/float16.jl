@@ -82,7 +82,7 @@ function convert(::Type{Float16}, val::Float32)
     i = (f >> 23) & 0x1ff + 1
     sh = shifttable[i]
     f &= 0x007fffff
-    h::UInt16 = uint16(basetable[i] + (f >> sh))
+    h::UInt16 = basetable[i] + (f >> sh)
     # round
     # NOTE: we maybe should ignore NaNs here, but the payload is
     # getting truncated anyway so "rounding" it might not matter
@@ -97,20 +97,20 @@ function convert(::Type{Float16}, val::Float32)
 end
 
 convert(::Type{Bool},    x::Float16) = (x!=0)
-convert(::Type{Int128},  x::Float16) = convert(Int128, float32(x))
-convert(::Type{UInt128}, x::Float16) = convert(UInt128, float32(x))
+convert(::Type{Int128},  x::Float16) = convert(Int128, Float32(x))
+convert(::Type{UInt128}, x::Float16) = convert(UInt128, Float32(x))
 
-convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, float32(x))
+convert{T<:Integer}(::Type{T}, x::Float16) = convert(T, Float32(x))
 
-round{T<:Integer}(::Type{T}, x::Float16) = round(T, float32(x))
-trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, float32(x))
-floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, float32(x))
-ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, float32(x))
+round{T<:Integer}(::Type{T}, x::Float16) = round(T, Float32(x))
+trunc{T<:Integer}(::Type{T}, x::Float16) = trunc(T, Float32(x))
+floor{T<:Integer}(::Type{T}, x::Float16) = floor(T, Float32(x))
+ceil {T<:Integer}(::Type{T}, x::Float16) = ceil(T, Float32(x))
 
-round(x::Float16) = float16(round(float32(x)))
-trunc(x::Float16) = float16(trunc(float32(x)))
-floor(x::Float16) = float16(floor(float32(x)))
- ceil(x::Float16) = float16( ceil(float32(x)))
+round(x::Float16) = Float16(round(Float32(x)))
+trunc(x::Float16) = Float16(trunc(Float32(x)))
+floor(x::Float16) = Float16(floor(Float32(x)))
+ ceil(x::Float16) = Float16( ceil(Float32(x)))
 
 isnan(x::Float16)    = reinterpret(UInt16,x)&0x7fff  > 0x7c00
 isinf(x::Float16)    = reinterpret(UInt16,x)&0x7fff == 0x7c00
@@ -131,33 +131,41 @@ end
 -(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) $ 0x8000)
 abs(x::Float16) = reinterpret(Float16, reinterpret(UInt16,x) & 0x7fff)
 for op in (:+,:-,:*,:/,:\,:^)
-    @eval ($op)(a::Float16, b::Float16) = float16(($op)(float32(a), float32(b)))
+    @eval ($op)(a::Float16, b::Float16) = Float16(($op)(Float32(a), Float32(b)))
 end
 function fma(a::Float16, b::Float16, c::Float16)
-    float16(fma(float32(a), float32(b), float32(c)))
+    Float16(fma(Float32(a), Float32(b), Float32(c)))
 end
 function muladd(a::Float16, b::Float16, c::Float16)
-    float16(muladd(float32(a), float32(b), float32(c)))
+    Float16(muladd(Float32(a), Float32(b), Float32(c)))
 end
 for op in (:<,:<=,:isless)
-    @eval ($op)(a::Float16, b::Float16) = ($op)(float32(a), float32(b))
+    @eval ($op)(a::Float16, b::Float16) = ($op)(Float32(a), Float32(b))
 end
 for func in (:sin,:cos,:tan,:asin,:acos,:atan,:sinh,:cosh,:tanh,:asinh,:acosh,
              :atanh,:exp,:log,:log2,:log10,:sqrt,:lgamma,:log1p)
     @eval begin
-        $func(a::Float16) = float16($func(float32(a)))
-        $func(a::Complex32) = complex32($func(complex64(a)))
+        $func(a::Float16) = Float16($func(Float32(a)))
+        $func(a::Complex32) = Complex32($func(Complex64(a)))
     end
 end
 
 for func in (:div,:fld,:cld,:rem,:mod,:atan2,:hypot)
     @eval begin
-        $func(a::Float16,b::Float16) = float16($func(float32(a),float32(a)))
+        $func(a::Float16,b::Float16) = Float16($func(Float32(a),Float32(a)))
     end
 end
 
-ldexp(a::Float16, b::Integer) = float16(ldexp(float32(a), b))
-exponent(x::Float16) = exponent(float32(x))
-^(x::Float16, y::Integer) = float16(float32(x)^y)
+ldexp(a::Float16, b::Integer) = Float16(ldexp(Float32(a), b))
 
-rationalize{T<:Integer}(::Type{T}, x::Float16; tol::Real=eps(x)) = rationalize(T, float32(x); tol=tol)
+^(x::Float16, y::Integer) = Float16(Float32(x)^y)
+
+rationalize{T<:Integer}(::Type{T}, x::Float16; tol::Real=eps(x)) = rationalize(T, Float32(x); tol=tol)
+
+reinterpret(::Type{Unsigned}, x::Float16) = reinterpret(UInt16,x)
+
+sign_mask(::Type{Float16}) =        0x8000
+exponent_mask(::Type{Float16}) =    0x7c00
+exponent_one(::Type{Float16}) =     0x3c00
+exponent_half(::Type{Float16}) =    0x3800
+significand_mask(::Type{Float16}) = 0x03ff

@@ -1,6 +1,6 @@
 ## IOStream
 
-const sizeof_ios_t = int(ccall(:jl_sizeof_ios_t, Int32, ()))
+const sizeof_ios_t = Int(ccall(:jl_sizeof_ios_t, Int32, ()))
 
 type IOStream <: IO
     handle::Ptr{Void}
@@ -22,22 +22,20 @@ function IOStream(name::AbstractString, finalize::Bool)
 end
 IOStream(name::AbstractString) = IOStream(name, true)
 
-convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, s.ios)
+unsafe_convert(T::Type{Ptr{Void}}, s::IOStream) = convert(T, pointer(s.ios))
 show(io::IO, s::IOStream) = print(io, "IOStream(", s.name, ")")
-fd(s::IOStream) = int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
+fd(s::IOStream) = Int(ccall(:jl_ios_fd, Clong, (Ptr{Void},), s.ios))
 stat(s::IOStream) = stat(fd(s))
 close(s::IOStream) = ccall(:ios_close, Void, (Ptr{Void},), s.ios)
-isopen(s::IOStream) = bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
+isopen(s::IOStream) = Bool(ccall(:ios_isopen, Cint, (Ptr{Void},), s.ios))
 function flush(s::IOStream)
     sigatomic_begin()
     systemerror("flush", ccall(:ios_flush, Cint, (Ptr{Void},), s.ios) != 0)
     sigatomic_end()
     s
 end
-iswritable(s::IOStream) = bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
-isreadable(s::IOStream) = bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
-modestr(s::IO) = modestr(isreadable(s), iswritable(s))
-modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
+iswritable(s::IOStream) = Bool(ccall(:ios_get_writable, Cint, (Ptr{Void},), s.ios))
+isreadable(s::IOStream) = Bool(ccall(:ios_get_readable, Cint, (Ptr{Void},), s.ios))
 
 function truncate(s::IOStream, n::Integer)
     systemerror("truncate", ccall(:ios_trunc, Int32, (Ptr{Void}, UInt), s.ios, n) != 0)
@@ -72,30 +70,6 @@ function position(s::IOStream)
 end
 
 eof(s::IOStream) = ccall(:ios_eof_blocking, Int32, (Ptr{Void},), s.ios)!=0
-
-# For interfacing with C FILE* functions
-
-
-immutable CFILE
-    ptr::Ptr{Void}
-end
-
-function CFILE(s::IO)
-    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd(s)), modestr(s))
-    systemerror("fdopen", FILEp == C_NULL)
-    seek(CFILE(FILEp), position(s))
-end
-
-convert(::Type{CFILE}, s::IO) = CFILE(s)
-
-function seek(h::CFILE, offset::Integer)
-    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
-                               h.ptr, convert(Clong, offset), int32(0)) != 0)
-    h
-end
-
-position(h::CFILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
 
 ## constructing and opening streams ##
 
@@ -142,14 +116,14 @@ end
 
 ## low-level calls ##
 
-write(s::IOStream, b::UInt8) = int(ccall(:ios_putc, Int32, (UInt8, Ptr{Void}), b, s.ios))
+write(s::IOStream, b::UInt8) = Int(ccall(:ios_putc, Int32, (UInt8, Ptr{Void}), b, s.ios))
 
 function write{T}(s::IOStream, a::Array{T})
     if isbits(T)
         if !iswritable(s)
             throw(ArgumentError("write failed, IOStream is not writeable"))
         end
-        int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
+        Int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt),
                   s.ios, a, length(a)*sizeof(T)))
     else
         invoke(write, (IO, Array), s, a)
@@ -160,7 +134,7 @@ function write(s::IOStream, p::Ptr, nb::Integer)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt), s.ios, p, nb))
+    Int(ccall(:ios_write, UInt, (Ptr{Void}, Ptr{Void}, UInt), s.ios, p, nb))
 end
 
 function write{T,N,A<:Array}(s::IOStream, a::SubArray{T,N,A})
@@ -185,7 +159,7 @@ function read(s::IOStream, ::Type{UInt8})
     if b == -1
         throw(EOFError())
     end
-    uint8(b)
+    b % UInt8
 end
 
 function read!{T}(s::IOStream, a::Array{T})
@@ -207,7 +181,7 @@ function write(s::IOStream, c::Char)
     if !iswritable(s)
         throw(ArgumentError("write failed, IOStream is not writeable"))
     end
-    int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
+    Int(ccall(:ios_pututf8, Int32, (Ptr{Void}, Char), s.ios, c))
 end
 read(s::IOStream, ::Type{Char}) = ccall(:jl_getutf8, Char, (Ptr{Void},), s.ios)
 
@@ -246,7 +220,7 @@ function readbytes!(s::IOStream, b::Array{UInt8}, nb=length(b))
             lb = max(65536, (nr+1) * 2)
             resize!(b, lb)
         end
-        nr += int(ccall(:ios_readall, UInt,
+        nr += Int(ccall(:ios_readall, UInt,
                         (Ptr{Void}, Ptr{Void}, UInt),
                         s.ios, pointer(b, nr+1), min(lb-nr, nb-nr)))
     end
@@ -260,7 +234,7 @@ end
 const _chtmp = Array(Char, 1)
 function peekchar(s::IOStream)
     if ccall(:ios_peekutf8, Int32, (Ptr{Void}, Ptr{Char}), s, _chtmp) < 0
-        return char(-1)
+        return Char(-1)
     end
     return _chtmp[1]
 end
@@ -269,15 +243,15 @@ function peek(s::IOStream)
     ccall(:ios_peekc, Int32, (Ptr{Void},), s)
 end
 
-function skipchars(s::IOStream, pred; linecomment::Char=char(0xffffffff))
-    ch = peekchar(s); status = int(ch)
+function skipchars(s::IOStream, pred; linecomment::Char=Char(0xffffffff))
+    ch = peekchar(s); status = Int(ch)
     while status >= 0 && (pred(ch) || ch == linecomment)
         if ch == linecomment
             readline(s)
         else
             read(s, Char)  # advance one character
         end
-        ch = peekchar(s); status = int(ch)
+        ch = peekchar(s); status = Int(ch)
     end
     return s
 end

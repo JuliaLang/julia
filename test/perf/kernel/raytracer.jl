@@ -131,7 +131,7 @@ function Raytracer(levels, n, ss)
                     g += ray_trace(light, ray, scene);
                 end
             end
-            # write(f, int8(0.5 + 255. * g / (ss*ss)))
+            # write(f, trunc(UInt8, 0.5 + 255. * g / (ss*ss)))
         end
     end
     # close(f)

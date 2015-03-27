@@ -23,7 +23,10 @@ export sin, cos, tan, sinh, cosh, tanh, asin, acos, atan,
 import Base: log, exp, sin, cos, tan, sinh, cosh, tanh, asin,
              acos, atan, asinh, acosh, atanh, sqrt, log2, log10,
              max, min, minmax, ^, exp2,
-             exp10, expm1, log1p
+             exp10, expm1, log1p,
+             sign_mask, exponent_mask, exponent_one, exponent_half,
+             significand_mask, significand_bits, exponent_bits, exponent_bias
+
 
 import Core.Intrinsics: nan_dom_err, sqrt_llvm, box, unbox, powi_llvm
 
@@ -73,7 +76,7 @@ macro evalpoly(z, p...)
              :(s = x*x + y*y),
              as...,
              :(muladd($ai, tt, $b)))
-    R = Expr(:macrocall, symbol("@horner"), :tt, p...)
+    R = Expr(:macrocall, symbol("@horner"), :tt, map(esc, p)...)
     :(let tt = $(esc(z))
           isa(tt, Complex) ? $C : $R
       end)
@@ -132,15 +135,6 @@ sqrt(x::Float32) = box(Float32,sqrt_llvm(unbox(Float32,x)))
 sqrt(x::Real) = sqrt(float(x))
 @vectorize_1arg Number sqrt
 
-for f in (:significand,)
-    @eval begin
-        ($f)(x::Float64) = ccall(($(string(f)),libm), Float64, (Float64,), x)
-        ($f)(x::Float32) = ccall(($(string(f,"f")),libm), Float32, (Float32,), x)
-        @vectorize_1arg Real $f
-    end
-end
-
-
 hypot(x::Real, y::Real) = hypot(promote(float(x), float(y))...)
 function hypot{T<:FloatingPoint}(x::T, y::T)
     x = abs(x)
@@ -182,53 +176,63 @@ minmax{T<:FloatingPoint}(x::T, y::T) =  ifelse((y < x) | (signbit(y) > signbit(x
                                         ifelse((y > x) | (signbit(y) < signbit(x)), (x, y), 
                                         ifelse(x == x, (x, x), (y, y))))
 
-function exponent(x::Float64)
-    if x==0 || !isfinite(x)
+
+ldexp(x::Float64,e::Integer) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, Int32(e))
+ldexp(x::Float32,e::Integer) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, Int32(e))
+# TODO: vectorize ldexp
+
+function exponent{T<:FloatingPoint}(x::T)
+    xu = reinterpret(Unsigned,x)
+    xe = xu & exponent_mask(T)
+    k = Int(xe >> significand_bits(T))
+    if xe == 0 # x is subnormal
+        x == 0 && throw(DomainError())
+        xu &= significand_mask(T)
+        m = leading_zeros(xu)-exponent_bits(T)
+        k = 1-m
+    elseif xe == exponent_mask(T) # NaN or Inf
         throw(DomainError())
     end
-    int(ccall((:ilogb,libm), Int32, (Float64,), x))
-end
-function exponent(x::Float32)
-    if x==0 || !isfinite(x)
-        throw(DomainError())
-    end
-    int(ccall((:ilogbf,libm), Int32, (Float32,), x))
+    k - exponent_bias(T)
 end
 @vectorize_1arg Real exponent
 
-ldexp(x::Float64,e::Int) = ccall((:scalbn,libm),  Float64, (Float64,Int32), x, int32(e))
-ldexp(x::Float32,e::Int) = ccall((:scalbnf,libm), Float32, (Float32,Int32), x, int32(e))
-# TODO: vectorize ldexp
-
-function frexp(x::Float64)
-    xu = reinterpret(UInt64,x)
-    k = int(xu >> 52) & 0x07ff
-    if k == 0 # x is subnormal
-        x == zero(x) && return x,0
-        x *= 1.8014398509481984e16 # 0x1p54, normalise significand
-        xu = reinterpret(UInt64,x)
-        k = int(xu >> 52) & 0x07ff - 54
-    elseif k == 0x07ff # NaN or Inf
-        return x,0
+function significand{T<:FloatingPoint}(x::T)
+    xu = reinterpret(Unsigned,x)
+    xe = xu & exponent_mask(T)
+    if xe == 0 # x is subnormal
+        x == 0 && return x
+        xs = xu & sign_mask(T)
+        xu $= xs
+        m = leading_zeros(xu)-exponent_bits(T)
+        xu <<= m
+        xu $= xs
+    elseif xe == exponent_mask(T) # NaN or Inf
+        return x
     end
-    k -= 1022
-    xu = (xu & 0x800f_ffff_ffff_ffff) | 0x3fe0_0000_0000_0000
-    reinterpret(Float64,xu), k
+    xu = (xu & ~exponent_mask(T)) | exponent_one(T)
+    reinterpret(T,xu)
 end
-function frexp(x::Float32)
-    xu = reinterpret(UInt32,x)
-    k = int(xu >> 23) & 0x00ff
-    if k == 0 # x is subnormal
-        x == zero(x) && return x,0
-        x *= 3.3554432f7 # 0x1p25: no Float32 hex literal
-        xu = reinterpret(UInt32,x)
-        k = int(xu >> 23) & 0x00ff - 25
-    elseif k == 0x00ff # NaN or Inf
+@vectorize_1arg Real significand
+
+function frexp{T<:FloatingPoint}(x::T)
+    xu = reinterpret(Unsigned,x)
+    xe = xu & exponent_mask(T)
+    k = Int(xe >> significand_bits(T))
+    if xe == 0 # x is subnormal
+        x == 0 && return x, 0
+        xs = xu & sign_mask(T)
+        xu $= xs
+        m = leading_zeros(xu)-exponent_bits(T)
+        xu <<= m
+        xu $= xs
+        k = 1-m
+    elseif xe == exponent_mask(T) # NaN or Inf
         return x,0
     end
-    k -= 126
-    xu = (xu & 0x807f_ffff) | 0x3f00_0000
-    reinterpret(Float32,xu), k
+    k -= (exponent_bias(T)-1)
+    xu = (xu & ~exponent_mask(T)) | exponent_half(T)
+    reinterpret(T,xu), k
 end
 
 function frexp{T<:FloatingPoint}(A::Array{T})
@@ -258,9 +262,9 @@ end
 ^(x::Float32, y::Float32) = nan_dom_err(ccall((:powf,libm), Float32, (Float32,Float32), x, y), x+y)
 
 ^(x::Float64, y::Integer) =
-    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,int32(y))))
+    box(Float64, powi_llvm(unbox(Float64,x), unbox(Int32,Int32(y))))
 ^(x::Float32, y::Integer) =
-    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,int32(y))))
+    box(Float32, powi_llvm(unbox(Float32,x), unbox(Int32,Int32(y))))
 
 function angle_restrict_symm(theta)
     const P1 = 4 * 7.8539812564849853515625e-01
@@ -353,10 +357,10 @@ function mod2pi(x::Float64) # or modtau(x)
     end
 end
 
-mod2pi(x::Float32) = float32(mod2pi(float64(x)))
-mod2pi(x::Int32) = mod2pi(float64(x))
+mod2pi(x::Float32) = Float32(mod2pi(Float64(x)))
+mod2pi(x::Int32) = mod2pi(Float64(x))
 function mod2pi(x::Int64)
-  fx = float64(x)
+  fx = Float64(x)
   fx == x || throw(ArgumentError("Int64 argument to mod2pi is too large: $x"))
   mod2pi(fx)
 end

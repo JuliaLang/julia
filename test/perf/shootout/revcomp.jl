@@ -51,7 +51,7 @@ function revcomp(infile="revcomp-input.txt")
 #            write(line)
         else
             l = length(line)-1
-            append!(buff, [uint8(revcompdata[char(line[i])]) for i=1:l])
+            append!(buff, [UInt8(revcompdata[Char(line[i])]) for i=1:l])
         end
     end
     close(input)

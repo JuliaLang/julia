@@ -40,7 +40,7 @@ let # xbdsqr
         @test_approx_eq full(Bidiagonal(d, e, true)) U*Diagonal(s)*Vt
 
         @test_throws ArgumentError bdsqr!('A', d, e, Vt, U, C)
-        @test_throws DimensionMismatch bdsqr!('U', d, [e, 1], Vt, U, C)
+        @test_throws DimensionMismatch bdsqr!('U', d, [e; 1], Vt, U, C)
         @test_throws DimensionMismatch bdsqr!('U', d, e, Vt[1:end - 1, :], U, C)
         @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U[:,1:end - 1], C)
         @test_throws DimensionMismatch bdsqr!('U', d, e, Vt, U, C[1:end - 1, :])

@@ -3,14 +3,14 @@ type LaTeX
 end
 
 @trigger '$' ->
-function latex(stream::IO)
+function tex(stream::IO, md::MD)
     result = parse_inline_wrapper(stream, "\$", rep = true)
     return result == nothing ? nothing : LaTeX(result)
 end
 
-function blocktex(stream::IO, md::MD, config::Config)
+function blocktex(stream::IO, md::MD)
     withstream(stream) do
-        ex = latex(stream)
+        ex = tex(stream, md)
         if ex ≡ nothing
             return false
         else

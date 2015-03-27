@@ -6,7 +6,15 @@ type MD
         new(content, meta)
 end
 
-MD(xs...) = MD([xs...])
+MD(xs...) = MD(vcat(xs...))
+
+function MD(cfg::Config, xs...)
+    md = MD(xs...)
+    md.meta[:config] = cfg
+    return md
+end
+
+config(md::MD) = md.meta[:config]::Config
 
 # Forward some array methods
 
@@ -30,22 +38,20 @@ Base.isempty(md::MD) = isempty(md.content)
 
 # Inner parsing
 
-function innerparse(stream::IO, parsers::Vector{Function})
+function parseinline(stream::IO, md::MD, parsers::Vector{Function})
     for parser in parsers
-        inner = parser(stream)
+        inner = parser(stream, md)
         inner ≡ nothing || return inner
     end
 end
 
-innerparse(stream::IO, config::Config) =
-    innerparse(stream, config.inner.parsers)
-
-function parseinline(stream::IO, config::Config)
+function parseinline(stream::IO, md::MD, config::Config)
     content = []
     buffer = IOBuffer()
     while !eof(stream)
         char = peek(stream)
-        if haskey(config.inner, char) && (inner = innerparse(stream, config.inner[char])) != nothing
+        if haskey(config.inner, char) &&
+                (inner = parseinline(stream, md, config.inner[char])) != nothing
             c = takebuf_string(buffer)
             !isempty(c) && push!(content, c)
             buffer = IOBuffer()
@@ -59,29 +65,32 @@ function parseinline(stream::IO, config::Config)
     return content
 end
 
-parseinline(s::String, c::Config) = parseinline(IOBuffer(s), c)
-# TODO remove once GH #9888 is fixed
-parseinline{T}(s::SubString{T}, c::Config) = parseinline(convert(T, s), c)
+parseinline(s::String, md::MD, c::Config) =
+    parseinline(IOBuffer(s), md, c)
 
-# TODO: store _config_ in the MD and pass it through
-parseinline(s) = parseinline(s, _config_ == nothing ? julia : _config_)
+# TODO remove once GH #9888 is fixed
+parseinline{T}(s::SubString{T}, md::MD, c::Config) =
+    parseinline(convert(T, s), md, c)
+
+parseinline(s, md::MD) = parseinline(s, md, config(md))
 
 # Block parsing
 
 function parse(stream::IO, block::MD, config::Config; breaking = false)
     skipblank(stream)
     eof(stream) && return false
-    for parser in (breaking ? config.breaking : [config.breaking, config.regular])
-        parser(stream, block, config) && return true
+    for parser in (breaking ? config.breaking : [config.breaking; config.regular])
+        parser(stream, block) && return true
     end
     return false
 end
 
+parse(stream::IO, block::MD; breaking = false) =
+  parse(stream, block, config(block), breaking = breaking)
+
 function parse(stream::IO; flavor = julia)
     isa(flavor, Symbol) && (flavor = flavors[flavor])
-    markdown = MD()
-    withconfig(flavor) do
-        while parse(stream, markdown, flavor) end
-    end
+    markdown = MD(flavor)
+    while parse(stream, markdown, flavor) end
     return markdown
 end

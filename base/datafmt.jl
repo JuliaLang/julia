@@ -3,12 +3,12 @@
 module DataFmt
 
 importall Base
-import Base: _default_delims
+import Base: _default_delims, tryparse_internal
 
 export countlines, readdlm, readcsv, writedlm, writecsv
 
 
-const invalid_dlm = char(0xfffffffe)
+const invalid_dlm = Char(0xfffffffe)
 const offs_chunk_size = 5000
 
 countlines(nameorfile) = countlines(nameorfile, '\n')
@@ -27,7 +27,7 @@ function countlines(io::IO, eol::Char)
     while !eof(io)
         nb = readbytes!(io, a)
         for i=1:nb
-            if char(a[i]) == eol
+            if Char(a[i]) == eol
                 preceded_by_eol = true
             elseif preceded_by_eol
                 preceded_by_eol = false
@@ -59,7 +59,7 @@ end
 
 function as_mmap(fname::AbstractString, fsz::Int64)
     open(fname) do io
-        mmap_array(UInt8, (int(fsz),), io)
+        mmap_array(UInt8, (Int(fsz),), io)
     end
 end
 
@@ -81,10 +81,10 @@ type DLMOffsets <: DLMHandler
     thresh::Int
     bufflen::Int
 
-    function DLMOffsets(sbuff::AbstractString)
+    function DLMOffsets(sbuff::ByteString)
         offsets = Array(Array{Int,1}, 1)
         offsets[1] = Array(Int, offs_chunk_size)
-        thresh = int(Base.Sys.total_memory() / sizeof(Int) / 5)
+        thresh = ceil(min(typemax(UInt),Base.Sys.total_memory()) / sizeof(Int) / 5)
         new(offsets, 1, thresh, length(sbuff.data))
     end
 end
@@ -98,7 +98,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, st
     if length(offsets) < offidx
         offlen = offs_chunk_size * length(oarr)
         if (offlen + offs_chunk_size) > dlmoffsets.thresh
-            est_tot = int(offlen * dlmoffsets.bufflen / endpos)
+            est_tot = Int(offlen * dlmoffsets.bufflen / endpos)
             if (est_tot - offlen) > offs_chunk_size    # allow another chunk
                 # abandon offset collection
                 dlmoffsets.oarr = Vector{Int}[]
@@ -112,7 +112,7 @@ function store_cell(dlmoffsets::DLMOffsets, row::Int, col::Int, quoted::Bool, st
     end
     offsets[offidx] = row
     offsets[offidx+1] = col
-    offsets[offidx+2] = int(quoted)
+    offsets[offidx+2] = Int(quoted)
     offsets[offidx+3] = startpos
     offsets[offidx+4] = endpos
     dlmoffsets.offidx = offidx + 5
@@ -125,7 +125,7 @@ function result(dlmoffsets::DLMOffsets)
     dlmoffsets.oarr
 end
 
-type DLMStore{T,S<:AbstractString} <: DLMHandler
+type DLMStore{T,S<:ByteString} <: DLMHandler
     hdr::Array{AbstractString, 2}
     data::Array{T, 2}
 
@@ -137,18 +137,19 @@ type DLMStore{T,S<:AbstractString} <: DLMHandler
     sbuff::S
     auto::Bool
     eol::Char
-    tmp64::Array{Float64,1}
 end
 
-function DLMStore{T,S<:AbstractString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
+function DLMStore{T,S<:ByteString}(::Type{T}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::S, auto::Bool, eol::Char)
     (nrows,ncols) = dims
     nrows <= 0 && throw(ArgumentError("number of rows in dims must be > 0, got $nrows"))
     ncols <= 0 && throw(ArgumentError("number of columns in dims must be > 0, got $ncols"))
     hdr_offset = has_header ? 1 : 0
-    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol, Array(Float64,1))
+    DLMStore{T,S}(fill(SubString(sbuff,1,0), 1, ncols), Array(T, nrows-hdr_offset, ncols), nrows, ncols, 0, 0, hdr_offset, sbuff, auto, eol)
 end
 
-function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
+_chrinstr(sbuff::ByteString, chr::UInt8, startpos::Int, endpos::Int) = (endpos >= startpos) && (C_NULL != ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), pointer(sbuff.data)+startpos-1, chr, endpos-startpos+1))
+
+function store_cell{T,S<:ByteString}(dlmstore::DLMStore{T,S}, row::Int, col::Int, quoted::Bool, startpos::Int, endpos::Int)
     drow = row - dlmstore.hdr_offset
 
     ncols = dlmstore.ncols
@@ -156,11 +157,13 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
     lastrow = dlmstore.lastrow
     cells::Array{T,2} = dlmstore.data
     sbuff::S = dlmstore.sbuff
-    tmp64 = dlmstore.tmp64
 
     endpos = prevind(sbuff, nextind(sbuff,endpos))
-    (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
-    sval = quoted ? SubString(sbuff, startpos+1, endpos-1) : SubString(sbuff, startpos, endpos)
+    (endpos > 0) && ('\n' == dlmstore.eol) && ('\r' == Char(sbuff[endpos])) && (endpos = prevind(sbuff, endpos))
+    if quoted
+        startpos += 1
+        endpos -= 1
+    end
 
     if drow > 0
         # fill missing elements
@@ -182,12 +185,14 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
         end
 
         # fill data
-        if quoted && ('"' in sval)
-            fail = colval(replace(sval, r"\"\"", "\""), cells, drow, col, tmp64)
+        if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
+            unescaped = replace(SubString(sbuff,startpos,endpos), r"\"\"", "\"")
+            fail = colval(unescaped, 1, length(unescaped), cells, drow, col)
         else
-            fail = colval(sval, cells, drow, col, tmp64)
+            fail = colval(sbuff, startpos, endpos, cells, drow, col)
         end
         if fail
+            sval = SubString(sbuff,startpos,endpos)
             ((T <: Number) && dlmstore.auto) ? throw(TypeError(:store_cell, "", Any, T)) : error("file entry \"$(sval)\" cannot be converted to $T")
         end
 
@@ -195,7 +200,12 @@ function store_cell{T,S<:AbstractString}(dlmstore::DLMStore{T,S}, row::Int, col:
         dlmstore.lastcol = col
     else
         # fill header
-        colval((quoted && ('"' in sval)) ? replace(sval, r"\"\"", "\"") : sval, dlmstore.hdr, 1, col, tmp64)
+        if quoted && _chrinstr(sbuff, UInt8('"'), startpos, endpos)
+            unescaped = replace(SubString(sbuff,startpos,endpos), r"\"\"", "\"")
+            colval(unescaped, 1, length(unescaped), dlmstore.hdr, 1, col)
+        else
+            colval(sbuff, startpos,endpos, dlmstore.hdr, 1, col)
+        end
     end
 
     nothing
@@ -231,7 +241,7 @@ function result{T}(dlmstore::DLMStore{T})
 end
 
 
-function readdlm_string(sbuff::AbstractString, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
+function readdlm_string(sbuff::ByteString, dlm::Char, T::Type, eol::Char, auto::Bool, optsd::Dict)
     ign_empty = (dlm == invalid_dlm)
     quotes = get(optsd, :quotes, true)
     comments = get(optsd, :comments, true)
@@ -288,16 +298,18 @@ function val_opts(opts)
     d
 end
 
-function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::AbstractString, auto::Bool, eol::Char)
+function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integer}, has_header::Bool, sbuff::ByteString, auto::Bool, eol::Char)
     idx = 1
     offidx = 1
     offsets = offarr[1]
+    row = 0
+    col = 0
     try
         dh = DLMStore(T, dims, has_header, sbuff, auto, eol)
         while idx <= length(offsets)
             row = offsets[idx]
             col = offsets[idx+1]
-            quoted = bool(offsets[idx+2])
+            quoted = Bool(offsets[idx+2])
             startpos = offsets[idx+3]
             endpos = offsets[idx+4]
 
@@ -308,28 +320,63 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         return result(dh)
     catch ex
         isa(ex, TypeError) && (ex.func == :store_cell) && (return dlm_fill(ex.expected, offarr, dims, has_header, sbuff, auto, eol))
-        rethrow(ex)
+        error("at row $row, column $col : $ex")
     end
 end
 
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Bool,2}, row::Int, col::Int)
+    n = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{T<:Integer, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int)
+    n = tryparse_internal(T, sbuff, startpos, endpos, 0, false)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float64,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Float32,2}, row::Int, col::Int)
+    n = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+    isnull(n) || (cells[row,col] = get(n))
+    isnull(n)
+end
+colval{T<:AbstractString, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) = ((cells[row,col] = SubString(sbuff,startpos,endpos)); false)
+function colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{Any,2}, row::Int, col::Int)
+    # if array is of Any type, attempt parsing only the most common types: Int, Bool, Float64 and fallback to SubString
+    len = endpos-startpos+1
+    if len > 0
+        # check Inteter
+        ni64 = tryparse_internal(Int, sbuff, startpos, endpos, 0, false)
+        isnull(ni64) || (cells[row,col] = get(ni64); return false)
 
-colval{T<:Bool, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((sval=="true") && (cells[row,col]=true; return false); (sval=="false") && (cells[row,col]=false; return false); true)
-colval{T<:Number, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = (float64_isvalid(sval, tmp64) ? ((cells[row,col] = tmp64[1]); false) : true)
-colval{T<:AbstractString, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = sval); false)
-colval{S<:AbstractString}(sval::S, cells::Array{Any,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((cells[row,col] = float64_isvalid(sval, tmp64) ? tmp64[1] : sval); false)
-colval{T<:Char, S<:AbstractString}(sval::S, cells::Array{T,2}, row::Int, col::Int, tmp64::Array{Float64,1}) = ((length(sval) == 1) ? ((cells[row,col] = next(sval,1)[1]); false) : true)
-colval{S<:AbstractString}(sval::S, cells::Array, row::Int, col::Int, tmp64::Array{Float64,1}) = true
+        # check Bool
+        nb = tryparse_internal(Bool, sbuff, startpos, endpos, false)
+        isnull(nb) || (cells[row,col] = get(nb); return false)
+
+        # check float64
+        nf64 = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), sbuff, startpos-1, endpos-startpos+1)
+        isnull(nf64) || (cells[row,col] = get(nf64); return false)
+    end
+    cells[row,col] = SubString(sbuff, startpos, endpos)
+    false
+end
+colval{T<:Char, S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array{T,2}, row::Int, col::Int) = ((startpos==endpos) ? ((cells[row,col] = next(sbuff,startpos)[1]); false) : true)
+colval{S<:ByteString}(sbuff::S, startpos::Int, endpos::Int, cells::Array, row::Int, col::Int) = true
 
 dlm_parse(s::ASCIIString, eol::Char, dlm::Char, qchar::Char, cchar::Char, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler) =  begin
-    dlm_parse(s.data, uint8(uint32(eol)), uint8(uint32(dlm)), uint8(uint32(qchar)), uint8(uint32(cchar)),
+    dlm_parse(s.data, UInt32(eol)%UInt8, UInt32(dlm)%UInt8, UInt32(qchar)%UInt8, UInt32(cchar)%UInt8,
               ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh)
 end
 
 function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dlm::Bool, allow_quote::Bool, allow_comments::Bool, skipstart::Int, skipblanks::Bool, dh::DLMHandler)
     all_ascii = (D <: UInt8) || (isascii(eol) && isascii(dlm) && (!allow_quote || isascii(qchar)) && (!allow_comments || isascii(cchar)))
-    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, uint8(eol), uint8(dlm), uint8(qchar), uint8(cchar), ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
+    (T <: UTF8String) && all_ascii && (return dlm_parse(dbuff.data, eol%UInt8, dlm%UInt8, qchar%UInt8, cchar%UInt8, ign_adj_dlm, allow_quote, allow_comments, skipstart, skipblanks, dh))
     ncols = nrows = col = 0
-    is_default_dlm = (dlm == uint32(invalid_dlm) % D)
+    is_default_dlm = (dlm == UInt32(invalid_dlm) % D)
     error_str = ""
     # 0: begin field, 1: quoted field, 2: unquoted field, 3: second quote (could either be end of field or escape character), 4: comment, 5: skipstart
     state = (skipstart > 0) ? 5 : 0
@@ -341,16 +388,16 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
         was_cr = false
         while idx <= slen
             val,idx = next(dbuff, idx)
-            if (is_eol = (char(val) == char(eol)))
+            if (is_eol = (Char(val) == Char(eol)))
                 is_dlm = is_comment = is_cr = is_quote = false
-            elseif (is_dlm = (is_default_dlm ? in(char(val), _default_delims) : (char(val) == char(dlm))))
+            elseif (is_dlm = (is_default_dlm ? in(Char(val), _default_delims) : (Char(val) == Char(dlm))))
                 is_comment = is_cr = is_quote = false
-            elseif (is_quote = (char(val) == char(qchar)))
+            elseif (is_quote = (Char(val) == Char(qchar)))
                 is_comment = is_cr = false
-            elseif (is_comment = (char(val) == char(cchar)))
+            elseif (is_comment = (Char(val) == Char(cchar)))
                 is_cr = false
             else
-                is_cr = (char(eol) == '\n') && (char(val) == '\r')
+                is_cr = (Char(eol) == '\n') && (Char(val) == '\r')
             end
 
             if 2 == state   # unquoted field
@@ -447,7 +494,7 @@ function dlm_parse{T,D}(dbuff::T, eol::D, dlm::D, qchar::D, cchar::D, ign_adj_dl
                     col = 0
                     state = 4
                 elseif (is_cr && was_cr) || !is_cr
-                    error_str = escape_string("unexpected character '$(char(val))' after quoted field at row $(nrows+1) column $(col+1)")
+                    error_str = escape_string("unexpected character '$(Char(val))' after quoted field at row $(nrows+1) column $(col+1)")
                     break
                 end
             elseif 5 == state # skip start

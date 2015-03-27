@@ -11,7 +11,7 @@ end
 utf16_is_lead(c::UInt16) = (c & 0xfc00) == 0xd800
 utf16_is_trail(c::UInt16) = (c & 0xfc00) == 0xdc00
 utf16_is_surrogate(c::UInt16) = (c & 0xf800) == 0xd800
-utf16_get_supplementary(lead::UInt16, trail::UInt16) = char(uint32(lead-0xd7f7)<<10 + trail)
+utf16_get_supplementary(lead::UInt16, trail::UInt16) = Char(UInt32(lead-0xd7f7)<<10 + trail)
 
 function endof(s::UTF16String)
     d = s.data
@@ -21,7 +21,7 @@ function endof(s::UTF16String)
 end
 function next(s::UTF16String, i::Int)
     if !utf16_is_surrogate(s.data[i])
-        return char(s.data[i]), i+1
+        return Char(s.data[i]), i+1
     elseif length(s.data)-1 > i && utf16_is_lead(s.data[i]) && utf16_is_trail(s.data[i+1])
         return utf16_get_supplementary(s.data[i], s.data[i+1]), i+2
     end
@@ -54,10 +54,10 @@ function encode16(s::AbstractString)
     for ch in s
         c = reinterpret(UInt32, ch)
         if c < 0x10000
-            push!(buf, uint16(c))
+            push!(buf, UInt16(c))
         else
-            push!(buf, uint16(0xd7c0 + (c>>10) & 0x3ff))
-            push!(buf, uint16(0xdc00 + c & 0x3ff))
+            push!(buf, UInt16(0xd7c0 + (c>>10) & 0x3ff))
+            push!(buf, UInt16(0xdc00 + c & 0x3ff))
         end
     end
     push!(buf, 0) # NULL termination
@@ -75,7 +75,7 @@ convert(::Type{UTF8String}, s::UTF16String) =
     sprint(length(s.data)-1, io->for c in s; write(io,c::Char); end)
 
 sizeof(s::UTF16String) = sizeof(s.data) - sizeof(UInt16)
-convert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
+unsafe_convert{T<:Union(Int16,UInt16)}(::Type{Ptr{T}}, s::UTF16String) =
     convert(Ptr{T}, pointer(s))
 
 function is_valid_utf16(data::AbstractArray{UInt16})

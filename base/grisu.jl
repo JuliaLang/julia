@@ -13,9 +13,12 @@ include("grisu/float.jl")
 include("grisu/fastshortest.jl")
 include("grisu/fastprecision.jl")
 include("grisu/fastfixed.jl")
+include("grisu/bignums.jl")
 include("grisu/bignum.jl")
 
-function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
+const BIGNUMS = [Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum(),Bignums.Bignum()]
+
+function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS,bignums=BIGNUMS)
     if signbit(v)
         neg = true
         v = -v
@@ -34,15 +37,15 @@ function grisu(v::FloatingPoint,mode,requested_digits,buffer=DIGITS)
         return len, point, neg, buffer
     end
     if mode == SHORTEST
-        status,len,point,buf = fastshortest(v,buffer)
+        status,len,point = fastshortest(v,buffer)
     elseif mode == FIXED
-        status,len,point,buf = fastfixedtoa(v,0,requested_digits,buffer)
+        status,len,point = fastfixedtoa(v,0,requested_digits,buffer)
     elseif mode == PRECISION
-        status,len,point,buf = fastprecision(v,requested_digits,buffer)
+        status,len,point = fastprecision(v,requested_digits,buffer)
     end
-    status && return len-1, point, neg, buf
-    status, len, point, buf = bignumdtoa(v,mode,requested_digits,buffer)
-    return len-1, point, neg, buf
+    status && return len-1, point, neg, buffer
+    status, len, point = bignumdtoa(v,mode,requested_digits,buffer,bignums)
+    return len-1, point, neg, buffer
 end
 
 _show(io::IO, x::FloatingPoint, mode, n::Int, t) =
@@ -59,7 +62,7 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
         write(io, typed ? infstr : "Inf")
         return
     end
-    typed && isa(x,Float16) && write(io, "float16(")
+    typed && isa(x,Float16) && write(io, "Float16(")
     len,pt,neg,buffer = grisu(x,mode,n)
     pdigits = pointer(buffer)
     if mode == PRECISION

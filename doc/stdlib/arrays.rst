@@ -90,9 +90,11 @@ Basic functions
 Constructors
 ------------
 
-.. function:: Array(type, dims)
+.. function:: Array(dims)
 
-   Construct an uninitialized dense array. ``dims`` may be a tuple or a series of integer arguments.
+   ``Array{T}(dims)`` constructs an uninitialized dense array with element type ``T``.
+   ``dims`` may be a tuple or a series of integer arguments.
+   The syntax ``Array(T, dims)`` is also available, but deprecated.
 
 .. function:: getindex(type[, elements...])
 
@@ -149,7 +151,7 @@ Constructors
 
 .. function:: reinterpret(type, A)
 
-   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, uint32(7))`` interprets the 4 bytes corresponding to ``uint32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
+   Change the type-interpretation of a block of memory. For example, ``reinterpret(Float32, UInt32(7))`` interprets the 4 bytes corresponding to ``UInt32(7)`` as a ``Float32``. For arrays, this constructs an array with the same binary data as the given array, but with the specified element type.
 
 .. function:: eye(n)
 
@@ -163,12 +165,12 @@ Constructors
 
    Constructs an identity matrix of the same dimensions and type as ``A``.
 
-.. function:: linspace(start, stop, n)
+.. function:: linspace(start, stop, n=100)
 
    Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
    See also: :func:`linrange` that constructs a range object.
 
-.. function:: logspace(start, stop, n)
+.. function:: logspace(start, stop, n=50)
 
    Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
 
@@ -264,14 +266,6 @@ Indexing, Assignment, and Concatenation
 .. function:: flipdim(A, d)
 
    Reverse ``A`` in dimension ``d``.
-
-.. function:: flipud(A)
-
-   Equivalent to ``flipdim(A,1)``.
-
-.. function:: fliplr(A)
-
-   Equivalent to ``flipdim(A,2)``.
 
 .. function:: circshift(A,shifts)
 
@@ -471,15 +465,21 @@ Array functions
    Rotate matrix ``A`` right 90 degrees an integer ``k`` number of times. If ``k``
    is zero or a multiple of four, this is equivalent to a ``copy``.
 
-.. function:: reducedim(f, A, dims, initial)
+.. function:: reducedim(f, A, dims[, initial])
 
    Reduce 2-argument function ``f`` along dimensions of ``A``. ``dims`` is a
    vector specifying the dimensions to reduce, and ``initial`` is the initial
-   value to use in the reductions.
+   value to use in the reductions. For `+`, `*`, `max` and `min` the `initial`
+   argument is optional.
 
    The associativity of the reduction is implementation-dependent; if you
    need a particular associativity, e.g. left-to-right, you should write
    your own loop. See documentation for ``reduce``.
+
+.. function:: mapreducedim(f, op, A, dims[, initial])
+
+   Evaluates to the same as `reducedim(op, map(f, A), dims, f(initial))`, but
+   is generally faster because the intermediate array is avoided.
 
 .. function:: mapslices(f, A, dims)
 
@@ -523,9 +523,10 @@ Combinatorics
 
    In-place version of :func:`nthperm`.
 
-.. function:: randperm(n)
+.. function:: randperm([rng,] n)
 
-   Construct a random permutation of the given length.
+   Construct a random permutation of length ``n``. The optional ``rng`` argument
+   specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: invperm(v)
 
@@ -547,15 +548,19 @@ Combinatorics
 
    Like permute!, but the inverse of the given permutation is applied.
 
-.. function:: randcycle(n)
+.. function:: randcycle([rng,] n)
 
-   Construct a random cyclic permutation of the given length.
+   Construct a random cyclic permutation of length ``n``. The optional ``rng``
+   argument specifies a random number generator, see :ref:`Random Numbers
+   <random-numbers>`.
 
-.. function:: shuffle(v)
+.. function:: shuffle([rng,] v)
 
-   Return a randomly permuted copy of ``v``.
+   Return a randomly permuted copy of ``v``. The optional ``rng`` argument
+   specifies a random number generator, see :ref:`Random Numbers
+   <random-numbers>`.
 
-.. function:: shuffle!(v)
+.. function:: shuffle!([rng,] v)
 
    In-place version of :func:`shuffle`.
 
@@ -702,7 +707,7 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
 .. function:: spzeros(m,n)
 
-   Create an empty sparse matrix of size ``m x n``.
+   Create a sparse matrix of size ``m x n``. This sparse matrix will not contain any nonzero values. No storage will be allocated for nonzero values during construction.
 
 .. function:: spones(S)
 
@@ -716,9 +721,9 @@ Sparse matrices support much of the same set of operations as dense matrices. Th
 
    Construct a sparse diagonal matrix. ``B`` is a tuple of vectors containing the diagonals and ``d`` is a tuple containing the positions of the diagonals. In the case the input contains only one diagonaly, ``B`` can be a vector (instead of a tuple) and ``d`` can be the diagonal position (instead of a tuple), defaulting to 0 (diagonal). Optionally, ``m`` and ``n`` specify the size of the resulting sparse matrix.
 
-.. function:: sprand(m,n,p[,rng])
+.. function:: sprand([rng,] m,n,p [,rfn])
 
-   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rng``. The uniform distribution is used in case ``rng`` is not specified.
+   Create a random ``m`` by ``n`` sparse matrix, in which the probability of any element being nonzero is independently given by ``p`` (and hence the mean density of nonzeros is also exactly ``p``). Nonzero values are sampled from the distribution specified by ``rfn``. The uniform distribution is used in case ``rfn`` is not specified. The optional ``rng`` argument specifies a random number generator, see :ref:`Random Numbers <random-numbers>`.
 
 .. function:: sprandn(m,n,p)
 

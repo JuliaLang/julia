@@ -78,18 +78,3 @@ macro flavor (name, features)
         flavors[$(Expr(:quote, name))] = $(esc(name))
     end
 end
-
-# Dynamic scoping of current config
-
-_config_ = nothing
-
-function withconfig(f, config)
-    global _config_
-    old = _config_
-    _config_ = config
-    try
-        f()
-    finally
-        _config_ = old
-    end
-end

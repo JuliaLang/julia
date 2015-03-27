@@ -18,7 +18,7 @@ end
 /(x::Integer, y::Integer) = float(x)/float(y)
 inv(x::Integer) = float(one(x))/float(x)
 
-isodd(n::Integer) = bool(rem(n,2))
+isodd(n::Integer) = Bool(rem(n,2))
 iseven(n::Integer) = !isodd(n)
 
 signbit(x::Integer) = x < 0
@@ -117,9 +117,9 @@ bswap(x::UInt128) = box(UInt128,bswap_int(unbox(UInt128,x)))
 
 for T in IntTypes
     @eval begin
-        count_ones(x::$T)     = int(box($T,ctpop_int(unbox($T,x))))
-        leading_zeros(x::$T)  = int(box($T,ctlz_int(unbox($T,x))))
-        trailing_zeros(x::$T) = int(box($T,cttz_int(unbox($T,x))))
+        count_ones(x::$T)     = Int(box($T,ctpop_int(unbox($T,x))))
+        leading_zeros(x::$T)  = Int(box($T,ctlz_int(unbox($T,x))))
+        trailing_zeros(x::$T) = Int(box($T,cttz_int(unbox($T,x))))
     end
 end
 count_zeros  (x::Integer) = count_ones(~x)
@@ -162,11 +162,16 @@ for to in tuple(IntTypes...,Char), from in tuple(IntTypes...,Char,Bool)
             @eval rem(x::($from), ::Type{$to}) = box($to,trunc_int($to,unbox($from,x)))
         elseif from.size < to.size || from === Bool
             if issubtype(from, Signed)
-                @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
+                if issubtype(to, Unsigned)
+                    @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,check_top_bit(unbox($from,x))))
+                else
+                    @eval convert(::Type{$to}, x::($from)) = box($to,sext_int($to,unbox($from,x)))
+                end
+                @eval rem(x::($from), ::Type{$to}) = box($to,sext_int($to,unbox($from,x)))
             else
                 @eval convert(::Type{$to}, x::($from)) = box($to,zext_int($to,unbox($from,x)))
+                @eval rem(x::($from), ::Type{$to}) = convert($to,x)
             end
-            @eval rem(x::($from), ::Type{$to}) = convert($to,x)
         else
             if !(issubtype(from,Signed) === issubtype(to,Signed))
                 # raise InexactError if x's top bit is set
@@ -226,26 +231,8 @@ convert(::Type{Unsigned}, x::Float64) = convert(UInt,x)
 convert(::Type{Unsigned}, x::Char)    = convert(UInt,x)
 convert(::Type{Unsigned}, x::Bool)    = convert(UInt,x)
 
-convert(::Type{Integer}, x::Float32) = convert(Int,x)
-convert(::Type{Integer}, x::Float64) = convert(Int,x)
-
-int8(x) = convert(Int8,x)
-int16(x) = convert(Int16,x)
-int32(x) = convert(Int32,x)
-int64(x) = convert(Int64,x)
-int128(x) = convert(Int128,x)
-
-uint8(x) = convert(UInt8,x)
-uint8(x::Integer) = x % UInt8
-uint8(x::Int8) = box(UInt8,unbox(Int8,x))
-uint8(x::Bool) = convert(UInt8,x)
-
-uint16(x) = convert(UInt16,x)
-uint32(x) = convert(UInt32,x)
-uint64(x) = convert(UInt64,x)
-uint128(x) = convert(UInt128,x)
-
-integer(x) = convert(Integer,x)
+convert(::Type{Integer}, x::Integer) = x
+convert(::Type{Integer}, x::Union(Real,Char)) = convert(Signed,x)
 
 round(x::Integer) = x
 trunc(x::Integer) = x
@@ -259,12 +246,20 @@ floor{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
 
 ## integer construction ##
 
-macro int128_str(str)
-    int128(str)
+macro int128_str(x)
+    if isa(x,AbstractString)
+        parse(Int128,x)
+    else
+        Int128(x)
+    end
 end
 
-macro uint128_str(str)
-    uint128(str)
+macro uint128_str(x)
+    if isa(x,AbstractString)
+        parse(UInt128,x)
+    else
+        UInt128(x)
+    end
 end
 
 macro bigint_str(str)
@@ -273,7 +268,7 @@ end
 
 ## system word size ##
 
-const WORD_SIZE = int(Int.size)*8
+const WORD_SIZE = Int(Int.size)*8
 
 ## integer promotions ##
 
@@ -337,26 +332,26 @@ promote_rule(::Type{UInt128}, ::Type{Int128}) = UInt128
 
 ## traits ##
 
-typemin(::Type{Int8  }) = int8(-128)
-typemax(::Type{Int8  }) = int8(127)
-typemin(::Type{UInt8 }) = uint8(0)
-typemax(::Type{UInt8 }) = uint8(255)
-typemin(::Type{Int16 }) = int16(-32768)
-typemax(::Type{Int16 }) = int16(32767)
-typemin(::Type{UInt16}) = uint16(0)
-typemax(::Type{UInt16}) = uint16(65535)
-typemin(::Type{Int32 }) = int32(-2147483648)
-typemax(::Type{Int32 }) = int32(2147483647)
-typemin(::Type{UInt32}) = uint32(0)
-typemax(::Type{UInt32}) = uint32(4294967295)
+typemin(::Type{Int8  }) = Int8(-128)
+typemax(::Type{Int8  }) = Int8(127)
+typemin(::Type{UInt8 }) = UInt8(0)
+typemax(::Type{UInt8 }) = UInt8(255)
+typemin(::Type{Int16 }) = Int16(-32768)
+typemax(::Type{Int16 }) = Int16(32767)
+typemin(::Type{UInt16}) = UInt16(0)
+typemax(::Type{UInt16}) = UInt16(65535)
+typemin(::Type{Int32 }) = Int32(-2147483648)
+typemax(::Type{Int32 }) = Int32(2147483647)
+typemin(::Type{UInt32}) = UInt32(0)
+typemax(::Type{UInt32}) = UInt32(4294967295)
 typemin(::Type{Int64 }) = -9223372036854775808
 typemax(::Type{Int64 }) = 9223372036854775807
-typemin(::Type{UInt64}) = uint64(0)
+typemin(::Type{UInt64}) = UInt64(0)
 typemax(::Type{UInt64}) = 0xffffffffffffffff
-@eval typemin(::Type{UInt128}) = $(uint128(0))
+@eval typemin(::Type{UInt128}) = $(UInt128(0))
 @eval typemax(::Type{UInt128}) = $(box(UInt128,unbox(Int128,convert(Int128,-1))))
-@eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<int32(127))
-@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>int32(1))))
+@eval typemin(::Type{Int128} ) = $(convert(Int128,1)<<Int32(127))
+@eval typemax(::Type{Int128} ) = $(box(Int128,unbox(UInt128,typemax(UInt128)>>Int32(1))))
 
 widen(::Type{Int8}) = Int
 widen(::Type{Int16}) = Int
@@ -378,18 +373,6 @@ widemul(x::Bool,y::Number) = x*y
 widemul(x::Number,y::Bool) = x*y
 
 
-## float to integer coercion ##
-
-# requires int arithmetic defined, for the loops to work
-
-for (f,t) in ((:uint8,:UInt8), (:uint16,:UInt16), (:uint32,:UInt32), (:uint64,:UInt64),
-              (:int8,:Int8),   (:int16,:Int16),   (:int32,:Int32),   (:int64,:Int64),
-              (:int128,:Int128), (:uint128,:UInt128),
-              (:signed,:Int), (:unsigned,:UInt), (:integer,:Int),
-              (:int,:Int), (:uint,:UInt))
-    @eval ($f)(x::FloatingPoint) = round($t,x)
-end
-
 ## wide multiplication, Int128 multiply and divide ##
 
 if WORD_SIZE==32
@@ -405,7 +388,7 @@ if WORD_SIZE==32
         w1 = u0*reinterpret(UInt64,v1) + (t&0xffffffff)
         hi = u1*v1 + w2 + (reinterpret(Int64,w1) >> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        int128(hi)<<64 + int128(lo)
+        Int128(hi)<<64 + Int128(lo)
     end
 
     function widemul(u::UInt64, v::UInt64)
@@ -420,38 +403,38 @@ if WORD_SIZE==32
         w1 = u0*v1 + (t&0xffffffff)
         hi = u1*v1 + w2 + (w1 >>> 32)
         lo = w0&0xffffffff + (w1 << 32)
-        uint128(hi)<<64 + uint128(lo)
+        UInt128(hi)<<64 + UInt128(lo)
     end
 
     function *(u::Int128, v::Int128)
-        u0 = u % UInt64; u1 = int64(u>>64)
-        v0 = v % UInt64; v1 = int64(v>>64)
+        u0 = u % UInt64; u1 = Int64(u>>64)
+        v0 = v % UInt64; v1 = Int64(v>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(reinterpret(Int64,u0), v1)
         hilo = widemul(u1, reinterpret(Int64,v0))
         t = reinterpret(UInt128,hilo) + (lolo>>>64)
         w1 = reinterpret(UInt128,lohi) + (t&0xffffffffffffffff)
-        int128(lolo&0xffffffffffffffff) + reinterpret(Int128,w1)<<64
+        Int128(lolo&0xffffffffffffffff) + reinterpret(Int128,w1)<<64
     end
 
     function *(u::UInt128, v::UInt128)
-        u0 = u % UInt64; u1 = uint64(u>>>64)
-        v0 = v % UInt64; v1 = uint64(v>>>64)
+        u0 = u % UInt64; u1 = UInt64(u>>>64)
+        v0 = v % UInt64; v1 = UInt64(v>>>64)
         lolo = widemul(u0, v0)
         lohi = widemul(u0, v1)
         hilo = widemul(u1, v0)
         t = hilo + (lolo>>>64)
         w1 = lohi + (t&0xffffffffffffffff)
-        (lolo&0xffffffffffffffff) + uint128(w1)<<64
+        (lolo&0xffffffffffffffff) + UInt128(w1)<<64
     end
 
-    div(x::Int128, y::Int128) = int128(div(BigInt(x),BigInt(y)))
-    div(x::UInt128, y::UInt128) = uint128(div(BigInt(x),BigInt(y)))
+    div(x::Int128, y::Int128) = Int128(div(BigInt(x),BigInt(y)))
+    div(x::UInt128, y::UInt128) = UInt128(div(BigInt(x),BigInt(y)))
 
-    rem(x::Int128, y::Int128) = int128(rem(BigInt(x),BigInt(y)))
-    rem(x::UInt128, y::UInt128) = uint128(rem(BigInt(x),BigInt(y)))
+    rem(x::Int128, y::Int128) = Int128(rem(BigInt(x),BigInt(y)))
+    rem(x::UInt128, y::UInt128) = UInt128(rem(BigInt(x),BigInt(y)))
 
-    mod(x::Int128, y::Int128) = int128(mod(BigInt(x),BigInt(y)))
+    mod(x::Int128, y::Int128) = Int128(mod(BigInt(x),BigInt(y)))
 
     << (x::Int128,  y::Int32) = y == 0 ? x : box(Int128,shl_int(unbox(Int128,x),unbox(Int32,y)))
     << (x::UInt128, y::Int32) = y == 0 ? x : box(UInt128,shl_int(unbox(UInt128,x),unbox(Int32,y)))
@@ -473,6 +456,8 @@ else
 end
 
 ## checked +, - and *
+
+# requires int arithmetic defined, for the loops to work
 
 for T in (Int8,Int16,Int32,Int64)#,Int128) ## FIXME: #4905
     @eval begin
@@ -510,7 +495,7 @@ end
 if WORD_SIZE == 32
 for T in (Int64,UInt64)
     @eval function checked_mul(x::$T, y::$T)
-        xy = int128(x)*int128(y)
+        xy = Int128(x)*Int128(y)
         (typemin($T) <= xy <= typemax($T)) || throw(OverflowError())
         return xy % $T
     end

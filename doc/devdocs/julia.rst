@@ -9,8 +9,12 @@
 .. toctree::
    :maxdepth: 1
 
+   init
+   eval
+   object
    cartesian
    meta
    subarrays
    sysimg
    llvm
+   stdio

@@ -92,6 +92,7 @@ done
 for i in share/julia/base/pcre_h.jl; do
   $SEVENZIP e -y julia-installer.exe "\$_OUTDIR/$i" -obase >> get-deps.log
 done
+sed -i 's/int32/Int32/g' base/pcre_h.jl
 # suppress "bash.exe: warning: could not find /tmp, please create!"
 mkdir -p usr/Git/tmp
 # Remove libjulia.dll if it was copied from downloaded binary
@@ -140,8 +141,16 @@ if ! [ -e $f ]; then
 fi
 echo "Extracting $f"
 $SEVENZIP x -y $f >> get-deps.log
-echo 'LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
+echo 'override LLVM_CONFIG = $(JULIAHOME)/usr/bin/llvm-config' >> Make.user
 
+if [ -n "$APPVEYOR" ]; then
+  for i in make.exe touch.exe msys-intl-8.dll msys-iconv-2.dll; do
+    f="/c/MinGW/msys/1.0/bin/$i"
+    if [ -e $f ]; then
+      cp $f /bin/$i
+    fi
+  done
+fi
 if [ -z "`which make 2>/dev/null`" ]; then
   if [ -n "`uname | grep CYGWIN`" ]; then
     echo "Install the Cygwin package for 'make' and try again."
@@ -159,7 +168,7 @@ if [ -z "`which make 2>/dev/null`" ]; then
   export PATH=$PWD/bin:$PATH
 fi
 
-for lib in LLVM SUITESPARSE ARPACK BLAS LAPACK FFTW \
+for lib in SUITESPARSE ARPACK BLAS LAPACK FFTW \
     GMP MPFR PCRE LIBUNWIND RMATH OPENSPECFUN; do
   echo "USE_SYSTEM_$lib = 1" >> Make.user
 done
@@ -196,5 +205,5 @@ else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
 fi
 
-make -j2
+make
 #make debug

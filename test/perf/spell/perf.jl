@@ -92,7 +92,7 @@ function spelltest(tests; bias=0, verbose=false)
         end
     end
 
-    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>int(100. - 100.*bad/n),
+    return Dict("bad"=>bad, "n"=>n, "bias"=>bias, "pct"=>Int(100. - 100.*bad/n),
                 "unknown"=>unknown, "secs"=>toc())
 end
 

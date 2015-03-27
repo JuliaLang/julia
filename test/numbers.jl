@@ -28,21 +28,21 @@
 @test true  $ true  == false
 
 # the bool operator
-@test bool(false) == false
-@test bool(true) == true
-@test bool(0) == false
-@test bool(1) == true
-@test bool(-1) == true
-@test bool(0.0) == false
-@test bool(1.0) == true
-@test bool(0.1) == true
-@test bool(-1.0) == true
-@test bool(Complex(0,0)) == false
-@test bool(Complex(1,0)) == true
-@test_throws InexactError bool(Complex(0,1)) == true
-@test bool(0//1) == false
-@test bool(1//1) == true
-@test bool(1//2) == true
+@test Bool(false) == false
+@test Bool(true) == true
+@test Bool(0) == false
+@test Bool(1) == true
+@test Bool(-1) == true
+@test Bool(0.0) == false
+@test Bool(1.0) == true
+@test Bool(0.1) == true
+@test Bool(-1.0) == true
+@test Bool(Complex(0,0)) == false
+@test Bool(Complex(1,0)) == true
+@test_throws InexactError Bool(Complex(0,1)) == true
+@test Bool(0//1) == false
+@test Bool(1//1) == true
+@test Bool(1//2) == true
 
 # basic arithmetic
 @test 2 + 3 == 5
@@ -63,7 +63,7 @@
 @test minmax(-0.0,0.0) === minmax(0.0,-0.0)
 
 # fma
-let x = int64(7)^7
+let x = Int64(7)^7
     @test fma(x-1, x-2, x-3) == (x-1) * (x-2) + (x-3)
     @test (fma((x-1)//(x-2), (x-3)//(x-4), (x-5)//(x-6)) ==
            (x-1)//(x-2) * (x-3)//(x-4) + (x-5)//(x-6))
@@ -76,36 +76,36 @@ let x = BigInt(7)^77
 end
 
 let eps = 1//BigInt(2)^30, one_eps = 1+eps,
-    eps64 = float64(eps), one_eps64 = float64(one_eps)
-    @test eps64 == float64(eps)
+    eps64 = Float64(eps), one_eps64 = Float64(one_eps)
+    @test eps64 == Float64(eps)
     @test rationalize(BigInt, eps64, tol=0) == eps
-    @test one_eps64 == float64(one_eps)
+    @test one_eps64 == Float64(one_eps)
     @test rationalize(BigInt, one_eps64, tol=0) == one_eps
-    @test one_eps64 * one_eps64 - 1 != float64(one_eps * one_eps - 1)
-    @test fma(one_eps64, one_eps64, -1) == float64(one_eps * one_eps - 1)
+    @test one_eps64 * one_eps64 - 1 != Float64(one_eps * one_eps - 1)
+    @test fma(one_eps64, one_eps64, -1) == Float64(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^15, one_eps = 1+eps,
-    eps32 = float32(eps), one_eps32 = float32(one_eps)
-    @test eps32 == float32(eps)
+    eps32 = Float32(eps), one_eps32 = Float32(one_eps)
+    @test eps32 == Float32(eps)
     @test rationalize(BigInt, eps32, tol=0) == eps
-    @test one_eps32 == float32(one_eps)
+    @test one_eps32 == Float32(one_eps)
     @test rationalize(BigInt, one_eps32, tol=0) == one_eps
-    @test one_eps32 * one_eps32 - 1 != float32(one_eps * one_eps - 1)
-    @test fma(one_eps32, one_eps32, -1) == float32(one_eps * one_eps - 1)
+    @test one_eps32 * one_eps32 - 1 != Float32(one_eps * one_eps - 1)
+    @test fma(one_eps32, one_eps32, -1) == Float32(one_eps * one_eps - 1)
 end
 
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
-    eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
-    @test eps16 == float16(float32(eps))
+    eps16 = Float16(Float32(eps)), one_eps16 = Float16(Float32(one_eps))
+    @test eps16 == Float16(Float32(eps))
     # Currently broken in Julia -- enable when "rationalize" is fixed;
     # see <https://github.com/JuliaLang/julia/issues/9897>
     # @test rationalize(BigInt, eps16, tol=0) == eps
-    @test one_eps16 == float16(float32(one_eps))
+    @test one_eps16 == Float16(Float32(one_eps))
     # @test rationalize(BigInt, one_eps16, tol=0) == one_eps
-    @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
+    @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
     @test (fma(one_eps16, one_eps16, -1) ==
-           float16(float32(one_eps * one_eps - 1)))
+           Float16(Float32(one_eps * one_eps - 1)))
 end
 
 let eps = 1//BigInt(2)^200, one_eps = 1+eps,
@@ -121,35 +121,35 @@ end
 # muladd
 
 let eps = 1//BigInt(2)^30, one_eps = 1+eps,
-    eps64 = float64(eps), one_eps64 = float64(one_eps)
-    @test eps64 == float64(eps)
-    @test one_eps64 == float64(one_eps)
-    @test one_eps64 * one_eps64 - 1 != float64(one_eps * one_eps - 1)
+    eps64 = Float64(eps), one_eps64 = Float64(one_eps)
+    @test eps64 == Float64(eps)
+    @test one_eps64 == Float64(one_eps)
+    @test one_eps64 * one_eps64 - 1 != Float64(one_eps * one_eps - 1)
     @test isapprox(muladd(one_eps64, one_eps64, -1),
-                   float64(one_eps * one_eps - 1))
+                   Float64(one_eps * one_eps - 1))
 end
 
 let eps = 1//BigInt(2)^15, one_eps = 1+eps,
-    eps32 = float32(eps), one_eps32 = float32(one_eps)
-    @test eps32 == float32(eps)
-    @test one_eps32 == float32(one_eps)
-    @test one_eps32 * one_eps32 - 1 != float32(one_eps * one_eps - 1)
+    eps32 = Float32(eps), one_eps32 = Float32(one_eps)
+    @test eps32 == Float32(eps)
+    @test one_eps32 == Float32(one_eps)
+    @test one_eps32 * one_eps32 - 1 != Float32(one_eps * one_eps - 1)
     @test isapprox(muladd(one_eps32, one_eps32, -1),
-                   float32(one_eps * one_eps - 1))
+                   Float32(one_eps * one_eps - 1))
 end
 
 let eps = 1//BigInt(2)^7, one_eps = 1+eps,
-    eps16 = float16(float32(eps)), one_eps16 = float16(float32(one_eps))
-    @test eps16 == float16(float32(eps))
-    @test one_eps16 == float16(float32(one_eps))
-    @test one_eps16 * one_eps16 - 1 != float16(float32(one_eps * one_eps - 1))
+    eps16 = Float16(Float32(eps)), one_eps16 = Float16(Float32(one_eps))
+    @test eps16 == Float16(Float32(eps))
+    @test one_eps16 == Float16(Float32(one_eps))
+    @test one_eps16 * one_eps16 - 1 != Float16(Float32(one_eps * one_eps - 1))
     @test isapprox(muladd(one_eps16, one_eps16, -1),
-                   float16(float32(one_eps * one_eps - 1)))
+                   Float16(Float32(one_eps * one_eps - 1)))
 end
 
 @test muladd(1,2,3) == 1*2+3
 @test muladd(big(1),2,3) == big(1)*2+3
-@test muladd(uint(1),2,3) == uint(1)*2+3
+@test muladd(UInt(1),2,3) == UInt(1)*2+3
 @test muladd(1//1,2,3) == (1//1)*2+3
 @test muladd(big(1//1),2,3) == big(1//1)*2+3
 @test muladd(1.0,2,3) == 1.0*2+3
@@ -357,6 +357,9 @@ end
 @test base(12,typemin(Int128)) == "-2a695925806818735399a37a20a31b3534a8"
 @test base(12,typemax(Int128)) == "2a695925806818735399a37a20a31b3534a7"
 
+@test hex2num("3ff0000000000000") == 1.
+@test hex2num("4000000000000000") == 2.
+
 # floating-point printing
 @test repr(1.0) == "1.0"
 @test repr(-1.0) == "-1.0"
@@ -370,7 +373,7 @@ end
 @test repr(-Inf) == "-Inf"
 @test repr(NaN) == "NaN"
 @test repr(-NaN) == "NaN"
-@test repr(float64(pi)) == "3.141592653589793"
+@test repr(Float64(pi)) == "3.141592653589793"
 
 @test repr(1.0f0) == "1.0f0"
 @test repr(-1.0f0) == "-1.0f0"
@@ -384,7 +387,7 @@ end
 @test repr(-Inf32) == "-Inf32"
 @test repr(NaN32) == "NaN32"
 @test repr(-NaN32) == "NaN32"
-@test repr(float32(pi)) == "3.1415927f0"
+@test repr(Float32(pi)) == "3.1415927f0"
 
 # signs
 @test sign(1) == 1
@@ -572,96 +575,96 @@ end
 @test lexcmp(NaN, NaN) == 0
 
 for x=-5:5, y=-5:5
-    @test (x==y)==(float64(x)==int64(y))
-    @test (x!=y)==(float64(x)!=int64(y))
-    @test (x< y)==(float64(x)< int64(y))
-    @test (x> y)==(float64(x)> int64(y))
-    @test (x<=y)==(float64(x)<=int64(y))
-    @test (x>=y)==(float64(x)>=int64(y))
+    @test (x==y)==(Float64(x)==Int64(y))
+    @test (x!=y)==(Float64(x)!=Int64(y))
+    @test (x< y)==(Float64(x)< Int64(y))
+    @test (x> y)==(Float64(x)> Int64(y))
+    @test (x<=y)==(Float64(x)<=Int64(y))
+    @test (x>=y)==(Float64(x)>=Int64(y))
 
-    @test (x==y)==(int64(x)==float64(y))
-    @test (x!=y)==(int64(x)!=float64(y))
-    @test (x< y)==(int64(x)< float64(y))
-    @test (x> y)==(int64(x)> float64(y))
-    @test (x<=y)==(int64(x)<=float64(y))
-    @test (x>=y)==(int64(x)>=float64(y))
+    @test (x==y)==(Int64(x)==Float64(y))
+    @test (x!=y)==(Int64(x)!=Float64(y))
+    @test (x< y)==(Int64(x)< Float64(y))
+    @test (x> y)==(Int64(x)> Float64(y))
+    @test (x<=y)==(Int64(x)<=Float64(y))
+    @test (x>=y)==(Int64(x)>=Float64(y))
 
     if x >= 0
-        @test (x==y)==(uint64(x)==float64(y))
-        @test (x!=y)==(uint64(x)!=float64(y))
-        @test (x< y)==(uint64(x)< float64(y))
-        @test (x> y)==(uint64(x)> float64(y))
-        @test (x<=y)==(uint64(x)<=float64(y))
-        @test (x>=y)==(uint64(x)>=float64(y))
+        @test (x==y)==(UInt64(x)==Float64(y))
+        @test (x!=y)==(UInt64(x)!=Float64(y))
+        @test (x< y)==(UInt64(x)< Float64(y))
+        @test (x> y)==(UInt64(x)> Float64(y))
+        @test (x<=y)==(UInt64(x)<=Float64(y))
+        @test (x>=y)==(UInt64(x)>=Float64(y))
     end
     if y >= 0
-        @test (x==y)==(float64(x)==uint64(y))
-        @test (x!=y)==(float64(x)!=uint64(y))
-        @test (x< y)==(float64(x)< uint64(y))
-        @test (x> y)==(float64(x)> uint64(y))
-        @test (x<=y)==(float64(x)<=uint64(y))
-        @test (x>=y)==(float64(x)>=uint64(y))
+        @test (x==y)==(Float64(x)==UInt64(y))
+        @test (x!=y)==(Float64(x)!=UInt64(y))
+        @test (x< y)==(Float64(x)< UInt64(y))
+        @test (x> y)==(Float64(x)> UInt64(y))
+        @test (x<=y)==(Float64(x)<=UInt64(y))
+        @test (x>=y)==(Float64(x)>=UInt64(y))
     end
 end
 
 function _cmp_(x::Union(Int64,UInt64), y::Float64)
-    if x==int64(2)^53-2 && y==2.0^53-2; return  0; end
-    if x==int64(2)^53-2 && y==2.0^53-1; return -1; end
-    if x==int64(2)^53-2 && y==2.0^53  ; return -1; end
-    if x==int64(2)^53-2 && y==2.0^53+2; return -1; end
-    if x==int64(2)^53-2 && y==2.0^53+3; return -1; end
-    if x==int64(2)^53-2 && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53-2 && y==2.0^53-2; return  0; end
+    if x==Int64(2)^53-2 && y==2.0^53-1; return -1; end
+    if x==Int64(2)^53-2 && y==2.0^53  ; return -1; end
+    if x==Int64(2)^53-2 && y==2.0^53+2; return -1; end
+    if x==Int64(2)^53-2 && y==2.0^53+3; return -1; end
+    if x==Int64(2)^53-2 && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53-1 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53-1 && y==2.0^53-1; return  0; end
-    if x==int64(2)^53-1 && y==2.0^53  ; return -1; end
-    if x==int64(2)^53-1 && y==2.0^53+2; return -1; end
-    if x==int64(2)^53-1 && y==2.0^53+3; return -1; end
-    if x==int64(2)^53-1 && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53-1 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53-1 && y==2.0^53-1; return  0; end
+    if x==Int64(2)^53-1 && y==2.0^53  ; return -1; end
+    if x==Int64(2)^53-1 && y==2.0^53+2; return -1; end
+    if x==Int64(2)^53-1 && y==2.0^53+3; return -1; end
+    if x==Int64(2)^53-1 && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53   && y==2.0^53-2; return +1; end
-    if x==int64(2)^53   && y==2.0^53-1; return +1; end
-    if x==int64(2)^53   && y==2.0^53  ; return  0; end
-    if x==int64(2)^53   && y==2.0^53+2; return -1; end
-    if x==int64(2)^53   && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53   && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53   && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53   && y==2.0^53  ; return  0; end
+    if x==Int64(2)^53   && y==2.0^53+2; return -1; end
+    if x==Int64(2)^53   && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53+1 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53+1 && y==2.0^53-1; return +1; end
-    if x==int64(2)^53+1 && y==2.0^53  ; return +1; end
-    if x==int64(2)^53+1 && y==2.0^53+2; return -1; end
-    if x==int64(2)^53+1 && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53+1 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53+1 && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53+1 && y==2.0^53  ; return +1; end
+    if x==Int64(2)^53+1 && y==2.0^53+2; return -1; end
+    if x==Int64(2)^53+1 && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53+2 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53+2 && y==2.0^53-1; return +1; end
-    if x==int64(2)^53+2 && y==2.0^53  ; return +1; end
-    if x==int64(2)^53+2 && y==2.0^53+2; return  0; end
-    if x==int64(2)^53+2 && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53+2 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53+2 && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53+2 && y==2.0^53  ; return +1; end
+    if x==Int64(2)^53+2 && y==2.0^53+2; return  0; end
+    if x==Int64(2)^53+2 && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53+3 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53+3 && y==2.0^53-1; return +1; end
-    if x==int64(2)^53+3 && y==2.0^53  ; return +1; end
-    if x==int64(2)^53+3 && y==2.0^53+2; return +1; end
-    if x==int64(2)^53+3 && y==2.0^53+4; return -1; end
+    if x==Int64(2)^53+3 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53+3 && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53+3 && y==2.0^53  ; return +1; end
+    if x==Int64(2)^53+3 && y==2.0^53+2; return +1; end
+    if x==Int64(2)^53+3 && y==2.0^53+4; return -1; end
 
-    if x==int64(2)^53+4 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53+4 && y==2.0^53-1; return +1; end
-    if x==int64(2)^53+4 && y==2.0^53  ; return +1; end
-    if x==int64(2)^53+4 && y==2.0^53+2; return +1; end
-    if x==int64(2)^53+4 && y==2.0^53+4; return  0; end
+    if x==Int64(2)^53+4 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53+4 && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53+4 && y==2.0^53  ; return +1; end
+    if x==Int64(2)^53+4 && y==2.0^53+2; return +1; end
+    if x==Int64(2)^53+4 && y==2.0^53+4; return  0; end
 
-    if x==int64(2)^53+5 && y==2.0^53-2; return +1; end
-    if x==int64(2)^53+5 && y==2.0^53-1; return +1; end
-    if x==int64(2)^53+5 && y==2.0^53  ; return +1; end
-    if x==int64(2)^53+5 && y==2.0^53+2; return +1; end
-    if x==int64(2)^53+5 && y==2.0^53+4; return +1; end
+    if x==Int64(2)^53+5 && y==2.0^53-2; return +1; end
+    if x==Int64(2)^53+5 && y==2.0^53-1; return +1; end
+    if x==Int64(2)^53+5 && y==2.0^53  ; return +1; end
+    if x==Int64(2)^53+5 && y==2.0^53+2; return +1; end
+    if x==Int64(2)^53+5 && y==2.0^53+4; return +1; end
 
     error("invalid: _cmp_($x,$y)")
 end
 
-for x=int64(2)^53-2:int64(2)^53+5,
+for x=Int64(2)^53-2:Int64(2)^53+5,
     y=[2.0^53-2 2.0^53-1 2.0^53 2.0^53+2 2.0^53+4]
-    u = uint64(x)
-    @test y == float64(trunc(Int64,y))
+    u = UInt64(x)
+    @test y == Float64(trunc(Int64,y))
 
     @test (x==y)==(y==x)
     @test (x!=y)==!(x==y)
@@ -747,73 +750,73 @@ for x=int64(2)^53-2:int64(2)^53+5,
     end
 end
 
-@test int64(2)^62-1 != 2.0^62
-@test int64(2)^62   == 2.0^62
-@test int64(2)^62+1 != 2.0^62
-@test 2.0^62 != int64(2)^62-1
-@test 2.0^62 == int64(2)^62
-@test 2.0^62 != int64(2)^62+1
+@test Int64(2)^62-1 != 2.0^62
+@test Int64(2)^62   == 2.0^62
+@test Int64(2)^62+1 != 2.0^62
+@test 2.0^62 != Int64(2)^62-1
+@test 2.0^62 == Int64(2)^62
+@test 2.0^62 != Int64(2)^62+1
 
 @test typemax(Int64)   != +2.0^63
 @test typemin(Int64)   == -2.0^63
 @test typemin(Int64)+1 != -2.0^63
 
-@test uint64(2)^60-1 != 2.0^60
-@test uint64(2)^60   == 2.0^60
-@test uint64(2)^60+1 != 2.0^60
-@test 2.0^60 != uint64(2)^60-1
-@test 2.0^60 == uint64(2)^60
-@test 2.0^60 != uint64(2)^60+1
+@test UInt64(2)^60-1 != 2.0^60
+@test UInt64(2)^60   == 2.0^60
+@test UInt64(2)^60+1 != 2.0^60
+@test 2.0^60 != UInt64(2)^60-1
+@test 2.0^60 == UInt64(2)^60
+@test 2.0^60 != UInt64(2)^60+1
 
-@test uint64(2)^63-1 != 2.0^63
-@test uint64(2)^63   == 2.0^63
-@test uint64(2)^63+1 != 2.0^63
-@test 2.0^63 != uint64(2)^63-1
-@test 2.0^63 == uint64(2)^63
-@test 2.0^63 != uint64(2)^63+1
+@test UInt64(2)^63-1 != 2.0^63
+@test UInt64(2)^63   == 2.0^63
+@test UInt64(2)^63+1 != 2.0^63
+@test 2.0^63 != UInt64(2)^63-1
+@test 2.0^63 == UInt64(2)^63
+@test 2.0^63 != UInt64(2)^63+1
 
 @test typemax(UInt64) != 2.0^64
 
-@test typemax(UInt64) < float64(typemax(UInt64))
-@test typemax(Int64) < float64(typemax(Int64))
-@test typemax(UInt64) <= float64(typemax(UInt64))
-@test typemax(Int64) <= float64(typemax(Int64))
+@test typemax(UInt64) < Float64(typemax(UInt64))
+@test typemax(Int64) < Float64(typemax(Int64))
+@test typemax(UInt64) <= Float64(typemax(UInt64))
+@test typemax(Int64) <= Float64(typemax(Int64))
 
-@test float64(typemax(UInt64)) > typemax(UInt64)
-@test float64(typemax(Int64)) > typemax(Int64)
-@test float64(typemax(UInt64)) >= typemax(UInt64)
-@test float64(typemax(Int64)) >= typemax(Int64)
+@test Float64(typemax(UInt64)) > typemax(UInt64)
+@test Float64(typemax(Int64)) > typemax(Int64)
+@test Float64(typemax(UInt64)) >= typemax(UInt64)
+@test Float64(typemax(Int64)) >= typemax(Int64)
 
-@test float64(int128(0)) == 0.0
-@test float32(int128(0)) == 0.0f0
-@test float64(int128(-1)) == -1.0
-@test float32(int128(-1)) == -1.0f0
-@test float64(int128(3)) == 3.0
-@test float32(int128(3)) == 3.0f0
-@test float64(uint128(10121)) == 10121.0
-@test float32(uint128(10121)) == 10121.0f0
-@test float64(typemin(Int128)) == -2.0^127
-@test float32(typemin(Int128)) == -2.0f0^127
-@test float64(typemax(Int128)) == 2.0^127
-@test float32(typemax(Int128)) == 2.0f0^127
-@test float64(typemin(UInt128)) == 0.0
-@test float32(typemin(UInt128)) == 0.0f0
-@test float64(typemax(UInt128)) == 2.0^128
-@test float32(typemax(UInt128)) == 2.0f0^128
+@test Float64(Int128(0)) == 0.0
+@test Float32(Int128(0)) == 0.0f0
+@test Float64(Int128(-1)) == -1.0
+@test Float32(Int128(-1)) == -1.0f0
+@test Float64(Int128(3)) == 3.0
+@test Float32(Int128(3)) == 3.0f0
+@test Float64(UInt128(10121)) == 10121.0
+@test Float32(UInt128(10121)) == 10121.0f0
+@test Float64(typemin(Int128)) == -2.0^127
+@test Float32(typemin(Int128)) == -2.0f0^127
+@test Float64(typemax(Int128)) == 2.0^127
+@test Float32(typemax(Int128)) == 2.0f0^127
+@test Float64(typemin(UInt128)) == 0.0
+@test Float32(typemin(UInt128)) == 0.0f0
+@test Float64(typemax(UInt128)) == 2.0^128
+@test Float32(typemax(UInt128)) == 2.0f0^128
 
 # check for double rounding in conversion
-@test float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
-@test float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
-@test float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
-@test float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
+@test Float64(10633823966279328163822077199654060032) == 1.0633823966279327e37 #0x1p123
+@test Float64(10633823966279328163822077199654060033) == 1.063382396627933e37 #nextfloat(0x1p123)
+@test Float64(-10633823966279328163822077199654060032) == -1.0633823966279327e37
+@test Float64(-10633823966279328163822077199654060033) == -1.063382396627933e37
 
 # check Float vs Int128 comparisons
-@test int128(1e30) == 1e30
-@test int128(1e30)+1 > 1e30
+@test Int128(1e30) == 1e30
+@test Int128(1e30)+1 > 1e30
 
-@test int128(-2.0^127) == typemin(Int128)
-@test float64(uint128(3.7e19)) == 3.7e19
-@test float64(uint128(3.7e30)) == 3.7e30
+@test Int128(-2.0^127) == typemin(Int128)
+@test Float64(UInt128(3.7e19)) == 3.7e19
+@test Float64(UInt128(3.7e30)) == 3.7e30
 
 @test !(NaN <= 1)
 @test !(NaN >= 1)
@@ -857,9 +860,9 @@ for a = -5:5, b = -5:5
     @test rationalize(a/b) == a//b
     @test a//b == a//b
     if b == 0
-        @test_throws DivideError integer(a//b) == integer(a/b)
+        @test_throws DivideError round(Integer,a//b) == round(Integer,a/b)
     else
-        @test integer(a//b) == integer(a/b)
+        @test round(Integer,a//b) == round(Integer,a/b)
     end
     for c = -5:5
         @test (a//b == c) == (a/b == c)
@@ -925,6 +928,18 @@ end
 @test Float32(pi,RoundUp) > pi
 @test !(Float32(pi,RoundDown) > pi)
 @test !(Float32(pi,RoundUp) < pi)
+
+# issue #6365
+for T in (Float32, Float64)
+    for i = 9007199254740992:9007199254740996
+        @test T(i) == T(BigFloat(i))
+        @test T(-i) == T(BigFloat(-i))
+        for r in (RoundNearest,RoundUp,RoundDown,RoundToZero)
+            @test T(i,r) == T(BigFloat(i),r)
+            @test T(-i,r) == T(BigFloat(-i),r)
+        end
+    end
+end
 
 @test prevfloat(big(pi)) < pi
 @test nextfloat(big(pi)) > pi
@@ -1109,6 +1124,8 @@ for yr = Any[
         c = cld(x,y)
         r = rem(x,y)
         m = mod(x,y)
+        d2, r2 = divrem(x,y)
+        f2, m2 = fldmod(x,y)
 
         t1 = isa(x,Rational) && isa(y,Rational) ?
                                promote_type(typeof(num(x)),typeof(num(y))) :
@@ -1130,6 +1147,16 @@ for yr = Any[
         @test 0 <= r < y
         @test x == y*d + r
 
+        @test typeof(d2) == typeof(d)
+        @test typeof(r2) == typeof(r)
+        @test typeof(f2) == typeof(f)
+        @test typeof(m2) == typeof(m)
+
+        @test d2 == d
+        @test r2 == r
+        @test f2 == f
+        @test m2 == m
+
         for X=[-1,1], Y=[-1,1]
             sx = X*x
             sy = Y*y
@@ -1139,6 +1166,8 @@ for yr = Any[
             sc = cld(sx,sy)
             sr = rem(sx,sy)
             sm = mod(sx,sy)
+            sd2, sr2 = divrem(sx,sy)
+            sf2, sm2 = fldmod(sx,sy)
 
             @test typeof(sd) <: t1
             @test typeof(sf) <: t1
@@ -1150,6 +1179,16 @@ for yr = Any[
             @test sy < 0 ? -y < sm <= 0 : 0 <= sm < +y
             @test sx == sy*sd + sr
             @test sx == sy*sf + sm
+
+            @test typeof(sd2) == typeof(sd)
+            @test typeof(sr2) == typeof(sr)
+            @test typeof(sf2) == typeof(sf)
+            @test typeof(sm2) == typeof(sm)
+
+            @test sd2 == sd
+            @test sr2 == sr
+            @test sf2 == sf
+            @test sm2 == sm
         end
     end
 end
@@ -1176,7 +1215,6 @@ end
 @test div(typemin(Int64)  , 1) == -9223372036854775807-1
 @test div(typemin(Int64)  , 2) == -4611686018427387904
 @test div(typemin(Int64)  , 7) == -1317624576693539401
-#@test div(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test div(typemin(Int64)  ,-2) ==  4611686018427387904
 @test div(typemin(Int64)  ,-7) ==  1317624576693539401
 @test div(typemin(Int64)+1, 1) == -9223372036854775807
@@ -1220,7 +1258,6 @@ end
 @test fld(typemin(Int64)  , 1) == -9223372036854775807-1
 @test fld(typemin(Int64)  , 2) == -4611686018427387904
 @test fld(typemin(Int64)  , 7) == -1317624576693539402
-#@test fld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test fld(typemin(Int64)  ,-2) ==  4611686018427387904
 @test fld(typemin(Int64)  ,-7) ==  1317624576693539401
 @test fld(typemin(Int64)+1, 1) == -9223372036854775807
@@ -1264,7 +1301,6 @@ end
 @test cld(typemin(Int64)  , 1) == -9223372036854775807-1
 @test cld(typemin(Int64)  , 2) == -4611686018427387904
 @test cld(typemin(Int64)  , 7) == -1317624576693539401
-#@test cld(typemin(Int64)  ,-1) == -9223372036854775807-1 # FIXME!
 @test cld(typemin(Int64)  ,-2) ==  4611686018427387904
 @test cld(typemin(Int64)  ,-7) ==  1317624576693539402
 @test cld(typemin(Int64)+1, 1) == -9223372036854775807
@@ -1303,35 +1339,35 @@ for x=Any[typemin(Int64), -typemax(Int64), -typemax(Int64)+1, -typemax(Int64)+2,
 end
 
 for x=0:5, y=1:5
-    @test div(uint(x),uint(y)) == div(x,y)
-    @test div(uint(x),y) == div(x,y)
-    @test div(x,uint(y)) == div(x,y)
-    @test div(uint(x),-y) == reinterpret(UInt,div(x,-y))
-    @test div(-x,uint(y)) == div(-x,y)
+    @test div(UInt(x),UInt(y)) == div(x,y)
+    @test div(UInt(x),y) == div(x,y)
+    @test div(x,UInt(y)) == div(x,y)
+    @test div(UInt(x),-y) == reinterpret(UInt,div(x,-y))
+    @test div(-x,UInt(y)) == div(-x,y)
 
-    @test fld(uint(x),uint(y)) == fld(x,y)
-    @test fld(uint(x),y) == fld(x,y)
-    @test fld(x,uint(y)) == fld(x,y)
-    @test fld(uint(x),-y) == reinterpret(UInt,fld(x,-y))
-    @test fld(-x,uint(y)) == fld(-x,y)
+    @test fld(UInt(x),UInt(y)) == fld(x,y)
+    @test fld(UInt(x),y) == fld(x,y)
+    @test fld(x,UInt(y)) == fld(x,y)
+    @test fld(UInt(x),-y) == reinterpret(UInt,fld(x,-y))
+    @test fld(-x,UInt(y)) == fld(-x,y)
 
-    @test cld(uint(x),uint(y)) == cld(x,y)
-    @test cld(uint(x),y) == cld(x,y)
-    @test cld(x,uint(y)) == cld(x,y)
-    @test cld(uint(x),-y) == reinterpret(UInt,cld(x,-y))
-    @test cld(-x,uint(y)) == cld(-x,y)
+    @test cld(UInt(x),UInt(y)) == cld(x,y)
+    @test cld(UInt(x),y) == cld(x,y)
+    @test cld(x,UInt(y)) == cld(x,y)
+    @test cld(UInt(x),-y) == reinterpret(UInt,cld(x,-y))
+    @test cld(-x,UInt(y)) == cld(-x,y)
 
-    @test rem(uint(x),uint(y)) == rem(x,y)
-    @test rem(uint(x),y) == rem(x,y)
-    @test rem(x,uint(y)) == rem(x,y)
-    @test rem(uint(x),-y) == rem(x,-y)
-    @test rem(-x,uint(y)) == rem(-x,y)
+    @test rem(UInt(x),UInt(y)) == rem(x,y)
+    @test rem(UInt(x),y) == rem(x,y)
+    @test rem(x,UInt(y)) == rem(x,y)
+    @test rem(UInt(x),-y) == rem(x,-y)
+    @test rem(-x,UInt(y)) == rem(-x,y)
 
-    @test mod(uint(x),uint(y)) == mod(x,y)
-    @test mod(uint(x),y) == mod(x,y)
-    @test mod(x,uint(y)) == mod(x,y)
-    @test mod(uint(x),-y) == mod(x,-y)
-    @test mod(-x,uint(y)) == mod(-x,y)
+    @test mod(UInt(x),UInt(y)) == mod(x,y)
+    @test mod(UInt(x),y) == mod(x,y)
+    @test mod(x,UInt(y)) == mod(x,y)
+    @test mod(UInt(x),-y) == mod(x,-y)
+    @test mod(-x,UInt(y)) == mod(-x,y)
 end
 
 @test div(typemax(UInt64)  , 1) ==  typemax(UInt64)
@@ -1412,7 +1448,7 @@ end
 @test mod(prevfloat(1.0),1.0) == prevfloat(1.0)
 
 # issue #3046
-@test mod(int64(2),typemax(Int64)) == 2
+@test mod(Int64(2),typemax(Int64)) == 2
 
 # things related to floating-point epsilon
 @test eps() == eps(Float64)
@@ -1444,12 +1480,12 @@ end
 # rounding difficult values
 
 for x = 2^53-10:2^53+10
-    y = float64(x)
+    y = Float64(x)
     i = trunc(Int64,y)
-    @test int64(trunc(y)) == i
-    @test int64(round(y)) == i
-    @test int64(floor(y)) == i
-    @test int64(ceil(y))  == i
+    @test Int64(trunc(y)) == i
+    @test Int64(round(y)) == i
+    @test Int64(floor(y)) == i
+    @test Int64(ceil(y))  == i
 
     @test round(Int64,y)       == i
     @test floor(Int64,y)       == i
@@ -1457,12 +1493,12 @@ for x = 2^53-10:2^53+10
 end
 
 for x = 2^24-10:2^24+10
-    y = float32(x)
+    y = Float32(x)
     i = trunc(Int,y)
-    @test int(trunc(y)) == i
-    @test int(round(y)) == i
-    @test int(floor(y)) == i
-    @test int(ceil(y))  == i
+    @test Int(trunc(y)) == i
+    @test Int(round(y)) == i
+    @test Int(floor(y)) == i
+    @test Int(ceil(y))  == i
     @test round(Int,y)     == i
     @test floor(Int,y)     == i
     @test ceil(Int,y)      == i
@@ -1666,7 +1702,7 @@ end
 @test isa(-0x00000000000000000000000000000000,UInt128)
 @test isa(-0x000000000000000000000000000000000,BigInt)
 
-# float32 literals
+# Float32 literals
 @test isa(1f0,Float32)
 @test isa(1.f0,Float32)
 @test isa(1.0f0,Float32)
@@ -1776,17 +1812,17 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test isinf(signif(Inf, 3))
 @test isnan(signif(NaN, 3))
 @test signif(1.12312, 1000) === 1.12312
-@test signif(float32(7.262839104539736), 3) === float32(7.26)
-@test signif(float32(7.262839104539736), 4) === float32(7.263)
-@test signif(float32(1.2), 3) === float32(1.2)
-@test signif(float32(1.2), 5) === float32(1.2)
-@test signif(float16(0.6), 2) === float16(0.6)
-@test signif(float16(1.1), 70) === float16(1.1)
+@test signif(Float32(7.262839104539736), 3) === Float32(7.26)
+@test signif(Float32(7.262839104539736), 4) === Float32(7.263)
+@test signif(Float32(1.2), 3) === Float32(1.2)
+@test signif(Float32(1.2), 5) === Float32(1.2)
+@test signif(Float16(0.6), 2) === Float16(0.6)
+@test signif(Float16(1.1), 70) === Float16(1.1)
 
 # issue #1308
-@test hex(~uint128(0)) == "f"^32
-@test uint128(~0) == ~uint128(0)
-@test int128(~0) == ~int128(0)
+@test hex(~UInt128(0)) == "f"^32
+@test (~0)%UInt128 == ~UInt128(0)
+@test Int128(~0) == ~Int128(0)
 
 # issue 1552
 @test isa(rationalize(Int8, float(pi)), Rational{Int8})
@@ -1801,10 +1837,10 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
 @test rationalize(Int8, 0.003803032342443835) == 0//1
 
 # issue 3412
-@test convert(Rational{Int32},0.5) === int32(1)//int32(2)
+@test convert(Rational{Int32},0.5) === Int32(1)//Int32(2)
 
 # issue 6712
-@test convert(Rational{BigInt},float64(pi)) == float64(pi)
+@test convert(Rational{BigInt},Float64(pi)) == Float64(pi)
 @test convert(Rational{BigInt},big(pi)) == big(pi)
 
 @test convert(Rational,0.0) == 0
@@ -1970,7 +2006,7 @@ approx_eq(a, b) = approx_eq(a, b, 1e-6)
     9851, 9857, 9859, 9871, 9883, 9887, 9901, 9907, 9923, 9929, 9931, 9941,
     9949, 9967, 9973 ]
 
-for T in [Int,BigInt], n = [1:1000,1000000]
+for T in [Int,BigInt], n = [1:1000;1000000]
     n = convert(T,n)
     f = factor(n)
     @test n == prod(T[p^k for (p,k)=f])
@@ -2017,9 +2053,9 @@ end
 @test 2^(1//3) == 2^(1/3)
 
 # large shift amounts
-@test int32(-1)>>31 == -1
-@test int32(-1)>>32 == -1
-@test int32(-1)>>33 == -1
+@test Int32(-1)>>31 == -1
+@test Int32(-1)>>32 == -1
+@test Int32(-1)>>33 == -1
 @test 10>>64 == 0
 @test 10>>>64 == 0
 @test 10<<64 == 0
@@ -2075,14 +2111,33 @@ end
 # other divide-by-zero errors
 @test_throws DivideError div(1,0)
 @test_throws DivideError rem(1,0)
+@test_throws DivideError divrem(1,0)
+@test_throws DivideError fld(1,0)
 @test_throws DivideError mod(1,0)
+@test_throws DivideError fldmod(1,0)
+@test_throws DivideError cld(1,0)
+
 @test_throws DivideError div(-1,0)
 @test_throws DivideError rem(-1,0)
+@test_throws DivideError divrem(-1,0)
+@test_throws DivideError fld(-1,0)
 @test_throws DivideError mod(-1,0)
-@test_throws DivideError div(uint(1),uint(0))
-@test_throws DivideError rem(uint(1),uint(0))
-@test_throws DivideError mod(uint(1),uint(0))
+@test_throws DivideError fldmod(-1,0)
+@test_throws DivideError cld(-1,0)
+
+@test_throws DivideError div(UInt(1),UInt(0))
+@test_throws DivideError rem(UInt(1),UInt(0))
+@test_throws DivideError divrem(UInt(1),UInt(0))
+@test_throws DivideError fld(UInt(1),UInt(0))
+@test_throws DivideError mod(UInt(1),UInt(0))
+@test_throws DivideError fldmod(UInt(1),UInt(0))
+@test_throws DivideError cld(UInt(1),UInt(0))
+
 @test_throws DivideError div(typemin(Int),-1)
+@test_throws DivideError fld(typemin(Int),-1)
+@test_throws DivideError cld(typemin(Int),-1)
+@test_throws DivideError divrem(typemin(Int),-1)
+@test_throws DivideError fldmod(typemin(Int),-1)
 @test rem(typemin(Int),-1) == 0
 @test mod(typemin(Int),-1) == 0
 
@@ -2144,8 +2199,8 @@ end
 
 @test false*pi === 0.0
 @test pi*false === 0.0
-@test true*pi === float64(pi)
-@test pi*true === float64(pi)
+@test true*pi === Float64(pi)
+@test pi*true === Float64(pi)
 
 # issue #5881
 @test bits(true) == "00000001"
@@ -2165,7 +2220,7 @@ end
 
 # widen
 @test widen(1.5f0) === 1.5
-@test widen(int32(42)) === int64(42)
+@test widen(Int32(42)) === Int64(42)
 @test widen(Int8) === Int
 @test widen(Float32) === Float64
 ## Note: this should change to e.g. Float128 at some point
@@ -2185,34 +2240,34 @@ end
 @test [1//3+2im,3+4im] .// [5,6] == [(1//3+2im)//5,(3+4im)//6]
 
 # issue #7441
-@test_throws InexactError int32(2.0^50)
+@test_throws InexactError Int32(2.0^50)
 
 @test_throws InexactError round(UInt8, 255.5)
 @test round(UInt8, 255.4) === 0xff
 
 @test_throws InexactError round(Int16, -32768.7)
-@test round(Int16, -32768.1) === int16(-32768)
+@test round(Int16, -32768.1) === Int16(-32768)
 
 # issue #7508
 @test_throws ErrorException reinterpret(Int, 0x01)
 
 # issue #41
-ndigf(n) = float64(log(float32(n)))
-@test float64(log(float32(256))) == ndigf(256) == 5.545177459716797
+ndigf(n) = Float64(log(Float32(n)))
+@test Float64(log(Float32(256))) == ndigf(256) == 5.545177459716797
 
 # cmp on unsigned integers (see commit 24b236321e03c6d9b8cb91a450f567256a793196)
 @test cmp(0x77777777,0x88888888) == -1
 @test cmp(0x3959dcc5d7fd177b67df4e10bc350850, 0xd63d5b1183221b0a9e38c6809b33cdec) == -1
 
 # issue #7911
-@test sum([int128(1) int128(2)]) == int128(3)
+@test sum([Int128(1) Int128(2)]) == Int128(3)
 
 # digits and digits!
 @test digits(24, 2) == [0, 0, 0, 1, 1]
 @test digits(24, 2, 3) == [0, 0, 0, 1, 1]
 @test digits(24, 2, 7) == [0, 0, 0, 1, 1, 0, 0]
 @test digits(100) == [0, 0, 1]
-@test digits(BigInt(2)^128, 2) == [zeros(128), 1]
+@test digits(BigInt(2)^128, 2) == [zeros(128); 1]
 let a = zeros(Int, 3)
     digits!(a, 50)
     @test a == [0, 5, 0]
@@ -2246,13 +2301,13 @@ let x = big(-0.0)
 end
 
 # issue #9611
-@test factor(int128(2)^101+1) == Dict(3=>1,845100400152152934331135470251=>1)
+@test factor(Int128(2)^101+1) == Dict(3=>1,845100400152152934331135470251=>1)
 
 # test second branch, after all small primes in list have been searched
-@test factor(10009 * int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
+@test factor(10009 * Int128(1000000000000037)) == Dict(10009=>1,1000000000000037=>1)
 
 #Issue #5570
-@test map(x -> int(mod1(uint(x),uint(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
+@test map(x -> Int(mod1(UInt(x),UInt(5))), 0:15) == [5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5, 1, 2, 3, 4, 5]
 
 # Issue #9618: errors thrown by large exponentiations
 @test_throws DomainError big(2)^-(big(typemax(UInt))+1)
@@ -2273,12 +2328,12 @@ for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
 end
 
 #eltype{T<:Number}(::Type{T}) = T
-for T in [subtypes(Complex), subtypes(Real)]
+for T in [subtypes(Complex); subtypes(Real)]
     @test eltype(T) == T
 end
 
 #ndims{T<:Number}(::Type{T}) = 0
-for x in [subtypes(Complex), subtypes(Real)]
+for x in [subtypes(Complex); subtypes(Real)]
     @test ndims(x) == 0
 end
 
@@ -2319,3 +2374,38 @@ end
 @test map(cos, 3) == cos(3)
 @test map(tan, 3) == tan(3)
 @test map(log, 3) == log(3)
+
+@test_throws InexactError convert(UInt8, big(300))
+
+# issue #10311
+let n = 1
+    @test n//n + n//big(n)*im == 1//1 + 1//1*im
+end
+
+# BigInt - (small negative) is tricky because gmp only has gmpz_sub_ui
+@test big(-200) - Int8(-128) == -72
+
+# n % Type
+for T in Any[Int16, Int32, UInt32, Int64, UInt64, BigInt]
+    if !(T <: Unsigned)
+        @test convert(T, -200) %  Int8 === Int8(56)
+        @test convert(T, -200) % UInt8 === 0x38
+        @test convert(T, -300) %  Int8 === Int8(-44)
+        @test convert(T, -300) % UInt8 === 0xd4
+        @test convert(T, -128) %  Int8 === Int8(-128)
+        @test convert(T, -128) % UInt8 === 0x80
+    end
+    @test convert(T,  127) %  Int8 === Int8(127)
+    @test convert(T,  127) % UInt8 === 0x7f
+    @test convert(T,  128) %  Int8 === Int8(-128)
+    @test convert(T,  128) % UInt8 === 0x80
+    @test convert(T,  200) %  Int8 === Int8(-56)
+    @test convert(T,  300) % UInt8 === 0x2c
+end
+
+@test_throws InexactError UInt128(-1)
+
+for T in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
+    @test_throws InexactError T(big(typemax(T))+1)
+    @test_throws InexactError T(big(typemin(T))-1)
+end

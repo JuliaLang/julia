@@ -20,7 +20,7 @@ for c in child_nodes(root(xdoc))
         if latex != nothing
             L = strip(content(latex))
             id = attribute(ce, "id")
-            U = string(map(s -> char(parseint(s, 16)),
+            U = string(map(s -> Char(parse(Int, s, 16)),
                            split(id[2:end], "-"))...)
             if ismatch(r"^\\[A-Za-z]+$",L) && !isa(U,ASCIIString)
                 if L in Ls
@@ -51,7 +51,7 @@ open("unicode-math-table.tex") do f
     for L in eachline(f)
         x = map(s -> rstrip(s, [' ','\t','\n']),
                 split(replace(L, r"[{}\"]+", "\t"), "\t"))
-        c = char(parseint(x[2], 16))
+        c = Char(parse(Int, x[2], 16))
         if (Base.is_id_char(c) || Base.isoperator(symbol(c))) &&
            string(c) ∉ latex_strings && !isascii(c)
             println("    \"", escape_string(x[3]), "\" => \"",

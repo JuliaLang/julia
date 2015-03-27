@@ -141,24 +141,24 @@ static jl_sym_t *runnable_sym;
 
 extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
-DLLEXPORT jl_task_t * volatile jl_current_task;
-jl_task_t *jl_root_task;
-jl_value_t * volatile jl_task_arg_in_transit;
-jl_value_t *jl_exception_in_transit;
+DLLEXPORT JL_THREAD jl_task_t * volatile jl_current_task;
+JL_THREAD jl_task_t *jl_root_task;
+JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
+JL_THREAD jl_value_t *jl_exception_in_transit;
 #ifdef JL_GC_MARKSWEEP
-jl_gcframe_t *jl_pgcstack = NULL;
+JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
 #ifdef COPY_STACKS
-static jl_jmp_buf * volatile jl_jmp_target;
+static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
-void *jl_stackbase;
+JL_THREAD void *jl_stackbase;
 
 #ifndef ASM_COPY_STACKS
-static jl_jmp_buf jl_base_ctx; // base context of stack
+static JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
 #endif
 
 static void NOINLINE save_stack(jl_task_t *t)
@@ -510,7 +510,7 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //printf("lookup %d\n", AddrBase);
+    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
@@ -530,7 +530,7 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //printf("lookup base %d\n", dwAddr);
+    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
@@ -590,12 +590,13 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
     size_t n = 0;
     while (n < maxsize) {
 #ifndef _CPU_X86_64_
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
         if (!result)
             break;
-        data[n++] = (intptr_t)stk.AddrPC.Offset;
 #else
+        data[n++] = (intptr_t)Context->Rip;
         DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), Context->Rip);
         if (!ImageBase)
             break;
@@ -622,7 +623,6 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         }
         if (!Context->Rip)
             break;
-        data[n++] = (intptr_t)Context->Rip;
 #endif
     }
 #if !defined(_CPU_X86_64_)
@@ -686,14 +686,18 @@ static void record_backtrace(void)
 static jl_value_t *array_ptr_void_type = NULL;
 DLLEXPORT jl_value_t *jl_backtrace_from_here(void)
 {
-    if (array_ptr_void_type == NULL)
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
-                                            jl_tuple2(jl_voidpointer_type,
-                                                      jl_box_long(1)));
-    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
+    jl_tuple_t *tp = NULL;
+    jl_array_t *bt = NULL;
+    JL_GC_PUSH2(&tp, &bt);
+    if (array_ptr_void_type == NULL) {
+        tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+    }
+    bt = jl_alloc_array_1d(array_ptr_void_type, MAX_BT_SIZE);
     size_t n = rec_backtrace((ptrint_t*)jl_array_data(bt), MAX_BT_SIZE);
     if (n < MAX_BT_SIZE)
         jl_array_del_end(bt, MAX_BT_SIZE-n);
+    JL_GC_POP();
     return (jl_value_t*)bt;
 }
 
@@ -719,12 +723,16 @@ DLLEXPORT jl_value_t *jl_lookup_code_address(void *ip, int skipC)
 
 DLLEXPORT jl_value_t *jl_get_backtrace(void)
 {
-    if (array_ptr_void_type == NULL)
-        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type,
-                                            jl_tuple2(jl_voidpointer_type,
-                                                      jl_box_long(1)));
-    jl_array_t *bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
+    jl_tuple_t *tp = NULL;
+    jl_array_t *bt = NULL;
+    JL_GC_PUSH2(&tp, &bt);
+    if (array_ptr_void_type == NULL) {
+        tp = jl_tuple2(jl_voidpointer_type, jl_box_long(1));
+        array_ptr_void_type = jl_apply_type((jl_value_t*)jl_array_type, tp);
+    }
+    bt = jl_alloc_array_1d(array_ptr_void_type, bt_size);
     memcpy(bt->data, bt_data, bt_size*sizeof(void*));
+    JL_GC_POP();
     return (jl_value_t*)bt;
 }
 
@@ -737,11 +745,11 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         if (line_num == ip)
-            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
+            jl_safe_printf("unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
-            ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
         else
-            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s:%d\n", func_name, file_name, line_num);
     }
 }
 
@@ -769,9 +777,9 @@ void NORETURN throw_internal(jl_value_t *e)
     }
     else {
         if (jl_current_task == jl_root_task) {
-            JL_PRINTF(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
+            jl_printf(JL_STDERR, "fatal: error thrown and no exception handler available.\n");
             jl_static_show(JL_STDERR, e);
-            JL_PRINTF(JL_STDERR, "\n");
+            jl_printf(JL_STDERR, "\n");
             jlbacktrace();
             jl_exit(1);
         }
@@ -779,7 +787,7 @@ void NORETURN throw_internal(jl_value_t *e)
         finish_task(jl_current_task, e);
         assert(0);
     }
-    jl_exit(1);
+    assert(0);
 }
 
 // record backtrace and raise an error
@@ -809,7 +817,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 {
     size_t pagesz = jl_page_size;
     jl_task_t *t = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    t->type = (jl_value_t*)jl_task_type;
+    jl_set_typeof(t, jl_task_type);
     ssize = LLT_ALIGN(ssize, pagesz);
     t->ssize = ssize;
     t->current_module = NULL;
@@ -915,7 +923,7 @@ void jl_init_tasks(void *stack, size_t ssize)
     runnable_sym = jl_symbol("runnable");
 
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
-    jl_current_task->type = (jl_value_t*)jl_task_type;
+    jl_set_typeof(jl_current_task, jl_task_type);
 #ifdef COPY_STACKS
     jl_current_task->ssize = 0;  // size of saved piece
     jl_current_task->bufsz = 0;

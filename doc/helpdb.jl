@@ -118,10 +118,12 @@ Any[
 
 "),
 
-("Base","Array","Array(type, dims)
+("Base","Array","Array(dims)
 
-   Construct an uninitialized dense array. \"dims\" may be a tuple or
-   a series of integer arguments.
+   \"Array{T}(dims)\" constructs an uninitialized dense array with
+   element type \"T\". \"dims\" may be a tuple or a series of integer
+   arguments. The syntax \"Array(T, dims)\" is also available, but
+   deprecated.
 
 "),
 
@@ -214,15 +216,18 @@ Any[
    Create an uninitialized array of the same type as the given array,
    but with the specified element type and dimensions. The second and
    third arguments are both optional. The \"dims\" argument may be a
-   tuple or a series of integer arguments.
+   tuple or a series of integer arguments. For some special
+   \"AbstractArray\" objects which are not real containers (like
+   ranges), this function returns a standard \"Array\" to allow
+   operating on elements.
 
 "),
 
 ("Base","reinterpret","reinterpret(type, A)
 
    Change the type-interpretation of a block of memory. For example,
-   \"reinterpret(Float32, uint32(7))\" interprets the 4 bytes
-   corresponding to \"uint32(7)\" as a \"Float32\". For arrays, this
+   \"reinterpret(Float32, UInt32(7))\" interprets the 4 bytes
+   corresponding to \"UInt32(7)\" as a \"Float32\". For arrays, this
    constructs an array with the same binary data as the given array,
    but with the specified element type.
 
@@ -247,7 +252,7 @@ Any[
 
 "),
 
-("Base","linspace","linspace(start, stop, n)
+("Base","linspace","linspace(start, stop, n=100)
 
    Construct a vector of \"n\" linearly-spaced elements from \"start\"
    to \"stop\". See also: \"linrange()\" that constructs a range
@@ -255,7 +260,7 @@ Any[
 
 "),
 
-("Base","logspace","logspace(start, stop, n)
+("Base","logspace","logspace(start, stop, n=50)
 
    Construct a vector of \"n\" logarithmically-spaced numbers from
    \"10^start\" to \"10^stop\".
@@ -414,18 +419,6 @@ Any[
 ("Base","flipdim","flipdim(A, d)
 
    Reverse \"A\" in dimension \"d\".
-
-"),
-
-("Base","flipud","flipud(A)
-
-   Equivalent to \"flipdim(A,1)\".
-
-"),
-
-("Base","fliplr","fliplr(A)
-
-   Equivalent to \"flipdim(A,2)\".
 
 "),
 
@@ -728,15 +721,24 @@ Any[
 
 "),
 
-("Base","reducedim","reducedim(f, A, dims, initial)
+("Base","reducedim","reducedim(f, A, dims[, initial])
 
    Reduce 2-argument function \"f\" along dimensions of \"A\".
    \"dims\" is a vector specifying the dimensions to reduce, and
-   \"initial\" is the initial value to use in the reductions.
+   \"initial\" is the initial value to use in the reductions. For *+*,
+   ***, *max* and *min* the *initial* argument is optional.
 
    The associativity of the reduction is implementation-dependent; if
    you need a particular associativity, e.g. left-to-right, you should
    write your own loop. See documentation for \"reduce\".
+
+"),
+
+("Base","mapreducedim","mapreducedim(f, op, A, dims[, initial])
+
+   Evaluates to the same as *reducedim(op, map(f, A), dims,
+   f(initial))*, but is generally faster because the intermediate
+   array is avoided.
 
 "),
 
@@ -791,9 +793,11 @@ Any[
 
 "),
 
-("Base","randperm","randperm(n)
+("Base","randperm","randperm([rng], n)
 
-   Construct a random permutation of the given length.
+   Construct a random permutation of length \"n\". The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
@@ -825,19 +829,22 @@ Any[
 
 "),
 
-("Base","randcycle","randcycle(n)
+("Base","randcycle","randcycle([rng], n)
 
-   Construct a random cyclic permutation of the given length.
-
-"),
-
-("Base","shuffle","shuffle(v)
-
-   Return a randomly permuted copy of \"v\".
+   Construct a random cyclic permutation of length \"n\". The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
-("Base","shuffle!","shuffle!(v)
+("Base","shuffle","shuffle([rng], v)
+
+   Return a randomly permuted copy of \"v\". The optional \"rng\"
+   argument specifies a random number generator, see *Random Numbers*.
+
+"),
+
+("Base","shuffle!","shuffle!([rng], v)
 
    In-place version of \"shuffle()\".
 
@@ -944,15 +951,41 @@ Any[
 
 "),
 
+("Base","rol!","rol!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on \"src\" and put the result
+   into \"dest\".
+
+"),
+
+("Base","rol!","rol!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a left rotation operation on B.
+
+"),
+
 ("Base","rol","rol(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Left rotation operator.
+   Performs a left rotation operation.
+
+"),
+
+("Base","ror!","ror!(dest::BitArray{1}, src::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on \"src\" and put the result
+   into \"dest\".
+
+"),
+
+("Base","ror!","ror!(B::BitArray{1}, i::Integer) -> BitArray{1}
+
+   Performs a right rotation operation on B.
 
 "),
 
 ("Base","ror","ror(B::BitArray{1}, i::Integer) -> BitArray{1}
 
-   Right rotation operator.
+   Performs a right rotation operation.
 
 "),
 
@@ -994,7 +1027,7 @@ Any[
 
 ("Base","sparse","sparse(A)
 
-   Convert a dense matrix \"A\" into a sparse matrix.
+   Convert an AbstractMatrix \"A\" into a sparse matrix.
 
 "),
 
@@ -1020,7 +1053,9 @@ Any[
 
 ("Base","spzeros","spzeros(m, n)
 
-   Create an empty sparse matrix of size \"m x n\".
+   Create a sparse matrix of size \"m x n\". This sparse matrix will
+   not contain any nonzero values. No storage will be allocated for
+   nonzero values during construction.
 
 "),
 
@@ -1051,14 +1086,15 @@ Any[
 
 "),
 
-("Base","sprand","sprand(m, n, p[, rng])
+("Base","sprand","sprand([rng], m, n, p[, rfn])
 
    Create a random \"m\" by \"n\" sparse matrix, in which the
    probability of any element being nonzero is independently given by
    \"p\" (and hence the mean density of nonzeros is also exactly
    \"p\"). Nonzero values are sampled from the distribution specified
-   by \"rng\". The uniform distribution is used in case \"rng\" is not
-   specified.
+   by \"rfn\". The uniform distribution is used in case \"rfn\" is not
+   specified. The optional \"rng\" argument specifies a random number
+   generator, see *Random Numbers*.
 
 "),
 
@@ -1619,14 +1655,6 @@ Any[
 
 "),
 
-("Base","subtypetree","subtypetree(T::DataType)
-
-   Return a nested list of all subtypes of DataType T.  Note that all
-   currently loaded subtypes are included, including those not visible
-   in the current module.
-
-"),
-
 ("Base","typemin","typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -1725,7 +1753,7 @@ Any[
    For example, we could use it in the following manner to summarize
    information about a struct type:
 
-      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+      julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
@@ -1796,6 +1824,13 @@ Any[
 
 "),
 
+("Base","Union","Union(Ts...)
+
+   Construct a special abstract type that behaves as though all of the
+   types in \"Ts\" are its subtypes.
+
+"),
+
 ("Base","Val{c}","Val{c}()
 
    Create a \"value type\" out of \"c\", which must be an \"isbits\"
@@ -1803,6 +1838,23 @@ Any[
    constants, e.g., \"f(Val{false})\" allows you to dispatch directly
    (at compile-time) to an implementation \"f(::Type{Val{false}})\",
    without having to test the boolean value at runtime.
+
+"),
+
+("","@enum EnumName EnumValue1[=x] EnumValue2[=y]","@enum EnumName EnumValue1[=x] EnumValue2[=y]
+
+   Create an *Enum* type with name *EnumName* and enum member values
+   of *EnumValue1* and *EnumValue2* with optional assigned values of
+   *x* and *y*, respectively. *EnumName* can be used just like other
+   types and enum member values as regular values, such as
+
+      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+
+      julia> f(x::FRUIT) = \"I'm a FRUIT with value: \$(int(x))\"
+      f (generic function with 1 method)
+
+      julia> f(apple)
+      \"I'm a FRUIT with value: 1\"
 
 "),
 
@@ -1900,9 +1952,8 @@ Any[
 
 ("Base","evalfile","evalfile(path::AbstractString)
 
-   Evaluate all expressions in the given file, and return the value of
-   the last one. No other processing (path searching, fetching from
-   node 1, etc.) is performed.
+   Load the file using \"include\", evaluate all expressions, and
+   return the value of the last one.
 
 "),
 
@@ -1910,9 +1961,9 @@ Any[
 
    Only valid in the context of an Expr returned from a macro.
    Prevents the macro hygiene pass from turning embedded variables
-   into gensym variables. See the *Non-Standard AbstractString
-   Literals* section of the Metaprogramming chapter of the manual for
-   more details and examples.
+   into gensym variables. See the *Macros* section of the
+   Metaprogramming chapter of the manual for more details and
+   examples.
 
 "),
 
@@ -1952,6 +2003,15 @@ Any[
    expression. If \"raise\" is true (default), syntax errors will
    raise an error; otherwise, \"parse\" will return an expression that
    will raise an error upon evaluation.
+
+"),
+
+("Base","Nullable","Nullable(x)
+
+   Wrap value \"x\" in an object of type \"Nullable\", which indicates
+   whether a value is present. \"Nullable(x)\" yields a non-empty
+   wrapper, and \"Nullable{T}()\" yields an empty instance of a
+   wrapper that might contain a value of type \"T\".
 
 "),
 
@@ -2048,14 +2108,14 @@ Any[
 
 "),
 
-("Base","Base","Base.set_process_title(title::AbstractString)
+("Base","Sys","Sys.set_process_title(title::AbstractString)
 
    Set the process title. No-op on some operating systems. (not
    exported)
 
 "),
 
-("Base","Base","Base.get_process_title()
+("Base","Sys","Sys.get_process_title()
 
    Get the process title. On some systems, will always return empty
    string. (not exported)
@@ -2096,33 +2156,40 @@ Any[
 
 "),
 
-("Base","|>","|>(command, command)
-|>(command, filename)
-|>(filename, command)
+("Base","pipe","pipe(from, to, ...)
 
-   Redirect operator. Used for piping the output of a process into
-   another (first form) or to redirect the standard output/input of a
-   command to/from a file (second and third forms).
+   Create a pipeline from a data source to a destination. The source
+   and destination can be commands, I/O streams, strings, or results
+   of other \"pipe\" calls. At least one argument must be a command.
+   Strings refer to filenames. When called with more than two
+   arguments, they are chained together from left to right. For
+   example \"pipe(a,b,c)\" is equivalent to \"pipe(pipe(a,b),c)\".
+   This provides a more concise way to specify multi-stage pipelines.
 
    **Examples**:
-      * \"run(`ls` |> `grep xyz`)\"
+      * \"run(pipe(`ls`, `grep xyz`))\"
 
-      * \"run(`ls` |> \"out.txt\")\"
+      * \"run(pipe(`ls`, \"out.txt\"))\"
 
-      * \"run(\"out.txt\" |> `grep xyz`)\"
-
-"),
-
-("Base",">>",">>(command, filename)
-
-   Redirect standard output of a process, appending to the destination
-   file.
+      * \"run(pipe(\"out.txt\", `grep xyz`))\"
 
 "),
 
-("Base",".>",".>(command, filename)
+("Base","pipe","pipe(command; stdin, stdout, stderr, append=false)
 
-   Redirect the standard error stream of a process.
+   Redirect I/O to or from the given \"command\". Keyword arguments
+   specify which of the command's streams should be redirected.
+   \"append\" controls whether file output appends to the file. This
+   is a more general version of the 2-argument \"pipe\" function.
+   \"pipe(from, to)\" is equivalent to \"pipe(from, stdout=to)\" when
+   \"from\" is a command, and to \"pipe(to, stdin=from)\" when
+   \"from\" is another kind of data source.
+
+   **Examples**:
+      * \"run(pipe(`dothings`, stdout=\"out.txt\",
+        stderr=\"errs.txt\"))\"
+
+      * \"run(pipe(`update`, stdout=\"log.txt\", append=true))\"
 
 "),
 
@@ -2145,11 +2212,10 @@ Any[
 
 "),
 
-("Base","time","time([t::TmStruct])
+("Base","time","time()
 
    Get the system time in seconds since the epoch, with fairly high
-   (typically, microsecond) resolution. When passed a \"TmStruct\",
-   converts it to a number of seconds since the epoch.
+   (typically, microsecond) resolution.
 
 "),
 
@@ -2157,35 +2223,6 @@ Any[
 
    Get the time in nanoseconds. The time corresponding to 0 is
    undefined, and wraps every 5.8 years.
-
-"),
-
-("Base","strftime","strftime([format], time)
-
-   Convert time, given as a number of seconds since the epoch or a
-   \"TmStruct\", to a formatted string using the given format.
-   Supported formats are the same as those in the standard C library.
-
-"),
-
-("Base","strptime","strptime([format], timestr)
-
-   Parse a formatted time string into a \"TmStruct\" giving the
-   seconds, minute, hour, date, etc. Supported formats are the same as
-   those in the standard C library. On some platforms, timezones will
-   not be parsed correctly. If the result of this function will be
-   passed to \"time\" to convert it to seconds since the epoch, the
-   \"isdst\" field should be filled in manually. Setting it to \"-1\"
-   will tell the C library to use the current system settings to
-   determine the timezone.
-
-"),
-
-("Base","TmStruct","TmStruct([seconds])
-
-   Convert a number of seconds since the epoch to broken-down format,
-   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
-   \"year\", \"wday\", \"yday\", and \"isdst\".
 
 "),
 
@@ -2315,15 +2352,21 @@ Any[
 
 ("Base","assert","assert(cond[, text])
 
-   Raise an error if \"cond\" is false. Also available as the macro
-   \"@assert expr\".
+   Throw an \"AssertionError\" if \"cond\" is false. Also available as
+   the macro \"@assert expr\".
 
 "),
 
-("Base","@assert","@assert()
+("","@assert cond [text]","@assert cond [text]
 
-   Raise an error if \"cond\" is false. Preferred syntax for writings
-   assertions.
+   Throw an \"AssertionError\" if \"cond\" is false. Preferred syntax
+   for writing assertions.
+
+"),
+
+("Base","AssertionError","AssertionError
+
+   The asserted condition did not evalutate to \"true\".
 
 "),
 
@@ -2461,7 +2504,7 @@ Any[
 
 "),
 
-("Base","names","names(x::DataType)
+("Base","fieldnames","fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
 
@@ -2516,13 +2559,15 @@ Any[
 ("Base","gc_disable","gc_disable()
 
    Disable garbage collection. This should be used only with extreme
-   caution, as it can cause memory use to grow without bound.
+   caution, as it can cause memory use to grow without bound. Returns
+   previous GC state.
 
 "),
 
 ("Base","gc_enable","gc_enable()
 
    Re-enable garbage collection after calling \"gc_disable()\".
+   Returns previous GC state.
 
 "),
 
@@ -2554,10 +2599,12 @@ Any[
 
 "),
 
-("Base","code_typed","code_typed(f, types)
+("Base","code_typed","code_typed(f, types; optimize=true)
 
    Returns an array of lowered and type-inferred ASTs for the methods
-   matching the given generic function and type signature.
+   matching the given generic function and type signature. The keyword
+   argument \"optimize\" controls whether additional optimizations,
+   such as inlining, are also applied.
 
 "),
 
@@ -2623,19 +2670,27 @@ Any[
 
 "),
 
-("Base","ccall","ccall((symbol, library) or fptr, RetType, (ArgType1, ...), ArgVar1, ...)
+("Base","ccall","ccall((symbol, library) or function_pointer, ReturnType, (ArgumentType1, ...), ArgumentValue1, ...)
 
    Call function in C-exported shared library, specified by
-   \"(function name, library)\" tuple, where each component is a
-   AbstractString or :Symbol. Alternatively, ccall may be used to call
-   a function pointer returned by dlsym, but note that this usage is
-   generally discouraged to facilitate future static compilation. Note
-   that the argument type tuple must be a literal tuple, and not a
-   tuple-valued variable or expression.
+   \"(function name, library)\" tuple, where each component is an
+   AbstractString or :Symbol.
+
+   Note that the argument type tuple must be a literal tuple, and not
+   a tuple-valued variable or expression. Alternatively, ccall may
+   also be used to call a function pointer, such as one returned by
+   dlsym.
+
+   Each \"ArgumentValue\" to the \"ccall\" will be converted to the
+   corresponding \"ArgumentType\", by automatic insertion of calls to
+   \"unsafe_convert(ArgumentType, cconvert(ArgumentType,
+   ArgumentValue))\". (see also the documentation for each of these
+   functions for further details). In most cases, this simply results
+   in a call to \"convert(ArgumentType, ArgumentValue)\"
 
 "),
 
-("Base","cglobal","cglobal((symbol, library) or ptr[, Type=Void])
+("Base","cglobal","cglobal((symbol, library)[, type=Void])
 
    Obtain a pointer to a global variable in a C-exported shared
    library, specified exactly as in \"ccall\".  Returns a
@@ -2645,7 +2700,7 @@ Any[
 
 "),
 
-("Base","cfunction","cfunction(fun::Function, RetType::Type, (ArgTypes...))
+("Base","cfunction","cfunction(function::Function, ReturnType::Type, (ArgumentTypes...))
 
    Generate C-callable function pointer from Julia function. Type
    annotation of the return value in the callback function is a must
@@ -2664,149 +2719,40 @@ Any[
 
 "),
 
-("Base","dlopen","dlopen(libfile::AbstractString[, flags::Integer])
+("Base","unsafe_convert","unsafe_convert(T, x)
 
-   Load a shared library, returning an opaque handle.
+   Convert \"x\" to a value of type \"T\"
 
-   The optional flags argument is a bitwise-or of zero or more of
-   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
-   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
-   \"RTLD_FIRST\".  These are converted to the corresponding flags of
-   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
-   possible, or are ignored if the specified functionality is not
-   available on the current platform.  The default is
-   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
-   these flags, on POSIX platforms, is to specify
-   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
-   symbols to be available for usage in other shared libraries, in
-   situations where there are dependencies between shared libraries.
+   In cases where \"convert\" would need to take a Julia object and
+   turn it into a \"Ptr\", this function should be used to define and
+   perform that conversion.
 
-"),
+   Be careful to ensure that a julia reference to \"x\" exists as long
+   as the result of this function will be used. Accordingly, the
+   argument \"x\" to this function should never be an expression, only
+   a variable name or field reference. For example, \"x=a.b.c\" is
+   acceptable, but \"x=[a,b,c]\" is not.
 
-("Base","dlopen_e","dlopen_e(libfile::AbstractString[, flags::Integer])
-
-   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
-   of raising errors.
+   The \"unsafe\" prefix on this function indicates that using the
+   result of this function after the \"x\" argument to this function
+   is no longer accessible to the program may cause undefined
+   behavior, including program corruption or segfaults, at any later
+   time.
 
 "),
 
-("Base","RTLD_DEEPBIND","RTLD_DEEPBIND
+("Base","cconvert","cconvert(T, x)
 
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
+   Convert \"x\" to a value of type \"T\", typically by calling
+   \"convert(T,x)\"
 
-"),
+   In cases where \"x\" cannot be safely converted to \"T\", unlike
+   \"convert\", \"cconvert\" may return an object of a type different
+   from \"T\", which however is suitable for \"unsafe_convert\" to
+   handle.
 
-("Base","RTLD_FIRST","RTLD_FIRST
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_GLOBAL","RTLD_GLOBAL
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_LAZY","RTLD_LAZY
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_LOCAL","RTLD_LOCAL
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NODELETE","RTLD_NODELETE
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NOLOAD","RTLD_NOLOAD
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","RTLD_NOW","RTLD_NOW
-
-   Enum constant for \"dlopen()\". See your platform man page for
-   details, if applicable.
-
-"),
-
-("Base","dlsym","dlsym(handle, sym)
-
-   Look up a symbol from a shared library handle, return callable
-   function pointer on success.
-
-"),
-
-("Base","dlsym_e","dlsym_e(handle, sym)
-
-   Look up a symbol from a shared library handle, silently return NULL
-   pointer on lookup failure.
-
-"),
-
-("Base","dlclose","dlclose(handle)
-
-   Close shared library referenced by handle.
-
-"),
-
-("Base","find_library","find_library(names, locations)
-
-   Searches for the first library in \"names\" in the paths in the
-   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
-   that order) which can successfully be dlopen'd. On success, the
-   return value will be one of the names (potentially prefixed by one
-   of the paths in locations). This string can be assigned to a
-   \"global const\" and used as the library name in future
-   \"ccall\"'s. On failure, it returns the empty string.
-
-"),
-
-("Base","DL_LOAD_PATH","DL_LOAD_PATH
-
-   When calling \"dlopen\", the paths in this list will be searched
-   first, in order, before searching the system locations for a valid
-   library handle.
-
-"),
-
-("Base","c_malloc","c_malloc(size::Integer) -> Ptr{Void}
-
-   Call \"malloc\" from the C standard library.
-
-"),
-
-("Base","c_calloc","c_calloc(num::Integer, size::Integer) -> Ptr{Void}
-
-   Call \"calloc\" from the C standard library.
-
-"),
-
-("Base","c_realloc","c_realloc(addr::Ptr, size::Integer) -> Ptr{Void}
-
-   Call \"realloc\" from the C standard library.
-
-"),
-
-("Base","c_free","c_free(addr::Ptr)
-
-   Call \"free\" from the C standard library.
+   Neither \"convert\" nor \"cconvert\" should take a Julia object and
+   turn it into a \"Ptr\".
 
 "),
 
@@ -2816,6 +2762,11 @@ Any[
    (1-indexed) starting at \"p\". This is equivalent to the C
    expression \"p[i-1]\".
 
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointer >>``<<p` to ensure that it is valid.
+   Incorrect usage may segfault your program or return garbage
+   answers, in the same manner as C.
+
 "),
 
 ("Base","unsafe_store!","unsafe_store!(p::Ptr{T}, x, i::Integer)
@@ -2823,6 +2774,11 @@ Any[
    Store a value of type \"T\" to the address of the ith element
    (1-indexed) starting at \"p\". This is equivalent to the C
    expression \"p[i-1] = x\".
+
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointer >>``<<p` to ensure that it is valid.
+   Incorrect usage may corrupt or segfault your program, in the same
+   manner as C.
 
 "),
 
@@ -2832,6 +2788,11 @@ Any[
    checking. The size of an element is determined by the type of the
    pointers.
 
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed on the pointers \"dest\" and \"src\" to ensure that
+   they are valid. Incorrect usage may corrupt or segfault your
+   program, in the same manner as C.
+
 "),
 
 ("Base","unsafe_copy!","unsafe_copy!(dest::Array, do, src::Array, so, N)
@@ -2839,6 +2800,11 @@ Any[
    Copy \"N\" elements from a source array to a destination, starting
    at offset \"so\" in the source and \"do\" in the destination
    (1-indexed).
+
+   The \"unsafe\" prefix on this function indicates that no validation
+   is performed to ensure that N is inbounds on either array.
+   Incorrect usage may corrupt or segfault your program, in the same
+   manner as C.
 
 "),
 
@@ -2857,21 +2823,19 @@ Any[
 
 "),
 
-("Base","pointer","pointer(a[, index])
+("Base","pointer","pointer(array[, index])
 
    Get the native address of an array or string element. Be careful to
    ensure that a julia reference to \"a\" exists as long as this
-   pointer will be used.
+   pointer will be used. This function is \"unsafe\" like
+   \"unsafe_convert\".
+
+   Calling \"Ref(array[, index])\" is generally preferable to this
+   function.
 
 "),
 
-("Base","pointer","pointer(type, int)
-
-   Convert an integer to a pointer of the specified element type.
-
-"),
-
-("Base","pointer_to_array","pointer_to_array(p, dims[, own])
+("Base","pointer_to_array","pointer_to_array(pointer, dims[, take_ownership::Bool])
 
    Wrap a native pointer as a Julia Array object. The pointer element
    type determines the array element type. \"own\" optionally
@@ -2881,7 +2845,7 @@ Any[
 
 "),
 
-("Base","pointer_from_objref","pointer_from_objref(obj)
+("Base","pointer_from_objref","pointer_from_objref(object_instance)
 
    Get the memory address of a Julia object as a \"Ptr\". The
    existence of the resulting \"Ptr\" will not protect the object from
@@ -2919,18 +2883,6 @@ Any[
 
 "),
 
-("Base","errno","errno([code])
-
-   Get the value of the C library's \"errno\". If an argument is
-   specified, it is used to set the value of \"errno\".
-
-   The value of \"errno\" is only valid immediately after a \"ccall\"
-   to a C library routine that sets it. Specifically, you cannot call
-   \"errno\" at the next prompt in a REPL, because lots of code is
-   executed between prompts.
-
-"),
-
 ("Base","systemerror","systemerror(sysfunc, iftrue)
 
    Raises a \"SystemError\" for \"errno\" with the descriptive string
@@ -2938,9 +2890,26 @@ Any[
 
 "),
 
-("Base","strerror","strerror(n)
+("Base","Ptr{T}","Ptr{T}
 
-   Convert a system call error code to a descriptive string
+   A memory address referring to data of type \"T\". However, there is
+   no guarantee that the memory is actually valid, or that it actually
+   represents data of the specified type.
+
+"),
+
+("Base","Ref{T}","Ref{T}
+
+   An object that safely references data of type \"T\". This type is
+   guaranteed to point to valid, Julia-allocated memory of the correct
+   type. The underlying data is protected from freeing by the garbage
+   collector as long as the \"Ref\" itself is referenced.
+
+   When passed as a \"ccall\" argument (either as a \"Ptr\" or \"Ref\"
+   type), a \"Ref\" object will be converted to a native pointer to
+   the data it references.
+
+   There is no invalid (NULL) \"Ref\".
 
 "),
 
@@ -3083,18 +3052,17 @@ Any[
    the \"i\"th tuple contains the \"i\"th component of each input
    iterable.
 
-   Note that \"zip()\" is its own inverse: \"[zip(zip(a...)...)...] ==
-   [a...]\".
+   Note that \"zip()\" is its own inverse:
+   \"collect(zip(zip(a...)...)) == collect(a)\".
 
 "),
 
 ("Base","enumerate","enumerate(iter)
 
-   Return an iterator that yields \"(i, x)\" where \"i\" is an index
-   starting at 1, and \"x\" is the \"i\"th value from the given
-   iterator. It's useful when you need not only the values \"x\" over
-   which you are iterating, but also the index \"i\" of the
-   iterations.
+   An iterator that yields \"(i, x)\" where \"i\" is an index starting
+   at 1, and \"x\" is the \"i\"th value from the given iterator. It's
+   useful when you need not only the values \"x\" over which you are
+   iterating, but also the index \"i\" of the iterations.
 
       julia> a = [\"a\", \"b\", \"c\"];
 
@@ -3104,6 +3072,48 @@ Any[
       1 a
       2 b
       3 c
+
+"),
+
+("Base","rest","rest(iter, state)
+
+   An iterator that yields the same elements as \"iter\", but starting
+   at the given \"state\".
+
+"),
+
+("Base","countfrom","countfrom(start=1, step=1)
+
+   An iterator that counts forever, starting at \"start\" and
+   incrementing by \"step\".
+
+"),
+
+("Base","take","take(iter, n)
+
+   An iterator that generates at most the first \"n\" elements of
+   \"iter\".
+
+"),
+
+("Base","drop","drop(iter, n)
+
+   An iterator that generates all but the first \"n\" elements of
+   \"iter\".
+
+"),
+
+("Base","cycle","cycle(iter)
+
+   An iterator that cycles through \"iter\" forever.
+
+"),
+
+("Base","repeated","repeated(x[, n::Int])
+
+   An iterator that generates the value \"x\" forever. If \"n\" is
+   specified, generates \"x\" that many times (equivalent to
+   \"take(repeated(x), n)\").
 
 "),
 
@@ -3159,11 +3169,14 @@ Any[
 
 "),
 
-("Base","eltype","eltype(collection)
+("Base","eltype","eltype(type)
 
-   Determine the type of the elements generated by iterating
-   \"collection\". For associative collections, this will be a
-   \"(key,value)\" tuple type.
+   Determine the type of the elements generated by iterating a
+   collection of the given \"type\". For associative collection types,
+   this will be a \"(key,value)\" tuple type. The definition
+   \"eltype(x) = eltype(typeof(x))\" is provided for convenience so
+   that instances can be passed instead of types. However the form
+   that accepts a type argument should be defined for new types.
 
 "),
 
@@ -3956,7 +3969,7 @@ Any[
 
 ("Base","push!","push!(collection, items...) -> collection
 
-   Insert zero or more \"items\" at the end of \"collection\".
+   Insert one or more \"items\" at the end of \"collection\".
 
       julia> push!([1, 2, 3], 4, 5, 6)
       6-element Array{Int64,1}:
@@ -4001,7 +4014,7 @@ Any[
 
 ("Base","unshift!","unshift!(collection, items...) -> collection
 
-   Insert zero or more \"items\" at the beginning of \"collection\".
+   Insert one or more \"items\" at the beginning of \"collection\".
 
       julia> unshift!([1, 2, 3, 4], 5, 6)
       6-element Array{Int64,1}:
@@ -4292,6 +4305,14 @@ Any[
 
 "),
 
+("Base","nothing","nothing
+
+   The singleton instance of type \"Void\", used by convention when
+   there is no value to return (as in a C \"void\" function). Can be
+   converted to an empty \"Nullable\" value.
+
+"),
+
 ("Base","OS_NAME","OS_NAME
 
    A symbol representing the name of the operating system. Possible
@@ -4504,6 +4525,25 @@ Any[
 
 "),
 
+("Dates","Dates","Dates.DateFormat(format::AbstractString) -> DateFormat
+
+   Construct a date formatting object that can be passed repeatedly
+   for parsing similarly formatted date strings. \"format\" is a
+   format string in the form described above (e.g. \"\"yyyy-mm-
+   dd\"\").
+
+"),
+
+("Dates","DateTime","DateTime(dt::AbstractString, df::DateFormat) -> DateTime
+
+   Similar form as above for parsing a \"DateTime\", but passes a
+   \"DateFormat\" object instead of a raw formatting string. It is
+   more efficient if similarly formatted date strings will be parsed
+   repeatedly to first create a \"DateFormat\" object then use this
+   method for parsing.
+
+"),
+
 ("Dates","Date","Date(y[, m, d]) -> Date
 
    Construct a \"Date\" type by parts. Arguments must be convertible
@@ -4548,6 +4588,13 @@ Any[
 
 "),
 
+("Dates","Date","Date(dt::AbstractString, df::DateFormat) -> Date
+
+   Parse a date from a date string \"dt\" using a \"DateFormat\"
+   object \"df\".
+
+"),
+
 ("Dates","now","now() -> DateTime
 
    Returns a DateTime corresponding to the user's system time
@@ -4559,6 +4606,14 @@ Any[
 
    Returns a DateTime corresponding to the user's system time as
    UTC/GMT.
+
+"),
+
+("Dates","eps","eps(::DateTime) -> Millisecond
+eps(::Date) -> Day
+
+   Returns \"Millisecond(1)\" for \"DateTime\" values and \"Day(1)\"
+   for \"Date\" values.
 
 "),
 
@@ -4838,7 +4893,7 @@ Millisecond(v)
 
 "),
 
-("","default(p::Period) => Period","default(p::Period) => Period
+("Dates","default","default(p::Period) -> Period
 
    Returns a sensible \"default\" value for the input Period by
    returning \"one(p)\" for Year, Month, and Day, and \"zero(p)\" for
@@ -5046,9 +5101,10 @@ Millisecond(v)
 
 "),
 
-("Base","cp","cp(src::AbstractString, dst::AbstractString)
+("Base","cp","cp(src::AbstractString, dst::AbstractString; recursive=false)
 
-   Copy a file from *src* to *dest*.
+   Copy a file from *src* to *dest*. Passing \"recursive=true\" will
+   enable recursive copying of directories.
 
 "),
 
@@ -5301,146 +5357,6 @@ Millisecond(v)
 
 "),
 
-("Base.Graphics","Vec2","Vec2(x, y)
-
-   Creates a point in two dimensions
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(xmin, xmax, ymin, ymax)
-
-   Creates a box in two dimensions with the given edges
-
-"),
-
-("Base.Graphics","BoundingBox","BoundingBox(objs...)
-
-   Creates a box in two dimensions that encloses all objects
-
-"),
-
-("Base.Graphics","width","width(obj)
-
-   Computes the width of an object
-
-"),
-
-("Base.Graphics","height","height(obj)
-
-   Computes the height of an object
-
-"),
-
-("Base.Graphics","xmin","xmin(obj)
-
-   Computes the minimum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","xmax","xmax(obj)
-
-   Computes the maximum x-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymin","ymin(obj)
-
-   Computes the minimum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","ymax","ymax(obj)
-
-   Computes the maximum y-coordinate contained in an object
-
-"),
-
-("Base.Graphics","diagonal","diagonal(obj)
-
-   Return the length of the diagonal of an object
-
-"),
-
-("Base.Graphics","aspect_ratio","aspect_ratio(obj)
-
-   Compute the height/width of an object
-
-"),
-
-("Base.Graphics","center","center(obj)
-
-   Return the point in the center of an object
-
-"),
-
-("Base.Graphics","xrange","xrange(obj)
-
-   Returns a tuple \"(xmin(obj), xmax(obj))\"
-
-"),
-
-("Base.Graphics","yrange","yrange(obj)
-
-   Returns a tuple \"(ymin(obj), ymax(obj))\"
-
-"),
-
-("Base.Graphics","rotate","rotate(obj, angle, origin) -> newobj
-
-   Rotates an object around origin by the specified angle (radians),
-   returning a new object of the same type.  Because of type-
-   constancy, this new object may not always be a strict geometric
-   rotation of the input; for example, if \"obj\" is a \"BoundingBox\"
-   the return is the smallest \"BoundingBox\" that encloses the
-   rotated input.
-
-"),
-
-("Base.Graphics","shift","shift(obj, dx, dy)
-
-   Returns an object shifted horizontally and vertically by the
-   indicated amounts
-
-"),
-
-("Base.Graphics","*","*(obj, s::Real)
-
-   Scale the width and height of a graphics object, keeping the center
-   fixed
-
-"),
-
-("Base.Graphics","+","+(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the smallest box containing both boxes
-
-"),
-
-("Base.Graphics","&","&(bb1::BoundingBox, bb2::BoundingBox) -> BoundingBox
-
-   Returns the intersection, the largest box contained in both boxes
-
-"),
-
-("Base.Graphics","deform","deform(bb::BoundingBox, dxmin, dxmax, dymin, dymax)
-
-   Returns a bounding box with all edges shifted by the indicated
-   amounts
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, x, y)
-
-   True if the given point is inside the box
-
-"),
-
-("Base.Graphics","isinside","isinside(bb::BoundingBox, point)
-
-   True if the given point is inside the box
-
-"),
-
 
 ("Base","STDOUT","STDOUT
 
@@ -5556,13 +5472,6 @@ Millisecond(v)
 ("Base","flush","flush(stream)
 
    Commit all currently buffered writes to the given stream.
-
-"),
-
-("Base","flush_cstdio","flush_cstdio()
-
-   Flushes the C \"stdout\" and \"stderr\" streams (which may have
-   been written to by external C code).
 
 "),
 
@@ -5803,7 +5712,7 @@ Millisecond(v)
 ("Base","truncate","truncate(file, n)
 
    Resize the file or buffer given by the first argument to exactly
-   *n* bytes, filling previously unallocated space with '0' if the
+   *n* bytes, filling previously unallocated space with '\\0' if the
    file or buffer is grown
 
 "),
@@ -5822,8 +5731,8 @@ Millisecond(v)
 
    Read io until the end of the stream/file and count the number of
    non-empty lines. To specify a file pass the filename as the first
-   argument. EOL markers other than 'n' are supported by passing them
-   as the second argument.
+   argument. EOL markers other than '\\n' are supported by passing
+   them as the second argument.
 
 "),
 
@@ -6080,7 +5989,7 @@ Millisecond(v)
 
 "),
 
-("Base","writedlm","writedlm(f, A, delim='t')
+("Base","writedlm","writedlm(f, A, delim='\\t')
 
    Write \"A\" (a vector, matrix or an iterable collection of iterable
    rows) as text to \"f\" (either a filename string or an \"IO\"
@@ -6230,16 +6139,16 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","reprmime","reprmime(mime, x)
 
-   Returns a \"AbstractString\" or \"Vector{UInt8}\" containing the
+   Returns an \"AbstractString\" or \"Vector{UInt8}\" containing the
    representation of \"x\" in the requested \"mime\" type, as written
    by \"writemime\" (throwing a \"MethodError\" if no appropriate
-   \"writemime\" is available).  A \"AbstractString\" is returned for
+   \"writemime\" is available).  An \"AbstractString\" is returned for
    MIME types with textual representations (such as \"\"text/html\"\"
    or \"\"application/postscript\"\"), whereas binary data is returned
    as \"Vector{UInt8}\".  (The function \"istext(mime)\" returns
    whether or not Julia treats a given \"mime\" type as text.)
 
-   As a special case, if \"x\" is a \"AbstractString\" (for textual
+   As a special case, if \"x\" is an \"AbstractString\" (for textual
    MIME types) or a \"Vector{UInt8}\" (for binary MIME types), the
    \"reprmime\" function assumes that \"x\" is already in the
    requested \"mime\" format and simply returns \"x\".
@@ -6248,9 +6157,10 @@ displayable(d::Display, mime) -> Bool
 
 ("Base","stringmime","stringmime(mime, x)
 
-   Returns a \"AbstractString\" containing the representation of \"x\"
-   in the requested \"mime\" type.  This is similar to \"reprmime\"
-   except that binary data is base64-encoded as an ASCII string.
+   Returns an \"AbstractString\" containing the representation of
+   \"x\" in the requested \"mime\" type.  This is similar to
+   \"reprmime\" except that binary data is base64-encoded as an ASCII
+   string.
 
 "),
 
@@ -6355,56 +6265,6 @@ popdisplay(d::Display)
 
    Forces synchronization between the in-memory version of a memory-
    mapped \"Array\" or \"BitArray\" and the on-disk version.
-
-"),
-
-("Base","msync","msync(ptr, len[, flags])
-
-   Forces synchronization of the \"mmap()\"ped memory region from
-   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
-   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
-   your platform man page for specifics. The flags argument is not
-   valid on Windows.
-
-   You may not need to call \"msync\", because synchronization is
-   performed at intervals automatically by the operating system.
-   However, you can call this directly if, for example, you are
-   concerned about losing the result of a long-running calculation.
-
-"),
-
-("Base","MS_ASYNC","MS_ASYNC
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","MS_SYNC","MS_SYNC
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","MS_INVALIDATE","MS_INVALIDATE
-
-   Enum constant for \"msync()\". See your platform man page for
-   details. (not available on Windows).
-
-"),
-
-("Base","mmap","mmap(len, prot, flags, fd, offset)
-
-   Low-level interface to the \"mmap\" system call. See the man page.
-
-"),
-
-("Base","munmap","munmap(pointer, len)
-
-   Low-level interface for unmapping memory (see the man page). With
-   \"mmap_array()\" you do not need to call this directly; the memory
-   is unmapped for you when the array goes out of scope.
 
 "),
 
@@ -6590,6 +6450,271 @@ popdisplay(d::Display)
 
 "),
 
+("Libc","malloc","malloc(size::Integer) -> Ptr{Void}
+
+   Call \"malloc\" from the C standard library.
+
+"),
+
+("Libc","calloc","calloc(num::Integer, size::Integer) -> Ptr{Void}
+
+   Call \"calloc\" from the C standard library.
+
+"),
+
+("Libc","realloc","realloc(addr::Ptr, size::Integer) -> Ptr{Void}
+
+   Call \"realloc\" from the C standard library.
+
+   See warning in the documentation for \"free\" regarding only using
+   this on memory originally obtained from \"malloc\".
+
+"),
+
+("Libc","free","free(addr::Ptr)
+
+   Call \"free\" from the C standard library. Only use this on memory
+   obtained from \"malloc\", not on pointers retrieved from other C
+   libraries. \"Ptr\" objects obtained from C libraries should be
+   freed by the free functions defined in that library, to avoid
+   assertion failures if multiple \"libc\" libraries exist on the
+   system.
+
+"),
+
+("Libc","errno","errno([code])
+
+   Get the value of the C library's \"errno\". If an argument is
+   specified, it is used to set the value of \"errno\".
+
+   The value of \"errno\" is only valid immediately after a \"ccall\"
+   to a C library routine that sets it. Specifically, you cannot call
+   \"errno\" at the next prompt in a REPL, because lots of code is
+   executed between prompts.
+
+"),
+
+("Libc","strerror","strerror(n)
+
+   Convert a system call error code to a descriptive string
+
+"),
+
+("Libc","time","time(t::TmStruct)
+
+   Converts a \"TmStruct\" struct to a number of seconds since the
+   epoch.
+
+"),
+
+("Libc","strftime","strftime([format], time)
+
+   Convert time, given as a number of seconds since the epoch or a
+   \"TmStruct\", to a formatted string using the given format.
+   Supported formats are the same as those in the standard C library.
+
+"),
+
+("Libc","strptime","strptime([format], timestr)
+
+   Parse a formatted time string into a \"TmStruct\" giving the
+   seconds, minute, hour, date, etc. Supported formats are the same as
+   those in the standard C library. On some platforms, timezones will
+   not be parsed correctly. If the result of this function will be
+   passed to \"time\" to convert it to seconds since the epoch, the
+   \"isdst\" field should be filled in manually. Setting it to \"-1\"
+   will tell the C library to use the current system settings to
+   determine the timezone.
+
+"),
+
+("Libc","TmStruct","TmStruct([seconds])
+
+   Convert a number of seconds since the epoch to broken-down format,
+   with fields \"sec\", \"min\", \"hour\", \"mday\", \"month\",
+   \"year\", \"wday\", \"yday\", and \"isdst\".
+
+"),
+
+("Libc","flush_cstdio","flush_cstdio()
+
+   Flushes the C \"stdout\" and \"stderr\" streams (which may have
+   been written to by external C code).
+
+"),
+
+("Libc","msync","msync(ptr, len[, flags])
+
+   Forces synchronization of the \"mmap()\"ped memory region from
+   \"ptr\" to \"ptr+len\". Flags defaults to \"MS_SYNC\", but can be a
+   combination of \"MS_ASYNC\", \"MS_SYNC\", or \"MS_INVALIDATE\". See
+   your platform man page for specifics. The flags argument is not
+   valid on Windows.
+
+   You may not need to call \"msync\", because synchronization is
+   performed at intervals automatically by the operating system.
+   However, you can call this directly if, for example, you are
+   concerned about losing the result of a long-running calculation.
+
+"),
+
+("Libc","MS_ASYNC","MS_ASYNC
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","MS_SYNC","MS_SYNC
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","MS_INVALIDATE","MS_INVALIDATE
+
+   Enum constant for \"msync()\". See your platform man page for
+   details. (not available on Windows).
+
+"),
+
+("Libc","mmap","mmap(len, prot, flags, fd, offset)
+
+   Low-level interface to the \"mmap\" system call. See the man page.
+
+"),
+
+("Libc","munmap","munmap(pointer, len)
+
+   Low-level interface for unmapping memory (see the man page). With
+   \"mmap_array()\" you do not need to call this directly; the memory
+   is unmapped for you when the array goes out of scope.
+
+"),
+
+("Libdl","dlopen","dlopen(libfile::AbstractString[, flags::Integer])
+
+   Load a shared library, returning an opaque handle.
+
+   The optional flags argument is a bitwise-or of zero or more of
+   \"RTLD_LOCAL\", \"RTLD_GLOBAL\", \"RTLD_LAZY\", \"RTLD_NOW\",
+   \"RTLD_NODELETE\", \"RTLD_NOLOAD\", \"RTLD_DEEPBIND\", and
+   \"RTLD_FIRST\".  These are converted to the corresponding flags of
+   the POSIX (and/or GNU libc and/or MacOS) dlopen command, if
+   possible, or are ignored if the specified functionality is not
+   available on the current platform.  The default is
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_LOCAL\".  An important usage of
+   these flags, on POSIX platforms, is to specify
+   \"RTLD_LAZY|RTLD_DEEPBIND|RTLD_GLOBAL\" in order for the library's
+   symbols to be available for usage in other shared libraries, in
+   situations where there are dependencies between shared libraries.
+
+"),
+
+("Libdl","dlopen_e","dlopen_e(libfile::AbstractString[, flags::Integer])
+
+   Similar to \"dlopen()\", except returns a \"NULL\" pointer instead
+   of raising errors.
+
+"),
+
+("Libdl","RTLD_DEEPBIND","RTLD_DEEPBIND
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_FIRST","RTLD_FIRST
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_GLOBAL","RTLD_GLOBAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_LAZY","RTLD_LAZY
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_LOCAL","RTLD_LOCAL
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NODELETE","RTLD_NODELETE
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NOLOAD","RTLD_NOLOAD
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","RTLD_NOW","RTLD_NOW
+
+   Enum constant for \"dlopen()\". See your platform man page for
+   details, if applicable.
+
+"),
+
+("Libdl","dlsym","dlsym(handle, sym)
+
+   Look up a symbol from a shared library handle, return callable
+   function pointer on success.
+
+"),
+
+("Libdl","dlsym_e","dlsym_e(handle, sym)
+
+   Look up a symbol from a shared library handle, silently return NULL
+   pointer on lookup failure.
+
+"),
+
+("Libdl","dlclose","dlclose(handle)
+
+   Close shared library referenced by handle.
+
+"),
+
+("Libdl","find_library","find_library(names, locations)
+
+   Searches for the first library in \"names\" in the paths in the
+   \"locations\" list, \"DL_LOAD_PATH\", or system library paths (in
+   that order) which can successfully be dlopen'd. On success, the
+   return value will be one of the names (potentially prefixed by one
+   of the paths in locations). This string can be assigned to a
+   \"global const\" and used as the library name in future
+   \"ccall\"'s. On failure, it returns the empty string.
+
+"),
+
+("Libdl","DL_LOAD_PATH","DL_LOAD_PATH
+
+   When calling \"dlopen\", the paths in this list will be searched
+   first, in order, before searching the system locations for a valid
+   library handle.
+
+"),
+
 ("Base","*","*(A, B)
 
    Matrix multiplication
@@ -6607,8 +6732,12 @@ popdisplay(d::Display)
    Otherwise an LU factorization is used. For rectangular \"A\" the
    result is the minimum-norm least squares solution computed by a
    pivoted QR factorization of \"A\" and a rank estimate of A based on
-   the R factor. For sparse, square \"A\" the LU factorization (from
-   UMFPACK) is used.
+   the R factor.
+
+   When \"A\" is sparse, a similar polyalgorithm is used. For
+   indefinite matrices, the LDLt factorization does not use pivoting
+   during the numerical factorization and therefore the procedure can
+   fail even for invertible matrices.
 
 "),
 
@@ -6634,13 +6763,6 @@ popdisplay(d::Display)
    type of the input matrix. The return value can then be reused for
    efficient solving of multiple systems. For example:
    \"A=factorize(A); x=A\\\\b; y=A\\\\C\".
-
-"),
-
-("Base","factorize!","factorize!(A)
-
-   \"factorize!\" is the same as \"factorize()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
 
 "),
 
@@ -6745,23 +6867,14 @@ popdisplay(d::Display)
 
 "),
 
-("Base","cholfact","cholfact(A[, ll]) -> CholmodFactor
+("Base","cholfact","cholfact(A) -> CHOLMOD.Factor
 
-   Compute the sparse Cholesky factorization of a sparse matrix \"A\".
-   If \"A\" is Hermitian its Cholesky factor is determined.  If \"A\"
-   is not Hermitian the Cholesky factor of \"A*A'\" is determined. A
-   fill-reducing permutation is used.  Methods for \"size\",
-   \"solve\", \"\\\", \"findn_nzs\", \"diag\", \"det\" and \"logdet\"
-   are available for \"CholmodFactor\" objects.  One of the solve
-   methods includes an integer argument that can be used to solve
-   systems involving parts of the factorization only.  The optional
-   boolean argument, \"ll\" determines whether the factorization
-   returned is of the \"A[p,p] = L*L'\" form, where \"L\" is lower
-   triangular or \"A[p,p] = L*Diagonal(D)*L'\" form where \"L\" is
-   unit lower triangular and \"D\" is a non-negative vector.  The
-   default is LDL. The symbolic factorization can also be reused for
-   other matrices with the same structure as \"A\" by calling
-   \"cholfact!\".
+   Compute the Cholesky factorization of a sparse positive definite
+   matrix \"A\". A fill-reducing permutation is used.  The main
+   application of this type is to solve systems of equations with
+   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
+   defined. The function calls the C library CHOLMOD and many other
+   functions from the library are wrapped but not exported.
 
 "),
 
@@ -6780,6 +6893,17 @@ popdisplay(d::Display)
    Compute a factorization of a positive definite matrix \"A\" such
    that \"A=L*Diagonal(d)*L'\" where \"L\" is a unit lower triangular
    matrix and \"d\" is a vector with non-negative elements.
+
+"),
+
+("Base","ldltfact","ldltfact(A) -> CHOLMOD.Factor
+
+   Compute the LDLt factorization of a sparse symmetric or Hermitian
+   matrix \"A\". A fill-reducing permutation is used.  The main
+   application of this type is to solve systems of equations with
+   \"\\\", but also the methods \"diag\", \"det\", \"logdet\" are
+   defined. The function calls the C library CHOLMOD and many other
+   functions from the library are wrapped but not exported.
 
 "),
 
@@ -6872,10 +6996,21 @@ popdisplay(d::Display)
 
 "),
 
+("Base","qrfact","qrfact(A) -> SPQR.Factorization
+
+   Compute the QR factorization of a sparse matrix \"A\". A fill-
+   reducing permutation is used. The main application of this type is
+   to solve least squares problems with \"\\\". The function calls the
+   C library SPQR and a few additional functions from the library are
+   wrapped but not exported.
+
+"),
+
 ("Base","qrfact!","qrfact!(A[, pivot=Val{false}])
 
-   \"qrfact!\" is the same as \"qrfact()\", but saves space by
-   overwriting the input \"A\", instead of creating a copy.
+   \"qrfact!\" is the same as \"qrfact()\" when A is a subtype of
+   \"StridedMatrix\", but saves space by overwriting the input \"A\",
+   instead of creating a copy.
 
 "),
 
@@ -7351,13 +7486,6 @@ popdisplay(d::Display)
    upper diagonal, respectively. The result is of type
    \"SymTridiagonal\" and provides efficient specialized eigensolvers,
    but may be converted into a regular matrix with \"full()\".
-
-"),
-
-("Base","Woodbury","Woodbury(A, U, C, V)
-
-   Construct a matrix in a form suitable for applying the Woodbury
-   matrix identity.
 
 "),
 
@@ -8228,6 +8356,13 @@ popdisplay(d::Display)
 
 "),
 
+("Base","fldmod","fldmod(x, y)
+
+   The floored quotient and modulus after division. Equivalent to
+   \"(fld(x,y), mod(x,y))\".
+
+"),
+
 ("Base","mod1","mod1(x, m)
 
    Modulus after division, returning in the range (0,m]
@@ -8992,25 +9127,8 @@ popdisplay(d::Display)
       julia> round(2.5)
       2.0
 
-   The optional \"RoundingMode\" argument will change this behaviour.
-   Currently supported are
-
-      \"RoundNearestTiesAway\"
-         rounds to nearest integer, with ties rounded away from zero
-         (C/C++ \"round\" behaviour).
-
-      \"RoundNearestTiesUp\"
-         rounds to nearest integer, with ties rounded toward positive
-         infinity (Java/JavaScript \"round\" behaviour).
-
-      \"RoundToZero\"
-         an alias for \"trunc()\".
-
-      \"RoundUp\"
-         an alias for \"ceil()\".
-
-      \"RoundDown\"
-         an alias for \"floor()\".
+   The optional \"RoundingMode\" argument will change how the number
+   gets rounded.
 
    \"round(T, x, [r::RoundingMode])\" converts the result to type
    \"T\", throwing an \"InexactError\" if the value is not
@@ -9026,22 +9144,91 @@ popdisplay(d::Display)
          julia> round(pi, 3, 2)
          3.125
 
-   Note: rounding to specified digits in bases other than 2 can be
-   inexact when operating on binary floating point numbers. For
-   example, the \"Float64\" value represented by \"1.15\" is actually
-   *less* than 1.15, yet will be rounded to 1.2.
+   Note: Rounding to specified digits in bases other than 2 can be
+     inexact when operating on binary floating point numbers. For
+     example, the \"Float64\" value represented by \"1.15\" is
+     actually *less* than 1.15, yet will be rounded to 1.2.
 
-         julia> x = 1.15
-         1.15
+        julia> x = 1.15
+        1.15
 
-         julia> @sprintf \"%.20f\" x
-         \"1.14999999999999991118\"
+        julia> @sprintf \"%.20f\" x
+        \"1.14999999999999991118\"
 
-         julia> x < 115//100
-         true
+        julia> x < 115//100
+        true
 
-         julia> round(x, 1)
-         1.2
+        julia> round(x, 1)
+        1.2
+
+"),
+
+("Base","RoundingMode","RoundingMode
+
+   A type which controls rounding behavior. Currently supported
+   rounding modes are:
+
+   * \"RoundNearest\" (default)
+
+   * \"RoundNearestTiesAway\"
+
+   * \"RoundNearestTiesUp\"
+
+   * \"RoundToZero\"
+
+   * \"RoundUp\"
+
+   * \"RoundDown\"
+
+"),
+
+("Base","RoundNearest","RoundNearest
+
+   The default rounding mode. Rounds to the nearest integer, with ties
+   (fractional values of 0.5) being rounded to the nearest even
+   integer.
+
+"),
+
+("Base","RoundNearestTiesAway","RoundNearestTiesAway
+
+   Rounds to nearest integer, with ties rounded away from zero (C/C++
+   \"round()\" behaviour).
+
+"),
+
+("Base","RoundNearestTiesUp","RoundNearestTiesUp
+
+   Rounds to nearest integer, with ties rounded toward positive
+   infinity (Java/JavaScript \"round()\" behaviour).
+
+"),
+
+("Base","RoundToZero","RoundToZero
+
+   \"round()\" using this rounding mode is an alias for \"trunc()\".
+
+"),
+
+("Base","RoundUp","RoundUp
+
+   \"round()\" using this rounding mode is an alias for \"ceil()\".
+
+"),
+
+("Base","RoundDown","RoundDown
+
+   \"round()\" using this rounding mode is an alias for \"floor()\".
+
+"),
+
+("Base","round","round(z, RoundingModeReal, RoundingModeImaginary)
+
+   Returns the nearest integral value of the same type as the complex-
+   valued \"z\" to \"z\", breaking ties using the specified
+   \"RoundingMode\"s. The first \"RoundingMode\" is used for rounding
+   the real components while the second is used for rounding the
+   imaginary components.
 
 "),
 
@@ -9268,7 +9455,7 @@ popdisplay(d::Display)
 
 ("Base","angle","angle(z)
 
-   Compute the phase angle of a complex number \"z\"
+   Compute the phase angle in radians of a complex number \"z\"
 
 "),
 
@@ -9286,7 +9473,7 @@ popdisplay(d::Display)
 
 ("Base","factorial","factorial(n)
 
-   Factorial of \"n\".  If \"n\" is an \"Integer()\", the factorial is
+   Factorial of \"n\".  If \"n\" is an \"Integer\", the factorial is
    computed as an integer (promoted to at least 64 bits).  Note that
    this may overflow if \"n\" is not small, but you can use
    \"factorial(big(n))\" to compute the result exactly in arbitrary
@@ -9422,8 +9609,8 @@ popdisplay(d::Display)
 
 ("Base","lgamma","lgamma(x)
 
-   Compute the logarithm of the absolute value of \"gamma(x)\" for
-   \"Real()\" \"x\", while for \"Complex()\" \"x\" it computes the
+   Compute the logarithm of the absolute value of \"gamma()\" for
+   \"Real\" \"x\", while for \"Complex\" \"x\" it computes the
    logarithm of \"gamma(x)\".
 
 "),
@@ -10409,17 +10596,21 @@ popdisplay(d::Display)
 
 "),
 
-("Base","parseint","parseint([type], str[, base])
+("Base","parse","parse(type, str[, base])
 
-   Parse a string as an integer in the given base (default 10),
-   yielding a number of the specified type (default \"Int\").
+   Parse a string as a number. If the type is an integer type, then a
+   base can be specified (the default is 10). If the type is a
+   floating point type, the string is parsed as a decimal floating
+   point number. If the string does not contain a valid number, an
+   error is raised.
 
 "),
 
-("Base","parsefloat","parsefloat([type], str)
+("Base","tryparse","tryparse(type, str[, base])
 
-   Parse a string as a decimal floating point number, yielding a
-   number of the specified type.
+   Like \"parse\", but returns a \"Nullable\" of the requested type.
+   The result will be null if the string does not contain a valid
+   number.
 
 "),
 
@@ -10428,36 +10619,6 @@ popdisplay(d::Display)
    Convert a number to a maximum precision representation (typically
    \"BigInt\" or \"BigFloat\"). See \"BigFloat\" for information about
    some pitfalls with floating-point numbers.
-
-"),
-
-("Base","bool","bool(x)
-
-   Convert a number or numeric array to boolean
-
-"),
-
-("Base","int","int(x)
-
-   Convert a number or array to the default integer type on your
-   platform. Alternatively, \"x\" can be a string, which is parsed as
-   an integer.
-
-"),
-
-("Base","uint","uint(x)
-
-   Convert a number or array to the default unsigned integer type on
-   your platform. Alternatively, \"x\" can be a string, which is
-   parsed as an unsigned integer.
-
-"),
-
-("Base","integer","integer(x)
-
-   Convert a number or array to integer type. If \"x\" is already of
-   integer type it is unchanged, otherwise it converts it to the
-   default integer type on your platform.
 
 "),
 
@@ -10476,115 +10637,20 @@ popdisplay(d::Display)
 
 "),
 
-("Base","int8","int8(x)
-
-   Convert a number or array to \"Int8\" data type
-
-"),
-
-("Base","int16","int16(x)
-
-   Convert a number or array to \"Int16\" data type
-
-"),
-
-("Base","int32","int32(x)
-
-   Convert a number or array to \"Int32\" data type
-
-"),
-
-("Base","int64","int64(x)
-
-   Convert a number or array to \"Int64\" data type
-
-"),
-
-("Base","int128","int128(x)
-
-   Convert a number or array to \"Int128\" data type
-
-"),
-
-("Base","uint8","uint8(x)
-
-   Convert a number or array to \"UInt8\" data type
-
-"),
-
-("Base","uint16","uint16(x)
-
-   Convert a number or array to \"UInt16\" data type
-
-"),
-
-("Base","uint32","uint32(x)
-
-   Convert a number or array to \"UInt32\" data type
-
-"),
-
-("Base","uint64","uint64(x)
-
-   Convert a number or array to \"UInt64\" data type
-
-"),
-
-("Base","uint128","uint128(x)
-
-   Convert a number or array to \"UInt128\" data type
-
-"),
-
-("Base","float16","float16(x)
-
-   Convert a number or array to \"Float16\" data type
-
-"),
-
-("Base","float32","float32(x)
-
-   Convert a number or array to \"Float32\" data type
-
-"),
-
-("Base","float64","float64(x)
-
-   Convert a number or array to \"Float64\" data type
-
-"),
-
-("Base","float32_isvalid","float32_isvalid(x, out::Vector{Float32}) -> Bool
-
-   Convert a number or array to \"Float32\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
-
-"),
-
-("Base","float64_isvalid","float64_isvalid(x, out::Vector{Float64}) -> Bool
-
-   Convert a number or array to \"Float64\" data type, returning true
-   if successful. The result of the conversion is stored in
-   \"out[1]\".
-
-"),
-
 ("Base","float","float(x)
 
    Convert a number, array, or string to a \"FloatingPoint\" data
    type. For numeric data, the smallest suitable \"FloatingPoint\"
    type is used. Converts strings to \"Float64\".
 
-   This function is not recommended for arrays. It is better to use a
-   more specific function such as \"float32\" or \"float64\".
-
 "),
 
 ("Base","significand","significand(x)
 
    Extract the significand(s) (a.k.a. mantissa), in binary
-   representation, of a floating-point number or array.
+   representation, of a floating-point number or array. If \"x\" is a
+   non-zero finite number, than the result will be a number of the
+   same type on the interval [1,2). Otherwise \"x\" is returned.
 
       julia> significand(15.2)/15.2
       0.125
@@ -10600,29 +10666,9 @@ popdisplay(d::Display)
 
 "),
 
-("Base","complex64","complex64(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex64\" data type.
-   \"i\" defaults to zero.
-
-"),
-
-("Base","complex128","complex128(r[, i])
-
-   Convert to \"r + i*im\" represented as a \"Complex128\" data type.
-   \"i\" defaults to zero.
-
-"),
-
 ("Base","complex","complex(r[, i])
 
    Convert real numbers or arrays to complex. \"i\" defaults to zero.
-
-"),
-
-("Base","char","char(x)
-
-   Convert a number or array to \"Char\" data type
 
 "),
 
@@ -10689,6 +10735,7 @@ popdisplay(d::Display)
 "),
 
 ("Base","e","e
+eu
 
    The constant e
 
@@ -10701,12 +10748,14 @@ popdisplay(d::Display)
 "),
 
 ("Base","γ","γ
+eulergamma
 
    Euler's constant
 
 "),
 
 ("Base","φ","φ
+golden
 
    The golden ratio
 
@@ -10845,7 +10894,7 @@ popdisplay(d::Display)
 ("Base","BigInt","BigInt(x)
 
    Create an arbitrary precision integer. \"x\" may be an \"Int\" (or
-   anything that can be converted to an \"Int\") or a
+   anything that can be converted to an \"Int\") or an
    \"AbstractString\". The usual mathematical operators are defined
    for this type, and results are promoted to a \"BigInt\".
 
@@ -10854,7 +10903,7 @@ popdisplay(d::Display)
 ("Base","BigFloat","BigFloat(x)
 
    Create an arbitrary precision floating point number. \"x\" may be
-   an \"Integer\", a \"Float64\", a \"AbstractString\" or a
+   an \"Integer\", a \"Float64\", an \"AbstractString\" or a
    \"BigInt\". The usual mathematical operators are defined for this
    type, and results are promoted to a \"BigFloat\". Note that because
    floating-point numbers are not exactly-representable in decimal
@@ -10908,7 +10957,7 @@ popdisplay(d::Display)
 
    Number of zeros in the binary representation of \"x\".
 
-      julia> count_zeros(int32(2 ^ 16 - 1))
+      julia> count_zeros(Int32(2 ^ 16 - 1))
       16
 
 "),
@@ -10917,7 +10966,7 @@ popdisplay(d::Display)
 
    Number of zeros leading the binary representation of \"x\".
 
-      julia> leading_zeros(int32(1))
+      julia> leading_zeros(Int32(1))
       31
 
 "),
@@ -10926,7 +10975,7 @@ popdisplay(d::Display)
 
    Number of ones leading the binary representation of \"x\".
 
-      julia> leading_ones(uint32(2 ^ 32 - 2))
+      julia> leading_ones(UInt32(2 ^ 32 - 2))
       31
 
 "),
@@ -11138,6 +11187,12 @@ popdisplay(d::Display)
 
 "),
 
+("Base","istaskstarted","istaskstarted(task) -> Bool
+
+   Tell whether a task has started executing.
+
+"),
+
 ("Base","consume","consume(task, values...)
 
    Receive the next value passed to \"produce\" by the specified task.
@@ -11274,8 +11329,8 @@ popdisplay(d::Display)
    \"bind_addr\" and \"port\".
 
    \"count\" is the number of workers to be launched on the specified
-   host. If specified as \"\"auto\"\" or \":auto\" it will launch as
-   many workers as the number of cores on the specific host.
+   host. If specified as \":auto\" it will launch as many workers as
+   the number of cores on the specific host.
 
    Keyword arguments:
 
@@ -11288,11 +11343,12 @@ popdisplay(d::Display)
    \"max_parallel\" : specifies the maximum number of workers
    connected to in parallel at a host. Defaults to 10.
 
-   \"dir\" :  specifies the location of the julia binaries on the
-   worker nodes. Defaults to JULIA_HOME.
+   \"dir\" :  specifies the working directory on the workers. Defaults
+   to the host's current directory (as found by *pwd()*)
 
    \"exename\" :  name of the julia executable. Defaults to
-   \"./julia\" or \"./julia-debug\" as the case may be.
+   \"\$JULIA_HOME/julia\" or \"\$JULIA_HOME/julia-debug\" as the case
+   may be.
 
    \"exeflags\" :  additional flags passed to the worker processes.
 
@@ -11304,9 +11360,6 @@ popdisplay(d::Display)
 
    For example Beowulf clusters are  supported via a custom cluster
    manager implemented in  package \"ClusterManagers\".
-
-   See the documentation for package \"ClusterManagers\" for more
-   information on how to write a custom cluster manager.
 
 "),
 
@@ -11355,12 +11408,13 @@ popdisplay(d::Display)
 
 "),
 
-("Base","pmap","pmap(f, lsts...; err_retry=true, err_stop=false)
+("Base","pmap","pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    Transform collections \"lsts\" by applying \"f\" to each element in
    parallel. If \"nprocs() > 1\", the calling process will be
    dedicated to assigning tasks. All other available processes will be
-   used as parallel workers.
+   used as parallel workers, or on the processes specified by
+   \"pids\".
 
    If \"err_retry\" is true, it retries a failed application of \"f\"
    on a different worker. If \"err_stop\" is true, it takes precedence
@@ -11391,7 +11445,8 @@ popdisplay(d::Display)
      or failure.
 
    * \"Task\": Wait for a \"Task\" to finish, returning its result
-     value.
+     value. If the task fails with an exception, the exception is
+     propagated (re-thrown in the task that called \"wait\").
 
    * \"RawFD\": Wait for changes on a file descriptor (see *poll_fd*
      for keyword arguments and return code)
@@ -11544,89 +11599,6 @@ popdisplay(d::Display)
 
 "),
 
-("Base","DArray","DArray(init, dims[, procs, dist])
-
-   Construct a distributed array. The parameter \"init\" is a function
-   that accepts a tuple of index ranges. This function should allocate
-   a local chunk of the distributed array and initialize it for the
-   specified indices. \"dims\" is the overall size of the distributed
-   array. \"procs\" optionally specifies a vector of process IDs to
-   use. If unspecified, the array is distributed over all worker
-   processes only. Typically, when running in distributed mode, i.e.,
-   \"nprocs() > 1\", this would mean that no chunk of the distributed
-   array exists on the process hosting the interactive julia prompt.
-   \"dist\" is an integer vector specifying how many chunks the
-   distributed array should be divided into in each dimension.
-
-   For example, the \"dfill\" function that creates a distributed
-   array and fills it with a value \"v\" is implemented as:
-
-   \"dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)\"
-
-"),
-
-("Base","dzeros","dzeros(dims, ...)
-
-   Construct a distributed array of zeros. Trailing arguments are the
-   same as those accepted by \"DArray()\".
-
-"),
-
-("Base","dones","dones(dims, ...)
-
-   Construct a distributed array of ones. Trailing arguments are the
-   same as those accepted by \"DArray()\".
-
-"),
-
-("Base","dfill","dfill(x, dims, ...)
-
-   Construct a distributed array filled with value \"x\". Trailing
-   arguments are the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","drand","drand(dims, ...)
-
-   Construct a distributed uniform random array. Trailing arguments
-   are the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","drandn","drandn(dims, ...)
-
-   Construct a distributed normal random array. Trailing arguments are
-   the same as those accepted by \"DArray()\".
-
-"),
-
-("Base","distribute","distribute(a)
-
-   Convert a local array to distributed.
-
-"),
-
-("Base","localpart","localpart(d)
-
-   Get the local piece of a distributed array. Returns an empty array
-   if no local part exists on the calling process.
-
-"),
-
-("Base","localindexes","localindexes(d)
-
-   A tuple describing the indexes owned by the local process. Returns
-   a tuple with empty ranges if no local part exists on the calling
-   process.
-
-"),
-
-("Base","procs","procs(d)
-
-   Get the vector of processes storing pieces of \"d\".
-
-"),
-
 ("Base","SharedArray","SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
 
    Construct a SharedArray of a bitstype \"T\"  and size \"dims\"
@@ -11766,7 +11738,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base.Pkg","installed","installed(pkg) -> Nothing | VersionNumber
+("Base.Pkg","installed","installed(pkg) -> Void | VersionNumber
 
    If \"pkg\" is installed, return the installed version number,
    otherwise return \"nothing\".
@@ -12532,10 +12504,12 @@ popdisplay(d::Display)
 
 "),
 
-("Base","randstring","randstring(len)
+("Base","randstring","randstring([rng], len=8)
 
    Create a random ASCII string of length \"len\", consisting of
-   upper- and lower-case letters and the digits 0-9
+   upper- and lower-case letters and the digits 0-9. The optional
+   \"rng\" argument specifies a random number generator, see *Random
+   Numbers*.
 
 "),
 
@@ -12757,7 +12731,8 @@ popdisplay(d::Display)
 ("Base","runtests","runtests([tests=[\"all\"][, numcores=iceil(CPU_CORES/2)]])
 
    Run the Julia unit tests listed in \"tests\", which can be either a
-   string or an array of strings, using \"numcores\" processors.
+   string or an array of strings, using \"numcores\" processors. (not
+   exported)
 
 "),
 

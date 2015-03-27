@@ -7,27 +7,24 @@ convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
 convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
 
 # integer to pointer
-convert{T}(::Type{Ptr{T}}, x::Integer) = box(Ptr{T},unbox(UInt,UInt(x)))
-convert{T}(::Type{Ptr{T}}, x::Signed) = box(Ptr{T},unbox(Int,Int(x)))
+convert{T}(::Type{Ptr{T}}, x::UInt) = box(Ptr{T},unbox(UInt,UInt(x)))
+convert{T}(::Type{Ptr{T}}, x::Int) = box(Ptr{T},unbox(Int,Int(x)))
 
 # pointer to pointer
 convert{T}(::Type{Ptr{T}}, p::Ptr{T}) = p
 convert{T}(::Type{Ptr{T}}, p::Ptr) = box(Ptr{T}, unbox(Ptr,p))
 
-# object to pointer
-convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
-convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
-convert(::Type{Ptr{UInt8}}, s::ByteString) = convert(Ptr{UInt8}, s.data)
-convert(::Type{Ptr{Int8}}, s::ByteString) = convert(Ptr{Int8}, s.data)
+# object to pointer (when used with ccall)
+unsafe_convert(::Type{Ptr{UInt8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{UInt8}, (Any,), x)
+unsafe_convert(::Type{Ptr{Int8}}, x::Symbol) = ccall(:jl_symbol_name, Ptr{Int8}, (Any,), x)
+unsafe_convert(::Type{Ptr{UInt8}}, s::ByteString) = unsafe_convert(Ptr{UInt8}, s.data)
+unsafe_convert(::Type{Ptr{Int8}}, s::ByteString) = unsafe_convert(Ptr{Int8}, s.data)
+# convert strings to ByteString to pass as pointers
+cconvert(::Type{Ptr{UInt8}}, s::AbstractString) = bytestring(s)
+cconvert(::Type{Ptr{Int8}}, s::AbstractString) = bytestring(s)
 
-convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
-convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
-
-# note: these definitions don't mean any AbstractArray is convertible to
-# pointer. they just map the array element type to the pointer type for
-# convenience in cases that work.
-pointer{T}(x::AbstractArray{T}) = convert(Ptr{T},x)
-pointer{T}(x::AbstractArray{T}, i::Integer) = convert(Ptr{T},x) + (i-1)*elsize(x)
+unsafe_convert{T}(::Type{Ptr{T}}, a::Array{T}) = ccall(:jl_array_ptr, Ptr{T}, (Any,), a)
+unsafe_convert(::Type{Ptr{Void}}, a::Array) = ccall(:jl_array_ptr, Ptr{Void}, (Any,), a)
 
 # unsafe pointer to array conversions
 pointer_to_array(p, d::Integer, own=false) = pointer_to_array(p, (d,), own)
@@ -52,20 +49,18 @@ unsafe_store!{T}(p::Ptr{T}, x, i::Integer) = pointerset(p, convert(T,x), Int(i))
 unsafe_store!{T}(p::Ptr{T}, x) = pointerset(p, convert(T,x), 1)
 
 # convert a raw Ptr to an object reference, and vice-versa
-unsafe_pointer_to_objref(p::Ptr) = pointertoref(unbox(Ptr{Void},p))
-pointer_from_objref(x::Any) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+unsafe_pointer_to_objref(x::Ptr) = ccall(:jl_value_ptr, Any, (Ptr{Void},), x)
+pointer_from_objref(x::ANY) = ccall(:jl_value_ptr, Ptr{Void}, (Any,), x)
+data_pointer_from_objref(x::ANY) = pointer_from_objref(x)::Ptr{Void}
 
-integer(x::Ptr) = convert(UInt, x)
-unsigned(x::Ptr) = convert(UInt, x)
-
-eltype{T}(::Ptr{T}) = T
+eltype{T}(::Type{Ptr{T}}) = T
 
 ## limited pointer arithmetic & comparison ##
 
-==(x::Ptr, y::Ptr) = uint(x) == uint(y)
-isless(x::Ptr, y::Ptr) = isless(uint(x), uint(y))
--(x::Ptr, y::Ptr) = uint(x) - uint(y)
+==(x::Ptr, y::Ptr) = UInt(x) == UInt(y)
+isless(x::Ptr, y::Ptr) = isless(UInt(x), UInt(y))
+-(x::Ptr, y::Ptr) = UInt(x) - UInt(y)
 
-+(x::Ptr, y::Integer) = oftype(x, (uint(x) + (y % UInt) % UInt))
--(x::Ptr, y::Integer) = oftype(x, (uint(x) - (y % UInt) % UInt))
++(x::Ptr, y::Integer) = oftype(x, (UInt(x) + (y % UInt) % UInt))
+-(x::Ptr, y::Integer) = oftype(x, (UInt(x) - (y % UInt) % UInt))
 +(x::Integer, y::Ptr) = y + x

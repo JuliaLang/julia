@@ -560,48 +560,60 @@ end
 
 #Generic solver using naive substitution
 function naivesub!(A::UpperTriangular, b::AbstractVector, x::AbstractVector=b)
-    N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch())
-    for j = N:-1:1
-        x[j] = b[j]
-        for k = j+1:1:N
-            x[j] -= A[j,k] * x[k]
+    n = size(A, 2)
+    n == length(b) == length(x) || throw(DimensionMismatch())
+    for j = n:-1:1
+        xj = b[j]
+        for k = j+1:1:n
+            xj -= A[j,k] * x[k]
         end
-        x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
+        Ajj = A[j,j]
+        if Ajj == zero(Ajj)
+            throw(SingularException(j))
+        else
+            x[j] = Ajj\xj
+        end
     end
     x
 end
 function naivesub!(A::UnitUpperTriangular, b::AbstractVector, x::AbstractVector=b)
-    N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch())
-    for j = N:-1:1
-        x[j] = b[j]
-        for k = j+1:1:N
-            x[j] -= A[j,k] * x[k]
+    n = size(A, 2)
+    n == length(b) == length(x) || throw(DimensionMismatch())
+    for j = n:-1:1
+        xj = b[j]
+        for k = j+1:1:n
+            xj -= A[j,k] * x[k]
         end
+        x[j] = xj
     end
     x
 end
 function naivesub!(A::LowerTriangular, b::AbstractVector, x::AbstractVector=b)
-    N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch())
-    for j = 1:N
-        x[j] = b[j]
+    n = size(A, 2)
+    n == length(b) == length(x) || throw(DimensionMismatch())
+    for j = 1:n
+        xj = b[j]
         for k = 1:j-1
-            x[j] -= A[j,k] * x[k]
+            xj -= A[j,k] * x[k]
         end
-        x[j] = A[j,j]==0 ? throw(SingularException(j)) : A[j,j]\x[j]
+        Ajj = A[j,j]
+        if Ajj == zero(Ajj)
+            throw(SingularException(j))
+        else
+            x[j] = Ajj\xj
+        end
     end
     x
 end
 function naivesub!(A::UnitLowerTriangular, b::AbstractVector, x::AbstractVector=b)
-    N = size(A, 2)
-    N == length(b) == length(x) || throw(DimensionMismatch())
-    for j = 1:N
-        x[j] = b[j]
+    n = size(A, 2)
+    n == length(b) == length(x) || throw(DimensionMismatch())
+    for j = 1:n
+        xj = b[j]
         for k = 1:j-1
-            x[j] -= A[j,k] * x[k]
+            xj -= A[j,k] * x[k]
         end
+        x[j] = xj
     end
     x
 end

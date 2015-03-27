@@ -36,7 +36,7 @@ function skipblank(io::IO)
 end
 
 """
-Returns true if the line contains only (and
+Returns true if the line contains only (and, unless allowempty,
 at least one of) the characters given.
 """
 function linecontains(io::IO, chars; allow_whitespace = true,
@@ -46,7 +46,7 @@ function linecontains(io::IO, chars; allow_whitespace = true,
     l = readline(io) |> chomp
     length(l) == 0 && return allowempty
 
-    result = false
+    result = allowempty
     for c in l
         c in whitespace && (allow_whitespace ? continue : (result = false; break))
         c in chars && (result = true; continue)
@@ -116,6 +116,19 @@ function withstream(f, stream)
 end
 
 """
+Consume the standard allowed markdown indent of
+three spaces. Returns false if there are more than
+three present.
+"""
+function eatindent(io::IO, n = 3)
+    withstream(io) do
+        m = 0
+        while startswith(io, ' ') m += 1 end
+        return m <= n
+    end
+end
+
+"""
 Read the stream until startswith(stream, delim)
 The delimiter is consumed but not included.
 Returns nothing and resets the stream if delim is
@@ -132,6 +145,7 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
                 else
                     count -= 1
                     write(buffer, delimiter)
+                    continue
                 end
             end
             char = read(stream, Char)
@@ -142,6 +156,11 @@ function readuntil(stream::IO, delimiter; newlines = false, match = nothing)
     end
 end
 
+# TODO: refactor this. If we're going to assume
+# the delimiter is a single character + a minimum
+# repeat we may as well just pass that into the
+# function.
+
 """
 Parse a symmetrical delimiter which wraps words.
 i.e. `*word word*` but not `*word * word`.
@@ -149,17 +168,28 @@ i.e. `*word word*` but not `*word * word`.
 Escaped delimiters are not yet supported.
 """
 function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
+    delimiter, nmin = string(delimiter[1]), length(delimiter)
     withstream(stream) do
-        startswith(stream, delimiter) || return nothing
-        n = 1
-        while rep && startswith(stream, delimiter); (n += 1) end
+        if position(stream) >= 1
+            # check the previous byte isn't a delimiter
+            skip(stream, -2)
+            (read(stream, Char) in delimiter) && return nothing
+        end
+        n = nmin
+        startswith(stream, delimiter^n) || return nothing
+        while startswith(stream, delimiter); n += 1; end
+        !rep && n > nmin && return nothing
+        !eof(stream) && peek(stream) in whitespace && return nothing
 
         buffer = IOBuffer()
         while !eof(stream)
             char = read(stream, Char)
             write(buffer, char)
-            if !(char in whitespace || char == '\n') && startswith(stream, delimiter^n)
-                return takebuf_string(buffer)
+            if !(char in whitespace || char == '\n' || char in delimiter) && startswith(stream, delimiter^n)
+                trailing = 0
+                while startswith(stream, delimiter); trailing += 1; end
+                trailing == 0 && return takebuf_string(buffer)
+                write(buffer, delimiter ^ (n + trailing))
             end
         end
     end

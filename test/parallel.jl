@@ -1,8 +1,8 @@
 # NOTE: worker processes cannot add more workers, only the client process can.
 require("testdefs.jl")
 
-if nprocs() < 3
-    remotecall_fetch(1, () -> addprocs(2))
+if nworkers() < 3
+    remotecall_fetch(1, () -> addprocs(3))
 end
 
 id_me = myid()
@@ -11,44 +11,6 @@ id_other = filter(x -> x != id_me, procs())[rand(1:(nprocs()-1))]
 @test fetch(@spawnat id_other myid()) == id_other
 @test @fetchfrom id_other begin myid() end == id_other
 @fetch begin myid() end
-
-d = drand((200,200), [id_me, id_other])
-dc = copy(d)
-
-@test d == dc                                           # Should be identical
-@spawnat id_other localpart(dc)[1] = 0
-@test fetch(@spawnat id_other localpart(d)[1] != 0) # but not point to the same memory
-
-s = convert(Matrix{Float64}, d[1:150, 1:150])
-a = convert(Matrix{Float64}, d)
-@test a[1:150,1:150] == s
-
-@test fetch(@spawnat id_me localpart(d)[1,1]) == d[1,1]
-@test fetch(@spawnat id_other localpart(d)[1,1]) == d[1,101]
-
-d=DArray(I->fill(myid(), map(length,I)), (10,10), [id_me, id_other])
-d2 = map(x->1, d)
-@test reduce(+, d2) == 100
-
-@test reduce(+, d) == ((50*id_me) + (50*id_other))
-map!(x->1, d)
-@test reduce(+, d) == 100
-
-# Test mapreduce on DArrays
-begin
-    # Test that the proper method exists on DArrays
-    sig = methods(mapreduce, (Function, Function, DArray))[1].sig
-    @test sig[3] == DArray
-
-    # Test that it is functionally equivalent to the standard method
-    for _ = 1:25, f = [x -> 2x, x -> x^2, x -> x^2 + 2x - 1], opt = [+, *]
-        n = rand(2:50)
-        arr = rand(1:100, n)
-        darr = distribute(arr)
-
-        @test mapreduce(f, opt, arr) == mapreduce(f, opt, darr)
-    end
-end
 
 dims = (20,20,20)
 
@@ -81,8 +43,8 @@ for p in procs(d)
     idxes_in_p = remotecall_fetch(p, D -> parentindexes(D.loc_subarr_1d)[1], d)
     idxf = first(idxes_in_p)
     idxl = last(idxes_in_p)
-    d[idxf] = float64(idxf)
-    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == float64(idxf)); D[idxl] = float64(idxl); D[idxl];  end, d,idxf,idxl)
+    d[idxf] = Float64(idxf)
+    rv = remotecall_fetch(p, (D,idxf,idxl) -> begin assert(D[idxf] == Float64(idxf)); D[idxl] = Float64(idxl); D[idxl];  end, d,idxf,idxl)
     @test d[idxl] == rv
 end
 
@@ -145,13 +107,9 @@ map!(x->1, d)
 @test 2.0 == remotecall_fetch(id_other, D->D[2], Base.shmem_fill(2.0, 2; pids=[id_me, id_other]))
 @test 3.0 == remotecall_fetch(id_other, D->D[1], Base.shmem_fill(3.0, 1; pids=[id_me, id_other]))
 
-
 # Test @parallel load balancing - all processors should get either M or M+1
 # iterations out of the loop range for some M.
-if nprocs() < 4
-    remotecall_fetch(1, () -> addprocs(4 - nprocs()))
-end
-workloads = hist(@parallel((a,b)->[a,b], for i=1:7; myid(); end), nprocs())[2]
+workloads = hist(@parallel((a,b)->[a;b], for i=1:7; myid(); end), nprocs())[2]
 @test maximum(workloads) - minimum(workloads) <= 1
 
 # @parallel reduction should work even with very short ranges
@@ -185,14 +143,48 @@ end
 # specify pids for pmap
 @test sort(workers()[1:2]) == sort(unique(pmap(x->(sleep(0.1);myid()), 1:10, pids = workers()[1:2])))
 
-# TODO: The below block should be always enabled but the error is printed by the event loop
+# Testing buffered  and unbuffered reads
+# This large array should write directly to the socket
+a = ones(10^6)
+@test a == remotecall_fetch(id_other, (x)->x, a)
 
-# Hence in the event of any relevant changes to the parallel codebase,
-# please define an ENV variable PTEST_FULL and ensure that the below block is
-# executed successfully before committing/merging
+# Not a bitstype, should be buffered
+s = [randstring() for x in 1:10^5]
+@test s == remotecall_fetch(id_other, (x)->x, s)
 
-if haskey(ENV, "PTEST_FULL")
-    print("\n\nSTART of parallel tests that print errors\n")
+#large number of small requests
+num_small_requests = 10000
+@test fill(id_other, num_small_requests) == [remotecall_fetch(id_other, myid) for i in 1:num_small_requests]
+
+# test parallel sends of large arrays from multiple tasks to the same remote worker
+ntasks = 10
+rr_list = [RemoteRef() for x in 1:ntasks]
+a=ones(2*10^5);
+for rr in rr_list
+    @async let rr=rr
+        try
+            for i in 1:10
+                @test a == remotecall_fetch(id_other, (x)->x, a)
+                yield()
+            end
+            put!(rr, :OK)
+        catch
+            put!(rr, :ERROR)
+        end
+    end
+end
+
+@test [fetch(rr) for rr in rr_list] == [:OK for x in 1:ntasks]
+
+
+# The below block of tests are usually run only on local development systems, since:
+# - addprocs tests are memory intensive
+# - ssh addprocs requires sshd to be running locally with passwordless login enabled.
+# - includes some tests that print errors
+# The test block is enabled by defining env JULIA_TESTFULL=1
+
+if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
+    print("\n\nTesting correct error handling in pmap call. Please ignore printed errors when specified.\n")
 
     # make sure exceptions propagate when waiting on Tasks
     @test_throws ErrorException (@sync (@async error("oops")))
@@ -201,41 +193,32 @@ if haskey(ENV, "PTEST_FULL")
     # needs at least 4 processors (which are being created above for the @parallel tests)
     s = "a"*"bcdefghijklmnopqrstuvwxyz"^100;
     ups = "A"*"BCDEFGHIJKLMNOPQRSTUVWXYZ"^100;
-    @test ups == bytestring(UInt8[uint8(c) for c in pmap(x->uppercase(x), s)])
-    @test ups == bytestring(UInt8[uint8(c) for c in pmap(x->uppercase(char(x)), s.data)])
+    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(x), s)])
+    @test ups == bytestring(UInt8[UInt8(c) for c in pmap(x->uppercase(Char(x)), s.data)])
 
     # retry, on error exit
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=true);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=true);
     @test length(res) < length(ups)
     @test isa(res[1], Exception)
 
     # no retry, on error exit
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=true);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=true);
     @test length(res) < length(ups)
     @test isa(res[1], Exception)
 
     # retry, on error continue
-    res = pmap(x->iseven(myid()) ? error("test error. don't panic.") : uppercase(x), s; err_retry=true, err_stop=false);
+    res = pmap(x->iseven(myid()) ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=true, err_stop=false);
     @test length(res) == length(ups)
-    @test ups == bytestring(UInt8[uint8(c) for c in res])
+    @test ups == bytestring(UInt8[UInt8(c) for c in res])
 
     # no retry, on error continue
-    res = pmap(x->(x=='a') ? error("test error. don't panic.") : uppercase(x), s; err_retry=false, err_stop=false);
+    res = pmap(x->(x=='a') ? error("EXPECTED TEST ERROR. TO BE IGNORED.") : uppercase(x), s; err_retry=false, err_stop=false);
     @test length(res) == length(ups)
     @test isa(res[1], Exception)
 
-    print("\n\nEND of parallel tests that print errors\n")
+    print("\n\nPassed all pmap tests that print errors.\n")
 
 @unix_only begin
-    #Issue #9951
-    hosts=[]
-    for i in 1:30
-        push!(hosts, "localhost", string(getipaddr()), "127.0.0.1")
-    end
-
-    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
-    new_pids = remotecall_fetch(1, addprocs, hosts)
-#    print("Added workers $new_pids\n\n")
     function test_n_remove_pids(new_pids)
         for p in new_pids
             w_in_remote = sort(remotecall_fetch(p, workers))
@@ -252,21 +235,37 @@ if haskey(ENV, "PTEST_FULL")
         @test :ok == remotecall_fetch(1, (p)->rmprocs(p; waitfor=5.0), new_pids)
     end
 
+    print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
+    print("Please ensure sshd is running locally with passwordless login enabled.\n")
+
+    sshflags = `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR `
+    #Issue #9951
+    hosts=[]
+    localhost_aliases = ["localhost", string(getipaddr()), "127.0.0.1"]
+    num_workers = parse(Int,(get(ENV, "JULIA_ADDPROCS_NUM", "9")))
+
+    for i in 1:(num_workers/length(localhost_aliases))
+        append!(hosts, localhost_aliases)
+    end
+
+    print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
+    new_pids = remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), hosts, sshflags)
+    @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with :auto\n")
-    new_pids = sort(remotecall_fetch(1, addprocs, ["localhost", ("127.0.0.1", :auto), "localhost"]))
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags))
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
-    print("\nMixed ssh addprocs with numbers\n")
-    new_pids = sort(remotecall_fetch(1, addprocs, [("localhost", 2), ("127.0.0.1", 2), "localhost"]))
+    print("\nMixed ssh addprocs with numeric counts\n")
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), [("localhost", 2), ("127.0.0.1", 2), "localhost"], sshflags))
     @test length(new_pids) == 5
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, ()->addprocs([("localhost", 2)]; tunnel=true)))
-    @test length(new_pids) == 2
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", 9)], sshflags))
+    @test length(new_pids) == 9
     test_n_remove_pids(new_pids)
 
 end

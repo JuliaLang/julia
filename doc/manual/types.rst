@@ -403,11 +403,11 @@ However, the value for ``baz`` must be convertible to :class:`Int`:
     ERROR: InexactError()
      in Foo at no file
 
-You may find a list of field names using the ``names`` function.
+You may find a list of field names using the ``fieldnames`` function.
 
 .. doctest::
 
-    julia> names(foo)
+    julia> fieldnames(foo)
     3-element Array{Symbol,1}:
      :bar
      :baz
@@ -1275,6 +1275,8 @@ numbers, tuples, etc.) can be passed via ``Val``.
 For consistency across Julia, the call site should always pass a
 ``Val`` type rather than creating an instance, i.e., use
 ``foo(Val{:bar})`` rather than ``foo(Val{:bar}())``.
+
+.. _man-nullable-types:
 
 Nullable Types: Representing Missing Values
 -------------------------------------------

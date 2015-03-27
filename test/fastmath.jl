@@ -30,7 +30,7 @@ fm_fast_64_upd(x) = @fastmath (r=x; r+=eps64_2; r+=eps64_2)
 
 let epsf = 1.0f0/2^15, one_epsf = 1+epsf
     @test isapprox((@fastmath one_epsf * one_epsf - 1),
-                   float32(65537/1073741824))
+                   Float32(65537/1073741824))
 end
 let eps = 1.0/2^30, one_eps = 1+eps
     @test isapprox((@fastmath one_eps * one_eps - 1),
@@ -159,4 +159,17 @@ for T in (Complex64, Complex128, Complex{BigFloat})
         @test isapprox((@eval @fastmath $f($third, $half)),
                        (@eval $f($third, $half)))
     end
+end
+
+# issue #10544
+let a = ones(2,2), b = ones(2,2)
+    @test isapprox((@fastmath a[1] += 2.0), b[1] += 2.0)
+    @test isapprox((@fastmath a[2] -= 2.0), b[2] -= 2.0)
+    @test isapprox((@fastmath a[1,1] *= 2.0), b[1,1] *= 2.0)
+    @test isapprox((@fastmath a[2,2] /= 2.0), b[2,2] /= 2.0)
+    @test isapprox((@fastmath a[1,2] ^= 2.0), b[1,2] ^= 2.0)
+
+    # test fallthrough for unsupported ops
+    c = 0
+    @test Bool((@fastmath c |= 1))
 end

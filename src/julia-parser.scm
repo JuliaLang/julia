@@ -803,15 +803,18 @@
 ; given an expression and the next token, is there a juxtaposition
 ; operator between them?
 (define (juxtapose? expr t)
-  (and (not (operator? t))
-       (not (operator? expr))
+  (and (or (number? expr)
+           (large-number? expr)
+	   (not (number? t))    ;; disallow "x.3" and "sqrt(2)2"
+	   ;; to allow x'y as a special case
+	   #;(and (pair? expr) (memq (car expr) '(|'| |.'|))
+		(not (memv t '(#\( #\[ #\{))))
+	   )
+       (not (operator? t))
        (not (memq t reserved-words))
        (not (closing-token? t))
        (not (newline? t))
-       (not (and (pair? expr) (eq? (car expr) '...)))
-       (or (number? expr)
-           (large-number? expr)
-           (not (memv t '(#\( #\[ #\{))))))
+       (not (and (pair? expr) (syntactic-unary-op? (car expr))))))
 
 (define (parse-juxtapose ex s)
   (let ((next (peek-token s)))
@@ -963,13 +966,10 @@
                                   (string (deprecated-dict-replacement ex) "(a=>b, ...)"))
                                  (loop (list* 'typed_dict ex (cdr al))))
                           (loop (list* 'ref ex (cdr al)))))
+                     ((vect)  (loop (list* 'ref ex (cdr al))))
                      ((hcat)  (loop (list* 'typed_hcat ex (cdr al))))
                      ((vcat)
-                      (if (any (lambda (x)
-                                 (and (pair? x) (eq? (car x) 'row)))
-                               (cdr al))
-                          (loop (list* 'typed_vcat ex (cdr al)))
-                          (loop (list* 'ref ex (cdr al)))))
+                      (loop (list* 'typed_vcat ex (cdr al))))
                      ((comprehension)
                       (loop (list* 'typed_comprehension ex (cdr al))))
                      ((dict_comprehension)
@@ -989,7 +989,10 @@
                            `(macrocall (|.| ,ex (quote ,(cadr name)))
                                        ,@(cddr name))
                            `(|.| ,ex (quote ,name))))))))
-            ((|.'| |'|) (take-token s)
+            ((|.'| |'|)
+	     (if (ts:space? s)
+		 (error (string "space not allowed before \"" t "\"")))
+	     (take-token s)
              (loop (list t ex)))
             ((#\{ )   (take-token s)
              (loop (list* 'curly ex
@@ -1001,15 +1004,14 @@
                  (let* ((str (begin (take-token s)
                                     (parse-string-literal s #t)))
                         (nxt (peek-token s))
-                        (suffix (if (triplequote-string-literal? str) '_mstr '_str))
-                        (macname (symbol (string #\@ ex suffix)))
-                        (macstr (cdr str)))
+                        (macname (symbol (string #\@ ex '_str)))
+                        (macstr (if (triplequote-string-literal? str) str (cadr str))))
                    (if (and (symbol? nxt) (not (operator? nxt))
                             (not (ts:space? s)))
                        ;; string literal suffix, "s"x
-                       (loop `(macrocall ,macname ,@macstr
+                       (loop `(macrocall ,macname ,macstr
                                          ,(string (take-token s))))
-                       (loop `(macrocall ,macname ,@macstr))))
+                       (loop `(macrocall ,macname ,macstr))))
                  ex))
             (else ex))))))
 
@@ -1416,21 +1418,20 @@
                        (error (string "missing comma or " closer
                                       " in argument list"))))))))))
 
-; parse [] concatenation expressions and {} cell expressions
-(define (parse-vcat s first closer)
+(define (parse-vect s first closer)
   (let loop ((lst '())
              (nxt first))
     (let ((t (require-token s)))
       (if (eqv? t closer)
           (begin (take-token s)
-                 (cons 'vcat (reverse (cons nxt lst))))
+                 (cons 'vect (reverse (cons nxt lst))))
           (case t
             ((#\,)
              (take-token s)
              (if (eqv? (require-token s) closer)
                  ;; allow ending with ,
                  (begin (take-token s)
-                        (cons 'vcat (reverse (cons nxt lst))))
+                        (cons 'vect (reverse (cons nxt lst))))
                  (loop (cons nxt lst) (parse-eq* s))))
             ((#\;)
              (if (eqv? (require-token s) closer)
@@ -1443,7 +1444,7 @@
              (error "missing separator in array expression")))))))
 
 (define (parse-dict s first closer)
-  (let ((v (parse-vcat s first closer)))
+  (let ((v (parse-vect s first closer)))
     (if (any dict-literal? (cdr v))
         (if (every dict-literal? (cdr v))
             `(dict ,@(cdr v))
@@ -1462,7 +1463,7 @@
         `(dict_comprehension ,@(cdr c))
         (error "invalid dict comprehension"))))
 
-(define (parse-matrix s first closer)
+(define (parse-matrix s first closer gotnewline)
   (define (fix head v) (cons head (reverse v)))
   (define (update-outer v outer)
     (cond ((null? v)       outer)
@@ -1471,7 +1472,7 @@
   (define semicolon (eqv? (peek-token s) #\;))
   (let loop ((vec   (list first))
              (outer '()))
-    (let ((t  (if (eqv? (peek-token s) #\newline)
+    (let ((t  (if (or (eqv? (peek-token s) #\newline) gotnewline)
                   #\newline
                   (require-token s))))
       (if (eqv? t closer)
@@ -1479,11 +1480,13 @@
                  (if (pair? outer)
                      (fix 'vcat (update-outer vec outer))
                      (if (or (null? vec) (null? (cdr vec)))
-                         (fix 'vcat vec)     ; [x]   => (vcat x)
+                         (fix 'vect vec)     ; [x]   => (vect x)
                          (fix 'hcat vec))))  ; [x y] => (hcat x y)
           (case t
             ((#\; #\newline)
-             (take-token s) (loop '() (update-outer vec outer)))
+             (or gotnewline (take-token s))
+             (set! gotnewline #f)
+             (loop '() (update-outer vec outer)))
             ((#\,)
              (error "unexpected comma in matrix expression"))
             ((#\] #\})
@@ -1522,14 +1525,19 @@
                  (if (or (null? isdict) (not (car isdict)))
                      (syntax-deprecation-warning s "[a=>b, ...]" "Dict(a=>b, ...)"))
                  (parse-dict s first closer)))
-              (case (peek-token s)
-                ((#\,)
-                 (parse-vcat s first closer))
-                ((for)
-                 (take-token s)
-                 (parse-comprehension s first closer))
-                (else
-                 (parse-matrix s first closer)))))))))
+              (let ((t (peek-token s)))
+                (cond ((or (eqv? t #\,) (eqv? t closer))
+                       (parse-vect s first closer))
+                      ((eq? t 'for)
+                       (take-token s)
+                       (parse-comprehension s first closer))
+                      ((eqv? t #\newline)
+                       (take-token s)
+                       (if (memv (peek-token s) (list #\, closer))
+                           (parse-vect s first closer)
+                           (parse-matrix s first closer #t)))
+                      (else
+                       (parse-matrix s first closer #f))))))))))
 
 ; for sequenced evaluation inside expressions: e.g. (a;b, c;d)
 (define (parse-stmts-within-expr s)
@@ -1730,7 +1738,9 @@
                       (or (not (symbol? nxt))
                           (ts:space? s)))
                  ':
-                 (list 'quote (parse-atom- s)))))
+		 (if (ts:space? s)
+		     (error "space not allowed after \":\" used for quoting")
+		     (list 'quote (parse-atom- s))))))
 
           ;; misplaced =
           ((eq? t '=) (error "unexpected \"=\""))
@@ -1803,17 +1813,18 @@
                      (begin (syntax-deprecation-warning s "{}" "[]")
                             '(cell1d))
                      (case (car vex)
+                       ((vect)  `(cell1d ,@(cdr vex)))
                        ((comprehension)
-                         (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
+                        (syntax-deprecation-warning s "{a for a in b}" "Any[a for a in b]")
                         `(typed_comprehension (top Any) ,@(cdr vex)))
                        ((dict_comprehension)
-                         (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
+                        (syntax-deprecation-warning s "{a=>b for (a,b) in c}" "Dict{Any,Any}([a=>b for (a,b) in c])")
                         `(typed_dict_comprehension (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((dict)
-                         (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
+                        (syntax-deprecation-warning s "{a=>b, ...}" "Dict{Any,Any}(a=>b, ...)")
                         `(typed_dict (=> (top Any) (top Any)) ,@(cdr vex)))
                        ((hcat)
-                         (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
+                        (syntax-deprecation-warning s "{a b ...}" "Any[a b ...]")
                         `(cell2d 1 ,(length (cdr vex)) ,@(cdr vex)))
                        (else  ; (vcat ...)
                         (if (and (pair? (cadr vex)) (eq? (caadr vex) 'row))
@@ -1828,25 +1839,25 @@
                                         (cddr vex)))
                                   (error "inconsistent shape in cell expression"))
                               (begin
-                                  (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]"))
-                                  `(cell2d ,nr ,nc
-                                       ,@(apply append
-                                                ;; transpose to storage order
-                                                (apply map list
-                                                       (map cdr (cdr vex))))))
+                                (syntax-deprecation-warning s "{a b; c d}" "Any[a b; c d]")
+                                `(cell2d ,nr ,nc
+                                         ,@(apply append
+                                                  ;; transpose to storage order
+                                                  (apply map list
+                                                         (map cdr (cdr vex)))))))
                             (if (any (lambda (x) (and (pair? x)
                                                       (eq? (car x) 'row)))
                                      (cddr vex))
                                 (error "inconsistent shape in cell expression")
                                 (begin
-                                    (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
-                                    `(cell1d ,@(cdr vex)))))))))))
+                                  (syntax-deprecation-warning s "{a,b, ...}" "Any[a,b, ...]")
+                                  `(cell1d ,@(cdr vex)))))))))))
 
           ;; cat expression
           ((eqv? t #\[ )
            (take-token s)
            (let ((vex (parse-cat s #\])))
-             (if (null? vex) '(vcat) vex)))
+             (if (null? vex) '(vect) vex)))
 
           ;; string literal
           ((eqv? t #\")

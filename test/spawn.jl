@@ -9,28 +9,31 @@
 #TODO:
 # - Windows:
 #   - Add a test whether coreutils are available and skip tests if not
+
+valgrind_off = ccall(:jl_running_on_valgrind,Cint,()) == 0
+
 yes = `perl -le 'while (1) {print STDOUT "y"}'`
 
 #### Examples used in the manual ####
 
 @test readall(`echo hello | sort`) == "hello | sort\n"
-@test readall(`echo hello` |> `sort`) == "hello\n"
-@test length(spawn(`echo hello` |> `sort`).processes) == 2
+@test readall(pipe(`echo hello`, `sort`)) == "hello\n"
+@test length(spawn(pipe(`echo hello`, `sort`)).processes) == 2
 
 out = readall(`echo hello` & `echo world`)
 @test search(out,"world") != (0,0)
 @test search(out,"hello") != (0,0)
-@test readall((`echo hello` & `echo world`) |> `sort`)=="hello\nworld\n"
+@test readall(pipe(`echo hello` & `echo world`, `sort`)) == "hello\nworld\n"
 
 @test (run(`printf "       \033[34m[stdio passthrough ok]\033[0m\n"`); true)
 
 # Test for SIGPIPE being treated as normal termination (throws an error if broken)
-@unix_only @test (run(yes|>`head`|>DevNull); true)
+@unix_only @test (run(pipe(yes,`head`,DevNull)); true)
 
 begin
     a = Base.Condition()
     @schedule begin
-        p = spawn(yes|>DevNull)
+        p = spawn(pipe(yes,DevNull))
         Base.notify(a,p)
         @test !success(p)
     end
@@ -38,34 +41,38 @@ begin
     kill(p)
 end
 
-@test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+if valgrind_off
+    # If --trace-children=yes is passed to valgrind, valgrind will
+    # exit here with an error code, and no UVError will be raised.
+    @test_throws Base.UVError run(`foo_is_not_a_valid_command`)
+end
 
 if false
     prefixer(prefix, sleep) = `perl -nle '$|=1; print "'$prefix' ", $_; sleep '$sleep';'`
-    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
-                  prefixer("A",2) & prefixer("B",2))
-    @test success(`perl -le '$|=1; for(0..2){ print; sleep 1 }'` |>
-                  prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3) |>
-                  prefixer("A",2) & prefixer("B",2))
+    @test success(pipe(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
+                       prefixer("A",2) & prefixer("B",2)))
+    @test success(pipe(`perl -le '$|=1; for(0..2){ print; sleep 1 }'`,
+                       prefixer("X",3) & prefixer("Y",3) & prefixer("Z",3),
+                       prefixer("A",2) & prefixer("B",2)))
 end
 
 @test  success(`true`)
 @test !success(`false`)
-@test success(`true` |> `true`)
+@test success(pipe(`true`, `true`))
 if false
     @test  success(ignorestatus(`false`))
-    @test  success(ignorestatus(`false`) |> `true`)
-    @test !success(ignorestatus(`false`) |> `false`)
+    @test  success(pipe(ignorestatus(`false`), `true`))
+    @test !success(pipe(ignorestatus(`false`), `false`))
     @test !success(ignorestatus(`false`) & `false`)
-    @test  success(ignorestatus(`false` |> `false`))
+    @test  success(ignorestatus(pipe(`false`, `false`)))
     @test  success(ignorestatus(`false` & `false`))
 end
 
 # STDIN Redirection
 file = tempname()
-run(`echo hello world` |> file)
-@test readall(file |> `cat`) == "hello world\n"
-@test open(readall, file |> `cat`, "r") == "hello world\n"
+run(pipe(`echo hello world`, file))
+@test readall(pipe(file, `cat`)) == "hello world\n"
+@test open(readall, pipe(file, `cat`), "r") == "hello world\n"
 rm(file)
 
 # Stream Redirection
@@ -75,12 +82,12 @@ rm(file)
         port, server = listenany(2326)
         put!(r,port)
         client = accept(server)
-        @test readall(client |> `cat`) == "hello world\n"
+        @test readall(pipe(client, `cat`)) == "hello world\n"
         close(server)
     end
     @async begin
         sock = connect(fetch(r))
-        run(`echo hello world` |> sock)
+        run(pipe(`echo hello world`, sock))
         close(sock)
     end
 end
@@ -102,7 +109,7 @@ str2 = readall(stdout)
 
 # This test hangs if the end of run walk across uv streams calls shutdown on a stream that is shutting down.
 file = tempname()
-open(`cat -` |> file, "w") do io
+open(pipe(`cat -`, file), "w") do io
     write(io, str)
 end
 rm(file)
@@ -153,14 +160,18 @@ unmark(sock)
 close(sock)
 
 # issue #4535
-exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
-@test readall(`$exename -f -e 'println(STDERR,"Hello World")'` .> `cat`) == "Hello World\n"
+exename = joinpath(JULIA_HOME, Base.julia_exename())
+if valgrind_off
+    # If --trace-children=yes is passed to valgrind, we will get a
+    # valgrind banner here, not "Hello World\n".
+    @test readall(pipe(`$exename -f -e 'println(STDERR,"Hello World")'`, stderr=`cat`)) == "Hello World\n"
+end
 
 # issue #6310
-@test readall(`echo "2+2"` |> `$exename -f`) == "4\n"
+@test readall(pipe(`echo "2+2"`, `$exename -f`)) == "4\n"
 
 # issue #5904
-@test run(ignorestatus(`false`) |> `true`) === nothing
+@test run(pipe(ignorestatus(`false`), `true`)) === nothing
 
 
 # issue #6010
@@ -180,3 +191,4 @@ redirect_stdout(OLD_STDOUT)
 close(f)
 @test "Hello World\n" == readall(fname)
 @test is(OLD_STDOUT,STDOUT)
+rm(fname)

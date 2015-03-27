@@ -41,9 +41,65 @@ Alternatively, look at the ``embedding.c`` program in the julia source tree in t
 
 The first thing that has to be done before calling any other Julia C function is to initialize Julia. This is done by calling ``jl_init``, which takes as argument a C string (``const char*``) to the location where Julia is installed. When the argument is ``NULL``, Julia tries to determine the install location automatically.
 
-The second statement initializes Julia's task scheduling system. This statement must appear in a function that will not return as long as calls into Julia will be made (``main`` works fine). Strictly speaking, this statement is optional, but operations that switch tasks will cause problems if it is omitted.
+The second statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
 
-The third statement in the test program evaluates a Julia statement using a call to ``jl_eval_string``.
+Before the program terminates, it is strongly recommended to call ``jl_atexit_hook``.  The above example program calls this before returning from ``main``.
+
+Using julia-config to automatically determine build parameters
+--------------------------------------------------------------
+
+The script *julia-config.jl* was created to aid in determining what build parameters are required by a program that uses embedded Julia.  This script uses the
+build parameters and system configuration of the particular Julia distribution it is invoked by to export the necessary compiler flags for an embedding program to
+interact with that distribution.  This script is located in the Julia shared data directory.
+
+Example
+.......
+
+Below is essentially the same as above with one small change; the argument to ``jl_init`` is
+now **JULIA_INIT_DIR** which is defined by *julia-config.jl*.::
+
+  #include <julia.h>
+
+  int main(int argc, char *argv[])
+  {
+     jl_init(JULIA_INIT_DIR);
+     (void)jl_eval_string("println(sqrt(2.0))");
+     jl_atexit_hook();
+     return 0;
+  }
+
+On the command line
+...................
+
+A simple use of this script is from the command line.  Assuming that *julia-config.jl* is located
+in */usr/local/julia/share/julia*, it can be invoked on the command line directly and takes any
+combination of 3 flags::
+
+    /usr/local/julia/share/julia/julia-config.jl
+    Usage: julia-config [--cflags|--ldflags|--ldlibs]
+
+If the above example source is saved in the file *embed_exmaple.c*, then the following command will compile it into a running program on Linux and Windows (MSYS2 environment),
+or if on OS/X, then substitute clang for gcc.::
+
+    /usr/local/julia/share/julia/julia-config.jl --cflags --ldflags --ldlibs | xargs gcc embed_example.c
+
+Use in Makefiles
+................
+
+But in general, embedding projects will be more complicated than the above, and so the following allows general makefile support as well -- assuming GNU make because
+of the use of the **shell** macro expansions.  Additionally, though many times *julia-config.jl* may be found in the directory */usr/local*, this is not necessarily the case,
+but Julia can be used to locate *julia-config.jl* too, and the makefile can be used to take advantage of that.  The above example is extended to use a Makefile::
+
+    JL_SHARE = $(shell julia -e 'print(joinpath(JULIA_HOME,Base.DATAROOTDIR,"julia"))')
+    CFLAGS   += $(shell $(JL_SHARE)/julia-config.jl --cflags)
+    CXXFLAGS += $(shell $(JL_SHARE)/julia-config.jl --cflags)
+    LDFLAGS  += $(shell $(JL_SHARE)/julia-config.jl --ldflags)
+    LDLIBS   += $(shell $(JL_SHARE)/julia-config.jl --ldlibs)
+
+    all: embed_example
+
+Now the build command is simply **make**.
+
 
 Converting Types
 ========================

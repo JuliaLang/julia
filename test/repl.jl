@@ -29,7 +29,7 @@ begin
 stdin_write, stdout_read, stdout_read, repl = fake_repl()
 
 repl.specialdisplay = Base.REPL.REPLDisplay(repl)
-repl.no_history_file = true
+repl.history_file = false
 
 repltask = @async begin
     Base.REPL.run_repl(repl)
@@ -89,6 +89,24 @@ readuntil(stdout_read, "\n")
 @test pwd() == homedir()
 rm(tmpdir)
 cd(origpwd)
+
+# Issue #10222
+# Test ignoring insert key in standard and prefix search modes
+write(stdin_write, "\e[2h\e[2h\n") # insert (VT100-style)
+@test search(readline(stdout_read), "[2h") == 0:-1
+readline(stdout_read)
+write(stdin_write, "\e[2~\e[2~\n") # insert (VT220-style)
+@test search(readline(stdout_read), "[2~") == 0:-1
+readline(stdout_read)
+write(stdin_write, "1+1\n") # populate history with a trivial input
+readline(stdout_read)
+write(stdin_write, "\e[A\e[2h\n") # up arrow, insert (VT100-style)
+readline(stdout_read)
+readline(stdout_read)
+write(stdin_write, "\e[A\e[2~\n") # up arrow, insert (VT220-style)
+readline(stdout_read)
+readline(stdout_read)
+
 # Close REPL ^D
 write(stdin_write, '\x04')
 wait(repltask)
@@ -217,7 +235,7 @@ end
 
 ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
 
-let exename=joinpath(JULIA_HOME,(ccall(:jl_is_debugbuild,Cint,())==0?"julia":"julia-debug"))
+let exename = joinpath(JULIA_HOME, Base.julia_exename())
 
 # Test REPL in dumb mode
 @unix_only begin
@@ -240,7 +258,7 @@ master = Base.TTY(RawFD(fdm); readable = true)
 
 nENV = copy(ENV)
 nENV["TERM"] = "dumb"
-p = spawn(setenv(`$exename -f --quiet`,nENV),slave,slave,slave)
+p = spawn(setenv(`$exename --startup-file=no --quiet`,nENV),slave,slave,slave)
 start_reading(master)
 Base.wait_readnb(master,1)
 write(master,"1\nquit()\n")
@@ -249,13 +267,15 @@ wait(p)
 
 ccall(:close,Cint,(Cint,),fds)
 output = readall(master)
-@test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+if ccall(:jl_running_on_valgrind,Cint,()) == 0
+    @test output == "julia> 1\r\nquit()\r\n1\r\n\r\njulia> "
+end
 close(master)
 
 end
 
 # Test stream mode
-outs, ins, p = readandwrite(`$exename -f --quiet`)
+outs, ins, p = readandwrite(`$exename --startup-file=no --quiet`)
 write(ins,"1\nquit()\n")
 @test readall(outs) == "1\n"
 end

@@ -53,8 +53,8 @@ function diff(A::AbstractMatrix, dim::Integer)
 end
 
 
-gradient(F::AbstractVector) = gradient(F, [1:length(F)])
-gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F))])
+gradient(F::AbstractVector) = gradient(F, [1:length(F);])
+gradient(F::AbstractVector, h::Real) = gradient(F, [h*(1:length(F));])
 
 diag(A::AbstractVector) = error("use diagm instead of diag to construct a diagonal matrix")
 
@@ -98,7 +98,7 @@ end
 
 function generic_vecnorm2(x)
     maxabs = vecnormInf(x)
-    maxabs == 0 && return maxabs
+    (maxabs == 0 || isinf(maxabs)) && return maxabs
     s = start(x)
     (v, s) = next(x, s)
     T = typeof(maxabs)
@@ -113,10 +113,12 @@ function generic_vecnorm2(x)
     return convert(T, maxabs * sqrt(sum))
 end
 
+# Compute L_p norm ‖x‖ₚ = sum(abs(x).^p)^(1/p)
+# (Not technically a "norm" for p < 1.)
 function generic_vecnormp(x, p)
-    if p > 1 || p < 0 # need to rescale to avoid overflow/underflow
-        maxabs = vecnormInf(x)
-        maxabs == 0 && return maxabs
+    if p > 1 || p < -1 # need to rescale to avoid overflow
+        maxabs = p > 1 ? vecnormInf(x) : vecnormMinusInf(x)
+        (maxabs == 0 || isinf(maxabs)) && return maxabs
         s = start(x)
         (v, s) = next(x, s)
         T = typeof(maxabs)
@@ -128,7 +130,7 @@ function generic_vecnormp(x, p)
             ssum += (abs(v)*scale)^spp
         end
         return convert(T, maxabs * ssum^inv(spp))
-    else # 0 < p < 1, no need for rescaling (but technically not a true norm)
+    else # -1 ≤ p ≤ 1, no need for rescaling
         s = start(x)
         (v, s) = next(x, s)
         av = float(abs(v))
@@ -237,11 +239,15 @@ function inv{T}(A::AbstractMatrix{T})
     A_ldiv_B!(factorize(convert(AbstractMatrix{S}, A)), eye(S, chksquare(A)))
 end
 
+function \{T}(A::AbstractMatrix{T}, B::AbstractVecOrMat{T})
+    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
+    factorize(A)\B
+end
 function \{TA,TB}(A::AbstractMatrix{TA}, B::AbstractVecOrMat{TB})
     TC = typeof(one(TA)/one(TB))
-    size(A,1) == size(B,1) || throw(DimensionMismatch("LHS and RHS should have the same number of rows. LHS has $(size(A,1)) rows, but RHS has $(size(B,1)) rows."))
-    A_ldiv_B!(factorize(TA == TC ? copy(A) : convert(AbstractMatrix{TC}, A)), TB == TC ? copy(B) : convert(AbstractArray{TC}, B))
+    convert(AbstractMatrix{TC}, A)\convert(AbstractArray{TC}, B)
 end
+
 \(a::AbstractVector, b::AbstractArray) = reshape(a, length(a), 1) \ b
 /(A::AbstractVecOrMat, B::AbstractVecOrMat) = (B' \ A')'
 # \(A::StridedMatrix,x::Number) = inv(A)*x Should be added at some point when the old elementwise version has been deprecated long enough
@@ -330,11 +336,12 @@ scale!(b::AbstractVector, A::AbstractMatrix) = scale!(A,b,A)
 #findmin(a::AbstractArray)
 
 function peakflops(n::Integer=2000; parallel::Bool=false)
-    a = rand(100,100)
-    t = @elapsed a*a
-    a = rand(n,n)
-    t = @elapsed a*a
-    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*float64(n)^3/t)
+    a = ones(Float64,100,100)
+    t = @elapsed a2 = a*a
+    a = ones(Float64,n,n)
+    t = @elapsed a2 = a*a
+    @assert a2[1,1] == n
+    parallel ? sum(pmap(peakflops, [ n for i in 1:nworkers()])) : (2*Float64(n)^3/t)
 end
 
 # BLAS-like in-place y=alpha*x+y function (see also the version in blas.jl

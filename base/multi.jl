@@ -110,14 +110,16 @@ type WorkerConfig
     environ::Nullable{Dict}
 
     function WorkerConfig()
-        wc=new()
-        for n in names(WorkerConfig)
+        wc = new()
+        for n in fieldnames(WorkerConfig)
             T = eltype(fieldtype(WorkerConfig, n))
             setfield!(wc, n, Nullable{T}())
         end
         wc
     end
 end
+
+
 
 type Worker
     id::Int
@@ -126,16 +128,17 @@ type Worker
     manager::ClusterManager
     config::WorkerConfig
 
-    sendbuf::IOBuffer
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
 
     Worker(id, r_stream, w_stream, manager, config) =
-        new(id, r_stream, w_stream, manager, config, IOBuffer(), [], [], false)
+        new(id, r_stream, buffer_writes(w_stream), manager, config, [], [], false)
 end
 
 Worker(id, r_stream, w_stream, manager) = Worker(id, r_stream, w_stream, manager, WorkerConfig())
+
+
 
 function send_msg_now(w::Worker, kind, args...)
     send_msg_(w, kind, args, true)
@@ -161,34 +164,37 @@ function flush_gc_msgs(w::Worker)
     end
 end
 
-#TODO: Move to different Thread
-function enq_send_req(sock::AsyncStream, buf, now::Bool)
-    arr=takebuf_array(buf)
-    write(sock,arr)
-    #TODO implement "now"
-end
-
 function send_msg_(w::Worker, kind, args, now::Bool)
     #println("Sending msg $kind")
-    buf = w.sendbuf
-    serialize(buf, kind)
-    for arg in args
-        serialize(buf, arg)
-    end
+    io = w.w_stream
+    lock(io) do io
+        serialize(io, kind)
+        for arg in args
+            serialize(io, arg)
+        end
 
-    if !now && w.gcflag
-        flush_gc_msgs(w)
-    else
-        enq_send_req(w.w_stream, buf, now)
+        if !now && w.gcflag
+            flush_gc_msgs(w)
+        else
+            flush(io)
+        end
     end
 end
 
 function flush_gc_msgs()
     for w in (PGRP::ProcessGroup).workers
-        if isa(w,Worker)
-            k = w::Worker
-            if k.gcflag
-                flush_gc_msgs(k)
+        try
+            if isa(w,Worker)
+                k = w::Worker
+                if k.gcflag
+                    flush_gc_msgs(k)
+                end
+            end
+        catch e
+            global rmprocset
+            # Ignore any errors, if worker is terminating.
+            if !(w.id in rmprocset)
+                rethrow(e)
             end
         end
     end
@@ -281,7 +287,7 @@ function rmprocs(args...; waitfor = 0.0)
     global rmprocset
     empty!(rmprocset)
 
-    for i in [args...]
+    for i in vcat(args...)
         if i == 1
             warn("rmprocs: process 1 not removed")
         else
@@ -328,7 +334,7 @@ end
 function worker_id_from_socket(s)
     w = get(map_sock_wrkr, s, nothing)
     if isa(w,Worker)
-        if is(s, w.r_stream) || is(s, w.w_stream) || is(s, w.sendbuf)
+        if is(s, w.r_stream) || is(s, w.w_stream)
             return w.id
         end
     end
@@ -346,7 +352,6 @@ function register_worker(pg, w)
     if isa(w, Worker)
         map_sock_wrkr[w.r_stream] = w
         map_sock_wrkr[w.w_stream] = w
-        map_sock_wrkr[w.sendbuf] = w
     end
 end
 
@@ -359,7 +364,6 @@ function deregister_worker(pg, pid)
         if w.r_stream != w.w_stream
             pop!(map_sock_wrkr, w.w_stream)
         end
-        pop!(map_sock_wrkr, w.sendbuf)
 
         # Notify the cluster manager of this workers death
         if myid() == 1
@@ -726,7 +730,7 @@ fetch_ref(rid) = wait_full(lookup_ref(rid))
 fetch(r::RemoteRef) = call_on_owner(fetch_ref, r)
 fetch(x::ANY) = x
 
-# storing a value to a Ref
+# storing a value to a RemoteRef
 function put!(rv::RemoteValue, val::ANY)
     wait_empty(rv)
     rv.result = val
@@ -776,7 +780,7 @@ function deliver_result(sock::IO, msg, oid, value)
     end
 end
 
-# notify waiters that a certain job has finished or Ref has been emptied
+# notify waiters that a certain job has finished or RemoteRef has been emptied
 notify_full (rv::RemoteValue) = notify(rv.full, work_result(rv))
 notify_empty(rv::RemoteValue) = notify(rv.empty)
 
@@ -965,7 +969,7 @@ function start_worker(out::IO)
 
     init_worker()
     if LPROC.bind_port == 0
-        (actual_port,sock) = listenany(uint16(9009))
+        (actual_port,sock) = listenany(UInt16(9009))
         LPROC.bind_port = actual_port
     else
         sock = listen(LPROC.bind_port)
@@ -1028,9 +1032,9 @@ end
 function parse_connection_info(str)
     m = match(r"^julia_worker:(\d+)#(.*)", str)
     if m != nothing
-        (m.captures[2], parseint(Int16, m.captures[1]))
+        (m.captures[2], parse(Int16, m.captures[1]))
     else
-        ("", int16(-1))
+        ("", Int16(-1))
     end
 end
 
@@ -1040,6 +1044,15 @@ function init_worker(manager::ClusterManager=DefaultClusterManager())
     global cluster_manager
     cluster_manager = manager
     disable_threaded_libs()
+
+    # Since our pid has yet to be set, ensure no RemoteRefs have been created or addprocs() called.
+    assert(nprocs() <= 1)
+    assert(isempty(PGRP.refs))
+    assert(isempty(client_refs))
+
+    # System is started in head node mode, cleanup entries related to the same
+    empty!(PGRP.workers)
+    empty!(map_pid_wrkr)
 end
 
 
@@ -1468,18 +1481,6 @@ macro parallel(args...)
     na = length(args)
     if na==1
         loop = args[1]
-        if isa(loop,Expr) && loop.head === :comprehension
-            ex = loop.args[1]
-            loop.args[1] = esc(ex)
-            nd = length(loop.args)-1
-            ranges = map(e->esc(e.args[2]), loop.args[2:end])
-            for i=1:nd
-                var = loop.args[1+i].args[1]
-                loop.args[1+i] = :( $(esc(var)) = ($(ranges[i]))[I[$i]] )
-            end
-            return :( DArray((I::(UnitRange{Int}...))->($loop),
-                             tuple($(map(r->:(length($r)),ranges)...))) )
-        end
     elseif na==2
         reducer = args[1]
         loop = args[2]
@@ -1578,7 +1579,7 @@ function disable_nagle(sock)
     @linux_only begin
         # tcp_quickack is a linux only option
         if ccall(:jl_tcp_quickack, Cint, (Ptr{Void}, Cint), sock.handle, 1) < 0
-            warn_once("Parallel networking unoptimized ( Error enabling TCP_QUICKACK : ", strerror(errno()), " )")
+            warn_once("Parallel networking unoptimized ( Error enabling TCP_QUICKACK : ", Libc.strerror(Libc.errno()), " )")
         end
     end
 end
@@ -1617,4 +1618,3 @@ function terminate_all_workers()
         end
     end
 end
-

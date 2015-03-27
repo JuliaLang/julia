@@ -132,10 +132,10 @@ end
 function recv_data()
     try
         #println("On $(manager.zid_self) waiting to recv message")
-        zid = int(bytestring(ZMQ.recv(manager.sub)))
+        zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
         assert(zid == manager.zid_self)
 
-        from_zid = int(bytestring(ZMQ.recv(manager.sub)))
+        from_zid = parse(Int,bytestring(ZMQ.recv(manager.sub)))
         mtype = bytestring(ZMQ.recv(manager.sub))
 
         #println("$zid received message of type $mtype from $from_zid")
@@ -195,7 +195,7 @@ end
 function launch(manager::ZMQCMan, params::Dict, launched::Array, c::Condition)
     #println("launch $(params[:np])")
     for i in 1:params[:np]
-        io, pobj = open (`julia --worker custom worker.jl $i`, "r")
+        io, pobj = open (`julia worker.jl $i`, "r")
 
         wconfig = WorkerConfig()
         wconfig.userdata = Dict(:zid=>i, :io=>io)
@@ -240,7 +240,7 @@ function start_worker(zid)
         if streams == nothing
             # First time..
             (r_s, w_s) = setup_connection(from_zid, REMOTE_INITIATED)
-            process_messages(r_s, w_s)
+            Base.process_messages(r_s, w_s)
         else
             (r_s, w_s, t_r) = streams
         end

@@ -30,47 +30,35 @@ function term(io::IO, md::BlockQuote, columns)
 end
 
 function term(io::IO, md::List, columns)
-    for point in md.items
-        print(io, " "^2margin, "• ")
-        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2), i = 2margin+2) do io
+    for (i, point) in enumerate(md.items)
+        print(io, " "^2margin, md.ordered ? "$i. " : "•  ")
+        print_wrapped(io, width = columns-(4margin+2), pre = " "^(2margin+2),
+                          i = 2margin+2) do io
             terminline(io, point)
         end
     end
 end
 
-function term(io::IO, md::Header{1}, columns)
-    _term_header(io, md, '=', columns)
-end
-
-function term(io::IO, md::Header{2}, columns)
-    _term_header(io, md, '–', columns)
-end
-
-function term(io::IO, md::Header{3}, columns)
-    _term_header(io, md, '-', columns)
-end
-
 function _term_header(io::IO, md, char, columns)
     text = terminline(md.text)
     with_output_format(:bold, io) do io
-        print(io, " ")
+        print(io, " "^(2margin), " ")
         line_no, lastline_width = print_wrapped(io, text,
                                                 width=columns - 4margin; pre=" ")
         line_width = min(1 + lastline_width, columns)
         if line_no > 1
             line_width = max(line_width, div(columns, 3))
         end
-        println(io, string(char) ^ line_width)
+        char != ' ' && println(io, " "^(2margin), string(char) ^ line_width)
     end
 end
 
+const _header_underlines = collect("≡=–-⋅ ")
+# TODO settle on another option with unicode e.g. "≡=≃–∼⋅" ?
 
 function term{l}(io::IO, md::Header{l}, columns)
-    with_output_format(:bold, io) do io
-        print(io, "#"^l, " ")
-        terminline(io, md.text)
-        println(io)
-    end
+    underline = _header_underlines[l]
+    _term_header(io, md, underline, columns)
 end
 
 function term(io::IO, md::Code, columns)
@@ -84,6 +72,10 @@ end
 
 function term(io::IO, br::LineBreak, columns)
    println(io)
+end
+
+function term(io::IO, br::HorizontalRule, columns)
+   println(io, " " ^ margin, "-" ^ (columns - 2margin))
 end
 
 term(io::IO, x, _) = writemime(io, MIME"text/plain"(), x)

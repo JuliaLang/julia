@@ -4,6 +4,12 @@
 Constants
 =========
 
+.. data:: nothing
+
+   The singleton instance of type ``Void``, used by convention when there is no value to
+   return (as in a C ``void`` function).
+   Can be converted to an empty ``Nullable`` value.
+
 .. data:: OS_NAME
 
    A symbol representing the name of the operating system. Possible values

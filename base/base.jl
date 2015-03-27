@@ -11,13 +11,13 @@ call(T::Type{DivideError}) = Core.call(T)
 call(T::Type{DomainError}) = Core.call(T)
 call(T::Type{OverflowError}) = Core.call(T)
 call(T::Type{InexactError}) = Core.call(T)
-call(T::Type{MemoryError}) = Core.call(T)
+call(T::Type{OutOfMemoryError}) = Core.call(T)
 call(T::Type{StackOverflowError}) = Core.call(T)
 call(T::Type{UndefRefError}) = Core.call(T)
 call(T::Type{UndefVarError}, var::Symbol) = Core.call(T, var)
 call(T::Type{InterruptException}) = Core.call(T)
 call(T::Type{SymbolNode}, name::Symbol, t::ANY) = Core.call(T, name, t)
-call(T::Type{GetfieldNode}, value, name::Symbol, typ) = Core.call(T, value, name, typ)
+call(T::Type{GlobalRef}, modu, name::Symbol) = Core.call(T, modu, name)
 call(T::Type{ASCIIString}, d::Array{UInt8,1}) = Core.call(T, d)
 call(T::Type{UTF8String}, d::Array{UInt8,1}) = Core.call(T, d)
 call(T::Type{TypeVar}, args...) = Core.call(T, args...)
@@ -52,16 +52,15 @@ convert{T}(::Type{(T...)}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
+# conversions used by ccall
+ptr_arg_cconvert{T}(::Type{Ptr{T}}, x) = cconvert(T, x)
+ptr_arg_unsafe_convert{T}(::Type{Ptr{T}}, x) = unsafe_convert(T, x)
+ptr_arg_unsafe_convert(::Type{Ptr{Void}}, x) = x
 
-ptr_arg_convert{T}(::Type{Ptr{T}}, x) = convert(T, x)
-ptr_arg_convert(::Type{Ptr{Void}}, x) = x
-
-# conversion used by ccall
-cconvert(T, x) = convert(T, x)
-# use the code in ccall.cpp to safely allocate temporary pointer arrays
-cconvert{T}(::Type{Ptr{Ptr{T}}}, a::Array) = a
-# convert strings to ByteString to pass as pointers
-cconvert{P<:Union(Int8,UInt8)}(::Type{Ptr{P}}, s::AbstractString) = bytestring(s)
+cconvert(T::Type, x) = convert(T, x) # do the conversion eagerly in most cases
+cconvert{P<:Ptr}(::Type{P}, x) = x # but defer the conversion to Ptr to unsafe_convert
+unsafe_convert{T}(::Type{T}, x::T) = x # unsafe_convert (like convert) defaults to assuming the convert occurred
+unsafe_convert{P<:Ptr}(::Type{P}, x::Ptr) = convert(P, x)
 
 reinterpret{T,S}(::Type{T}, x::S) = box(T,unbox(S,x))
 
@@ -74,8 +73,8 @@ end
 type SystemError <: Exception
     prefix::AbstractString
     errnum::Int32
-    SystemError(p::AbstractString, e::Integer) = new(p, int32(e))
-    SystemError(p::AbstractString) = new(p, errno())
+    SystemError(p::AbstractString, e::Integer) = new(p, e)
+    SystemError(p::AbstractString) = new(p, Libc.errno())
 end
 
 type TypeError <: Exception
@@ -119,6 +118,13 @@ type DimensionMismatch <: Exception
 end
 DimensionMismatch() = DimensionMismatch("")
 
+type AssertionError <: Exception
+    msg::AbstractString
+
+    AssertionError() = new("")
+    AssertionError(msg) = new(msg)
+end
+
 # For passing constants through type inference
 immutable Val{T}
 end
@@ -131,11 +137,6 @@ end
 
 ccall(:jl_get_system_hooks, Void, ())
 
-
-int(x) = convert(Int, x)
-int(x::Int) = x
-uint(x) = convert(UInt, x)
-uint(x::UInt) = x
 
 # index colon
 type Colon
@@ -155,9 +156,9 @@ end
 
 finalize(o::ANY) = ccall(:jl_finalize, Void, (Any,), o)
 
-gc(full = true) = ccall(:jl_gc_collect, Void, (Int,), full ? 1 : 0)
-gc_enable() = ccall(:jl_gc_enable, Void, ())
-gc_disable() = ccall(:jl_gc_disable, Void, ())
+gc(full::Bool=true) = ccall(:jl_gc_collect, Void, (Cint,), full)
+gc_enable() = Bool(ccall(:jl_gc_enable, Cint, ()))
+gc_disable() = Bool(ccall(:jl_gc_disable, Cint, ()))
 
 bytestring(str::ByteString) = str
 
@@ -215,10 +216,7 @@ function length_checked_equal(args...)
     n
 end
 
-map(f::Callable, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
-
-macro thunk(ex); :(()->$(esc(ex))); end
-macro L_str(s); s; end
+map(f::Function, a::Array{Any,1}) = Any[ f(a[i]) for i=1:length(a) ]
 
 function precompile(f::ANY, args::Tuple)
     if isa(f,DataType)
@@ -251,22 +249,28 @@ macro goto(name::Symbol)
     Expr(:symbolicgoto, name)
 end
 
-Array{T,N}(::Type{T}, d::NTuple{N,Int}) =
+call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
+call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert((Int...), d))
 
-Array{T}(::Type{T}, m::Int) =
+call{T}(::Type{Array{T}}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T}(::Type{T}, m::Int,n::Int) =
-    ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m,n)
-Array{T}(::Type{T}, m::Int,n::Int,o::Int) =
-    ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m,n,o)
-
-Array(T::Type, d::Int...) = Array(T, d)
-Array(T::Type, d::Integer...) = Array(T, convert((Int...), d))
-
-Array{T}(::Type{T}, m::Integer) =
-    ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
-Array{T}(::Type{T}, m::Integer,n::Integer) =
+call{T}(::Type{Array{T}}, m::Integer, n::Integer) =
     ccall(:jl_alloc_array_2d, Array{T,2}, (Any,Int,Int), Array{T,2}, m, n)
-Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) =
+call{T}(::Type{Array{T}}, m::Integer, n::Integer, o::Integer) =
     ccall(:jl_alloc_array_3d, Array{T,3}, (Any,Int,Int,Int), Array{T,3}, m, n, o)
+
+# TODO: possibly turn these into deprecations
+Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
+Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert((Int...), d))
+Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
+Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
+Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)
+
+immutable Nullable{T}
+    isnull::Bool
+    value::T
+
+    Nullable() = new(true)
+    Nullable(value::T) = new(false, value)
+end

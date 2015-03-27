@@ -14,11 +14,17 @@ linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 # CartesianIndex
 abstract CartesianIndex{N}
 
-stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex},index::NTuple{N,Integer})
     indextype = gen_cartesian(N)
     return Expr(:call,indextype,[:(to_index(index[$i])) for i=1:N]...)
 end
-Base.call{N}(::Type{CartesianIndex{N}},index::Real...) = CartesianIndex(index::NTuple{N,Real})
+stagedfunction Base.call{N}(::Type{CartesianIndex{N}},index::Integer...)
+    length(index) == N && return :(CartesianIndex(index))
+    length(index) > N && throw(DimensionMismatch("Cannot create CartesianIndex{$N} from $(length(index)) indexes"))
+    args = [i <= length(index) ? :(index[$i]) : 1 for i = 1:N]
+    :(CartesianIndex(tuple($(args...))))
+end
+Base.call{M,N}(::Type{CartesianIndex{N}},index::NTuple{M,Integer}) = CartesianIndex{N}(index...)
 
 let implemented = IntSet()
     global gen_cartesian
@@ -26,12 +32,12 @@ let implemented = IntSet()
         # Create the types
         indextype = symbol("CartesianIndex_$N")
         if !in(N,implemented)
-            fieldnames = [symbol("I_$i") for i = 1:N]
-            fields = [Expr(:(::), fieldnames[i], :Int) for i = 1:N]
+            fnames = [symbol("I_$i") for i = 1:N]
+            fields = [Expr(:(::), fnames[i], :Int) for i = 1:N]
             extype = Expr(:type, false, Expr(:(<:), indextype, Expr(:curly, :CartesianIndex, N)), Expr(:block, fields...))
             eval(extype)
-            argsleft = [Expr(:(::), fieldnames[i], :Real) for i = 1:N]
-            argsright = [Expr(:call,:to_index,fieldnames[i]) for i=1:N]
+            argsleft = [Expr(:(::), fnames[i], :Integer) for i = 1:N]
+            argsright = [Expr(:call,:to_index,fnames[i]) for i=1:N]
             exconstructor = Expr(:(=),Expr(:call,:(Base.call),:(::Type{CartesianIndex{$N}}),argsleft...),Expr(:call,indextype,argsright...))
             eval(exconstructor)
             push!(implemented,N)
@@ -51,15 +57,27 @@ getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
     N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
 end
+stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayref(A, i)) : :(@ncall $(N+1) Base.arrayref A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
+end
+stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
+    N==0 ? :(Base.arrayset(A, convert($T,v), i)) : :(@ncall $(N+1) Base.arrayset A convert($T,v) d->(d == 1 ? i : index[d-1]))
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
     :(@nref $N A d->index[d])
 end
+stagedfunction getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
+    :(@nref $(N+1) A d->(d == 1 ? i : index[d-1]))
+end
 stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
     :((@nref $N A d->index[d]) = v)
+end
+stagedfunction setindex!{N}(A::AbstractArray, v, i::Integer, index::CartesianIndex{N})
+    :((@nref $(N+1) A d->(d == 1 ? i : index[d-1])) = v)
 end
 
 # arithmetic, min/max
@@ -259,6 +277,23 @@ end
 
 stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
     N = length(J)
+    if x<:AbstractArray
+        ex=quote
+            X = x
+            @ncall $N setindex_shape_check X I
+            Xs = start(X)
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                v, Xs = next(X, Xs)
+                @inbounds A[offset_0] = v
+            end
+        end
+    else
+        ex=quote
+            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
+                @inbounds A[offset_0] = x
+            end
+        end
+    end
     quote
         @nexprs $N d->(J_d = J[d])
         @ncall $N checkbounds A J
@@ -266,20 +301,7 @@ stagedfunction setindex!(A::Array, x, J::Union(Real,AbstractArray)...)
         stride_1 = 1
         @nexprs $N d->(stride_{d+1} = stride_d*size(A,d))
         @nexprs $N d->(offset_d = 1)  # really only need offset_$N = 1
-        if !isa(x, AbstractArray)
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-                @inbounds A[offset_0] = x
-            end
-        else
-            X = x
-            @ncall $N setindex_shape_check X I
-            iter = eachindex(X)
-            Xs = start(iter)
-            @nloops $N i d->(1:length(I_d)) d->(@inbounds offset_{d-1} = offset_d + (unsafe_getindex(I_d, i_d)-1)*stride_d) begin
-                Xindex, Xs = next(iter, Xs)
-                @inbounds A[offset_0] = X[Xindex]
-            end
-        end
+        $ex
         A
     end
 end
@@ -341,33 +363,35 @@ end
 # the corresponding cartesian index into the parent, and then uses
 # dims to convert back to a linear index into the parent array.
 #
-# However, a common case is linindex::UnitRange.
-# Since div is slow and in(j::Int, linindex::UnitRange) is fast,
+# However, a common case is linindex::Range.
+# Since div is slow and in(j::Int, linindex::Range) is fast,
 # it can be much faster to generate all possibilities and
 # then test whether the corresponding linear index is in linindex.
 # One exception occurs when only a small subset of the total
 # is desired, in which case we fall back to the div-based algorithm.
-stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange{Int})
-    N = length(indexes)
+#stagedfunction merge_indexes{T<:Integer}(V, parentindexes::NTuple, parentdims::Dims, linindex::Union(Colon,Range{T}), lindim)
+stagedfunction merge_indexes_in{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+    N = length(parentindexes)   # number of parent axes we're merging
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
+    lengthexpr = linindex == Colon ? (:(prod(size(V)[lindim:end]))) : (:(length(linindex)))
+    L = symbol(string("Istride_", N+1))  # length of V's trailing dimensions
     quote
-        n = length(linindex)
-        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
-        L = 1
-        dimoffset = ndims(V.parent) - length(dims)
-        Base.Cartesian.@nexprs $N d->(L *= dimsize(V.parent, d+dimoffset, I_d))
-        if n < 0.1L   # this has not been carefully tuned
-            return merge_indexes_div(V, indexes, dims, linindex)
+        n = $lengthexpr
+        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
+        pdimoffset = ndims(V.parent) - length(parentdims)
+        Istride_1 = 1   # parentindexes strides
+        Base.Cartesian.@nexprs $N d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
+        Istridet = Base.Cartesian.@ntuple $(N+1) d->Istride_d
+        if n < 0.1*$L   # this has not been carefully tuned
+            return merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
         end
         Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
-        Istride_1 = 1   # indexes strides
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V, d+dimoffset, I_d))
-        Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into indexes
+        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
+        Base.Cartesian.@nexprs $N d->(counter_d = 1) # counter_0 is a linear index into parentindexes
         Base.Cartesian.@nexprs $N d->(offset_d = 1)  # offset_0 is a linear index into parent
         k = 0
         index = Array(Int, n)
-        Base.Cartesian.@nloops $N i d->(1:dimsize(V, d+dimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
+        Base.Cartesian.@nloops $N i d->(1:dimsize(V.parent, d+pdimoffset, I_d)) d->(offset_{d-1} = offset_d + (I_d[i_d]-1)*Pstride_d; counter_{d-1} = counter_d + (i_d-1)*Istride_d) begin
             if in(counter_0, linindex)
                 index[k+=1] = offset_0
             end
@@ -375,27 +399,35 @@ stagedfunction merge_indexes(V, indexes::NTuple, dims::Dims, linindex::UnitRange
         index
     end
 end
-merge_indexes(V, indexes::NTuple, dims::Dims, linindex) = merge_indexes_div(V, indexes, dims, linindex)
+
+# HACK: dispatch seemingly wasn't working properly
+function merge_indexes(V, parentindexes::NTuple, parentdims::Dims, linindex, lindim)
+    if isa(linindex, Colon) || isa(linindex, Range)
+        return merge_indexes_in(V, parentindexes, parentdims, linindex, lindim)
+    end
+    merge_indexes_div(V, parentindexes, parentdims, linindex, lindim)
+end
 
 # This could be written as a regular function, but performance
 # will be better using Cartesian macros to avoid the heap and
 # an extra loop.
-stagedfunction merge_indexes_div(V, indexes::NTuple, dims::Dims, linindex)
-    N = length(indexes)
+stagedfunction merge_indexes_div{TT}(V, parentindexes::TT, parentdims::Dims, linindex, lindim)
+    N = length(parentindexes)
     N > 0 || throw(ArgumentError("cannot merge empty indexes"))
     Istride_N = symbol("Istride_$N")
+    lengthexpr = :(length(linindex))
     quote
-        Base.Cartesian.@nexprs $N d->(I_d = indexes[d])
+        Base.Cartesian.@nexprs $N d->(I_d = parentindexes[d])
         Pstride_1 = 1   # parent strides
-        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*dims[d])
-        Istride_1 = 1   # indexes strides
-        dimoffset = ndims(V.parent) - length(dims)
-        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+dimoffset, I_d))
-        n = length(linindex)
-        L = $(Istride_N) * dimsize(V.parent, $N+dimoffset, indexes[end])
+        Base.Cartesian.@nexprs $(N-1) d->(Pstride_{d+1} = Pstride_d*parentdims[d])
+        Istride_1 = 1   # parentindexes strides
+        pdimoffset = ndims(V.parent) - length(parentdims)
+        Base.Cartesian.@nexprs $(N-1) d->(Istride_{d+1} = Istride_d*dimsize(V.parent, d+pdimoffset, I_d))
+        n = $lengthexpr
+        L = $(Istride_N) * dimsize(V.parent, $N+pdimoffset, parentindexes[end])
         index = Array(Int, n)
         for i = 1:n
-            k = linindex[i] # k is the indexes-centered linear index
+            k = linindex[i] # k is the parentindexes-centered linear index
             1 <= k <= L || throw(BoundsError())
             k -= 1
             j = 0  # j will be the new parent-centered linear index

@@ -597,7 +597,7 @@ built-in :exc:`Exception`\ s listed below all interrupt the normal flow of contr
 +---------------------------+
 | :exc:`LoadError`          |
 +---------------------------+
-| :exc:`MemoryError`        |
+| :exc:`OutOfMemoryError`   |
 +---------------------------+
 | :exc:`MethodError`        |
 +---------------------------+

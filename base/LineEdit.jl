@@ -662,7 +662,7 @@ write_prompt(terminal, s::ASCIIString) = write(terminal, s)
 ### Keymap Support
 
 normalize_key(key::Char) = string(key)
-normalize_key(key::Integer) = normalize_key(char(key))
+normalize_key(key::Integer) = normalize_key(Char(key))
 function normalize_key(key::AbstractString)
     '\0' in key && error("Matching \\0 not currently supported.")
     buf = IOBuffer()
@@ -856,8 +856,6 @@ function postprocess!(dict::Dict)
     # needs to be done first for every branch
     if haskey(dict, '\0')
         add_specialisations(dict, dict, 1)
-    else
-        dict['\0'] = (args...)->error("Unrecognized input")
     end
     for (k,v) in dict
         k == '\0' && continue
@@ -944,32 +942,42 @@ function keymap{D<:Dict}(keymaps::Array{D})
 end
 
 const escape_defaults = merge!(
-    AnyDict([char(i) => nothing for i=[1:26, 28:31]]), # Ignore control characters by default
+    AnyDict([Char(i) => nothing for i=vcat(1:26, 28:31)]), # Ignore control characters by default
     AnyDict( # And ignore other escape sequences by default
-    "\e*" => nothing,
-    "\e[*" => nothing,
-    "\eO*" => nothing,
-    # Also ignore extended escape sequences
-    # TODO: Support ranges of characters
-    "\e[1**" => nothing,
-    "\e[2**" => nothing,
-    "\e[3**" => nothing,
-    "\e[4**" => nothing,
-    "\e[5**" => nothing,
-    "\e[6**" => nothing,
-    # These are different spellings of arrow keys, home keys, etc.
-    # and should always do the same as the canonical key sequence
-    "\e[1~" => KeyAlias("\e[H"),
-    "\e[4~" => KeyAlias("\e[F"),
-    "\e[7~" => KeyAlias("\e[H"),
-    "\e[8~" => KeyAlias("\e[F"),
-    "\eOA"  => KeyAlias("\e[A"),
-    "\eOB"  => KeyAlias("\e[B"),
-    "\eOC"  => KeyAlias("\e[C"),
-    "\eOD"  => KeyAlias("\e[D"),
-    "\eOH"  => KeyAlias("\e[H"),
-    "\eOF"  => KeyAlias("\e[F"),
-))
+        "\e*" => nothing,
+        "\e[*" => nothing,
+        "\eO*" => nothing,
+        # Also ignore extended escape sequences
+        # TODO: Support ranges of characters
+        "\e[1**" => nothing,
+        "\e[2**" => nothing,
+        "\e[3**" => nothing,
+        "\e[4**" => nothing,
+        "\e[5**" => nothing,
+        "\e[6**" => nothing,
+        # less commonly used VT220 editing keys
+        "\e[2~" => nothing, # insert
+        "\e[3~" => nothing, # delete
+        "\e[5~" => nothing, # page up
+        "\e[6~" => nothing, # page down
+        # These are different spellings of arrow keys, home keys, etc.
+        # and should always do the same as the canonical key sequence
+        "\e[1~" => KeyAlias("\e[H"), # home
+        "\e[4~" => KeyAlias("\e[F"), # end
+        "\e[7~" => KeyAlias("\e[H"), # home
+        "\e[8~" => KeyAlias("\e[F"), # end
+        "\eOA"  => KeyAlias("\e[A"),
+        "\eOB"  => KeyAlias("\e[B"),
+        "\eOC"  => KeyAlias("\e[C"),
+        "\eOD"  => KeyAlias("\e[D"),
+        "\eOH"  => KeyAlias("\e[H"),
+        "\eOF"  => KeyAlias("\e[F"),
+    ),
+    # set mode commands
+    AnyDict(["\e[$(c)h" => nothing for c in 1:20]),
+    # reset mode commands
+    AnyDict(["\e[$(c)l" => nothing for c in 1:20])
+    )
 
 function write_response_buffer(s::PromptState, data)
     offset = s.input_buffer.ptr
@@ -1416,31 +1424,32 @@ const history_keymap = AnyDict(
     "\e[6~" => (s,o...)->(history_next(s, mode(s).hist))
 )
 
-const prefix_history_keymap = AnyDict(
-    # Up Arrow
-    "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
-    # Down Arrow
-    "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
-    # by default, pass thru to the parent mode
-    "*"    => (s,data,c)->begin
-        accept_result(s, data.histprompt);
-        ps = state(s, mode(s))
-        map = keymap(ps, mode(s))
-        match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
-    end,
-    # match escape sequences for pass thru
-    "\e*" => "*",
-    "\e[*" => "*",
-    "\eO*"  => "*",
-    "\e[1~" => "*",
-    "\e[3~" => "*",
-    "\e[4~" => "*",
-    "\e[5~" => "*",
-    "\e[6~" => "*",
-    "\e[7~" => "*",
-    "\e[8~" => "*",
-    "\e[1;5*" => "*", # Ctrl-Arrow
-    "\e[200~" => "*"
+const prefix_history_keymap = merge!(
+    AnyDict(
+        # Up Arrow
+        "\e[A" => (s,data,c)->history_prev_prefix(data, data.histprompt.hp, data.prefix),
+        # Down Arrow
+        "\e[B" => (s,data,c)->history_next_prefix(data, data.histprompt.hp, data.prefix),
+        # by default, pass thru to the parent mode
+        "*"    => (s,data,c)->begin
+            accept_result(s, data.histprompt);
+            ps = state(s, mode(s))
+            map = keymap(ps, mode(s))
+            match_input(map, s, IOBuffer(c))(s, keymap_data(ps, mode(s)))
+        end,
+        # match escape sequences for pass thru
+        "\e*" => "*",
+        "\e[*" => "*",
+        "\eO*"  => "*",
+        "\e[1;5*" => "*", # Ctrl-Arrow
+        "\e[200~" => "*"
+    ),
+    # VT220 editing commands
+    AnyDict(["\e[$(n)~" => "*" for n in 1:8]),
+    # set mode commands
+    AnyDict(["\e[$(c)h" => "*" for c in 1:20]),
+    # reset mode commands
+    AnyDict(["\e[$(c)l" => "*" for c in 1:20])
 )
 
 function setup_prefix_keymap(hp, parent_prompt)
@@ -1562,7 +1571,17 @@ function prompt!(term, prompt, s = init_state(term, prompt))
         activate(prompt, s, term)
         while true
             map = keymap(s, prompt)
-            state = match_input(map, s)(s, keymap_data(s, prompt))
+            fcn = match_input(map, s)
+            # errors in keymaps shouldn't cause the REPL to fail, so wrap in a
+            # try/catch block
+            local state
+            try
+                state = fcn(s, keymap_data(s, prompt))
+            catch e
+                warn("Caught an exception in the keymap:")
+                warn(e)
+                state = :done
+            end
             if state == :abort
                 stop_reading(term)
                 return buffer(s), false, false

@@ -100,7 +100,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # The determinant of a rotation matrix should always be 1.
     if elty != Int
-        for theta = convert(Vector{elty}, pi ./ [1:4])
+        for theta = convert(Vector{elty}, pi ./ [1:4;])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
             @test_approx_eq convert(elty, det(R)) one(elty)
@@ -147,10 +147,10 @@ end
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     if elty <: Real
-        x = convert(Vector{elty}, [1:3])
+        x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3],[1:3]))
+        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
     @test_approx_eq gradient(x) g
@@ -190,7 +190,7 @@ l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
 @test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(float64(float(a)))
+@test_approx_eq det(a) det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
@@ -198,7 +198,7 @@ H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
 Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
 with_bigfloat_precision(2^10) do
-    @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
+    @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100
 end
 
 # Test balancing in eigenvector calculations
@@ -215,9 +215,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
 end
 
 # Tests norms
-nnorm = 1000
-mmat = 100
-nmat = 80
+nnorm = 10
+mmat = 10
+nmat = 8
 for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
     debug && println(elty)
 
@@ -338,8 +338,26 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         for p = -2:3
             @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
         end
+
+        # issue #10234
+        if elty <: FloatingPoint || elty <: Complex
+            let z = zeros(elty, 100)
+                z[1] = -Inf
+                for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
+                    @test norm(z, p) == (p < 0 ? 0 : Inf)
+                    @test norm(elty[Inf],p) == Inf
+                end
+            end
+        end
     end
 end
+
+# issue #10234
+@test norm(Any[Inf],-2) == norm(Any[Inf],-1) == norm(Any[Inf],1) == norm(Any[Inf],1.5) == norm(Any[Inf],2) == norm(Any[Inf],Inf) == Inf
+
+# overflow/underflow in norms:
+@test_approx_eq norm(Float64[1e-300, 1], -3)*1e300 1
+@test_approx_eq norm(Float64[1e300, 1], 3)*1e-300 1
 
 # Uniform scaling
 @test I[1,1] == 1 # getindex

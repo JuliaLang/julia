@@ -3,7 +3,7 @@ function tohtml(io::IO, m::MIME"text/html", x)
 end
 
 function tohtml(io::IO, m::MIME"text/plain", x)
-    writemime(io, m, x)
+    htmlesc(io, sprint(writemime, m, x))
 end
 
 function tohtml(io::IO, m::MIME"image/png", img)

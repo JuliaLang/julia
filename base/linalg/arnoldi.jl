@@ -18,12 +18,12 @@ function eigs(A, B;
     nevmax=sym ? n-1 : n-2
     if nev > nevmax
         nev = nevmax
-        isinteractive() && warn("nev should be at most $nevmax")
+        warn("nev should be at most $nevmax")
     end
     nev > 0 || throw(ArgumentError("requested number of eigen values (nev) must be ≥ 1, got $nev"))
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        isinteractive() && warn("ncv should be at least $ncvmin")
+        warn("ncv should be at least $ncvmin")
         ncv = ncvmin
     end
     ncv = blas_int(min(ncv, n))
@@ -32,7 +32,7 @@ function eigs(A, B;
     isshift = sigma !== nothing
 
     if isa(which,AbstractString)
-        isinteractive() && warn("Use symbols instead of strings for specifying which eigenvalues to compute")
+        warn("Use symbols instead of strings for specifying which eigenvalues to compute")
         which=symbol(which)
     end
     if (which != :LM && which != :SM && which != :LR && which != :SR &&
@@ -40,11 +40,8 @@ function eigs(A, B;
        throw(ArgumentError("which must be :LM, :SM, :LR, :SR, :LI, :SI, or :BE, got $(repr(which))"))
     end
     which != :BE || sym || throw(ArgumentError("which=:BE only possible for real symmetric problem"))
-    if isshift && which == :SM
-        if isinteractive()
-            warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
-        end
-    end
+    isshift && which == :SM && warn("use of :SM in shift-and-invert mode is not recommended, use :LM to find eigenvalues closest to sigma")
+
     if which==:SM && !isshift # transform into shift-and-invert method with sigma = 0
         isshift=true
         sigma=zero(T)
@@ -137,10 +134,11 @@ function svds{S}(X::S; nsv::Int = 6, ritzvec::Bool = true, tol::Float64 = 0.0, m
     end
     otype = eltype(X)
     ex    = eigs(SVDOperator{otype,S}(X), I; ritzvec = ritzvec, nev = 2*nsv, tol = tol, maxiter = maxiter)
-    ind   = [1:2:nsv*2]
+    ind   = [1:2:nsv*2;]
     sval  = abs(ex[1][ind])
 
-    ritzvec || return (sval, ex[2], ex[3], ex[4], ex[5])
+    #The sort is necessary to work around #10329
+    ritzvec || return (sort!(sval, by=real, rev=true), ex[2], ex[3], ex[4], ex[5])
 
     # calculating singular vectors
     left_sv  = sqrt(2) * ex[2][ 1:size(X,1),     ind ] .* sign(ex[1][ind]')

@@ -1,6 +1,6 @@
 module Docs
 
-import Base.Markdown: @doc_str, @doc_mstr, MD
+import Base.Markdown: @doc_str, MD
 
 export doc, @doc
 
@@ -30,10 +30,6 @@ function doc(obj)
     for mod in modules
         haskey(mod.META, obj) && return mod.META[obj]
     end
-end
-
-function doc(obj::Union(Symbol, AbstractString))
-    doc(current_module().(symbol(obj)))
 end
 
 # Function / Method support
@@ -113,7 +109,7 @@ function doc(f::Function, m::Method)
 end
 
 catdoc() = nothing
-catdoc(xs...) = [xs...]
+catdoc(xs...) = vcat(xs...)
 
 # Modules
 
@@ -149,9 +145,9 @@ namify(sy::Symbol) = sy
 
 function mdify(ex)
     if isa(ex, AbstractString)
-        :(@doc_str $(esc(ex)))
+        :(@doc_str $ex)
     elseif isexpr(ex, :macrocall) && namify(ex) == symbol("@mstr")
-        :(@doc_mstr $(esc(ex.args[2])))
+        :(@doc_str $(Expr(:triple_quoted_string, ex.args[2])))
     else
         esc(ex)
     end
@@ -197,7 +193,7 @@ function docm(meta, def)
 end
 
 function docm(ex)
-    haskey(keywords, ex) && return keywords[ex]
+    isa(ex,Symbol) && haskey(keywords, ex) && return keywords[ex]
     isexpr(ex, :->) && return docm(ex.args...)
     isexpr(ex, :call) && return :(doc($(esc(ex.args[1])), @which $(esc(ex))))
     isexpr(ex, :macrocall) && (ex = namify(ex))
@@ -258,7 +254,7 @@ end
 
 import Base: print, writemime
 
-export HTML, @html_str, @html_mstr
+export HTML, @html_str
 
 export HTML, Text
 
@@ -289,13 +285,8 @@ writemime(io::IO, ::MIME"text/html", h::HTML) = print(io, h.content)
 writemime(io::IO, ::MIME"text/html", h::HTML{Function}) = h.content(io)
 
 @doc "Create an `HTML` object from a literal string." ->
-macro html_str (s)
+macro html_str(s)
     :(HTML($s))
-end
-
-@doc (@doc html"") ->
-macro html_mstr (s)
-    :(HTML($(Base.triplequoted(s))))
 end
 
 function catdoc(xs::HTML...)
@@ -306,7 +297,7 @@ function catdoc(xs::HTML...)
     end
 end
 
-export Text, @text_str, @text_mstr
+export Text, @text_str
 
 # @doc """
 # `Text(s)`: Create an object that renders `s` as plain text.
@@ -330,11 +321,6 @@ writemime(io::IO, ::MIME"text/plain", t::Text) = print(io, t)
 @doc "Create a `Text` object from a literal string." ->
 macro text_str (s)
     :(Text($s))
-end
-
-@doc (@doc text"") ->
-macro text_mstr (s)
-    :(Text($(Base.triplequoted(s))))
 end
 
 function catdoc(xs::Text...)
@@ -418,7 +404,7 @@ avgdistance(xs) =
 function fuzzyscore(needle, haystack)
     score = 0.
     is, acro = bestmatch(needle, haystack)
-    score += (acro?2:1)length(is) # Matched characters
+    score += (acro?2:1)*length(is) # Matched characters
     score -= 2(length(needle)-length(is)) # Missing characters
     !acro && (score -= avgdistance(is)/10) # Contiguous
     !isempty(is) && (score -= mean(is)/100) # Closer to beginning
@@ -525,8 +511,8 @@ moduleusings(mod) = ccall(:jl_module_usings, Any, (Any,), mod)
 filtervalid(names) = filter(x->!ismatch(r"#", x), map(string, names))
 
 accessible(mod::Module) =
-    [names(mod, true, true),
-     map(names, moduleusings(mod))...,
+    [names(mod, true, true);
+     map(names, moduleusings(mod))...;
      builtins] |> unique |> filtervalid
 
 completions(name) = fuzzysort(name, accessible(current_module()))

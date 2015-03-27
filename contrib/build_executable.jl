@@ -57,10 +57,9 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
     julia = abspath(joinpath(JULIA_HOME, "julia"))
     build_sysimg = abspath(joinpath(dirname(@__FILE__), "build_sysimg.jl"))
 
-    patchelf = nothing
     if targetdir != nothing
         patchelf = find_patchelf()
-        if patchelf == nothing
+        if patchelf == nothing && !(OS_NAME == :Windows)
             println("ERROR: Using the 'targetdir' option requires the 'patchelf' utility. Please install it.")
             return 1
         end
@@ -109,37 +108,55 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
     run(`$(julia) $(build_sysimg) $(sys.buildfile) native $(userimgjl) --force`)
     println()
 
+    gcc = find_system_gcc()
+    # This argument is needed for the gcc, see issue #9973
+    win_arg = @windows ? `-D_WIN32_WINNT=0x0502` : ``
+    incs = get_includes()
+    ENV2 = deepcopy(ENV)
+    @windows_only begin
+        if contains(gcc, "WinRPM")
+            # This should not bee necessary, it is done due to WinRPM's gcc's
+            # include paths is not correct see WinRPM.jl issue #38
+            ENV2["PATH"] *= ";" * dirname(gcc)
+            push!(incs, "-I"*abspath(joinpath(dirname(gcc),"..","include")))
+        end
+    end
+
     for exe in [exe_release, exe_debug]
-        incs = join(get_includes(), " ")
-        println("running: gcc -g -Wl,--no-as-needed $(incs) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)")
-        run(`gcc -g -Wl,--no-as-needed $(get_includes()) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)`)
+        println("running: $gcc -g -Wl,--no-as-needed $win_arg $(join(incs, " ")) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)")
+        cmd = setenv(`$gcc -g -Wl,--no-as-needed $win_arg $(incs) $(cfile) -o $(exe.buildfile) -Wl,-rpath,$(sys.buildpath) -L$(sys.buildpath) $(exe.libjulia) -l$(exename)`, ENV2)
+        run(cmd)
         println()
     end
 
     println("running: rm -rf $(tmpdir) $(sys.buildfile).o $(sys.buildfile0).o $(sys.buildfile0).ji")
-    run(`rm -rf $(tmpdir) $(sys.buildfile).o $(sys.buildfile0).o $(sys.buildfile0).ji`)
+    map(f-> rm(f, recursive=true), [tmpdir, sys.buildfile*".o", sys.buildfile0*".o", sys.buildfile0*".ji"])
     println()
 
     if targetdir != nothing
         # Move created files to target directory
-        run(`mv $(exe_release.buildfile) $(exe_debug.buildfile) $(sys.buildfile).$(Sys.dlext) $(sys.buildfile).ji $(targetdir)`)
+        for file in [exe_release.buildfile, exe_debug.buildfile, sys.buildfile*".$(Sys.dlext)", sys.buildfile*".ji"]
+            mv(file,joinpath(targetdir, basename(file)))
+        end
 
         # Copy needed shared libraries to the target directory
         tmp = ".*\.$(Sys.dlext).*"
         shlibs = filter(Regex(tmp),readdir(sys.buildpath))
         for shlib in shlibs
-            run(`cp $(joinpath(sys.buildpath, shlib)) $(targetdir)`)
+            cp(joinpath(sys.buildpath, shlib), joinpath(targetdir, shlib))
         end
 
-        # Fix rpath in executable and shared libraries
-        shlibs = filter(Regex(tmp),readdir(targetdir))
-        push!(shlibs, exe_release.filename)
-        push!(shlibs, exe_debug.filename)
-
-        for shlib in shlibs
-            rpath = readall(`$(patchelf) --print-rpath $(joinpath(targetdir, shlib))`)[1:end-1]
-            if Base.samefile(rpath, sys.buildpath)
-                run(`$(patchelf) --set-rpath $(targetdir) $(joinpath(targetdir, shlib))`)
+        @unix_only begin
+            # Fix rpath in executable and shared libraries
+            shlibs = filter(Regex(tmp),readdir(targetdir))
+            push!(shlibs, exe_release.filename)
+            push!(shlibs, exe_debug.filename)
+            println(shlibs)
+            for shlib in shlibs
+                rpath = readall(`$(patchelf) --print-rpath $(joinpath(targetdir, shlib))`)[1:end-1]
+                if Base.samefile(rpath, sys.buildpath)
+                    run(`$(patchelf) --set-rpath $(targetdir) $(joinpath(targetdir, shlib))`)
+                end
             end
         end
     end
@@ -151,20 +168,13 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
 end
 
 function find_patchelf()
-    patchelf = nothing
-
-    for x in [joinpath(JULIA_HOME, "patchelf"), "patchelf"]
-        patchelf = x
-        works = true
+    for patchelf in [joinpath(JULIA_HOME, "patchelf"), "patchelf"]
         try
-            x=readall(`$(patchelf) --version`)
-        catch
-            works = false
+            if success(`$(patchelf) --version`)
+                return patchelf
+            end
         end
-        works && break
     end
-
-    patchelf
 end
 
 function get_includes()
@@ -187,9 +197,9 @@ function emit_cmain(cfile, exename, relocation)
     if relocation
         sysji = joinpath("lib"*exename)
     else
-        sysji = joinpath("..", "lib", "lib"*exename)
+        sysji = joinpath(dirname(Sys.dlpath("libjulia")), "lib"*exename)
     end
-
+    sysji = escape_string(sysji)
     f = open(cfile, "w")
     write( f, """
         #include <julia.h>
@@ -206,7 +216,7 @@ function emit_cmain(cfile, exename, relocation)
             if (jl_exception_occurred())
             {
                 jl_show(jl_stderr_obj(), jl_exception_occurred());
-                JL_PRINTF(jl_stderr_stream(), \"\\n\");
+                jl_printf(jl_stderr_stream(), \"\\n\");
                 ret = 1;
             }
 
@@ -219,12 +229,30 @@ function emit_cmain(cfile, exename, relocation)
 end
 
 function emit_userimgjl(userimgjl, script_file)
-    f = open(userimgjl, "w")
-    write( f, """
-        include(\"$(script_file)\")
-        """
-    )
-    close(f)
+    open(userimgjl, "w") do f
+        write( f, "include(\"$(escape_string(script_file))\")")
+    end
+end
+
+function find_system_gcc()
+    # On Windows, check to see if WinRPM is installed, and if so, see if gcc is installed
+    @windows_only try
+        require("WinRPM")
+        winrpmgcc = joinpath(WinRPM.installdir,"usr","$(Sys.ARCH)-w64-mingw32",
+            "sys-root","mingw","bin","gcc.exe")
+        if success(`$winrpmgcc --version`)
+            return winrpmgcc
+        end
+    end
+
+    # See if `gcc` exists
+    @unix_only try
+        if success(`gcc -v`)
+            return "gcc"
+        end
+    end
+
+    error( "GCC not found on system: " * @windows? "GCC can be installed via `Pkg.add(\"WinRPM\"); WinRPM.install(\"gcc\")`" : "" )
 end
 
 if !isinteractive()

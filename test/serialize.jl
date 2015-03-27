@@ -9,19 +9,19 @@ end
 # Tags
 create_serialization_stream() do s
     Base.writetag(s, Bool)
-    @test takebuf_array(s)[end] == uint8(Base.ser_tag[Bool])
+    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
 end
 
 create_serialization_stream() do s
     Base.write_as_tag(s, Bool)
-    @test takebuf_array(s)[end] == uint8(Base.ser_tag[Bool])
+    @test takebuf_array(s)[end] == UInt8(Base.ser_tag[Bool])
 end
 
 create_serialization_stream() do s
     Base.write_as_tag(s, Symbol)
     data = takebuf_array(s)
     @test data[end-1] == 0x00
-    @test data[end] == uint8(Base.ser_tag[Symbol])
+    @test data[end] == UInt8(Base.ser_tag[Symbol])
 end
 
 # Boolean & Empty & Nothing
@@ -97,7 +97,7 @@ end
 
 # DataType
 create_serialization_stream() do s # standard types
-    typ1 = Uint8
+    typ1 = UInt8
     serialize(s, typ1)
     typ2 = Bool
     serialize(s, typ2)
@@ -185,7 +185,7 @@ end
 
 # Array
 type TA1
-    v::Uint8
+    v::UInt8
 end
 create_serialization_stream() do s # small 1d array
     arr1 = fill(0x01, 10)    # small 1d array
@@ -215,9 +215,9 @@ end
 
 # SubArray
 create_serialization_stream() do s # slices
-    slc1 = slice(ones(Uint8, 4), 2:3)
+    slc1 = slice(ones(UInt8, 4), 2:3)
     serialize(s, slc1)
-    slc2 = slice(ones(Uint8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
+    slc2 = slice(ones(UInt8, 4, 4) .+ [0x00, 0x01, 0x02, 0x03], 1, 2:4)
     serialize(s, slc2)
 
     seek(s, 0)
@@ -263,4 +263,13 @@ create_serialization_stream() do s # user-defined type array
     r = deserialize(s)
     @test r.state == :failed
     @test isa(t.exception, ErrorException)
+end
+
+# corner case: undefined inside immutable type
+create_serialization_stream() do s
+    serialize(s, Nullable{Any}())
+    seekstart(s)
+    n = deserialize(s)
+    @test isa(n, Nullable)
+    @test !isdefined(n, :value)
 end

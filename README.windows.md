@@ -287,6 +287,10 @@ If you are building for 64-bit windows, the steps are essentially the same. Just
 
 ## Windows Build Debugging
 
+### GDB hangs with cygwin mintty
+
+- run gdb under the windows console (cmd) instead. gdb [does not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications.
+
 ### Build process is slow/eats memory/hangs my computer
 
 - Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and

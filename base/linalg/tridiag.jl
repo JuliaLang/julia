@@ -127,7 +127,7 @@ setindex!(a::ZeroOffsetVector, x, i) = a.data[i+1]=x
 #Implements the inverse using the recurrence relation between principal minors
 # a, b, c are assumed to be the subdiagonal, diagonal, and superdiagonal of
 # a tridiagonal matrix.
-#Ref:
+#Reference:
 #    R. Usmani, "Inversion of a tridiagonal Jacobi matrix",
 #    Linear Algebra and its Applications 212-213 (1994), pp.413-414
 #    doi:10.1016/0024-3795(94)90414-6

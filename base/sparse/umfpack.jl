@@ -23,7 +23,7 @@ function umferror(status::Integer)
      elseif status==UMFPACK_WARNING_determinant_overflow
          throw(MatrixIllConditionedException("The determinant overflowed"))
      elseif status==UMFPACK_ERROR_out_of_memory
-         throw(MemoryError())
+         throw(OutOfMemoryError())
      elseif status==UMFPACK_ERROR_invalid_Numeric_object
          throw(ArgumentError("Invalid UMFPack numeric object"))
      elseif status==UMFPACK_ERROR_invalid_Symbolic_object
@@ -56,7 +56,7 @@ macro isok(A)
 end
 
 # check the size of SuiteSparse_long
-if int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
+if Int(ccall((:jl_cholmod_sizeof_long,:libsuitesparse_wrapper),Csize_t,())) == 4
     const UmfpackIndexTypes = (:Int32, )
     typealias UMFITypes Union(Int32)
 else
@@ -75,7 +75,7 @@ const umf_info = Array(Float64, UMFPACK_INFO)
 
 function show_umf_ctrl(level::Real)
     old_prt::Float64 = umf_ctrl[1]
-    umf_ctrl[1] = float64(level)
+    umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_control, :libumfpack), Void, (Ptr{Float64},), umf_ctrl)
     umf_ctrl[1] = old_prt
 end
@@ -83,7 +83,7 @@ show_umf_ctrl() = show_umf_ctrl(2.)
 
 function show_umf_info(level::Real)
     old_prt::Float64 = umf_ctrl[1]
-    umf_ctrl[1] = float64(level)
+    umf_ctrl[1] = Float64(level)
     ccall((:umfpack_dl_report_info, :libumfpack), Void,
           (Ptr{Float64}, Ptr{Float64}), umf_ctrl, umf_info)
     umf_ctrl[1] = old_prt
@@ -392,7 +392,7 @@ show_umf_info() = show_umf_info(2.)
 
 function umfpack_report_symbolic(symb::Ptr{Void}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
-    umf_ctrl[UMFPACK_PRL] = float64(level)
+    umf_ctrl[UMFPACK_PRL] = Float64(level)
     @isok ccall((:umfpack_dl_report_symbolic, :libumfpack), Int,
                 (Ptr{Void}, Ptr{Float64}), symb, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl
@@ -407,7 +407,7 @@ end
 umfpack_report_symbolic(lu::UmfpackLU) = umfpack_report_symbolic(lu.symbolic,4.)
 function umfpack_report_numeric(num::Ptr{Void}, level::Real)
     old_prl::Float64 = umf_ctrl[UMFPACK_PRL]
-    umf_ctrl[UMFPACK_PRL] = float64(level)
+    umf_ctrl[UMFPACK_PRL] = Float64(level)
     @isok ccall((:umfpack_dl_report_numeric, :libumfpack), Int,
                 (Ptr{Void}, Ptr{Float64}), num, umf_ctrl)
     umf_ctrl[UMFPACK_PRL] = old_prl

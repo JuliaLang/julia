@@ -323,7 +323,7 @@ function triu{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     end
     rowval = Array(Ti, nnz)
     nzval = Array(Tv, nnz)
-    A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = max(k+1,1) : n
         c1 = S.colptr[col]
         for c2 = A.colptr[col] : A.colptr[col+1]-1
@@ -353,7 +353,7 @@ function tril{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti}, k::Integer)
     end
     rowval = Array(Ti, nnz)
     nzval = Array(Tv, nnz)
-    A = SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    A = SparseMatrixCSC(m, n, colptr, rowval, nzval)
     for col = 1 : min(n, m+k)
         c1 = S.colptr[col+1]-1
         l2 = A.colptr[col+1]-1
@@ -370,7 +370,7 @@ end
 
 function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     m,n = size(S)
-    m > 1 || return SparseMatrixCSC{Tv,Ti}(0, n, ones(n+1), Ti[], Tv[])
+    m > 1 || return SparseMatrixCSC(0, n, ones(Ti,n+1), Ti[], Tv[])
     colptr = Array(Ti, n+1)
     numnz = 2 * nnz(S) # upper bound; will shrink later
     rowval = Array(Ti, numnz)
@@ -405,7 +405,7 @@ function sparse_diff1{Tv,Ti}(S::SparseMatrixCSC{Tv,Ti})
     end
     deleteat!(rowval, numnz+1:length(rowval))
     deleteat!(nzval, numnz+1:length(nzval))
-    return SparseMatrixCSC{Tv,Ti}(m-1, n, colptr, rowval, nzval)
+    return SparseMatrixCSC(m-1, n, colptr, rowval, nzval)
 end
 
 function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
@@ -425,7 +425,7 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     ptrS = 1
     colptr[1] = 1
 
-    n == 0 && return SparseMatrixCSC{Tv,Ti}(m, n, colptr, rowval, nzval)
+    n == 0 && return SparseMatrixCSC(m, n, colptr, rowval, nzval)
 
     startA = colptr_a[1]
     stopA = colptr_a[2]
@@ -495,7 +495,7 @@ function sparse_diff2{Tv,Ti}(a::SparseMatrixCSC{Tv,Ti})
     end
     deleteat!(rowval, ptrS:length(rowval))
     deleteat!(nzval, ptrS:length(nzval))
-    return SparseMatrixCSC{Tv,Ti}(m, n-1, colptr, rowval, nzval)
+    return SparseMatrixCSC(m, n-1, colptr, rowval, nzval)
 end
 
 diff(a::SparseMatrixCSC, dim::Integer)= dim==1 ? sparse_diff1(a) : sparse_diff2(a)
@@ -672,6 +672,41 @@ scale{Tv,Ti,T}(A::SparseMatrixCSC{Tv,Ti}, b::Vector{T}) =
 
 scale{T,Tv,Ti}(b::Vector{T}, A::SparseMatrixCSC{Tv,Ti}) =
     scale!(similar(A, promote_type(Tv,T)), b, A)
+
+function factorize(A::SparseMatrixCSC)
+    m, n = size(A)
+    if m == n
+        AC = CHOLMOD.Sparse(A)
+        if ishermitian(AC)
+            try
+                return cholfact(A)
+            catch e
+                isa(e, PosDefException) || rethrow(e)
+                return ldltfact(A)
+            end
+        end
+        return lufact(A)
+    else
+        return qrfact(A)
+    end
+end
+
+function factorize{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}})
+    try
+        return cholfact(A)
+    catch e
+        isa(e, PosDefException) || rethrow(e)
+        return ldltfact(A)
+    end
+end
+function factorize{Ti}(A::Hermitian{Complex{Float64}, SparseMatrixCSC{Complex{Float64},Ti}})
+    try
+        return cholfact(A)
+    catch e
+        isa(e, PosDefException) || rethrow(e)
+        return ldltfact(A)
+    end
+end
 
 chol(A::SparseMatrixCSC) = error("Use cholfact() instead of chol() for sparse matrices.")
 lu(A::SparseMatrixCSC) = error("Use lufact() instead of lu() for sparse matrices.")

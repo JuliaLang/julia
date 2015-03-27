@@ -99,27 +99,28 @@ expm(D::Diagonal) = Diagonal(exp(D.diag))
 sqrtm(D::Diagonal) = Diagonal(sqrt(D.diag))
 
 #Linear solver
-function \{TD<:Number,TA<:Number}(D::Diagonal{TD}, A::AbstractArray{TA,1})
-    m, n = size(A,2)==1 ? (size(A,1),1) : size(A)
-    m==length(D.diag) || throw(DimensionMismatch())
-    (m == 0 || n == 0) && return A
-    C = Array(typeof(one(TD)/one(TA)),size(A))
+function A_ldiv_B!(D::Diagonal, B::StridedVecOrMat)
+    m, n = size(B, 1), size(B, 2)
+    m == length(D.diag) || throw(DimensionMismatch("diagonal matrix is $(length(D.diag)) by $(length(D.diag)) but right hand side has $m rows"))
+    (m == 0 || n == 0) && return B
     for j = 1:n
         for i = 1:m
             di = D.diag[i]
-            di==0 && throw(SingularException(i))
-            C[i,j] = A[i,j] / di
+            di == 0 && throw(SingularException(i))
+            B[i,j] /= di
         end
     end
-    return C
+    return B
 end
+\(D::Diagonal, B::StridedMatrix) = scale(1 ./ D.diag, B)
+\(D::Diagonal, b::StridedVector) = reshape(scale(1 ./ D.diag, reshape(b, length(b), 1)), length(b))
 \(Da::Diagonal, Db::Diagonal) = Diagonal(Db.diag ./ Da.diag)
 
 function inv{T}(D::Diagonal{T})
     Di = similar(D.diag)
     for i = 1:length(D.diag)
-        D.diag[i]==zero(T) && throw(SingularException(i))
-        Di[i]=inv(D.diag[i])
+        D.diag[i] == zero(T) && throw(SingularException(i))
+        Di[i] = inv(D.diag[i])
     end
     Diagonal(Di)
 end
