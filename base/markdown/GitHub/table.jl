@@ -35,7 +35,7 @@ function parsealign(row)
     return align
 end
 
-function github_table(stream::IO, md::MD, config::Config)
+function github_table(stream::IO, md::MD)
     withstream(stream) do
         skipblank(stream)
         rows = []

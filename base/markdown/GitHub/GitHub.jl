@@ -1,7 +1,7 @@
 include("table.jl")
 
 @breaking true ->
-function fencedcode(stream::IO, block::MD, config::Config)
+function fencedcode(stream::IO, block::MD)
     withstream(stream) do
         startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
         skip(stream, -2)
@@ -30,7 +30,7 @@ function fencedcode(stream::IO, block::MD, config::Config)
     end
 end
 
-function github_paragraph(stream::IO, md::MD, config::Config)
+function github_paragraph(stream::IO, md::MD)
     skipwhitespace(stream)
     buffer = IOBuffer()
     p = Paragraph()
