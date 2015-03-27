@@ -71,6 +71,12 @@ for T in (Int8, UInt8, Int16, UInt16, Int32, UInt32, Int64, UInt64, Int128, UInt
     end
 end
 
+@test !any([(Base.Random.maxmultiple(i)+i) > 0xFF for i in 0x00:0xFF])
+@test all([(Base.Random.maxmultiple(i)+1) % i for i in 0x01:0xFF] .== 0)
+@test all([(Base.Random.maxmultiple(i)+1+i) > 0xFF for i in 0x00:0xFF])
+@test length(0x00:0xFF)== Base.Random.maxmultiple(0x0)+1
+
+
 if sizeof(Int32) < sizeof(Int)
     r = rand(Int32(-1):typemax(Int32))
     @test typeof(r) == Int32
@@ -78,6 +84,9 @@ if sizeof(Int32) < sizeof(Int)
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(UInt64,1:k)).u for k in 13 .+ Int64(2).^(32:62)])
     @test all([div(0x00010000000000000000,k)*k - 1 == Base.Random.RangeGenerator(map(Int64,1:k)).u for k in 13 .+ Int64(2).^(32:61)])
 
+    @test Base.Random.maxmultiplemix(0x000100000000) === 0xffffffffffffffff
+    @test Base.Random.maxmultiplemix(0x0000FFFFFFFF) === 0x00000000fffffffe
+    @test Base.Random.maxmultiplemix(0x000000000000) === 0xffffffffffffffff
 end
 
 # BigInt specific
