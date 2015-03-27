@@ -93,9 +93,9 @@ void jl_init_serializer(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
-extern __JL_THREAD void *jl_stackbase;
+extern JL_THREAD void *jl_stackbase;
 #ifndef ASM_COPY_STACKS
-extern __JL_THREAD jl_jmp_buf jl_base_ctx;
+extern JL_THREAD jl_jmp_buf jl_base_ctx;
 #endif
 #endif
 

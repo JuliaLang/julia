@@ -62,10 +62,10 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 JL_DEFINE_MUTEX(codegen);
 
 // thread ID
-__JL_THREAD int16_t ti_tid = 0;
+JL_THREAD int16_t ti_tid = 0;
 
 // thread heap
-__JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
+JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
 struct _jl_thread_heap_t **jl_all_heaps;
 jl_gcframe_t ***jl_all_pgcstacks;
 jl_thread_task_state_t *jl_all_task_states;

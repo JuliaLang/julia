@@ -21,12 +21,12 @@ extern "C" {
 #  else
 #    define MAX_ALIGN sizeof(void*)
 #  endif
-#  define __JL_THREAD __thread
+#  define JL_THREAD __thread
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
-#  define __JL_THREAD __declspec(thread)
+#  define JL_THREAD __declspec(thread)
 #endif
 
 #ifdef _P64
@@ -1023,7 +1023,7 @@ typedef struct _jl_gcframe_t {
 // jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
 // x = f(); y = g(); foo(x, y)
 
-extern DLLEXPORT __JL_THREAD jl_gcframe_t *jl_pgcstack;
+extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
 
 #define JL_GC_PUSH(...)                                                   \
   void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
@@ -1259,10 +1259,10 @@ typedef struct {
     jl_value_t **ptask_arg_in_transit;
 } jl_thread_task_state_t;
 
-extern DLLEXPORT __JL_THREAD jl_task_t *jl_current_task;
-extern DLLEXPORT __JL_THREAD jl_task_t *jl_root_task;
-extern DLLEXPORT __JL_THREAD jl_value_t *jl_exception_in_transit;
-extern DLLEXPORT __JL_THREAD jl_value_t *jl_task_arg_in_transit;
+extern DLLEXPORT JL_THREAD jl_task_t *jl_current_task;
+extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
+extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
+extern DLLEXPORT JL_THREAD jl_value_t *jl_task_arg_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
