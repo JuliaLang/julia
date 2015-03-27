@@ -143,26 +143,26 @@ extern size_t jl_page_size;
 jl_datatype_t *jl_task_type;
 
 #ifdef JL_GC_MARKSWEEP
-__JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
+JL_THREAD jl_gcframe_t *jl_pgcstack = NULL;
 #endif
 
-DLLEXPORT __JL_THREAD jl_task_t *jl_current_task;
-DLLEXPORT __JL_THREAD jl_task_t *jl_root_task;
-DLLEXPORT __JL_THREAD jl_value_t *jl_task_arg_in_transit;
-DLLEXPORT __JL_THREAD jl_value_t *jl_exception_in_transit;
+DLLEXPORT JL_THREAD jl_task_t *jl_current_task;
+DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
+DLLEXPORT JL_THREAD jl_value_t *jl_task_arg_in_transit;
+DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
 
 static void start_task();
 
 #ifdef COPY_STACKS
-__JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
+JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
 #if defined(_CPU_X86_64_) || defined(_CPU_X86_)
 #define ASM_COPY_STACKS
 #endif
-__JL_THREAD void *jl_stackbase;
+JL_THREAD void *jl_stackbase;
 
 #ifndef ASM_COPY_STACKS
-__JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
+JL_THREAD jl_jmp_buf jl_base_ctx; // base context of stack
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
