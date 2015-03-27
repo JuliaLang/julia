@@ -16,14 +16,15 @@ function eigs(A, B;
     isgeneral = B !== I
     sym = issym(A) && !iscmplx
     nevmax=sym ? n-1 : n-2
+    nevmax > 0 || throw(ArgumentError("Input matrix A is too small. Use eigfact instead."))
     if nev > nevmax
+        warn("Adjusting nev from $nev to $nevmax")
         nev = nevmax
-        warn("nev should be at most $nevmax")
     end
-    nev > 0 || throw(ArgumentError("requested number of eigen values (nev) must be ≥ 1, got $nev"))
+    nev > 0 || throw(ArgumentError("requested number of eigenvalues (nev) must be ≥ 1, got $nev"))
     ncvmin = nev + (sym ? 1 : 2)
     if ncv < ncvmin
-        warn("ncv should be at least $ncvmin")
+        warn("Adjusting ncv from $ncv to $ncvmin")
         ncv = ncvmin
     end
     ncv = blas_int(min(ncv, n))
@@ -87,7 +88,7 @@ function eigs(A, B;
             F = factorize(sigma==zero(T) ? A : A - UniformScaling(sigma))
             solveSI(x) = F \ x
         end
-    else                    # Generalized eigen problem
+    else                    # Generalized eigenproblem
         matvecB(x) = B * x
         if !isshift         #    Regular inverse mode
             mode       = 2
