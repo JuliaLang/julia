@@ -21,12 +21,10 @@ extern "C" {
 #  else
 #    define MAX_ALIGN sizeof(void*)
 #  endif
-#  define JL_THREAD __thread
 #else
 #  define jl_jmp_buf jmp_buf
 #  include <malloc.h> //for _resetstkoflw
 #  define MAX_ALIGN 8
-#  define JL_THREAD __declspec(thread)
 #endif
 
 #ifdef _P64
@@ -51,6 +49,104 @@ extern "C" {
 #define JL_ATTRIBUTE_ALIGN_PTRSIZE(x) x __attribute__ ((aligned (sizeof(void*))))
 #else
 #define JL_ATTRIBUTE_ALIGN_PTRSIZE(x)
+#endif
+
+// threading ------------------------------------------------------------------
+
+// WARNING: Threading support is incomplete.  Changing the 1 to a 0 will break Julia.
+// Nonetheless, we define JL_THREAD and use it to give advanced notice to maintainers
+// of what eventual threading support will change.
+#if 0
+// Definition for compiling non-thread-safe Julia.
+#  define JL_THREAD
+#elif !defined(_OS_WINDOWS_)
+// Definition for compiling Julia on platforms with GCC __thread.
+#  define JL_THREAD __thread
+#else
+// Definition for compiling Julia on Windows
+#  define JL_THREAD __declspec(thread)
+#endif
+
+DLLEXPORT int16_t jl_threadid(void);
+DLLEXPORT void *jl_threadgroup(void);
+DLLEXPORT void jl_cpu_pause(void);
+DLLEXPORT void jl_threading_profile();
+
+#if __GNUC__
+#  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
+       __sync_fetch_and_add(&(a), (b))
+#  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
+       __sync_bool_compare_and_swap(&(a), (b), (c)) 
+#  define JL_ATOMIC_TEST_AND_SET(a)                                       \
+       __sync_lock_test_and_set(&(a), 1)
+#  define JL_ATOMIC_RELEASE(a)                                            \
+       __sync_lock_release(&(a))
+#elif _WIN32
+#  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
+       _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
+#  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
+       _InterlockedCompareExchange64(&(a), (c), (b)) 
+#  define JL_ATOMIC_TEST_AND_SET(a)                                       \
+       _InterlockedExchange64(&(a), 1)
+#  define JL_ATOMIC_RELEASE(a)                                            \
+       _InterlockedExchange64(&(a), 0)
+#else
+#  error "No atomic operations supported."
+#endif
+
+#if 0
+#define JL_DEFINE_MUTEX(m)                                                \
+    uv_mutex_t m ## _mutex;                                               \
+    uint64_t m ## _thread_id = -1;
+
+#define JL_DEFINE_MUTEX_EXT(m)                                            \
+    extern uv_mutex_t m ## _mutex;                                        \
+    extern uint64_t m ## _thread_id;
+
+#define JL_LOCK(m)                                                        \
+    int m ## locked = 0;                                                  \
+    if (m ## _thread_id != uv_thread_self()) {                            \
+        uv_mutex_lock(&m ## _mutex);                                      \
+        m ## locked = 1;                                                  \
+        m ## _thread_id = uv_thread_self();                               \
+    }
+
+#define JL_UNLOCK(m)                                                      \
+    if (m ## locked) {                                                    \
+        m ## _thread_id = -1;                                             \
+        m ## locked = 0;                                                  \
+        uv_mutex_unlock(&m ## _mutex);                                    \
+    }
+#else
+#define JL_DEFINE_MUTEX(m)                                                \
+    uint64_t volatile m ## _mutex = 0;                                    \
+    int32_t m ## _lock_count = 0;
+
+#define JL_DEFINE_MUTEX_EXT(m)                                            \
+    extern uint64_t volatile m ## _mutex;                                 \
+    extern int32_t m ## _lock_count;
+
+#define JL_LOCK(m)                                                        \
+    if (m ## _mutex == uv_thread_self())                                  \
+        ++m ## _lock_count;                                               \
+    else {                                                                \
+        for (; ;) {                                                       \
+            if (m ## _mutex == 0 &&                                       \
+                    JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, 0,            \
+                                               uv_thread_self())) {       \
+                m ## _lock_count = 1;                                     \
+                break;                                                    \
+            }                                                             \
+            jl_cpu_pause();                                               \
+        }                                                                 \
+    }
+
+#define JL_UNLOCK(m)                                                      \
+    if (m ## _mutex == uv_thread_self()) {                                \
+        --m ## _lock_count;                                               \
+        if (m ## _lock_count == 0)                                        \
+            JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
+    }
 #endif
 
 // core data types ------------------------------------------------------------
@@ -1104,91 +1200,6 @@ STATIC_INLINE void *alloc_3w() { return allocobj(3*sizeof(void*)); }
 STATIC_INLINE void *alloc_4w() { return allocobj(4*sizeof(void*)); }
 #define allocb(nb)    malloc(nb)
 #define allocobj(nb)  malloc(nb)
-#endif
-
-// threading ------------------------------------------------------------------
-
-DLLEXPORT int16_t jl_threadid(void);
-DLLEXPORT void *jl_threadgroup(void);
-DLLEXPORT void jl_cpu_pause(void);
-DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *fun, jl_tuple_t *args);
-DLLEXPORT void jl_threading_profile();
-
-#if __GNUC__
-#  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
-       __sync_fetch_and_add(&(a), (b))
-#  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       __sync_bool_compare_and_swap(&(a), (b), (c)) 
-#  define JL_ATOMIC_TEST_AND_SET(a)                                       \
-       __sync_lock_test_and_set(&(a), 1)
-#  define JL_ATOMIC_RELEASE(a)                                            \
-       __sync_lock_release(&(a))
-#elif _WIN32
-#  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
-       _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
-#  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       _InterlockedCompareExchange64(&(a), (c), (b)) 
-#  define JL_ATOMIC_TEST_AND_SET(a)                                       \
-       _InterlockedExchange64(&(a), 1)
-#  define JL_ATOMIC_RELEASE(a)                                            \
-       _InterlockedExchange64(&(a), 0)
-#else
-#  error "No atomic operations supported."
-#endif
-
-#if 0
-#define JL_DEFINE_MUTEX(m)                                                \
-    uv_mutex_t m ## _mutex;                                               \
-    uint64_t m ## _thread_id = -1;
-
-#define JL_DEFINE_MUTEX_EXT(m)                                            \
-    extern uv_mutex_t m ## _mutex;                                        \
-    extern uint64_t m ## _thread_id;
-
-#define JL_LOCK(m)                                                        \
-    int m ## locked = 0;                                                  \
-    if (m ## _thread_id != uv_thread_self()) {                            \
-        uv_mutex_lock(&m ## _mutex);                                      \
-        m ## locked = 1;                                                  \
-        m ## _thread_id = uv_thread_self();                               \
-    }
-
-#define JL_UNLOCK(m)                                                      \
-    if (m ## locked) {                                                    \
-        m ## _thread_id = -1;                                             \
-        m ## locked = 0;                                                  \
-        uv_mutex_unlock(&m ## _mutex);                                    \
-    }
-#else
-#define JL_DEFINE_MUTEX(m)                                                \
-    uint64_t volatile m ## _mutex = 0;                                    \
-    int32_t m ## _lock_count = 0;
-
-#define JL_DEFINE_MUTEX_EXT(m)                                            \
-    extern uint64_t volatile m ## _mutex;                                 \
-    extern int32_t m ## _lock_count;
-
-#define JL_LOCK(m)                                                        \
-    if (m ## _mutex == uv_thread_self())                                  \
-        ++m ## _lock_count;                                               \
-    else {                                                                \
-        for (; ;) {                                                       \
-            if (m ## _mutex == 0 &&                                       \
-                    JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, 0,            \
-                                               uv_thread_self())) {       \
-                m ## _lock_count = 1;                                     \
-                break;                                                    \
-            }                                                             \
-            jl_cpu_pause();                                               \
-        }                                                                 \
-    }
-
-#define JL_UNLOCK(m)                                                      \
-    if (m ## _mutex == uv_thread_self()) {                                \
-        --m ## _lock_count;                                               \
-        if (m ## _lock_count == 0)                                        \
-            JL_ATOMIC_COMPARE_AND_SWAP(m ## _mutex, uv_thread_self(), 0); \
-    }
 #endif
 
 // async signal handling ------------------------------------------------------

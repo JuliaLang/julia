@@ -356,7 +356,7 @@ void jl_cpu_pause()
 
 // interface to user code: specialize and compile the user thread function
 // and run it in all threads
-jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
+DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
 {
 #if PROFILE_JL_THREADING
     uint64_t tstart = rdtsc();
