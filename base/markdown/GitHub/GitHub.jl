@@ -48,7 +48,7 @@ function github_paragraph(stream::IO, md::MD, config::Config)
             write(buffer, char)
         end
     end
-    p.content = parseinline(seek(buffer, 0), config)
+    p.content = parseinline(seek(buffer, 0), md)
     return true
 end
 

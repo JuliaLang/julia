@@ -50,7 +50,7 @@ function github_table(stream::IO, md::MD, config::Config)
                 align = parsealign(row)
                 (align == nothing || length(align) != cols) && return false
             else
-                push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
+                push!(rows, map(x -> parseinline(x, md), rowlength!(row, cols)))
             end
         end
         length(rows) <= 1 && return false
