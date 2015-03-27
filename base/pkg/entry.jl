@@ -618,7 +618,7 @@ function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
         pkg == "julia" && continue
         pkg in seen && continue
         build!(Read.requires_list(pkg),errs,push!(seen,pkg))
-        Read.isinstalled(pkg) || error("$pkg is not a package (not registered or installed)")
+        Read.isinstalled(pkg) || error("$pkg is not an installed package")
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
         info("Building $pkg")
