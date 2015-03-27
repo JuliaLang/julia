@@ -16,7 +16,7 @@ function interpinner(stream::IO, greedy = false)
 end
 
 @trigger '$' ->
-function interp(stream::IO)
+function interp(stream::IO, md::MD)
     withstream(stream) do
         ex = interpinner(stream)
         return ex

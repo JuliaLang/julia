@@ -25,7 +25,7 @@ function paragraph(stream::IO, md::MD, config::Config)
             write(buffer, char)
         end
     end
-    p.content = parseinline(seek(buffer, 0), config)
+    p.content = parseinline(seek(buffer, 0), md)
     return true
 end
 
@@ -58,7 +58,7 @@ function hashheader(stream::IO, md::MD, config::Config)
             h = match(r"(.*?)( +#+)?$", h).captures[1]
             buffer = IOBuffer()
             print(buffer, h)
-            push!(md.content, Header(parseinline(seek(buffer, 0), config), level))
+            push!(md.content, Header(parseinline(seek(buffer, 0), md), level))
         else
             push!(md.content, Header("", level))
         end
@@ -80,7 +80,7 @@ function setextheader(stream::IO, md::MD, config::Config)
         all(c -> c == u, underline) || return false
         level = (u == '=') ? 1 : 2
 
-        push!(md.content, Header(parseinline(header, config), level))
+        push!(md.content, Header(parseinline(header, md), level))
         return true
     end
 end
@@ -180,7 +180,7 @@ function list(stream::IO, block::MD, config::Config)
             if fresh_line
                 sp = startswith(stream, r"^ {0,3}")
                 if !(startswith(stream, b) in [false, ""])
-                    push!(the_list.items, parseinline(takebuf_string(buffer), config))
+                    push!(the_list.items, parseinline(takebuf_string(buffer), block))
                     buffer = IOBuffer()
                 else
                     # TODO write a newline here, and deal with nested
@@ -202,7 +202,7 @@ function list(stream::IO, block::MD, config::Config)
                 end
             end
         end
-        push!(the_list.items, parseinline(takebuf_string(buffer), config))
+        push!(the_list.items, parseinline(takebuf_string(buffer), block))
         push!(block, the_list)
         return true
     end
