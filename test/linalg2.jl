@@ -215,9 +215,9 @@ for elty in (Float32, Float64, Complex64, Complex128)
 end
 
 # Tests norms
-nnorm = 1000
-mmat = 100
-nmat = 80
+nnorm = 10
+mmat = 10
+nmat = 8
 for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
     debug && println(elty)
 
