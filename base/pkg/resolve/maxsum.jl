@@ -21,7 +21,7 @@ type MaxSumParams
                  # step
 
     function MaxSumParams()
-        accuracy = int(get(ENV, "JULIA_PKGRESOLVE_ACCURACY", 1))
+        accuracy = parse(Int,get(ENV, "JULIA_PKGRESOLVE_ACCURACY", "1"))
         if accuracy <= 0
             error("JULIA_PKGRESOLVE_ACCURACY must be >= 1")
         end
@@ -148,7 +148,7 @@ type Graph
             end
         end
 
-        perm = [1:np]
+        perm = [1:np;]
 
         return new(gadj, gmsk, gdir, adjdict, spp, perm, np)
     end
@@ -186,7 +186,7 @@ type Messages
         # a "deterministic noise" function based on hashes
         function noise(p0::Int, v0::Int)
             s = pkgs[p0] * string(v0 == spp[p0] ? "UNINST" : pvers[p0][v0])
-            int128(hash(s))
+            Int128(hash(s))
         end
 
         # external fields: there are 2 terms, a noise to break potential symmetries

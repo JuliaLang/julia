@@ -172,7 +172,7 @@ function ndigits0z(x::UInt128)
         x = div(x,0x8ac7230489e80000)
         n += 19
     end
-    return n + ndigits0z(uint64(x))
+    return n + ndigits0z(UInt64(x))
 end
 ndigits0z(x::Integer) = ndigits0z(unsigned(abs(x)))
 
@@ -208,14 +208,14 @@ function ndigits0z(n::Unsigned, b::Int)
     end
     return d
 end
-ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),int(b))
+ndigits0z(x::Integer, b::Integer) = ndigits0z(unsigned(abs(x)),Int(b))
 
 ndigitsnb(x::Integer, b::Integer) = x==0 ? 1 : ndigits0znb(x, b)
 
-ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,int(b))
+ndigits(x::Unsigned, b::Integer) = x==0 ? 1 : ndigits0z(x,Int(b))
 ndigits(x::Unsigned)             = x==0 ? 1 : ndigits0z(x)
 
-ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),int(b)) : ndigitsnb(x, b)
+ndigits(x::Integer, b::Integer) = b >= 0 ? ndigits(unsigned(abs(x)),Int(b)) : ndigitsnb(x, b)
 ndigits(x::Integer) = ndigits(unsigned(abs(x)))
 
 ## integer to string functions ##
@@ -271,8 +271,8 @@ end
 
 num2hex(n::Integer) = hex(n, sizeof(n)*2)
 
-const base36digits = ['0':'9','a':'z']
-const base62digits = ['0':'9','A':'Z','a':'z']
+const base36digits = ['0':'9';'a':'z']
+const base62digits = ['0':'9';'A':'Z';'a':'z']
 
 function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     2 <= b <= 62 || throw(ArgumentError("base must be 2 ≤ base ≤ 62, got $b"))
@@ -287,7 +287,7 @@ function base(b::Int, x::Unsigned, pad::Int, neg::Bool)
     if neg; a[1]='-'; end
     ASCIIString(a)
 end
-base(b::Integer, n::Integer, pad::Integer=1) = base(int(b), unsigned(abs(n)), pad, n<0)
+base(b::Integer, n::Integer, pad::Integer=1) = base(Int(b), unsigned(abs(n)), pad, n<0)
 
 for sym in (:bin, :oct, :dec, :hex)
     @eval begin
@@ -332,4 +332,42 @@ function isqrt(x::Union(Int64,UInt64,Int128,UInt128))
     # too many bits.
     s = (s + div(x,s)) >> 1
     s*s > x ? s-1 : s
+end
+
+function factorial(n::Integer)
+    n < 0 && throw(DomainError())
+    local f::typeof(n*n), i::typeof(n*n)
+    f = 1
+    for i = 2:n
+        f *= i
+    end
+    return f
+end
+
+function binomial{T<:Integer}(n::T, k::T)
+    k < 0 && return zero(T)
+    sgn = one(T)
+    if n < 0
+        n = -n + k -1
+        if isodd(k)
+            sgn = -sgn
+        end
+    end
+    k > n && return zero(T)
+    (k == 0 || k == n) && return sgn
+    k == 1 && return sgn*n
+    if k > (n>>1)
+        k = (n - k)
+    end
+    x::T = nn = n - k + 1
+    nn += 1
+    rr = 2
+    while rr <= k
+        xt = div(widemul(x, nn), rr)
+        x = xt
+        x == xt || throw(OverflowError())
+        rr += 1
+        nn += 1
+    end
+    convert(T, copysign(x, sgn))
 end

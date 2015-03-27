@@ -97,11 +97,13 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
         print(io, key)
         print(io, " => ")
 
-        val = sprint(show, v)
         if limit
+            val = with_output_limit(()->sprint(show, v))
             val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(io, v)
         end
-        print(io, val)
     end
 end
 
@@ -135,16 +137,20 @@ function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Boo
         print(io, "\n  ")
         limit && i >= rows && (print(io, "⋮"); break)
 
-        str = sprint(show, v)
-        limit && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
-        print(io, str)
+        if limit
+            str = with_output_limit(()->sprint(show, v))
+            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            print(io, str)
+        else
+            show(io, v)
+        end
     end
 end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
 isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
-eltype(v::KeyIterator) = eltype(v.dict)[1]
-eltype(v::ValueIterator) = eltype(v.dict)[2]
+eltype{D}(::Type{KeyIterator{D}}) = eltype(D)[1]
+eltype{D}(::Type{ValueIterator{D}}) = eltype(D)[2]
 
 start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
 done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
@@ -191,7 +197,7 @@ function merge(d::Associative, others::Associative...)
     merge!(Dict{K,V}(), d, others...)
 end
 
-function filter!(f::Function, d::Associative)
+function filter!(f, d::Associative)
     for (k,v) in d
         if !f(k,v)
             delete!(d,k)
@@ -199,9 +205,9 @@ function filter!(f::Function, d::Associative)
     end
     return d
 end
-filter(f::Function, d::Associative) = filter!(f,copy(d))
+filter(f, d::Associative) = filter!(f,copy(d))
 
-eltype{K,V}(a::Associative{K,V}) = (K,V)
+eltype{K,V}(::Type{Associative{K,V}}) = (K,V)
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
@@ -397,7 +403,7 @@ convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
-    write(s, int32(length(t)))
+    write(s, Int32(length(t)))
     for (k,v) in t
         serialize(s, k)
         serialize(s, v)

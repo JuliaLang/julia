@@ -6,7 +6,7 @@ let x = ((realmax(1.0)/4)*3)
     @test middle(x, x) === x
 end
 @test middle(1:8) === 4.5
-@test middle([1:8]) === 4.5
+@test middle([1:8;]) === 4.5
 
 # ensure type-correctness
 for T in [Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128,Float16,Float32,Float64]
@@ -121,7 +121,7 @@ function safe_cov(x, y, zm::Bool, cr::Bool)
         x = x .- mean(x)
         y = y .- mean(y)
     end
-    dot(vec(x), vec(y)) / (n - int(cr))
+    dot(vec(x), vec(y)) / (n - Int(cr))
 end
 
 X = [1. 2. 3. 4. 5.; 5. 4. 6. 2. 1.]'
@@ -252,19 +252,18 @@ end
 @test hist([1])[2] == [1]
 @test hist([1,2,3],[0,2,4]) == ([0,2,4],[2,1])
 @test hist([1,2,3],0:2:4) == (0:2:4,[2,1])
-@test all(hist([1:100]/100,0.0:0.01:1.0)[2] .==1)
+@test all(hist([1:100;]/100,0.0:0.01:1.0)[2] .==1)
 @test hist([1,1,1,1,1])[2][1] == 5
 @test sum(hist2d(rand(100, 2))[3]) == 100
 @test hist([1 2 3 4;1 2 3 4]) == (0.0:2.0:4.0, [2 2 0 0; 0 0 2 2])
 
 @test midpoints(1.0:1.0:10.0) == 1.5:1.0:9.5
 @test midpoints(1:10) == 1.5:9.5
-@test midpoints(Float64[1.0:1.0:10.0]) == Float64[1.5:1.0:9.5]
+@test midpoints(Float64[1.0:1.0:10.0;]) == Float64[1.5:1.0:9.5;]
 
 @test quantile([1,2,3,4],0.5) == 2.5
 @test quantile([1., 3],[.25,.5,.75])[2] == median([1., 3])
-@test quantile([0.:100.],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
-
+@test quantile([0.:100.;],[.1,.2,.3,.4,.5,.6,.7,.8,.9])[1] == 10.0
 
 # test invalid hist nbins argument (#9999)
 @test_throws ArgumentError hist(Int[], -1)
@@ -273,3 +272,14 @@ end
 @test_throws ArgumentError hist([1,2,3], 0)
 @test_throws ArgumentError hist([1.0,2.0,3.0], -1)
 @test_throws ArgumentError hist([1.0,2.0,3.0], 0)
+
+@test histrange([1, 2, 3, 4], 4) == 0.0:1.0:4.0
+@test histrange([1, 2, 2, 4], 4) == 0.0:1.0:4.0
+@test histrange([1, 10], 4) == 0.0:5.0:10.0
+@test histrange([1, 20], 4) == 0.0:5.0:20.0
+@test histrange([1, 600], 4) == 0.0:200.0:600.0
+@test histrange([1, -1000], 4) == -1500.0:500.0:500.0
+
+@test_throws ArgumentError histrange([1, 10], 0)
+@test_throws ArgumentError histrange([1, 10], -1)
+

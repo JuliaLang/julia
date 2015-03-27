@@ -21,7 +21,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: \\(A, B)
    :noindex:
 
-   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor. For sparse, square ``A`` the LU factorization (from UMFPACK) is used.
+   Matrix division using a polyalgorithm. For input matrices ``A`` and ``B``, the result ``X`` is such that ``A*X == B`` when ``A`` is square.  The solver that is used depends upon the structure of ``A``.  A direct solver is used for upper- or lower triangular ``A``.  For Hermitian ``A`` (equivalent to symmetric ``A`` for non-complex ``A``) the ``BunchKaufman`` factorization is used.  Otherwise an LU factorization is used. For rectangular ``A`` the result is the minimum-norm least squares solution computed by a pivoted QR factorization of ``A`` and a rank estimate of A based on the R factor.
+
+   When ``A`` is sparse, a similar polyalgorithm is used. For indefinite matrices, the LDLt factorization does not use pivoting during the numerical factorization and therefore the procedure can fail even for invertible matrices.
 
 .. function:: dot(x, y)
               ⋅(x,y)
@@ -89,9 +91,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute the Cholesky factorization of a dense symmetric positive (semi)definite matrix ``A`` and return either a ``Cholesky`` if ``pivot==Val{false}`` or ``CholeskyPivoted`` if ``pivot==Val{true}``. ``LU`` may be ``:L`` for using the lower part or ``:U`` for the upper part. The default is to use ``:U``. The triangular matrix can be obtained from the factorization ``F`` with: ``F[:L]`` and ``F[:U]``. The following functions are available for ``Cholesky`` objects: ``size``, ``\``, ``inv``, ``det``. For ``CholeskyPivoted`` there is also defined a ``rank``. If ``pivot==Val{false}`` a ``PosDefException`` exception is thrown in case the matrix is not positive definite. The argument ``tol`` determines the tolerance for determining the rank. For negative values, the tolerance is the machine precision.
 
-.. function:: cholfact(A, [ll]) -> CholmodFactor
+.. function:: cholfact(A) -> CHOLMOD.Factor
 
-   Compute the sparse Cholesky factorization of a sparse matrix ``A``.  If ``A`` is Hermitian its Cholesky factor is determined.  If ``A`` is not Hermitian the Cholesky factor of ``A*A'`` is determined. A fill-reducing permutation is used.  Methods for ``size``, ``solve``, ``\``, ``findn_nzs``, ``diag``, ``det`` and ``logdet`` are available for ``CholmodFactor`` objects.  One of the solve methods includes an integer argument that can be used to solve systems involving parts of the factorization only.  The optional boolean argument, ``ll`` determines whether the factorization returned is of the ``A[p,p] = L*L'`` form, where ``L`` is lower triangular or ``A[p,p] = L*Diagonal(D)*L'`` form where ``L`` is unit lower triangular and ``D`` is a non-negative vector.  The default is LDL. The symbolic factorization can also be reused for other matrices with the same structure as ``A`` by calling ``cholfact!``.
+   Compute the Cholesky factorization of a sparse positive definite matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 .. function:: cholfact!(A [,LU=:U [,pivot=Val{false}]][;tol=-1.0]) -> Cholesky
 
@@ -100,6 +102,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: ldltfact(A) -> LDLtFactorization
 
    Compute a factorization of a positive definite matrix ``A`` such that ``A=L*Diagonal(d)*L'`` where ``L`` is a unit lower triangular matrix and ``d`` is a vector with non-negative elements.
+
+.. function:: ldltfact(A) -> CHOLMOD.Factor
+
+   Compute the LDLt factorization of a sparse symmetric or Hermitian matrix ``A``. A fill-reducing permutation is used.  The main application of this type is to solve systems of equations with ``\``, but also the methods ``diag``, ``det``, ``logdet`` are defined. The function calls the C library CHOLMOD and many other functions from the library are wrapped but not exported.
 
 .. function:: qr(A [,pivot=Val{false}][;thin=true]) -> Q, R, [p]
 
@@ -157,9 +163,13 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    .. [Bischof1987] C Bischof and C Van Loan, The WY representation for products of Householder matrices, SIAM J Sci Stat Comput 8 (1987), s2-s13. doi:10.1137/0908009
    .. [Schreiber1989] R Schreiber and C Van Loan, A storage-efficient WY representation for products of Householder transformations, SIAM J Sci Stat Comput 10 (1989), 53-57. doi:10.1137/0910005
 
+.. function:: qrfact(A) -> SPQR.Factorization
+
+   Compute the QR factorization of a sparse matrix ``A``. A fill-reducing permutation is used. The main application of this type is to solve least squares problems with ``\``. The function calls the C library SPQR and a few additional functions from the library are wrapped but not exported.
+
 .. function:: qrfact!(A [,pivot=Val{false}])
 
-   ``qrfact!`` is the same as :func:`qrfact`, but saves space by overwriting the input ``A``, instead of creating a copy.
+   ``qrfact!`` is the same as :func:`qrfact` when A is a subtype of ``StridedMatrix``, but saves space by overwriting the input ``A``, instead of creating a copy.
 
 .. function:: full(QRCompactWYQ[, thin=true]) -> Matrix
 

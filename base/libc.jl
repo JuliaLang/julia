@@ -1,8 +1,69 @@
+module Libc
+
+export FILE, TmStruct, strftime, strptime, getpid, gethostname, free, malloc, calloc, realloc,
+    errno, strerror, flush_cstdio, systemsleep, time,
+    MS_ASYNC, MS_INVALIDATE, MS_SYNC, mmap, munmap, msync
+
+include("errno.jl")
+
+## RawFD ##
+
+#Wrapper for an OS file descriptor (on both Unix and Windows)
+immutable RawFD
+    fd::Int32
+    RawFD(fd::Integer) = new(fd)
+    RawFD(fd::RawFD) = fd
+end
+
+Base.convert(::Type{Int32}, fd::RawFD) = fd.fd
+
+dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
+dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
+    ccall((@windows? :_dup2 : :dup2),Int32,
+    (Int32,Int32),src.fd,target.fd))
+
+## FILE ##
+
+immutable FILE
+    ptr::Ptr{Void}
+end
+
+modestr(s::IO) = modestr(isreadable(s), iswritable(s))
+modestr(r::Bool, w::Bool) = r ? (w ? "r+" : "r") : (w ? "w" : throw(ArgumentError("neither readable nor writable")))
+
+function FILE(fd, mode)
+    @unix_only FILEp = ccall(:fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
+    @windows_only FILEp = ccall(:_fdopen, Ptr{Void}, (Cint, Ptr{UInt8}), convert(Cint, fd), mode)
+    systemerror("fdopen", FILEp == C_NULL)
+    FILE(FILEp)
+end
+
+function FILE(s::IO)
+    f = FILE(dup(RawFD(fd(s))),modestr(s))
+    seek(f, position(s))
+    f
+end
+
+Base.unsafe_convert(T::Union(Type{Ptr{Void}},Type{Ptr{FILE}}), f::FILE) = convert(T, f.ptr)
+Base.close(f::FILE) = systemerror("fclose", ccall(:fclose, Cint, (Ptr{Void},), f.ptr) != 0)
+Base.convert(::Type{FILE}, s::IO) = FILE(s)
+
+function Base.seek(h::FILE, offset::Integer)
+    systemerror("fseek", ccall(:fseek, Cint, (Ptr{Void}, Clong, Cint),
+                               h.ptr, offset, 0) != 0)
+    h
+end
+
+Base.position(h::FILE) = ccall(:ftell, Clong, (Ptr{Void},), h.ptr)
+
+# flush C stdio output from external libraries
+flush_cstdio() = ccall(:jl_flush_cstdio, Void, ())
+
 ## time-related functions ##
 
 # TODO: check for usleep errors?
 @unix_only systemsleep(s::Real) = ccall(:usleep, Int32, (UInt32,), round(UInt32,s*1e6))
-@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return int32(0))
+@windows_only systemsleep(s::Real) = (ccall(:Sleep, stdcall, Void, (UInt32,), round(UInt32,s*1e3)); return Int32(0))
 
 type TmStruct
     sec::Int32
@@ -28,7 +89,7 @@ type TmStruct
         t = floor(t)
         tm = TmStruct()
         # TODO: add support for UTC via gmtime_r()
-        ccall(:localtime_r, Ptr{Void}, (Ptr{Int}, Ptr{Void}), &t, &tm)
+        ccall(:localtime_r, Ptr{TmStruct}, (Ptr{Int}, Ptr{TmStruct}), &t, &tm)
         return tm
     end
 end
@@ -37,18 +98,18 @@ strftime(t) = strftime("%c", t)
 strftime(fmt::AbstractString, t::Real) = strftime(fmt, TmStruct(t))
 function strftime(fmt::AbstractString, tm::TmStruct)
     timestr = Array(UInt8, 128)
-    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{Void}),
+    n = ccall(:strftime, Int, (Ptr{UInt8}, Int, Ptr{UInt8}, Ptr{TmStruct}),
               timestr, length(timestr), fmt, &tm)
     if n == 0
         return ""
     end
-    bytestring(convert(Ptr{UInt8},timestr))
+    bytestring(pointer(timestr), n)
 end
 
 strptime(timestr::AbstractString) = strptime("%c", timestr)
 function strptime(fmt::AbstractString, timestr::AbstractString)
     tm = TmStruct()
-    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{Void}),
+    r = ccall(:strptime, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}, Ptr{TmStruct}),
               timestr, fmt, &tm)
     # the following would tell mktime() that this is a local time, and that
     # it should try to guess the timezone. not sure if/how this should be
@@ -62,13 +123,15 @@ function strptime(fmt::AbstractString, timestr::AbstractString)
         # if we didn't explicitly parse the weekday or year day, use mktime
         # to fill them in automatically.
         if !ismatch(r"([^%]|^)%(a|A|j|w|Ow)", fmt)
-            ccall(:mktime, Int, (Ptr{Void},), &tm)
+            ccall(:mktime, Int, (Ptr{TmStruct},), &tm)
         end
     end
     tm
 end
 
-time(tm::TmStruct) = float64(ccall(:mktime, Int, (Ptr{Void},), &tm))
+# system date in seconds
+time(tm::TmStruct) = Float64(ccall(:mktime, Int, (Ptr{TmStruct},), &tm))
+time() = ccall(:clock_now, Float64, ())
 
 ## process-related functions ##
 
@@ -81,12 +144,81 @@ function gethostname()
     @unix_only err=ccall(:gethostname, Int32, (Ptr{UInt8}, UInt), hn, length(hn))
     @windows_only err=ccall(:gethostname, stdcall, Int32, (Ptr{UInt8}, UInt32), hn, length(hn))
     systemerror("gethostname", err != 0)
-    bytestring(convert(Ptr{UInt8},hn))
+    bytestring(pointer(hn))
 end
+
+## system error handling ##
+
+errno() = ccall(:jl_errno, Cint, ())
+errno(e::Integer) = ccall(:jl_set_errno, Void, (Cint,), e)
+strerror(e::Integer) = bytestring(ccall(:strerror, Ptr{UInt8}, (Int32,), e))
+strerror() = strerror(errno())
 
 ## Memory related ##
 
-c_free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
-c_malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
-c_realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
-c_calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+free(p::Ptr) = ccall(:free, Void, (Ptr{Void},), p)
+malloc(size::Integer) = ccall(:malloc, Ptr{Void}, (Csize_t,), size)
+realloc(p::Ptr, size::Integer) = ccall(:realloc, Ptr{Void}, (Ptr{Void}, Csize_t), p, size)
+calloc(num::Integer, size::Integer) = ccall(:calloc, Ptr{Void}, (Csize_t, Csize_t), num, size)
+
+## mmap ##
+
+msync{T}(A::Array{T}) = msync(pointer(A), length(A)*sizeof(T))
+
+msync(B::BitArray) = msync(pointer(B.chunks), length(B.chunks)*sizeof(UInt64))
+
+@unix_only begin
+# Low-level routines
+# These are needed for things like MAP_ANONYMOUS
+function mmap(len::Integer, prot::Integer, flags::Integer, fd, offset::Integer)
+    const pagesize::Int = ccall(:jl_getpagesize, Clong, ())
+    # Check that none of the computations will overflow
+    if len < 0
+        throw(ArgumentError("requested size must be ≥ 0, got $len"))
+    end
+    if len > typemax(Int)-pagesize
+        throw(ArgumentError("requested size must be ≤ $(typemax(Int)-pagesize), got $len"))
+    end
+    # Set the offset to a page boundary
+    offset_page::FileOffset = floor(Integer,offset/pagesize)*pagesize
+    len_page::Int = (offset-offset_page) + len
+    # Mmap the file
+    p = ccall(:jl_mmap, Ptr{Void}, (Ptr{Void}, Csize_t, Cint, Cint, Cint, FileOffset), C_NULL, len_page, prot, flags, fd, offset_page)
+    systemerror("memory mapping failed", reinterpret(Int,p) == -1)
+    # Also return a pointer that compensates for any adjustment in the offset
+    return p, Int(offset-offset_page)
+end
+
+function munmap(p::Ptr,len::Integer)
+    systemerror("munmap", ccall(:munmap,Cint,(Ptr{Void},Int),p,len) != 0)
+end
+
+const MS_ASYNC = 1
+const MS_INVALIDATE = 2
+const MS_SYNC = 4
+function msync(p::Ptr, len::Integer, flags::Integer)
+    systemerror("msync", ccall(:msync, Cint, (Ptr{Void}, Csize_t, Cint), p, len, flags) != 0)
+end
+msync(p::Ptr, len::Integer) = msync(p, len, MS_SYNC)
+end
+
+
+@windows_only begin
+function munmap(viewhandle::Ptr, mmaphandle::Ptr)
+    status = Bool(ccall(:UnmapViewOfFile, stdcall, Cint, (Ptr{Void},), viewhandle))
+    status |= Bool(ccall(:CloseHandle, stdcall, Cint, (Ptr{Void},), mmaphandle))
+    if !status
+        error("could not unmap view: $(FormatMessage())")
+    end
+end
+
+function msync(p::Ptr, len::Integer)
+    status = Bool(ccall(:FlushViewOfFile, stdcall, Cint, (Ptr{Void}, Csize_t), p, len))
+    if !status
+        error("could not msync: $(FormatMessage())")
+    end
+end
+
+end
+
+end # module

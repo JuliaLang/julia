@@ -392,6 +392,7 @@ but leaves expressions alone::
     julia> eval(ex)
     42
 
+.. _man-macros:
 
 Macros
 ------
@@ -728,8 +729,6 @@ following macro sets ``x`` to zero in the call environment::
 This kind of manipulation of variables should be used judiciously, but
 is occasionally quite handy.
 
-.. _man-non-standard-string-literals2:
-
 Code Generation
 ---------------
 
@@ -780,10 +779,10 @@ cause a compile-time error:
     julia> $a + b
     ERROR: unsupported or misplaced expression $
 
-.. _man-macros:
+.. _man-non-standard-string-literals2:
 
-Non-Standard AbstractString Literals
-------------------------------------
+Non-Standard String Literals
+----------------------------
 
 Recall from :ref:`Strings <man-non-standard-string-literals>` that
 string literals prefixed by an identifier are called non-standard string

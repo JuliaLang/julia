@@ -26,14 +26,14 @@ end
 n=12 #Size of matrix problem to test
 
 #Issue #7647: test xsyevr, xheevr, xstevr drivers
-for Mi7647 in (Symmetric(diagm([1.0:3.0])),
-               Hermitian(diagm([1.0:3.0])),
-               Hermitian(diagm(complex([1.0:3.0]))),
-               SymTridiagonal([1.0:3.0], zeros(2)))
+for Mi7647 in (Symmetric(diagm(1.0:3.0)),
+               Hermitian(diagm(1.0:3.0)),
+               Hermitian(diagm(complex(1.0:3.0))),
+               SymTridiagonal([1.0:3.0;], zeros(2)))
     debug && println("Eigenvalues in interval for $(typeof(Mi7647))")
     @test eigmin(Mi7647)  == eigvals(Mi7647, 0.5, 1.5)[1] == 1.0
     @test eigmax(Mi7647)  == eigvals(Mi7647, 2.5, 3.5)[1] == 3.0
-    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0]
+    @test eigvals(Mi7647) == eigvals(Mi7647, 0.5, 3.5) == [1.0:3.0;]
 end
 
 debug && println("Bidiagonal matrices")
@@ -66,14 +66,14 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
 
         debug && println("Linear solver")
         Tfull = full(T)
-        condT = cond(complex128(Tfull))
+        condT = cond(map(Complex128,Tfull))
         x = T \ b
         tx = Tfull \ b
         @test norm(x-tx,Inf) <= 4*condT*max(eps()*norm(tx,Inf), eps(relty)*norm(x,Inf))
 
         debug && println("Eigensystems")
         d1, v1 = eig(T)
-        d2, v2 = eig((elty<:Complex?complex128:float64)(Tfull))
+        d2, v2 = eig(map(elty<:Complex ? Complex128 : Float64,Tfull))
         @test_approx_eq isupper?d1:reverse(d1) d2
         if elty <: Real
             test_approx_eq_vecs(v1, isupper?v2:v2[:,n:-1:1])
@@ -89,7 +89,9 @@ for relty in (Float32, Float64, BigFloat), elty in (relty, Complex{relty})
                 test_approx_eq_vecs(u1, u2)
                 test_approx_eq_vecs(v1, v2)
             end
-            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1'-Tfull))
+            @test_approx_eq_eps 0 vecnorm(u2*diagm(d2)*v2'-Tfull) n*max(n^2*eps(relty), vecnorm(u1*diagm(d1)*v1' - Tfull))
+            @inferred svdvals(T)
+            @inferred svd(T)
         end
 
         debug && println("Binary operations")
@@ -165,7 +167,7 @@ end
 
 
 debug && println("Test interconversion between special matrix types")
-a=[1.0:n]
+a=[1.0:n;]
 A=Diagonal(a)
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, LowerTriangular, UpperTriangular, Matrix]
     debug && println("newtype is $(newtype)")
@@ -174,7 +176,7 @@ end
 
 for isupper in (true, false)
     debug && println("isupper is $(isupper)")
-    A=Bidiagonal(a, [1.0:n-1], isupper)
+    A=Bidiagonal(a, [1.0:n-1;], isupper)
     for newtype in [Bidiagonal, Tridiagonal, isupper ? UpperTriangular : LowerTriangular, Matrix]
         debug && println("newtype is $(newtype)")
         @test full(convert(newtype, A)) == full(A)
@@ -188,12 +190,12 @@ for isupper in (true, false)
     end
 end
 
-A = SymTridiagonal(a, [1.0:n-1])
+A = SymTridiagonal(a, [1.0:n-1;])
 for newtype in [Tridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end
 
-A = Tridiagonal(zeros(n-1), [1.0:n], zeros(n-1)) #morally Diagonal
+A = Tridiagonal(zeros(n-1), [1.0:n;], zeros(n-1)) #morally Diagonal
 for newtype in [Diagonal, Bidiagonal, SymTridiagonal, Matrix]
     @test full(convert(newtype, A)) == full(A)
 end

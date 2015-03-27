@@ -16,14 +16,14 @@ function interpinner(stream::IO, greedy = false)
 end
 
 @trigger '$' ->
-function interp(stream::IO)
+function interp(stream::IO, md::MD)
     withstream(stream) do
         ex = interpinner(stream)
         return ex
     end
 end
 
-function blockinterp(stream::IO, md::MD, config::Config)
+function blockinterp(stream::IO, md::MD)
     withstream(stream) do
         ex = interpinner(stream)
         if ex ≡ nothing
@@ -41,7 +41,7 @@ toexpr(xs::Vector{Any}) = Expr(:cell1d, map(toexpr, xs)...)
 
 function deftoexpr(T)
     @eval function toexpr(md::$T)
-        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), names(T))...))
+        Expr(:call, typeof(md), $(map(x->:(toexpr(md.$x)), fieldnames(T))...))
     end
 end
 

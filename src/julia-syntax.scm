@@ -622,7 +622,7 @@
                                    ,else)))
                           (if (null? restkw)
                               ;; if no rest kw, give error for unrecognized
-                              `(call (top error) "unrecognized keyword argument \"" ,elt  "\"")
+                              `(call (top kwerr) ,elt)
                               ;; otherwise add to rest keywords
                               `(ccall 'jl_cell_1d_push Void (tuple Any Any)
                                       ,rkw (tuple ,elt
@@ -994,20 +994,6 @@
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
 (define (lower-ccall name RT atypes args)
-  (define (ccall-conversion T x)
-    (cond ((eq? T 'Any)  x)
-          ((and (pair? x) (eq? (car x) '&))
-           `(& (call (top ptr_arg_convert) ,T ,(cadr x))))
-          (else
-           `(call (top cconvert) ,T ,x))))
-  (define (argument-root a)
-    ;; something to keep rooted for this argument
-    (cond ((and (pair? a) (eq? (car a) '&))
-           (argument-root (cadr a)))
-          ((and (pair? a) (sym-dot? a))
-           (cadr a))
-          ((symbol-like? a) a)
-          (else         0)))
   (let loop ((F atypes)  ;; formals
              (A args)    ;; actuals
              (stmts '()) ;; initializers
@@ -1019,28 +1005,16 @@
                 ,@A))
         (let* ((a     (car A))
                (isseq (and (pair? (car F)) (eq? (caar F) '...)))
-               (ty    (if isseq (cadar F) (car F)))
-               (rt (if (eq? ty 'Any)
-                       0
-                       (argument-root a)))
-               (ca (cond ((eq? ty 'Any)
-                          a)
-                         ((and (pair? a) (eq? (car a) '&))
-                          (if (and (pair? (cadr a)) (not (sym-dot? (cadr a))))
-                              (let ((g (make-jlgensym)))
-                                (begin
-                                  (set! stmts (cons `(= ,g ,(cadr a)) stmts))
-                                  `(& ,g)))
-                              a))
-                         ((and (pair? a) (not (sym-dot? a)) (not (quoted? a)))
-                          (let ((g (make-jlgensym)))
-                            (begin
-                              (set! stmts (cons `(= ,g ,a) stmts))
-                              g)))
-                         (else
-                          a))))
-          (loop (if isseq F (cdr F)) (cdr A) stmts
-                (list* rt (ccall-conversion ty ca) C))))))
+               (ty    (if isseq (cadar F) (car F))))
+          (if (eq? ty 'Any)
+            (loop (if isseq F (cdr F)) (cdr A) stmts (list* 0 a C))
+            (let* ((g (make-jlgensym))
+                   (isamp (and (pair? a) (eq? (car a) '&)))
+                   (a (if isamp (cadr a) a))
+                   (stmts (cons `(= ,g (call (top ,(if isamp 'ptr_arg_cconvert 'cconvert)) ,ty ,a)) stmts))
+                   (ca `(call (top ,(if isamp 'ptr_arg_unsafe_convert 'unsafe_convert)) ,ty ,g)))
+              (loop (if isseq F (cdr F)) (cdr A) stmts
+                    (list* g (if isamp `(& ,ca) ca) C))))))))
 
 (define (block-returns? e)
   (if (assignment? e)
@@ -1981,6 +1955,9 @@
          (error "invalid \":\" outside indexing"))
      `(call colon ,.(map expand-forms (cdr e))))
 
+   'vect
+   (lambda (e) (expand-forms `(call (top vect) ,@(cdr e))))
+
    'hcat
    (lambda (e) (expand-forms `(call hcat ,.(map expand-forms (cdr e)))))
 
@@ -2005,47 +1982,26 @@
              `(call vcat ,@a))))))
 
    'typed_hcat
-   (lambda (e)
-     (let ((t (cadr e))
-           (a (cddr e)))
-       (let ((result (make-jlgensym))
-             (ncols (length a)))
-         `(block
-           #;(if (call (top !) (call (top isa) ,t Type))
-           (call (top error) "invalid array index"))
-           (= ,result (call (top Array) ,(expand-forms t) 1 ,ncols))
-           ,.(map (lambda (x i) `(call (top setindex!) ,result
-                                       ,(expand-forms x) ,i))
-                  a (cdr (iota (+ ncols 1))))
-           ,result))))
+   (lambda (e) `(call (top typed_hcat) ,(expand-forms (cadr e)) ,.(map expand-forms (cddr e))))
 
    'typed_vcat
    (lambda (e)
      (let ((t (cadr e))
-           (rows (cddr e)))
-       (if (any (lambda (x) (not (and (pair? x) (eq? 'row (car x))))) rows)
-           (error "invalid array literal")
-           (let ((result (make-jlgensym))
-                 (nrows (length rows))
-                 (ncols (length (cdar rows))))
-             (if (any (lambda (x) (not (= (length (cdr x)) ncols))) rows)
-                 (error "invalid array literal")
-                 `(block
-                   #;(if (call (top !) (call (top isa) ,t Type))
-                   (call (top error) "invalid array index"))
-                   (= ,result (call (top Array) ,(expand-forms t) ,nrows ,ncols))
-                   ,.(apply nconc
-                            (map
-                             (lambda (row i)
-                               (map
-                                (lambda (x j)
-                                  `(call (top setindex!) ,result
-                                         ,(expand-forms x) ,i ,j))
-                                (cdr row)
-                                (cdr (iota (+ ncols 1)))))
-                             rows
-                             (cdr (iota (+ nrows 1)))))
-                   ,result))))))
+           (a (cddr e)))
+       (expand-forms
+        (if (any (lambda (x)
+             (and (pair? x) (eq? (car x) 'row)))
+           a)
+            ;; convert nested hcat inside vcat to hvcat
+            (let ((rows (map (lambda (x)
+                               (if (and (pair? x) (eq? (car x) 'row))
+                                   (cdr x)
+                                   (list x)))
+                             a)))
+              `(call (top typed_hvcat) ,t
+                     (tuple ,.(map length rows))
+                     ,.(apply append rows)))
+            `(call (top typed_vcat) ,t ,@a)))))
 
    '|'|  (lambda (e) `(call ctranspose ,(expand-forms (cadr e))))
    '|.'| (lambda (e) `(call  transpose ,(expand-forms (cadr e))))
@@ -3273,20 +3229,18 @@ So far only the second case can actually occur.
        (length= (cadr e) 2)   (eq? (caadr e) 'tuple)
        (vararg? (cadadr e))))
 
+(define (wrap-with-splice x)
+  `(call (top _expr) (inert $)
+	 (call (top _expr) (inert tuple)
+	       (call (top _expr) (inert |...|) ,x))))
+
 (define (julia-bq-bracket x d)
-  (cond ((splice-expr? x)
-	 (if (= d 0)
-	     (cadr (cadr (cadr x)))
-	     (list 'cell1d
-		   `(call (top _expr) (inert $)
-			  (call (top _expr) (inert tuple)
-				(call (top _expr) (inert |...|)
-				      ,(julia-bq-expand (cadr (cadr (cadr x))) (- d 1))))))))
-	((and (pair? x) (eq? (car x) '$))
-	 (if (= d 0)
-	     (list 'cell1d (cadr x))
-	     (list 'cell1d `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
-	(else  (list 'cell1d (julia-bq-expand x d)))))
+  (if (splice-expr? x)
+      (if (= d 0)
+	  (cadr (cadr (cadr x)))
+	  (list 'cell1d
+		(wrap-with-splice (julia-bq-expand (cadr (cadr (cadr x))) (- d 1)))))
+      (list 'cell1d (julia-bq-expand x d))))
 
 (define (julia-bq-expand x d)
   (cond ((or (eq? x 'true) (eq? x 'false))  x)
@@ -3297,10 +3251,13 @@ So far only the second case can actually occur.
         ((eq? (car x) '$)
 	 (if (and (= d 0) (length= x 2))
 	     (cadr x)
-	     `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1)))))
+	     (if (splice-expr? (cadr x))
+		 `(call (top splicedexpr) (inert $)
+			(call (top append_any) ,(julia-bq-bracket (cadr x) (- d 1))))
+		 `(call (top _expr) (inert $) ,(julia-bq-expand (cadr x) (- d 1))))))
         ((not (contains (lambda (e) (and (pair? e) (eq? (car e) '$))) x))
          `(copyast (inert ,x)))
-	((or (> d 0) (not (any splice-expr? x)))
+	((not (any splice-expr? x))
 	 `(call (top _expr) ,.(map (lambda (ex) (julia-bq-expand ex d)) x)))
 	(else
 	 (let loop ((p (cdr x)) (q '()))
@@ -3320,7 +3277,13 @@ So far only the second case can actually occur.
         ((eq? (car e) 'macrocall)
          ;; expand macro
          (let ((form
-                (apply invoke-julia-macro (cadr e) (cddr e))))
+		(if (and (length> e 2) (pair? (caddr e)) (eq? (caaddr e) 'triple_quoted_string))
+		    ;; for a custom triple-quoted string literal, first invoke mstr
+		    ;; to handle unindenting
+		    (apply invoke-julia-macro (cadr e)
+			   (julia-expand-macros `(macrocall @mstr ,(cadr (caddr e))))
+			   (cdddr e))
+		    (apply invoke-julia-macro (cadr e) (cddr e)))))
            (if (not form)
                (error (string "macro \"" (cadr e) "\" not defined")))
            (if (and (pair? form) (eq? (car form) 'error))

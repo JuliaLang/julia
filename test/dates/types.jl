@@ -50,31 +50,31 @@ test = Dates.Date(Dates.UTD(734869))
 
 # Test various input types for Date/DateTime
 test = Dates.Date(1,1,1)
-@test Dates.Date(int8(1),int8(1),int8(1)) == test
-@test Dates.Date(uint8(1),uint8(1),uint8(1)) == test
-@test Dates.Date(int16(1),int16(1),int16(1)) == test
-@test Dates.Date(uint8(1),uint8(1),uint8(1)) == test
-@test Dates.Date(int32(1),int32(1),int32(1)) == test
-@test Dates.Date(uint32(1),uint32(1),uint32(1)) == test
-@test Dates.Date(int64(1),int64(1),int64(1)) == test
+@test Dates.Date(Int8(1),Int8(1),Int8(1)) == test
+@test Dates.Date(UInt8(1),UInt8(1),UInt8(1)) == test
+@test Dates.Date(Int16(1),Int16(1),Int16(1)) == test
+@test Dates.Date(UInt8(1),UInt8(1),UInt8(1)) == test
+@test Dates.Date(Int32(1),Int32(1),Int32(1)) == test
+@test Dates.Date(UInt32(1),UInt32(1),UInt32(1)) == test
+@test Dates.Date(Int64(1),Int64(1),Int64(1)) == test
 @test Dates.Date('\x01','\x01','\x01') == test
 @test Dates.Date(true,true,true) == test
 @test_throws ArgumentError Dates.Date(false,true,false)
 @test Dates.Date(false,true,true) == test - Dates.Year(1)
 @test_throws ArgumentError Dates.Date(true,true,false)
-@test Dates.Date(uint64(1),uint64(1),uint64(1)) == test
-@test Dates.Date(-1,uint64(1),uint64(1)) == test - Dates.Year(2)
-@test Dates.Date(int128(1),int128(1),int128(1)) == test
-@test_throws InexactError Dates.Date(170141183460469231731687303715884105727,int128(1),int128(1))
-@test Dates.Date(uint128(1),uint128(1),uint128(1)) == test
+@test Dates.Date(UInt64(1),UInt64(1),UInt64(1)) == test
+@test Dates.Date(-1,UInt64(1),UInt64(1)) == test - Dates.Year(2)
+@test Dates.Date(Int128(1),Int128(1),Int128(1)) == test
+@test_throws InexactError Dates.Date(170141183460469231731687303715884105727,Int128(1),Int128(1))
+@test Dates.Date(UInt128(1),UInt128(1),UInt128(1)) == test
 @test Dates.Date(big(1),big(1),big(1)) == test
 @test Dates.Date(big(1),big(1),big(1)) == test
 # Potentially won't work if can't losslessly convert to Int64
 @test Dates.Date(BigFloat(1),BigFloat(1),BigFloat(1)) == test
 @test Dates.Date(complex(1),complex(1),complex(1)) == test
-@test Dates.Date(float64(1),float64(1),float64(1)) == test
-@test Dates.Date(float32(1),float32(1),float32(1)) == test
-@test Dates.Date(float16(1),float16(1),float16(1)) == test
+@test Dates.Date(Float64(1),Float64(1),Float64(1)) == test
+@test Dates.Date(Float32(1),Float32(1),Float32(1)) == test
+@test Dates.Date(Float16(1),Float16(1),Float16(1)) == test
 @test Dates.Date(Rational(1),Rational(1),Rational(1)) == test
 @test_throws InexactError Dates.Date(BigFloat(1.2),BigFloat(1),BigFloat(1))
 @test_throws InexactError Dates.Date(1 + im,complex(1),complex(1))

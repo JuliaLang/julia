@@ -2,7 +2,7 @@ module Pkg
 
 export Git, Dir, GitHub, Types, Reqs, Cache, Read, Query, Resolve, Write, Generate, Entry
 export dir, init, rm, add, available, installed, status, clone, checkout,
-       release, fix, update, resolve, register, tag, publish, generate, test,
+       update, resolve, register, tag, publish, generate, test,
        build, free, pin
 
 const DEFAULT_META = "git://github.com/JuliaLang/METADATA.jl"

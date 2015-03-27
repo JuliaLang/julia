@@ -10,7 +10,7 @@ function find_in_path(name::AbstractString)
         name = string(base,".jl")
         isfile(name) && return abspath(name)
     end
-    for prefix in [Pkg.dir(), LOAD_PATH]
+    for prefix in [Pkg.dir(); LOAD_PATH]
         path = joinpath(prefix, name)
         isfile(path) && return abspath(path)
         path = joinpath(prefix, base, "src", name)
@@ -59,7 +59,8 @@ end
 function _require(path)
     global toplevel_load
     if haskey(package_list,path)
-        wait(package_locks[path])
+        loaded, c = package_locks[path]
+        !loaded && wait(c)
     else
         last = toplevel_load
         toplevel_load = false
@@ -143,7 +144,7 @@ end
 function reload_path(path::AbstractString)
     had = haskey(package_list, path)
     if !had
-        package_locks[path] = RemoteRef()
+        package_locks[path] = (false, Condition())
     end
     package_list[path] = time()
     tls = task_local_storage()
@@ -158,8 +159,10 @@ function reload_path(path::AbstractString)
             tls[:SOURCE_PATH] = prev
         end
     end
-    if !isready(package_locks[path])
-        put!(package_locks[path],nothing)
+    reloaded, c = package_locks[path]
+    if !reloaded
+        package_locks[path] = (true, c)
+        notify(c, all=true)
     end
     nothing
 end

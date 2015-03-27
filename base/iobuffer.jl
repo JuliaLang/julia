@@ -51,6 +51,7 @@ IOBuffer() = IOBuffer(UInt8[], true, true)
 IOBuffer(maxsize::Int) = (x=IOBuffer(Array(UInt8,maxsize),true,true,maxsize); x.size=0; x)
 
 is_maxsize_unlimited(io::IOBuffer) = (io.maxsize == typemax(Int))
+maxsize(io::IOBuffer) = io.maxsize
 
 read!(from::IOBuffer, a::Array) = read_sub(from, a, 1, length(a))
 
@@ -65,7 +66,7 @@ function read_sub{T}(from::IOBuffer, a::Array{T}, offs, nel)
     return a
 end
 
-read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, int(nb))
+read!(from::IOBuffer, p::Ptr, nb::Integer) = read!(from, p, Int(nb))
 function read!(from::IOBuffer, p::Ptr, nb::Int)
     from.readable || throw(ArgumentError("read failed, IOBuffer is not readable"))
     avail = nb_available(from)
@@ -108,7 +109,9 @@ nb_available(io::IOBuffer) = io.size - io.ptr + 1
 position(io::IOBuffer) = io.ptr-1
 
 function skip(io::IOBuffer, n::Integer)
-    io.ptr = min(io.ptr + n, io.size+1)
+    seekto = io.ptr + n
+    n < 0 && return seek(io, seekto) # Does error checking
+    io.ptr = min(seekto, io.size+1)
     return io
 end
 
@@ -117,7 +120,11 @@ function seek(io::IOBuffer, n::Integer)
         ismarked(io) || throw(ArgumentError("seek failed, IOBuffer is not seekable and is not marked"))
         n == io.mark || throw(ArgumentError("seek failed, IOBuffer is not seekable and n != mark"))
     end
-    io.ptr = min(n+1, io.size+1)
+    # TODO: REPL.jl relies on the fact that this does not throw (by seeking past the beginning or end
+    #       of an IOBuffer), so that would need to be fixed in order to throw an error here
+    #(n < 0 || n > io.size) && throw(ArgumentError("Attempted to seek outside IOBuffer boundaries."))
+    #io.ptr = n+1
+    io.ptr = max(min(n+1, io.size+1), 1)
     return io
 end
 
@@ -236,7 +243,7 @@ function write(to::IOBuffer, from::IOBuffer)
     from.ptr += nb_available(from)
 end
 
-write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, int(nb))
+write(to::IOBuffer, p::Ptr, nb::Integer) = write(to, p, Int(nb))
 function write(to::IOBuffer, p::Ptr, nb::Int)
     to.writable || throw(ArgumentError("write failed, IOBuffer is not writeable"))
     ensureroom(to, nb)

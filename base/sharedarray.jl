@@ -49,7 +49,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be < 32 characters
-        shm_seg_name = string("/jl", getpid(), int64(time() * 10^9))
+        shm_seg_name = string("/jl", getpid(), round(Int64,time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -139,7 +139,7 @@ sdata(A::AbstractArray) = A
 
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
+unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
 
 convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
 convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
@@ -284,14 +284,14 @@ similar(S::SharedArray, T) = similar(S, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims)
 similar(S::SharedArray) = similar(S, eltype(S), size(S))
 
-map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
+map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
 
-reduce(f::Function, S::SharedArray) =
+reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
-function map!(f::Callable, S::SharedArray)
+function map!(f, S::SharedArray)
     @sync for p in procs(S)
         @spawnat p begin
             for idx in localindexes(S)
@@ -331,9 +331,9 @@ function print_shmem_limits(slen)
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
 
-        shmmax_MB = div(int(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = int(split(readall(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(int(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parse(Int, split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
+        page_size = parse(Int, split(readall(`getconf PAGE_SIZE`))[end])
+        shmall_MB = div(parse(Int, split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

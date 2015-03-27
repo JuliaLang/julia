@@ -150,14 +150,13 @@ export
 typealias BlasFloat Union(Float64,Float32,Complex128,Complex64)
 typealias BlasReal Union(Float64,Float32)
 typealias BlasComplex Union(Complex128,Complex64)
-typealias BlasChar Char
 
 if USE_BLAS64
     typealias BlasInt Int64
-    blas_int(x) = int64(x)
+    blas_int(x) = Int64(x)
 else
     typealias BlasInt Int32
-    blas_int(x) = int32(x)
+    blas_int(x) = Int32(x)
 end
 
 #Check that stride of matrix/vector is 1
@@ -194,6 +193,8 @@ const CHARU = 'U'
 const CHARL = 'L'
 char_uplo(uplo::Symbol) = uplo == :U ? CHARU : (uplo == :L ? CHARL : throw(ArgumentError("uplo argument must be either :U or :L")))
 
+copy_oftype{T,N}(A::AbstractArray{T,N}, ::Type{T}) = copy(A)
+copy_oftype{T,N,S}(A::AbstractArray{T,N}, ::Type{S}) = convert(AbstractArray{S,N}, A)
 
 include("linalg/exceptions.jl")
 include("linalg/generic.jl")

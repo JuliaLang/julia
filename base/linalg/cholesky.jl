@@ -34,13 +34,14 @@ function chol!{T}(A::AbstractMatrix{T})
             for i = 1:k - 1
                 A[k,k] -= A[i,k]'A[i,k]
             end
-            A[k,k] = chol!(A[k,k], uplo)
-            AkkInv = inv(A[k,k])
+            Akk = chol!(A[k,k], :U)
+            A[k,k] = Akk
+            AkkInv = inv(Akk')
             for j = k + 1:n
                 for i = 1:k - 1
                     A[k,j] -= A[i,k]'A[i,j]
                 end
-                A[k,j] = A[k,k]'\A[k,j]
+                A[k,j] = AkkInv*A[k,j]
             end
         end
     end
@@ -54,12 +55,17 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
                 for i = 1:k - 1
                     A[k,k] -= A[k,i]*A[k,i]'
                 end
-                A[k,k] = chol!(A[k,k], uplo)
-                AkkInv = inv(A[k,k]')
+                Akk = chol!(A[k,k], uplo)
+                A[k,k] = Akk
+                AkkInv = inv(Akk)
                 for j = 1:k
                     for i = k + 1:n
-                        j == 1 && (A[i,k] = A[i,k]*AkkInv)
-                        j < k && (A[i,k] -= A[i,j]*A[k,j]'*AkkInv)
+                        if j == 1
+                            A[i,k] = A[i,k]*AkkInv'
+                        end
+                        if j < k
+                            A[i,k] -= A[i,j]*A[k,j]'*AkkInv'
+                        end
                     end
                 end
             end
@@ -68,13 +74,14 @@ function chol!{T}(A::AbstractMatrix{T}, uplo::Symbol)
                 for i = 1:k - 1
                     A[k,k] -= A[i,k]'A[i,k]
                 end
-                A[k,k] = chol!(A[k,k], uplo)
-                AkkInv = inv(A[k,k])
+                Akk = chol!(A[k,k], uplo)
+                A[k,k] = Akk
+                AkkInv = inv(Akk')
                 for j = k + 1:n
                     for i = 1:k - 1
                         A[k,j] -= A[i,k]'A[i,j]
                     end
-                    A[k,j] = A[k,k]'\A[k,j]
+                    A[k,j] = AkkInv*A[k,j]
                 end
             end
         else
@@ -95,7 +102,7 @@ function _cholfact!{T<:BlasFloat}(A::StridedMatrix{T}, ::Type{Val{true}}, uplo::
     A, piv, rank, info = LAPACK.pstrf!(uplochar, A, tol)
     return CholeskyPivoted{T,StridedMatrix{T}}(A, uplochar, piv, rank, tol, info)
 end
-cholfact!(A::AbstractMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
+cholfact!(A::StridedMatrix, uplo::Symbol=:U) = Cholesky(chol!(A, uplo).data, uplo)
 
 function cholfact!{T<:BlasFloat,S,UpLo}(C::Cholesky{T,S,UpLo})
     _, info = LAPACK.potrf!(char_uplo(UpLo), C.UL)
@@ -107,8 +114,6 @@ cholfact{T<:BlasFloat}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{V
     cholfact!(copy(A), uplo, pivot, tol=tol)
 
 
-copy_oftype{T}(A::StridedMatrix{T}, ::Type{T}) = copy(A)
-copy_oftype{T,S}(A::StridedMatrix{T}, ::Type{S}) = convert(AbstractMatrix{S}, A)
 cholfact{T}(A::StridedMatrix{T}, uplo::Symbol=:U, pivot::Union(Type{Val{false}}, Type{Val{true}})=Val{false}; tol=0.0) =
     _cholfact(copy_oftype(A, promote_type(typeof(chol(one(T))),Float32)), pivot, uplo, tol=tol)
 _cholfact{T<:BlasFloat}(A::StridedMatrix{T}, pivot::Type{Val{true}}, uplo::Symbol=:U; tol=0.0) =
@@ -127,7 +132,14 @@ function cholfact(x::Number, uplo::Symbol=:U)
     Cholesky(xf, uplo)
 end
 
-chol{T}(A::AbstractMatrix{T}, uplo::Symbol=:U) = (S = promote_type(typeof(chol(one(T))),Float32); S != T ? chol!(convert(AbstractMatrix{S}, A), uplo) : chol!(copy(A), uplo))
+function chol{T}(A::AbstractMatrix{T})
+    S = promote_type(typeof(chol(one(T))), Float32)
+    chol!(copy_oftype(A, S))
+end
+function chol{T}(A::AbstractMatrix{T}, uplo::Symbol)
+    S = promote_type(typeof(chol(one(T))), Float32)
+    chol!(copy_oftype(A, S), uplo)
+end
 function chol!(x::Number, uplo::Symbol=:U)
     rx = real(x)
     rx == abs(x) || throw(DomainError())

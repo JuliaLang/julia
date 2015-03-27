@@ -14,44 +14,47 @@ immutable StepRange{T,S} <: OrdinalRange{T,S}
     stop::T
 
     function StepRange(start::T, step::S, stop::T)
-        if T<:FloatingPoint || S<:FloatingPoint
-            throw(ArgumentError("StepRange should not be used with floating point"))
-        end
-        z = zero(S)
-        step == z && throw(ArgumentError("step cannot be zero"))
-        step != step && throw(ArgumentError("step cannot be NaN"))
+        new(start, step, steprange_last(start,step,stop))
+    end
+end
 
-        if stop == start
-            last = stop
+# to make StepRange constructor inlineable, so optimizer can see `step` value
+function steprange_last{T}(start::T, step, stop)
+    if isa(start,FloatingPoint) || isa(step,FloatingPoint)
+        throw(ArgumentError("StepRange should not be used with floating point"))
+    end
+    z = zero(step)
+    step == z && throw(ArgumentError("step cannot be zero"))
+
+    if stop == start
+        last = stop
+    else
+        if (step > z) != (stop > start)
+            # empty range has a special representation where stop = start-1
+            # this is needed to avoid the wrap-around that can happen computing
+            # start - step, which leads to a range that looks very large instead
+            # of empty.
+            if step > z
+                last = start - one(stop-start)
+            else
+                last = start + one(stop-start)
+            end
         else
-            if (step > z) != (stop > start)
-                # empty range has a special representation where stop = start-1
-                # this is needed to avoid the wrap-around that can happen computing
-                # start - step, which leads to a range that looks very large instead
-                # of empty.
-                if step > z
-                    last = start - one(stop-start)
+            diff = stop - start
+            if T<:Signed && (diff > zero(diff)) != (stop > start)
+                # handle overflowed subtraction with unsigned rem
+                if diff > zero(diff)
+                    remain = -convert(T, unsigned(-diff) % step)
                 else
-                    last = start + one(stop-start)
+                    remain = convert(T, unsigned(diff) % step)
                 end
             else
-                diff = stop - start
-                if T<:Signed && (diff > zero(diff)) != (stop > start)
-                    # handle overflowed subtraction with unsigned rem
-                    if diff > zero(diff)
-                        remain = -convert(T, unsigned(-diff) % step)
-                    else
-                        remain = convert(T, unsigned(diff) % step)
-                    end
-                else
-                    remain = steprem(start,stop,step)
-                end
-                last = stop - remain
+                remain = steprem(start,stop,step)
             end
+            last = stop - remain
         end
-
-        new(start, step, last)
     end
+    last
 end
 
 steprem(start,stop,step) = (stop-start) % step
@@ -182,11 +185,11 @@ step(r::UnitRange) = 1
 step(r::FloatRange) = r.step/r.divisor
 
 function length(r::StepRange)
-    n = integer(div(r.stop+r.step - r.start, r.step))
+    n = Integer(div(r.stop+r.step - r.start, r.step))
     isempty(r) ? zero(n) : n
 end
-length(r::UnitRange) = integer(r.stop - r.start + 1)
-length(r::FloatRange) = integer(r.len)
+length(r::UnitRange) = Integer(r.stop - r.start + 1)
+length(r::FloatRange) = Integer(r.len)
 
 function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)
@@ -209,11 +212,11 @@ let smallint = (Int === Int64 ?
     global length
 
     function length{T <: smallint}(r::StepRange{T})
-        isempty(r) && return int(0)
-        div(int(r.stop)+int(r.step) - int(r.start), int(r.step))
+        isempty(r) && return Int(0)
+        div(Int(r.stop)+Int(r.step) - Int(r.start), Int(r.step))
     end
 
-    length{T <: smallint}(r::UnitRange{T}) = int(r.stop) - int(r.start) + 1
+    length{T <: smallint}(r::UnitRange{T}) = Int(r.stop) - Int(r.start) + 1
 end
 
 first{T}(r::OrdinalRange{T}) = convert(T, r.start)
@@ -303,6 +306,7 @@ end
 show(io::IO, r::UnitRange) = print(io, repr(first(r)), ':', repr(last(r)))
 
 =={T<:Range}(r::T, s::T) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
+==(r::OrdinalRange, s::OrdinalRange) = (first(r) == first(s)) & (step(r) == step(s)) & (last(r) == last(s))
 
 function ==(r::Range, s::Range)
     lr = length(r)
@@ -329,7 +333,7 @@ intersect{T<:Integer}(i::Integer, r::UnitRange{T}) =
 intersect{T<:Integer}(r::UnitRange{T}, i::Integer) = intersect(i, r)
 
 function intersect{T1<:Integer, T2<:Integer}(r::UnitRange{T1}, s::StepRange{T2})
-    if length(s) == 0
+    if isempty(s)
         range(first(r), 0)
     elseif step(s) == 0
         intersect(first(s), r)
@@ -356,7 +360,7 @@ function intersect{T1<:Integer, T2<:Integer}(r::StepRange{T1}, s::UnitRange{T2})
 end
 
 function intersect(r::StepRange, s::StepRange)
-    if length(r) == 0 || length(s) == 0
+    if isempty(r) || isempty(s)
         return range(first(r), step(r), 0)
     elseif step(s) < 0
         return intersect(r, reverse(s))
@@ -497,11 +501,14 @@ convert{T}(::Type{FloatRange{T}}, r::OrdinalRange) =
 
 ## concatenation ##
 
-function vcat{T}(r::Range{T})
-    n = length(r)
+function vcat{T}(rs::Range{T}...)
+    n::Int = 0
+    for ra in rs
+        n += length(ra)
+    end
     a = Array(T,n)
     i = 1
-    for x in r
+    for ra in rs, x in ra
         @inbounds a[i] = x
         i += 1
     end
@@ -509,21 +516,9 @@ function vcat{T}(r::Range{T})
 end
 
 convert{T}(::Type{Array{T,1}}, r::Range{T}) = vcat(r)
+collect(r::Range) = vcat(r)
 
-function vcat{T}(rs::Range{T}...)
-    n = sum(length,rs)::Int
-    a = Array(T,n)
-    i = 1
-    for r in rs
-        for x in r
-            @inbounds a[i] = x
-            i += 1
-        end
-    end
-    return a
-end
-
-reverse(r::OrdinalRange) = range(last(r), -step(r), length(r))
+reverse(r::OrdinalRange) = colon(last(r), -step(r), first(r))
 reverse(r::FloatRange)   = FloatRange(r.start + (r.len-1)*r.step, -r.step, r.len, r.divisor)
 
 ## sorting ##
@@ -558,5 +553,5 @@ function in(x, r::Range)
     n >= 1 && n <= length(r) && r[n] == x
 end
 
-in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(int(x)-first(r),step(r)) == 0)
-in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(int(x) - int(first(r)), step(r)) == 0)
+in{T<:Integer}(x, r::Range{T}) = isinteger(x) && !isempty(r) && x>=minimum(r) && x<=maximum(r) && (mod(convert(T,x),step(r))-mod(first(r),step(r)) == 0)
+in(x::Char, r::Range{Char}) = !isempty(r) && x >= minimum(r) && x <= maximum(r) && (mod(Int(x) - Int(first(r)), step(r)) == 0)

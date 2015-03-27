@@ -1,7 +1,6 @@
 # timing
 
-# system date in seconds
-time() = ccall(:clock_now, Float64, ())
+# time() in libc.jl
 
 # high-resolution relative time, in nanoseconds
 time_ns() = ccall(:jl_hrtime, UInt64, ())
@@ -260,8 +259,8 @@ warn(io::IO, err::Exception; prefix="ERROR: ", kw...) =
 warn(err::Exception; prefix="ERROR: ", kw...) =
     warn(STDERR, err, prefix=prefix; kw...)
 
-function julia_cmd(julia=joinpath(JULIA_HOME, "julia"))
-    opts = compileropts()
+function julia_cmd(julia=joinpath(JULIA_HOME, julia_exename()))
+    opts = JLOptions()
     cpu_target = bytestring(opts.cpu_target)
     image_file = bytestring(opts.image_file)
     `$julia -C$cpu_target -J$image_file`
@@ -269,13 +268,60 @@ end
 
 julia_exename() = ccall(:jl_is_debugbuild,Cint,())==0 ? "julia" : "julia-debug"
 
-function get_process_title()
-    buf = zeros(Uint8, 512)
-    err = ccall(:uv_get_process_title, Cint, (Ptr{Uint8}, Cint), buf, 512)
-    uv_error("get_process_title", err)
-    bytestring(pointer(buf))
+# Advisory reentrant lock
+type ReentrantLock
+    locked_by::Nullable{Task}
+    cond_wait::Condition
+    reentrancy_cnt::Int
+
+    ReentrantLock() = new(nothing, Condition(), 0)
 end
-function set_process_title(title::AbstractString)
-    err = ccall(:uv_set_process_title, Cint, (Ptr{UInt8},), bytestring(title))
-    uv_error("set_process_title", err)
+
+# Lock object during function execution. Recursive calls by the same task is OK.
+const adv_locks_map = WeakKeyDict{Any, ReentrantLock}()
+function lock(f::Function, o::Any)
+    rl = get(adv_locks_map, o, nothing)
+    if rl == nothing
+        rl = ReentrantLock()
+        adv_locks_map[o] = rl
+    end
+    lock(rl)
+
+    try
+        f(o)
+    finally
+        unlock(o)
+    end
 end
+
+function lock(rl::ReentrantLock)
+    t = current_task()
+    while true
+        if rl.reentrancy_cnt == 0
+            rl.locked_by = t
+            rl.reentrancy_cnt = 1
+            return
+        elseif t == get(rl.locked_by)
+            rl.reentrancy_cnt += 1
+            return
+        end
+        wait(rl.cond_wait)
+    end
+end
+
+function unlock(o::Any)
+    rl = adv_locks_map[o]
+    unlock(rl)
+end
+
+function unlock(rl::ReentrantLock)
+    rl.reentrancy_cnt = rl.reentrancy_cnt - 1
+    if rl.reentrancy_cnt == 0
+        rl.locked_by = nothing
+        notify(rl.cond_wait)
+    elseif rl.reentrancy_cnt < 0
+        AssertionError("unlock count must match lock count")
+    end
+    rl
+end
+

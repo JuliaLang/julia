@@ -1,19 +1,36 @@
 include("table.jl")
 
 @breaking true ->
-function fencedcode(stream::IO, block::MD, config::Config)
-    startswith(stream, "```", padding = true) || return false
-    flavor = strip(readline(stream))
-    buffer = IOBuffer()
-    while !eof(stream)
-        startswith(stream, "```") && break
-        write(buffer, readline(stream))
+function fencedcode(stream::IO, block::MD)
+    withstream(stream) do
+        startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
+        skip(stream, -2)
+        ch = read(stream, Char)
+        trailing = strip(readline(stream))
+        flavor = lstrip(trailing, ch)
+        n = 3 + length(trailing) - length(flavor)
+
+        # inline code block
+        ch in flavor && return false
+
+        buffer = IOBuffer()
+        while !eof(stream)
+            line_start = position(stream)
+            if startswith(stream, string(ch) ^ n)
+                if !startswith(stream, string(ch))
+                    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
+                    return true
+                else
+                    seek(stream, line_start)
+                end
+            end
+            write(buffer, readline(stream))
+        end
+        return false
     end
-    push!(block, Code(flavor, takebuf_string(buffer) |> chomp))
-    return true
 end
 
-function github_paragraph(stream::IO, md::MD, config::Config)
+function github_paragraph(stream::IO, md::MD)
     skipwhitespace(stream)
     buffer = IOBuffer()
     p = Paragraph()
@@ -31,7 +48,7 @@ function github_paragraph(stream::IO, md::MD, config::Config)
             write(buffer, char)
         end
     end
-    p.content = parseinline(seek(buffer, 0), config)
+    p.content = parseinline(seek(buffer, 0), md)
     return true
 end
 

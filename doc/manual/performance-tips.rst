@@ -770,7 +770,7 @@ example::
           y = _var4::UNION(INT64,FLOAT64) # line 3:
           _var1 = y::UNION(INT64,FLOAT64) * x::Float64::Float64
           _var2 = (top(box))(Float64,(top(add_float))(_var1::Float64,(top(box))(Float64,(top(sitofp))(Float64,1))))
-          return (GetfieldNode(Base.Math,:nan_dom_err,Any))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GetfieldNode(Base.Math,:libm,Any))),Float64,$(Expr(:call1, :(top(tuple)), :Float64)),_var2::Float64,0)::Float64,_var2::Float64)::Float64
+          return (GlobalRef(Base.Math,:nan_dom_err))((top(ccall))($(Expr(:call1, :(top(tuple)), "sin", GlobalRef(Base.Math,:libm))),Float64,$(Expr(:call1, :(top(tuple)), :Float64)),_var2::Float64,0)::Float64,_var2::Float64)::Float64
       end::Float64
 
 Interpreting the output of :obj:`@code_warntype`, like that of its cousins

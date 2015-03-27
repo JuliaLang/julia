@@ -1,3 +1,30 @@
+# Pair
+p = Pair(1,2)
+@test p == (1=>2)
+@test isequal(p,1=>2)
+@test start(p) == 1
+@test next(p, 1) == (1,2)
+@test !done(p, 1)
+@test !done(p,2)
+@test done(p,3)
+@test !done(p,0)
+@test Base.indexed_next(p, 1, (1,2)) == (1,2)
+@test Base.indexed_next(p, 2, (1,2)) == (2,3)
+@test (1=>2) < (2=>3)
+@test (2=>2) < (2=>3)
+@test !((2=>3) < (2=>3))
+@test (2=>3) < (4=>3)
+@test (1=>100) < (4=>1)
+@test p[1] == 1
+@test p[2] == 2
+@test_throws BoundsError p[3]
+@test_throws BoundsError p[false]
+@test p[true] == 1
+@test p[2.0] == 2
+@test p[0x01] == 1
+@test_throws InexactError p[2.3]
+
+# Dict
 h = Dict()
 for i=1:10000
     h[i] = i+1
@@ -209,7 +236,7 @@ end
 for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
           [string(i) => i for i = 1:30],
           [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10],
+          [utf8(Char['α':'α'+i;]) => utf8(Char['α':'α'+i;]) for i = (1:10)*10],
           Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested

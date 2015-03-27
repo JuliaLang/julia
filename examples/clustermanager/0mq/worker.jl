@@ -1,3 +1,3 @@
 include("ZMQCM.jl")
 
-start_worker(int(ARGS[1]))
+start_worker(parse(Int,ARGS[1]))

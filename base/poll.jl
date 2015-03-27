@@ -4,7 +4,7 @@ type FileMonitor
     open::Bool
     notify::Condition
     function FileMonitor(cb, file)
-        handle = c_malloc(_sizeof_uv_fs_event)
+        handle = Libc.malloc(_sizeof_uv_fs_event)
         err = ccall(:jl_fs_event_init,Int32, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Int32), eventloop(),handle,file,0)
         if err < 0
             ccall(:uv_fs_event_stop, Int32, (Ptr{Void},), handle)
@@ -74,10 +74,10 @@ type PollingFileWatcher <: UVPollingWatcher
     notify::Condition
     cb::Callback
     function PollingFileWatcher(cb, file)
-        handle = c_malloc(_sizeof_uv_fs_poll)
+        handle = Libc.malloc(_sizeof_uv_fs_poll)
         err = ccall(:uv_fs_poll_init,Int32,(Ptr{Void},Ptr{Void}),eventloop(),handle)
         if err < 0
-            c_free(handle)
+            Libc.free(handle)
             throw(UVError("PollingFileWatcher",err))
         end
         this = new(handle, file, false, Condition(), cb)
@@ -106,14 +106,14 @@ type FDWatcher <: UVPollingWatcher
         new(handle,_get_osfhandle(fd),open,notify,cb,events)
 end
 function FDWatcher(fd::RawFD)
-    handle = c_malloc(_sizeof_uv_poll)
+    handle = Libc.malloc(_sizeof_uv_poll)
     @unix_only if ccall(:jl_uv_unix_fd_is_watched,Int32,(Int32,Ptr{Void},Ptr{Void}),fd.fd,handle,eventloop()) == 1
-        c_free(handle)
+        Libc.free(handle)
         throw(ArgumentError("file descriptor $(fd.fd) is already being watched by another watcher"))
     end
     err = ccall(:uv_poll_init,Int32,(Ptr{Void},Ptr{Void},Int32),eventloop(),handle,fd.fd)
     if err < 0
-        c_free(handle)
+        Libc.free(handle)
         throw(UVError("FDWatcher",err))
     end
     this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())
@@ -122,11 +122,11 @@ function FDWatcher(fd::RawFD)
     this
 end
 @windows_only function FDWatcher(fd::WindowsRawSocket)
-    handle = c_malloc(_sizeof_uv_poll)
+    handle = Libc.malloc(_sizeof_uv_poll)
     err = ccall(:uv_poll_init_socket,Int32,(Ptr{Void},   Ptr{Void}, Ptr{Void}),
                                             eventloop(), handle,    fd.handle)
     if err < 0
-        c_free(handle)
+        Libc.free(handle)
         throw(UVError("FDWatcher",err))
     end
     this = FDWatcher(handle,fd,false,Condition(),false,FDEvent())

@@ -1,8 +1,37 @@
 # frexp,ldexp,significand,exponent
-@test frexp(12.8) == (0.8,4)
-@test ldexp(0.8,4) == 12.8
-@test significand(12.8) == 1.6
-@test exponent(12.8) == 3
+for T in (Float16,Float32,Float64)
+    for z in (zero(T),-zero(T))
+        frexp(z) === (z,0)
+        significand(z) === z
+        @test_throws DomainError exponent(z)
+    end
+
+    for (a,b) in [(T(12.8),T(0.8)),
+                  (prevfloat(realmin(T)), nextfloat(one(T),-2)),
+                  (nextfloat(zero(T),3), T(0.75)),
+                  (nextfloat(zero(T)), T(0.5))]
+
+        n = Int(log2(a/b))
+        @test frexp(a) == (b,n)
+        @test ldexp(b,n) == a
+        @test ldexp(a,-n) == b
+        @test significand(a) == 2b
+        @test exponent(a) == n-1
+
+        @test frexp(-a) == (-b,n)
+        @test ldexp(-b,n) == -a
+        @test ldexp(-a,-n) == -b
+        @test significand(-a) == -2b
+        @test exponent(-a) == n-1
+    end
+end
+
+for T in (Int, Float64, BigFloat)
+    @test_approx_eq deg2rad(T(180)) 1pi
+    @test_approx_eq deg2rad(T[45, 60]) [pi/T(4), pi/T(3)]
+    @test_approx_eq rad2deg([pi/T(4), pi/T(3)]) [45, 60]
+    @test_approx_eq rad2deg(T(1)*pi) 180
+end
 
 # degree-based trig functions
 for T = (Float32,Float64,Rational{Int})
@@ -68,20 +97,19 @@ end
 @test_approx_eq erfinv(0.84270079294971486934) 1
 @test_approx_eq erfcinv(0.15729920705028513066) 1
 @test_approx_eq dawson(1) 0.53807950691276841914
-# TODO: complex versions only supported on 64-bit for now
-@unix_only if WORD_SIZE==64
-    @test_approx_eq erf(1+2im) -0.53664356577856503399-5.0491437034470346695im
-    @test_approx_eq erfc(1+2im) 1.5366435657785650340+5.0491437034470346695im
-    @test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
-    @test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
-    @test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
-end
+
+@test_approx_eq erf(1+2im) -0.53664356577856503399-5.0491437034470346695im
+@test_approx_eq erfc(1+2im) 1.5366435657785650340+5.0491437034470346695im
+@test_approx_eq erfcx(1+2im) 0.14023958136627794370-0.22221344017989910261im
+@test_approx_eq erfi(1+2im) -0.011259006028815025076+1.0036063427256517509im
+@test_approx_eq dawson(1+2im) -13.388927316482919244-11.828715103889593303im
+
 for x in logspace(-200, -0.01)
     @test_approx_eq_eps erf(erfinv(x)) x 1e-12*x
     @test_approx_eq_eps erf(erfinv(-x)) -x 1e-12*x
     @test_approx_eq_eps erfc(erfcinv(2*x)) 2*x 1e-12*x
     if x > 1e-20
-        xf = float32(x)
+        xf = Float32(x)
         @test_approx_eq_eps erf(erfinv(xf)) xf 1e-5*xf
         @test_approx_eq_eps erf(erfinv(-xf)) -xf 1e-5*xf
         @test_approx_eq_eps erfc(erfcinv(2xf)) 2xf 1e-5*xf
@@ -168,13 +196,13 @@ y33 = bessely(3,3.)
 
 # issue #6653
 for f in (besselj,bessely,besseli,besselk,hankelh1,hankelh2)
-    @test_approx_eq f(0,1) f(0,complex128(1))
-    @test_approx_eq f(0,1) f(0,complex64(1))
+    @test_approx_eq f(0,1) f(0,Complex128(1))
+    @test_approx_eq f(0,1) f(0,Complex64(1))
 end
 
 # scaled bessel[ijky] and hankelh[12]
 for x in (1.0, 0.0, -1.0), y in (1.0, 0.0, -1.0), nu in (1.0, 0.0, -1.0)
-    z = complex128(x + y * im)
+    z = Complex128(x + y * im)
     z == zero(z) || @test_approx_eq hankelh1x(nu, z) hankelh1(nu, z) * exp(-z * im)
     z == zero(z) || @test_approx_eq hankelh2x(nu, z) hankelh2(nu, z) * exp(z * im)
     (nu < 0 && z == zero(z)) || @test_approx_eq besselix(nu, z) besseli(nu, z) * exp(-abs(real(z)))
@@ -199,9 +227,9 @@ end
 
 # gamma, lgamma (complex argument)
 if Base.Math.libm == "libopenlibm"
-    @test gamma(Float64[1:25]) == gamma(1:25)
+    @test gamma(Float64[1:25;]) == gamma(1:25)
 else
-    @test_approx_eq gamma(Float64[1:25]) gamma(1:25)
+    @test_approx_eq gamma(Float64[1:25;]) gamma(1:25)
 end
 @test_approx_eq gamma(1/2) sqrt(π)
 @test_approx_eq gamma(-1/2) -2sqrt(π)
@@ -332,6 +360,10 @@ end
                     end, 1,2,3,4,5)
           evalcounts
       end == 1
+a0 = 1
+a1 = 2
+c = 3
+@test @evalpoly(c, a0, a1) == 7
 
 @test 1e-14 > err(eta(1+1e-9), 0.693147180719814213126976796937244130533478392539154928250926)
 @test 1e-14 > err(eta(1+5e-3), 0.693945708117842473436705502427198307157819636785324430166786)

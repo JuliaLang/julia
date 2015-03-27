@@ -12,79 +12,90 @@ function wrapinline(f, io, cmd)
     print(io, "}")
 end
 
-writemime(io::IO, ::MIME"text/latex", md::Content) =
-    writemime(io, "text/plain", md)
+# Block elements
 
-function writemime(io::IO, mime::MIME"text/latex", block::Block)
-    for md in block.content[1:end-1]
-        writemime(io::IO, mime, md)
-        println(io)
+latex(io::IO, md::MD) = latex(io, md.content)
+
+function latex(io::IO, content::Vector)
+    for c in content
+        latex(io, c)
     end
-    writemime(io::IO, mime, block.content[end])
 end
 
-function writemime{l}(io::IO, mime::MIME"text/latex", header::Header{l})
+function latex{l}(io::IO, header::Header{l})
     tag = l < 4 ? "sub"^(l-1) * "section" : "sub"^(l-4) * "paragraph"
     wrapinline(io, tag) do
-        print(io, header.text)
+        latexinline(io, header.text)
     end
     println(io)
 end
 
-function writemime(io::IO, ::MIME"text/latex", code::BlockCode)
+function latex(io::IO, code::Code)
     wrapblock(io, "verbatim") do
+        # TODO latex escape
         println(io, code.code)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", code::InlineCode)
+function latexinline(io::IO, code::Code)
     wrapinline(io, "texttt") do
         print(io, code.code)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Paragraph)
+function latex(io::IO, md::Paragraph)
     for md in md.content
-        latex_inline(io, md)
+        latexinline(io, md)
     end
     println(io)
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::BlockQuote)
+function latex(io::IO, md::BlockQuote)
     wrapblock(io, "quote") do
-        writemime(io, "text/latex", Block(md.content))
+        latex(io, md.content)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::List)
-    wrapblock(io, "itemize") do
-        for item in md.content
+function latex(io::IO, md::List)
+    env = md.ordered ? "enumerate" : "itemize"
+    wrapblock(io, env) do
+        for item in md.items
             print(io, "\\item ")
-            latex_inline(io, item)
+            latexinline(io, item)
             println(io)
         end
     end
 end
 
+function writemime(io::IO, ::MIME"text/latex", md::HorizontalRule)
+    println(io, "\\rule{\\textwidth}{1pt}")
+end
+
 # Inline elements
 
-function writemime(io::IO, ::MIME"text/latex", md::Plain)
-    print(io, md.text)
+function latexinline(io::IO, md::Vector)
+    for c in md
+        latexinline(io, c)
+    end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Bold)
+function latexinline(io::IO, md::String)
+    latexesc(io, md)
+end
+
+function latexinline(io::IO, md::Bold)
     wrapinline(io, "textbf") do
-        print(io, md.text)
+        latexinline(io, md.text)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Italic)
+function latexinline(io::IO, md::Italic)
     wrapinline(io, "emph") do
-        print(io, md.text)
+        latexinline(io, md.text)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Image)
+function latexinline(io::IO, md::Image)
     wrapblock(io, "figure") do
         println(io, "\\centering")
         wrapinline(io, "includegraphics") do
@@ -92,19 +103,36 @@ function writemime(io::IO, ::MIME"text/latex", md::Image)
         end
         println(io)
         wrapinline(io, "caption") do
-            print(io, md.alt)
+            latexinline(io, md.alt)
         end
         println(io)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Link)
+function latexinline(io::IO, md::Link)
     wrapinline(io, "href") do
         print(io, md.url)
     end
-    print(io, "{", md.text, "}")
+    print(io, "{")
+    latexinline(io, md.text)
+    print(io, "}")
 end
 
-latex_inline(io::IO, el::Content) = writemime(io, "text/latex", el)
+const _latexescape_chars = Dict{Char, String}(
+   '~'=>"{\\sim}", '^'=>"\\^{}", '\\'=>"{\\textbackslash}")
+for ch in "&%\$#_{}"
+    _latexescape_chars[ch] = "\\$ch"
+end
 
-latex(md::Content) = stringmime("text/latex", md)
+function latexesc(io, s::String)
+    for ch in s
+        print(io, get(_latexescape_chars, ch, ch))
+    end
+end
+
+latex(md) = sprint(latex, md)
+latexinline(md) = sprint(latexinline, md)
+latexesc(s) = sprint(latexesc, s)
+
+writemime(io::IO, ::MIME"text/latex", md::MD) = latex(io, md)
+#writemime(io::IO, ::MIME"text/latex", md::MD) = writemime(io, "text/plain", md)

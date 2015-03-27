@@ -143,18 +143,62 @@ inlineanonymous(base::Symbol, ext) = symbol(base,"_",string(ext))
 #    lreplace(:i_d, :d, 3) -> :i_3
 #    lreplace(:i_{d-1}, :d, 3) -> :i_2
 # This follows LaTeX notation.
-lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), sym, val, Regex("_"*string(sym)*"(\$|(?=_))"))
-lreplace!(arg, sym::Symbol, val, r) = arg
-function lreplace!(s::Symbol, sym::Symbol, val, r::Regex)
-    if (s == sym)
-        return val
-    end
-    symbol(replace(string(s), r, "_"*string(val)))
+immutable LReplace{S<:AbstractString}
+    pat_sym::Symbol
+    pat_str::S
+    val::Int
 end
-function lreplace!(ex::Expr, sym::Symbol, val, r)
+LReplace(sym::Symbol, val::Integer) = LReplace(sym, string(sym), val)
+
+lreplace(ex, sym::Symbol, val) = lreplace!(copy(ex), LReplace(sym, val))
+
+function lreplace!(sym::Symbol, r::LReplace)
+    sym == r.pat_sym && return r.val
+    symbol(lreplace!(string(sym), r))
+end
+
+function lreplace!(str::AbstractString, r::LReplace)
+    i = start(str)
+    pat = r.pat_str
+    j = start(pat)
+    matching = false
+    while !done(str, i)
+        cstr, i = next(str, i)
+        if !matching
+            if cstr != '_' || done(str, i)
+                continue
+            end
+            istart = i
+            cstr, i = next(str, i)
+        end
+        if !done(pat, j)
+            cr, j = next(pat, j)
+            if cstr == cr
+                matching = true
+            else
+                matching = false
+                j = start(pat)
+                i = istart
+                continue
+            end
+        end
+        if matching && done(pat, j)
+            if done(str, i) || next(str, i)[1] == '_'
+                # We have a match
+                return string(str[1:prevind(str, istart)], r.val, str[i:end])
+            end
+            matching = false
+            j = start(pat)
+            i = istart
+        end
+    end
+    str
+end
+
+function lreplace!(ex::Expr, r::LReplace)
     # Curly-brace notation, which acts like parentheses
     if ex.head == :curly && length(ex.args) == 2 && isa(ex.args[1], Symbol) && endswith(string(ex.args[1]), "_")
-        excurly = exprresolve(lreplace!(ex.args[2], sym, val, r))
+        excurly = Base.Cartesian.exprresolve(lreplace!(ex.args[2], r))
         if isa(excurly, Number)
             return symbol(ex.args[1],excurly)
         else
@@ -163,10 +207,13 @@ function lreplace!(ex::Expr, sym::Symbol, val, r)
         end
     end
     for i in 1:length(ex.args)
-        ex.args[i] = lreplace!(ex.args[i], sym, val, r)
+        ex.args[i] = lreplace!(ex.args[i], r)
     end
     ex
 end
+
+lreplace!(arg, r::LReplace) = arg
+
 
 poplinenum(arg) = arg
 function poplinenum(ex::Expr)

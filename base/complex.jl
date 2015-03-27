@@ -44,20 +44,6 @@ complex(x::Real, y::Real) = Complex(x, y)
 complex(x::Real) = Complex(x)
 complex(z::Complex) = z
 
-complex128(r::Float64, i::Float64) = Complex{Float64}(r, i)
-complex128(r::Real, i::Real) = complex128(float64(r),float64(i))
-complex128(z) = complex128(real(z), imag(z))
-complex64(r::Float32, i::Float32) = Complex{Float32}(r, i)
-complex64(r::Real, i::Real) = complex64(float32(r),float32(i))
-complex64(z) = complex64(real(z), imag(z))
-complex32(r::Float16, i::Float16) = Complex{Float16}(r, i)
-complex32(r::Real, i::Real) = complex32(float16(r),float16(i))
-complex32(z) = complex32(real(z), imag(z))
-
-for fn in _numeric_conversion_func_names
-    @eval $fn(z::Complex) = Complex($fn(real(z)),$fn(imag(z)))
-end
-
 function complex_show(io::IO, z::Complex, compact::Bool)
     r, i = reim(z)
     compact ? showcompact(io,r) : show(io,r)
@@ -117,7 +103,7 @@ sign(z::Complex) = z/abs(z)
 *(z::Complex, x::Real) = Complex(x * real(z), x * imag(z))
 +(x::Real, z::Complex) = Complex(x + real(z), imag(z))
 +(z::Complex, x::Real) = Complex(x + real(z), imag(z))
--(x::Real, z::Complex) = Complex(x - real(z), -imag(z))
+-(x::Real, z::Complex) = Complex(x - real(z), zero(x) - imag(z))
 -(z::Complex, x::Real) = Complex(real(z) - x, imag(z))
 
 /(a::Real  , w::Complex) = a*inv(w)
@@ -692,13 +678,23 @@ function lexcmp(a::Complex, b::Complex)
 end
 
 #Rounding complex numbers
+# Superfluous tuple splatting in return arguments is a work around for 32-bit systems (#10027)
 #Requires two different RoundingModes for the real and imaginary components
+
+if WORD_SIZE==32
+function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
+    Complex((round(real(z), RoundingMode{MR}()),
+             round(imag(z), RoundingMode{MI}()))...)
+end
+round(z::Complex) = Complex((round(real(z)), round(imag(z)))...)
+else
 function round{T<:FloatingPoint, MR, MI}(z::Complex{T}, ::RoundingMode{MR}, ::RoundingMode{MI})
     Complex(round(real(z), RoundingMode{MR}()),
             round(imag(z), RoundingMode{MI}()))
 end
-
 round(z::Complex) = Complex(round(real(z)), round(imag(z)))
+end
+
 @vectorize_1arg Complex round
 
 function round(z::Complex, digits::Integer, base::Integer=10)
@@ -709,4 +705,3 @@ end
 float{T<:FloatingPoint}(z::Complex{T}) = z
 float(z::Complex) = Complex(float(real(z)), float(imag(z)))
 @vectorize_1arg Complex float
-

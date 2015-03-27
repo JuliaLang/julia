@@ -3,6 +3,27 @@ JULIAHOME = $(abspath ..)
 include Versions.make
 include $(JULIAHOME)/Make.inc
 
+# Special comments:
+#
+# all targets in here should follow the same structure,
+# and provide a get-a, configure-a, compile-a, check-a, and install-a
+# additionally all targets should be listed in the getall target for easier off-line compilation
+# if you are adding a new target, it can help to copy an similar, existing target
+#
+# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
+# custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
+# CMake libs: libgit2
+#
+# downloaded from git: llvm-svn, uv, libopenlibm, mojibake, openspecfun
+#
+# there are rules in this file with the . replaced by a %
+# this is some magic Makefile trick that tells make
+# that all targets with a % in them on that line will
+# be rebuilt in a single invocation
+#
+
+## Some shared configuration options ##
+
 CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
@@ -31,15 +52,14 @@ endif
 # they will override the values passed above to ./configure
 MAKE_COMMON = DESTDIR="" prefix=$(build_prefix) bindir=$(build_bindir) libdir=$(build_libdir) libexecdir=$(build_libexecdir) datarootdir=$(build_datarootdir) includedir=$(build_includedir) sysconfdir=$(build_sysconfdir)
 
-#autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
-#custom Makefile rules: openlibm Rmath dsfmt suitesparse-wrapper suitesparse lapack openblas mojibake objconv
-#CMake libs: libgit2
+
+## Overall configuration of which rules exist and should be run by default ##
 
 # prevent installing libs into usr/lib64 on opensuse
 unexport CONFIG_SITE
 
 STAGE1_DEPS =
-STAGE2_DEPS = Rmath
+STAGE2_DEPS = Rmath-julia
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
@@ -163,7 +183,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-mojibake get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -212,26 +232,20 @@ LLVM_TAR=llvm-$(LLVM_VER).src.tar.xz
 endif
 
 ifeq ($(BUILD_LLDB),1)
-ifeq ($(LLVM_VER), 3.5.0)
-LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.xz
-else
+ifeq ($(LLVM_VER), 3.3)
 LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.gz
-endif # LLVM_VER == 3.5.0
+else
+LLVM_LLDB_TAR=lldb-$(LLVM_VER).src.tar.xz
+endif # LLVM_VER == 3.3
 endif # BUILD_LLDB
 
 ifeq ($(BUILD_LLVM_CLANG),1)
-ifeq ($(LLVM_VER), 3.0)
-LLVM_CLANG_TAR=clang-$(LLVM_VER).tar.gz
-LLVM_COMPILER_RT_TAR=
-else ifeq ($(LLVM_VER), 3.3)
+ifeq ($(LLVM_VER), 3.3)
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.gz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
-else ifeq ($(LLVM_VER), 3.5.0)
+else
 LLVM_CLANG_TAR=cfe-$(LLVM_VER).src.tar.xz
 LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.xz
-else
-LLVM_CLANG_TAR=clang-$(LLVM_VER).src.tar.gz
-LLVM_COMPILER_RT_TAR=compiler-rt-$(LLVM_VER).src.tar.gz
 endif # LLVM_VER
 else
 LLVM_CLANG_TAR=
@@ -501,6 +515,8 @@ ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
 endif
 endif
+else ifeq ($(LLVM_VER),3.6.0)
+	cd llvm-3.6.0 && patch -p1 < ../zerosign-llvm-3.6.0.patch
 endif
 	touch -c $@
 
@@ -556,9 +572,9 @@ install-llvm: $(LLVM_OBJ_TARGET)
 
 update-llvm:
 	(cd llvm-$(LLVM_VER); git pull --ff-only)
-	([ -d llvm-$(LLVM_VER)/tools/clang ] && (cd llvm-$(LLVM_VER)/tools/clang; git pull --ff-only))
-	([ -d llvm-$(LLVM_VER)/projects/compiler-rt ] && (cd llvm-$(LLVM_VER)/projects/compiler-rt; git pull --ff-only))
-	([ -d llvm-$(LLVM_VER)/tools/lldb ] && (cd llvm-$(LLVM_VER)/tools/lldb; git pull --ff-only))
+	([ -d "llvm-$(LLVM_VER)/tools/clang"  ] || exit 0;          cd llvm-$(LLVM_VER)/tools/clang; git pull --ff-only)
+	([ -d "llvm-$(LLVM_VER)/projects/compiler-rt" ] || exit 0;  cd llvm-$(LLVM_VER)/projects/compiler-rt; git pull --ff-only)
+	([ -d "llvm-$(LLVM_VER)/tools/lldb" ] || exit 0;            cd llvm-$(LLVM_VER)/tools/lldb; git pull --ff-only)
 
 ## LIBUV ##
 
@@ -685,7 +701,7 @@ endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(OPENLIBM_OBJ_TARGET): $(OPENLIBM_OBJ_SOURCE)
+$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a : $(OPENLIBM_OBJ_SOURCE)
 	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
 	touch -c $@
@@ -748,7 +764,7 @@ install-openspecfun: $(OPENSPECFUN_OBJ_TARGET)
 
 ## DSFMT ##
 
-DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT)
+DSFMT_OBJ_TARGET = $(build_shlibdir)/libdSFMT.$(SHLIB_EXT) $(build_includedir)/dSFMT.h
 DSFMT_OBJ_SOURCE = dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
 
 DSFMT_CFLAGS = $(CFLAGS) -DNDEBUG -DDSFMT_MEXP=19937 $(fPIC) -DDSFMT_DO_NOT_USE_OLD_NAMES
@@ -773,11 +789,11 @@ dsfmt-$(DSFMT_VER)/config.status: dsfmt-$(DSFMT_VER).tar.gz
 	echo 1 > $@
 $(DSFMT_OBJ_SOURCE): dsfmt-$(DSFMT_VER)/config.status
 	cd dsfmt-$(DSFMT_VER) && \
-	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT) && \
-	cp dSFMT.h $(build_includedir)
-$(DSFMT_OBJ_TARGET): $(DSFMT_OBJ_SOURCE)
+	$(CC) $(CPPFLAGS) $(DSFMT_CFLAGS) $(LDFLAGS) dSFMT.c -o libdSFMT.$(SHLIB_EXT)
+$(build_shlibdir)/libdSFMT%$(SHLIB_EXT) $(build_includedir)/dSFMT%h: $(DSFMT_OBJ_SOURCE) | $(build_includedir) $(build_shlibdir)
+	cp dsfmt-$(DSFMT_VER)/dSFMT.h $(build_includedir)
 	cp $< $@ && \
-	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(DSFMT_OBJ_TARGET)
+	$(INSTALL_NAME_CMD)libdSFMT.$(SHLIB_EXT) $(build_shlibdir)/libDSFMT.$(SHLIB_EXT)
 
 clean-dsfmt:
 	-rm -f dsfmt-$(DSFMT_VER)/libdSFMT.$(SHLIB_EXT)
@@ -791,46 +807,43 @@ check-dsfmt: compile-dsfmt
 install-dsfmt: $(DSFMT_OBJ_TARGET)
 
 
-## Rmath ##
+## Rmath-julia ##
 
 ifeq ($(USE_SYSTEM_DSFMT),0)
 DSFMT_FAKE_TARGET = $(DSFMT_OBJ_TARGET)
 endif
 
-RMATH_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
-RMATH_OBJ_SOURCE = Rmath/src/libRmath-julia.$(SHLIB_EXT)
+RMATH_JULIA_OBJ_TARGET = $(build_shlibdir)/libRmath-julia.$(SHLIB_EXT)
+RMATH_JULIA_OBJ_SOURCE = Rmath-julia-$(RMATH_JULIA_VER)/src/libRmath-julia.$(SHLIB_EXT)
 
-RMATH_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
+RMATH_JULIA_FLAGS += CC="$(CC)" USECLANG=$(USECLANG) USEGCC=$(USEGCC) \
 			   OS="$(OS)" ARCH="$(ARCH)" \
 			   USE_DSFMT=1 DSFMT_libdir="$(build_shlibdir)" \
 			   DSFMT_includedir="$(build_includedir)"
 
-Rmath/Make.inc:
-	(cd .. && git submodule init && git submodule update)
-ifeq (exists, $(shell [ -d Rmath/.git ] && echo exists ))
-$(RMATH_OBJ_SOURCE): Rmath/.git/HEAD
-endif
-ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/Rmath ] && echo exists ))
-$(RMATH_OBJ_SOURCE): $(JULIAHOME)/.git/modules/deps/Rmath/HEAD
-endif
-$(RMATH_OBJ_SOURCE): Rmath/Make.inc $(DSFMT_FAKE_TARGET)
-	$(MAKE) -C Rmath/src $(RMATH_FLAGS) $(MAKE_COMMON)
+Rmath-julia-$(RMATH_JULIA_VER).tar.gz:
+	$(JLDOWNLOAD) $@ https://github.com/JuliaLang/Rmath-julia/archive/v$(RMATH_JULIA_VER).tar.gz
+$(RMATH_JULIA_OBJ_SOURCE): Rmath-julia-$(RMATH_JULIA_VER).tar.gz $(DSFMT_FAKE_TARGET)
+	$(JLCHECKSUM) Rmath-julia-$(RMATH_JULIA_VER).tar.gz && \
+	mkdir -p Rmath-julia-$(RMATH_JULIA_VER) && \
+	$(TAR) -C Rmath-julia-$(RMATH_JULIA_VER) --strip-components 1 -xf $< && \
+	$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER)/src $(RMATH_JULIA_FLAGS) $(MAKE_COMMON) && \
 	touch -c $@
-$(RMATH_OBJ_TARGET): $(RMATH_OBJ_SOURCE) | $(build_shlibdir)
+$(RMATH_JULIA_OBJ_TARGET): $(RMATH_JULIA_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
 	$(INSTALL_NAME_CMD)libRmath-julia.$(SHLIB_EXT) $@
 
-clean-Rmath:
-	-$(MAKE) -C Rmath/src clean
-	-rm $(RMATH_OBJ_TARGET)
-distclean-Rmath: clean-Rmath
-	-cd Rmath && git clean -fdx
+clean-Rmath-julia:
+	-$(MAKE) -C Rmath-julia-$(RMATH_JULIA_VER) clean
+	-rm $(RMATH_JULIA_OBJ_TARGET)
+distclean-Rmath-julia: clean-Rmath-julia
+	-rm -rf Rmath-julia-$(RMATH_JULIA_VER).tar.gz Rmath-julia-$(RMATH_JULIA_VER)
 
-get-Rmath: Rmath/Make.inc
-configure-Rmath: get-Rmath
-compile-Rmath: $(RMATH_OBJ_SOURCE)
-check-Rmath: compile-Rmath
-install-Rmath: $(RMATH_OBJ_TARGET)
+get-Rmath-julia: Rmath-julia-$(RMATH_JULIA_VER).tar.gz
+configure-Rmath-julia: get-Rmath-julia
+compile-Rmath-julia: $(RMATH_JULIA_OBJ_SOURCE)
+check-Rmath-julia: compile-Rmath-julia
+install-Rmath-julia: $(RMATH_JULIA_OBJ_TARGET)
 
 
 ## objconv ##
@@ -933,7 +946,7 @@ OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
 openblas-$(OPENBLAS_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
+	$(JLDOWNLOAD) $@ https://github.com/xianyi/OpenBLAS/archive/$(OPENBLAS_VER).tar.gz
 openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
 ifneq ($(OPENBLAS_VER),develop)
 	$(JLCHECKSUM) $<
@@ -1214,7 +1227,7 @@ FFTW_DOUBLE_OBJ_TARGET = $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-threads
 ifeq ($(ARCH), arm)
-  FFTW_CONFIG += --enable-neon
+  FFTW_CONFIG +=
 else ifeq ($(ARCH), ppc)
   FFTW_CONFIG += --enable-altivec
 else ifeq ($(ARCH), x86_64)
@@ -1670,7 +1683,7 @@ compile-patchelf: install-patchelf
 install-patchelf: $(PATCHELF_TARGET)
 
 patchelf-$(PATCHELF_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://ia601003.us.archive.org/29/items/julialang/mirror/patchelf-$(PATCHELF_VER).tar.gz
+	$(JLDOWNLOAD) $@ http://nixos.org/releases/patchelf/patchelf-$(PATCHELF_VER)/patchelf-$(PATCHELF_VER).tar.gz
 patchelf-$(PATCHELF_VER)/configure: patchelf-$(PATCHELF_VER).tar.gz
 	$(JLCHECKSUM) $<
 	$(TAR) zxf $<
@@ -1754,12 +1767,15 @@ $(VIRTUALENV_SOURCE): virtualenv-$(VIRTUALENV_VER).tar.gz
 	touch -c $@
 $(VIRTUALENV_TARGET): $(VIRTUALENV_SOURCE)
 	"$(shell ./find_python2)" $< $@
+ifeq ($(BUILD_OS), WINNT)
+	[ -e $@/Scripts ] && ! [ -e $@/bin ] && cmd //C mklink //J $@\\bin $@\\Scripts
+endif
 	touch -c $@
 
 clean-virtualenv:
 	-$(MAKE) -C virtualenv-$(VIRTUALENV_VER) clean
-	-rm -f $(VIRTUALENV_TARGET)
-distclean-virtualenv:
+	-rm -rf $(VIRTUALENV_TARGET)
+distclean-virtualenv: clean-virtualenv
 	-rm -rf virtualenv-$(VIRTUALENV_VER).tar.gz virtualenv-$(VIRTUALENV_VER)
 
 get-virtualenv: virtualenv-$(VIRTUALENV_VER).tar.gz

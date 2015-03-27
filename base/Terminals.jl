@@ -144,13 +144,13 @@ end
         else
             ccall(:jl_tty_set_mode,
                  Int32, (Ptr{Void},Int32),
-                 t.in_stream.handle, int32(raw)) != -1
+                 t.in_stream.handle, raw) != -1
         end
     end
 end : begin
     raw!(t::TTYTerminal, raw::Bool) = ccall(:uv_tty_set_mode,
                                          Int32, (Ptr{Void},Int32),
-                                         t.in_stream.handle, int32(raw)) != -1
+                                         t.in_stream.handle, raw) != -1
 end
 enable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004h")
 disable_bracketed_paste(t::UnixTerminal) = write(t.out_stream, "$(CSI)?2004l")
@@ -161,7 +161,7 @@ let s = zeros(Int32, 2)
     function Base.size(t::TTYTerminal)
         @windows_only if ispty(t.out_stream)
             try
-                h,w = int(split(readall(open(`stty size`, "r", t.out_stream)[1])))
+                h,w = map(x->parse(Int,x),split(readall(open(`stty size`, "r", t.out_stream)[1])))
                 w > 0 || (w = 80)
                 h > 0 || (h = 24)
                 return h,w
@@ -175,7 +175,7 @@ let s = zeros(Int32, 2)
         w,h = s[1],s[2]
         w > 0 || (w = 80)
         h > 0 || (h = 24)
-        (int(h),int(w))
+        (Int(h),Int(w))
     end
 end
 

@@ -96,7 +96,7 @@ error:
     julia> f(2.0, 3)
     ERROR: `f` has no method matching f(::Float64, ::Int64)
 
-    julia> f(float32(2.0), 3.0)
+    julia> f(Float32(2.0), 3.0)
     ERROR: `f` has no method matching f(::Float32, ::Float64)
 
     julia> f(2.0, "3.0")
@@ -341,8 +341,6 @@ Julia language. Core operations typically have dozens of methods::
     +(a::VWPreBuild,b::VWPreBuild) at pkg/resolve/versionweight.jl:120
     +(a::VersionWeight,b::VersionWeight) at pkg/resolve/versionweight.jl:164
     +(a::FieldValue,b::FieldValue) at pkg/resolve/fieldvalue.jl:41
-    +(a::Vec2,b::Vec2) at graphics.jl:60
-    +(bb1::BoundingBox,bb2::BoundingBox) at graphics.jl:123
     +(a,b,c) at operators.jl:82
     +(a,b,c,xs...) at operators.jl:83
 
@@ -445,7 +443,7 @@ the same type:
     julia> same_type("foo", "bar")
     true
 
-    julia> same_type(int32(1), int64(2))
+    julia> same_type(Int32(1), Int64(2))
     false
 
 This kind of definition of function behavior by dispatch is quite common
@@ -519,7 +517,7 @@ can also constrain type parameters of methods::
     julia> same_type_numeric("foo", "bar")
     no method same_type_numeric(ASCIIString,ASCIIString)
 
-    julia> same_type_numeric(int32(1), int64(2))
+    julia> same_type_numeric(Int32(1), Int64(2))
     false
 
 The ``same_type_numeric`` function behaves much like the ``same_type``

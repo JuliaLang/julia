@@ -748,6 +748,8 @@ To prevent this, we can add an inner constructor::
 
 The inner constructor requires that the element type of ``A`` be ``T``.
 
+.. _man-nothing:
+
 Nothingness and missing values
 ------------------------------
 

@@ -35,7 +35,7 @@ function parsealign(row)
     return align
 end
 
-function github_table(stream::IO, md::MD, config::Config)
+function github_table(stream::IO, md::MD)
     withstream(stream) do
         skipblank(stream)
         rows = []
@@ -50,10 +50,10 @@ function github_table(stream::IO, md::MD, config::Config)
                 align = parsealign(row)
                 (align == nothing || length(align) != cols) && return false
             else
-                push!(rows, map(x -> parseinline(x, config), rowlength!(row, cols)))
+                push!(rows, map(x -> parseinline(x, md), rowlength!(row, cols)))
             end
         end
-        length(rows) == 0 && return false
+        length(rows) <= 1 && return false
         push!(md, Table(rows, align))
         return true
     end
@@ -126,14 +126,14 @@ function term(io::IO, md::Table, columns)
     end
 end
 
-function writemime(io::IO, ::MIME"text/latex", md::Table)
+function latex(io::IO, md::Table)
     wrapblock(io, "tabular") do
         align = md.align
         println(io, "{$(join(align, " | "))}")
         for (i, row) in enumerate(md.rows)
             for (j, cell) in enumerate(row)
                 j != 1 && print(io, " & ")
-                latex_inline(io, cell)
+                latexinline(io, cell)
             end
             println(io, " \\\\")
             if i == 1

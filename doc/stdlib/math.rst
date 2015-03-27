@@ -128,6 +128,10 @@ Mathematical Operators
 
    The quotient and remainder from Euclidean division. Equivalent to ``(x÷y, x%y)``.
 
+.. function:: fldmod(x, y)
+
+   The floored quotient and modulus after division. Equivalent to ``(fld(x,y), mod(x,y))``.
+
 .. function:: mod1(x,m)
 
    Modulus after division, returning in the range (0,m]
@@ -919,7 +923,7 @@ Mathematical Functions
 
 .. function:: factorial(n)
 
-   Factorial of ``n``.  If ``n`` is an :func:`Integer`, the factorial
+   Factorial of ``n``.  If ``n`` is an :obj:`Integer`, the factorial
    is computed as an integer (promoted to at least 64 bits).  Note
    that this may overflow if ``n`` is not small, but you can use
    ``factorial(big(n))`` to compute the result exactly in arbitrary
@@ -1013,8 +1017,8 @@ Mathematical Functions
 
 .. function:: lgamma(x)
 
-   Compute the logarithm of the absolute value of ``gamma(x)`` for
-   :func:`Real` ``x``, while for :func:`Complex` ``x`` it computes the
+   Compute the logarithm of the absolute value of :func:`gamma` for
+   :obj:`Real` ``x``, while for :obj:`Complex` ``x`` it computes the
    logarithm of ``gamma(x)``.
 
 .. function:: lfact(x)

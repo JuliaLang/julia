@@ -103,7 +103,7 @@ static value_t *GCHandleStack[N_GC_HANDLES];
 static uint32_t N_GCHND = 0;
 
 value_t FL_NIL, FL_T, FL_F, FL_EOF, QUOTE;
-value_t IOError, ParseError, TypeError, ArgError, UnboundError, MemoryError;
+value_t IOError, ParseError, TypeError, ArgError, UnboundError, OutOfMemoryError;
 value_t DivideError, BoundsError, Error, KeyError, EnumerationError;
 value_t printwidthsym, printreadablysym, printprettysym, printlengthsym;
 value_t printlevelsym, builtins_table_sym;
@@ -465,7 +465,7 @@ static inline int symchar(char c);
 void fl_gc_handle(value_t *pv)
 {
     if (N_GCHND >= N_GC_HANDLES)
-        lerror(MemoryError, "out of gc handles");
+        lerror(OutOfMemoryError, "out of gc handles");
     GCHandleStack[N_GCHND++] = pv;
 }
 
@@ -705,7 +705,7 @@ static void grow_stack(void)
     size_t newsz = N_STACK + (N_STACK>>1);
     value_t *ns = (value_t*)realloc(Stack, newsz*sizeof(value_t));
     if (ns == NULL)
-        lerror(MemoryError, "stack overflow");
+        lerror(OutOfMemoryError, "stack overflow");
     Stack = ns;
     N_STACK = newsz;
 }
@@ -2364,7 +2364,7 @@ static void lisp_init(size_t initial_heapsize)
     IOError = symbol("io-error");     ParseError = symbol("parse-error");
     TypeError = symbol("type-error"); ArgError = symbol("arg-error");
     UnboundError = symbol("unbound-error");
-    KeyError = symbol("key-error");   MemoryError = symbol("memory-error");
+    KeyError = symbol("key-error");   OutOfMemoryError = symbol("memory-error");
     BoundsError = symbol("bounds-error");
     DivideError = symbol("divide-error");
     EnumerationError = symbol("enumeration-error");
@@ -2420,7 +2420,7 @@ static void lisp_init(size_t initial_heapsize)
         setc(symbol("*install-dir*"), cvalue_static_cstring(strdup(dirname(exename))));
     }
 
-    memory_exception_value = fl_list2(MemoryError,
+   memory_exception_value = fl_list2(OutOfMemoryError,
                                       cvalue_static_cstring("out of memory"));
 
     assign_global_builtins(core_builtin_info);
@@ -2442,6 +2442,18 @@ void fl_init(size_t initial_heapsize)
     lisp_init(initial_heapsize);
     fl_init_julia_extensions();
 }
+
+extern fltype_t *iostreamtype;
+
+int fl_load_system_image_str(char *str, size_t len)
+{
+    value_t img = cvalue(iostreamtype, sizeof(ios_t));
+    ios_t *pi = value2c(ios_t*, img);
+    ios_static_buffer(pi, str, len);
+
+    return fl_load_system_image(img);
+}
+
 
 int fl_load_system_image(value_t sys_image_iostream)
 {

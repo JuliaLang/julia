@@ -1,4 +1,3 @@
-module Errno
 include("errno_h.jl")
 export
     E2BIG,
@@ -132,4 +131,3 @@ export
     EUSERS,
     EXDEV,
     EXFULL
-end

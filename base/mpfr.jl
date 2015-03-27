@@ -90,7 +90,7 @@ BigFloat(x::Integer) = BigFloat(BigInt(x))
 BigFloat(x::Union(Bool,Int8,Int16,Int32)) = BigFloat(convert(Clong,x))
 BigFloat(x::Union(UInt8,UInt16,UInt32)) = BigFloat(convert(Culong,x))
 
-BigFloat(x::Union(Float16,Float32)) = BigFloat(float64(x))
+BigFloat(x::Union(Float16,Float32)) = BigFloat(Float64(x))
 BigFloat(x::Rational) = BigFloat(num(x)) / BigFloat(den(x))
 
 convert(::Type{Rational}, x::BigFloat) = convert(Rational{BigInt}, x)

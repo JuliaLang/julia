@@ -1,7 +1,11 @@
 ## core text I/O ##
 
 print(io::IO, x) = show(io, x)
-print(io::IO, xs...) = for x in xs print(io, x) end
+function print(io::IO, xs...)
+    lock(io) do io
+        for x in xs print(io, x) end
+    end
+end
 println(io::IO, xs...) = print(io, xs..., '\n')
 
 print(xs...)   = print(STDOUT, xs...)
@@ -12,7 +16,7 @@ println(xs...) = println(STDOUT, xs...)
 endof(s::AbstractString) = error("you must implement endof(", typeof(s), ")")
 next(s::AbstractString, i::Int) = error("you must implement next(", typeof(s), ",Int)")
 next(s::DirectIndexString, i::Int) = (s[i],i+1)
-next(s::AbstractString, i::Integer) = next(s,int(i))
+next(s::AbstractString, i::Integer) = next(s,Int(i))
 
 ## conversion of general objects to strings ##
 
@@ -56,9 +60,9 @@ convert(::Type{Symbol}, s::AbstractString) = symbol(s)
 start(s::AbstractString) = 1
 done(s::AbstractString,i) = (i > endof(s))
 getindex(s::AbstractString, i::Int) = next(s,i)[1]
-getindex(s::AbstractString, i::Integer) = s[int(i)]
+getindex(s::AbstractString, i::Integer) = s[Int(i)]
 getindex(s::AbstractString, x::Real) = s[to_index(x)]
-getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[int(first(r)):int(last(r))]
+getindex{T<:Integer}(s::AbstractString, r::UnitRange{T}) = s[Int(first(r)):Int(last(r))]
 # TODO: handle other ranges with stride ±1 specially?
 getindex(s::AbstractString, v::AbstractVector) =
     sprint(length(v), io->(for i in v write(io,s[i]) end))
@@ -71,7 +75,6 @@ show(io::IO, s::AbstractString) = print_quoted(io, s)
 
 sizeof(s::AbstractString) = error("type $(typeof(s)) has no canonical binary representation")
 
-eltype(::AbstractString) = Char
 eltype{T<:AbstractString}(::Type{T}) = Char
 
 (*)(s::AbstractString...) = string(s...)
@@ -234,7 +237,7 @@ function _searchindex(s, t, i)
 end
 
 function _search_bloom_mask(c)
-    uint64(1) << (c & 63)
+    UInt64(1) << (c & 63)
 end
 
 function _searchindex(s::Array, t::Array, i)
@@ -254,7 +257,7 @@ function _searchindex(s::Array, t::Array, i)
         return 0
     end
 
-    bloom_mask = uint64(0)
+    bloom_mask = UInt64(0)
     skip = n - 1
     tlast = t[end]
     for j in 1:n
@@ -386,7 +389,7 @@ function _rsearchindex(s::Array, t::Array, k)
         return 0
     end
 
-    bloom_mask = uint64(0)
+    bloom_mask = UInt64(0)
     skip = n - 1
     tfirst = t[1]
     for j in n:-1:1
@@ -525,7 +528,7 @@ endswith(str::AbstractString, chars::Chars) = !isempty(str) && str[end] in chars
 # faster comparisons for byte strings and symbols
 
 cmp(a::ByteString, b::ByteString) = lexcmp(a.data, b.data)
-cmp(a::Symbol, b::Symbol) = int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
+cmp(a::Symbol, b::Symbol) = Int(sign(ccall(:strcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}), a, b)))
 
 ==(a::ByteString, b::ByteString) = endof(a) == endof(b) && cmp(a,b) == 0
 isless(a::Symbol, b::Symbol) = cmp(a,b) < 0
@@ -538,12 +541,12 @@ startswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,int(ccall(:wcwidth, Int32, (UInt32,), c)))
+charwidth(c::Char) = max(0,Int(ccall(:wcwidth, Int32, (UInt32,), c)))
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
-strwidth(s::ByteString) = int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
+strwidth(s::ByteString) = Int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument
 
-isascii(c::Char) = c < char(0x80)
+isascii(c::Char) = c < Char(0x80)
 isascii(s::AbstractString) = all(isascii, s)
 isascii(s::ASCIIString) = true
 
@@ -582,7 +585,7 @@ immutable SubString{T<:AbstractString} <: AbstractString
 end
 SubString{T<:AbstractString}(s::T, i::Int, j::Int) = SubString{T}(s, i, j)
 SubString(s::SubString, i::Int, j::Int) = SubString(s.string, s.offset+i, s.offset+j)
-SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, int(i), int(j))
+SubString(s::AbstractString, i::Integer, j::Integer) = SubString(s, Int(i), Int(j))
 SubString(s::AbstractString, i::Integer) = SubString(s, i, endof(s))
 
 write{T<:ByteString}(to::IOBuffer, s::SubString{T}) =
@@ -598,7 +601,7 @@ sizeof(s::SubString{UTF8String}) = s.endof == 0 ? 0 : next(s,s.endof)[2]-1
 length{T<:DirectIndexString}(s::SubString{T}) = endof(s)
 
 function length(s::SubString{UTF8String})
-    return s.endof==0 ? 0 : int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
+    return s.endof==0 ? 0 : Int(ccall(:u8_charnum, Csize_t, (Ptr{UInt8}, Csize_t),
                                       pointer(s), next(s,s.endof)[2]-1))
 end
 
@@ -647,7 +650,7 @@ function getindex(s::AbstractString, r::UnitRange{Int})
     SubString(s, first(r), last(r))
 end
 
-function convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
+function unsafe_convert{P<:Union(Int8,UInt8),T<:ByteString}(::Type{Ptr{P}}, s::SubString{T})
     if s.offset+s.endof < endof(s.string)
         throw(ArgumentError("a SubString must coincide with the end of the original string to be convertible to pointer"))
     end
@@ -822,7 +825,7 @@ end
 map_result(s::AbstractString, a::Vector{UInt8}) = UTF8String(a)
 map_result(s::Union(ASCIIString,SubString{ASCIIString}), a::Vector{UInt8}) = bytestring(a)
 
-function map(f::Function, s::AbstractString)
+function map(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s
@@ -835,7 +838,7 @@ function map(f::Function, s::AbstractString)
     map_result(s, takebuf_array(out))
 end
 
-function filter(f::Function, s::AbstractString)
+function filter(f, s::AbstractString)
     out = IOBuffer(Array(UInt8,endof(s)),true,true)
     truncate(out,0)
     for c in s
@@ -877,7 +880,7 @@ function print_escaped(io, s::AbstractString, esc::AbstractString)
         c == '\e'       ? print(io, "\\e") :
         c == '\\'       ? print(io, "\\\\") :
         c in esc        ? print(io, '\\', c) :
-        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[int(c)-6]) :
+        '\a' <= c <= '\r' ? print(io, '\\', "abtnvfr"[Int(c)-6]) :
         isprint(c)      ? print(io, c) :
         c <= '\x7f'     ? print(io, "\\x", hex(c, 2)) :
         c <= '\uffff'   ? print(io, "\\u", hex(c, need_full_hex(s,j) ? 4 : 2)) :
@@ -935,9 +938,9 @@ function print_unescaped(io, s::AbstractString)
                     throw(ArgumentError("\\x used with no following hex digits in $(repr(s))"))
                 end
                 if m == 2 # \x escape sequence
-                    write(io, uint8(n))
+                    write(io, UInt8(n))
                 else
-                    print(io, char(n))
+                    print(io, Char(n))
                 end
             elseif '0' <= c <= '7'
                 k = 1
@@ -950,7 +953,7 @@ function print_unescaped(io, s::AbstractString)
                 if n > 255
                     throw(ArgumentError("octal escape sequence out of range"))
                 end
-                write(io, uint8(n))
+                write(io, UInt8(n))
             else
                 print(io, c == 'a' ? '\a' :
                           c == 'b' ? '\b' :
@@ -1476,45 +1479,50 @@ strip(s::AbstractString, chars::Chars) = lstrip(rstrip(s, chars), chars)
 
 ## string to integer functions ##
 
-function parseint(c::Char, base::Integer=36, a::Int=(base <= 36 ? 10 : 36))
+function parse{T<:Integer}(::Type{T}, c::Char, base::Integer=36)
+    a::Int = (base <= 36 ? 10 : 36)
     2 <= base <= 62 || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
     d = '0' <= c <= '9' ? c-'0'    :
         'A' <= c <= 'Z' ? c-'A'+10 :
         'a' <= c <= 'z' ? c-'a'+a  : throw(ArgumentError("invalid digit: $(repr(c))"))
     d < base || throw(ArgumentError("invalid base $base digit $(repr(c))"))
-    d
-end
-parseint{T<:Integer}(::Type{T}, c::Char, base::Integer) = convert(T,parseint(c,base))
-parseint{T<:Integer}(::Type{T}, c::Char) = convert(T,parseint(c))
-
-function parseint_next(s::AbstractString, i::Int=start(s))
-    done(s,i) && throw(ArgumentError("premature end of integer: $(repr(s))"))
-    j = i
-    c, i = next(s,i)
-    c, i, j
+    convert(T, d)
 end
 
-function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
-    c, i, j = parseint_next(s)
+function parseint_next(s::AbstractString, startpos::Int, endpos::Int)
+    (0 < startpos <= endpos) || (return Char(0), 0, 0)
+    j = startpos
+    c, startpos = next(s,startpos)
+    c, startpos, j
+end
+
+function parseint_preamble(signed::Bool, base::Int, s::AbstractString, startpos::Int, endpos::Int)
+    c, i, j = parseint_next(s, startpos, endpos)
+
     while isspace(c)
-        c, i, j = parseint_next(s,i)
+        c, i, j = parseint_next(s,i,endpos)
     end
+    (j == 0) && (return 0, 0, 0)
+
     sgn = 1
     if signed
         if c == '-' || c == '+'
             (c == '-') && (sgn = -1)
-            c, i, j = parseint_next(s,i)
+            c, i, j = parseint_next(s,i,endpos)
         end
     end
+
     while isspace(c)
-        c, i, j = parseint_next(s,i)
+        c, i, j = parseint_next(s,i,endpos)
     end
+    (j == 0) && (return 0, 0, 0)
+
     if base == 0
         if c == '0' && !done(s,i)
             c, i = next(s,i)
             base = c=='b' ? 2 : c=='o' ? 8 : c=='x' ? 16 : 10
             if base != 10
-                c, i, j = parseint_next(s,i)
+                c, i, j = parseint_next(s,i,endpos)
             end
         else
             base = 10
@@ -1523,23 +1531,49 @@ function parseint_preamble(signed::Bool, s::AbstractString, base::Int)
     return sgn, base, j
 end
 
-function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a::Int)
-    sgn, base, i = parseint_preamble(T<:Signed,s,base)
-    c, i = parseint_next(s,i)
+function tryparse_internal{S<:ByteString}(::Type{Bool}, sbuff::S, startpos::Int, endpos::Int, raise::Bool)
+    len = endpos-startpos+1
+    p = pointer(sbuff)+startpos-1
+    (len == 4) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "true", 4)) && (return Nullable(true))
+    (len == 5) && (0 == ccall(:memcmp, Int32, (Ptr{UInt8}, Ptr{UInt8}, UInt), p, "false", 5)) && (return Nullable(false))
+    raise && throw(ArgumentError("invalid Bool representation: $(repr(SubString(s,startpos,endpos)))"))
+    Nullable{Bool}()
+end
+
+safe_add{T<:Integer}(n1::T, n2::T) = ((n2 > 0) ? (n1 > (typemax(T) - n2)) : (n1 < (typemin(T) - n2))) ? Nullable{T}() : Nullable{T}(n1 + n2)
+safe_mul{T<:Integer}(n1::T, n2::T) = ((n2 >   0) ? ((n1 > div(typemax(T),n2)) || (n1 < div(typemin(T),n2))) :
+                                      (n2 <  -1) ? ((n1 > div(typemin(T),n2)) || (n1 < div(typemax(T),n2))) :
+                                      ((n2 == -1) && n1 == typemin(T))) ? Nullable{T}() : Nullable{T}(n1 * n2)
+
+function tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, a::Int, raise::Bool)
+    _n = Nullable{T}()
+    sgn, base, i = parseint_preamble(T<:Signed, base, s, startpos, endpos)
+    if i == 0
+        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
+        return _n
+    end
+    c, i = parseint_next(s,i,endpos)
+    if i == 0
+        raise && throw(ArgumentError("premature end of integer: $(repr(SubString(s,startpos,endpos)))"))
+        return _n
+    end
+
     base = convert(T,base)
-    ## FIXME: remove 128-bit specific code once 128-bit div doesn't rely on BigInt
-    m::T = T===UInt128 || T===Int128 ? typemax(T) : div(typemax(T)-base+1,base)
+    m::T = div(typemax(T)-base+1,base)
     n::T = 0
     while n <= m
         d::T = '0' <= c <= '9' ? c-'0'    :
                'A' <= c <= 'Z' ? c-'A'+10 :
                'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+        if d >= base
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
+            return _n
+        end
         n *= base
         n += d
-        if done(s,i)
+        if i > endpos
             n *= sgn
-            return n
+            return Nullable{T}(n)
         end
         c, i = next(s,i)
         isspace(c) && break
@@ -1547,44 +1581,46 @@ function parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int, a
     (T <: Signed) && (n *= sgn)
     while !isspace(c)
         d::T = '0' <= c <= '9' ? c-'0'    :
-               'A' <= c <= 'Z' ? c-'A'+10 :
-               'a' <= c <= 'z' ? c-'a'+a  : base
-        d < base || throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(s))"))
+        'A' <= c <= 'Z' ? c-'A'+10 :
+            'a' <= c <= 'z' ? c-'a'+a  : base
+        if d >= base
+            raise && throw(ArgumentError("invalid base $base digit $(repr(c)) in $(repr(SubString(s,startpos,endpos)))"))
+            return _n
+        end
         (T <: Signed) && (d *= sgn)
-        n = checked_mul(n,base)
-        n = checked_add(n,d)
-        done(s,i) && return n
+
+        safe_n = safe_mul(n, base)
+        isnull(safe_n) || (safe_n = safe_add(get(safe_n), d))
+        if isnull(safe_n)
+            raise && throw(OverflowError())
+            return _n
+        end
+        n = get(safe_n)
+        (i > endpos) && return Nullable{T}(n)
         c, i = next(s,i)
     end
-    while !done(s,i)
+    while i <= endpos
         c, i = next(s,i)
-        isspace(c) || throw(ArgumentError("extra characters after whitespace in $(repr(s))"))
+        if !isspace(c)
+            raise && throw(ArgumentError("extra characters after whitespace in $(repr(SubString(s,startpos,endpos)))"))
+            return _n
+        end
     end
-    return n
+    return Nullable{T}(n)
 end
-parseint_nocheck{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
-    parseint_nocheck(T, s, base, base <= 36 ? 10 : 36)
+tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, base::Int, raise::Bool) =
+    tryparse_internal(T,s,start(s),length(s),base,raise)
+tryparse_internal{T<:Integer}(::Type{T}, s::AbstractString, startpos::Int, endpos::Int, base::Int, raise::Bool) =
+    tryparse_internal(T, s, startpos, endpos, base, base <= 36 ? 10 : 36, raise)
+tryparse{T<:Integer}(::Type{T}, s::AbstractString, base::Int) =
+    2 <= base <= 62 ? tryparse_internal(T,s,Int(base),false) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+tryparse{T<:Integer}(::Type{T}, s::AbstractString) = tryparse_internal(T,s,0,false)
 
-parseint{T<:Integer}(::Type{T}, s::AbstractString, base::Integer) =
-    2 <= base <= 62 ? parseint_nocheck(T,s,int(base)) : throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
-parseint{T<:Integer}(::Type{T}, s::AbstractString) = parseint_nocheck(T,s,0)
-parseint(s::AbstractString, base::Integer) = parseint(Int,s,base)
-parseint(s::AbstractString) = parseint_nocheck(Int,s,0)
-
-integer (s::AbstractString) = int(s)
-unsigned(s::AbstractString) = uint(s)
-int     (s::AbstractString) = parseint(Int,s)
-uint    (s::AbstractString) = parseint(UInt,s)
-int8    (s::AbstractString) = parseint(Int8,s)
-uint8   (s::AbstractString) = parseint(UInt8,s)
-int16   (s::AbstractString) = parseint(Int16,s)
-uint16  (s::AbstractString) = parseint(UInt16,s)
-int32   (s::AbstractString) = parseint(Int32,s)
-uint32  (s::AbstractString) = parseint(UInt32,s)
-int64   (s::AbstractString) = parseint(Int64,s)
-uint64  (s::AbstractString) = parseint(UInt64,s)
-int128  (s::AbstractString) = parseint(Int128,s)
-uint128 (s::AbstractString) = parseint(UInt128,s)
+function parse{T<:Integer}(::Type{T}, s::AbstractString, base::Integer)
+    (2 <= base <= 62) || throw(ArgumentError("invalid base: base must be 2 ≤ base ≤ 62, got $base"))
+    get(tryparse_internal(T, s, base, true))
+end
+parse{T<:Integer}(::Type{T}, s::AbstractString) = get(tryparse_internal(T, s, 0, true))
 
 ## stringifying integers more efficiently ##
 
@@ -1592,45 +1628,20 @@ string(x::Union(Int8,Int16,Int32,Int64,Int128)) = dec(x)
 
 ## string to float functions ##
 
-float64_isvalid(s::AbstractString, out::Array{Float64,1}) =
-    ccall(:jl_strtod, Int32, (Ptr{UInt8},Ptr{Float64}), s, out) == 0
-float32_isvalid(s::AbstractString, out::Array{Float32,1}) =
-    ccall(:jl_strtof, Int32, (Ptr{UInt8},Ptr{Float32}), s, out) == 0
+tryparse(::Type{Float64}, s::AbstractString) = ccall(:jl_try_strtod, Nullable{Float64}, (Ptr{UInt8},), s)
+tryparse(::Type{Float64}, s::SubString) = ccall(:jl_try_substrtod, Nullable{Float64}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
 
-float64_isvalid(s::SubString, out::Array{Float64,1}) =
-    ccall(:jl_substrtod, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float64}), s.string, s.offset, s.endof, out) == 0
-float32_isvalid(s::SubString, out::Array{Float32,1}) =
-    ccall(:jl_substrtof, Int32, (Ptr{UInt8},Csize_t,Cint,Ptr{Float32}), s.string, s.offset, s.endof, out) == 0
+tryparse(::Type{Float32}, s::AbstractString) = ccall(:jl_try_strtof, Nullable{Float32}, (Ptr{UInt8},), s)
+tryparse(::Type{Float32}, s::SubString) = ccall(:jl_try_substrtof, Nullable{Float32}, (Ptr{UInt8},Csize_t,Cint), s.string, s.offset, s.endof)
 
-begin
-    local tmp::Array{Float64,1} = Array(Float64,1)
-    local tmpf::Array{Float32,1} = Array(Float32,1)
-    global float64, float32
-    function float64(s::AbstractString)
-        if !float64_isvalid(s, tmp)
-            throw(ArgumentError("float64(::AbstractString): invalid number format $(repr(s))"))
-        end
-        return tmp[1]
-    end
-
-    function float32(s::AbstractString)
-        if !float32_isvalid(s, tmpf)
-            throw(ArgumentError("float32(::AbstractString): invalid number format $(repr(s))"))
-        end
-        return tmpf[1]
-    end
+function parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString)
+    nf = tryparse(T, s)
+    isnull(nf) ? throw(ArgumentError("invalid number format $(repr(s)) for $T")) : get(nf)
 end
 
-float(x::AbstractString) = float64(x)
-parsefloat(x::AbstractString) = float64(x)
-parsefloat(::Type{Float64}, x::AbstractString) = float64(x)
-parsefloat(::Type{Float32}, x::AbstractString) = float32(x)
+float(x::AbstractString) = parse(Float64,x)
 
-for conv in (:float, :float32, :float64,
-             :int, :int8, :int16, :int32, :int64,
-             :uint, :uint8, :uint16, :uint32, :uint64)
-    @eval ($conv){S<:AbstractString}(a::AbstractArray{S}) = map($conv, a)
-end
+float{S<:AbstractString}(a::AbstractArray{S}) = map!(float, similar(a,typeof(float(0))), a)
 
 # find the index of the first occurrence of a value in a byte array
 
@@ -1646,11 +1657,11 @@ function search(a::ByteArray, b::Union(Int8,UInt8), i::Integer)
     end
     p = pointer(a)
     q = ccall(:memchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p+i-1, b, n-i+1)
-    q == C_NULL ? 0 : int(q-p+1)
+    q == C_NULL ? 0 : Int(q-p+1)
 end
 function search(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
-        search(a,uint8(b),i)
+        search(a,UInt8(b),i)
     else
         search(a,string(b).data,i).start
     end
@@ -1667,23 +1678,16 @@ function rsearch(a::Union(Array{UInt8,1},Array{Int8,1}), b::Union(Int8,UInt8), i
     end
     p = pointer(a)
     q = ccall(:memrchr, Ptr{UInt8}, (Ptr{UInt8}, Int32, Csize_t), p, b, i)
-    q == C_NULL ? 0 : int(q-p+1)
+    q == C_NULL ? 0 : Int(q-p+1)
 end
 function rsearch(a::ByteArray, b::Char, i::Integer)
     if isascii(b)
-        rsearch(a,uint8(b),i)
+        rsearch(a,UInt8(b),i)
     else
         rsearch(a,string(b).data,i).start
     end
 end
 rsearch(a::ByteArray, b::Union(Int8,UInt8,Char)) = rsearch(a,b,length(a))
-
-# return a random string (often useful for temporary filenames/dirnames)
-let b = uint8(['0':'9','A':'Z','a':'z'])
-    global randstring
-    randstring(n::Int) = ASCIIString(b[rand(1:length(b),n)])
-    randstring() = randstring(8)
-end
 
 function hex2bytes(s::ASCIIString)
     len = length(s)

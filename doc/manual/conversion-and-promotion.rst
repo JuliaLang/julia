@@ -105,7 +105,7 @@ numbers as strings to be conversions (many dynamic languages will even
 perform conversion for you automatically), however Julia does not: even
 though some strings can be parsed as numbers, most strings are not valid
 representations of numbers, and only a very limited subset of them are.
-Therefore in Julia the dedicated ``parseint`` function must be used
+Therefore in Julia the dedicated ``parse`` function must be used
 to perform this operation, making it more explicit.
 
 Defining New Conversions
@@ -292,7 +292,7 @@ This allows calls like the following to work:
 
 .. doctest::
 
-    julia> Rational(int8(15),int32(-5))
+    julia> Rational(Int8(15),Int32(-5))
     -3//1
 
     julia> typeof(ans)

@@ -4,10 +4,6 @@ include(joinpath(dir, "bubblesort.jl"))
 a = rand(1:100,100)
 @test issorted(sort!(a;alg=BubbleSort))
 
-include(joinpath(dir, "enum.jl"))
-@enum TestEnum TestEnum1 TestEnum2 TestEnum3
-@test [TestEnum1.n,TestEnum2.n,TestEnum3.n] == [0,1,2]
-
 include(joinpath(dir, "lru.jl"))
 include(joinpath(dir, "lru_test.jl"))
 
@@ -41,16 +37,16 @@ include(joinpath(dir, "queens.jl"))
 @unix_only begin
     script = joinpath(dir, "clustermanager/simple/test_simple.jl")
     cmd = `$(joinpath(JULIA_HOME,Base.julia_exename())) $script`
-    if !success(cmd)
+
+    (strm, proc) = open(cmd)
+    wait(proc)
+    if !success(proc) && ccall(:jl_running_on_valgrind,Cint,()) == 0
+        println(readall(strm))
         error("UnixDomainCM failed test, cmd : $cmd")
     end
 end
 
 # At least make sure code loads
-include(joinpath(dir, "plife.jl"))
-
-include(joinpath(dir, "preduce.jl"))
-
 include(joinpath(dir, "wordcount.jl"))
 
 # the 0mq clustermanager depends on package ZMQ. Just making sure the

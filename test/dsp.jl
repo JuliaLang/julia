@@ -21,6 +21,16 @@ a = [1.0,-2.4744161749781606,2.8110063119115782,-1.703772240915465,0.54443269488
 si = [0.9967207836936347,-1.4940914728163142,1.2841226760316475,-0.4524417279474106,0.07559488540931815]
 @test_approx_eq filt(b, a, ones(10), si) ones(10) # Shouldn't affect DC offset
 
+@test_throws ArgumentError filt!([1, 2], [1], [1], [1])
+@test xcorr([1, 2], [3, 4]) == [4, 11, 6]
+
+@test fftshift([1 2 3]) == [3 1 2]
+@test fftshift([1, 2, 3]) == [3, 1, 2]
+@test fftshift([1 2 3; 4 5 6]) == [6 4 5; 3 1 2]
+@test ifftshift([1 2 3]) == [2 3 1]
+@test ifftshift([1, 2, 3]) == [2, 3, 1]
+@test ifftshift([1 2 3; 4 5 6]) == [5 6 4; 2 3 1]
+
 # Convolution
 a = [1., 2., 1., 2.]
 b = [1., 2., 3.]

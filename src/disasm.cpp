@@ -110,6 +110,8 @@ public:
     // ArrayRef-like accessors:
     const char operator[] (const size_t idx) const { return Fptr[idx]; }
     uint64_t size() const { return Fsize; }
+    const uint8_t *data() const { return (const uint8_t*)Fptr; }
+    FuncMCView slice(unsigned N) const { return FuncMCView(Fptr+N, Fsize-N); }
 };
 #endif
 
@@ -125,9 +127,10 @@ class SymbolTable {
     MCContext& Ctx;
     const FuncMCView &MemObj;
     int Pass;
+    uint64_t ip; // virtual instruction pointer of the current instruction
 public:
     SymbolTable(MCContext &Ctx, const FuncMCView &MemObj):
-        Ctx(Ctx), MemObj(MemObj) {}
+        Ctx(Ctx), MemObj(MemObj), ip(0) {}
     const FuncMCView &getMemoryObject() const { return MemObj; }
     void setPass(int Pass) { this->Pass = Pass; }
     int getPass() const { return Pass; }
@@ -135,7 +138,17 @@ public:
     // void createSymbol(const char *name, uint64_t addr);
     void createSymbols();
     const char *lookupSymbol(uint64_t addr);
+    void setIP(uint64_t addr);
+    uint64_t getIP() const;
 };
+void SymbolTable::setIP(uint64_t addr)
+{
+    ip = addr;
+}
+uint64_t SymbolTable::getIP() const
+{
+    return ip;
+}
 // Insert an address
 void SymbolTable::insertAddress(uint64_t addr)
 {
@@ -152,7 +165,7 @@ void SymbolTable::createSymbols()
 {
     for (TableType::iterator isymb = Table.begin(), esymb = Table.end();
          isymb != esymb; ++isymb) {
-        uint64_t addr = isymb->first;
+        uint64_t addr = isymb->first - ip;
         std::ostringstream name;
         name << "L" << addr;
         MCSymbol *symb = Ctx.GetOrCreateSymbol(StringRef(name.str()));
@@ -177,7 +190,7 @@ const char *SymbolLookup(void *DisInfo,
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
     if (SymTab->getPass() != 0) {
         if (*ReferenceType == LLVMDisassembler_ReferenceType_In_Branch) {
-            uint64_t addr = ReferenceValue;
+            uint64_t addr = ReferenceValue + SymTab->getIP();
             const char *symbolName = SymTab->lookupSymbol(addr);
             *ReferenceType = LLVMDisassembler_ReferenceType_InOut_None;
             *ReferenceName = NULL;
@@ -197,6 +210,7 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
                  int TagType, void *TagBuf)
 {
     SymbolTable *SymTab = (SymbolTable*)DisInfo;
+    PC += SymTab->getIP() - (uint64_t)(uintptr_t)SymTab->getMemoryObject().data(); // add offset from MemoryObject base
     if (TagType != 1)
         return 0;               // Unknown data format
     LLVMOpInfo1 *info = (LLVMOpInfo1*)TagBuf;
@@ -231,7 +245,7 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
 } // namespace
 
 extern "C"
-void jl_dump_function_asm(const char *Fptr, size_t Fsize,
+void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #else
@@ -304,11 +318,11 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
     OwningPtr<MCDisassembler> DisAsm(TheTarget->createMCDisassembler(*STI));
 #endif
     if (!DisAsm) {
-        JL_PRINTF(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
+        jl_printf(JL_STDERR, "error: no disassembler for target", TripleName.c_str(), "\n");
         return;
     }
 
-    unsigned OutputAsmVariant = 1;
+    unsigned OutputAsmVariant = 0; // ATT or Intel-style assembly
     bool ShowEncoding = false;
     bool ShowInst = false;
 
@@ -326,7 +340,11 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
     MCCodeEmitter *CE = 0;
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
+#ifdef LLVM37
+        CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, Ctx);
+#else
         CE = TheTarget->createMCCodeEmitter(*MCII, *MRI, *STI, Ctx);
+#endif
 #ifdef LLVM34
         MAB = TheTarget->createMCAsmBackend(*MRI, TripleName, MCPU);
 #else
@@ -351,7 +369,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 #ifdef LLVM36
     ArrayRef<uint8_t> memoryObject(const_cast<uint8_t*>((const uint8_t*)Fptr),Fsize);
 #else
-    FuncMCView memoryObject(Fptr, Fsize);
+    FuncMCView memoryObject((const uint8_t*)Fptr, Fsize);
 #endif
     SymbolTable DisInfo(Ctx, memoryObject);
 
@@ -363,7 +381,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
     DIContext *di_ctx = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(objectfile));
 #endif
     if (di_ctx == NULL) return;
-    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange((size_t)Fptr, Fsize);
+    DILineInfoTable lineinfo = di_ctx->getLineInfoForAddressRange(Fptr-slide, Fsize);
 #else
     typedef std::vector<JITEvent_EmittedFunctionDetails::LineStart> LInfoVec;
 #endif
@@ -431,14 +449,12 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 #endif
 
         uint64_t Index = 0;
-        uint64_t absAddr = 0;
         uint64_t insSize = 0;
 
         // Do the disassembly
-        for (Index = 0, absAddr = (uint64_t)Fptr;
-             Index < Fsize; Index += insSize, absAddr += insSize) {
+        for (Index = 0; Index < Fsize; Index += insSize) {
 
-            if (nextLineAddr != (uint64_t)-1 && absAddr == nextLineAddr) {
+            if (nextLineAddr != (uint64_t)-1 && Index + Fptr - slide == nextLineAddr) {
 #ifdef USE_MCJIT
 #ifdef LLVM35
                 if (pass != 0)
@@ -454,22 +470,23 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                 nextLineAddr = (*++lineIter).Address;
 #endif
             }
+            DisInfo.setIP(Fptr+Index);
             if (pass != 0) {
                 // Uncomment this to output addresses for all instructions
                 // stream << Index << ": ";
-                const char *symbolName = DisInfo.lookupSymbol(Index);
+                const char *symbolName = DisInfo.lookupSymbol(Fptr+Index);
                 if (symbolName)
                     stream << symbolName << ":";
             }
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
-            S = DisAsm->getInstruction(Inst, insSize, memoryObject, Index,
+            S = DisAsm->getInstruction(Inst, insSize, memoryObject.slice(Index), 0,
                                       /*REMOVE*/ nulls(), nulls());
             switch (S) {
             case MCDisassembler::Fail:
                 if (pass != 0)
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer(Fptr + Index),
+                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
                                         "invalid instruction encoding");
                 if (insSize == 0)
@@ -478,7 +495,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
 
             case MCDisassembler::SoftFail:
                 if (pass != 0)
-                    SrcMgr.PrintMessage(SMLoc::getFromPointer(Fptr + Index),
+                    SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
                                         "potentially undefined instruction encoding");
                 // Fall through
@@ -489,9 +506,9 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
                     if (MCIA->isBranch(Inst)) {
                         uint64_t addr;
 #ifdef LLVM34
-                        if (MCIA->evaluateBranch(Inst, Index, insSize, addr))
+                        if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
 #else
-                        if ((addr = MCIA->evaluateBranch(Inst, Index, insSize)) != (uint64_t)-1)
+                        if ((addr = MCIA->evaluateBranch(Inst, Fptr+Index, insSize)) != (uint64_t)-1)
 #endif
                             DisInfo.insertAddress(addr);
                     }
@@ -508,6 +525,7 @@ void jl_dump_function_asm(const char *Fptr, size_t Fsize,
             }
         }
 
+        DisInfo.setIP(Fptr);
         if (pass == 0)
             DisInfo.createSymbols();
     }

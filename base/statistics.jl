@@ -18,13 +18,7 @@ mean(A::AbstractArray) = sum(A) / length(A)
 
 function mean!{T}(R::AbstractArray{T}, A::AbstractArray)
     sum!(R, A; init=true)
-    lenR = length(R)
-    rs = convert(T, length(A) / lenR)
-    if rs != 1
-        for i = 1:lenR
-            @inbounds R[i] /= rs
-        end
-    end
+    scale!(R, length(R) / length(A))
     return R
 end
 
@@ -33,7 +27,7 @@ momenttype(::Type{Float32}) = Float32
 momenttype{T<:Union(Float64,Int32,Int64,UInt32,UInt64)}(::Type{T}) = Float64
 
 mean{T}(A::AbstractArray{T}, region) =
-    mean!(Array(momenttype(T), reduced_dims(size(A), region)), A)
+    mean!(reducedim_initarray(A, region, 0, momenttype(T)), A)
 
 
 ##### variances #####
@@ -57,7 +51,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
             S = S + (value - M) * (value - new_M)
             M = new_M
         end
-        return S / (count - int(corrected))
+        return S / (count - Int(corrected))
     elseif isa(mean, Number) # mean provided
         # Cannot use a compensated version, e.g. the one from
         # "Updating Formulae and a Pairwise Algorithm for Computing Sample Variances."
@@ -70,7 +64,7 @@ function var(iterable; corrected::Bool=true, mean=nothing)
             count += 1
             sum2 += (value - mean)^2
         end
-        return sum2 / (count - int(corrected))
+        return sum2 / (count - Int(corrected))
     else
         throw(ArgumentError("invalid value of mean, $(mean)::$(typeof(mean))"))
     end
@@ -79,33 +73,35 @@ end
 function varzm{T}(A::AbstractArray{T}; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    return sumabs2(A) / (n - int(corrected))
+    return sumabs2(A) / (n - Int(corrected))
 end
 
 function varzm!{S}(R::AbstractArray{S}, A::AbstractArray; corrected::Bool=true)
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(length(A), length(r)) - int(corrected)
+        rn = div(length(A), length(r)) - Int(corrected)
         scale!(sumabs2!(R, A; init=true), convert(S, 1/rn))
     end
     return R
 end
 
 varzm{T}(A::AbstractArray{T}, region; corrected::Bool=true) =
-    varzm!(Array(momenttype(T), reduced_dims(A, region)), A; corrected=corrected)
+    varzm!(reducedim_initarray(A, region, 0, momenttype(T)), A; corrected=corrected)
 
 immutable CentralizedAbs2Fun{T<:Number} <: Func{1}
     m::T
 end
 call(f::CentralizedAbs2Fun, x) = abs2(x - f.m)
+centralize_sumabs2(A::AbstractArray, m::Number) =
+    mapreduce(CentralizedAbs2Fun(m), AddFun(), A)
 centralize_sumabs2(A::AbstractArray, m::Number, ifirst::Int, ilast::Int) =
     mapreduce_impl(CentralizedAbs2Fun(m), AddFun(), A, ifirst, ilast)
 
 stagedfunction centralize_sumabs2!{S,T,N}(R::AbstractArray{S}, A::AbstractArray{T,N}, means::AbstractArray)
     quote
         # following the implementation of _mapreducedim! at base/reducedim.jl
-        lsiz = check_reducdims(R, A)
+        lsiz = check_reducedims(R,A)
         isempty(R) || fill!(R, zero(S))
         isempty(A) && return R
         @nextract $N sizeR d->size(R,d)
@@ -142,22 +138,22 @@ end
 function varm{T}(A::AbstractArray{T}, m::Number; corrected::Bool=true)
     n = length(A)
     n == 0 && return convert(momenttype(T), NaN)
-    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - int(corrected)))
-    return centralize_sumabs2(A, m, 1, n) / (n - int(corrected))
+    n == 1 && return convert(momenttype(T), abs2(A[1] - m)/(1 - Int(corrected)))
+    return centralize_sumabs2(A, m) / (n - Int(corrected))
 end
 
 function varm!{S}(R::AbstractArray{S}, A::AbstractArray, m::AbstractArray; corrected::Bool=true)
     if isempty(A)
         fill!(R, convert(S, NaN))
     else
-        rn = div(length(A), length(R)) - int(corrected)
+        rn = div(length(A), length(R)) - Int(corrected)
         scale!(centralize_sumabs2!(R, A, m), convert(S, 1/rn))
     end
     return R
 end
 
 varm{T}(A::AbstractArray{T}, m::AbstractArray, region; corrected::Bool=true) =
-    varm!(Array(momenttype(T), reduced_dims(size(A), region)), A, m; corrected=corrected)
+    varm!(reducedim_initarray(A, region, 0, momenttype(T)), A, m; corrected=corrected)
 
 
 function var{T}(A::AbstractArray{T}; corrected::Bool=true, mean=nothing)
@@ -250,16 +246,16 @@ unscaled_covzm(x::AbstractMatrix, y::AbstractMatrix, vardim::Int) =
 
 # covzm (with centered data)
 
-covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - int(corrected))
+covzm(x::AbstractVector; corrected::Bool=true) = unscaled_covzm(x, x) / (length(x) - Int(corrected))
 
 covzm(x::AbstractMatrix; vardim::Int=1, corrected::Bool=true) =
-    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - int(corrected)))
+    scale!(unscaled_covzm(x, vardim), inv(size(x,vardim) - Int(corrected)))
 
 covzm(x::AbstractVector, y::AbstractVector; corrected::Bool=true) =
-    unscaled_covzm(x, y) / (length(x) - int(corrected))
+    unscaled_covzm(x, y) / (length(x) - Int(corrected))
 
 covzm(x::AbstractVecOrMat, y::AbstractVecOrMat; vardim::Int=1, corrected::Bool=true) =
-    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - int(corrected)))
+    scale!(unscaled_covzm(x, y, vardim), inv(_getnobs(x, y, vardim) - Int(corrected)))
 
 # covm (with provided mean)
 
@@ -450,9 +446,9 @@ end
 ##### median & quantiles #####
 
 # Specialized functions for real types allow for improved performance
-middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = float64(x)
+middle(x::Union(Bool,Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)) = Float64(x)
 middle(x::FloatingPoint) = x
-middle(x::Float16) = float32(x)
+middle(x::Float16) = Float32(x)
 middle(x::Real) = (x + zero(x)) / 1
 middle(x::Real, y::Real) = x/2 + y/2
 middle(a::Range) = middle(a[1], a[end])
@@ -558,6 +554,9 @@ function histrange{T<:Integer,N}(v::AbstractArray{T,N}, n::Integer)
     end
     if nv == 0
         return 0:1:0
+    end
+    if n <= 0
+        throw(ArgumentError("number of bins n=$n must be positive"))
     end
     lo, hi = extrema(v)
     if hi == lo

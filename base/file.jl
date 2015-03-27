@@ -70,7 +70,20 @@ end
 
 # The following use Unix command line facilites
 
-cp(src::AbstractString, dst::AbstractString) = FS.sendfile(src, dst)
+function cp(src::AbstractString, dst::AbstractString; recursive::Bool=false)
+    if islink(src) || !isdir(src)
+        FS.sendfile(src, dst)
+    elseif recursive
+        mkdir(dst)
+        for p in readdir(src)
+            cp(joinpath(src, p), joinpath(dst, p), recursive=recursive)
+        end
+    else
+        throw(ArgumentError(string("'$src' is a directory. ",
+            "Use `cp(src, dst, recursive=true)` ",
+            "to copy directories recursively.")))
+    end
+end
 mv(src::AbstractString, dst::AbstractString) = FS.rename(src, dst)
 
 function touch(path::AbstractString)
@@ -91,7 +104,7 @@ function tempname()
     p = ccall(:tempnam, Ptr{UInt8}, (Ptr{UInt8},Ptr{UInt8}), d, "julia")
     systemerror(:tempnam, p == C_NULL)
     s = bytestring(p)
-    c_free(p)
+    Libc.free(p)
     return s
 end
 
@@ -123,7 +136,7 @@ function tempdir()
     resize!(temppath,lentemppath+1)
     return utf8(UTF16String(temppath))
 end
-tempname(uunique::UInt32=uint32(0)) = tempname(tempdir(), uunique)
+tempname(uunique::UInt32=UInt32(0)) = tempname(tempdir(), uunique)
 function tempname(temppath::AbstractString,uunique::UInt32)
     tname = Array(UInt16,32767)
     uunique = ccall(:GetTempFileNameW,stdcall,UInt32,(Ptr{UInt16},Ptr{UInt16},UInt32,Ptr{UInt16}),
@@ -151,7 +164,7 @@ function mktempdir()
         if ret == 0
             return filename
         end
-        systemerror(:mktempdir, errno()!=EEXIST)
+        systemerror(:mktempdir, Libc.errno()!=Libc.EEXIST)
         seed += 1
     end
 end

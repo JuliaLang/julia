@@ -11,7 +11,7 @@ Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidia
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = error("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument.")
 
 #Convert from BLAS uplo flag to boolean internal
-Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::BlasChar) = begin
+Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
     if uplo === 'U'
         isupper = true
     elseif uplo === 'L'
@@ -47,13 +47,20 @@ function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal{T})
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
 
-#################
-# BLAS routines #
-#################
+###################
+# LAPACK routines #
+###################
 
 #Singular values
-svdvals{T<:BlasReal}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'N', copy(M.dv), copy(M.ev))
-svd    {T<:BlasReal}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'I', copy(M.dv), copy(M.ev))
+svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
+function svd{T<:BlasReal}(M::Bidiagonal{T})
+    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', copy(M.dv), copy(M.ev))
+    return U, d, Vt'
+end
+function svdfact!(M::Bidiagonal, thin::Bool=true)
+    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
+    SVD(U, d, Vt)
+end
 
 ####################
 # Generic routines #
@@ -216,8 +223,3 @@ function eigvecs{T}(M::Bidiagonal{T})
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
-#Singular values
-function svdfact(M::Bidiagonal, thin::Bool=true)
-    U, S, V = svd(M)
-    SVD(U, S, V')
-end

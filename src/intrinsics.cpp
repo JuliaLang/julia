@@ -39,7 +39,7 @@ namespace JL_I {
         sqrt_llvm, powi_llvm,
         sqrt_llvm_fast,
         // pointer access
-        pointerref, pointerset, pointertoref,
+        pointerref, pointerset,
         // c interface
         ccall, cglobal, jl_alloca, llvmcall
     };
@@ -125,6 +125,11 @@ static Value *uint_cnvt(Type *to, Value *x)
     return builder.CreateZExt(x, to);
 }
 
+#ifdef LLVM33
+    #define LLVM_FP(a,b) APFloat(a,b)
+#else
+    #define LLVM_FP(a,b) APFloat(b,true)
+#endif
 static Constant *julia_const_to_llvm(jl_value_t *e)
 {
     jl_value_t *jt = jl_typeof(e);
@@ -135,39 +140,67 @@ static Constant *julia_const_to_llvm(jl_value_t *e)
 
     if (e == jl_true)
         return ConstantInt::get(T_int1, 1);
-    else if (e == jl_false)
+    if (e == jl_false)
         return ConstantInt::get(T_int1, 0);
 
+    if (jl_is_cpointer_type(jt))
+        return ConstantExpr::getIntToPtr(ConstantInt::get(T_size, jl_unbox_long(e)), julia_type_to_llvm((jl_value_t*)bt));
     if (jl_is_bitstype(jt)) {
         int nb = jl_datatype_size(bt);
-        //APInt copies the data (but only as much as needed, so it doesn't matter if ArrayRef extends too far)
-        APInt val = APInt(8*nb,ArrayRef<uint64_t>((uint64_t*)jl_data_ptr(e),(nb+7)/8));
-        if (jl_is_float(e)) {
-#ifdef LLVM33
-            #define LLVM_FP(a,b) APFloat(a,b)
-#else
-            #define LLVM_FP(a,b) APFloat(b,true)
-#endif
+        //TODO: non-power-of-2 size datatypes may not be interpreted correctly on big-endian systems
+        switch (nb) {
+        case 1: {
+            uint8_t data8 = *(uint8_t*)jl_data_ptr(e);
+            return ConstantInt::get(T_int8, data8);
+        }
+        case 2: {
+            uint16_t data16 = *(uint16_t*)jl_data_ptr(e);
 #ifndef DISABLE_FLOAT16
-            if (nb == 2)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,val));
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEhalf,APInt(16,data16)));
+            }
+#endif
+            return ConstantInt::get(T_int16, data16);
+        }
+        case 4: {
+            uint32_t data32 = *(uint32_t*)jl_data_ptr(e);
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,APInt(32,data32)));
+            }
+            return ConstantInt::get(T_int32, data32);
+        }
+        case 8: {
+            uint64_t data64 = *(uint64_t*)jl_data_ptr(e);
+            if (jl_is_float(e)) {
+                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,APInt(64,data64)));
+            }
+            return ConstantInt::get(T_int64, data64);
+        }
+        default:
+            size_t nw = (nb+sizeof(uint64_t)-1)/sizeof(uint64_t);
+            uint64_t *data = (uint64_t*)jl_data_ptr(e);
+            APInt val;
+#if !defined(_P64)
+            // malloc may not be 16-byte aligned on P32,
+            // but we must ensure that llvm's uint64_t reads don't fall
+            // off the end of a page
+            // where 16-byte alignment requirement == (8-byte typetag) % (uint64_t ArrayRef access)
+            if (nb % 16 != 0) {
+                uint64_t *data_a64 = (uint64_t*)alloca(sizeof(uint64_t)*nw);
+                memcpy(data_a64, data, nb);
+                val = APInt(8*nb, ArrayRef<uint64_t>(data_a64, nw));
+            }
             else
 #endif
-            if (nb == 4)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEsingle,val));
-            else if (nb == 8)
-                return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEdouble,val));
-            else if (nb == 16)
+            val = APInt(8*nb, ArrayRef<uint64_t>(data, nw));
+            if (nb == 16 && jl_is_float(e)) {
                 return ConstantFP::get(jl_LLVMContext,LLVM_FP(APFloat::IEEEquad,val));
-            // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
+                // If we have a floating point type that's not hardware supported, just treat it like an integer for LLVM purposes
+            }
+            return ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
         }
-        Constant *asInt = ConstantInt::get(IntegerType::get(jl_LLVMContext,8*nb),val);
-        if (jl_is_cpointer_type(bt)) {
-            return ConstantExpr::getIntToPtr(asInt, julia_type_to_llvm((jl_value_t*)bt));
-        }
-        return asInt;
     }
-    else if (jl_isbits(jt)) {
+    if (jl_isbits(jt)) {
         size_t nf = jl_tuple_len(bt->names), i;
         size_t llvm_nf = 0;
         Constant **fields = (Constant**)alloca(nf * sizeof(Constant*));
@@ -264,9 +297,9 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
             Type *ety = jl_llvmtuple_eltype(to,jt,i);
             if (ety == T_void)
                 continue;
-            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i+1),jt,NULL);
+            Value *ref = emit_tupleref(x,ConstantInt::get(T_size,i),jt,NULL);
             Value *elt = emit_unbox(ety,ref,jl_tupleref(jt,i));
-            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i+1),elt,jt,NULL);
+            tpl = emit_tupleset(tpl,ConstantInt::get(T_size,i),elt,jt,NULL);
         }
         return tpl;
     }
@@ -630,11 +663,11 @@ static Value *emit_pointerref(jl_value_t *e, jl_value_t *i, jl_codectx_t *ctx)
                                ConstantInt::get(T_size,
                                     sizeof(void*)+size));
         builder.CreateStore(literal_pointer_val((jl_value_t*)ety),
-                            emit_nthptr_addr(strct, (size_t)0));
+                            emit_typeptr_addr(strct));
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         thePtr = builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1);
-        builder.CreateMemCpy(builder.CreateBitCast(emit_nthptr_addr(strct, (size_t)1), T_pint8),
+        builder.CreateMemCpy(builder.CreateBitCast(strct, T_pint8),
                             thePtr, size, 1);
         return mark_julia_type(strct, ety);
     }
@@ -690,7 +723,7 @@ static Value *emit_pointerset(jl_value_t *e, jl_value_t *x, jl_value_t *i, jl_co
         im1 = builder.CreateMul(im1, ConstantInt::get(T_size,
                     LLT_ALIGN(size, ((jl_datatype_t*)ety)->alignment)));
         builder.CreateMemCpy(builder.CreateGEP(builder.CreateBitCast(thePtr, T_pint8), im1),
-                             builder.CreateBitCast(emit_nthptr_addr(val, (size_t)1), T_pint8), size, 1);
+                             builder.CreateBitCast(val, T_pint8), size, 1);
     }
     else {
         if (val == NULL) {
@@ -734,9 +767,9 @@ struct math_builder {
     math_builder(jl_codectx_t *ctx, bool always_fast = false):
         old_fmf(builder.getFastMathFlags())
     {
-        if (jl_compileropts.fast_math != JL_COMPILEROPT_FAST_MATH_OFF &&
+        if (jl_options.fast_math != JL_OPTIONS_FAST_MATH_OFF &&
             (always_fast ||
-             jl_compileropts.fast_math == JL_COMPILEROPT_FAST_MATH_ON)) {
+             jl_options.fast_math == JL_OPTIONS_FAST_MATH_ON)) {
             FastMathFlags fmf;
             fmf.setUnsafeAlgebra();
             builder.SetFastMathFlags(fmf);
@@ -803,13 +836,6 @@ static Value *emit_intrinsic(intrinsic f, jl_value_t **args, size_t nargs,
     HANDLE(zext_int,2)    return generic_zext(args[1], args[2], ctx);
     HANDLE(pointerref,2)  return emit_pointerref(args[1], args[2], ctx);
     HANDLE(pointerset,3)  return emit_pointerset(args[1], args[2], args[3], ctx);
-    HANDLE(pointertoref,1) {
-        Value *p = auto_unbox(args[1], ctx);
-        if (p->getType()->isIntegerTy()) {
-            return builder.CreateIntToPtr(p, jl_pvalue_llvmt);
-        }
-        return builder.CreateBitCast(p, jl_pvalue_llvmt);
-    }
     HANDLE(checked_fptosi,2) {
         Value *x = FP(auto_unbox(args[2], ctx));
         return emit_checked_fptosi(args[1], x, ctx);
@@ -1361,7 +1387,7 @@ extern "C" void jl_init_intrinsic_functions(void)
     ADD_I(ceil_llvm); ADD_I(floor_llvm); ADD_I(trunc_llvm); ADD_I(rint_llvm);
     ADD_I(sqrt_llvm); ADD_I(powi_llvm);
     ADD_I(sqrt_llvm_fast);
-    ADD_I(pointerref); ADD_I(pointerset); ADD_I(pointertoref);
+    ADD_I(pointerref); ADD_I(pointerset);
     ADD_I(checked_sadd); ADD_I(checked_uadd);
     ADD_I(checked_ssub); ADD_I(checked_usub);
     ADD_I(checked_smul); ADD_I(checked_umul);

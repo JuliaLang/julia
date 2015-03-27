@@ -17,7 +17,7 @@ jl_module_t *jl_current_module=NULL;
 jl_module_t *jl_new_module(jl_sym_t *name)
 {
     jl_module_t *m = (jl_module_t*)allocobj(sizeof(jl_module_t));
-    m->type = (jl_value_t*)jl_module_type;
+    jl_set_typeof(m, jl_module_type);
     JL_GC_PUSH1(&m);
     assert(jl_is_symbol(name));
     m->name = name;
@@ -364,11 +364,11 @@ DLLEXPORT void jl_checked_assignment(jl_binding_t *b, jl_value_t *rhs)
                 jl_is_type(rhs) || jl_is_function(rhs) || jl_is_module(rhs)) {
                 jl_errorf("invalid redefinition of constant %s", b->name->name);
             }
-            JL_PRINTF(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
+            jl_printf(JL_STDERR,"Warning: redefining constant %s\n",b->name->name);
         }
     }
     b->value = rhs;
-    gc_wb_binding(((void**)b)-1, rhs);
+    gc_wb_binding(b, rhs);
 }
 
 DLLEXPORT void jl_declare_constant(jl_binding_t *b)
@@ -444,9 +444,9 @@ void jl_module_run_initializer(jl_module_t *m)
         jl_apply(f, NULL, 0);
     }
     JL_CATCH {
-        JL_PRINTF(JL_STDERR, "Warning: error initializing module %s:\n", m->name->name);
+        jl_printf(JL_STDERR, "Warning: error initializing module %s:\n", m->name->name);
         jl_static_show(JL_STDERR, jl_exception_in_transit);
-        JL_PRINTF(JL_STDERR, "\n");
+        jl_printf(JL_STDERR, "\n");
     }
 }
 

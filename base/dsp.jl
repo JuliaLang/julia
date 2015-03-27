@@ -26,7 +26,7 @@ function filt!{T,S,N}(out::AbstractArray, b::Union(AbstractVector, Number), a::U
     isempty(a) && throw(ArgumentError("filter vector a must be non-empty"))
     a[1] == 0  && throw(ArgumentError("filter vector a[1] must be nonzero"))
     if size(x) != size(out)
-        thow(ArgumentError("output size $(size(out)) must match input size $(size(x))"))
+        throw(ArgumentError("output size $(size(out)) must match input size $(size(x))"))
     end
 
     as = length(a)
@@ -111,8 +111,8 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     nv = length(v)
     n = nu + nv - 1
     np2 = n > 1024 ? nextprod([2,3,5], n) : nextpow2(n)
-    upad = [u, zeros(T, np2 - nu)]
-    vpad = [v, zeros(T, np2 - nv)]
+    upad = [u; zeros(T, np2 - nu)]
+    vpad = [v; zeros(T, np2 - nv)]
     if T <: Real
         p = plan_rfft(upad)
         y = irfft(p(upad).*p(vpad), np2)
@@ -122,7 +122,7 @@ function conv{T<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{T}
     end
     return y[1:n]
 end
-conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = int(conv(float(u), float(v)))
+conv{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}) = round(Int,conv(float(u), float(v)))
 conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{T}, v::StridedVector{S}) = conv(float(u), v)
 conv{T<:Integer, S<:Base.LinAlg.BlasFloat}(u::StridedVector{S}, v::StridedVector{T}) = conv(u, float(v))
 
@@ -153,8 +153,8 @@ function conv2{T}(A::StridedMatrix{T}, B::StridedMatrix{T})
     end
     return C
 end
-conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = int(conv2(float(A), float(B)))
-conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = int(conv2(float(u), float(v), float(A)))
+conv2{T<:Integer}(A::StridedMatrix{T}, B::StridedMatrix{T}) = round(Int,conv2(float(A), float(B)))
+conv2{T<:Integer}(u::StridedVector{T}, v::StridedVector{T}, A::StridedMatrix{T}) = round(Int,conv2(float(u), float(v), float(A)))
 
 function xcorr(u, v)
     su = size(u,1); sv = size(v,1)
@@ -163,7 +163,7 @@ function xcorr(u, v)
     elseif sv < su
         v = [v;zeros(eltype(v),su-sv)]
     end
-    flipud(conv(flipud(u), v))
+    flipdim(conv(flipdim(u, 1), v), 1)
 end
 
 fftshift(x) = circshift(x, div([size(x)...],2))
@@ -189,7 +189,7 @@ end
 
 fftwcopy{T<:fftwNumber}(X::StridedArray{T}) = copy(X)
 fftwcopy{T<:Real}(X::StridedArray{T}) = float(X)
-fftwcopy{T<:Complex}(X::StridedArray{T}) = complex128(X)
+fftwcopy{T<:Complex}(X::StridedArray{T}) = map(Complex128,X)
 
 for (f, fr2r, Y, Tx) in ((:dct, :r2r, :Y, :Number),
                          (:dct!, :r2r!, :X, :fftwNumber))

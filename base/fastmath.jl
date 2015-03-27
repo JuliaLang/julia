@@ -99,9 +99,11 @@ function make_fastmath(expr::Expr)
             inds = tuple(var.args[2:end]...)
             arrvar = gensym()
             indvars = tuple([gensym() for i in inds]...)
-            expr = :($arrvar = $arr
-                     $indvars = $inds
-                     $(arrvar)[indvars] = $(op)($(arrvar)[$indvars], $rhs))
+            expr = quote
+                $(Expr(:(=), arrvar, arr))
+                $(Expr(:(=), Expr(:tuple, indvars...), Expr(:tuple, inds...)))
+                $(arrvar)[$(indvars...)] = $(op)($(arrvar)[$(indvars...)], $rhs)
+            end
         end
     end
     Expr(make_fastmath(expr.head), map(make_fastmath, expr.args)...)
@@ -218,7 +220,7 @@ end
 # builtins
 
 pow_fast{T<:FloatTypes}(x::T, y::Integer) =
-    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,int32(y))))
+    box(T, Base.powi_llvm(unbox(T,x), unbox(Int32,Int32(y))))
 
 # TODO: Change sqrt_llvm intrinsic to avoid nan checking; add nan
 # checking to sqrt in math.jl; remove sqrt_llvm_fast intrinsic

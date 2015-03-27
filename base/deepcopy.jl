@@ -27,17 +27,18 @@ function deepcopy_internal(x, stackdict::ObjectIdDict)
 end
 
 function _deepcopy_t(x, T::DataType, stackdict::ObjectIdDict)
-    isbits(T) | isempty(T.names) && return x
+    nf = nfields(T)
+    (isbits(T) || nf == 0) && return x
     if T.mutable
         y = ccall(:jl_new_struct_uninit, Any, (Any,), T)
         stackdict[x] = y
-        for i in 1:length(T.names)
+        for i in 1:nf
             if isdefined(x,i)
                 y.(i) = deepcopy_internal(x.(i), stackdict)
             end
         end
     else
-        fields = Any[deepcopy_internal(x.(i), stackdict) for i in 1:length(T.names)]
+        fields = Any[deepcopy_internal(x.(i), stackdict) for i in 1:nf]
         y = ccall(:jl_new_structv, Any, (Any, Ptr{Void}, UInt32),
                   T, pointer(fields), length(fields))
     end

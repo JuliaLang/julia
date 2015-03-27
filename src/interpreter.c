@@ -127,8 +127,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     }
     if (jl_is_gensym(e)) {
         ssize_t genid = ((jl_gensym_t*)e)->id;
-        if (genid > ngensym || genid < 0)
-            return NULL;
+        if (genid >= ngensym || genid < 0)
+            jl_error("access to invalid GenSym location");
         else
             return locals[nl*2 + genid];
     }
@@ -143,9 +143,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         return v;
     }
     if (!jl_is_expr(e)) {
-        if (jl_is_getfieldnode(e)) {
-            jl_value_t *v = eval(jl_getfieldnode_val(e), locals, nl, ngensym);
-            jl_value_t *gfargs[2] = {v, (jl_value_t*)jl_getfieldnode_name(e)};
+        if (jl_is_globalref(e)) {
+            jl_value_t *gfargs[2] = {(jl_value_t*)jl_globalref_mod(e), (jl_value_t*)jl_globalref_name(e)};
             return jl_f_get_field(NULL, gfargs, 2);
         }
         if (jl_is_lambda_info(e)) {
@@ -174,7 +173,7 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         return e;
     }
     jl_expr_t *ex = (jl_expr_t*)e;
-    jl_value_t **args = jl_array_data(ex->args);
+    jl_value_t **args = (jl_value_t**)jl_array_data(ex->args);
     size_t nargs = jl_array_len(ex->args);
     if (ex->head == call_sym ||  ex->head == call1_sym) {
         if (jl_is_lambda_info(args[0])) {
@@ -221,8 +220,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_value_t *rhs = eval(args[1], locals, nl, ngensym);
         if (jl_is_gensym(sym)) {
             ssize_t genid = ((jl_gensym_t*)sym)->id;
-            if (genid > ngensym || genid < 0)
-                jl_errorf("illegal attempt to assign to non-existent GenSym location");
+            if (genid >= ngensym || genid < 0)
+                jl_error("assignment to invalid GenSym location");
             locals[nl*2 + genid] = rhs;
             gc_wb(jl_current_module, rhs); // not sure about jl_current_module
             return rhs;
@@ -335,16 +334,16 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         jl_value_t *para = eval(args[1], locals, nl, ngensym);
         jl_value_t *super = NULL;
         jl_value_t *temp = NULL;
-        JL_GC_PUSH3(&para, &super, &temp);
+        jl_datatype_t *dt = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &dt);
         assert(jl_is_tuple(para));
         assert(jl_is_symbol(name));
-        jl_datatype_t *dt =
-            jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
+        dt = jl_new_abstracttype(name, jl_any_type, (jl_tuple_t*)para);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
-        gc_wb_binding(((void**)b)-1, dt);
+        gc_wb_binding(b, dt);
         super = eval(args[2], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;
@@ -357,7 +356,8 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
     else if (ex->head == bitstype_sym) {
         jl_value_t *name = args[0];
         jl_value_t *super = NULL, *para = NULL, *vnb = NULL, *temp = NULL;
-        JL_GC_PUSH3(&para, &super, &temp);
+        jl_datatype_t *dt = NULL;
+        JL_GC_PUSH4(&para, &super, &temp, &dt);
         assert(jl_is_symbol(name));
         para = eval(args[1], locals, nl, ngensym);
         assert(jl_is_tuple(para));
@@ -368,12 +368,12 @@ static jl_value_t *eval(jl_value_t *e, jl_value_t **locals, size_t nl, size_t ng
         if (nb < 1 || nb>=(1<<23) || (nb&7) != 0)
             jl_errorf("invalid number of bits in type %s",
                       ((jl_sym_t*)name)->name);
-        jl_datatype_t *dt =
-            jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
+        dt = jl_new_bitstype(name, jl_any_type, (jl_tuple_t*)para, nb);
         jl_binding_t *b = jl_get_binding_wr(jl_current_module, (jl_sym_t*)name);
         temp = b->value;
         check_can_assign_type(b);
         b->value = (jl_value_t*)dt;
+        gc_wb_binding(b, dt);
         super = eval(args[3], locals, nl, ngensym);
         jl_set_datatype_super(dt, super);
         b->value = temp;

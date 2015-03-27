@@ -16,6 +16,21 @@ module CompletionFoo
     macro foobar()
         :()
     end
+
+    test{T<:Real}(x::T, y::T) = pass
+    test(x::Real, y::Real) = pass
+    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(args...) = pass
+
+    test1(x::Type{Float64}) = pass
+
+    test2(x::AbstractString) = pass
+    test2(x::Char) = pass
+
+    test3(x::AbstractArray{Int}, y::Int) = pass
+    test3(x::AbstractArray{Float64}, y::Float64) = pass
+
+    array = [1, 1]
 end
 
 function temp_pkg_dir(fn::Function)
@@ -145,6 +160,71 @@ c, r, res = test_complete(s)
 @test c[1] == string(start(methods(max)))
 @test r == 1:3
 @test s[r] == "max"
+
+# Test completion of methods with input args
+s = "CompletionFoo.test(1,1, "
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Int, Int))[1])
+@test length(c) == 3
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(CompletionFoo.array,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Array{Int, 1}, Any))[1])
+@test length(c) == 2
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(1,1,1,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Any, Any, Any))[1])
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test1(Int,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 0
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "CompletionFoo.test1(Float64,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "prevind(\"θ\",1,"
+c, r, res = test_complete(s)
+@test c[1] == string(methods(prevind, (UTF8String, Int))[1])
+@test r == 1:7
+@test s[r] == "prevind"
+
+for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+    s = "(1, CompletionFoo.test2($arg,"
+    c, r, res = test_complete(s)
+    @test length(c) == 1
+    @test c[1] == string(methods(CompletionFoo.test2, (T,))[1])
+    @test r == 5:23
+    @test s[r] == "CompletionFoo.test2"
+end
+
+s = "CompletionFoo.test3([1.,2.],"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
+s = "CompletionFoo.test3([1.,2.], 1.,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test3, (Array{Float64, 1}, Float64))[1])
+@test r == 1:19
+@test s[r] == "CompletionFoo.test3"
 
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
@@ -279,6 +359,11 @@ let #test that it can auto complete with spaces in file/path
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
         end
+        # Test for issue #10324
+        s = "cd(\"$dir_space"
+        c,r = test_complete(s)
+        @test r == 5:15
+        @test s[r] ==  dir_space
     end
     rm(dir, recursive=true)
 end

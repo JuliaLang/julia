@@ -1,4 +1,4 @@
-import Base: copy, ctranspose, getindex, showarray, transpose, one, zero, inv
+import Base: copy, ctranspose, getindex, show, transpose, one, zero, inv
 import Base.LinAlg: SingularException
 
 immutable UniformScaling{T<:Number}
@@ -7,7 +7,7 @@ end
 
 const I = UniformScaling(1)
 
-eltype{T}(J::UniformScaling{T}) = T
+eltype{T}(::Type{UniformScaling{T}}) = T
 ndims(J::UniformScaling) = 2
 getindex(J::UniformScaling, i::Integer,j::Integer) = ifelse(i==j,J.λ,zero(J.λ))
 
