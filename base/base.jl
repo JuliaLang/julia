@@ -32,6 +32,8 @@ call(T::Type{TopNode}, s::Symbol) = Core.call(T, s)
 call(T::Type{Module}, args...) = Core.call(T, args...)
 call(T::Type{Task}, f::ANY) = Core.call(T, f)
 call(T::Type{GenSym}, n::Int) = Core.call(T, n)
+call(T::Type{WeakRef}) = Core.call(T)
+call(T::Type{WeakRef}, v::ANY) = Core.call(T, v)
 
 call{T}(::Type{T}, args...) = convert(T, args...)::T
 
@@ -127,12 +129,6 @@ end
 
 # For passing constants through type inference
 immutable Val{T}
-end
-
-type WeakRef
-    value
-    WeakRef() = WeakRef(nothing)
-    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
 end
 
 ccall(:jl_get_system_hooks, Void, ())

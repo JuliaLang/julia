@@ -126,7 +126,6 @@ jl_value_t *jl_eval_module_expr(jl_expr_t *ex)
         jl_typeerror_type = NULL;
         jl_methoderror_type = NULL;
         jl_loaderror_type = NULL;
-        jl_weakref_type = NULL;
         jl_current_task->tls = jl_nothing;
     }
     // export all modules from Main
