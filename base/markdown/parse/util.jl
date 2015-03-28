@@ -172,7 +172,7 @@ function parse_inline_wrapper(stream::IO, delimiter::String; rep = false)
     withstream(stream) do
         if position(stream) >= 1
             # check the previous byte isn't a delimiter
-            skip(stream, -2)
+            skip(stream, -1)
             (read(stream, Char) in delimiter) && return nothing
         end
         n = nmin
