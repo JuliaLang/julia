@@ -7,6 +7,6 @@
 [submodule "deps/openspecfun"]
 	path = deps/openspecfun
 	url = git://github.com/JuliaLang/openspecfun.git
-[submodule "deps/libmojibake"]
-	path = deps/libmojibake
-	url = git://github.com/JuliaLang/libmojibake.git
+[submodule "deps/utf8proc"]
+	path = deps/utf8proc
+	url = git://github.com/JuliaLang/utf8proc.git
