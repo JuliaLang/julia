@@ -629,7 +629,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
    The following keyword arguments are supported:
     * ``nev``: Number of eigenvalues
     * ``ncv``: Number of Krylov vectors used in the computation; should satisfy
-        ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n``
+       ``nev+1 <= ncv <= n`` for real symmetric problems and ``nev+2 <= ncv <= n``
        for other problems, where ``n`` is the size of the input matrix ``A``.
        The default is ``ncv = max(20,2*nev+1)``.
        Note that these restrictions limit the input matrix ``A`` to be of
@@ -668,7 +668,9 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 .. function:: svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
 
    ``svds`` computes largest singular values ``s`` of ``A`` using Lanczos or Arnoldi iterations.
-   Uses :func:`eigs` underneath. Inputs are:
+   Uses :func:`eigs` underneath.
+
+   Inputs are:
     * ``A``: Linear operator. It can either subtype of ``AbstractArray`` (e.g., sparse matrix) or duck typed. For duck typing ``A`` has to support ``size(A)``, ``eltype(A)``, ``A * vector`` and ``A' * vector``.
     * ``nsv``: Number of singular values.
     * ``ritzvec``: Whether to return the left and right singular vectors ``left_sv`` and ``right_sv``, default is ``true``. If ``false`` the singular vectors are omitted from the output.
