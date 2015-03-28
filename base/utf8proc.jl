@@ -6,13 +6,13 @@ import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype
 export isgraphemebreak
 
 # also exported by Base:
-export normalize_string, graphemes, is_valid_char, is_assigned_char,
+export normalize_string, graphemes, is_valid_char, is_assigned_char, charwidth,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c) = (0x0 <= c <= 0x110000) && Bool(ccall(:utf8proc_codepoint_valid, Cuchar, (Int32,), c))
-is_valid_char(c::Char) = is_valid_char(UInt32(c))
+is_valid_char(c::Union(UInt8,UInt16,UInt32,Char)) = Bool(ccall(:utf8proc_codepoint_valid, Cuchar, (UInt32,), c))
+is_valid_char(c::Integer) = (0x0 <= c <= 0x110000) && is_valid_char(UInt32(c))
 
 # utf8 category constants
 const UTF8PROC_CATEGORY_CN = 0
@@ -116,10 +116,13 @@ end
 
 ############################################################################
 
-# returns UTF8PROC_CATEGORY code in 1:30 giving Unicode category
+charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
+
+############################################################################
+
+# returns UTF8PROC_CATEGORY code in 0:30 giving Unicode category
 function category_code(c)
-    UInt32(c) > 0x10FFFF && return 0x0000 # see utf8proc_get_property docs
-    return unsafe_load(ccall(:utf8proc_get_property, Ptr{UInt16}, (Int32,), c))
+    return ccall(:utf8proc_category, Cint, (UInt32,), c)
 end
 
 is_assigned_char(c) = category_code(c) != UTF8PROC_CATEGORY_CN
@@ -176,7 +179,7 @@ end
 # iterators for grapheme segmentation
 
 isgraphemebreak(c1::Char, c2::Char) =
-    ccall(:utf8proc_grapheme_break, Bool, (Char, Char), c1, c2)
+    ccall(:utf8proc_grapheme_break, Bool, (UInt32, UInt32), c1, c2)
 
 immutable GraphemeIterator{S<:AbstractString}
     s::S # original string (for generation of SubStrings)

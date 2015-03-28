@@ -20,6 +20,9 @@
 #include <wchar.h>
 #include <wctype.h>
 
+#include "utf8proc.h"
+#undef DLLEXPORT /* avoid conflicting definition */
+
 #include "dtypes.h"
 
 #ifdef _OS_WINDOWS_
@@ -261,17 +264,10 @@ size_t u8_strlen(const char *s)
     return count;
 }
 
-#if defined(_OS_WINDOWS_)
-extern int wcwidth(uint32_t ch);
-#elif defined(_OS_LINUX_)
-extern int wcwidth(wchar_t ch);
-#endif
-
 size_t u8_strwidth(const char *s)
 {
     uint32_t ch;
     size_t nb, tot=0;
-    int w;
     signed char sc;
 
     while ((sc = (signed char)*s) != 0) {
@@ -293,8 +289,7 @@ size_t u8_strwidth(const char *s)
             case 0: ch += (unsigned char)*s++;
             }
             ch -= offsetsFromUTF8[nb];
-            w = wcwidth(ch);  // might return -1
-            if (w > 0) tot += w;
+            tot += utf8proc_charwidth(ch);
         }
     }
     return tot;
