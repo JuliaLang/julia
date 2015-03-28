@@ -198,6 +198,12 @@ if VERSION < v"0.4.0-dev+3874"
     Base.parse{T<:Union(Float32,Float64)}(::Type{T}, s::AbstractString) = parsefloat(T, s)
 end
 
+if VERSION < v"0.4.0-dev+3710"
+    const unsafe_convert = Base.convert
+else
+    import Base.unsafe_convert
+end
+
 if VERSION < v"0.4.0-dev+3732"
     const calltypes = Dict{Symbol,Symbol}()
     for (k,v) in [(:Integer,:integer),
