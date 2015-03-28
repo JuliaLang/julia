@@ -144,11 +144,12 @@ those available for the ``perl`` and ``ruby`` programs::
     --inline={yes|no}         Control whether inlining is permitted (overrides functions declared as @inline)
     --math-mode={ieee|user}   Always use IEEE semantics for math (ignoring declarations),
                               or adhere to declarations in source code
+
 Resources
 ---------
 
 In addition to this manual, there are various other resources that may
-help new users get started with julia:
+help new users get started with Julia:
 
 - `Julia and IJulia cheatsheet <http://math.mit.edu/~stevenj/Julia-cheatsheet.pdf>`_
 - `Learn Julia in a few minutes <http://learnxinyminutes.com/docs/julia/>`_
