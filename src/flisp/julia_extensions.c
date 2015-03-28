@@ -3,7 +3,7 @@
 #include <string.h>
 #include <assert.h>
 #include "flisp.h"
-#include "mojibake.h"
+#include "utf8proc.h"
 
 #ifdef __cplusplus
 extern "C" {

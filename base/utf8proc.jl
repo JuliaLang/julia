@@ -6,7 +6,7 @@ import Base: show, showcompact, ==, hash, string, symbol, isless, length, eltype
 export isgraphemebreak
 
 # also exported by Base:
-export normalize_string, graphemes, is_valid_char, is_assigned_char,
+export normalize_string, graphemes, is_valid_char, is_assigned_char, charwidth,
    islower, isupper, isalpha, isdigit, isnumber, isalnum,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
@@ -113,6 +113,10 @@ function normalize_string(s::AbstractString, nf::Symbol)
                                    | UTF8PROC_COMPAT) :
                     throw(ArgumentError(":$nf is not one of :NFC, :NFD, :NFKC, :NFKD")))
 end
+
+############################################################################
+
+charwidth(c::Char) = Int(ccall(:utf8proc_charwidth, Cint, (UInt32,), c))
 
 ############################################################################
 
