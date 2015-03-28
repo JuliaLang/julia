@@ -119,7 +119,6 @@ export
     Vector,
     VersionNumber,
     WeakKeyDict,
-    WeakRef,
     WorkerConfig,
     WString,
     Zip,

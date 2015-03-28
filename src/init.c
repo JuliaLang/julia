@@ -1251,6 +1251,7 @@ void jl_get_builtin_hooks(void)
     jl_float64_type = (jl_datatype_t*)core("Float64");
     jl_floatingpoint_type = (jl_datatype_t*)core("FloatingPoint");
     jl_number_type = (jl_datatype_t*)core("Number");
+    jl_signed_type = (jl_datatype_t*)core("Signed");
 
     jl_stackovf_exception  = jl_new_struct_uninit((jl_datatype_t*)core("StackOverflowError"));
     jl_diverror_exception  = jl_new_struct_uninit((jl_datatype_t*)core("DivideError"));
@@ -1267,7 +1268,7 @@ void jl_get_builtin_hooks(void)
     jl_utf8_string_type = (jl_datatype_t*)core("UTF8String");
     jl_symbolnode_type = (jl_datatype_t*)core("SymbolNode");
     jl_globalref_type = (jl_datatype_t*)core("GlobalRef");
-    jl_signed_type = (jl_datatype_t*)core("Signed");
+    jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 
     jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
                                         jl_tuple2(jl_uint8_type,
@@ -1283,7 +1284,6 @@ DLLEXPORT void jl_get_system_hooks(void)
     jl_typeerror_type = (jl_datatype_t*)basemod("TypeError");
     jl_methoderror_type = (jl_datatype_t*)basemod("MethodError");
     jl_loaderror_type = (jl_datatype_t*)basemod("LoadError");
-    jl_weakref_type = (jl_datatype_t*)basemod("WeakRef");
     jl_complex_type = (jl_datatype_t*)basemod("Complex");
 }
 

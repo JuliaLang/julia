@@ -123,7 +123,7 @@ export
     AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Symbol, Task, Array, GenSym,
+    Module, Symbol, Task, Array, WeakRef,
     # numeric types
     Number, Real, Integer, Bool, Ref, Ptr,
     FloatingPoint, Float16, Float32, Float64,
@@ -137,7 +137,7 @@ export
     StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GlobalRef, NewvarNode,
+    GlobalRef, NewvarNode, GenSym,
     # object model functions
     fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref,
@@ -250,6 +250,12 @@ typealias ByteString Union(ASCIIString,UTF8String)
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 # constructors for built-in types
+
+type WeakRef
+    value
+    WeakRef() = WeakRef(nothing)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
+end
 
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
