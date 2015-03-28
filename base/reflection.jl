@@ -4,9 +4,11 @@ module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
 function fullname(m::Module)
-    if m === Main
-        return ()
-    elseif module_parent(m) === m
+    m === Main && return ()
+    m === Base && return (:Base,)  # issue #10653
+    mn = module_name(m)
+    mp = module_parent(m)
+    if mp === m
         # not Main, but is its own parent, means a prior Main module
         n = ()
         this = Main
@@ -15,13 +17,12 @@ function fullname(m::Module)
                 n = tuple(n..., :LastMain)
                 this = this.LastMain
             else
-                error("no reference to module ", module_name(m))
+                error("no reference to module ", mn)
             end
         end
         return n
-    else
-        return tuple(fullname(module_parent(m))..., module_name(m))
     end
+    return tuple(fullname(mp)..., mn)
 end
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
