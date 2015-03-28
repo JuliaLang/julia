@@ -456,3 +456,8 @@ precompile(Base.setindex!, (Dict{Any, Any}, Base.RemoteValue, (Int, Int)))
 precompile(Base.setindex!, (Dict{ByteString, VersionNumber}, VersionNumber, ASCIIString))
 precompile(Base.spawn, (Cmd, (Base.TTY, Base.TTY, Base.TTY), Bool, Bool))
 precompile(Base.spawn, (Cmd,))
+
+# Speed up repl help
+sprint(Markdown.term, @doc fft)
+sprint(Docs.repl_search, "fft")
+sprint(Docs.repl_corrections, "fft")
