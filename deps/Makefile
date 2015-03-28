@@ -1200,6 +1200,9 @@ ifeq ($(OS), Linux)
 	done
 endif
 	touch -c $@
+ifneq ($(PATCHELF),patchelf)
+$(ARPACK_OBJ_TARGET): $(PATCHELF)
+endif
 
 clean-arpack:
 	-$(MAKE) -C arpack-ng-$(ARPACK_VER) clean
