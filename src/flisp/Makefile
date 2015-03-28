@@ -22,11 +22,11 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS = $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS = $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLTDIR = ../support
-LLT = $(BUILDDIR)/$(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
+LLT = $(BUILDDIR)/$(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS -DMOJIBAKE_EXPORTS
+        -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden
 endif
