@@ -173,8 +173,11 @@ static void jl_serialize_value_(ios_t *s, jl_value_t *v);
 static jl_value_t *jl_deserialize_value(ios_t *s, jl_value_t **loc);
 jl_value_t ***sysimg_gvars = NULL;
 
-extern int globalUnique;
+#ifdef HAVE_CPUID
 extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
+#endif
+
+extern int globalUnique;
 uv_lib_t *jl_sysimg_handle = NULL;
 uint64_t jl_sysimage_base = 0;
 #ifdef _OS_WINDOWS_
@@ -200,6 +203,7 @@ static void jl_load_sysimg_so()
         if (strcmp(cpu_target,jl_options.cpu_target) != 0)
             jl_error("Julia and the system image were compiled for different architectures.\n"
                      "Please delete or regenerate sys.{so,dll,dylib}.\n");
+#ifdef HAVE_CPUID
         uint32_t info[4];
         jl_cpuid((int32_t*)info, 1);
         if (strcmp(cpu_target, "native") == 0) {
@@ -215,6 +219,8 @@ static void jl_load_sysimg_so()
                 jl_error("The current host does not support SSSE3, but the system image was compiled for Core2.\n"
                          "Please delete or regenerate sys.{so,dll,dylib}.\n");
         }
+#endif
+
 #ifdef _OS_WINDOWS_
         jl_sysimage_base = (intptr_t)jl_sysimg_handle->handle;
 #else

@@ -82,8 +82,10 @@ $(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET)-debu
 $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBS) $(OSLIBS))
 
+ifneq ($(BUILDDIR),.)
 $(BUILDDIR)/flisp.boot: flisp.boot
 	cp $< $@
+endif
 
 test:
 ifneq ($(USEMSVC), 1)

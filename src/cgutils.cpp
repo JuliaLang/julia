@@ -303,9 +303,11 @@ extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
     return it->second.index;
 }
 
+#ifdef HAVE_CPUID
 extern "C" {
     extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
+#endif
 
 static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars)
 {
@@ -336,6 +338,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                     feature_string,
                     "jl_sysimg_cpu_target")));
 
+#ifdef HAVE_CPUID
     // For native also store the cpuid
     if (strcmp(jl_options.cpu_target,"native") == 0) {
         uint32_t info[4];
@@ -349,6 +352,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                         ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
                         "jl_sysimg_cpu_cpuid")));
     }
+#endif
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)
