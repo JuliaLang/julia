@@ -135,3 +135,12 @@ let io=IOBuffer("asdf")
     @test position(seek(io, -1)) == 0
     @test position(seek(io, 6)) == 4
 end
+
+# issue #10658
+let io=IOBuffer("hello")
+    @test position(skip(io, 4)) == 4
+    @test position(skip(io, 10)) == 5
+    @test position(skip(io, -2)) == 3
+    @test position(skip(io, -3)) == 0
+    @test position(skip(io, -3)) == 0
+end

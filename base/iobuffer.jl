@@ -110,7 +110,7 @@ position(io::IOBuffer) = io.ptr-1
 
 function skip(io::IOBuffer, n::Integer)
     seekto = io.ptr + n
-    n < 0 && return seek(io, seekto) # Does error checking
+    n < 0 && return seek(io, seekto-1) # Does error checking
     io.ptr = min(seekto, io.size+1)
     return io
 end
