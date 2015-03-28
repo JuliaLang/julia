@@ -67,9 +67,10 @@
    Load a value of type ``T`` from the address of the ith element (1-indexed)
    starting at ``p``. This is equivalent to the C expression ``p[i-1]``.
 
-   The ``unsafe`` prefix on this function indicates that no validation is performed
-   on the pointer ``p` to ensure that it is valid. Incorrect usage may segfault
-   your program or return garbage answers, in the same manner as C.
+   The ``unsafe`` prefix on this function indicates that no validation is
+   performed on the pointer ``p`` to ensure that it is valid. Incorrect usage
+   may segfault your program or return garbage answers, in the same manner as
+   C.
 
 .. function:: unsafe_store!(p::Ptr{T},x,i::Integer)
 
@@ -77,8 +78,8 @@
    starting at ``p``. This is equivalent to the C expression ``p[i-1] = x``.
 
    The ``unsafe`` prefix on this function indicates that no validation is performed
-   on the pointer ``p` to ensure that it is valid. Incorrect usage may corrupt or segfault
-   your program, in the same manner as C.
+   on the pointer ``p`` to ensure that it is valid. Incorrect usage may corrupt
+   or segfault your program, in the same manner as C.
 
 .. function:: unsafe_copy!(dest::Ptr{T}, src::Ptr{T}, N)
 
