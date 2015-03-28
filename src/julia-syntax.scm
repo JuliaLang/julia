@@ -110,7 +110,9 @@
          (bad-formal-argument v))
         (else
          (case (car v)
-           ((...)         `(... ,(decl-type (cadr v))))
+           ((...) (if (eq? (length v) 3)
+                      `(... ,(decl-type (cadr v)) ,(caddr v))
+                      `(... ,(decl-type (cadr v)))))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
@@ -384,8 +386,12 @@
                     (cons (replace-end (expand-index-colon idx) a n tuples last)
                           ret)))))))
 
+(define (make-vararg t) (if (eq? (length t) 3)
+                            `(curly Vararg ,(cadr t) ,(caddr t))
+                            `(curly Vararg ,(cadr t))))
+
 (define (make-decl n t) `(|::| ,n ,(if (and (pair? t) (eq? (car t) '...))
-                                       `(curly Vararg ,(cadr t))
+                                       (make-vararg t)
                                        t)))
 
 (define (function-expr argl body)
@@ -1809,7 +1815,7 @@
                          (error "assignment not allowed inside tuple"))
                      (expand-forms
                       (if (vararg? x)
-                          `(curly Vararg ,(cadr x))
+                          (make-vararg x)
                           x)))
                    (cdr e))))
 
