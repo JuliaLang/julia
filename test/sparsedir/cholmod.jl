@@ -180,7 +180,7 @@ ACSC = sprandn(10, 10, 0.3) + I
 @test ishermitian(Sparse(Hermitian(complex(ACSC), :U)))
 
 # test Sparse constructor for c_Sparse{Tv,Ti} input( and Sparse*Sparse)
-B = CHOLMOD.Sparse(SparseMatrixCSC{Float64,Int32}(sprandn(48, 48, 0.1))) # A has Int32 indeces
+B = CHOLMOD.Sparse(SparseMatrixCSC{Float64,Int32}(sprandn(48, 48, 0.1))) # A has Int32 indices
 @test_approx_eq A*B sparse(A)*sparse(B)
 
 # test Sparse constructor for c_SparseVoid (and read_sparse)
@@ -215,7 +215,7 @@ end
 @test_throws ArgumentError CHOLMOD.Sparse(convert(Ptr{CHOLMOD.C_SparseVoid}, C_NULL))
 
 ## The struct pointer must be constructed by the library constructor and then modified afterwards to checks that the method throws
-### illegal dtype (for now but should be supprted at some point)
+### illegal dtype (for now but should be supported at some point)
 p = ccall((:cholmod_l_allocate_sparse, :libcholmod), Ptr{CHOLMOD.C_SparseVoid},
     (Csize_t, Csize_t, Csize_t, Cint, Cint, Cint, Cint, Ptr{Void}),
     1, 1, 1, true, true, 0, CHOLMOD.REAL, CHOLMOD.common(CHOLMOD.SuiteSparse_long))
@@ -265,7 +265,7 @@ end
 
 # Test Dense wrappers (only Float64 supported a present)
 
-## High level interfact
+## High level interface
 for elty in (Float64, Complex{Float64})
     if elty == Float64
         A = randn(5, 5)
@@ -338,7 +338,7 @@ for elty in (Float64, Complex{Float64})
     end
     @test copy(A1Sparse) == A1Sparse
     @test size(A1Sparse, 3) == 1
-    if elty <: Real # multiplcation only defined for real matrices in CHOLMOD
+    if elty <: Real # multiplication only defined for real matrices in CHOLMOD
         @test_approx_eq A1Sparse*A2Sparse A1*A2
         @test_throws DimensionMismatch CHOLMOD.Sparse(A1[:,1:4])*A2Sparse
         @test_approx_eq A1Sparse'A2Sparse A1'A2
