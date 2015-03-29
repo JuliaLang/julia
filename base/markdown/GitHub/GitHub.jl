@@ -39,7 +39,7 @@ function github_paragraph(stream::IO, md::MD)
         char = read(stream, Char)
         if char == '\n'
             eof(stream) && break
-            if blankline(stream) || parse(stream, md, config, breaking = true)
+            if blankline(stream) || parse(stream, md, breaking = true)
                 break
             else
                 write(buffer, '\n')
