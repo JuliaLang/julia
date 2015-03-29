@@ -8,7 +8,15 @@ immutable Hermitian{T,S<:AbstractMatrix} <: AbstractMatrix{T}
     data::S
     uplo::Char
 end
-Hermitian(A::AbstractMatrix, uplo::Symbol=:U) = (chksquare(A);Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo)))
+function Hermitian(A::AbstractMatrix, uplo::Symbol=:U)
+    n = chksquare(A)
+    for i=1:n
+        isreal(A[i, i]) || throw(ArgumentError(
+            "Cannot construct Hermitian from matrix with nonreal diagonals"))
+    end
+    Hermitian{eltype(A),typeof(A)}(A, char_uplo(uplo))
+end
+
 typealias HermOrSym{T,S} Union(Hermitian{T,S}, Symmetric{T,S})
 typealias RealHermSymComplexHerm{T<:Real,S} Union(Hermitian{T,S}, Symmetric{T,S}, Hermitian{Complex{T},S})
 
