@@ -103,6 +103,7 @@ include("iostream.jl")
 include("libc.jl")
 using .Libc: getpid, gethostname, time, msync
 include("libdl.jl")
+using .Libdl: DL_LOAD_PATH
 include("env.jl")
 include("path.jl")
 include("intfuncs.jl")
