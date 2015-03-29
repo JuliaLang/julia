@@ -328,6 +328,7 @@ for elty in (Float64, Complex{Float64})
     @test_throws BoundsError A1Sparse[6, 1]
     @test_throws BoundsError A1Sparse[1, 6]
     @test sparse(A1Sparse) == A1
+    for i=1:size(A1, 1) A1[i, i] = real(A1[i, i]) end #Construct Hermitian matrix properly
     @test CHOLMOD.sparse(CHOLMOD.Sparse(Hermitian(A1, :L))) == Hermitian(A1, :L)
     @test CHOLMOD.sparse(CHOLMOD.Sparse(Hermitian(A1, :U))) == Hermitian(A1, :U)
     @test_throws ArgumentError convert(SparseMatrixCSC{elty,Int}, A1pdSparse)
@@ -359,8 +360,8 @@ for elty in (Float64, Complex{Float64})
     @test_throws ArgumentError cholfact(A1)
     @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(full(A1 + A1'))I)
     @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -2eigmax(full(A1 + A1')))
-    @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
-    @test_throws Base.LinAlg.ArgumentError ldltfact(A1 + A1', -2real(A1[1,1]))
+    @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
+    @test_throws ArgumentError ldltfact(A1 + A1', -2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
     @test_throws ArgumentError cholfact(A1, 1.0)
     @test_throws ArgumentError ldltfact(A1)
