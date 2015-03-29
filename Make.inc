@@ -37,6 +37,7 @@ USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_MOJIBAKE=0
 USE_SYSTEM_LIBGIT2=0
+USE_SYSTEM_PATCHELF=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -487,7 +488,7 @@ ISX86=1
 else ifeq ($(ARCH),x86_64)
 BINARY=64
 ISX86=1
-else ifeq ($(ARCH),arm)
+else ifneq (,$(findstring arm,$(ARCH)))
 ISX86=0
 else ifneq (,$(findstring powerpc,$(ARCH)))
 ISX86=0
