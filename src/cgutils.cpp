@@ -303,9 +303,11 @@ extern "C" int32_t jl_get_llvm_gv(jl_value_t *p)
     return it->second.index;
 }
 
+#ifdef HAVE_CPUID
 extern "C" {
     extern void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType);
 }
+#endif
 
 static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*, 8> &globalvars)
 {
@@ -336,6 +338,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                     feature_string,
                     "jl_sysimg_cpu_target")));
 
+#ifdef HAVE_CPUID
     // For native also store the cpuid
     if (strcmp(jl_options.cpu_target,"native") == 0) {
         uint32_t info[4];
@@ -349,6 +352,7 @@ static void jl_gen_llvm_gv_array(llvm::Module *mod, SmallVector<GlobalVariable*,
                         ConstantInt::get(T_int64,((uint64_t)info[2])|(((uint64_t)info[3])<<32)),
                         "jl_sysimg_cpu_cpuid")));
     }
+#endif
 }
 
 static int32_t jl_assign_functionID(Function *functionObject)
@@ -1798,6 +1802,7 @@ static Value* emit_allocobj(size_t static_size)
 // if ptr is NULL this emits a write barrier _back_
 static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
 {
+#ifdef JL_GC_MARKSWEEP
     Value* parenttag = builder.CreateBitCast(emit_typeptr_addr(parent), T_psize);
     Value* parent_type = builder.CreateLoad(parenttag);
     Value* parent_mark_bits = builder.CreateAnd(parent_type, 1);
@@ -1820,10 +1825,12 @@ static void emit_write_barrier(jl_codectx_t* ctx, Value *parent, Value *ptr)
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
+#endif
 }
 
 static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *ptr)
 {
+#ifdef JL_GC_MARKSWEEP
     BasicBlock *cont;
     Value *not_null = builder.CreateICmpNE(ptr, V_null);
     BasicBlock *if_not_null = BasicBlock::Create(getGlobalContext(), "wb_not_null", ctx->f);
@@ -1834,6 +1841,7 @@ static void emit_checked_write_barrier(jl_codectx_t *ctx, Value *parent, Value *
     builder.CreateBr(cont);
     ctx->f->getBasicBlockList().push_back(cont);
     builder.SetInsertPoint(cont);
+#endif
 }
 
 static void emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx0,
