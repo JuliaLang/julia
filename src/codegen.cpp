@@ -3443,18 +3443,19 @@ static void allocate_gc_frame(size_t n_roots, BasicBlock *b0, jl_codectx_t *ctx)
     builder.CreateStore(builder.CreateLoad(prepare_global(jlpgcstack_var), false),
                         builder.CreateBitCast(builder.CreateConstGEP1_32(ctx->gcframe, 1), PointerType::get(jl_ppvalue_llvmt,0)));
     Instruction *linst = builder.CreateStore(ctx->gcframe, prepare_global(jlpgcstack_var), false);
-    ctx->last_gcframe_inst = BasicBlock::iterator(linst);
-    // initialize local variable stack roots to null
-    for(size_t i=0; i < (size_t)ctx->argSpaceOffs; i++) {
-        Value *varSlot = builder.CreateConstGEP1_32(ctx->argTemp,i);
-        builder.CreateStore(V_null, varSlot);
-    }
     ctx->argSpaceInits = &b0->back();
 #else
     ctx->argTemp = builder.CreateAlloca(jl_pvalue_llvmt,
                                        ConstantInt::get(T_int32, n_roots));
+    ctx->first_gcframe_inst = BasicBlock::iterator(ctx->argTemp);
+    Instruction *linst = ctx->argTemp;
 #endif
-
+    // initialize local variable stack roots to null
+    for(size_t i=0; i < (size_t)ctx->argSpaceOffs; i++) {
+        Value *varSlot = builder.CreateConstGEP1_32(ctx->argTemp,i);
+        linst = builder.CreateStore(V_null, varSlot);
+    }
+    ctx->last_gcframe_inst = BasicBlock::iterator(linst);
 }
 
 static void finalize_gc_frame(jl_codectx_t *ctx)
@@ -3534,7 +3535,7 @@ static void finalize_gc_frame(jl_codectx_t *ctx)
         }
     }
 #else
-    if (ctx->argSpaceOffs + ctx->maxDepth != 0) {
+    if (ctx->maxDepth != 0) {
         BasicBlock::iterator bbi(ctx->argTemp);
         AllocaInst *newgcframe =
             new AllocaInst(jl_pvalue_llvmt,
