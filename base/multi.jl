@@ -167,7 +167,8 @@ end
 function send_msg_(w::Worker, kind, args, now::Bool)
     #println("Sending msg $kind")
     io = w.w_stream
-    lock(io) do io
+    lock(io.lock)
+    try
         serialize(io, kind)
         for arg in args
             serialize(io, arg)
@@ -178,6 +179,8 @@ function send_msg_(w::Worker, kind, args, now::Bool)
         else
             flush(io)
         end
+    finally
+        unlock(io.lock)
     end
 end
 

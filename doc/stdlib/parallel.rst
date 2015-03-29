@@ -98,6 +98,22 @@ Tasks
    Block the current task for a specified number of seconds. The minimum sleep
    time is 1 millisecond or input of ``0.001``.
 
+.. function:: ReentrantLock()
+
+   Creates a reentrant lock. The same task can acquire the lock as many times
+   as required. Each lock must be matched with an unlock.
+
+.. function:: lock(l::ReentrantLock)
+
+   Associates ``l`` with the current task. If ``l`` is already locked by a different
+   task, waits for it to become available. The same task can acquire the lock multiple
+   times. Each "lock" must be matched by an "unlock"
+
+.. function:: unlock(l::ReentrantLock)
+
+   Releases ownership of the lock by the current task. If the lock had been acquired before,
+   it just decrements an internal counter and returns immediately.
+
 
 General Parallel Computing Support
 ----------------------------------
