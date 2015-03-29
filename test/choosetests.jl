@@ -47,7 +47,7 @@ function choosetests(choices = [])
         prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4",
             "linalg/lapack", "linalg/triangular", "linalg/tridiag",
             "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
-            "linalg/arnoldi"])
+            "linalg/arnoldi", "linalg/symmetric"])
         end
 
     net_required_for = ["socket", "parallel"]
