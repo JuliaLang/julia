@@ -113,6 +113,7 @@ include("nullable.jl")
 
 # I/O
 include("task.jl")
+include("lock.jl")
 include("show.jl")
 include("stream.jl")
 include("socket.jl")

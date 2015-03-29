@@ -101,6 +101,8 @@ type Pipe <: AsyncStream
     closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
+    lock::ReentrantLock
+
     Pipe(handle) = new(
         handle,
         StatusUninit,
@@ -109,7 +111,7 @@ type Pipe <: AsyncStream
         false,Condition(),
         false,Condition(),
         false,Condition(),
-        nothing)
+        nothing, ReentrantLock())
 end
 function Pipe()
     handle = Libc.malloc(_sizeof_uv_named_pipe)
@@ -177,6 +179,7 @@ type TTY <: AsyncStream
     closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
+    lock::ReentrantLock
     @windows_only ispty::Bool
     function TTY(handle)
         tty = new(
@@ -186,7 +189,7 @@ type TTY <: AsyncStream
             PipeBuffer(),
             false,Condition(),
             false,Condition(),
-            nothing)
+            nothing, ReentrantLock())
         @windows_only tty.ispty = Bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
         tty
     end
@@ -216,6 +219,16 @@ nb_available(stream::UVStream) = nb_available(stream.buffer)
 
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
+
+function println(io::AsyncStream, xs...)
+    lock(io.lock)
+    try
+        invoke(println, tuple(IO, typeof(xs)...), io, xs...)
+    finally
+        unlock(io.lock)
+    end
+end
+
 
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
@@ -957,8 +970,9 @@ type BufferStream <: AsyncStream
     close_c::Condition
     is_open::Bool
     buffer_writes::Bool
+    lock::ReentrantLock
 
-    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false)
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false, ReentrantLock())
 end
 
 isopen(s::BufferStream) = s.is_open

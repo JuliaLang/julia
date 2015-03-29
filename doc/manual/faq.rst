@@ -833,6 +833,50 @@ potential performance optimizations that can be achieved by other
 means (e.g., using explicit loops), operators like ``+=`` and ``*=``
 work by rebinding new values.
 
+Asynchronous IO and concurrent synchronous writes
+-------------------------------------------------
+
+Why do concurrent writes to the same stream result in inter-mixed output?
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+While the streaming I/O API is synchronous, the underlying implementation
+is fully asynchronous.
+
+The following::
+
+    @sync for i in 1:3
+        @async print(i, " Foo ", " Bar ")
+    end
+
+results in::
+    123 Foo  Foo  Foo  Bar  Bar  Bar
+
+This is happening because, while ``print(i, " Foo ", " Bar ")`` is synchronous,
+internally, the writing of each argument yields to other tasks while waiting for
+that part of the I/O to complete.
+
+``println`` to asynchronous streams like STDOUT, TcpSockets, "locks" the stream
+during a call. Consequently changing ``print`` to ``println`` in the above example
+results in::
+
+    1 Foo  Bar
+    2 Foo  Bar
+    3 Foo  Bar
+
+For other functions and streams, etc, you could lock your writes with a ``ReentrantLock``
+like this::
+
+    l = ReentrantLock()
+    @sync for i in 1:3
+        @async begin
+            lock(l)
+            try
+                print(i, " Foo ", " Bar ")
+            finally
+                unlock(l)
+            end
+    end
+
 
 Julia Releases
 ----------------
