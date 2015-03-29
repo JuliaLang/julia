@@ -481,29 +481,53 @@ void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
 
             MCInst Inst;
             MCDisassembler::DecodeStatus S;
-            S = DisAsm->getInstruction(Inst, insSize, memoryObject.slice(Index), 0,
+#if defined(_CPU_PPC64_) && BYTE_ORDER == LITTLE_ENDIAN
+            // llvm doesn't know that POWER8 can have little-endian instruction order
+            unsigned char byte_swap_buf[4];
+            assert(memoryObject.size() >= 4);
+            byte_swap_buf[3] = memoryObject[Index+0];
+            byte_swap_buf[2] = memoryObject[Index+1];
+            byte_swap_buf[1] = memoryObject[Index+2];
+            byte_swap_buf[0] = memoryObject[Index+3];
+            FuncMCView view = FuncMCView(byte_swap_buf, 4);
+#else
+            FuncMCView view = memoryObject.slice(Index);
+#endif
+            S = DisAsm->getInstruction(Inst, insSize, view, 0,
                                       /*REMOVE*/ nulls(), nulls());
             switch (S) {
             case MCDisassembler::Fail:
                 if (pass != 0)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+                    stream << "\t" << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
+#else
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
                                         "invalid instruction encoding");
-                if (insSize == 0)
-                    insSize = 1; // skip illegible bytes
+#endif
+                if (insSize == 0) // skip illegible bytes
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+                    insSize = 4; // instructions are always 4 bytes
+#else
+                    insSize = 1; // attempt to slide 1 byte forward
+#endif
                 break;
 
             case MCDisassembler::SoftFail:
                 if (pass != 0)
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+                    stream << "potentially undefined instruction encoding:\n";
+#else
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
                                         "potentially undefined instruction encoding");
+#endif
                 // Fall through
 
             case MCDisassembler::Success:
                 if (pass == 0) {
                     // Pass 0: Record all branch targets
-                    if (MCIA->isBranch(Inst)) {
+                    if (MCIA && MCIA->isBranch(Inst)) {
                         uint64_t addr;
 #ifdef LLVM34
                         if (MCIA->evaluateBranch(Inst, Fptr+Index, insSize, addr))
