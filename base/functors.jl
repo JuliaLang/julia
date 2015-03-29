@@ -48,10 +48,9 @@ call(::MoreFun, x, y) = x > y
 
 # a fallback unspecialized functor that allows code using functors to not care
 # whether they were able to specialize on the function value or not
-immutable UnspecializedFun{N,T<:Callable} <: Func{N}
-    f::T
+immutable UnspecializedFun{N} <: Func{N}
+    f::Function
 end
-call{N,T}(::Type{UnspecializedFun{N}}, f::T) = UnspecializedFun{N,T}(f)
 call(f::UnspecializedFun{1}, x) = f.f(x)
 call(f::UnspecializedFun{2}, x, y) = f.f(x,y)
 
@@ -105,7 +104,7 @@ call(::BitFunctorBinary{false, true,  true,  true }, p, q) = ~(p & q)
 
 # Specializations by value
 
-function specialized_unary(f::Callable)
+function specialized_unary(f::Function)
     is(f, identity) ? IdFun()   :
     is(f, abs)      ? AbsFun()  :
     is(f, abs2)     ? Abs2Fun() :
@@ -113,7 +112,7 @@ function specialized_unary(f::Callable)
     is(f, log)      ? LogFun()  :
     UnspecializedFun{1}(f)
 end
-function specialized_binary(f::Callable)
+function specialized_binary(f::Function)
     is(f, +) ? AddFun() :
     is(f, *) ? MulFun() :
     is(f, &) ? AndFun() :
@@ -121,14 +120,14 @@ function specialized_binary(f::Callable)
     UnspecializedFun{2}(f)
 end
 
-function specialized_bitwise_unary(f::Callable)
+function specialized_bitwise_unary(f::Function)
     is(f, identity)     ? BitFunctorUnary{true,  false}() :
     is(f, !) | is(f, ~) ? BitFunctorUnary{false, true }() :
     is(f, one)          ? BitFunctorUnary{true,  true }() :
     is(f, zero)         ? BitFunctorUnary{false, false}() :
     UnspecializedFun{1}(f)
 end
-function specialized_bitwise_binary(f::Callable)
+function specialized_bitwise_binary(f::Function)
     is(f, &)  | is(f, *) | is(f, min) ? BitFunctorBinary{true,  false, false, false}() :
     is(f, |)  | is(f, max)            ? BitFunctorBinary{true,  true,  true,  false}() :
     is(f, $)  | is(f, !=)             ? BitFunctorBinary{false, true,  true,  false}() :
