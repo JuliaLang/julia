@@ -3081,7 +3081,8 @@ void jl_init_types(void)
     jl_type_type->parameters = jl_tuple(1, tttvar);
 
     jl_tuple_t *tv;
-    tv = jl_tuple1(tvar("T"));
+    //tv = jl_tuple1(tvar("T"));
+    tv = jl_tuple2(tvar("T"), tvar("N"));
     jl_vararg_type = jl_new_abstracttype((jl_value_t*)jl_symbol("Vararg"),
                                          jl_any_type, tv);
 
