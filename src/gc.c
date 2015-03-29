@@ -33,6 +33,127 @@ void jl_(void *jl_value);
 extern "C" {
 #endif
 
+#define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
+
+int jl_in_gc; // referenced from switchto task.c
+static int64_t allocd_bytes;
+static int64_t freed_bytes = 0;
+
+// malloc wrappers, aligned allocation
+
+#ifdef _P64
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define free_a16(p) free(p)
+
+#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
+#define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
+#define free_a16(p) _aligned_free(p)
+
+#elif defined(__APPLE__)
+#define malloc_a16(sz) malloc(((sz)+15)&-16)
+#define free_a16(p) free(p)
+
+#else
+static inline void *malloc_a16(size_t sz)
+{
+    void *ptr;
+    if (posix_memalign(&ptr, 16, (sz+15)&-16))
+        return NULL;
+    return ptr;
+}
+#define free_a16(p) free(p)
+#endif
+
+// finalization
+static arraylist_t finalizer_list;
+static arraylist_t finalizer_list_marked;
+static arraylist_t to_finalize;
+
+static void schedule_finalization(void *o, void *f)
+{
+    arraylist_push(&to_finalize, o);
+    arraylist_push(&to_finalize, f);
+}
+
+static void run_finalizer(jl_value_t *o, jl_value_t *ff)
+{
+    jl_function_t *f = (jl_function_t*)ff;
+    assert(jl_is_function(f));
+    JL_TRY {
+        jl_apply(f, (jl_value_t**)&o, 1);
+    }
+    JL_CATCH {
+        jl_printf(JL_STDERR, "error in running finalizer: ");
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_printf(JL_STDERR, "\n");
+    }
+}
+
+static int finalize_object(jl_value_t *o)
+{
+    int success = 0;
+    jl_value_t *f = NULL;
+    JL_GC_PUSH1(&f);
+    for(int i = 0; i < finalizer_list.len; i+=2) {
+        if (o == (jl_value_t*)finalizer_list.items[i]) {
+            f = (jl_value_t*)finalizer_list.items[i+1];
+            if (i < finalizer_list.len - 2) {
+                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
+                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
+                i -= 2;
+            }
+            finalizer_list.len -= 2;
+            run_finalizer(o, f);
+            success = 1;
+        }
+    }
+    JL_GC_POP();
+    return success;
+}
+
+static void run_finalizers(void)
+{
+    void *o = NULL, *f = NULL;
+    JL_GC_PUSH2(&o, &f);
+    while (to_finalize.len > 0) {
+        f = arraylist_pop(&to_finalize);
+        o = arraylist_pop(&to_finalize);
+        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
+    }
+    JL_GC_POP();
+}
+
+void schedule_all_finalizers(arraylist_t* flist)
+{
+    for(size_t i=0; i < flist->len; i+=2) {
+        jl_value_t *f = (jl_value_t*)flist->items[i+1];
+        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
+            schedule_finalization(flist->items[i], flist->items[i+1]);
+        }
+    }
+    flist->len = 0;
+}
+
+void jl_gc_run_all_finalizers(void)
+{
+    schedule_all_finalizers(&finalizer_list);
+    schedule_all_finalizers(&finalizer_list_marked);
+    run_finalizers();
+}
+
+DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
+{
+    arraylist_push(&finalizer_list, (void*)v);
+    arraylist_push(&finalizer_list, (void*)f);
+}
+
+void jl_finalize(jl_value_t *o)
+{
+    (void)finalize_object(o);
+}
+
+#ifdef JL_GC_MARKSWEEP
+
 typedef struct {
     union {
         uintptr_t header;
@@ -168,7 +289,6 @@ static size_t max_collect_interval = 1250000000UL;
 static size_t max_collect_interval =  500000000UL;
 #endif
 static size_t collect_interval;
-static int64_t allocd_bytes;
 
 #define N_POOLS 42
 static pool_t norm_pools[N_POOLS];
@@ -179,7 +299,6 @@ static bigval_t *big_objects_marked = NULL;
 
 static int64_t total_allocd_bytes = 0;
 static int64_t allocd_bytes_since_sweep = 0;
-static int64_t freed_bytes = 0;
 static uint64_t total_gc_time = 0;
 #define NS_TO_S(t) ((double)(t/1000)/(1000*1000))
 #define NS2MS(t) ((double)(t/1000)/1000)
@@ -187,8 +306,6 @@ static int64_t live_bytes = 0;
 static int64_t promoted_bytes = 0;
 static size_t current_pg_count = 0;
 static size_t max_pg_count = 0;
-
-int jl_in_gc; // referenced from switchto task.c
 
 #ifdef OBJPROFILE
 static htable_t obj_counts[3];
@@ -446,32 +563,6 @@ inline void gc_setmark_buf(void *o, int mark_mode)
         gc_setmark_big(buf, mark_mode);
 }
 
-// malloc wrappers, aligned allocation
-
-#ifdef _P64
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
-#define free_a16(p) free(p)
-
-#elif defined(_OS_WINDOWS_) /* 32-bit OS is implicit here. */
-#define malloc_a16(sz) _aligned_malloc(sz?((sz)+15)&-16:1, 16)
-#define free_a16(p) _aligned_free(p)
-
-#elif defined(__APPLE__)
-#define malloc_a16(sz) malloc(((sz)+15)&-16)
-#define free_a16(p) free(p)
-
-#else
-static inline void *malloc_a16(size_t sz)
-{
-    void *ptr;
-    if (posix_memalign(&ptr, 16, (sz+15)&-16))
-        return NULL;
-    return ptr;
-}
-#define free_a16(p) free(p)
-
-#endif
-
 static NOINLINE void *malloc_page(void)
 {
     void *ptr = (void*)0;
@@ -561,6 +652,7 @@ static void free_page(void *p)
 }
 
 #define should_collect() (__unlikely(allocd_bytes>0))
+
 static inline int maybe_collect(void)
 {
     if (should_collect()) {
@@ -570,79 +662,6 @@ static inline int maybe_collect(void)
     return 0;
 }
 
-DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
-{
-    maybe_collect();
-    allocd_bytes += sz;
-    void *b = malloc(sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
-}
-
-DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
-{
-    free(p);
-    freed_bytes += sz;
-}
-
-DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
-{
-    maybe_collect();
-    allocd_bytes += (sz-old);
-    void *b = realloc(p, sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
-}
-
-void *jl_gc_managed_malloc(size_t sz)
-{
-    maybe_collect();
-    allocd_bytes += sz;
-    sz = (sz+15) & -16;
-    void *b = malloc_a16(sz);
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-    return b;
-}
-
-void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner)
-{
-    maybe_collect();
-
-    if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
-        perm_scanned_bytes += sz - oldsz;
-        live_bytes += sz - oldsz;
-    }
-    else {
-        allocd_bytes += sz - oldsz;
-    }
-
-    sz = (sz+15) & -16;
-    void *b;
-#ifdef _P64
-    b = realloc(d, sz);
-#elif defined(_OS_WINDOWS_)
-    if (isaligned)
-        b = _aligned_realloc(d, sz, 16);
-    else
-        b = realloc(d, sz);
-#elif defined(__APPLE__)
-    b = realloc(d, sz);
-#else
-    // TODO better aligned realloc here
-    b = malloc_a16(sz);
-    if (b != NULL) {
-        memcpy(b, d, oldsz);
-        if (isaligned) free_a16(d); else free(d);
-    }
-#endif
-    if (b == NULL)
-        jl_throw(jl_memory_exception);
-
-    return b;
-}
 
 // preserved values
 
@@ -699,94 +718,6 @@ static void sweep_weak_refs(void)
     } while ((n < l-ndel) && SWAP_wr(lst[n],lst[n+ndel]));
 
     weak_refs.len -= ndel;
-}
-
-// finalization
-static arraylist_t finalizer_list;
-static arraylist_t finalizer_list_marked;
-static arraylist_t to_finalize;
-
-static void schedule_finalization(void *o, void *f)
-{
-    arraylist_push(&to_finalize, o);
-    arraylist_push(&to_finalize, f);
-}
-
-static void run_finalizer(jl_value_t *o, jl_value_t *ff)
-{
-    jl_function_t *f = (jl_function_t*)ff;
-    assert(jl_is_function(f));
-    JL_TRY {
-        jl_apply(f, (jl_value_t**)&o, 1);
-    }
-    JL_CATCH {
-        jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
-    }
-}
-
-static int finalize_object(jl_value_t *o)
-{
-    int success = 0;
-    jl_value_t *f = NULL;
-    JL_GC_PUSH1(&f);
-    for(int i = 0; i < finalizer_list.len; i+=2) {
-        if (o == (jl_value_t*)finalizer_list.items[i]) {
-            f = (jl_value_t*)finalizer_list.items[i+1];
-            if (i < finalizer_list.len - 2) {
-                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
-                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
-                i -= 2;
-            }
-            finalizer_list.len -= 2;
-            run_finalizer(o, f);
-            success = 1;
-        }
-    }
-    JL_GC_POP();
-    return success;
-}
-
-static void run_finalizers(void)
-{
-    void *o = NULL, *f = NULL;
-    JL_GC_PUSH2(&o, &f);
-    while (to_finalize.len > 0) {
-        f = arraylist_pop(&to_finalize);
-        o = arraylist_pop(&to_finalize);
-        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
-    }
-    JL_GC_POP();
-}
-
-void schedule_all_finalizers(arraylist_t* flist)
-{
-    for(size_t i=0; i < flist->len; i+=2) {
-        jl_value_t *f = (jl_value_t*)flist->items[i+1];
-        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
-            schedule_finalization(flist->items[i], flist->items[i+1]);
-        }
-    }
-    flist->len = 0;
-}
-
-void jl_gc_run_all_finalizers(void)
-{
-    schedule_all_finalizers(&finalizer_list);
-    schedule_all_finalizers(&finalizer_list_marked);
-    run_finalizers();
-}
-
-void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
-{
-    arraylist_push(&finalizer_list, (void*)v);
-    arraylist_push(&finalizer_list, (void*)f);
-}
-
-void jl_finalize(jl_value_t *o)
-{
-    (void)finalize_object(o);
 }
 
 // big value list
@@ -2316,8 +2247,6 @@ void *reallocb(void *b, size_t sz)
     }
 }
 
-#define jl_valueof(v) (&((jl_taggedvalue_t*)(v))->value)
-
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
     sz += sizeof(jl_taggedvalue_t);
@@ -2537,6 +2466,105 @@ static void big_obj_stats(void)
     jl_printf(JL_STDOUT, "%d kB (%d%% old) in %d large objects (%d%% old)\n", (nbytes + nbytes_old)/1024, nbytes + nbytes_old ? (nbytes_old*100)/(nbytes + nbytes_old) : 0, nused + nused_old, nused+nused_old ? (nused_old*100)/(nused + nused_old) : 0);
 }
 #endif //MEMPROFILE
+
+#else //JL_GC_MARKSWEEP
+DLLEXPORT jl_value_t *allocobj(size_t sz)
+{
+    sz += sizeof(jl_taggedvalue_t);
+    allocd_bytes += sz;
+    return jl_valueof(malloc(sz));
+}
+int64_t diff_gc_total_bytes(void)
+{
+    return 0;
+}
+DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
+{
+    jl_weakref_t *wr = (jl_weakref_t*)alloc_1w();
+    jl_set_typeof(wr, jl_weakref_type);
+    wr->value = value;
+    return wr;
+}
+static inline int maybe_collect(void)
+{
+    return 0;
+}
+#endif //JL_GC_MARKSWEEP
+
+DLLEXPORT void *jl_gc_counted_malloc(size_t sz)
+{
+    maybe_collect();
+    allocd_bytes += sz;
+    void *b = malloc(sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void jl_gc_counted_free(void *p, size_t sz)
+{
+    free(p);
+    freed_bytes += sz;
+}
+
+DLLEXPORT void *jl_gc_counted_realloc_with_old_size(void *p, size_t old, size_t sz)
+{
+    maybe_collect();
+    allocd_bytes += (sz-old);
+    void *b = realloc(p, sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void *jl_gc_managed_malloc(size_t sz)
+{
+    maybe_collect();
+    allocd_bytes += sz;
+    sz = (sz+15) & -16;
+    void *b = malloc_a16(sz);
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+    return b;
+}
+
+DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner)
+{
+    maybe_collect();
+
+#ifdef JL_GC_MARKSWEEP
+    if (gc_bits(jl_astaggedvalue(owner)) == GC_MARKED) {
+        perm_scanned_bytes += sz - oldsz;
+        live_bytes += sz - oldsz;
+    }
+    else
+#endif
+    allocd_bytes += sz - oldsz;
+
+    sz = (sz+15) & -16;
+    void *b;
+#ifdef _P64
+    b = realloc(d, sz);
+#elif defined(_OS_WINDOWS_)
+    if (isaligned)
+        b = _aligned_realloc(d, sz, 16);
+    else
+        b = realloc(d, sz);
+#elif defined(__APPLE__)
+    b = realloc(d, sz);
+#else
+    // TODO better aligned realloc here
+    b = malloc_a16(sz);
+    if (b != NULL) {
+        memcpy(b, d, oldsz);
+        if (isaligned) free_a16(d); else free(d);
+    }
+#endif
+    if (b == NULL)
+        jl_throw(jl_memory_exception);
+
+    return b;
+}
 
 #ifdef __cplusplus
 }

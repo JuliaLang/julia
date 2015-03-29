@@ -461,15 +461,6 @@ AS += -q
 endif
 endif
 
-# Set some ARCH-specific flags
-ifneq ($(USEICC),1)
-ifneq ($(ARCH), arm)
-CC += -m$(BINARY)
-CXX += -m$(BINARY)
-FC += -m$(BINARY)
-endif
-endif
-
 JULIA_CPU_TARGET ?= native
 JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
@@ -480,24 +471,43 @@ endif
 
 ifeq ($(ARCH),i386)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i387)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i486)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i586)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i686)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),x86_64)
 BINARY=64
+ISX86=1
 else ifeq ($(ARCH),arm)
+ISX86=0
+else ifneq (,$(findstring powerpc,$(ARCH)))
+ISX86=0
+else ifneq (,$(findstring ppc,$(ARCH)))
+ISX86=0
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
 
+# Set some ARCH-specific flags
+ifneq ($(USEICC),1)
+ifeq ($(ISX86),1)
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
+endif
+endif
+
 ifeq ($(USEGCC),1)
-ifeq ($(ARCH), arm)
-else ifneq ($(ARCH), ppc64)
+ifeq ($(ISX86),1)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
