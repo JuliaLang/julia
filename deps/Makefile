@@ -77,7 +77,7 @@ endif
 endif
 
 ifeq ($(OS), Linux)
-ifeq ($(shell which patchelf 2>/dev/null),)
+ifeq ($(USE_SYSTEM_PATCHELF), 0)
 STAGE1_DEPS += patchelf
 PATCHELF=$(build_bindir)/patchelf
 else
@@ -1229,7 +1229,7 @@ FFTW_SINGLE_OBJ_TARGET = $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
 FFTW_DOUBLE_OBJ_TARGET = $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 
 FFTW_CONFIG = --enable-shared --disable-fortran --disable-mpi --enable-threads
-ifeq ($(ARCH), arm)
+ifneq (,$(findstring arm,$(ARCH)))
   FFTW_CONFIG +=
 else ifeq ($(ARCH), ppc)
   FFTW_CONFIG += --enable-altivec
