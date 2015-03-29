@@ -178,7 +178,7 @@ The ``base`` argument is a pointer to an array of length ``nmemb``, with element
 elements ``a`` and ``b`` and returns an integer less/greater than zero if ``a`` should
 appear before/after ``b`` (or zero if any order is permitted). Now, suppose that we
 have a 1d array ``A`` of values in Julia that we want to sort using the ``qsort``
-function (rather than Julia’s built-in ``sort`` function). Before we worry about calling
+function (rather than Julia's built-in ``sort`` function). Before we worry about calling
 ``qsort`` and passing arguments, we need to write a comparison function that works for
 some arbitrary type T::
 
@@ -206,7 +206,7 @@ The final call to ``qsort`` looks like this::
 
 After this executes, ``A`` is changed to the sorted array ``[-2.7, 1.3, 3.1, 4.4]``.
 Note that Julia knows how to convert an array into a ``Ptr{Cdouble}``, how to compute
-the size of a type in bytes (identical to C’s ``sizeof`` operator), and so on.
+the size of a type in bytes (identical to C's ``sizeof`` operator), and so on.
 For fun, try inserting a ``println("mycompare($a,$b)")`` line into ``mycompare``, which
 will allow you to see the comparisons that ``qsort`` is performing (and to verify that
 it is really calling the Julia function that you passed to it).
@@ -266,16 +266,16 @@ Syntax / Keyword                Example                         Description
 
 ``abstract``                    ``Any``,                        "Super Type" :: A super-type (not a leaf-type)
                                 ``AbstractArray{T,N}``,         that cannot be instantiated, but can be used to
-                                ``Complex{T}``                  describe a group of types
+                                ``Complex{T}``                  describe a group of types.
 
 ``{T}``                         ``Vector{Int}``                 "Type Parameter" :: A specialization of a type
-                                                                (typically used to dispatch or storage optimization)
+                                                                (typically used for dispatch or storage optimization).
 
                                                                 "TypeVar" :: The ``T`` in the type parameter declaration
-                                                                is referred to as a TypeVar (short for type variable)
+                                                                is referred to as a TypeVar (short for type variable).
 
 ``bitstype``                    ``Int``,                        "Bits Type" :: A type with no fields, but a size. It
-                                ``Float64``                     is stored and defined by-value
+                                ``Float64``                     is stored and defined by-value.
 
 ``immutable``                   ``Pair{String,String}``         "Immutable" :: A type with all fields defined to be
                                                                 constant. It is defined by-value. And may be stored
@@ -283,18 +283,18 @@ Syntax / Keyword                Example                         Description
 
                                 ``Complex128`` (`isbits`)       "Is-Bits" :: A ``bitstype``, or an ``immutable`` type
                                                                 where all fields are other ``isbits`` types. It is
-                                                                defined by-value, and is stored without a type-tag
+                                                                defined by-value, and is stored without a type-tag.
 
-``type ...; end``               ``nothing``                     "Singleton" :: a Leaf Type or Immutable with no fields
+``type ...; end``               ``nothing``                     "Singleton" :: a Leaf Type or Immutable with no fields.
 
 ``(...)`` or ``tuple(...)```    ``(1,2,3)``                     "Tuple" :: an immutable data-structure similar to an
-                                                                anonymous immutable type, or a constant array. it's
+                                                                anonymous immutable type, or a constant array. Its
                                                                 storage semantics are TBD.
 
 ``typealias``                   Not applicable here             Type aliases, and other similar mechanisms of
                                                                 doing type indirection, are resolved to their base
                                                                 type (this includes assigning a type to another name,
-                                                                or getting the type out of a function call)
+                                                                or getting the type out of a function call).
 ==============================  ==============================  ======================================================
 
 Bits Types:
@@ -302,12 +302,12 @@ Bits Types:
 
 There are several special types to be aware of, as no other type can be defined to behave the same:
 
-:Float32: Exactly corresponds to the ``float`` type in C (or ``REAL*4`` in Fortran)
-:Float64: Exactly corresponds to the ``double`` type in C (or ``REAL*8`` in Fortran)
-:Complex64: Exactly corresponds to the ``complex float`` type in C (or ``COMPLEX*8`` in Fortran)
-:Complex128: Exactly corresponds to the ``complex double`` type in C (or ``COMPLEX*16`` in Fortran)
-:Signed: Exactly corresponds to the ``signed`` type annotation in C (or any ``INTEGER`` type in Fortran). Any Julia type that is not a subtype of ``Signed`` is assumed to be unsigned
-:Ref{T}: Behaves like a ``Ptr{T}`` that owns it's memory
+:Float32: Exactly corresponds to the ``float`` type in C (or ``REAL*4`` in Fortran).
+:Float64: Exactly corresponds to the ``double`` type in C (or ``REAL*8`` in Fortran).
+:Complex64: Exactly corresponds to the ``complex float`` type in C (or ``COMPLEX*8`` in Fortran).
+:Complex128: Exactly corresponds to the ``complex double`` type in C (or ``COMPLEX*16`` in Fortran).
+:Signed: Exactly corresponds to the ``signed`` type annotation in C (or any ``INTEGER`` type in Fortran). Any Julia type that is not a subtype of ``Signed`` is assumed to be unsigned.
+:Ref{T}: Behaves like a ``Ptr{T}`` that owns its memory.
 :Array{T,N}:
     When an array is passed to C as a ``Ptr{T}`` argument, it is
     not reinterpret-cast: Julia requires that the element type of the
@@ -324,7 +324,7 @@ There are several special types to be aware of, as no other type can be defined 
 
     If an array of eltype ``Ptr{T}`` is passed as a ``Ptr{Ptr{T}}`` argument, the Julia base library
     `cconvert_gcroot` function will attempt to first make a null-terminated copy of the array with
-    each element replaced by it's ``cconvert`` version. This allows, for example, passing an ``argv``
+    each element replaced by its ``cconvert`` version. This allows, for example, passing an ``argv``
     pointer array of type ``Vector{ByteString}`` to an argument of type ``Ptr{Ptr{Cchar}}``.
 
 
