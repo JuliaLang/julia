@@ -4,14 +4,14 @@
 # next to libjulia (except on Windows, where it goes in $JULIA_HOME\..\lib\julia)
 # Allow insertion of a userimg via userimg_path.  If sysimg_path.dlext is currently loaded into memory,
 # don't continue unless force is set to true.  Allow targeting of a CPU architecture via cpu_target
-@unix_only const default_sysimg_path = joinpath(dirname(Sys.dlpath("libjulia")),"sys")
+@unix_only const default_sysimg_path = joinpath(dirname(Libdl.dlpath("libjulia")),"sys")
 @windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
 function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = dlopen_e("sys")
     if sysimg != C_NULL
-        if !force && Base.samefile(Sys.dlpath(sysimg), "$(sysimg_path).$(Sys.dlext)")
-            info("System image already loaded at $(Sys.dlpath(sysimg)), set force to override")
+        if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Sys.dlext)")
+            info("System image already loaded at $(Libdl.dlpath(sysimg)), set force to override")
             return
         end
     end
@@ -112,7 +112,7 @@ end
 
 # Link sys.o into sys.$(dlext)
 function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
-    julia_libdir = dirname(Sys.dlpath("libjulia"))
+    julia_libdir = dirname(Libdl.dlpath("libjulia"))
 
     FLAGS = ["-L$julia_libdir"]
     if OS_NAME == :Darwin

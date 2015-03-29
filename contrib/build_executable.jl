@@ -46,7 +46,7 @@ type SysFile
 end
 
 function SysFile(exename)
-    buildpath = abspath(dirname(Sys.dlpath("libjulia")))
+    buildpath = abspath(dirname(Libdl.dlpath("libjulia")))
     buildfile = joinpath(buildpath, "lib"*exename)
     buildfile0 = joinpath(buildpath, "sys0")
 
@@ -197,7 +197,7 @@ function emit_cmain(cfile, exename, relocation)
     if relocation
         sysji = joinpath("lib"*exename)
     else
-        sysji = joinpath(dirname(Sys.dlpath("libjulia")), "lib"*exename)
+        sysji = joinpath(dirname(Libdl.dlpath("libjulia")), "lib"*exename)
     end
     sysji = escape_string(sysji)
     f = open(cfile, "w")
