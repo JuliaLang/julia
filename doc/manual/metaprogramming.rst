@@ -872,3 +872,194 @@ entirely in Julia. You can read their source and see precisely what they
 do — and all they do is construct expression objects to be inserted into
 your program's syntax tree.
 
+Staged functions
+----------------
+
+*Staged functions* play a similar role as macros, but at a later stage
+between parsing and run-time. Staged functions give the capability to
+generate specialized code depending on the types of their arguments.
+While macros work with expressions at parsing-time and cannot access the
+types of their inputs, a staged function gets expanded at a time when
+the types of the arguments are known, but the function is not yet compiled.
+
+Depending on the types of the arguments, a staged function returns a quoted
+expression which then forms the function body of the specialized function.
+Thus, staged functions provide a flexible framework to move work from
+run-time to compile-time.
+
+When defining staged functions, there are three main differences to
+ordinary functions:
+
+1. You use the keyword ``stagedfunction`` instead of ``function``
+
+2. In the body of the ``stagedfunction`` you only have access to the
+   *types* of the arguments, not their values.
+
+3. Instead of calculating something or performing some action, you return
+   from the staged function a *quoted expression* which, when evaluated,
+   does what you want.
+
+It's easiest to illustrate this with an example. We can declare a staged
+function ``foo`` as
+
+.. doctest::
+
+    julia> stagedfunction foo(x)
+               println(x)
+               :(x*x)
+           end
+    foo (generic function with 1 method)
+
+Note that the body returns a quoted expression, namely ``x*x``.
+
+From the callers perspective, they are very similar to regular functions;
+in fact, you don't have to know if you're calling a ``function`` or a
+``stagedfunction`` - the syntax and result of the call is just the same.
+Let's see how ``foo`` behaves:
+
+.. doctest::
+
+    julia> x = foo(2); # note: not printing the result
+    Int64              # this is the println() statement in the body
+    julia> x           # now we print x
+    4
+
+    julia> y = foo("bar");
+    ASCIIString
+    julia> y
+    "barbar"
+
+So, we see that in the body of the ``stagedfunction``, ``x`` is the
+*type* of the passed argument, and the value returned by the ``stagedfunction``,
+is the result of evaluating the quoted expression we returned from the
+definition, now with the *value* of ``x``.
+
+What happens if we evaluate ``foo`` again with a type that we have already
+used?
+
+.. doctest::
+
+    julia> foo(4)
+    16
+
+Note that there is no printout of ``Int64``. The body of the ``stagedfunction``
+is only executed *once*, when the method for that specific set of argument
+types is compiled. After that, the expression returned from the
+``stagedfunction`` on the first invocation is re-used as the method body.
+
+The example staged function ``foo`` above did not do anything a normal
+function ``foo(x)=x*x`` could not do, except printing the the type on the
+first invocation. However, the power of a staged function lies in its
+ability to compute different quoted expression depending on the types
+passed to it:
+
+.. doctest::
+
+   julia> stagedfunction bar(x)
+              if x <: Integer
+                  return :(x^2)
+              else
+                  return :(x)
+              end
+          end
+    bar (generic function with 1 method)
+
+    julia> bar(4)
+    16
+    julia> bar("baz")
+    "baz"
+
+We can, of course, abuse this to produce some interesting behavior::
+
+   julia> stagedfunction baz(x)
+              if rand() < .9
+                  return :(x^2)
+              else
+                  return :("boo!")
+              end
+          end
+
+Since the body of the staged function is non-deterministic, its behavior
+is undefined; the expression returned on the *first* invocation will be
+used for *all* subsequent invocations with the same type. When we call
+the staged function with ``x`` of a new type, ``rand()`` will be called
+again to see which method body to use for the new type. In this case, for
+one *type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
+In short: don't do this.
+
+While these examples are perhaps not so interesting, they have hopefully
+helped to illustrate how staged functions work, both in the definition end
+and at the call site. Next, let's build some more advanced functionality
+using staged functions...
+
+An advanced example
+~~~~~~~~~~~~~~~~~~~
+
+Julia's base library has a function ``sub2ind`` function to calculate a
+linear index into an n-dimensional array, based on a set of n multilinear
+indices - in other words, to calculate the index ``i`` that can be used to
+index into an array ``A`` using ``A[i]``, instead of ``A[x,y,z,...]``. One
+possible implementation is the following::
+
+    function sub2ind_loop(dims::NTuple{N}, I::Integer...)
+        ind = I[N] - 1
+        for i = N-1:-1:1
+            ind = I[i]-1 + dims[i]*ind
+        end
+        ind + 1
+    end
+
+The same thing can be done using recursion::
+
+    sub2ind_rec(dims::()) = 1
+    sub2ind_rec(dims::(),i1::Integer, I::Integer...) =
+        i1==1 ? sub2ind(dims,I...) : throw(BoundsError())
+    sub2ind_rec(dims::(Integer,Integer...), i1::Integer) = i1
+    sub2ind_rec(dims::(Integer,Integer...), i1::Integer, I::Integer...) =
+        i1 + dims[1]*(sub2ind(tail(dims),I...)-1)
+
+Both these implementations, although different, do essentially the same
+thing: a runtime loop over the dimensions of the array, collecting the
+offset in each dimension into the final index.
+
+However, all the information we need for the loop is embedded in the type
+information of the arguments. Thus, we can utilize staged functions to
+move the iteration to compile-time. The body becomes almost identical,
+but instead of calculating the linear index, we build up an *expression*
+that calculates the index::
+
+    stagedfunction sub2ind_staged{N}(dims::NTuple{N}, I::Integer...)
+        ex = :(I[$N] - 1)
+        for i = N-1:-1:1
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        end
+        :($ex + 1)
+    end
+
+**What code will this staged function generate?**
+
+An easy way to find out, is to extract the body into another (regular)
+function::
+
+    stagedfunction sub2ind_staged{N}(dims::NTuple{N}, I::Integer...)
+        sub2ind_staged_impl(dims, I...)
+    end
+
+    function sub2ind_staged_impl(dims, I...)
+        ex = :(I[$N] - 1)
+        for i = N-1:-1:1
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
+        end
+        :($ex + 1)
+    end
+
+We can now execute ``sub2ind_staged_impl`` and examine the expression it
+returns::
+
+    julia> sub2ind_staged_impl((5,2), 3, 2)
+    :(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)
+
+So, the method body that will be used here doesn't include a loop at all
+- just indexing into the two tuples, multiplication and addition/subtraction.
+All the looping is performed compile-time, which means we only loop
+*once per type*, in this case once per ``N``.
