@@ -478,9 +478,90 @@ extern jl_sym_t *simdloop_sym; extern jl_sym_t *meta_sym;
 extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 extern jl_sym_t *inert_sym;
 
+// gc -------------------------------------------------------------------------
 
-// GC write barrier
+#ifdef JL_GC_MARKSWEEP
+typedef struct _jl_gcframe_t {
+    size_t nroots;
+    struct _jl_gcframe_t *prev;
+    // actual roots go here
+} jl_gcframe_t;
 
+// NOTE: it is the caller's responsibility to make sure arguments are
+// rooted. foo(f(), g()) will not work, and foo can't do anything about it,
+// so the caller must do
+// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
+// x = f(); y = g(); foo(x, y)
+
+extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
+
+#define JL_GC_PUSH(...)                                                   \
+  void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
+                       __VA_ARGS__};                                      \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH1(arg1)                                                 \
+  void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH2(arg1, arg2)                                           \
+  void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
+  void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
+  void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
+  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
+  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
+
+#define JL_GC_PUSHARGS(rts_var,n)                               \
+  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
+  ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
+  ((void**)rts_var)[-1] = jl_pgcstack;                          \
+  jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
+
+#define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
+
+void jl_gc_init(void);
+void jl_gc_setmark(jl_value_t *v);
+DLLEXPORT int jl_gc_enable(void);
+DLLEXPORT int jl_gc_disable(void);
+DLLEXPORT int jl_gc_is_enabled(void);
+DLLEXPORT int64_t jl_gc_total_bytes(void);
+DLLEXPORT uint64_t jl_gc_total_hrtime(void);
+int64_t diff_gc_total_bytes(void);
+void sync_gc_total_bytes(void);
+
+DLLEXPORT void jl_gc_collect(int);
+DLLEXPORT void jl_gc_preserve(jl_value_t *v);
+DLLEXPORT void jl_gc_unpreserve(void);
+DLLEXPORT int jl_gc_n_preserved_values(void);
+
+DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+DLLEXPORT void jl_finalize(jl_value_t *o);
+DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
+void jl_gc_free_array(jl_array_t *a);
+void jl_gc_track_malloced_array(jl_array_t *a);
+void jl_gc_count_allocd(size_t sz);
+void jl_gc_run_all_finalizers(void);
+DLLEXPORT jl_value_t *alloc_1w(void);
+DLLEXPORT jl_value_t *alloc_2w(void);
+DLLEXPORT jl_value_t *alloc_3w(void);
+void *allocb(size_t sz);
+void *reallocb(void*, size_t);
+DLLEXPORT jl_value_t *allocobj(size_t sz);
+
+DLLEXPORT void jl_clear_malloc_data(void);
+DLLEXPORT int64_t jl_gc_num_pause(void);
+DLLEXPORT int64_t jl_gc_num_full_sweep(void);
+
+// GC write barriers
 DLLEXPORT void gc_queue_root(jl_value_t *root); // root isa jl_value_t*
 void gc_queue_binding(jl_binding_t *bnd);
 void gc_setmark_buf(void *buf, int);
@@ -514,6 +595,47 @@ static inline void gc_wb_back(void *ptr) // ptr isa jl_value_t*
     }
 }
 
+#else // No Garbage Collection
+
+#define JL_GC_PUSH(...) ;
+#define JL_GC_PUSH1(...) ;
+#define JL_GC_PUSH2(...) ;
+#define JL_GC_PUSH3(...) ;
+#define JL_GC_PUSH4(...) ;
+#define JL_GC_PUSH5(...) ;
+#define JL_GC_PUSHARGS(rts_var,n) rts_var = ((jl_value_t**)alloca((n)*sizeof(jl_value_t*)));
+#define JL_GC_POP()
+
+#define jl_gc_preserve(v) ((void)(v))
+#define jl_gc_unpreserve()
+#define jl_gc_n_preserved_values() (0)
+
+#define allocb(nb)    malloc(nb)
+DLLEXPORT jl_value_t *allocobj(size_t sz);
+STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
+STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
+STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
+
+DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
+
+int64_t diff_gc_total_bytes(void);
+#define sync_gc_total_bytes()
+#define jl_gc_collect(arg);
+#define jl_gc_enable() (0)
+#define jl_gc_disable() (0)
+#define jl_gc_is_enabled() (0)
+#define jl_gc_track_malloced_array(a)
+#define jl_gc_count_allocd(sz)
+
+#define gc_wb_binding(bnd, val)
+#define gc_wb(parent, ptr)
+#define gc_wb_buf(parent, bufptr)
+#define gc_wb_back(ptr)
+
+#endif
+
+DLLEXPORT void *jl_gc_managed_malloc(size_t sz);
+DLLEXPORT void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
 
 // object accessors -----------------------------------------------------------
 
@@ -1148,108 +1270,6 @@ DLLEXPORT jl_value_t *jl_call3(jl_function_t *f, jl_value_t *a, jl_value_t *b, j
 // interfacing with Task runtime
 DLLEXPORT void jl_yield();
 
-// gc -------------------------------------------------------------------------
-
-#ifdef JL_GC_MARKSWEEP
-typedef struct _jl_gcframe_t {
-    size_t nroots;
-    struct _jl_gcframe_t *prev;
-    // actual roots go here
-} jl_gcframe_t;
-
-// NOTE: it is the caller's responsibility to make sure arguments are
-// rooted. foo(f(), g()) will not work, and foo can't do anything about it,
-// so the caller must do
-// jl_value_t *x=NULL, *y=NULL; JL_GC_PUSH(&x, &y);
-// x = f(); y = g(); foo(x, y)
-
-extern DLLEXPORT JL_THREAD jl_gcframe_t *jl_pgcstack;
-
-#define JL_GC_PUSH(...)                                                   \
-  void *__gc_stkf[] = {(void*)((VA_NARG(__VA_ARGS__)<<1)|1), jl_pgcstack, \
-                       __VA_ARGS__};                                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH1(arg1)                                                 \
-  void *__gc_stkf[] = {(void*)3, jl_pgcstack, arg1};                      \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH2(arg1, arg2)                                           \
-  void *__gc_stkf[] = {(void*)5, jl_pgcstack, arg1, arg2};                \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH3(arg1, arg2, arg3)                                     \
-  void *__gc_stkf[] = {(void*)7, jl_pgcstack, arg1, arg2, arg3};          \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH4(arg1, arg2, arg3, arg4)                               \
-  void *__gc_stkf[] = {(void*)9, jl_pgcstack, arg1, arg2, arg3, arg4};    \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSH5(arg1, arg2, arg3, arg4, arg5)                               \
-  void *__gc_stkf[] = {(void*)11, jl_pgcstack, arg1, arg2, arg3, arg4, arg5};    \
-  jl_pgcstack = (jl_gcframe_t*)__gc_stkf;
-
-#define JL_GC_PUSHARGS(rts_var,n)                               \
-  rts_var = ((jl_value_t**)alloca(((n)+2)*sizeof(jl_value_t*)))+2;    \
-  ((void**)rts_var)[-2] = (void*)(((size_t)n)<<1);              \
-  ((void**)rts_var)[-1] = jl_pgcstack;                          \
-  jl_pgcstack = (jl_gcframe_t*)&(((void**)rts_var)[-2])
-
-#define JL_GC_POP() (jl_pgcstack = jl_pgcstack->prev)
-
-void jl_gc_init(void);
-void jl_gc_setmark(jl_value_t *v);
-DLLEXPORT int jl_gc_enable(void);
-DLLEXPORT int jl_gc_disable(void);
-DLLEXPORT int jl_gc_is_enabled(void);
-DLLEXPORT int64_t jl_gc_total_bytes(void);
-DLLEXPORT uint64_t jl_gc_total_hrtime(void);
-int64_t diff_gc_total_bytes(void);
-void sync_gc_total_bytes(void);
-
-DLLEXPORT void jl_gc_collect(int);
-DLLEXPORT void jl_gc_preserve(jl_value_t *v);
-DLLEXPORT void jl_gc_unpreserve(void);
-DLLEXPORT int jl_gc_n_preserved_values(void);
-
-DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f);
-DLLEXPORT void jl_finalize(jl_value_t *o);
-DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value);
-void *jl_gc_managed_malloc(size_t sz);
-void *jl_gc_managed_realloc(void *d, size_t sz, size_t oldsz, int isaligned, jl_value_t* owner);
-void jl_gc_free_array(jl_array_t *a);
-void jl_gc_track_malloced_array(jl_array_t *a);
-void jl_gc_count_allocd(size_t sz);
-void jl_gc_run_all_finalizers(void);
-DLLEXPORT jl_value_t *alloc_1w(void);
-DLLEXPORT jl_value_t *alloc_2w(void);
-DLLEXPORT jl_value_t *alloc_3w(void);
-void *allocb(size_t sz);
-void *reallocb(void*, size_t);
-DLLEXPORT jl_value_t *allocobj(size_t sz);
-
-DLLEXPORT void jl_clear_malloc_data(void);
-DLLEXPORT int64_t jl_gc_num_pause(void);
-DLLEXPORT int64_t jl_gc_num_full_sweep(void);
-
-#else
-
-#define JL_GC_PUSH(...) ;
-#define JL_GC_PUSHARGS(rts,n) ;
-#define JL_GC_POP()
-
-#define jl_gc_preserve(v) ((void)(v))
-#define jl_gc_unpreserve()
-#define jl_gc_n_preserved_values() (0)
-
-STATIC_INLINE jl_value_t *alloc_1w() { return allocobj(1*sizeof(void*)); }
-STATIC_INLINE jl_value_t *alloc_2w() { return allocobj(2*sizeof(void*)); }
-STATIC_INLINE jl_value_t *alloc_3w() { return allocobj(3*sizeof(void*)); }
-#define allocb(nb)    malloc(nb)
-#define allocobj(nb)  (((jl_taggedvalue_t*)malloc((nb)+sizeof(jl_taggedvalue_t)))->value)
-#endif
-
 // async signal handling ------------------------------------------------------
 
 #include <signal.h>
@@ -1305,8 +1325,10 @@ typedef struct _jl_task_t {
 
     // current exception handler
     jl_handler_t *eh;
+#ifdef JL_GC_MARKSWEEP
     // saved gc stack top for context switches
     jl_gcframe_t *gcstack;
+#endif
     // current module, or NULL if this task has not set one
     jl_module_t *current_module;
 } jl_task_t;
