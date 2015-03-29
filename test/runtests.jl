@@ -67,6 +67,34 @@ if VERSION < v"0.4.0-dev+1387"
 end
 
 @test round(Int, 3//4) == 1
+@test round(Int, 1) == 1
+@test round(Int, 1.1) == 1
+@test round(Int, [1, 1]) == [1, 1]
+@test round(Int, [1.1, 1.1]) == [1, 1]
+@test round(Int, [1 1]) == [1 1]
+@test round(Int, [1.1 1.1]) == [1 1]
+@test round(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+@test ceil(Int, 1) == 1
+@test ceil(Int, 1.1) == 2
+@test ceil(Int, [1, 1]) == [1, 1]
+@test ceil(Int, [1.1, 1.1]) == [2, 2]
+@test ceil(Int, [1 1]) == [1 1]
+@test ceil(Int, [1.1 1.1]) == [2 2]
+@test ceil(Int, fill(1.1, 2, 3, 4)) == fill(2, 2, 3, 4)
+@test floor(Int, 1) == 1
+@test floor(Int, 1.1) == 1
+@test floor(Int, [1, 1]) == [1, 1]
+@test floor(Int, [1.1, 1.1]) == [1, 1]
+@test floor(Int, [1 1]) == [1 1]
+@test floor(Int, [1.1 1.1]) == [1 1]
+@test floor(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
+@test trunc(Int, 1) == 1
+@test trunc(Int, 1.1) == 1
+@test trunc(Int, [1, 1]) == [1, 1]
+@test trunc(Int, [1.1, 1.1]) == [1, 1]
+@test trunc(Int, [1 1]) == [1 1]
+@test trunc(Int, [1.1 1.1]) == [1 1]
+@test trunc(Int, fill(1.1, 2, 3, 4)) == fill(1, 2, 3, 4)
 
 @test IPv4("1.2.3.4") == ip"1.2.3.4"
 @test IPv6("2001:1:2:3::1") == ip"2001:1:2:3::1"
