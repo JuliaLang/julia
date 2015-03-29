@@ -24,6 +24,37 @@ DLLEXPORT int jl_profile_start_timer(void);
 //
 // Windows
 //
+
+jmp_buf profile_env;
+
+extern void __cdecl crt_sig_handler(int sig, int num);
+
+// Special signal handler for the profiler so that we
+// can keep going if there is a segfault during backtrace
+// collection.
+// We save the stack before calling rec_backtrace_ctx,
+// and just skip the sample if there is a segfault.
+// see https://github.com/JuliaLang/julia/issues/10638
+void __cdecl prof_sig_handler(int sig, int num)
+{
+    if (sig != SIGSEGV) {
+        fputs("profile signal handler only handles SEGV. aborting", stderr);
+        abort();
+    }
+    jl_longjmp(profile_env, 1);
+}
+
+static LONG WINAPI profile_exception_handler(struct _EXCEPTION_POINTERS *ExceptionInfo)
+{
+    // Turn on the profiler signal handler
+    if (signal(SIGSEGV, (void (__cdecl *)(int))prof_sig_handler) == SIG_ERR) {
+        fputs("failed to set SEGV handler in profiler exception handler! aborting.", stderr);
+        abort();
+    }
+    // Tell SEH to run the handler, which will return to our saved stack
+    return EXCEPTION_EXECUTE_HANDLER;
+}
+
 volatile HANDLE hBtThread = 0;
 static DWORD WINAPI profile_bt( LPVOID lparam )
 {
@@ -44,6 +75,10 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 fputs("failed to suspend main thread. aborting profiling.",stderr);
                 break;
             }
+
+            // Set our own exception filter in case something goes wrong during bt collection
+            LPTOP_LEVEL_EXCEPTION_FILTER prevHandler = SetUnhandledExceptionFilter(profile_exception_handler);
+
             CONTEXT ctxThread;
             memset(&ctxThread,0,sizeof(CONTEXT));
             ctxThread.ContextFlags = CONTEXT_CONTROL | CONTEXT_INTEGER;
@@ -51,11 +86,26 @@ static DWORD WINAPI profile_bt( LPVOID lparam )
                 fputs("failed to get context from main thread. aborting profiling.",stderr);
                 break;
             }
-            // Get backtrace data
-            bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur, bt_size_max-bt_size_cur-1, &ctxThread);
-            // Mark the end of this block with 0
-            bt_data_prof[bt_size_cur] = 0;
-            bt_size_cur++;
+
+            // Save the stack here in case there is a segfault in backtrace collection.
+            if (jl_setjmp(profile_env,0) == 0) {
+                // Get backtrace data
+                bt_size_cur += rec_backtrace_ctx((ptrint_t*)bt_data_prof+bt_size_cur,
+                                                  bt_size_max-bt_size_cur-1, &ctxThread);
+                // Mark the end of this block with 0
+                bt_data_prof[bt_size_cur] = 0;
+                bt_size_cur++;
+            } else {
+                // caught exception
+                if (signal(SIGSEGV, (void (__cdecl *)(int))crt_sig_handler) == SIG_ERR) {
+                    fputs("failed to reset SEGV handler in profiler thread! aborting.", stderr);
+                    abort();
+                }
+            }
+
+            // Reset the exception handler
+            SetUnhandledExceptionFilter(prevHandler);
+
             if ((DWORD)-1 == ResumeThread(hMainThread)) {
                 fputs("failed to resume main thread! aborting.",stderr);
                 abort();
