@@ -4,7 +4,7 @@ include("table.jl")
 function fencedcode(stream::IO, block::MD)
     withstream(stream) do
         startswith(stream, "~~~", padding = true) || startswith(stream, "```", padding = true) || return false
-        skip(stream, -2)
+        skip(stream, -1)
         ch = read(stream, Char)
         trailing = strip(readline(stream))
         flavor = lstrip(trailing, ch)
