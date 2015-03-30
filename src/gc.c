@@ -2220,14 +2220,17 @@ void *allocb(size_t sz)
     sz += sizeof(void*);
 #ifdef MEMDEBUG
     b = (buff_t*)alloc_big(sz);
+    b->header = 0x4EADE800;
     b->pooled = 0;
 #else
     if (sz > 2048) {
         b = (buff_t*)alloc_big(sz);
+        b->header = 0x4EADE800;
         b->pooled = 0;
     }
     else {
         b = (buff_t*)pool_alloc(&pools[szclass(sz)]);
+        b->header = 0x4EADE800;
         b->pooled = 1;
     }
 #endif
