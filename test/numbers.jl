@@ -58,6 +58,9 @@
 @test minmax(3., NaN) == (3., 3.)
 @test minmax(NaN, 3.) == (3., 3.)
 @test isequal(minmax(NaN, NaN), (NaN, NaN))
+@test min(-0.0,0.0) === min(0.0,-0.0)
+@test max(-0.0,0.0) === max(0.0,-0.0)
+@test minmax(-0.0,0.0) === minmax(0.0,-0.0)
 
 # fma
 let x = Int64(7)^7
