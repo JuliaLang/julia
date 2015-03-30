@@ -1,3 +1,22 @@
+### Infer the types of variables in functions, given the types of the arguments
+
+# A few general notes:
+# - The entry point to the inference code is typeinf_ext, which gets called from
+#   C and performs type inference on the AST and supplied argument types.
+# - This works by "simulating" your code at the level of expressions.
+#   The abstract_eval_* series of functions computes the types of the objects that would
+#   be produced from eval-ing the corresponding individual expressions.
+# - Inlining is performed during type inference; the main entry point is inlining_pass
+#   called from typeinf_uncached.
+# - Julia's type system can be thought of in terms of sets. Any corresponds to the
+#   entire domain (any possible type), and Bottom corresponds to the empty set.
+#   Bottom is used to indicate that two types don't match, i.e., their intersection
+#   is the empty set; it also applies to functions that return nothing.
+#   Any is used when types can't be inferred, because potentially any type in the domain
+#   of all types might be returned.
+# - During julia's bootstrap, type inference is initially off, but it gets turned on
+#   by the ccall at the end of this file.
+
 # parameters limiting potentially-infinite types
 const MAX_TYPEUNION_LEN = 3
 const MAX_TYPE_DEPTH = 4
@@ -103,6 +122,10 @@ isType(t::ANY) = isa(t,DataType) && is((t::DataType).name,Type.name)
 
 isvarargtype(t::ANY) = isa(t,DataType)&&is((t::DataType).name,Vararg.name)
 
+## t_func is a cache of type information for Julia's builtins. Each entry
+# is a 3-tuple (min_nargs, max_nargs, typefun), where typefun is a function
+# that computes the return type from the input types. When named, these functions
+# often have the pattern fname_tfunc, where fname is the corresponding function.
 const t_func = ObjectIdDict()
 #t_func[tuple] = (0, Inf, (args...)->limit_tuple_depth(args))
 t_func[throw] = (1, 1, x->Bottom)
@@ -188,7 +211,8 @@ const typeof_tfunc = function (t)
             Type{typeof(t)}
         end
     elseif isvarargtype(t)
-        Vararg{typeof_tfunc(t.parameters[1])}
+        length(t.parameters) == 1 ? Vararg{typeof_tfunc(t.parameters[1])} :
+                                    Vararg{typeof_tfunc(t.parameters[1]), t.parameters[2]}
     elseif isa(t,DataType)
         if isleaftype(t)
             Type{t}
@@ -206,8 +230,10 @@ const typeof_tfunc = function (t)
     end
 end
 t_func[typeof] = (1, 1, typeof_tfunc)
-# involving constants: typeassert, tupleref, getfield, fieldtype, apply_type
-# therefore they get their arguments unevaluated
+
+# The following involve constants: typeassert, tupleref, getfield, fieldtype, apply_type
+# For example, getfield(obj, i) can be inferred only if we know the value (not just type)
+# of i. Therefore, these inference functions also receive their argument values (the variable A).
 t_func[typeassert] =
     (2, 2, (A, v, t)->(isType(t) ? typeintersect(v,t.parameters[1]) :
                        isa(t,Tuple) && all(isType,t) ?
@@ -523,6 +549,10 @@ function tuple_tfunc(argtypes::ANY, limit)
     return t
 end
 
+# Perform type inference on a builtin function f for argument types argtypes
+# For those builtins that cannot be inferred without knowing the values
+# of the arguments (e.g., getfield(obj, i)), also pass the argument values
+# in args.
 function builtin_tfunction(f::ANY, args::ANY, argtypes::ANY)
     isva = isvatuple(argtypes)
     if is(f,tuple)
@@ -660,6 +690,8 @@ const limit_tuple_type_n = function (t::Tuple, lim::Int)
     return t
 end
 
+# Return the instantiation of a method m, given the argument types tt. env contains
+# method parameters, if any.
 let stagedcache=Dict{Any,Any}()
     global func_for_method
     function func_for_method(m::Method, tt, env)
@@ -681,6 +713,8 @@ let stagedcache=Dict{Any,Any}()
     end
 end
 
+# f is the function, fargs holds the argument values, argtypes is a tuple of argument types,
+# and e is the expression that defines the function call
 function abstract_call_gf(f, fargs, argtypes, e)
     if length(argtypes)>1 && (argtypes[1] <: Tuple) && argtypes[2]===Int
         # allow tuple indexing functions to take advantage of constant
@@ -802,6 +836,7 @@ function abstract_call_gf(f, fargs, argtypes, e)
     return rettype
 end
 
+# f is the function, types is a tuple of types in the signature, and argtypes is a tuple of argument types for the call
 function invoke_tfunc(f, types, argtypes)
     argtypes = typeintersect(types,limit_tuple_type(argtypes))
     if is(argtypes,Bottom)
@@ -879,6 +914,10 @@ function abstract_apply(af, aargtypes, vtypes, sv, e)
     return abstract_call(af, (), Tuple, vtypes, sv, ())
 end
 
+# Main entry point for inference on a function-call
+# f is the function, fargs holds the argument values, argtypes holds the argument types,
+# vtypes is an ObjectIdDict of variables and their types, sv contains similar information as vtypes,
+# and e is the expression that defines the function call.
 function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     if is(f,_apply) && length(fargs)>1
         a2type = argtypes[2]
@@ -959,6 +998,7 @@ function abstract_call(f, fargs, argtypes, vtypes, sv::StaticVarInfo, e)
     return rt
 end
 
+# Abstract evaluation of an argument in an expression
 function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     t = abstract_eval(a, vtypes, sv)
     if isa(t,TypeVar) && t.lb == Bottom && isleaftype(t.ub)
@@ -967,6 +1007,7 @@ function abstract_eval_arg(a::ANY, vtypes::ANY, sv::StaticVarInfo)
     return t
 end
 
+# Inference on a Expr(:call, args...)
 function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     fargs = e.args[2:end]
     argtypes = tuple([abstract_eval_arg(a, vtypes, sv) for a in fargs]...)
@@ -995,6 +1036,8 @@ function abstract_eval_call(e, vtypes, sv::StaticVarInfo)
     return abstract_call(f, fargs, argtypes, vtypes, sv, e)
 end
 
+# Main entry point for abstract evaluation of an expression
+# e is the expression; vtypes is an ObjectIdDict of variables and their types
 function abstract_eval(e::ANY, vtypes, sv::StaticVarInfo)
     if isa(e,QuoteNode)
         return typeof((e::QuoteNode).value)
@@ -1340,6 +1383,8 @@ f_argnames(ast) =
 
 is_rest_arg(arg::ANY) = (ccall(:jl_is_rest_arg,Int32,(Any,), arg) != 0)
 
+# linfo is the "lambda info", atypes is a tuple containing the argument types,
+# sparams is always empty, and def is described below
 function typeinf_ext(linfo, atypes::ANY, sparams::ANY, def)
     global inference_stack
     last = inference_stack
