@@ -1140,9 +1140,8 @@
      (list 'abstract (parse-subtype-spec s)))
     ((type immutable)
      (let ((immu? (eq? word 'immutable)))
-       (if (and immu? (eq? (peek-token s) 'type))
-           ;; allow "immutable type"
-           (take-token s))
+       (if (memq (peek-token s) reserved-words)
+	   (error (string "invalid type name \"" (take-token s) "\"")))
        (let ((sig (parse-subtype-spec s)))
          (begin0 (list 'type (if (eq? word 'type) #t #f)
                        sig (parse-block s))
