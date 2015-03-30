@@ -130,7 +130,7 @@ A = [1.0 3.0 6.0;
 # issue #10461
 Areduc = rand(3, 4, 5, 6)
 for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
-                                                     2 3]]
+                                                     2 3], "hello"]
     @test_throws ArgumentError sum(Areduc, region)
     @test_throws ArgumentError prod(Areduc, region)
     @test_throws ArgumentError maximum(Areduc, region)
