@@ -119,8 +119,7 @@ type WorkerConfig
     end
 end
 
-
-
+@enum WorkerState W_RUNNING W_TERMINATING W_TERMINATED
 type Worker
     id::Int
     r_stream::AsyncStream
@@ -131,9 +130,10 @@ type Worker
     del_msgs::Array{Any,1}
     add_msgs::Array{Any,1}
     gcflag::Bool
+    state::WorkerState
 
     Worker(id, r_stream, w_stream, manager, config) =
-        new(id, r_stream, buffer_writes(w_stream), manager, config, [], [], false)
+        new(id, r_stream, buffer_writes(w_stream), manager, config, [], [], false, W_RUNNING)
 end
 
 Worker(id, r_stream, w_stream, manager) = Worker(id, r_stream, w_stream, manager, WorkerConfig())
@@ -182,21 +182,15 @@ function send_msg_(w::Worker, kind, args, now::Bool)
 end
 
 function flush_gc_msgs()
-    for w in (PGRP::ProcessGroup).workers
-        try
-            if isa(w,Worker)
-                k = w::Worker
-                if k.gcflag
-                    flush_gc_msgs(k)
-                end
-            end
-        catch e
-            global rmprocset
-            # Ignore any errors, if worker is terminating.
-            if !(w.id in rmprocset)
-                rethrow(e)
+    try
+        for w in (PGRP::ProcessGroup).workers
+            if isa(w,Worker) && w.gcflag && (w.state == W_RUNNING)
+                flush_gc_msgs(w)
             end
         end
+    catch e
+        bt = catch_backtrace()
+        @schedule showerror(STDERR, e, bt)
     end
 end
 
@@ -277,38 +271,36 @@ function workers()
     end
 end
 
-rmprocset = Set()
 function rmprocs(args...; waitfor = 0.0)
     # Only pid 1 can add and remove processes
     if myid() != 1
         error("only process 1 can add and remove processes")
     end
 
-    global rmprocset
-    empty!(rmprocset)
-
+    rmprocset = []
     for i in vcat(args...)
         if i == 1
             warn("rmprocs: process 1 not removed")
         else
             if haskey(map_pid_wrkr, i)
-                push!(rmprocset, i)
                 w = map_pid_wrkr[i]
+                w.state = W_TERMINATING
                 kill(w.manager, i, w.config)
+                push!(rmprocset, w)
             end
         end
     end
 
     start = time()
     while (time() - start) < waitfor
-        if length(rmprocset) == 0
+        if all(w -> w.state == W_TERMINATED, rmprocset)
             break;
         else
             sleep(0.1)
         end
     end
 
-    ((waitfor > 0) && (length(rmprocset) > 0)) ? :timed_out : :ok
+    ((waitfor > 0) && any(w -> w.state != W_TERMINATED, rmprocset)) ? :timed_out : :ok
 end
 
 
@@ -916,6 +908,10 @@ function create_message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStrea
             end # end of while
         catch e
             iderr = worker_id_from_socket(r_stream)
+            werr = worker_from_id(iderr)
+            oldstate = werr.state
+            werr.state = W_TERMINATED
+
             # If error occured talking to pid 1, commit harakiri
             if iderr == 1
                 if isopen(w_stream)
@@ -934,10 +930,7 @@ function create_message_handler_loop(r_stream::AsyncStream, w_stream::AsyncStrea
             if isopen(w_stream) close(w_stream) end
 
             if (myid() == 1)
-                global rmprocset
-                if in(iderr, rmprocset)
-                    delete!(rmprocset, iderr)
-                else
+                if oldstate != W_TERMINATING
                     println(STDERR, "Worker $iderr terminated.")
                     rethrow(e)
                 end
