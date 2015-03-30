@@ -5449,7 +5449,11 @@ extern "C" void jl_init_codegen(void)
 #ifdef JL_DEBUG_BUILD
     cl::ParseEnvironmentOptions("Julia", "JULIA_LLVM_ARGS");
 #endif
+#if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
+    imaging_mode = true; // LLVM seems to JIT bad TOC tables for the optimizations we attempt in non-imaging_mode
+#else
     imaging_mode = jl_options.build_path != NULL;
+#endif
 
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR <= 3
     // this option disables LLVM's signal handlers
@@ -5620,4 +5624,10 @@ extern "C" void jl_init_codegen(void)
                               "jl_box64", (void*)&jl_box64, m);
 
     typeToTypeId = jl_alloc_cell_1d(16);
+}
+
+// for debugging from gdb
+extern "C" void jl_dump_llvm_value(void *v)
+{
+    ((Value*)v)->dump();
 }
