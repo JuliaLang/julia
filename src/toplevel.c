@@ -661,7 +661,7 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_binding_
                 jl_add_constructors((jl_datatype_t*)gf);
             }
             if (!jl_is_gf(gf)) {
-                jl_errorf("cannot define function %s; it already has a value", bnd->name->name);
+                jl_errorf("cannot define function %s; it already has a value", name->name);
             }
         }
     }
