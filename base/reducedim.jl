@@ -34,6 +34,7 @@ end
 function reduced_dims{N}(siz::NTuple{N,Int}, region)
     rsiz = [siz...]
     for i in region
+        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = convert(Int, i)::Int
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
@@ -47,6 +48,7 @@ end
 function reduced_dims0{N}(siz::NTuple{N,Int}, region)
     rsiz = [siz...]
     for i in region
+        isa(i, Integer) || throw(ArgumentError("reduced dimension(s) must be integers"))
         d = convert(Int, i)::Int
         if d < 1
             throw(ArgumentError("region dimension(s) must be ≥ 1, got $d"))
