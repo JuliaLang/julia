@@ -51,3 +51,13 @@ macro test999_str(args...); args; end
 
 # issue #8301
 @test_throws ParseError parse("&*s")
+
+# issue #10677
+@test_throws ParseError parse("/1")
+@test_throws ParseError parse("/pi")
+@test parse("- = 2") == Expr(:(=), :(-), 2)
+@test parse("/ = 2") == Expr(:(=), :(/), 2)
+@test_throws ParseError parse("< : 2")
+@test_throws ParseError parse("+ : 2")
+@test_throws ParseError parse("< :2")
+@test parse("+ :2") == Expr(:call, :(+), QuoteNode(2))

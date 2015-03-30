@@ -187,9 +187,9 @@ end"
 
 # issue #8994
 @test_repr "get! => 2"
-@test_repr "< : 2"
-@test_repr "< :: T"
-@test_repr "S{< <: T}"
+@test_repr "(<) : 2"
+@test_repr "(<) :: T"
+@test_repr "S{(<) <: T}"
 @test_repr "+ + +"
 
 # issue #9474
