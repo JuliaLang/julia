@@ -236,6 +236,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             exit(1)
         end
         repl = true
+        force_repl = false
         startup = true
         history_file = true
         quiet = false
@@ -274,6 +275,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
                 addprocs(load_machine_file(bytestring(opts.machinefile)))
             end
             global is_interactive = Bool(opts.isinteractive)
+            force_repl = Bool(opts.forcerepl)
             # REPL color
             if opts.color == 0
                 color_set = false
@@ -322,7 +324,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             end
             break
         end
-        return (quiet,repl,startup,color_set,history_file)
+        return (quiet,repl|force_repl,startup,color_set,history_file)
     end
 end
 

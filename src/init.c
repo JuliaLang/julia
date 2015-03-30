@@ -98,6 +98,7 @@ jl_options_t jl_options = { 0,    // version
                             0,    // nprocs
                             NULL, // machinefile
                             0,    // isinteractive
+                            0,    // forcerepl
                             0,    // color
                             JL_OPTIONS_HISTORYFILE_ON, // historyfile
                             0,    // startupfile
