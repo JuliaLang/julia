@@ -502,13 +502,13 @@ static jl_sym_t *mk_symbol(const char *str)
     }
 
 #ifdef MEMDEBUG
-    sym = (jl_sym_t*)((jl_taggedvalue_t*)malloc(nb))->value;
+    sym = (jl_sym_t*)&((jl_taggedvalue_t*)malloc(nb))->value;
 #else
     if (sym_pool == NULL || pool_ptr+nb > sym_pool+SYM_POOL_SIZE) {
         sym_pool = (char*)malloc(SYM_POOL_SIZE);
         pool_ptr = sym_pool;
     }
-    sym = (jl_sym_t*)&((jl_taggedvalue_t*)malloc(nb))->value;
+    sym = (jl_sym_t*)&((jl_taggedvalue_t*)pool_ptr)->value;
     pool_ptr += nb;
 #endif
     jl_set_typeof(sym, jl_sym_type);
