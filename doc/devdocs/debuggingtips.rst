@@ -22,6 +22,9 @@ Similarly, if you're debugging some of julia's internals (e.g.,
 
 This is a good way to circumvent problems that arise from the order in which julia's output streams are initialized.
 
+Julia's flisp interpreter uses ``value_t*`` objects; these can be displayed
+with ``call fl_print(ios_stdout, obj)``.
+
 Inserting breakpoints for inspection from gdb
 ---------------------------------------------
 
