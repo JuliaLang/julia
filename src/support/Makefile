@@ -11,7 +11,7 @@ SRCS = hashing timefuncs ptrhash operators \
 	utf8 ios htable bitvector \
 	int2str libsupportinit arraylist strtod
 ifeq ($(OS),WINNT)
-SRCS += asprintf wcwidth
+SRCS += asprintf
 ifeq ($(ARCH),i686)
 SRCS += _setjmp.win32 _longjmp.win32
 else ifeq ($(ARCH),i386)
@@ -26,7 +26,7 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS = $(SRCS:%=$(BUILDDIR)/%.o)
 DOBJS = $(SRCS:%=$(BUILDDIR)/%.dbg.obj)
 
-FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -DLIBRARY_EXPORTS
+FLAGS = $(CFLAGS) $(HFILEDIRS:%=-I%) -I$(LIBUV_INC) -I$(UTF8PROC_INC) -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -fvisibility=hidden
 endif

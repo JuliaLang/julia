@@ -541,7 +541,6 @@ startswith(a::Array{UInt8,1}, b::Array{UInt8,1}) =
 
 ## character column width function ##
 
-charwidth(c::Char) = max(0,Int(ccall(:wcwidth, Int32, (UInt32,), c)))
 strwidth(s::AbstractString) = (w=0; for c in s; w += charwidth(c); end; w)
 strwidth(s::ByteString) = Int(ccall(:u8_strwidth, Csize_t, (Ptr{UInt8},), s.data))
 # TODO: implement and use u8_strnwidth that takes a length argument

@@ -2,8 +2,11 @@
 #include <stdio.h>
 #include <string.h>
 #include <assert.h>
+
+#include "utf8proc.h"
+#undef DLLEXPORT /* avoid conflicting definition */
+
 #include "flisp.h"
-#include "mojibake.h"
 
 #ifdef __cplusplus
 extern "C" {

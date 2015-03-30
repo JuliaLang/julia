@@ -180,9 +180,9 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # Remaining dependencies:
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
-# mojibake since its headers are not in the binary download
+# utf8proc since its headers are not in the binary download
 echo 'override STAGE1_DEPS = uv' >> Make.user
-echo 'override STAGE2_DEPS = mojibake' >> Make.user
+echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
 make -C deps get-uv
 
@@ -197,8 +197,8 @@ if [ -n "$USEMSVC" ]; then
   # Since we don't have a static library for openlibm
   echo 'override UNTRUSTED_SYSTEM_LIBM = 0' >> Make.user
 
-  # Compile libuv and mojibake without -TP first, then add -TP
-  make -C deps install-uv install-mojibake
+  # Compile libuv and utf8proc without -TP first, then add -TP
+  make -C deps install-uv install-utf8proc
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
 else
