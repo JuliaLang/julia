@@ -286,6 +286,27 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
+# very small linspace & ranges
+for T = (Float32, Float64)
+    z = zero(T)
+    u = eps(z)
+    @test [linspace(-u,u,2);] == [-u,u]
+    @test [linspace(-u,u,3);] == [-u,0,u]
+    @test [linspace(-u,u,4);] == [-u,0,0,u]
+    @test [linspace(-u,u,4);][2] === -z
+    @test [linspace(-u,u,4);][3] === z
+    @test [linspace(u,-u,2);] == [u,-u]
+    @test [linspace(u,-u,3);] == [u,0,-u]
+    @test [linspace(u,-u,4);] == [u,0,0,-u]
+    @test [linspace(u,-u,4);][2] === z
+    @test [linspace(u,-u,4);][3] === -z
+    v = [linspace(-u,u,12);]
+    @test length(v) == 12
+    @test issorted(v) && unique(v) == [-u,0,0,u]
+    @test [-3u:u:3u;] == [linspace(-3u,3u,7);] == [-3:3;].*u
+    @test [3u:-u:-3u;] == [linspace(3u,-3u,7);] == [3:-1:-3;].*u
+end
+
 # near-equal ranges
 @test 0.0:0.1:1.0 != 0.0f0:0.1f0:1.0f0
 
