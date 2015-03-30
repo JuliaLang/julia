@@ -29,7 +29,6 @@
     rl_clear_input;
     save_arg_area_loc;
     u8_*;
-    wcwidth;
     uv_*;
     add_library_mapping;
     utf8proc_*;

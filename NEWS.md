@@ -144,6 +144,21 @@ Library improvements
 
     * Add sparse least squares to ``\`` by adding ``qrfact`` for sparse matrices based on the SPQR library. ([#10180])
 
+  * String improvements
+
+    * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
+
+    * Character predicates such as `islower()`, `isspace()`, etc. use
+      utf8proc to provide uniform cross-platform behavior and
+      up-to-date, locale-independent support for Unicode standards
+      ([#5939]).
+
+    * `reverseind` function to convert indices in reversed strings (e.g. from
+      reversed regex searches) to indices in the original string ([#9249]).
+
+    * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
+      results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]).
+
   * Other improvements
 
     * `gc_enable`, `gc_disable` returns previous GC state.
@@ -177,15 +192,6 @@ Library improvements
     `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise ([#8011]).
 
     * Efficient `mean` and `median` for ranges ([#8089]).
-
-    * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
-
-    * Character predicates such as `islower()`, `isspace()`, etc. use utf8proc/libmojibake
-    to provide uniform cross-platform behavior and up-to-date, locale-independent support
-    for Unicode standards ([#5939]).
-
-    * `reverseind` function to convert indices in reversed strings (e.g. from
-    reversed regex searches) to indices in the original string ([#9249]).
 
     * New `Nullable` type for missing data ([#8152]).
 
@@ -1084,6 +1090,7 @@ Too numerous to mention.
 [#3688]: https://github.com/JuliaLang/julia/issues/3688
 [#3697]: https://github.com/JuliaLang/julia/issues/3697
 [#3719]: https://github.com/JuliaLang/julia/issues/3719
+[#3721]: https://github.com/JuliaLang/julia/issues/3721
 [#3737]: https://github.com/JuliaLang/julia/issues/3737
 [#3759]: https://github.com/JuliaLang/julia/issues/3759
 [#3790]: https://github.com/JuliaLang/julia/issues/3790
@@ -1313,3 +1320,4 @@ Too numerous to mention.
 [#10446]: https://github.com/JuliaLang/julia/issues/10446
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
+[#10659]: https://github.com/JuliaLang/julia/issues/10659

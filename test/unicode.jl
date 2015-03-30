@@ -125,3 +125,6 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
         end
     end
 end
+
+# up-to-date character widths (#3721, #6939)
+@test charwidth('\U1f355') == strwidth("\U1f355") == strwidth(utf16("\U1f355")) == strwidth("\U1f355\u0302") == strwidth(utf16("\U1f355\u0302")) == 2
