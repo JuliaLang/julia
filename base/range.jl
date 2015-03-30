@@ -193,17 +193,23 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
             e = lcm(b,d)
             a *= div(e,b)
             c *= div(e,d)
-            s, p = frexp(convert(T,n*e))
-            p = one(p) << p
-            a /= p; c /= p
+            s = convert(T,n*e)
+            if isinf(a*n) || isinf(c*n)
+                s, p = frexp(convert(T,s))
+                p = one(p) << p
+                a /= p; c /= p
+            end
             if a*n/s == start && c*n/s == stop
                 return LinSpace(a, c, len, s)
             end
         end
     end
-    s, p = frexp(convert(T,n))
-    p = one(p) << p
-    start /= p; stop /= p
+    s = convert(T,n)
+    if isinf(s*start) || isinf(s*stop)
+        s, p = frexp(s)
+        p = one(p) << p
+        start /= p; stop /= p
+    end
     return LinSpace(start, stop, len, s)
 end
 linspace(start::Real, stop::Real, len::Real=50) =
