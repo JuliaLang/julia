@@ -23,6 +23,7 @@ export File,
        rename,
        sendfile,
        symlink,
+       readlink,
        chmod,
        futime,
        JL_O_WRONLY,
@@ -161,6 +162,20 @@ end
     uv_error("symlink",err)
 end
 @windowsxp_only symlink(p::AbstractString, np::AbstractString) =
+    error("WindowsXP does not support soft symlinks")
+
+@windows_only readlink(path::AbstractString) =
+    error("readlink is not yet tested on Windows")
+@non_windowsxp_only function readlink(path::AbstractString)
+    uv_readlink_req = zeros(UInt8, ccall(:jl_sizeof_uv_fs_t, Int32, ()))
+    ret = ccall(:jl_fs_readlink, Int32, (Ptr{UInt8}, Ptr{UInt8}), path, uv_readlink_req)
+    uv_error("readlink", ret)
+
+    linkval = bytestring(ccall(:jl_uv_fs_t_ptr, Ptr{UInt8}, (Ptr{UInt8},), uv_readlink_req))
+    ccall(:jl_uv_fs_req_cleanup, Void, (Ptr{UInt8},), uv_readlink_req)
+    return linkval
+end
+@windowsxp_only readlink(p::AbstractString, np::AbstractString) =
     error("WindowsXP does not support soft symlinks")
 
 function chmod(p::AbstractString, mode::Integer)

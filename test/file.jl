@@ -52,6 +52,9 @@ end
     @test isdir(dirlink) == true
 end
 
+# test readlink
+@unix_only @test readlink(link) == file
+
 # rename file
 newfile = joinpath(dir, "bfile.txt")
 mv(file, newfile)
