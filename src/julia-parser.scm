@@ -835,7 +835,8 @@
   (let ((t (require-token s)))
     (if (closing-token? t)
         (error (string "unexpected " t)))
-    (cond ((memq t unary-ops)
+    ;; TODO: ? should probably not be listed here except for the syntax hack in osutils.jl
+    (cond ((and (operator? t) (not (memq t '(: |'| ?))) (not (syntactic-unary-op? t)))
            (let* ((op  (take-token s))
                   (nch (peek-char (ts:port s))))
              (if (and (or (eq? op '-) (eq? op '+))
@@ -851,11 +852,14 @@
                               (list 'call op (parse-factor s)))
                        num))
                  (let ((next (peek-token s)))
-                   (cond ((or (closing-token? next) (newline? next))
+                   (cond ((or (closing-token? next) (newline? next) (eq? next '=))
                           op)  ; return operator by itself, as in (+)
                          ((eqv? next #\{)  ;; this case is +{T}(x::T) = ...
                           (ts:put-back! s op)
                           (parse-factor s))
+			 ((and (not (memq op unary-ops))
+			       (not (eqv? next #\( )))
+			  (error (string "\"" op "\" is not a unary operator")))
                          (else
                           (let ((arg (parse-unary s)))
                             (if (and (pair? arg)
