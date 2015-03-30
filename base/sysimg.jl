@@ -192,6 +192,13 @@ importall .Random
 include("printf.jl")
 importall .Printf
 
+# metaprogramming
+include("meta.jl")
+
+# enums
+include("Enums.jl")
+importall .Enums
+
 # concurrency and parallelism
 include("serialize.jl")
 include("multi.jl")
@@ -207,14 +214,13 @@ include("poll.jl")
 include("mmap.jl")
 include("sharedarray.jl")
 
-# utilities - timing, help, edit, metaprogramming
+# utilities - timing, help, edit
 include("datafmt.jl")
 importall .DataFmt
 include("deepcopy.jl")
 include("interactiveutil.jl")
 include("replutil.jl")
 include("test.jl")
-include("meta.jl")
 include("i18n.jl")
 include("help.jl")
 using .I18n
@@ -284,10 +290,6 @@ importall .Profile
 # dates
 include("Dates.jl")
 import .Dates: Date, DateTime, now
-
-# enums
-include("Enums.jl")
-importall .Enums
 
 # deprecated functions
 include("deprecated.jl")
