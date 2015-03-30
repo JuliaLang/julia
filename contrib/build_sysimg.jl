@@ -10,7 +10,7 @@ function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", user
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
     sysimg = dlopen_e("sys")
     if sysimg != C_NULL
-        if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Sys.dlext)")
+        if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
             info("System image already loaded at $(Libdl.dlpath(sysimg)), set force to override")
             return
         end
@@ -130,10 +130,10 @@ function link_sysimg(sysimg_path=default_sysimg_path, ld=find_system_linker())
     end
     @windows_only append!(FLAGS, ["-ljulia", "-lssp-0"])
 
-    info("Linking sys.$(Sys.dlext)")
-    run(`$ld $FLAGS -o $sysimg_path.$(Sys.dlext) $sysimg_path.o`)
+    info("Linking sys.$(Libdl.dlext)")
+    run(`$ld $FLAGS -o $sysimg_path.$(Libdl.dlext) $sysimg_path.o`)
 
-    info("System image successfully built at $sysimg_path.$(Sys.dlext)")
+    info("System image successfully built at $sysimg_path.$(Libdl.dlext)")
     @windows_only begin
         if convert(VersionNumber, Base.libllvm_version) < v"3.5.0"
             LLVM_msg = "Building sys.dll on Windows against LLVM < 3.5.0 can cause incorrect backtraces!"
