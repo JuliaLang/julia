@@ -158,7 +158,7 @@ function pointer arguments. For example, to match c-prototypes of the form::
     typedef returntype (*functiontype)(argumenttype,...)
 
 The function `cfunction` generates the c-compatible function pointer for
-a call to a Julia Julia library function.
+a call to a Julia library function.
 Arguments to ``cfunction`` are as follows:
 
 1. A Julia Function
