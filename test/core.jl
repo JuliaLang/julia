@@ -521,7 +521,7 @@ end
 
 # dispatch with fixed-length varargs
 begin
-    local gi, mysum
+    local gi, mysum, mysum2
     function gi{T,N}(A::AbstractArray{T,N}, indexes...N)
         return true
     end
@@ -539,6 +539,12 @@ begin
     end
     @test mysum(1,2,3) == 6
     @test mysum(1,2,3,4) == 10
+    function mysum2(x::Int...3)
+        x[1] + x[2] + x[3]
+    end
+    @test_throws MethodError mysum2(1,2)
+    @test mysum2(1,2,3) == 6
+    @test_throws MethodError mysum2(1,2,3,4)
 end
 
 # try/finally
