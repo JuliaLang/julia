@@ -8,7 +8,7 @@
 @windows_only const default_sysimg_path = joinpath(JULIA_HOME,"..","lib","julia","sys")
 function build_sysimg(sysimg_path=default_sysimg_path, cpu_target="native", userimg_path=nothing; force=false)
     # Quit out if a sysimg is already loaded and is in the same spot as sysimg_path, unless forcing
-    sysimg = dlopen_e("sys")
+    sysimg = Libdl.dlopen_e("sys")
     if sysimg != C_NULL
         if !force && Base.samefile(Libdl.dlpath(sysimg), "$(sysimg_path).$(Libdl.dlext)")
             info("System image already loaded at $(Libdl.dlpath(sysimg)), set force to override")
