@@ -519,6 +519,28 @@ begin
     @test firstlast(Val{false}) == "Last"
 end
 
+# dispatch with fixed-length varargs
+begin
+    local gi, mysum
+    function gi{T,N}(A::AbstractArray{T,N}, indexes...N)
+        return true
+    end
+    @test_throws MethodError gi(zeros(2,2), 1)
+    @test gi(zeros(2,2), 1, 1)
+    @test_throws MethodError gi(zeros(2,2), 1, 1, 1)
+    @test gi(zeros(2,2,2), 1, 1, 1)
+    @test_throws MethodError gi(zeros(2,2,2), 1, 1)
+    function mysum{N}(x::Int...N)
+        s = 0
+        for i = 1:N
+            s += x[i]
+        end
+        s
+    end
+    @test mysum(1,2,3) == 6
+    @test mysum(1,2,3,4) == 10
+end
+
 # try/finally
 begin
     after = 0
