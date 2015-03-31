@@ -710,6 +710,14 @@ STATIC_INLINE int jl_is_vararg_type(jl_value_t *v)
             ((jl_datatype_t*)(v))->name == jl_vararg_type->name);
 }
 
+STATIC_INLINE int jl_is_vararg_fixedlen(jl_value_t *v)
+{
+    assert(jl_is_vararg_type(v));
+    jl_value_t *lenv = jl_tparam1(v);
+    assert(jl_is_typevar(lenv));
+    return ((jl_tvar_t*)lenv)->bound != 0;
+}
+
 STATIC_INLINE int jl_is_ntuple_type(jl_value_t *v)
 {
     return (jl_is_datatype(v) &&

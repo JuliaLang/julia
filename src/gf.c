@@ -738,57 +738,58 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     // in general, here we want to find the biggest type that's not a
     // supertype of any other method signatures. so far we are conservative
     // and the types we find should be bigger.
-    if (!isstaged && jl_tuple_len(type) > mt->max_args &&
-        jl_is_vararg_type(jl_tupleref(decl,jl_tuple_len(decl)-1))) {
-        size_t nspec = mt->max_args + 2;
-        limited = jl_alloc_tuple(nspec);
-        for(i=0; i < nspec-1; i++) {
-            jl_tupleset(limited, i, jl_tupleref(type, i));
-        }
-        jl_value_t *lasttype = jl_tupleref(type,i-1);
-        // if all subsequent arguments are subtypes of lasttype, specialize
-        // on that instead of decl. for example, if decl is
-        // (Any...)
-        // and type is
-        // (Symbol, Symbol, Symbol)
-        // then specialize as (Symbol...), but if type is
-        // (Symbol, Int32, Expr)
-        // then specialize as (Any...)
-        size_t j = i;
-        int all_are_subtypes=1;
-        for(; j < jl_tuple_len(type); j++) {
-            if (!jl_subtype(jl_tupleref(type,j), lasttype, 0)) {
-                all_are_subtypes = 0;
-                break;
+    if (!isstaged && jl_tuple_len(type) > mt->max_args) {
+        jl_value_t *lastdeclt = jl_tupleref(decl,jl_tuple_len(decl)-1);
+        if (jl_is_vararg_type(lastdeclt) && !jl_is_vararg_fixedlen(lastdeclt)) {
+            size_t nspec = mt->max_args + 2;
+            limited = jl_alloc_tuple(nspec);
+            for(i=0; i < nspec-1; i++) {
+                jl_tupleset(limited, i, jl_tupleref(type, i));
             }
-        }
-        type = limited;
-        if (all_are_subtypes) {
-            // avoid Type{Type{...}...}...
-            if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
-                lasttype = (jl_value_t*)jl_type_type;
-            temp = (jl_value_t*)jl_tuple1(lasttype);
-            jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_vararg_type,
-                                               (jl_tuple_t*)temp));
-        }
-        else {
-            jl_value_t *lastdeclt = jl_tupleref(decl,jl_tuple_len(decl)-1);
-            if (jl_tuple_len(sparams) > 0) {
-                lastdeclt = (jl_value_t*)
-                    jl_instantiate_type_with((jl_value_t*)lastdeclt,
-                                             sparams->data,
-                                             jl_tuple_len(sparams)/2);
+            jl_value_t *lasttype = jl_tupleref(type,i-1);
+            // if all subsequent arguments are subtypes of lasttype, specialize
+            // on that instead of decl. for example, if decl is
+            // (Any...)
+            // and type is
+            // (Symbol, Symbol, Symbol)
+            // then specialize as (Symbol...), but if type is
+            // (Symbol, Int32, Expr)
+            // then specialize as (Any...)
+            size_t j = i;
+            int all_are_subtypes=1;
+            for(; j < jl_tuple_len(type); j++) {
+                if (!jl_subtype(jl_tupleref(type,j), lasttype, 0)) {
+                    all_are_subtypes = 0;
+                    break;
+                }
             }
-            jl_tupleset(type, i, lastdeclt);
+            type = limited;
+            if (all_are_subtypes) {
+                // avoid Type{Type{...}...}...
+                if (jl_is_type_type(lasttype) && jl_is_type_type(jl_tparam0(lasttype)))
+                    lasttype = (jl_value_t*)jl_type_type;
+                temp = (jl_value_t*)jl_tuple1(lasttype);
+                jl_tupleset(type, i, jl_apply_type((jl_value_t*)jl_vararg_type,
+                                                   (jl_tuple_t*)temp));
+            }
+            else {
+                if (jl_tuple_len(sparams) > 0) {
+                    lastdeclt = (jl_value_t*)
+                        jl_instantiate_type_with((jl_value_t*)lastdeclt,
+                                                 sparams->data,
+                                                 jl_tuple_len(sparams)/2);
+                }
+                jl_tupleset(type, i, lastdeclt);
+            }
+            // now there is a problem: the computed signature is more
+            // general than just the given arguments, so it might conflict
+            // with another definition that doesn't have cache instances yet.
+            // to fix this, we insert guard cache entries for all intersections
+            // of this signature and definitions. those guard entries will
+            // supersede this one in conflicted cases, alerting us that there
+            // should actually be a cache miss.
+            need_guard_entries = 1;
         }
-        // now there is a problem: the computed signature is more
-        // general than just the given arguments, so it might conflict
-        // with another definition that doesn't have cache instances yet.
-        // to fix this, we insert guard cache entries for all intersections
-        // of this signature and definitions. those guard entries will
-        // supersede this one in conflicted cases, alerting us that there
-        // should actually be a cache miss.
-        need_guard_entries = 1;
     }
 
     if (need_guard_entries) {
