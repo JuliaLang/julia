@@ -924,6 +924,8 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
     return newmeth;
 }
 
+// a holds the argument types, b the argument signature, tvars the parameters.
+// On output, *penv holds (parameter1, value1, ...) pairs from intersection.
 static jl_value_t *lookup_match(jl_value_t *a, jl_value_t *b, jl_tuple_t **penv,
                                 jl_tuple_t *tvars)
 {

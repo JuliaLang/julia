@@ -431,8 +431,8 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
     jl_value_t *result = (jl_value_t*)tc;
     jl_value_t *ce = NULL;
     JL_GC_PUSH2(&tc, &ce);
-    size_t ai=0, bi=0, ci;
-    jl_value_t *ae=NULL, *be=NULL;
+    size_t ai=0, bi=0, ci, i;
+    jl_value_t *ae=NULL, *be=NULL, *bn=NULL;
     int aseq=0, bseq=0;
     for(ci=0; ci < n; ci++) {
         if (ai < al) {
@@ -447,6 +447,7 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
             be = jl_tupleref(b,bi);
             if (jl_is_vararg_type(be)) {
                 bseq=1;
+                bn = jl_tparam1(be);
                 be = jl_tparam0(be);
             }
             bi++;
@@ -470,6 +471,21 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
             ce = (jl_value_t*)jl_wrap_vararg(ce);
         }
         jl_tupleset(tc, ci, ce);
+    }
+    // Check for a length-constrained vararg
+    if (bseq) {
+        if (!jl_is_long(bn))
+            // set bn from eqc parameters
+            for (i = 0; i < eqc->n; i+=2)
+                if (eqc->data[i] == bn) {
+                    bn = eqc->data[i+1];
+                    break;
+                }
+        if (jl_is_long(bn)) {
+            long valen = jl_unbox_long(bn);
+            if (valen != (ai-bi+1))
+                result = (jl_value_t*)jl_bottom_type;
+        }
     }
  done_intersect_tuple:
     JL_GC_POP();
