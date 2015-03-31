@@ -337,12 +337,18 @@ end
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
-## iteration support for arrays as ranges ##
+## iteration support for arrays ##
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+start(A::AbstractArray) = (@_inline_meta(); itr = eachindex(A); (itr, start(itr)))
+next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
+done(A::AbstractArray,i) = done(i[1], i[2])
 
-start(A::AbstractArray) = _start(A,linearindexing(A))
-_start(::AbstractArray,::LinearFast) = 1
-next(a::AbstractArray,i) = (a[i],i+1)
-done(a::AbstractArray,i) = (i > length(a))
+# eachindex iterates over all indices. LinearSlow is later in bootstrap
+eachindex(A::AbstractArray) = (@_inline_meta; eachindex(linearindexing(A), A))
+eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+
 isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##

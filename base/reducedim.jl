@@ -209,7 +209,7 @@ function _mapreducedim!{T,N}(f, op, R::AbstractArray, A::AbstractArray{T,N})
         end
     else
         sizeR = CartesianIndex{N}(size(R))
-        @inbounds @simd for IA in eachindex(A)
+        @inbounds @simd for IA in CartesianRange(size(A))
             IR = min(IA, sizeR)
             R[IR] = op(R[IR], f(A[IA]))
         end
@@ -306,7 +306,7 @@ function findminmax!{T,N}(f, Rval, Rind, A::AbstractArray{T,N})
         end
     else
         sizeR = CartesianIndex(size(Rval))
-        @inbounds for IA in eachindex(A)
+        @inbounds for IA in CartesianRange(size(A))
             IR = min(sizeR, IA)
             k += 1
             tmpAv = A[IA]
