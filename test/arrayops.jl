@@ -993,7 +993,7 @@ I2 = CartesianIndex((-1,5,2))
 
 @test length(I1) == 3
 
-a = zeros(2,3)
+a = spzeros(2,3)
 @test CartesianRange(size(a)) == eachindex(a)
 a[CartesianIndex{2}(2,3)] = 5
 @test a[2,3] == 5
@@ -1015,22 +1015,24 @@ indexes = collect(R)
 @test length(R) == 12
 
 r = 2:3
-state = start(eachindex(r))
-@test !done(r, state)
-_, state = next(r, state)
-@test !done(r, state)
-val, state = next(r, state)
-@test done(r, state)
-@test val == 3
-r = 2:3:8
-state = start(eachindex(r))
-@test !done(r, state)
-_, state = next(r, state)
-_, state = next(r, state)
-@test !done(r, state)
-val, state = next(r, state)
-@test val == 8
-@test done(r, state)
+itr = eachindex(r)
+state = start(itr)
+@test !done(itr, state)
+_, state = next(itr, state)
+@test !done(itr, state)
+val, state = next(itr, state)
+@test done(itr, state)
+@test r[val] == 3
+r = sparse(collect(2:3:8))
+itr = eachindex(r)
+state = start(itr)
+@test !done(itr, state)
+_, state = next(itr, state)
+_, state = next(itr, state)
+@test !done(itr, state)
+val, state = next(itr, state)
+@test r[val] == 8
+@test done(itr, state)
 
 
 #rotates

@@ -713,7 +713,7 @@ function skip_deleted(h::Dict, i)
 end
 
 start(t::Dict) = skip_deleted(t, 1)
-done(t::Dict, i) = done(t.vals, i)
+done(t::Dict, i) = i > length(t.vals)
 next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
