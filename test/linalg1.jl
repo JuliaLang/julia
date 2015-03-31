@@ -97,32 +97,6 @@ debug && println("(Automatic) Thin (pivoted) QR decomposition") # Pivoting is on
     @test_approx_eq q*r isa(qrpa, QRPivoted) ? a[:,p] : a[:,1:n1]
     @test_approx_eq isa(qrpa, QRPivoted) ? q*r[:,invperm(p)] : q*r a[:,1:n1]
 
-debug && println("symmetric eigen-decomposition")
-    if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
-        d,v   = eig(asym)
-        @test_approx_eq asym*v[:,1] d[1]*v[:,1]
-        @test_approx_eq v*Diagonal(d)*v' asym
-        @test isequal(eigvals(asym[1]), eigvals(asym[1:1,1:1]))
-        @test_approx_eq abs(eigfact(Hermitian(asym), 1:2)[:vectors]'v[:,1:2]) eye(eltya, 2)
-        eig(Hermitian(asym), 1:2) # same result, but checks that method works
-        @test_approx_eq abs(eigfact(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2]))[:vectors]'v[:,1:2]) eye(eltya, 2)
-        eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
-        @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
-        @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
-
-        # relation to svdvals
-        @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
-
-        # cond
-        @test_approx_eq cond(Hermitian(asym)) cond(asym)
-
-        # rank
-        let
-            A = a[:,1:5]*a[:,1:5]'
-            @test rank(A) == rank(Hermitian(A))
-        end
-    end
-
 debug && println("non-symmetric eigen decomposition")
     if eltya != BigFloat && eltyb != BigFloat # Revisit when implemented in julia
         d,v   = eig(a)
