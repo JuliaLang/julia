@@ -691,7 +691,7 @@
             ((eq? t '...)
              (take-token s)
              (let ((tnxt (peek-token s)))
-               (if (or (number? tnxt) (symbol? tnxt))
+               (if (and (or (number? tnxt) (symbol? tnxt)) (not (ts:space? s)))
                    (begin
                      (take-token s)
                      (set! t (list t tnxt))
