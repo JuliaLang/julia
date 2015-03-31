@@ -1,5 +1,8 @@
 using Base.Test
 
+debug = false
+
+debug && println("eigs")
 let
     srand(1234)
     local n,a,asym,b,bsym,d,v
@@ -133,6 +136,7 @@ let
     @test_approx_eq eigs(speye(50), nev=10)[1] ones(10) #Issue 4246
 end
 
+debug && println("real svds")
 let # svds test
     A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], [2.0, -1.0, 6.1, 7.0, 1.5])
     S1 = svds(A, nsv = 2)
@@ -152,6 +156,7 @@ let # svds test
     @test_approx_eq s1_right s2_right
 
     #10329
+    debug && println("Issue 10329")
     B = sparse(diagm([1.0, 2.0, 34.0, 5.0, 6.0]))
     S3 = svds(B, ritzvec=false, nsv=2)
     @test_approx_eq S3[1] [34.0, 6.0]
@@ -159,6 +164,7 @@ let # svds test
     @test_approx_eq S4[2] [34.0, 6.0]
 end
 
+debug && println("complex svds")
 let # complex svds test
     A = sparse([1, 1, 2, 3, 4], [2, 1, 1, 3, 1], exp(im*[2.0:2:10;]))
     S1 = svds(A, nsv = 2)
