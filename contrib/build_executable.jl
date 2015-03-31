@@ -88,7 +88,7 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
     sys = SysFile(exename)
 
     if !force
-        for f in [cfile, userimgjl, "$(sys.buildfile).$(Sys.dlext)", "$(sys.buildfile).ji", exe_release.buildfile, exe_debug.buildfile]
+        for f in [cfile, userimgjl, "$(sys.buildfile).$(Libdl.dlext)", "$(sys.buildfile).ji", exe_release.buildfile, exe_debug.buildfile]
             if isfile(f)
                 println("ERROR: File '$(f)' already exists. Delete it or use --force.")
                 return 1
@@ -135,12 +135,12 @@ function build_executable(exename, script_file, targetdir=nothing; force=false)
 
     if targetdir != nothing
         # Move created files to target directory
-        for file in [exe_release.buildfile, exe_debug.buildfile, sys.buildfile*".$(Sys.dlext)", sys.buildfile*".ji"]
+        for file in [exe_release.buildfile, exe_debug.buildfile, sys.buildfile*".$(Libdl.dlext)", sys.buildfile*".ji"]
             mv(file,joinpath(targetdir, basename(file)))
         end
 
         # Copy needed shared libraries to the target directory
-        tmp = ".*\.$(Sys.dlext).*"
+        tmp = ".*\.$(Libdl.dlext).*"
         shlibs = filter(Regex(tmp),readdir(sys.buildpath))
         for shlib in shlibs
             cp(joinpath(sys.buildpath, shlib), joinpath(targetdir, shlib))
