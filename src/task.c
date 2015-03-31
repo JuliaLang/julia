@@ -600,9 +600,22 @@ DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Cont
         DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), Context->Rip);
         if (!ImageBase)
             break;
+
+        MEMORY_BASIC_INFORMATION mInfo;
+
         PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(GetCurrentProcess(), Context->Rip);
         if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
             Context->Rsp = Context->Rbp;                 // MOV RSP, RBP
+
+            // Check whether the pointer is valid and executable before dereferencing
+            // to avoid segfault while recording. See #10638.
+            if (VirtualQuery((LPCVOID)Context->Rsp, &mInfo, sizeof(MEMORY_BASIC_INFORMATION)) == 0)
+                break;
+            DWORD X = mInfo.AllocationProtect;
+            if (!((X&PAGE_READONLY) || (X&PAGE_READWRITE) || (X&PAGE_WRITECOPY) || (X&PAGE_EXECUTE_READ)) ||
+                  (X&PAGE_GUARD) || (X&PAGE_NOACCESS))
+                break;
+
             Context->Rbp = *(DWORD64*)Context->Rsp;      // POP RBP
             Context->Rsp = Context->Rsp + sizeof(void*);
             Context->Rip = *(DWORD64*)Context->Rsp;      // POP RIP (aka RET)
