@@ -972,7 +972,7 @@ void jl_show(jl_value_t *stream, jl_value_t *v)
 
 extern int jl_in_inference;
 extern int jl_boot_file_loaded;
-int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops);
+int jl_eval_with_compiler_p(jl_expr_t *expr, int compileloops, jl_module_t *m);
 
 void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple_t *sig)
 {
@@ -986,7 +986,7 @@ void jl_trampoline_compile_function(jl_function_t *f, int always_infer, jl_tuple
                 f->linfo->ast = jl_uncompress_ast(f->linfo, f->linfo->ast);
                 gc_wb(f->linfo, f->linfo->ast);
             }
-            if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1)) {
+            if (always_infer || jl_eval_with_compiler_p(jl_lam_body((jl_expr_t*)f->linfo->ast),1,f->linfo->module)) {
                 jl_type_infer(f->linfo, sig, f->linfo);
             }
         }
