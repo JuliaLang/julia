@@ -110,7 +110,7 @@ function eigs(A, B;
                                  resid, ncv, v, ldv, sigma, iparam, ipntr, workd, workl, lworkl, rwork)
 
     # Issue 10495: Check that all eigenvalues are converged
-    length(output[1]) == output[3] || warn("not all Ritz pairs are converged. Requested: $(length(output[1])), converged: $(output[3])")
+    length(output[1]) <= output[3] || warn("not all wanted Ritz pairs converged. Requested: $(length(output[1])), converged: $(output[3])")
 
     return output
 end
