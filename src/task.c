@@ -894,7 +894,8 @@ DLLEXPORT jl_value_t *jl_get_current_task(void)
 
 jl_function_t *jl_unprotect_stack_func;
 
-void jl_init_tasks(void *stack, size_t ssize)
+// Do one-time initializations for task system
+void jl_init_tasks(void)
 {
     _probe_arch();
     jl_task_type = jl_new_datatype(jl_symbol("Task"),
@@ -922,6 +923,12 @@ void jl_init_tasks(void *stack, size_t ssize)
     failed_sym = jl_symbol("failed");
     runnable_sym = jl_symbol("runnable");
 
+    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
+}
+
+// Initialize a root task using the given stack.
+void jl_init_root_task(void *stack, size_t ssize)
+{
     jl_current_task = (jl_task_t*)allocobj(sizeof(jl_task_t));
     jl_set_typeof(jl_current_task, jl_task_type);
 #ifdef COPY_STACKS
@@ -951,7 +958,6 @@ void jl_init_tasks(void *stack, size_t ssize)
 
     jl_exception_in_transit = (jl_value_t*)jl_null;
     jl_task_arg_in_transit = (jl_value_t*)jl_null;
-    jl_unprotect_stack_func = jl_new_closure(jl_unprotect_stack, (jl_value_t*)jl_null, NULL);
 }
 
 #ifdef __cplusplus
