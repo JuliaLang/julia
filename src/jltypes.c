@@ -486,6 +486,22 @@ static jl_value_t *intersect_tuple(jl_tuple_t *a, jl_tuple_t *b,
             if (valen != (ai-bi+1))
                 result = (jl_value_t*)jl_bottom_type;
         }
+        else if (jl_is_typevar(bn) && ((jl_tvar_t*)bn)->bound) {
+            // set eqc parameter from valen, to support func{N}(x...N)
+            int found = 0;
+            long valen = ai-bi+1;
+            for (i = 0; i < eqc->n; i+=2)
+                if (eqc->data[i] == bn) {
+                    eqc->data[i+1] = jl_box_long(valen);
+                    found = 1;
+                    break;
+                }
+            if (!found) {
+                eqc->data[eqc->n] = bn;
+                eqc->data[eqc->n+1] = jl_box_long(valen);
+                eqc->n += 2;
+            }
+        }
     }
  done_intersect_tuple:
     JL_GC_POP();
