@@ -231,9 +231,18 @@ let reqarg = Set(UTF8String["--home",          "-H",
                             "--bind-to"])
     global process_options
     function process_options(opts::JLOptions, args::Vector{UTF8String})
-        if !isempty(args) && (arg = first(args); !isempty(arg) && arg[1] == '-' && in(arg, reqarg))
-            println(STDERR, "julia: option `$arg` is missing an argument")
-            exit(1)
+        if !isempty(args)
+            arg = first(args)
+            if !isempty(arg) && arg[1] == '-' && in(arg, reqarg)
+                println(STDERR, "julia: option `$arg` is missing an argument")
+                exit(1)
+            end
+            idxs = find(x -> x == "--", args)
+            if length(idxs) > 1
+                println(STDERR, "julia: redundant option terminator `--`")
+                exit(1)
+            end
+            deleteat!(ARGS, idxs)
         end
         repl                  = true
         startup               = (opts.startupfile != 2)
@@ -264,7 +273,6 @@ let reqarg = Set(UTF8String["--home",          "-H",
             if opts.machinefile != C_NULL
                 addprocs(load_machine_file(bytestring(opts.machinefile)))
             end
-
             # load file immediately on all processors
             if opts.load != C_NULL
                 require(bytestring(opts.load))
