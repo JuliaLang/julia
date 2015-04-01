@@ -48,7 +48,7 @@ end
 
 test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
-test_latexcomplete(s) = latex_completions(s,endof(s))[2]
+test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
 
 s = ""
 c,r = test_complete(s)
@@ -118,15 +118,29 @@ c,r,res = test_complete(s)
 
 # test latex symbol completions
 s = "\\alpha"
-c,r = test_latexcomplete(s)
+c,r = test_bslashcomplete(s)
 @test c[1] == "α"
 @test r == 1:length(s)
 @test length(c) == 1
 
 # test latex symbol completions after unicode #9209
 s = "α\\alpha"
-c,r = test_latexcomplete(s)
+c,r = test_bslashcomplete(s)
 @test c[1] == "α"
+@test r == 3:sizeof(s)
+@test length(c) == 1
+
+# test emoji symbol completions
+s = "\\:koala:"
+c,r = test_bslashcomplete(s)
+@test c[1] == "🐨"
+@test r == 1:sizeof(s)
+@test length(c) == 1
+
+# test emoji symbol completions after unicode #9209
+s = "α\\:koala:"
+c,r = test_bslashcomplete(s)
+@test c[1] == "🐨"
 @test r == 3:sizeof(s)
 @test length(c) == 1
 
