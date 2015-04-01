@@ -15,3 +15,6 @@ B = [true true false]
 @test ifelse(B, 1, [2 3 4]) == [1 1 4]
 @test ifelse(B, [2 3 4], 1) == [2 3 1]
 @test ifelse(B, [2 3 4], [5 6 7]) == [2 3 7]
+
+@test reverse(Pair(1,2)) == Pair(2,1)
+@test reverse(Pair("13","24")) == Pair("24","13")
