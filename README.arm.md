@@ -21,7 +21,7 @@ Next, create a file in the `julia` top-level directory called
 `Make.user` with the following contents:
 
 ```
-include $(JULIAHOME)/ARM.inc
+include $(JULIAHOME)/Make.arm
 ```
 
 Then proceed to build as described in the primary README. Just typing
