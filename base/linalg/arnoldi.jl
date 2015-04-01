@@ -109,8 +109,10 @@ function eigs(A, B;
     output = ARPACK.eupd_wrapper(T, n, sym, iscmplx, bmat, nev, whichstr, ritzvec, TOL,
                                  resid, ncv, v, ldv, sigma, iparam, ipntr, workd, workl, lworkl, rwork)
 
-    # Issue 10495: Check that all eigenvalues are converged
-    length(output[1]) == output[3] || warn("not all Ritz pairs are converged. Requested: $(length(output[1])), converged: $(output[3])")
+    # Issue 10495, 10701: Check that all eigenvalues are converged
+    nev = length(output[1])
+    nconv = output[ritzvec ? 3 : 2]
+    nev ≤ nconv || warn("not all wanted Ritz pairs converged. Requested: $nev, converged: $nconv")
 
     return output
 end
