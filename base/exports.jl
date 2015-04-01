@@ -1276,6 +1276,7 @@ export
     mv,
     operm,
     pwd,
+    readlink,
     rm,
     stat,
     symlink,

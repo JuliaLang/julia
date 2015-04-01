@@ -448,6 +448,11 @@ DLLEXPORT int jl_fs_symlink(char *path, char *new_path, int flags)
     return ret;
 }
 
+DLLEXPORT int jl_fs_readlink(const char *path, uv_fs_t *readlink_req)
+{
+    return uv_fs_readlink(uv_default_loop(), readlink_req, path, NULL);
+}
+
 DLLEXPORT int jl_fs_chmod(char *path, int mode)
 {
     uv_fs_t req;
