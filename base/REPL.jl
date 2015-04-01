@@ -286,7 +286,7 @@ end
 function complete_line(c::LatexCompletions, s)
     partial = bytestring_beforecursor(LineEdit.buffer(s))
     full = LineEdit.input_string(s)
-    ret, range, should_complete = latex_completions(full, endof(partial))[2]
+    ret, range, should_complete = bslash_completions(full, endof(partial))[2]
     return ret, partial[range], should_complete
 end
 

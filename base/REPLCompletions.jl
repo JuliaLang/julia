@@ -1,6 +1,6 @@
 module REPLCompletions
 
-export completions, shell_completions, latex_completions
+export completions, shell_completions, bslash_completions
 
 using Base.Meta
 
@@ -236,6 +236,7 @@ function complete_methods(ex_org::Expr)
 end
 
 include("latex_symbols.jl")
+include("emoji_symbols.jl")
 
 const non_identifier_chars = [" \t\n\r\"\\'`\$><=:;|&{}()[],+-*/?%^~"...]
 const whitespace_chars = [" \t\n\r"...]
@@ -253,17 +254,26 @@ function afterusing(string::ByteString, startpos::Int)
     return ismatch(r"^\b(using|import)\s*(\w+\s*,\s*)*\w*$", str[fr:end])
 end
 
-function latex_completions(string, pos)
+function bslash_completions(string, pos)
     slashpos = rsearch(string, '\\', pos)
-    if rsearch(string, whitespace_chars, pos) < slashpos && !(1 < slashpos && (string[prevind(string, slashpos)]=='\\'))
-        # latex symbol substitution
+    if (rsearch(string, whitespace_chars, pos) < slashpos &&
+        !(1 < slashpos && (string[prevind(string, slashpos)]=='\\')))
+        # latex / emoji symbol substitution
         s = string[slashpos:pos]
         latex = get(latex_symbols, s, "")
         if !isempty(latex) # complete an exact match
             return (true, ([latex], slashpos:pos, true))
-        else
-            # return possible matches; these cannot be mixed with regular
-            # Julian completions as only latex symbols contain the leading \
+        end
+        emoji = get(emoji_symbols, s, "")
+        if !isempty(emoji)
+            return (true, ([emoji], slashpos:pos, true))
+        end
+        # return possible matches; these cannot be mixed with regular
+        # Julian completions as only latex / emoji symbols contain the leading \
+        if startswith(s, "\\:") # emoji
+            emoji_names = filter(k -> startswith(k, s), keys(emoji_symbols))
+            return (true, (sort!(collect(emoji_names)), slashpos:pos, true))
+        else # latex
             latex_names = filter(k -> startswith(k, s), keys(latex_symbols))
             return (true, (sort!(collect(latex_names)), slashpos:pos, true))
         end
@@ -290,9 +300,10 @@ function completions(string, pos)
         (success || inc_tag==:cmd) && return sort(paths), r, success
     end
 
-    ok, ret = latex_completions(string, pos)
+    ok, ret = bslash_completions(string, pos)
     ok && return ret
-    # Make sure that only latex_completions is working on strings
+
+    # Make sure that only bslash_completions is working on strings
     inc_tag==:string && return UTF8String[], 0:-1, false
 
      if inc_tag == :other && should_method_complete(partial)
