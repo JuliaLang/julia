@@ -335,8 +335,13 @@ void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
     OwningPtr<MCInstrAnalysis>
         MCIA(TheTarget->createMCInstrAnalysis(MCII.get()));
 #endif
+#ifdef LLVM37
+    MCInstPrinter* IP =
+        TheTarget->createMCInstPrinter(TheTriple, OutputAsmVariant, *MAI, *MCII, *MRI);
+#else
     MCInstPrinter* IP =
         TheTarget->createMCInstPrinter(OutputAsmVariant, *MAI, *MCII, *MRI, *STI);
+#endif
     MCCodeEmitter *CE = 0;
     MCAsmBackend *MAB = 0;
     if (ShowEncoding) {
