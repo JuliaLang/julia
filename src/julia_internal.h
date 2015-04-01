@@ -87,20 +87,17 @@ void jl_init_frontend(void);
 void jl_init_primitives(void);
 void jl_init_codegen(void);
 void jl_init_intrinsic_functions(void);
-void jl_init_tasks(void *stack, size_t ssize);
-void jl_init_root_task(void);
+void jl_init_tasks(void);
+void jl_init_root_task(void *stack, size_t ssize);
 void jl_init_serializer(void);
 
 void _julia_init(JL_IMAGE_SEARCH rel);
 #ifdef COPY_STACKS
 extern JL_THREAD void *jl_stackbase;
-#ifndef ASM_COPY_STACKS
-extern JL_THREAD jl_jmp_buf jl_base_ctx;
-#endif
 #endif
 
-void jl_set_stackbase(void);
-void jl_set_base_ctx(void);
+void jl_set_stackbase(char *__stk);
+void jl_set_base_ctx(char *__stk);
 
 void jl_init_threading(void);
 void jl_start_threads(void);

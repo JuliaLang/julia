@@ -991,8 +991,8 @@ void _julia_init(JL_IMAGE_SEARCH rel)
 #endif
     jl_init_frontend();
     jl_init_types();
-    jl_init_tasks(jl_stack_lo, jl_stack_hi-jl_stack_lo);
-    jl_init_root_task();
+    jl_init_tasks();
+    jl_init_root_task(jl_stack_lo, jl_stack_hi-jl_stack_lo);
     jl_init_codegen();
 
     jl_start_threads();

@@ -519,6 +519,7 @@ extern jl_sym_t *arrow_sym; extern jl_sym_t *ldots_sym;
 #else
 #define jl_typeof(v) (((jl_value_t*)(v))->type)
 #endif
+#define jl_set_typeof(v,t) ((v)->type = (jl_value_t*)(t))
 #define jl_typeis(v,t) (jl_typeof(v)==(jl_value_t*)(t))
 
 #ifdef OVERLAP_TUPLE_LEN
@@ -1264,16 +1265,16 @@ typedef struct _jl_task_t {
 } jl_task_t;
 
 typedef struct {
-    jl_task_t **pcurrent_task;
+    jl_task_t * volatile *pcurrent_task;
     jl_task_t **proot_task;
     jl_value_t **pexception_in_transit;
-    jl_value_t **ptask_arg_in_transit;
+    jl_value_t * volatile *ptask_arg_in_transit;
 } jl_thread_task_state_t;
 
-extern DLLEXPORT JL_THREAD jl_task_t *jl_current_task;
+extern DLLEXPORT JL_THREAD jl_task_t *volatile jl_current_task;
 extern DLLEXPORT JL_THREAD jl_task_t *jl_root_task;
 extern DLLEXPORT JL_THREAD jl_value_t *jl_exception_in_transit;
-extern DLLEXPORT JL_THREAD jl_value_t *jl_task_arg_in_transit;
+extern DLLEXPORT JL_THREAD jl_value_t * volatile jl_task_arg_in_transit;
 
 DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize);
 jl_value_t *jl_switchto(jl_task_t *t, jl_value_t *arg);
