@@ -69,11 +69,22 @@ function typejoin(a::ANY, b::ANY)
         return Any
     end
     while !is(b,Any)
-        if a <: b
-            return b
-        end
         if a <: b.name.primary
-            return b.name.primary
+            while a.name !== b.name
+                a = super(a)
+            end
+            # join on parameters
+            n = length(a.parameters)
+            p = cell(n)
+            for i = 1:n
+                ai, bi = a.parameters[i], b.parameters[i]
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
+                    p[i] = ai
+                else
+                    p[i] = a.name.primary.parameters[i]
+                end
+            end
+            return a.name.primary{p...}
         end
         b = super(b)
     end
