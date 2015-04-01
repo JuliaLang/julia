@@ -164,9 +164,9 @@ void *ti_threadfun(void *arg)
     ti_initthread(ta->tid);
 
     // set up tasking
-    jl_init_root_task();
-    jl_set_stackbase();
-    jl_set_base_ctx();
+    jl_init_root_task(0,0);
+    jl_set_stackbase((char*)&arg);
+    jl_set_base_ctx((char*)&arg);
 
     // set the thread-local tid and wait for a thread group
     while (ta->state == TI_THREAD_INIT)
