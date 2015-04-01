@@ -407,9 +407,13 @@
 ;; except for rest arg
 (define (method-lambda-expr argl body)
   (let ((argl (map (lambda (x)
-                     (if (and (pair? x) (eq? (car x) '...))
+                     (if (vararg? x)
                          (make-decl (arg-name x) (arg-type x))
-                         (arg-name x)))
+                         (if (varargexpr? x)
+                             (if (pair? (caddr x))
+                                 x
+                                 `(|::| ,(arg-name x) (curly Vararg Any)))
+                             (arg-name x))))
                    argl)))
     `(lambda ,argl
        (scope-block ,body))))
@@ -482,6 +486,15 @@
                     ,body ,isstaged))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (varargexpr? x) (and
+                         (pair? x)
+                         (eq? (car x) '::)
+                         (or
+                          (eq? (caddr x) 'Vararg)
+                          (and
+                           (pair? (caddr x))
+                           (length> (caddr x) 1)
+                           (eq? (cadr (caddr x)) 'Vararg)))))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
 (define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 
