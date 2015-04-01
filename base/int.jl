@@ -246,24 +246,16 @@ floor{T<:Integer}(::Type{T},x::Integer) = convert(T,x)
 
 ## integer construction ##
 
-macro int128_str(x)
-    if isa(x,AbstractString)
-        parse(Int128,x)
-    else
-        Int128(x)
-    end
+macro int128_str(s)
+    parse(Int128,s)
 end
 
-macro uint128_str(x)
-    if isa(x,AbstractString)
-        parse(UInt128,x)
-    else
-        UInt128(x)
-    end
+macro uint128_str(s)
+    parse(UInt128,s)
 end
 
-macro bigint_str(str)
-    BigInt(str)
+macro bigint_str(s)
+    parse(BigInt,s)
 end
 
 ## system word size ##
