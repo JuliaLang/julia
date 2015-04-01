@@ -1,6 +1,6 @@
 ## basic task functions and TLS
 
-show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
+show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
