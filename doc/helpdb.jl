@@ -2763,7 +2763,7 @@ Any[
    expression \"p[i-1]\".
 
    The \"unsafe\" prefix on this function indicates that no validation
-   is performed on the pointer >>``<<p` to ensure that it is valid.
+   is performed on the pointer \"p\" to ensure that it is valid.
    Incorrect usage may segfault your program or return garbage
    answers, in the same manner as C.
 
@@ -2776,7 +2776,7 @@ Any[
    expression \"p[i-1] = x\".
 
    The \"unsafe\" prefix on this function indicates that no validation
-   is performed on the pointer >>``<<p` to ensure that it is valid.
+   is performed on the pointer \"p\" to ensure that it is valid.
    Incorrect usage may corrupt or segfault your program, in the same
    manner as C.
 
@@ -3584,14 +3584,16 @@ Any[
    \"mapreduce()\" is functionally equivalent to calling \"reduce(op,
    v0, map(f, itr))\", but will in general execute faster since no
    intermediate collection needs to be created. See documentation for
-   \"reduce()\" and \"map\".
+   \"reduce()\" and \"map()\".
 
       julia> mapreduce(x->x^2, +, [1:3]) # == 1 + 4 + 9
       14
 
-   The associativity of the reduction is implementation-dependent. Use
+   The associativity of the reduction is implementation-dependent.
+   Additionally, some implementations may reuse the return value of
+   \"f\" for elements that appear multiple times in \"itr\". Use
    \"mapfoldl()\" or \"mapfoldr()\" instead for guaranteed left or
-   right associativity.
+   right associativity and invocation of \"f\" for every value.
 
 "),
 
@@ -5755,7 +5757,7 @@ Millisecond(v)
 ("Base","readavailable","readavailable(stream)
 
    Read all available data on the stream, blocking the task only if no
-   data is available.
+   data is available. The result is a \"Vector{UInt8,1}\".
 
 "),
 
@@ -7767,16 +7769,22 @@ popdisplay(d::Display)
 
 ("Base","eigs","eigs(A[, B], ; nev=6, which=\"LM\", tol=0.0, maxiter=300, sigma=nothing, ritzvec=true, v0=zeros((0, ))) -> (d[, v], nconv, niter, nmult, resid)
 
-   \"eigs\" computes eigenvalues \"d\" of \"A\" using Lanczos or
-   Arnoldi iterations for real symmetric or general nonsymmetric
-   matrices respectively. If \"B\" is provided, the generalized eigen-
-   problem is solved.  The following keyword arguments are supported:
+   Computes eigenvalues \"d\" of \"A\" using Lanczos or Arnoldi
+   iterations for real symmetric or general nonsymmetric matrices
+   respectively. If \"B\" is provided, the generalized eigenproblem is
+   solved.
+
+   The following keyword arguments are supported:
       * \"nev\": Number of eigenvalues
 
       * \"ncv\": Number of Krylov vectors used in the computation;
-        should satisfy \"nev+1 <= ncv <= n\" for real symmetric
-        problems and \"nev+2 <= ncv <= n\" for other problems; default
-        is \"ncv = max(20,2*nev+1)\".
+        should satisfy
+
+           \"nev+1 <= ncv <= n\" for real symmetric problems and
+           \"nev+2 <= ncv <= n\" for other problems, where \"n\" is
+           the size of the input matrix \"A\". The default is \"ncv =
+           max(20,2*nev+1)\". Note that these restrictions limit the
+           input matrix \"A\" to be of dimension at least 2.
 
       * \"which\": type of eigenvalues to compute. See the note
         below.
@@ -7839,12 +7847,13 @@ popdisplay(d::Display)
 ("Base","svds","svds(A; nsv=6, ritzvec=true, tol=0.0, maxiter=1000) -> (left_sv, s, right_sv, nconv, niter, nmult, resid)
 
    \"svds\" computes largest singular values \"s\" of \"A\" using
-   Lanczos or Arnoldi iterations. Uses \"eigs\" underneath. Inputs
-   are:
+   Lanczos or Arnoldi iterations. Uses \"eigs()\" underneath.
+
+   Inputs are:
       * \"A\": Linear operator. It can either subtype of
-        AbstractArray (e.g., sparse matrix) or duck typed. For duck
-        typing \"A\" has to support \"size(A)\", \"eltype(A)\", \"A *
-        vector\" and \"A' * vector\".
+        \"AbstractArray\" (e.g., sparse matrix) or duck typed. For
+        duck typing \"A\" has to support \"size(A)\", \"eltype(A)\",
+        \"A * vector\" and \"A' * vector\".
 
       * \"nsv\": Number of singular values.
 
@@ -7852,9 +7861,9 @@ popdisplay(d::Display)
         vectors \"left_sv\" and \"right_sv\", default is \"true\". If
         \"false\" the singular vectors are omitted from the output.
 
-      * \"tol\": tolerance, see \"eigs\".
+      * \"tol\": tolerance, see \"eigs()\".
 
-      * \"maxiter\": Maximum number of iterations, see \"eigs\".
+      * \"maxiter\": Maximum number of iterations, see \"eigs()\".
 
    **Example**:
 
@@ -7921,7 +7930,7 @@ popdisplay(d::Display)
 
 "),
 
-("Base.LinAlg.BLAS","axpy!","axpy!(n, a, X, incx, Y, incy)
+("Base.LinAlg.BLAS","axpy!","axpy!(a, X, Y)
 
    Overwrite \"Y\" with \"a*X + Y\".  Returns \"Y\".
 
@@ -10509,6 +10518,14 @@ popdisplay(d::Display)
    passing a *norm*-like function as the *norm* keyword argument
    (which defaults to *vecnorm*).
 
+   [Only one-dimensional integrals are provided by this function.  For
+   multi-dimensional integration (cubature), there are many different
+   algorithms (often much better than simple nested 1d integrals) and
+   the optimal choice tends to be very problem-dependent.  See the
+   Julia external-package listing for available algorithms for
+   multidimensional integration or other specialized tasks (such as
+   integrals of highly oscillatory or singular functions).]
+
    The algorithm is an adaptive Gauss-Kronrod integration technique:
    the integral in each interval is estimated using a Kronrod rule
    (\"2*order+1\" points) and the error is estimated using an embedded
@@ -11632,6 +11649,78 @@ golden
 
    Returns the index of the current worker into the \"pids\" vector,
    i.e., the list of workers mapping the SharedArray
+
+"),
+
+("Base","launch","launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
+
+   Implemented by cluster managers. For every Julia worker launched by
+   this function, it should append a \"WorkerConfig\" entry to
+   \"launched\" and notify \"launch_ntfy\". The function MUST exit
+   once all workers, requested by \"manager\" have been launched.
+   \"params\" is a dictionary of all keyword arguments \"addprocs\"
+   was called with.
+
+"),
+
+("Base","manage","manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
+
+   Implemented by cluster managers. It is called on the master
+   process, during a worker's lifetime, with appropriate \"op\"
+   values:
+
+      * with \":register\"/\":deregister\" when a worker is added /
+        removed from the Julia worker pool.
+
+      * with \":interrupt\" when \"interrupt(workers)\" is called.
+        The \"ClusterManager\" should signal the appropriate worker
+        with an interrupt signal.
+
+      * with \":finalize\" for cleanup purposes.
+
+"),
+
+("Base","kill","kill(manager::FooManager, pid::Int, config::WorkerConfig)
+
+   Implemented by cluster managers. It is called on the master
+   process, by \"rmprocs\". It should cause the remote worker
+   specified by \"pid\" to exit.
+   \"Base.kill(manager::ClusterManager.....)\" executes a remote
+   \"exit()\" on \"pid\"
+
+"),
+
+("Base","init_worker","init_worker(manager::FooManager)
+
+   Called by cluster managers implementing custom transports. It
+   initializes a newly launched process as a worker. Command line
+   argument \"--worker\" has the effect of initializing a process as a
+   worker using TCP/IP sockets for transport.
+
+"),
+
+("Base","connect","connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
+
+   Implemented by cluster managers using custom transports. It should
+   establish a logical connection to worker with id \"pid\", specified
+   by \"config\" and return a pair of \"AsyncStream\" objects.
+   Messages from \"pid\" to current process will be read off
+   \"instrm\", while messages to be sent to \"pid\" will be written to
+   \"outstrm\". The custom transport implementation must ensure that
+   messages are delivered and received completely and in order.
+   \"Base.connect(manager::ClusterManager.....)\" sets up TCP/IP
+   socket connections in-between workers.
+
+"),
+
+("Base","Base","Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
+
+   Called by cluster managers using custom transports. It should be
+   called when the custom transport implementation receives the first
+   message from a remote worker. The custom transport must manage a
+   logical connection to the remote worker and provide two AsyncStream
+   objects, one for incoming messages and the other for messages
+   addressed to the remote worker.
 
 "),
 
