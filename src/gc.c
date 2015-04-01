@@ -207,15 +207,15 @@ typedef struct _gcpage_t {
 // A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
 // It uses a very naive allocator (see malloc_page & free_page)
 #if defined(_P64) && !defined(_COMPILER_MICROSOFT_)
-#define REGION_PG_COUNT 16*8*4096 // 8G because virtual memory is cheap
+#define REGION_PG_COUNT ((size_t)16*8*4096) // 8G because virtual memory is cheap
 #else
-#define REGION_PG_COUNT 8*4096 // 512M
+#define REGION_PG_COUNT ((size_t)8*4096) // 512M
 #endif
 #define REGION_COUNT 8
 
 typedef struct {
-    uint32_t freemap[REGION_PG_COUNT/32];
     char pages[REGION_PG_COUNT][GC_PAGE_SZ];
+    uint32_t freemap[REGION_PG_COUNT/32];
     gcpage_t meta[REGION_PG_COUNT];
 } region_t;
 static region_t *regions[REGION_COUNT] = {NULL};
@@ -236,7 +236,8 @@ static region_t *find_region(void *ptr)
 {
     // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        if ((char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
+        char* begin = &regions[i]->pages[0][0];
+        if ((char*)ptr >= begin && (char*)ptr < begin+REGION_PG_COUNT*GC_PAGE_SZ)
             return regions[i];
     }
     return NULL;
@@ -244,6 +245,7 @@ static region_t *find_region(void *ptr)
 static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data);
+    assert(r);
     int pg_idx = (GC_PAGE_DATA(data) - &r->pages[0][0])/GC_PAGE_SZ;
     return &r->meta[pg_idx];
 }
@@ -1747,6 +1749,35 @@ static void post_mark(arraylist_t *list, int dryrun)
     visit_mark_stack(GC_MARKED_NOESC);
 }
 
+//#ifdef GC_SCRUB
+
+char* stack_lo;
+void gc_scrub(char* stack_hi)
+{
+    char** stack_lo_a16 = (char**)((uintptr_t)stack_lo & (uintptr_t)(-16));
+    //    printf("Stack 0x%lx - 0x%lx\n", stack_hi, stack_lo_a16);
+    for (uintptr_t *p = stack_lo_a16; (char*)p > stack_hi; p--) {
+        region_t* r;
+        void** o = *p;
+        if (r = find_region(o)) {
+            size_t ofs =  (char*)o - GC_PAGE_DATA(o);
+            int osize = page_metadata(o)->osize;
+            if (osize == 0) {
+                //                printf("Osize 0 0x%lx 0x%lx 0x%lx 0x%lx\n", o, page_metadata(o), r, p);
+                //abort();
+                continue;
+            }
+            int obj_ofs = ofs % osize;
+            if (!gc_marked((char*)o - obj_ofs)) { // pointing to the tag or the data
+                *p = 0xdead0000000000 | (ofs - obj_ofs);
+            }
+            //            *p = sizeof(region_t);
+        }
+    }
+}
+
+//#endif
+
 /*
  How to debug a missing write barrier :
  (or rather how I do it, if you know of a better way update this)
@@ -1994,11 +2025,13 @@ void prepare_sweep(void)
 static void clear_mark(int);
 #endif
 
-
+void gc_scrub(char*);
 void jl_gc_collect(int full)
 {
     if (!is_gc_enabled) return;
     if (jl_in_gc) return;
+    char dummy;
+    char* stack_hi = &dummy;
     jl_in_gc = 1;
     JL_SIGATOMIC_BEGIN();
     uint64_t t0 = jl_hrtime();
@@ -2094,7 +2127,7 @@ void jl_gc_collect(int full)
             post_time = jl_hrtime() - post_time;
 #endif
             estimate_freed = live_bytes - scanned_bytes - perm_scanned_bytes + actual_allocd;
-
+            gc_scrub(stack_hi);
 #ifdef GC_VERIFY
             gc_verify();
 #endif
@@ -2332,6 +2365,7 @@ void jl_gc_init(void)
         norm_pools[i].newpages = NULL;
         norm_pools[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
     }
+    stack_lo = &i;
 
     collect_interval = default_collect_interval;
     allocd_bytes = -default_collect_interval;
