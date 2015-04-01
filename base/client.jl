@@ -235,36 +235,27 @@ let reqarg = Set(UTF8String["--home",          "-H",
             println(STDERR, "julia: option `$arg` is missing an argument")
             exit(1)
         end
-        repl = true
-        startup = true
-        history_file = true
-        quiet = false
-        color_set = false
+        repl                  = true
+        startup               = (opts.startupfile == 1)
+        history_file          = Bool(opts.historyfile)
+        quiet                 = Bool(opts.quiet)
+        color_set             = (opts.color != 0)
+        global have_color     = (opts.color == 1)
+        global is_interactive = Bool(opts.isinteractive)
         while true
             # show julia VERSION and quit
             if Bool(opts.version)
                 println(STDOUT, "julia version ", VERSION)
                 exit(0)
             end
+
+            # load ~/.juliarc file
+            startup && load_juliarc()
+
             # startup worker
             if Bool(opts.worker)
                 start_worker() # does not return
             end
-            # load file immediately on all processors
-            if opts.load != C_NULL
-                require(bytestring(opts.load))
-            end
-            # show banner
-            quiet = Bool(opts.quiet)
-            # load ~/.juliarc file
-            if opts.startupfile == 1
-                load_juliarc()
-                startup = false
-            elseif opts.startupfile == 2
-                startup = false
-            end
-            # load ~/.julia_history file
-            history_file = Bool(opts.historyfile)
             # add processors
             if opts.nprocs > 0
                 addprocs(opts.nprocs)
@@ -273,17 +264,10 @@ let reqarg = Set(UTF8String["--home",          "-H",
             if opts.machinefile != C_NULL
                 addprocs(load_machine_file(bytestring(opts.machinefile)))
             end
-            global is_interactive = Bool(opts.isinteractive)
-            # REPL color
-            if opts.color == 0
-                color_set = false
-                global have_color = false
-            elseif opts.color == 1
-                color_set = true
-                global have_color = true
-            elseif opts.color == 2
-                color_set = true
-                global have_color = false
+
+            # load file immediately on all processors
+            if opts.load != C_NULL
+                require(bytestring(opts.load))
             end
             # eval expression
             if opts.eval != C_NULL
@@ -305,10 +289,6 @@ let reqarg = Set(UTF8String["--home",          "-H",
             # load file
             if !isempty(args)
                 if !isempty(args[1]) && args[1][1] != '-'
-                    if startup
-                        load_juliarc()
-                        startup = false
-                    end
                     # program
                     repl = false
                     # remove filename from ARGS
@@ -425,8 +405,6 @@ function _start()
                 pushdisplay(REPL.REPLDisplay(active_repl))
             end
         end
-
-        startup && load_juliarc()
 
         if repl
             if !isa(STDIN,TTY)
