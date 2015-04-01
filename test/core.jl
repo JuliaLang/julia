@@ -177,6 +177,17 @@ end
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
 
+# typejoin associativity
+abstract Foo____{K}
+type Wow____{K,V} <: Foo____{K} end
+type Bar____{K,V} <: Foo____{K} end
+let
+    a = Wow____{Int64, Int64}
+    b = Wow____{Int64, Float64}
+    c = Bar____{Int64, Int64}
+    @test typejoin(typejoin(b,c), a) == typejoin(typejoin(b,a), c) == Foo____{Int64}
+end
+
 @test promote_type(Bool,Bottom) === Bool
 
 # ntuples
