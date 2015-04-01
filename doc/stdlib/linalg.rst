@@ -731,7 +731,7 @@ Usually a function has 4 methods defined, one each for ``Float64``,
    sum of the absolute values of the first ``n`` elements of array ``X`` with
    stride ``incx``.
 
-.. function:: axpy!(n, a, X, incx, Y, incy)
+.. function:: axpy!(a, X, Y)
 
    Overwrite ``Y`` with ``a*X + Y``.  Returns ``Y``.
 
