@@ -161,6 +161,8 @@ Library improvements
 
   * Other improvements
 
+    * You can now tab complete Emoji characters from the REPL, with `\:name:<tab>` ([#10709)
+
     * `gc_enable`, `gc_disable` returns previous GC state.
 
     * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
