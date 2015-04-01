@@ -322,7 +322,7 @@
             ((eq? pred char-bin?) (fix-uint-neg neg (sized-uint-literal n s 1)))
             (is-float32-literal   (float n))
             (n (if (and (integer? n) (> n 9223372036854775807))
-                   `(macrocall @int128_str ,n)
+                   `(macrocall @int128_str ,s)
                    n))
             ((within-int128? s) `(macrocall @int128_str ,s))
             (else `(macrocall @bigint_str ,s))))))
