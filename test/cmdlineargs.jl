@@ -165,9 +165,13 @@ let exename = joinpath(JULIA_HOME, Base.julia_exename())
             # write a julia source file that just prints ARGS to STDOUT and exits
             open(testfile, "w") do io
                 println(io, "println(ARGS)")
+                println(io, "exit(0)")
             end
             @test readchomp(`$exename $testfile foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
+            @test readchomp(`$exename -L $testfile -- foo -bar --baz`) ==  "UTF8String[\"foo\",\"-bar\",\"--baz\"]"
             @test !success(`$exename --foo $testfile`)
+            @test !success(`$exename -L $testfile -- foo -bar -- baz`)
         finally
             rm(testfile)
         end

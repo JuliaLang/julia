@@ -138,12 +138,22 @@ void parse_opts(int *argcp, char ***argvp)
         { "lisp",            no_argument,       &lisp_prompt, 1 },
         { 0, 0, 0, 0 }
     };
+    // getopt handles argument parsing up to -- delineator
+    int lastind = optind;
+    int argc = *argcp;
+    if (argc > 0) {
+        for (int i=0; i < argc; i++) {
+            if (!strcmp((*argvp)[i], "--")) {
+                argc = i;
+                break;
+            }
+        }
+    }
     int c;
     char *endptr;
     opterr = 0;
     int skip = 0;
-    int lastind = optind;
-    while ((c = getopt_long(*argcp,*argvp,shortopts,longopts,0)) != -1) {
+    while ((c = getopt_long(argc,*argvp,shortopts,longopts,0)) != -1) {
         switch (c) {
         case 0:
             break;
@@ -334,9 +344,8 @@ void parse_opts(int *argcp, char ***argvp)
     *argvp += optind;
     *argcp -= optind;
     if (jl_options.image_file==NULL && *argcp > 0) {
-        if (strcmp((*argvp)[0], "-")) {
+        if (strcmp((*argvp)[0], "-"))
             program = (*argvp)[0];
-        }
     }
 }
 
