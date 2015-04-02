@@ -212,11 +212,11 @@ sparsevec{K<:Integer,V}(d::Dict{K,V}, len::Int) = sparsevec(collect(keys(d)), co
 
 sparsevec{K<:Integer,V}(d::Dict{K,V}) = sparsevec(collect(keys(d)), collect(values(d)))
 
-sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, +)
+sparsevec(I::AbstractVector, V, m::Integer) = sparsevec(I, V, m, AddFun())
 
-sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), +)
+sparsevec(I::AbstractVector, V) = sparsevec(I, V, maximum(I), AddFun())
 
-function sparsevec(I::AbstractVector, V, m::Integer, combine::Function)
+function sparsevec(I::AbstractVector, V, m::Integer, combine::Union(Function,Func))
     nI = length(I)
     if isa(V, Number); V = fill(V, nI); end
     p = sortperm(I)
@@ -232,7 +232,7 @@ function sparsevec(a::Vector)
     I = find(a)
     J = ones(Int, n)
     V = a[I]
-    return sparse_IJ_sorted!(I,J,V,n,1,+)
+    return sparse_IJ_sorted!(I,J,V,n,1,AddFun())
 end
 
 sparse(a::Vector) = sparsevec(a)
@@ -243,13 +243,13 @@ sparse{Tv}(A::AbstractMatrix{Tv}) = convert(SparseMatrixCSC{Tv,Int}, A)
 
 sparse(S::SparseMatrixCSC) = copy(S)
 
-sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,+)
+sparse_IJ_sorted!(I,J,V,m,n) = sparse_IJ_sorted!(I,J,V,m,n,AddFun())
 
-sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n,|)
+sparse_IJ_sorted!(I,J,V::AbstractVector{Bool},m,n) = sparse_IJ_sorted!(I,J,V,m,n,OrFun())
 
 function sparse_IJ_sorted!{Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                         V::AbstractVector,
-                                        m::Integer, n::Integer, combine::Function)
+                                        m::Integer, n::Integer, combine::Union(Function,Func))
 
     m = m < 0 ? 0 : m
     n = n < 0 ? 0 : n
@@ -297,17 +297,17 @@ end
 
 dimlub(I) = length(I)==0 ? 0 : Int(maximum(I)) #least upper bound on required sparse matrix dimension
 
-sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), +)
+sparse(I,J,v::Number) = sparse(I, J, fill(v,length(I)), dimlub(I), dimlub(J), AddFun())
 
-sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J), +)
+sparse(I,J,V::AbstractVector) = sparse(I, J, V, dimlub(I), dimlub(J), AddFun())
 
-sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), +)
+sparse(I,J,v::Number,m,n) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), AddFun())
 
-sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), +)
+sparse(I,J,V::AbstractVector,m,n) = sparse(I, J, V, Int(m), Int(n), AddFun())
 
-sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), |)
+sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), OrFun())
 
-sparse(I,J,v::Number,m,n,combine::Function) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
+sparse(I,J,v::Number,m,n,combine::Union(Function,Func)) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
 
 function find(S::SparseMatrixCSC)
     sz = size(S)
@@ -411,7 +411,7 @@ function sprand{T}(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoin
     N == 1 && return rand(r) <= density ? sparse(rfn(r,1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(r, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, +)  # it will never need to combine
+    sparse_IJ_sorted!(I, J, rfn(r,length(I)), m, n, AddFun())  # it will never need to combine
 end
 
 function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
@@ -421,7 +421,7 @@ function sprand{T}(m::Integer, n::Integer, density::FloatingPoint,
     N == 1 && return rand() <= density ? sparse(rfn(1)) : spzeros(T,1,1)
 
     I,J = sprand_IJ(GLOBAL_RNG, m, n, density)
-    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, +)  # it will never need to combine
+    sparse_IJ_sorted!(I, J, rfn(length(I)), m, n, AddFun())  # it will never need to combine
 end
 
 sprand(r::AbstractRNG, m::Integer, n::Integer, density::FloatingPoint) = sprand(r,m,n,density,rand,Float64)
