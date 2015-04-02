@@ -239,6 +239,10 @@ Library improvements
 
     * `readavailable` returns a byte vector instead of a string.
 
+    * `lock` and `unlock` which operate on `ReentrantLock`. Useful to lock a stream during
+      concurrent writes from multiple tasks
+
+
 Deprecated or removed
 ---------------------
 

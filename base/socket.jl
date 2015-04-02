@@ -259,6 +259,7 @@ type TCPSocket <: Socket
     closecb::Callback
     closenotify::Condition
     sendbuf::Nullable{IOBuffer}
+    lock::ReentrantLock
 
     TCPSocket(handle) = new(
         handle,
@@ -268,7 +269,8 @@ type TCPSocket <: Socket
         false, Condition(),
         false, Condition(),
         false, Condition(),
-        nothing
+        nothing,
+        ReentrantLock()
     )
 end
 function TCPSocket()

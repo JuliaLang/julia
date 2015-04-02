@@ -1000,10 +1000,13 @@ export
     current_task,
     istaskstarted,
     istaskdone,
+    lock,
     notify,
     produce,
+    ReentrantLock,
     schedule,
     task_local_storage,
+    unlock,
     yield,
 
 # time
