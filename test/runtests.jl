@@ -165,9 +165,13 @@ let convert_funcs_and_types =
     @test c.re == 1
     @test c.im == 0
 
-    c = @compat Complex128(1,1)
+    c = @compat Complex128(1,2)
     @test c.re == 1
-    @test c.im == 1
+    @test c.im == 2
+
+    c = @compat Complex128(1+2im)
+    @test c.re == 1
+    @test c.im == 2
 end
 
 type Test3609

@@ -252,11 +252,7 @@ function _compat(ex::Expr)
         elseif VERSION < v"0.4.0-dev+3732" && haskey(calltypes, f) && length(ex.args) > 1
             T = ex.args[1]
             if T in (:Complex32, :Complex64, :Complex128)
-                if length(ex.args) < 3
-                    ex = Expr(:call, T, ex.args[2], zero(ex.args[2]))
-                else
-                    ex = Expr(:call, T, ex.args[2:end]...)
-                end
+                ex = Expr(:call, calltypes[T], ex.args[2:end]...)
             else
                 ex = Expr(:(::), Expr(:call, :convert, T, ex.args[2:end]...), T)
             end
