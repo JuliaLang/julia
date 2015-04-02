@@ -4,7 +4,7 @@ const C_NULL = box(Ptr{Void}, 0)
 
 # pointer to integer
 convert{T<:Union(Int,UInt)}(::Type{T}, x::Ptr) = box(T, unbox(Ptr,x))
-convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,unsigned(x))
+convert{T<:Integer}(::Type{T}, x::Ptr) = convert(T,convert(UInt, x))
 
 # integer to pointer
 convert{T}(::Type{Ptr{T}}, x::UInt) = box(Ptr{T},unbox(UInt,UInt(x)))
