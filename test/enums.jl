@@ -46,7 +46,7 @@ using Base.Test
 @test convert(BigInt,apple) == 0
 @test convert(Bool,apple) == false
 @test convert(Bool,orange) == true
-@test convert(Bool,kiwi)
+@test_throws InexactError convert(Bool,kiwi)
 @test names(Fruit) == [:apple, :orange, :kiwi]
 
 f(x::Fruit) = "hey, I'm a Fruit"

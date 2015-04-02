@@ -190,7 +190,7 @@ type TTY <: AsyncStream
             false,Condition(),
             false,Condition(),
             nothing, ReentrantLock())
-        @windows_only tty.ispty = Bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+        @windows_only tty.ispty = ccall(:jl_ispty, Cint, (Ptr{Void},), handle)!=0
         tty
     end
 end
@@ -211,9 +211,9 @@ end
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
 isreadable(io::Union(Pipe,TTY)) =
-    Bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
+    ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle)!=0
 iswritable(io::Union(Pipe,TTY)) =
-    Bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+    ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle)!=0
 
 nb_available(stream::UVStream) = nb_available(stream.buffer)
 

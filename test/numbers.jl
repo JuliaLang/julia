@@ -32,17 +32,17 @@
 @test Bool(true) == true
 @test Bool(0) == false
 @test Bool(1) == true
-@test Bool(-1) == true
+@test_throws InexactError Bool(-1)
 @test Bool(0.0) == false
 @test Bool(1.0) == true
-@test Bool(0.1) == true
-@test Bool(-1.0) == true
+@test_throws InexactError Bool(0.1)
+@test_throws InexactError Bool(-1.0)
 @test Bool(Complex(0,0)) == false
 @test Bool(Complex(1,0)) == true
-@test_throws InexactError Bool(Complex(0,1)) == true
+@test_throws InexactError Bool(Complex(0,1))
 @test Bool(0//1) == false
 @test Bool(1//1) == true
-@test Bool(1//2) == true
+@test_throws InexactError Bool(1//2)
 
 # basic arithmetic
 @test 2 + 3 == 5

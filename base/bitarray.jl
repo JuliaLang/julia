@@ -309,7 +309,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
             u = UInt64(1)
             c = UInt64(0)
             for j = 0:63
-                Bool(A[ind]) && (c |= u)
+                A[ind]!=0 && (c |= u)
                 ind += 1
                 u <<= 1
             end
@@ -318,7 +318,7 @@ function convert{T,N}(::Type{BitArray{N}}, A::AbstractArray{T,N})
         u = UInt64(1)
         c = UInt64(0)
         for j = 0:_mod64(l-1)
-            Bool(A[ind]) && (c |= u)
+            A[ind]!=0 && (c |= u)
             ind += 1
             u <<= 1
         end
