@@ -1759,19 +1759,17 @@ void gc_scrub(char* stack_hi)
     for (uintptr_t *p = stack_lo_a16; (char*)p > stack_hi; p--) {
         region_t* r;
         void** o = *p;
+        o--; // tag
         if (r = find_region(o)) {
             size_t ofs =  (char*)o - GC_PAGE_DATA(o);
             int osize = page_metadata(o)->osize;
             if (osize == 0) {
-                //                printf("Osize 0 0x%lx 0x%lx 0x%lx 0x%lx\n", o, page_metadata(o), r, p);
-                //abort();
                 continue;
             }
             int obj_ofs = ofs % osize;
-            if (!gc_marked((char*)o - obj_ofs)) { // pointing to the tag or the data
+            if (!gc_marked((char*)o - obj_ofs)) { // pointing inside an object
                 *p = 0xdead0000000000 | (ofs - obj_ofs);
             }
-            //            *p = sizeof(region_t);
         }
     }
 }
@@ -2285,7 +2283,7 @@ void *reallocb(void *b, size_t sz)
 
 DLLEXPORT jl_value_t *allocobj(size_t sz)
 {
-    sz += sizeof(jl_taggedvalue_t);
+    sz += sizeof(void*);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2297,7 +2295,7 @@ DLLEXPORT jl_value_t *allocobj(size_t sz)
 
 DLLEXPORT jl_value_t *alloc_1w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*);
+    const int sz = 2*sizeof(void*);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2306,7 +2304,7 @@ DLLEXPORT jl_value_t *alloc_1w(void)
 
 DLLEXPORT jl_value_t *alloc_2w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 2;
+    const int sz = 3*sizeof(void*);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
@@ -2315,7 +2313,7 @@ DLLEXPORT jl_value_t *alloc_2w(void)
 
 DLLEXPORT jl_value_t *alloc_3w(void)
 {
-    const int sz = sizeof(jl_taggedvalue_t) + sizeof(void*) * 3;
+    const int sz = 4*sizeof(void*);
 #ifdef MEMDEBUG
     return jl_valueof(alloc_big(sz));
 #endif
