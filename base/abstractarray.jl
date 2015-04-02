@@ -337,12 +337,24 @@ end
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
-## iteration support for arrays as ranges ##
+## iteration support for arrays by iterating over `eachindex` in the array ##
+# Allows fast iteration by default for both LinearFast and LinearSlow arrays
 
-start(A::AbstractArray) = _start(A,linearindexing(A))
-_start(::AbstractArray,::LinearFast) = 1
-next(a::AbstractArray,i) = (a[i],i+1)
-done(a::AbstractArray,i) = (i > length(a))
+# While the definitions for LinearFast are all simple enough to inline on their
+# own, LinearSlow's CartesianRange is more complicated and requires explicit
+# inlining. The real @inline macro is not available this early in the bootstrap,
+# so this internal macro splices the meta Expr directly into the function body.
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+start(A::AbstractArray) = (@_inline_meta(); itr = eachindex(A); (itr, start(itr)))
+next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
+done(A::AbstractArray,i) = done(i[1], i[2])
+
+# eachindex iterates over all indices. LinearSlow definitions are later.
+eachindex(A::AbstractArray) = (@_inline_meta; eachindex(linearindexing(A), A))
+eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+
 isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##

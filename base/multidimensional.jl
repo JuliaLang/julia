@@ -1,11 +1,11 @@
 ### Multidimensional iterators
 module IteratorsMD
 
-import Base: eltype, length, start, _start, done, next, last, getindex, setindex!, linearindexing, min, max
+import Base: eltype, length, start, done, next, last, getindex, setindex!, linearindexing, min, max, eachindex
 import Base: simd_outer_range, simd_inner_length, simd_index
 import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 
-export CartesianIndex, CartesianRange, eachindex
+export CartesianIndex, CartesianRange
 
 # Traits for linear indexing
 linearindexing(::BitArray) = LinearFast()
@@ -110,60 +110,37 @@ stagedfunction CartesianRange{N}(I::CartesianIndex{N})
 end
 CartesianRange{N}(sz::NTuple{N,Int}) = CartesianRange(CartesianIndex(sz))
 
-stagedfunction eachindex{T,N}(A::AbstractArray{T,N})
+stagedfunction eachindex{T,N}(::LinearSlow, A::AbstractArray{T,N})
     startargs = fill(1, N)
     stopargs = [:(size(A,$i)) for i=1:N]
-    :(CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
+    meta = Expr(:meta, :inline)
+    :($meta; CartesianRange(CartesianIndex{$N}($(startargs...)), CartesianIndex{$N}($(stopargs...))))
 end
 
 eltype{I}(::Type{CartesianRange{I}}) = I
 eltype{I}(::CartesianRange{I}) = I
 
-stagedfunction start{I}(iter::CartesianRange{I})
-    N=length(I)
-    finishedex = Expr(:(||), [:(iter.stop[$i] < iter.start[$i]) for i = 1:N]...)
-    :(return $finishedex, iter.start)
-end
-
-stagedfunction _start{T,N}(A::AbstractArray{T,N}, ::LinearSlow)
-    args = fill(1, N)
-    :(return isempty(A), CartesianIndex{$N}($(args...)))
-end
-
-# Prevent an ambiguity warning
-next(R::StepRange, state::(Bool, CartesianIndex{1})) = (index=state[2]; return R[index], (index[1]==length(R), CartesianIndex{1}(index[1]+1)))
-next{T}(R::UnitRange{T}, state::(Bool, CartesianIndex{1})) = (index=state[2]; return R[index], (index[1]==length(R), CartesianIndex{1}(index[1]+1)))
-done(R::StepRange, state::(Bool, CartesianIndex{1})) = state[1]
-done(R::UnitRange, state::(Bool, CartesianIndex{1})) = state[1]
-
-stagedfunction next{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N}))
-    I = state[2]
-    finishedex = (N==0 ? true : :(newindex[$N] > size(A, $N)))
-    meta = Expr(:meta, :inline)
-    quote
-        $meta
-        index=state[2]
-        @inbounds v = A[index]
-        newindex=@nif $N d->(index[d] < size(A, d)) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : 1))
-        finished=$finishedex
-        v, (finished,newindex)
-    end
-end
-stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I))
+start(iter::CartesianRange) = iter.start
+stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
     N = length(I)
-    finishedex = (N==0 ? true : :(newindex[$N] > iter.stop[$N]))
     meta = Expr(:meta, :inline)
     quote
         $meta
-        index=state[2]
-        newindex=@nif $N d->(index[d] < iter.stop[d]) d->@ncall($N, $I, k->(k>d ? index[k] : k==d ? index[k]+1 : iter.start[k]))
-        finished=$finishedex
-        index, (finished,newindex)
+        index=state
+        @nif $N d->(index[d] < iter.stop[d]) d->(@nexprs($N, k->(ind_k = ifelse(k>=d, index[k] + (k==d), iter.start[k]))))
+        newindex = @ncall $N $I ind
+        index, newindex
     end
 end
+stagedfunction done{I<:CartesianIndex}(iter::CartesianRange{I}, state)
+    N = length(I)
+    :(state[$N] > iter.stop[$N])
+end
 
-done{T,N}(A::AbstractArray{T,N}, state::(Bool, CartesianIndex{N})) = state[1]
-done{I<:CartesianIndex}(iter::CartesianRange{I}, state::(Bool, I)) = state[1]
+# 0-d cartesian ranges are special-cased to iterate once and only once
+start{I<:CartesianIndex{0}}(iter::CartesianRange{I}) = false
+next{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = iter.start, true
+done{I<:CartesianIndex{0}}(iter::CartesianRange{I}, state) = state
 
 stagedfunction length{I<:CartesianIndex}(iter::CartesianRange{I})
     N = length(I)
@@ -502,7 +479,7 @@ function copy!{T,N}(dest::AbstractArray{T,N}, src::AbstractArray{T,N})
             break
         end
     end
-    if samesize
+    if samesize && linearindexing(dest) == linearindexing(src)
         for I in eachindex(dest)
             @inbounds dest[I] = src[I]
         end
