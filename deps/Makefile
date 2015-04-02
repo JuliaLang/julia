@@ -281,7 +281,11 @@ ifeq ($(USE_LIBCPP), 1)
 LLVM_FLAGS += --enable-libcpp
 endif # USE_LIBCPP
 ifeq ($(OS), WINNT)
-LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS="" --disable-shared
+LLVM_FLAGS += --with-extra-ld-options="-Wl,--stack,8388608" LDFLAGS=""
+# turn off shared LLVM on Windows unless explicitly requested
+ifneq ($(USE_LLVM_SHLIB),1)
+LLVM_FLAGS += --disable-shared
+endif
 LLVM_CPPFLAGS += -D__USING_SJLJ_EXCEPTIONS__ -D__CRT__NO_INLINE
 endif # OS == WINNT
 ifeq ($(USE_INTEL_JITEVENTS), 1)
