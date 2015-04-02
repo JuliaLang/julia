@@ -1502,6 +1502,7 @@ typedef struct {
     long   nprocs;
     const char *machinefile;
     int8_t isinteractive;
+    int8_t forcerepl;
     int8_t color;
     int8_t historyfile;
     int8_t startupfile;

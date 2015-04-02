@@ -14,6 +14,7 @@ immutable JLOptions
     nprocs::Clong
     machinefile::Ptr{Cchar}
     isinteractive::Int8
+    forcerepl::Int8
     color::Int8
     historyfile::Int8
     startupfile::Int8
