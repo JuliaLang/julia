@@ -236,7 +236,7 @@ let reqarg = Set(UTF8String["--home",          "-H",
             exit(1)
         end
         repl                  = true
-        startup               = (opts.startupfile == 1)
+        startup               = (opts.startupfile != 2)
         history_file          = Bool(opts.historyfile)
         quiet                 = Bool(opts.quiet)
         color_set             = (opts.color != 0)
