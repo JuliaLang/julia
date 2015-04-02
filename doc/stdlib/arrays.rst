@@ -33,29 +33,31 @@ Basic functions
 
 .. function:: eachindex(A)
 
-   Creates an iterable object for visiting each multi-dimensional index of the AbstractArray ``A``.  Example for a 2-d array::
+   Creates an iterable object for visiting each index of an AbstractArray ``A`` in an efficient manner. For array types that have opted into fast linear indexing (like ``Array``), this is simply the range ``1:length(A)``. For other array types, this returns a specialized Cartesian range to efficiently index into the array with indices specified for every dimension. Example for a sparse 2-d array::
 
-    julia> A = rand(2,3)
-    2x3 Array{Float64,2}:
-     0.960084  0.629326  0.625155
-     0.432588  0.955903  0.991614
+    julia> A = sprand(2, 3, 0.5)
+    2x3 sparse matrix with 4 Float64 entries:
+        [1, 1]  =  0.598888
+        [1, 2]  =  0.0230247
+        [1, 3]  =  0.486499
+        [2, 3]  =  0.809041
 
     julia> for iter in eachindex(A)
-	       @show iter.I_1, iter.I_2
-	       @show A[iter]
-	   end
+               @show iter.I_1, iter.I_2
+               @show A[iter]
+           end
     (iter.I_1,iter.I_2) = (1,1)
-    A[iter] = 0.9600836263003063
+    A[iter] = 0.5988881393454597
     (iter.I_1,iter.I_2) = (2,1)
-    A[iter] = 0.4325878255452178
+    A[iter] = 0.0
     (iter.I_1,iter.I_2) = (1,2)
-    A[iter] = 0.6293256402775211
+    A[iter] = 0.02302469881746183
     (iter.I_1,iter.I_2) = (2,2)
-    A[iter] = 0.9559027084099654
+    A[iter] = 0.0
     (iter.I_1,iter.I_2) = (1,3)
-    A[iter] = 0.6251548453735303
+    A[iter] = 0.4864987874354343
     (iter.I_1,iter.I_2) = (2,3)
-    A[iter] = 0.9916142534546522
+    A[iter] = 0.8090413606455655
 
 .. function:: countnz(A)
 
