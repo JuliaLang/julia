@@ -309,7 +309,7 @@ function dlm_fill(T::DataType, offarr::Vector{Vector{Int}}, dims::NTuple{2,Integ
         while idx <= length(offsets)
             row = offsets[idx]
             col = offsets[idx+1]
-            quoted = Bool(offsets[idx+2])
+            quoted = offsets[idx+2] != 0
             startpos = offsets[idx+3]
             endpos = offsets[idx+4]
 

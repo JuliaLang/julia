@@ -18,16 +18,11 @@ vals = vcat(
 
 function coerce(T::Type, x)
     if T<:Rational
-        return convert(T, coerce(typeof(num(zero(T))), x))
-    end
-    if !(T<:Integer) || T===Bool
+        convert(T, coerce(typeof(num(zero(T))), x))
+    elseif !(T<:Integer)
         convert(T, x)
-    elseif sizeof(T) < sizeof(x)
-        x % T
-    elseif sizeof(T) == sizeof(x)
-        reinterpret(T, x)
     else
-        convert(T, x)
+        x % T
     end
 end
 

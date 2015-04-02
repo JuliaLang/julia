@@ -36,7 +36,7 @@ macro deprecate(old,new)
 end
 
 function depwarn(msg, funcsym)
-    if Bool(JLOptions().depwarn)
+    if JLOptions().depwarn!=0
         bt = backtrace()
         caller = firstcaller(bt, funcsym)
         warn(msg, once=(caller!=C_NULL), key=caller, bt=bt)
@@ -352,7 +352,7 @@ end
 @deprecate int(x)  Int(x)
 @deprecate uint(x) UInt(x)
 
-@deprecate bool(x::Number)  Bool(x)
+@deprecate bool(x::Number)  x!=0
 
 @deprecate char(x)                 Char(x)
 @deprecate char(x::FloatingPoint)  Char(round(UInt32,x))

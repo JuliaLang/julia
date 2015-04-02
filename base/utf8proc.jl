@@ -11,7 +11,7 @@ export normalize_string, graphemes, is_valid_char, is_assigned_char, charwidth,
    iscntrl, ispunct, isspace, isprint, isgraph, isblank
 
 # whether codepoints are valid Unicode
-is_valid_char(c::Union(UInt8,UInt16,UInt32,Char)) = Bool(ccall(:utf8proc_codepoint_valid, Cuchar, (UInt32,), c))
+is_valid_char(c::Union(UInt8,UInt16,UInt32,Char)) = ccall(:utf8proc_codepoint_valid, Cuchar, (UInt32,), c)!=0
 is_valid_char(c::Integer) = (0x0 <= c <= 0x110000) && is_valid_char(UInt32(c))
 
 # utf8 category constants
