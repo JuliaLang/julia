@@ -1,6 +1,6 @@
 module SparseMatrix
 
-using Base: NonTupleType
+using Base: NonTupleType, Func, AddFun, OrFun
 using Base.Sort: Forward
 using Base.LinAlg: AbstractTriangular
 
