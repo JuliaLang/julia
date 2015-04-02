@@ -64,94 +64,6 @@ static inline void *malloc_a16(size_t sz)
 #define free_a16(p) free(p)
 #endif
 
-// finalization
-static arraylist_t finalizer_list;
-static arraylist_t finalizer_list_marked;
-static arraylist_t to_finalize;
-
-static void schedule_finalization(void *o, void *f)
-{
-    arraylist_push(&to_finalize, o);
-    arraylist_push(&to_finalize, f);
-}
-
-static void run_finalizer(jl_value_t *o, jl_value_t *ff)
-{
-    jl_function_t *f = (jl_function_t*)ff;
-    assert(jl_is_function(f));
-    JL_TRY {
-        jl_apply(f, (jl_value_t**)&o, 1);
-    }
-    JL_CATCH {
-        jl_printf(JL_STDERR, "error in running finalizer: ");
-        jl_static_show(JL_STDERR, jl_exception_in_transit);
-        jl_printf(JL_STDERR, "\n");
-    }
-}
-
-static int finalize_object(jl_value_t *o)
-{
-    int success = 0;
-    jl_value_t *f = NULL;
-    JL_GC_PUSH1(&f);
-    for(int i = 0; i < finalizer_list.len; i+=2) {
-        if (o == (jl_value_t*)finalizer_list.items[i]) {
-            f = (jl_value_t*)finalizer_list.items[i+1];
-            if (i < finalizer_list.len - 2) {
-                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
-                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
-                i -= 2;
-            }
-            finalizer_list.len -= 2;
-            run_finalizer(o, f);
-            success = 1;
-        }
-    }
-    JL_GC_POP();
-    return success;
-}
-
-static void run_finalizers(void)
-{
-    void *o = NULL, *f = NULL;
-    JL_GC_PUSH2(&o, &f);
-    while (to_finalize.len > 0) {
-        f = arraylist_pop(&to_finalize);
-        o = arraylist_pop(&to_finalize);
-        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
-    }
-    JL_GC_POP();
-}
-
-void schedule_all_finalizers(arraylist_t* flist)
-{
-    for(size_t i=0; i < flist->len; i+=2) {
-        jl_value_t *f = (jl_value_t*)flist->items[i+1];
-        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
-            schedule_finalization(flist->items[i], flist->items[i+1]);
-        }
-    }
-    flist->len = 0;
-}
-
-void jl_gc_run_all_finalizers(void)
-{
-    schedule_all_finalizers(&finalizer_list);
-    schedule_all_finalizers(&finalizer_list_marked);
-    run_finalizers();
-}
-
-DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
-{
-    arraylist_push(&finalizer_list, (void*)v);
-    arraylist_push(&finalizer_list, (void*)f);
-}
-
-void jl_finalize(jl_value_t *o)
-{
-    (void)finalize_object(o);
-}
-
 #ifdef JL_GC_MARKSWEEP
 
 typedef struct {
@@ -201,7 +113,7 @@ typedef struct _gcpage_t {
 
 #define PAGE_PFL_BEG(p) ((gcval_t**)((p->data) + (p)->fl_begin_offset))
 #define PAGE_PFL_END(p) ((gcval_t**)((p->data) + (p)->fl_end_offset))
-// round an address inside a gcpage's data to its begining
+// round an address inside a gcpage's data to its beginning
 #define GC_PAGE_DATA(x) ((char*)((uintptr_t)(x) >> GC_PAGE_LG2 << GC_PAGE_LG2))
 
 // A region is contiguous storage for up to REGION_PG_COUNT naturally aligned GC_PAGE_SZ pages
@@ -277,6 +189,13 @@ typedef struct _bigval_t {
 #define BVOFFS (offsetof(bigval_t, _data)/sizeof(void*))
 #define bigval_header(data) ((bigval_t*)((char*)(data) - BVOFFS*sizeof(void*)))
 
+// data structure for tracking malloc'd arrays.
+
+typedef struct _mallocarray_t {
+    jl_array_t *a;
+    struct _mallocarray_t *next;
+} mallocarray_t;
+
 // GC knobs and self-measurement variables
 static int64_t last_gc_total_bytes = 0;
 
@@ -290,12 +209,44 @@ static size_t max_collect_interval =  500000000UL;
 #endif
 static size_t collect_interval;
 
+// Global variables that become thread-local in thread-safe version.
+
+// global variables for finalization
+
+static arraylist_t finalizer_list;
+
+// global variable for tracking preserved values.
+
+static arraylist_t preserved_values;
+
+// global variable for tracking weak reference
+
+static arraylist_t weak_refs;
+
+// global variables for tracking malloc'd arrays
+
+static mallocarray_t *mallocarrays = NULL;
+static mallocarray_t *mafreelist = NULL;
+
+// global variables for tracking big objects
+
+static bigval_t *big_objects = NULL;
+static bigval_t *big_objects_marked = NULL;
+
+// global variables for tracking "remembered set"
+
+static arraylist_t rem_bindings;
+static arraylist_t _remset[2]; // contains jl_value_t*
+static arraylist_t *remset = &_remset[0];
+static arraylist_t *last_remset = &_remset[1];
+
+// global variables for allocating objects from pools
+
 #define N_POOLS 42
 static pool_t norm_pools[N_POOLS];
 #define pools norm_pools
 
-static bigval_t *big_objects = NULL;
-static bigval_t *big_objects_marked = NULL;
+// global variables for GC stats
 
 static int64_t total_allocd_bytes = 0;
 static int64_t allocd_bytes_since_sweep = 0;
@@ -665,8 +616,6 @@ static inline int maybe_collect(void)
 
 // preserved values
 
-static arraylist_t preserved_values;
-
 DLLEXPORT int jl_gc_n_preserved_values(void)
 {
     return preserved_values.len;
@@ -683,8 +632,6 @@ DLLEXPORT void jl_gc_unpreserve(void)
 }
 
 // weak references
-
-static arraylist_t weak_refs;
 
 DLLEXPORT jl_weakref_t *jl_gc_new_weakref(jl_value_t *value)
 {
@@ -812,15 +759,95 @@ static void sweep_big(int sweep_mask)
     }
 }
 
+// finalization routines
+
+static arraylist_t finalizer_list_marked;
+static arraylist_t to_finalize;
+
+static void schedule_finalization(void *o, void *f)
+{
+    arraylist_push(&to_finalize, o);
+    arraylist_push(&to_finalize, f);
+}
+
+static void run_finalizer(jl_value_t *o, jl_value_t *ff)
+{
+    jl_function_t *f = (jl_function_t*)ff;
+    assert(jl_is_function(f));
+    JL_TRY {
+        jl_apply(f, (jl_value_t**)&o, 1);
+    }
+    JL_CATCH {
+        jl_printf(JL_STDERR, "error in running finalizer: ");
+        jl_static_show(JL_STDERR, jl_exception_in_transit);
+        jl_printf(JL_STDERR, "\n");
+    }
+}
+
+static int finalize_object(jl_value_t *o)
+{
+    int success = 0;
+    jl_value_t *f = NULL;
+    JL_GC_PUSH1(&f);
+    for(int i = 0; i < finalizer_list.len; i+=2) {
+        if (o == (jl_value_t*)finalizer_list.items[i]) {
+            f = (jl_value_t*)finalizer_list.items[i+1];
+            if (i < finalizer_list.len - 2) {
+                finalizer_list.items[i] = finalizer_list.items[finalizer_list.len-2];
+                finalizer_list.items[i+1] = finalizer_list.items[finalizer_list.len-1];
+                i -= 2;
+            }
+            finalizer_list.len -= 2;
+            run_finalizer(o, f);
+            success = 1;
+        }
+    }
+    JL_GC_POP();
+    return success;
+}
+
+static void run_finalizers(void)
+{
+    void *o = NULL, *f = NULL;
+    JL_GC_PUSH2(&o, &f);
+    while (to_finalize.len > 0) {
+        f = arraylist_pop(&to_finalize);
+        o = arraylist_pop(&to_finalize);
+        run_finalizer((jl_value_t*)o, (jl_value_t*)f);
+    }
+    JL_GC_POP();
+}
+
+static void schedule_all_finalizers(arraylist_t* flist)
+{
+    for(size_t i=0; i < flist->len; i+=2) {
+        jl_value_t *f = (jl_value_t*)flist->items[i+1];
+        if (f != HT_NOTFOUND && !jl_is_cpointer(f)) {
+            schedule_finalization(flist->items[i], flist->items[i+1]);
+        }
+    }
+    flist->len = 0;
+}
+
+void jl_gc_run_all_finalizers(void)
+{
+    schedule_all_finalizers(&finalizer_list);
+    schedule_all_finalizers(&finalizer_list_marked);
+    run_finalizers();
+}
+
+DLLEXPORT void jl_gc_add_finalizer(jl_value_t *v, jl_function_t *f)
+{
+    arraylist_push(&finalizer_list, (void*)v);
+    arraylist_push(&finalizer_list, (void*)f);
+}
+
+void jl_finalize(jl_value_t *o)
+{
+    (void)finalize_object(o);
+}
+
 // tracking Arrays with malloc'd storage
-
-typedef struct _mallocarray_t {
-    jl_array_t *a;
-    struct _mallocarray_t *next;
-} mallocarray_t;
-
-static mallocarray_t *mallocarrays = NULL;
-static mallocarray_t *mafreelist = NULL;
 
 void jl_gc_track_malloced_array(jl_array_t *a)
 {
@@ -830,7 +857,7 @@ void jl_gc_track_malloced_array(jl_array_t *a)
     }
     else {
         ma = mafreelist;
-        mafreelist = mafreelist->next;
+        mafreelist = ma->next;
     }
     ma->a = a;
     ma->next = mallocarrays;
@@ -1007,7 +1034,7 @@ static int szclass(size_t sz)
     return 41;
 }
 
-int check_timeout = 0;
+static int check_timeout = 0;
 #define should_timeout() 0
 
 // sweep phase
@@ -1257,14 +1284,13 @@ static int gc_sweep_inc(int sweep_mask)
 
 // mark phase
 
-jl_value_t **mark_stack = NULL;
-jl_value_t **mark_stack_base = NULL;
-size_t mark_stack_size = 0;
-size_t mark_sp = 0;
-size_t perm_marked = 0;
+static jl_value_t **mark_stack = NULL;
+static jl_value_t **mark_stack_base = NULL;
+static size_t mark_stack_size = 0;
+static size_t mark_sp = 0;
 
 
-void grow_mark_stack(void)
+static void grow_mark_stack(void)
 {
     size_t newsz = mark_stack_size>0 ? mark_stack_size*2 : 32000;
     size_t offset = mark_stack - mark_stack_base;
@@ -1277,14 +1303,9 @@ void grow_mark_stack(void)
     mark_stack_size = newsz;
 }
 
-int max_msp = 0;
+static int max_msp = 0;
 
-static arraylist_t tasks;
-static arraylist_t rem_bindings;
-static arraylist_t _remset[2]; // contains jl_value_t*
-static arraylist_t *remset = &_remset[0];
-static arraylist_t *last_remset = &_remset[1];
-void reset_remset(void)
+static void reset_remset(void)
 {
     arraylist_t *tmp = remset;
     remset = last_remset;
@@ -1418,14 +1439,6 @@ static void gc_mark_task_stack(jl_task_t *ta, int d)
 #endif
     }
 }
-
-#if 0
-static void mark_task_stacks(void) {
-    for (int i = 0; i < tasks.len; i++) {
-        gc_mark_task_stack(tasks.items[i], 0);
-    }
-}
-#endif
 
 NOINLINE static void gc_mark_task(jl_task_t *ta, int d)
 {
@@ -1980,8 +1993,10 @@ void print_obj_profiles(void)
 }
 #endif
 
-int saved_mark_sp = 0;
-int sweep_mask = GC_MARKED;
+#if defined(GC_TIME)
+static int saved_mark_sp = 0;
+#endif
+static int sweep_mask = GC_MARKED;
 #define MIN_SCAN_BYTES 1024*1024
 
 static void gc_mark_task_stack(jl_task_t*,int);
@@ -2158,9 +2173,6 @@ void jl_gc_collect(int full)
             }
 
             sweeping = 0;
-            if (sweep_mask == GC_MARKED) {
-                tasks.len = 0;
-            }
 #ifdef GC_TIME
             SAVE2 = freed_bytes;
             SAVE3 = allocd_bytes_since_sweep;
@@ -2318,38 +2330,41 @@ void jl_print_gc_stats(JL_STREAM *s)
 }
 #endif
 
-// initialization
+// Per-thread initialization (when threading is fully implemented)
+static void jl_gc_init_heap() {
+    const int* szc = sizeclasses;
+    pool_t *p = norm_pools;
+    for(int i=0; i < N_POOLS; i++) {
+        assert(szc[i] % 4 == 0);
+        p[i].osize = szc[i];
+        p[i].freelist = NULL;
+        p[i].newpages = NULL;
+        p[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
+    }
+    arraylist_new(&preserved_values, 0);
+    arraylist_new(&weak_refs, 0);
+    arraylist_new(&finalizer_list, 0);
+    arraylist_new(&rem_bindings, 0);
+    arraylist_new(remset, 0);
+    arraylist_new(last_remset, 0);
+}
 
+// System-wide initializations
 void jl_gc_init(void)
 {
-    const int* szc = sizeclasses;
-    int i;
+    jl_gc_init_heap();
 
-    for(i=0; i < N_POOLS; i++) {
-        assert(szc[i] % 4 == 0);
-        norm_pools[i].osize = szc[i];
-        norm_pools[i].freelist = NULL;
-        norm_pools[i].newpages = NULL;
-        norm_pools[i].end_offset = ((GC_PAGE_SZ/szc[i]) - 1)*szc[i];
-    }
+    arraylist_new(&to_finalize, 0);
 
     collect_interval = default_collect_interval;
     allocd_bytes = -default_collect_interval;
 
-    arraylist_new(&finalizer_list, 0);
-    arraylist_new(&to_finalize, 0);
-    arraylist_new(&preserved_values, 0);
-    arraylist_new(&weak_refs, 0);
 #ifdef GC_VERIFY
     for(int i = 0; i < 4; i++)
         arraylist_new(&bits_save[i], 0);
     arraylist_new(&lostval_parents, 0);
     arraylist_new(&lostval_parents_done, 0);
 #endif
-    arraylist_new(&tasks, 0);
-    arraylist_new(&rem_bindings, 0);
-    arraylist_new(remset, 0);
-    arraylist_new(last_remset, 0);
 
 #ifdef OBJPROFILE
     for(int g=0; g<3; g++) {
