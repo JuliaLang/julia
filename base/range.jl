@@ -168,22 +168,26 @@ range(a::FloatingPoint, st::Real, len::Integer) = FloatRange(a, float(st), len, 
 immutable LinSpace{T<:FloatingPoint} <: Range{T}
     start::T
     stop::T
-    len::Int
+    len::T
     divisor::T
 end
-LinSpace(start::FloatingPoint, stop::FloatingPoint, len::Real, divisor::Real) =
-    LinSpace{promote_type(typeof(start),typeof(stop),typeof(divisor))}(start,stop,len,divisor)
 
-function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
+function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
+    len == round(len) || throw(InexactError())
     0 <= len || error("linspace($start, $stop, $len): negative length")
     if len == 0
-        return LinSpace(-start, -stop, -1, convert(T,2))
+        n = convert(T, 2)
+        if isinf(n*start) || isinf(n*stop)
+            start /= n; stop /= n; n = one(T)
+        end
+        return LinSpace(-start, -stop, -one(T), n)
     end
     if len == 1
         start == stop || error("linspace($start, $stop, $len): endpoints differ")
-        return LinSpace(-start, -start, 0, one(T))
+        return LinSpace(-start, -start, zero(T), one(T))
     end
-    n = len - 1
+    n = convert(T, len - 1)
+    len - n == 1 || error("linspace($start, $stop, $len): too long for $T")
     a0, b = rat(start)
     a = convert(T,a0)
     if a/convert(T,b) == start
@@ -195,7 +199,7 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
             c *= div(e,d)
             s = convert(T,n*e)
             if isinf(a*n) || isinf(c*n)
-                s, p = frexp(convert(T,s))
+                s, p = frexp(s)
                 p = one(p) << p
                 a /= p; c /= p
             end
@@ -204,18 +208,30 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::Int)
             end
         end
     end
-    s = convert(T,n)
-    if isinf(s*start) || isinf(s*stop)
-        s, p = frexp(s)
+    if isinf(n*start) || isinf(n*stop)
+        n, p = frexp(n)
         p = one(p) << p
         start /= p; stop /= p
     end
-    return LinSpace(start, stop, len, s)
+    return LinSpace(start, stop, len, n)
+end
+function linspace{T<:FloatingPoint}(start::T, stop::T, len::Real)
+    T_len = convert(T, len)
+    T_len == len || throw(InexactError())
+    linspace(start, stop, T_len)
 end
 linspace(start::Real, stop::Real, len::Real=50) =
-    linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., Int(len))
+    linspace(promote(FloatingPoint(start), FloatingPoint(stop))..., len)
 
-show(io::IO, r::LinSpace) = print(io, "linspace($(first(r)),$(last(r)),$(length(r)))")
+function show(io::IO, r::LinSpace)
+    print(io, "linspace(")
+    show(io, first(r))
+    print(io, ',')
+    show(last(r))
+    print(io, ',')
+    show(length(r))
+    print(io, ')')
+end
 
 logspace(start::Real, stop::Real, n::Integer=50) = 10.^linspace(start, stop, n)
 
@@ -243,7 +259,7 @@ function length(r::StepRange)
 end
 length(r::UnitRange) = Integer(r.stop - r.start + 1)
 length(r::FloatRange) = Integer(r.len)
-length(r::LinSpace) = r.len + signbit(r.len - 1)
+length(r::LinSpace) = Integer(r.len + signbit(r.len - 1))
 
 function length{T<:Union(Int,UInt,Int64,UInt64)}(r::StepRange{T})
     isempty(r) && return zero(T)
