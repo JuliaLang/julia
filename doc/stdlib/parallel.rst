@@ -118,7 +118,7 @@ Tasks
 General Parallel Computing Support
 ----------------------------------
 
-.. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
+.. function:: addprocs(n::Integer; exeflags=``, affinity=[:compact|:balanced]) -> List of process identifiers
 
    Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
    This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
@@ -158,6 +158,11 @@ General Parallel Computing Support
 
    ``exeflags`` :  additional flags passed to the worker processes.
 
+   ``affinity`` :  Linux only feature. Uses the ``taskset`` command to associate each worker with a specific core.
+                   If specified as ``:compact`` cores will be associated in a serial manner. For example, adding 3 workers
+                   on a machine with 8 cores will result in core0 -> worker1, core1 -> worker2,... and so on.
+                   If specified as ``:balanced`` workers will be distributed across cores. For example, adding 3 workers
+                   on a machine with 8 cores will result in core0 -> worker1, core3 -> worker2 and core7 -> worker3.
 
 .. function:: addprocs(manager::ClusterManager; kwargs...) -> List of process identifiers
 

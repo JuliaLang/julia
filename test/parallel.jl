@@ -237,6 +237,7 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
 
     print("\n\nTesting SSHManager. A minimum of 4GB of RAM is recommended.\n")
     print("Please ensure sshd is running locally with passwordless login enabled.\n")
+    print("On Linux, please ensure the 'taskset' command is available.\n")
 
     sshflags = `-o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -o LogLevel=ERROR `
     #Issue #9951
@@ -249,12 +250,12 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     end
 
     print("\nTesting SSH addprocs with $(length(hosts)) workers...\n")
-    new_pids = remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), hosts, sshflags)
+    new_pids = remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf, affinity=:compact), hosts, sshflags)
     @test length(new_pids) == length(hosts)
     test_n_remove_pids(new_pids)
 
     print("\nMixed ssh addprocs with :auto\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf), ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags))
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; sshflags=sf, affinity=:balanced), ["localhost", ("127.0.0.1", :auto), "localhost"], sshflags))
     @test length(new_pids) == (2 + Sys.CPU_CORES)
     test_n_remove_pids(new_pids)
 
@@ -264,7 +265,7 @@ if Bool(parse(Int,(get(ENV, "JULIA_TESTFULL", "0"))))
     test_n_remove_pids(new_pids)
 
     print("\nssh addprocs with tunnel\n")
-    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf), [("localhost", 9)], sshflags))
+    new_pids = sort(remotecall_fetch(1, (h, sf) -> addprocs(h; tunnel=true, sshflags=sf, affinity=:balanced), [("localhost", 9)], sshflags))
     @test length(new_pids) == 9
     test_n_remove_pids(new_pids)
 
