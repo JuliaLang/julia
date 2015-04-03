@@ -286,15 +286,27 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[n:-2:1];] == [r;][n:-2:1]
 end
 
-# very small linspace & ranges
+# linspace & ranges with very small endpoints
 for T = (Float32, Float64)
     z = zero(T)
     u = eps(z)
+    @test first(linspace(u,u,0)) == u
+    @test last(linspace(u,u,0)) == u
+    @test first(linspace(-u,u,0)) == -u
+    @test last(linspace(-u,u,0)) == u
+    @test [linspace(-u,u,0);] == []
+    @test [linspace(-u,-u,1);] == [-u]
     @test [linspace(-u,u,2);] == [-u,u]
     @test [linspace(-u,u,3);] == [-u,0,u]
     @test [linspace(-u,u,4);] == [-u,0,0,u]
     @test [linspace(-u,u,4);][2] === -z
     @test [linspace(-u,u,4);][3] === z
+    @test first(linspace(-u,-u,0)) == -u
+    @test last(linspace(-u,-u,0)) == -u
+    @test first(linspace(u,-u,0)) == u
+    @test last(linspace(u,-u,0)) == -u
+    @test [linspace(u,-u,0);] == []
+    @test [linspace(u,u,1);] == [u]
     @test [linspace(u,-u,2);] == [u,-u]
     @test [linspace(u,-u,3);] == [u,0,-u]
     @test [linspace(u,-u,4);] == [u,0,0,-u]
@@ -305,6 +317,36 @@ for T = (Float32, Float64)
     @test issorted(v) && unique(v) == [-u,0,0,u]
     @test [-3u:u:3u;] == [linspace(-3u,3u,7);] == [-3:3;].*u
     @test [3u:-u:-3u;] == [linspace(3u,-3u,7);] == [3:-1:-3;].*u
+end
+
+# linspace with very large endpoints
+for T = (Float32, Float64)
+    a = realmax()
+    for i = 1:5
+        @test [linspace(a,a,1);] == [a]
+        @test [linspace(-a,-a,1);] == [-a]
+        b = realmax()
+        for j = 1:5
+            @test [linspace(-a,b,0);] == []
+            @test [linspace(-a,b,2);] == [-a,b]
+            @test [linspace(-a,b,3);] == [-a,(b-a)/2,b]
+            @test [linspace(a,-b,0);] == []
+            @test [linspace(a,-b,2);] == [a,-b]
+            @test [linspace(a,-b,3);] == [a,(a-b)/2,-b]
+            for c = maxintfloat(T)-3:maxintfloat(T)
+                s = linspace(-a,b,c)
+                @test first(s)  == -a
+                @test last(s)   ==  b
+                @test length(s) ==  c
+                s = linspace(a,-b,c)
+                @test first(s)  ==  a
+                @test last(s)   == -b
+                @test length(s) ==  c
+            end
+            b = prevfloat(b)
+        end
+        a = prevfloat(a)
+    end
 end
 
 # near-equal ranges
