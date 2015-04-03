@@ -1,7 +1,7 @@
 language: cpp
 os:
     - linux
-    - osx
+    #- osx # this build is running out of time frequently now, disable it until we can make the tests it runs faster / fewer
 env:
     - ARCH="i686"
     - ARCH="x86_64"
