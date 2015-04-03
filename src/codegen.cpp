@@ -1574,9 +1574,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     JL_GC_PUSH1(&val);
     li = li->def;
     if (li->roots == NULL) {
-        JL_GC_PUSH1(&val);
         li->roots = jl_alloc_cell_1d(1);
-        JL_GC_POP();
         gc_wb(li, li->roots);
         jl_cellset(li->roots, 0, val);
     }
