@@ -81,6 +81,9 @@
 #else
 #include <llvm/Analysis/DebugInfo.h>
 #endif
+#ifndef LLVM37
+#define format_hex(v, d) format("%#0" #d "x", v)
+#endif
 
 #include "julia.h"
 

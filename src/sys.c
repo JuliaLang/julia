@@ -497,15 +497,15 @@ DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
-static long chachedPagesize = 0;
+static long cachedPagesize = 0;
 long jl_getpagesize(void)
 {
     if (!chachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
-        chachedPagesize = systemInfo.dwPageSize;
+        cachedPagesize = systemInfo.dwPageSize;
     }
-    return chachedPagesize;
+    return cachedPagesize;
 }
 #else
 long jl_getpagesize(void)

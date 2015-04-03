@@ -37,7 +37,8 @@ extern "C" {
 
 int jl_in_gc; // referenced from switchto task.c
 static int64_t allocd_bytes;
-static int64_t freed_bytes = 0;
+static int64_t freed_bytes;
+static long system_page_size;
 
 // malloc wrappers, aligned allocation
 
@@ -196,7 +197,7 @@ typedef struct _gcpage_t {
     uint16_t fl_begin_offset; // offset of first free object in this page
     uint16_t fl_end_offset;   // offset of last free object in this page
     char *data;
-    char *ages;
+    uint8_t *ages;
 } gcpage_t;
 
 #define PAGE_PFL_BEG(p) ((gcval_t**)((p->data) + (p)->fl_begin_offset))
@@ -214,8 +215,8 @@ typedef struct _gcpage_t {
 #define REGION_COUNT 8
 
 typedef struct {
+    char pages[REGION_PG_COUNT][GC_PAGE_SZ]; // must be first, to preserve page alignment
     uint32_t freemap[REGION_PG_COUNT/32];
-    char pages[REGION_PG_COUNT][GC_PAGE_SZ];
     gcpage_t meta[REGION_PG_COUNT];
 } region_t;
 static region_t *regions[REGION_COUNT] = {NULL};
@@ -232,23 +233,25 @@ typedef struct _pool_t {
     uint16_t nfree;      // number of free objects in page pointed into by free_list
 } pool_t;
 
+#define PAGE_INDEX(region, data) ((GC_PAGE_DATA(data) - &(region)->pages[0][0])/GC_PAGE_SZ)
 static region_t *find_region(void *ptr)
 {
     // on 64bit systems we could probably use a single region and remove this loop
     for (int i = 0; i < REGION_COUNT && regions[i]; i++) {
-        if ((char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
+        if (regions[i] && (char*)ptr >= (char*)regions[i] && (char*)ptr <= (char*)regions[i] + sizeof(region_t))
             return regions[i];
     }
+    assert(0 && "find_region failed");
     return NULL;
 }
 static gcpage_t *page_metadata(void *data)
 {
     region_t *r = find_region(data);
-    int pg_idx = (GC_PAGE_DATA(data) - &r->pages[0][0])/GC_PAGE_SZ;
+    int pg_idx = PAGE_INDEX(r, data);
     return &r->meta[pg_idx];
 }
 
-static char *page_age(gcpage_t *pg)
+static uint8_t *page_age(gcpage_t *pg)
 {
     return pg->ages;
 }
@@ -575,20 +578,31 @@ static NOINLINE void *malloc_page(void)
 #ifdef _OS_WINDOWS_
             char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
-            char* mem = (char*)mmap(0, sizeof(region_t) + GC_PAGE_SZ, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+            size_t alloc_size = sizeof(region_t);
+            if (GC_PAGE_SZ > system_page_size)
+                alloc_size += GC_PAGE_SZ;
+            char* mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
             mem = mem == MAP_FAILED ? NULL : mem;
 #endif
             if (mem == NULL) {
                 jl_printf(JL_STDERR, "could not allocate pools\n");
                 abort();
             }
-            region = (region_t*)((char*)GC_PAGE_DATA(mem + REGION_PG_COUNT/8 + GC_PAGE_SZ - 1) - REGION_PG_COUNT/8);
-            regions[region_i] = region;
+            if (GC_PAGE_SZ > system_page_size) {
+                // round data pointer up to the nearest GC_PAGE_DATA-aligned boundary
+                // if mmap didn't already do so
+                alloc_size += GC_PAGE_SZ;
+                region = (region_t*)((char*)GC_PAGE_DATA(mem + GC_PAGE_SZ - 1));
+            }
+            else {
+                region = (region_t*)mem;
+            }
 #ifdef _OS_WINDOWS_
             VirtualAlloc(region->freemap, REGION_PG_COUNT/8, MEM_COMMIT, PAGE_READWRITE);
             VirtualAlloc(region->meta, REGION_PG_COUNT*sizeof(gcpage_t), MEM_COMMIT, PAGE_READWRITE);
 #endif
             memset(region->freemap, 0xff, REGION_PG_COUNT/8);
+            regions[region_i] = region;
         }
         for(i = regions_lb[region_i]; i < REGION_PG_COUNT/32; i++) {
             if (region->freemap[i]) break;
@@ -633,7 +647,7 @@ static void free_page(void *p)
     int pg_idx = -1;
     int i;
     for(i = 0; i < REGION_COUNT && regions[i] != NULL; i++) {
-        pg_idx = ((char*)p - (char*)&regions[i]->pages[0])/GC_PAGE_SZ;
+        pg_idx = PAGE_INDEX(regions[i], p);
         if (pg_idx >= 0 && pg_idx < REGION_PG_COUNT) break;
     }
     assert(i < REGION_COUNT && regions[i] != NULL);
@@ -642,11 +656,26 @@ static void free_page(void *p)
     assert(!(region->freemap[pg_idx/32] & msk));
     region->freemap[pg_idx/32] ^= msk;
     free(region->meta[pg_idx].ages);
+    // tell the OS we don't need these pages right now
+    size_t decommit_size = GC_PAGE_SZ;
+    if (GC_PAGE_SZ < system_page_size) {
+        // ensure so we don't release more memory than intended
+        size_t n_pages = (GC_PAGE_SZ + system_page_size - 1) / GC_PAGE_SZ;
+        decommit_size = system_page_size;
+        p = (void*)((uintptr_t)&region->pages[pg_idx][0] & ~(system_page_size - 1)); // round down to the nearest page
+        pg_idx = PAGE_INDEX(region, p);
+        if (pg_idx + n_pages > REGION_PG_COUNT) goto no_decommit;
+        for (; n_pages--; pg_idx++) {
+            msk = (uint32_t)(1 << ((pg_idx % 32)));
+            if (!(region->freemap[pg_idx/32] & msk)) goto no_decommit;
+        }
+    }
 #ifdef _OS_WINDOWS_
-    VirtualFree(p, GC_PAGE_SZ, MEM_DECOMMIT);
+    VirtualFree(p, decommit_size, MEM_DECOMMIT);
 #else
-    madvise(p, GC_PAGE_SZ, MADV_DONTNEED);
+    madvise(p, decommit_size, MADV_DONTNEED);
 #endif
+no_decommit:
     if (regions_lb[i] > pg_idx/32) regions_lb[i] = pg_idx/32;
     current_pg_count--;
 }
@@ -914,7 +943,7 @@ static NOINLINE void add_page(pool_t *p)
     gcpage_t *pg = page_metadata(data);
     pg->data = data;
     pg->osize = p->osize;
-    pg->ages = (char*)malloc((GC_PAGE_SZ/p->osize + 7)/8);
+    pg->ages = (uint8_t*)malloc((GC_PAGE_SZ/p->osize + 7)/8);
     gcval_t *fl = reset_page(p, pg, p->newpages);
     p->newpages = fl;
 }
@@ -1089,7 +1118,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     int pg_freedall = 0, pg_total = 0, pg_skpd = 0;
     int obj_per_page = GC_PAGE_SZ/osize;
     char *data = pg->data;
-    char *ages = page_age(pg);
+    uint8_t *ages = page_age(pg);
     v = (gcval_t*)data;
     char *lim = (char*)v + GC_PAGE_SZ - osize;
     freedall = 1;
@@ -1117,7 +1146,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
     {  // scope to avoid clang goto errors
         int pg_nfree = 0;
         gcval_t **pfl_begin = NULL;
-        unsigned char msk = 1; // mask for the age bit in the current age byte
+        uint8_t msk = 1; // mask for the age bit in the current age byte
         while ((char*)v <= lim) {
             int bits = gc_bits(v);
             if (!(bits & GC_MARKED)) {
@@ -1140,7 +1169,7 @@ static gcval_t** sweep_page(pool_t* p, gcpage_t* pg, gcval_t **pfl, int sweep_ma
                 freedall = 0;
             }
             v = (gcval_t*)((char*)v + osize);
-            msk *= 2;
+            msk <<= 1;
             if (!msk) {
                 msk = 1;
                 ages++;
@@ -2324,6 +2353,7 @@ void jl_gc_init(void)
 {
     const int* szc = sizeclasses;
     int i;
+    system_page_size = jl_getpagesize();
 
     for(i=0; i < N_POOLS; i++) {
         assert(szc[i] % 4 == 0);
