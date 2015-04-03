@@ -509,20 +509,30 @@ endif
 endif
 endif
 
+# Apply version-specific LLVM patches
 ifeq ($(LLVM_VER),3.3)
 	patch -p0 < llvm-3.3.patch
 	patch -p0 < instcombine-llvm-3.3.patch
 	patch -p0 < int128-vector.llvm-3.3.patch
 	(cd llvm-$(LLVM_VER) && patch < ../osx-10.10.llvm-3.3.patch)
+
 ifeq ($(OS),WINNT)
 ifeq ($(ARCH),x86_64)
 	patch -p0 < win64-int128.llvm-3.3.patch
 endif
 endif
+
 else ifeq ($(LLVM_VER),3.6.0)
 	cd llvm-3.6.0 && patch -p1 < ../zerosign-llvm-3.6.0.patch
+ifeq ($(OS),WINNT)
+ifeq ($(ARCH),x86_64)
+	cd llvm-3.6.0 && patch -p1 < ../win64-allocas-llvm-3.6.0.patch
+endif
+endif
+
 endif
 	touch -c $@
+# end target llvm-$(LLVM_VER)/configure
 
 llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/config.status: llvm-$(LLVM_VER)/configure | $(llvm_python_workaround) $(LIBCXX_DEPENDENCY)
 	cd llvm-$(LLVM_VER) && \
