@@ -16,7 +16,7 @@ extern "C" {
 #include <setjmp.h>
 #ifndef _OS_WINDOWS_
 #  define jl_jmp_buf sigjmp_buf
-#  if defined(__arm__)
+#  if defined(_CPU_ARM_)
 #    define MAX_ALIGN 8
 #  else
 #    define MAX_ALIGN sizeof(void*)

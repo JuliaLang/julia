@@ -126,16 +126,12 @@ extern "C" {
 extern uintptr_t __stack_chk_guard;
 extern void __stack_chk_fail();
 #else
-uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
-#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-void __stack_chk_fail()
-#else
-void __attribute__(()) __stack_chk_fail()
-#endif
+DLLEXPORT uintptr_t __stack_chk_guard = (uintptr_t)0xBAD57ACCBAD67ACC; // 0xBADSTACKBADSTACK
+DLLEXPORT void __stack_chk_fail()
 {
     /* put your panic function or similar in here */
     fprintf(stderr, "fatal error: stack corruption detected\n");
-    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function
+    abort(); // end with abort, since the compiler destroyed the stack upon entry to this function, there's no going back now
 }
 #endif
 
@@ -1578,9 +1574,7 @@ static void jl_add_linfo_root(jl_lambda_info_t *li, jl_value_t *val)
     JL_GC_PUSH1(&val);
     li = li->def;
     if (li->roots == NULL) {
-        JL_GC_PUSH1(&val);
         li->roots = jl_alloc_cell_1d(1);
-        JL_GC_POP();
         gc_wb(li, li->roots);
         jl_cellset(li->roots, 0, val);
     }
