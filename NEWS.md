@@ -161,7 +161,7 @@ Library improvements
 
   * Other improvements
 
-    * You can now tab complete Emoji characters from the REPL, with `\:name:<tab>` ([#10709)
+    * You can now tab complete Emoji characters from the REPL, with `\:name:<tab>` ([#10709])
 
     * `gc_enable`, `gc_disable` returns previous GC state.
 
@@ -1327,3 +1327,4 @@ Too numerous to mention.
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
+[#10709]: https://github.com/JuliaLang/julia/issues/10709
