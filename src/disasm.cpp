@@ -81,6 +81,9 @@
 #else
 #include <llvm/Analysis/DebugInfo.h>
 #endif
+#ifndef LLVM37
+#define format_hex(v, d) format("%#0" #d "x", v)
+#endif
 
 #include "julia.h"
 
@@ -504,7 +507,7 @@ void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
             case MCDisassembler::Fail:
                 if (pass != 0)
 #if defined(_CPU_PPC_) || defined(_CPU_PPC64_)
-                    stream << "\t" << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
+                    stream << "\t.long " << format_hex(*(uint32_t*)(Fptr+Index), 10) << "\n";
 #else
                     SrcMgr.PrintMessage(SMLoc::getFromPointer((const char*)(Fptr + Index)),
                                         SourceMgr::DK_Warning,
