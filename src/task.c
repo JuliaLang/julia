@@ -653,7 +653,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
-#ifndef __arm__
+#if !defined(_CPU_ARM_) && !defined(_CPU_PPC64_)
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
