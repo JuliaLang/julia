@@ -285,17 +285,19 @@ end
 sqrtm(a::Number) = (b = sqrt(complex(a)); imag(b) == 0 ? real(b) : b)
 sqrtm(a::Complex) = sqrt(a)
 
+function inv!{S}(A::StridedMatrix{S})
+    if istriu(A)
+        Ai = inv!(UpperTriangular(A))
+    elseif istril(A)
+        Ai = inv!(LowerTriangular(A))
+    else
+        Ai = inv(lufact!(A))
+    end
+    return convert(typeof(A), Ai)
+end
 function inv{S}(A::StridedMatrix{S})
     T = typeof(one(S)/one(S))
-    Ac = convert(AbstractMatrix{T}, A)
-    if istriu(Ac)
-        Ai = inv(UpperTriangular(A))
-    elseif istril(Ac)
-        Ai = inv(LowerTriangular(A))
-    else
-        Ai = inv(lufact(Ac))
-    end
-    return convert(typeof(Ac), Ai)
+    inv!(copy_oftype(A, T))
 end
 
 function factorize{T}(A::Matrix{T})
