@@ -220,7 +220,7 @@ for (t, uploc, isunitc) in ((:LowerTriangular, 'L', 'N'),
         A_rdiv_Bc!{T<:BlasComplex,S<:StridedMatrix}(A::StridedMatrix{T}, B::$t{T,S}) = BLAS.trsm!('R', $uploc, 'C', $isunitc, one(T), B.data, A)
 
         # Matrix inverse
-        inv{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}) = $t{T,S}(LAPACK.trtri!($uploc, $isunitc, copy(A.data)))
+        inv!{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}) = $t{T,S}(LAPACK.trtri!($uploc, $isunitc, A.data))
 
         # Error bounds for triangular solve
         errorbounds{T<:BlasFloat,S<:StridedMatrix}(A::$t{T,S}, X::StridedVecOrMat{T}, B::StridedVecOrMat{T}) = LAPACK.trrfs!($uploc, 'N', $isunitc, A.data, B, X)
