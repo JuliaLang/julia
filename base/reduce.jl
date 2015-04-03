@@ -360,7 +360,7 @@ end
 
 ## countnz & count
 
-function count(pred::Union(Function,Func{1}), itr)
+function count(pred::Union(Callable,Func{1}), itr)
     n = 0
     for x in itr
         pred(x) && (n += 1)
@@ -368,7 +368,7 @@ function count(pred::Union(Function,Func{1}), itr)
     return n
 end
 
-function count(pred::Union(Function,Func{1}), a::AbstractArray)
+function count(pred::Union(Callable,Func{1}), a::AbstractArray)
     n = 0
     for i = 1:length(a)
         @inbounds if pred(a[i])
