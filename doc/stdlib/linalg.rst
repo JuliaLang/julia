@@ -387,17 +387,33 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Upper triangle of a matrix.
 
+.. function:: triu(M, k)
+
+   Returns the upper triangle of ``M`` starting from the ``k``th superdiagonal.
+
 .. function:: triu!(M)
 
    Upper triangle of a matrix, overwriting ``M`` in the process.
+
+.. function:: triu!(M, k)
+
+   Returns the upper triangle of ``M`` starting from the ``k``th superdiagonal, overwriting ``M`` in the process.
 
 .. function:: tril(M)
 
    Lower triangle of a matrix.
 
+.. function:: tril(M, k)
+
+   Returns the lower triangle of ``M`` starting from the ``k``th subdiagonal.
+
 .. function:: tril!(M)
 
    Lower triangle of a matrix, overwriting ``M`` in the process.
+
+.. function:: tril!(M, k)
+
+   Returns the lower triangle of ``M`` starting from the ``k``th subdiagonal, overwriting ``M`` in the process.
 
 .. function:: diagind(M[, k])
 
