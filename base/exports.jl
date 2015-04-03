@@ -522,7 +522,6 @@ export
     issorted,
     last,
     levicivita,
-    linrange,
     linspace,
     logspace,
     mapslices,
