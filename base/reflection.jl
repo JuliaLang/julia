@@ -157,11 +157,19 @@ uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 function _dump_function(f, t::ANY, native, wrapper)
-    str = ccall(:jl_dump_function, Any, (Any,Any,Bool,Bool), f, t, native, wrapper)::ByteString
-    if str == ""
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
+
+    if llvmf == C_NULL
         error("no method found for the specified argument types")
     end
-    str
+
+    if (native)
+        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
+    else
+        str = ccall(:jl_dump_function_ir, Any, (Ptr{Void},), llvmf)::ByteString
+    end
+
+    return str
 end
 
 code_llvm(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, false, false))

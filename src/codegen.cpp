@@ -888,43 +888,8 @@ extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #endif
     );
 
-extern "C"
-void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
-#ifdef USE_MCJIT
-                          const object::ObjectFile *objectfile,
-#else
-                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-#endif
-                          formatted_raw_ostream &stream);
 
-const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
-{
-    std::string code;
-    llvm::raw_string_ostream stream(code);
-    llvm::formatted_raw_ostream fstream(stream);
-    Function *llvmf = (Function*)f;
-    if (dumpasm == false) {
-        llvmf->print(stream);
-    }
-    else {
-        uint64_t symsize, slide;
-#ifdef USE_MCJIT
-        uint64_t fptr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
-        const object::ObjectFile *object;
-#else
-        uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
-        std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
-#endif
-        assert(fptr != 0);
-        if (jl_get_llvmf_info(fptr, &symsize, &slide, &object))
-            jl_dump_function_asm(fptr, symsize, slide, object, fstream);
-        else
-            jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
-        fstream.flush();
-    }
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
-}
-
+// Get pointer to llvm::Function instance, compiling if necessary
 extern "C" DLLEXPORT
 void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
 {
@@ -964,13 +929,53 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
     return llvmf;
 }
 
-extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+// Pre-declaration. Definition in disasm.cpp
+extern "C"
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
+#ifdef USE_MCJIT
+                          const object::ObjectFile *objectfile,
+#else
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
+#endif
+                          formatted_raw_ostream &stream);
+
+extern "C"
+const jl_value_t *jl_dump_function_ir(void *f)
 {
-    void *llvmf = jl_get_llvmf(f,types,dumpwrapper);
-    if (llvmf == NULL)
-        return jl_cstr_to_string(const_cast<char*>(""));
-    return jl_dump_llvmf(llvmf,dumpasm);
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+ 
+    Function *llvmf = (Function*)f;
+    llvmf->print(stream);
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+} 
+
+extern "C"
+const jl_value_t *jl_dump_function_asm(void *f)
+{
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    llvm::formatted_raw_ostream fstream(stream);
+    Function *llvmf = (Function*)f;
+
+    // Dump assembly code
+    uint64_t symsize, slide;
+#ifdef USE_MCJIT
+    uint64_t fptr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    const object::ObjectFile *object;
+#else
+    uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
+#endif
+    assert(fptr != 0);
+    if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
+        jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
+    } else {
+        jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
+    }
+    fstream.flush();
+
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
 // Code coverage
