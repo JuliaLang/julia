@@ -156,7 +156,8 @@ done(mt::MethodTable, i::()) = true
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-function _dump_function(f, t::ANY, native, wrapper)
+# Printing code representations in IR and assembly
+function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
 
     if llvmf == C_NULL
@@ -166,15 +167,19 @@ function _dump_function(f, t::ANY, native, wrapper)
     if (native)
         str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
     else
-        str = ccall(:jl_dump_function_ir, Any, (Ptr{Void},), llvmf)::ByteString
+        str = ccall(:jl_dump_function_ir, Any,
+                        (Ptr{Void}, Bool), llvmf, strip_ir_metadata)::ByteString
     end
 
     return str
 end
 
-code_llvm(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, false, false))
+code_llvm(io::IO, f::Function, types::(Type...), strip_ir_metadata = true) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata))
 code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
-code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
+code_llvm_raw(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types, false)
+
+code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false, false))
 code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
 function which(f::ANY, t::(Type...))

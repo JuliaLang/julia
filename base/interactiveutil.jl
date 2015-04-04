@@ -264,7 +264,8 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_warntype, :code_lowered, :code_llvm, :code_native]
+for fname in [:which, :less, :edit, :code_typed, :code_warntype,
+              :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)

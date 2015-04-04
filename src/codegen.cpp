@@ -944,15 +944,38 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
                           formatted_raw_ostream &stream);
 
 extern "C"
-const jl_value_t *jl_dump_function_ir(void *f)
+const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
- 
     Function *llvmf = (Function*)f;
-    llvmf->print(stream);
+
+    if (!strip_ir_metadata) {
+        // print the function IR as-is
+        llvmf->print(stream);
+    } else {
+        // make a copy of the function and strip metadata from the copy
+        llvm::ValueToValueMapTy VMap;
+        Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
+
+        for (auto f2_bb = f2->getBasicBlockList().begin();
+                  f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
+            for (auto f2_il = (*f2_bb).getInstList().begin();
+                      f2_il != (*f2_bb).getInstList().end(); ++f2_il) {
+                SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                (*f2_il).getAllMetadata(MDForInst);
+                for (auto md_iter = MDForInst.begin();
+                     md_iter != MDForInst.end(); ++md_iter) {
+                    (*f2_il).setMetadata((*md_iter).first, NULL);
+                }
+            }
+        }
+        f2->print(stream);
+        delete f2;
+    }
+
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
-} 
+}
 
 extern "C"
 const jl_value_t *jl_dump_function_asm(void *f)
