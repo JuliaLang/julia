@@ -166,7 +166,7 @@ endif
 
 $(build_private_libdir)/sys0.o: | $(build_private_libdir)
 	@$(call PRINT_JULIA, cd base && \
-	$(call spawn,$(JULIA_EXECUTABLE)) -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
+	$(call spawn,$(JULIA_EXECUTABLE)) --depwarn=no -C $(JULIA_CPU_TARGET) --build $(call cygpath_w,$(build_private_libdir)/sys0) sysimg.jl)
 
 BASE_SRCS := $(wildcard base/*.jl base/*/*.jl base/*/*/*.jl)
 
