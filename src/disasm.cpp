@@ -245,7 +245,7 @@ int OpInfoLookup(void *DisInfo, uint64_t PC,
 } // namespace
 
 extern "C"
-void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #ifndef USE_MCJIT
                           std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
 #else
