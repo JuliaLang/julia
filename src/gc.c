@@ -575,10 +575,10 @@ static NOINLINE void *malloc_page(void)
     while(region_i < REGION_COUNT) {
         region = regions[region_i];
         if (region == NULL) {
+            size_t alloc_size = sizeof(region_t);
 #ifdef _OS_WINDOWS_
             char* mem = (char*)VirtualAlloc(NULL, sizeof(region_t) + GC_PAGE_SZ, MEM_RESERVE, PAGE_READWRITE);
 #else
-            size_t alloc_size = sizeof(region_t);
             if (GC_PAGE_SZ > system_page_size)
                 alloc_size += GC_PAGE_SZ;
             char* mem = (char*)mmap(0, alloc_size, PROT_READ | PROT_WRITE, MAP_NORESERVE | MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
