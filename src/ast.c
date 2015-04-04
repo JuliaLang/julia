@@ -138,7 +138,11 @@ void jl_init_frontend(void)
     fl_jlgensym_sym = symbol("jlgensym");
 
     // Enable / disable syntax deprecation warnings
-    jl_parse_depwarn((int)jl_options.depwarn);
+    // Disable in imaging mode to avoid i/o errors (#10727)
+    if (jl_options.build_path != NULL)
+        jl_parse_depwarn(0);
+    else
+        jl_parse_depwarn((int)jl_options.depwarn);
 }
 
 DLLEXPORT void jl_lisp_prompt(void)
