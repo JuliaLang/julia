@@ -167,6 +167,9 @@ DLLEXPORT void jl_atexit_hook();
 #define HAVE_CPUID
 #endif
 
+DLLEXPORT const jl_value_t* jl_dump_llvm_ir(void*);
+DLLEXPORT const jl_value_t* jl_dump_llvm_asm(void*);
+
 #ifdef __cplusplus
 }
 #endif
