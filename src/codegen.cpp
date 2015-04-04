@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/IR/IntrinsicInst.h>
 #ifdef LLVM37
 #include "llvm/IR/LegacyPassManager.h"
 #else
@@ -939,18 +940,53 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
                           formatted_raw_ostream &stream);
 
-extern "C"
-const jl_value_t *jl_dump_function_ir(void *f)
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
- 
     Function *llvmf = (Function*)f;
-    llvmf->print(stream);
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
-} 
 
-extern "C"
+    if (!strip_ir_metadata) {
+        // print the function IR as-is
+        llvmf->print(stream);
+    } else {
+        // make a copy of the function and strip metadata from the copy
+        llvm::ValueToValueMapTy VMap;
+        std::vector<Instruction> dbgInsts;
+        Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
+        Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
+        // iterate over all basic blocks in the function
+        for (; f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
+            BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
+            // iterate over instructions in basic block
+            for (; f2_il != (*f2_bb).getInstList().end(); ) {
+                Instruction *inst = f2_il++;
+                // remove dbg.declare and dbg.value calls
+                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                    inst->eraseFromParent();
+                    continue;
+                }
+
+                SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                inst->getAllMetadata(MDForInst);
+                SmallVector<std::pair<unsigned, MDNode*>, 4>::iterator md_iter = MDForInst.begin();
+
+                // iterate over all metadata kinds and set to NULL to remove
+                for (; md_iter != MDForInst.end(); ++md_iter) {
+                    inst->setMetadata((*md_iter).first, NULL);
+                }
+            }
+        }
+
+        f2->print(stream);
+        delete f2;
+    }
+
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+}
+
+extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f)
 {
     std::string code;
