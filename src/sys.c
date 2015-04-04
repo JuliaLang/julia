@@ -500,7 +500,7 @@ DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 static long cachedPagesize = 0;
 long jl_getpagesize(void)
 {
-    if (!chachedPagesize) {
+    if (!cachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
         cachedPagesize = systemInfo.dwPageSize;
