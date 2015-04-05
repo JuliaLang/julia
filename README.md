@@ -283,7 +283,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
 - **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
 - **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
-- **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings
+- **[utf8proc]** (>= 1.2)    — a library for processing UTF-8 encoded Unicode strings
 - **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
 - **[Rmath-julia]**          — library for commonly used statistical functions from the R project.
 
