@@ -10,11 +10,11 @@ include $(JULIAHOME)/Make.inc
 # additionally all targets should be listed in the getall target for easier off-line compilation
 # if you are adding a new target, it can help to copy an similar, existing target
 #
-# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf uv
+# autoconf configure-driven scripts: llvm pcre arpack fftw unwind gmp mpfr patchelf libuv
 # custom Makefile rules: openlibm Rmath-julia dsfmt suitesparse-wrapper suitesparse lapack openblas utf8proc objconv
 # CMake libs: libgit2
 #
-# downloaded from git: llvm-svn, uv, libopenlibm, utf8proc, openspecfun
+# downloaded from git: llvm-svn, libuv, libopenlibm, utf8proc, openspecfun
 #
 # there are rules in this file with the . replaced by a %
 # this is some magic Makefile trick that tells make
@@ -66,7 +66,7 @@ STAGE2_DEPS = Rmath-julia
 STAGE3_DEPS = suitesparse-wrapper
 
 ifeq ($(USE_SYSTEM_LIBUV), 0)
-STAGE1_DEPS += uv
+STAGE1_DEPS += libuv
 endif
 
 ifeq ($(USE_SYSTEM_LIBUNWIND), 0)
@@ -186,7 +186,7 @@ install: $(addprefix install-, $(DEP_LIBS))
 cleanall: $(addprefix clean-, $(DEP_LIBS))
 distcleanall: $(addprefix distclean-, $(DEP_LIBS))
 	rm -rf $(build_prefix)
-getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
+getall: get-llvm get-libuv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmath-julia get-openblas get-lapack get-fftw get-suitesparse get-arpack get-unwind get-osxunwind get-gmp get-mpfr get-patchelf get-utf8proc get-virtualenv get-objconv get-libgit2
 
 ## PATHS ##
 # sort is used to remove potential duplicates
@@ -227,6 +227,9 @@ endef
 #
 # this defines rules for:
 #   VARNAME_SRC_DIR = source directory for the output
+#   dirname:
+#   dirname/file_from_download:
+#   distclean-dirname:
 #
 define git-external
 include $1.version
@@ -257,6 +260,8 @@ $$($2_SRC_DIR)/$3: $$($2_SRC_DIR).tar.gz
 	$(TAR) -C $$($2_SRC_DIR) --strip-components 1 -xf $$<
 	touch -c $$@
 endif
+distclean-$1:
+	-rm -rf $$($2_SRC_DIR) $$($2_SRC_DIR).tar.gz
 endef
 
 
@@ -671,10 +676,10 @@ update-llvm:
 ## LIBUV ##
 LIBUV_GIT_URL=git://github.com/JuliaLang/libuv.git
 LIBUV_TAR_URL=https://api.github.com/repos/JuliaLang/libuv/tarball/$1
-$(eval $(call git-external,libuv,LIBUV,configure,.libs/libuv.a))
+$(eval $(call git-external,libuv,LIBUV,configure,.libs/libuv.la))
 
-UV_SRC_TARGET = $(LIBUV_SRC_DIR)/.libs/libuv.a
-UV_OBJ_TARGET = $(build_libdir)/libuv.a
+UV_SRC_TARGET = $(LIBUV_SRC_DIR)/.libs/libuv.la
+UV_OBJ_TARGET = $(build_libdir)/libuv.la
 
 UV_CFLAGS =
 ifeq ($(USEMSVC), 1)
@@ -713,17 +718,15 @@ $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
 	$(call make-install,$(LIBUV_SRC_DIR),)
 	$(INSTALL_NAME_CMD)libuv.$(SHLIB_EXT) $(build_shlibdir)/libuv.$(SHLIB_EXT)
 
-clean-uv:
+clean-libuv:
 	-$(MAKE) -C $(LIBUV_SRC_DIR) clean
-	-rm -rf $(build_shlibdir)/libuv.a $(build_includedir)/uv.h $(build_includedir)/uv-private
-distclean-uv:
-	-rm -rf $(LIBUV_SRC_DIR)
+	-rm -rf $(build_libdir)/libuv.a $(build_libdir)/libuv.la $(build_includedir)/libuv.h $(build_includedir)/libuv-private
 
-get-uv: $(LIBUV_SRC_DIR)/configure
-configure-uv: $(LIBUV_SRC_DIR)/config.status
-compile-uv: $(UV_SRC_TARGET)
-check-uv: $(LIBUV_SRC_DIR)/checked
-install-uv: $(UV_OBJ_TARGET)
+get-libuv: $(LIBUV_SRC_DIR)/configure
+configure-libuv: $(LIBUV_SRC_DIR)/config.status
+compile-libuv: $(UV_SRC_TARGET)
+check-libuv: $(LIBUV_SRC_DIR)/checked
+install-libuv: $(UV_OBJ_TARGET)
 
 
 ## PCRE ##
@@ -791,9 +794,6 @@ clean-openlibm:
 	-rm $(OPENLIBM_OBJ_TARGET)
 	-rm $(build_libdir)/libopenlibm.a
 
-distclean-openlibm:
-	-rm -rf $(OPENLIBM_SRC_DIR)
-
 get-openlibm: openlibm/Makefile
 configure-openlibm: get-openlibm
 compile-openlibm: $(OPENLIBM_OBJ_SOURCE)
@@ -826,8 +826,6 @@ clean-openspecfun:
 	-$(MAKE) -C $(OPENSPECFUN_SRC_DIR) distclean $(OPENSPECFUN_FLAGS)
 	-rm $(OPENSPECFUN_OBJ_TARGET)
 	-rm $(build_libdir)/libopenspecfun.a
-distclean-openspecfun:
-	-rm -rf $(OPENSPECFUN_SRC_DIR)
 
 get-openspecfun: $(OPENSPECFUN_SRC_DIR)/Makefile
 configure-openspecfun: get-openspecfun
@@ -1443,8 +1441,6 @@ $(UTF8PROC_OBJ_HEADER): $(UTF8PROC_SRC_TARGET)
 clean-utf8proc:
 	-$(MAKE) -C $(UTF8PROC_SRC_DIR) clean
 	-rm -rf $(build_libdir)/libutf8proc.a $(build_includedir)/utf8proc.h
-distclean-utf8proc:
-	-rm -rf $(UTF8PROC_SRC_DIR)
 
 get-utf8proc: $(UTF8PROC_SRC_DIR)/Makefile
 configure-utf8proc: get-utf8proc
