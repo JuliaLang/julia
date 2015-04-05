@@ -205,5 +205,6 @@ else
   echo 'override STAGE1_DEPS += openlibm' >> Make.user
 fi
 
-make
+cat Make.user
+make VERBOSE=1
 #make debug

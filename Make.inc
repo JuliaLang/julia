@@ -106,6 +106,7 @@ sysconfdir = $(prefix)/etc
 
 # Directories where things get built into
 build_prefix = $(JULIAHOME)/usr
+build_staging = $(build_prefix)-staging
 build_bindir = $(build_prefix)/bin
 build_libdir = $(build_prefix)/lib
 build_private_libdir = $(build_prefix)/lib/julia

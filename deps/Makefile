@@ -174,7 +174,7 @@ endif
 
 DEP_LIBS = $(STAGE1_DEPS) $(STAGE2_DEPS) $(STAGE3_DEPS)
 
-default: $(build_prefix) install
+default: install | $(build_prefix)
 get: $(addprefix get-, $(DEP_LIBS))
 configure: $(addprefix configure-, $(DEP_LIBS))
 compile: $(addprefix compile-, $(DEP_LIBS))
@@ -187,11 +187,26 @@ getall: get-llvm get-uv get-pcre get-openlibm get-openspecfun get-dsfmt get-Rmat
 
 ## PATHS ##
 # sort is used to remove potential duplicates
-DIRS = $(sort $(build_bindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir))
+DIRS = $(sort $(build_bindir) $(build_libdir) $(build_includedir) $(build_sysconfdir) $(build_datarootdir) $(build_staging))
 
 $(foreach dir,$(DIRS),$(eval $(call dir_target,$(dir))))
 
-$(build_prefix): $(DIRS)
+$(build_prefix): | $(DIRS)
+
+## A rule for calling `make install` ##
+#	rule: dependencies
+#   	$(call make-install build-directory,add-args)
+#   	touch -c $@
+# this rule ensures that make install is more nearly atomic
+# so it's harder to get half-installed (or half-reinstalled) dependencies
+MAKE_DESTDIR = DESTDIR="$(build_staging)/$1"
+define make-install
+	rm -rf $(build_staging)/$1
+	$(MAKE) -C $1 install $(MAKE_COMMON) $2 $(call MAKE_DESTDIR,$1)
+	mkdir -p $(build_prefix)
+	cp -af $(build_staging)/$1$(build_prefix)/* $(build_prefix)
+endef
+
 
 ## LLVM ##
 LLVM_GIT_URL_BASE ?= http://llvm.org/git
@@ -263,7 +278,9 @@ LLVM_CPPFLAGS = $(CPPFLAGS)
 LLVM_LDFLAGS = $(LDFLAGS)
 LLVM_TARGET_FLAGS= --enable-targets=host
 LLVM_FLAGS += --disable-profiling --enable-shared --enable-static $(LLVM_TARGET_FLAGS) --disable-bindings --disable-docs
-LLVM_MFLAGS =
+# LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
+# We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
+LLVM_MFLAGS = PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
 ifeq ($(LLVM_ASSERTIONS), 1)
 LLVM_FLAGS += --enable-assertions
 ifeq ($(OS), WINNT)
@@ -556,16 +573,13 @@ endif
 	echo 1 > $@
 
 $(LLVM_OBJ_TARGET): $(LLVM_OBJ_SOURCE) | $(llvm_python_workaround)
-	# LLVM has weird install prefixes (see llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE)/Makefile.config for the full list)
-	# We map them here to the "normal" ones, which means just prefixing "PROJ_" to the variable name.
 	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir) PROJ_includedir=$(build_includedir)
+	$(call make-install,llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE),$(LLVM_MFLAGS))
 	touch -c $@
 
 reinstall-llvm:
-	-rm $(build_bindir)/llvm-config
-	export PATH=$(abspath llvm-$(LLVM_VER)/python2_path):$$PATH && \
-	$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) install $(LLVM_MFLAGS) $(MAKE_COMMON) PROJ_libdir=$(build_libdir) PROJ_bindir=$(build_bindir)
+	-rm $(LLVM_OBJ_TARGET)
+	$(MAKE) -s install-llvm
 
 clean-llvm:
 	-$(MAKE) -C llvm-$(LLVM_VER)/build_$(LLVM_BUILDTYPE) clean
@@ -638,7 +652,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(UV_OBJ_TARGET): $(UV_SRC_TARGET)
-	$(MAKE) -C libuv install $(MAKE_COMMON)
+	$(call make-install,libuv,)
 	$(INSTALL_NAME_CMD)libuv.$(SHLIB_EXT) $(build_shlibdir)/libuv.$(SHLIB_EXT)
 
 clean-uv:
@@ -680,7 +694,7 @@ endif
 endif
 	echo 1 > $@
 $(PCRE_OBJ_TARGET): $(PCRE_SRC_TARGET) pcre-$(PCRE_VER)/checked
-	$(MAKE) -C pcre-$(PCRE_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
+	$(call make-install,pcre-$(PCRE_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libpcre.$(SHLIB_EXT) $@
 	touch -c $@
 
@@ -715,8 +729,8 @@ endif
 $(OPENLIBM_OBJ_SOURCE): openlibm/Makefile
 	$(MAKE) -C openlibm $(OPENLIBM_FLAGS) $(MAKE_COMMON)
 	touch -c $@
-$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a : $(OPENLIBM_OBJ_SOURCE)
-	$(MAKE) -C openlibm install $(OPENLIBM_FLAGS) $(MAKE_COMMON)
+$(build_shlibdir)/libopenlibm%$(SHLIB_EXT) $(build_libdir)/libopenlibm%a: $(OPENLIBM_OBJ_SOURCE)
+	$(call make-install,openlibm,$(OPENLIBM_FLAGS))
 	$(INSTALL_NAME_CMD)libopenlibm.$(SHLIB_EXT) $(build_shlibdir)/libopenlibm.$(SHLIB_EXT)
 	touch -c $@
 
@@ -759,7 +773,7 @@ $(OPENSPECFUN_OBJ_SOURCE): openspecfun/Makefile $(OPENLIBM_FAKE_TARGET)
 	$(MAKE) -C openspecfun $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
 	touch -c $@
 $(OPENSPECFUN_OBJ_TARGET): $(OPENSPECFUN_OBJ_SOURCE)
-	$(MAKE) -C openspecfun install $(OPENSPECFUN_FLAGS) $(MAKE_COMMON)
+	$(call make-install,openspecfun,$(OPENSPECFUN_FLAGS))
 	$(INSTALL_NAME_CMD)libopenspecfun.$(SHLIB_EXT) $@
 	touch -c $@
 
@@ -1202,8 +1216,7 @@ arpack-ng-$(ARPACK_VER)/checked: $(ARPACK_OBJ_SOURCE)
 #	cd TESTS && $(call spawn,./dnsimp$(EXE))
 	echo 1 > $@
 $(ARPACK_OBJ_TARGET): $(ARPACK_OBJ_SOURCE) arpack-ng-$(ARPACK_VER)/checked | $(build_shlibdir)
-	cd arpack-ng-$(ARPACK_VER) && \
-	$(MAKE) install $(ARPACK_MFLAGS) $(MAKE_COMMON)
+	$(call make-install,arpack-ng-$(ARPACK_VER),$(ARPACK_MFLAGS))
 ifeq ($(OS), WINNT)
 	mv $(build_shlibdir)/libarpack-2.dll $@
 endif
@@ -1279,8 +1292,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(FFTW_SINGLE_OBJ_TARGET): $(FFTW_SINGLE_SRC_TARGET) fftw-$(FFTW_VER)-single/checked
-	$(MAKE) -C fftw-$(FFTW_VER)-single install $(MAKE_COMMON)
-	touch -c $@
+	$(call make-install,fftw-$(FFTW_VER)-single,)
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3f.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libfftw3f_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3f_threads.$(SHLIB_EXT)
@@ -1314,7 +1326,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(FFTW_DOUBLE_OBJ_TARGET): $(FFTW_DOUBLE_SRC_TARGET) fftw-$(FFTW_VER)-double/checked
-	$(MAKE) -C fftw-$(FFTW_VER)-double install $(MAKE_COMMON)
+	$(call make-install,fftw-$(FFTW_VER)-double,)
 ifeq ($(OS), Darwin)
 	$(INSTALL_NAME_CMD)libfftw3.$(SHLIB_EXT) $(build_shlibdir)/libfftw3.$(SHLIB_EXT)
 	$(INSTALL_NAME_CMD)libfftw3_threads.$(SHLIB_EXT) $(build_shlibdir)/libfftw3_threads.$(SHLIB_EXT)
@@ -1549,11 +1561,12 @@ endif
 	echo 1 > $@
 #todo: libunwind tests known to fail
 $(LIBUNWIND_TARGET_OBJ): $(LIBUNWIND_TARGET_SOURCE)
-	$(MAKE) install -C libunwind-$(UNWIND_VER) $(MAKE_COMMON)
+	$(call make-install,libunwind-$(UNWIND_VER),)
 ifeq ($(ARCH), ppc64)
 	# workaround for configure script bug
 	mv $(build_prefix)/lib64/libunwind*.a $(build_libdir)
 endif
+	touch $@
 
 clean-unwind:
 	-$(MAKE) -C libunwind-$(UNWIND_VER) clean
@@ -1675,7 +1688,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(MPFR_OBJ_TARGET): $(MPFR_SRC_TARGET) mpfr-$(MPFR_VER)/checked
-	$(MAKE) -C mpfr-$(MPFR_VER) $(LIBTOOL_CCLD) install $(MAKE_COMMON)
+	$(call make-install,mpfr-$(MPFR_VER),$(LIBTOOL_CCLD))
 	$(INSTALL_NAME_CMD)libmpfr.$(SHLIB_EXT) $@
 	touch -c $@
 
@@ -1719,7 +1732,7 @@ ifeq ($(OS),$(BUILD_OS))
 endif
 	echo 1 > $@
 $(PATCHELF_TARGET): $(PATCHELF_SOURCE) patchelf-$(PATCHELF_VER)/checked
-	$(MAKE) -C patchelf-$(PATCHELF_VER) install $(MAKE_COMMON)
+	$(call make-install,patchelf-$(PATCHELF_VER),)
 	touch -c $@
 
 clean-patchelf:
@@ -1737,8 +1750,8 @@ install-patchelf: $(PATCHELF_TARGET)
 ## Git
 # only used for the mac binaries in contrib/mac/app/Makefile
 
-GIT_SOURCE = git-$(GIT_VER)/src/git
-GIT_TARGET = $(build_prefix)/git
+GIT_SOURCE = git-$(GIT_VER)/git
+GIT_TARGET = $(build_libexecdir)/git
 
 git-$(GIT_VER).tar.gz:
 	$(JLDOWNLOAD) $@ https://www.kernel.org/pub/software/scm/git/git-$(GIT_VER).tar.gz
@@ -1756,7 +1769,7 @@ $(GIT_SOURCE): git-$(GIT_VER)/config.status
 git-$(GIT_VER)/checked: $(GIT_SOURCE)
 	echo 1 > $@
 $(GIT_TARGET): $(GIT_SOURCE) git-$(GIT_VER)/checked
-	$(MAKE) -C git-$(GIT_VER) install NO_INSTALL_HARDLINKS=1 $(MAKE_COMMON)
+	$(call make-install,git-$(GIT_VER),NO_INSTALL_HARDLINKS=1 bindir="$(build_libexecdir)")
 	touch -c $@
 
 clean-git:
@@ -1838,6 +1851,7 @@ endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
+	#$(call make-install,libgit2-$(LIBGIT2_VER)/build,)
 ifeq ($(OS),Linux)
 	# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
@@ -1847,6 +1861,7 @@ ifeq ($(OS),Linux)
 		[ ! -z "$$LIB_PATH" ] && cp -v "$$LIB_PATH" $(build_shlibdir); \
 	done
 endif
+	touch -c $@
 
 clean-libgit2:
 	-rm -rf libgit2-$(LIBGIT2_VER)/build/
