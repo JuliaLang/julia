@@ -20,23 +20,26 @@
 /llvm-*
 /lldb-*
 /mpfr-*
-/openblas-*
 /patchelf-*
 /pcre-*
 !pcre-gcc49-compile.patch
 /root
 /SuiteSparse-*
 /zlib-*
-/utf8proc-*
 /librandom.*
 /virtualenv-*
 /julia-env
 /objconv*
 /Rmath-julia*
 
-# git externals:
+# git-externals:
 /libuv
+/libuv-*
 /openblas
+/openblas-*
 /openlibm
+/openlibm-*
 /openspecfun
+/openspecfun-*
 /utf8proc
+/utf8proc-*
