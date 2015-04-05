@@ -466,7 +466,7 @@ cleanall: clean
 ifeq ($(OS),WINNT)
 	@rm -rf $(build_prefix)/lib
 endif
-	@$(MAKE) -C deps clean-uv
+	@$(MAKE) -C deps clean-libuv
 
 distcleanall: cleanall
 	@$(MAKE) -C deps distcleanall
