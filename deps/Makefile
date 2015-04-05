@@ -946,10 +946,12 @@ install-objconv: $(OBJCONV_TARGET)
 
 ## OpenBLAS ##
 # LAPACK is built into OpenBLAS by default
+OPENBLAS_GIT_URL = git://github.com/xianyi/OpenBLAS.git
+OPENBLAS_TAR_URL = https://api.github.com/repos/xianyi/OpenBLAS/tarball/$1
+$(eval $(call git-external,openblas,OPENBLAS,Makefile,libopenblas.$(SHLIB_EXT)))
 
-OPENBLAS_OBJ_SOURCE = openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT)
+OPENBLAS_OBJ_SOURCE = $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT)
 OPENBLAS_OBJ_TARGET = $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
-
 OPENBLAS_BUILD_OPTS = CC="$(CC)" FC="$(FC)" RANLIB="$(RANLIB)" FFLAGS="$(FFLAGS) $(JFFLAGS)" LDFLAGS="$(LDFLAGS)" TARGET=$(OPENBLAS_TARGET_ARCH) BINARY=$(BINARY)
 
 # Thread support
@@ -1015,21 +1017,15 @@ else ifeq ($(OPENBLAS_NO_AVX2), 1)
 OPENBLAS_BUILD_OPTS += NO_AVX2=1
 endif
 
-openblas-$(OPENBLAS_VER).tar.gz:
-	$(JLDOWNLOAD) $@ https://api.github.com/repos/xianyi/OpenBLAS/tarball/$(OPENBLAS_VER)
-openblas-$(OPENBLAS_VER)/config.status: openblas-$(OPENBLAS_VER).tar.gz
-ifneq ($(OPENBLAS_VER),develop)
-	$(JLCHECKSUM) $<
-endif
-	mkdir -p openblas-$(OPENBLAS_VER) && \
-	$(TAR) -C openblas-$(OPENBLAS_VER) --strip-components 1 -xf $<
-	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' openblas-$(OPENBLAS_VER)/Makefile.system
-	echo 1 > $@
-$(OPENBLAS_OBJ_SOURCE): openblas-$(OPENBLAS_VER)/config.status
-	$(MAKE) -C openblas-$(OPENBLAS_VER) $(OPENBLAS_BUILD_OPTS) || (echo "*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***" && false)
+$(OPENBLAS_SRC_DIR)/config.status: $(OPENBLAS_SRC_DIR)/Makefile
+	perl -i -ple 's/^\s*(EXTRALIB\s*\+=\s*-lSystemStubs)\s*$$/# $$1/g' $(OPENBLAS_SRC_DIR)/Makefile.system
+	touch $@
+$(OPENBLAS_OBJ_SOURCE): $(OPENBLAS_SRC_DIR)/config.status
+	echo $(MAKE) -C $(OPENBLAS_SRC_DIR) $(OPENBLAS_BUILD_OPTS) # echo first, so we only print the error message below in a failure case
+	@$(MAKE) -C $(OPENBLAS_SRC_DIR) $(OPENBLAS_BUILD_OPTS) || (echo $(WARNCOLOR)"*** Clean the OpenBLAS build with 'make -C deps clean-openblas'. Rebuild with 'make OPENBLAS_USE_THREAD=0 if OpenBLAS had trouble linking libpthread.so, and with 'make OPENBLAS_TARGET_ARCH=NEHALEM' if there were errors building SandyBridge support. Both these options can also be used simultaneously. ***"$(ENDCOLOR) && false)
 	touch -c $@
 $(OPENBLAS_OBJ_TARGET): $(OPENBLAS_OBJ_SOURCE) | $(build_shlibdir)
-	cp -f openblas-$(OPENBLAS_VER)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
+	cp -f $(OPENBLAS_SRC_DIR)/libopenblas.$(SHLIB_EXT) $(build_shlibdir)
 ifeq ($(OS), Linux)
 	cd $(build_shlibdir) && \
 	ln -sf libopenblas.$(SHLIB_EXT) libopenblas.$(SHLIB_EXT).0
@@ -1037,12 +1033,10 @@ endif
 	$(INSTALL_NAME_CMD)libopenblas.$(SHLIB_EXT) $(build_shlibdir)/libopenblas.$(SHLIB_EXT)
 
 clean-openblas:
-	-$(MAKE) -C openblas-$(OPENBLAS_VER) clean
-distclean-openblas:
-	-rm -rf openblas-$(OPENBLAS_VER).tar.gz openblas-$(OPENBLAS_VER)
+	-$(MAKE) -C $(OPENBLAS_SRC_DIR) clean
 
-get-openblas: openblas-$(OPENBLAS_VER).tar.gz
-configure-openblas: openblas-$(OPENBLAS_VER)/config.status
+get-openblas: $(OPENBLAS_SRC_DIR)/Makefile
+configure-openblas: $(OPENBLAS_SRC_DIR)/config.status
 compile-openblas: $(OPENBLAS_OBJ_SOURCE)
 check-openblas: compile-openblas
 install-openblas: $(OPENBLAS_OBJ_TARGET)
