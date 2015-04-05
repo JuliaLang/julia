@@ -58,9 +58,9 @@ $(BUILDDIR)/%.o: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(SHIPFLAGS) -DNDEBUG -c $< -o $@)
 $(BUILDDIR)/%.dbg.obj: %.c $(HEADERS) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CC) $(CPPFLAGS) $(CFLAGS) $(DEBUGFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.o: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.o: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(SHIPFLAGS) -c $< -o $@)
-$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) | $(BUILDDIR)
+$(BUILDDIR)/%.dbg.obj: %.cpp $(HEADERS) $(shell which $(LLVM_CONFIG)) | $(BUILDDIR)
 	@$(call PRINT_CC, $(CXX) $(call exec,$(LLVM_CONFIG) --cxxflags) $(CPPFLAGS) $(CXXFLAGS) $(DEBUGFLAGS) -c $< -o $@)
 
 $(BUILDDIR)/julia_flisp.boot.inc: $(BUILDDIR)/julia_flisp.boot $(BUILDDIR)/flisp/libflisp.a
