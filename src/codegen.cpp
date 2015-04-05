@@ -945,7 +945,10 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
     std::string code;
     llvm::raw_string_ostream stream(code);
-    Function *llvmf = (Function*)f;
+
+    Function *llvmf = dyn_cast<Function>((Function*)f);
+    if (!llvmf)
+        jl_error("jl_dump_function_ir: Expected Function*");
 
     if (!strip_ir_metadata) {
         // print the function IR as-is
@@ -992,7 +995,10 @@ const jl_value_t *jl_dump_function_asm(void *f)
     std::string code;
     llvm::raw_string_ostream stream(code);
     llvm::formatted_raw_ostream fstream(stream);
-    Function *llvmf = (Function*)f;
+
+    Function *llvmf = dyn_cast<Function>((Function*)f);
+    if (!llvmf)
+        jl_error("jl_dump_function_asm: Expected Function*");
 
     // Dump assembly code
     uint64_t symsize, slide;
