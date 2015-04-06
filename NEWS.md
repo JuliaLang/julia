@@ -242,6 +242,8 @@ Library improvements
     * `lock` and `unlock` which operate on `ReentrantLock`. Useful to lock a stream during
       concurrent writes from multiple tasks
 
+    * `code_llvm` now outputs stripped IR without debug info or other attached metadata.
+      Use `code_llvm_raw` for the unstripped output ([#10747]).
 
 Deprecated or removed
 ---------------------
