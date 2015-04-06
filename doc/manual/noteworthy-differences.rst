@@ -44,8 +44,7 @@ some noteworthy differences that may trip up Julia users accustomed to MATLAB:
   the syntax ``[a b; c d]`` is used to avoid confusion. In Julia v0.4, the
   concatenation syntax ``[x, [y, z]]`` is deprecated in favor of ``[x; [y, z]]``.
 - In Julia, ``a:b`` and ``a:b:c`` construct :obj:`Range` objects. To construct
-  a full vector like in MATLAB, use :func:`collect(a:b) <collect>` or
-  :func:`linspace`.
+  a full vector like in MATLAB, use :func:`collect(a:b) <collect>`.
 - Functions in Julia return values from their last expression or the ``return``
   keyword instead of listing the names of variables to return in the function
   definition (see :ref:`man-return-keyword` for details).
