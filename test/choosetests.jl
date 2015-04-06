@@ -45,7 +45,7 @@ function choosetests(choices = [])
         # specifically selected case
         filter!(x -> x != "linalg", tests)
         prepend!(tests, ["linalg1", "linalg2", "linalg3", "linalg4",
-            "linalg/lapack", "linalg/triangular", "linalg/tridiag",
+            "linalg/lapack", "linalg/triangular", "linalg/tridiag", "linalg/bidiag",
             "linalg/pinv", "linalg/givens", "linalg/cholesky", "linalg/lu",
             "linalg/arnoldi", "linalg/symmetric"])
         end
