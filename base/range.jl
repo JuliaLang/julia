@@ -208,12 +208,16 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
             end
         end
     end
-    if isinf(n*start) || isinf(n*stop)
-        n, p = frexp(n)
+    a, c, s = start, stop, n
+    if isinf(a*n) || isinf(c*n)
+        s, p = frexp(s)
         p = one(p) << p
-        start /= p; stop /= p
+        a /= p; c /= p
     end
-    return LinSpace(start, stop, len, n)
+    if a*n/s == start && c*n/s == stop
+        return LinSpace(a, c, len, s)
+    end
+    error("linspace($start, $stop, $len): cannot be constructed")
 end
 function linspace{T<:FloatingPoint}(start::T, stop::T, len::Real)
     T_len = convert(T, len)
