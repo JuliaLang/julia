@@ -169,12 +169,11 @@ Constructors
 
 .. function:: linspace(start, stop, n=100)
 
-   Construct a vector of ``n`` linearly-spaced elements from ``start`` to ``stop``.
-   See also: :func:`linrange` that constructs a range object.
+   Construct a range of ``n`` linearly spaced elements from ``start`` to ``stop``.
 
 .. function:: logspace(start, stop, n=50)
 
-   Construct a vector of ``n`` logarithmically-spaced numbers from ``10^start`` to ``10^stop``.
+   Construct a vector of ``n`` logarithmically spaced numbers from ``10^start`` to ``10^stop``.
 
 Mathematical operators and functions
 ------------------------------------
