@@ -962,7 +962,6 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     } else {
         // make a copy of the function and strip metadata from the copy
         llvm::ValueToValueMapTy VMap;
-        std::vector<Instruction> dbgInsts;
         Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
         Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
         // iterate over all basic blocks in the function
@@ -987,7 +986,6 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
                 }
             }
         }
-
         f2->print(stream);
         delete f2;
     }
