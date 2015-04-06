@@ -144,6 +144,7 @@ end
 @test_throws ErrorException ctranspose(sub(sprandn(10, 10, 0.3), 1:4, 1:4))
 
 # test diag
-A = eye(4)
-@test diag(A) == ones(4)
-@test diag(sub(A, 1:3, 1:3)) == ones(3)
+let A = eye(4)
+    @test diag(A) == ones(4)
+    @test diag(sub(A, 1:3, 1:3)) == ones(3)
+end
