@@ -276,7 +276,7 @@ Julia uses the following external libraries, which are automatically downloaded 
 - **[LAPACK]** (>= 3.4)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
-- **[SuiteSparse]** (>= 2.1) — library of linear algebra routines for sparse matrices.
+- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
 - **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]** (>= 8.31)       — Perl-compatible regular expressions library.
