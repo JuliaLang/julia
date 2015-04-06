@@ -139,6 +139,30 @@ So, we could have defined the ``test`` function above as
              println("x is ", relation, " than y.")
            end
 
+The variable ``relation`` is declared inside the ``if`` block, but used
+outside. However, when depending on this behavior, make sure all possible
+code paths define a value for the variable. The following change to
+the above function results in a runtime error
+
+.. doctest::
+
+    julia> function test(x,y)
+             if x < y
+               relation = "less than"
+             elseif x == y
+               relation = "equal to"
+             end
+             println("x is ", relation, " than y.")
+           end
+    test (generic function with 1 method)
+
+    julia> test(1,2)
+    x is less than than y.
+
+    julia> test(2,1)
+    ERROR: UndefVarError: relation not defined
+     in test at none:7
+
 ``if`` blocks also return a value, which may seem unintuitive to users
 coming from many other languages. This value is simply the return value
 of the last executed statement in the branch that was chosen, so
