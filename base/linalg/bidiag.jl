@@ -89,8 +89,8 @@ end
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
-istriu(M::Bidiagonal) = M.isupper
-istril(M::Bidiagonal) = !M.isupper
+istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
+istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
 
 function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     if n==0
