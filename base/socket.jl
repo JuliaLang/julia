@@ -553,20 +553,20 @@ function _uv_hook_getaddrinfo(cb::Function, addrinfo::Ptr{Void}, status::Int32)
         cb(UVError("getaddrinfo callback",status))
         return
     end
+    addresses = IPAddr[]
     freeaddrinfo = addrinfo
     while addrinfo != C_NULL
         sockaddr = ccall(:jl_sockaddr_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
         if ccall(:jl_sockaddr_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
-            cb(IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
-            break
-        #elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #    host = Array(UInt128,1)
-        #    scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
-        #    cb(IPv6(ntoh(host[1])))
-        #    break
+            push!(addresses, IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr))))
+        elseif ccall(:jl_sockaddr_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
+            host = Array(UInt128,1)
+            scope_id = ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,pointer(host))
+            push!(addresses, IPv6(ntoh(host[1])))
         end
         addrinfo = ccall(:jl_next_from_addrinfo,Ptr{Void},(Ptr{Void},),addrinfo)
     end
+    cb(addresses)
     ccall(:uv_freeaddrinfo,Void,(Ptr{Void},),freeaddrinfo)
 end
 
@@ -577,16 +577,16 @@ function getaddrinfo(cb::Function, host::ASCIIString)
 end
 getaddrinfo(cb::Function, host::AbstractString) = getaddrinfo(cb,ascii(host))
 
-function getaddrinfo(host::ASCIIString)
+function getaddrinfo(host::ASCIIString; addrtype::Type=IPv4)
     c = Condition()
     getaddrinfo(host) do IP
         notify(c,IP)
     end
-    ip = wait(c)
-    isa(ip,UVError) && throw(ip)
-    return ip::IPAddr
+    ipaddresses = wait(c)
+    isa(ipaddresses,UVError) && throw(ipaddresses)
+    return filter(x -> isa(x, addrtype), ipaddresses)::Vector{IPAddr}
 end
-getaddrinfo(host::AbstractString) = getaddrinfo(ascii(host))
+getaddrinfo(host::AbstractString; addrtype::Type=IPv4) = getaddrinfo(ascii(host); addrtype=addrtype)
 
 const _sizeof_uv_interface_address = ccall(:jl_uv_sizeof_interface_address,Int32,())
 
@@ -609,12 +609,13 @@ function getipaddr()
         end
         sockaddr = ccall(:jl_uv_interface_address_sockaddr,Ptr{Void},(Ptr{UInt8},),current_addr)
         if ccall(:jl_sockaddr_in_is_ip4,Int32,(Ptr{Void},),sockaddr) == 1
+            ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
             return IPv4(ntoh(ccall(:jl_sockaddr_host4,UInt32,(Ptr{Void},),sockaddr)))
-        # Uncomment to enbable IPv6
-        #elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
-        #   host = Array(UInt128,1)
-        #   ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddrr,host)
-        #   return IPv6(ntoh(host[1]))
+        elseif ccall(:jl_sockaddr_in_is_ip6,Int32,(Ptr{Void},),sockaddr) == 1
+            host = Array(UInt128,1)
+            ccall(:jl_sockaddr_host6,UInt32,(Ptr{Void},Ptr{UInt128}),sockaddr,host)
+            ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
+            return IPv6(ntoh(host[1]))
         end
     end
     ccall(:uv_free_interface_addresses,Void,(Ptr{UInt8},Int32),addr,count)
@@ -662,9 +663,21 @@ function connect!(sock::TCPSocket, host::AbstractString, port::Integer)
     if sock.status != StatusInit
         error("TCPSocket is not initialized")
     end
-    ipaddr = getaddrinfo(host)
+    ipaddresses = getaddrinfo(host)
     sock.status = StatusInit
-    connect!(sock,ipaddr,port)
+    lasterr = None
+    for ipaddr in ipaddresses
+        try
+            connect!(sock,ipaddr,port)
+            break
+        catch err
+            lasterr = err
+            continue
+        end
+    end
+    if lasterr != None
+        throw(lasterr)
+    end
     sock.status = StatusConnecting
     sock
 end

@@ -89,7 +89,7 @@ for T in (ASCIIString, UTF8String, UTF16String) # test for issue #9435
 end
 
 @test_throws Base.UVError getaddrinfo(".invalid")
-@test_throws Base.UVError connect("localhost", 21452)
+@test_throws Base.UVError connect("127.0.0.1", 21452)
 
 # test invalid port
 @test_throws ArgumentError connect(ip"127.0.0.1",-1)
@@ -108,7 +108,7 @@ close(server)
 wait(tsk)
 
 port, server = listenany(defaultport)
-@async connect("localhost",port)
+@async connect("127.0.0.1",port)
 s1 = accept(server)
 @test_throws ErrorException accept(server,s1)
 @test_throws Base.UVError listen(port)
