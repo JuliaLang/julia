@@ -8,6 +8,7 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#include <llvm/IR/IntrinsicInst.h>
 #ifdef LLVM37
 #include "llvm/IR/LegacyPassManager.h"
 #else
@@ -862,6 +863,12 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 #endif
 }
 
+
+extern "C" DLLEXPORT
+void *jl_function_ptr_by_llvm_name(char* name) {
+    return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
+}
+
 // export a C-callable entry point for a function, with a given name
 extern "C" DLLEXPORT
 void jl_extern_c(jl_function_t *f, jl_value_t *rt, jl_value_t *argt, char *name)
@@ -888,43 +895,8 @@ extern int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #endif
     );
 
-extern "C"
-void jl_dump_function_asm(uintptr_t Fptr, size_t Fsize, size_t slide,
-#ifdef USE_MCJIT
-                          const object::ObjectFile *objectfile,
-#else
-                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-#endif
-                          formatted_raw_ostream &stream);
 
-const jl_value_t *jl_dump_llvmf(void *f, bool dumpasm)
-{
-    std::string code;
-    llvm::raw_string_ostream stream(code);
-    llvm::formatted_raw_ostream fstream(stream);
-    Function *llvmf = (Function*)f;
-    if (dumpasm == false) {
-        llvmf->print(stream);
-    }
-    else {
-        uint64_t symsize, slide;
-#ifdef USE_MCJIT
-        uint64_t fptr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
-        const object::ObjectFile *object;
-#else
-        uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
-        std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
-#endif
-        assert(fptr != 0);
-        if (jl_get_llvmf_info(fptr, &symsize, &slide, &object))
-            jl_dump_function_asm(fptr, symsize, slide, object, fstream);
-        else
-            jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
-        fstream.flush();
-    }
-    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
-}
-
+// Get pointer to llvm::Function instance, compiling if necessary
 extern "C" DLLEXPORT
 void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
 {
@@ -964,13 +936,92 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
     return llvmf;
 }
 
+// Pre-declaration. Definition in disasm.cpp
+extern "C"
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
+#ifdef USE_MCJIT
+                          const object::ObjectFile *objectfile,
+#else
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
+#endif
+                          formatted_raw_ostream &stream);
+
 extern "C" DLLEXPORT
-const jl_value_t *jl_dump_function(jl_function_t *f, jl_tuple_t *types, bool dumpasm, bool dumpwrapper)
+const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
-    void *llvmf = jl_get_llvmf(f,types,dumpwrapper);
-    if (llvmf == NULL)
-        return jl_cstr_to_string(const_cast<char*>(""));
-    return jl_dump_llvmf(llvmf,dumpasm);
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+
+    Function *llvmf = dyn_cast<Function>((Function*)f);
+    if (!llvmf)
+        jl_error("jl_dump_function_ir: Expected Function*");
+
+    if (!strip_ir_metadata) {
+        // print the function IR as-is
+        llvmf->print(stream);
+    } else {
+        // make a copy of the function and strip metadata from the copy
+        llvm::ValueToValueMapTy VMap;
+        Function* f2 = llvm::CloneFunction(llvmf, VMap, false);
+        Function::BasicBlockListType::iterator f2_bb = f2->getBasicBlockList().begin();
+        // iterate over all basic blocks in the function
+        for (; f2_bb != f2->getBasicBlockList().end(); ++f2_bb) {
+            BasicBlock::InstListType::iterator f2_il = (*f2_bb).getInstList().begin();
+            // iterate over instructions in basic block
+            for (; f2_il != (*f2_bb).getInstList().end(); ) {
+                Instruction *inst = f2_il++;
+                // remove dbg.declare and dbg.value calls
+                if (isa<DbgDeclareInst>(inst) || isa<DbgValueInst>(inst)) {
+                    inst->eraseFromParent();
+                    continue;
+                }
+
+                SmallVector<std::pair<unsigned, MDNode*>, 4> MDForInst;
+                inst->getAllMetadata(MDForInst);
+                SmallVector<std::pair<unsigned, MDNode*>, 4>::iterator md_iter = MDForInst.begin();
+
+                // iterate over all metadata kinds and set to NULL to remove
+                for (; md_iter != MDForInst.end(); ++md_iter) {
+                    inst->setMetadata((*md_iter).first, NULL);
+                }
+            }
+        }
+        f2->print(stream);
+        delete f2;
+    }
+
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
+}
+
+extern "C" DLLEXPORT
+const jl_value_t *jl_dump_function_asm(void *f)
+{
+    std::string code;
+    llvm::raw_string_ostream stream(code);
+    llvm::formatted_raw_ostream fstream(stream);
+
+    Function *llvmf = dyn_cast<Function>((Function*)f);
+    if (!llvmf)
+        jl_error("jl_dump_function_asm: Expected Function*");
+
+    // Dump assembly code
+    uint64_t symsize, slide;
+#ifdef USE_MCJIT
+    uint64_t fptr = jl_ExecutionEngine->getFunctionAddress(llvmf->getName());
+    const object::ObjectFile *object;
+#else
+    uint64_t fptr = (uintptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> object;
+#endif
+    assert(fptr != 0);
+    if (jl_get_llvmf_info(fptr, &symsize, &slide, &object)) {
+        jl_dump_asm_internal(fptr, symsize, slide, object, fstream);
+    } else {
+        jl_printf(JL_STDERR, "Warning: Unable to find function pointer\n");
+    }
+    fstream.flush();
+
+    return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
 
 // Code coverage
