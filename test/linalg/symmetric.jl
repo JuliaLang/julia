@@ -1,5 +1,6 @@
 using Base.Test
 
+srand(101)
 debug = false #Turn on for more debugging info
 
 #Pauli σ-matrices
