@@ -985,6 +985,8 @@ Internals
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
 
+   All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
+
 .. function:: @code_llvm
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_llvm` on the resulting expression
