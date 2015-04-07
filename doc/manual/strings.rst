@@ -93,7 +93,7 @@ convert an integer value back to a :obj:`Char` just as easily:
 
 .. doctest::
 
-    julia> Char(120)
+    julia> char(120)
     'x'
 
 Not all integer values are valid Unicode code points, but for
