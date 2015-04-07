@@ -550,3 +550,17 @@ let M = 2^8, N=2^3
         @assert res[1] == res[2] == res[3]
     end
 end
+
+# issue #10407
+@test maximum(spzeros(5, 5)) == 0.0
+@test minimum(spzeros(5, 5)) == 0.0
+
+# issue #10411
+for (m,n) in ((2,-2),(-2,2),(-2,-2))
+    @test_throws ArgumentError spzeros(m,n)
+    @test_throws ArgumentError speye(m,n)
+    @test_throws ArgumentError sprand(m,n,0.2)
+end
+
+# promotion in spdiagm
+@test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]

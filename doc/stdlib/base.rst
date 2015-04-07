@@ -472,7 +472,7 @@ Syntax
 
 .. function:: evalfile(path::String)
 
-   Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
+   Load the file using ``include``, evaluate all expressions, and return the value of the last one.
 
 .. function:: esc(e::ANY)
 

@@ -767,6 +767,8 @@ static void coverageVisitLine(std::string filename, int line)
                         v);
 }
 
+extern "C" int isabspath(const char *in);
+
 void write_log_data(logdata_t logData, const char *extension)
 {
     std::string base = std::string(julia_home);
@@ -776,7 +778,7 @@ void write_log_data(logdata_t logData, const char *extension)
         std::string filename = (*it).first;
         std::vector<GlobalVariable*> &values = (*it).second;
         if (values.size() > 1) {
-            if (filename[0] != '/')
+            if (!isabspath(filename.c_str()))
                 filename = base + filename;
             std::ifstream inf(filename.c_str());
             if (inf.is_open()) {

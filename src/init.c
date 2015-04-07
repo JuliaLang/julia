@@ -743,6 +743,27 @@ kern_return_t catch_exception_raise(mach_port_t            exception_port,
 
 #endif
 
+int isabspath(const char *in)
+{
+#ifdef _OS_WINDOWS_
+    char c0 = in[0];
+    if (c0 == '/' || c0 == '\\') {
+        return 1; // absolute path relative to %CD% (current drive), or UNC
+    }
+    else {
+        int s = strlen(in);
+        if (s > 2) {
+            char c1 = in[1];
+            char c2 = in[2];
+            if (c1 == ':' && (c2 == '/' || c2 == '\\')) return 1; // absolute path
+        }
+    }
+#else
+    if (in[0] == '/') return 1; // absolute path
+#endif
+    return 0; // relative path
+}
+
 void julia_init(char *imageFile)
 {
     jl_io_loop = uv_default_loop(); // this loop will internal events (spawning process etc.),

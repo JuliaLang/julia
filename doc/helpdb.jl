@@ -1317,8 +1317,9 @@
 
    Create a deep copy of \"x\": everything is copied recursively,
    resulting in a fully independent object. For example, deep-copying
-   an array produces a new array whose elements are deep-copies of the
-   original elements.
+   an array produces a new array whose elements are deep copies of the
+   original elements. Calling *deepcopy* on an object should generally
+   have the same effect as serializing and then deserializing it.
 
    As a special case, functions can only be actually deep-copied if
    they are anonymous, otherwise they are just copied. The difference
@@ -1680,9 +1681,8 @@
 
 ("Base","evalfile","evalfile(path::String)
 
-   Evaluate all expressions in the given file, and return the value of
-   the last one. No other processing (path searching, fetching from
-   node 1, etc.) is performed.
+   Load the file using \"include\", evaluate all expressions, and
+   return the value of the last one.
 
 "),
 
