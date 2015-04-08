@@ -5621,8 +5621,8 @@ extern "C" void jl_init_codegen(void)
             jl_TargetMachine->getTargetCPU(),
             jl_TargetMachine->getTargetFeatureString(),
             jl_TargetMachine->Options,
-            Reloc::Default,
-            CodeModel::JITDefault,
+            Reloc::PIC_,
+            CodeModel::Default,
 #ifdef DISABLE_OPT
             CodeGenOpt::None // -O3
 #else
