@@ -538,6 +538,15 @@ translates to the following three methods::
     f(a) = f(a,2)
     f() = f(1,2)
 
+The first method is the original definition of ``f``. The second and third methods 
+call ``f`` using the default values of ``a`` and ``b``. It should be noted that 
+these function calls are subject to method dispatch as usual, and so they may also 
+call different methods of ``f``. For example, if you have also defined
+
+    f(a::Int,b::Int) = a-2b
+ 
+then the result of ``f()`` will be ``1 - 4 = -3`` instead of ``1 + 4 = 5``.
+
 Keyword arguments behave quite differently from ordinary positional arguments.
 In particular, they do not participate in method dispatch. Methods are
 dispatched based only on positional arguments, with keyword arguments processed
