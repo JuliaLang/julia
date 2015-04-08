@@ -35,8 +35,9 @@ USE_SYSTEM_SUITESPARSE=0
 USE_SYSTEM_RMATH=0
 USE_SYSTEM_LIBUV=0
 USE_SYSTEM_UTF8PROC=0
-USE_SYSTEM_MOJIBAKE=0
+USE_SYSTEM_UTF8PROC=0
 USE_SYSTEM_LIBGIT2=0
+USE_SYSTEM_PATCHELF=0
 
 # Link to the LLVM shared library
 USE_LLVM_SHLIB = 0
@@ -105,6 +106,7 @@ sysconfdir = $(prefix)/etc
 
 # Directories where things get built into
 build_prefix = $(JULIAHOME)/usr
+build_staging = $(build_prefix)-staging
 build_bindir = $(build_prefix)/bin
 build_libdir = $(build_prefix)/lib
 build_private_libdir = $(build_prefix)/lib/julia
@@ -244,7 +246,7 @@ FC_BASE = $(CROSS_COMPILE)gfortran
 endif
 FC = $(FC_BASE)
 
-STDLIBCPP_FLAG = 
+STDLIBCPP_FLAG =
 
 ifeq ($(OS), Darwin)
 DARWINVER := $(shell uname -r | cut -b 1-2)
@@ -260,7 +262,7 @@ else
 ifeq ($(DARWINVER_GTE13),1)
 USE_LIBCPP = 1
 STDLIBCPP_FLAG = -stdlib=libstdc++
-else 
+else
 USE_LIBCPP = 0
 endif
 USEGCC = 0
@@ -461,15 +463,6 @@ AS += -q
 endif
 endif
 
-# Set some ARCH-specific flags
-ifneq ($(USEICC),1)
-ifneq ($(ARCH), arm)
-CC += -m$(BINARY)
-CXX += -m$(BINARY)
-FC += -m$(BINARY)
-endif
-endif
-
 JULIA_CPU_TARGET ?= native
 JCPPFLAGS += -DJULIA_TARGET_ARCH=$(JULIA_CPU_TARGET)
 
@@ -480,24 +473,43 @@ endif
 
 ifeq ($(ARCH),i386)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i387)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i486)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i586)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),i686)
 BINARY=32
+ISX86=1
 else ifeq ($(ARCH),x86_64)
 BINARY=64
-else ifeq ($(ARCH),arm)
+ISX86=1
+else ifneq (,$(findstring arm,$(ARCH)))
+ISX86=0
+else ifneq (,$(findstring powerpc,$(ARCH)))
+ISX86=0
+else ifneq (,$(findstring ppc,$(ARCH)))
+ISX86=0
 else
 $(error "unknown word-size for arch: $(ARCH)")
 endif
 
+# Set some ARCH-specific flags
+ifneq ($(USEICC),1)
+ifeq ($(ISX86),1)
+CC += -m$(BINARY)
+CXX += -m$(BINARY)
+FC += -m$(BINARY)
+endif
+endif
+
 ifeq ($(USEGCC),1)
-ifeq ($(ARCH), arm)
-else ifneq ($(ARCH), ppc64)
+ifeq ($(ISX86),1)
   SHIPFLAGS += -momit-leaf-frame-pointer
 endif
 endif
@@ -594,14 +606,12 @@ else
   LIBUV_INC = $(JULIAHOME)/deps/libuv/include
 endif
 
-ifeq ($(USE_SYSTEM_MOJIBAKE), 1)
-  LIBMOJIBAKE = -lmojibake
+ifeq ($(USE_SYSTEM_UTF8PROC), 1)
+  LIBUTF8PROC = -lutf8proc
+  UTF8PROC_INC = /usr/include
 else
-  ifeq ($(USE_SYSTEM_UTF8PROC), 1)
-    LIBMOJIBAKE = -lutf8proc
-  else
-    LIBMOJIBAKE = $(build_libdir)/libmojibake.a
-  endif
+  LIBUTF8PROC = $(build_libdir)/libutf8proc.a
+  UTF8PROC_INC = $(JULIAHOME)/deps/utf8proc
 endif
 
 # OS specific stuff
@@ -660,8 +670,12 @@ endif
 ifeq ($(OS), Linux)
 OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
 JLDFLAGS = -Wl,-Bdynamic
+ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS = -Wl,-Bsymbolic-functions
 else
+JLIBLDFLAGS =
+endif
+else #Linux
 JLIBLDFLAGS =
 endif
 

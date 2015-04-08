@@ -6,7 +6,7 @@
 
 ## byte-order mark, ntoh & hton ##
 
-const ENDIAN_BOM = reinterpret(UInt32,uint8([1:4]))[1]
+const ENDIAN_BOM = reinterpret(UInt32,UInt8[1:4;])[1]
 
 if ENDIAN_BOM == 0x01020304
     ntoh(x) = x
@@ -36,7 +36,7 @@ if ENDIAN_BOM == 0x01020304
     function write(s::IO, x::Integer)
         sz = sizeof(x)
         for n = sz:-1:1
-            write(s, uint8((x>>>((n-1)<<3))))
+            write(s, (x>>>((n-1)<<3))%UInt8)
         end
         sz
     end
@@ -44,13 +44,13 @@ else
     function write(s::IO, x::Integer)
         sz = sizeof(x)
         for n = 1:sz
-            write(s, uint8((x>>>((n-1)<<3))))
+            write(s, (x>>>((n-1)<<3))%UInt8)
         end
         sz
     end
 end
 
-write(s::IO, x::Bool)    = write(s, uint8(x))
+write(s::IO, x::Bool)    = write(s, UInt8(x))
 write(s::IO, x::Float16) = write(s, reinterpret(Int16,x))
 write(s::IO, x::Float32) = write(s, reinterpret(Int32,x))
 write(s::IO, x::Float64) = write(s, reinterpret(Int64,x))
@@ -66,22 +66,22 @@ end
 function write(s::IO, ch::Char)
     c = reinterpret(UInt32, ch)
     if c < 0x80
-        write(s, uint8(c))
+        write(s, c%UInt8)
         return 1
     elseif c < 0x800
-        write(s, uint8(( c >> 6          ) | 0xC0))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 6          ) | 0xC0)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 2
     elseif c < 0x10000
-        write(s, uint8(( c >> 12         ) | 0xE0))
-        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 12         ) | 0xE0)%UInt8)
+        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 3
     elseif c < 0x110000
-        write(s, uint8(( c >> 18         ) | 0xF0))
-        write(s, uint8(((c >> 12) & 0x3F ) | 0x80))
-        write(s, uint8(((c >> 6)  & 0x3F ) | 0x80))
-        write(s, uint8(( c        & 0x3F ) | 0x80))
+        write(s, (( c >> 18         ) | 0xF0)%UInt8)
+        write(s, (((c >> 12) & 0x3F ) | 0x80)%UInt8)
+        write(s, (((c >> 6)  & 0x3F ) | 0x80)%UInt8)
+        write(s, (( c        & 0x3F ) | 0x80)%UInt8)
         return 4
     else
         return write(s, '\ufffd')
@@ -96,8 +96,8 @@ function write(s::IO, p::Ptr, n::Integer)
 end
 
 function write(io::IO, s::Symbol)
-    pname = convert(Ptr{UInt8}, s)
-    write(io, pname, int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
+    pname = unsafe_convert(Ptr{UInt8}, s)
+    write(io, pname, Int(ccall(:strlen, Csize_t, (Ptr{UInt8},), pname)))
 end
 
 # all subtypes should implement this
@@ -118,10 +118,9 @@ read(s::IO, ::Type{Float16}) = box(Float16,unbox(Int16,read(s,Int16)))
 read(s::IO, ::Type{Float32}) = box(Float32,unbox(Int32,read(s,Int32)))
 read(s::IO, ::Type{Float64}) = box(Float64,unbox(Int64,read(s,Int64)))
 
-read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) =
-    read(s, t, tuple(d1,dims...))
+read{T}(s::IO, t::Type{T}, d1::Int, dims::Int...) = read(s, t, tuple(d1,dims...))
 read{T}(s::IO, t::Type{T}, d1::Integer, dims::Integer...) =
-    read(s, t, map(int,tuple(d1,dims...)))
+    read(s, t, convert((Int...),tuple(d1,dims...)))
 
 read{T}(s::IO, ::Type{T}, dims::Dims) = read!(s, Array(T, dims))
 
@@ -135,7 +134,7 @@ end
 function read(s::IO, ::Type{Char})
     ch = read(s, UInt8)
     if ch < 0x80
-        return char(ch)
+        return Char(ch)
     end
 
     # mimic utf8.next function
@@ -148,12 +147,12 @@ function read(s::IO, ::Type{Char})
     end
     c += ch
     c -= Base.utf8_offset[trailing+1]
-    char(c)
+    Char(c)
 end
 
 function readuntil(s::IO, delim::Char)
-    if delim < char(0x80)
-        data = readuntil(s, uint8(delim))
+    if delim < Char(0x80)
+        data = readuntil(s, delim%UInt8)
         enc = byte_string_classify(data)
         return (enc==1) ? ASCIIString(data) : UTF8String(data)
     end
@@ -268,7 +267,7 @@ function done(itr::EachLine, nada)
     true
 end
 next(itr::EachLine, nada) = (readline(itr.stream), nothing)
-eltype(itr::EachLine) = ByteString
+eltype(::Type{EachLine}) = ByteString
 
 readlines(s=STDIN) = collect(eachline(s))
 
@@ -288,8 +287,8 @@ function unmark(io::IO)
     return true
 end
 
-function reset(io::IO)
-    !ismarked(io) && error(io, " not marked")
+function reset{T<:IO}(io::T)
+    ismarked(io) || throw(ArgumentError("$(T) not marked"))
     m = io.mark
     seek(io, m)
     io.mark = -1 # must be after seek, or seek may fail

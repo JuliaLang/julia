@@ -4,17 +4,17 @@ types = Any[
     Rational{Int8}, Rational{UInt8}, Rational{Int16}, Rational{UInt16},
     Rational{Int32}, Rational{UInt32}, Rational{Int64}, Rational{UInt64}
 ]
-vals = [
+vals = vcat(
     typemin(Int64),
-    -int64(maxintfloat(Float64))+Int64[-4:1],
+    -Int64(maxintfloat(Float64))+Int64[-4:1;],
     typemin(Int32),
-    -integer(maxintfloat(Float32))+(-4:1),
+    -Integer(maxintfloat(Float32))+(-4:1),
     -2:2,
-    integer(maxintfloat(Float32))+(-1:4),
+    Integer(maxintfloat(Float32))+(-1:4),
     typemax(Int32),
-    int64(maxintfloat(Float64))+Int64[-1:4],
+    Int64(maxintfloat(Float64))+Int64[-1:4;],
     typemax(Int64),
-]
+)
 
 function coerce(T::Type, x)
     if T<:Rational
@@ -29,6 +29,11 @@ function coerce(T::Type, x)
     else
         convert(T, x)
     end
+end
+
+for T=types[2:end], x=vals
+    a = coerce(T,x)
+    @test hash(a,zero(UInt)) == invoke(hash,(Real,UInt),a,zero(UInt))
 end
 
 for T=types, S=types, x=vals
@@ -46,8 +51,8 @@ for T=types, S=types, x=vals
 end
 
 # issue #8619
-@test hash(nextfloat(2.0^63)) == hash(uint64(nextfloat(2.0^63)))
-@test hash(prevfloat(2.0^64)) == hash(uint64(prevfloat(2.0^64)))
+@test hash(nextfloat(2.0^63)) == hash(UInt64(nextfloat(2.0^63)))
+@test hash(prevfloat(2.0^64)) == hash(UInt64(prevfloat(2.0^64)))
 
 # issue #9264
 @test hash(1//6,zero(UInt)) == invoke(hash,(Real,UInt),1//6,zero(UInt))
@@ -59,14 +64,18 @@ vals = Any[
     [1,2,3,4], [1 3;2 4], Any[1,2,3,4], [1,3,2,4],
     [1,0], [true,false], bitpack([true,false]),
     Set([1,2,3,4]),
-    Set([1:10]),                 # these lead to different key orders
+    Set([1:10;]),                # these lead to different key orders
     Set([7,9,4,10,2,3,5,8,6,1]), #
     Dict(42 => 101, 77 => 93), Dict{Any,Any}(42 => 101, 77 => 93),
     (1,2,3,4), (1.0,2.0,3.0,4.0), (1,3,2,4),
     ("a","b"), (SubString("a",1,1), SubString("b",1,1)),
     # issue #6900
     [x => x for x in 1:10],
-    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1)
+    Dict(7=>7,9=>9,4=>4,10=>10,2=>2,3=>3,8=>8,5=>5,6=>6,1=>1),
+    [], [1], [2], [1, 1], [1, 2], [1, 3], [2, 2], [1, 2, 2], [1, 3, 3],
+    zeros(2, 2), spzeros(2, 2), eye(2, 2), speye(2, 2),
+    sparse(ones(2, 2)), ones(2, 2), sparse([0 0; 1 0]), [0 0; 1 0],
+    [-0. 0; -0. 0.], SparseMatrixCSC(2, 2, [1, 3, 3], [1, 2], [-0., -0.])
 ]
 
 for a in vals, b in vals
@@ -79,3 +88,9 @@ end
 @test hash(:(X.x)) != hash(:(X.y))
 
 @test hash([1,2]) == hash(sub([1,2,3,4],1:2))
+
+# test explicit zeros in SparseMatrixCSC
+x = sprand(10, 10, 0.5)
+x[1] = 1
+x.nzval[1] = 0
+@test hash(x) == hash(full(x))

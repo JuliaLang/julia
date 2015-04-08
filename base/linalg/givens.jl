@@ -35,6 +35,12 @@ realmin2(::Type{Float32}) = reinterpret(Float32, 0x26000000)
 realmin2(::Type{Float64}) = reinterpret(Float64, 0x21a0000000000000)
 realmin2{T}(::Type{T}) = (twopar = 2one(T); twopar^trunc(Integer,log(realmin(T)/eps(T))/log(twopar)/twopar))
 
+# derived from LAPACK's dlartg
+# Copyright:
+# Univ. of Tennessee
+# Univ. of California Berkeley
+# Univ. of Colorado Denver
+# NAG Ltd.
 function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
     zeropar = zero(T)
     onepar = one(T)
@@ -66,7 +72,7 @@ function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
                 scalepar = max(abs(f1), abs(g1))
                 if scalepar < safmx2 break end
             end
-            r = hypot(f1, g1)
+            r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
             sn = g1/r
             for i = 1:count
@@ -81,14 +87,14 @@ function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
                 scalepar = max(abs(f1), abs(g1))
                 if scalepar > safmn2 break end
             end
-            r = hypot(f1, g1)
+            r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
             sn = g1/r
             for i = 1:count
                 r *= safmn2
             end
         else
-            r = hypot(f1, g1)
+            r = sqrt(f1*f1 + g1*g1)
             cs = f1/r
             sn = g1/r
         end
@@ -101,6 +107,12 @@ function givensAlgorithm{T<:FloatingPoint}(f::T, g::T)
     return cs, sn, r
 end
 
+# derived from LAPACK's zlartg
+# Copyright:
+# Univ. of Tennessee
+# Univ. of California Berkeley
+# Univ. of Colorado Denver
+# NAG Ltd.
 function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
     twopar, onepar, zeropar = 2one(T), one(T), zero(T)
     czero = zero(Complex{T})
@@ -206,13 +218,13 @@ function givensAlgorithm{T<:FloatingPoint}(f::Complex{T}, g::Complex{T})
 end
 
 function givens{T}(f::T, g::T, i1::Integer, i2::Integer)
-    i1 < i2 || error("second index must be larger than the first")
+    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
     c, s, r = givensAlgorithm(f, g)
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end
 
 function givens{T}(A::AbstractMatrix{T}, i1::Integer, i2::Integer, col::Integer)
-    i1 < i2 || error("second index must be larger than the first")
+    i1 < i2 || throw(ArgumentError("second index must be larger than the first"))
     c, s, r = givensAlgorithm(A[i1,col], A[i2,col])
     Givens(i1, i2, convert(T, c), convert(T, s)), r
 end

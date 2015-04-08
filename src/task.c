@@ -155,7 +155,7 @@ static void start_task();
 #ifdef COPY_STACKS
 static JL_THREAD jl_jmp_buf * volatile jl_jmp_target;
 
-#if defined(_CPU_X86_64_) || defined(_CPU_X86_)
+#if (defined(_CPU_X86_64_) || defined(_CPU_X86_)) && !defined(_COMPILER_MICROSOFT_)
 #define ASM_COPY_STACKS
 #endif
 JL_THREAD void *jl_stackbase;
@@ -181,6 +181,10 @@ static void NOINLINE save_stack(jl_task_t *t)
     }
     t->ssize = nb;
     memcpy(buf, (char*)&_x, nb);
+    // this task's stack could have been modified after
+    // it was marked by an incremental collection
+    // move the barrier back instead of walking it again here
+    gc_wb_back(t);
 }
 
 void NOINLINE restore_stack(jl_task_t *t, jl_jmp_buf *where, char *p)
@@ -330,6 +334,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
         }
 
         t->last = jl_current_task;
+        gc_wb(t, t->last);
         jl_current_task = t;
 
 #ifdef COPY_STACKS
@@ -347,7 +352,7 @@ static void ctx_switch(jl_task_t *t, jl_jmp_buf *where)
                 " push %%rbp;\n" // instead of RSP
                 " jmp %P1;\n" // call stack_task with fake stack frame
                 " ud2"
-                : : "r"(stackbase), "i"(start_task) : "memory" );
+                : : "r"(stackbase), "i"(&start_task) : "memory" );
 #elif defined(_CPU_X86_)
             asm(" movl %0, %%esp;\n"
                 " xorl %%ebp, %%ebp;\n"
@@ -523,23 +528,38 @@ static PVOID CALLBACK JuliaFunctionTableAccess64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 AddrBase)
 {
-    //printf("lookup %d\n", AddrBase);
+    //jl_printf(JL_STDOUT, "lookup %d\n", AddrBase);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(AddrBase, &ImageBase, &HistoryTable);
     if (fn) return fn;
-#endif
+    if (jl_in_stackwalk) {
+        return 0;
+    }
+    jl_in_stackwalk = 1;
+    PVOID ftable = SymFunctionTableAccess64(hProcess, AddrBase);
+    jl_in_stackwalk = 0;
+    return ftable;
+#else
     return SymFunctionTableAccess64(hProcess, AddrBase);
+#endif
 }
 static DWORD64 WINAPI JuliaGetModuleBase64(
         _In_  HANDLE hProcess,
         _In_  DWORD64 dwAddr)
 {
-    //printf("lookup base %d\n", dwAddr);
+    //jl_printf(JL_STDOUT, "lookup base %d\n", dwAddr);
 #ifdef _CPU_X86_64_
     DWORD64 ImageBase;
     PRUNTIME_FUNCTION fn = RtlLookupFunctionEntry(dwAddr, &ImageBase, &HistoryTable);
     if (fn) return ImageBase;
+    if (jl_in_stackwalk) {
+        return 0;
+    }
+    jl_in_stackwalk = 1;
+    DWORD64 fbase = SymGetModuleBase64(hProcess, dwAddr);
+    jl_in_stackwalk = 0;
+    return fbase;
 #else
     if (dwAddr == HistoryTable.dwAddr) return HistoryTable.ImageBase;
     DWORD64 ImageBase = jl_getUnwindInfo(dwAddr);
@@ -548,8 +568,8 @@ static DWORD64 WINAPI JuliaGetModuleBase64(
         HistoryTable.ImageBase = ImageBase;
         return ImageBase;
     }
-#endif
     return SymGetModuleBase64(hProcess, dwAddr);
+#endif
 }
 
 int needsSymRefreshModuleList;
@@ -558,52 +578,87 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 {
     CONTEXT Context;
     memset(&Context, 0, sizeof(Context));
-    jl_in_stackwalk = 1;
     RtlCaptureContext(&Context);
-    jl_in_stackwalk = 0;
     return rec_backtrace_ctx(data, maxsize, &Context);
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, CONTEXT *Context)
 {
-    if (jl_in_stackwalk) {
-        return 0;
-    }
-    STACKFRAME64 stk;
-    memset(&stk, 0, sizeof(stk));
-
-    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0) {
+    if (needsSymRefreshModuleList && hSymRefreshModuleList != 0 && !jl_in_stackwalk) {
         jl_in_stackwalk = 1;
         hSymRefreshModuleList(GetCurrentProcess());
         jl_in_stackwalk = 0;
         needsSymRefreshModuleList = 0;
     }
-#if defined(_CPU_X86_64_)
-    DWORD MachineType = IMAGE_FILE_MACHINE_AMD64;
-    stk.AddrPC.Offset = Context->Rip;
-    stk.AddrStack.Offset = Context->Rsp;
-    stk.AddrFrame.Offset = Context->Rbp;
-#elif defined(_CPU_X86_)
+#if !defined(_CPU_X86_64_)
+    if (jl_in_stackwalk) {
+        return 0;
+    }
     DWORD MachineType = IMAGE_FILE_MACHINE_I386;
+    STACKFRAME64 stk;
+    memset(&stk, 0, sizeof(stk));
     stk.AddrPC.Offset = Context->Eip;
     stk.AddrStack.Offset = Context->Esp;
     stk.AddrFrame.Offset = Context->Ebp;
-#else
-#error WIN16 not supported :P
-#endif
     stk.AddrPC.Mode = AddrModeFlat;
     stk.AddrStack.Mode = AddrModeFlat;
     stk.AddrFrame.Mode = AddrModeFlat;
+    jl_in_stackwalk = 1;
+#endif
 
     size_t n = 0;
-    jl_in_stackwalk = 1;
     while (n < maxsize) {
+#ifndef _CPU_X86_64_
+        data[n++] = (intptr_t)stk.AddrPC.Offset;
         BOOL result = StackWalk64(MachineType, GetCurrentProcess(), hMainThread,
             &stk, Context, NULL, JuliaFunctionTableAccess64, JuliaGetModuleBase64, NULL);
-        data[n++] = (intptr_t)stk.AddrPC.Offset;
         if (!result)
             break;
+#else
+        data[n++] = (intptr_t)Context->Rip;
+        DWORD64 ImageBase = JuliaGetModuleBase64(GetCurrentProcess(), Context->Rip);
+        if (!ImageBase)
+            break;
+
+        MEMORY_BASIC_INFORMATION mInfo;
+
+        PRUNTIME_FUNCTION FunctionEntry = (PRUNTIME_FUNCTION)JuliaFunctionTableAccess64(GetCurrentProcess(), Context->Rip);
+        if (!FunctionEntry) { // assume this is a NO_FPO RBP-based function
+            Context->Rsp = Context->Rbp;                 // MOV RSP, RBP
+
+            // Check whether the pointer is valid and executable before dereferencing
+            // to avoid segfault while recording. See #10638.
+            if (VirtualQuery((LPCVOID)Context->Rsp, &mInfo, sizeof(MEMORY_BASIC_INFORMATION)) == 0)
+                break;
+            DWORD X = mInfo.AllocationProtect;
+            if (!((X&PAGE_READONLY) || (X&PAGE_READWRITE) || (X&PAGE_WRITECOPY) || (X&PAGE_EXECUTE_READ)) ||
+                  (X&PAGE_GUARD) || (X&PAGE_NOACCESS))
+                break;
+
+            Context->Rbp = *(DWORD64*)Context->Rsp;      // POP RBP
+            Context->Rsp = Context->Rsp + sizeof(void*);
+            Context->Rip = *(DWORD64*)Context->Rsp;      // POP RIP (aka RET)
+            Context->Rsp = Context->Rsp + sizeof(void*);
+        }
+        else {
+            PVOID HandlerData;
+            DWORD64 EstablisherFrame;
+            (void)RtlVirtualUnwind(
+                    0 /*UNW_FLAG_NHANDLER*/,
+                    ImageBase,
+                    Context->Rip,
+                    FunctionEntry,
+                    Context,
+                    &HandlerData,
+                    &EstablisherFrame,
+                    NULL);
+        }
+        if (!Context->Rip)
+            break;
+#endif
     }
+#if !defined(_CPU_X86_64_)
     jl_in_stackwalk = 0;
+#endif
     return n;
 }
 #else
@@ -616,7 +671,7 @@ DLLEXPORT size_t rec_backtrace(ptrint_t *data, size_t maxsize)
 }
 DLLEXPORT size_t rec_backtrace_ctx(ptrint_t *data, size_t maxsize, unw_context_t *uc)
 {
-#ifndef __arm__
+#if !defined(_CPU_ARM_) && !defined(_CPU_PPC64_)
     unw_cursor_t cursor;
     unw_word_t ip;
     size_t n=0;
@@ -721,11 +776,11 @@ DLLEXPORT void gdblookup(ptrint_t ip)
     frame_info_from_ip(&func_name, &line_num, &file_name, ip, 0);
     if (func_name != NULL) {
         if (line_num == ip)
-            ios_printf(ios_stderr, "unknown function (ip: %d)\n", line_num);
+            jl_safe_printf("unknown function (ip: %d)\n", line_num);
         else if (line_num == -1)
-            ios_printf(ios_stderr, "%s at %s (unknown line)\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s (unknown line)\n", func_name, file_name);
         else
-            ios_printf(ios_stderr, "%s at %s:%d\n", func_name, file_name, line_num);
+            jl_safe_printf("%s at %s:%d\n", func_name, file_name, line_num);
     }
 }
 
@@ -820,6 +875,7 @@ DLLEXPORT jl_task_t *jl_new_task(jl_function_t *start, size_t ssize)
 
     char *stk = allocb(ssize+pagesz+(pagesz-1));
     t->stkbuf = stk;
+    gc_wb_buf(t, t->stkbuf);
     stk = (char*)LLT_ALIGN((uptrint_t)stk, pagesz);
     // add a guard page to detect stack overflow
     // the GC might read this area, which is ok, just prevent writes

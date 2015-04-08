@@ -61,7 +61,7 @@ function joinpath(a::AbstractString, b::AbstractString)
     isabspath(b) && return b
     A, a = splitdrive(a)
     B, b = splitdrive(b)
-    !isempty(B) && A != B && error("drive mismatch: $A$a $B$b")
+    !isempty(B) && A != B && throw(ArgumentError("drive mismatch: $A$a $B$b"))
     C = isempty(B) ? A : B
     isempty(a)                             ? string(C,b) :
     ismatch(path_separator_re, a[end:end]) ? string(C,a,b) :
@@ -108,7 +108,7 @@ abspath(a::AbstractString, b::AbstractString...) = abspath(joinpath(a,b...))
 
 @windows_only realpath(path::AbstractString) = realpath(utf16(path))
 @windows_only function realpath(path::UTF16String)
-    p = uint32((sizeof(path)>>2) + 1)
+    p = UInt32((sizeof(path)>>2) + 1)
     while true
         buflength = p
         buf = zeros(UInt16,buflength)
@@ -127,7 +127,7 @@ end
     p = ccall(:realpath, Ptr{UInt8}, (Ptr{UInt8}, Ptr{UInt8}), path, C_NULL)
     systemerror(:realpath, p == C_NULL)
     s = bytestring(p)
-    c_free(p)
+    Libc.free(p)
     return s
 end
 
@@ -139,5 +139,5 @@ end
     if done(path,i) return homedir() end
     c, j = next(path,i)
     if c == '/' return homedir()*path[i:end] end
-    error("~user tilde expansion not yet implemented")
+    throw(ArgumentError("~user tilde expansion not yet implemented"))
 end

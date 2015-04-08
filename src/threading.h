@@ -39,7 +39,6 @@ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 extern __thread int16_t ti_tid;
 
 // GC
-extern JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
 extern struct _jl_thread_heap_t **jl_all_heaps;
 extern jl_gcframe_t ***jl_all_pgcstacks;
 extern jl_thread_task_state_t *jl_all_task_states;

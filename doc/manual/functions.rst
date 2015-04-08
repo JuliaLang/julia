@@ -3,7 +3,7 @@
 .. currentmodule:: Base
 
 ***********
- Functions  
+ Functions
 ***********
 
 In Julia, a function is an object that maps a tuple of argument values
@@ -210,11 +210,16 @@ Functions in Julia are `first-class objects
 variables, called using the standard function call syntax from the
 variable they have been assigned to. They can be used as arguments, and
 they can be returned as values. They can also be created anonymously,
-without being given a name:
+without being given a name, using either of these syntaxes:
 
 .. doctest::
 
     julia> x -> x^2 + 2x - 1
+    (anonymous function)
+
+    julia> function (x)
+               x^2 + 2x - 1
+           end
     (anonymous function)
 
 This creates an unnamed function taking one argument *x* and returning the
@@ -418,11 +423,11 @@ Optional Arguments
 
 In many cases, function arguments have sensible default values and therefore
 might not need to be passed explicitly in every call. For example, the
-library function :func:`parseint(num,base) <parseint>` interprets a string as a number
+library function :func:`parse(type,num,base) <parse>` interprets a string as a number
 in some base. The ``base`` argument defaults to ``10``. This behavior can be
 expressed concisely as::
 
-    function parseint(num, base=10)
+    function parse(type, num, base=10)
         ###
     end
 
@@ -432,13 +437,13 @@ specified:
 
 .. doctest::
 
-    julia> parseint("12",10)
+    julia> parse(Int,"12",10)
     12
 
-    julia> parseint("12",3)
+    julia> parse(Int,"12",3)
     5
 
-    julia> parseint("12")
+    julia> parse(Int,"12")
     12
 
 Optional arguments are actually just a convenient syntax for writing
@@ -522,8 +527,8 @@ undefined variable error (since the default expressions are evaluated
 left-to-right, and ``b`` has not been assigned yet).
 
 
-Block Syntax for Function Arguments
------------------------------------
+Do-Block Syntax for Function Arguments
+--------------------------------------
 
 Passing functions as arguments to other functions is a powerful technique,
 but the syntax for it is not always convenient. Such calls are especially

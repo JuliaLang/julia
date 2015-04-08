@@ -23,6 +23,10 @@ Tasks
 
    Tell whether a task has exited.
 
+.. function:: istaskstarted(task) -> Bool
+
+   Tell whether a task has started executing.
+
 .. function:: consume(task, values...)
 
    Receive the next value passed to ``produce`` by the specified task.
@@ -94,6 +98,22 @@ Tasks
    Block the current task for a specified number of seconds. The minimum sleep
    time is 1 millisecond or input of ``0.001``.
 
+.. function:: ReentrantLock()
+
+   Creates a reentrant lock. The same task can acquire the lock as many times
+   as required. Each lock must be matched with an unlock.
+
+.. function:: lock(l::ReentrantLock)
+
+   Associates ``l`` with the current task. If ``l`` is already locked by a different
+   task, waits for it to become available. The same task can acquire the lock multiple
+   times. Each "lock" must be matched by an "unlock"
+
+.. function:: unlock(l::ReentrantLock)
+
+   Releases ownership of the lock by the current task. If the lock had been acquired before,
+   it just decrements an internal counter and returns immediately.
+
 
 General Parallel Computing Support
 ----------------------------------
@@ -101,7 +121,7 @@ General Parallel Computing Support
 .. function:: addprocs(n::Integer; exeflags=``) -> List of process identifiers
 
    Launches workers using the in-built ``LocalManager`` which only launches workers on the local host.
-   This can be used to take advantage of multiple cores. `addprocs(4)`` will add 4 processes on the local machine.
+   This can be used to take advantage of multiple cores. ``addprocs(4)`` will add 4 processes on the local machine.
 
 .. function:: addprocs() -> List of process identifiers
 
@@ -120,8 +140,8 @@ General Parallel Computing Support
    to current user, ``port`` to the standard ssh port. If ``[bind_addr[:port]]`` is specified, other
    workers will connect to this worker at the specified ``bind_addr`` and ``port``.
 
-   ``count`` is the number of workers to be launched on the specified host. If specified as ``"auto"``
-   or ``:auto`` it will launch as many workers as the number of cores on the specific host.
+   ``count`` is the number of workers to be launched on the specified host. If specified as ``:auto``
+   it will launch as many workers as the number of cores on the specific host.
 
 
    Keyword arguments:
@@ -132,9 +152,9 @@ General Parallel Computing Support
 
    ``max_parallel`` : specifies the maximum number of workers connected to in parallel at a host. Defaults to 10.
 
-   ``dir`` :  specifies the location of the julia binaries on the worker nodes. Defaults to JULIA_HOME.
+   ``dir`` :  specifies the working directory on the workers. Defaults to the host's current directory (as found by `pwd()`)
 
-   ``exename`` :  name of the julia executable. Defaults to "./julia" or "./julia-debug" as the case may be.
+   ``exename`` :  name of the julia executable. Defaults to "$JULIA_HOME/julia" or "$JULIA_HOME/julia-debug" as the case may be.
 
    ``exeflags`` :  additional flags passed to the worker processes.
 
@@ -145,9 +165,6 @@ General Parallel Computing Support
 
    For example Beowulf clusters are  supported via a custom cluster manager implemented
    in  package ``ClusterManagers``.
-
-   See the documentation for package ``ClusterManagers`` for more information on how to
-   write a custom cluster manager.
 
 
 .. function:: nprocs()
@@ -180,11 +197,11 @@ General Parallel Computing Support
 
    Get the id of the current process.
 
-.. function:: pmap(f, lsts...; err_retry=true, err_stop=false)
+.. function:: pmap(f, lsts...; err_retry=true, err_stop=false, pids=workers())
 
    Transform collections ``lsts`` by applying ``f`` to each element in parallel.
    If ``nprocs() > 1``, the calling process will be dedicated to assigning tasks.
-   All other available processes will be used as parallel workers.
+   All other available processes will be used as parallel workers, or on the processes specified by ``pids``.
 
    If ``err_retry`` is true, it retries a failed application of ``f`` on a different worker.
    If ``err_stop`` is true, it takes precedence over the value of ``err_retry`` and ``pmap`` stops execution on the first error.
@@ -205,7 +222,7 @@ General Parallel Computing Support
 
    * ``Process``: Wait for a process or process chain to exit. The ``exitcode`` field of a process can be used to determine success or failure.
 
-   * ``Task``: Wait for a ``Task`` to finish, returning its result value.
+   * ``Task``: Wait for a ``Task`` to finish, returning its result value. If the task fails with an exception, the exception is propagated (re-thrown in the task that called ``wait``).
 
    * ``RawFD``: Wait for changes on a file descriptor (see `poll_fd` for keyword arguments and return code)
 
@@ -314,63 +331,6 @@ General Parallel Computing Support
             body
         end
 
-
-
-Distributed Arrays
-------------------
-
-.. function:: DArray(init, dims, [procs, dist])
-
-   Construct a distributed array. The parameter ``init`` is a function that accepts a tuple of index ranges.
-   This function should allocate a local chunk of the distributed array and initialize it for the specified indices.
-   ``dims`` is the overall size of the distributed array. ``procs`` optionally specifies a vector of process IDs to use.
-   If unspecified, the array is distributed over all worker processes only. Typically, when running in distributed mode,
-   i.e., ``nprocs() > 1``, this would mean that no chunk of the distributed array exists on the process hosting the
-   interactive julia prompt.
-   ``dist`` is an integer vector specifying how many chunks the distributed array should be divided into in each dimension.
-
-   For example, the ``dfill`` function that creates a distributed array and fills it with a value ``v`` is implemented as:
-
-   ``dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)``
-
-.. function:: dzeros(dims, ...)
-
-   Construct a distributed array of zeros. Trailing arguments are the same as those accepted by :func:`DArray`.
-
-.. function:: dones(dims, ...)
-
-   Construct a distributed array of ones. Trailing arguments are the same as those accepted by :func:`DArray`.
-
-.. function:: dfill(x, dims, ...)
-
-   Construct a distributed array filled with value ``x``. Trailing arguments are the same as those accepted by :func:`DArray`.
-
-.. function:: drand(dims, ...)
-
-   Construct a distributed uniform random array. Trailing arguments are the same as those accepted by :func:`DArray`.
-
-.. function:: drandn(dims, ...)
-
-   Construct a distributed normal random array. Trailing arguments are the same as those accepted by :func:`DArray`.
-
-.. function:: distribute(a)
-
-   Convert a local array to distributed.
-
-.. function:: localpart(d)
-
-   Get the local piece of a distributed array. Returns an empty array if no local part exists on the calling process.
-
-.. function:: localindexes(d)
-
-   A tuple describing the indexes owned by the local process. Returns a tuple with empty ranges
-   if no local part exists on the calling process.
-
-.. function:: procs(d)
-
-   Get the vector of processes storing pieces of ``d``.
-
-
 Shared Arrays (Experimental, UNIX-only feature)
 -----------------------------------------------
 
@@ -399,3 +359,55 @@ Shared Arrays (Experimental, UNIX-only feature)
 
    Returns the index of the current worker into the ``pids`` vector, i.e., the list of workers mapping
    the SharedArray
+
+Cluster Manager Interface
+-------------------------
+    This interface provides a mechanism to launch and manage Julia workers on different cluster environments.
+    LocalManager, for launching additional workers on the same host and SSHManager, for launching on remote
+    hosts via ssh are present in Base. TCP/IP sockets are used to connect and transport messages
+    between processes. It is possible for Cluster Managers to provide a different transport.
+
+.. function:: launch(manager::FooManager, params::Dict, launched::Vector{WorkerConfig}, launch_ntfy::Condition)
+
+    Implemented by cluster managers. For every Julia worker launched by this function, it should append a ``WorkerConfig`` entry
+    to ``launched`` and notify ``launch_ntfy``. The function MUST exit once all workers, requested by ``manager`` have been launched.
+    ``params`` is a dictionary of all keyword arguments ``addprocs`` was called with.
+
+.. function:: manage(manager::FooManager, pid::Int, config::WorkerConfig. op::Symbol)
+
+    Implemented by cluster managers. It is called on the master process, during a worker's lifetime,
+    with appropriate ``op`` values:
+
+      - with ``:register``/``:deregister`` when a worker is added / removed
+        from the Julia worker pool.
+      - with ``:interrupt`` when ``interrupt(workers)`` is called. The
+        :class:`ClusterManager` should signal the appropriate worker with an
+        interrupt signal.
+      - with ``:finalize`` for cleanup purposes.
+
+.. function:: kill(manager::FooManager, pid::Int, config::WorkerConfig)
+
+    Implemented by cluster managers. It is called on the master process, by ``rmprocs``. It should cause the remote worker specified
+    by ``pid`` to exit. ``Base.kill(manager::ClusterManager.....)`` executes a remote ``exit()`` on ``pid``
+
+.. function:: init_worker(manager::FooManager)
+
+    Called by cluster managers implementing custom transports. It initializes a newly launched process as a worker.
+    Command line argument ``--worker`` has the effect of initializing a process as a worker using TCP/IP sockets
+    for transport.
+
+.. function:: connect(manager::FooManager, pid::Int, config::WorkerConfig) -> (instrm::AsyncStream, outstrm::AsyncStream)
+
+    Implemented by cluster managers using custom transports. It should establish a logical connection to worker with id ``pid``,
+    specified by ``config`` and return a pair of ``AsyncStream`` objects. Messages from ``pid`` to current process will be read
+    off ``instrm``, while messages to be sent to ``pid`` will be written to ``outstrm``. The custom transport implementation
+    must ensure that messages are delivered and received completely and in order. ``Base.connect(manager::ClusterManager.....)``
+    sets up TCP/IP socket connections in-between workers.
+
+
+.. function:: Base.process_messages(instrm::AsyncStream, outstrm::AsyncStream)
+
+    Called by cluster managers using custom transports. It should be called when the custom transport implementation receives the
+    first message from a remote worker. The custom transport must manage a logical connection to the remote worker and provide two
+    AsyncStream objects, one for incoming messages and the other for messages addressed to the remote worker.
+

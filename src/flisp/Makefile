@@ -14,7 +14,7 @@ LIBTARGET = lib$(NAME)
 SRCS = flisp.c builtins.c string.c equalhash.c table.c iostream.c \
         julia_extensions.c
 ifeq ($(USEMSVC), 1)
-SRCS += basename.c dirname.c
+SRCS += dirname.c
 endif
 
 HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
@@ -22,11 +22,11 @@ HEADERS = $(wildcard *.h) $(LIBUV_INC)/uv.h
 OBJS = $(SRCS:%.c=$(BUILDDIR)/%.o)
 DOBJS = $(SRCS:%.c=$(BUILDDIR)/%.dbg.obj)
 LLTDIR = ../support
-LLT = $(BUILDDIR)/$(LLTDIR)/libsupport.a $(LIBUV) $(LIBMOJIBAKE)
+LLT = $(BUILDDIR)/$(LLTDIR)/libsupport.a $(LIBUV) $(LIBUTF8PROC)
 
 FLAGS = -I$(LLTDIR) $(CFLAGS) $(HFILEDIRS:%=-I%) \
         -I$(LIBUV_INC) -I$(build_includedir) $(LIBDIRS:%=-L%) \
-        -DLIBRARY_EXPORTS -DMOJIBAKE_EXPORTS
+        -DLIBRARY_EXPORTS -DUTF8PROC_EXPORTS
 ifneq ($(USEMSVC), 1)
 FLAGS += -Wall -Wno-strict-aliasing -DUSE_COMPUTED_GOTO -fvisibility=hidden
 endif
@@ -82,8 +82,10 @@ $(BUILDDIR)/$(EXENAME)-debug: $(DOBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET)-debu
 $(BUILDDIR)/$(EXENAME): $(OBJS) $(LIBFILES) $(BUILDDIR)/$(LIBTARGET).a $(BUILDDIR)/flmain.o | $(BUILDDIR)/flisp.boot
 	@$(call PRINT_LINK, $(CCLD) $(SHIPFLAGS) $(OBJS) $(BUILDDIR)/flmain.o -o $@ $(BUILDDIR)/$(LIBTARGET).a $(LIBS) $(OSLIBS))
 
+ifneq ($(BUILDDIR),.)
 $(BUILDDIR)/flisp.boot: flisp.boot
 	cp $< $@
+endif
 
 test:
 ifneq ($(USEMSVC), 1)

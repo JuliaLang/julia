@@ -11,8 +11,7 @@ SOURCES = \
 	table.c \
 	iostream.c \
 	julia_extensions.c \
-	dirname.c \
-	basename.c
+	dirname.c
 
 HEADERS = \
 	flisp.h \
@@ -27,21 +26,20 @@ OBJECTS = \
 	table.obj \
 	iostream.obj \
 	julia_extensions.obj \
-	dirname.obj \
-	basename.obj
+	dirname.obj
 
 LIBUV = $(MAKEDIR)\..\..\deps\libuv\libuv.lib
-LIBMOJIBAKE = $(MAKEDIR)\..\..\deps\libmojibake\libmojibake.lib
+LIBUTF8PROC = $(MAKEDIR)\..\..\deps\libutf8proc\libutf8proc.lib
 LIBSUPPORT = $(MAKEDIR)\..\support\libsupport.lib
 
-INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include;$(MAKEDIR)\..\..\deps\libmojibake;$(MAKEDIR)\..\support
+INCLUDE = $(INCLUDE);$(MAKEDIR)\..\..\deps\libuv\include;$(MAKEDIR)\..\..\deps\libutf8proc;$(MAKEDIR)\..\support
 
 CFLAGS = $(CFLAGS) /Qstd=c99 -D_CRT_SECURE_NO_WARNINGS -DLIBRARY_EXPORTS
 LFLAGS = $(LFLAGS) kernel32.lib ws2_32.lib psapi.lib advapi32.lib iphlpapi.lib
 
 default: $(NAME).exe
 
-$(NAME).exe: lib$(NAME).lib flmain.obj $(LIBSUPPORT) $(LIBUV) $(LIBMOJIBAKE)
+$(NAME).exe: lib$(NAME).lib flmain.obj $(LIBSUPPORT) $(LIBUV) $(LIBUTF8PROC)
 	$(LINK) $(LFLAGS) /OUT:$(NAME).exe /PDB:$(NAME).pdb /MAP $**
 
 $(LIBSUPPORT):
@@ -50,8 +48,8 @@ $(LIBSUPPORT):
 $(LIBUV):
 	PUSHD $(MAKEDIR)\..\..\deps\libuv && $(MAKE) /NOLOGO /F Windows.mk  && POPD
 
-$(LIBMOJIBAKE):
-	PUSHD $(MAKEDIR)\..\..\deps\libmojibake && cl -nologo /c utf8proc.c && $(AR) /OUT:libmojibake.lib utf8proc.obj && POPD
+$(LIBUTF8PROC):
+	PUSHD $(MAKEDIR)\..\..\deps\libutf8proc && cl -nologo /c utf8proc.c && $(AR) /OUT:libutf8proc.lib utf8proc.obj && POPD
 
 lib$(NAME).lib: $(OBJECTS)
 	$(AR) /OUT:lib$(NAME).lib $**

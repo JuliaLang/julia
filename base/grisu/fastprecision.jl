@@ -34,8 +34,8 @@ function digitgen(w,buffer,requested_digits=1000)
         integrals %= divisor
         kappa -= 1
         if requested_digits == 0
-            rest = (uint64(integrals) << -one.e) + fractionals
-            r, kappa = roundweed(buffer, len, rest, uint64(divisor) << -one.e,
+            rest = (UInt64(integrals) << -one.e) + fractionals
+            r, kappa = roundweed(buffer, len, rest, UInt64(divisor) << -one.e,
                     unit,kappa)
             return r, kappa, len
         end
@@ -58,12 +58,12 @@ function digitgen(w,buffer,requested_digits=1000)
 end
 
 function fastprecision(v,requested_digits,buffer=Array(UInt8,100))
-    f = normalize(float64(v))
+    f = normalize(Float64(v))
     ten_mk_min_exp = kMinExp - (f.e + FloatSignificandSize)
     ten_mk_max_exp = kMaxExp - (f.e + FloatSignificandSize)
     cp = binexp_cache(ten_mk_min_exp,ten_mk_max_exp)
     scaled_w = f * cp
     r, kappa, len = digitgen(scaled_w,buffer,requested_digits)
     decimal_exponent = -cp.de + kappa
-    return r, len, decimal_exponent+len-1, buffer
+    return r, len, decimal_exponent+len-1
 end

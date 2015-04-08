@@ -12,7 +12,7 @@ u16 = utf16(u8)
 # UTF32
 u32 = utf32(u8)
 @test sizeof(u32) == 16
-@test length(u32.data) == 5 && u32.data[end] == char(0)
+@test length(u32.data) == 5 && u32.data[end] == Char(0)
 @test length(u32) == 4
 @test utf8(u32) == u8
 @test collect(u8) == collect(u32)
@@ -45,7 +45,7 @@ else
     for encoding in ["UTF-32LE", "UTF-16BE", "UTF-16LE", "UTF-8"]
         output_path = joinpath(unicodedir, encoding*".unicode")
         f = Base.FS.open(output_path,Base.JL_O_WRONLY|Base.JL_O_CREAT,Base.S_IRUSR | Base.S_IWUSR | Base.S_IRGRP | Base.S_IROTH)
-        run(`iconv -f $primary_encoding -t $encoding $primary_path` |> f)
+        run(pipe(`iconv -f $primary_encoding -t $encoding $primary_path`, f))
         Base.FS.close(f)
     end
 
@@ -125,3 +125,6 @@ let grphtest = (("b\u0300lahβlahb\u0302láh", ["b\u0300","l","a","h",
         end
     end
 end
+
+# up-to-date character widths (#3721, #6939)
+@test charwidth('\U1f355') == strwidth("\U1f355") == strwidth(utf16("\U1f355")) == strwidth("\U1f355\u0302") == strwidth(utf16("\U1f355\u0302")) == 2

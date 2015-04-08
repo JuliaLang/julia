@@ -96,6 +96,8 @@ Function                                            Description
 
 .. [#] *iid*, independently and identically distributed.
 
+The syntax ``[A, B, C, ...]`` constructs a 1-d array (vector) of its arguments.
+
 Concatenation
 -------------
 
@@ -117,8 +119,8 @@ The concatenation functions are used so often that they have special syntax:
 =================== =============
 Expression          Calls
 =================== =============
+``[A; B; C; ...]``  :func:`vcat`
 ``[A B C ...]``     :func:`hcat`
-``[A, B, C, ...]``  :func:`vcat`
 ``[A B; C D; ...]`` :func:`hvcat`
 =================== =============
 
@@ -131,8 +133,11 @@ Typed array initializers
 An array with a specific element type can be constructed using the syntax
 ``T[A, B, C, ...]``. This will construct a 1-d array with element type
 ``T``, initialized to contain elements ``A``, ``B``, ``C``, etc.
+For example ``Any[x, y, z]`` constructs a heterogeneous array that can
+contain any values.
 
-An array constructed with an explicit type annotation does not automatically concatenate its arguments.
+Concatenation syntax can similarly be prefixed with a type to specify
+the element type of the result.
 
 .. doctest::
 
@@ -140,19 +145,9 @@ An array constructed with an explicit type annotation does not automatically con
     1x4 Array{Int64,2}:
      1  2  3  4
 
-    julia> Int64[[1 2] [3 4]]
-    ERROR: `convert` has no method matching convert(::Type{Int64}, ::Array{Int64,2})
-    <BLANKLINE>
-    You might have used a 2d row vector where a 1d column vector was required.
-    Note the difference between 1d column vector [1,2,3] and 2d row vector [1 2 3].
-    You can convert to a column vector with the vec() function.
-     in setindex! at array.jl:307
-
-    julia> Array[[1 2] [3 4]]
-    1x2 Array{Array{T,N},2}:
-     1x2 Array{Int64,2}:
-     1  2  1x2 Array{Int64,2}:
-     3  4
+    julia> Int8[[1 2] [3 4]]
+    1x4 Array{Int8,2}:
+     1  2  3  4
 
 .. _comprehensions:
 
@@ -225,7 +220,7 @@ The general syntax for indexing into an n-dimensional array A is::
 
 where each I\_k may be:
 
-1. A scalar value
+1. A scalar integer
 2. A ``Range`` of the form ``:``, ``a:b``, or ``a:b:c``
 3. An arbitrary integer vector, including the empty vector ``[]``
 4. A boolean vector
@@ -233,10 +228,13 @@ where each I\_k may be:
 The result X generally has dimensions
 ``(length(I_1), length(I_2), ..., length(I_n))``, with location
 ``(i_1, i_2, ..., i_n)`` of X containing the value
-``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions indexed with
-scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
+``A[I_1[i_1], I_2[i_2], ..., I_n[i_n]]``. Trailing dimensions
+indexed with scalars are dropped. For example, the dimensions of ``A[I, 1]`` will be
 ``(length(I),)``. Boolean vectors are first transformed with ``find``; the size of
 a dimension indexed by a boolean vector will be the number of true values in the vector.
+As a special part of this syntax, the ``end`` keyword may be used to represent the last
+index of each dimension within the indexing brackets, as determined by the size of the
+innermost array being indexed.
 
 Indexing syntax is equivalent to a call to ``getindex``::
 
@@ -445,7 +443,7 @@ The ``AbstractArray`` type includes anything vaguely array-like, and
 implementations of it might be quite different from conventional
 arrays. For example, elements might be computed on request rather than
 stored.  However, any concrete ``AbstractArray{T,N}`` type should
-generally implement at least :func:`size(A) <size>` (returing an ``Int`` tuple),
+generally implement at least :func:`size(A) <size>` (returning an ``Int`` tuple),
 :func:`getindex(A,i) <getindex>` and :func:`getindex(A,i1,...,iN) <getindex>`;
 mutable arrays should also implement :func:`setindex!`.  It
 is recommended that these operations have nearly constant time complexity,

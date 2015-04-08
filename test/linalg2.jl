@@ -14,11 +14,6 @@ du = -rand(n-1)
 v = randn(n)
 B = randn(n,2)
 
-# Woodbury
-U = randn(n,2)
-V = randn(2,n)
-C = randn(2,2)
-
 for elty in (Float32, Float64, Complex64, Complex128, Int)
     if elty == Int
         srand(61516384)
@@ -27,20 +22,12 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         du = -rand(0:10, n-1)
         v = rand(1:100, n)
         B = rand(1:100, n, 2)
-
-        # Woodbury
-        U = rand(1:100, n, 2)
-        V = rand(1:100, 2, n)
-        C = rand(1:100, 2, 2)
     else
         d = convert(Vector{elty}, d)
         dl = convert(Vector{elty}, dl)
         du = convert(Vector{elty}, du)
         v = convert(Vector{elty}, v)
         B = convert(Matrix{elty}, B)
-        U = convert(Matrix{elty}, U)
-        V = convert(Matrix{elty}, V)
-        C = convert(Matrix{elty}, C)
     end
     ε = eps(abs2(float(one(elty))))
     T = Tridiagonal(dl, d, du)
@@ -92,19 +79,6 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
         @test_approx_eq abs(VT'Vecs) eye(elty, n)
     end
 
-    # Woodbury
-    W = Woodbury(T, U, C, V)
-    F = full(W)
-    @test_approx_eq W*v F*v
-    iFv = F\v
-    @test norm(W\v - iFv)/norm(iFv) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    @test abs((det(W) - det(F))/det(F)) <= n*cond(F)*ε # Revisit. Condition number is wrong
-    iWv = similar(iFv)
-    if elty != Int
-        iWv = A_ldiv_B!(W, copy(v))
-        @test_approx_eq iWv iFv
-    end
-
     # Test det(A::Matrix)
     # In the long run, these tests should step through Strang's
     #  axiomatic definition of determinants.
@@ -126,7 +100,7 @@ for elty in (Float32, Float64, Complex64, Complex128, Int)
 
     # The determinant of a rotation matrix should always be 1.
     if elty != Int
-        for theta = convert(Vector{elty}, pi ./ [1:4])
+        for theta = convert(Vector{elty}, pi ./ [1:4;])
             R = [cos(theta) -sin(theta);
                  sin(theta) cos(theta)]
             @test_approx_eq convert(elty, det(R)) one(elty)
@@ -173,10 +147,10 @@ end
 # Test gradient
 for elty in (Int32, Int64, Float32, Float64, Complex64, Complex128)
     if elty <: Real
-        x = convert(Vector{elty}, [1:3])
+        x = convert(Vector{elty}, [1:3;])
         g = ones(elty, 3)
     else
-        x = convert(Vector{elty}, complex([1:3],[1:3]))
+        x = convert(Vector{elty}, complex([1:3;], [1:3;]))
         g = convert(Vector{elty}, complex(ones(3), ones(3)))
     end
     @test_approx_eq gradient(x) g
@@ -199,7 +173,7 @@ for elty in (Float32, Float64, Complex{Float32}, Complex{Float64})
         end
 
         ## QR
-        FJulia  = invoke(qrfact!, (AbstractMatrix,), copy(A))
+        FJulia  = invoke(qrfact!, (AbstractMatrix,Type{Val{false}}), copy(A), Val{false})
         FLAPACK = Base.LinAlg.LAPACK.geqrf!(copy(A))
         @test_approx_eq FJulia.factors FLAPACK[1]
         @test_approx_eq FJulia.τ FLAPACK[2]
@@ -216,7 +190,7 @@ l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l[invperm(p),:]*u a
 @test_approx_eq a * inv(lua) eye(n)
 @test_approx_eq a*(lua\b) b
-@test_approx_eq det(a) det(float64(float(a)))
+@test_approx_eq det(a) det(Array{Float64}(a))
 ## Hilbert Matrix (very ill conditioned)
 ## Testing Rational{BigInt} and BigFloat version
 nHilbert = 50
@@ -224,7 +198,7 @@ H = Rational{BigInt}[1//(i+j-1) for i = 1:nHilbert,j = 1:nHilbert]
 Hinv = Rational{BigInt}[(-1)^(i+j)*(i+j-1)*binomial(nHilbert+i-1,nHilbert-j)*binomial(nHilbert+j-1,nHilbert-i)*binomial(i+j-2,i-1)^2 for i = big(1):nHilbert,j=big(1):nHilbert]
 @test inv(H) == Hinv
 with_bigfloat_precision(2^10) do
-    @test norm(float64(inv(float(H)) - float(Hinv))) < 1e-100
+    @test norm(Array{Float64}(inv(float(H)) - float(Hinv))) < 1e-100
 end
 
 # Test balancing in eigenvector calculations
@@ -233,16 +207,17 @@ for elty in (Float32, Float64, Complex64, Complex128)
                                -2.0      4.0       1.0    -eps(real(one(elty)));
                                -eps(real(one(elty)))/4  eps(real(one(elty)))/2  -1.0     0;
                                -0.5     -0.5       0.1     1.0])
-    F = eigfact(A,permute=false,scale=false)
+    F = eigfact(A, permute=false, scale=false)
+    eig(A, permute=false, scale=false)
     @test_approx_eq F[:vectors]*Diagonal(F[:values])/F[:vectors] A
     F = eigfact(A)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
 # Tests norms
-nnorm = 1000
-mmat = 100
-nmat = 80
+nnorm = 10
+mmat = 10
+nmat = 8
 for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Complex{BigFloat}, Int32, Int64, BigInt)
     debug && println(elty)
 
@@ -363,8 +338,26 @@ for elty in (Float32, Float64, BigFloat, Complex{Float32}, Complex{Float64}, Com
         for p = -2:3
             @test norm(reshape(A, length(A)), p) == vecnorm(A, p)
         end
+
+        # issue #10234
+        if elty <: FloatingPoint || elty <: Complex
+            let z = zeros(elty, 100)
+                z[1] = -Inf
+                for p in [-2,-1.5,-1,-0.5,0.5,1,1.5,2,Inf]
+                    @test norm(z, p) == (p < 0 ? 0 : Inf)
+                    @test norm(elty[Inf],p) == Inf
+                end
+            end
+        end
     end
 end
+
+# issue #10234
+@test norm(Any[Inf],-2) == norm(Any[Inf],-1) == norm(Any[Inf],1) == norm(Any[Inf],1.5) == norm(Any[Inf],2) == norm(Any[Inf],Inf) == Inf
+
+# overflow/underflow in norms:
+@test_approx_eq norm(Float64[1e-300, 1], -3)*1e300 1
+@test_approx_eq norm(Float64[1e300, 1], 3)*1e-300 1
 
 # Uniform scaling
 @test I[1,1] == 1 # getindex
@@ -403,7 +396,7 @@ S = sprandn(3,3,0.5)
 @test A/I == A
 @test I/λ === UniformScaling(1/λ)
 @test I\J === J
-T = Triangular(randn(3,3),:L)
+T = LowerTriangular(randn(3,3))
 @test T\I == inv(T)
 @test I\A == A
 @test A\I == inv(A)

@@ -55,7 +55,7 @@ function parallel_wordcount(text)
         if last>length(lines)
             last=length(lines)
         end
-        subtext=join(lines[int(first):int(last)],"\n")
+        subtext=join(lines[Int(first):Int(last)],"\n")
         push!(rrefs, @spawn wordcount( subtext ) )
     end
     # fetch results

@@ -105,9 +105,10 @@
    Like uperm but gets the permissions for people who neither own the file nor are a
    member of the group owning the file
 
-.. function:: cp(src::AbstractString,dst::AbstractString)
+.. function:: cp(src::AbstractString,dst::AbstractString; recursive=false)
 
-   Copy a file from `src` to `dest`.
+   Copy a file from `src` to `dest`. Passing ``recursive=true`` will enable
+   recursive copying of directories.
 
 .. function:: download(url,[localfile])
 

@@ -29,14 +29,14 @@ seek(io, 2)
 truncate(io, 10)
 @test ioslength(io) == 10
 io.readable = false
-@test_throws ErrorException read!(io,UInt8[0])
+@test_throws ArgumentError read!(io,UInt8[0])
 truncate(io, 0)
 @test write(io,"boston\ncambridge\n") > 0
 @test takebuf_string(io) == "boston\ncambridge\n"
 @test takebuf_string(io) == ""
 close(io)
-@test_throws ErrorException write(io,UInt8[0])
-@test_throws ErrorException seek(io,0)
+@test_throws ArgumentError write(io,UInt8[0])
+@test_throws ArgumentError seek(io,0)
 @test eof(io)
 end
 
@@ -47,9 +47,9 @@ let io = IOBuffer("hamster\nguinea pig\nturtle")
 @test_throws EOFError read(io,UInt8)
 seek(io,0)
 @test read(io,UInt8) == convert(UInt8, 'h')
-@test_throws ErrorException truncate(io,0)
-@test_throws ErrorException write(io,uint8(0))
-@test_throws ErrorException write(io,UInt8[0])
+@test_throws ArgumentError truncate(io,0)
+@test_throws ArgumentError write(io,UInt8(0))
+@test_throws ArgumentError write(io,UInt8[0])
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle"
 @test takebuf_string(io) == "hamster\nguinea pig\nturtle" #should be unchanged
 close(io)
@@ -64,8 +64,8 @@ Base.compact(io)
 @test readline(io) == "waffles\n"
 @test write(io,"whipped cream\n") > 0
 @test readline(io) == "blueberries\n"
-@test_throws ErrorException seek(io,0)
-@test_throws ErrorException truncate(io,0)
+@test_throws ArgumentError seek(io,0)
+@test_throws ArgumentError truncate(io,0)
 @test readline(io) == "whipped cream\n"
 Base.compact(io)
 @test position(io) == 0
@@ -94,7 +94,7 @@ write(io,[1,2,3])
 @test ioslength(io) == 75
 @test length(io.data) == 75
 skip(io,1)
-@test write(io,uint8(104)) == 1
+@test write(io,UInt8(104)) == 1
 skip(io,3)
 @test write(io,"apples".data) == 3
 skip(io,71)
@@ -127,3 +127,20 @@ a = Array(UInt8,1024)
 end
 
 @test isempty(readlines(IOBuffer()))
+
+# issue #8193
+let io=IOBuffer("asdf")
+    @test position(skip(io, -1)) == 0
+    @test position(skip(io, 6)) == 4
+    @test position(seek(io, -1)) == 0
+    @test position(seek(io, 6)) == 4
+end
+
+# issue #10658
+let io=IOBuffer("hello")
+    @test position(skip(io, 4)) == 4
+    @test position(skip(io, 10)) == 5
+    @test position(skip(io, -2)) == 3
+    @test position(skip(io, -3)) == 0
+    @test position(skip(io, -3)) == 0
+end

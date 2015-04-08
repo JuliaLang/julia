@@ -7,13 +7,20 @@ type Bidiagonal{T} <: AbstractMatrix{T}
         length(ev)==length(dv)-1 ? new(dv, ev, isupper) : throw(DimensionMismatch())
     end
 end
-
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}, isupper::Bool)=Bidiagonal{T}(copy(dv), copy(ev), isupper)
 Bidiagonal{T}(dv::AbstractVector{T}, ev::AbstractVector{T}) = error("Did you want an upper or lower Bidiagonal? Try again with an additional true (upper) or false (lower) argument.")
 
 #Convert from BLAS uplo flag to boolean internal
-Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::BlasChar) = Bidiagonal(copy(dv), copy(ev), uplo=='U' ? true : uplo=='L' ? false : error("Bidiagonal can only be upper 'U' or lower 'L' but you said '$uplo''"))
-
+Bidiagonal(dv::AbstractVector, ev::AbstractVector, uplo::Char) = begin
+    if uplo === 'U'
+        isupper = true
+    elseif uplo === 'L'
+        isupper = false
+    else
+        throw(ArgumentError("Bidiagonal uplo argument must be upper 'U' or lower 'L', got $(repr(uplo))"))
+    end
+    Bidiagonal(copy(dv), copy(ev), isupper)
+end
 function Bidiagonal{Td,Te}(dv::AbstractVector{Td}, ev::AbstractVector{Te}, isupper::Bool)
     T = promote_type(Td,Te)
     Bidiagonal(convert(Vector{T}, dv), convert(Vector{T}, ev), isupper)
@@ -36,17 +43,24 @@ promote_rule{T,S}(::Type{Matrix{T}}, ::Type{Bidiagonal{S}})=Matrix{promote_type(
 Tridiagonal{T}(M::Bidiagonal{T}) = convert(Tridiagonal{T}, M)
 function convert{T}(::Type{Tridiagonal{T}}, A::Bidiagonal{T})
     z = zeros(T, size(A)[1]-1)
-    A.isupper ? Tridiagonal(A.ev, A.dv, z) : Tridiagonal(z, A.dv, A.ev)
+    A.isupper ? Tridiagonal(z, A.dv, A.ev) : Tridiagonal(A.ev, A.dv, z)
 end
 promote_rule{T,S}(::Type{Tridiagonal{T}}, ::Type{Bidiagonal{S}})=Tridiagonal{promote_type(T,S)}
 
-#################
-# BLAS routines #
-#################
+###################
+# LAPACK routines #
+###################
 
 #Singular values
-svdvals{T<:BlasReal}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'N', copy(M.dv), copy(M.ev))
-svd    {T<:BlasReal}(M::Bidiagonal{T})=LAPACK.bdsdc!(M.isupper?'U':'L', 'I', copy(M.dv), copy(M.ev))
+svdvals!{T<:BlasReal}(M::Bidiagonal{T}) = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'N', M.dv, M.ev)[1]
+function svd{T<:BlasReal}(M::Bidiagonal{T})
+    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', copy(M.dv), copy(M.ev))
+    return U, d, Vt'
+end
+function svdfact!(M::Bidiagonal, thin::Bool=true)
+    d, e, U, Vt, Q, iQ = LAPACK.bdsdc!(M.isupper ? 'U' : 'L', 'I', M.dv, M.ev)
+    SVD(U, d, Vt)
+end
 
 ####################
 # Generic routines #
@@ -61,7 +75,7 @@ function show(io::IO, M::Bidiagonal)
 end
 
 size(M::Bidiagonal) = (length(M.dv), length(M.dv))
-size(M::Bidiagonal, d::Integer) = d<1 ? error("dimension out of range") : (d<=2 ? length(M.dv) : 1)
+size(M::Bidiagonal, d::Integer) = d<1 ? throw(ArgumentError("dimension must be ≥ 1, got $d")) : (d<=2 ? length(M.dv) : 1)
 
 #Elementary operations
 for func in (:conj, :copy, :round, :trunc, :floor, :ceil)
@@ -75,8 +89,8 @@ end
 transpose(M::Bidiagonal) = Bidiagonal(M.dv, M.ev, !M.isupper)
 ctranspose(M::Bidiagonal) = Bidiagonal(conj(M.dv), conj(M.ev), !M.isupper)
 
-istriu(M::Bidiagonal) = M.isupper
-istril(M::Bidiagonal) = !M.isupper
+istriu(M::Bidiagonal) = M.isupper || all(M.ev .== 0)
+istril(M::Bidiagonal) = !M.isupper || all(M.ev .== 0)
 
 function diag{T}(M::Bidiagonal{T}, n::Integer=0)
     if n==0
@@ -114,24 +128,20 @@ end
 /(A::Bidiagonal, B::Number) = Bidiagonal(A.dv/B, A.ev/B, A.isupper)
 ==(A::Bidiagonal, B::Bidiagonal) = (A.dv==B.dv) && (A.ev==B.ev) && (A.isupper==B.isupper)
 
-SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, Triangular)
+SpecialMatrix = Union(Diagonal, Bidiagonal, SymTridiagonal, Tridiagonal, AbstractTriangular)
 *(A::SpecialMatrix, B::SpecialMatrix)=full(A)*full(B)
 
 #Generic multiplication
 for func in (:*, :Ac_mul_B, :A_mul_Bc, :/, :A_rdiv_Bc)
-    @eval begin
-        ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
-        #($func){T}(A::AbstractArray{T}, B::Triangular{T}) = ($func)(full(A), B)
-    end
+    @eval ($func){T}(A::Bidiagonal{T}, B::AbstractVector{T}) = ($func)(full(A), B)
 end
 
-
 #Linear solvers
-A_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(A, b)
-At_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(transpose(A), b)
-Ac_ldiv_B!(A::Union(Bidiagonal, Triangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
-for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
-    function ($func)(A::Union(Bidiagonal, Triangular), B::AbstractMatrix)
+A_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(A, b)
+At_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(transpose(A), b)
+Ac_ldiv_B!(A::Union(Bidiagonal, AbstractTriangular), b::AbstractVector) = naivesub!(ctranspose(A), b)
+for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!)
+    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:,1])
         n = size(B, 1)
         for i = 1:size(B,2)
@@ -141,9 +151,9 @@ for func in (:A_ldiv_B!, :Ac_ldiv_B!, :At_ldiv_B!) @eval begin
         end
         B
     end
-end end
-for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
-    function ($func)(A::Union(Bidiagonal, Triangular), B::AbstractMatrix)
+end
+for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!)
+    @eval function ($func)(A::Union(Bidiagonal, AbstractTriangular), B::AbstractMatrix)
         tmp = similar(B[:, 2])
         m, n = size(B)
         nm = n*m
@@ -154,7 +164,7 @@ for func in (:A_ldiv_Bt!, :Ac_ldiv_Bt!, :At_ldiv_Bt!) @eval begin
         end
         B
     end
-end end
+end
 
 #Generic solver using naive substitution
 function naivesub!{T}(A::Bidiagonal{T}, b::AbstractVector, x::AbstractVector = b)
@@ -181,6 +191,8 @@ function \{T,S}(A::Bidiagonal{T}, B::AbstractVecOrMat{S})
     TS = typeof(zero(T)*zero(S) + zero(T)*zero(S))
     TS == S ? A_ldiv_B!(A, copy(B)) : A_ldiv_B!(A, convert(AbstractArray{TS}, B))
 end
+
+factorize(A::Bidiagonal) = A
 
 # Eigensystems
 eigvals(M::Bidiagonal) = M.dv
@@ -211,8 +223,3 @@ function eigvecs{T}(M::Bidiagonal{T})
 end
 eigfact(M::Bidiagonal) = Eigen(eigvals(M), eigvecs(M))
 
-#Singular values
-function svdfact(M::Bidiagonal, thin::Bool=true)
-    U, S, V = svd(M)
-    SVD(U, S, V')
-end

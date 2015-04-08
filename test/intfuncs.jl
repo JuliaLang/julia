@@ -7,7 +7,7 @@
 
 @test gcd(2, 4, 6) == 2
 
-@test typeof(gcd(int32(3), int32(15))) == Int32
+@test typeof(gcd(Int32(3), Int32(15))) == Int32
 
 @test lcm(2, 3) == 6
 @test lcm(4, 6) == 12
@@ -18,7 +18,7 @@
 
 @test lcm(2, 4, 6) == 12
 
-@test typeof(lcm(int32(2), int32(3))) == Int32
+@test typeof(lcm(Int32(2), Int32(3))) == Int32
 
 @test gcdx(5, 12) == (1, 5, -2)
 @test gcdx(5, -12) == (1, 5, 2)
@@ -84,12 +84,17 @@
 @test digits(4, 2) == [0, 0, 1]
 @test digits(5, 3) == [2, 1]
 
+@test leading_ones(UInt32(Int64(2) ^ 32 - 2)) == 31
+@test leading_ones(1) == 0
+@test leading_zeros(Int32(1)) == 31
+@test leading_zeros(UInt32(Int64(2) ^ 32 - 2)) == 0
+
 @test isqrt(4) == 2
 @test isqrt(5) == 2
 # issue #4884
 @test isqrt(9223372030926249000) == 3037000498
-@test isqrt(typemax(Int128)) == int128("13043817825332782212")
-@test isqrt(int128(typemax(Int64))^2-1) == 9223372036854775806
+@test isqrt(typemax(Int128)) == parse(Int128,"13043817825332782212")
+@test isqrt(Int128(typemax(Int64))^2-1) == 9223372036854775806
 @test isqrt(0) == 0
 for i = 1:1000
     n = rand(UInt128)
@@ -102,3 +107,11 @@ for i = 1:1000
     @test (s+1)*(s+1) > n
 end
 
+# issue #9786
+let ptr = Ptr{Void}(typemax(UInt))
+    for T in (Int, Cssize_t)
+        @test T(ptr) == -1
+        @test ptr == Ptr{Void}(T(ptr))
+        @test typeof(Ptr{Float64}(T(ptr))) == Ptr{Float64}
+    end
+end

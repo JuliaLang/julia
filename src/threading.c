@@ -65,7 +65,6 @@ JL_DEFINE_MUTEX(codegen);
 JL_THREAD int16_t ti_tid = 0;
 
 // thread heap
-JL_THREAD struct _jl_thread_heap_t *jl_thread_heap;
 struct _jl_thread_heap_t **jl_all_heaps;
 jl_gcframe_t ***jl_all_pgcstacks;
 jl_thread_task_state_t *jl_all_task_states;
@@ -130,8 +129,7 @@ void ti_initthread(int16_t tid)
     ti_tid = tid;
     jl_pgcstack = NULL;
     jl_all_pgcstacks[tid] = &jl_pgcstack;
-    jl_thread_heap = jl_mk_thread_heap();
-    jl_all_heaps[tid] = jl_thread_heap;
+    jl_all_heaps[tid] = jl_mk_thread_heap();
 
     jl_all_task_states[tid].pcurrent_task = &jl_current_task;
     jl_all_task_states[tid].proot_task = &jl_root_task;
@@ -141,10 +139,10 @@ void ti_initthread(int16_t tid)
 
 
 // all threads call this function to run user code
-jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args)
+static jl_value_t *ti_run_fun(jl_function_t *f, jl_tuple_t *args)
 {
     JL_TRY {
-        jl_apply(f, &jl_tupleref(args,0), jl_tuple_len(args));
+        jl_apply(f, jl_tuple_data(args), jl_tuple_len(args));
     }
     JL_CATCH {
         return jl_exception_in_transit;
@@ -365,7 +363,7 @@ DLLEXPORT jl_value_t *jl_threading_run(jl_function_t *f, jl_tuple_t *args)
     jl_tuple_t *argtypes = NULL;
     jl_function_t *fun = NULL;
     JL_GC_PUSH2(&argtypes, &fun);
-    argtypes = arg_type_tuple(&jl_tupleref(args, 0), jl_tuple_len(args));
+    argtypes = arg_type_tuple(jl_tuple_data(args), jl_tuple_len(args));
     fun = jl_get_specialization(f, argtypes);
     if (fun == NULL)
         fun = f;

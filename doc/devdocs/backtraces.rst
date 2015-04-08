@@ -61,12 +61,12 @@ The procedure is very similar to `Segfaults during bootstrap (sysimg.jl)`_.  Cre
 
   $ cd <julia_root>
   $ make debug
-  $ gdb --args usr/bin/julia-debug-readline <path_to_your_script>
+  $ gdb --args usr/bin/julia-debug <path_to_your_script>
 
 Note that ``gdb`` will sit there, waiting for instructions.  Type ``r`` to run the process, and ``bt`` to generate a backtrace once it segfaults::
 
   (gdb) r
-  Starting program: /home/sabae/src/julia/usr/bin/julia-debug-readline ./test.jl
+  Starting program: /home/sabae/src/julia/usr/bin/julia-debug ./test.jl
   ...
   (gdb) bt
 

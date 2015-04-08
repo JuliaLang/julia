@@ -141,7 +141,7 @@ function nonzero_chunks(chunks::Vector{UInt64}, pos0::Int, pos1::Int)
 
     delta_k = k1 - k0
 
-    z = uint64(0)
+    z = UInt64(0)
     u = ~z
     if delta_k == 0
         msk_0 = (u << l0) & ~(u << l1 << 1)
@@ -181,7 +181,7 @@ function istril(A::BitMatrix)
 end
 
 function findmax(a::BitArray)
-    length(a)==0 && error("findmax: array is empty")
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
     m, mi = false, 1
     ti = 1
     ac = a.chunks
@@ -194,7 +194,7 @@ function findmax(a::BitArray)
 end
 
 function findmin(a::BitArray)
-    length(a)==0 && error("findmin: array is empty")
+    isempty(a) && throw(ArgumentError("BitArray must be non-empty"))
     m, mi = true, 1
     ti = 1
     ac = a.chunks

@@ -8,26 +8,26 @@ immutable VersionNumber
     build::(Union(Int,ASCIIString)...)
 
     function VersionNumber(major::Integer, minor::Integer, patch::Integer, pre::(Union(Int,ASCIIString)...), bld::(Union(Int,ASCIIString)...))
-        major >= 0 || error("invalid negative major version: $major")
-        minor >= 0 || error("invalid negative minor version: $minor")
-        patch >= 0 || error("invalid negative patch version: $patch")
+        major >= 0 || throw(ArgumentError("invalid negative major version: $major"))
+        minor >= 0 || throw(ArgumentError("invalid negative minor version: $minor"))
+        patch >= 0 || throw(ArgumentError("invalid negative patch version: $patch"))
         for ident in pre
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative pre-release identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative pre-release identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && !(length(pre)==1 && isempty(bld))
-                    error("invalid pre-release identifier: ", repr(ident))
+                    throw(ArgumentError("invalid pre-release identifier: $(repr(ident))"))
                 end
             end
         end
         for ident in bld
             if isa(ident,Int)
-                ident >= 0 || error("invalid negative build identifier: $ident")
+                ident >= 0 || throw(ArgumentError("invalid negative build identifier: $ident"))
             else
                 if !ismatch(r"^(?:|[0-9a-z-]*[a-z-][0-9a-z-]*)$"i, ident) ||
                     isempty(ident) && length(bld)!=1
-                    error("invalid build identifier: ", repr(ident))
+                    throw(ArgumentError("invalid build identifier: $(repr(ident))"))
                 end
             end
         end
@@ -75,17 +75,17 @@ function split_idents(s::AbstractString)
     idents = split(s, '.')
     ntuple(length(idents)) do i
         ident = idents[i]
-        ismatch(r"^\d+$", ident) ? parseint(ident) : bytestring(ident)
+        ismatch(r"^\d+$", ident) ? parse(Int, ident) : bytestring(ident)
     end
 end
 
 VersionNumber(v::AbstractString) = begin
     m = match(VERSION_REGEX, v)
-    if m == nothing error("invalid version string: $v") end
+    m == nothing && throw(ArgumentError("invalid version string: $v"))
     major, minor, patch, minus, prerl, plus, build = m.captures
-    major = int(major)
-    minor = minor != nothing ? int(minor) : 0
-    patch = patch != nothing ? int(patch) : 0
+    major = parse(Int, major)
+    minor = minor != nothing ? parse(Int, minor) : 0
+    patch = patch != nothing ? parse(Int, patch) : 0
     if prerl != nothing && !isempty(prerl) && prerl[1] == '-'
         prerl = prerl[2:end] # strip leading '-'
     end
@@ -207,7 +207,7 @@ function banner(io::IO = STDOUT)
     elseif GIT_VERSION_INFO.commit == ""
         commit_string = ""
     else
-        days = int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
+        days = Int(floor((ccall(:clock_now, Float64, ()) - GIT_VERSION_INFO.fork_master_timestamp) / (60 * 60 * 24)))
         unit = days == 1 ? "day" : "days"
         distance = GIT_VERSION_INFO.fork_master_distance
         commit = GIT_VERSION_INFO.commit_short

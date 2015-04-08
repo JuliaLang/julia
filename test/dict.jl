@@ -1,3 +1,30 @@
+# Pair
+p = Pair(1,2)
+@test p == (1=>2)
+@test isequal(p,1=>2)
+@test start(p) == 1
+@test next(p, 1) == (1,2)
+@test !done(p, 1)
+@test !done(p,2)
+@test done(p,3)
+@test !done(p,0)
+@test Base.indexed_next(p, 1, (1,2)) == (1,2)
+@test Base.indexed_next(p, 2, (1,2)) == (2,3)
+@test (1=>2) < (2=>3)
+@test (2=>2) < (2=>3)
+@test !((2=>3) < (2=>3))
+@test (2=>3) < (4=>3)
+@test (1=>100) < (4=>1)
+@test p[1] == 1
+@test p[2] == 2
+@test_throws BoundsError p[3]
+@test_throws BoundsError p[false]
+@test p[true] == 1
+@test p[2.0] == 2
+@test p[0x01] == 1
+@test_throws InexactError p[2.3]
+
+# Dict
 h = Dict()
 for i=1:10000
     h[i] = i+1
@@ -90,7 +117,7 @@ let
     @test typeof(d) == typeof(d2) == typeof(d3) == Dict{Any,Any}
 end
 
-@test_throws ErrorException first(Dict())
+@test_throws ArgumentError first(Dict())
 @test first(Dict(:f=>2)) == (:f,2)
 
 # issue #1821
@@ -209,7 +236,7 @@ end
 for d in (Dict("\n" => "\n", "1" => "\n", "\n" => "2"),
           [string(i) => i for i = 1:30],
           [reshape(1:i^2,i,i) => reshape(1:i^2,i,i) for i = 1:24],
-          [utf8(Char['α':'α'+i]) => utf8(Char['α':'α'+i]) for i = (1:10)*10],
+          [utf8(Char['α':'α'+i;]) => utf8(Char['α':'α'+i;]) for i = (1:10)*10],
           Dict("key" => zeros(0, 0)))
     for cols in (12, 40, 80), rows in (2, 10, 24)
         # Ensure output is limited as requested
@@ -268,4 +295,19 @@ let
     a = Dict("foo"  => 0.0, "bar" => 42.0)
     b = Dict("フー" => 17, "バー" => 4711)
     @test is(typeof(merge(a, b)), Dict{UTF8String,Float64})
+end
+
+# issue 9295
+let
+    d = Dict()
+    @test is(push!(d, 'a' => 1), d)
+    @test d['a'] == 1
+    @test is(push!(d, 'b' => 2, 'c' => 3), d)
+    @test d['b'] == 2
+    @test d['c'] == 3
+    @test is(push!(d, 'd' => 4, 'e' => 5, 'f' => 6), d)
+    @test d['d'] == 4
+    @test d['e'] == 5
+    @test d['f'] == 6
+    @test length(d) == 6
 end

@@ -45,7 +45,7 @@ function vcat_perf(n, iter)
     a = rand(n,n)
     b = rand(n,n)
     for i = 1:iter
-        c = [a, b, b, a]
+        c = [a; b; b; a]
     end
 end
 

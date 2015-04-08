@@ -43,7 +43,7 @@ let skew = 10  # allow 10s skew
     mdir  = mtime(dir)
     @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
 end
-#@test int(time()) >= int(mtime(file)) >= int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
+#@test Int(time()) >= Int(mtime(file)) >= Int(mtime(dir)) >= 0 # 1 second accuracy should be sufficient
 
 # test links
 @unix_only @test islink(link) == true
@@ -185,16 +185,16 @@ s = open(file, "r")
 @test isreadonly(s) == true
 c = mmap_array(UInt8, (11,), s)
 @test c == "Hello World".data
-c = mmap_array(UInt8, (uint16(11),), s)
+c = mmap_array(UInt8, (UInt16(11),), s)
 @test c == "Hello World".data
-@test_throws ErrorException mmap_array(UInt8, (int16(-11),), s)
-@test_throws ErrorException mmap_array(UInt8, (typemax(UInt),), s)
+@test_throws ArgumentError mmap_array(UInt8, (Int16(-11),), s)
+@test_throws ArgumentError mmap_array(UInt8, (typemax(UInt),), s)
 close(s)
 s = open(file, "r+")
 @test isreadonly(s) == false
 c = mmap_array(UInt8, (11,), s)
-c[5] = uint8('x')
-msync(c)
+c[5] = UInt8('x')
+Libc.msync(c)
 close(s)
 s = open(file, "r")
 str = readline(s)
@@ -212,12 +212,12 @@ s = open(file, "r")
 @test isreadonly(s)
 b = mmap_bitarray((17,13), s)
 @test b == trues(17,13)
-@test_throws ErrorException mmap_bitarray((7,3), s)
+@test_throws ArgumentError mmap_bitarray((7,3), s)
 close(s)
 s = open(file, "r+")
 b = mmap_bitarray((17,19), s)
 rand!(b)
-msync(b)
+Libc.msync(b)
 b0 = copy(b)
 close(s)
 s = open(file, "r")
@@ -272,7 +272,7 @@ mark(s)
 @test ismarked(s)
 unmark(s)
 @test !ismarked(s)
-@test_throws ErrorException reset(s)
+@test_throws ArgumentError reset(s)
 @test !unmark(s)
 @test !ismarked(s)
 close(s)
@@ -331,6 +331,38 @@ write(af, "This is indeed a test")
 bfile = joinpath(dir, "b.txt")
 cp(afile, bfile)
 
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+
+    @test_throws ArgumentError cp(src, dst)
+end
+
+# Recursive copy
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+    touch(joinpath(src, "foo"))
+    mkdir(joinpath(src, "bar"))
+    touch(joinpath(src, "bar", "qux"))
+
+    cp(src, dst, recursive=true)
+    @test isfile(joinpath(dst, "foo"))
+    @test isfile(joinpath(dst, "bar", "qux"))
+end
+
+# issue #10434
+mktempdir() do tmpdir
+    src = joinpath(tmpdir, "src")
+    dst = joinpath(tmpdir, "dst")
+    mkdir(src)
+
+    try cp(src, dst) end
+    @test !ispath(dst)
+end
+
 # issue #8698
 cfile = joinpath(dir, "c.txt")
 open(cfile, "w") do cf
@@ -354,18 +386,25 @@ rm(cfile)
 # FILE* interface #
 ###################
 
+function test_LibcFILE(FILEp)
+    buf = Array(UInt8, 8)
+    str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp)
+    @test bytestring(buf) == "Hello, w"
+    @test position(FILEp) == 8
+    seek(FILEp, 5)
+    @test position(FILEp) == 5
+    close(FILEp)
+end
+
 f = open(file, "w")
 write(f, "Hello, world!")
 close(f)
 f = open(file, "r")
-FILEp = convert(CFILE, f)
-buf = Array(UInt8, 8)
-str = ccall(:fread, Csize_t, (Ptr{Void}, Csize_t, Csize_t, Ptr{Void}), buf, 1, 8, FILEp.ptr)
-@test bytestring(buf) == "Hello, w"
-@test position(FILEp) == 8
-seek(FILEp, 5)
-@test position(FILEp) == 5
+test_LibcFILE(convert(Libc.FILE, f))
 close(f)
+@unix_only f = RawFD(ccall(:open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
+@windows_only f = RawFD(ccall(:_open, Cint, (Ptr{Uint8}, Cint), file, Base.FS.JL_O_RDONLY))
+test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 
 ############
 # Clean up #

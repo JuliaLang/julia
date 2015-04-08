@@ -6,9 +6,12 @@ progress - several tests are known to fail, and backtraces are not
 available.
 
 In addition to the standard `build-essentials` toolchain the following
-libraries must be installed to build on ARM:
+libraries must be installed to build on ARM. On Debian/Ubuntu, use the
+following command:
 
-- libblas3gf, liblapack3gf, libfftw3-dev, libgmp3-dev, libmpfr-dev, libblas-dev, liblapack-dev
+````
+sudo apt-get install libblas3gf liblapack3gf libfftw3-dev libgmp3-dev libmpfr-dev libblas-dev liblapack-dev cmake gcc-4.7 g++-4.7 gfortran libgfortran3
+````
 
 Please start from the standard [build
 instructions](README.md#source-download-and-compilation), in
@@ -18,7 +21,7 @@ Next, create a file in the `julia` top-level directory called
 `Make.user` with the following contents:
 
 ```
-include $(JULIAHOME)/ARM.inc
+include $(JULIAHOME)/Make.arm
 ```
 
 Then proceed to build as described in the primary README. Just typing
