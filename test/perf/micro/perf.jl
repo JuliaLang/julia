@@ -16,7 +16,7 @@ function parseintperf(t)
     for i=1:t
         n = rand(UInt32)
         s = hex(n)
-        m = uint32(parseint(Int64,s,16))
+        m = UInt32(parse(Int64,s,16))
     end
     @test m == n
     return n
@@ -148,3 +148,5 @@ end
     printfd(1)
     @timeit printfd(100000) "printfd" "Printing to a file descriptor"
 end
+
+maxrss("micro")

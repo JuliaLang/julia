@@ -6,12 +6,51 @@ typealias AbstractVecOrMat{T} Union(AbstractVector{T}, AbstractMatrix{T})
 
 ## Basic functions ##
 
+vect() = Array(Any, 0)
+vect{T}(X::T...) = T[ X[i] for i=1:length(X) ]
+
+const _oldstyle_array_vcat_ = true
+
+if _oldstyle_array_vcat_
+    function oldstyle_vcat_warning(n::Int)
+        if n == 1
+            before = "a"
+            after  = "a;"
+        elseif n == 2
+            before = "a,b"
+            after  = "a;b"
+        else
+            before = "a,b,..."
+            after  = "a;b;..."
+        end
+        depwarn("[$before] concatenation is deprecated; use [$after] instead", :vect)
+    end
+    function vect(A::AbstractArray...)
+        oldstyle_vcat_warning(length(A))
+        vcat(A...)
+    end
+    function vect(X...)
+        for a in X
+            if typeof(a) <: AbstractArray
+                oldstyle_vcat_warning(length(X))
+                break
+            end
+        end
+        vcat(X...)
+    end
+else
+    function vect(X...)
+        T = promote_typeof(X...)
+        #T[ X[i] for i=1:length(X) ]
+        # TODO: this is currently much faster. should figure out why. not clear.
+        copy!(Array(T,length(X)), X)
+    end
+end
+
 size{T,n}(t::AbstractArray{T,n}, d) = d <= n ? size(t)[d] : 1
 size(x, d1::Integer, d2::Integer, dx::Integer...) = tuple(size(x, d1), size(x, d2, dx...)...)
-eltype(x) = Any
-eltype{T,n}(::AbstractArray{T,n}) = T
+eltype{T}(::Type{AbstractArray{T}}) = T
 eltype{T,n}(::Type{AbstractArray{T,n}}) = T
-eltype{T<:AbstractArray}(::Type{T}) = eltype(super(T))
 iseltype(x,T) = eltype(x) <: T
 elsize{T}(::AbstractArray{T}) = sizeof(T)
 isinteger(x::AbstractArray) = all(isinteger,x)
@@ -24,7 +63,7 @@ ndims{T<:AbstractArray}(::Type{T}) = ndims(super(T))
 length(t::AbstractArray) = prod(size(t))::Int
 endof(a::AbstractArray) = length(a)
 first(a::AbstractArray) = a[1]
-first(a) = (s = start(a); done(a, s) ? error("collection is empty") : next(a, s)[1])
+first(a) = (s = start(a); done(a, s) ? throw(ArgumentError("collection must be non-empty")) : next(a, s)[1])
 last(a) = a[end]
 ctranspose(a::AbstractArray) = error("ctranspose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
 transpose(a::AbstractArray) = error("transpose not implemented for $(typeof(a)). Consider adding parentheses, e.g. A*(B*C.') instead of A*B*C' to avoid explicit calculation of the transposed matrix.")
@@ -75,6 +114,7 @@ linearindexing{A<:Array}(::Type{A}) = LinearFast()
 linearindexing{A<:Range}(::Type{A}) = LinearFast()
 
 ## Bounds checking ##
+checkbounds(sz::Int, ::Colon) = nothing
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
 checkbounds(sz::Int, i::Real) = checkbounds(sz, to_index(i))
 checkbounds(sz::Int, I::AbstractVector{Bool}) = length(I) == sz || throw(BoundsError())
@@ -91,17 +131,17 @@ checkbounds(A::AbstractArray, I::AbstractArray{Bool}) = size(A) == size(I) || th
 
 checkbounds(A::AbstractArray, I) = checkbounds(length(A), I)
 
-function checkbounds(A::AbstractMatrix, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
+function checkbounds(A::AbstractMatrix, I::Union(Real,Colon,AbstractArray), J::Union(Real,Colon,AbstractArray))
     checkbounds(size(A,1), I)
     checkbounds(size(A,2), J)
 end
 
-function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray), J::Union(Real,AbstractArray))
+function checkbounds(A::AbstractArray, I::Union(Real,Colon,AbstractArray), J::Union(Real,Colon,AbstractArray))
     checkbounds(size(A,1), I)
     checkbounds(trailingsize(A,2), J)
 end
 
-function checkbounds(A::AbstractArray, I::Union(Real,AbstractArray)...)
+function checkbounds(A::AbstractArray, I::Union(Real,Colon,AbstractArray)...)
     n = length(I)
     if n > 0
         for dim = 1:(n-1)
@@ -166,7 +206,7 @@ function squeeze(A::AbstractArray, dims::Dims)
     reshape(A, d::typeof(_sub(size(A), dims)))
 end
 
-squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (int(dim),))
+squeeze(A::AbstractArray, dim::Integer) = squeeze(A, (Int(dim),))
 
 function copy!(dest::AbstractArray, src)
     i = 1
@@ -297,69 +337,27 @@ end
 
 zero{T}(x::AbstractArray{T}) = fill!(similar(x), zero(T))
 
-## iteration support for arrays as ranges ##
+## iteration support for arrays by iterating over `eachindex` in the array ##
+# Allows fast iteration by default for both LinearFast and LinearSlow arrays
 
-start(A::AbstractArray) = _start(A,linearindexing(A))
-_start(::AbstractArray,::LinearFast) = 1
-next(a::AbstractArray,i) = (a[i],i+1)
-done(a::AbstractArray,i) = (i > length(a))
+# While the definitions for LinearFast are all simple enough to inline on their
+# own, LinearSlow's CartesianRange is more complicated and requires explicit
+# inlining. The real @inline macro is not available this early in the bootstrap,
+# so this internal macro splices the meta Expr directly into the function body.
+macro _inline_meta()
+    Expr(:meta, :inline)
+end
+start(A::AbstractArray) = (@_inline_meta(); itr = eachindex(A); (itr, start(itr)))
+next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx], (i[1], s)))
+done(A::AbstractArray,i) = done(i[1], i[2])
+
+# eachindex iterates over all indices. LinearSlow definitions are later.
+eachindex(A::AbstractArray) = (@_inline_meta; eachindex(linearindexing(A), A))
+eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+
 isempty(a::AbstractArray) = (length(a) == 0)
 
 ## Conversions ##
-
-for (f,t) in ((:char,   Char),
-              (:int,    Int),
-              (:int8,   Int8),
-              (:int16,  Int16),
-              (:int32,  Int32),
-              (:int64,  Int64),
-              (:int128, Int128),
-              (:uint,   UInt),
-              (:uint8,  UInt8),
-              (:uint16, UInt16),
-              (:uint32, UInt32),
-              (:uint64, UInt64),
-              (:uint128,UInt128))
-    @eval begin
-        ($f)(x::AbstractArray{$t}) = x
-        ($f)(x::AbstractArray{$t}) = x
-
-        function ($f)(x::AbstractArray)
-            y = similar(x,$t)
-            i = 1
-            for e in x
-                y[i] = ($f)(e)
-                i += 1
-            end
-            y
-        end
-    end
-end
-
-for (f,t) in ((:integer, Integer),
-              (:unsigned, Unsigned))
-    @eval begin
-        ($f){T<:$t}(x::AbstractArray{T}) = x
-        ($f){T<:$t}(x::AbstractArray{T}) = x
-
-        function ($f)(x::AbstractArray)
-            y = similar(x,typeof(($f)(one(eltype(x)))))
-            i = 1
-            for e in x
-                y[i] = ($f)(e)
-                i += 1
-            end
-            y
-        end
-    end
-end
-
-big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
-big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
-big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
-
-bool(x::AbstractArray{Bool}) = x
-bool(x::AbstractArray) = copy!(similar(x,Bool), x)
 
 convert{T,N  }(::Type{AbstractArray{T,N}}, A::AbstractArray{T,N}) = A
 convert{T,S,N}(::Type{AbstractArray{T,N}}, A::AbstractArray{S,N}) = copy!(similar(A,T), A)
@@ -367,13 +365,9 @@ convert{T,S,N}(::Type{AbstractArray{T  }}, A::AbstractArray{S,N}) = convert(Abst
 
 convert{T,N}(::Type{Array}, A::AbstractArray{T,N}) = convert(Array{T,N}, A)
 
-for (f,T) in ((:float16,    Float16),
-              (:float32,    Float32),
-              (:float64,    Float64),
-              (:complex64,  Complex64),
-              (:complex128, Complex128))
-    @eval ($f){S,N}(x::AbstractArray{S,N}) = convert(AbstractArray{$T,N}, x)
-end
+big{T<:FloatingPoint,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigFloat,N}, x)
+big{T<:FloatingPoint,N}(x::AbstractArray{Complex{T},N}) = convert(AbstractArray{Complex{BigFloat},N}, x)
+big{T<:Integer,N}(x::AbstractArray{T,N}) = convert(AbstractArray{BigInt,N}, x)
 
 float{T<:FloatingPoint}(x::AbstractArray{T}) = x
 complex{T<:Complex}(x::AbstractArray{T}) = x
@@ -394,17 +388,20 @@ end
 
 full(x::AbstractArray) = x
 
+map(::Type{Integer},  a::Array) = map!(Integer, similar(a,typeof(Integer(one(eltype(a))))), a)
+map(::Type{Signed},   a::Array) = map!(Signed, similar(a,typeof(Signed(one(eltype(a))))), a)
+map(::Type{Unsigned}, a::Array) = map!(Unsigned, similar(a,typeof(Unsigned(one(eltype(a))))), a)
+
 ## range conversions ##
 
-for fn in _numeric_conversion_func_names
+map{T<:Real}(::Type{T}, r::StepRange) = T(r.start):T(r.step):T(last(r))
+map{T<:Real}(::Type{T}, r::UnitRange) = T(r.start):T(last(r))
+map{T<:FloatingPoint}(::Type{T}, r::FloatRange) = FloatRange(T(r.start), T(r.step), r.len, T(r.divisor))
+
+for fn in (:float,:big)
     @eval begin
         $fn(r::StepRange) = $fn(r.start):$fn(r.step):$fn(last(r))
         $fn(r::UnitRange) = $fn(r.start):$fn(last(r))
-    end
-end
-
-for fn in (:float,:float16,:float32,:float64,:big)
-    @eval begin
         $fn(r::FloatRange) = FloatRange($fn(r.start), $fn(r.step), r.len, $fn(r.divisor))
     end
 end
@@ -462,7 +459,7 @@ function flipdim(A::AbstractArray, d::Integer)
     B = similar(A)
     nnd = 0
     for i = 1:nd
-        nnd += int(size(A,i)==1 || i==d)
+        nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension
@@ -478,16 +475,13 @@ function flipdim(A::AbstractArray, d::Integer)
     return B
 end
 
-flipud(A::AbstractArray) = flipdim(A, 1)
-fliplr(A::AbstractArray) = flipdim(A, 2)
-
-circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [integer(shiftamt)])
+circshift(a::AbstractArray, shiftamt::Real) = circshift(a, [Integer(shiftamt)])
 function circshift{T,N}(a::AbstractArray{T,N}, shiftamts)
     I = ()
     for i=1:N
         s = size(a,i)
         d = i<=length(shiftamts) ? shiftamts[i] : 0
-        I = tuple(I..., d==0 ? [1:s] : mod([-d:s-1-d], s).+1)
+        I = tuple(I..., d==0 ? [1:s;] : mod([-d:s-1-d;], s).+1)
     end
     a[(I::NTuple{N,Vector{Int}})...]
 end
@@ -576,18 +570,12 @@ vcat{T}(X::T...)         = T[ X[i] for i=1:length(X) ]
 vcat{T<:Number}(X::T...) = T[ X[i] for i=1:length(X) ]
 
 function vcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,length(X)), X)
 end
 
 function hcat(X::Number...)
-    T = Bottom
-    for x in X
-        T = promote_type(T,typeof(x))
-    end
+    T = promote_typeof(X...)
     hvcat_fill(Array(T,1,length(X)), X)
 end
 
@@ -662,7 +650,13 @@ function vcat{T}(A::AbstractMatrix{T}...)
 end
 
 ## cat: general case
+
 function cat(catdims, X...)
+    T = promote_type(map(x->isa(x,AbstractArray) ? eltype(x) : typeof(x), X)...)
+    cat_t(catdims, T, X...)
+end
+
+function cat_t(catdims, typeC::Type, X...)
     catdims = collect(catdims)
     nargs = length(X)
     ndimsX = Int[isa(a,AbstractArray) ? ndims(a) : 0 for a in X]
@@ -673,13 +667,11 @@ function cat(catdims, X...)
         dims2cat[catdims[k]]=k
     end
 
-    typeC = isa(X[1],AbstractArray) ? eltype(X[1]) : typeof(X[1])
     dimsC = Int[d <= ndimsX[1] ? size(X[1],d) : 1 for d=1:ndimsC]
     for k = 1:length(catdims)
         catsizes[1,k] = dimsC[catdims[k]]
     end
     for i = 2:nargs
-        typeC = promote_type(typeC, isa(X[i], AbstractArray) ? eltype(X[i]) : typeof(X[i]))
         for d = 1:ndimsC
             currentdim = (d <= ndimsX[i] ? size(X[i],d) : 1)
             if dims2cat[d]==0
@@ -710,56 +702,18 @@ end
 vcat(X...) = cat(1, X...)
 hcat(X...) = cat(2, X...)
 
+typed_vcat(T::Type, X...) = cat_t(1, T, X...)
+typed_hcat(T::Type, X...) = cat_t(2, T, X...)
+
 cat{T}(catdims, A::AbstractArray{T}...) = cat_t(catdims, T, A...)
 
-cat(catdims, A::AbstractArray...) =
-    cat_t(catdims, promote_eltype(A...), A...)
-
-function cat_t(catdims, typeC, A::AbstractArray...)
-    catdims = collect(catdims)
-    nargs = length(A)
-    ndimsA = Int[ndims(a) for a in A]
-    ndimsC = max(maximum(ndimsA), maximum(catdims))
-    catsizes = zeros(Int,(nargs,length(catdims)))
-    dims2cat = zeros(Int,ndimsC)
-    for k = 1:length(catdims)
-        dims2cat[catdims[k]]=k
-    end
-
-    dimsC = Int[d <= ndimsA[1] ? size(A[1],d) : 1 for d=1:ndimsC]
-    for k = 1:length(catdims)
-        catsizes[1,k] = dimsC[catdims[k]]
-    end
-    for i = 2:nargs
-        for d = 1:ndimsC
-            currentdim = (d <= ndimsA[i] ? size(A[i],d) : 1)
-            if dims2cat[d]==0
-                dimsC[d] == currentdim || throw(DimensionMismatch("mismatch in dimension $(d)"))
-            else
-                dimsC[d] += currentdim
-                catsizes[i,dims2cat[d]] = currentdim
-            end
-        end
-    end
-
-    C = similar(full(A[1]), typeC, tuple(dimsC...))
-    if length(catdims)>1
-        fill!(C,0)
-    end
-
-    offsets = zeros(Int,length(catdims))
-    for i=1:nargs
-        cat_one = [ dims2cat[d]==0 ? (1:dimsC[d]) : (offsets[dims2cat[d]]+(1:catsizes[i,dims2cat[d]])) for d=1:ndimsC]
-        C[cat_one...] = A[i]
-        for k = 1:length(catdims)
-            offsets[k] += catsizes[i,k]
-        end
-    end
-    return C
-end
+cat(catdims, A::AbstractArray...) = cat_t(catdims, promote_eltype(A...), A...)
 
 vcat(A::AbstractArray...) = cat(1, A...)
 hcat(A::AbstractArray...) = cat(2, A...)
+
+typed_vcat(T::Type, A::AbstractArray...) = cat_t(1, T, A...)
+typed_hcat(T::Type, A::AbstractArray...) = cat_t(2, T, A...)
 
 # 2d horizontal and vertical concatenation
 
@@ -851,24 +805,47 @@ function hvcat_fill(a, xs)
     a
 end
 
-function hvcat(rows::(Int...), xs::Number...)
+function typed_hvcat(T::Type, rows::(Int...), xs::Number...)
     nr = length(rows)
     nc = rows[1]
-    #error check
     for i = 2:nr
         if nc != rows[i]
             throw(ArgumentError("row $(i) has mismatched number of columns"))
         end
     end
     len = length(xs)
-    T = typeof(xs[1])
-    for i=2:len
-        T = promote_type(T,typeof(xs[i]))
-    end
     if nr*nc != len
         throw(ArgumentError("argument count $(len) does not match specified shape $((nr,nc))"))
     end
     hvcat_fill(Array(T, nr, nc), xs)
+end
+
+function hvcat(rows::(Int...), xs::Number...)
+    T = promote_typeof(xs...)
+    typed_hvcat(T, rows, xs...)
+end
+
+# fallback definition of hvcat in terms of hcat and vcat
+function hvcat(rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    vcat(rs...)
+end
+
+function typed_hvcat(T::Type, rows::(Int...), as...)
+    nbr = length(rows)  # number of block rows
+    rs = cell(nbr)
+    a = 1
+    for i = 1:nbr
+        rs[i] = hcat(as[a:a-1+rows[i]]...)
+        a += rows[i]
+    end
+    T[rs...;]
 end
 
 ## Reductions and scans ##
@@ -983,18 +960,6 @@ end
 
 ## Other array functions ##
 
-# fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::(Int...), as...)
-    nbr = length(rows)  # number of block rows
-    rs = cell(nbr)
-    a = 1
-    for i = 1:nbr
-        rs[i] = hcat(as[a:a-1+rows[i]]...)
-        a += rows[i]
-    end
-    vcat(rs...)
-end
-
 function repmat(a::AbstractVecOrMat, m::Int, n::Int=1)
     o, p = size(a,1), size(a,2)
     b = similar(a, o*m, p*n)
@@ -1020,24 +985,24 @@ function repmat(a::AbstractVector, m::Int)
 end
 
 sub2ind(dims) = 1
-sub2ind(dims, i::Integer) = int(i)
-sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, int(i), int(j))
+sub2ind(dims, i::Integer) = Int(i)
+sub2ind(dims, i::Integer, j::Integer) = sub2ind(dims, Int(i), Int(j))
 sub2ind(dims, i::Int, j::Int) = (j-1)*dims[1] + i
-sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, int(i0),int(i1),int(i2))
+sub2ind(dims, i0::Integer, i1::Integer, i2::Integer) = sub2ind(dims, Int(i0),Int(i1),Int(i2))
 sub2ind(dims, i0::Int, i1::Int, i2::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*(i2-1))
 sub2ind(dims, i0::Integer, i1::Integer, i2::Integer, i3::Integer) =
-    sub2ind(dims, int(i0),int(i1),int(i2),int(i3))
+    sub2ind(dims, Int(i0),Int(i1),Int(i2),Int(i3))
 sub2ind(dims, i0::Int, i1::Int, i2::Int, i3::Int) =
     i0 + dims[1]*((i1-1) + dims[2]*((i2-1) + dims[3]*(i3-1)))
 
 function sub2ind(dims, I::Integer...)
     ndims = length(dims)
-    index = int(I[1])
+    index = Int(I[1])
     stride = 1
     for k=2:ndims
         stride = stride * dims[k-1]
-        index += (int(I[k])-1) * stride
+        index += (Int(I[k])-1) * stride
     end
     return index
 end
@@ -1073,7 +1038,7 @@ function ind2sub(dims::(Integer,Integer...), ind::Int)
     return tuple(ind, sub...)
 end
 
-ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, int(ind))
+ind2sub(dims::(Integer...), ind::Integer) = ind2sub(dims, Int(ind))
 ind2sub(dims::(), ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::(Integer,), ind::Int) = (ind,)
 ind2sub(dims::(Integer,Integer), ind::Int) =
@@ -1217,7 +1182,7 @@ end
 
 ##
 # generic map on any iterator
-function map(f::Callable, iters...)
+function map(f, iters...)
     result = []
     len = length(iters)
     states = [start(iters[idx]) for idx in 1:len]
@@ -1251,7 +1216,7 @@ function mapslices(f::Function, A::AbstractArray, dims::AbstractVector)
 
     dimsA = [size(A)...]
     ndimsA = ndims(A)
-    alldims = [1:ndimsA]
+    alldims = [1:ndimsA;]
 
     otherdims = setdiff(alldims, dims)
 
@@ -1299,7 +1264,7 @@ end
 
 
 # using promote_type
-function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+function promote_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, do a type promotion and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1321,7 +1286,7 @@ function promote_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractAr
     return dest
 end
 
-function map_promote(f::Callable, A::AbstractArray)
+function map_promote(f, A::AbstractArray)
     if isempty(A); return similar(A, Bottom); end
     first = f(A[1])
     dest = similar(A, typeof(first))
@@ -1330,7 +1295,15 @@ function map_promote(f::Callable, A::AbstractArray)
 end
 
 ## 1 argument
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
+map!{F}(f::F, A::AbstractArray) = map!(f, A, A)
+function map!{F}(f::F, dest::AbstractArray, A::AbstractArray)
+    for i = 1:length(A)
+        dest[i] = f(A[i])
+    end
+    return dest
+end
+
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray)
     # map to dest array, checking the type of each result. if a result does not
     # match, widen the result type and re-dispatch.
     @inbounds for i = offs:length(A)
@@ -1349,8 +1322,10 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray)
     return dest
 end
 
-function map(f::Callable, A::AbstractArray)
-    if isempty(A); return similar(A); end
+function map(f, A::AbstractArray)
+    if isempty(A)
+        return isa(f,Type) ? similar(A,f) : similar(A)
+    end
     first = f(A[1])
     dest = similar(A, typeof(first))
     dest[1] = first
@@ -1358,7 +1333,14 @@ function map(f::Callable, A::AbstractArray)
 end
 
 ## 2 argument
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
+function map!{F}(f::F, dest::AbstractArray, A::AbstractArray, B::AbstractArray)
+    for i = 1:length(A)
+        dest[i] = f(A[i], B[i])
+    end
+    return dest
+end
+
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, A::AbstractArray, B::AbstractArray)
     @inbounds for i = offs:length(A)
         el = f(A[i], B[i])
         S = typeof(el)
@@ -1374,7 +1356,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, A::AbstractArray,
     return dest
 end
 
-function map(f::Callable, A::AbstractArray, B::AbstractArray)
+function map(f, A::AbstractArray, B::AbstractArray)
     shp = promote_shape(size(A),size(B))
     if prod(shp) == 0
         return similar(A, promote_type(eltype(A),eltype(B)), shp)
@@ -1386,7 +1368,17 @@ function map(f::Callable, A::AbstractArray, B::AbstractArray)
 end
 
 ## N argument
-function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray...)
+function map!{F}(f::F, dest::AbstractArray, As::AbstractArray...)
+    n = length(As[1])
+    i = 1
+    ith = a->a[i]
+    for i = 1:n
+        dest[i] = f(map(ith, As)...)
+    end
+    return dest
+end
+
+function map_to!{T,F}(f::F, offs, dest::AbstractArray{T}, As::AbstractArray...)
     local i
     ith = a->a[i]
     @inbounds for i = offs:length(As[1])
@@ -1404,7 +1396,7 @@ function map_to!{T}(f::Callable, offs, dest::AbstractArray{T}, As::AbstractArray
     return dest
 end
 
-function map(f::Callable, As::AbstractArray...)
+function map(f, As::AbstractArray...)
     shape = mapreduce(size, promote_shape, As)
     if prod(shape) == 0
         return similar(As[1], promote_eltype(As...), shape)
@@ -1417,50 +1409,7 @@ end
 
 # multi-item push!, unshift! (built on top of type-specific 1-item version)
 # (note: must not cause a dispatch loop when 1-item case is not defined)
-push!(A) = A
 push!(A, a, b) = push!(push!(A, a), b)
 push!(A, a, b, c...) = push!(push!(A, a, b), c...)
-unshift!(A) = A
 unshift!(A, a, b) = unshift!(unshift!(A, b), a)
 unshift!(A, a, b, c...) = unshift!(unshift!(A, c...), a, b)
-
-# Fill S (resized as needed) with a random subsequence of A, where
-# each element of A is included in S with independent probability p.
-# (Note that this is different from the problem of finding a random
-#  size-m subset of A where m is fixed!)
-function randsubseq!(S::AbstractArray, A::AbstractArray, p::Real)
-    0 <= p <= 1 || throw(ArgumentError("probability $p not in [0,1]"))
-    n = length(A)
-    p == 1 && return copy!(resize!(S, n), A)
-    empty!(S)
-    p == 0 && return S
-    nexpected = p * length(A)
-    sizehint!(S, round(Int,nexpected + 5*sqrt(nexpected)))
-    if p > 0.15 # empirical threshold for trivial O(n) algorithm to be better
-        for i = 1:n
-            rand() <= p && push!(S, A[i])
-        end
-    else
-        # Skip through A, in order, from each element i to the next element i+s
-        # included in S. The probability that the next included element is
-        # s==k (k > 0) is (1-p)^(k-1) * p, and hence the probability (CDF) that
-        # s is in {1,...,k} is 1-(1-p)^k = F(k).   Thus, we can draw the skip s
-        # from this probability distribution via the discrete inverse-transform
-        # method: s = ceil(F^{-1}(u)) where u = rand(), which is simply
-        # s = ceil(log(rand()) / log1p(-p)).
-        L = 1 / log1p(-p)
-        i = 0
-        while true
-            s = log(rand()) * L # note that rand() < 1, so s > 0
-            s >= n - i && return S # compare before ceil to avoid overflow
-            push!(S, A[i += ceil(Int,s)])
-        end
-        # [This algorithm is similar in spirit to, but much simpler than,
-        #  the one by Vitter for a related problem in "Faster methods for
-        #  random sampling," Comm. ACM Magazine 7, 703-718 (1984).]
-    end
-    return S
-end
-
-randsubseq{T}(A::AbstractArray{T}, p::Real) = randsubseq!(T[], A, p)
-

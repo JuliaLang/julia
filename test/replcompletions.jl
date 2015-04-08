@@ -16,6 +16,21 @@ module CompletionFoo
     macro foobar()
         :()
     end
+
+    test{T<:Real}(x::T, y::T) = pass
+    test(x::Real, y::Real) = pass
+    test{T<:Real}(x::AbstractArray{T}, y) = pass
+    test(args...) = pass
+
+    test1(x::Type{Float64}) = pass
+
+    test2(x::AbstractString) = pass
+    test2(x::Char) = pass
+
+    test3(x::AbstractArray{Int}, y::Int) = pass
+    test3(x::AbstractArray{Float64}, y::Float64) = pass
+
+    array = [1, 1]
 end
 
 function temp_pkg_dir(fn::Function)
@@ -33,7 +48,7 @@ end
 
 test_complete(s) = completions(s,endof(s))
 test_scomplete(s) = shell_completions(s,endof(s))
-test_latexcomplete(s) = latex_completions(s,endof(s))[2]
+test_bslashcomplete(s) = bslash_completions(s,endof(s))[2]
 
 s = ""
 c,r = test_complete(s)
@@ -103,15 +118,29 @@ c,r,res = test_complete(s)
 
 # test latex symbol completions
 s = "\\alpha"
-c,r = test_latexcomplete(s)
+c,r = test_bslashcomplete(s)
 @test c[1] == "α"
 @test r == 1:length(s)
 @test length(c) == 1
 
 # test latex symbol completions after unicode #9209
 s = "α\\alpha"
-c,r = test_latexcomplete(s)
+c,r = test_bslashcomplete(s)
 @test c[1] == "α"
+@test r == 3:sizeof(s)
+@test length(c) == 1
+
+# test emoji symbol completions
+s = "\\:koala:"
+c,r = test_bslashcomplete(s)
+@test c[1] == "🐨"
+@test r == 1:sizeof(s)
+@test length(c) == 1
+
+# test emoji symbol completions after unicode #9209
+s = "α\\:koala:"
+c,r = test_bslashcomplete(s)
+@test c[1] == "🐨"
 @test r == 3:sizeof(s)
 @test length(c) == 1
 
@@ -146,6 +175,71 @@ c, r, res = test_complete(s)
 @test r == 1:3
 @test s[r] == "max"
 
+# Test completion of methods with input args
+s = "CompletionFoo.test(1,1, "
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Int, Int))[1])
+@test length(c) == 3
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(CompletionFoo.array,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Array{Int, 1}, Any))[1])
+@test length(c) == 2
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test(1,1,1,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test, (Any, Any, Any))[1])
+@test r == 1:18
+@test s[r] == "CompletionFoo.test"
+
+s = "CompletionFoo.test1(Int,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 0
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "CompletionFoo.test1(Float64,"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 1
+@test r == 1:19
+@test s[r] == "CompletionFoo.test1"
+
+s = "prevind(\"θ\",1,"
+c, r, res = test_complete(s)
+@test c[1] == string(methods(prevind, (UTF8String, Int))[1])
+@test r == 1:7
+@test s[r] == "prevind"
+
+for (T, arg) in [(ASCIIString,"\")\""),(Char, "')'")]
+    s = "(1, CompletionFoo.test2($arg,"
+    c, r, res = test_complete(s)
+    @test length(c) == 1
+    @test c[1] == string(methods(CompletionFoo.test2, (T,))[1])
+    @test r == 5:23
+    @test s[r] == "CompletionFoo.test2"
+end
+
+s = "CompletionFoo.test3([1.,2.],"
+c, r, res = test_complete(s)
+@test !res
+@test length(c) == 2
+
+s = "CompletionFoo.test3([1.,2.], 1.,"
+c, r, res = test_complete(s)
+@test !res
+@test c[1] == string(methods(CompletionFoo.test3, (Array{Float64, 1}, Float64))[1])
+@test r == 1:19
+@test s[r] == "CompletionFoo.test3"
+
 # Test completion in multi-line comments
 s = "#=\n\\alpha"
 c, r, res = test_complete(s)
@@ -168,6 +262,31 @@ temp_pkg_dir() do
     @test "CompletionFoo" in c #The module
     @test "CompletionFooPackage" in c #The package
     @test s[r] == "Completion"
+end
+
+path = joinpath(tempdir(),randstring())
+push!(LOAD_PATH, path)
+try
+    # Should not throw an error even though the path do no exist
+    test_complete("using ")
+    Pack_folder = joinpath(path,"Test_pack")
+    mkpath(Pack_folder)
+
+    # Test it completes on folders
+    c,r,res = test_complete("using Test_p")
+    @test "Test_pack" in c
+
+    # Test that it also completes on .jl files in pwd()
+    cd(Pack_folder) do
+        open("Text.txt","w") do f end
+        open("Pack.jl","w") do f end
+        c,r,res = test_complete("using ")
+        @test "Pack" in c
+        @test !("Text.txt" in c)
+    end
+finally
+    @test pop!(LOAD_PATH) == path
+    rm(path, recursive=true)
 end
 
 # Test $ in shell-mode
@@ -254,6 +373,11 @@ let #test that it can auto complete with spaces in file/path
             @test r == endof(s)-4:endof(s)
             @test "space\\ .file\"" in c
         end
+        # Test for issue #10324
+        s = "cd(\"$dir_space"
+        c,r = test_complete(s)
+        @test r == 5:15
+        @test s[r] ==  dir_space
     end
     rm(dir, recursive=true)
 end

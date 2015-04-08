@@ -1,12 +1,20 @@
 type MD
-  content::Vector{Any}
-  meta::Dict{Any, Any}
+    content::Vector{Any}
+    meta::Dict{Any, Any}
 
-  MD(content::AbstractVector, meta::Dict = Dict()) =
-    new(content, meta)
+    MD(content::AbstractVector, meta::Dict = Dict()) =
+        new(content, meta)
 end
 
-MD(xs...) = MD([xs...])
+MD(xs...) = MD(vcat(xs...))
+
+function MD(cfg::Config, xs...)
+    md = MD(xs...)
+    md.meta[:config] = cfg
+    return md
+end
+
+config(md::MD) = md.meta[:config]::Config
 
 # Forward some array methods
 
@@ -16,6 +24,8 @@ Base.setindex!(md::MD, args...) = setindex!(md.content, args...)
 Base.endof(md::MD) = endof(md.content)
 Base.length(md::MD) = length(md.content)
 Base.isempty(md::MD) = isempty(md.content)
+
+==(a::MD, b::MD) = (html(a) == html(b))
 
 # Parser functions:
 #   md – should be modified appropriately
@@ -28,57 +38,59 @@ Base.isempty(md::MD) = isempty(md.content)
 
 # Inner parsing
 
-function innerparse(stream::IO, parsers::Vector{Function})
-  for parser in parsers
-    inner = parser(stream)
-    inner ≡ nothing || return inner
-  end
-end
-
-innerparse(stream::IO, config::Config) =
-  innerparse(stream, config.inner.parsers)
-
-function parseinline(stream::IO, config::Config)
-  content = []
-  buffer = IOBuffer()
-  while !eof(stream)
-    char = peek(stream)
-    if haskey(config.inner, char) &&
-        (inner = innerparse(stream, config.inner[char])) != nothing
-      c = takebuf_string(buffer)
-      !isempty(c) && push!(content, c)
-      buffer = IOBuffer()
-      push!(content, inner)
-    else
-      write(buffer, read(stream, Char))
+function parseinline(stream::IO, md::MD, parsers::Vector{Function})
+    for parser in parsers
+        inner = parser(stream, md)
+        inner ≡ nothing || return inner
     end
-  end
-  c = takebuf_string(buffer)
-  !isempty(c) && push!(content, c)
-  return content
 end
 
-parseinline(s::String, c::Config) =
-  parseinline(IOBuffer(s), c)
+function parseinline(stream::IO, md::MD, config::Config)
+    content = []
+    buffer = IOBuffer()
+    while !eof(stream)
+        char = peek(stream)
+        if haskey(config.inner, char) &&
+                (inner = parseinline(stream, md, config.inner[char])) != nothing
+            c = takebuf_string(buffer)
+            !isempty(c) && push!(content, c)
+            buffer = IOBuffer()
+            push!(content, inner)
+        else
+            write(buffer, read(stream, Char))
+        end
+    end
+    c = takebuf_string(buffer)
+    !isempty(c) && push!(content, c)
+    return content
+end
 
-parseinline(s) = parseinline(s, _config_)
+parseinline(s::String, md::MD, c::Config) =
+    parseinline(IOBuffer(s), md, c)
+
+# TODO remove once GH #9888 is fixed
+parseinline{T}(s::SubString{T}, md::MD, c::Config) =
+    parseinline(convert(T, s), md, c)
+
+parseinline(s, md::MD) = parseinline(s, md, config(md))
 
 # Block parsing
 
 function parse(stream::IO, block::MD, config::Config; breaking = false)
-  skipblank(stream)
-  eof(stream) && return false
-  for parser in (breaking ? config.breaking : [config.breaking, config.regular])
-    parser(stream, block, config) && return true
-  end
-  return false
+    skipblank(stream)
+    eof(stream) && return false
+    for parser in (breaking ? config.breaking : [config.breaking; config.regular])
+        parser(stream, block) && return true
+    end
+    return false
 end
 
+parse(stream::IO, block::MD; breaking = false) =
+  parse(stream, block, config(block), breaking = breaking)
+
 function parse(stream::IO; flavor = julia)
-  isa(flavor, Symbol) && (flavor = flavors[flavor])
-  markdown = MD()
-  withconfig(flavor) do
+    isa(flavor, Symbol) && (flavor = flavors[flavor])
+    markdown = MD(flavor)
     while parse(stream, markdown, flavor) end
-  end
-  return markdown
+    return markdown
 end

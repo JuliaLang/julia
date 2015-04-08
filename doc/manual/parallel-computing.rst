@@ -303,7 +303,7 @@ we can use a *parallel for loop*, which can be written in Julia like
 this::
 
     nheads = @parallel (+) for i=1:200000000
-      int(rand(Bool))
+      Int(rand(Bool))
     end
 
 This construct implements the pattern of assigning iterations to
@@ -329,7 +329,9 @@ For example, the following code will not work as intended::
 However, this code will not initialize all of ``a``, since each
 process will have a separate copy of it. Parallel for loops like these
 must be avoided. Fortunately, distributed arrays can be used to get
-around this limitation, as we will see in the next section.
+around this limitation (see the
+`DistributedArrays.jl <https://github.com/JuliaParallel/DistributedArrays.jl>`_
+package).
 
 Using "outside" variables in parallel loops is perfectly reasonable if
 the variables are read-only::
@@ -441,147 +443,6 @@ required, since the threads are scheduled cooperatively and not
 preemptively. This means context switches only occur at well-defined
 points: in this case, when :func:`remotecall_fetch` is called.
 
-Distributed Arrays
-------------------
-
-Large computations are often organized around large arrays of data. In
-these cases, a particularly natural way to obtain parallelism is to
-distribute arrays among several processes. This combines the memory
-resources of multiple machines, allowing use of arrays too large to fit
-on one machine. Each process operates on the part of the array it
-owns, providing a ready answer to the question of how a program should
-be divided among machines.
-
-Julia distributed arrays are implemented by the :class:`DArray` type. A
-:class:`DArray` has an element type and dimensions just like an :class:`Array`.
-A :class:`DArray` can also use arbitrary array-like types to represent the local
-chunks that store actual data. The data in a :class:`DArray` is distributed by
-dividing the index space into some number of blocks in each dimension.
-
-Common kinds of arrays can be constructed with functions beginning with
-``d``::
-
-    dzeros(100,100,10)
-    dones(100,100,10)
-    drand(100,100,10)
-    drandn(100,100,10)
-    dfill(x,100,100,10)
-
-In the last case, each element will be initialized to the specified
-value ``x``. These functions automatically pick a distribution for you.
-For more control, you can specify which processes to use, and how the
-data should be distributed::
-
-    dzeros((100,100), workers()[1:4], [1,4])
-
-The second argument specifies that the array should be created on the first
-four workers. When dividing data among a large number of processes,
-one often sees diminishing returns in performance. Placing :class:`DArray`\ s
-on a subset of processes allows multiple :class:`DArray` computations to
-happen at once, with a higher ratio of work to communication on each
-process.
-
-The third argument specifies a distribution; the nth element of
-this array specifies how many pieces dimension n should be divided into.
-In this example the first dimension will not be divided, and the second
-dimension will be divided into 4 pieces. Therefore each local chunk will be
-of size ``(100,25)``. Note that the product of the distribution array must
-equal the number of processes.
-
-:func:`distribute(a::Array) <distribute>` converts a local array to a distributed array.
-
-:func:`localpart(a::DArray) <localpart>` obtains the locally-stored portion
-of a :class:`DArray`.
-
-:func:`localindexes(a::DArray) <localindexes>` gives a tuple of the index ranges owned by the
-local process.
-
-:func:`convert(Array, a::DArray) <convert>` brings all the data to the local process.
-
-Indexing a :class:`DArray` (square brackets) with ranges of indexes always
-creates a :class:`SubArray`, not copying any data.
-
-
-Constructing Distributed Arrays
--------------------------------
-
-The primitive :func:`DArray <DArray>` constructor has the following somewhat elaborate signature::
-
-    DArray(init, dims[, procs, dist])
-
-``init`` is a function that accepts a tuple of index ranges. This function should
-allocate a local chunk of the distributed array and initialize it for the specified
-indices. ``dims`` is the overall size of the distributed array.
-``procs`` optionally specifies a vector of process IDs to use.
-``dist`` is an integer vector specifying how many chunks the
-distributed array should be divided into in each dimension.
-
-The last two arguments are optional, and defaults will be used if they
-are omitted.
-
-As an example, here is how to turn the local array constructor :func:`fill`
-into a distributed array constructor::
-
-    dfill(v, args...) = DArray(I->fill(v, map(length,I)), args...)
-
-In this case the ``init`` function only needs to call :func:`fill` with the
-dimensions of the local piece it is creating.
-
-Distributed Array Operations
-----------------------------
-
-At this time, distributed arrays do not have much functionality. Their
-major utility is allowing communication to be done via array indexing, which
-is convenient for many problems. As an example, consider implementing the
-"life" cellular automaton, where each cell in a grid is updated according
-to its neighboring cells. To compute a chunk of the result of one iteration,
-each process needs the immediate neighbor cells of its local chunk. The
-following code accomplishes this::
-
-    function life_step(d::DArray)
-        DArray(size(d),procs(d)) do I
-            top   = mod(first(I[1])-2,size(d,1))+1
-            bot   = mod( last(I[1])  ,size(d,1))+1
-            left  = mod(first(I[2])-2,size(d,2))+1
-            right = mod( last(I[2])  ,size(d,2))+1
-
-            old = Array(Bool, length(I[1])+2, length(I[2])+2)
-            old[1      , 1      ] = d[top , left]   # left side
-            old[2:end-1, 1      ] = d[I[1], left]
-            old[end    , 1      ] = d[bot , left]
-            old[1      , 2:end-1] = d[top , I[2]]
-            old[2:end-1, 2:end-1] = d[I[1], I[2]]   # middle
-            old[end    , 2:end-1] = d[bot , I[2]]
-            old[1      , end    ] = d[top , right]  # right side
-            old[2:end-1, end    ] = d[I[1], right]
-            old[end    , end    ] = d[bot , right]
-
-            life_rule(old)
-        end
-    end
-
-As you can see, we use a series of indexing expressions to fetch
-data into a local array ``old``. Note that the ``do`` block syntax is
-convenient for passing ``init`` functions to the :class:`DArray` constructor.
-Next, the serial function ``life_rule`` is called to apply the update rules
-to the data, yielding the needed :class:`DArray` chunk. Nothing about ``life_rule``
-is :class:`DArray`\ -specific, but we list it here for completeness::
-
-    function life_rule(old)
-        m, n = size(old)
-        new = similar(old, m-2, n-2)
-        for j = 2:n-1
-            for i = 2:m-1
-                nc = +(old[i-1,j-1], old[i-1,j], old[i-1,j+1],
-                       old[i  ,j-1],             old[i  ,j+1],
-                       old[i+1,j-1], old[i+1,j], old[i+1,j+1])
-                new[i-1,j-1] = (nc == 3 || nc == 2 && old[i,j])
-            end
-        end
-        new
-    end
-
-
 
 Shared Arrays (Experimental)
 -----------------------------------------------
@@ -646,7 +507,7 @@ Here's a brief example::
 and is sometimes convenient for splitting up tasks among processes.
 You can, of course, divide the work any way you wish::
 
-  julia> S = SharedArray(Int, (3,4), init = S -> S[myid()-1:nworkers():length(S)] = myid())
+  julia> S = SharedArray(Int, (3,4), init = S -> S[indexpids(S):length(procs(S)):length(S)] = myid())
   3x4 SharedArray{Int64,2}:
    2  2  2  2
    3  3  3  3
@@ -656,7 +517,7 @@ Since all processes have access to the underlying data, you do have to
 be careful not to set up conflicts.  For example::
 
   @sync begin
-      for p in workers()
+      for p in procs(S)
           @async begin
               remotecall_wait(p, fill!, S, p)
           end
@@ -674,21 +535,46 @@ retained.
 ClusterManagers
 ---------------
 
-Julia worker processes can also be spawned on arbitrary machines,
-enabling Julia's natural parallelism to function quite transparently
-in a cluster environment. The :class:`ClusterManager` interface provides a
-way to specify a means to launch and manage worker processes.
+The launching, management and networking of julia processes into a logical
+cluster is done via cluster managers. A :obj:`ClusterManager` is responsible for
 
-Thus, a custom cluster manager would need to:
+- launching worker processes in a cluster environment
+- managing events during the lifetime of each worker
+- optionally, a cluster manager can also provide data transport
+
+A julia cluster has the following characteristics:
+- The initial julia process, also called the ``master`` is special and has a julia id of 1.
+- Only the ``master`` process can add or remove worker processes.
+- All processes can directly communicate with each other.
+
+Connections between workers (using the in-built TCP/IP transport) is established in the following manner:
+- :func:`addprocs` is called on the master process with a :obj:`ClusterManager` object
+- :func:`addprocs` calls the appropriate :func:`launch` method which spawns
+required number of worker processes on appropriate machines
+- Each worker starts listening on a free port and writes out its host, port information to :const:`STDOUT`
+- The cluster manager captures the stdout's of each worker and makes it available to the master process
+- The master process parses this information and sets up TCP/IP connections to each worker
+- Every worker is also notified of other workers in the cluster
+- Each worker connects to all workers whose julia id is less than its own id
+- In this way a mesh network is established, wherein every worker is directly connected with every other worker
+
+
+While the default transport layer uses plain TCP sockets, it is possible for a julia cluster to provide
+its own transport.
+
+Julia provides two in-built cluster managers:
+
+- ``LocalManager``, used when :func:`addprocs` or :func:`addprocs(np::Integer) <addprocs>` are called
+- ``SSHManager``, used when :func:`addprocs(hostnames::Array) <addprocs>` is called with a list of hostnames
+
+:class:`LocalManager` is used to launch additional workers on the same host, thereby leveraging multi-core
+and multi-processor hardware.
+
+Thus, a minimal cluster manager would need to:
 
 - be a subtype of the abstract :class:`ClusterManager`
 - implement :func:`launch`, a method responsible for launching new workers
 - implement :func:`manage`, which is called at various events during a worker's lifetime
-
-Julia provides two in-built cluster managers:
-
-- :class:`LocalManager`, used when :func:`addprocs` or :func:`addprocs(::Integer) <addprocs>` are called
-- :class:`SSHManager`, used when :func:`addprocs(::Array) <addprocs>` is called with a list of hostnames
 
 :func:`addprocs(manager::FooManager) <addprocs>` requires ``FooManager`` to implement::
 
@@ -725,13 +611,20 @@ The :func:`launch` method takes the following arguments:
 
 The :func:`launch` method is called asynchronously in a separate task. The termination of this task
 signals that all requested workers have been launched. Hence the :func:`launch` function MUST exit as soon
-as all the requested workers have been launched. The Julia worker MUST be launched with a ``--worker``
-argument. Optionally ``--bind-to bind_addr[:port]`` may also be specified to enable other workers
-to connect to it at the specified ``bind_addr`` and ``port``. Useful for multi-homed hosts.
+as all the requested workers have been launched.
 
+Newly launched workers are connected to each other, and the master process, in a all-to-all manner.
+Specifying command argument, ``--worker`` results in the launched processes initializing themselves
+as workers and connections being setup via TCP/IP sockets. Optionally ``--bind-to bind_addr[:port]``
+may also be specified to enable other workers to connect to it at the specified ``bind_addr`` and ``port``.
+This is useful for multi-homed hosts.
 
-For every worker launched, the :func:`launch` method must add a :clas`WorkerConfig`
-object with appropriate fields initialized to ``launched`` ::
+For non-TCP/IP transports, for example, an implementation may choose to use MPI as the transport,
+``--worker`` must NOT be specified. Instead newly launched workers should call ``init_worker()``
+before using any of the parallel constructs
+
+For every worker launched, the :func:`launch` method must add a :class:`WorkerConfig`
+object (with appropriate fields initialized) to ``launched`` ::
 
  type WorkerConfig
      # Common fields relevant to all cluster managers
@@ -741,6 +634,7 @@ object with appropriate fields initialized to ``launched`` ::
 
      # Used when launching additional workers at a host
      count::Nullable{Union(Int, Symbol)}
+     exename::Nullable{AbstractString}
      exeflags::Nullable{Cmd}
 
      # External cluster managers can use this to store information at a per-worker level
@@ -752,6 +646,8 @@ object with appropriate fields initialized to ``launched`` ::
      bind_addr::Nullable{AbstractString}
      sshflags::Nullable{Cmd}
      max_parallel::Nullable{Integer}
+
+     connect_at::Nullable{Any}
 
      .....
  end
@@ -766,11 +662,12 @@ to be configured manually.
 
 If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 
-``count`` and ``exeflags`` are relevant for launching additional workers from a worker.
+``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
 For example, a cluster manager may launch a single worker per node, and use that to launch
 additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
-while a value of ``:auto`` will launch as many workers as cores on that machine. ``exeflags``
-should be set to the required command line arguments for new workers.
+while a value of ``:auto`` will launch as many workers as cores on that machine.
+``exename`` is the name of the julia executable including the full path.
+``exeflags`` should be set to the required command line arguments for new workers.
 
 ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
 required to connect to the workers from the master process.
@@ -778,9 +675,8 @@ required to connect to the workers from the master process.
 ``userdata`` is provided for custom cluster managers to store their own worker specific information.
 
 
-
-:func:`manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol) <manage>` is called at different
-times during the worker's lifetime with different ``op`` values:
+``manage(manager::FooManager, id::Integer, config::WorkerConfig, op::Symbol)`` is called at different
+times during the worker's lifetime with appropriate ``op`` values:
 
       - with ``:register``/``:deregister`` when a worker is added / removed
         from the Julia worker pool.
@@ -788,6 +684,59 @@ times during the worker's lifetime with different ``op`` values:
         :class:`ClusterManager` should signal the appropriate worker with an
         interrupt signal.
       - with ``:finalize`` for cleanup purposes.
+
+
+Cluster Managers with custom transports
+---------------------------------------
+
+Replacing the default TCP/IP all-to-all socket connections with a custom transport layer is a little more involved.
+Each julia process has as many communication tasks as the workers it is connected to. For example, consider a julia cluster of
+32 processes in a all-to-all mesh network:
+
+    - Each julia process thus has 31 communication tasks
+    - Each task handles all incoming messages from a single remote worker in a message processing loop
+    - The message processing loop waits on an ``AsyncStream`` object - for example, a TCP socket in the default implementation, reads an entire
+      message, processes it and waits for the next one
+    - Sending messages to a process is done directly from any julia task - not just communication tasks - again, via the appropriate
+      ``AsyncStream`` object
+
+Replacing the default transport involves the new implementation to setup connections to remote workers, and to provide appropriate
+``AsyncStream`` objects that the message processing loops can wait on. The manager specific callbacks to be implemented are::
+
+    connect(manager::FooManager, pid::Integer, config::WorkerConfig)
+    kill(manager::FooManager, pid::Int, config::WorkerConfig)
+
+The default implementation (which uses TCP/IP sockets) is implemented as ``connect(manager::ClusterManager, pid::Integer, config::WorkerConfig)``.
+
+``connect`` should return a pair of ``AsyncStream`` objects, one for reading data sent from worker ``pid``,
+and the other to write data that needs to be sent to worker ``pid``. Custom cluster managers can use an in-memory ``BufferStream``
+as the plumbing to proxy data between the custom, possibly non-AsyncStream transport and julia's in-built parallel infrastructure.
+
+A ``BufferStream`` is an in-memory ``IOBuffer`` which behaves like an ``AsyncStream``.
+
+Folder ``examples/clustermanager/0mq`` is an example of using ZeroMQ is connect julia workers in a star network with a 0MQ broker in the middle.
+Note: The julia processes are still all *logically* connected to each other - any worker can message any other worker directly without any
+awareness of 0MQ being used as the transport layer.
+
+When using custom transports:
+    - julia workers must NOT be started with ``--worker``. Starting with ``--worker`` will result in the newly launched
+      workers defaulting to the TCP/IP socket transport implementation
+    - For every incoming logical connection with a worker, ``Base.process_messages(rd::AsyncStream, wr::AsyncStream)`` must be called.
+      This launches a new task that handles reading and writing of messages from/to the worker represented by the ``AsyncStream`` objects
+    - ``init_worker(manager::FooManager)`` MUST be called as part of worker process initializaton
+    - Field ``connect_at::Any`` in :class:`WorkerConfig` can be set by the cluster manager when ``launch`` is called. The value of
+      this field is passed in in all ``connect`` callbacks. Typically, it carries information on *how to connect* to a worker. For example,
+      the TCP/IP socket transport uses this field to specify the ``(host, port)`` tuple at which to connect to a worker
+
+
+``kill(manager, pid, config)`` is called to remove a worker from the cluster.
+On the master process, the corresponding ``AsyncStream`` objects must be closed by the implementation to ensure proper cleanup. The default
+implementation simply executes an ``exit()`` call on the specified remote worker.
+
+``examples/clustermanager/simple`` is an example that shows a simple implementation using unix domain sockets for cluster setup
+
+
+
 
 .. rubric:: Footnotes
 

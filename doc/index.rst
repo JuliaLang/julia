@@ -31,6 +31,7 @@
    manual/constructors
    manual/conversion-and-promotion
    manual/modules
+   manual/documentation
    manual/metaprogramming
    manual/arrays
    manual/linear-algebra
@@ -44,6 +45,7 @@
    manual/packages
    manual/profile
    manual/performance-tips
+   manual/workflow-tips
    manual/style-guide
    manual/faq
    manual/noteworthy-differences
@@ -72,8 +74,6 @@
    stdlib/punctuation
    stdlib/sort
    stdlib/pkg
-   stdlib/collections
-   stdlib/graphics
    stdlib/dates
    stdlib/test
    stdlib/c

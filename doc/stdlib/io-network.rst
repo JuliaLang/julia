@@ -77,11 +77,6 @@ General I/O
 
    Commit all currently buffered writes to the given stream.
 
-.. function:: flush_cstdio()
-
-   Flushes the C ``stdout`` and ``stderr`` streams (which may have been
-   written to by external C code).
-
 .. function:: close(stream)
 
    Close an I/O stream. Performs a ``flush`` first.
@@ -239,7 +234,7 @@ General I/O
 
 .. function:: truncate(file,n)
 
-   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\0'
+   Resize the file or buffer given by the first argument to exactly `n` bytes, filling previously unallocated space with '\\0'
    if the file or buffer is grown
 
 .. function:: skipchars(stream, predicate; linecomment::Char)
@@ -249,7 +244,7 @@ General I/O
 .. function:: countlines(io,[eol::Char])
 
    Read io until the end of the stream/file and count the number of non-empty lines. To specify a file pass the filename as the first
-   argument. EOL markers other than '\n' are supported by passing them as the second argument.
+   argument. EOL markers other than '\\n' are supported by passing them as the second argument.
 
 .. function:: PipeBuffer()
 
@@ -261,7 +256,7 @@ General I/O
 
 .. function:: readavailable(stream)
 
-   Read all available data on the stream, blocking the task only if no data is available.
+   Read all available data on the stream, blocking the task only if no data is available. The result is a ``Vector{UInt8,1}``.
 
 
 Text I/O
@@ -400,7 +395,7 @@ Text I/O
 
    The columns are assumed to be separated by one or more whitespaces. The end of line delimiter is taken as ``\n``. If all data is numeric, the result will be a numeric array. If some elements cannot be parsed as numbers, a cell array of numbers and strings is returned.
 
-.. function:: writedlm(f, A, delim='\t')
+.. function:: writedlm(f, A, delim='\\t')
 
    Write ``A`` (a vector, matrix or an iterable collection of iterable rows) as text to ``f`` (either a filename string or an ``IO`` stream) using the given delimeter ``delim`` (which defaults to tab, but can be any printable Julia object, typically a ``Char`` or ``AbstractString``).
 
@@ -539,23 +534,23 @@ Julia environments (such as the IPython-based IJulia notebook).
 
 .. function:: reprmime(mime, x)
 
-   Returns a ``AbstractString`` or ``Vector{UInt8}`` containing the
+   Returns an ``AbstractString`` or ``Vector{UInt8}`` containing the
    representation of ``x`` in the requested ``mime`` type, as written
    by ``writemime`` (throwing a ``MethodError`` if no appropriate
-   ``writemime`` is available).  A ``AbstractString`` is returned for MIME
+   ``writemime`` is available).  An ``AbstractString`` is returned for MIME
    types with textual representations (such as ``"text/html"`` or
    ``"application/postscript"``), whereas binary data is returned as
    ``Vector{UInt8}``.  (The function ``istext(mime)`` returns whether
    or not Julia treats a given ``mime`` type as text.)
 
-   As a special case, if ``x`` is a ``AbstractString`` (for textual MIME types)
+   As a special case, if ``x`` is an ``AbstractString`` (for textual MIME types)
    or a ``Vector{UInt8}`` (for binary MIME types), the ``reprmime`` function
    assumes that ``x`` is already in the requested ``mime`` format and
    simply returns ``x``.
 
 .. function:: stringmime(mime, x)
 
-   Returns a ``AbstractString`` containing the representation of ``x`` in the
+   Returns an ``AbstractString`` containing the representation of ``x`` in the
    requested ``mime`` type.  This is similar to ``reprmime`` except
    that binary data is base64-encoded as an ASCII string.
 
@@ -658,33 +653,6 @@ Memory-mapped I/O
 .. function:: msync(array)
 
    Forces synchronization between the in-memory version of a memory-mapped ``Array`` or ``BitArray`` and the on-disk version.
-
-.. function:: msync(ptr, len, [flags])
-
-   Forces synchronization of the :func:`mmap`\ ped memory region from ``ptr`` to ``ptr+len``. Flags defaults to ``MS_SYNC``, but can be a combination of ``MS_ASYNC``, ``MS_SYNC``, or ``MS_INVALIDATE``. See your platform man page for specifics. The flags argument is not valid on Windows.
-
-   You may not need to call ``msync``, because synchronization is performed at intervals automatically by the operating system. However, you can call this directly if, for example, you are concerned about losing the result of a long-running calculation.
-
-.. data:: MS_ASYNC
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. data:: MS_SYNC
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. data:: MS_INVALIDATE
-
-   Enum constant for :func:`msync`. See your platform man page for details. (not available on Windows).
-
-.. function:: mmap(len, prot, flags, fd, offset)
-
-   Low-level interface to the ``mmap`` system call. See the man page.
-
-.. function:: munmap(pointer, len)
-
-   Low-level interface for unmapping memory (see the man page). With :func:`mmap_array` you do not need to call this directly; the memory is unmapped for you when the array goes out of scope.
-
 
 Network I/O
 -----------

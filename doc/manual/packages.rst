@@ -18,7 +18,7 @@ The :func:`Pkg.status` function prints out a summary of the state of packages yo
 Initially, you'll have no packages installed::
 
     julia> Pkg.status()
-    INFO: Initializing package repository /Users/stefan/.julia/v0.3
+    INFO: Initializing package repository /Users/stefan/.julia/v0.4
     INFO: Cloning METADATA from git://github.com/JuliaLang/METADATA.jl
     No packages installed.
 
@@ -52,7 +52,7 @@ This means that you tell it what you want and it figures out what versions to in
 So rather than installing a package, you just add it to the list of requirements and then "resolve" what needs to be installed.
 In particular, this means that if some package had been installed because it was needed by a previous version of something you wanted, and a newer version doesn't have that requirement anymore, updating will actually remove that package.
 
-Your package requirements are in the file ``~/.julia/v0.3/REQUIRE``.
+Your package requirements are in the file ``~/.julia/v0.4/REQUIRE``.
 You can edit this file by hand and then call :func:`Pkg.resolve` to install, upgrade or remove packages to optimally satisfy the requirements, or you can do :func:`Pkg.edit`, which will open ``REQUIRE`` in your editor (configured via the ``EDITOR`` or ``VISUAL`` environment variables), and then automatically call :func:`Pkg.resolve` afterwards if necessary.
 If you only want to add or remove the requirement for a single package, you can also use the non-interactive :func:`Pkg.add` and :func:`Pkg.rm` commands, which add or remove a single requirement to ``REQUIRE`` and then call :func:`Pkg.resolve`.
 
@@ -77,15 +77,15 @@ You can add a package to the list of requirements with the :func:`Pkg.add` funct
      - NumericExtensions             0.2.17
      - Stats                         0.2.6
 
-What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.3/REQUIRE`` file::
+What this is doing is first adding ``Distributions`` to your ``~/.julia/v0.4/REQUIRE`` file::
 
-    $ cat ~/.julia/v0.3/REQUIRE
+    $ cat ~/.julia/v0.4/REQUIRE
     Distributions
 
 It then runs :func:`Pkg.resolve` using these new requirements, which leads to the conclusion that the ``Distributions`` package should be installed since it is required but not installed.
-As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.3/REQUIRE`` file by hand and then running :func:`Pkg.resolve` yourself::
+As stated before, you can accomplish the same thing by editing your ``~/.julia/v0.4/REQUIRE`` file by hand and then running :func:`Pkg.resolve` yourself::
 
-    $ echo UTF16 >> ~/.julia/v0.3/REQUIRE
+    $ echo UTF16 >> ~/.julia/v0.4/REQUIRE
 
     julia> Pkg.resolve()
     INFO: Cloning cache of UTF16 from git://github.com/nolta/UTF16.jl.git
@@ -130,6 +130,27 @@ Because the package manager uses git internally to manage the package git reposi
 
     git config --global url."https://".insteadOf git://
 
+Offline Installation of Packages
+--------------------------------
+
+For machines with no Internet connection, packages may be installed by copying
+the package root directory (given by :func:`Pkg.dir`) from a machine with the
+same operating system and environment.
+
+:func:`Pkg.add` does the following within the package root directory:
+
+1. Adds the name of the package to ``INSTALLED``.
+2. Downloads the package to ``.cache``, then copies the package to the package root directory.
+3. Recursively performs step 2 against all the packages listed in the package's ``REQUIRES`` file.
+4. Runs :func:`Pkg.build`
+
+.. warning::
+
+   Copying installed packages from a different machine is brittle for packages
+   requiring binary external dependencies. Such packages may break due to
+   differences in operating system versions, build environments, and/or
+   absolute path dependencies.
+
 Installing Unregistered Packages
 --------------------------------
 
@@ -148,7 +169,7 @@ To install an unregistered package, use :func:`Pkg.clone(url) <Pkg.clone>`, wher
     Resolving deltas: 100% (8/8), done.
 
 By convention, Julia repository names end with ``.jl`` (the additional ``.git`` indicates a "bare" git repository), which keeps them from colliding with repositories for other languages, and also makes Julia packages easy to find in search engines.
-When packages are installed in your ``.julia/v0.3`` directory, however, the extension is redundant so we leave it off.
+When packages are installed in your ``.julia/v0.4`` directory, however, the extension is redundant so we leave it off.
 
 If unregistered packages contain a ``REQUIRE`` file at the top of their source tree, that file will be used to determine which registered packages the unregistered package depends on, and they will automatically be installed.
 Unregistered packages participate in the same version resolution logic as registered packages, so installed package versions will be adjusted as necessary to satisfy the requirements of both registered and unregistered packages.
@@ -167,7 +188,7 @@ To get the latest and greatest versions of all your packages, just do :func:`Pkg
     INFO: Upgrading Distributions: v0.2.8 => v0.2.10
     INFO: Upgrading Stats: v0.2.7 => v0.2.8
 
-The first step of updating packages is to pull new changes to ``~/.julia/v0.3/METADATA`` and see if any new registered package versions have been published.
+The first step of updating packages is to pull new changes to ``~/.julia/v0.4/METADATA`` and see if any new registered package versions have been published.
 After this, :func:`Pkg.update` attempts to update packages that are checked out on a branch and not dirty (i.e. no changes have been made to files tracked by git) by pulling changes from the package's upstream repository.
 Upstream changes will only be applied if no merging or rebasing is necessary – i.e. if the branch can be `"fast-forwarded" <http://git-scm.com/book/en/Git-Branching-Basic-Branching-and-Merging>`_.
 If the branch cannot be fast-forwarded, it is assumed that you're working on it and will update the repository yourself.
@@ -180,7 +201,7 @@ A package is considered fixed if it is one of the following:
 3. **Dirty:** changes have been made to files in the repo.
 
 If any of these are the case, the package manager cannot freely change the installed version of the package, so its requirements must be satisfied by whatever other package versions it picks.
-The combination of top-level requirements in ``~/.julia/v0.3/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
+The combination of top-level requirements in ``~/.julia/v0.4/REQUIRE`` and the requirement of fixed packages are used to determine what should be installed.
 
 Checkout, Pin and Free
 ----------------------
@@ -306,6 +327,8 @@ Julia's package manager is designed so that when you have a package installed, y
 You are also able to make changes to packages, commit them using git, and easily contribute fixes and enhancements upstream.
 Similarly, the system is designed so that if you want to create a new package, the simplest way to do so is within the infrastructure provided by the package manager.
 
+.. _man-pkg-dev-setup:
+
 Initial Setup
 -------------
 
@@ -325,8 +348,234 @@ Once you do this, the package manager knows your GitHub user name and can config
 You should also `upload <https://github.com/settings/ssh>`_ your public SSH key to GitHub and set up an `SSH agent <http://linux.die.net/man/1/ssh-agent>`_ on your development machine so that you can push changes with minimal hassle.
 In the future, we will make this system extensible and support other common git hosting options like `BitBucket <https://bitbucket.org>`_ and allow developers to choose their favorite.
 
+Making changes to an existing package
+-------------------------------------
+
+Documentation changes
+~~~~~~~~~~~~~~~~~~~~~
+
+If you want to improve the online documentation of a package, the
+easiest approach (at least for small changes) is to use GitHub's
+online editing functionality. First, navigate to the repository's
+GitHub "home page," find the file (e.g., ``README.md``) within the
+repository's folder structure, and click on it. You'll see the
+contents displayed, along with a small "pencil" icon in the upper
+right hand corner. Clicking that icon opens the file in edit mode.
+Make your changes, write a brief summary describing the changes you
+want to make (this is your *commit message*), and then hit "Propose
+file change."  Your changes will be submitted for consideration by the
+package owner(s) and collaborators.
+
+Code changes
+~~~~~~~~~~~~
+
+If you want to fix a bug or add new functionality, you want to be able
+to test your changes before you submit them for consideration. You
+also need to have an easy way to update your proposal in response to
+the package owner's feedback. Consequently, in this case the strategy
+is to work locally on your own machine; once you are satisfied with
+your changes, you submit them for consideration.  This process is
+called a *pull request* because you are asking to "pull" your changes
+into the project's main repository. Because the online repository
+can't see the code on your private machine, you first *push* your
+changes to a publicly-visible location, your own online *fork* of
+the package (hosted on your own personal GitHub account).
+
+Let's assume you already have the ``Foo`` package installed.  In the
+description below, anything starting with ``Pkg.`` is meant to be
+typed at the Julia prompt; anything starting with ``git`` is meant to
+be typed in :ref:`julia's shell mode <man-shell-mode>` (or using the
+shell that comes with your operating system).  Within Julia, you can
+combine these two modes::
+
+    julia> cd(Pkg.dir("Foo"))          # go to Foo's folder
+
+    shell> git command arguments...    # command will apply to Foo
+
+Now suppose you're ready to make some changes to ``Foo``.  While there
+are several possible approaches, here is one that is widely used:
+
+- From the Julia prompt, type :func:`Pkg.checkout("Foo") <Pkg.checkout>`. This
+  ensures you're running the latest code (the ``master`` branch), rather than
+  just whatever "official release" version you have installed. (If you're
+  planning to fix a bug, at this point it's a good idea to check again
+  whether the bug has already been fixed by someone else. If it has,
+  you can request that a new official release be tagged so that the
+  fix gets distributed to the rest of the community.) If you receive
+  an error ``Foo is dirty, bailing``, see :ref:`Dirty packages
+  <man-pkg-dirty>` below.
+
+- Create a branch for your changes: navigate to the package folder
+  (the one that Julia reports from :func:`Pkg.dir("Foo") <Pkg.dir>`) and (in
+  shell mode) create a new branch using ``git checkout -b <newbranch>``,
+  where ``<newbranch>`` might be some descriptive name (e.g.,
+  ``fixbar``). By creating a branch, you ensure that you can easily go
+  back and forth between your new work and the current ``master``
+  branch (see
+  `<http://git-scm.com/book/en/v2/Git-Branching-Branches-in-a-Nutshell>`_).
+
+  If you forget to do this step until after you've already made some
+  changes, don't worry: see :ref:`more detail about branching
+  <man-post-hoc-branching>` below.
+
+- Make your changes. Whether it's fixing a bug or adding new
+  functionality, in most cases your change should include updates to
+  both the ``src/`` and ``test/`` folders.  If you're fixing a bug,
+  add your minimal example demonstrating the bug (on the current code)
+  to the test suite; by contributing a test for the bug, you ensure
+  that the bug won't accidentally reappear at some later time due to
+  other changes.  If you're adding new functionality, creating tests
+  demonstrates to the package owner that you've made sure your code
+  works as intended.
+
+- Run the package's tests and make sure they pass. There are several ways to
+  run the tests:
+
+  + From Julia, run :func:`Pkg.test("Foo") <Pkg.test>`: this will run your
+    tests in a separate (new) julia process.
+  + From Julia, ``include("runtests.jl")`` from the package's ``test/`` folder
+    (it's possible the file has a different name, look for one that runs all
+    the tests): this allows you to run the tests repeatedly in the same session
+    without reloading all the package code; for packages that take a while to
+    load, this can be much faster. With this approach, you do have to do some
+    extra work to make :ref:`changes in the package code <man-workflow-tips>`.
+  + From the shell, run ``julia runtests.jl`` from within the package's
+    ``test/`` folder.
+
+
+- Commit your changes: see `<http://git-scm.com/book/en/v2/Git-Basics-Recording-Changes-to-the-Repository>`_.
+
+- Submit your changes: From the Julia prompt, type
+  :func:`Pkg.submit("Foo") <Pkg.submit>`. This will push your changes to your
+  GitHub fork, creating it if it doesn't already exist. (If you encounter an
+  error, :ref:`make sure you've set up your SSH keys <man-pkg-dev-setup>`.)
+  Julia will then give you a hyperlink; open that link, edit the message, and
+  then click "submit." At that point, the package owner will be notified of
+  your changes and may initiate discussion.
+
+- The package owner may suggest additional improvements. To respond to those
+  suggestions, you can easily update the pull request (this only works for
+  changes that have not already been merged; for merged pull requests, make new
+  changes by starting a new branch):
+
+  + If you've changed branches in the meantime, make sure you go back
+    to the same branch with ``git checkout fixbar`` (from shell mode)
+    or :func:`Pkg.checkout("Foo", "fixbar") <Pkg.checkout>` (from the Julia
+    prompt).
+
+  + As above, make your changes, run the tests, and commit your changes.
+
+  + From the shell, type ``git push``.  This will add your new
+    commit(s) to the same pull request; you should see them appear
+    automatically on the page holding the discussion of your pull
+    request.
+
+  One potential type of change the owner may request is that you
+  squash your commits.  See :ref:`Squashing <man-pkg-squash>` below.
+
+.. _man-pkg-dirty:
+
+Dirty packages
+~~~~~~~~~~~~~~
+
+If you can't change branches because the package manager complains
+that your package is dirty, it means you have some changes that have
+not been committed. From the shell, use ``git diff`` to see
+what these changes are; you can either discard them (``git checkout
+changedfile.jl``) or commit them before switching branches.  If you
+can't easily resolve the problems manually, as a last resort you can
+delete the entire ``"Foo"`` folder and reinstall a fresh copy with
+:func:`Pkg.add("Foo") <Pkg.add>`. Naturally, this deletes any changes you've
+made.
+
+.. _man-post-hoc-branching:
+
+Making a branch *post hoc*
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Especially for newcomers to git, one often forgets to create a new
+branch until after some changes have already been made.  If you
+haven't yet staged or committed your changes, you can create a new
+branch with ``git checkout -b <newbranch>`` just as usual---git will
+kindly show you that some files have been modified and create the new
+branch for you.  *Your changes have not yet been committed to this new
+branch*, so the normal work rules still apply.
+
+However, if you've already made a commit to ``master`` but wish to go
+back to the official ``master`` (called ``origin/master``), use the
+following procedure:
+
+- Create a new branch. This branch will hold your changes.
+- Make sure everything is committed to this branch.
+- ``git checkout master``. If this fails, *do not* proceed further
+  until you have resolved the problems, or you may lose your changes.
+- *Reset* ``master`` (your current branch) back to an earlier state
+  with ``git reset --hard origin/master`` (see
+  `<http://git-scm.com/blog/2011/07/11/reset.html>`_).
+
+This requires a bit more familiarity with git, so it's much better to
+get in the habit of creating a branch at the outset.
+
+.. _man-pkg-squash:
+
+Squashing and rebasing
+~~~~~~~~~~~~~~~~~~~~~~
+
+.. highlight:: none
+
+Depending on the tastes of the package owner (s)he may ask you to
+"squash" your commits. This is especially likely if your change is
+quite simple but your commit history looks like this::
+
+   WIP: add new 1-line whizbang function (currently breaks package)
+   Finish whizbang function
+   Fix typo in variable name
+   Oops, don't forget to supply default argument
+   Split into two 1-line functions
+   Rats, forgot to export the second function
+   ...
+
+.. highlight:: julia
+
+This gets into the territory of more advanced git usage, and you're
+encouraged to do some reading
+(`<http://git-scm.com/book/en/v2/Git-Branching-Rebasing>`_).  However,
+a brief summary of the procedure is as follows:
+
+- To protect yourself from error, start from your ``fixbar`` branch
+  and create a new branch with ``git checkout -b fixbar_backup``.  Since
+  you started from ``fixbar``, this will be a copy. Now go back to
+  the one you intend to modify with ``git checkout fixbar``.
+- From the shell, type ``git rebase -i origin/master``.
+- To combine commits, change ``pick`` to ``squash`` (for additional
+  options, consult other sources). Save the file and close the editor
+  window.
+- Edit the combined commit message.
+
+If the rebase goes badly, you can go back to the beginning to try
+again like this::
+
+   git checkout fixbar
+   git reset --hard fixbar_backup
+
+Now let's assume you've rebased successfully. Since your ``fixbar``
+repository has now diverged from the one in your GitHub fork, you're
+going to have to do a *force push*:
+
+- To make it easy to refer to your GitHub fork, create a "handle" for
+  it with ``git remote add myfork
+  https://github.com/myaccount/Foo.jl.git``, where the URL comes from
+  the "clone URL" on your GitHub fork's page.
+- Force-push to your fork with ``git push myfork +fixbar``. The `+`
+  indicates that this should replace the ``fixbar`` branch found at
+  ``myfork``.
+
+
+Creating a new Package
+----------------------
+
 Guidelines for Naming a Package
--------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Package names should be sensible to most Julia users, *even to those who are
 not domain experts*.
@@ -360,26 +609,26 @@ not domain experts*.
   * Julia does not have a single comprehensive plotting package. Instead,
     ``Gadfly``, ``PyPlot``, ``Winston`` and other packages each implement a
     unique approach based on a particular design philosophy.
-  
+
   * In contrast, ``SortingAlgorithms`` provides a consistent interface to use
     many well-established sorting algorithms.
 
 5. Packages that wrap external libraries or programs should be named after
    those libraries or programs.
-   
+
   * ``CPLEX.jl`` wraps the ``CPLEX`` library, which can be identified easily in
     a web search.
 
   * ``MATLAB.jl`` provides an interface to call the MATLAB engine from within Julia.
 
-Generating a New Package
-------------------------
+Generating the package
+~~~~~~~~~~~~~~~~~~~~~~
 
 Suppose you want to create a new Julia package called ``FooBar``.
 To get started, do :func:`Pkg.generate(pkg,license) <Pkg.generate>` where ``pkg`` is the new package name and ``license`` is the name of a license that the package generator knows about::
 
     julia> Pkg.generate("FooBar","MIT")
-    INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.3/FooBar
+    INFO: Initializing FooBar repo: /Users/stefan/.julia/v0.4/FooBar
     INFO: Origin: git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Generating LICENSE.md
     INFO: Generating README.md
@@ -388,9 +637,9 @@ To get started, do :func:`Pkg.generate(pkg,license) <Pkg.generate>` where ``pkg`
     INFO: Generating .travis.yml
     INFO: Committing FooBar generated files
 
-This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository::
+This creates the directory ``~/.julia/v0.4/FooBar``, initializes it as a git repository, generates a bunch of files that all packages should have, and commits them to the repository::
 
-    $ cd ~/.julia/v0.3/FooBar && git show --stat
+    $ cd ~/.julia/v0.4/FooBar && git show --stat
 
     commit 84b8e266dae6de30ab9703150b3bf771ec7b6285
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -413,7 +662,7 @@ This creates the directory ``~/.julia/v0.3/FooBar``, initializes it as a git rep
      5 files changed, 51 insertions(+)
 
 At the moment, the package manager knows about the MIT "Expat" License, indicated by ``"MIT"``, the Simplified BSD License, indicated by ``"BSD"``, and version 2.0 of the Apache Software License, indicated by ``"ASL"``.
-If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.3/PACKAGE/LICENSE.md`` file after it has been generated.
+If you want to use a different license, you can ask us to add it to the package generator, or just pick one of these three and then modify the ``~/.julia/v0.4/PACKAGE/LICENSE.md`` file after it has been generated.
 
 If you created a GitHub account and configured git to know about it, :func:`Pkg.generate` will set an appropriate origin URL for you.
 It will also automatically generate a ``.travis.yml`` file for using the `Travis <https://travis-ci.org>`_ automated testing service.
@@ -421,7 +670,7 @@ You will have to enable testing on the Travis website for your package repositor
 Of course, all the default testing does is verify that ``using FooBar`` in Julia works.
 
 Making Your Package Available
------------------------------
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Once you've made some commits and you're happy with how ``FooBar`` is working, you may want to get some other people to try it out.
 First you'll need to create the remote repository and push your code to it;
@@ -439,7 +688,7 @@ People you send this URL to can use :func:`Pkg.clone` to install the package and
 .. [3] Installing and using GitHub's `"hub" tool <https://github.com/github/hub>`_ is highly recommended. It allows you to do things like run ``hub create`` in the package repo and have it automatically created via GitHub's API.
 
 Publishing Your Package
------------------------
+~~~~~~~~~~~~~~~~~~~~~~~
 
 Once you've decided that ``FooBar`` is ready to be registered as an official package, you can add it to your local copy of ``METADATA`` using :func:`Pkg.register`::
 
@@ -447,9 +696,9 @@ Once you've decided that ``FooBar`` is ready to be registered as an official pac
     INFO: Registering FooBar at git://github.com/StefanKarpinski/FooBar.jl.git
     INFO: Committing METADATA for FooBar
 
-This creates a commit in the ``~/.julia/v0.3/METADATA`` repo::
+This creates a commit in the ``~/.julia/v0.4/METADATA`` repo::
 
-    $ cd ~/.julia/v0.3/METADATA && git show
+    $ cd ~/.julia/v0.4/METADATA && git show
 
     commit 9f71f4becb05cadacb983c54a72eed744e5c019d
     Author: Stefan Karpinski <stefan@karpinski.org>
@@ -505,7 +754,7 @@ This is a good way to have people test out your packages as you work on them, be
 .. _man-manual-publish:
 
 Publishing METADATA manually
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+============================
 
 If :func:`Pkg.publish` fails you can follow these instructions to
 manually publish your package.
@@ -518,12 +767,12 @@ that copy exists, you can push your local changes to your copy
 
 1. go to `<https://github.com/JuliaLang/METADATA.jl/fork>`_ and create your own
 fork.
- 
+
 2. add your fork as a remote repository for the METADATA
 repository on your local computer (in the terminal where USERNAME is
 your github username)::
-    
-    cd ~/.julia/METADATA
+
+    cd ~/.julia/v0.4/METADATA
     git remote add USERNAME https://github.com/USERNAME/METADATA.jl.git
 
 3. push your changes to your fork::
@@ -537,7 +786,7 @@ fork, and click the "pull request" link.
 Tagging Package Versions
 ------------------------
 
-Once you are ready to make an official version your package, you can tag and register it with the :func:`Pkg.tag` command::
+Once you are ready to make an official version your package---or release a new version of an established package---you can tag and register it with the :func:`Pkg.tag` command::
 
     julia> Pkg.tag("FooBar")
     INFO: Tagging FooBar v0.0.1
@@ -545,12 +794,12 @@ Once you are ready to make an official version your package, you can tag and reg
 
 This tags ``v0.0.1`` in the ``FooBar`` repo::
 
-    $ cd ~/.julia/v0.3/FooBar && git tag
+    $ cd ~/.julia/v0.4/FooBar && git tag
     v0.0.1
 
 It also creates a new version entry in your local ``METADATA`` repo for ``FooBar``::
 
-    $ cd ~/.julia/v0.3/FooBar && git show
+    $ cd ~/.julia/v0.4/FooBar && git show
     commit de77ee4dc0689b12c5e8b574aef7f70e8b311b0e
     Author: Stefan Karpinski <stefan@karpinski.org>
     Date:   Wed Oct 16 23:06:18 2013 -0400
@@ -593,7 +842,7 @@ Fixing Package Requirements
 
 If you need to fix the registered requirements of an already-published package version, you can do so just by editing the metadata for that version, which will still have the same commit hash – the hash associated with a version is permanent::
 
-    $ cd ~/.julia/v0.3/METADATA/FooBar/versions/0.0.1 && cat requires
+    $ cd ~/.julia/v0.4/METADATA/FooBar/versions/0.0.1 && cat requires
     julia 0.3-
     $ vi requires
 
@@ -606,7 +855,7 @@ When you fix the requirements in ``METADATA`` for a previous version of a packag
 Requirements Specification
 --------------------------
 
-The ``~/.julia/v0.3/REQUIRE`` file, the ``REQUIRE`` file inside packages, and the ``METADATA`` package ``requires`` files use a simple line-based format to express the ranges of package versions which need to be installed.  Package ``REQUIRE`` and ``METADATA requires`` files should also include the range of versions of ``julia`` the package is expected to work with.
+The ``~/.julia/v0.4/REQUIRE`` file, the ``REQUIRE`` file inside packages, and the ``METADATA`` package ``requires`` files use a simple line-based format to express the ranges of package versions which need to be installed.  Package ``REQUIRE`` and ``METADATA requires`` files should also include the range of versions of ``julia`` the package is expected to work with.
 
 Here's how these files are parsed and interpreted.
 
@@ -684,4 +933,3 @@ various releases of Julia. Examples of runtime checks::
     VERSION >= v"0.2.1" #get at least version 0.2.1
 
 See the section on :ref:`version number literals <man-version-number-literals>` for a more complete description.
-

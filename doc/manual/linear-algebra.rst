@@ -1,7 +1,7 @@
 .. currentmodule:: Base
 
 ****************
- Linear algebra 
+ Linear algebra
 ****************
 
 Matrix factorizations
@@ -30,7 +30,7 @@ in the :ref:`stdlib-linalg` section of the standard library documentation.
 :class:`GeneralizedSVD`  `Generalized SVD <http://en.wikipedia.org/wiki/Generalized_singular_value_decomposition#Higher_order_version>`_
 ======================== ======
 
-Special matrices 
+Special matrices
 ================
 
 `Matrices with special symmetries and structures <http://www2.imm.dtu.dk/pubdb/views/publication_details.php?id=3274>`_
@@ -44,15 +44,16 @@ The following tables summarize the types of special matrices that have been
 implemented in Julia, as well as whether hooks to various optimized methods
 for them in LAPACK are available.
 
-======================= ==================================================================================
-:class:`Hermitian`      `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
-:class:`Triangular`     Upper/lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
-:class:`Tridiagonal`    `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
-:class:`SymTridiagonal` Symmetric tridiagonal matrix
-:class:`Bidiagonal`     Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
-:class:`Diagonal`       `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_
-:class:`UniformScaling` `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_
-======================= ==================================================================================
+======================== ==================================================================================
+:class:`Hermitian`       `Hermitian matrix <http://en.wikipedia.org/wiki/Hermitian_matrix>`_
+:class:`UpperTriangular` Upper `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`LowerTriangular` Lower `triangular matrix <http://en.wikipedia.org/wiki/Triangular_matrix>`_
+:class:`Tridiagonal`     `Tridiagonal matrix <http://en.wikipedia.org/wiki/Tridiagonal_matrix>`_
+:class:`SymTridiagonal`  Symmetric tridiagonal matrix
+:class:`Bidiagonal`      Upper/lower `bidiagonal matrix <http://en.wikipedia.org/wiki/Bidiagonal_matrix>`_
+:class:`Diagonal`        `Diagonal matrix <http://en.wikipedia.org/wiki/Diagonal_matrix>`_
+:class:`UniformScaling`  `Uniform scaling operator <http://en.wikipedia.org/wiki/Uniform_scaling>`_
+======================== ==================================================================================
 
 Elementary operations
 ---------------------
@@ -64,7 +65,9 @@ Elementary operations
 | :class:`Hermitian`      |       |       |       |   MV  | :func:`inv`,                   |
 |                         |       |       |       |       | :func:`sqrtm`, :func:`expm`    |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
-| :class:`Triangular`     |       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
+| :class:`UpperTriangular`|       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
++-------------------------+-------+-------+-------+-------+--------------------------------+
+| :class:`LowerTriangular`|       |       |  MV   |   MV  | :func:`inv`, :func:`det`       |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
 | :class:`SymTridiagonal` |   M   |   M   |  MS   |   MV  | :func:`eigmax`, :func:`eigmin` |
 +-------------------------+-------+-------+-------+-------+--------------------------------+
@@ -96,7 +99,9 @@ Matrix factorizations
 +=========================+========+=============+=================+=================+=============+=================+
 | :class:`Hermitian`      |   HE   |             |       ARI       |                 |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
-| :class:`Triangular`     |   TR   |             |                 |                 |             |                 |
+| :class:`UpperTriangular`|   TR   |      A      |        A        |       A         |             |                 |
++-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
+| :class:`LowerTriangular`|   TR   |      A      |        A        |       A         |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+
 | :class:`SymTridiagonal` |   ST   |      A      |       ARI       |       AV        |             |                 |
 +-------------------------+--------+-------------+-----------------+-----------------+-------------+-----------------+

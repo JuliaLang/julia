@@ -4,12 +4,13 @@ abstract Ty
 
 type TypeName
     name::Symbol
+    abs::Bool
     super::Ty    # actually TagT
     # arity
     # representation
-    # abstract, mutable
-    TypeName(name, super) = new(name, super)
-    TypeName(name) = new(name)
+    # mutable
+    TypeName(name, abs, super) = new(name, abs, super)
+    TypeName(name, abs) = new(name, abs)
 end
 
 show(io::IO, x::TypeName) = print(io, x.name)
@@ -111,12 +112,12 @@ end
 
 # Any, Bottom, and Tuple
 
-const AnyT = TagT(TypeName(:Any), ())
+const AnyT = TagT(TypeName(:Any,true), ())
 AnyT.name.super = AnyT
 
 const BottomT = BottomTy()
 
-const TupleName = TypeName(:Tuple, AnyT)
+const TupleName = TypeName(:Tuple,false,AnyT)
 const TupleT = TagT(TupleName, (AnyT,), true)
 tupletype(xs...) = inst(TupleName, xs...)
 vatype(xs...) = (t = inst(TupleName, xs...); t.vararg = true; t)
@@ -131,7 +132,7 @@ inst(t::TagT) = t
 inst(t::UnionAllT, param) = subst(t.T, Dict{Any,Any}(t.var => param))
 inst(t::UnionAllT, param, rest...) = inst(inst(t,param), rest...)
 
-super(t::TagT) = inst(t.name.super, t.params...)
+super(t::TagT) = t.name===TupleName ? AnyT : inst(t.name.super, t.params...)
 
 extend(d::Dict, k, v) = (x = copy(d); x[k]=v; x)
 
@@ -154,6 +155,8 @@ type Bounds
     lb
     ub
     right::Bool
+    concrete::Bool
+    Bounds(l,u,r) = new(l,u,r,false)
 end
 
 type UnionState
@@ -244,41 +247,80 @@ issub(a::Ty, b::UnionT, env) =
 issub(a::UnionT, b::Var, env) = issub_union(b, a, env, false, env.Lunions)
 issub(a::Var, b::UnionT, env) = a===b.a || a===b.b || issub_union(a, b, env, true, env.Runions)
 
+function isconcrete(t::TagT, env)
+    if t.name === TupleName
+        t.vararg && return false
+        for x in t.params
+            !isconcrete(x, env) && return false
+        end
+    end
+    return !t.name.abs
+end
+
+isconcrete(t::BottomTy, env) = true
+isconcrete(x, env) = true
+
+function isconcrete(t::UnionT, env)
+    t.a === BottomT && return isconcrete(t.b, env)
+    return isconcrete(t.a, env) && issub(t.b, t.a, env)
+end
+
+function isconcrete(v::Var, env)
+    b = env.vars[v]
+    #return issub(b.ub, b.lb, env)
+    return b.concrete || isconcrete(b.ub, env)  # ???
+end
+
+function isconcrete(t::UnionAllT, env)
+    #if isconcrete(t.var.ub, env)
+    # TODO: maybe true if var is only in covariant position
+    #    return isconcrete(inst(t, t.var.ub), env)
+    #end
+
+    #if issub(t.var.ub, t.var.lb, env)
+    # TODO this seems to require more nondeterminism
+    #    return isconcrete(inst(t, t.var.ub), env)
+    #end
+    return false
+end
+
 function issub(a::TagT, b::TagT, env)
     a === b && return true
     b === AnyT && return true
     a === AnyT && return false
     if a.name !== b.name
-        a.name === TupleName && return false
         return issub(super(a), b, env)
     end
     if a.name === TupleName
         va, vb = a.vararg, b.vararg
         la, lb = length(a.params), length(b.params)
-        if va && (!vb || la < lb)
-            return false
-        end
-        ai = bi = 1
-        while true
-            ai > la && return bi > lb || (bi==lb && vb)
-            bi > lb && return false
-            !issub(a.params[ai], b.params[bi], env) && return false
-            ai==la && bi==lb && va && vb && return true
-            if ai < la || !va
-                ai += 1
-            end
+        ai = bi = 0
+        while ai < la
+            ai += 1
+            ap = a.params[ai]
             if bi < lb || !vb
                 bi += 1
+                bi > lb && return false
+                bp = b.params[bi]
             end
+            if isa(bp,Var) && env.vars[bp].right
+                if !isconcrete(env.vars[bp].lb, env)
+                    return false
+                end
+                env.vars[bp].concrete = true
+                if isa(ap, Var)
+                    env.vars[ap].concrete = true
+                end
+            end
+            !issub(ap, bp, env) && return false
         end
-        @assert false
-    else
-        for i = 1:length(a.params)
-            ai, bi = a.params[i], b.params[i]
-            # use issub in both directions to test equality
-            if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
-                return false
-            end
+        return (la==lb && va==vb) || (vb && (la >= (va ? lb : lb-1)))
+    end
+    for i = 1:length(a.params)
+        ai, bi = a.params[i], b.params[i]
+        # use issub in both directions to test equality
+        if !(ai===bi || (issub(ai, bi, env) && issub(bi, ai, env)))
+            return false
         end
     end
     return true
@@ -312,8 +354,12 @@ end
 
 function var_lt(b::Var, a::Union(Ty,Var), env)
     bb = env.vars[b]
+    #println("$b($(bb.lb),$(bb.ub)) <: $a")
     !bb.right && return issub(bb.ub, a, env)  # check ∀b . b<:a
     !issub(bb.lb, a, env) && return false
+    if bb.concrete
+        !issub(a, bb.ub, env) && return false
+    end
     # for contravariance we would need to compute a meet here, but
     # because of invariance bb.ub ⊓ a == a here always. however for this
     # to work we need to compute issub(left,right) before issub(right,left),
@@ -324,8 +370,12 @@ end
 
 function var_gt(b::Var, a::Union(Ty,Var), env)
     bb = env.vars[b]
+    #println("$b($(bb.lb),$(bb.ub)) >: $a")
     !bb.right && return issub(a, bb.lb, env)  # check ∀b . b>:a
     !issub(a, bb.ub, env) && return false
+    if bb.concrete
+        !issub(bb.lb, a, env) && return false
+    end
     bb.lb = join(bb.lb, a, env)
     return true
 end
@@ -434,7 +484,7 @@ function xlate(t::DataType, env)
         for i = length(para):-1:1
             sup = UnionAllT(para[i], sup)
         end
-        tn = TypeName(t.name.name, sup)
+        tn = TypeName(t.name.name, t.abstract, sup)
         tndict[t.name] = tn
     else
         tn = tndict[t.name]
@@ -453,20 +503,20 @@ issub(a::Type, b::Ty  ) = issub(xlate(a), b)
 # tests
 
 AbstractArrayT =
-    let AbstractArrayName = TypeName(:AbstractArray, @UnionAll T @UnionAll N AnyT)
+    let AbstractArrayName = TypeName(:AbstractArray, true, @UnionAll T @UnionAll N AnyT)
         @UnionAll T @UnionAll N inst(AbstractArrayName, T, N)
     end
 
 ArrayT =
-    let ArrayName = TypeName(:Array, @UnionAll T @UnionAll N inst(AbstractArrayT, T, N))
+    let ArrayName = TypeName(:Array, false, @UnionAll T @UnionAll N inst(AbstractArrayT, T, N))
         @UnionAll T @UnionAll N inst(ArrayName, T, N)
     end
 
-PairT = let PairName = TypeName(:Pair, @UnionAll A @UnionAll B AnyT)
+PairT = let PairName = TypeName(:Pair, false, @UnionAll A @UnionAll B AnyT)
     @UnionAll A @UnionAll B inst(PairName, A, B)
 end
 
-RefT = let RefName = TypeName(:Ref, @UnionAll T AnyT)
+RefT = let RefName = TypeName(:Ref, false, @UnionAll T AnyT)
     @UnionAll T inst(RefName, T)
 end
 
@@ -477,6 +527,32 @@ tndict[Pair.name] = PairT.T.T.name
 using Base.Test
 
 issub_strict(x,y) = issub(x,y) && !issub(y,x)
+
+function test_diagonal()
+    @test !issub(Ty((Integer,Integer)), @UnionAll T tupletype(T,T))
+    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll S<:T tupletype(T,S)))
+    @test !issub(Ty((Integer,Int)), (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)))
+
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S<:T tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll T<:S<:T tupletype(T,S)) )
+    @test issub((@UnionAll R tupletype(R,R)),
+                (@UnionAll T @UnionAll S>:T tupletype(T,S)) )
+
+    @test !issub((@UnionAll T @UnionAll S tupletype(T,S)),
+                 (@UnionAll R tupletype(R,R)))
+
+    @test issub((@UnionAll T @UnionAll S<:T tupletype(T,S)),
+                (@UnionAll R tupletype(R,R)))
+
+    @test issub((@UnionAll T @UnionAll T<:S<:T tupletype(T,S)),
+                (@UnionAll R tupletype(R,R)))
+
+end
+
 
 # level 1: no varags, union, UnionAll
 function test_1()
@@ -518,6 +594,33 @@ function test_2()
     @test !issub((Int, (Real, Integer)), (Int...))
 end
 
+function test_no_diagonal()
+    # from test_3
+    @test issub((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
+
+    @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+
+    @test issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
+                (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+
+    @test issub(Ty((Int,String,Vector{Any})),
+                @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
+
+    @test isequal_type(Ty(Array{(Integer,Integer),1}),
+                       inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
+
+    @test issub(Ty((Float32,Array{Real,1})),
+                @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
+
+    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
+    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+                       (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
+
+    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+                 (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
+end
+
 # level 3: UnionAll
 function test_3()
     @test issub_strict(Ty(Array{Int,1}), @UnionAll T inst(ArrayT, T, 1))
@@ -527,11 +630,9 @@ function test_3()
 
     @test !issub((@UnionAll T<:Ty(Real) T), (@UnionAll T<:Ty(Integer) T))
 
-    @test issub((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
-    @test issub((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
-
-    @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
-    @test isequal_type((@UnionAll T @UnionAll S tupletype(T,S)), (@UnionAll T tupletype(T,T)))
+    @test issub_strict((@UnionAll T tupletype(T,T)), (@UnionAll T @UnionAll S tupletype(T,S)))
+    @test isequal_type((@UnionAll T tupletype(T,T)), (@UnionAll R tupletype(R,R)))
+    @test !issub(tupletype(Ty(Real),Ty(Real)), @UnionAll T<:Ty(Real) tupletype(T,T))
 
     @test !issub((@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (T,S)),
                  (@UnionAll T<:Ty(Integer) @UnionAll S<:Ty(Number) (S,T)))
@@ -554,8 +655,10 @@ function test_3()
     @test isequal_type((@UnionAll T tupletype(T)), tupletype(AnyT))
     @test isequal_type((@UnionAll T<:Ty(Real) tupletype(T)), tupletype(Ty(Real)))
 
-    @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
+    @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
                  (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
+    @test  issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Int)),
+                 (@UnionAll T<:Ty(Integer) @UnionAll S<:T tupletype(inst(ArrayT,T,1),S)))
 
     @test !issub(tupletype(inst(ArrayT,Ty(Integer),1), Ty(Real)),
                  (@UnionAll T<:Ty(Integer) tupletype(inst(ArrayT,T,1),T)))
@@ -567,14 +670,14 @@ function test_3()
     @test !issub(Ty((Int,String,Vector{(Integer,)})),
                  @UnionAll T tupletype(T,T,inst(ArrayT,tupletype(T),1)))
 
-    @test  issub(Ty((Int,String,Vector{Any})),
+    @test !issub(Ty((Int,String,Vector{Any})),
                  @UnionAll T tupletype(T, T, inst(ArrayT,T,1)))
 
     @test isequal_type(Ty(Array{Int,1}), inst(ArrayT, (@UnionAll T<:Ty(Int) T), 1))
     @test isequal_type(Ty(Array{(Any,),1}), inst(ArrayT, (@UnionAll T tupletype(T)), 1))
 
-    @test isequal_type(Ty(Array{(Integer,Integer),1}),
-                       inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
+    @test isequal_type(Ty(Array{(Int,Int),1}),
+                       inst(ArrayT, (@UnionAll T<:Ty(Int) tupletype(T,T)), 1))
     @test !issub(Ty(Array{(Int,Integer),1}),
                  inst(ArrayT, (@UnionAll T<:Ty(Integer) tupletype(T,T)), 1))
 
@@ -603,8 +706,8 @@ function test_3()
     @test !issub(Ty((Float32,Array{Float64,1})),
                  @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
 
-    @test issub(Ty((Float32,Array{Real,1})),
-                @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
+    @test !issub(Ty((Float32,Array{Real,1})),
+                 @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
 
     @test !issub(Ty((Number,Array{Real,1})),
                  @UnionAll T<:Ty(Real) @UnionAll S<:inst(AbstractArrayT,T,1) tupletype(T,S))
@@ -629,9 +732,9 @@ function test_3()
     @test issub_strict((@UnionAll T @UnionAll S>:T inst(PairT,T,S)),
                        (@UnionAll T @UnionAll S    inst(PairT,T,S)))
 
-    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+    @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll S<:T tupletype(inst(RefT,T),S)))
-    @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
+    @test issub_strict((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll S<:T @UnionAll R<:S tupletype(inst(RefT,T),R)))
     @test isequal_type((@UnionAll T tupletype(inst(RefT,T), T)),
                        (@UnionAll T @UnionAll T<:S<:T tupletype(inst(RefT,T),S)))
@@ -728,7 +831,7 @@ end
 
 # tricky type variable lower bounds
 function test_6()
-    @test  issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
+    @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Any})))),
                  (@UnionAll T tupletype(T, T, inst(ArrayT,T,1))))
 
     @test !issub((@UnionAll S<:Ty(Int) (@UnionAll R<:Ty(String) tupletype(S,R,Ty(Vector{Integer})))),
@@ -878,6 +981,11 @@ function test_properties()
             if issubTS
                 for R in menagerie
                     if issub(S, R)
+                        if !issub(T, R)
+                            @show T
+                            @show S
+                            @show R
+                        end
                         @test issub(T, R)  # issub(S, R) → issub(T, R)
                         @test issub(inst(RefT,S), @UnionAll T<:U<:R inst(RefT,U))
                     end
@@ -912,10 +1020,10 @@ end
 # attempt to implement non-terminating example from
 # "On the Decidability of Subtyping with Bounded Existential Types"
 function non_terminating_2()
-    C = let CName = TypeName(:C, @UnionAll T AnyT)
+    C = let CName = TypeName(:C, false, @UnionAll T AnyT)
         @UnionAll T inst(CName, T)
     end
-    D = let DName = TypeName(:D, @UnionAll T AnyT)
+    D = let DName = TypeName(:D, false, @UnionAll T AnyT)
         @UnionAll T inst(DName, T)
     end
     ¬T = @UnionAll X>:T inst(D,X)
@@ -925,3 +1033,46 @@ function non_terminating_2()
     e.vars[X] = Bounds(BottomT, ¬U, false)
     issub(X, ¬inst(C,X), e)
 end
+
+#=
+Replacing type S with a union over var T(ᶜ)<:S can affect the subtype
+relation in all possible ways:
+
+    (C{Real},C{Real}) < @U T<:Real (C{T},C{T})
+    (Real,Real)       = @U T<:Real (T,T)
+
+    (C{Real},C{Real}) ! @U Tᶜ<:Real (C{T},C{T})  (*)  # neither <= nor >=
+    (Real,Real)       > @U Tᶜ<:Real (T,T)
+
+    (C{Real},) < @U T<:Real (C{T},)
+    (Real,)    = @U T<:Real (T,)
+    (C{Real},) ! @U Tᶜ<:Real (C{T},)  (*)
+    (Real,)    = @U Tᶜ<:Real (T,)
+
+cases (*) are probably not needed in practice.
+
+
+transform all covariant occurrences of non-concrete types to
+vars: (Real,Real) => @U T<:Real @U S<:Real (T,S)
+and then treat all vars as invariant.
+this can maybe even be done on the fly without actually making the
+UnionAll types up-front.
+in fact this may only need to be done on the left.
+which implies right away that the algorithm works as-is if the left
+side is a concrete type.
+
+possible explanation:
+
+1. match all tvars with invariant rule
+2. imagine left side is concrete
+3. therefore all (right-) vars will have to equal concrete types
+   (this completes the base case)
+4. inductive hypothesis: tvars match concrete types
+5. "build up" an abstract type on the left over the initial concrete type
+6. handle all abstract types T in covariant position on the left by treating
+   them as variables V<:T instead
+7. by the inductive hypothesis tvars continue to match concrete types
+
+it seems you need to plug in the isconcrete predicate in step 6.
+
+=#

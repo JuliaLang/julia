@@ -24,10 +24,10 @@ function edit(file::AbstractString, line::Integer)
         f = find_source_file(file)
         f != nothing && (file = f)
     end
-    no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
+    const no_line_msg = "Unknown editor: no line number information passed.\nThe method is defined at line $line."
     if startswith(edname, "emacs") || edname == "gedit"
         spawn(`$edpath +$line $file`)
-    elseif edname == "vim" || edname == "nvim" || edname == "nano"
+    elseif edname == "vim" || edname == "nvim" || edname == "mvim" || edname == "nano"
         run(`$edpath +$line $file`)
     elseif edname == "textmate" || edname == "mate" || edname == "kate"
         spawn(`$edpath $file -l $line`)
@@ -83,7 +83,7 @@ end
         global _clipboardcmd
         _clipboardcmd !== nothing && return _clipboardcmd
         for cmd in (:xclip, :xsel)
-            success(`which $cmd` |> DevNull) && return _clipboardcmd = cmd
+            success(pipe(`which $cmd`, DevNull)) && return _clipboardcmd = cmd
         end
         error("no clipboard command found, please install xsel or xclip")
     end
@@ -158,7 +158,7 @@ function versioninfo(io::IO=STDOUT, verbose::Bool=false)
     println(io,             "  WORD_SIZE: ", Sys.WORD_SIZE)
     if verbose
         lsb = ""
-        @linux_only try lsb = readchomp(`lsb_release -ds` .> DevNull) end
+        @linux_only try lsb = readchomp(pipe(`lsb_release -ds`, stderr=DevNull)) end
         @windows_only try lsb = strip(readall(`$(ENV["COMSPEC"]) /c ver`)) end
         if lsb != ""
             println(io,     "           ", lsb)
@@ -264,7 +264,8 @@ function gen_call_with_extracted_types(fcn, ex0)
     exret
 end
 
-for fname in [:which, :less, :edit, :code_typed, :code_warntype, :code_lowered, :code_llvm, :code_native]
+for fname in [:which, :less, :edit, :code_typed, :code_warntype,
+              :code_lowered, :code_llvm, :code_llvm_raw, :code_native]
     @eval begin
         macro ($fname)(ex0)
             gen_call_with_extracted_types($(Expr(:quote,fname)), ex0)
@@ -333,7 +334,7 @@ downloadcmd = nothing
     global downloadcmd
     if downloadcmd === nothing
         for checkcmd in (:curl, :wget, :fetch)
-            if success(`which $checkcmd` |> DevNull)
+            if success(pipe(`which $checkcmd`, DevNull))
                 downloadcmd = checkcmd
                 break
             end

@@ -189,7 +189,7 @@ filter!(isodd, s)
 @test isequal(s, Set([1,3]))
 
 # first
-@test_throws ErrorException first(Set())
+@test_throws ArgumentError first(Set())
 @test first(Set(2)) == 2
 
 # ########## end of set tests ##########
@@ -224,8 +224,8 @@ s = IntSet([0,1,10,20,200,300,1000,10000,10002])
 @test !in(0,s)
 @test !in(10002,s)
 @test in(10000,s)
-@test_throws ErrorException first(IntSet())
-@test_throws ErrorException last(IntSet())
+@test_throws ArgumentError first(IntSet())
+@test_throws ArgumentError last(IntSet())
 t = copy(s)
 sizehint!(t, 20000) #check that hash does not depend on size of internal Array{UInt32, 1}
 @test hash(s) == hash(t)
@@ -239,11 +239,16 @@ setdiff!(s2, IntSet([2, 4, 5, 6]))
 
 @test s2 == IntSet([1, 3])
 
+# == with last-bit set (groups.google.com/forum/#!topic/julia-users/vZNjiIEG_sY)
+s = IntSet(255)
+@test s == s
+
 # issue #7851
 @test_throws ArgumentError IntSet(-1)
 @test !(-1 in IntSet(0:10))
 
-# issue #8570
-s = IntSet(2^32)
-@test length(s) == 1
-for b in s; b; end
+# # issue #8570
+# This requires 2^29 bytes of storage, which is too much for a simple test
+# s = IntSet(2^32)
+# @test length(s) == 1
+# for b in s; b; end

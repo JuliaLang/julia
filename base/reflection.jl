@@ -4,9 +4,11 @@ module_parent(m::Module) = ccall(:jl_module_parent, Any, (Any,), m)::Module
 current_module() = ccall(:jl_get_current_module, Any, ())::Module
 
 function fullname(m::Module)
-    if m === Main
-        ()
-    elseif module_parent(m) === m
+    m === Main && return ()
+    m === Base && return (:Base,)  # issue #10653
+    mn = module_name(m)
+    mp = module_parent(m)
+    if mp === m
         # not Main, but is its own parent, means a prior Main module
         n = ()
         this = Main
@@ -15,27 +17,36 @@ function fullname(m::Module)
                 n = tuple(n..., :LastMain)
                 this = this.LastMain
             else
-                error("no reference to module ", module_name(m))
+                error("no reference to module ", mn)
             end
         end
         return n
-    else
-        tuple(fullname(module_parent(m))..., module_name(m))
     end
+    return tuple(fullname(mp)..., mn)
 end
 
 names(m::Module, all::Bool, imported::Bool) = ccall(:jl_module_names, Array{Symbol,1}, (Any,Int32,Int32), m, all, imported)
 names(m::Module, all::Bool) = names(m, all, false)
 names(m::Module) = names(m, false, false)
-names(t::DataType) = collect(t.names)
 
-function names(v)
+fieldnames(t::DataType) = collect(t.names)
+function fieldnames(v)
     t = typeof(v)
-    if isa(t,DataType)
-        return names(t)
-    else
-        error("cannot call names() on a non-composite type")
+    if !isa(t,DataType)
+        throw(ArgumentError("cannot call fieldnames() on a non-composite type"))
     end
+    return fieldnames(t)
+end
+
+fieldname(t::DataType, i::Integer) = t.names[i]
+
+nfields(t::DataType) = length(t.names)
+function nfields(v)
+    t = typeof(v)
+    if !isa(DataType)
+        throw(ArgumentError("cannot call nfields() on a non-composite type"))
+    end
+    return nfields(t)
 end
 
 isconst(s::Symbol) =
@@ -49,7 +60,7 @@ object_id(x::ANY) = ccall(:jl_object_id, UInt, (Any,), x)
 
 # type predicates
 isimmutable(x::ANY) = (isa(x,Tuple) || !typeof(x).mutable)
-isstructtype(t::DataType) = t.names!=() || (t.size==0 && !t.abstract)
+isstructtype(t::DataType) = nfields(t) != 0 || (t.size==0 && !t.abstract)
 isstructtype(x) = false
 isbits(t::DataType) = !t.mutable & t.pointerfree & isleaftype(t)
 isbits(t::Type) = false
@@ -60,7 +71,7 @@ typeintersect(a::ANY,b::ANY) = ccall(:jl_type_intersection, Any, (Any,Any), a, b
 typeseq(a::ANY,b::ANY) = a<:b && b<:a
 
 function fieldoffsets(x::DataType)
-    offsets = Array(Int, length(x.names))
+    offsets = Array(Int, nfields(x))
     ccall(:jl_field_offsets, Void, (Any, Ptr{Int}), x, offsets)
     offsets
 end
@@ -83,8 +94,6 @@ function _subtypes(m::Module, x::DataType, sts=Set(), visited=Set())
 end
 subtypes(m::Module, x::DataType) = sort(collect(_subtypes(m, x)), by=string)
 subtypes(x::DataType) = subtypes(Main, x)
-
-subtypetree(x::DataType, level=-1) = (level == 0 ? (x, []) : (x, Any[subtypetree(y, level-1) for y in subtypes(x)]))
 
 # function reflection
 isgeneric(f::ANY) = (isa(f,Function) && isa(f.env,MethodTable))
@@ -122,7 +131,7 @@ end
 
 function methods(f::Function)
     if !isgeneric(f)
-        error("not a generic function")
+        throw(ArgumentError("argument is not a generic function"))
     end
     f.env
 end
@@ -147,17 +156,30 @@ done(mt::MethodTable, i::()) = true
 uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
-function _dump_function(f, t::ANY, native, wrapper)
-    str = ccall(:jl_dump_function, Any, (Any,Any,Bool,Bool), f, t, native, wrapper)::ByteString
-    if str == ""
+# Printing code representations in IR and assembly
+function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
+    llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
+
+    if llvmf == C_NULL
         error("no method found for the specified argument types")
     end
-    str
+
+    if (native)
+        str = ccall(:jl_dump_function_asm, Any, (Ptr{Void},), llvmf)::ByteString
+    else
+        str = ccall(:jl_dump_function_ir, Any,
+                        (Ptr{Void}, Bool), llvmf, strip_ir_metadata)::ByteString
+    end
+
+    return str
 end
 
-code_llvm(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, false, false))
+code_llvm(io::IO, f::Function, types::(Type...), strip_ir_metadata = true) =
+    print(io, _dump_function(f, types, false, false, strip_ir_metadata))
 code_llvm(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types)
-code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false))
+code_llvm_raw(f::Function, types::(Type...)) = code_llvm(STDOUT, f, types, false)
+
+code_native(io::IO, f::Function, types::(Type...)) = print(io, _dump_function(f, types, true, false, false))
 code_native(f::Function, types::(Type...)) = code_native(STDOUT, f, types)
 
 function which(f::ANY, t::(Type...))
@@ -171,7 +193,7 @@ function which(f::ANY, t::(Type...))
             t = tuple(isa(f,Type) ? Type{f} : typeof(f), t...)
             f = call
         elseif !isgeneric(f)
-            error("argument is not a generic function")
+            throw(ArgumentError("argument is not a generic function"))
         end
         m = ccall(:jl_gf_invoke_lookup, Any, (Any, Any), f, t)
         if m === nothing
@@ -190,12 +212,25 @@ function functionloc(m::Method)
     (find_source_file(string(lsd.file)), ln)
 end
 
-functionloc(f::ANY, types=(Any...)) = functionloc(which(f,types))
+functionloc(f::ANY, types) = functionloc(which(f,types))
 
-function function_module(f, types=(Any...))
+function functionloc(f)
+    m = methods(f)
+    if length(m) > 1
+        error("function has multiple methods; please specify a type signature")
+    end
+    functionloc(m.defs)
+end
+
+function function_module(f, types)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")
     end
     m[1].func.code.module
 end
+
+#
+
+type_alignment(x::DataType) = ccall(:jl_get_alignment,Csize_t,(Any,),x)
+field_offset(x::DataType,idx) = ccall(:jl_get_field_offset,Csize_t,(Any,Int32),x,idx)

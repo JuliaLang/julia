@@ -214,7 +214,7 @@ void bounds_error(char *fname, value_t arr, value_t ind) __attribute__ ((__noret
 void fl_savestate(fl_exception_context_t *_ctx);
 void fl_restorestate(fl_exception_context_t *_ctx);
 
-extern value_t ArgError, IOError, KeyError, MemoryError, EnumerationError;
+extern value_t ArgError, IOError, KeyError, OutOfMemoryError, EnumerationError;
 extern value_t UnboundError;
 
 static inline void argcount(char *fname, uint32_t nargs, uint32_t c)
@@ -386,6 +386,7 @@ value_t cvalue_wchar(value_t *args, uint32_t nargs);
 
 void fl_init(size_t initial_heapsize);
 int fl_load_system_image(value_t ios);
+int fl_load_system_image_str(char* str, size_t len);
 
 /* julia extensions */
 DLLEXPORT int jl_id_char(uint32_t wc);

@@ -69,11 +69,22 @@ function typejoin(a::ANY, b::ANY)
         return Any
     end
     while !is(b,Any)
-        if a <: b
-            return b
-        end
         if a <: b.name.primary
-            return b.name.primary
+            while a.name !== b.name
+                a = super(a)
+            end
+            # join on parameters
+            n = length(a.parameters)
+            p = cell(n)
+            for i = 1:n
+                ai, bi = a.parameters[i], b.parameters[i]
+                if ai === bi || (isa(ai,Type) && isa(bi,Type) && typeseq(ai,bi))
+                    p[i] = ai
+                else
+                    p[i] = a.name.primary.parameters[i]
+                end
+            end
+            return a.name.primary{p...}
         end
         b = super(b)
     end
@@ -160,6 +171,9 @@ promote_to_super{T<:Number,S<:Number}(::Type{T}, ::Type{S}, ::Type) =
 /(x::Number, y::Number) = /(promote(x,y)...)
 ^(x::Number, y::Number) = ^(promote(x,y)...)
 
+fma(x::Number, y::Number, z::Number) = fma(promote(x,y,z)...)
+muladd(x::Number, y::Number, z::Number) = muladd(promote(x,y,z)...)
+
 (&)(x::Integer, y::Integer) = (&)(promote(x,y)...)
 (|)(x::Integer, y::Integer) = (|)(promote(x,y)...)
 ($)(x::Integer, y::Integer) = ($)(promote(x,y)...)
@@ -182,6 +196,10 @@ max(x::Real, y::Real) = max(promote(x,y)...)
 min(x::Real, y::Real) = min(promote(x,y)...)
 minmax(x::Real, y::Real) = minmax(promote(x, y)...)
 
+checked_add(x::Integer, y::Integer) = checked_add(promote(x,y)...)
+checked_sub(x::Integer, y::Integer) = checked_sub(promote(x,y)...)
+checked_mul(x::Integer, y::Integer) = checked_mul(promote(x,y)...)
+
 ## catch-alls to prevent infinite recursion when definitions are missing ##
 
 no_op_err(name, T) = error(name," not defined for ",T)
@@ -191,6 +209,10 @@ no_op_err(name, T) = error(name," not defined for ",T)
 /{T<:Number}(x::T, y::T) = no_op_err("/", T)
 ^{T<:Number}(x::T, y::T) = no_op_err("^", T)
 
+fma{T<:Number}(x::T, y::T, z::T) = no_op_err("fma", T)
+fma(x::Integer, y::Integer, z::Integer) = x*y+z
+muladd{T<:Number}(x::T, y::T, z::T) = x*y+z
+
 (&){T<:Integer}(x::T, y::T) = no_op_err("&", T)
 (|){T<:Integer}(x::T, y::T) = no_op_err("|", T)
 ($){T<:Integer}(x::T, y::T) = no_op_err("\$", T)
@@ -198,6 +220,20 @@ no_op_err(name, T) = error(name," not defined for ",T)
 =={T<:Number}(x::T, y::T) = x === y
 <{T<:Real}(x::T, y::T) = no_op_err("<", T)
 
+div{T<:Real}(x::T, y::T) = no_op_err("div", T)
+fld{T<:Real}(x::T, y::T) = no_op_err("fld", T)
+cld{T<:Real}(x::T, y::T) = no_op_err("cld", T)
+rem{T<:Real}(x::T, y::T) = no_op_err("rem", T)
+mod{T<:Real}(x::T, y::T) = no_op_err("mod", T)
+
+mod1{T<:Real}(x::T, y::T) = no_op_err("mod1", T)
+rem1{T<:Real}(x::T, y::T) = no_op_err("rem1", T)
+fld1{T<:Real}(x::T, y::T) = no_op_err("fld1", T)
+
 max{T<:Real}(x::T, y::T) = ifelse(y < x, x, y)
 min{T<:Real}(x::T, y::T) = ifelse(y < x, y, x)
 minmax{T<:Real}(x::T, y::T) = y < x ? (y, x) : (x, y)
+
+checked_add{T<:Integer}(x::T, y::T) = no_op_err("checked_add", T)
+checked_sub{T<:Integer}(x::T, y::T) = no_op_err("checked_sub", T)
+checked_mul{T<:Integer}(x::T, y::T) = no_op_err("checked_mul", T)

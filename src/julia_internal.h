@@ -10,15 +10,25 @@ extern "C" {
 
 STATIC_INLINE jl_value_t *newobj(jl_value_t *type, size_t nfields)
 {
-    jl_value_t *jv = (jl_value_t*)allocobj((1+nfields) * sizeof(void*));
-    jv->type = type;
+    jl_value_t *jv = NULL;
+    switch (nfields) {
+    case 1:
+        jv = (jl_value_t*)alloc_1w(); break;
+    case 2:
+        jv = (jl_value_t*)alloc_2w(); break;
+    case 3:
+        jv = (jl_value_t*)alloc_3w(); break;
+    default:
+        jv = (jl_value_t*)allocobj(nfields * sizeof(void*));
+    }
+    jl_set_typeof(jv, type);
     return jv;
 }
 
 STATIC_INLINE jl_value_t *newstruct(jl_datatype_t *type)
 {
-    jl_value_t *jv = (jl_value_t*)allocobj(sizeof(void*) + type->size);
-    jv->type = (jl_value_t*)type;
+    jl_value_t *jv = (jl_value_t*)allocobj(type->size);
+    jl_set_typeof(jv, type);
     return jv;
 }
 
@@ -54,6 +64,7 @@ STATIC_INLINE int jl_is_box(void *v)
             ((jl_datatype_t*)(t))->name == jl_box_typename);
 }
 
+ssize_t jl_max_jlgensym_in(jl_value_t *v);
 
 extern uv_loop_t *jl_io_loop;
 
@@ -119,6 +130,8 @@ void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig);
 jl_function_t *jl_get_specialization(jl_function_t *f, jl_tuple_t *types);
 jl_tuple_t *arg_type_tuple(jl_value_t **args, size_t nargs);
 
+jl_value_t* skip_meta(jl_array_t *body);
+
 // backtraces
 #ifdef _OS_WINDOWS_
 extern volatile HANDLE hMainThread;
@@ -159,6 +172,10 @@ extern uv_lib_t *jl_winsock_handle;
 #endif
 
 DLLEXPORT void jl_atexit_hook();
+
+#if defined(_CPU_X86_) || defined(_CPU_X86_64_)
+#define HAVE_CPUID
+#endif
 
 #ifdef __cplusplus
 }

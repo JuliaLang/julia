@@ -74,7 +74,7 @@ When compiled the first time, it will automatically download and build its [exte
 This takes a while, but only has to be done once. If the defaults in the build do not work for you, and you need to set specific make parameters, you can save them in `Make.user`. The build will automatically check for the existence of `Make.user` and use it if it exists.
 Building Julia requires 1.5GiB of disk space and approximately 700MiB of virtual memory.
 
-If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the julia directory over to the target environment and build with `make`.
+If you need to build Julia in an environment that does not allow access to the outside world, use `make -C deps getall` to download all the necessary files. Then, copy the `julia` directory over to the target environment and build with `make`.
 
 **Note:** the build process will not work if any of the build directory's parent directories have spaces in their names (this is due to a limitation in GNU make).
 
@@ -147,10 +147,13 @@ latest version.
    b. To delete existing binaries of `julia` and all its dependencies,
       delete the `./usr` directory _in the source tree_.
 
-3. If you've moved the source directory, you might get errors such as
+3. If you've upgraded OS X recently and you get an error that looks like
+    ```ld: library not found for -lcrt1.10.6.o```, run `xcode-select --install`.
+
+4. If you've moved the source directory, you might get errors such as
     ```CMake Error: The current CMakeCache.txt directory ... is different than the directory ... where     CMakeCache.txt was created.```, in which case you may delete the offending dependency under `deps`
 
-4. In extreme cases, you may wish to reset the source tree to a pristine state.
+5. In extreme cases, you may wish to reset the source tree to a pristine state.
    The following git commands may be helpful:
 
    ```sh
@@ -175,7 +178,7 @@ Julia does not install anything outside the directory it was cloned into. Julia 
 
 #### General
 
-* GCC version 4.6 or later is recommended to build Julia.
+* GCC version 4.7 or later is required to build Julia.
 * To use external shared libraries not in the system library search path, set `USE_SYSTEM_XXX=1` and `LDFLAGS=-Wl,-rpath /path/to/dir/contains/libXXX.so` in `Make.user`.
   * Instead of setting `LDFLAGS`, putting the library directory into the environment variable `LD_LIBRARY_PATH` (at both compile and run time) also works.
 * See also the [external dependencies](#Required-Build-Tools-External-Libraries).
@@ -191,21 +194,15 @@ You can also set `MARCH=native` for a maximum-performance build customized for t
 
 #### Ubuntu
 
-The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
+The [julia-deps PPA](https://launchpad.net/~staticfloat/+archive/julia-deps/) contains updated packages for Julia dependencies if you want to use system libraries instead of having them downloaded and built during the build process.  See [System Provided Libraries](#System-Provided-Libraries).
 
 For a fast and easy current installation, the `before_install` section of [travis.yml](https://github.com/JuliaLang/julia/blob/master/.travis.yml) is a great resource.  Note that those instructions are for Ubuntu 12.04, and for later versions you may need to install newer versions of dependencies, such as `libunwind8-dev` instead of `libunwind7-dev`.
 
-#### RHEL/CentOS 5
+#### RHEL/CentOS 6
 
-On RHEL/CentOS 5 systems, the default compiler (`gcc` 4.1) is too old to build Julia.
+On RHEL/CentOS 6 systems, the default compiler (`gcc` 4.4) is too old to build Julia.
 
-If the `gcc44` and `gfortran44` packages are installed, you can specify their use by adding the following to Make.user
-
-    FC = gfortran44
-    CC = gcc44
-    CXX = g++44
-
-Otherwise, install or contact your systems administrator to install a more recent version of `gcc`.
+Install or contact your systems administrator to install a more recent version of `gcc`. The [Scientific Linux Developer Toolset](http://linux.web.cern.ch/linux/devtoolset/) works well.
 
 #### Google Compute Engine
 
@@ -238,9 +235,9 @@ If you see build failures in OpenBLAS or if you prefer to experiment, you can us
 
 ### FreeBSD
 
-On *FreeBSD Release 9.0*, install the `gcc46`, `git`, and `gmake` packages/ports, and compile Julia with the command:
+On *FreeBSD Release 9.0*, install the `gcc47`, `git`, and `gmake` packages/ports, and compile Julia with the command:
 
-    $ gmake FC=gfortran46
+    $ gmake FC=gfortran47
 
 You must use the `gmake` command on FreeBSD instead of `make`.
 
@@ -258,66 +255,73 @@ Julia can be developed in an isolated Vagrant environment. See [the Vagrant READ
 Building Julia requires that the following software be installed:
 
 - **[GNU make]**                — building dependencies.
-- **[gcc & g++][gcc]** (>= 4.4) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
-- **[gfortran][gcc]**           — compiling and linking fortran libraries
+- **[gcc & g++][gcc]** (>= 4.7) or **[Clang][clang]** (>= 3.1, Xcode 4.3.3 on OS X) — compiling and linking C, C++
+- **[gfortran][gcc]**           — compiling and linking Fortran libraries
 - **[git]**                     — version control and package management (version 1.7.3+ required)
 - **[perl]**                    — preprocessing of header files of libraries.
 - **[wget]**, **[curl]**, or **[fetch]** (FreeBSD) — to automatically download external libraries.
 - **[m4]**                      — needed to build GMP.
 - **[patch]**                   — for modifying source code.
-- **[cmake]**                   — needed to build libgit2.
+- **[cmake]**                   — needed to build `libgit2`.
 
 Julia uses the following external libraries, which are automatically downloaded (or in a few cases, included in the Julia source repository) and then compiled from source the first time you run `make`:
 
-- **[LLVM]** (3.3)           — compiler infrastructure. (3.4 not supported; 3.5+ mostly supported, [with caveats](https://github.com/JuliaLang/julia/issues/9336)) 
+- **[LLVM]** (3.3)           — compiler infrastructure. (3.4 not supported; 3.5+ mostly supported, [with caveats](https://github.com/JuliaLang/julia/issues/9336))
 - **[FemtoLisp]**            — packaged with Julia source, and used to implement the compiler front-end.
 - **[libuv]**                — portable, high-performance event-based I/O library
-- **[OpenLibm]**             — a portable libm library containing elementary math functions.
-- **[OpenSpecFun]** (>= 0.4) — a library containing Bessel and error functions of complex arguments.
-- **[DSFMT]**                — a fast Mersenne Twister pseudorandom number generator library.
-- **[OpenBLAS]**             — a fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](http://www.tacc.utexas.edu/tacc-projects/gotoblas2/). The system provided BLAS and LAPACK are used on OS X.
-- **[LAPACK]** (>= 3.4)      — a library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
+- **[OpenLibm]**             — portable libm library containing elementary math functions.
+- **[OpenSpecFun]** (>= 0.4) — library containing Bessel and error functions of complex arguments.
+- **[DSFMT]**                — fast Mersenne Twister pseudorandom number generator library.
+- **[OpenBLAS]**             — fast, open, and maintained [basic linear algebra subprograms (BLAS)](http://en.wikipedia.org/wiki/Basic_Linear_Algebra_Subprograms) library, based on [Kazushige Goto's](http://en.wikipedia.org/wiki/Kazushige_Goto) famous [GotoBLAS](https://www.tacc.utexas.edu/research-development/tacc-software/gotoblas2).
+- **[LAPACK]** (>= 3.4)      — library of linear algebra routines for solving systems of simultaneous linear equations, least-squares solutions of linear systems of equations, eigenvalue problems, and singular value problems.
 - **[MKL]** (optional)       – OpenBLAS and LAPACK may be replaced by Intel's MKL library.
 - **[AMOS]**                 — subroutines for computing Bessel and Airy functions.
-- **[SuiteSparse]**          — a library of linear algebra routines for sparse matrices.
-- **[ARPACK]**               — a collection of subroutines designed to solve large, sparse eigenvalue problems.
+- **[SuiteSparse]** (>= 4.1) — library of linear algebra routines for sparse matrices.
+- **[ARPACK]**               — collection of subroutines designed to solve large, sparse eigenvalue problems.
 - **[FFTW]** (>= 3.3)        — library for computing fast Fourier transforms very quickly and efficiently.
 - **[PCRE]** (>= 8.31)       — Perl-compatible regular expressions library.
-- **[GMP]** (>= 5.0)         — the GNU multiple precision arithmetic library, needed for bigint support.
-- **[MPFR]** (>= 3.0)        — the GNU multiple precision floating point library, needed for arbitrary precision floating point support.
-- **[libgit2]** (>= 0.21)    — the Git linkable library, used by Julia's package manager
+- **[GMP]** (>= 5.0)         — GNU multiple precision arithmetic library, needed for `BigInt` support.
+- **[MPFR]** (>= 3.0)        — GNU multiple precision floating point library, needed for arbitrary precision floating point (`BigFloat`) support.
+- **[libgit2]** (>= 0.21)    — Git linkable library, used by Julia's package manager
+- **[utf8proc]**             — a library for processing UTF-8 encoded Unicode strings
+- **[libosxunwind]**         — clone of [libunwind], a library that determines the call-chain of a program
+- **[Rmath-julia]**          — library for commonly used statistical functions from the R project.
 
 For a longer overview of Julia's dependencies, see these [slides](https://github.com/tkelman/BAJUtalk-Dec2014/blob/master/BAJUtalkDec2014.pdf?raw=true).
 
-[GNU make]:     http://www.gnu.org/software/make/
-[patch]:        http://www.gnu.org/software/patch/
-[wget]:         http://www.gnu.org/software/wget/
-[m4]:           http://www.gnu.org/software/m4/
-[gcc]:          http://gcc.gnu.org/
-[clang]:        http://clang.llvm.org/
-[curl]:         http://curl.haxx.se/
+[GNU make]:     http://www.gnu.org/software/make
+[patch]:        http://www.gnu.org/software/patch
+[wget]:         http://www.gnu.org/software/wget
+[m4]:           http://www.gnu.org/software/m4
+[gcc]:          http://gcc.gnu.org
+[clang]:        http://clang.llvm.org
+[curl]:         http://curl.haxx.se
 [fetch]:        http://www.freebsd.org/cgi/man.cgi?fetch(1)
-[git]:          http://git-scm.com/
-[perl]:         http://www.perl.org/
-[cmake]:        http://www.cmake.org/
+[git]:          http://git-scm.com
+[perl]:         http://www.perl.org
+[cmake]:        http://www.cmake.org
 [OpenLibm]:     https://github.com/JuliaLang/openlibm
 [OpenSpecFun]:  https://github.com/JuliaLang/openspecfun
 [DSFMT]:        http://www.math.sci.hiroshima-u.ac.jp/~m-mat/MT/SFMT/#dSFMT
 [OpenBLAS]:     https://github.com/xianyi/OpenBLAS
-[LAPACK]:       http://www.netlib.org/lapack/
-[MKL]:          http://software.intel.com/en-us/articles/intel-mkl/
+[LAPACK]:       http://www.netlib.org/lapack
+[MKL]:          http://software.intel.com/en-us/articles/intel-mkl
 [SuiteSparse]:  http://faculty.cse.tamu.edu/davis/suitesparse.html
 [AMOS]:         http://netlib.org/amos
-[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng/
-[FFTW]:         http://www.fftw.org/
-[PCRE]:         http://www.pcre.org/
-[LLVM]:         http://www.llvm.org/
+[ARPACK]:       http://forge.scilab.org/index.php/p/arpack-ng
+[FFTW]:         http://www.fftw.org
+[PCRE]:         http://www.pcre.org
+[LLVM]:         http://www.llvm.org
 [FemtoLisp]:    https://github.com/JeffBezanson/femtolisp
-[GMP]:          http://gmplib.org/
-[MPFR]:         http://www.mpfr.org/
-[double-conversion]: http://double-conversion.googlecode.com/
+[GMP]:          http://gmplib.org
+[MPFR]:         http://www.mpfr.org
+[double-conversion]: http://double-conversion.googlecode.com
 [libuv]:        https://github.com/JuliaLang/libuv
 [libgit2]:      https://libgit2.github.com/
+[utf8proc]:     http://julialang.org/utf8proc/
+[libosxunwind]: https://github.com/JuliaLang/libosxunwind
+[libunwind]:    http://www.nongnu.org/libunwind
+[Rmath-julia]:  https://github.com/JuliaLang/Rmath-julia
 
 <a name="System-Provided-Libraries">
 ### System Provided Libraries
@@ -339,7 +343,7 @@ For a 64-bit architecture, the environment should be set up as follows:
     source /path/to/mkl/bin/mklvars.sh intel64 ilp64
     export MKL_INTERFACE_LAYER=ILP64
 
-It is recommended that Intel compilers be used to build julia when using MKL.
+It is recommended that Intel compilers be used to build Julia when using MKL.
 Add the following to the `Make.user` file:
 
     USEICC = 1

@@ -14,9 +14,11 @@
 *.do
 *.o
 *.obj
+*.so
 *.dylib
 *.dSYM
 *.jl.cov
 *.jl.mem
+*.ji
 
 .DS_Store

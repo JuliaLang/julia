@@ -3,7 +3,11 @@
 #include "llvm-version.h"
 #include <llvm/ExecutionEngine/ExecutionEngine.h>
 #include <llvm/ExecutionEngine/JITEventListener.h>
+#ifdef LLVM37
+#include <llvm/DebugInfo/DWARF/DIContext.h>
+#else
 #include <llvm/DebugInfo/DIContext.h>
+#endif
 #include <llvm/Support/MemoryBuffer.h>
 #ifdef LLVM33
 #include <llvm/IR/Function.h>
@@ -70,6 +74,9 @@ struct FuncInfo {
 struct ObjectInfo {
     const object::ObjectFile* object;
     size_t size;
+#ifdef LLVM36
+    size_t slide;
+#endif
 #ifdef _OS_DARWIN_
     const char *name;
 #endif
@@ -126,7 +133,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
 #endif
             static int warned = 0;
             if (!warned) {
-                JL_PRINTF(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
+                jl_printf(JL_STDERR, "WARNING: failed to insert module info for backtrace: %d\n", GetLastError());
                 warned = 1;
             }
         }
@@ -139,7 +146,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
             name[len-1] = 0;
             if (!SymAddSymbol(GetCurrentProcess(), (ULONG64)Section, name,
                         (DWORD64)Code, (DWORD)Size, 0)) {
-                JL_PRINTF(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
+                jl_printf(JL_STDERR, "WARNING: failed to insert function name %s into debug info: %d\n", name, GetLastError());
             }
         }
         jl_in_stackwalk = 0;
@@ -148,7 +155,7 @@ static void create_PRUNTIME_FUNCTION(uint8_t *Code, size_t Size, StringRef fnnam
     if (!RtlAddFunctionTable(tbl, 1, (DWORD64)Section)) {
         static int warned = 0;
         if (!warned) {
-            JL_PRINTF(JL_STDERR, "WARNING: failed to insert function stack unwind info: %d\n", GetLastError());
+            jl_printf(JL_STDERR, "WARNING: failed to insert function stack unwind info: %d\n", GetLastError());
             warned = 1;
         }
     }
@@ -204,16 +211,21 @@ public:
 #ifdef LLVM36
         object::section_iterator Section = obj.section_begin();
         object::section_iterator EndSection = obj.section_end();
+        uint64_t SectionAddr = 0;
+        StringRef sName;
 #else
         object::section_iterator Section = obj.begin_sections();
         object::section_iterator EndSection = obj.end_sections();
         bool isText;
-#endif
 #ifndef _OS_LINUX_
         StringRef sName;
 #endif
+#endif
+
 #ifdef _OS_WINDOWS_
+#ifndef LLVM36
         uint64_t SectionAddr = 0;
+#endif
         uint64_t SectionSize = 0;
         uint64_t SectionAddrCheck = 0; // assert that all of the Sections are at the same location
 #endif
@@ -292,13 +304,18 @@ public:
             if (Section == EndSection) continue;
 #if defined(LLVM36)
             if (!Section->isText()) continue;
+            Section->getName(sName);
+            SectionAddr = L.getSectionLoadAddress(sName);
+            Addr += SectionAddr;
 #else
             if (Section->isText(isText) || !isText) continue;
 #endif
 #ifdef _OS_DARWIN_
 #if defined(LLVM36)
-            Section->getName(sName);
-            Addr += L.getSectionLoadAddress(sName);
+            sym_iter.getName(sName);
+            if (sName[0] == '_') {
+                sName = sName.substr(1);
+            }
 #else
             sym_iter.getName(sName);
             Addr = ((MCJIT*)jl_ExecutionEngine)->getSymbolAddress(sName, true);
@@ -311,9 +328,6 @@ public:
 #elif defined(_OS_WINDOWS_)
 #if defined(LLVM36)
             SectionSize = Section->getSize();
-            Section->getName(sName);
-            SectionAddr = L.getSectionLoadAddress(sName);
-            Addr += SectionAddr;
 #else
             Section->getAddress(SectionAddr);
             Section->getSize(SectionSize);
@@ -337,8 +351,11 @@ public:
                 obj.getObjectFile();
 #endif
             ObjectInfo tmp = {objfile, (size_t)Size
+#ifdef LLVM36
+                ,(size_t)SectionAddr
+#endif
 #ifdef _OS_DARWIN_
-                ,strdup(sName.data())
+                ,strndup(sName.data(), sName.size())
 #endif
             };
             objectmap[Addr] = tmp;
@@ -496,9 +513,6 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
     if (isvalid) {
         char *fname = ModuleInfo.LoadedImageName;
         DWORD64 fbase = ModuleInfo.BaseOfImage;
-#ifdef LLVM35
-        size_t msize = ModuleInfo.ImageSize;
-#endif
         *fromC = (fbase != jl_sysimage_base);
         if (skipC && *fromC) {
             return;
@@ -520,7 +534,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         }
         else {
             // SymFromAddr failed
-            //fprintf(stderr,"SymFromAddr returned error : %lu\n", GetLastError());
+            //jl_printf(JL_STDERR,"SymFromAddr returned error : %lu\n", GetLastError());
         }
 
         frame_info_line.SizeOfStruct = sizeof(IMAGEHLP_LINE64);
@@ -558,10 +572,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
         obfiletype::iterator it = objfilemap.find(fbase);
         llvm::object::ObjectFile *obj = NULL;
         if (it == objfilemap.end()) {
-#if defined(_OS_DARWIN_) || defined(_OS_WINDOWS_)
-#if defined(_OS_WINDOWS_)
-#define origerrorobj errorobj
-#endif
+#if defined(_OS_DARWIN_)
 #ifdef LLVM36
            std::unique_ptr<MemoryBuffer> membuf = MemoryBuffer::getMemBuffer(
                     StringRef((const char *)fbase, msize), "", false);
@@ -579,7 +590,6 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
             llvm::object::ObjectFile *origerrorobj = llvm::object::ObjectFile::createObjectFile(
                 membuf);
 #endif
-#if defined(_OS_DARWIN_)
             if (!origerrorobj) {
                 objfileentry_t entry = {obj,context,slide};
                 objfilemap[fbase] = entry;
@@ -614,8 +624,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #else
             llvm::object::ObjectFile *errorobj = llvm::object::ObjectFile::createObjectFile(dsympath);
 #endif
-#endif // ifdef _OS_DARWIN_
-#else // ifdef  _OS_DARWIN_ || _OS_WINDOWS_
+#else // ifdef _OS_DARWIN_
             // On Linux systems we need to mmap another copy because of the permissions on the mmap'ed shared library.
 #ifdef LLVM35
             auto errorobj = llvm::object::ObjectFile::createObjectFile(fname);
@@ -624,9 +633,7 @@ void jl_getDylibFunctionInfo(const char **name, size_t *line, const char **filen
 #endif
 #endif // ifdef _OS_DARWIN_
             if (errorobj) {
-#if LLVM36 && defined(_OS_WINDOWS_)
-                obj = errorobj.get().release();
-#elif LLVM36
+#if LLVM36
                 auto binary = errorobj.get().takeBinary();
                 obj = binary.first.release();
                 binary.second.release();
@@ -709,6 +716,7 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
 #else
 #ifdef LLVM36
         DIContext *context = DIContext::getDWARFContext(*it->second.object);
+        pointer -= (*it).second.slide;
 #else
         DIContext *context = DIContext::getDWARFContext(const_cast<object::ObjectFile*>(it->second.object));
 #endif
@@ -775,12 +783,13 @@ void jl_getFunctionInfo(const char **name, size_t *line, const char **filename, 
     jl_getDylibFunctionInfo(name,line,filename,pointer,fromC,skipC);
 }
 
-int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
+int jl_get_llvmf_info(uint64_t fptr, uint64_t *symsize, uint64_t *slide,
 #ifdef USE_MCJIT
-    const object::ObjectFile **object)
+    const object::ObjectFile **object
 #else
-    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines)
+    std::vector<JITEvent_EmittedFunctionDetails::LineStart> *lines
 #endif
+    )
 {
 #ifndef USE_MCJIT
     std::map<size_t, FuncInfo, revcomp> &fmap = jl_jit_events->getMap();
@@ -789,6 +798,7 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     if (fit != fmap.end()) {
         *symsize = fit->second.lengthAdr;
         *lines = fit->second.lines;
+        *slide = 0;
         return 1;
     }
     return 0;
@@ -799,6 +809,11 @@ int jl_get_llvmf_info(size_t fptr, uint64_t *symsize,
     if (fit != objmap.end()) {
         *symsize = fit->second.size;
         *object = fit->second.object;
+#ifdef LLVM36
+        *slide = fit->second.slide;
+#else
+        *slide = 0;
+#endif
         return 1;
     }
     return 0;

@@ -1,8 +1,9 @@
 ## conversions to floating-point ##
 convert(::Type{Float16}, x::Integer) = convert(Float16, convert(Float32,x))
-for t in (Bool,Int8,Int16,Int32,Int64,UInt8,UInt16,UInt32,UInt64)
+for t in (Int8,Int16,Int32,Int64,Int128,UInt8,UInt16,UInt32,UInt64,UInt128)
     @eval promote_rule(::Type{Float16}, ::Type{$t}) = Float32
 end
+promote_rule(::Type{Float16}, ::Type{Bool}) = Float16
 
 for t1 in (Float32,Float64)
     for st in (Int8,Int16,Int32,Int64)
@@ -104,10 +105,7 @@ convert(::Type{FloatingPoint}, x::UInt32)  = convert(Float64, x)
 convert(::Type{FloatingPoint}, x::UInt64)  = convert(Float64, x) # LOSSY
 convert(::Type{FloatingPoint}, x::UInt128) = convert(Float64, x) # LOSSY
 
-float16(x) = convert(Float16, x)
-float32(x) = convert(Float32, x)
-float64(x) = convert(Float64, x)
-float(x)   = convert(FloatingPoint, x)
+float(x) = convert(FloatingPoint, x)
 
 for Ti in (Int8, Int16, Int32, Int64)
     @eval begin
@@ -124,7 +122,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float64)
     xu = reinterpret(UInt64,x)
-    k = int(xu >> 52) & 0x07ff - 1075
+    k = Int(xu >> 52) & 0x07ff - 1075
     xu = (xu & 0x000f_ffff_ffff_ffff) | 0x0010_0000_0000_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -138,7 +136,7 @@ end
 
 function unsafe_trunc(::Type{UInt128}, x::Float32)
     xu = reinterpret(UInt32,x)
-    k = int(xu >> 23) & 0x00ff - 150
+    k = Int(xu >> 23) & 0x00ff - 150
     xu = (xu & 0x007f_ffff) | 0x0080_0000
     if k <= 0
         UInt128(xu >> -k)
@@ -198,6 +196,9 @@ widen(::Type{Float32}) = Float64
 /(x::Float32, y::Float32) = box(Float32,div_float(unbox(Float32,x),unbox(Float32,y)))
 /(x::Float64, y::Float64) = box(Float64,div_float(unbox(Float64,x),unbox(Float64,y)))
 
+muladd(x::Float32, y::Float32, z::Float32) = box(Float32,muladd_float(unbox(Float32,x),unbox(Float32,y),unbox(Float32,z)))
+muladd(x::Float64, y::Float64, z::Float64) = box(Float64,muladd_float(unbox(Float64,x),unbox(Float64,y),unbox(Float64,z)))
+
 # TODO: faster floating point div?
 # TODO: faster floating point fld?
 # TODO: faster floating point mod?
@@ -216,7 +217,6 @@ function mod{T<:FloatingPoint}(x::T, y::T)
         r
     end
 end
-
 
 ## floating point comparisons ##
 ==(x::Float32, y::Float32) = eq_float(unbox(Float32,x),unbox(Float32,y))
@@ -278,14 +278,14 @@ for Ti in (Int64,UInt64,Int128,UInt128)
     end
 end
 
-==(x::Float32, y::Union(Int32,UInt32)) = float64(x)==float64(y)
-==(x::Union(Int32,UInt32), y::Float32) = float64(x)==float64(y)
+==(x::Float32, y::Union(Int32,UInt32)) = Float64(x)==Float64(y)
+==(x::Union(Int32,UInt32), y::Float32) = Float64(x)==Float64(y)
 
-<(x::Float32, y::Union(Int32,UInt32)) = float64(x)<float64(y)
-<(x::Union(Int32,UInt32), y::Float32) = float64(x)<float64(y)
+<(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<Float64(y)
+<(x::Union(Int32,UInt32), y::Float32) = Float64(x)<Float64(y)
 
-<=(x::Float32, y::Union(Int32,UInt32)) = float64(x)<=float64(y)
-<=(x::Union(Int32,UInt32), y::Float32) = float64(x)<=float64(y)
+<=(x::Float32, y::Union(Int32,UInt32)) = Float64(x)<=Float64(y)
+<=(x::Union(Int32,UInt32), y::Float32) = Float64(x)<=Float64(y)
 
 abs(x::Float64) = box(Float64,abs_float(unbox(Float64,x)))
 abs(x::Float32) = box(Float32,abs_float(unbox(Float32,x)))
@@ -383,6 +383,56 @@ end
     eps() = eps(Float64)
 end
 
+# fused multiply-add
+fma_libm(x::Float32, y::Float32, z::Float32) =
+    ccall(("fmaf", libm_name), Float32, (Float32,Float32,Float32), x, y, z)
+fma_libm(x::Float64, y::Float64, z::Float64) =
+    ccall(("fma", libm_name), Float64, (Float64,Float64,Float64), x, y, z)
+fma_llvm(x::Float32, y::Float32, z::Float32) =
+    box(Float32,fma_float(unbox(Float32,x),unbox(Float32,y),unbox(Float32,z)))
+fma_llvm(x::Float64, y::Float64, z::Float64) =
+    box(Float64,fma_float(unbox(Float64,x),unbox(Float64,y),unbox(Float64,z)))
+# Disable LLVM's fma if it is incorrect, e.g. because LLVM falls back
+# onto a broken system libm; if so, use openlibm's fma instead
+# 1.0000305f0 = 1 + 1/2^15
+# 1.0000000009313226 = 1 + 1/2^30
+# If fma_llvm() clobbers the rounding mode, the result of 0.1 + 0.2 will be 0.3
+# instead of the properly-rounded 0.30000000000000004; check after calling fma
+if (fma_llvm(1.0000305f0, 1.0000305f0, -1.0f0) == 6.103609f-5 &&
+    (fma_llvm(1.0000000009313226, 1.0000000009313226, -1.0) ==
+     1.8626451500983188e-9) && 0.1 + 0.2 == 0.30000000000000004)
+    fma(x::Float32, y::Float32, z::Float32) = fma_llvm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_llvm(x,y,z)
+else
+    fma(x::Float32, y::Float32, z::Float32) = fma_libm(x,y,z)
+    fma(x::Float64, y::Float64, z::Float64) = fma_libm(x,y,z)
+end
+# This is necessary at least on 32-bit Intel Linux, since fma_llvm may
+# have called glibc, and some broken glibc fma implementations don't
+# properly restore the rounding mode
+Rounding.set_rounding_raw(Float32, Rounding.JL_FE_TONEAREST)
+Rounding.set_rounding_raw(Float64, Rounding.JL_FE_TONEAREST)
+
 ## byte order swaps for arbitrary-endianness serialization/deserialization ##
 bswap(x::Float32) = box(Float32,bswap_int(unbox(Float32,x)))
 bswap(x::Float64) = box(Float64,bswap_int(unbox(Float64,x)))
+
+# bit patterns
+reinterpret(::Type{Unsigned}, x::Float64) = reinterpret(UInt64,x)
+reinterpret(::Type{Unsigned}, x::Float32) = reinterpret(UInt32,x)
+
+sign_mask(::Type{Float64}) =        0x8000_0000_0000_0000
+exponent_mask(::Type{Float64}) =    0x7ff0_0000_0000_0000
+exponent_one(::Type{Float64}) =     0x3ff0_0000_0000_0000
+exponent_half(::Type{Float64}) =    0x3fe0_0000_0000_0000
+significand_mask(::Type{Float64}) = 0x000f_ffff_ffff_ffff
+
+sign_mask(::Type{Float32}) =        0x8000_0000
+exponent_mask(::Type{Float32}) =    0x7f80_0000
+exponent_one(::Type{Float32}) =     0x3f80_0000
+exponent_half(::Type{Float32}) =    0x3f00_0000
+significand_mask(::Type{Float32}) = 0x007f_ffff
+
+significand_bits{T<:FloatingPoint}(::Type{T}) = trailing_ones(significand_mask(T))
+exponent_bits{T<:FloatingPoint}(::Type{T}) = sizeof(T)*8 - significand_bits(T) - 1
+exponent_bias{T<:FloatingPoint}(::Type{T}) = Int(exponent_one(T) >> significand_bits(T))

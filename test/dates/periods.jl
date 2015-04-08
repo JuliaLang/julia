@@ -43,23 +43,23 @@ ms = Dates.Millisecond(1)
 @test Dates.Minute(mi) == mi
 @test Dates.Second(s) == s
 @test Dates.Millisecond(ms) == ms
-@test typeof(int8(y)) <: Int8
-@test typeof(uint8(y)) <: UInt8
-@test typeof(int16(y)) <: Int16
-@test typeof(uint16(y)) <: UInt16
-@test typeof(int32(y)) <: Int32
-@test typeof(uint32(y)) <: UInt32
-@test typeof(int64(y)) <: Int64
-@test typeof(uint64(y)) <: UInt64
-@test typeof(int128(y)) <: Int128
-@test typeof(uint128(y)) <: UInt128
+@test typeof(Int8(y)) <: Int8
+@test typeof(UInt8(y)) <: UInt8
+@test typeof(Int16(y)) <: Int16
+@test typeof(UInt16(y)) <: UInt16
+@test typeof(Int32(y)) <: Int32
+@test typeof(UInt32(y)) <: UInt32
+@test typeof(Int64(y)) <: Int64
+@test typeof(UInt64(y)) <: UInt64
+@test typeof(Int128(y)) <: Int128
+@test typeof(UInt128(y)) <: UInt128
 @test typeof(convert(BigInt,y)) <: BigInt
 @test typeof(convert(BigFloat,y)) <: BigFloat
 @test typeof(convert(Complex,y)) <: Complex
 @test typeof(convert(Rational,y)) <: Rational
-@test typeof(float16(y)) <: Float16
-@test typeof(float32(y)) <: Float32
-@test typeof(float64(y)) <: Float64
+@test typeof(Float16(y)) <: Float16
+@test typeof(Float32(y)) <: Float32
+@test typeof(Float64(y)) <: Float64
 @test Dates.Year(convert(Int8,1)) == y
 @test Dates.Year(convert(UInt8,1)) == y
 @test Dates.Year(convert(Int16,1)) == y
@@ -90,28 +90,28 @@ y2 = Dates.Year(2)
 @test y2 > y
 @test y != y2
 
-@test Dates.Year(int8(1)) == y
-@test Dates.Year(uint8(1)) == y
-@test Dates.Year(int16(1)) == y
-@test Dates.Year(uint16(1)) == y
-@test Dates.Year(int(1)) == y
-@test Dates.Year(uint(1)) == y
-@test Dates.Year(int64(1)) == y
-@test Dates.Year(uint64(1)) == y
-@test Dates.Year(int128(1)) == y
-@test Dates.Year(uint128(1)) == y
+@test Dates.Year(Int8(1)) == y
+@test Dates.Year(UInt8(1)) == y
+@test Dates.Year(Int16(1)) == y
+@test Dates.Year(UInt16(1)) == y
+@test Dates.Year(Int(1)) == y
+@test Dates.Year(UInt(1)) == y
+@test Dates.Year(Int64(1)) == y
+@test Dates.Year(UInt64(1)) == y
+@test Dates.Year(UInt128(1)) == y
+@test Dates.Year(UInt128(1)) == y
 @test Dates.Year(big(1)) == y
 @test Dates.Year(BigFloat(1)) == y
 @test Dates.Year(float(1)) == y
-@test Dates.Year(float32(1)) == y
+@test Dates.Year(Float32(1)) == y
 @test Dates.Year(Rational(1)) == y
 @test Dates.Year(complex(1)) == y
 @test_throws InexactError Dates.Year(BigFloat(1.2)) == y
 @test_throws InexactError Dates.Year(1.2) == y
-@test_throws InexactError Dates.Year(float32(1.2)) == y
+@test_throws InexactError Dates.Year(Float32(1.2)) == y
 @test_throws InexactError Dates.Year(3//4) == y
 @test_throws InexactError Dates.Year(complex(1.2)) == y
-@test_throws InexactError Dates.Year(float16(1.2)) == y
+@test_throws InexactError Dates.Year(Float16(1.2)) == y
 @test Dates.Year(true) == y
 @test Dates.Year(false) != y
 @test_throws MethodError Dates.Year(:hey) == y
@@ -238,7 +238,7 @@ test = ((((((((dt + y) - m) + w) - d) + h) - mi) + s) - ms)
 @test Dates.Second("1") == s
 @test Dates.Millisecond("1") == ms
 @test_throws ArgumentError Dates.Year("1.0")
-@test Dates.Year(parsefloat("1.0")) == y
+@test Dates.Year(parse(Float64,"1.0")) == y
 
 dt = Dates.DateTime(2014)
 @test typeof(Dates.Year(dt)) <: Dates.Year

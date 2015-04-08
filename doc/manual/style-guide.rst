@@ -72,7 +72,7 @@ Handle excess argument diversity in the caller
 Instead of::
 
     function foo(x, y)
-        x = int(x); y = int(y)
+        x = Int(x); y = Int(y)
         ...
     end
     foo(x, y)
@@ -82,7 +82,7 @@ use::
     function foo(x::Int, y::Int)
         ...
     end
-    foo(int(x), int(y))
+    foo(Int(x), Int(y))
 
 This is better style because ``foo`` does not really accept numbers of all
 types; it really needs ``Int`` s.
@@ -121,11 +121,18 @@ Avoid strange type Unions
 Types such as ``Union(Function,AbstractString)`` are often a sign that some design
 could be cleaner.
 
-Try to avoid nullable fields
-----------------------------
+Avoid type Unions in fields
+---------------------------
 
-When using ``x::Union(Nothing,T)``, ask whether the option for ``x`` to be
-``nothing`` is really necessary. Here are some alternatives to consider:
+When creating a type such as::
+
+    type MyType
+        ...
+        x::Union(Void,T)
+    end
+
+ask whether the option for ``x`` to be ``nothing`` (of type ``Void``)
+is really necessary. Here are some alternatives to consider:
 
 - Find a safe default value to initialize ``x`` with
 - Introduce another type that lacks ``x``
@@ -133,6 +140,9 @@ When using ``x::Union(Nothing,T)``, ask whether the option for ``x`` to be
 - Determine whether there is a simple rule for when ``x`` is ``nothing``.
   For example, often the field will start as ``nothing`` but get initialized at
   some well-defined point. In that case, consider leaving it undefined at first.
+- If ``x`` really needs to hold no value at some times, define it as
+  ``::Nullable{T}`` instead, as this guarantees type-stability in the code
+  accessing this field (see :ref:`Nullable types <man-nullable-types>`)
 
 Avoid elaborate container types
 -------------------------------
@@ -289,3 +299,64 @@ But any function can be passed directly, without being "wrapped" in an
 anonymous function. Instead of writing ``map(x->f(x), a)``, write
 :func:`map(f, a) <map>`.
 
+Avoid using floats for numeric literals in generic code when possible
+---------------------------------------------------------------------
+
+If you write generic code which handles numbers, and which can be expected to
+run with many different numeric type arguments, try using literals of a numeric
+type that will affect the arguments as little as possible through promotion.
+
+For example,
+
+.. doctest::
+
+    julia> f(x) = 2.0 * x
+    f (generic function with 1 method)
+
+    julia> f(1//2)
+    1.0
+
+    julia> f(1/2)
+    1.0
+
+    julia> f(1)
+    2.0
+
+while
+
+.. doctest::
+
+    julia> g(x) = 2 * x
+    g (generic function with 1 method)
+
+    julia> g(1//2)
+    1//1
+
+    julia> g(1/2)
+    1.0
+
+    julia> g(2)
+    4
+
+As you can see, the second version, where we used an :obj:`Int` literal, preserved
+the type of the input argument, while the first didn't. This is because e.g.
+``promote_type(Int, Float64) == Float64``, and promotion happens with the
+multiplication. Similarly, :obj:`Rational` literals are less type disruptive than
+:obj:`Float64` literals, but more disruptive than :obj:`Int`\ s:
+
+.. doctest::
+
+    julia> h(x) = 2//1 * x
+    h (generic function with 1 method)
+
+    julia> h(1//2)
+    1//1
+
+    julia> h(1/2)
+    1.0
+
+    julia> h(1)
+    2//1
+
+Thus, use :obj:`Int` literals when possible, with :obj:`Rational{Int}` for literal
+non-integer numbers, in order to make it easier to use your code.

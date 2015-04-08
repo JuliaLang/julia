@@ -97,11 +97,13 @@ function showdict{K,V}(io::IO, t::Associative{K,V}; limit::Bool = false,
         print(io, key)
         print(io, " => ")
 
-        val = sprint(show, v)
         if limit
+            val = with_output_limit(()->sprint(show, v))
             val = _truncate_at_width_or_chars(val, cols - keylen, "\r\n")
+            print(io, val)
+        else
+            show(io, v)
         end
-        print(io, val)
     end
 end
 
@@ -135,16 +137,20 @@ function showkv{T<:Union(KeyIterator,ValueIterator)}(io::IO, iter::T; limit::Boo
         print(io, "\n  ")
         limit && i >= rows && (print(io, "⋮"); break)
 
-        str = sprint(show, v)
-        limit && (str = _truncate_at_width_or_chars(str, cols, "\r\n"))
-        print(io, str)
+        if limit
+            str = with_output_limit(()->sprint(show, v))
+            str = _truncate_at_width_or_chars(str, cols, "\r\n")
+            print(io, str)
+        else
+            show(io, v)
+        end
     end
 end
 
 length(v::Union(KeyIterator,ValueIterator)) = length(v.dict)
 isempty(v::Union(KeyIterator,ValueIterator)) = isempty(v.dict)
-eltype(v::KeyIterator) = eltype(v.dict)[1]
-eltype(v::ValueIterator) = eltype(v.dict)[2]
+eltype{D}(::Type{KeyIterator{D}}) = eltype(D)[1]
+eltype{D}(::Type{ValueIterator{D}}) = eltype(D)[2]
 
 start(v::Union(KeyIterator,ValueIterator)) = start(v.dict)
 done(v::Union(KeyIterator,ValueIterator), state) = done(v.dict, state)
@@ -191,7 +197,7 @@ function merge(d::Associative, others::Associative...)
     merge!(Dict{K,V}(), d, others...)
 end
 
-function filter!(f::Function, d::Associative)
+function filter!(f, d::Associative)
     for (k,v) in d
         if !f(k,v)
             delete!(d,k)
@@ -199,9 +205,9 @@ function filter!(f::Function, d::Associative)
     end
     return d
 end
-filter(f::Function, d::Associative) = filter!(f,copy(d))
+filter(f, d::Associative) = filter!(f,copy(d))
 
-eltype{K,V}(a::Associative{K,V}) = (K,V)
+eltype{K,V}(::Type{Associative{K,V}}) = (K,V)
 
 function isequal(l::Associative, r::Associative)
     if isa(l,ObjectIdDict) != isa(r,ObjectIdDict)
@@ -246,7 +252,9 @@ end
 getindex(t::Associative, k1, k2, ks...) = getindex(t, tuple(k1,k2,ks...))
 setindex!(t::Associative, v, k1, k2, ks...) = setindex!(t, v, tuple(k1,k2,ks...))
 
-push!(t::Associative, key, v) = setindex!(t, v, key)
+push!(t::Associative, p::Pair) = setindex!(t, p.second, p.first)
+push!(t::Associative, p::Pair, q::Pair) = push!(push!(t, p), q)
+push!(t::Associative, p::Pair, q::Pair, r::Pair...) = push!(push!(push!(t, p), q), r...)
 
 # hashing objects by identity
 
@@ -266,13 +274,7 @@ type ObjectIdDict <: Associative{Any,Any}
         d
     end
 
-    function ObjectIdDict(o::ObjectIdDict)
-        N = length(o.ht)
-        ht = cell(N)
-        ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt),
-              ht, o.ht, N*sizeof(Ptr))
-        new(ht)
-    end
+    ObjectIdDict(o::ObjectIdDict) = new(copy(o.ht))
 end
 
 similar(d::ObjectIdDict) = ObjectIdDict()
@@ -324,11 +326,10 @@ type Dict{K,V} <: Associative{K,V}
     vals::Array{V,1}
     ndel::Int
     count::Int
-    deleter::Function
 
     function Dict()
         n = 16
-        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0, identity)
+        new(zeros(UInt8,n), Array(K,n), Array(V,n), 0, 0)
     end
     function Dict(kv)
         h = Dict{K,V}()
@@ -346,9 +347,17 @@ type Dict{K,V} <: Associative{K,V}
         end
         return h
     end
+    function Dict(d::Dict{K,V})
+        if d.ndel > 0
+            rehash!(d)
+        end
+        @assert d.ndel == 0
+        new(copy(d.slots), copy(d.keys), copy(d.vals), 0, d.count)
+    end
 end
 Dict() = Dict{Any,Any}()
 Dict(kv::()) = Dict()
+copy(d::Dict) = Dict(d)
 
 const AnyDict = Dict{Any,Any}
 
@@ -394,7 +403,7 @@ convert{K,V}(::Type{Dict{K,V}},d::Dict{K,V}) = d
 
 function serialize(s, t::Dict)
     serialize_type(s, typeof(t))
-    write(s, int32(length(t)))
+    write(s, Int32(length(t)))
     for (k,v) in t
         serialize(s, k)
         serialize(s, v)
@@ -573,7 +582,7 @@ end
 function setindex!{K,V}(h::Dict{K,V}, v0, key0)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
     v = convert(V,  v0)
 
@@ -592,7 +601,7 @@ end
 function get!{K,V}(h::Dict{K,V}, key0, default)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
 
     index = ht_keyindex2(h, key)
@@ -607,7 +616,7 @@ end
 function get!{K,V}(default::Callable, h::Dict{K,V}, key0)
     key = convert(K,key0)
     if !isequal(key,key0)
-        error(key0, " is not a valid key for type ", K)
+        throw(ArgumentError("$key0 is not a valid key for type $K"))
     end
 
     index = ht_keyindex2(h, key)
@@ -625,7 +634,9 @@ macro get!(h, key0, default)
     quote
         K, V = eltype($(esc(h)))
         key = convert(K, $(esc(key0)))
-        isequal(key, $(esc(key0))) || error($(esc(key0)), " is not a valid key for type ", K)
+        if !isequal(key, $(esc(key0)))
+            throw(ArgumentError(string($(esc(key0)), " is not a valid key for type ", K)))
+        end
         idx = ht_keyindex2($(esc(h)), key)
         if idx < 0
             idx = -idx
@@ -702,7 +713,7 @@ function skip_deleted(h::Dict, i)
 end
 
 start(t::Dict) = skip_deleted(t, 1)
-done(t::Dict, i) = done(t.vals, i)
+done(t::Dict, i) = i > length(t.vals)
 next(t::Dict, i) = ((t.keys[i],t.vals[i]), skip_deleted(t,i+1))
 
 isempty(t::Dict) = (t.count == 0)
@@ -713,6 +724,14 @@ next{T<:Dict}(v::ValueIterator{T}, i) = (v.dict.vals[i], skip_deleted(v.dict,i+1
 
 # weak key dictionaries
 
+type WeakKeyDict{K,V} <: Associative{K,V}
+    ht::Dict{Any,V}
+    deleter::Function
+
+    WeakKeyDict() = new(Dict{Any,V}(), identity)
+end
+WeakKeyDict() = WeakKeyDict{Any,Any}()
+
 function weak_key_delete!(t::Dict, k)
     # when a weak key is finalized, remove from dictionary if it is still there
     wk = getkey(t, k, secret_table_token)
@@ -721,40 +740,20 @@ function weak_key_delete!(t::Dict, k)
     end
 end
 
-function add_weak_key(t::Dict, k, v)
-    if is(t.deleter, identity)
-        t.deleter = x->weak_key_delete!(t, x)
+function setindex!{K}(wkh::WeakKeyDict{K}, v, key)
+    t = wkh.ht
+    k = convert(K, key)
+    if is(wkh.deleter, identity)
+        wkh.deleter = x->weak_key_delete!(t, x)
     end
     t[WeakRef(k)] = v
     # TODO: it might be better to avoid the finalizer, allow
     # wiped WeakRefs to remain in the table, and delete them as
     # they are discovered by getindex and setindex!.
-    finalizer(k, t.deleter)
+    finalizer(k, wkh.deleter)
     return t
 end
 
-function weak_value_delete!(t::Dict, k, v)
-    # when a weak value is finalized, remove from dictionary if it is still there
-    wv = get(t, k, secret_table_token)
-    if !is(wv,secret_table_token) && is(wv.value, v)
-        delete!(t, k)
-    end
-end
-
-function add_weak_value(t::Dict, k, v)
-    t[k] = WeakRef(v)
-    finalizer(v, x->weak_value_delete!(t, k, x))
-    return t
-end
-
-type WeakKeyDict{K,V} <: Associative{K,V}
-    ht::Dict{Any,V}
-
-    WeakKeyDict() = new(Dict{Any,V}())
-end
-WeakKeyDict() = WeakKeyDict{Any,Any}()
-
-setindex!{K}(wkh::WeakKeyDict{K}, v, key) = add_weak_key(wkh.ht, convert(K,key), v)
 
 function getkey{K}(wkh::WeakKeyDict{K}, kk, default)
     k = getkey(wkh.ht, kk, secret_table_token)

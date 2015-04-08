@@ -73,7 +73,8 @@
 #    contents::T
 #end
 
-#bitstype {32|64} Ptr{T}
+#abstract Ref{T}
+#bitstype {32|64} Ptr{T} <: Ref{T}
 
 # types for the front end
 
@@ -117,25 +118,26 @@ import Core.Intrinsics.ccall
 
 export
     # key types
-    Any, DataType, Vararg, ANY, NTuple, Top,
+    Any, DataType, Vararg, ANY, NTuple,
     Tuple, Type, TypeConstructor, TypeName, TypeVar, Union, UnionType, Void,
     AbstractArray, DenseArray,
     # special objects
     Box, Function, IntrinsicFunction, LambdaStaticData, Method, MethodTable,
-    Module, Symbol, Task, Array,
+    Module, Symbol, Task, Array, WeakRef,
     # numeric types
-    Bool, FloatingPoint, Float16, Float32, Float64, Number, Integer, Int, Int8, Int16,
-    Int32, Int64, Int128, Ptr, Real, Signed, UInt, UInt8, UInt16, UInt32,
-    UInt64, UInt128, Unsigned,
+    Number, Real, Integer, Bool, Ref, Ptr,
+    FloatingPoint, Float16, Float32, Float64,
+    Signed, Int, Int8, Int16, Int32, Int64, Int128,
+    Unsigned, UInt, UInt8, UInt16, UInt32, UInt64, UInt128,
     # string types
     Char, ASCIIString, ByteString, DirectIndexString, AbstractString, UTF8String,
     # errors
     BoundsError, DivideError, DomainError, Exception,
-    InexactError, InterruptException, MemoryError, OverflowError,
+    InexactError, InterruptException, OutOfMemoryError, OverflowError,
     StackOverflowError, UndefRefError, UndefVarError,
     # AST representation
     Expr, GotoNode, LabelNode, LineNumberNode, QuoteNode, SymbolNode, TopNode,
-    GetfieldNode, NewvarNode,
+    GlobalRef, NewvarNode, GenSym,
     # object model functions
     fieldtype, getfield, setfield!, yieldto, throw, tuple, is, ===, isdefined,
     # arraylen, arrayref, arrayset, arraysize, tuplelen, tupleref,
@@ -157,6 +159,7 @@ export
     #nan_dom_err, copysign_float, ctlz_int, ctpop_int, cttz_int,
     #div_float, eq_float, eq_int, eqfsi64, eqfui64, flipsign_int, select_value,
     #sqrt_llvm, powi_llvm,
+    #sqrt_llvm_fast,
     #fpext, fpiseq, fpislt, fpsiround, fpuiround, fptosi, fptoui,
     #fptrunc, le_float, lefsi64, lefui64, lesif64,
     #leuif64, lshr_int, lt_float, ltfsi64, ltfui64, ltsif64, ltuif64, mul_float,
@@ -212,7 +215,7 @@ immutable DivideError        <: Exception end
 immutable DomainError        <: Exception end
 immutable OverflowError      <: Exception end
 immutable InexactError       <: Exception end
-immutable MemoryError        <: Exception end
+immutable OutOfMemoryError   <: Exception end
 immutable StackOverflowError <: Exception end
 immutable UndefRefError      <: Exception end
 immutable UndefVarError      <: Exception
@@ -229,10 +232,9 @@ type SymbolNode
     SymbolNode(name::Symbol, t::ANY) = new(name, t)
 end
 
-type GetfieldNode
-    value
+immutable GlobalRef
+    mod::Module
     name::Symbol
-    typ
 end
 
 immutable ASCIIString <: DirectIndexString
@@ -248,6 +250,12 @@ typealias ByteString Union(ASCIIString,UTF8String)
 include(fname::ByteString) = ccall(:jl_load_, Any, (Any,), fname)
 
 # constructors for built-in types
+
+type WeakRef
+    value
+    WeakRef() = WeakRef(nothing)
+    WeakRef(v::ANY) = ccall(:jl_gc_new_weakref, Any, (Any,), v)::WeakRef
+end
 
 TypeVar(n::Symbol) =
     ccall(:jl_new_typevar, Any, (Any, Any, Any), n, Union(), Any)::TypeVar
@@ -266,12 +274,14 @@ TypeConstructor(p::ANY, t::ANY) = ccall(:jl_new_type_constructor, Any, (Any, Any
 
 Expr(args::ANY...) = _expr(args...)
 
-LineNumberNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LineNumberNode, n)::LineNumberNode
-LabelNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), LabelNode, n)::LabelNode
-GotoNode(n::Int) = ccall(:jl_new_struct, Any, (Any,Any...), GotoNode, n)::GotoNode
-QuoteNode(x::ANY) = ccall(:jl_new_struct, Any, (Any,Any...), QuoteNode, x)::QuoteNode
-NewvarNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), NewvarNode, s)::NewvarNode
-TopNode(s::Symbol) = ccall(:jl_new_struct, Any, (Any,Any...), TopNode, s)::TopNode
+_new(typ::Symbol, argty::Symbol) = eval(:(Core.call(::$(Expr(:call, :(Core.apply_type), :Type, typ)), n::$argty) = $(Expr(:new, typ, :n))))
+_new(:LineNumberNode, :Int)
+_new(:LabelNode, :Int)
+_new(:GotoNode, :Int)
+_new(:TopNode, :Symbol)
+_new(:NewvarNode, :Symbol)
+_new(:QuoteNode, :ANY)
+_new(:GenSym, :Int)
 
 Module(name::Symbol) = ccall(:jl_f_new_module, Any, (Any,), name)::Module
 Module() = Module(:anonymous)

@@ -8,7 +8,7 @@
 ## required core functionality ##
 
 endof(s::ASCIIString) = length(s.data)
-getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? char(x) : '\ufffd')
+getindex(s::ASCIIString, i::Int) = (x=s.data[i]; x < 0x80 ? Char(x) : '\ufffd')
 
 ## overload methods for efficiency ##
 
@@ -17,8 +17,8 @@ sizeof(s::ASCIIString) = sizeof(s.data)
 getindex(s::ASCIIString, r::Vector) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, r::UnitRange{Int}) = ASCIIString(getindex(s.data,r))
 getindex(s::ASCIIString, indx::AbstractVector{Int}) = ASCIIString(s.data[indx])
-search(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? search(s.data,uint8(c),i) : 0
-rsearch(s::ASCIIString, c::Char, i::Integer) = c < char(0x80) ? rsearch(s.data,uint8(c),i) : 0
+search(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? search(s.data,c%UInt8,i) : 0
+rsearch(s::ASCIIString, c::Char, i::Integer) = c < Char(0x80) ? rsearch(s.data,c%UInt8,i) : 0
 
 function string(c::ASCIIString...)
     if length(c) == 1
@@ -58,10 +58,10 @@ end
 function uppercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'a' <= char(d[i]) <= 'z'
+        if 'a' <= Char(d[i]) <= 'z'
             td = copy(d)
             for j = i:length(td)
-                if 'a' <= char(td[j]) <= 'z'
+                if 'a' <= Char(td[j]) <= 'z'
                     td[j] -= 32
                 end
             end
@@ -73,10 +73,10 @@ end
 function lowercase(s::ASCIIString)
     d = s.data
     for i = 1:length(d)
-        if 'A' <= char(d[i]) <= 'Z'
+        if 'A' <= Char(d[i]) <= 'Z'
             td = copy(d)
             for j = i:length(td)
-                if 'A' <= char(td[j]) <= 'Z'
+                if 'A' <= Char(td[j]) <= 'Z'
                     td[j] += 32
                 end
             end
@@ -90,7 +90,6 @@ reverse(s::ASCIIString) = ASCIIString(reverse(s.data))
 
 ## outputing ASCII strings ##
 
-print(io::IO, s::ASCIIString) = (write(io, s);nothing)
 write(io::IO, s::ASCIIString) = write(io, s.data)
 
 ## transcoding to ASCII ##
@@ -98,7 +97,11 @@ write(io::IO, s::ASCIIString) = write(io, s.data)
 ascii(x) = convert(ASCIIString, x)
 convert(::Type{ASCIIString}, s::ASCIIString) = s
 convert(::Type{ASCIIString}, s::UTF8String) = ascii(s.data)
-convert(::Type{ASCIIString}, a::Array{UInt8,1}) = is_valid_ascii(a) ? ASCIIString(a) : error("invalid ASCII sequence")
+convert(::Type{ASCIIString}, a::Vector{UInt8}) = begin
+    is_valid_ascii(a) || throw(ArgumentError("invalid ASCII sequence"))
+    return ASCIIString(a)
+end
+
 function convert(::Type{ASCIIString}, a::Array{UInt8,1}, invalids_as::ASCIIString)
     l = length(a)
     idx = 1

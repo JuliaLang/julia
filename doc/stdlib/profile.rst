@@ -16,6 +16,8 @@
 
 .. currentmodule:: Base.Profile
 
+The methods in :mod:`Base.Profile` are not exported and need to be called e.g. as ``Profile.print()``.
+
 .. function:: clear()
 
    Clear any existing backtraces from the internal buffer.

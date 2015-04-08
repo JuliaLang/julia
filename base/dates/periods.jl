@@ -10,7 +10,7 @@ for p in (:Year,:Month,:Week,:Day,:Hour,:Minute,:Second,:Millisecond)
     # periodisless
     @eval periodisless(x::$p,y::$p) = value(x) < value(y)
     # AbstractString parsing (mainly for IO code)
-    @eval $p(x::AbstractString) = $p(parseint(Int64,x))
+    @eval $p(x::AbstractString) = $p(Base.parse(Int64,x))
     # Period accessors
     @eval $p(x::TimeType) = $p($(symbol(lowercase(string(p))))(x))
 end
@@ -288,4 +288,3 @@ days(c::Week)        = 7*value(c)
 days(c::Year)        = 365.2425*value(c)
 days(c::Month)       = 30.436875*value(c)
 days(c::CompoundPeriod) = isempty(c.periods)?0.0 : Float64(sum(days,c.periods))
-

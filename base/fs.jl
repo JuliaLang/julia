@@ -63,18 +63,19 @@ end
 
 isopen(f::Union(File,AsyncFile)) = f.open
 
+# Not actually a pointer, but that's how we pass it through the C API so it's fine
+uvhandle(file::File) = convert(Ptr{Void}, file.handle % UInt)
 uvtype(::File) = Base.UV_RAW_FD
-uvhandle(file::File) = file.handle
 
 _uv_fs_result(req) = ccall(:jl_uv_fs_result,Int32,(Ptr{Void},),req)
 
 function open(f::File,flags::Integer,mode::Integer)
-    req = c_malloc(_sizeof_uv_fs)
+    req = Libc.malloc(_sizeof_uv_fs)
     ret = ccall(:uv_fs_open,Int32,(Ptr{Void},Ptr{Void},Ptr{UInt8},Int32,Int32,Ptr{Void}),
                 eventloop(), req, f.path, flags,mode, C_NULL)
     f.handle = _uv_fs_result(req)
     ccall(:uv_fs_req_cleanup,Void,(Ptr{Void},),req)
-    c_free(req)
+    Libc.free(req)
     uv_error("open",ret)
     f.open = true
     f
@@ -84,7 +85,7 @@ open(f::AbstractString,flags) = open(f,flags,0)
 
 function close(f::File)
     if !f.open
-        error("file is already closed")
+        throw(ArgumentError("file \"$(f.path)\" is already closed"))
     end
     err = ccall(:jl_fs_close, Int32, (Int32,), f.handle)
     uv_error("close",err)
@@ -99,7 +100,7 @@ function unlink(p::AbstractString)
 end
 function unlink(f::File)
     if isempty(f.path)
-      error("no path associated with this file")
+      throw(ArgumentError("no path associated with this file"))
     end
     if f.open
         close(f)
@@ -127,13 +128,13 @@ end
 function sendfile(src::AbstractString, dst::AbstractString)
     src_file = open(src, JL_O_RDONLY)
     if !src_file.open
-        error("Src file is not open")
+        throw(ArgumentError("source file \"$(src.path)\" is not open"))
     end
 
     dst_file = open(dst, JL_O_CREAT | JL_O_TRUNC | JL_O_WRONLY,
                     S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP| S_IROTH | S_IWOTH)
     if !dst_file.open
-        error("Dst file is not open")
+        throw(ArgumentError("destination file \"$(dst.path)\" is not open"))
     end
 
     src_stat = stat(src_file)
@@ -169,7 +170,7 @@ end
 
 function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     if !f.open
-        error("file is not open")
+        throw(ArgumentError("file \"$(f.path)\" is not open"))
     end
     err = ccall(:jl_fs_write, Int32, (Int32, Ptr{UInt8}, Csize_t, Int64),
                 f.handle, buf, len, offset)
@@ -177,14 +178,7 @@ function write(f::File, buf::Ptr{UInt8}, len::Integer, offset::Integer=-1)
     len
 end
 
-function write(f::File, c::UInt8)
-    if !f.open
-        error("file is not open")
-    end
-    err = ccall(:jl_fs_write_byte, Int32, (Int32, Cchar), f.handle, c)
-    uv_error("write",err)
-    1
-end
+write(f::File, c::UInt8) = write(f,[c])
 
 function write{T}(f::File, a::Array{T})
     if isbits(T)
@@ -195,30 +189,30 @@ function write{T}(f::File, a::Array{T})
 end
 
 function truncate(f::File, n::Integer)
-    req = Base.c_malloc(_sizeof_uv_fs)
+    req = Base.Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_ftruncate,Int32,(Ptr{Void},Ptr{Void},Int32,Int64,Ptr{Void}),
                 eventloop(),req,f.handle,n,C_NULL)
-    c_free(req)
+    Libc.free(req)
     uv_error("ftruncate", err)
     f
 end
 
 function futime(f::File, atime::Float64, mtime::Float64)
-    req = Base.c_malloc(_sizeof_uv_fs)
+    req = Base.Libc.malloc(_sizeof_uv_fs)
     err = ccall(:uv_fs_futime,Int32,(Ptr{Void},Ptr{Void},Int32,Float64,Float64,Ptr{Void}),
                 eventloop(),req,f.handle,atime,mtime,C_NULL)
-    c_free(req)
+    Libc.free(req)
     uv_error("futime", err)
     f
 end
 
 function read(f::File, ::Type{UInt8})
     if !f.open
-        error("file is not open")
+        throw(ArgumentError("file \"$(f.path)\" is not open"))
     end
     ret = ccall(:jl_fs_read_byte, Int32, (Int32,), f.handle)
     uv_error("read", ret)
-    return uint8(ret)
+    return ret%UInt8
 end
 
 function read!{T}(f::File, a::Array{T}, nel=length(a))
@@ -255,9 +249,9 @@ function readbytes(f::File)
     a
 end
 
-const SEEK_SET = int32(0)
-const SEEK_CUR = int32(1)
-const SEEK_END = int32(2)
+const SEEK_SET = Int32(0)
+const SEEK_CUR = Int32(1)
+const SEEK_END = Int32(2)
 
 function position(f::File)
     ret = ccall(:jl_lseek, Coff_t,(Int32,Coff_t,Int32),f.handle,0,SEEK_CUR)

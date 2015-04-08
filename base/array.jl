@@ -13,7 +13,33 @@ typealias StridedVector{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,
 typealias StridedMatrix{T,A<:DenseArray,I<:(RangeIndex...)}  Union(DenseArray{T,2}, SubArray{T,2,A,I})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
+call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
+call{T}(::Type{Matrix{T}}, m::Integer, n::Integer) = Array{T}(m, n)
+
 ## Basic functions ##
+
+# convert Arrays to pointer arrays for ccall
+function call{P<:Ptr,T<:Ptr}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array{T<:Ptr})
+    return RefArray(a) # effectively a no-op
+end
+function call{P<:Ptr,T}(::Type{Ref{P}}, a::Array{T}) # Ref{P<:Ptr}(a::Array)
+    if (!isbits(T) && T <: eltype(P))
+        # this Array already has the right memory layout for the requested Ref
+        return RefArray(a,1,false) # root something, so that this function is type-stable
+    else
+        ptrs = Array(P, length(a)+1)
+        roots = Array(Any, length(a))
+        for i = 1:length(a)
+            root = cconvert(P, a[i])
+            ptrs[i] = unsafe_convert(P, root)::P
+            roots[i] = root
+        end
+        ptrs[length(a)+1] = C_NULL
+        return RefArray(ptrs,1,roots)
+    end
+end
+cconvert{P<:Ptr,T<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array{T}) = a
+cconvert{P<:Ptr}(::Union(Type{Ptr{P}},Type{Ref{P}}), a::Array) = Ref{P}(a)
 
 size(a::Array) = arraysize(a)
 size(a::Array, d) = arraysize(a, d)
@@ -57,8 +83,14 @@ end
 
 copy!{T}(dest::Array{T}, src::Array{T}) = copy!(dest, 1, src, 1, length(src))
 
+function copy(a::Array)
+    b = similar(a)
+    ccall(:memcpy, Ptr{Void}, (Ptr{Void}, Ptr{Void}, UInt), b, a, sizeof(a))
+    return b
+end
+
 function reinterpret{T,S}(::Type{T}, a::Array{S,1})
-    nel = int(div(length(a)*sizeof(S),sizeof(T)))
+    nel = Int(div(length(a)*sizeof(S),sizeof(T)))
     # TODO: maybe check that remainder is zero?
     return reinterpret(T, a, (nel,))
 end
@@ -118,7 +150,7 @@ similar{T}(a::Array{T,2}, S)          = Array(S, size(a,1), size(a,2))
 # T[x...] constructs Array{T,1}
 function getindex(T::NonTupleType, vals...)
     a = Array(T,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
@@ -126,20 +158,29 @@ end
 
 function getindex(::Type{Any}, vals::ANY...)
     a = Array(Any,length(vals))
-    for i = 1:length(vals)
+    @inbounds for i = 1:length(vals)
         a[i] = vals[i]
     end
     return a
 end
 
-getindex(T::(Type...)) = Array(T,0)
+function getindex(T::(Type...), vals::Tuple...)
+    a = Array(T,length(vals))
+    @inbounds for i = 1:length(vals)
+        a[i] = vals[i]
+    end
+    return a
+end
 
+if _oldstyle_array_vcat_
 # T[a:b] and T[a:s:b] also construct typed ranges
 function getindex{T<:Union(Char,Number)}(::Type{T}, r::Range)
+    depwarn("T[a:b] concatenation is deprecated; use T[a:b;] instead", :getindex)
     copy!(Array(T,length(r)), r)
 end
 
 function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
+    depwarn("T[a:b,...] concatenation is deprecated; use T[a:b;...] instead", :getindex)
     a = Array(T,length(r1)+sum(length,rs))
     o = 1
     copy!(a, o, r1)
@@ -150,8 +191,9 @@ function getindex{T<:Union(Char,Number)}(::Type{T}, r1::Range, rs::Range...)
     end
     return a
 end
+end
 
-function fill!{T<:Union(Int8,UInt8)}(a::Array{T}, x::Integer)
+function fill!(a::Union(Array{UInt8}, Array{Int8}), x::Integer)
     ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t), a, x, length(a))
     return a
 end
@@ -209,7 +251,7 @@ linspace(start::Integer, stop::Integer, n::Integer) =
 function linspace(start::Real, stop::Real, n::Integer)
     (start, stop) = promote(start, stop)
     T = typeof(start)
-    a = Array(T, int(n))
+    a = Array(T, Int(n))
     if n == 1
         a[1] = start
         return a
@@ -233,6 +275,8 @@ convert{T,n}(::Type{Array{T,n}}, x::Array{T,n}) = x
 convert{T,n,S}(::Type{Array{T}}, x::Array{S,n}) = convert(Array{T,n}, x)
 convert{T,n,S}(::Type{Array{T,n}}, x::Array{S,n}) = copy!(similar(x,T), x)
 
+promote_rule{T,n,S}(::Type{Array{T,n}}, ::Type{Array{S,n}}) = Array{promote_type(T,S),n}
+
 function collect(T::Type, itr)
     if applicable(length, itr)
         # when length() isn't defined this branch might pollute the
@@ -252,6 +296,11 @@ function collect(T::Type, itr)
 end
 
 collect(itr) = collect(eltype(itr), itr)
+
+## Iteration ##
+start(A::Array) = 1
+next(a::Array,i) = (a[i],i+1)
+done(a::Array,i) = (i > length(a))
 
 ## Indexing: getindex ##
 
@@ -360,6 +409,9 @@ function setindex!{T<:Real}(A::Array, X::AbstractArray, I::AbstractVector{T})
     count = 1
     if is(X,A)
         X = copy(X)
+        is(I,A) && (I = X)
+    elseif is(I,A)
+        I = copy(I)
     end
     for i in I
         A[i] = X[count]
@@ -514,7 +566,7 @@ function resize!(a::Vector, nl::Integer)
         ccall(:jl_array_grow_end, Void, (Any, UInt), a, nl-l)
     else
         if nl < 0
-            throw(ArgumentError("new length must be ≥ 0, got $(nl)"))
+            throw(ArgumentError("new length must be ≥ 0"))
         end
         ccall(:jl_array_del_end, Void, (Any, UInt), a, l-nl)
     end
@@ -573,6 +625,7 @@ end
 
 function deleteat!{T<:Integer}(a::Vector, r::UnitRange{T})
     n = length(a)
+    isempty(r) && return a
     f = first(r)
     l = last(r)
     if !(1 <= f && l <= n)
@@ -716,39 +769,32 @@ promote_array_type{S<:Union(Complex, Real), AT<:FloatingPoint}(::Type{S}, ::Type
 promote_array_type{S<:Integer, A<:Integer}(::Type{S}, ::Type{A}) = A
 promote_array_type{S<:Integer}(::Type{S}, ::Type{Bool}) = S
 
-./{T<:Integer}(x::Integer, y::StridedArray{T}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{T<:Integer}(x::StridedArray{T}, y::Integer) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-
-./{T<:Integer}(x::Integer, y::StridedArray{Complex{T}}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{T<:Integer}(x::StridedArray{Complex{T}}, y::Integer) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-./{S<:Integer,T<:Integer}(x::Complex{S}, y::StridedArray{T}) =
-    reshape([ x    ./ y[i] for i=1:length(y) ], size(y))
-./{S<:Integer,T<:Integer}(x::StridedArray{S}, y::Complex{T}) =
-    reshape([ x[i] ./ y    for i=1:length(x) ], size(x))
-
-# ^ is difficult, since negative exponents give a different type
-
-.^(x::Number, y::StridedArray) =
-    reshape([ x ^ y[i] for i=1:length(y) ], size(y))
-
-.^(x::StridedArray, y::Number      ) =
-    reshape([ x[i] ^ y for i=1:length(x) ], size(x))
+# Handle operations that return different types
+./(x::Number, Y::AbstractArray) =
+    reshape([ x ./ y for y in Y ], size(Y))
+./(X::AbstractArray, y::Number) =
+    reshape([ x ./ y for x in X ], size(X))
+.\(x::Number, Y::AbstractArray) =
+    reshape([ x .\ y for y in Y ], size(Y))
+.\(X::AbstractArray, y::Number) =
+    reshape([ x .\ y for x in X ], size(X))
+.^(x::Number, Y::AbstractArray) =
+    reshape([ x ^ y for y in Y ], size(Y))
+.^(X::AbstractArray, y::Number      ) =
+    reshape([ x ^ y for x in X ], size(X))
 
 for f in (:+, :-, :div, :mod, :&, :|, :$)
     @eval begin
-        function ($f){S,T}(A::StridedArray{S}, B::StridedArray{T})
+        function ($f){S,T}(A::Range{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
-            for i=1:length(A)
-                @inbounds F[i] = ($f)(A[i], B[i])
+            i = 1
+            for (a,b) in zip(A,B)
+                @inbounds F[i] = ($f)(a, b)
+                i += 1
             end
             return F
         end
-        # interaction with Ranges
-        function ($f){S,T<:Real}(A::StridedArray{S}, B::Range{T})
+        function ($f){S,T}(A::AbstractArray{S}, B::Range{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for b in B
@@ -757,7 +803,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
-        function ($f){S<:Real,T}(A::Range{S}, B::StridedArray{T})
+        function ($f){S,T}(A::Range{S}, B::AbstractArray{T})
             F = similar(B, promote_type(S,T), promote_shape(size(A),size(B)))
             i = 1
             for a in A
@@ -766,18 +812,25 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
             end
             return F
         end
+        function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
+            F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
+            for i=1:length(A)
+                @inbounds F[i] = ($f)(A[i], B[i])
+            end
+            return F
+        end
     end
 end
-for f in (:.+, :.-, :.*, :./, :.\, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
+for f in (:.+, :.-, :.*, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
-        function ($f){T}(A::Number, B::StridedArray{T})
+        function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
             for i=1:length(B)
                 @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
-        function ($f){T}(A::StridedArray{T}, B::Number)
+        function ($f){T}(A::AbstractArray{T}, B::Number)
             F = similar(A, promote_array_type(typeof(B),T))
             for i=1:length(A)
                 @inbounds F[i] = ($f)(A[i], B)
@@ -866,7 +919,7 @@ end
 
 function slicedim(A::Array, d::Integer, i::Integer)
     if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+        throw(ArgumentError("dimension must be ≥ 1"))
     end
     d_in = size(A)
     leading = d_in[1:(d-1)]
@@ -900,7 +953,7 @@ end
 
 function flipdim{T}(A::Array{T}, d::Integer)
     if d < 1
-        throw(ArgumentError("dimension d must be ≥ 1, got $(d)"))
+        throw(ArgumentError("dimension d must be ≥ 1"))
     end
     nd = ndims(A)
     sd = d > nd ? 1 : size(A, d)
@@ -912,7 +965,7 @@ function flipdim{T}(A::Array{T}, d::Integer)
 
     nnd = 0
     for i = 1:nd
-        nnd += int(size(A,i)==1 || i==d)
+        nnd += Int(size(A,i)==1 || i==d)
     end
     if nnd==nd
         # flip along the only non-singleton dimension
@@ -1046,7 +1099,9 @@ end
 function hcat{T}(V::Vector{T}...)
     height = length(V[1])
     for j = 2:length(V)
-        if length(V[j]) != height; throw(ArgumentError("vector must have same lengths")); end
+        if length(V[j]) != height
+            throw(DimensionMismatch("vectors must have same lengths"))
+        end
     end
     [ V[j][i]::T for i=1:length(V[1]), j=1:length(V) ]
 end
@@ -1160,11 +1215,11 @@ function findn(A::StridedMatrix)
     return (I, J)
 end
 
-function findnz{T}(A::StridedMatrix{T})
+function findnz{T}(A::AbstractMatrix{T})
     nnzA = countnz(A)
     I = zeros(Int, nnzA)
     J = zeros(Int, nnzA)
-    NZs = zeros(T, nnzA)
+    NZs = Array(T, nnzA)
     count = 1
     if nnzA > 0
         for j=1:size(A,2), i=1:size(A,1)
@@ -1237,11 +1292,9 @@ end
 
 function findin(a, b)
     ind = Array(Int, 0)
-    bset = union!(Set(), b)
-    for i = 1:length(a)
-        if in(a[i], bset)
-            push!(ind, i)
-        end
+    bset = Set(b)
+    @inbounds for i = 1:length(a)
+        a[i] in bset && push!(ind, i)
     end
     ind
 end
@@ -1273,9 +1326,9 @@ end
 ## Filter ##
 
 # given a function returning a boolean and an array, return matching elements
-filter(f::Function, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
+filter(f, As::AbstractArray) = As[map(f, As)::AbstractArray{Bool}]
 
-function filter!(f::Function, a::Vector)
+function filter!(f, a::Vector)
     insrt = 1
     for curr = 1:length(a)
         if f(a[curr])
@@ -1287,7 +1340,7 @@ function filter!(f::Function, a::Vector)
     return a
 end
 
-function filter(f::Function, a::Vector)
+function filter(f, a::Vector)
     r = Array(eltype(a), 0)
     for i = 1:length(a)
         if f(a[i])
@@ -1445,7 +1498,7 @@ function setdiff(a, b)
     args_type = promote_type(eltype(a), eltype(b))
     bset = Set(b)
     ret = Array(args_type,0)
-    seen = Set()
+    seen = Set{eltype(a)}()
     for a_elem in a
         if !in(a_elem, seen) && !in(a_elem, bset)
             push!(ret, a_elem)

@@ -37,7 +37,7 @@ function broadcast_shape(As::Union(AbstractArray,Number)...)
                 if bshape[d] == 1
                     bshape[d] = n
                 elseif bshape[d] != n
-                    error("arrays could not be broadcast to a common size")
+                    throw(DimensionMismatch("arrays could not be broadcast to a common size"))
                 end
             end
         end
@@ -49,12 +49,12 @@ end
 function check_broadcast_shape(shape::Dims, As::Union(AbstractArray,Number)...)
     for A in As
         if ndims(A) > length(shape)
-            error("cannot broadcast array to have fewer dimensions")
+            throw(DimensionMismatch("cannot broadcast array to have fewer dimensions"))
         end
         for k in 1:ndims(A)
             n, nA = shape[k], size(A, k)
             if n != nA != 1
-                error("array could not be broadcast to match destination")
+                throw(DimensionMismatch("array could not be broadcast to match destination"))
             end
         end
     end
@@ -107,8 +107,8 @@ function dumpbitcache(Bc::Vector{UInt64}, bind::Int, C::Vector{Bool})
     ind = 1
     nc = min(bitcache_chunks, length(Bc)-bind+1)
     for i = 1:nc
-        u = uint64(1)
-        c = uint64(0)
+        u = UInt64(1)
+        c = UInt64(0)
         for j = 1:64
             C[ind] && (c |= u)
             ind += 1
@@ -239,38 +239,48 @@ broadcast!_function(f::Function) = (B, As...) -> broadcast!(f, B, As...)
 broadcast_function(f::Function) = (As...) -> broadcast(f, As...)
 
 broadcast_getindex(src::AbstractArray, I::AbstractArray...) = broadcast_getindex!(Array(eltype(src), broadcast_shape(I...)), src, I...)
-@ngenerate N typeof(dest) function broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::NTuple{N, AbstractArray}...)
-    check_broadcast_shape(size(dest), I...)  # unnecessary if this function is never called directly
-    checkbounds(src, I...)
-    @nloops N i dest d->(@nexprs N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
-        @nexprs N k->(@inbounds J_k = @nref N I_k d->j_d_k)
-        @inbounds (@nref N dest i) = (@nref N src J)
+stagedfunction broadcast_getindex!(dest::AbstractArray, src::AbstractArray, I::AbstractArray...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        @nexprs $N d->(I_d = I[d])
+        check_broadcast_shape(size(dest), $(Isplat...))  # unnecessary if this function is never called directly
+        checkbounds(src, $(Isplat...))
+        @nloops $N i dest d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+            @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
+            @inbounds (@nref $N dest i) = (@nref $N src J)
+        end
+        dest
     end
-    dest
 end
 
-@ngenerate N typeof(A) function broadcast_setindex!(A::AbstractArray, x, I::NTuple{N, AbstractArray}...)
-    checkbounds(A, I...)
-    shape = broadcast_shape(I...)
-    @nextract N shape d->(length(shape) < d ? 1 : shape[d])
-    if !isa(x, AbstractArray)
-        @nloops N i d->(1:shape_d) d->(@nexprs N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
-            @nexprs N k->(@inbounds J_k = @nref N I_k d->j_d_k)
-            @inbounds (@nref N A J) = x
+stagedfunction broadcast_setindex!(A::AbstractArray, x, I::AbstractArray...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        @nexprs $N d->(I_d = I[d])
+        checkbounds(A, $(Isplat...))
+        shape = broadcast_shape($(Isplat...))
+        @nextract $N shape d->(length(shape) < d ? 1 : shape[d])
+        if !isa(x, AbstractArray)
+            @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+                @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
+                @inbounds (@nref $N A J) = x
+            end
+        else
+            X = x
+            # To call setindex_shape_check, we need to create fake 1-d indexes of the proper size
+            @nexprs $N d->(fakeI_d = 1:shape_d)
+            Base.setindex_shape_check(X, (@ntuple $N fakeI)...)
+            k = 1
+            @nloops $N i d->(1:shape_d) d->(@nexprs $N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
+                @nexprs $N k->(@inbounds J_k = @nref $N I_k d->j_d_k)
+                @inbounds (@nref $N A J) = X[k]
+                k += 1
+            end
         end
-    else
-        X = x
-        # To call setindex_shape_check, we need to create fake 1-d indexes of the proper size
-        @nexprs N d->(fakeI_d = 1:shape_d)
-        Base.setindex_shape_check(X, (@ntuple N fakeI)...)
-        k = 1
-        @nloops N i d->(1:shape_d) d->(@nexprs N k->(j_d_k = size(I_k, d) == 1 ? 1 : i_d)) begin
-            @nexprs N k->(@inbounds J_k = @nref N I_k d->j_d_k)
-            @inbounds (@nref N A J) = X[k]
-            k += 1
-        end
+        A
     end
-    A
 end
 
 ## elementwise operators ##

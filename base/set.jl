@@ -7,7 +7,7 @@ end
 Set() = Set{Any}()
 Set(itr) = Set{eltype(itr)}(itr)
 
-eltype{T}(s::Set{T}) = T
+eltype{T}(::Type{Set{T}}) = T
 similar{T}(s::Set{T}) = Set{T}()
 
 function show(io::IO, s::Set)
@@ -53,6 +53,7 @@ function union(s::Set, sets::Set...)
 end
 const ∪ = union
 union!(s::Set, xs) = (for x=xs; push!(s,x); end; s)
+union!(s::Set, xs::AbstractArray) = (sizehint!(s,length(xs));for x=xs; push!(s,x); end; s)
 join_eltype() = Bottom
 join_eltype(v1, vs...) = typejoin(eltype(v1), join_eltype(vs...))
 
@@ -97,7 +98,7 @@ function issubset(l, r)
     return true
 end
 const ⊆ = issubset
-⊊(l::Set, r::Set) = ⊆(l, r) && l!=r
+⊊(l::Set, r::Set) = <(l, r)
 ⊈(l::Set, r::Set) = !⊆(l, r)
 
 function unique(C)
@@ -112,7 +113,7 @@ function unique(C)
     out
 end
 
-function filter(f::Function, s::Set)
+function filter(f, s::Set)
     u = similar(s)
     for x in s
         if f(x)
@@ -121,7 +122,7 @@ function filter(f::Function, s::Set)
     end
     return u
 end
-function filter!(f::Function, s::Set)
+function filter!(f, s::Set)
     for x in s
         if !f(x)
             delete!(s, x)

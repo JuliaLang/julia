@@ -25,7 +25,7 @@ end
 function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     N = length(dims)
 
-    isbits(T) || error("Type of Shared Array elements must be bits types")
+    isbits(T) || throw(ArgumentError("type of SharedArray elements must be bits types, got $(T)"))
 
     if isempty(pids)
         # only use workers on the current host
@@ -37,7 +37,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
         onlocalhost = true
     else
         if !check_same_host(pids)
-            error("SharedArray requires all requested processes to be on the same machine.")
+            throw(ArgumentError("SharedArray requires all requested processes to be on the same machine."))
         end
 
         onlocalhost = myid() in procs(pids[1])
@@ -49,7 +49,7 @@ function SharedArray(T::Type, dims::NTuple; init=false, pids=Int[])
     local shmmem_create_pid
     try
         # On OSX, the shm_seg_name length must be < 32 characters
-        shm_seg_name = string("/jl", getpid(), int64(time() * 10^9))
+        shm_seg_name = string("/jl", getpid(), round(Int64,time() * 10^9))
         if onlocalhost
             shmmem_create_pid = myid()
             s = shm_mmap_array(T, dims, shm_seg_name, JL_O_CREAT | JL_O_RDWR)
@@ -119,7 +119,7 @@ length(S::SharedArray) = prod(S.dims)
 size(S::SharedArray) = S.dims
 
 function reshape{T,N}(a::SharedArray{T}, dims::NTuple{N,Int})
-    (length(a) != prod(dims)) && error("dimensions must be consistent with array size")
+    (length(a) != prod(dims)) && throw(DimensionMismatch("dimensions must be consistent with array size"))
     refs = Array(RemoteRef, length(a.pids))
     for (i, p) in enumerate(a.pids)
         refs[i] = remotecall(p, (r,d)->reshape(fetch(r),d), a.refs[i], dims)
@@ -139,7 +139,7 @@ sdata(A::AbstractArray) = A
 
 localindexes(S::SharedArray) = S.pidx > 0 ? range_1dim(S, S.pidx) : 1:0
 
-convert{T}(::Type{Ptr{T}}, S::SharedArray) = convert(Ptr{T}, sdata(S))
+unsafe_convert{T}(::Type{Ptr{T}}, S::SharedArray) = unsafe_convert(Ptr{T}, sdata(S))
 
 convert(::Type{SharedArray}, A::Array) = (S = SharedArray(eltype(A), size(A)); copy!(S, A))
 convert{T}(::Type{SharedArray{T}}, A::Array) = (S = SharedArray(T, size(A)); copy!(S, A))
@@ -210,15 +210,28 @@ convert(::Type{Array}, S::SharedArray) = S.s
 getindex(S::SharedArray) = getindex(S.s)
 getindex(S::SharedArray, I::Real) = getindex(S.s, I)
 getindex(S::SharedArray, I::AbstractArray) = getindex(S.s, I)
-@nsplat N 1:5 getindex(S::SharedArray, I::NTuple{N,Union(Real,AbstractVector)}...) = getindex(S.s, I...)
+stagedfunction getindex(S::SharedArray, I::Union(Real,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        getindex(S.s, $(Isplat...))
+    end
+end
 
 setindex!(S::SharedArray, x) = setindex!(S.s, x)
 setindex!(S::SharedArray, x, I::Real) = setindex!(S.s, x, I)
 setindex!(S::SharedArray, x, I::AbstractArray) = setindex!(S.s, x, I)
-@nsplat N 1:5 setindex!(S::SharedArray, x, I::NTuple{N,Union(Real,AbstractVector)}...) = setindex!(S.s, x, I...)
+stagedfunction setindex!(S::SharedArray, x, I::Union(Real,AbstractVector)...)
+    N = length(I)
+    Isplat = Expr[:(I[$d]) for d = 1:N]
+    quote
+        setindex!(S.s, x, $(Isplat...))
+    end
+end
 
 function fill!(S::SharedArray, v)
-    f = S->fill!(S.loc_subarr_1d, v)
+    vT = convert(eltype(S), v)
+    f = S->fill!(S.loc_subarr_1d, vT)
     @sync for p in procs(S)
         @async remotecall_wait(p, f, S)
     end
@@ -271,14 +284,14 @@ similar(S::SharedArray, T) = similar(S, T, size(S))
 similar(S::SharedArray, dims::Dims) = similar(S, eltype(S), dims)
 similar(S::SharedArray) = similar(S, eltype(S), size(S))
 
-map(f::Callable, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
+map(f, S::SharedArray) = (S2 = similar(S); S2[:] = S[:]; map!(f, S2); S2)
 
-reduce(f::Function, S::SharedArray) =
+reduce(f, S::SharedArray) =
     mapreduce(fetch, f,
               Any[ @spawnat p reduce(f, S.loc_subarr_1d) for p in procs(S) ])
 
 
-function map!(f::Callable, S::SharedArray)
+function map!(f, S::SharedArray)
     @sync for p in procs(S)
         @spawnat p begin
             for idx in localindexes(S)
@@ -294,7 +307,7 @@ copy!(S::SharedArray, A::Array) = (copy!(S.s, A); S)
 function copy!(S::SharedArray, R::SharedArray)
     length(S) == length(R) || throw(BoundsError())
     ps = intersect(procs(S), procs(R))
-    isempty(ps) && error("source and destination arrays don't share any process")
+    isempty(ps) && throw(ArgumentError("source and destination arrays don't share any process"))
     l = length(S)
     length(ps) > l && (ps = ps[1:l])
     nw = length(ps)
@@ -318,9 +331,9 @@ function print_shmem_limits(slen)
         @linux_only pfx = "kernel"
         @osx_only pfx = "kern.sysv"
 
-        shmmax_MB = div(int(split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
-        page_size = int(split(readall(`getconf PAGE_SIZE`))[end])
-        shmall_MB = div(int(split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
+        shmmax_MB = div(parse(Int, split(readall(`sysctl $(pfx).shmmax`))[end]), 1024*1024)
+        page_size = parse(Int, split(readall(`getconf PAGE_SIZE`))[end])
+        shmall_MB = div(parse(Int, split(readall(`sysctl $(pfx).shmall`))[end]) * page_size, 1024*1024)
 
         println("System max size of single shmem segment(MB) : ", shmmax_MB,
             "\nSystem max size of all shmem segments(MB) : ", shmall_MB,

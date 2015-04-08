@@ -1,19 +1,16 @@
-@unix_only if WORD_SIZE == 64
-# TODO: complex return only on 64-bit for now
 for f in (:erf, :erfc, :erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
-        ($fname)(z::Complex128) = complex128(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
-        ($fname)(z::Complex64) = complex64(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), complex128(z), float64(eps(Float32))))
-        ($fname)(z::Complex) = ($fname)(complex128(z))
+        ($fname)(z::Complex128) = Complex128(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), z, zero(Float64)))
+        ($fname)(z::Complex64) = Complex64(ccall(($(string("Faddeeva_",f)),openspecfun), Complex{Float64}, (Complex{Float64}, Float64), Complex128(z), Float64(eps(Float32))))
+        ($fname)(z::Complex) = ($fname)(Complex128(z))
     end
-end
 end
 for f in (:erfcx, :erfi, :Dawson)
     fname = (f === :Dawson) ? :dawson : f
     @eval begin
         ($fname)(x::Float64) = ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), x)
-        ($fname)(x::Float32) = float32(ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), float64(x)))
+        ($fname)(x::Float32) = Float32(ccall(($(string("Faddeeva_",f,"_re")),openspecfun), Float64, (Float64,), Float64(x)))
         ($fname)(x::Integer) = ($fname)(float(x))
         @vectorize_1arg Number $fname
     end

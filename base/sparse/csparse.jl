@@ -14,7 +14,7 @@
 # http://www.cise.ufl.edu/research/sparse/CSparse/
 function sparse{Tv,Ti<:Integer}(I::AbstractVector{Ti}, J::AbstractVector{Ti},
                                 V::AbstractVector{Tv},
-                                nrow::Integer, ncol::Integer, combine::Function)
+                                nrow::Integer, ncol::Integer, combine::Union(Function,Base.Func))
 
     if length(I) == 0; return spzeros(eltype(V),nrow,ncol); end
     N = length(I)

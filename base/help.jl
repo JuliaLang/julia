@@ -126,8 +126,9 @@ function help(io::IO, fname::AbstractString, obj=0)
                     println(io)
                 end
             end
-            if length(obj.names) > 0
-                println(io, "  fields   : ", obj.names)
+            fields = fieldnames(obj)
+            if !isempty(fields)
+                println(io, "  fields   : ", fields)
             end
         elseif isgeneric(obj)
             writemime(io, "text/plain", obj); println()
@@ -179,7 +180,7 @@ function help(io::IO, x)
 end
 
 help(args...) = help(STDOUT, args...)
-help(::IO, args...) = error("too many arguments to help()")
+help(::IO, args...) = throw(ArgumentError("too many arguments to help()"))
 
 # check whether an expression is a qualified name, e.g. Base.FFTW.FORWARD
 isname(n::Symbol) = true
@@ -197,10 +198,6 @@ macro help_(ex)
     else
         return Expr(:macrocall, symbol("@which"), esc(ex))
     end
-end
-
-macro help (ex)
-  Base.Docs.replhelp(ex)
 end
 
 end # module

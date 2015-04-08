@@ -37,10 +37,6 @@
 
 #endif /* !_COMPILER_MINGW_ */
 
-#if defined(_COMPILER_MICROSOFT_)
-#define isnan _isnan
-#endif /* _COMPILER_MICROSOFT_ */
-
 #endif /* _OS_WINDOWS_ */
 
 
@@ -88,15 +84,15 @@
 #endif
 
 #ifdef _OS_WINDOWS_
-#define __LITTLE_ENDIAN	1234
-#define __BIG_ENDIAN	4321
-#define __PDP_ENDIAN	3412
+#define __LITTLE_ENDIAN    1234
+#define __BIG_ENDIAN       4321
+#define __PDP_ENDIAN       3412
 #define __BYTE_ORDER       __LITTLE_ENDIAN
 #define __FLOAT_WORD_ORDER __LITTLE_ENDIAN
-#define LITTLE_ENDIAN  __LITTLE_ENDIAN
-#define BIG_ENDIAN     __BIG_ENDIAN
-#define PDP_ENDIAN     __PDP_ENDIAN
-#define BYTE_ORDER     __BYTE_ORDER
+#define LITTLE_ENDIAN      __LITTLE_ENDIAN
+#define BIG_ENDIAN         __BIG_ENDIAN
+#define PDP_ENDIAN         __PDP_ENDIAN
+#define BYTE_ORDER         __BYTE_ORDER
 #endif
 
 #if (__STDC_VERSION__ >= 199901L) || defined(__GNUG__)
@@ -127,8 +123,16 @@
 #  define STATIC_INLINE static __inline
 #  define INLINE __inline
 #else
-# define STATIC_INLINE static inline
-# define INLINE inline
+#  define STATIC_INLINE static inline
+#  define INLINE inline
+#endif
+
+#if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
+#  define NOINLINE __declspec(noinline)
+#  define NOINLINE_DECL(f) __declspec(noinline) f
+#else
+#  define NOINLINE __attribute__((noinline))
+#  define NOINLINE_DECL(f) f __attribute__((noinline))
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)

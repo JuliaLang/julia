@@ -1,9 +1,15 @@
 ## basic task functions and TLS
 
-show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(unsigned(pointer_from_objref(t)), WORD_SIZE>>2))")
+show(io::IO, t::Task) = print(io, "Task ($(t.state)) @0x$(hex(convert(UInt, pointer_from_objref(t)), WORD_SIZE>>2))")
 
 macro task(ex)
     :(Task(()->$(esc(ex))))
+end
+
+# schedule an expression to run asynchronously, with minimal ceremony
+macro schedule(expr)
+    expr = :(()->($expr))
+    :(enq_work(Task($(esc(expr)))))
 end
 
 current_task() = ccall(:jl_get_current_task, Any, ())::Task
@@ -58,6 +64,7 @@ function task_done_hook(t::Task)
     err = (t.state == :failed)
     result = t.result
     nexttask = t.last
+    handled = true
 
     q = t.consumers
 
@@ -68,11 +75,16 @@ function task_done_hook(t::Task)
         nexttask.state = :runnable
     elseif isa(q,Condition) && !isempty(q.waitq)
         notify(q, result, error=err)
+    else
+        handled = false
     end
 
     t.consumers = nothing
 
-    isa(t.donenotify,Condition) && notify(t.donenotify, result, error=err)
+    if isa(t.donenotify,Condition)
+        handled |= !isempty(t.donenotify.waitq)
+        notify(t.donenotify, result, error=err)
+    end
 
     if nexttask.state == :runnable
         if err
@@ -80,9 +92,20 @@ function task_done_hook(t::Task)
         end
         yieldto(nexttask, result)
     else
-        if err && isa(result,InterruptException) && isdefined(REPL,:interactive_task) &&
-            REPL.interactive_task.state == :waiting && isempty(Workqueue)
-            throwto(REPL.interactive_task, result)
+        if err && !handled
+            if isa(result,InterruptException) && isdefined(Base,:active_repl_backend) &&
+                active_repl_backend.backend_task.state == :waiting && isempty(Workqueue) &&
+                active_repl_backend.in_eval
+                throwto(active_repl_backend.backend_task, result)
+            end
+            let bt = catch_backtrace()
+                # run a new task to print the error for us
+                @schedule with_output_color(:red, STDERR) do io
+                    print(io, "ERROR (unhandled task failure): ")
+                    showerror(io, result, bt)
+                    println(io)
+                end
+            end
         end
         wait()
     end
@@ -233,12 +256,6 @@ function enq_work(t::Task)
     push!(Workqueue, t)
     t.state = :queued
     t
-end
-
-# schedule an expression to run asynchronously, with minimal ceremony
-macro schedule(expr)
-    expr = :(()->($expr))
-    :(enq_work(Task($(esc(expr)))))
 end
 
 schedule(t::Task) = enq_work(t)

@@ -11,7 +11,7 @@ The Julia standard library contains a range of functions and macros appropriate 
 
 Some general notes:
 
-* Except for functions in built-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`, :mod:`~Base.Graphics`,
+* Except for functions in built-in modules (:mod:`~Base.Pkg`, :mod:`~Base.Collections`,
   :mod:`~Base.Test` and :mod:`~Base.Profile`), all functions documented here are directly available for use in programs.
 * To use module functions, use ``import Module`` to import the module, and ``Module.fn(x)`` to use the functions.
 * Alternatively, ``using Module`` will import all exported ``Module`` functions into the current namespace.
@@ -326,10 +326,6 @@ Types
 
    Return a list of immediate subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
 
-.. function:: subtypetree(T::DataType)
-
-   Return a nested list of all subtypes of DataType T.  Note that all currently loaded subtypes are included, including those not visible in the current module.
-
 .. function:: typemin(type)
 
    The lowest value representable by the given (real) numeric type.
@@ -390,7 +386,7 @@ Types
 
    .. doctest::
 
-      julia> structinfo(T) = [zip(fieldoffsets(T),names(T),T.types)...];
+      julia> structinfo(T) = [zip(fieldoffsets(T),fieldnames(T),T.types)...];
 
       julia> structinfo(StatStruct)
       12-element Array{(Int64,Symbol,DataType),1}:
@@ -442,6 +438,10 @@ Types
 
    Compute a type that contains the intersection of ``T`` and ``S``. Usually this will be the smallest such type or one close to it.
 
+.. function:: Union(Ts...)
+
+   Construct a special abstract type that behaves as though all of the types in ``Ts`` are its subtypes.
+
 .. function:: Val{c}
 
    Create a "value type" out of ``c``, which must be an ``isbits``
@@ -449,6 +449,20 @@ Types
    constants, e.g., ``f(Val{false})`` allows you to dispatch directly
    (at compile-time) to an implementation ``f(::Type{Val{false}})``,
    without having to test the boolean value at runtime.
+
+.. function:: @enum EnumName EnumValue1[=x] EnumValue2[=y]
+
+   Create an `Enum` type with name `EnumName` and enum member values of `EnumValue1` and `EnumValue2` with optional assigned values of `x` and `y`, respectively. `EnumName` can be used just like other types and enum member values as regular values, such as
+
+   .. doctest::
+
+      julia> @enum FRUIT apple=1 orange=2 kiwi=3
+
+      julia> f(x::FRUIT) = "I'm a FRUIT with value: $(int(x))"
+      f (generic function with 1 method)
+
+      julia> f(apple)
+      "I'm a FRUIT with value: 1"
 
 Generic Functions
 -----------------
@@ -530,7 +544,7 @@ Syntax
 
 .. function:: evalfile(path::AbstractString)
 
-   Evaluate all expressions in the given file, and return the value of the last one. No other processing (path searching, fetching from node 1, etc.) is performed.
+   Load the file using ``include``, evaluate all expressions, and return the value of the last one.
 
 .. function:: esc(e::ANY)
 
@@ -556,6 +570,12 @@ Syntax
 
 Nullables
 ---------
+
+.. function:: Nullable(x)
+
+   Wrap value ``x`` in an object of type ``Nullable``, which indicates whether a value is present.
+   ``Nullable(x)`` yields a non-empty wrapper, and ``Nullable{T}()`` yields an empty instance
+   of a wrapper that might contain a value of type ``T``.
 
 .. function:: get(x)
 
@@ -621,6 +641,14 @@ System
    and waits for the process to complete.  Returns the value returned
    by ``f``.
 
+.. function:: Sys.set_process_title(title::AbstractString)
+
+   Set the process title. No-op on some operating systems. (not exported)
+
+.. function:: Sys.get_process_title()
+
+   Get the process title. On some systems, will always return empty string. (not exported)
+
 .. function:: readandwrite(command)
 
    Starts running a command asynchronously, and returns a tuple (stdout,stdin,process) of the output stream and input stream of the process, and the process object itself.
@@ -645,24 +673,33 @@ System
    The ``dir`` keyword argument can be used to specify a working directory for the
    command.
 
-.. function:: |>(command, command)
-              |>(command, filename)
-              |>(filename, command)
+.. function:: pipe(from, to, ...)
 
-   Redirect operator. Used for piping the output of a process into another (first form) or to redirect the standard output/input of a command to/from a file (second and third forms).
+   Create a pipeline from a data source to a destination. The source and destination can
+   be commands, I/O streams, strings, or results of other ``pipe`` calls. At least one
+   argument must be a command. Strings refer to filenames.
+   When called with more than two arguments, they are chained together from left to right.
+   For example ``pipe(a,b,c)`` is equivalent to ``pipe(pipe(a,b),c)``. This provides a more
+   concise way to specify multi-stage pipelines.
 
    **Examples**:
-     * ``run(`ls` |> `grep xyz`)``
-     * ``run(`ls` |> "out.txt")``
-     * ``run("out.txt" |> `grep xyz`)``
+     * ``run(pipe(`ls`, `grep xyz`))``
+     * ``run(pipe(`ls`, "out.txt"))``
+     * ``run(pipe("out.txt", `grep xyz`))``
 
-.. function:: >>(command, filename)
+.. function:: pipe(command; stdin, stdout, stderr, append=false)
 
-   Redirect standard output of a process, appending to the destination file.
+   Redirect I/O to or from the given ``command``. Keyword arguments specify which of
+   the command's streams should be redirected. ``append`` controls whether file output
+   appends to the file.
+   This is a more general version of the 2-argument ``pipe`` function.
+   ``pipe(from, to)`` is equivalent to ``pipe(from, stdout=to)`` when ``from`` is a
+   command, and to ``pipe(to, stdin=from)`` when ``from`` is another kind of
+   data source.
 
-.. function:: .>(command, filename)
-
-   Redirect the standard error stream of a process.
+   **Examples**:
+     * ``run(pipe(`dothings`, stdout="out.txt", stderr="errs.txt"))``
+     * ``run(pipe(`update`, stdout="log.txt", append=true))``
 
 .. function:: gethostname() -> AbstractString
 
@@ -676,25 +713,13 @@ System
 
    Get julia's process ID.
 
-.. function:: time([t::TmStruct])
+.. function:: time()
 
-   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution. When passed a ``TmStruct``, converts it to a number of seconds since the epoch.
+   Get the system time in seconds since the epoch, with fairly high (typically, microsecond) resolution.
 
 .. function:: time_ns()
 
    Get the time in nanoseconds. The time corresponding to 0 is undefined, and wraps every 5.8 years.
-
-.. function:: strftime([format], time)
-
-   Convert time, given as a number of seconds since the epoch or a ``TmStruct``, to a formatted string using the given format. Supported formats are the same as those in the standard C library.
-
-.. function:: strptime([format], timestr)
-
-   Parse a formatted time string into a ``TmStruct`` giving the seconds, minute, hour, date, etc. Supported formats are the same as those in the standard C library. On some platforms, timezones will not be parsed correctly. If the result of this function will be passed to ``time`` to convert it to seconds since the epoch, the ``isdst`` field should be filled in manually. Setting it to ``-1`` will tell the C library to use the current system settings to determine the timezone.
-
-.. function:: TmStruct([seconds])
-
-   Convert a number of seconds since the epoch to broken-down format, with fields ``sec``, ``min``, ``hour``, ``mday``, ``month``, ``year``, ``wday``, ``yday``, and ``isdst``.
 
 .. function:: tic()
 
@@ -777,11 +802,15 @@ Errors
 
 .. function:: assert(cond, [text])
 
-   Raise an error if ``cond`` is false. Also available as the macro ``@assert expr``.
+   Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``.
 
-.. function:: @assert
+.. function:: @assert cond [text]
 
-   Raise an error if ``cond`` is false. Preferred syntax for writings assertions.
+   Throw an ``AssertionError`` if ``cond`` is false. Preferred syntax for writing assertions.
+
+.. data:: AssertionError
+
+   The asserted condition did not evalutate to ``true``.
 
 .. data:: ArgumentError
 
@@ -874,7 +903,7 @@ Reflection
    Get an array of the names exported by a module, with optionally more module
    globals according to the additional parameters.
 
-.. function:: names(x::DataType)
+.. function:: fieldnames(x::DataType)
 
    Get an array of the fields of a data type.
 
@@ -914,10 +943,11 @@ Internals
 
    Disable garbage collection. This should be used only with extreme
    caution, as it can cause memory use to grow without bound.
+   Returns previous GC state.
 
 .. function:: gc_enable()
 
-   Re-enable garbage collection after calling :func:`gc_disable`.
+   Re-enable garbage collection after calling :func:`gc_disable`. Returns previous GC state.
 
 .. function:: macroexpand(x)
 
@@ -935,9 +965,9 @@ Internals
 
    Evaluates the arguments to the function call, determines their types, and calls :func:`code_lowered` on the resulting expression
 
-.. function:: code_typed(f, types)
+.. function:: code_typed(f, types; optimize=true)
 
-   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature.
+   Returns an array of lowered and type-inferred ASTs for the methods matching the given generic function and type signature. The keyword argument ``optimize`` controls whether additional optimizations, such as inlining, are also applied.
 
 .. function:: @code_typed
 
@@ -954,6 +984,8 @@ Internals
 .. function:: code_llvm(f, types)
 
    Prints the LLVM bitcodes generated for running the method matching the given generic function and type signature to :const:`STDOUT`.
+
+   All metadata and dbg.* calls are removed from the printed bitcode. Use code_llvm_raw for the full IR.
 
 .. function:: @code_llvm
 

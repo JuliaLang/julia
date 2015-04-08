@@ -22,9 +22,9 @@
 @test Base.mapfoldr(abs2, -, 10, 2:5) == -4
 
 # reduce & mapreduce
-@test reduce((x,y)->"($x+$y)", [9:11]) == "((9+10)+11)"
+@test reduce((x,y)->"($x+$y)", 9:11) == "((9+10)+11)"
 @test reduce(max, [8 6 7 5 3 0 9]) == 9
-@test reduce(+, 1000, [1:5]) == (1000 + 1 + 2 + 3 + 4 + 5)
+@test reduce(+, 1000, 1:5) == (1000 + 1 + 2 + 3 + 4 + 5)
 
 @test mapreduce(-, +, [-10 -9 -3]) == ((10 + 9) + 3)
 @test mapreduce((x)->x[1:3], (x,y)->"($x+$y)", ["abcd", "efgh", "01234"]) == "((abc+efg)+012)"
@@ -32,14 +32,14 @@
 # sum
 
 @test sum(Int8[]) === 0
-@test sum(Int[]) === int(0)
+@test sum(Int[]) === Int(0)
 @test sum(Float64[]) === 0.0
 
-@test sum(int8(3)) === int8(3)
+@test sum(Int8(3)) === Int8(3)
 @test sum(3) === 3
 @test sum(3.0) === 3.0
 
-@test sum([int8(3)]) === 3
+@test sum([Int8(3)]) === 3
 @test sum([3]) === 3
 @test sum([3.0]) === 3.0
 
@@ -48,7 +48,7 @@ fz = float(z)
 @test sum(z) === 136
 @test sum(fz) === 136.0
 
-@test_throws ErrorException sum(sin, Int[])
+@test_throws ArgumentError sum(sin, Int[])
 @test sum(sin, 3) == sin(3.0)
 @test sum(sin, [3]) == sin(3.0)
 a = sum(sin, z)
@@ -60,14 +60,14 @@ fz = float(z)
 a = randn(32) # need >16 elements to trigger BLAS code path
 b = complex(randn(32), randn(32))
 @test sumabs(Float64[]) === 0.0
-@test sumabs([int8(-2)]) === 2
+@test sumabs([Int8(-2)]) === 2
 @test sumabs(z) === 14
 @test sumabs(fz) === 14.0
 @test_approx_eq sumabs(a) sum(abs(a))
 @test_approx_eq sumabs(b) sum(abs(b))
 
 @test sumabs2(Float64[]) === 0.0
-@test sumabs2([int8(-2)]) === 4
+@test sumabs2([Int8(-2)]) === 4
 @test sumabs2(z) === 54
 @test sumabs2(fz) === 54.0
 @test_approx_eq sumabs2(a) sum(abs2(a))
@@ -92,7 +92,7 @@ for f in (sum2, sum5, sum6, sum9, sum10)
 end
 for f in (sum3, sum4, sum7, sum8)
     @test sum(z) == f(z)
-    @test_throws ErrorException f(Int[])
+    @test_throws ArgumentError f(Int[])
     @test sum(Int[7]) == f(Int[7]) == 7
 end
 @test typeof(sum(Int8[])) == typeof(sum(Int8[1])) == typeof(sum(Int8[1 7]))
@@ -107,7 +107,7 @@ end
 @test prod(Float64[]) === 1.0
 
 @test prod([3]) === 3
-@test prod([int8(3)]) === 3
+@test prod([Int8(3)]) === 3
 @test prod([3.0]) === 3.0
 
 @test prod(z) === 120
@@ -125,8 +125,8 @@ prod2(itr) = invoke(prod, (Any,), itr)
 
 # maximum & minimum & extrema
 
-@test_throws ErrorException maximum(Int[])
-@test_throws ErrorException minimum(Int[])
+@test_throws ArgumentError maximum(Int[])
+@test_throws ArgumentError minimum(Int[])
 
 @test maximum(5) == 5
 @test minimum(5) == 5
@@ -149,7 +149,7 @@ prod2(itr) = invoke(prod, (Any,), itr)
 @test extrema([4., 3., NaN, 5., 2.]) == (2., 5.)
 
 @test maxabs(Int[]) == 0
-@test_throws ErrorException Base.minabs(Int[])
+@test_throws ArgumentError Base.minabs(Int[])
 
 @test maxabs(-2) == 2
 @test minabs(-2) == 2
@@ -158,6 +158,10 @@ prod2(itr) = invoke(prod, (Any,), itr)
 
 @test maximum(x->abs2(x), 3:7) == 49
 @test minimum(x->abs2(x), 3:7) == 9
+
+@test maximum(Int16[1]) === Int16(1)
+@test maximum(collect(Int16(1):Int16(100))) === Int16(100)
+@test maximum(Int32[1,2]) === Int32(2)
 
 # any & all
 
@@ -234,5 +238,5 @@ end
 @test isequal(cummin([1 0; 0 1], 1), [1 0; 0 0])
 @test isequal(cummin([1 0; 0 1], 2), [1 0; 0 0])
 
-@test sum(collect(uint8(0:255))) == 32640
-@test sum(collect(uint8(254:255))) == 509
+@test sum(collect(map(UInt8,0:255))) == 32640
+@test sum(collect(map(UInt8,254:255))) == 509

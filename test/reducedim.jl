@@ -126,3 +126,17 @@ A = [1.0 3.0 6.0;
 @test std(FloatingPoint[1,2,3], 1) == [1.0]
 @test sum(Any[1 2;3 4],1) == [4 6]
 @test sum(Vector{Int}[[1,2],[4,3]], 1)[1] == [5,5]
+
+# issue #10461
+Areduc = rand(3, 4, 5, 6)
+for region in Any[-1, 0, (-1, 2), [0, 1], (1,-2,3), [0 1;
+                                                     2 3], "hello"]
+    @test_throws ArgumentError sum(Areduc, region)
+    @test_throws ArgumentError prod(Areduc, region)
+    @test_throws ArgumentError maximum(Areduc, region)
+    @test_throws ArgumentError minimum(Areduc, region)
+    @test_throws ArgumentError sumabs(Areduc, region)
+    @test_throws ArgumentError sumabs2(Areduc, region)
+    @test_throws ArgumentError maxabs(Areduc, region)
+    @test_throws ArgumentError minabs(Areduc, region)
+end

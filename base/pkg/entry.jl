@@ -53,7 +53,7 @@ function add(pkg::AbstractString, vers::VersionSet)
                 outdated = :yes
             else
                 try
-                    run(Git.cmd(`fetch -q --all`, dir="METADATA") |>DevNull .>DevNull)
+                    run(pipe(Git.cmd(`fetch -q --all`, dir="METADATA"),stdout=DevNull,stderr=DevNull))
                     outdated = Git.success(`diff --quiet origin/$branch`, dir="METADATA") ?
                         (:no) : (:yes)
                 end
@@ -82,7 +82,7 @@ available() = sort!(ASCIIString[keys(Read.available())...], by=lowercase)
 function available(pkg::AbstractString)
     avail = Read.available(pkg)
     if !isempty(avail) || Read.isinstalled(pkg)
-        return sort!([keys(avail)...])
+        return sort!(collect(keys(avail)))
     end
     error("$pkg is not a package (not registered or installed)")
 end
@@ -106,7 +106,7 @@ function status(io::IO; pkgname::AbstractString = "")
     showpkg(pkg) = (pkgname == "") ? (true) : (pkg == pkgname)
     reqs = Reqs.parse("REQUIRE")
     instd = Read.installed()
-    required = sort!([keys(reqs)...])
+    required = sort!(collect(keys(reqs)))
     if !isempty(required)
         showpkg("") && println(io, "$(length(required)) required packages:")
         for pkg in required
@@ -114,7 +114,7 @@ function status(io::IO; pkgname::AbstractString = "")
             showpkg(pkg) && status(io,pkg,ver,fix)
         end
     end
-    additional = sort!([keys(instd)...])
+    additional = sort!(collect(keys(instd)))
     if !isempty(additional)
         showpkg("") && println(io, "$(length(additional)) additional packages:")
         for pkg in additional
@@ -203,7 +203,7 @@ function free(pkg::AbstractString)
     isempty(avail) && error("$pkg cannot be freed – not a registered package")
     Git.dirty(dir=pkg) && error("$pkg cannot be freed – repo is dirty")
     info("Freeing $pkg")
-    vers = sort!([keys(avail)...], rev=true)
+    vers = sort!(collect(keys(avail)), rev=true)
     while true
         for ver in vers
             sha1 = avail[ver].sha1
@@ -247,12 +247,12 @@ function update(branch::AbstractString)
         end
         # TODO: handle merge conflicts
         Base.with_env("GIT_MERGE_AUTOEDIT","no") do
-            Git.run(`pull -q`, out=DevNull)
+            Git.run(`pull --rebase -q`, out=DevNull)
         end
     end
     avail = Read.available()
     # this has to happen before computing free/fixed
-    @sync for pkg in filter!(Read.isinstalled,[keys(avail)...])
+    @sync for pkg in filter!(Read.isinstalled,collect(keys(avail)))
         @async Cache.prefetch(pkg, Read.url(pkg), [a.sha1 for (v,a)=avail[pkg]])
     end
     instd = Read.installed(avail)
@@ -279,7 +279,7 @@ function update(branch::AbstractString)
     info("Computing changes...")
     resolve(Reqs.parse("REQUIRE"), avail, instd, fixed, free)
     # Don't use instd here since it may have changed
-    updatehook(sort!([keys(installed())...]))
+    updatehook(sort!(collect(keys(installed()))))
 end
 
 function pull_request(dir::AbstractString, commit::AbstractString="", url::AbstractString="")
@@ -310,13 +310,11 @@ function publish(branch::AbstractString)
     Git.branch(dir="METADATA") == branch ||
         error("METADATA must be on $branch to publish changes")
     Git.run(`fetch -q`, dir="METADATA")
-    ahead_remote, ahead_local = map(int,split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
+    ahead_remote, ahead_local = map(x->parse(Int,x),split(Git.readchomp(`rev-list --count --left-right origin/$branch...$branch`, dir="METADATA"),'\t'))
     ahead_remote > 0 && error("METADATA is behind origin/$branch – run `Pkg.update()` before publishing")
     ahead_local == 0 && error("There are no METADATA changes to publish")
 
-    info("Validating METADATA")
-    check_metadata()
-    tags = Dict{ASCIIString,Vector{ASCIIString}}()
+    tags = Dict{ByteString,Vector{ASCIIString}}()
     Git.run(`update-index -q --really-refresh`, dir="METADATA")
     cmd = `diff --name-only --diff-filter=AMR origin/$branch HEAD --`
     for line in eachline(Git.cmd(cmd, dir="METADATA"))
@@ -337,7 +335,9 @@ function publish(branch::AbstractString)
         end || error("$pkg v$ver is incorrectly tagged – $sha1 expected")
     end
     isempty(tags) && info("No new package versions to publish")
-    @sync for pkg in sort!([keys(tags)...])
+    info("Validating METADATA")
+    check_metadata(Set(keys(tags)))
+    @sync for pkg in sort!(collect(keys(tags)))
         @async begin
             forced = ASCIIString[]
             unforced = ASCIIString[]
@@ -489,7 +489,7 @@ function register(pkg::AbstractString, url::AbstractString)
             open(io->println(io,url), path, "w")
             Git.run(`add $path`)
         end
-        vers = sort!([keys(versions)...])
+        vers = sort!(collect(keys(versions)))
         for ver in vers
             info("Tagging $pkg v$ver")
             write_tag_metadata(pkg,ver,versions[ver])
@@ -585,7 +585,7 @@ function tag(pkg::AbstractString, ver::Union(Symbol,VersionNumber), force::Bool=
     end
 end
 
-function check_metadata()
+function check_metadata(pkgs::Set{ByteString} = Set{ByteString}())
     avail = Read.available()
     deps, conflicts = Query.dependencies(avail)
 
@@ -593,7 +593,7 @@ function check_metadata()
         haskey(deps, p) || error("package $dp v$v requires a non-registered package: $p")
     end
 
-    problematic = Resolve.sanity_check(deps)
+    problematic = Resolve.sanity_check(deps, pkgs)
     if !isempty(problematic)
         msg = "packages with unsatisfiable requirements found:\n"
         for (p, vn, rp) in problematic
@@ -615,8 +615,10 @@ end
 
 function build!(pkgs::Vector, errs::Dict, seen::Set=Set())
     for pkg in pkgs
+        pkg == "julia" && continue
         pkg in seen && continue
         build!(Read.requires_list(pkg),errs,push!(seen,pkg))
+        Read.isinstalled(pkg) || error("$pkg is not an installed package")
         path = abspath(pkg,"deps","build.jl")
         isfile(path) || continue
         info("Building $pkg")
@@ -643,7 +645,7 @@ function build(pkgs::Vector)
      - build a single package by running its `deps/build.jl` script
     """)
 end
-build() = build(sort!([keys(installed())...]))
+build() = build(sort!(collect(keys(installed()))))
 
 function updatehook!(pkgs::Vector, errs::Dict, seen::Set=Set())
     for pkg in pkgs

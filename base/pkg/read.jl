@@ -81,7 +81,7 @@ end
 function installed_version(pkg::AbstractString, avail::Dict=available(pkg))
     ispath(pkg,".git") || return typemin(VersionNumber)
     head = Git.head(dir=pkg)
-    vers = [keys(filter((ver,info)->info.sha1==head, avail))...]
+    vers = collect(keys(filter((ver,info)->info.sha1==head, avail)))
     !isempty(vers) && return maximum(vers)
     cache = Cache.path(pkg)
     cache_has_head = isdir(cache) && Git.iscommit(head, dir=cache)
@@ -127,12 +127,9 @@ function requires_path(pkg::AbstractString, avail::Dict=available(pkg))
     return pkgreq
 end
 
-function requires_list(pkg::AbstractString, avail::Dict=available(pkg))
-    reqs = filter!(Reqs.read(requires_path(pkg,avail))) do line
-        isa(line,Reqs.Requirement)
-    end
-    map(req->req.package, reqs)
-end
+requires_list(pkg::AbstractString, avail::Dict=available(pkg)) =
+    collect(keys(Reqs.parse(requires_path(pkg,avail))))
+
 requires_dict(pkg::AbstractString, avail::Dict=available(pkg)) =
     Reqs.parse(requires_path(pkg,avail))
 

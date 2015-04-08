@@ -23,7 +23,8 @@
    sort
    pkg
    collections
-   graphics
    test
    c
+   libc
+   libdl
    profile

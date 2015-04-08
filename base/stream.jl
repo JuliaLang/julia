@@ -1,6 +1,8 @@
 #TODO: Move stdio detection from C to Julia (might require some Clang magic)
 include("uv_constants.jl")
 
+import .Libc: RawFD, dup
+
 ## types ##
 typealias Callback Union(Function,Bool)
 
@@ -16,15 +18,6 @@ const uvhandles = ObjectIdDict()
 
 preserve_handle(x) = uvhandles[x] = get(uvhandles,x,0)+1
 unpreserve_handle(x) = (v = uvhandles[x]; v == 1 ? pop!(uvhandles,x) : (uvhandles[x] = v-1); nothing)
-
-#Wrapper for an OS file descriptor (on both Unix and Windows)
-immutable RawFD
-    fd::Int32
-    RawFD(fd::Integer) = new(int32(fd))
-    RawFD(fd::RawFD) = fd
-end
-
-convert(::Type{Int32}, fd::RawFD) = fd.fd
 
 function uv_sizeof_handle(handle)
     if !(UV_UNKNOWN_HANDLE < handle < UV_HANDLE_TYPE_MAX)
@@ -107,6 +100,9 @@ type Pipe <: AsyncStream
     connectnotify::Condition
     closecb::Callback
     closenotify::Condition
+    sendbuf::Nullable{IOBuffer}
+    lock::ReentrantLock
+
     Pipe(handle) = new(
         handle,
         StatusUninit,
@@ -114,17 +110,18 @@ type Pipe <: AsyncStream
         true,
         false,Condition(),
         false,Condition(),
-        false,Condition())
+        false,Condition(),
+        nothing, ReentrantLock())
 end
 function Pipe()
-    handle = c_malloc(_sizeof_uv_named_pipe)
+    handle = Libc.malloc(_sizeof_uv_named_pipe)
     try
         ret = Pipe(handle)
         associate_julia_struct(ret.handle,ret)
         finalizer(ret,uvfinalize)
         return init_pipe!(ret;readable=true)
     catch
-        c_free(handle)
+        Libc.free(handle)
         rethrow()
     end
 end
@@ -155,15 +152,15 @@ function init_pipe!(pipe::Union(Pipe,PipeServer);readable::Bool=false,writable=f
 end
 
 function PipeServer()
-    handle = c_malloc(_sizeof_uv_named_pipe)
+    handle = Libc.malloc(_sizeof_uv_named_pipe)
     try
         ret = PipeServer(handle)
         associate_julia_struct(ret.handle,ret)
         finalizer(ret,uvfinalize)
         return init_pipe!(ret;readable=true)
     catch
-        c_free(handle)
-        c_free(handle-1)
+        Libc.free(handle)
+        Libc.free(handle-1)
         rethrow()
     end
 end
@@ -181,6 +178,8 @@ type TTY <: AsyncStream
     readnotify::Condition
     closecb::Callback
     closenotify::Condition
+    sendbuf::Nullable{IOBuffer}
+    lock::ReentrantLock
     @windows_only ispty::Bool
     function TTY(handle)
         tty = new(
@@ -189,14 +188,15 @@ type TTY <: AsyncStream
             true,
             PipeBuffer(),
             false,Condition(),
-            false,Condition())
-        @windows_only tty.ispty = bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
+            false,Condition(),
+            nothing, ReentrantLock())
+        @windows_only tty.ispty = Bool(ccall(:jl_ispty, Cint, (Ptr{Void},), handle))
         tty
     end
 end
 
 function TTY(fd::RawFD; readable::Bool = false)
-    handle = c_malloc(_sizeof_uv_tty)
+    handle = Libc.malloc(_sizeof_uv_tty)
     ret = TTY(handle)
     associate_julia_struct(handle,ret)
     finalizer(ret,uvfinalize)
@@ -211,14 +211,24 @@ end
 # note that uv_is_readable/writable work for any subtype of
 # uv_stream_t, including uv_tty_t and uv_pipe_t
 isreadable(io::Union(Pipe,TTY)) =
-    bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
+    Bool(ccall(:uv_is_readable, Cint, (Ptr{Void},), io.handle))
 iswritable(io::Union(Pipe,TTY)) =
-    bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
+    Bool(ccall(:uv_is_writable, Cint, (Ptr{Void},), io.handle))
 
 nb_available(stream::UVStream) = nb_available(stream.buffer)
 
 show(io::IO,stream::TTY) = print(io,"TTY(",uv_status_string(stream),", ",
     nb_available(stream.buffer)," bytes waiting)")
+
+function println(io::AsyncStream, xs...)
+    lock(io.lock)
+    try
+        invoke(println, tuple(IO, typeof(xs)...), io, xs...)
+    finally
+        unlock(io.lock)
+    end
+end
+
 
 uvtype(::AsyncStream) = UV_STREAM
 uvhandle(stream::AsyncStream) = stream.handle
@@ -226,8 +236,6 @@ uvhandle(stream::AsyncStream) = stream.handle
 convert(T::Type{Ptr{Void}}, s::AsyncStream) = convert(T, s.handle)
 handle(s::AsyncStream) = s.handle
 handle(s::Ptr{Void}) = s
-
-make_stdout_stream() = _uv_tty2tty(ccall(:jl_stdout_stream, Ptr{Void}, ()))
 
 associate_julia_struct(handle::Ptr{Void},jlobj::ANY) =
     ccall(:jl_uv_associate_julia_struct,Void,(Ptr{Void},Any),handle,jlobj)
@@ -239,6 +247,8 @@ function init_stdio(handle)
     t = ccall(:jl_uv_handle_type,Int32,(Ptr{Void},),handle)
     if t == UV_FILE
         return fdio(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle))
+#       Replace ios.c filw with libuv file?
+#       return File(RawFD(ccall(:jl_uv_file_handle,Int32,(Ptr{Void},),handle)))
     else
         if t == UV_TTY
             ret = TTY(handle)
@@ -247,7 +257,7 @@ function init_stdio(handle)
         elseif t == UV_NAMED_PIPE
             ret = Pipe(handle)
         else
-            error("FATAL: stdio type ($t) invalid")
+            throw(ArgumentError("invalid stdio type: $t"))
         end
         ret.status = StatusOpen
         ret.line_buffered = false
@@ -272,7 +282,6 @@ function reinit_stdio()
     global uv_jl_readcb = cglobal(:jl_uv_readcb)
     global uv_jl_connectioncb = cglobal(:jl_uv_connectioncb)
     global uv_jl_connectcb = cglobal(:jl_uv_connectcb)
-    global uv_jl_writecb = cglobal(:jl_uv_writecb)
     global uv_jl_writecb_task = cglobal(:jl_uv_writecb_task)
     global uv_eventloop = ccall(:jl_global_event_loop, Ptr{Void}, ())
     global STDIN = init_stdio(ccall(:jl_stdin_stream ,Ptr{Void},()))
@@ -280,18 +289,16 @@ function reinit_stdio()
     global STDERR = init_stdio(ccall(:jl_stderr_stream,Ptr{Void},()))
 end
 
-flush(::AsyncStream) = nothing
-
-function isopen(x::Union(AsyncStream,UVServer))
+function isopen{T<:Union(AsyncStream,UVServer)}(x::T)
     if !(x.status != StatusUninit && x.status != StatusInit)
-        error("I/O object not initialized")
+        throw(ArgumentError("$T object not initialized"))
     end
     x.status != StatusClosed && x.status != StatusEOF
 end
 
 function check_open(x)
     if !isopen(x) || x.status == StatusClosing
-        error("stream is closed or unusable")
+        throw(ArgumentError("stream is closed or unusable"))
     end
 end
 
@@ -352,14 +359,14 @@ end
 ## BUFFER ##
 ## Allocate a simple buffer
 function alloc_request(buffer::IOBuffer, recommended_size::UInt)
-    ensureroom(buffer, int(recommended_size))
+    ensureroom(buffer, Int(recommended_size))
     ptr = buffer.append ? buffer.size + 1 : buffer.ptr
     return (pointer(buffer.data, ptr), length(buffer.data)-ptr+1)
 end
 function _uv_hook_alloc_buf(stream::AsyncStream, recommended_size::UInt)
     (buf,size) = alloc_request(stream.buffer, recommended_size)
     @assert size>0 # because libuv requires this (TODO: possibly stop reading too if it fails)
-    (buf,uint(size))
+    (buf,UInt(size))
 end
 
 function notify_filled(buffer::IOBuffer, nread::Int, base::Ptr{Void}, len::UInt)
@@ -373,7 +380,7 @@ function notify_filled(stream::AsyncStream, nread::Int)
     more = true
     while more
         if isa(stream.readcb,Function)
-            nreadable = (stream.line_buffered ? int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
+            nreadable = (stream.line_buffered ? Int(search(stream.buffer, '\n')) : nb_available(stream.buffer))
             if nreadable > 0
                 more = stream.readcb(stream, nreadable)
             else
@@ -435,7 +442,7 @@ type SingleAsyncWork <: AsyncWork
     handle::Ptr{Void}
     cb::Function
     function SingleAsyncWork(cb::Function)
-        this = new(c_malloc(_sizeof_uv_async), cb)
+        this = new(Libc.malloc(_sizeof_uv_async), cb)
         associate_julia_struct(this.handle, this)
         preserve_handle(this)
         err = ccall(:uv_async_init,Cint,(Ptr{Void},Ptr{Void},Ptr{Void}),eventloop(),this.handle,uv_jl_asynccb::Ptr{Void})
@@ -447,7 +454,7 @@ type Timer <: AsyncWork
     handle::Ptr{Void}
     cb::Function
     function Timer(cb::Function)
-        this = new(c_malloc(_sizeof_uv_timer), cb)
+        this = new(Libc.malloc(_sizeof_uv_timer), cb)
         # We don't want to set a julia struct, but we also
         # want to make sure there's no garbage data in the
         # ->data field
@@ -455,7 +462,7 @@ type Timer <: AsyncWork
         err = ccall(:uv_timer_init,Cint,(Ptr{Void},Ptr{Void}),eventloop(),this.handle)
         if err != 0
             #TODO: this codepath is currently not tested
-            c_free(this.handle)
+            Libc.free(this.handle)
             this.handle = C_NULL
             throw(UVError("uv_make_timer",err))
         end
@@ -464,10 +471,10 @@ type Timer <: AsyncWork
     end
 end
 
-close(t::Timer) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
+close(t::AsyncWork) = ccall(:jl_close_uv,Void,(Ptr{Void},),t.handle)
 
 function _uv_hook_close(uv::Union(AsyncStream,UVServer))
-    uv.handle = 0
+    uv.handle = C_NULL
     uv.status = StatusClosed
     if isa(uv.closecb, Function)
         uv.closecb(uv)
@@ -476,7 +483,8 @@ function _uv_hook_close(uv::Union(AsyncStream,UVServer))
     try notify(uv.readnotify) end
     try notify(uv.connectnotify) end
 end
-_uv_hook_close(uv::AsyncWork) = (uv.handle = C_NULL; nothing)
+_uv_hook_close(uv::Timer) = (uv.handle = C_NULL; nothing)
+_uv_hook_close(uv::SingleAsyncWork) = (uv.handle = C_NULL; unpreserve_handle(uv); nothing)
 
 # This serves as a common callback for all async classes
 function _uv_hook_asynccb(async::AsyncWork)
@@ -498,7 +506,7 @@ function start_timer(timer::Timer, timeout::Real, repeat::Real)
     preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
     ccall(:uv_timer_start,Cint,(Ptr{Void},Ptr{Void},UInt64,UInt64),
-          timer.handle, uv_jl_asynccb::Ptr{Void}, uint64(round(timeout*1000))+1, uint64(round(repeat*1000)))
+          timer.handle, uv_jl_asynccb::Ptr{Void}, UInt64(round(timeout*1000))+1, UInt64(round(repeat*1000)))
 end
 
 function stop_timer(timer::Timer)
@@ -543,7 +551,7 @@ end
 
 ## pipe functions ##
 function malloc_julia_pipe(x)
-    x.handle = c_malloc(_sizeof_uv_named_pipe)
+    x.handle = Libc.malloc(_sizeof_uv_named_pipe)
     associate_julia_struct(x.handle,x)
     finalizer(x,uvfinalize)
 end
@@ -599,7 +607,7 @@ end
 close_pipe_sync(p::Pipe) = (ccall(:uv_pipe_close_sync,Void,(Ptr{Void},),p.handle); p.status = StatusClosed)
 close_pipe_sync(handle::UVHandle) = ccall(:uv_pipe_close_sync,Void,(UVHandle,),handle)
 
-_uv_hook_isopen(stream) = int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
+_uv_hook_isopen(stream) = Int32(stream.status != StatusUninit && stream.status != StatusInit && isopen(stream))
 
 function close(stream::Union(AsyncStream,UVServer))
     if isopen(stream) && stream.status != StatusClosing
@@ -620,9 +628,9 @@ function start_reading(stream::AsyncStream)
         stream.status = StatusActive
         ret
     elseif stream.status == StatusActive
-        int32(0)
+        Int32(0)
     else
-        int32(-1)
+        Int32(-1)
     end
 end
 function start_reading(stream::AsyncStream, cb::Function)
@@ -642,9 +650,9 @@ function stop_reading(stream::AsyncStream)
         stream.status = StatusOpen
         ret
     elseif stream.status == StatusOpen
-        int32(0)
+        Int32(0)
     else
-        int32(-1)
+        Int32(-1)
     end
 end
 
@@ -655,12 +663,13 @@ function readall(stream::AsyncStream)
 end
 
 function read!{T}(s::AsyncStream, a::Array{T})
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = length(a) * sizeof(T)
     read!(s, reshape(reinterpret(UInt8, a), nb))
     return a
 end
 
+const SZ_UNBUFFERED_IO=65536
 function read!(s::AsyncStream, a::Vector{UInt8})
     nb = length(a)
     sbuf = s.buffer
@@ -671,7 +680,7 @@ function read!(s::AsyncStream, a::Vector{UInt8})
         return read!(sbuf, a)
     end
 
-    if nb <= 65536 # Arbitrary 64K limit under which we are OK with copying the array from the stream's buffer
+    if nb <= SZ_UNBUFFERED_IO # Under this limit we are OK with copying the array from the stream's buffer
         wait_readnb(s,nb)
         read!(sbuf, a)
     else
@@ -687,7 +696,7 @@ function read!(s::AsyncStream, a::Vector{UInt8})
 end
 
 function read{T}(s::AsyncStream, ::Type{T}, dims::Dims)
-    isbits(T) || error("read from buffer only supports bits types or arrays of bits types")
+    isbits(T) || throw(ArgumentError("read from AsyncStream only supports bits types or arrays of bits types"))
     nb = prod(dims)*sizeof(T)
     a = read!(s, Array(UInt8, nb))
     reshape(reinterpret(T, a), dims)
@@ -708,7 +717,7 @@ function readavailable(this::AsyncStream)
     buf = this.buffer
     @assert buf.seekable == false
     wait_readnb(this,1)
-    takebuf_string(buf)
+    takebuf_array(buf)
 end
 
 function readuntil(this::AsyncStream,c::UInt8)
@@ -726,93 +735,91 @@ end
 #    finish_read(state...)
 #end
 
-macro uv_write(n,call)
-    esc(quote
-        check_open(s)
-        uvw = c_malloc(_sizeof_uv_write+$(n))
-        err = $call
+function uv_write(s::AsyncStream, p, n::Integer)
+    check_open(s)
+    uvw = Libc.malloc(_sizeof_uv_write)
+    try
+        uv_req_set_data(uvw,C_NULL)
+        err = ccall(:jl_uv_write,
+                    Int32,
+                    (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}),
+                    handle(s), p, n, uvw,
+                    uv_jl_writecb_task::Ptr{Void})
         if err < 0
-            c_free(uvw)
             uv_error("write", err)
         end
-    end)
-end
-
-## low-level calls ##
-
-function write!{T}(s::AsyncStream, a::Array{T})
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb::Ptr{Void})
-        return int(length(a)*sizeof(T))
-    else
-        throw(MethodError(write,(s,a)))
-    end
-end
-function write!(s::AsyncStream, p::Ptr, nb::Integer)
-    @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb::Ptr{Void})
-    return nb
-end
-write!(s::AsyncStream, string::ByteString) = write!(s,string.data)
-
-function _uv_hook_writecb(s::AsyncStream, req::Ptr{Void}, status::Int32)
-    if status < 0
-        err = UVError("write",status)
-        showerror(STDERR, err, backtrace())
-    end
-    nothing
-end
-
-function write(s::AsyncStream, b::UInt8)
-    @uv_write 1 ccall(:jl_putc_copy, Int32, (UInt8, Ptr{Void}, Ptr{Void}, Ptr{Void}), b, handle(s), uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return 1
-end
-function write(s::AsyncStream, c::Char)
-    nb = utf8sizeof(c)
-    @uv_write nb ccall(:jl_pututf8_copy, Int32, (Ptr{Void}, UInt32, Ptr{Void}, Ptr{Void}), handle(s), c, uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return nb
-end
-function write{T}(s::AsyncStream, a::Array{T})
-    if isbits(T)
-        n = uint(length(a)*sizeof(T))
-        @uv_write n ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), a, n, uvw, uv_jl_writecb_task::Ptr{Void})
         ct = current_task()
         uv_req_set_data(uvw,ct)
         ct.state = :waiting
         stream_wait(ct)
-        return int(length(a)*sizeof(T))
+    finally
+        Libc.free(uvw)
+    end
+    return Int(n)
+end
+
+# Optimized send
+# - smaller writes are buffered, final uv write on flush or when buffer full
+# - large isbits arrays are unbuffered and written directly
+
+function buffer_or_write(s::AsyncStream, p::Ptr, n::Integer)
+    if isnull(s.sendbuf)
+        return uv_write(s, p, n)
+    else
+        buf = get(s.sendbuf)
+    end
+
+    totb = nb_available(buf) + n
+    if totb < maxsize(buf)
+        nb = write(buf, p, n)
+    else
+        flush(s)
+        if n > maxsize(buf)
+            nb = uv_write(s, p, n)
+        else
+            nb = write(buf, p, n)
+        end
+    end
+    return nb
+end
+
+function flush(s::AsyncStream)
+    if isnull(s.sendbuf)
+        return s
+    end
+    buf = get(s.sendbuf)
+    if nb_available(buf) > 0
+        arr = takebuf_array(buf)        # Array of UInt8s
+        uv_write(s, arr, length(arr))
+    end
+    s
+end
+
+buffer_writes(s::AsyncStream, bufsize=SZ_UNBUFFERED_IO) = (s.sendbuf=PipeBuffer(bufsize); s)
+
+## low-level calls ##
+
+write(s::AsyncStream, b::UInt8) = write(s, [b])
+write(s::AsyncStream, c::Char) = write(s, string(c))
+function write{T}(s::AsyncStream, a::Array{T})
+    if isbits(T)
+        n = UInt(length(a)*sizeof(T))
+        return buffer_or_write(s, pointer(a), n);
     else
         check_open(s)
         invoke(write,(IO,Array),s,a)
     end
 end
-function write(s::AsyncStream, p::Ptr, nb::Integer)
-    @uv_write nb ccall(:jl_write_no_copy, Int32, (Ptr{Void}, Ptr{Void}, UInt, Ptr{Void}, Ptr{Void}), handle(s), p, nb, uvw, uv_jl_writecb_task::Ptr{Void})
-    ct = current_task()
-    uv_req_set_data(uvw,ct)
-    ct.state = :waiting
-    stream_wait(ct)
-    return int(nb)
-end
+
+write(s::AsyncStream, p::Ptr, n::Integer) = buffer_or_write(s, p, n)
 
 function _uv_hook_writecb_task(s::AsyncStream,req::Ptr{Void},status::Int32)
     d = uv_req_data(req)
+    @assert d != C_NULL
     if status < 0
         err = UVError("write",status)
-        if d != C_NULL
-            schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
-        else
-            showerror(STDERR, err, backtrace())
-        end
-    elseif d != C_NULL
+        schedule(unsafe_pointer_to_objref(d)::Task,err,error=true)
+    else
         schedule(unsafe_pointer_to_objref(d)::Task)
     end
 end
@@ -821,7 +828,7 @@ end
 type UVError <: Exception
     prefix::AbstractString
     code::Int32
-    UVError(p::AbstractString,code::Integer)=new(p,int32(code))
+    UVError(p::AbstractString,code::Integer)=new(p,code)
 end
 
 struverror(err::UVError) = bytestring(ccall(:uv_strerror,Ptr{UInt8},(Int32,),err.code))
@@ -853,7 +860,7 @@ end
 
 function accept(server::UVServer, client::AsyncStream)
     if server.status != StatusActive
-        throw(ArgumentError("server not connected; make sure \"listen\" has been called"))
+        throw(ArgumentError("server not connected, make sure \"listen\" has been called"))
     end
     while isopen(server)
         err = accept_nonblock(server,client)
@@ -877,7 +884,7 @@ function _listen(sock::UVServer; backlog::Integer=BACKLOG_DEFAULT)
     err
 end
 
-function bind(server::PipeServer, name::ASCIIString)
+function bind(server::PipeServer, name::AbstractString)
     @assert server.status == StatusInit
     err = ccall(:uv_pipe_bind, Int32, (Ptr{Void}, Ptr{UInt8}),
                 server.handle, name)
@@ -894,22 +901,21 @@ function bind(server::PipeServer, name::ASCIIString)
 end
 
 
-function listen(path::ByteString)
+function listen(path::AbstractString)
     sock = PipeServer()
-    bind(sock, path) || error("could not listen on path $path")
+    bind(sock, path) || throw(ArgumentError("could not listen on path $path"))
     uv_error("listen", _listen(sock))
     sock
 end
 
-function connect!(sock::Pipe, path::ByteString)
+function connect!(sock::Pipe, path::AbstractString)
     @assert sock.status == StatusInit
-    req = c_malloc(_sizeof_uv_connect)
+    req = Libc.malloc(_sizeof_uv_connect)
     uv_req_set_data(req,C_NULL)
     ccall(:uv_pipe_connect, Void, (Ptr{Void}, Ptr{Void}, Ptr{UInt8}, Ptr{Void}), req, sock.handle, path, uv_jl_connectcb::Ptr{Void})
     sock.status = StatusConnecting
     sock
 end
-connect!(sock::Pipe, path::AbstractString) = connect(sock,bytestring(path))
 
 function connect(sock::AsyncStream, args...)
     connect!(sock,args...)
@@ -919,11 +925,6 @@ end
 
 connect(path::AbstractString) = connect(Pipe(),path)
 
-dup(x::RawFD) = RawFD(ccall((@windows? :_dup : :dup),Int32,(Int32,),x.fd))
-dup(src::RawFD,target::RawFD) = systemerror("dup",-1==
-    ccall((@windows? :_dup2 : :dup2),Int32,
-    (Int32,Int32),src.fd,target.fd))
-
 _fd(x::IOStream) = RawFD(fd(x))
 @unix_only _fd(x::AsyncStream) = RawFD(ccall(:jl_uv_handle,Int32,(Ptr{Void},),x.handle))
 @windows_only _fd(x::AsyncStream) = WindowsRawSocket(
@@ -931,7 +932,7 @@ _fd(x::IOStream) = RawFD(fd(x))
 
 for (x,writable,unix_fd,c_symbol) in ((:STDIN,false,0,:jl_uv_stdin),(:STDOUT,true,1,:jl_uv_stdout),(:STDERR,true,2,:jl_uv_stderr))
     f = symbol("redirect_"*lowercase(string(x)))
-    _f = symbol(string("_",f))
+    _f = symbol("_",f)
     @eval begin
         function ($_f)(stream)
             global $x
@@ -961,3 +962,62 @@ mark(x::AsyncStream)     = mark(x.buffer)
 unmark(x::AsyncStream)   = unmark(x.buffer)
 reset(x::AsyncStream)    = reset(x.buffer)
 ismarked(x::AsyncStream) = ismarked(x.buffer)
+
+# BufferStream's are non-OS streams, backed by a regular IOBuffer
+type BufferStream <: AsyncStream
+    buffer::IOBuffer
+    r_c::Condition
+    close_c::Condition
+    is_open::Bool
+    buffer_writes::Bool
+    lock::ReentrantLock
+
+    BufferStream() = new(PipeBuffer(), Condition(), Condition(), true, false, ReentrantLock())
+end
+
+isopen(s::BufferStream) = s.is_open
+close(s::BufferStream) = (s.is_open = false; notify(s.r_c; all=true); notify(s.close_c; all=true); nothing)
+
+function wait_readnb(s::BufferStream, nb::Int)
+    while isopen(s) && nb_available(s.buffer) < nb
+        wait(s.r_c)
+    end
+
+    (nb_available(s.buffer) < nb) && error("closed BufferStream")
+end
+
+function eof(s::BufferStream)
+    wait_readnb(s,1)
+    !isopen(s) && nb_available(s.buffer)<=0
+end
+
+show(io::IO, s::BufferStream) = print(io,"BufferStream() bytes waiting:",nb_available(s.buffer),", isopen:", s.is_open)
+
+nb_available(s::BufferStream) = nb_available(s.buffer)
+
+function wait_readbyte(s::BufferStream, c::UInt8)
+    while isopen(s) && search(s.buffer,c) <= 0
+        wait(s.r_c)
+    end
+end
+
+wait_close(s::BufferStream) = if isopen(s) wait(s.close_c); end
+start_reading(s::BufferStream) = nothing
+
+write(s::BufferStream, b::UInt8) = write(s, [b])
+write(s::BufferStream, c::Char) = write(s, string(c))
+
+function write{T}(s::BufferStream, a::Array{T})
+    rv=write(s.buffer, a)
+    !(s.buffer_writes) && notify(s.r_c; all=true);
+    rv
+end
+function write(s::BufferStream, p::Ptr, nb::Integer)
+    rv=write(s.buffer, p, nb)
+    !(s.buffer_writes) && notify(s.r_c; all=true);
+    rv
+end
+
+# If buffer_writes is called, it will delay notifying waiters till a flush is called.
+buffer_writes(s::BufferStream, bufsize=0) = (s.buffer_writes=true; s)
+flush(s::BufferStream) = (notify(s.r_c; all=true); s)

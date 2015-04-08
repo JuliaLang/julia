@@ -8,10 +8,10 @@ promote_rule{s}(::Type{MathConst{s}}, ::Type{Float32}) = Float32
 promote_rule{s,t}(::Type{MathConst{s}}, ::Type{MathConst{t}}) = Float64
 promote_rule{s,T<:Number}(::Type{MathConst{s}}, ::Type{T}) = promote_type(Float64,T)
 
-convert(::Type{FloatingPoint}, x::MathConst) = float64(x)
-convert(::Type{Float16}, x::MathConst) = float16(float32(x))
+convert(::Type{FloatingPoint}, x::MathConst) = Float64(x)
+convert(::Type{Float16}, x::MathConst) = Float16(Float32(x))
 convert{T<:Real}(::Type{Complex{T}}, x::MathConst) = convert(Complex{T}, convert(T,x))
-convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, float64(x))
+convert{T<:Integer}(::Type{Rational{T}}, x::MathConst) = convert(Rational{T}, Float64(x))
 
 stagedfunction call{T<:Union(Float32,Float64),s}(t::Type{T},c::MathConst{s},r::RoundingMode)
     f = T(big(c()),r())
@@ -21,11 +21,52 @@ end
 =={s}(::MathConst{s}, ::MathConst{s}) = true
 ==(::MathConst, ::MathConst) = false
 
-hash(x::MathConst, h::UInt) = hash(object_id(x), h)
+# MathConsts are irrational, so unequal to everything else
+==(x::MathConst, y::Real) = false
+==(x::Real, y::MathConst) = false
 
--(x::MathConst) = -float64(x)
+# MathConst vs FloatingPoint
+<(x::MathConst, y::Float64) = Float64(x,RoundUp) <= y
+<(x::Float64, y::MathConst) = x <= Float64(y,RoundDown)
+<(x::MathConst, y::Float32) = Float32(x,RoundUp) <= y
+<(x::Float32, y::MathConst) = x <= Float32(y,RoundDown)
+<(x::MathConst, y::Float16) = Float32(x,RoundUp) <= y
+<(x::Float16, y::MathConst) = x <= Float32(y,RoundDown)
+<(x::MathConst, y::BigFloat) = with_bigfloat_precision(precision(y)+32) do
+    big(x) < y
+end
+<(x::BigFloat, y::MathConst) = with_bigfloat_precision(precision(x)+32) do
+    x < big(y)
+end
+
+<=(x::MathConst,y::FloatingPoint) = x < y
+<=(x::FloatingPoint,y::MathConst) = x < y
+
+# MathConst vs Rational
+stagedfunction <{T}(x::MathConst, y::Rational{T})
+    bx = big(x())
+    bx < 0 && T <: Unsigned && return true
+    rx = rationalize(T,bx,tol=0)
+    rx < bx ? :($rx < y) : :($rx <= y)
+end
+stagedfunction <{T}(x::Rational{T}, y::MathConst)
+    by = big(y())
+    by < 0 && T <: Unsigned && return false
+    ry = rationalize(T,by,tol=0)
+    ry < by ? :(x <= $ry) : :(x < $ry)
+end
+<(x::MathConst, y::Rational{BigInt}) = big(x) < y
+<(x::Rational{BigInt}, y::MathConst) = x < big(y)
+
+<=(x::MathConst,y::Rational) = x < y
+<=(x::Rational,y::MathConst) = x < y
+
+
+hash(x::MathConst, h::UInt) = 3*object_id(x) - h
+
+-(x::MathConst) = -Float64(x)
 for op in Symbol[:+, :-, :*, :/, :^]
-    @eval $op(x::MathConst, y::MathConst) = $op(float64(x),float64(y))
+    @eval $op(x::MathConst, y::MathConst) = $op(Float64(x),Float64(y))
 end
 
 macro math_const(sym, val, def)
@@ -46,10 +87,10 @@ macro math_const(sym, val, def)
         const $esym = MathConst{$qsym}()
         $bigconvert
         Base.convert(::Type{Float64}, ::MathConst{$qsym}) = $val
-        Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(float32(val))
+        Base.convert(::Type{Float32}, ::MathConst{$qsym}) = $(Float32(val))
         @assert isa(big($esym), BigFloat)
-        @assert float64($esym) == float64(big($esym))
-        @assert float32($esym) == float32(big($esym))
+        @assert Float64($esym) == Float64(big($esym))
+        @assert Float32($esym) == Float32(big($esym))
     end
 end
 

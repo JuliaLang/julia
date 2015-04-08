@@ -46,7 +46,6 @@ extern "C" {
 #endif
 
 #if defined(_OS_WINDOWS_) && !defined(_COMPILER_MINGW_)
-DLLEXPORT char *basename(char *);
 DLLEXPORT char *dirname(char *);
 #else
 #include <libgen.h>
@@ -58,8 +57,6 @@ DLLEXPORT uint32_t jl_getutf8(ios_t *s)
     ios_getutf8(s, &wc);
     return wc;
 }
-
-DLLEXPORT size_t jl_ios_size(ios_t *s) { return s->size; }
 
 DLLEXPORT int jl_sizeof_off_t(void) { return sizeof(off_t); }
 #ifndef _OS_WINDOWS_
@@ -392,25 +389,21 @@ int jl_process_stop_signal(int status) { return WSTOPSIG(status); }
 
 // -- access to std filehandles --
 
-JL_STREAM *JL_STDIN=0;
-JL_STREAM *JL_STDOUT=0;
-JL_STREAM *JL_STDERR=0;
+JL_STREAM *JL_STDIN  = (JL_STREAM*)STDIN_FILENO;
+JL_STREAM *JL_STDOUT = (JL_STREAM*)STDOUT_FILENO;
+JL_STREAM *JL_STDERR = (JL_STREAM*)STDERR_FILENO;
 
-JL_STREAM *jl_stdin_stream(void)  { return (JL_STREAM*)JL_STDIN; }
-JL_STREAM *jl_stdout_stream(void) { return (JL_STREAM*)JL_STDOUT; }
-JL_STREAM *jl_stderr_stream(void) { return (JL_STREAM*)JL_STDERR; }
+JL_STREAM *jl_stdin_stream(void)  { return JL_STDIN; }
+JL_STREAM *jl_stdout_stream(void) { return JL_STDOUT; }
+JL_STREAM *jl_stderr_stream(void) { return JL_STDERR; }
 
 // CPUID
 
+#ifdef HAVE_CPUID
 DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
 {
 #if defined _MSC_VER
     __cpuid(CPUInfo, InfoType);
-#elif defined(__arm__)
-    CPUInfo[0] = 0x41; // ARMv7
-    CPUInfo[1] = 0; // godspeed
-    CPUInfo[2] = 0; // to anyone
-    CPUInfo[3] = 0; // using <v7
 #else
     __asm__ __volatile__ (
         #if defined(__i386__) && defined(__PIC__)
@@ -429,6 +422,7 @@ DLLEXPORT void jl_cpuid(int32_t CPUInfo[4], int32_t InfoType)
     );
 #endif
 }
+#endif
 
 // -- set/clear the FZ/DAZ flags on x86 & x86-64 --
 #ifdef __SSE__
@@ -503,15 +497,15 @@ DLLEXPORT void jl_field_offsets(jl_datatype_t *dt, ssize_t *offsets)
 // -- misc sysconf info --
 
 #ifdef _OS_WINDOWS_
-static long chachedPagesize = 0;
+static long cachedPagesize = 0;
 long jl_getpagesize(void)
 {
-    if (!chachedPagesize) {
+    if (!cachedPagesize) {
         SYSTEM_INFO systemInfo;
         GetSystemInfo (&systemInfo);
-        chachedPagesize = systemInfo.dwPageSize;
+        cachedPagesize = systemInfo.dwPageSize;
     }
-    return chachedPagesize;
+    return cachedPagesize;
 }
 #else
 long jl_getpagesize(void)
@@ -546,6 +540,19 @@ DLLEXPORT long jl_SC_CLK_TCK(void)
     return 0;
 #endif
 }
+
+DLLEXPORT size_t jl_get_field_offset(jl_datatype_t *ty, int field)
+{
+    if(field > jl_tuple_len(ty->names))
+        jl_error("This type does not have that many fields");
+    return ty->fields[field].offset;
+}
+
+DLLEXPORT size_t jl_get_alignment(jl_datatype_t *ty)
+{
+    return ty->alignment;
+}
+
 
 // Dynamic Library interrogation
 

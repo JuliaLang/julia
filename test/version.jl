@@ -54,7 +54,7 @@
 
 # basic comparison
 
-@test VersionNumber(2,3,1) == VersionNumber(int8(2),uint32(3),int32(1)) == v"2.3.1"
+@test VersionNumber(2,3,1) == VersionNumber(Int8(2),UInt32(3),Int32(1)) == v"2.3.1"
 @test v"2.3.0" < v"2.3.1" < v"2.4.8" < v"3.7.2"
 
 # advanced comparison & manipulation

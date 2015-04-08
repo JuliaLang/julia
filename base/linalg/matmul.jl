@@ -6,8 +6,9 @@ arithtype(::Type{Bool}) = Int
 # multiply by diagonal matrix as vector
 function scale!(C::AbstractMatrix, A::AbstractMatrix, b::AbstractVector)
     m, n = size(A)
-    n == length(b) || throw(DimensionMismatch())
-    for j = 1:n
+    p, q = size(C)
+    n == length(b) && p == m && q == n || throw(DimensionMismatch())
+    @inbounds for j = 1:n
         bj = b[j]
         for i = 1:m
             C[i,j] = A[i,j]*bj
@@ -18,8 +19,9 @@ end
 
 function scale!(C::AbstractMatrix, b::AbstractVector, A::AbstractMatrix)
     m, n = size(A)
-    m == length(b) || throw(DimensionMismatch())
-    for j = 1:n, i = 1:m
+    p, q = size(C)
+    m == length(b) && p == m && q == n || throw(DimensionMismatch())
+    @inbounds for j = 1:n, i = 1:m
         C[i,j] = A[i,j]*b[i]
     end
     C
@@ -301,6 +303,7 @@ function copy_transpose!{R,S}(B::AbstractMatrix{R}, ir_dest::UnitRange{Int}, jr_
         copy!(B, ir_dest, jr_dest, M, jr_src, ir_src)
         tM == 'C' && conj!(B)
     end
+    B
 end
 
 # TODO: It will be faster for large matrices to convert to float,

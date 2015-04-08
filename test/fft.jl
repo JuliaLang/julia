@@ -39,9 +39,9 @@ pifft!n_fftn_m4 = fft(m4); plan_ifft!(pifft!n_fftn_m4)(pifft!n_fftn_m4)
 
 sfftn_m4 = fft(sm4)
 psfftn_m4 = plan_fft(sm4)(sm4)
-sfft!n_b = complex128(b)
+sfft!n_b = map(Complex128,b)
 sfft!n_m4 = slice(sfft!n_b,3:6,9:12); fft!(sfft!n_m4)
-psfft!n_b = complex128(b)
+psfft!n_b = map(Complex128,b)
 psfft!n_m4 = slice(psfft!n_b,3:6,9:12); plan_fft!(psfft!n_m4)(psfft!n_m4)
 
 true_fft_m4 = [
@@ -102,7 +102,7 @@ plan_ifft!(psfft!n_m4)(psfft!n_m4)
 # They are not available in MKL, and hence do not test them.
 if Base.fftw_vendor() != :mkl
 
-    m3d = float32(reshape(1:5*3*2, 5, 3, 2))
+    m3d = map(Float32,reshape(1:5*3*2, 5, 3, 2))
     ifft3_fft3_m3d = ifft(fft(m3d))
 
     fftd3_m3d = fft(m3d,3)

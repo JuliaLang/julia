@@ -58,7 +58,7 @@ function sin_kernel(x::DoubleFloat32)
     w = z*z
     r = S3+z*S4
     s = z*x.hi
-    float32((x.hi + s*(S1+z*S2)) + s*w*r)
+    Float32((x.hi + s*(S1+z*S2)) + s*w*r)
 end
 
 function cos_kernel(x::DoubleFloat32)
@@ -70,7 +70,7 @@ function cos_kernel(x::DoubleFloat32)
     z = x.hi*x.hi
     w = z*z
     r = C2+z*C3
-    float32(((1.0+z*C0) + w*C1) + (w*z)*r)
+    Float32(((1.0+z*C0) + w*C1) + (w*z)*r)
 end
 
 # fallback methods
@@ -83,8 +83,7 @@ function mulpi_ext(x::Float64)
     m_hi = 3.1415926218032837
     m_lo = 3.178650954705639e-8
 
-    u = 134217729.0*x # 0x1p27 + 1
-    x_hi = u-(u-x)
+    x_hi = reinterpret(Float64, reinterpret(UInt64,x) & 0xffff_ffff_f800_0000)
     x_lo = x-x_hi
 
     y_hi = m*x
@@ -92,64 +91,115 @@ function mulpi_ext(x::Float64)
 
     DoubleFloat64(y_hi,y_lo)
 end
-mulpi_ext(x::Float32) = DoubleFloat32(pi*float64(x))
+mulpi_ext(x::Float32) = DoubleFloat32(pi*Float64(x))
 mulpi_ext(x::Rational) = mulpi_ext(float(x))
 mulpi_ext(x::Real) = pi*x # Fallback
 
-function sinpi(x::Real)
-    if isinf(x)
-        return throw(DomainError())
-    elseif isnan(x)
-        return oftype(x,NaN)
+
+function sinpi{T<:FloatingPoint}(x::T)
+    if !isfinite(x)
+        isnan(x) && return x
+        throw(DomainError())
     end
 
-    rx = copysign(rem(x,2),x)
+    ax = abs(x)
+    s = maxintfloat(T)/2
+    ax >= s && return copysign(zero(T),x) # integer-valued
+
+    # reduce to interval [-1,1]
+    # assumes RoundNearest rounding mode
+    t = 3*s
+    rx = x-((x+t)-t) # zeros may be incorrectly signed
     arx = abs(rx)
 
-    if rx == zero(rx)
-        return copysign(float(zero(rx)),x)
-    elseif arx < oftype(rx,0.25)
-        return sin_kernel(mulpi_ext(rx))
-    elseif arx <= oftype(rx,0.75)
-        y = mulpi_ext(oftype(rx,0.5) - arx)
-        return copysign(cos_kernel(y),rx)
-    elseif arx == one(x)
-        return copysign(float(zero(rx)),rx)
-    elseif arx < oftype(rx,1.25)
-        y = mulpi_ext((one(rx) - arx)*sign(rx))
-        return sin_kernel(y)
-    elseif arx <= oftype(rx,1.75)
-        y = mulpi_ext(oftype(rx,1.5) - arx)
-        return -copysign(cos_kernel(y),rx)
+    if (arx == 0) | (arx == 1)
+        copysign(zero(T),x)
+    elseif arx < 0.25
+        sin_kernel(mulpi_ext(rx))
+    elseif arx < 0.75
+        y = mulpi_ext(T(0.5) - arx)
+        copysign(cos_kernel(y),rx)
     else
-        y = mulpi_ext(rx - copysign(oftype(rx,2.0),rx))
-        return sin_kernel(y)
+        y = mulpi_ext(copysign(one(T),rx) - rx)
+        sin_kernel(y)
     end
 end
 
-function cospi(x::Real)
-    if isinf(x)
-        return throw(DomainError())
-    elseif isnan(x)
-        return oftype(x,NaN)
+# Rationals and other Real types
+function sinpi{T<:Real}(x::T)
+    Tf = typeof(float(x))
+    if !isfinite(x)
+        throw(DomainError())
     end
 
-    rx = abs(float(rem(x,2)))
+    # until we get an IEEE remainder function (#9283)
+    rx = rem(x,2)
+    if rx > 1
+        rx -= 2
+    elseif rx < -1
+        rx += 2
+    end
+    arx = abs(rx)
 
-    if rx <= oftype(rx,0.25)
-        return cos_kernel(mulpi_ext(rx))
-    elseif rx < oftype(rx,0.75)
-        y = mulpi_ext(oftype(rx,0.5) - rx)
-        return sin_kernel(y)
-    elseif rx <= oftype(rx,1.25)
-        y = mulpi_ext(one(rx) - rx)
-        return -cos_kernel(y)
-    elseif rx < oftype(rx,1.75)
-        y = mulpi_ext(rx - oftype(rx,1.5))
-        return sin_kernel(y)
+    if (arx == 0) | (arx == 1)
+        copysign(zero(Tf),x)
+    elseif arx < 0.25
+        sin_kernel(mulpi_ext(rx))
+    elseif arx < 0.75
+        y = mulpi_ext(T(0.5) - arx)
+        copysign(cos_kernel(y),rx)
     else
-        y = mulpi_ext(oftype(rx,2.0) - rx)
-        return cos_kernel(y)
+        y = mulpi_ext(copysign(one(T),rx) - rx)
+        sin_kernel(y)
+    end
+end
+
+function cospi{T<:FloatingPoint}(x::T)
+    if !isfinite(x)
+        isnan(x) && return x
+        throw(DomainError())
+    end
+
+    ax = abs(x)
+    s = maxintfloat(T)
+    ax >= s && return one(T) # even integer-valued
+
+    # reduce to interval [-1,1], then [0,1]
+    # assumes RoundNearest rounding mode
+    rx = abs(ax-((ax+s)-s))
+
+    if rx <= 0.25
+        cos_kernel(mulpi_ext(rx))
+    elseif rx < 0.75
+        y = mulpi_ext(T(0.5) - rx)
+        sin_kernel(y)
+    else
+        y = mulpi_ext(one(T) - rx)
+        -cos_kernel(y)
+    end
+end
+
+# Rationals and other Real types
+function cospi{T<:Real}(x::T)
+    if !isfinite(x)
+        throw(DomainError())
+    end
+
+    ax = abs(x)
+    # until we get an IEEE remainder function (#9283)
+    rx = rem(ax,2)
+    if rx > 1
+        rx = 2-rx
+    end
+
+    if rx <= 0.25
+        cos_kernel(mulpi_ext(rx))
+    elseif rx < 0.75
+        y = mulpi_ext(T(0.5) - rx)
+        sin_kernel(y)
+    else
+        y = mulpi_ext(one(T) - rx)
+        -cos_kernel(y)
     end
 end
 
@@ -229,7 +279,7 @@ function deg2rad_ext(x::Float64)
 
     DoubleFloat64(y_hi,y_lo)
 end
-deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(float64(x)))
+deg2rad_ext(x::Float32) = DoubleFloat32(deg2rad(Float64(x)))
 deg2rad_ext(x::Real) = deg2rad(x) # Fallback
 
 function sind(x::Real)

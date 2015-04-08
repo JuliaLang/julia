@@ -90,7 +90,7 @@ function digamma(z::Union(Float64,Complex{Float64}))
     t = inv(z)
     ψ += log(z) - 0.5*t
     t *= t # 1/z^2
-    # the coefficients here are float64(bernoulli[2:9] .// (2*(1:8)))
+    # the coefficients here are Float64(bernoulli[2:9] .// (2*(1:8)))
     ψ -= t * @evalpoly(t,0.08333333333333333,-0.008333333333333333,0.003968253968253968,-0.004166666666666667,0.007575757575757576,-0.021092796092796094,0.08333333333333333,-0.4432598039215686)
 end
 
@@ -113,7 +113,7 @@ function trigamma(z::Union(Float64,Complex{Float64}))
     t = inv(z)
     w = t * t # 1/z^2
     ψ += t + 0.5*w
-    # the coefficients here are float64(bernoulli[2:9])
+    # the coefficients here are Float64(bernoulli[2:9])
     ψ += t*w * @evalpoly(w,0.16666666666666666,-0.03333333333333333,0.023809523809523808,-0.03333333333333333,0.07575757575757576,-0.2531135531135531,1.1666666666666667,-7.092156862745098)
 end
 
@@ -284,7 +284,7 @@ function zeta(s::Union(Int,Float64,Complex{Float64}),
             end
             throw(DomainError()) # or return NaN?
         end
-        nx = int(xf)
+        nx = Int(xf)
         n = ceil(Int,cutoff - nx)
         ζ += inv_oftype(ζ, z)^s
         for ν = -nx:-1:1
@@ -338,34 +338,36 @@ function polygamma(m::Integer, z::Union(Float64,Complex{Float64}))
     end
 end
 
+# TODO: better way to do this
+f64(x::Real) = Float64(x)
+f64(z::Complex) = Complex128(z)
+f32(x::Real) = Float32(x)
+f32(z::Complex) = Complex64(z)
+f16(x::Real) = Float16(x)
+f16(z::Complex) = Complex32(z)
+
 # If we really cared about single precision, we could make a faster
 # Float32 version by truncating the Stirling series at a smaller cutoff.
-for (f,T) in ((float32,Float32), (float16,Float16))
+for (f,T) in ((:f32,Float32),(:f16,Float16))
     @eval begin
-        zeta(s::Integer, z::Union($T,Complex{$T})) =
-            $f(zeta(int(s), float64(z)))
-        zeta(s::Union(Float64,Complex{Float64}), z::Union($T,Complex{$T})) =
-            zeta(s, float64(z))
-        zeta(s::Number, z::Union($T,Complex{$T})) =
-            $f(zeta(float64(s), float64(z)))
-        polygamma(m::Integer, z::Union($T,Complex{$T})) =
-            $f(polygamma(int(m), float64(z)))
-        digamma(z::Union($T,Complex{$T})) =
-            $f(digamma(float64(z)))
-        trigamma(z::Union($T,Complex{$T})) =
-            $f(trigamma(float64(z)))
+        zeta(s::Integer, z::Union($T,Complex{$T})) = $f(zeta(Int(s), f64(z)))
+        zeta(s::Union(Float64,Complex128), z::Union($T,Complex{$T})) = zeta(s, f64(z))
+        zeta(s::Number, z::Union($T,Complex{$T})) = $f(zeta(f64(s), f64(z)))
+        polygamma(m::Integer, z::Union($T,Complex{$T})) = $f(polygamma(Int(m), f64(z)))
+        digamma(z::Union($T,Complex{$T})) = $f(digamma(f64(z)))
+        trigamma(z::Union($T,Complex{$T})) = $f(trigamma(f64(z)))
     end
 end
 
-zeta(s::Integer, z::Number) = zeta(int(s), float64(z))
-zeta(s::Number, z::Number) = zeta(float64(s), float64(z))
+zeta(s::Integer, z::Number) = zeta(Int(s), f64(z))
+zeta(s::Number, z::Number) = zeta(f64(s), f64(z))
 for f in (:digamma, :trigamma)
     @eval begin
-        $f(z::Number) = $f(float64(z))
+        $f(z::Number) = $f(f64(z))
         @vectorize_1arg Number $f
     end
 end
-polygamma(m::Integer, z::Number) = polygamma(m, float64(z))
+polygamma(m::Integer, z::Number) = polygamma(m, f64(z))
 @vectorize_2arg Number polygamma
 @vectorize_2arg Number zeta
 
@@ -394,8 +396,8 @@ function invdigamma(y::Float64)
 
     return x_new
 end
-invdigamma(x::Float32) = float32(invdigamma(float64(x)))
-invdigamma(x::Real) = invdigamma(float64(x))
+invdigamma(x::Float32) = Float32(invdigamma(Float64(x)))
+invdigamma(x::Real) = invdigamma(Float64(x))
 @vectorize_1arg Real invdigamma
 
 function beta(x::Number, w::Number)
@@ -455,9 +457,9 @@ function zeta(s::Union(Float64,Complex{Float64}))
     return ζ
 end
 
-zeta(x::Integer) = zeta(float64(x))
-zeta(x::Real)    = oftype(float(x),zeta(float64(x)))
-zeta(z::Complex) = oftype(float(z),zeta(complex128(z)))
+zeta(x::Integer) = zeta(Float64(x))
+zeta(x::Real)    = oftype(float(x),zeta(Float64(x)))
+zeta(z::Complex) = oftype(float(z),zeta(Complex128(z)))
 @vectorize_1arg Number zeta
 
 function eta(z::Union(Float64,Complex{Float64}))
@@ -474,7 +476,7 @@ function eta(z::Union(Float64,Complex{Float64}))
         return -zeta(z) * expm1(0.6931471805599453094172321214581765*δz)
     end
 end
-eta(x::Integer) = eta(float64(x))
-eta(x::Real)    = oftype(float(x),eta(float64(x)))
-eta(z::Complex) = oftype(float(z),eta(complex128(z)))
+eta(x::Integer) = eta(Float64(x))
+eta(x::Real)    = oftype(float(x),eta(Float64(x)))
+eta(z::Complex) = oftype(float(z),eta(Complex128(z)))
 @vectorize_1arg Number eta

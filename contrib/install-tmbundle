@@ -1,2 +1,0 @@
-#!/bin/sh
-cp -r Julia.tmbundle ~/Library/Application\ Support/TextMate/Bundles

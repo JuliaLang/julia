@@ -33,7 +33,7 @@ include("gk.jl")
 # issue #942
 s = sparse(ones(280,280));
 @timeit s*s "sparsemul" "Sparse matrix - sparse matrix multiplication"
-s2 = sparse(rand(1:2000,10^5), kron([1:10^4],ones(Int,10)), ones(Int,10^5), 2000, 10^4);
+s2 = sparse(rand(1:2000,10^5), kron([1:10^4;],ones(Int,10)), ones(Int,10^5), 2000, 10^4);
 @timeit s2*s2' "sparsemul2" "Sparse matrix - matrix multiplication with fill-in"
 
 # issue #938
@@ -47,7 +47,7 @@ v = rand(64^3)
 @timeit A*v "matvec" "Sparse matrix - dense vector multiplication"
 
 # issue #939
-y = [500000:-1:1];
+y = [500000:-1:1;]
 @timeit sortperm(y) "sortperm" "Sorting of a worst-case vector"
 
 # issue #445
@@ -208,7 +208,7 @@ _json_data = "{\"web-app\": {
 @timeit (for n in 1:10; a = parse_json(_json_data); end) "json" "JSON parsing"
 
 include("indexing.jl")
-x = [1:100_000]
+x = [1:100_000;]
 y = filter(iseven, 1:length(x))
 logical_y = map(iseven, 1:length(x))
 
@@ -217,3 +217,4 @@ logical_y = map(iseven, 1:length(x))
 @timeit (for n=1:100 add1!(x,logical_y) end) "add1_logical" "Increment x_i if y_i is true"
 @timeit (for n=1:100 devec_add1_logical!(x,logical_y) end) "devec_add1_logical" "Devectorized increment x_i if y_i is true"
 
+maxrss("kernel")

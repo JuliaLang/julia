@@ -93,17 +93,17 @@ convert an integer value back to a :obj:`Char` just as easily:
 
 .. doctest::
 
-    julia> char(120)
+    julia> Char(120)
     'x'
 
 Not all integer values are valid Unicode code points, but for
-performance, the :func:`char` conversion does not check that every character
+performance, the :func:`Char` conversion does not check that every character
 value is valid. If you want to check that each converted value is a
 valid code point, use the :func:`is_valid_char` function:
 
 .. doctest::
 
-    julia> char(0x110000)
+    julia> Char(0x110000)
     '\U110000'
 
     julia> is_valid_char(0x110000)
@@ -142,25 +142,25 @@ also be used:
 
 .. doctest::
 
-    julia> int('\0')
+    julia> Int('\0')
     0
 
-    julia> int('\t')
+    julia> Int('\t')
     9
 
-    julia> int('\n')
+    julia> Int('\n')
     10
 
-    julia> int('\e')
+    julia> Int('\e')
     27
 
-    julia> int('\x7f')
+    julia> Int('\x7f')
     127
 
-    julia> int('\177')
+    julia> Int('\177')
     127
 
-    julia> int('\xff')
+    julia> Int('\xff')
     255
 
 You can do comparisons and a limited amount of arithmetic with
@@ -183,10 +183,10 @@ You can do comparisons and a limited amount of arithmetic with
     julia> 'A' + 1
     'B'
 
-:obj:`AbstractString` Basics
-----------------------------
+String Basics
+-------------
 
-:obj:`AbstractString` literals are delimited by double quotes or triple double quotes:
+String literals are delimited by double quotes or triple double quotes:
 
 .. doctest::
 
@@ -311,7 +311,9 @@ such an invalid byte index, an error is thrown:
     ' '
 
 In this case, the character ``∀`` is a three-byte character, so the
-indices 2 and 3 are invalid and the next character's index is 4.
+indices 2 and 3 are invalid and the next character's index is 4; this
+next valid index can be computed by :func:`nextind(s,1) <nextind>`,
+and the next index after that by ``nextind(s,4)`` and so on.
 
 Because of variable-length encodings, the number of characters in a
 string (given by :func:`length(s) <length>`) is not always the same as the last index.
@@ -409,7 +411,7 @@ can interpolate any expression into a string using parentheses:
     julia> "1 + 2 = $(1 + 2)"
     "1 + 2 = 3"
 
-Both concatenation and string interpolation call 
+Both concatenation and string interpolation call
 :func:`string` to convert objects into string form. Most
 non-:obj:`AbstractString` objects are converted to strings closely
 corresponding to how they are entered as literal expressions:
@@ -542,8 +544,8 @@ Some other useful functions include:
 
 .. _man-non-standard-string-literals:
 
-Non-Standard AbstractString Literals
-------------------------------------
+Non-Standard String Literals
+----------------------------
 
 There are situations when you want to construct a string or use string
 semantics, but the behavior of the standard string construct is not
@@ -659,7 +661,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "acd"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Nothing),1}:
+    3-element Array{Union(SubString{UTF8String},Void),1}:
      "a"
      "c"
      "d"
@@ -680,7 +682,7 @@ a string is invalid). Here's is a pair of somewhat contrived examples::
     "ad"
 
     julia> m.captures
-    3-element Array{Union(SubString{UTF8String},Nothing),1}:
+    3-element Array{Union(SubString{UTF8String},Void),1}:
      "a"
      nothing
      "d"

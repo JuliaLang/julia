@@ -91,10 +91,10 @@ end
 
 let x = ["\"hello\"", "world\""], io = IOBuffer()
     writedlm(io, x, quotes=false)
-    @assert takebuf_string(io) == "\"hello\"\nworld\"\n"
+    @test takebuf_string(io) == "\"hello\"\nworld\"\n"
 
     writedlm(io, x)
-    @assert takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
+    @test takebuf_string(io) == "\"\"\"hello\"\"\"\n\"world\"\"\"\n"
 end
 
 # test comments
@@ -184,7 +184,7 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
         "Yugoslavia (Cyrillic)", "Djordje Balasevic", "Југославија", "Ђорђе Балашевић",
         "Yugoslavia (Latin)", "Djordje Balasevic", "Jugoslavija", "Đorđe Balašević"]
 
-    i18n_arr = transpose(reshape(i18n_data, 4, int(floor(length(i18n_data)/4))))
+    i18n_arr = transpose(reshape(i18n_data, 4, Int(floor(length(i18n_data)/4))))
     i18n_buff = PipeBuffer()
     writedlm(i18n_buff, i18n_arr, ',')
     @test i18n_arr == readcsv(i18n_buff)
@@ -197,3 +197,8 @@ let i18n_data = ["Origin (English)", "Name (English)", "Origin (Native)", "Name 
     writedlm(i18n_buff, i18n_arr, '\t')
     @test (data, hdr) == readdlm(i18n_buff, '\t', header=true)
 end
+
+@test isequaldlm(readcsv(IOBuffer("1,22222222222222222222222222222222222222,0x3,10e6\n2000.1,true,false,-10.34"), Any),
+    reshape(Any[1,2000.1,Float64(22222222222222222222222222222222222222),true,0x3,false,10e6,-10.34], 2, 4), Any)
+
+@test isequaldlm(readcsv(IOBuffer("-9223355253176920979,9223355253176920979"), Int64), Int64[-9223355253176920979  9223355253176920979], Int64)

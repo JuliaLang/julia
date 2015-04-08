@@ -15,7 +15,7 @@ Instructions for adding fonts to the terminal are available at:
 
 Additionally, rather than sticking with the default command prompt, you may want to use a different terminal emulator program, such as [`Conemu`](https://code.google.com/p/conemu-maximus5/) or [`Mintty`](https://code.google.com/p/mintty/)
 (note that running Julia on Mintty needs a copy of `stty.exe` in your `%PATH%` to work properly).
-Alternatively, you may prefer the features of a more full-function IDE, such as [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
+Alternatively, you may prefer the features of a more full-function IDE, such as [`Juno`](http://junolab.org), [`LightTable`](https://github.com/one-more-minute/Jupiter-LT), [`Sublime-IJulia`](https://github.com/quinnj/Sublime-IJulia), or [`IJulia`](https://github.com/JuliaLang/IJulia.jl).
 
 
 # Binary distribution
@@ -37,9 +37,9 @@ Julia uses binary-mode files exclusively. Unlike many other Windows programs, if
 
     git config --global core.eol lf
     git config --global core.autocrlf input
-    
+
 or edit `%USERPROFILE%\.gitconfig` and add/edit the lines:
-    
+
     [core] eol = lf
            autocrlf = input
 
@@ -287,9 +287,13 @@ If you are building for 64-bit windows, the steps are essentially the same. Just
 
 ## Windows Build Debugging
 
+### GDB hangs with cygwin mintty
+
+- run gdb under the windows console (cmd) instead. gdb [does not function properly](https://www.cygwin.com/ml/cygwin/2009-02/msg00531.html) under mintty with non-cygwin applications.
+
 ### Build process is slow/eats memory/hangs my computer
 
-- Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and 
+- Disable the Windows [Superfetch](http://en.wikipedia.org/wiki/Windows_Vista_I/O_technologies#SuperFetch) and
   [Program Compatibility Assistant](http://blogs.msdn.com/b/cjacks/archive/2011/11/22/managing-the-windows-7-program-compatibility-assistant-pca.aspx) services, as they are known to have
   [spurious interactions]((https://cygwin.com/ml/cygwin/2011-12/msg00058.html)) with MinGW/Cygwin.
 
