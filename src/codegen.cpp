@@ -680,6 +680,7 @@ static void jl_setup_module(Module *m, bool add)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
     if (add) {
+        assert(jl_ExecutionEngine);
 #ifdef LLVM36
         jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
 #else
@@ -3882,6 +3883,8 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 #endif
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
+
+    FPM->run(*w);
 
     return w;
 }
