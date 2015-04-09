@@ -847,19 +847,58 @@ Instead, use a semicolon or insert a line break after ``catch``::
       x
     end
 
-The ``catch`` clause is not strictly necessary; when omitted, the default
-return value is ``nothing``.
+The return value of a ``try`` block will be the last expression in the ``try``
+clause or the ``catch`` clause if the exception was caught.  Uncaught
+exceptions, naturally, will not have a return value.  Statements inside
+``finally``, explained in the next section, do not change the return value.
+
+There is a terse syntax to catch and avoid raising the exception to the caller.
+The following is equivalent to having empty catch clause.
 
 .. doctest::
 
-    julia> try error() end #Returns nothing
+    julia> try error() end  # Equivalent to try error() catch end
+
+This terse syntax for catching exception can only be used when a ``finally``
+clause is also omitted. See explanation under ``finally`` in the next section.
+The return value of the above try block will be ``nothing``. If you use the
+return value of the block, make sure you check it before using the returned
+value.
+
+.. doctest::
+
+    julia> x = try sqrt(-1) end
+
+    julia> x == nothing
+    true
 
 The power of the ``try/catch`` construct lies in the ability to unwind a deeply
 nested computation immediately to a much higher level in the stack of calling
 functions. There are situations where no error has occurred, but the ability to
 unwind the stack and pass a value to a higher level is desirable. Julia
-provides the :func:`rethrow`, :func:`backtrace` and :func:`catch_backtrace` functions for
-more advanced error handling.
+provides the :func:`rethrow`, :func:`backtrace` and :func:`catch_backtrace`
+functions for more advanced error handling. The following example illustrates a
+rethrow.
+
+.. doctest::
+
+    julia> x = -1
+    -1
+
+    julia> try
+               sqrt(x)
+           catch ex
+               if isa(ex, DomainError)
+                   sqrt(complex(x))
+               else
+                   rethrow(ex)
+               end
+           end
+    0.0 + 1.0im
+
+You should only catch an exception if your code is going to take at least one
+action other than ``rethrow``. There is no point of catching an exception and
+then immediately rethrowing it.
 
 finally Clauses
 ~~~~~~~~~~~~~~~
@@ -883,9 +922,87 @@ For example, here is how we can guarantee that an opened file is closed::
 When control leaves the ``try`` block (for example due to a ``return``, or
 just finishing normally), ``close(f)`` will be executed. If
 the ``try`` block exits due to an exception, the exception will continue
-propagating. A ``catch`` block may be combined with ``try`` and ``finally``
-as well. In this case the ``finally`` block will run after ``catch`` has
-handled the error.
+propagating. A ``catch`` clause may be combined with ``try`` and ``finally``
+as well. In this case the ``finally`` clause will run after ``catch`` has
+handled the error. ``finally`` clause cannot change the return value of the``try`` block.
+
+The following examples illustrate the effect of ``try``, ``catch``,
+``finally``, and their effect on execution and return value of the block.
+Examples are written as one-liners for brevity. This is not a recommended
+style.
+
+.. doctest::
+
+    julia> try error(); println("this will not print") end
+
+Returns nothing since the implicit ``catch`` clause did not have any expression.
+Implicit ``catch`` does not re-throw the exception either.
+
+.. doctest::
+
+    julia> try error(); println("this will not print") catch end
+
+Same as above, but more explicit.
+
+.. doctest::
+
+    julia> try error(); println("this will not print") finally println("finally") end
+    finally
+    ERROR:
+     in anonymous at no file:1
+
+There is no implicit ``catch`` clause here, you must explicitly add a ``catch`` if you
+wish to catch the exception. ``finally`` is executed in all cases.
+
+.. doctest::
+
+     julia> try error(); println("this will not print") catch finally println("finally") end
+     finally
+
+Similar to above, but with the addition of a ``catch`` clause to catch the exception.
+This block now returns ``nothing`` instead of raising an exception.
+``finally`` clause is executed in this case as well.
+
+A few more examples below illustrate the effect on return value alone. Notice
+the cases when return value comes from the ``catch`` clause and also how expressions
+in ``finally`` do not influence the return value. Examples are written as
+one-liners for brevity. This is not a recommended style.
+
+.. doctest::
+
+    julia> x, y, z = 1, 2, 3
+    (1,2,3)
+
+    julia> try x catch; y finally println("finally"); z end
+    finally
+    1
+
+    julia> try error() catch; y finally println("finally"); z end
+    finally
+    2
+
+Exception may also occur inside ``catch`` or ``finally`` clauses. They are
+thrown an usual. ``finally`` clause is still executed even if there was an
+exception inside the ``catch`` clause. Pay close attention to the code that
+goes inside ``catch`` and ``finally`` clause. They may mask the original
+exception and make it hard to identify the root cause.
+
+.. doctest::
+
+    julia> sqrt(-1)
+    sqrt will only return a complex result if called with a complex argument.
+    try sqrt (complex(x))
+    ERROR: DomainError:
+     in sqrt at math.jl:135
+
+    julia> try sqrt(-1) catch; error() finally println("finally") end
+    finally
+    ERROR:
+     in anonymous at no file:1
+
+    julia> try sqrt(-1) finally error(); println("finally") end
+    ERROR:
+     in anonymous at no file:1
 
 .. _man-tasks:
 
