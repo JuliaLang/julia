@@ -1096,6 +1096,7 @@ export
 
 # misc
     atexit,
+    atreplinit,
     clipboard,
     exit,
     ntuple,
