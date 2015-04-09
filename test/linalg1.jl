@@ -78,6 +78,16 @@ debug && println("QR decomposition (without pivoting)")
     @test_approx_eq q*r a
     @test_approx_eq_eps a*(qra\b) b 3000ε
 
+debug && println("Thin QR decomposition (without pivoting)")
+    qra   = qrfact(a[:,1:n1], Val{false})
+    q,r   = qra[:Q], qra[:R]
+    @test_approx_eq q'*full(q, thin=false) eye(n)
+    @test_approx_eq q'*full(q) eye(n, n1)
+    @test_approx_eq q*r a[:,1:n1]
+    @test_approx_eq_eps q*b[1:n1] full(q)*b[1:n1] 100ε
+    @test_approx_eq_eps q*b full(q, thin=false)*b 100ε
+    @test_throws DimensionMismatch q*b[1:n1 + 1]
+
 debug && println("(Automatic) Fat (pivoted) QR decomposition") # Pivoting is only implemented for BlasFloats
     qrpa  = factorize(a[1:n1,:])
     q,r = qrpa[:Q], qrpa[:R]
