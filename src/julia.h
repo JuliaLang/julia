@@ -938,8 +938,8 @@ DLLEXPORT jl_value_t *jl_method_def(jl_sym_t *name, jl_value_t **bp, jl_value_t 
                                     jl_tuple_t *argtypes, jl_function_t *f, jl_value_t *isstaged,
                                     jl_value_t *call_func, int iskw);
 DLLEXPORT jl_value_t *jl_box_bool(int8_t x);
-DLLEXPORT jl_value_t *jl_box_int8(int32_t x);
-DLLEXPORT jl_value_t *jl_box_uint8(uint32_t x);
+DLLEXPORT jl_value_t *jl_box_int8(int8_t x);
+DLLEXPORT jl_value_t *jl_box_uint8(uint8_t x);
 DLLEXPORT jl_value_t *jl_box_int16(int16_t x);
 DLLEXPORT jl_value_t *jl_box_uint16(uint16_t x);
 DLLEXPORT jl_value_t *jl_box_int32(int32_t x);
