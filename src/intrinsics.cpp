@@ -1340,9 +1340,12 @@ static FunctionType *ft2arg(Type *ret, Type *arg1, Type *arg2)
     return FunctionType::get(ret, args2, false);
 }
 
-#define BOX_F(ct,jl_ct)                                                       \
+#define BOX_F(ct,jl_ct)                                                    \
     box_##ct##_func = boxfunc_llvm(ft1arg(jl_pvalue_llvmt, T_##jl_ct),     \
                                    "jl_box_"#ct, (void*)&jl_box_##ct, m);
+
+#define SBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::SExt);
+#define UBOX_F(ct,jl_ct) BOX_F(ct,jl_ct); box_##ct##_func->addAttribute(1, Attribute::ZExt);
 
 static void add_intrinsic(jl_module_t *m, const std::string &name, intrinsic f)
 {
