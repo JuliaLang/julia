@@ -1266,6 +1266,9 @@ shuffle(a::AbstractVector) = shuffle(GLOBAL_RNG, a)
 
 function randperm(r::AbstractRNG, n::Integer)
     a = Array(typeof(n), n)
+    if n == 0
+       return a
+    end
     a[1] = 1
     @inbounds for i = 2:n
         j = rand(r, 1:i)
