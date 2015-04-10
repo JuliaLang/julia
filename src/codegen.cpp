@@ -957,7 +957,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!llvmf)
         jl_error("jl_dump_function_ir: Expected Function*");
 
-    if (!strip_ir_metadata) {
+    if (!strip_ir_metadata || llvmf->isDeclaration()) {
         // print the function IR as-is
         llvmf->print(stream);
     } else {
