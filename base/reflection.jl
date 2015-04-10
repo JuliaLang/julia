@@ -103,7 +103,20 @@ function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 code_lowered(f::Function,t::(Type...)) = map(m->uncompressed_ast(m.func.code), methods(f,t))
 methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
 methods(f::ANY,t::ANY) = methods(call, tuple(isa(f,Type) ? Type{f} : typeof(f), t...))
-_methods(f::ANY,t::ANY,lim) = _methods(f, Any[(t::Tuple)...], length(t::Tuple), lim, [])
+_merge_methods(b::Bool) = b
+function _merge_methods(ts::Array{Any,1})
+    0 < length(ts) || return ts
+    sig1, env, meth = ts[1]
+    n = length(sig1)
+    for t in ts
+        if length(t[1]) != n || t[2] !== env || t[3] !== meth
+            return ts
+        end
+    end
+    sig = tuple([ reduce(tmerge, Bottom, map(t->t[1][i],ts)) for i=1:n ]...)
+    Any[(sig, env, meth)]
+end
+_methods(f::ANY,t::ANY,lim) = _merge_methods(_methods(f, Any[(t::Tuple)...], length(t::Tuple), lim, []))
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
         new = ccall(:jl_matching_methods, Any, (Any,Any,Int32), f, tuple(t...), lim)
