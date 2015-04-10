@@ -686,6 +686,7 @@ static void jl_setup_module(Module *m, bool add)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
     if (add) {
+        assert(jl_ExecutionEngine);
 #ifdef LLVM36
         jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
 #else
@@ -964,7 +965,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!llvmf)
         jl_error("jl_dump_function_ir: Expected Function*");
 
-    if (!strip_ir_metadata) {
+    if (!strip_ir_metadata || llvmf->isDeclaration()) {
         // print the function IR as-is
         llvmf->print(stream);
     } else {
@@ -3891,6 +3892,8 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
 
+    FPM->run(*w);
+
     return w;
 }
 
@@ -5667,13 +5670,13 @@ extern "C" void jl_init_codegen(void)
             JITEventListener::createIntelJITEventListener());
 #endif // JL_USE_INTEL_JITEVENTS
 
-    BOX_F(int8,int32);  BOX_F(uint8,uint32);
-    BOX_F(int16,int16); BOX_F(uint16,uint16);
-    BOX_F(int32,int32); BOX_F(uint32,uint32);
-    BOX_F(int64,int64); BOX_F(uint64,uint64);
+    BOX_F(int8,int8);  UBOX_F(uint8,uint8);
+    BOX_F(int16,int16); UBOX_F(uint16,uint16);
+    BOX_F(int32,int32); UBOX_F(uint32,uint32);
+    BOX_F(int64,int64); UBOX_F(uint64,uint64);
     BOX_F(float32,float32); BOX_F(float64,float64);
     BOX_F(char,char);
-    BOX_F(gensym,size);
+    UBOX_F(gensym,size);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)&jl_box8, m);
