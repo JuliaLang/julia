@@ -1,6 +1,8 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
+
+starttime = time()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
@@ -37,8 +39,9 @@ chmod(file, filemode(file) | 0o222)
 # files and is thus zero in this case.
 @windows_only @test filesize(dir) == 0
 @unix_only @test filesize(dir) > 0
-let skew = 10  # allow 10s skew
-    now   = time()
+now = time()
+# Allow 10s skew in addition to the time it took us to actually execute this code
+let skew = 10 + (now - starttime)
     mfile = mtime(file)
     mdir  = mtime(dir)
     @test abs(now - mfile) <= skew && abs(now - mdir) <= skew && abs(mfile - mdir) <= skew
