@@ -20,6 +20,13 @@
 // original object
 #define ARRAY_INLINE_NBYTES (2048*sizeof(void*))
 
+// codegen options ------------------------------------------------------------
+
+// (Experimental) codegen support for thread-local storage
+// #define CODEGEN_TLS
+
+// with KEEP_BODIES, we keep LLVM function bodies around for later debugging
+// #define KEEP_BODIES
 
 // GC options -----------------------------------------------------------------
 
@@ -31,7 +38,7 @@
 // with MEMDEBUG, every object is allocated explicitly with malloc, and
 // filled with 0xbb before being freed. this helps tools like valgrind
 // catch invalid accesses.
-//#define MEMDEBUG
+// #define MEMDEBUG
 
 // GC_VERIFY force a full verification gc along with every quick gc to ensure no
 // reachable memory is freed
@@ -77,5 +84,20 @@
 #ifndef COPY_STACKS
 #define COPY_STACKS
 #endif
+
+// sanitizer defaults ---------------------------------------------------------
+
+// Automatically enable MEMDEBUG and KEEP_BODIES for the sanitizers
+#if defined(__has_feature)
+#  if __has_feature(address_sanitizer) || __has_feature(memory_sanitizer)
+#  define MEMDEBUG
+#  define KEEP_BODIES
+#  endif
+// Memory sanitizer also needs thread-local storage
+#  if __has_feature(memory_sanitizer)
+#  define CODEGEN_TLS
+#  endif
+#endif
+
 
 #endif
