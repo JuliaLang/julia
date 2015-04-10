@@ -24,7 +24,7 @@ include $(JULIAHOME)/Make.inc
 
 ## Some shared configuration options ##
 
-CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir))
+CONFIGURE_COMMON = --prefix=$(abspath $(build_prefix)) --build=$(BUILD_MACHINE) --libdir=$(abspath $(build_libdir)) $(CUSTOM_LD_LIBRARY_PATH)
 ifneq ($(XC_HOST),)
 CONFIGURE_COMMON += --host=$(XC_HOST)
 endif
@@ -33,19 +33,22 @@ ifneq ($(USEMSVC), 1)
 CONFIGURE_COMMON += LDFLAGS=-Wl,--stack,8388608
 endif
 endif
-CONFIGURE_COMMON += F77="$(FC)" CC="$(CC)" CXX="$(CXX)"
+CONFIGURE_COMMON += F77="$(FC)" CC="$(CC) $(DEPS_CFLAGS)" CXX="$(CXX) $(DEPS_CXXFLAGS)"
+
+CMAKE_CC_ARG = $(CC_ARG) $(DEPS_CFLAGS)
+CMAKE_CXX_ARG = $(CXX_ARG) $(DEPS_CXXFLAGS)
 
 CMAKE_COMMON = -DCMAKE_INSTALL_PREFIX:PATH=$(build_prefix) -DCMAKE_BUILD_TYPE=Release
 ifneq ($(VERBOSE), 0)
 CMAKE_COMMON += -DCMAKE_VERBOSE_MAKEFILE=ON
 endif
 CMAKE_COMMON += -DCMAKE_C_COMPILER="$(CC_BASE)"
-ifdef CC_ARG
-CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CC_ARG)"
+ifneq ($(strip $(CMAKE_CC_ARG)),)
+CMAKE_COMMON += -DCMAKE_C_COMPILER_ARG1="$(CMAKE_CC_ARG)"
 endif
 CMAKE_COMMON += -DCMAKE_CXX_COMPILER="$(CXX_BASE)"
-ifdef CXX_ARG
-CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CXX_ARG)"
+ifneq ($(strip $(CMAKE_CXX_ARG)),)
+CMAKE_COMMON += -DCMAKE_CXX_COMPILER_ARG1="$(CMAKE_CXX_ARG)"
 endif
 
 # If the top-level Makefile is called with environment variables,
@@ -133,7 +136,7 @@ endif
 ifeq ($(USE_SYSTEM_MPFR), 0)
 STAGE2_DEPS += mpfr
 ifeq ($(USE_SYSTEM_GMP), 0)
-MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir))
+MPFR_OPTS = --with-gmp-include=$(abspath $(build_includedir)) --with-gmp-lib=$(abspath $(build_shlibdir)) CFLAGS="-O0 -g"
 endif
 endif
 ifeq ($(BUILD_OS),WINNT)
@@ -232,7 +235,11 @@ LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Asserts
 endif
 LLVM_FLAVOR := $(LLVM_BUILDTYPE)
 ifeq ($(LLVM_SANITIZE),1)
-LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+Sanitize
+ifeq ($(SANITIZE_MEMORY),1)
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+MSAN
+else
+LLVM_BUILDTYPE := $(LLVM_BUILDTYPE)+ASAN
+endif
 endif
 
 LLVM_LIB_FILE = libLLVMCodeGen.a
@@ -331,9 +338,17 @@ endif # ARCH == ppc64
 
 
 ifeq ($(LLVM_SANITIZE),1)
+ifeq ($(SANITIZE_MEMORY),1)
+LLVM_CC = CFLAGS="-fsanitize=memory -fsanitize-memory-track-origins"
+LLVM_LDFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
+LLVM_CXXFLAGS += -fsanitize=memory -fsanitize-memory-track-origins
+LLVM_CMAKE += -DLLVM_USE_SANITIZER="MemoryWithOrigins"
+else
 LLVM_CC = CFLAGS="-fsanitize=address"
 LLVM_LDFLAGS += -fsanitize=address
 LLVM_CXXFLAGS += -fsanitize=address
+LLVM_CMAKE += -DLLVM_USE_SANITIZER="Address"
+endif
 LLVM_MFLAGS += TOOL_NO_EXPORTS= HAVE_LINK_VERSION_SCRIPT=0
 else
 LLVM_CC =
@@ -346,9 +361,9 @@ endif # LLVM_CXXFLAGS
 LLVM_MFLAGS += $(LLVM_CC)
 
 ifeq ($(BUILD_CUSTOM_LIBCXX),1)
-LLVM_LDFLAGS += -Wl,-R$(build_libdir)
+LLVM_LDFLAGS += -Wl,-R$(build_libdir) -lc++ -lc++abi
 ifeq ($(USEICC),1)
-LLVM_LDFLAGS += -no_cpprt -lc++ -lc++abi
+LLVM_LDFLAGS += -no_cpprt
 endif # USEICC
 endif # BUILD_CUSTOM_LIBCXX
 
@@ -425,12 +440,12 @@ libcxx-build:
 	mkdir -p libcxx-build
 libcxx-build/Makefile: llvm-$(LLVM_VER)/projects/libcxx | llvm-$(LLVM_VER)/projects/libcxxabi libcxx-build
 	cd libcxx-build && \
-		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_LIBCXXABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
+		$(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLIBCXX_CXX_ABI=libcxxabi -DLIBCXX_CXX_ABI_INCLUDE_PATHS="../llvm-$(LLVM_VER)/projects/libcxxabi/include" ../llvm-$(LLVM_VER)/projects/libcxx -DCMAKE_SHARED_LINKER_FLAGS="-L$(build_libdir) $(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS)"
 libcxxabi-build:
 	mkdir -p libcxxabi-build
 libcxxabi-build/Makefile: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx libcxxabi-build
 	cd libcxxabi-build && \
-        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) -DLLVM_PATH="../llvm-$(LLVM_VER)" ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
+        $(CMAKE) -G "Unix Makefiles" $(CMAKE_COMMON) $(LLVM_CMAKE) -DLLVM_ABI_BREAKING_CHECKS="WITH_ASSERTS" -DLLVM_PATH="../llvm-$(LLVM_VER)" ../llvm-$(LLVM_VER)/projects/libcxxabi -DLIBCXXABI_CXX_ABI_LIBRARIES="$(LIBCXX_EXTRA_FLAGS)" -DCMAKE_CXX_FLAGS="$(CXXFLAGS) -std=c++11"
 llvm-$(LLVM_VER)/projects/libcxxabi/lib/libc++abi.so.1.0: llvm-$(LLVM_VER)/projects/libcxxabi | llvm-$(LLVM_VER)/projects/libcxx
 libcxxabi-build/lib/libc++abi.so.1.0: | libcxxabi-build/Makefile
 	cd libcxxabi-build && $(MAKE)
@@ -1390,7 +1405,7 @@ ifeq (exists, $(shell [ -d $(JULIAHOME)/.git/modules/deps/utf8proc ] && echo exi
 $(UTF8PROC_SRC_TARGET): $(JULIAHOME)/.git/modules/deps/utf8proc/HEAD
 endif
 $(UTF8PROC_SRC_TARGET): utf8proc/Makefile
-	$(MAKE) -C utf8proc cc="$(CC) -O2 -std=c99 $(fPIC) -DUTF8PROC_EXPORTS" AR="$(AR)" libutf8proc.a
+	$(MAKE) -C utf8proc cc="$(CC) -O2 -std=c99 $(fPIC) -DUTF8PROC_EXPORTS $(DEPS_CFLAGS)" AR="$(AR)" libutf8proc.a
 	touch -c $@
 utf8proc/checked: $(UTF8PROC_SRC_TARGET)
 ifeq ($(OS),$(BUILD_OS))
@@ -1620,6 +1635,10 @@ install-osxunwind: $(OSXUNWIND_OBJ_TARGET)
 GMP_SRC_TARGET = gmp-$(GMP_VER)/.libs/libgmp.$(SHLIB_EXT)
 GMP_OBJ_TARGET = $(build_shlibdir)/libgmp.$(SHLIB_EXT)
 
+ifneq ($(SANITIZE),)
+GMP_CONFIGURE_OPTS += --disable-assembly
+endif
+
 gmp-$(GMP_VER).tar.bz2:
 	$(JLDOWNLOAD) $@ https://gmplib.org/download/gmp/$@
 gmp-$(GMP_VER)/configure: gmp-$(GMP_VER).tar.bz2
@@ -1631,7 +1650,7 @@ endif
 	touch -c $@
 gmp-$(GMP_VER)/config.status: gmp-$(GMP_VER)/configure
 	cd gmp-$(GMP_VER) && \
-	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static
+	./configure $(CONFIGURE_COMMON) F77= --enable-shared --disable-static $(GMP_CONFIGURE_OPTS)
 	touch -c $@
 $(GMP_SRC_TARGET): gmp-$(GMP_VER)/config.status
 	$(MAKE) -C gmp-$(GMP_VER) $(LIBTOOL_CCLD)
@@ -1668,6 +1687,11 @@ MPFR_SRC_TARGET = mpfr-$(MPFR_VER)/src/.libs/libmpfr.$(SHLIB_EXT)
 MPFR_OBJ_TARGET = $(build_shlibdir)/libmpfr.$(SHLIB_EXT)
 ifeq ($(OS),Darwin)
 MPFR_CHECK_MFLAGS = LDFLAGS="-Wl,-rpath,'$(build_libdir)'"
+endif
+
+ifneq ($(SANITIZE),)
+# Force generic C build
+MPFR_OPTS += --host=none-unknown-linux
 endif
 
 mpfr-$(MPFR_VER).tar.bz2:

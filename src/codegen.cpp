@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "options.h"
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -436,6 +437,8 @@ void jl_dump_objfile(char *fname, int jit_model)
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::COFF);
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+    TheTriple.setObjectFormat(Triple::MachO);
 #endif
 #ifdef LLVM35
     std::unique_ptr<TargetMachine>
@@ -673,8 +676,10 @@ static void jl_setup_module(Module *m, bool add)
         llvm::DEBUG_METADATA_VERSION);
 #endif
 #ifdef LLVM37
-    if (jl_ExecutionEngine)
+    if (jl_ExecutionEngine) {
         m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+        m->setTargetTriple(jl_TargetMachine->getTargetTriple());
+    }
 #elif LLVM36
     if (jl_ExecutionEngine)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
@@ -731,8 +736,10 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
         assert(li->fptr != NULL);
+#ifndef KEEP_BODIES
         if (!imaging_mode)
             llvmf->deleteBody();
+#endif
 
         if (li->cFunctionList != NULL) {
             size_t i;
@@ -743,9 +750,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 #else
                 (void)jl_ExecutionEngine->getPointerToFunction(list->data[i].f);
 #endif
+#ifndef KEEP_BODIES
                 if (!imaging_mode) {
                     list->data[i].f->deleteBody();
                 }
+#endif
             }
         }
 
@@ -867,6 +876,11 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 
 extern "C" DLLEXPORT
 void *jl_function_ptr_by_llvm_name(char* name) {
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+    __msan_unpoison_string(name);
+#endif
+#endif
     return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
 }
 
@@ -4973,8 +4987,7 @@ static void init_julia_llvm_env(Module *m)
     jlpgcstack_var =
         new GlobalVariable(*m, jl_ppvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack");
-    add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
+                           NULL, "jl_pgcstack", NULL);
 #endif
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
@@ -5398,6 +5411,9 @@ static void init_julia_llvm_env(Module *m)
 #   if __has_feature(address_sanitizer)
     FPM->add(createAddressSanitizerFunctionPass());
 #   endif
+#   if __has_feature(memory_sanitizer)
+    FPM->add(llvm::createMemorySanitizerPass(true));
+#   endif
 #endif
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #ifndef LLVM37
@@ -5586,12 +5602,14 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
+        .setRelocationModel(Reloc::PIC_)
+        .setCodeModel(CodeModel::Small)
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
 #endif
     ;
     Triple TheTriple(sys::getProcessTriple());
-#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
     jl_TargetMachine = eb->selectTarget(
@@ -5608,12 +5626,17 @@ extern "C" void jl_init_codegen(void)
             jl_TargetMachine->getTargetCPU(),
             jl_TargetMachine->getTargetFeatureString(),
             jl_TargetMachine->Options,
+#ifdef CODEGEN_TLS
+            Reloc::PIC_,
+            CodeModel::Small,
+#else
             Reloc::Default,
             CodeModel::JITDefault,
+#endif
 #ifdef DISABLE_OPT
-            CodeGenOpt::None // -O3
+            CodeGenOpt::None
 #else
-            CodeGenOpt::Aggressive
+            CodeGenOpt::Aggressive // -O3
 #endif
             );
     assert(jl_TargetMachine);
@@ -5640,11 +5663,12 @@ extern "C" void jl_init_codegen(void)
 #ifdef LLVM37
     m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    m->setTargetTriple(jl_TargetMachine->getTargetTriple());
+    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple());
 #elif LLVM36
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
-
     init_julia_llvm_env(m);
 
     RegisterJuliaJITEventListener();

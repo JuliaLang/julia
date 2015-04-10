@@ -388,9 +388,16 @@ include $(JULIAHOME)/Make.user
 endif
 
 ifeq ($(SANITIZE),1)
-JCXXFLAGS += -fsanitize=address -mllvm -asan-stack=0
-JCFLAGS += -fsanitize=address -mllvm -asan-stack=0
-LDFLAGS += -fsanitize=address
+ifeq ($(SANITIZE_MEMORY),1)
+SANITIZE_OPTS = -fsanitize=memory -fsanitize-memory-track-origins -fno-omit-frame-pointer
+else
+SANITIZE_OPTS = -fsanitize=address -mllvm -asan-stack=0
+endif
+JCXXFLAGS += $(SANITIZE_OPTS)
+JCFLAGS += $(SANITIZE_OPTS)
+LDFLAGS += $(SANITIZE_OPTS)
+DEPS_CFLAGS += $(SANITIZE_OPTS)
+DEPS_CXXFLAGS += $(SANITIZE_OPTS)
 endif
 
 TAR=`which gtar 2>/dev/null || which tar 2>/dev/null`
@@ -668,7 +675,14 @@ else ifneq ($(USEMSVC), 1)
 endif
 
 ifeq ($(OS), Linux)
-OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--version-script=$(JULIAHOME)/src/julia.expmap -Wl,--no-whole-archive $(LIBUNWIND)
+OSLIBS += -ldl -lrt -lpthread -Wl,--export-dynamic -Wl,--no-whole-archive $(LIBUNWIND)
+ifneq ($(SANITIZE),1)
+ifneq ($(SANITIZE_MEMORY),1)
+ifneq ($(LLVM_SANITIZE),1)
+OSLIBS += -Wl,--version-script=$(JULIAHOME)/src/julia.expmap
+endif
+endif
+endif
 JLDFLAGS = -Wl,-Bdynamic
 ifeq (-Bsymbolic-functions, $(shell $(LD) --help | grep -o -e "-Bsymbolic-functions"))
 JLIBLDFLAGS = -Wl,-Bsymbolic-functions
@@ -792,6 +806,7 @@ ifeq ($(BUILD_CUSTOM_LIBCXX),1)
 LDFLAGS += -L$(build_libdir) -lc++abi
 CXXLDFLAGS += -L$(build_libdir) -lc++abi -stdlib=libc++ -lc++
 CPPFLAGS += -I$(build_includedir)/c++/v1
+CUSTOM_LD_LIBRARY_PATH = LD_LIBRARY_PATH="$(build_libdir)"
 ifeq ($(USEICC),1)
 CXXFLAGS += -cxxlib-nostd -static-intel
 CLDFLAGS += -static-intel
