@@ -126,6 +126,29 @@ static void jl_find_stack_bottom(void)
     size_t stack_size;
 #if defined(__linux__) || defined(__APPLE__) || defined(__FreeBSD__)
     struct rlimit rl;
+
+    // When using memory sanitizer, increase stack size because msan bloats stack usage
+#if defined(__has_feature)
+#if __has_feature(memory_sanitizer)
+    const rlim_t kStackSize = 32 * 1024 * 1024;   // 32MB stack
+    int result;
+
+    result = getrlimit(RLIMIT_STACK, &rl);
+    if (result == 0)
+    {
+        if (rl.rlim_cur < kStackSize)
+        {
+            rl.rlim_cur = kStackSize;
+            result = setrlimit(RLIMIT_STACK, &rl);
+            if (result != 0)
+            {
+                fprintf(stderr, "setrlimit returned result = %d\n", result);
+            }
+        }
+    }
+#endif
+#endif
+
     getrlimit(RLIMIT_STACK, &rl);
     stack_size = rl.rlim_cur;
 #else
