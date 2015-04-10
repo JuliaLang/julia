@@ -107,7 +107,7 @@ CXXLD = $(LD) -dll -export:jl_setjmp -export:jl_longjmp
 endif
 
 $(build_shlibdir)/libjulia-debug.$(SHLIB_EXT): julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS))
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(DEBUGFLAGS) $(DOBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(DEBUG_LIBS))
 	$(INSTALL_NAME_CMD)libjulia-debug.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 $(BUILDDIR)/libjulia-debug.a: julia.expmap $(DOBJS) $(BUILDDIR)/flisp/libflisp-debug.a $(BUILDDIR)/support/libsupport-debug.a
@@ -122,7 +122,7 @@ else
 endif
 
 $(build_shlibdir)/libjulia.$(SHLIB_EXT): julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a $(LIBUV)
-	@$(call PRINT_LINK, $(CXXLD) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME)) $(CXXLDFLAGS)
+	@$(call PRINT_LINK, $(CXXLD) $(CXXFLAGS) $(CXXLDFLAGS) $(SHIPFLAGS) $(OBJS) $(RPATH_ORIGIN) -o $@ $(LDFLAGS) $(JLIBLDFLAGS) $(RELEASE_LIBS) $(SONAME)) $(CXXLDFLAGS)
 	$(INSTALL_NAME_CMD)libjulia.$(SHLIB_EXT) $@
 	$(DSYMUTIL) $@
 $(BUILDDIR)/libjulia.a: julia.expmap $(OBJS) $(BUILDDIR)/flisp/libflisp.a $(BUILDDIR)/support/libsupport.a
