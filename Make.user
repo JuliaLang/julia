@@ -2,4 +2,7 @@ CC = clang
 CFLAGS = -ftls-model=global-dynamic
 CXX = clang++
 LLVM_VER = svn
-LLVM_GIT_URL_LLVM = https://github.com/JuliaLang/llvm.git -b jl/thread-local-storage
+LLVM_GIT_URL_LLVM = https://github.com/JuliaLang/llvm.git -b kf/tlsrebase5
+
+LLVM_DEBUG = 1
+LLVM_ASSERTIONS = 1
