@@ -39,6 +39,10 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
    Compute a convenient factorization (including LU, Cholesky, Bunch-Kaufman, LowerTriangular, UpperTriangular) of A, based upon the type of the input matrix. The return value can then be reused for efficient solving of multiple systems. For example: ``A=factorize(A); x=A\\b; y=A\\C``.
 
+.. function:: full(F)
+
+  Reconstruct the matrix ``A`` from the factorization ``F=factorize(A)``.
+
 .. function:: lu(A) -> L, U, p
 
    Compute the LU factorization of ``A``, such that ``A[p,:] = L*U``.

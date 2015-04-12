@@ -45,3 +45,7 @@ A_ldiv_B!{T<:BlasReal}(B::BunchKaufman{T}, R::StridedVecOrMat{T}) = LAPACK.sytrs
 function A_ldiv_B!{T<:BlasComplex}(B::BunchKaufman{T}, R::StridedVecOrMat{T})
     (issym(B) ? LAPACK.sytrs! : LAPACK.hetrs!)(B.uplo, B.LD, B.ipiv, R)
 end
+
+## reconstruct the original matrix
+## TODO: understand the procedure described at
+## http://www.nag.com/numeric/FL/nagdoc_fl22/pdf/F07/f07mdf.pdf
