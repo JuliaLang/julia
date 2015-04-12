@@ -346,6 +346,9 @@ let mta = MersenneTwister(42), mtb = MersenneTwister(42)
     @test shuffle!(mta,collect(1:10)) == shuffle!(mtb,collect(1:10))
 
     @test randperm(mta,10) == randperm(mtb,10)
+    @test randperm(0) == []
+    @test_throws ErrorException randperm(-1)
+
     @test randcycle(mta,10) == randcycle(mtb,10)
 
     @test sprand(mta,1,1,0.9) == sprand(mtb,1,1,0.9)
