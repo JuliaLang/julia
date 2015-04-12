@@ -36,6 +36,7 @@ let n=10
         eig(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) # same result, but checks that method works
         @test_approx_eq eigvals(Hermitian(asym), 1:2) d[1:2]
         @test_approx_eq eigvals(Hermitian(asym), d[1]-10*eps(d[1]), d[2]+10*eps(d[2])) d[1:2]
+        @test_approx_eq full(eigfact(asym)) asym
 
         # relation to svdvals
         @test sum(sort(abs(eigvals(Hermitian(asym))))) == sum(sort(svdvals(Hermitian(asym))))
@@ -81,4 +82,3 @@ let A = [1.0+im 2.0; 2.0 0.0]
     @test !ishermitian(A)
     @test_throws ArgumentError Hermitian(A)
 end
-
