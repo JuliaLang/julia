@@ -266,7 +266,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return jl_pvalue_dillvmt;
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL)
+#ifdef LLVM37
+        return DIType((llvm::MDType*)jdt->ditype);
+#else
         return DIType((llvm::MDNode*)jdt->ditype);
+#endif
     if (jl_is_bitstype(jt)) {
         DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
@@ -1410,7 +1414,13 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 1); //index (not offset) of length field in jl_parray_llvmt
+    Value *addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                                          nullptr,
+#endif
+                                          builder.CreateBitCast(t,jl_parray_llvmt),
+                                          1); //index (not offset) of length field in jl_parray_llvmt
+
     return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
@@ -1442,7 +1452,13 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 0); //index (not offset) of data field in jl_parray_llvmt
+    Value* addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                                          nullptr,
+#endif
+                                          builder.CreateBitCast(t,jl_parray_llvmt),
+                                          0); //index (not offset) of data field in jl_parray_llvmt
+
     return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
 }
 
