@@ -1563,11 +1563,7 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple
         cenv[vname] = vtype
         s[1][vname] = VarState(vtype,false)
     end
-<<<<<<< HEAD
-    vinflist = (ast.args[2][2])::Array{Any,1}
-=======
     vinflist = ast.args[2][2]::Array{Any,1}
->>>>>>> c8c967c761f0463fad6b84ca36d18832cefa5092
     for vi in vinflist
         vi::Array{Any,1}
         if (vi[3]&4)!=0
@@ -1579,16 +1575,12 @@ function typeinf_uncached(linfo::LambdaStaticData, atypes::Tuple, sparams::Tuple
             s[1][vname] = VarState(vtype,false)
         end
     end
-<<<<<<< HEAD
-    sv = StaticVarInfo(sparams, cenv, vars, vinflist, label_counter(body))
-=======
 
     gensym_uses = find_gensym_uses(body)
     gensym_init = Any[ NF for i = 1:length(gensym_uses) ]
     gensym_types = copy(gensym_init)
 
     sv = StaticVarInfo(sparams, cenv, vars, gensym_types, vinflist, length(labels), ObjectIdDict())
->>>>>>> c8c967c761f0463fad6b84ca36d18832cefa5092
     frame.sv = sv
 
     recpts = IntSet()  # statements that depend recursively on our value
