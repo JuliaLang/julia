@@ -926,7 +926,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
         jl_type_infer(newmeth->linfo, type, method->linfo);
     }
     JL_GC_POP();
-    JL_UNLOCK(codegen)    
+    JL_UNLOCK(codegen)
     return newmeth;
 }
 

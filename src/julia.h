@@ -79,7 +79,7 @@ DLLEXPORT void jl_threading_profile();
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        __sync_fetch_and_add(&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       __sync_bool_compare_and_swap(&(a), (b), (c)) 
+       __sync_bool_compare_and_swap(&(a), (b), (c))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        __sync_lock_test_and_set(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \
@@ -88,7 +88,7 @@ DLLEXPORT void jl_threading_profile();
 #  define JL_ATOMIC_FETCH_AND_ADD(a,b)                                    \
        _InterlockedExchangeAdd((volatile LONG *)&(a), (b))
 #  define JL_ATOMIC_COMPARE_AND_SWAP(a,b,c)                               \
-       _InterlockedCompareExchange64(&(a), (c), (b)) 
+       _InterlockedCompareExchange64(&(a), (c), (b))
 #  define JL_ATOMIC_TEST_AND_SET(a)                                       \
        _InterlockedExchange64(&(a), 1)
 #  define JL_ATOMIC_RELEASE(a)                                            \

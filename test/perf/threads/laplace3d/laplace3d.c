@@ -145,12 +145,12 @@ int main(int argc, char **argv)
             for (i = 0;  i < nx;  ++i) {
                 ind = i + j*nx + k*nx*ny;
                 p_ind = i + j*padded_nx + k*padded_nx*ny;
- 
+
                 if (i == 0  ||  i == nx - 1
                         ||  j == 0  ||  j == ny - 1
                         ||  k == 0  ||  k == nz - 1) {
                     // Dirichlet b.c.'s
-                    u1[p_ind] = u1_orig[ind] = u2[p_ind] = 1.0f;           
+                    u1[p_ind] = u1_orig[ind] = u2[p_ind] = 1.0f;
                 }
                 else {
                     u1[p_ind] = u1_orig[ind] = u2[p_ind] = 0.0f;
@@ -298,13 +298,13 @@ void l3d_sse(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
                 __m128 pSrc4 = _mm_load_ps(&u1[ind+padded_nx]);
                 __m128 pSrc5 = _mm_load_ps(&u1[ind-padded_nx*ny]);
                 __m128 pSrc6 = _mm_load_ps(&u1[ind+padded_nx*ny]);
-     
+
                 __m128 sum1 = _mm_add_ps(pSrc1, pSrc2);
                 __m128 sum2 = _mm_add_ps(pSrc3, pSrc4);
                 __m128 sum3 = _mm_add_ps(pSrc5, pSrc6);
                 __m128 sum4 = _mm_add_ps(sum1, sum2);
                 __m128 vsum = _mm_add_ps(sum3, sum4);
-     
+
                 vsum = _mm_mul_ps(vsum, sixth);
 
                 _mm_stream_ps(&u2[ind], vsum);
@@ -333,13 +333,13 @@ void l3d_avx(int nx, int padded_nx, int ny, int nz, float *u1, float *u2)
                 __m256 pSrc4 = _mm256_load_ps(&u1[ind+padded_nx]);
                 __m256 pSrc5 = _mm256_load_ps(&u1[ind-padded_nx*ny]);
                 __m256 pSrc6 = _mm256_load_ps(&u1[ind+padded_nx*ny]);
-     
+
                 __m256 sum1 = _mm256_add_ps(pSrc1, pSrc2);
                 __m256 sum2 = _mm256_add_ps(pSrc3, pSrc4);
                 __m256 sum3 = _mm256_add_ps(pSrc5, pSrc6);
                 __m256 sum4 = _mm256_add_ps(sum1, sum2);
                 __m256 vsum = _mm256_add_ps(sum3, sum4);
-     
+
                 vsum = _mm256_mul_ps(vsum, sixth);
 
                 _mm256_stream_ps(&u2[ind], vsum);
