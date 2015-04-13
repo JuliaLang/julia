@@ -206,14 +206,33 @@ Order-Related Functions
    Variant of ``select!`` which copies ``v`` before partially sorting it, thereby
    returning the same thing as ``select!`` but leaving ``v`` unmodified.
 
+.. function:: selectperm(v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false])
+
+   Return a partial permutation of the the vector ``v``, according to the order
+   specified by ``by``, ``lt`` and ``rev``, so that ``v[output]`` returns the
+   first ``k`` (or range of adjacent values if ``k`` is a range) values of a
+   fully sorted version of ``v``. If ``k`` is a single index (Integer), an
+   array  of the first ``k`` indices is returned; if ``k`` is a range, an array
+   of those indices is returned. Note that the handling of integer values for
+   ``k`` is different from ``select`` in that it returns a vector of ``k``
+   elements instead of just the ``k`` th element. Also note that this is
+   equivalent to, but more efficient than, calling ``sortperm(...)[k]``
+
+.. function:: selectperm!(ix, v, k, [alg=<algorithm>,] [by=<transform>,] [lt=<comparison>,] [rev=false,] [initialized=false])
+
+   Like ``selectperm``, but accepts a preallocated index vector ``ix``.  If
+   ``initialized`` is ``false`` (the default), ix is initialized to contain the
+   values ``1:length(ix)``.
+
 
 Sorting Algorithms
 ------------------
 
-There are currently three sorting algorithms available in base Julia:
+There are currently four sorting algorithms available in base Julia:
 
 - ``InsertionSort``
 - ``QuickSort``
+- ``PartialQuickSort(k)``
 - ``MergeSort``
 
 ``InsertionSort`` is an O(n^2) stable sorting algorithm. It is efficient
@@ -224,6 +243,17 @@ very fast, but not stable – i.e. elements which are considered
 equal will not remain in the same order in which they originally
 appeared in the array to be sorted. ``QuickSort`` is the default
 algorithm for numeric values, including integers and floats.
+
+``PartialQuickSort(k)`` is similar to ``QuickSort``, but the output array
+is only sorted up to index ``k``. For example::
+
+    x = rand(1:500, 100)
+    k = 50
+    s = sort(x; alg=QuickSort)
+    ps = sort(x; alg=PartialQuickSort(k))
+    map(issorted, (s, ps))             # => (true, false)
+    map(x->issorted(x[1:k]), (s, ps))  # => (true, true)
+    s[1:k] == ps[1:k]                  # => true
 
 ``MergeSort`` is an O(n log n) stable sorting algorithm but is not
 in-place – it requires a temporary array of half the size of the
