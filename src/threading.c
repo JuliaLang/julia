@@ -94,7 +94,7 @@ int ti_threadcreate(uint64_t *pthread_id, int proc_num,
     pthread_attr_t attr;
     pthread_attr_init(&attr);
 
-#ifdef _OS_LINUX
+#ifdef _OS_LINUX_
     cpu_set_t cset;
     if (proc_num >= 0) {
 	CPU_ZERO(&cset);
@@ -111,7 +111,7 @@ int ti_threadcreate(uint64_t *pthread_id, int proc_num,
 // set thread affinity
 void ti_threadsetaffinity(uint64_t pthread_id, int proc_num)
 {
-#ifdef _OS_LINUX
+#ifdef _OS_LINUX_
     cpu_set_t cset;
 
     CPU_ZERO(&cset);

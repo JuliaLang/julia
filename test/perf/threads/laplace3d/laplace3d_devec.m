@@ -1,7 +1,9 @@
-nx = 34;
-ny = 34;
-nz = 34;
-niters = 100;
+% 3D Laplace equation solver
+
+nx = 290;
+ny = 290;
+nz = 290;
+iters = 100;
 sixth = 1.0/6.0;
 
 u1 = zeros(nx, ny, nz);
@@ -13,13 +15,13 @@ for k3 = 1:nz
             if k1==1 || k1==nx || k2==1 || k2==ny || k3==1 || k3==nz
                 u1(k1,k2,k3) = 1.0;
                 u2(k1,k2,k3) = 1.0;
-            endif
+            end
         end
     end
 end
 
-tic()
-for n = 1:niters
+tic
+for n = 1:iters
     for k3 = 2:nz-1
         for k2 = 2:ny-1
             for k1 = 2:nx-1
@@ -32,5 +34,5 @@ for n = 1:niters
     u1 = u2;
     u2 = foo;
 end
-toc()
+toc
 
