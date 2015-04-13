@@ -2173,7 +2173,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (!(jl_isbits(it) && jl_is_leaf_type(it)))
                 break;
         }
-        if (i >= nargs && ctx->linfo->specTypes) {
+        if (i == nargs && ctx->linfo->inferred) {
             rt1 = expr_type(expr, ctx);
             if (jl_is_tuple(rt1) && nargs == jl_tuple_len(rt1)) {
                 for(i=0; i < nargs; i++) {
@@ -2589,7 +2589,8 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
-            Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
+            jl_value_t *jt = jl_nth_slot_type(f->linfo->specTypes,i);
+            Type *et = julia_type_to_llvm(jt);
             if (et == T_void || et->isEmptyTy()) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
@@ -2608,8 +2609,7 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
             }
             else {
                 assert(at == et);
-                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx),
-                                          jl_tupleref(f->linfo->specTypes,i));
+                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx), jt);
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
@@ -3624,10 +3624,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (crt == NULL)
         jl_error("cfunction: return type doesn't correspond to a C type");
     size_t i;
-    size_t nargs = jl_tuple_len(lam->specTypes);
-    assert(nargs == jl_tuple_len(argt));
+    size_t nargs = jl_tuple_len(argt);
     for(i=0; i < nargs; i++) {
-        jl_value_t *tti = jl_tupleref(lam->specTypes,i);
+        jl_value_t *tti = jl_nth_slot_type(lam->specTypes,i);
         if (tti == (jl_value_t*)jl_pointer_type) {
             jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
         }
@@ -3713,7 +3712,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     for (size_t i=0; i < nargs; i++) {
         Value *val = AI++;
-        jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
+        jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i);
 
         // figure out how to unpack this type
         if (isref & (2<<i)) {
@@ -3860,12 +3859,12 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     ctx.linfo = lam;
     allocate_gc_frame(0, b0, &ctx);
 
-    size_t nargs = jl_tuple_len(lam->specTypes);
+    size_t nargs = jl_array_dim0(jl_lam_args(ast));
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {
-        jl_value_t *ty = jl_tupleref(lam->specTypes, i);
+        jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         Type *lty = julia_type_to_llvm(ty);
         if (lty != NULL && type_is_ghost(lty))
             continue;
@@ -4037,7 +4036,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // no captured vars and not vararg
         // consider specialized signature
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-            if (jltupleisbits(jl_tupleref(lam->specTypes, i))) {
+            if (jltupleisbits(jl_tupleref(lam->specTypes, i))) { // assumes !va
                 specsig = true;
                 break;
             }
@@ -4066,7 +4065,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
     funcName << "_" << globalUnique++;
 
-    if (specsig) {
+    if (specsig) { // assumes !va
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
@@ -4212,7 +4211,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #else
             std::vector<Value*> ditypes(0);
 #endif
-            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) { // assumes !va
                 if (ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost)
                     continue;
                 ditypes.push_back(julia_type_to_di(jl_tupleref(lam->specTypes,i),ctx.dbuilder,false));
@@ -4538,7 +4537,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         Value *argPtr = NULL;
         jl_value_t *argType = NULL;
         if (specsig) {
-            argType = jl_tupleref(lam->specTypes,i);
+            argType = jl_nth_slot_type(lam->specTypes,i);
             if (!vi.isGhost) {
                 argPtr = AI++;
                 argPtr = mark_julia_type(argPtr, argType);
@@ -4584,7 +4583,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                theArg,
                                                lam->specTypes == NULL ? NULL :
-                                               jl_tupleref(lam->specTypes,i)),
+                                               jl_nth_slot_type(lam->specTypes,i)),
                                     lv);
             }
         }
@@ -4825,7 +4824,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         // this assigns a function pointer (from loading the system image), to the function object
         std::string funcName = lam->name->name;
         funcName = "julia_" + funcName;
-        if (specsig) {
+        if (specsig) { // assumes !va
             jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
             std::vector<Type*> fsig(0);
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -4834,11 +4833,11 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                     fsig.push_back(ty);
             }
             Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
-            Function *f = Function::Create(FunctionType::get(rt, fsig, false),
+            Function *f = Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage, funcName,
 #ifdef USE_MCJIT
-                                           Function::ExternalLinkage, funcName, shadow_module);
+                                           shadow_module);
 #else
-                                           Function::ExternalLinkage, funcName, jl_Module);
+                                           jl_Module);
 #endif
 
         if (lam->specFunctionObject == NULL) {
