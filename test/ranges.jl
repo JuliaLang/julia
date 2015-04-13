@@ -335,13 +335,15 @@ for T = (Float32, Float64)
             @test [linspace(a,-b,3);] == [a,(a-b)/2,-b]
             for c = maxintfloat(T)-3:maxintfloat(T)
                 s = linspace(-a,b,c)
-                @test first(s)  == -a
-                @test last(s)   ==  b
-                @test length(s) ==  c
+                @test first(s) == -a
+                @test last(s) == b
+                c <= typemax(Int) && @test length(s) == c
+                @test s.len == c
                 s = linspace(a,-b,c)
-                @test first(s)  ==  a
-                @test last(s)   == -b
-                @test length(s) ==  c
+                @test first(s) == a
+                @test last(s) == -b
+                c <= typemax(Int) && @test length(s) == c
+                @test s.len == c
             end
             b = prevfloat(b)
         end

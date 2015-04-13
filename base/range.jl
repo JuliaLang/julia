@@ -200,7 +200,7 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
             s = convert(T,n*e)
             if isinf(a*n) || isinf(c*n)
                 s, p = frexp(s)
-                p = one(p) << p
+                p = oftype(s,2)^p
                 a /= p; c /= p
             end
             if a*n/s == start && c*n/s == stop
@@ -211,7 +211,7 @@ function linspace{T<:FloatingPoint}(start::T, stop::T, len::T)
     a, c, s = start, stop, n
     if isinf(a*n) || isinf(c*n)
         s, p = frexp(s)
-        p = one(p) << p
+        p = oftype(s,2)^p
         a /= p; c /= p
     end
     if a*n/s == start && c*n/s == stop
