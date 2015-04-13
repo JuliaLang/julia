@@ -42,13 +42,6 @@ $(build_docdir):
 	@cp -R examples/*.jl $@/examples/
 	@cp -R examples/clustermanager $@/examples/
 
-git-submodules:
-ifneq ($(NO_GIT), 1)
-	@-git submodule update --init
-else
-       $(warn "Submodules could not be updated because git is unavailable")
-endif
-
 julia-symlink-debug: julia-ui-debug
 ifneq ($(OS),WINNT)
 ifndef JULIA_VAGRANT_BUILD
@@ -63,7 +56,7 @@ ifndef JULIA_VAGRANT_BUILD
 endif
 endif
 
-julia-deps: git-submodules |  $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
+julia-deps: | $(DIRS) $(build_datarootdir)/julia/base $(build_datarootdir)/julia/test $(build_docdir) $(build_sysconfdir)/julia/juliarc.jl $(build_man1dir)/julia.1
 	@$(MAKE) $(QUIET_MAKE) -C deps
 
 julia-base: julia-deps
@@ -439,14 +432,13 @@ light-source-dist: light-source-dist.tmp
 	cd ../ && tar -cz -T $$DIRNAME/light-source-dist.tmp1 --no-recursion -f $$DIRNAME/julia-$(JULIA_VERSION)_$(JULIA_COMMIT).tar.gz
 
 # Make tarball with Julia code plus all dependencies
-full-source-dist source-dist: git-submodules light-source-dist.tmp
+full-source-dist source-dist: light-source-dist.tmp
 	# Get all the dependencies downloaded
-	@$(MAKE) -C deps getall
+	@$(MAKE) -C deps getall NO_GIT=1
 
 	# Create file full-source-dist.tmp to hold all the filenames that go into the tarball
 	cp light-source-dist.tmp full-source-dist.tmp
 	-ls deps/*.tar.gz deps/*.tar.bz2 deps/*.tar.xz deps/*.tgz deps/*.zip >> full-source-dist.tmp
-	git submodule --quiet foreach 'git ls-files | sed "s&^&$$path/&"' >> full-source-dist.tmp
 
 	# Prefix everything with the current directory name (usually "julia"), then create tarball
 	DIRNAME=$$(basename $$(pwd)); \
@@ -487,7 +479,7 @@ distcleanall: cleanall
 	test testall testall1 test-* clean distcleanall cleanall \
 	run-julia run-julia-debug run-julia-release run \
 	install binary-dist light-source-dist.tmp light-source-dist \
-	dist full-source-dist source-dist git-submodules
+	dist full-source-dist source-dist
 
 test: check-whitespace release
 	@$(MAKE) $(QUIET_MAKE) -C test default

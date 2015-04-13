@@ -883,6 +883,8 @@ ifndef VERBOSE
 VERBOSE = 0
 endif
 
+WARNCOLOR="\033[33;1m"
+
 ifeq ($(VERBOSE), 0)
 
 QUIET_MAKE = -s

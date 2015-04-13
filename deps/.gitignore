@@ -33,3 +33,10 @@
 /julia-env
 /objconv*
 /Rmath-julia*
+
+# git externals:
+/libuv
+/openblas
+/openlibm
+/openspecfun
+/utf8proc
