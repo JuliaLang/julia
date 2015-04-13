@@ -9,11 +9,6 @@ E.g.:
 
 $ ./laplace3d 258 258 258 1000 avx 0
 
-The Matlab/Octave version is orders of magnitude slower than the C
-and Julia versions, so it uses a smaller grid.
-
-Speedup with 16 threads on a 2 socket SNB-EP:
-
-C: X
-Julia: Y
+The Matlab/Octave versions are enough slower than the C and Julia
+versions that they use only 1/10 the iterations.
 

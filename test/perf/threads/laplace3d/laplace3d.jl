@@ -1,3 +1,5 @@
+## 3D Laplace equation
+
 using Base.Cartesian
 using Base.Threading
 
@@ -21,6 +23,7 @@ function l3d_orig(u1::Array{Float32,3}, u3::Array{Float32,3},
     end
 end
 
+## @threads 'call' form
 function l3d_threadfun(u1, u3, nx, ny, nz)
     tid = threadid()
     tnz, rem = divrem(nz-2, nthreads())
@@ -43,6 +46,7 @@ function l3d_threadfun(u1, u3, nx, ny, nz)
     end
 end
 
+## @threads 'block' form
 function l3d_threadblock(u1, u3, nx, ny, nz)
     @threads all begin
 	tid = threadid()
@@ -67,6 +71,7 @@ function l3d_threadblock(u1, u3, nx, ny, nz)
     end
 end
 
+## @threads 'for' form
 function l3d_threadfor(u1, u3, nx, ny, nz)
     @threads all for k_3=2:nz-1
         for k_2 = 2:ny-1
@@ -77,11 +82,8 @@ function l3d_threadfor(u1, u3, nx, ny, nz)
     end
 end
 
-precompile(l3d_threadfun, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
-precompile(l3d_threadblock, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
-precompile(l3d_threadfor, (Array{Float32,3}, Array{Float32,3}, Int64, Int64, Int64))
-
-function laplace3d(nx=258, ny=258, nz=258; iters=100, verify=false)
+## initialize and run
+function laplace3d(nx=290, ny=290, nz=290; iters=1000, verify=false)
     u1 = Array(Float32, nx, ny, nz)
     u3 = Array(Float32, nx, ny, nz)
     @nloops 3 k u1 begin
@@ -92,10 +94,10 @@ function laplace3d(nx=258, ny=258, nz=258; iters=100, verify=false)
         end
     end
     @time for n in 1:iters
+        l3d_threadfor(u1, u3, nx, ny, nz)
         # @threads all l3d_threadfun(u1, u3, nx, ny, nz)
 	# l3d_threadblock(u1, u3, nx, ny, nz)
-        # l3d_threadfor(u1, u3, nx, ny, nz)
-        ccall(:jl_threading_run, Void, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
+        # ccall(:jl_threading_run, Void, (Any, Any), l3d_threadfun, (u1, u3, nx, ny, nz))
         foo = u1
         u1 = u3
         u3 = foo
@@ -126,8 +128,6 @@ function laplace3d(nx=258, ny=258, nz=258; iters=100, verify=false)
     end
 end
 
-gc()
-
-laplace3d(verify=true)
-#laplace3d(iters=1000, verify=false)
+@time laplace3d()
+#ccall(:jl_threading_profile, Void, ())
 
