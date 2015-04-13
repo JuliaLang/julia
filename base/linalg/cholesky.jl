@@ -162,6 +162,7 @@ convert{T}(::Type{Factorization{T}}, C::CholeskyPivoted) = convert(CholeskyPivot
 
 full{T,S}(C::Cholesky{T,S,:U}) = C[:U]'C[:U]
 full{T,S}(C::Cholesky{T,S,:L}) = C[:L]*C[:L]'
+full(F::CholeskyPivoted) = (ip=invperm(F[:p]); (F[:L] * F[:U])[ip,ip])
 
 size(C::Union(Cholesky, CholeskyPivoted)) = size(C.UL)
 size(C::Union(Cholesky, CholeskyPivoted), d::Integer) = size(C.UL,d)

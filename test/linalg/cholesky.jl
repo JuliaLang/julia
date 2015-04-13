@@ -92,6 +92,7 @@ debug && println("pivoted Choleksy decomposition")
             if isreal(apd)
                 @test_approx_eq apd * inv(cpapd) eye(n)
             end
+            @test_approx_eq full(cpapd) apd
         end
     end
 end

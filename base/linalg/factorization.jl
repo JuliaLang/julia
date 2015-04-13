@@ -774,3 +774,17 @@ function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArr
     TFB = typeof(one(TF)/one(TB))
     At_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
+
+## reconstruct the original matrix
+full(F::QR) = F[:Q] * F[:R]
+full(F::QRCompactWY) = F[:Q] * F[:R]
+full(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
+
+## Can we determine the source/result is Real?  This is not stored in the type Eigen
+full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+
+full(F::Hessenberg) = (fq = full(F[:Q]); (fq * F[:H]) * fq')
+
+full(F::Schur) = (F.Z * F.T) * F.Z'
+
+full(F::SVD) = (F.U * Diagonal(F.S)) * F.Vt

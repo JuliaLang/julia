@@ -341,3 +341,5 @@ end
 
 /(B::AbstractMatrix,A::LU) = At_ldiv_Bt(A,B).'
 
+## reconstruct the original matrix
+full(F::LU) = (F[:L] * F[:U])[invperm(F[:p]),:]
