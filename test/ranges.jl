@@ -232,22 +232,22 @@ end
 
 # tricky floating-point ranges
 
-@test [0.1:0.1:0.3;]   == [1:3;]./10
-@test [0.0:0.1:0.3;]   == [0:3;]./10
-@test [0.3:-0.1:-0.1;] == [3:-1:-1;]./10
-@test [0.1:-0.1:-0.3;] == [1:-1:-3;]./10
-@test [0.0:0.1:1.0;]   == [0:10;]./10
-@test [0.0:-0.1:1.0;]  == []
-@test [0.0:0.1:-1.0;]  == []
-@test [0.0:-0.1:-1.0;] == [0:-1:-10;]./10
-@test [1.0:1/49:27.0;] == [49:1323;]./49
-@test [0.0:0.7:2.1;]   == [0:7:21;]./10
-@test [0.0:1.1:3.3;]   == [0:11:33;]./10
-@test [0.1:1.1:3.4;]   == [1:11:34;]./10
-@test [0.0:1.3:3.9;]   == [0:13:39;]./10
-@test [0.1:1.3:4.0;]   == [1:13:40;]./10
-@test [1.1:1.1:3.3;]   == [11:11:33;]./10
-@test [0.3:0.1:1.1;]   == [3:1:11;]./10
+@test [0.1:0.1:0.3;]   == [linspace(0.1,0.3,3);]     == [1:3;]./10
+@test [0.0:0.1:0.3;]   == [linspace(0.0,0.3,4);]     == [0:3;]./10
+@test [0.3:-0.1:-0.1;] == [linspace(0.3,-0.1,5);]    == [3:-1:-1;]./10
+@test [0.1:-0.1:-0.3;] == [linspace(0.1,-0.3,5);]    == [1:-1:-3;]./10
+@test [0.0:0.1:1.0;]   == [linspace(0.0,1.0,11);]    == [0:10;]./10
+@test [0.0:-0.1:1.0;]  == [linspace(0.0,1.0,0);]     == []
+@test [0.0:0.1:-1.0;]  == [linspace(0.0,-1.0,0);]    == []
+@test [0.0:-0.1:-1.0;] == [linspace(0.0,-1.0,11);]   == [0:-1:-10;]./10
+@test [1.0:1/49:27.0;] == [linspace(1.0,27.0,1275);] == [49:1323;]./49
+@test [0.0:0.7:2.1;]   == [linspace(0.0,2.1,4);]     == [0:7:21;]./10
+@test [0.0:1.1:3.3;]   == [linspace(0.0,3.3,4);]     == [0:11:33;]./10
+@test [0.1:1.1:3.4;]   == [linspace(0.1,3.4,4);]     == [1:11:34;]./10
+@test [0.0:1.3:3.9;]   == [linspace(0.0,3.9,4);]     == [0:13:39;]./10
+@test [0.1:1.3:4.0;]   == [linspace(0.1,4.0,4);]     == [1:13:40;]./10
+@test [1.1:1.1:3.3;]   == [linspace(1.1,3.3,3);]     == [11:11:33;]./10
+@test [0.3:0.1:1.1;]   == [linspace(0.3,1.1,9);]     == [3:1:11;]./10
 
 @test [0.0:1.0:5.5;]   == [0:10:55;]./10
 @test [0.0:-1.0:0.5;]  == []
@@ -272,8 +272,10 @@ for T = (Float32, Float64,),# BigFloat),
     start = convert(T,a)/den
     step  = convert(T,s)/den
     stop  = convert(T,(a+(n-1)*s))/den
+    vals  = T[a:s:a+(n-1)*s;]./den
     r = start:step:stop
-    @test [r;] == T[a:s:a+(n-1)*s;]./den
+    @test [r;] == vals
+    @test [linspace(start, stop, length(r));] == vals
     # issue #7420
     n = length(r)
     @test [r[1:n];] == [r;]
@@ -282,6 +284,71 @@ for T = (Float32, Float64,),# BigFloat),
     @test [r[2:2:n];] == [r;][2:2:n]
     @test [r[n:-1:2];] == [r;][n:-1:2]
     @test [r[n:-2:1];] == [r;][n:-2:1]
+end
+
+# linspace & ranges with very small endpoints
+for T = (Float32, Float64)
+    z = zero(T)
+    u = eps(z)
+    @test first(linspace(u,u,0)) == u
+    @test last(linspace(u,u,0)) == u
+    @test first(linspace(-u,u,0)) == -u
+    @test last(linspace(-u,u,0)) == u
+    @test [linspace(-u,u,0);] == []
+    @test [linspace(-u,-u,1);] == [-u]
+    @test [linspace(-u,u,2);] == [-u,u]
+    @test [linspace(-u,u,3);] == [-u,0,u]
+    @test [linspace(-u,u,4);] == [-u,0,0,u]
+    @test [linspace(-u,u,4);][2] === -z
+    @test [linspace(-u,u,4);][3] === z
+    @test first(linspace(-u,-u,0)) == -u
+    @test last(linspace(-u,-u,0)) == -u
+    @test first(linspace(u,-u,0)) == u
+    @test last(linspace(u,-u,0)) == -u
+    @test [linspace(u,-u,0);] == []
+    @test [linspace(u,u,1);] == [u]
+    @test [linspace(u,-u,2);] == [u,-u]
+    @test [linspace(u,-u,3);] == [u,0,-u]
+    @test [linspace(u,-u,4);] == [u,0,0,-u]
+    @test [linspace(u,-u,4);][2] === z
+    @test [linspace(u,-u,4);][3] === -z
+    v = [linspace(-u,u,12);]
+    @test length(v) == 12
+    @test issorted(v) && unique(v) == [-u,0,0,u]
+    @test [-3u:u:3u;] == [linspace(-3u,3u,7);] == [-3:3;].*u
+    @test [3u:-u:-3u;] == [linspace(3u,-3u,7);] == [3:-1:-3;].*u
+end
+
+# linspace with very large endpoints
+for T = (Float32, Float64)
+    a = realmax()
+    for i = 1:5
+        @test [linspace(a,a,1);] == [a]
+        @test [linspace(-a,-a,1);] == [-a]
+        b = realmax()
+        for j = 1:5
+            @test [linspace(-a,b,0);] == []
+            @test [linspace(-a,b,2);] == [-a,b]
+            @test [linspace(-a,b,3);] == [-a,(b-a)/2,b]
+            @test [linspace(a,-b,0);] == []
+            @test [linspace(a,-b,2);] == [a,-b]
+            @test [linspace(a,-b,3);] == [a,(a-b)/2,-b]
+            for c = maxintfloat(T)-3:maxintfloat(T)
+                s = linspace(-a,b,c)
+                @test first(s) == -a
+                @test last(s) == b
+                c <= typemax(Int) && @test length(s) == c
+                @test s.len == c
+                s = linspace(a,-b,c)
+                @test first(s) == a
+                @test last(s) == -b
+                c <= typemax(Int) && @test length(s) == c
+                @test s.len == c
+            end
+            b = prevfloat(b)
+        end
+        a = prevfloat(a)
+    end
 end
 
 # near-equal ranges
@@ -351,13 +418,13 @@ r = -0.004532318104333742:1.2597349521122731e-5:0.008065031416788989
 @test_throws BoundsError r[0:10]
 @test_throws BoundsError r[1:10000]
 
-r = linrange(1/3,5/7,6)
+r = linspace(1/3,5/7,6)
 @test length(r) == 6
 @test r[1] == 1/3
 @test abs(r[end] - 5/7) <= eps(5/7)
-r = linrange(0.25,0.25,1)
+r = linspace(0.25,0.25,1)
 @test length(r) == 1
-@test_throws Exception linrange(0.25,0.5,1)
+@test_throws Exception linspace(0.25,0.5,1)
 
 # issue #7426
 @test [typemax(Int):1:typemax(Int);] == [typemax(Int)]

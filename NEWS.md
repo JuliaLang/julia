@@ -245,6 +245,8 @@ Library improvements
     * `code_llvm` now outputs stripped IR without debug info or other attached metadata.
       Use `code_llvm_raw` for the unstripped output ([#10747]).
 
+    * `linspace` now returns a `LinSpace` object which lazily computes linear interpolation of values between the start and stop values. It "lifts" endpoints which are approximately rational in the same manner as the `colon` operator.
+
 Deprecated or removed
 ---------------------
 
@@ -308,6 +310,8 @@ Deprecated or removed
     ([#3631], [#5704], [#9487], [#10543]).
 
   * the --int-literals compiler option is no longer accepted.
+
+  * Instead of `linrange` use `linspace`.
 
 Julia v0.3.0 Release Notes
 ==========================
