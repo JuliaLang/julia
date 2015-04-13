@@ -21,6 +21,8 @@ export # also exported by Base
     # order & algorithm:
     sort,
     sort!,
+    selectperm,
+    selectperm!,
     sortperm,
     sortperm!,
     sortrows,
@@ -28,7 +30,8 @@ export # also exported by Base
     # algorithms:
     InsertionSort,
     QuickSort,
-    MergeSort
+    MergeSort,
+    PartialQuickSort
 
 export # not exported by Base
     Algorithm,
@@ -247,6 +250,13 @@ abstract Algorithm
 immutable InsertionSortAlg <: Algorithm end
 immutable QuickSortAlg     <: Algorithm end
 immutable MergeSortAlg     <: Algorithm end
+immutable PartialQuickSort <: Algorithm
+    k::Int
+end
+
+# partially sort until the  end of the range
+PartialQuickSort(r::OrdinalRange) = PartialQuickSort(last(r))
+
 
 const InsertionSort = InsertionSortAlg()
 const QuickSort     = QuickSortAlg()
@@ -351,6 +361,38 @@ function sort!(v::AbstractVector, lo::Int, hi::Int, a::MergeSortAlg, o::Ordering
     return v
 end
 
+function sort!(v::AbstractVector, lo::Int, hi::Int, a::PartialQuickSort,
+               o::Ordering)
+    k = a.k
+    while lo < hi
+        hi-lo <= SMALL_THRESHOLD && return sort!(v, lo, hi, SMALL_ALGORITHM, o)
+        pivot = v[(lo+hi)>>>1]
+        i, j = lo, hi
+        while true
+            while lt(o, v[i], pivot); i += 1; end
+            while lt(o, pivot, v[j]); j -= 1; end
+            i <= j || break
+            v[i], v[j] = v[j], v[i]
+            i += 1; j -= 1
+        end
+        if lo < j
+            if j - lo <= k
+                sort!(v, lo, j, QuickSort, o)
+            else
+                sort!(v, lo, j, PartialQuickSort(k), o)
+            end
+        end
+        jk = min(j, lo + k - 1)
+        if (i - lo + 1) <= k
+            k -= j - lo + 1
+            lo = i
+        else
+            break
+        end
+    end
+    return v
+end
+
 ## generic sorting methods ##
 
 defalg(v::AbstractArray) = DEFAULT_STABLE
@@ -368,6 +410,40 @@ function sort!(v::AbstractVector;
 end
 
 sort(v::AbstractVector; kws...) = sort!(copy(v); kws...)
+
+
+## selectperm: the permutation to sort the first k elements of an array ##
+
+function selectperm(v::AbstractVector,
+                    k::Union(Int,OrdinalRange);
+                    lt::Function=isless,
+                    by::Function=identity,
+                    rev::Bool=false,
+                    order::Ordering=Base.Order.Forward)
+    select!(collect(1:length(v)), k, Perm(ord(lt, by, rev, order), v))
+end
+
+function selectperm!{I<:Integer}(ix::AbstractVector{I}, v::AbstractVector,
+                                 k::Union(Int, OrdinalRange);
+                                 lt::Function=isless,
+                                 by::Function=identity,
+                                 rev::Bool=false,
+                                 order::Ordering=Forward,
+                                 initialized::Bool=false)
+    if !initialized
+        @inbounds for i = 1:length(ix)
+            ix[i] = i
+        end
+    end
+
+    # do partial quicksort
+    sort!(ix, PartialQuickSort(k), Perm(ord(lt, by, rev, order), v))
+
+    # TODO: Not type stable. If k is an int, this will return an Int, of it is
+    #       an OrdinalRange it will return a Vector{Int}. This, however, seems
+    #       to be the same behavior as as `select`
+    return ix[k]
+end
 
 ## sortperm: the permutation to sort an array ##
 
@@ -498,6 +574,10 @@ function fpsort!(v::AbstractVector, a::Algorithm, o::Ordering)
     sort!(v, i,  hi, a, right(o))
     return v
 end
+
+
+fpsort!(v::AbstractVector, a::PartialQuickSort, o::Ordering) =
+    sort!(v, 1, length(v), a, o)
 
 sort!{T<:Floats}(v::AbstractVector{T}, a::Algorithm, o::DirectOrdering) = fpsort!(v,a,o)
 sort!{O<:DirectOrdering,T<:Floats}(v::Vector{Int}, a::Algorithm, o::Perm{O,Vector{T}}) = fpsort!(v,a,o)
