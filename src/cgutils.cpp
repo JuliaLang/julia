@@ -266,7 +266,11 @@ static DIType julia_type_to_di(jl_value_t *jt, DIBuilder *dbuilder, bool isboxed
         return jl_pvalue_dillvmt;
     jl_datatype_t *jdt = (jl_datatype_t*)jt;
     if (jdt->ditype != NULL)
+#ifdef LLVM37
+        return DIType((llvm::MDType*)jdt->ditype);
+#else
         return DIType((llvm::MDNode*)jdt->ditype);
+#endif
     if (jl_is_bitstype(jt)) {
         DIType t = dbuilder->createBasicType(jdt->name->name->name,jdt->size,jdt->alignment,llvm::dwarf::DW_ATE_unsigned);
         MDNode *M = t;
@@ -1410,7 +1414,13 @@ static Value *emit_arraylen_prim(Value *t, jl_value_t *ty)
 {
 #ifdef STORE_ARRAY_LEN
     (void)ty;
-    Value *addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 1); //index (not offset) of length field in jl_parray_llvmt
+    Value *addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                                          nullptr,
+#endif
+                                          builder.CreateBitCast(t,jl_parray_llvmt),
+                                          1); //index (not offset) of length field in jl_parray_llvmt
+
     return tbaa_decorate(tbaa_arraylen, builder.CreateLoad(addr, false));
 #else
     jl_value_t *p1 = jl_tparam1(ty);
@@ -1442,7 +1452,13 @@ static Value *emit_arraylen(Value *t, jl_value_t *ex, jl_codectx_t *ctx)
 
 static Value *emit_arrayptr(Value *t)
 {
-    Value* addr = builder.CreateStructGEP(builder.CreateBitCast(t,jl_parray_llvmt), 0); //index (not offset) of data field in jl_parray_llvmt
+    Value* addr = builder.CreateStructGEP(
+#ifdef LLVM37
+                                          nullptr,
+#endif
+                                          builder.CreateBitCast(t,jl_parray_llvmt),
+                                          0); //index (not offset) of data field in jl_parray_llvmt
+
     return tbaa_decorate(tbaa_arrayptr, builder.CreateLoad(addr, false));
 }
 
@@ -1656,6 +1672,19 @@ static jl_value_t *static_constant_instance(Constant *constant, jl_value_t *jt)
     return tpl;
 }
 
+static Value *call_with_signed(Function *sfunc, Value *v)
+{
+    CallInst *Call = builder.CreateCall(prepare_call(sfunc), v);
+    Call->addAttribute(1, Attribute::SExt);
+    return Call;
+}
+
+static Value *call_with_unsigned(Function *ufunc, Value *v)
+{
+    CallInst *Call = builder.CreateCall(prepare_call(ufunc), v);
+    Call->addAttribute(1, Attribute::ZExt);
+    return Call;
+}
 
 // this is used to wrap values for generic contexts, where a
 // dynamically-typed value is required (e.g. argument to unknown function).
@@ -1721,12 +1750,10 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
 
     jl_datatype_t *jb = (jl_datatype_t*)jt;
     assert(jl_is_datatype(jb));
-    if (jb == jl_int8_type)
-        return builder.CreateCall(prepare_call(box_int8_func),
-                                  builder.CreateSExt(v, T_int32));
-    if (jb == jl_int16_type) return builder.CreateCall(prepare_call(box_int16_func), v);
-    if (jb == jl_int32_type) return builder.CreateCall(prepare_call(box_int32_func), v);
-    if (jb == jl_int64_type) return builder.CreateCall(prepare_call(box_int64_func), v);
+    if (jb == jl_int8_type)  return call_with_signed(box_int8_func, v);
+    if (jb == jl_int16_type) return call_with_signed(box_int16_func, v);
+    if (jb == jl_int32_type) return call_with_signed(box_int32_func, v);
+    if (jb == jl_int64_type) return call_with_signed(box_int64_func, v);
     if (jb == jl_float32_type) return builder.CreateCall(prepare_call(box_float32_func), v);
     //if (jb == jl_float64_type) return builder.CreateCall(box_float64_func, v);
     if (jb == jl_float64_type) {
@@ -1738,17 +1765,15 @@ static Value *boxed(Value *v, jl_codectx_t *ctx, jl_value_t *jt)
 #endif
         return init_bits_value(newv, literal_pointer_val(jt), t, v);
     }
-    if (jb == jl_uint8_type)
-        return builder.CreateCall(prepare_call(box_uint8_func),
-                                  builder.CreateZExt(v, T_int32));
-    if (jb == jl_uint16_type) return builder.CreateCall(prepare_call(box_uint16_func), v);
-    if (jb == jl_uint32_type) return builder.CreateCall(prepare_call(box_uint32_func), v);
-    if (jb == jl_uint64_type) return builder.CreateCall(prepare_call(box_uint64_func), v);
-    if (jb == jl_char_type)   return builder.CreateCall(prepare_call(box_char_func), v);
+    if (jb == jl_uint8_type)  return call_with_unsigned(box_uint8_func, v);
+    if (jb == jl_uint16_type) return call_with_unsigned(box_uint16_func, v);
+    if (jb == jl_uint32_type) return call_with_unsigned(box_uint32_func, v);
+    if (jb == jl_uint64_type) return call_with_unsigned(box_uint64_func, v);
+    if (jb == jl_char_type)   return call_with_unsigned(box_char_func, v);
     if (jb == jl_gensym_type) {
         unsigned zero = 0;
         v = builder.CreateExtractValue(v, ArrayRef<unsigned>(&zero,1));
-        return builder.CreateCall(prepare_call(box_gensym_func), v);
+        return call_with_unsigned(box_gensym_func, v);
     }
 
     if (!jl_isbits(jt) || !jl_is_leaf_type(jt)) {

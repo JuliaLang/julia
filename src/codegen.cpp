@@ -1,4 +1,5 @@
 #include "platform.h"
+#include "options.h"
 
 #ifndef __STDC_LIMIT_MACROS
 #define __STDC_LIMIT_MACROS
@@ -436,6 +437,8 @@ void jl_dump_objfile(char *fname, int jit_model)
     Triple TheTriple = Triple(jl_TargetMachine->getTargetTriple());
 #if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::COFF);
+#elif defined(_OS_DARWIN_) && defined(FORCE_ELF)
+    TheTriple.setObjectFormat(Triple::MachO);
 #endif
 #ifdef LLVM35
     std::unique_ptr<TargetMachine>
@@ -673,13 +676,16 @@ static void jl_setup_module(Module *m, bool add)
         llvm::DEBUG_METADATA_VERSION);
 #endif
 #ifdef LLVM37
-    if (jl_ExecutionEngine)
+    if (jl_ExecutionEngine) {
         m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+        m->setTargetTriple(jl_TargetMachine->getTargetTriple());
+    }
 #elif LLVM36
     if (jl_ExecutionEngine)
         m->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
     if (add) {
+        assert(jl_ExecutionEngine);
 #ifdef LLVM36
         jl_ExecutionEngine->addModule(std::unique_ptr<Module>(m));
 #else
@@ -730,8 +736,10 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
         li->fptr = (jl_fptr_t)jl_ExecutionEngine->getPointerToFunction(llvmf);
 #endif
         assert(li->fptr != NULL);
+#ifndef KEEP_BODIES
         if (!imaging_mode)
             llvmf->deleteBody();
+#endif
 
         if (li->cFunctionList != NULL) {
             size_t i;
@@ -742,9 +750,11 @@ extern "C" void jl_generate_fptr(jl_function_t *f)
 #else
                 (void)jl_ExecutionEngine->getPointerToFunction(list->data[i].f);
 #endif
+#ifndef KEEP_BODIES
                 if (!imaging_mode) {
                     list->data[i].f->deleteBody();
                 }
+#endif
             }
         }
 
@@ -866,6 +876,11 @@ void *jl_function_ptr(jl_function_t *f, jl_value_t *rt, jl_value_t *argt)
 
 extern "C" DLLEXPORT
 void *jl_function_ptr_by_llvm_name(char* name) {
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+    __msan_unpoison_string(name);
+#endif
+#endif
     return (void*)(intptr_t)jl_ExecutionEngine->FindFunctionNamed(name);
 }
 
@@ -936,16 +951,6 @@ void *jl_get_llvmf(jl_function_t *f, jl_tuple_t *types, bool getwrapper)
     return llvmf;
 }
 
-// Pre-declaration. Definition in disasm.cpp
-extern "C"
-void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
-#ifdef USE_MCJIT
-                          const object::ObjectFile *objectfile,
-#else
-                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
-#endif
-                          formatted_raw_ostream &stream);
-
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 {
@@ -956,7 +961,7 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
     if (!llvmf)
         jl_error("jl_dump_function_ir: Expected Function*");
 
-    if (!strip_ir_metadata) {
+    if (!strip_ir_metadata || llvmf->isDeclaration()) {
         // print the function IR as-is
         llvmf->print(stream);
     } else {
@@ -992,6 +997,16 @@ const jl_value_t *jl_dump_function_ir(void *f, bool strip_ir_metadata)
 
     return jl_cstr_to_string(const_cast<char*>(stream.str().c_str()));
 }
+
+// Pre-declaration. Definition in disasm.cpp
+extern "C"
+void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
+#ifdef USE_MCJIT
+                          const object::ObjectFile *objectfile,
+#else
+                          std::vector<JITEvent_EmittedFunctionDetails::LineStart> lineinfo,
+#endif
+                          formatted_raw_ostream &stream);
 
 extern "C" DLLEXPORT
 const jl_value_t *jl_dump_function_asm(void *f)
@@ -2158,7 +2173,7 @@ static Value *emit_known_call(jl_value_t *ff, jl_value_t **args, size_t nargs,
             if (!(jl_isbits(it) && jl_is_leaf_type(it)))
                 break;
         }
-        if (i >= nargs && ctx->linfo->specTypes) {
+        if (i == nargs && ctx->linfo->inferred) {
             rt1 = expr_type(expr, ctx);
             if (jl_is_tuple(rt1) && nargs == jl_tuple_len(rt1)) {
                 for(i=0; i < nargs; i++) {
@@ -2574,7 +2589,8 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
         unsigned idx = 0;
         for(size_t i=0; i < nargs; i++) {
             Type *at = cft->getParamType(idx);
-            Type *et = julia_type_to_llvm(jl_tupleref(f->linfo->specTypes,i));
+            jl_value_t *jt = jl_nth_slot_type(f->linfo->specTypes,i);
+            Type *et = julia_type_to_llvm(jt);
             if (et == T_void || et->isEmptyTy()) {
                 // Still emit the expression in case it has side effects
                 emit_expr(args[i+1], ctx);
@@ -2593,8 +2609,7 @@ static Value *emit_call_function_object(jl_function_t *f, Value *theF, Value *th
             }
             else {
                 assert(at == et);
-                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx),
-                                          jl_tupleref(f->linfo->specTypes,i));
+                argvals[idx] = emit_unbox(at, emit_unboxed(args[i+1], ctx), jt);
                 assert(dyn_cast<UndefValue>(argvals[idx]) == 0);
             }
             idx++;
@@ -3609,10 +3624,9 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
     if (crt == NULL)
         jl_error("cfunction: return type doesn't correspond to a C type");
     size_t i;
-    size_t nargs = jl_tuple_len(lam->specTypes);
-    assert(nargs == jl_tuple_len(argt));
+    size_t nargs = jl_tuple_len(argt);
     for(i=0; i < nargs; i++) {
-        jl_value_t *tti = jl_tupleref(lam->specTypes,i);
+        jl_value_t *tti = jl_nth_slot_type(lam->specTypes,i);
         if (tti == (jl_value_t*)jl_pointer_type) {
             jl_error("cfunction: argument type Ptr should have an element type, Ptr{T}");
         }
@@ -3698,7 +3712,7 @@ static Function *gen_cfun_wrapper(jl_function_t *ff, jl_value_t *jlrettype, jl_t
 
     for (size_t i=0; i < nargs; i++) {
         Value *val = AI++;
-        jl_value_t *jargty = jl_tupleref(lam->specTypes, i);
+        jl_value_t *jargty = jl_nth_slot_type(lam->specTypes, i);
 
         // figure out how to unpack this type
         if (isref & (2<<i)) {
@@ -3845,12 +3859,12 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
     ctx.linfo = lam;
     allocate_gc_frame(0, b0, &ctx);
 
-    size_t nargs = jl_tuple_len(lam->specTypes);
+    size_t nargs = jl_array_dim0(jl_lam_args(ast));
     size_t nfargs = f->getFunctionType()->getNumParams();
     Value **args = (Value**) alloca(nfargs*sizeof(Value*));
     unsigned idx = 0;
     for(size_t i=0; i < nargs; i++) {
-        jl_value_t *ty = jl_tupleref(lam->specTypes, i);
+        jl_value_t *ty = jl_nth_slot_type(lam->specTypes, i);
         Type *lty = julia_type_to_llvm(ty);
         if (lty != NULL && type_is_ghost(lty))
             continue;
@@ -3882,6 +3896,8 @@ static Function *gen_jlcall_wrapper(jl_lambda_info_t *lam, jl_expr_t *ast, Funct
 #endif
     finalize_gc_frame(&ctx);
     builder.CreateRet(r);
+
+    FPM->run(*w);
 
     return w;
 }
@@ -4020,7 +4036,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         // no captured vars and not vararg
         // consider specialized signature
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
-            if (jltupleisbits(jl_tupleref(lam->specTypes, i))) {
+            if (jltupleisbits(jl_tupleref(lam->specTypes, i))) { // assumes !va
                 specsig = true;
                 break;
             }
@@ -4049,7 +4065,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #endif
     funcName << "_" << globalUnique++;
 
-    if (specsig) {
+    if (specsig) { // assumes !va
         std::vector<Type*> fsig(0);
         for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
             Type *ty = julia_type_to_llvm(jl_tupleref(lam->specTypes,i));
@@ -4173,7 +4189,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
         dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
         #else
         DICompileUnit CU = dbuilder.createCompileUnit(0x01, filename, ".", "julia", true, "", 0);
+        #ifndef LLVM37
         assert(CU.Verify());
+        #endif
         #endif
 
 
@@ -4193,7 +4211,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
 #else
             std::vector<Value*> ditypes(0);
 #endif
-            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
+            for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) { // assumes !va
                 if (ctx.vars[jl_decl_var(jl_cellref(largs,i))].isGhost)
                     continue;
                 ditypes.push_back(julia_type_to_di(jl_tupleref(lam->specTypes,i),ctx.dbuilder,false));
@@ -4224,7 +4242,9 @@ static Function *emit_function(jl_lambda_info_t *lam)
                                     f);           // Fn
         // set initial line number
         builder.SetCurrentDebugLocation(DebugLoc::get(lno, 0, (MDNode*)SP, NULL));
+        #ifndef LLVM37
         assert(SP.Verify() && SP.describes(f) && SP.getFunction() == f);
+        #endif
     }
 
     if (ctx.debug_enabled) {
@@ -4291,7 +4311,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
         }
     }
 
+#ifdef LLVM37
+    std::map<jl_sym_t *, MDFile *> filescopes;
+#else
     std::map<jl_sym_t *, MDNode *> filescopes;
+#endif
 
     Value *fArg=NULL, *argArray=NULL, *argCount=NULL;
     unsigned argIdx = 0;
@@ -4513,7 +4537,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
         Value *argPtr = NULL;
         jl_value_t *argType = NULL;
         if (specsig) {
-            argType = jl_tupleref(lam->specTypes,i);
+            argType = jl_nth_slot_type(lam->specTypes,i);
             if (!vi.isGhost) {
                 argPtr = AI++;
                 argPtr = mark_julia_type(argPtr, argType);
@@ -4559,7 +4583,7 @@ static Function *emit_function(jl_lambda_info_t *lam)
                 builder.CreateStore(emit_unbox(dyn_cast<AllocaInst>(lv)->getAllocatedType(),
                                                theArg,
                                                lam->specTypes == NULL ? NULL :
-                                               jl_tupleref(lam->specTypes,i)),
+                                               jl_nth_slot_type(lam->specTypes,i)),
                                     lv);
             }
         }
@@ -4636,19 +4660,31 @@ static Function *emit_function(jl_lambda_info_t *lam)
         }
         else if (jl_is_expr(stmt) && ((jl_expr_t*)stmt)->head == line_sym) {
             lno = jl_unbox_long(jl_exprarg(stmt, 0));
+            #ifdef LLVM37
+            MDFile *dfil = NULL;
+            #else
             MDNode *dfil = NULL;
+            #endif
             if (jl_array_dim0(((jl_expr_t*)stmt)->args) > 1) {
                 jl_value_t *a1 = jl_exprarg(stmt,1);
                 if (jl_is_symbol(a1)) {
                     jl_sym_t *file = (jl_sym_t*)a1;
                     // If the string is not empty
                     if (*file->name != '\0') {
+                        #ifdef LLVM37
+                        std::map<jl_sym_t *, MDFile *>::iterator it = filescopes.find(file);
+                        #else
                         std::map<jl_sym_t *, MDNode *>::iterator it = filescopes.find(file);
+                        #endif
                         if (it != filescopes.end()) {
                             dfil = it->second;
                         }
                         else {
+                            #ifdef LLVM37
+                            dfil = filescopes[file] = (MDFile*)dbuilder.createFile(file->name, ".");
+                            #else
                             dfil = filescopes[file] = (MDNode*)dbuilder.createFile(file->name, ".");
+                            #endif
                         }
                     }
                 }
@@ -4788,7 +4824,7 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
         // this assigns a function pointer (from loading the system image), to the function object
         std::string funcName = lam->name->name;
         funcName = "julia_" + funcName;
-        if (specsig) {
+        if (specsig) { // assumes !va
             jl_value_t *jlrettype = jl_ast_rettype(lam, (jl_value_t*)lam->ast);
             std::vector<Type*> fsig(0);
             for(size_t i=0; i < jl_tuple_len(lam->specTypes); i++) {
@@ -4797,11 +4833,11 @@ extern "C" void jl_fptr_to_llvm(void *fptr, jl_lambda_info_t *lam, int specsig)
                     fsig.push_back(ty);
             }
             Type *rt = (jlrettype == (jl_value_t*)jl_void_type ? T_void : julia_type_to_llvm(jlrettype));
-            Function *f = Function::Create(FunctionType::get(rt, fsig, false),
+            Function *f = Function::Create(FunctionType::get(rt, fsig, false), Function::ExternalLinkage, funcName,
 #ifdef USE_MCJIT
-                                           Function::ExternalLinkage, funcName, shadow_module);
+                                           shadow_module);
 #else
-                                           Function::ExternalLinkage, funcName, jl_Module);
+                                           jl_Module);
 #endif
 
         if (lam->specFunctionObject == NULL) {
@@ -4970,8 +5006,7 @@ static void init_julia_llvm_env(Module *m)
     jlpgcstack_var =
         new GlobalVariable(*m, jl_ppvalue_llvmt,
                            false, GlobalVariable::ExternalLinkage,
-                           NULL, "jl_pgcstack");
-    add_named_global(jlpgcstack_var, (void*)&jl_pgcstack);
+                           NULL, "jl_pgcstack", NULL);
 #endif
 
     global_to_llvm("__stack_chk_guard", (void*)&__stack_chk_guard, m);
@@ -5395,6 +5430,9 @@ static void init_julia_llvm_env(Module *m)
 #   if __has_feature(address_sanitizer)
     FPM->add(createAddressSanitizerFunctionPass());
 #   endif
+#   if __has_feature(memory_sanitizer)
+    FPM->add(llvm::createMemorySanitizerPass(true));
+#   endif
 #endif
 #if LLVM_VERSION_MAJOR == 3 && LLVM_VERSION_MINOR >= 3
 #ifndef LLVM37
@@ -5583,12 +5621,14 @@ extern "C" void jl_init_codegen(void)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
         .setTargetOptions(options)
+        .setRelocationModel(Reloc::PIC_)
+        .setCodeModel(CodeModel::Small)
 #if defined(USE_MCJIT) && !defined(LLVM36)
         .setUseMCJIT(true)
 #endif
     ;
     Triple TheTriple(sys::getProcessTriple());
-#if defined(_OS_WINDOWS_) && defined(USE_MCJIT)
+#if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
     jl_TargetMachine = eb->selectTarget(
@@ -5605,12 +5645,17 @@ extern "C" void jl_init_codegen(void)
             jl_TargetMachine->getTargetCPU(),
             jl_TargetMachine->getTargetFeatureString(),
             jl_TargetMachine->Options,
+#ifdef CODEGEN_TLS
+            Reloc::PIC_,
+            CodeModel::Small,
+#else
             Reloc::Default,
             CodeModel::JITDefault,
+#endif
 #ifdef DISABLE_OPT
-            CodeGenOpt::None // -O3
+            CodeGenOpt::None
 #else
-            CodeGenOpt::Aggressive
+            CodeGenOpt::Aggressive // -O3
 #endif
             );
     assert(jl_TargetMachine);
@@ -5637,11 +5682,12 @@ extern "C" void jl_init_codegen(void)
 #ifdef LLVM37
     m->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout()->getStringRepresentation());
+    m->setTargetTriple(jl_TargetMachine->getTargetTriple());
+    engine_module->setTargetTriple(jl_TargetMachine->getTargetTriple());
 #elif LLVM36
     m->setDataLayout(jl_ExecutionEngine->getDataLayout());
     engine_module->setDataLayout(jl_ExecutionEngine->getDataLayout());
 #endif
-
     init_julia_llvm_env(m);
 
     RegisterJuliaJITEventListener();
@@ -5651,13 +5697,13 @@ extern "C" void jl_init_codegen(void)
             JITEventListener::createIntelJITEventListener());
 #endif // JL_USE_INTEL_JITEVENTS
 
-    BOX_F(int8,int32);  BOX_F(uint8,uint32);
-    BOX_F(int16,int16); BOX_F(uint16,uint16);
-    BOX_F(int32,int32); BOX_F(uint32,uint32);
-    BOX_F(int64,int64); BOX_F(uint64,uint64);
+    BOX_F(int8,int8);  UBOX_F(uint8,uint8);
+    BOX_F(int16,int16); UBOX_F(uint16,uint16);
+    BOX_F(int32,int32); UBOX_F(uint32,uint32);
+    BOX_F(int64,int64); UBOX_F(uint64,uint64);
     BOX_F(float32,float32); BOX_F(float64,float64);
     BOX_F(char,char);
-    BOX_F(gensym,size);
+    UBOX_F(gensym,size);
 
     box8_func  = boxfunc_llvm(ft2arg(jl_pvalue_llvmt, jl_pvalue_llvmt, T_int8),
                               "jl_box8", (void*)&jl_box8, m);

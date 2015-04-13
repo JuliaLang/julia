@@ -189,10 +189,6 @@ Mathematical Operators
 
    Construct a range by length, given a starting value and optional step (defaults to 1).
 
-.. function:: linrange(start, end, length)
-
-   Construct a range by length, given a starting and ending value.
-
 .. _==:
 .. function:: ==(x, y)
 

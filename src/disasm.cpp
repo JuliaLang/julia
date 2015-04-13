@@ -254,7 +254,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #else
                           const object::ObjectFile *objectfile,
 #endif
-                          formatted_raw_ostream &stream)
+#ifdef LLVM37
+                          raw_ostream &stream
+#else
+                          formatted_raw_ostream &stream
+#endif
+                          )
 {
     // Initialize targets and assembly printers/parsers.
     // Avoids hard-coded targets - will generally be only host CPU anyway.
@@ -360,7 +365,12 @@ void jl_dump_asm_internal(uintptr_t Fptr, size_t Fsize, size_t slide,
 #endif
     }
 
+#ifdef LLVM37
+    auto ustream = llvm::make_unique<formatted_raw_ostream>(stream);
+    Streamer.reset(TheTarget->createAsmStreamer(Ctx, std::move(ustream), /*asmverbose*/true,
+#else
     Streamer.reset(TheTarget->createAsmStreamer(Ctx, stream, /*asmverbose*/true,
+#endif
 #ifndef LLVM35
                                            /*useLoc*/ true,
                                            /*useCFI*/ true,

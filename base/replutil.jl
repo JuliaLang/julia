@@ -169,86 +169,104 @@ function showerror(io::IO, ex::MethodError)
     show_method_candidates(io, ex)
 end
 
+const UNSHOWN_METHODS = ObjectIdDict(
+    which(call, (Type, Any...)) => true
+)
 function show_method_candidates(io::IO, ex::MethodError)
     # Displays the closest candidates of the given function by looping over the
     # functions methods and counting the number of matching arguments.
 
     lines = Array((IOBuffer, Int), 0)
-    name = isgeneric(ex.f) ? ex.f.env.name : :anonymous
     # These functions are special cased to only show if first argument is matched.
     special = ex.f in [convert, getindex, setindex!]
-    for method in methods(ex.f)
-        buf = IOBuffer()
-        print(buf, "  $name")
-        right_matches = 0
-        tv = method.tvars
-        if !isa(tv,Tuple)
-            tv = (tv,)
-        end
-        if !isempty(tv)
-            show_delim_array(buf, tv, '{', ',', '}', false)
-        end
-        print(buf, "(")
-        t_i = [Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
-        right_matches = 0
-        for i = 1 : min(length(t_i), length(method.sig))
-            i != 1 && print(buf, ", ")
-            # If isvarargtype then it checks wether the rest of the input arguements matches
-            # the varargtype
-            j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
-            # Checks if the type of arg 1:i of the input intersects with the current method
-            t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
-            # If the function is one of the special cased then it should break the loop if
-            # the type of the first argument is not matched.
-            t_in == None && special && i == 1 && break
-            if t_in == None
-                if Base.have_color
-                    Base.with_output_color(:red, buf) do buf
-                        print(buf, "::$(method.sig[i])")
-                    end
-                else
-                    print(buf, "!Matched::$(method.sig[i])")
-                end
-                # If there is no typeintersect then the type signature from the method is
-                # inserted in t_i this ensures if the type at the next i matches the type
-                # signature then there will be a type intersect
-                t_i[i] = method.sig[i]
-            else
-                right_matches += j==i ? 1 : 0
-                print(buf, "::$(method.sig[i])")
-            end
-        end
-        special && right_matches==0 && continue
+    funcs = [ex.f]
 
-        if length(t_i) > length(method.sig) && !isempty(method.sig) && Base.isvarargtype(method.sig[end])
-            # It ensures that methods like f(a::AbstractString...) gets the correct
-            # number of right_matches
-            for t in typeof(ex.args)[length(method.sig):end]
-                if t <: method.sig[end].parameters[1]
-                    right_matches += 1
-                end
-            end
-        end
+    # An incorrect call method produces a MethodError for convert.
+    # It also happens that users type convert when they mean call. So
+    # pool MethodErrors for these two functions.
+    ex.f == convert && push!(funcs, call)
 
-        if right_matches > 0
-            if length(t_i) < length(method.sig)
-                # If the methods args is longer than input then the method
-                # arguments is printed as not a match
-                for sigtype in method.sig[length(t_i)+1:end]
-                    print(buf, ", ")
+    for func in funcs
+        name = isgeneric(func) ? func.env.name : :anonymous
+        for method in methods(func)
+            haskey(UNSHOWN_METHODS, method) && continue
+            buf = IOBuffer()
+            use_constructor_syntax = func == call && !isempty(method.sig) && isa(method.sig[1], DataType) &&
+                                     !isempty(method.sig[1].parameters) && isa(method.sig[1].parameters[1], DataType)
+            print(buf, "  ", use_constructor_syntax ? method.sig[1].parameters[1].name : name)
+            right_matches = 0
+            tv = method.tvars
+            if !isa(tv,Tuple)
+                tv = (tv,)
+            end
+            if !isempty(tv)
+                show_delim_array(buf, tv, '{', ',', '}', false)
+            end
+            print(buf, "(")
+            t_i = [Base.REPLCompletions.method_type_of_arg(arg) for arg in ex.args]
+            right_matches = 0
+            for i = 1 : min(length(t_i), length(method.sig))
+                i > (use_constructor_syntax ? 2 : 1) && print(buf, ", ")
+                # If isvarargtype then it checks wether the rest of the input arguements matches
+                # the varargtype
+                j = Base.isvarargtype(method.sig[i]) ? length(t_i) : i
+                # Checks if the type of arg 1:i of the input intersects with the current method
+                t_in = typeintersect(method.sig[1:i], tuple(t_i[1:j]...))
+                # If the function is one of the special cased then it should break the loop if
+                # the type of the first argument is not matched.
+                t_in == None && special && i == 1 && break
+                if use_constructor_syntax && i == 1
+                    right_matches += i
+                elseif t_in == None
                     if Base.have_color
                         Base.with_output_color(:red, buf) do buf
-                            print(buf, "::$sigtype")
+                            print(buf, "::$(method.sig[i])")
                         end
                     else
-                        print(buf, "!Matched::$sigtype")
+                        print(buf, "!Matched::$(method.sig[i])")
+                    end
+                    # If there is no typeintersect then the type signature from the method is
+                    # inserted in t_i this ensures if the type at the next i matches the type
+                    # signature then there will be a type intersect
+                    t_i[i] = method.sig[i]
+                else
+                    right_matches += j==i ? 1 : 0
+                    print(buf, "::$(method.sig[i])")
+                end
+            end
+            special && right_matches==0 && continue
+
+            if length(t_i) > length(method.sig) && !isempty(method.sig) && Base.isvarargtype(method.sig[end])
+                # It ensures that methods like f(a::AbstractString...) gets the correct
+                # number of right_matches
+                for t in typeof(ex.args)[length(method.sig):end]
+                    if t <: method.sig[end].parameters[1]
+                        right_matches += 1
                     end
                 end
             end
-            print(buf, ")")
-            push!(lines, (buf, right_matches))
+
+            if right_matches > 0
+                if length(t_i) < length(method.sig)
+                    # If the methods args is longer than input then the method
+                    # arguments is printed as not a match
+                    for sigtype in method.sig[length(t_i)+1:end]
+                        print(buf, ", ")
+                        if Base.have_color
+                            Base.with_output_color(:red, buf) do buf
+                                print(buf, "::$sigtype")
+                            end
+                        else
+                            print(buf, "!Matched::$sigtype")
+                        end
+                    end
+                end
+                print(buf, ")")
+                push!(lines, (buf, right_matches))
+            end
         end
     end
+
     if length(lines) != 0 # Display up to three closest candidates
         Base.with_output_color(:normal, io) do io
             println(io)

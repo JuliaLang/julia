@@ -41,6 +41,12 @@
 #include <intrin.h>
 #endif
 
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+#include <sanitizer/msan_interface.h>
+#endif
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -660,6 +666,15 @@ DLLEXPORT const char *jl_pathname_for_handle(uv_lib_t *uv_lib)
 
     struct link_map *map;
     dlinfo(handle, RTLD_DI_LINKMAP, &map);
+#ifdef __has_feature
+#if __has_feature(memory_sanitizer)
+    __msan_unpoison(&map,sizeof(struct link_map*));
+    if (map) {
+      __msan_unpoison(map, sizeof(struct link_map));
+      __msan_unpoison_string(map->l_name);
+    }
+#endif
+#endif
     if (map)
         return map->l_name;
 

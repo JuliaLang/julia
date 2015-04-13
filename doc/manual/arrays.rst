@@ -89,7 +89,7 @@ Function                                            Description
                                                     distributed random values
 :func:`eye(n) <eye>`                                ``n``-by-``n`` identity matrix
 :func:`eye(m, n) <eye>`                             ``m``-by-``n`` identity matrix
-:func:`linspace(start, stop, n) <linspace>`         vector of ``n`` linearly-spaced elements from ``start`` to ``stop``
+:func:`linspace(start, stop, n) <linspace>`         range of ``n`` linearly spaced elements from ``start`` to ``stop``
 :func:`fill!(A, x) <fill!>`                         fill the array ``A`` with the value ``x``
 :func:`fill(x, dims) <fill>`                        create an array filled with the value ``x``
 =================================================== =====================================================================

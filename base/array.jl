@@ -246,28 +246,6 @@ function one{T}(x::AbstractMatrix{T})
     eye(T, m)
 end
 
-linspace(start::Integer, stop::Integer, n::Integer) =
-    linspace(float(start), float(stop), n)
-function linspace(start::Real, stop::Real, n::Integer)
-    (start, stop) = promote(start, stop)
-    T = typeof(start)
-    a = Array(T, Int(n))
-    if n == 1
-        a[1] = start
-        return a
-    end
-    n -= 1
-    S = promote_type(T, Float64)
-    for i=0:n
-        a[i+1] = start*(convert(S, (n-i))/n) + stop*(convert(S, i)/n)
-    end
-    a
-end
-linspace(start::Real, stop::Real) = linspace(start, stop, 100)
-
-logspace(start::Real, stop::Real, n::Integer) = 10.^linspace(start, stop, n)
-logspace(start::Real, stop::Real) = logspace(start, stop, 50)
-
 ## Conversions ##
 
 convert{T,n}(::Type{Array{T}}, x::Array{T,n}) = x

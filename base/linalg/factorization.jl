@@ -179,18 +179,32 @@ function A_mul_B!{T}(A::QRPackedQ{T}, B::AbstractVecOrMat{T})
     end
     B
 end
-function *{TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{Tb})
+
+function (*){TA,Tb}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), b::StridedVector{Tb})
     TAb = promote_type(TA,Tb)
     Anew = convert(AbstractMatrix{TAb},A)
-    bnew = size(A.factors,1) == length(b) ? (Tb == TAb ? copy(b) : convert(Vector{TAb}, b)) : (size(A.factors,2) == length(b) ? [b,zeros(TAb, size(A.factors,1)-length(b))] : throw(DimensionMismatch()))
-    A_mul_B!(Anew,bnew)
+    if size(A.factors, 1) == length(b)
+        bnew = copy_oftype(b, TAb)
+    elseif size(A.factors, 2) == length(b)
+        bnew = [b; zeros(TAb, size(A.factors, 1) - length(b))]
+    else
+        throw(DimensionMismatch("vector must have length either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
+    end
+    A_mul_B!(Anew, bnew)
 end
-function *{TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB})
+function (*){TA,TB}(A::Union(QRPackedQ{TA},QRCompactWYQ{TA}), B::StridedMatrix{TB})
     TAB = promote_type(TA,TB)
     Anew = convert(AbstractMatrix{TAB},A)
-    Bnew = size(A.factors,1) == size(B,1) ? (TB == TAB ? copy(B) : convert(AbstractMatrix{TAB}, B)) : (size(A.factors,2) == size(B,1) ? [B;zeros(TAB, size(A.factors,1)-size(B,1),size(B,2))] : throw(DimensionMismatch()))
-    A_mul_B!(Anew,Bnew)
+    if size(A.factors, 1) == size(B, 1)
+        Bnew = copy_oftype(B, TAB)
+    elseif size(A.factors, 2) == size(B, 1)
+        Bnew = [B; zeros(TAB, size(A.factors, 1) - size(B,1), size(B, 2))]
+    else
+        throw(DimensionMismatch("first dimension of matrix must have size either $(size(A.factors, 1)) or $(size(A.factors, 2))"))
+    end
+    A_mul_B!(Anew, Bnew)
 end
+
 ### QcB
 Ac_mul_B!{T<:BlasReal}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','T',A.factors,A.T,B)
 Ac_mul_B!{T<:BlasComplex}(A::QRCompactWYQ{T}, B::StridedVecOrMat{T}) = LAPACK.gemqrt!('L','C',A.factors,A.T,B)
@@ -222,6 +236,7 @@ function Ac_mul_B{TQ<:Number,TB<:Number,N}(Q::Union(QRPackedQ{TQ},QRCompactWYQ{T
     TQB = promote_type(TQ,TB)
     Ac_mul_B!(convert(AbstractMatrix{TQB}, Q), TB == TQB ? copy(B) : convert(AbstractArray{TQB,N}, B))
 end
+
 ### AQ
 A_mul_B!{T<:BlasFloat}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','N', B.factors, B.T, A)
 A_mul_B!(A::StridedVecOrMat, B::QRPackedQ) = LAPACK.ormqr!('R', 'N', B.factors, B.τ, A)
@@ -247,10 +262,12 @@ function A_mul_B!{T}(A::StridedMatrix{T},Q::QRPackedQ{T})
     end
     A
 end
-function *{TA,TQ,N}(A::StridedArray{TA,N}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
+
+function (*){TA,TQ,N}(A::StridedArray{TA,N}, Q::Union(QRPackedQ{TQ},QRCompactWYQ{TQ}))
     TAQ = promote_type(TA, TQ)
     A_mul_B!(TA==TAQ ? copy(A) : convert(AbstractArray{TAQ,N}, A), convert(AbstractMatrix{TAQ}, Q))
 end
+
 ### AQc
 A_mul_Bc!{T<:BlasReal}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','T',B.factors,B.T,A)
 A_mul_Bc!{T<:BlasComplex}(A::StridedVecOrMat{T}, B::QRCompactWYQ{T}) = LAPACK.gemqrt!('R','C',B.factors,B.T,A)
@@ -774,3 +791,17 @@ function At_ldiv_B{TF<:Number,TB<:Number,N}(F::Factorization{TF}, B::AbstractArr
     TFB = typeof(one(TF)/one(TB))
     At_ldiv_B!(convert(Factorization{TFB}, F), TB == TFB ? copy(B) : convert(AbstractArray{TFB,N}, B))
 end
+
+## reconstruct the original matrix
+full(F::QR) = F[:Q] * F[:R]
+full(F::QRCompactWY) = F[:Q] * F[:R]
+full(F::QRPivoted) = (F[:Q] * F[:R])[:,invperm(F[:p])]
+
+## Can we determine the source/result is Real?  This is not stored in the type Eigen
+full(F::Eigen) = F.vectors * Diagonal(F.values) / F.vectors
+
+full(F::Hessenberg) = (fq = full(F[:Q]); (fq * F[:H]) * fq')
+
+full(F::Schur) = (F.Z * F.T) * F.Z'
+
+full(F::SVD) = (F.U * Diagonal(F.S)) * F.Vt

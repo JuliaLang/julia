@@ -522,3 +522,5 @@ export float32_isvalid, float64_isvalid
 @deprecate parseint(s,base)           parse(Int, s, base)
 @deprecate parseint(T::Type, s)       parse(T, s)
 @deprecate parseint(T::Type, s, base) parse(T, s, base)
+
+@deprecate linrange linspace

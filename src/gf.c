@@ -423,7 +423,7 @@ void jl_type_infer(jl_lambda_info_t *li, jl_tuple_t *argtypes,
     jl_in_inference = last_ii;
 }
 
-static jl_value_t *nth_slot_type(jl_tuple_t *sig, size_t i)
+jl_value_t *jl_nth_slot_type(jl_tuple_t *sig, size_t i)
 {
     size_t len = jl_tuple_len(sig);
     if (len == 0)
@@ -492,7 +492,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
 
     for (i=0; i < jl_tuple_len(type); i++) {
         jl_value_t *elt = jl_tupleref(type,i);
-        jl_value_t *decl_i = nth_slot_type(decl,i);
+        jl_value_t *decl_i = jl_nth_slot_type(decl,i);
         if (jl_is_type_type(elt) && jl_is_tuple(jl_tparam0(elt)) &&
             /*
               NOTE: without this, () is sometimes specialized as () and
@@ -506,7 +506,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             jl_methlist_t *curr = mt->defs;
             int ok=1;
             while (curr != JL_NULL) {
-                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
                     if (jl_is_type_type(slottype) &&
                         jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
@@ -676,7 +676,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             jl_methlist_t *curr = mt->defs;
             jl_value_t *kind = (jl_value_t*)jl_full_type(jl_tparam0(elt));
             while (curr != JL_NULL) {
-                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
                     if (slottype == kind) {
                         ok=0;
@@ -694,7 +694,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
                 else {
                     curr = mt->defs;
                     while (curr != JL_NULL) {
-                        jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                        jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
                         if (slottype && curr->func!=method) {
                             if (!very_general_type(slottype) &&
                                 jl_type_intersection(slottype, (jl_value_t*)jl_type_type) !=
@@ -719,7 +719,7 @@ static jl_function_t *cache_method(jl_methtable_t *mt, jl_tuple_t *type,
             jl_methlist_t *curr = mt->defs;
             int ok=1;
             while (curr != JL_NULL) {
-                jl_value_t *slottype = nth_slot_type(curr->sig, i);
+                jl_value_t *slottype = jl_nth_slot_type(curr->sig, i);
                 if (slottype && curr->func!=method) {
                     if (jl_is_type_type(slottype) &&
                         jl_type_intersection(slottype, decl_i) != jl_bottom_type) {
