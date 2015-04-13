@@ -99,33 +99,33 @@ big(x::MathConst) = convert(BigFloat,x)
 ## specific mathematical constants
 
 @math_const π        3.14159265358979323846  pi
-@math_const e        2.71828182845904523536  exp(big(1))
+@math_const ℯ        2.71828182845904523536  exp(big(1))
 @math_const γ        0.57721566490153286061  euler
 @math_const catalan  0.91596559417721901505  catalan
 @math_const φ        1.61803398874989484820  (1+sqrt(big(5)))/2
 
 # aliases
 const pi = π
-const eu = e
+const eu = ℯ
 const eulergamma = γ
 const golden = φ
 
 # special behaviors
 
-# use exp for e^x or e.^x, as in
-#    ^(::MathConst{:e}, x::Number) = exp(x)
-#    .^(::MathConst{:e}, x) = exp(x)
+# use exp for ℯ^x or ℯ.^x, as in
+#    ^(::MathConst{:ℯ}, x::Number) = exp(x)
+#    .^(::MathConst{:ℯ}, x) = exp(x)
 # but need to loop over types to prevent ambiguity with generic rules for ^(::Number, x) etc.
 for T in (MathConst, Rational, Integer, Number)
-    ^(::MathConst{:e}, x::T) = exp(x)
+    ^(::MathConst{:ℯ}, x::T) = exp(x)
 end
 for T in (Range, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
-    .^(::MathConst{:e}, x::T) = exp(x)
+    .^(::MathConst{:ℯ}, x::T) = exp(x)
 end
-^(::MathConst{:e}, x::AbstractMatrix) = expm(x)
+^(::MathConst{:ℯ}, x::AbstractMatrix) = expm(x)
 
-log(::MathConst{:e}) = 1 # use 1 to correctly promote expressions like log(x)/log(e)
-log(::MathConst{:e}, x) = log(x)
+log(::MathConst{:ℯ}) = 1 # use 1 to correctly promote expressions like log(x)/log(ℯ)
+log(::MathConst{:ℯ}, x) = log(x)
 
 #Align along = for nice Array printing
 function alignment(x::MathConst)

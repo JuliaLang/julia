@@ -2340,7 +2340,7 @@ end
 @test bswap(reinterpret(Float32,0x0000c03f)) === 1.5f0
 
 #isreal(x::Real) = true
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, MathConst, Rat]
     @test isreal(x) == true
 end
 
@@ -2355,20 +2355,20 @@ for x in [subtypes(Complex); subtypes(Real)]
 end
 
 #getindex(x::Number) = x
-for x in [1.23, 7, e, 4//5] #[FP, Int, MathConst, Rat]
+for x in [1.23, 7, ℯ, 4//5] #[FP, Int, MathConst, Rat]
     @test getindex(x) == x
 end
 
 #copysign(x::Real, y::Real) = ifelse(signbit(x)!=signbit(y), -x, x)
 #same sign
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
+for x in [1.23, 7, ℯ, 4//5]
+    for y in [1.23, 7, ℯ, 4//5]
         @test copysign(x,y) == x
     end
 end
 #different sign
-for x in [1.23, 7, e, 4//5]
-    for y in [1.23, 7, e, 4//5]
+for x in [1.23, 7, ℯ, 4//5]
+    for y in [1.23, 7, ℯ, 4//5]
         @test copysign(x, -y) == -x
     end
 end
@@ -2381,7 +2381,7 @@ end
 #in(x::Number, y::Number) = x == y
 @test in(3,3) == true #Int
 @test in(2.0,2.0) == true #FP
-@test in(e,e) == true #Const
+@test in(ℯ,ℯ) == true #Const
 @test in(4//5,4//5) == true #Rat
 @test in(1+2im, 1+2im) == true #Imag
 @test in(3, 3.0) == true #mixed

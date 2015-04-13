@@ -1,3 +1,21 @@
+# Deprecated functions and objects
+#
+# Please add new deprecations at the bottom of the file.
+# A function deprecated in a release will be removed in the next one.
+# Please also add a reference to the pull request which introduced the
+# deprecation.
+#
+# For simple cases where a direct replacement is available, use @deprecate:
+# the first argument is the signature of the deprecated method, the second one
+# is the call which replaces it. Remove the definition of the deprecated method
+# and its documentation, and unexport it, as @deprecate takes care of calling
+# the replacement and of exporting the function.
+#
+# For more complex cases, move the body of the deprecated method in this file,
+# and call depwarn() directly from inside it. The symbol depwarn() expects is
+# the name of the function, which is used to ensure that the deprecation warning
+# is only printed the first time for each call place.
+
 macro deprecate(old,new)
     meta = Expr(:meta, :noinline)
     if isa(old,Symbol)
@@ -522,3 +540,46 @@ export float32_isvalid, float64_isvalid
 @deprecate parseint(s,base)           parse(Int, s, base)
 @deprecate parseint(T::Type, s)       parse(T, s)
 @deprecate parseint(T::Type, s, base) parse(T, s, base)
+
+# Deprecation of e MathConst (#10612)
+export e
+const e = MathConst{:e}()
+
+e_depwarn(sym::Symbol) = depwarn("e mathematical constant is deprecated, use ℯ (\\e[tab]) or eu instead", sym)
+
+<(::MathConst{:e}, y::Rational{BigInt}) = (e_depwarn(symbol("<")); <(ℯ, y))
+<(x::Rational{BigInt}, ::MathConst{:e}) = (e_depwarn(symbol("<")); <(x, ℯ))
+
+<(::MathConst{:e}, y::Rational) = (e_depwarn(symbol("<")); <(ℯ, y))
+<(x::Rational, ::MathConst{:e}) =(e_depwarn(symbol("<"));  <(x, ℯ))
+
+<=(x::MathConst{:e}, y::Rational) = (e_depwarn(symbol("<=")); <=(ℯ, y))
+<=(x::Rational, y::MathConst{:e}) = (e_depwarn(symbol("<=")); <=(x, ℯ))
+
+hash(x::MathConst{:e}, h::UInt) = (e_depwarn(:hash); hash(ℯ, h))
+
+-(x::MathConst{:e}) = (e_depwarn(:-); -ℯ)
+for op in Symbol[:+, :-, :*, :/, :^]
+    @eval $op(x::MathConst{:e}, y::MathConst{:e}) = (e_depwarn(op); $op(ℯ, ℯ))
+end
+
+call(::Type{BigFloat}, ::MathConst{:e}) = (Base.e_depwarn(:call); BigFloat(ℯ))
+call(::Type{Float64}, ::MathConst{:e}) = (Base.e_depwarn(:call); Float64(ℯ))
+call(::Type{Float32}, ::MathConst{:e}) = (Base.e_depwarn(:call); Float32(ℯ))
+
+convert(::Type{BigFloat}, ::MathConst{:e}) = (e_depwarn(:convert); convert(BigFloat, ℯ))
+convert(::Type{Float64}, ::MathConst{:e}) = (e_depwarn(:convert); convert(Float64, ℯ))
+convert(::Type{Float32}, ::MathConst{:e}) = (e_depwarn(:convert); convert(Float32, ℯ))
+
+big(x::MathConst{:e}) = (e_depwarn(:big); big(ℯ))
+
+for T in (MathConst, Rational, Integer, Number)
+    ^(::MathConst{:e}, x::T) = (e_depwarn(:^); ^(ℯ, x))
+end
+for T in (Range, BitArray, SparseMatrixCSC, StridedArray, AbstractArray)
+    .^(::MathConst{:e}, x::T) = (e_depwarn(:.^); .^(ℯ, x))
+end
+^(::MathConst{:e}, x::AbstractMatrix) = (e_depwarn(:^); ^(ℯ, x))
+
+log(::MathConst{:e}) = (e_depwarn(:log); log(ℯ))
+log(::MathConst{:e}, x) = (e_depwarn(:log); log(ℯ, x))
