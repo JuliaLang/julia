@@ -2037,15 +2037,15 @@ module I9475
 end
 
 # issue #9520
-#f9520a(::Any, ::Any, args...) = 15
-#f9520b(::Any, ::Any, ::Any, args...) = 23
-#f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
-#@test invoke(f9520a, (Any, Any), 1, 2) == 15
-#@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
-#@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
-#@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
-#@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
-#@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
+f9520a(::Any, ::Any, args...) = 15
+f9520b(::Any, ::Any, ::Any, args...) = 23
+f9520c(::Any, ::Any, ::Any, ::Any, ::Any, ::Any, args...) = 46
+@test invoke(f9520a, (Any, Any), 1, 2) == 15
+@test invoke(f9520a, (Any, Any, Any), 1, 2, 3) == 15
+@test invoke(f9520b, (Any, Any, Any), 1, 2, 3) == 23
+@test invoke(f9520b, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 23
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6) == 46
+@test invoke(f9520c, (Any, Any, Any, Any, Any, Any, Any), 1, 2, 3, 4, 5, 6, 7) == 46
 
 # jl_new_bits testing
 let x = [1,2,3]
@@ -2057,14 +2057,11 @@ let x = [1,2,3]
 end
 
 # sig 2 is SIGINT per the POSIX.1-1990 standard
-#if Base.is_unix(OS_NAME)
-#    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
-#    @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
-#    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
-#end
-#XXX: test disabled since we may be getting this signal on any of our threads
-# (very bad), leading to segfaults. perhaps needs to switch to a multi-threading aware
-# sigwait-based handler?
+if Base.is_unix(OS_NAME)
+    ccall(:jl_exit_on_sigint, Void, (Cint,), 0)
+    @test_throws InterruptException ccall(:raise, Void, (Cint,), 2)
+    ccall(:jl_exit_on_sigint, Void, (Cint,), 1)
+end
 
 # pull request #9534
 @test try; a,b,c = 1,2; catch ex; (ex::BoundsError).a === (1,2) && ex.i == 3; end
