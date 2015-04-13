@@ -1,5 +1,4 @@
-export
-# Modules
+export # Modules
     Collections,
     FFTW,
     Meta,
@@ -73,6 +72,7 @@ export
     ObjectIdDict,
     OrdinalRange,
     Pair,
+    PartialQuickSort,
     PollingFileWatcher,
     ProcessGroup,
     QuickSort,
@@ -580,6 +580,8 @@ export
     sort!,
     sort,
     sortcols,
+    selectperm,
+    selectperm!,
     sortperm,
     sortperm!,
     sortrows,
