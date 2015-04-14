@@ -181,10 +181,10 @@ echo 'override LIBLAPACKNAME = $(LIBBLASNAME)' >> Make.user
 # libuv since its static lib is no longer included in the binaries
 # openlibm since we need it as a static library to work properly
 # utf8proc since its headers are not in the binary download
-echo 'override STAGE1_DEPS = uv' >> Make.user
+echo 'override STAGE1_DEPS = libuv' >> Make.user
 echo 'override STAGE2_DEPS = utf8proc' >> Make.user
 echo 'override STAGE3_DEPS = ' >> Make.user
-make -C deps get-uv
+make -C deps get-libuv
 
 if [ -n "$USEMSVC" ]; then
   # Create a modified version of compile for wrapping link
@@ -198,7 +198,7 @@ if [ -n "$USEMSVC" ]; then
   echo 'override UNTRUSTED_SYSTEM_LIBM = 0' >> Make.user
 
   # Compile libuv and utf8proc without -TP first, then add -TP
-  make -C deps install-uv install-utf8proc
+  make -C deps install-libuv install-utf8proc
   cp usr/lib/uv.lib usr/lib/libuv.a
   echo 'override CC += -TP' >> Make.user
 else
