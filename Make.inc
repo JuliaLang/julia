@@ -610,7 +610,7 @@ ifeq ($(USE_SYSTEM_LIBUV), 1)
   LIBUV_INC = /usr/include
 else
   LIBUV = $(build_libdir)/libuv.a
-  LIBUV_INC = $(JULIAHOME)/deps/libuv/include
+  LIBUV_INC = $(build_includedir)
 endif
 
 ifeq ($(USE_SYSTEM_UTF8PROC), 1)
@@ -618,7 +618,7 @@ ifeq ($(USE_SYSTEM_UTF8PROC), 1)
   UTF8PROC_INC = /usr/include
 else
   LIBUTF8PROC = $(build_libdir)/libutf8proc.a
-  UTF8PROC_INC = $(JULIAHOME)/deps/utf8proc
+  UTF8PROC_INC = $(build_includedir)
 endif
 
 # OS specific stuff
