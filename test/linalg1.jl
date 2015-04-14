@@ -53,24 +53,6 @@ debug && println("Bunch-Kaufman factors of a pos-def matrix")
         @test_approx_eq_eps apd * (bc2\b) b 150000ε
     end
 
-debug && println("(Automatic) Square LU decomposition")
-    κ     = cond(a,1)
-    lua   = factorize(a)
-    l,u,p = lua[:L], lua[:U], lua[:p]
-    @test_approx_eq l*u a[p,:]
-    @test_approx_eq (l*u)[invperm(p),:] a
-    @test_approx_eq a * inv(lua) eye(n)
-    @test norm(a*(lua\b) - b, 1) < ε*κ*n*2 # Two because the right hand side has two columns
-    @test_approx_eq full(lua) a
-
-debug && println("Thin LU")
-    lua   = lufact(a[:,1:n1])
-    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[:,1:n1]
-
-debug && println("Fat LU")
-    lua   = lufact(a[1:n1,:])
-    @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[1:n1,:]
-
 debug && println("QR decomposition (without pivoting)")
     qra   = qrfact(a, Val{false})
     q,r   = qra[:Q], qra[:R]
