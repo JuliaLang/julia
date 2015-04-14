@@ -55,29 +55,62 @@ length{I<:CartesianIndex}(::Type{I})=length(super(I))
 getindex(index::CartesianIndex, i::Integer) = getfield(index, i)::Int
 
 stagedfunction getindex{N}(A::Array, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayref(A, 1)) : :(@ncall $N Base.arrayref A d->index[d])
+    :(Base.arrayref(A, $(cartindex_exprs((index,), (:index,))...)))
 end
 stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayref(A, i)) : :(@ncall $(N+1) Base.arrayref A d->(d == 1 ? i : index[d-1]))
+    :(Base.arrayref(A, $(cartindex_exprs((i, index), (:i, :index))...)))
+end
+stagedfunction getindex{M,N}(A::Array, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+    :(Base.arrayref(A, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
 end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
+    :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((index,), (:index,))...)))
 end
 stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
-    N==0 ? :(Base.arrayset(A, convert($T,v), i)) : :(@ncall $(N+1) Base.arrayset A convert($T,v) d->(d == 1 ? i : index[d-1]))
+    :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((i, index), (:i, :index))...)))
+end
+stagedfunction setindex!{T,M,N}(A::Array{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+    :(Base.arrayset(A, convert($T,v), $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
-    :(@nref $N A d->index[d])
+    :(getindex(A, $(cartindex_exprs((index,), (:index,))...)))
 end
 stagedfunction getindex{N}(A::AbstractArray, i::Integer, index::CartesianIndex{N})
-    :(@nref $(N+1) A d->(d == 1 ? i : index[d-1]))
+    :(getindex(A, $(cartindex_exprs((i, index), (:i, :index))...)))
 end
-stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
-    :((@nref $N A d->index[d]) = v)
+stagedfunction setindex!{T,N}(A::AbstractArray{T}, v, index::CartesianIndex{N})
+    :(setindex!(A, v, $(cartindex_exprs((index,), (:index,))...)))
 end
-stagedfunction setindex!{N}(A::AbstractArray, v, i::Integer, index::CartesianIndex{N})
-    :((@nref $(N+1) A d->(d == 1 ? i : index[d-1])) = v)
+stagedfunction setindex!{T,N}(A::AbstractArray{T}, v, i::Integer, index::CartesianIndex{N})
+    :(setindex!(A, v, $(cartindex_exprs((i, index), (:i, :index))...)))
+end
+for AT in (AbstractVector, AbstractMatrix, AbstractArray)  # nix ambiguity warning
+    @eval begin
+        stagedfunction getindex{M,N}(A::AbstractArray, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+            :(getindex(A, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
+        end
+        stagedfunction setindex!{T,M,N}(A::AbstractArray{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+            :(setindex!(A, v, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
+        end
+    end
+end
+
+function cartindex_exprs(indexes, syms)
+    exprs = Any[]
+    for (i,ind) in enumerate(indexes)
+        if ind <: Number
+            push!(exprs, :($(syms[i])))
+        else
+            for j = 1:length(ind)
+                push!(exprs, :($(syms[i])[$j]))
+            end
+        end
+    end
+    if isempty(exprs)
+        push!(exprs, 1)  # Handle the zero-dimensional case
+    end
+    exprs
 end
 
 # arithmetic, min/max
