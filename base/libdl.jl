@@ -38,7 +38,7 @@ dlopen_e(s::AbstractString, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) =
 
 dlopen_e(s::Symbol, flags::Integer = RTLD_LAZY | RTLD_DEEPBIND) = dlopen_e(string(s), flags)
 
-dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); end
+dlclose(p::Ptr) = if p!=C_NULL; ccall(:uv_dlclose,Void,(Ptr{Void},),p); Libc.free(p); end
 
 function find_library{T<:ByteString, S<:ByteString}(libnames::Array{T,1}, extrapaths::Array{S,1}=ASCIIString[])
     for lib in libnames
