@@ -943,9 +943,16 @@ used?
     16
 
 Note that there is no printout of ``Int64``. The body of the ``stagedfunction``
-is only executed *once*, when the method for that specific set of argument
-types is compiled. After that, the expression returned from the
-``stagedfunction`` on the first invocation is re-used as the method body.
+is only executed *once* (not entirely true, see note below) when the method
+for that specific set of argument types is compiled. After that, the
+expression returned from the ``stagedfunction`` on the first invocation
+is re-used as the method body.
+
+The reason for the disclaimer above is that the number of times a staged
+function is staged is really an implementation detail; it *might* be only
+once, but it *might* also be more often. As a consequence, you should 
+*never* write a staged function with side effects - when, and how often,
+the side effects occur is undefined.
 
 The example staged function ``foo`` above did not do anything a normal
 function ``foo(x)=x*x`` could not do, except printing the the type on the
@@ -1045,10 +1052,10 @@ function::
         sub2ind_staged_impl(dims, I...)
     end
 
-    function sub2ind_staged_impl(dims, I...)
+    function sub2ind_staged_impl{N}(dims::NTuple{N}, I...)
         ex = :(I[$N] - 1)
         for i = N-1:-1:1
-            ex = :(I[$i] - 1 + dims[$i]*$ex)
+            ex = :(I[$i] - 1 + dims[$i]*ex)
         end
         :($ex + 1)
     end
@@ -1056,10 +1063,12 @@ function::
 We can now execute ``sub2ind_staged_impl`` and examine the expression it
 returns::
 
-    julia> sub2ind_staged_impl((5,2), 3, 2)
-    :(((I[1] - 1) + dims[1] * (I[2] - 1)) + 1)
+    julia> sub2ind_staged_impl((Int,Int), Int, Int)
+    :(((I[1] - 1) + dims[1] * ex) + 1)    
 
 So, the method body that will be used here doesn't include a loop at all
 - just indexing into the two tuples, multiplication and addition/subtraction.
-All the looping is performed compile-time, which means we only loop
-*once per type*, in this case once per ``N``.
+All the looping is performed compile-time, and we avoid looping during execution
+entirely. Thus, we only loop *once per type*, in this case once per ``N`` 
+(except in edge cases where the function is staged more than once - see
+disclaimer above).
