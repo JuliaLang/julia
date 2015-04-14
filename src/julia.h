@@ -1488,7 +1488,6 @@ void show_execution_point(char *filename, int lno);
 // julia options -----------------------------------------------------------
 // NOTE: This struct needs to be kept in sync with JLOptions type in base/options.jl
 typedef struct {
-    int8_t version;
     int8_t quiet;
     const char *julia_home;
     const char *julia_bin;
