@@ -5611,12 +5611,12 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
 #ifdef LLVM36
-    EngineBuilder *eb = new EngineBuilder(std::unique_ptr<Module>(engine_module));
+    EngineBuilder eb(std::move(std::unique_ptr<Module>(engine_module)));
 #else
-    EngineBuilder *eb = new EngineBuilder(engine_module);
+    EngineBuilder eb(engine_module);
 #endif
     std::string ErrorStr;
-    eb  ->setEngineKind(EngineKind::JIT)
+    eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
@@ -5631,7 +5631,7 @@ extern "C" void jl_init_codegen(void)
 #if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    jl_TargetMachine = eb->selectTarget(
+    TargetMachine *targetMachine = eb.selectTarget(
             TheTriple,
             "",
 #if LLVM35
@@ -5640,11 +5640,11 @@ extern "C" void jl_init_codegen(void)
             strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : "",
 #endif
             MAttrs);
-    jl_TargetMachine = jl_TargetMachine->getTarget().createTargetMachine(
+    jl_TargetMachine = targetMachine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_TargetMachine->getTargetCPU(),
-            jl_TargetMachine->getTargetFeatureString(),
-            jl_TargetMachine->Options,
+            targetMachine->getTargetCPU(),
+            targetMachine->getTargetFeatureString(),
+            targetMachine->Options,
 #ifdef CODEGEN_TLS
             Reloc::PIC_,
             CodeModel::Small,
@@ -5658,6 +5658,7 @@ extern "C" void jl_init_codegen(void)
             CodeGenOpt::Aggressive // -O3
 #endif
             );
+    delete targetMachine;
     assert(jl_TargetMachine);
 #if defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
@@ -5666,7 +5667,7 @@ extern "C" void jl_init_codegen(void)
 #else
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
 #endif
-    jl_ExecutionEngine = eb->create(jl_TargetMachine);
+    jl_ExecutionEngine = eb.create(jl_TargetMachine);
     //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
     if (!jl_ExecutionEngine) {
         jl_printf(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());

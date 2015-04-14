@@ -513,6 +513,13 @@ static void jl_uv_exitcleanup_walk(uv_handle_t *handle, void *arg)
 void jl_write_coverage_data(void);
 void jl_write_malloc_log(void);
 
+static struct uv_shutdown_queue_item *next_shutdown_queue_item(struct uv_shutdown_queue_item *item)
+{
+    struct uv_shutdown_queue_item *rv = item->next;
+    free(item);
+    return rv;
+}
+
 DLLEXPORT void jl_atexit_hook()
 {
 #if defined(JL_GC_MARKSWEEP) && defined(GC_FINAL_STATS)
@@ -559,7 +566,7 @@ DLLEXPORT void jl_atexit_hook()
             while (item) {
                 uv_handle_t *handle = item->h;
                 if (handle->type != UV_FILE && uv_is_closing(handle)) {
-                    item = item->next;
+                    item = next_shutdown_queue_item(item);
                     continue;
                 }
                 switch(handle->type) {
@@ -590,7 +597,7 @@ DLLEXPORT void jl_atexit_hook()
                 default:
                     assert(0);
                 }
-                item = item->next;
+                item = next_shutdown_queue_item(item);
             }
         }
         JL_CATCH {
@@ -598,7 +605,7 @@ DLLEXPORT void jl_atexit_hook()
             uv_unref(item->h);
             jl_printf(JL_STDERR, "error during exit cleanup: close: ");
             jl_static_show(JL_STDERR, jl_exception_in_transit);
-            item = item->next;
+            item = next_shutdown_queue_item(item);
         }
     }
     uv_run(loop,UV_RUN_DEFAULT); //let libuv spin until everything has finished closing
