@@ -6,6 +6,12 @@
 @test ip"192.0xFFFFFF" == IPv4(192,255,255,255)
 @test ip"022.0.0.1" == IPv4(18,0,0,1)
 
+@test UInt(IPv4(0x01020304)) == 0x01020304
+@test Int(IPv4("1.2.3.4")) == Int(0x01020304) == Int32(0x01020304)
+@test Int128(IPv6("2001:1::2")) == 42540488241204005274814694018844196866
+@test_throws InexactError Int16(IPv4("1.2.3.4"))
+@test_throws InexactError Int64(IPv6("2001:1::2"))
+
 let ipv = parseip("127.0.0.1")
     @test isa(ipv, IPv4)
     @test ipv == ip"127.0.0.1"
