@@ -114,9 +114,11 @@ Mathematical Operators
    Modulus after division by 2pi, returning in the range [0,2pi).
 
    This function computes a floating point representation of the modulus after
-   division by numerically exact 2pi, and is therefore not exactly the same as
+   division by numerically exact 2pi using range reduction, and is more accurate than
    mod(x,2pi), which would compute the modulus of x relative to division by the
-   floating-point number 2pi.
+   floating-point number 2pi using subtraction. 
+   Note: since the floating point number 2pi is smaller than the exact 2pi, 
+   ``mod2pi(2pi) == 2pi``.
 
 .. function:: rem(x, y)
               %(x, y)

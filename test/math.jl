@@ -402,3 +402,51 @@ for elty in (Float32, Float64)
     @test_approx_eq frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[1][2] convert(elty,0.65625)
     @test frexp( [ convert(elty,4.0) convert(elty,10.5) ] )[2] == [ 3 4 ]
 end
+
+# Issue #2524: mod2pi
+# Test cases designed to test all quadrants, and "difficult" cases:
+# large numbers close to multiples of pi, namely 
+# numerators of continuous fraction approximations to pi (http://oeis.org/A002485)
+@test mod2pi(2pi) == 2pi # note that the Float64 2pi is less than twice pi
+@test mod2pi(6.283185307179586) == 6.283185307179586
+@test mod2pi(-6.283185307179586) == 2.4492935982947064e-16
+@test mod2pi(-3.1415826535897935) == 3.141602653589793
+@test mod2pi(-0.1963395408493621) == 6.0868457663302244
+@test mod2pi(1.0e-5) == 1.0e-5
+@test mod2pi(-1.0e-5) == 6.283175307179587
+@test mod2pi(22.0) == 3.1504440784612404
+@test mod2pi(333.0) == 6.2743640266615035
+@test mod2pi(355.0) == 3.1416227979431572
+@test mod2pi(103993.0) == 6.283166177843807
+@test mod2pi(104348.0) == 3.141603668607378
+@test mod2pi(208341.0) == 3.141584539271598
+@test mod2pi(312689.0) == 2.9006993893361787e-6
+@test mod2pi(833719.0) == 3.1415903406703767
+@test mod2pi(1.146408e6) == 3.1415932413697663
+@test mod2pi(4.272943e6) == 6.283184757600089
+@test mod2pi(5.419351e6) == 3.1415926917902683
+@test mod2pi(8.0143857e7) == 6.283185292406739
+@test mod2pi(1.65707065e8) == 3.1415926622445745
+@test mod2pi(2.45850922e8) == 3.141592647471728
+@test mod2pi(4.11557987e8) == 2.5367160519636766e-9
+@test mod2pi(2.549491779e9) == 4.474494938161497e-10
+@test mod2pi(6.167950454e9) == 3.141592653440059
+@test mod2pi(1.4885392687e10) == 1.4798091093322177e-10
+@test mod2pi(2.1053343141e10) == 3.14159265358804
+@test mod2pi(1.783366216531e12) == 6.969482408757582e-13
+@test mod2pi(3.587785776203e12) == 3.141592653589434
+@test mod2pi(5.371151992734e12) == 3.1415926535901306
+@test mod2pi(8.958937768937e12) == 6.283185307179564
+@test mod2pi(1.39755218526789e14) == 3.1415926535898
+@test mod2pi(4.28224593349304e14) == 3.1415926535897927
+@test mod2pi(5.706674932067741e15) == 4.237546464512562e-16
+@test mod2pi(6.134899525417045e15) == 3.141592653589793
+
+@test_approx_eq mod2pi(10)          mod(10,2pi)
+@test_approx_eq mod2pi(-10)         mod(-10,2pi)
+@test_approx_eq mod2pi(355)         3.1416227979431572
+@test_approx_eq mod2pi(Int32(355))  3.1416227979431572
+@test_approx_eq mod2pi(355.0)       3.1416227979431572
+@test_approx_eq mod2pi(355.0f0)     3.1416228f0
+@test mod2pi(Int64(2)^60) == mod2pi(2.0^60)
+@test_throws ArgumentError mod2pi(Int64(2)^60-1)
