@@ -63,10 +63,14 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
 #endif
                          );
     if (lib->handle) {
+        if (lib->errmsg)
+            free(lib->errmsg);
         lib->errmsg = NULL;
         return 0;
     }
     else {
+        if (lib->errmsg)
+            free(lib->errmsg);
         lib->errmsg = strdup(dlerror());
         return -1;
     }
