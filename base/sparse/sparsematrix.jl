@@ -1923,6 +1923,8 @@ function blkdiag(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
+squeeze(S::SparseMatrixCSC, dims::Dims) = throw(ArgumentError("squeeze is not available for sparse matrices"))
+
 ## Structure query functions
 
 function issym(A::SparseMatrixCSC)
