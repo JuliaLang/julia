@@ -62,7 +62,7 @@ end
 
 percolate_up!{T}(xs::AbstractArray{T}, i::Integer, o::Ordering) = percolate_up!(xs, i, xs[i], o)
 
-heappeek(xs::AbstractArray, o::Ordering=Forward) = xs[1]
+heappeek(xs::AbstractArray) = xs[1]
 
 # Binary min-heap pop.
 function heappop!(xs::AbstractArray, o::Ordering=Forward)
