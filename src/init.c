@@ -84,8 +84,7 @@ DLLEXPORT void gdblookup(ptrint_t ip);
 
 static const char system_image_path[256] = JL_SYSTEM_IMAGE_PATH;
 
-jl_options_t jl_options = { 0,    // version
-                            0,    // quiet
+jl_options_t jl_options = { 0,    // quiet
                             NULL, // julia_home
                             NULL, // julia_bin
                             NULL, // build_path
