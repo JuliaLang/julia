@@ -981,6 +981,25 @@ a = ones(5,0)
 b = sub(a, :, :)
 @test mdsum(b) == 0
 
+a = reshape(1:60, 3, 4, 5)
+@test a[CartesianIndex{3}(2,3,4)] == 44
+a[CartesianIndex{3}(2,3,3)] = -1
+@test a[CartesianIndex{3}(2,3,3)] == -1
+@test a[2,CartesianIndex{2}(3,4)] == 44
+a[1,CartesianIndex{2}(3,4)] = -2
+@test a[1,CartesianIndex{2}(3,4)] == -2
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(4)] == 44
+a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+
+a = sub(zeros(3, 4, 5), :, :, :)
+a[CartesianIndex{3}(2,3,3)] = -1
+@test a[CartesianIndex{3}(2,3,3)] == -1
+a[1,CartesianIndex{2}(3,4)] = -2
+@test a[1,CartesianIndex{2}(3,4)] == -2
+a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] = -3
+@test a[CartesianIndex{1}(2),3,CartesianIndex{1}(3)] == -3
+
 I1 = CartesianIndex((2,3,0))
 I2 = CartesianIndex((-1,5,2))
 @test I1 + I2 == CartesianIndex((1,8,2))
