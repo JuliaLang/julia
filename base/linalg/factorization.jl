@@ -328,10 +328,9 @@ function A_ldiv_B!{T<:BlasFloat}(A::QRPivoted{T}, B::StridedMatrix{T}, rcond::Re
         push!(xmax, cmax)
         for i = 1:rnk
             xmin[i] *= smin
-            xmax[i] = smax*xmin[i]
+            xmax[i] *= smax
         end
         rnk += 1
-        # if cond(r[1:rnk, 1:rnk])*rcond < 1 break end
     end
     C, τ = LAPACK.tzrzf!(A.factors[1:rnk,:])
     A_ldiv_B!(UpperTriangular(C[1:rnk,1:rnk]),sub(Ac_mul_B!(getq(A),sub(B, 1:mA, 1:nrhs)),1:rnk,1:nrhs))
