@@ -1,6 +1,5 @@
 # NOTE: This type needs to be kept in sync with jl_options in src/julia.h
 immutable JLOptions
-    version::Int8
     quiet::Int8
     julia_home::Ptr{Cchar}
     julia_bin::Ptr{Cchar}
