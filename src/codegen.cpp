@@ -5632,7 +5632,7 @@ extern "C" void jl_init_codegen(void)
 #if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    jl_TargetMachine = eb.selectTarget(
+    TargetMachine *targetMachine = eb.selectTarget(
             TheTriple,
             "",
 #if LLVM35
@@ -5641,11 +5641,11 @@ extern "C" void jl_init_codegen(void)
             strcmp(jl_options.cpu_target,"native") ? jl_options.cpu_target : "",
 #endif
             MAttrs);
-    jl_TargetMachine = jl_TargetMachine->getTarget().createTargetMachine(
+    jl_TargetMachine = targetMachine->getTarget().createTargetMachine(
             TheTriple.getTriple(),
-            jl_TargetMachine->getTargetCPU(),
-            jl_TargetMachine->getTargetFeatureString(),
-            jl_TargetMachine->Options,
+            targetMachine->getTargetCPU(),
+            targetMachine->getTargetFeatureString(),
+            targetMachine->Options,
 #ifdef CODEGEN_TLS
             Reloc::PIC_,
             CodeModel::Small,
@@ -5659,6 +5659,7 @@ extern "C" void jl_init_codegen(void)
             CodeGenOpt::Aggressive // -O3
 #endif
             );
+    delete targetMachine;
     assert(jl_TargetMachine);
 #if defined(LLVM36) && !defined(LLVM37)
     engine_module->setDataLayout(jl_TargetMachine->getSubtargetImpl()->getDataLayout());
