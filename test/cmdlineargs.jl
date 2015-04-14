@@ -1,7 +1,7 @@
 let exename = joinpath(JULIA_HOME, Base.julia_exename())
     # --version
     let v = split(readall(`$exename -v`), "julia version ")[end]
-        @test VERSION == VersionNumber(v)
+        @test Base.VERSION_STRING == chomp(v)
     end
     @test readall(`$exename -v`) == readall(`$exename --version`)
 

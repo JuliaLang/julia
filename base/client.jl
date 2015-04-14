@@ -252,12 +252,6 @@ let reqarg = Set(UTF8String["--home",          "-H",
         global have_color     = (opts.color == 1)
         global is_interactive = Bool(opts.isinteractive)
         while true
-            # show julia VERSION and quit
-            if Bool(opts.version)
-                println(STDOUT, "julia version ", VERSION)
-                exit(0)
-            end
-
             # load ~/.juliarc file
             startup && load_juliarc()
 
