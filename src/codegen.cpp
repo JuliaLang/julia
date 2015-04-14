@@ -5612,12 +5612,12 @@ extern "C" void jl_init_codegen(void)
     SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
 #endif
 #ifdef LLVM36
-    EngineBuilder *eb = new EngineBuilder(std::unique_ptr<Module>(engine_module));
+    EngineBuilder eb(std::move(std::unique_ptr<Module>(engine_module)));
 #else
-    EngineBuilder *eb = new EngineBuilder(engine_module);
+    EngineBuilder eb(engine_module);
 #endif
     std::string ErrorStr;
-    eb  ->setEngineKind(EngineKind::JIT)
+    eb  .setEngineKind(EngineKind::JIT)
 #if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_) && !defined(USE_MCJIT)
         .setJITMemoryManager(createJITMemoryManagerWin())
 #endif
@@ -5632,7 +5632,7 @@ extern "C" void jl_init_codegen(void)
 #if (defined(_OS_WINDOWS_) || defined(FORCE_ELF)) && defined(USE_MCJIT)
     TheTriple.setObjectFormat(Triple::ELF);
 #endif
-    jl_TargetMachine = eb->selectTarget(
+    jl_TargetMachine = eb.selectTarget(
             TheTriple,
             "",
 #if LLVM35
@@ -5667,7 +5667,7 @@ extern "C" void jl_init_codegen(void)
 #else
     engine_module->setDataLayout(jl_TargetMachine->getDataLayout()->getStringRepresentation());
 #endif
-    jl_ExecutionEngine = eb->create(jl_TargetMachine);
+    jl_ExecutionEngine = eb.create(jl_TargetMachine);
     //jl_printf(JL_STDERR,"%s\n",jl_ExecutionEngine->getDataLayout()->getStringRepresentation().c_str());
     if (!jl_ExecutionEngine) {
         jl_printf(JL_STDERR, "Critical error initializing llvm: ", ErrorStr.c_str());
