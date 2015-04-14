@@ -117,7 +117,7 @@ Mathematical Operators
    division by numerically exact 2pi using range reduction, and is more accurate than
    mod(x,2pi), which would compute the modulus of x relative to division by the
    floating-point number 2pi using subtraction. 
-   Note: since the floating point number 2pi is smaller than the exact 2pi, 
+   Note: since the floating point number 2pi is less than the exact 2pi, 
    ``mod2pi(2pi) == 2pi``.
 
 .. function:: rem(x, y)
