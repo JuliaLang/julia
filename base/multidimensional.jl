@@ -60,11 +60,19 @@ end
 stagedfunction getindex{N}(A::Array, i::Integer, index::CartesianIndex{N})
     N==0 ? :(Base.arrayref(A, i)) : :(@ncall $(N+1) Base.arrayref A d->(d == 1 ? i : index[d-1]))
 end
+stagedfunction getindex{M,N}(A::Array, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+    exprs = vcat([:(index1[$d]) for d = 1:M], :i, [:(index2[$d]) for d = 1:N])
+    :(Base.arrayref(A, $(exprs...)))
+end
 stagedfunction setindex!{T,N}(A::Array{T}, v, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), 1)) : :(@ncall $N Base.arrayset A convert($T,v) d->index[d])
 end
 stagedfunction setindex!{T,N}(A::Array{T}, v, i::Integer, index::CartesianIndex{N})
     N==0 ? :(Base.arrayset(A, convert($T,v), i)) : :(@ncall $(N+1) Base.arrayset A convert($T,v) d->(d == 1 ? i : index[d-1]))
+end
+stagedfunction setindex!{T,M,N}(A::Array{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+    exprs = vcat([:(index1[$d]) for d = 1:M], :i, [:(index2[$d]) for d = 1:N])
+    :(Base.arrayset(A, convert($T,v), $(exprs...)))
 end
 
 stagedfunction getindex{N}(A::AbstractArray, index::CartesianIndex{N})
@@ -78,6 +86,18 @@ stagedfunction setindex!{N}(A::AbstractArray, v, index::CartesianIndex{N})
 end
 stagedfunction setindex!{N}(A::AbstractArray, v, i::Integer, index::CartesianIndex{N})
     :((@nref $(N+1) A d->(d == 1 ? i : index[d-1])) = v)
+end
+for AT in (AbstractVector, AbstractMatrix, AbstractArray)  # nix ambiguity warning
+    @eval begin
+        stagedfunction getindex{M,N}(A::$AT, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+            exprs = vcat([:(index1[$d]) for d = 1:M], :i, [:(index2[$d]) for d = 1:N])
+            :(getindex(A, $(exprs...)))
+        end
+        stagedfunction setindex!{M,N}(A::$AT, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+            exprs = vcat([:(index1[$d]) for d = 1:M], :i, [:(index2[$d]) for d = 1:N])
+            :(setindex!(A, v, $(exprs...)))
+        end
+    end
 end
 
 # arithmetic, min/max
