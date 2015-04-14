@@ -1624,7 +1624,7 @@
                     (take-token s)
                     ex)
                    (else (error "invalid interpolation syntax")))))
-          (else (error (string "invalid interpolation syntax: \"" c "\""))))))
+          (else (error (string "invalid interpolation syntax: \"$" c "\""))))))
 
 (define (tostr custom io)
   (if custom
