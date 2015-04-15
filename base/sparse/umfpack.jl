@@ -6,7 +6,7 @@ import Base: (\), Ac_ldiv_B, At_ldiv_B, findnz, getindex, show, size
 import Base.LinAlg: A_ldiv_B!, Ac_ldiv_B!, At_ldiv_B!, Factorization, det, lufact
 
 importall Base.SparseMatrix
-import Base.SparseMatrix: increment, increment!, decrement, decrement!
+import Base.SparseMatrix: increment, increment!, decrement, decrement!, nnz
 
 include("umfpack_h.jl")
 type MatrixIllConditionedException <: Exception
@@ -321,6 +321,11 @@ for itype in UmfpackIndexTypes
              increment!(P), increment!(Q), Rs)
         end
     end
+end
+
+function nnz(lu::UmfpackLU)
+    lnz, unz, = umf_lunz(lu)
+    return Int(lnz + unz)
 end
 
 ### Solve with Factorization

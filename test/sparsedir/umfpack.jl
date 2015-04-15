@@ -14,6 +14,7 @@ for Tv in (Float64, Complex128)
     for Ti in Base.SparseMatrix.UMFPACK.UMFITypes.types
         A = convert(SparseMatrixCSC{Tv,Ti}, A0)
         lua = lufact(A)
+        @test nnz(lua) == 18
         L,U,p,q,Rs = lua[:(:)]
         @test_approx_eq scale(Rs,A)[p,q] L*U
 
