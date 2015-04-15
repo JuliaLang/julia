@@ -178,7 +178,9 @@ DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_bu
 {
     if (handle->data) {
         jl_value_t *ret = JULIA_CB(alloc_buf,handle->data,1,CB_UINT,suggested_size);
-        assert(jl_is_tuple(ret) && jl_is_pointer(jl_fieldref(ret,0)));
+        JL_GC_PUSH1(&ret);
+        // TODO: jl_fieldref allocates boxes here. should avoid that.
+        assert(jl_is_tuple(ret) && jl_nfields(ret)==2 && jl_is_pointer(jl_fieldref(ret,0)));
         buf->base = jl_unbox_voidpointer(jl_fieldref(ret,0));
 #ifdef _P64
         assert(jl_is_uint64(jl_fieldref(ret,1)));
@@ -187,6 +189,7 @@ DLLEXPORT void jl_uv_alloc_buf(uv_handle_t *handle, size_t suggested_size, uv_bu
         assert(jl_is_uint32(jl_fieldref(ret,1)));
         buf->len = jl_unbox_uint32(jl_fieldref(ret,1));
 #endif
+        JL_GC_POP();
     }
     else {
         buf->len = 0;
