@@ -377,6 +377,21 @@ end
 import .Terminals
 import .REPL
 
+const repl_hooks = []
+
+atreplinit(f::Function) = (unshift!(repl_hooks, f); nothing)
+
+function _atreplinit(repl)
+    for f in repl_hooks
+        try
+            f(repl)
+        catch err
+            show(STDERR, err)
+            println(STDERR)
+        end
+    end
+end
+
 function _start()
     opts = JLOptions()
     try
@@ -421,6 +436,7 @@ function _start()
                     end
                 end
             else
+                _atreplinit(active_repl)
                 active_repl_backend = REPL.run_repl(active_repl)
             end
         end
