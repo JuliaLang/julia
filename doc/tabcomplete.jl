@@ -63,8 +63,14 @@ for entry in entries
     thisline = ""
     for (i, col) in enumerate(entry)
         thisline *= rpad(col, maxlen[i], " ") * " "
+
+        #Hack round JuliaLang/julia#10825
+        if i==2 && any(x->charwidth(x)==2, collect(col))
+            thisline *=" "
+        end
     end
     println(rstrip(thisline))
+
     if isheader
         println(underline("-", maxlen))
         isheader = false
