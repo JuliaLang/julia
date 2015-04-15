@@ -838,18 +838,6 @@ DLLEXPORT int jl_tcp_quickack(uv_tcp_t *handle, int on)
 }
 #endif
 
-DLLEXPORT jl_uv_libhandle jl_wrap_raw_dl_handle(void *handle)
-{
-    uv_lib_t *lib = (uv_lib_t*)malloc(sizeof(uv_lib_t));
-    #ifdef _OS_WINDOWS_
-    lib->handle=(HMODULE)handle;
-    #else
-    lib->handle=handle;
-    #endif
-    lib->errmsg=NULL;
-    return (jl_uv_libhandle) lib;
-}
-
 #ifndef _OS_WINDOWS_
 
 DLLEXPORT int jl_uv_unix_fd_is_watched(int fd, uv_poll_t *handle, uv_loop_t *loop)
