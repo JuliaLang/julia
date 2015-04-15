@@ -93,9 +93,7 @@
 #include <llvm/Support/DynamicLibrary.h>
 #include <llvm/Support/PrettyStackTrace.h>
 #include <llvm/Support/SourceMgr.h>
-#ifdef JL_DEBUG_BUILD
 #include <llvm/Support/CommandLine.h>
-#endif
 #include <llvm/Transforms/Utils/Cloning.h>
 
 #if defined(_OS_WINDOWS_) && !defined(NOMINMAX)
