@@ -161,13 +161,11 @@ The Julia REPL makes great use of key bindings.  Several control-key bindings we
 +------------------------+----------------------------------------------------+
 | ``^T``                 | Transpose the characters about the cursor          |
 +------------------------+----------------------------------------------------+
-| Delete, ``^D``         | Forward delete one character (when buffer has text)|
-+------------------------+----------------------------------------------------+
 
 Customizing keybindings
 ~~~~~~~~~~~~~~~~~~~~~~~
 
-Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
+Julia's REPL keybindings may be fully customized to a user's preferences by passing a dictionary to ``REPL.setup_interface()``. The keys of this dictionary may be characters or strings. The key ``'*'`` refers to the default action. Control plus character ``x`` bindings are indicated with ``"^x"``. Meta plus ``x`` can be written ``"\\Mx"``. The values of the custom keymap must be ``nothing`` (indicating that the input should be ignored) or functions that accept the signature ``(PromptState, AbstractREPL, Char)``. The ``REPL.setup_interface()`` function must be called before the REPL is initialized, by registering the operation with ``atreplinit()``. For example, to bind the up and down arrow keys to move through history without prefix search, one could put the following code in ``.juliarc.jl``::
 
     import Base: LineEdit, REPL
 
@@ -178,7 +176,11 @@ Julia's REPL keybindings may be fully customized to a user's preferences by pass
       "\e[B" => (s,o...)->(LineEdit.edit_move_up(s) || LineEdit.history_next(s, LineEdit.mode(s).hist))
     )
 
-    Base.active_repl.interface = REPL.setup_interface(Base.active_repl; extra_repl_keymap = mykeys)
+    function customize_keys(repl)
+      repl.interface = REPL.setup_interface(repl; extra_repl_keymap = mykeys)
+    end
+
+    atreplinit(customize_keys)
 
 Users should refer to ``base/LineEdit.jl`` to discover the available actions on key input.
 
