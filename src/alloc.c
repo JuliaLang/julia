@@ -497,6 +497,7 @@ jl_typename_t *jl_new_typename(jl_sym_t *name)
     tn->module = jl_current_module;
     tn->primary = NULL;
     tn->cache = (jl_value_t*)jl_emptysvec;
+    tn->names = NULL;
     tn->uid = jl_assign_type_uid();
     return tn;
 }
