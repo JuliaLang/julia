@@ -659,8 +659,9 @@ julia will automatically pass a C pointer to the encapsulated data::
     range = Ref{Cfloat}(0)
     ccall(:foo, Void, (Ref{Cint}, Ref{Cfloat}), width, range)
 
-This is used extensively in Julia's LAPACK interface, where an integer ``info``
-is passed to LAPACK by reference, and on return, includes the success code.
+Upon return, the contents of ``width`` and ``range`` can be retrieved
+(if they were changed by ``foo``) by ``width[]`` and ``range[]``; that is,
+they act like zero-dimensional arrays.
 
 Special Reference Syntax for ccall (deprecated):
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
