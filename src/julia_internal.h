@@ -84,7 +84,7 @@ void jl_set_datatype_super(jl_datatype_t *tt, jl_value_t *super);
 void jl_initialize_generic_function(jl_function_t *f, jl_sym_t *name);
 void jl_add_constructors(jl_datatype_t *t);
 
-jl_value_t *jl_nth_slot_type(jl_tuple_t *sig, size_t i);
+jl_value_t *jl_nth_slot_type(jl_tupletype_t *sig, size_t i);
 void jl_compute_field_offsets(jl_datatype_t *st);
 jl_array_t *jl_new_array_for_deserialization(jl_value_t *atype, uint32_t ndims, size_t *dims,
                                              int isunboxed, int elsz);
