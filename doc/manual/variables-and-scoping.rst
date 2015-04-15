@@ -26,6 +26,7 @@ The constructs introducing such blocks are:
 -  ``for`` loops
 -  ``try`` blocks
 -  ``catch`` blocks
+-  ``finally`` blocks 
 -  ``let`` blocks
 -  ``type`` blocks.
 
