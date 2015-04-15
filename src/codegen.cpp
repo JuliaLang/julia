@@ -4547,8 +4547,11 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         ,"-avx"
 #endif
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
+        ,"-disable-copyprop" // llvm bug 21743
+#endif
     };
-    SmallVector<std::string, 4> MAttrs(mattr, mattr+2);
+    SmallVector<std::string, 4> MAttrs(mattr, mattr+sizeof(mattr)/sizeof(mattr[0]));
 #endif
     EngineBuilder eb = EngineBuilder(engine_module)
         .setEngineKind(EngineKind::JIT)
