@@ -104,6 +104,7 @@ chma = cholfact(A)                      # LL' form
 @test unsafe_load(chma.p).is_ll == 1    # check that it is in fact an LLt
 x = chma\B
 @test_approx_eq x ones(size(x))
+@test nnz(chma) == 489
 
 #lp_afiro example
 afiro = CHOLMOD.Sparse(27, 51,
