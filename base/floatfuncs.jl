@@ -30,9 +30,9 @@ num2hex(x::Float64) = hex(box(Uint64,unbox(Float64,x)),16)
 
 function hex2num(s::String)
     if length(s) <= 8
-        return box(Float32,unbox(Int32,parseint(Int32,s,16)))
+        return box(Float32,unbox(Uint32,parseint(Uint32,s,16)))
     end
-    return box(Float64,unbox(Int64,parseint(Int64,s,16)))
+    return box(Float64,unbox(Uint64,parseint(Uint64,s,16)))
 end
 
 @vectorize_1arg Real iround
