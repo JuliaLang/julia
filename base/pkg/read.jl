@@ -17,7 +17,7 @@ function available(names=readdir("METADATA"))
         for ver in readdir(versdir)
             ismatch(Base.VERSION_REGEX, ver) || continue
             isfile(versdir, ver, "sha1") || continue
-            haskey(pkgs,pkg) || (pkgs[pkg] = eltype(pkgs)[2]())
+            haskey(pkgs,pkg) || (pkgs[pkg] = Dict{VersionNumber,Available}())
             pkgs[pkg][convert(VersionNumber,ver)] = Available(
                 readchomp(joinpath(versdir,ver,"sha1")),
                 Reqs.parse(joinpath(versdir,ver,"requires"))
