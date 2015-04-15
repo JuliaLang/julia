@@ -5604,7 +5604,7 @@ extern "C" void jl_init_codegen(void)
 #ifdef V128_BUG
         ,"-avx"
 #endif
-#if defined(LLVM35) && defined(_OS_WINDOWS_) && !defined(LLVM36)
+#if defined(_OS_WINDOWS_) && defined(_CPU_X86_64_)
         ,"-disable-copyprop" // llvm bug 21743
 #endif
     };
