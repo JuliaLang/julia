@@ -2983,7 +2983,7 @@ void jl_init_types(void)
     // NOTE: types should not really be mutable, but the instance and
     // struct_decl fields are basically caches, which are mutated.
     jl_datatype_type->mutabl = 1;
-    jl_datatype_type->ninitialized = 0;
+    jl_datatype_type->ninitialized = 4;
 
     jl_typename_type->name = jl_new_typename(jl_symbol("TypeName"));
     jl_typename_type->name->primary = (jl_value_t*)jl_typename_type;
@@ -3000,7 +3000,7 @@ void jl_init_types(void)
     jl_typename_type->abstract = 0;
     jl_typename_type->pointerfree = 0;
     jl_typename_type->mutabl = 1;
-    jl_typename_type->ninitialized = 0;
+    jl_typename_type->ninitialized = 2;
 
     jl_sym_type->name = jl_new_typename(jl_symbol("Symbol"));
     jl_sym_type->name->primary = (jl_value_t*)jl_sym_type;
@@ -3041,7 +3041,7 @@ void jl_init_types(void)
                                         jl_type_type, jl_emptysvec,
                                         jl_svec(1, jl_symbol("types")),
                                         jl_svec(1, jl_simplevector_type),
-                                        0, 0, 0);
+                                        0, 0, 1);
 
     jl_bottom_type = (jl_value_t*)jl_new_struct(jl_uniontype_type, jl_emptysvec);
 
@@ -3052,7 +3052,7 @@ void jl_init_types(void)
                                            jl_symbol("bound")),
                                    jl_svec(4, jl_sym_type, jl_type_type,
                                            jl_type_type, jl_any_type),
-                                   0, 0, 0);
+                                   0, 0, 3);
 
     jl_svec_t *tv;
     tv = jl_svec1(tvar("T"));
@@ -3105,7 +3105,7 @@ void jl_init_types(void)
                         jl_svec(7, jl_type_type, jl_bool_type, jl_bool_type,
                                 jl_any_type, jl_any_type,
                                 jl_any_type, jl_any_type),
-                        0, 1, 0);
+                        0, 1, 7);
 
     jl_methtable_type =
         jl_new_datatype(jl_symbol("MethodTable"), jl_any_type, jl_emptysvec,
@@ -3116,7 +3116,7 @@ void jl_init_types(void)
                         jl_svec(7, jl_sym_type, jl_any_type, jl_any_type,
                                 jl_any_type, jl_any_type, jl_long_type,
                                 jl_any_type),
-                        0, 1, 0);
+                        0, 1, 6);
 
     tv = jl_svec2(tvar("T"), tvar("N"));
     jl_abstractarray_type =
@@ -3154,10 +3154,10 @@ void jl_init_types(void)
         jl_new_datatype(jl_symbol("Expr"),
                         jl_any_type, jl_emptysvec,
                         jl_svec(3, jl_symbol("head"), jl_symbol("args"),
-                                 jl_symbol("typ")),
+                                jl_symbol("typ")),
                         jl_svec(3, jl_sym_type, jl_array_any_type,
                                  jl_any_type),
-                        0, 1, 0);
+                        0, 1, 3);
 
     jl_linenumbernode_type =
         jl_new_datatype(jl_symbol("LineNumberNode"), jl_any_type, jl_emptysvec,
@@ -3177,22 +3177,22 @@ void jl_init_types(void)
     jl_quotenode_type =
         jl_new_datatype(jl_symbol("QuoteNode"), jl_any_type, jl_emptysvec,
                         jl_svec(1, jl_symbol("value")),
-                        jl_svec(1, jl_any_type), 0, 0, 0);
+                        jl_svec(1, jl_any_type), 0, 0, 1);
 
     jl_newvarnode_type =
         jl_new_datatype(jl_symbol("NewvarNode"), jl_any_type, jl_emptysvec,
                         jl_svec(1, jl_symbol("name")),
-                        jl_svec(1, jl_sym_type), 0, 0, 0);
+                        jl_svec(1, jl_sym_type), 0, 0, 1);
 
     jl_topnode_type =
         jl_new_datatype(jl_symbol("TopNode"), jl_any_type, jl_emptysvec,
                         jl_svec(1, jl_symbol("name")),
-                        jl_svec(1, jl_sym_type), 0, 0, 0);
+                        jl_svec(1, jl_sym_type), 0, 0, 1);
 
     jl_module_type =
         jl_new_datatype(jl_symbol("Module"), jl_any_type, jl_emptysvec,
                         jl_svec(2, jl_symbol("name"), jl_symbol("parent")),
-                        jl_svec(2, jl_sym_type, jl_any_type), 0, 1, 0);
+                        jl_svec(2, jl_sym_type, jl_any_type), 0, 1, 2);
 
     jl_svecset(jl_typename_type->types, 1, jl_module_type);
 
@@ -3218,7 +3218,7 @@ void jl_init_types(void)
                                 jl_any_type,
                                 jl_sym_type, jl_int32_type,
                                 jl_bool_type),
-                        0, 1, 0);
+                        0, 1, 4);
 
     jl_box_type =
         jl_new_datatype(jl_symbol("Box"),
@@ -3234,7 +3234,7 @@ void jl_init_types(void)
                         jl_svec(2, jl_symbol("parameters"),
                                 jl_symbol("body")),
                         jl_svec(2, jl_simplevector_type, jl_any_type),
-                        0, 0, 0);
+                        0, 0, 2);
 
     jl_function_type =
         jl_new_datatype(jl_symbol("Function"), jl_any_type, jl_emptysvec,
