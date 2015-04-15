@@ -87,10 +87,10 @@ stagedfunction setindex!{T,N}(A::AbstractArray{T}, v, i::Integer, index::Cartesi
 end
 for AT in (AbstractVector, AbstractMatrix, AbstractArray)  # nix ambiguity warning
     @eval begin
-        stagedfunction getindex{M,N}(A::AbstractArray, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+        stagedfunction getindex{M,N}(A::$AT, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
             :(getindex(A, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
         end
-        stagedfunction setindex!{T,M,N}(A::AbstractArray{T}, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
+        stagedfunction setindex!{M,N}(A::$AT, v, index1::CartesianIndex{M}, i::Integer, index2::CartesianIndex{N})
             :(setindex!(A, v, $(cartindex_exprs((index1, i, index2), (:index1, :i, :index2))...)))
         end
     end
