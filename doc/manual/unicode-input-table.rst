@@ -260,7 +260,7 @@ U+01DB2           ᶲ            \\^Phi                                         
 U+01DBB           ᶻ            \\^z                                           MODIFIER LETTER SMALL Z
 U+01DBF           ᶿ            \\^theta                                       MODIFIER LETTER SMALL THETA
 U+02002                        \\enspace                                      EN SPACE
-U+02003                       \\quad                                         EM SPACE
+U+02003                        \\quad                                         EM SPACE
 U+02005                        \\thickspace                                   FOUR-PER-EM SPACE
 U+02009                        \\thinspace                                    THIN SPACE
 U+0200A                        \\hspace                                       HAIR SPACE
@@ -289,7 +289,7 @@ U+0203A           ›            \\guilsinglright                               
 U+0203C           ‼            \\:bangbang:                                   DOUBLE EXCLAMATION MARK
 U+02040           ⁀            \\tieconcat                                    CHARACTER TIE
 U+02049           ⁉            \\:interrobang:                                EXCLAMATION QUESTION MARK
-U+02057           ⁗           \\pppprime                                     QUADRUPLE PRIME
+U+02057           ⁗            \\pppprime                                     QUADRUPLE PRIME
 U+02060           ⁠             \\nolinebreak                                  WORD JOINER
 U+02070           ⁰            \\^0                                           SUPERSCRIPT ZERO / SUPERSCRIPT DIGIT ZERO
 U+02071           ⁱ            \\^i                                           SUPERSCRIPT LATIN SMALL LETTER I
@@ -395,17 +395,17 @@ U+02136           ℶ            \\beth                                         
 U+02137           ℷ            \\gimel                                        GIMEL SYMBOL / THIRD TRANSFINITE CARDINAL
 U+02138           ℸ            \\daleth                                       DALET SYMBOL / FOURTH TRANSFINITE CARDINAL
 U+02139           ℹ            \\:information_source:                         INFORMATION SOURCE
-U+0213C           ℼ           \\Bbbpi                                        DOUBLE-STRUCK SMALL PI
-U+0213D           ℽ           \\Bbbgamma                                     DOUBLE-STRUCK SMALL GAMMA
+U+0213C           ℼ            \\Bbbpi                                        DOUBLE-STRUCK SMALL PI
+U+0213D           ℽ            \\Bbbgamma                                     DOUBLE-STRUCK SMALL GAMMA
 U+0213E           ℾ            \\BbbGamma                                     DOUBLE-STRUCK CAPITAL GAMMA
-U+0213F           ℿ           \\BbbPi                                        DOUBLE-STRUCK CAPITAL PI
-U+02140           ⅀           \\bbsum                                        DOUBLE-STRUCK N-ARY SUMMATION
+U+0213F           ℿ            \\BbbPi                                        DOUBLE-STRUCK CAPITAL PI
+U+02140           ⅀            \\bbsum                                        DOUBLE-STRUCK N-ARY SUMMATION
 U+02141           ⅁            \\Game                                         TURNED SANS-SERIF CAPITAL G
 U+02142           ⅂            \\sansLturned                                  TURNED SANS-SERIF CAPITAL L
 U+02143           ⅃            \\sansLmirrored                                REVERSED SANS-SERIF CAPITAL L
 U+02144           ⅄            \\Yup                                          TURNED SANS-SERIF CAPITAL Y
-U+02145           ⅅ           \\mitBbbD                                      DOUBLE-STRUCK ITALIC CAPITAL D
-U+02146           ⅆ           \\mitBbbd                                      DOUBLE-STRUCK ITALIC SMALL D
+U+02145           ⅅ            \\mitBbbD                                      DOUBLE-STRUCK ITALIC CAPITAL D
+U+02146           ⅆ            \\mitBbbd                                      DOUBLE-STRUCK ITALIC SMALL D
 U+02147           ⅇ            \\mitBbbe                                      DOUBLE-STRUCK ITALIC SMALL E
 U+02148           ⅈ            \\mitBbbi                                      DOUBLE-STRUCK ITALIC SMALL I
 U+02149           ⅉ            \\mitBbbj                                      DOUBLE-STRUCK ITALIC SMALL J
@@ -500,18 +500,18 @@ U+021E7           ⇧            \\upwhitearrow                                 
 U+021E8           ⇨            \\rightwhitearrow                              RIGHTWARDS WHITE ARROW / WHITE RIGHT ARROW
 U+021E9           ⇩            \\downwhitearrow                               DOWNWARDS WHITE ARROW / WHITE DOWN ARROW
 U+021EA           ⇪            \\whitearrowupfrombar                          UPWARDS WHITE ARROW FROM BAR / WHITE UP ARROW FROM BAR
-U+021F4           ⇴           \\circleonrightarrow                           RIGHT ARROW WITH SMALL CIRCLE
+U+021F4           ⇴            \\circleonrightarrow                           RIGHT ARROW WITH SMALL CIRCLE
 U+021F5           ⇵            \\DownArrowUpArrow                             DOWNWARDS ARROW LEFTWARDS OF UPWARDS ARROW
 U+021F6           ⇶            \\rightthreearrows                             THREE RIGHTWARDS ARROWS
 U+021F7           ⇷            \\nvleftarrow                                  LEFTWARDS ARROW WITH VERTICAL STROKE
 U+021F8           ⇸            \\nvrightarrow                                 RIGHTWARDS ARROW WITH VERTICAL STROKE
-U+021F9           ⇹           \\nvleftrightarrow                             LEFT RIGHT ARROW WITH VERTICAL STROKE
-U+021FA           ⇺           \\nVleftarrow                                  LEFTWARDS ARROW WITH DOUBLE VERTICAL STROKE
-U+021FB           ⇻           \\nVrightarrow                                 RIGHTWARDS ARROW WITH DOUBLE VERTICAL STROKE
-U+021FC           ⇼           \\nVleftrightarrow                             LEFT RIGHT ARROW WITH DOUBLE VERTICAL STROKE
+U+021F9           ⇹            \\nvleftrightarrow                             LEFT RIGHT ARROW WITH VERTICAL STROKE
+U+021FA           ⇺            \\nVleftarrow                                  LEFTWARDS ARROW WITH DOUBLE VERTICAL STROKE
+U+021FB           ⇻            \\nVrightarrow                                 RIGHTWARDS ARROW WITH DOUBLE VERTICAL STROKE
+U+021FC           ⇼            \\nVleftrightarrow                             LEFT RIGHT ARROW WITH DOUBLE VERTICAL STROKE
 U+021FD           ⇽            \\leftarrowtriangle                            LEFTWARDS OPEN-HEADED ARROW
 U+021FE           ⇾            \\rightarrowtriangle                           RIGHTWARDS OPEN-HEADED ARROW
-U+021FF           ⇿           \\leftrightarrowtriangle                       LEFT RIGHT OPEN-HEADED ARROW
+U+021FF           ⇿            \\leftrightarrowtriangle                       LEFT RIGHT OPEN-HEADED ARROW
 U+02200           ∀            \\forall                                       FOR ALL
 U+02201           ∁            \\complement                                   COMPLEMENT
 U+02202           ∂            \\partial                                      PARTIAL DIFFERENTIAL
@@ -762,20 +762,20 @@ U+022EE           ⋮            \\vdots                                        
 U+022EF           ⋯            \\cdots                                        MIDLINE HORIZONTAL ELLIPSIS
 U+022F0           ⋰            \\adots                                        UP RIGHT DIAGONAL ELLIPSIS
 U+022F1           ⋱            \\ddots                                        DOWN RIGHT DIAGONAL ELLIPSIS
-U+022F2           ⋲           \\disin                                        ELEMENT OF WITH LONG HORIZONTAL STROKE
-U+022F3           ⋳           \\varisins                                     ELEMENT OF WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
+U+022F2           ⋲            \\disin                                        ELEMENT OF WITH LONG HORIZONTAL STROKE
+U+022F3           ⋳            \\varisins                                     ELEMENT OF WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
 U+022F4           ⋴            \\isins                                        SMALL ELEMENT OF WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
-U+022F5           ⋵           \\isindot                                      ELEMENT OF WITH DOT ABOVE
-U+022F6           ⋶           \\varisinobar                                  ELEMENT OF WITH OVERBAR
+U+022F5           ⋵            \\isindot                                      ELEMENT OF WITH DOT ABOVE
+U+022F6           ⋶            \\varisinobar                                  ELEMENT OF WITH OVERBAR
 U+022F7           ⋷            \\isinobar                                     SMALL ELEMENT OF WITH OVERBAR
 U+022F8           ⋸            \\isinvb                                       ELEMENT OF WITH UNDERBAR
-U+022F9           ⋹           \\isinE                                        ELEMENT OF WITH TWO HORIZONTAL STROKES
-U+022FA           ⋺           \\nisd                                         CONTAINS WITH LONG HORIZONTAL STROKE
-U+022FB           ⋻           \\varnis                                       CONTAINS WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
+U+022F9           ⋹            \\isinE                                        ELEMENT OF WITH TWO HORIZONTAL STROKES
+U+022FA           ⋺            \\nisd                                         CONTAINS WITH LONG HORIZONTAL STROKE
+U+022FB           ⋻            \\varnis                                       CONTAINS WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
 U+022FC           ⋼            \\nis                                          SMALL CONTAINS WITH VERTICAL BAR AT END OF HORIZONTAL STROKE
-U+022FD           ⋽           \\varniobar                                    CONTAINS WITH OVERBAR
+U+022FD           ⋽            \\varniobar                                    CONTAINS WITH OVERBAR
 U+022FE           ⋾            \\niobar                                       SMALL CONTAINS WITH OVERBAR
-U+022FF           ⋿           \\bagmember                                    Z NOTATION BAG MEMBERSHIP
+U+022FF           ⋿            \\bagmember                                    Z NOTATION BAG MEMBERSHIP
 U+02300           ⌀            \\diameter                                     DIAMETER SIGN
 U+02302           ⌂            \\house                                        HOUSE
 U+02306           ⌆            \\vardoublebarwedge                            PERSPECTIVE
@@ -806,35 +806,35 @@ U+0233F           ⌿            \\APLnotslash                                  
 U+02340           ⍀            \\APLnotbackslash                              APL FUNCTIONAL SYMBOL BACKSLASH BAR
 U+02353           ⍓            \\APLboxupcaret                                APL FUNCTIONAL SYMBOL QUAD UP CARET
 U+02370           ⍰            \\APLboxquestion                               APL FUNCTIONAL SYMBOL QUAD QUESTION
-U+02394           ⎔           \\hexagon                                      SOFTWARE-FUNCTION SYMBOL
+U+02394           ⎔            \\hexagon                                      SOFTWARE-FUNCTION SYMBOL
 U+023A3           ⎣            \\Elzdlcorn                                    LEFT SQUARE BRACKET LOWER CORNER
 U+023B0           ⎰            \\lmoustache                                   UPPER LEFT OR LOWER RIGHT CURLY BRACKET SECTION
 U+023B1           ⎱            \\rmoustache                                   UPPER RIGHT OR LOWER LEFT CURLY BRACKET SECTION
-U+023B4           ⎴           \\overbracket                                  TOP SQUARE BRACKET
-U+023B5           ⎵           \\underbracket                                 BOTTOM SQUARE BRACKET
-U+023B6           ⎶           \\bbrktbrk                                     BOTTOM SQUARE BRACKET OVER TOP SQUARE BRACKET
+U+023B4           ⎴            \\overbracket                                  TOP SQUARE BRACKET
+U+023B5           ⎵            \\underbracket                                 BOTTOM SQUARE BRACKET
+U+023B6           ⎶            \\bbrktbrk                                     BOTTOM SQUARE BRACKET OVER TOP SQUARE BRACKET
 U+023B7           ⎷            \\sqrtbottom                                   RADICAL SYMBOL BOTTOM
 U+023B8           ⎸            \\lvboxline                                    LEFT VERTICAL BOX LINE
 U+023B9           ⎹            \\rvboxline                                    RIGHT VERTICAL BOX LINE
-U+023CE           ⏎           \\varcarriagereturn                            RETURN SYMBOL
-U+023DE           ⏞           \\overbrace                                    TOP CURLY BRACKET
-U+023DF           ⏟           \\underbrace                                   BOTTOM CURLY BRACKET
-U+023E2           ⏢           \\trapezium                                    WHITE TRAPEZIUM
-U+023E3           ⏣           \\benzenr                                      BENZENE RING WITH CIRCLE
-U+023E4           ⏤           \\strns                                        STRAIGHTNESS
-U+023E5           ⏥           \\fltns                                        FLATNESS
-U+023E6           ⏦           \\accurrent                                    AC CURRENT
-U+023E7           ⏧           \\elinters                                     ELECTRICAL INTERSECTION
-U+023E9           ⏩           \\:fast_forward:                               BLACK RIGHT-POINTING DOUBLE TRIANGLE
-U+023EA           ⏪           \\:rewind:                                     BLACK LEFT-POINTING DOUBLE TRIANGLE
-U+023EB           ⏫           \\:arrow_double_up:                            BLACK UP-POINTING DOUBLE TRIANGLE
-U+023EC           ⏬           \\:arrow_double_down:                          BLACK DOWN-POINTING DOUBLE TRIANGLE
-U+023F0           ⏰           \\:alarm_clock:                                ALARM CLOCK
-U+023F3           ⏳           \\:hourglass_flowing_sand:                     HOURGLASS WITH FLOWING SAND
+U+023CE           ⏎            \\varcarriagereturn                            RETURN SYMBOL
+U+023DE           ⏞            \\overbrace                                    TOP CURLY BRACKET
+U+023DF           ⏟            \\underbrace                                   BOTTOM CURLY BRACKET
+U+023E2           ⏢            \\trapezium                                    WHITE TRAPEZIUM
+U+023E3           ⏣            \\benzenr                                      BENZENE RING WITH CIRCLE
+U+023E4           ⏤            \\strns                                        STRAIGHTNESS
+U+023E5           ⏥            \\fltns                                        FLATNESS
+U+023E6           ⏦            \\accurrent                                    AC CURRENT
+U+023E7           ⏧            \\elinters                                     ELECTRICAL INTERSECTION
+U+023E9           ⏩            \\:fast_forward:                               BLACK RIGHT-POINTING DOUBLE TRIANGLE
+U+023EA           ⏪            \\:rewind:                                     BLACK LEFT-POINTING DOUBLE TRIANGLE
+U+023EB           ⏫            \\:arrow_double_up:                            BLACK UP-POINTING DOUBLE TRIANGLE
+U+023EC           ⏬            \\:arrow_double_down:                          BLACK DOWN-POINTING DOUBLE TRIANGLE
+U+023F0           ⏰            \\:alarm_clock:                                ALARM CLOCK
+U+023F3           ⏳            \\:hourglass_flowing_sand:                     HOURGLASS WITH FLOWING SAND
 U+02422           ␢            \\blanksymbol                                  BLANK SYMBOL / BLANK
 U+02423           ␣            \\textvisiblespace                             OPEN BOX
-U+024C2           Ⓜ           \\:m:                                          CIRCLED LATIN CAPITAL LETTER M
-U+024C8           Ⓢ           \\circledS                                     CIRCLED LATIN CAPITAL LETTER S
+U+024C2           Ⓜ            \\:m:                                          CIRCLED LATIN CAPITAL LETTER M
+U+024C8           Ⓢ            \\circledS                                     CIRCLED LATIN CAPITAL LETTER S
 U+02506           ┆            \\Elzdshfnc                                    BOX DRAWINGS LIGHT TRIPLE DASH VERTICAL / FORMS LIGHT TRIPLE DASH VERTICAL
 U+02519           ┙            \\Elzsqfnw                                     BOX DRAWINGS UP LIGHT AND LEFT HEAVY / FORMS UP LIGHT AND LEFT HEAVY
 U+02571           ╱            \\diagup                                       BOX DRAWINGS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT / FORMS LIGHT DIAGONAL UPPER RIGHT TO LOWER LEFT
@@ -947,7 +947,7 @@ U+02609           ☉            \\astrosun                                     
 U+0260E           ☎            \\:phone:                                      BLACK TELEPHONE
 U+02611           ☑            \\:ballot_box_with_check:                      BALLOT BOX WITH CHECK
 U+02614           ☔            \\:umbrella:                                   UMBRELLA WITH RAIN DROPS
-U+02615           ☕           \\:coffee:                                     HOT BEVERAGE
+U+02615           ☕            \\:coffee:                                     HOT BEVERAGE
 U+0261D           ☝            \\:point_up:                                   WHITE UP POINTING INDEX
 U+02621           ☡            \\danger                                       CAUTION SIGN
 U+0263A           ☺            \\:relaxed:                                    WHITE SMILING FACE
@@ -989,430 +989,430 @@ U+0266B           ♫            \\twonotes                                     
 U+0266D           ♭            \\flat                                         MUSIC FLAT SIGN / FLAT
 U+0266E           ♮            \\natural                                      MUSIC NATURAL SIGN / NATURAL
 U+0266F           ♯            \\sharp                                        MUSIC SHARP SIGN / SHARP
-U+0267B           ♻           \\:recycle:                                    BLACK UNIVERSAL RECYCLING SYMBOL
-U+0267E           ♾           \\acidfree                                     PERMANENT PAPER SIGN
-U+0267F           ♿           \\:wheelchair:                                 WHEELCHAIR SYMBOL
-U+02680           ⚀           \\dicei                                        DIE FACE-1
-U+02681           ⚁           \\diceii                                       DIE FACE-2
-U+02682           ⚂           \\diceiii                                      DIE FACE-3
-U+02683           ⚃           \\diceiv                                       DIE FACE-4
-U+02684           ⚄           \\dicev                                        DIE FACE-5
-U+02685           ⚅           \\dicevi                                       DIE FACE-6
-U+02686           ⚆           \\circledrightdot                              WHITE CIRCLE WITH DOT RIGHT
-U+02687           ⚇           \\circledtwodots                               WHITE CIRCLE WITH TWO DOTS
-U+02688           ⚈           \\blackcircledrightdot                         BLACK CIRCLE WITH WHITE DOT RIGHT
-U+02689           ⚉           \\blackcircledtwodots                          BLACK CIRCLE WITH TWO WHITE DOTS
-U+02693           ⚓           \\:anchor:                                     ANCHOR
-U+026A0           ⚠           \\:warning:                                    WARNING SIGN
+U+0267B           ♻            \\:recycle:                                    BLACK UNIVERSAL RECYCLING SYMBOL
+U+0267E           ♾            \\acidfree                                     PERMANENT PAPER SIGN
+U+0267F           ♿            \\:wheelchair:                                 WHEELCHAIR SYMBOL
+U+02680           ⚀            \\dicei                                        DIE FACE-1
+U+02681           ⚁            \\diceii                                       DIE FACE-2
+U+02682           ⚂            \\diceiii                                      DIE FACE-3
+U+02683           ⚃            \\diceiv                                       DIE FACE-4
+U+02684           ⚄            \\dicev                                        DIE FACE-5
+U+02685           ⚅            \\dicevi                                       DIE FACE-6
+U+02686           ⚆            \\circledrightdot                              WHITE CIRCLE WITH DOT RIGHT
+U+02687           ⚇            \\circledtwodots                               WHITE CIRCLE WITH TWO DOTS
+U+02688           ⚈            \\blackcircledrightdot                         BLACK CIRCLE WITH WHITE DOT RIGHT
+U+02689           ⚉            \\blackcircledtwodots                          BLACK CIRCLE WITH TWO WHITE DOTS
+U+02693           ⚓            \\:anchor:                                     ANCHOR
+U+026A0           ⚠            \\:warning:                                    WARNING SIGN
 U+026A1           ⚡            \\:zap:                                        HIGH VOLTAGE SIGN
-U+026A5           ⚥           \\Hermaphrodite                                MALE AND FEMALE SIGN
+U+026A5           ⚥            \\Hermaphrodite                                MALE AND FEMALE SIGN
 U+026AA           ⚪            \\mdwhtcircle, \\:white_circle:                MEDIUM WHITE CIRCLE
 U+026AB           ⚫            \\mdblkcircle, \\:black_circle:                MEDIUM BLACK CIRCLE
 U+026AC           ⚬            \\mdsmwhtcircle                                MEDIUM SMALL WHITE CIRCLE
 U+026B2           ⚲            \\neuter                                       NEUTER
-U+026BD           ⚽           \\:soccer:                                     SOCCER BALL
-U+026BE           ⚾           \\:baseball:                                   BASEBALL
-U+026C4           ⛄           \\:snowman:                                    SNOWMAN WITHOUT SNOW
-U+026C5           ⛅           \\:partly_sunny:                               SUN BEHIND CLOUD
-U+026CE           ⛎           \\:ophiuchus:                                  OPHIUCHUS
-U+026D4           ⛔           \\:no_entry:                                   NO ENTRY
-U+026EA           ⛪           \\:church:                                     CHURCH
-U+026F2           ⛲           \\:fountain:                                   FOUNTAIN
-U+026F3           ⛳           \\:golf:                                       FLAG IN HOLE
-U+026F5           ⛵           \\:boat:                                       SAILBOAT
-U+026FA           ⛺           \\:tent:                                       TENT
-U+026FD           ⛽           \\:fuelpump:                                   FUEL PUMP
-U+02702           ✂           \\:scissors:                                   BLACK SCISSORS
-U+02705           ✅           \\:white_check_mark:                           WHITE HEAVY CHECK MARK
-U+02708           ✈           \\:airplane:                                   AIRPLANE
-U+02709           ✉           \\:email:                                      ENVELOPE
-U+0270A           ✊           \\:fist:                                       RAISED FIST
-U+0270B           ✋           \\:hand:                                       RAISED HAND
-U+0270C           ✌           \\:v:                                          VICTORY HAND
-U+0270F           ✏           \\:pencil2:                                    PENCIL
-U+02712           ✒           \\:black_nib:                                  BLACK NIB
-U+02713           ✓           \\checkmark                                    CHECK MARK
-U+02714           ✔           \\:heavy_check_mark:                           HEAVY CHECK MARK
-U+02716           ✖           \\:heavy_multiplication_x:                     HEAVY MULTIPLICATION X
-U+02720           ✠           \\maltese                                      MALTESE CROSS
-U+02728           ✨           \\:sparkles:                                   SPARKLES
-U+0272A           ✪           \\circledstar                                  CIRCLED WHITE STAR
-U+02733           ✳           \\:eight_spoked_asterisk:                      EIGHT SPOKED ASTERISK
-U+02734           ✴           \\:eight_pointed_black_star:                   EIGHT POINTED BLACK STAR
-U+02736           ✶           \\varstar                                      SIX POINTED BLACK STAR
-U+0273D           ✽           \\dingasterisk                                 HEAVY TEARDROP-SPOKED ASTERISK
-U+02744           ❄           \\:snowflake:                                  SNOWFLAKE
-U+02747           ❇           \\:sparkle:                                    SPARKLE
-U+0274C           ❌           \\:x:                                          CROSS MARK
-U+0274E           ❎           \\:negative_squared_cross_mark:                NEGATIVE SQUARED CROSS MARK
-U+02753           ❓           \\:question:                                   BLACK QUESTION MARK ORNAMENT
-U+02754           ❔           \\:grey_question:                              WHITE QUESTION MARK ORNAMENT
-U+02755           ❕           \\:grey_exclamation:                           WHITE EXCLAMATION MARK ORNAMENT
-U+02757           ❗           \\:exclamation:                                HEAVY EXCLAMATION MARK SYMBOL
-U+02764           ❤           \\:heart:                                      HEAVY BLACK HEART
-U+02795           ➕           \\:heavy_plus_sign:                            HEAVY PLUS SIGN
-U+02796           ➖           \\:heavy_minus_sign:                           HEAVY MINUS SIGN
-U+02797           ➗           \\:heavy_division_sign:                        HEAVY DIVISION SIGN
-U+0279B           ➛           \\draftingarrow                                DRAFTING POINT RIGHTWARDS ARROW / DRAFTING POINT RIGHT ARROW
-U+027A1           ➡           \\:arrow_right:                                BLACK RIGHTWARDS ARROW / BLACK RIGHT ARROW
+U+026BD           ⚽            \\:soccer:                                     SOCCER BALL
+U+026BE           ⚾            \\:baseball:                                   BASEBALL
+U+026C4           ⛄            \\:snowman:                                    SNOWMAN WITHOUT SNOW
+U+026C5           ⛅            \\:partly_sunny:                               SUN BEHIND CLOUD
+U+026CE           ⛎            \\:ophiuchus:                                  OPHIUCHUS
+U+026D4           ⛔            \\:no_entry:                                   NO ENTRY
+U+026EA           ⛪            \\:church:                                     CHURCH
+U+026F2           ⛲            \\:fountain:                                   FOUNTAIN
+U+026F3           ⛳            \\:golf:                                       FLAG IN HOLE
+U+026F5           ⛵            \\:boat:                                       SAILBOAT
+U+026FA           ⛺            \\:tent:                                       TENT
+U+026FD           ⛽            \\:fuelpump:                                   FUEL PUMP
+U+02702           ✂            \\:scissors:                                   BLACK SCISSORS
+U+02705           ✅            \\:white_check_mark:                           WHITE HEAVY CHECK MARK
+U+02708           ✈            \\:airplane:                                   AIRPLANE
+U+02709           ✉            \\:email:                                      ENVELOPE
+U+0270A           ✊            \\:fist:                                       RAISED FIST
+U+0270B           ✋            \\:hand:                                       RAISED HAND
+U+0270C           ✌            \\:v:                                          VICTORY HAND
+U+0270F           ✏            \\:pencil2:                                    PENCIL
+U+02712           ✒            \\:black_nib:                                  BLACK NIB
+U+02713           ✓            \\checkmark                                    CHECK MARK
+U+02714           ✔            \\:heavy_check_mark:                           HEAVY CHECK MARK
+U+02716           ✖            \\:heavy_multiplication_x:                     HEAVY MULTIPLICATION X
+U+02720           ✠            \\maltese                                      MALTESE CROSS
+U+02728           ✨            \\:sparkles:                                   SPARKLES
+U+0272A           ✪            \\circledstar                                  CIRCLED WHITE STAR
+U+02733           ✳            \\:eight_spoked_asterisk:                      EIGHT SPOKED ASTERISK
+U+02734           ✴            \\:eight_pointed_black_star:                   EIGHT POINTED BLACK STAR
+U+02736           ✶            \\varstar                                      SIX POINTED BLACK STAR
+U+0273D           ✽            \\dingasterisk                                 HEAVY TEARDROP-SPOKED ASTERISK
+U+02744           ❄            \\:snowflake:                                  SNOWFLAKE
+U+02747           ❇            \\:sparkle:                                    SPARKLE
+U+0274C           ❌            \\:x:                                          CROSS MARK
+U+0274E           ❎            \\:negative_squared_cross_mark:                NEGATIVE SQUARED CROSS MARK
+U+02753           ❓            \\:question:                                   BLACK QUESTION MARK ORNAMENT
+U+02754           ❔            \\:grey_question:                              WHITE QUESTION MARK ORNAMENT
+U+02755           ❕            \\:grey_exclamation:                           WHITE EXCLAMATION MARK ORNAMENT
+U+02757           ❗            \\:exclamation:                                HEAVY EXCLAMATION MARK SYMBOL
+U+02764           ❤            \\:heart:                                      HEAVY BLACK HEART
+U+02795           ➕            \\:heavy_plus_sign:                            HEAVY PLUS SIGN
+U+02796           ➖            \\:heavy_minus_sign:                           HEAVY MINUS SIGN
+U+02797           ➗            \\:heavy_division_sign:                        HEAVY DIVISION SIGN
+U+0279B           ➛            \\draftingarrow                                DRAFTING POINT RIGHTWARDS ARROW / DRAFTING POINT RIGHT ARROW
+U+027A1           ➡            \\:arrow_right:                                BLACK RIGHTWARDS ARROW / BLACK RIGHT ARROW
 U+027B0           ➰            \\:curly_loop:                                 CURLY LOOP
-U+027BF           ➿           \\:loop:                                       DOUBLE CURLY LOOP
+U+027BF           ➿            \\:loop:                                       DOUBLE CURLY LOOP
 U+027C0           ⟀            \\threedangle                                  THREE DIMENSIONAL ANGLE
-U+027C1           ⟁           \\whiteinwhitetriangle                         WHITE TRIANGLE CONTAINING SMALL WHITE TRIANGLE
+U+027C1           ⟁            \\whiteinwhitetriangle                         WHITE TRIANGLE CONTAINING SMALL WHITE TRIANGLE
 U+027C2           ⟂            \\perp                                         PERPENDICULAR
-U+027C8           ⟈           \\bsolhsub                                     REVERSE SOLIDUS PRECEDING SUBSET
-U+027C9           ⟉           \\suphsol                                      SUPERSET PRECEDING SOLIDUS
+U+027C8           ⟈            \\bsolhsub                                     REVERSE SOLIDUS PRECEDING SUBSET
+U+027C9           ⟉            \\suphsol                                      SUPERSET PRECEDING SOLIDUS
 U+027D1           ⟑            \\wedgedot                                     AND WITH DOT
-U+027D2           ⟒           \\upin                                         ELEMENT OF OPENING UPWARDS
-U+027D8           ⟘           \\bigbot                                       LARGE UP TACK
-U+027D9           ⟙           \\bigtop                                       LARGE DOWN TACK
+U+027D2           ⟒            \\upin                                         ELEMENT OF OPENING UPWARDS
+U+027D8           ⟘            \\bigbot                                       LARGE UP TACK
+U+027D9           ⟙            \\bigtop                                       LARGE DOWN TACK
 U+027E6           ⟦            \\llbracket, \\openbracketleft                 MATHEMATICAL LEFT WHITE SQUARE BRACKET
 U+027E7           ⟧            \\openbracketright, \\rrbracket                MATHEMATICAL RIGHT WHITE SQUARE BRACKET
 U+027E8           ⟨            \\langle                                       MATHEMATICAL LEFT ANGLE BRACKET
 U+027E9           ⟩            \\rangle                                       MATHEMATICAL RIGHT ANGLE BRACKET
-U+027F0           ⟰           \\UUparrow                                     UPWARDS QUADRUPLE ARROW
-U+027F1           ⟱           \\DDownarrow                                   DOWNWARDS QUADRUPLE ARROW
-U+027F5           ⟵           \\longleftarrow                                LONG LEFTWARDS ARROW
-U+027F6           ⟶           \\longrightarrow                               LONG RIGHTWARDS ARROW
-U+027F7           ⟷           \\longleftrightarrow                           LONG LEFT RIGHT ARROW
-U+027F8           ⟸           \\Longleftarrow                                LONG LEFTWARDS DOUBLE ARROW
-U+027F9           ⟹           \\Longrightarrow                               LONG RIGHTWARDS DOUBLE ARROW
-U+027FA           ⟺           \\Longleftrightarrow                           LONG LEFT RIGHT DOUBLE ARROW
-U+027FB           ⟻           \\longmapsfrom                                 LONG LEFTWARDS ARROW FROM BAR
-U+027FC           ⟼           \\longmapsto                                   LONG RIGHTWARDS ARROW FROM BAR
-U+027FD           ⟽           \\Longmapsfrom                                 LONG LEFTWARDS DOUBLE ARROW FROM BAR
-U+027FE           ⟾           \\Longmapsto                                   LONG RIGHTWARDS DOUBLE ARROW FROM BAR
-U+027FF           ⟿           \\longrightsquigarrow                          LONG RIGHTWARDS SQUIGGLE ARROW
-U+02900           ⤀           \\nvtwoheadrightarrow                          RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
-U+02901           ⤁           \\nVtwoheadrightarrow                          RIGHTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
-U+02902           ⤂           \\nvLeftarrow                                  LEFTWARDS DOUBLE ARROW WITH VERTICAL STROKE
-U+02903           ⤃           \\nvRightarrow                                 RIGHTWARDS DOUBLE ARROW WITH VERTICAL STROKE
-U+02904           ⤄           \\nvLeftrightarrow                             LEFT RIGHT DOUBLE ARROW WITH VERTICAL STROKE
-U+02905           ⤅           \\twoheadmapsto                                RIGHTWARDS TWO-HEADED ARROW FROM BAR
-U+02906           ⤆           \\Mapsfrom                                     LEFTWARDS DOUBLE ARROW FROM BAR
-U+02907           ⤇           \\Mapsto                                       RIGHTWARDS DOUBLE ARROW FROM BAR
+U+027F0           ⟰            \\UUparrow                                     UPWARDS QUADRUPLE ARROW
+U+027F1           ⟱            \\DDownarrow                                   DOWNWARDS QUADRUPLE ARROW
+U+027F5           ⟵            \\longleftarrow                                LONG LEFTWARDS ARROW
+U+027F6           ⟶            \\longrightarrow                               LONG RIGHTWARDS ARROW
+U+027F7           ⟷            \\longleftrightarrow                           LONG LEFT RIGHT ARROW
+U+027F8           ⟸            \\Longleftarrow                                LONG LEFTWARDS DOUBLE ARROW
+U+027F9           ⟹            \\Longrightarrow                               LONG RIGHTWARDS DOUBLE ARROW
+U+027FA           ⟺            \\Longleftrightarrow                           LONG LEFT RIGHT DOUBLE ARROW
+U+027FB           ⟻            \\longmapsfrom                                 LONG LEFTWARDS ARROW FROM BAR
+U+027FC           ⟼            \\longmapsto                                   LONG RIGHTWARDS ARROW FROM BAR
+U+027FD           ⟽            \\Longmapsfrom                                 LONG LEFTWARDS DOUBLE ARROW FROM BAR
+U+027FE           ⟾            \\Longmapsto                                   LONG RIGHTWARDS DOUBLE ARROW FROM BAR
+U+027FF           ⟿            \\longrightsquigarrow                          LONG RIGHTWARDS SQUIGGLE ARROW
+U+02900           ⤀            \\nvtwoheadrightarrow                          RIGHTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
+U+02901           ⤁            \\nVtwoheadrightarrow                          RIGHTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
+U+02902           ⤂            \\nvLeftarrow                                  LEFTWARDS DOUBLE ARROW WITH VERTICAL STROKE
+U+02903           ⤃            \\nvRightarrow                                 RIGHTWARDS DOUBLE ARROW WITH VERTICAL STROKE
+U+02904           ⤄            \\nvLeftrightarrow                             LEFT RIGHT DOUBLE ARROW WITH VERTICAL STROKE
+U+02905           ⤅            \\twoheadmapsto                                RIGHTWARDS TWO-HEADED ARROW FROM BAR
+U+02906           ⤆            \\Mapsfrom                                     LEFTWARDS DOUBLE ARROW FROM BAR
+U+02907           ⤇            \\Mapsto                                       RIGHTWARDS DOUBLE ARROW FROM BAR
 U+02908           ⤈            \\downarrowbarred                              DOWNWARDS ARROW WITH HORIZONTAL STROKE
 U+02909           ⤉            \\uparrowbarred                                UPWARDS ARROW WITH HORIZONTAL STROKE
-U+0290A           ⤊           \\Uuparrow                                     UPWARDS TRIPLE ARROW
-U+0290B           ⤋           \\Ddownarrow                                   DOWNWARDS TRIPLE ARROW
-U+0290C           ⤌           \\leftbkarrow                                  LEFTWARDS DOUBLE DASH ARROW
-U+0290D           ⤍           \\bkarow                                       RIGHTWARDS DOUBLE DASH ARROW
-U+0290E           ⤎           \\leftdbkarrow                                 LEFTWARDS TRIPLE DASH ARROW
-U+0290F           ⤏           \\dbkarow                                      RIGHTWARDS TRIPLE DASH ARROW
-U+02910           ⤐           \\drbkarrow                                    RIGHTWARDS TWO-HEADED TRIPLE DASH ARROW
-U+02911           ⤑           \\rightdotarrow                                RIGHTWARDS ARROW WITH DOTTED STEM
+U+0290A           ⤊            \\Uuparrow                                     UPWARDS TRIPLE ARROW
+U+0290B           ⤋            \\Ddownarrow                                   DOWNWARDS TRIPLE ARROW
+U+0290C           ⤌            \\leftbkarrow                                  LEFTWARDS DOUBLE DASH ARROW
+U+0290D           ⤍            \\bkarow                                       RIGHTWARDS DOUBLE DASH ARROW
+U+0290E           ⤎            \\leftdbkarrow                                 LEFTWARDS TRIPLE DASH ARROW
+U+0290F           ⤏            \\dbkarow                                      RIGHTWARDS TRIPLE DASH ARROW
+U+02910           ⤐            \\drbkarrow                                    RIGHTWARDS TWO-HEADED TRIPLE DASH ARROW
+U+02911           ⤑            \\rightdotarrow                                RIGHTWARDS ARROW WITH DOTTED STEM
 U+02912           ⤒            \\UpArrowBar                                   UPWARDS ARROW TO BAR
 U+02913           ⤓            \\DownArrowBar                                 DOWNWARDS ARROW TO BAR
-U+02914           ⤔           \\nvrightarrowtail                             RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
-U+02915           ⤕           \\nVrightarrowtail                             RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
-U+02916           ⤖           \\twoheadrightarrowtail                        RIGHTWARDS TWO-HEADED ARROW WITH TAIL
-U+02917           ⤗           \\nvtwoheadrightarrowtail                      RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
-U+02918           ⤘           \\nVtwoheadrightarrowtail                      RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
-U+0291D           ⤝           \\diamondleftarrow                             LEFTWARDS ARROW TO BLACK DIAMOND
-U+0291E           ⤞           \\rightarrowdiamond                            RIGHTWARDS ARROW TO BLACK DIAMOND
-U+0291F           ⤟           \\diamondleftarrowbar                          LEFTWARDS ARROW FROM BAR TO BLACK DIAMOND
-U+02920           ⤠           \\barrightarrowdiamond                         RIGHTWARDS ARROW FROM BAR TO BLACK DIAMOND
-U+02925           ⤥           \\hksearow                                     SOUTH EAST ARROW WITH HOOK
-U+02926           ⤦           \\hkswarow                                     SOUTH WEST ARROW WITH HOOK
-U+02927           ⤧           \\tona                                         NORTH WEST ARROW AND NORTH EAST ARROW
-U+02928           ⤨           \\toea                                         NORTH EAST ARROW AND SOUTH EAST ARROW
-U+02929           ⤩           \\tosa                                         SOUTH EAST ARROW AND SOUTH WEST ARROW
-U+0292A           ⤪           \\towa                                         SOUTH WEST ARROW AND NORTH WEST ARROW
-U+0292B           ⤫           \\rdiagovfdiag                                 RISING DIAGONAL CROSSING FALLING DIAGONAL
-U+0292C           ⤬           \\fdiagovrdiag                                 FALLING DIAGONAL CROSSING RISING DIAGONAL
-U+0292D           ⤭           \\seovnearrow                                  SOUTH EAST ARROW CROSSING NORTH EAST ARROW
-U+0292E           ⤮           \\neovsearrow                                  NORTH EAST ARROW CROSSING SOUTH EAST ARROW
-U+0292F           ⤯           \\fdiagovnearrow                               FALLING DIAGONAL CROSSING NORTH EAST ARROW
-U+02930           ⤰           \\rdiagovsearrow                               RISING DIAGONAL CROSSING SOUTH EAST ARROW
-U+02931           ⤱           \\neovnwarrow                                  NORTH EAST ARROW CROSSING NORTH WEST ARROW
-U+02932           ⤲           \\nwovnearrow                                  NORTH WEST ARROW CROSSING NORTH EAST ARROW
-U+02934           ⤴           \\:arrow_heading_up:                           ARROW POINTING RIGHTWARDS THEN CURVING UPWARDS
-U+02935           ⤵           \\:arrow_heading_down:                         ARROW POINTING RIGHTWARDS THEN CURVING DOWNWARDS
-U+02942           ⥂           \\ElzRlarr                                     RIGHTWARDS ARROW ABOVE SHORT LEFTWARDS ARROW
-U+02944           ⥄           \\ElzrLarr                                     SHORT RIGHTWARDS ARROW ABOVE LEFTWARDS ARROW
-U+02945           ⥅           \\rightarrowplus                               RIGHTWARDS ARROW WITH PLUS BELOW
-U+02946           ⥆           \\leftarrowplus                                LEFTWARDS ARROW WITH PLUS BELOW
-U+02947           ⥇           \\Elzrarrx                                     RIGHTWARDS ARROW THROUGH X
-U+02948           ⥈           \\leftrightarrowcircle                         LEFT RIGHT ARROW THROUGH SMALL CIRCLE
+U+02914           ⤔            \\nvrightarrowtail                             RIGHTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
+U+02915           ⤕            \\nVrightarrowtail                             RIGHTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+U+02916           ⤖            \\twoheadrightarrowtail                        RIGHTWARDS TWO-HEADED ARROW WITH TAIL
+U+02917           ⤗            \\nvtwoheadrightarrowtail                      RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
+U+02918           ⤘            \\nVtwoheadrightarrowtail                      RIGHTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+U+0291D           ⤝            \\diamondleftarrow                             LEFTWARDS ARROW TO BLACK DIAMOND
+U+0291E           ⤞            \\rightarrowdiamond                            RIGHTWARDS ARROW TO BLACK DIAMOND
+U+0291F           ⤟            \\diamondleftarrowbar                          LEFTWARDS ARROW FROM BAR TO BLACK DIAMOND
+U+02920           ⤠            \\barrightarrowdiamond                         RIGHTWARDS ARROW FROM BAR TO BLACK DIAMOND
+U+02925           ⤥            \\hksearow                                     SOUTH EAST ARROW WITH HOOK
+U+02926           ⤦            \\hkswarow                                     SOUTH WEST ARROW WITH HOOK
+U+02927           ⤧            \\tona                                         NORTH WEST ARROW AND NORTH EAST ARROW
+U+02928           ⤨            \\toea                                         NORTH EAST ARROW AND SOUTH EAST ARROW
+U+02929           ⤩            \\tosa                                         SOUTH EAST ARROW AND SOUTH WEST ARROW
+U+0292A           ⤪            \\towa                                         SOUTH WEST ARROW AND NORTH WEST ARROW
+U+0292B           ⤫            \\rdiagovfdiag                                 RISING DIAGONAL CROSSING FALLING DIAGONAL
+U+0292C           ⤬            \\fdiagovrdiag                                 FALLING DIAGONAL CROSSING RISING DIAGONAL
+U+0292D           ⤭            \\seovnearrow                                  SOUTH EAST ARROW CROSSING NORTH EAST ARROW
+U+0292E           ⤮            \\neovsearrow                                  NORTH EAST ARROW CROSSING SOUTH EAST ARROW
+U+0292F           ⤯            \\fdiagovnearrow                               FALLING DIAGONAL CROSSING NORTH EAST ARROW
+U+02930           ⤰            \\rdiagovsearrow                               RISING DIAGONAL CROSSING SOUTH EAST ARROW
+U+02931           ⤱            \\neovnwarrow                                  NORTH EAST ARROW CROSSING NORTH WEST ARROW
+U+02932           ⤲            \\nwovnearrow                                  NORTH WEST ARROW CROSSING NORTH EAST ARROW
+U+02934           ⤴            \\:arrow_heading_up:                           ARROW POINTING RIGHTWARDS THEN CURVING UPWARDS
+U+02935           ⤵            \\:arrow_heading_down:                         ARROW POINTING RIGHTWARDS THEN CURVING DOWNWARDS
+U+02942           ⥂            \\ElzRlarr                                     RIGHTWARDS ARROW ABOVE SHORT LEFTWARDS ARROW
+U+02944           ⥄            \\ElzrLarr                                     SHORT RIGHTWARDS ARROW ABOVE LEFTWARDS ARROW
+U+02945           ⥅            \\rightarrowplus                               RIGHTWARDS ARROW WITH PLUS BELOW
+U+02946           ⥆            \\leftarrowplus                                LEFTWARDS ARROW WITH PLUS BELOW
+U+02947           ⥇            \\Elzrarrx                                     RIGHTWARDS ARROW THROUGH X
+U+02948           ⥈            \\leftrightarrowcircle                         LEFT RIGHT ARROW THROUGH SMALL CIRCLE
 U+02949           ⥉            \\twoheaduparrowcircle                         UPWARDS TWO-HEADED ARROW FROM SMALL CIRCLE
-U+0294A           ⥊           \\leftrightharpoonupdown                       LEFT BARB UP RIGHT BARB DOWN HARPOON
-U+0294B           ⥋           \\leftrightharpoondownup                       LEFT BARB DOWN RIGHT BARB UP HARPOON
+U+0294A           ⥊            \\leftrightharpoonupdown                       LEFT BARB UP RIGHT BARB DOWN HARPOON
+U+0294B           ⥋            \\leftrightharpoondownup                       LEFT BARB DOWN RIGHT BARB UP HARPOON
 U+0294C           ⥌            \\updownharpoonrightleft                       UP BARB RIGHT DOWN BARB LEFT HARPOON
 U+0294D           ⥍            \\updownharpoonleftright                       UP BARB LEFT DOWN BARB RIGHT HARPOON
-U+0294E           ⥎           \\LeftRightVector                              LEFT BARB UP RIGHT BARB UP HARPOON
+U+0294E           ⥎            \\LeftRightVector                              LEFT BARB UP RIGHT BARB UP HARPOON
 U+0294F           ⥏            \\RightUpDownVector                            UP BARB RIGHT DOWN BARB RIGHT HARPOON
-U+02950           ⥐           \\DownLeftRightVector                          LEFT BARB DOWN RIGHT BARB DOWN HARPOON
+U+02950           ⥐            \\DownLeftRightVector                          LEFT BARB DOWN RIGHT BARB DOWN HARPOON
 U+02951           ⥑            \\LeftUpDownVector                             UP BARB LEFT DOWN BARB LEFT HARPOON
-U+02952           ⥒           \\LeftVectorBar                                LEFTWARDS HARPOON WITH BARB UP TO BAR
-U+02953           ⥓           \\RightVectorBar                               RIGHTWARDS HARPOON WITH BARB UP TO BAR
+U+02952           ⥒            \\LeftVectorBar                                LEFTWARDS HARPOON WITH BARB UP TO BAR
+U+02953           ⥓            \\RightVectorBar                               RIGHTWARDS HARPOON WITH BARB UP TO BAR
 U+02954           ⥔            \\RightUpVectorBar                             UPWARDS HARPOON WITH BARB RIGHT TO BAR
 U+02955           ⥕            \\RightDownVectorBar                           DOWNWARDS HARPOON WITH BARB RIGHT TO BAR
-U+02956           ⥖           \\DownLeftVectorBar                            LEFTWARDS HARPOON WITH BARB DOWN TO BAR
-U+02957           ⥗           \\DownRightVectorBar                           RIGHTWARDS HARPOON WITH BARB DOWN TO BAR
+U+02956           ⥖            \\DownLeftVectorBar                            LEFTWARDS HARPOON WITH BARB DOWN TO BAR
+U+02957           ⥗            \\DownRightVectorBar                           RIGHTWARDS HARPOON WITH BARB DOWN TO BAR
 U+02958           ⥘            \\LeftUpVectorBar                              UPWARDS HARPOON WITH BARB LEFT TO BAR
 U+02959           ⥙            \\LeftDownVectorBar                            DOWNWARDS HARPOON WITH BARB LEFT TO BAR
-U+0295A           ⥚           \\LeftTeeVector                                LEFTWARDS HARPOON WITH BARB UP FROM BAR
-U+0295B           ⥛           \\RightTeeVector                               RIGHTWARDS HARPOON WITH BARB UP FROM BAR
+U+0295A           ⥚            \\LeftTeeVector                                LEFTWARDS HARPOON WITH BARB UP FROM BAR
+U+0295B           ⥛            \\RightTeeVector                               RIGHTWARDS HARPOON WITH BARB UP FROM BAR
 U+0295C           ⥜            \\RightUpTeeVector                             UPWARDS HARPOON WITH BARB RIGHT FROM BAR
 U+0295D           ⥝            \\RightDownTeeVector                           DOWNWARDS HARPOON WITH BARB RIGHT FROM BAR
-U+0295E           ⥞           \\DownLeftTeeVector                            LEFTWARDS HARPOON WITH BARB DOWN FROM BAR
-U+0295F           ⥟           \\DownRightTeeVector                           RIGHTWARDS HARPOON WITH BARB DOWN FROM BAR
+U+0295E           ⥞            \\DownLeftTeeVector                            LEFTWARDS HARPOON WITH BARB DOWN FROM BAR
+U+0295F           ⥟            \\DownRightTeeVector                           RIGHTWARDS HARPOON WITH BARB DOWN FROM BAR
 U+02960           ⥠            \\LeftUpTeeVector                              UPWARDS HARPOON WITH BARB LEFT FROM BAR
 U+02961           ⥡            \\LeftDownTeeVector                            DOWNWARDS HARPOON WITH BARB LEFT FROM BAR
-U+02962           ⥢           \\leftharpoonsupdown                           LEFTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB DOWN
-U+02963           ⥣           \\upharpoonsleftright                          UPWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
-U+02964           ⥤           \\rightharpoonsupdown                          RIGHTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
-U+02965           ⥥           \\downharpoonsleftright                        DOWNWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
-U+02966           ⥦           \\leftrightharpoonsup                          LEFTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB UP
-U+02967           ⥧           \\leftrightharpoonsdown                        LEFTWARDS HARPOON WITH BARB DOWN ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
-U+02968           ⥨           \\rightleftharpoonsup                          RIGHTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB UP
-U+02969           ⥩           \\rightleftharpoonsdown                        RIGHTWARDS HARPOON WITH BARB DOWN ABOVE LEFTWARDS HARPOON WITH BARB DOWN
-U+0296A           ⥪           \\leftharpoonupdash                            LEFTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
-U+0296B           ⥫           \\dashleftharpoondown                          LEFTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
-U+0296C           ⥬           \\rightharpoonupdash                           RIGHTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
-U+0296D           ⥭           \\dashrightharpoondown                         RIGHTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
-U+0296E           ⥮           \\UpEquilibrium                                UPWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
-U+0296F           ⥯           \\ReverseUpEquilibrium                         DOWNWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
-U+02970           ⥰           \\RoundImplies                                 RIGHT DOUBLE ARROW WITH ROUNDED HEAD
+U+02962           ⥢            \\leftharpoonsupdown                           LEFTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB DOWN
+U+02963           ⥣            \\upharpoonsleftright                          UPWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
+U+02964           ⥤            \\rightharpoonsupdown                          RIGHTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
+U+02965           ⥥            \\downharpoonsleftright                        DOWNWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
+U+02966           ⥦            \\leftrightharpoonsup                          LEFTWARDS HARPOON WITH BARB UP ABOVE RIGHTWARDS HARPOON WITH BARB UP
+U+02967           ⥧            \\leftrightharpoonsdown                        LEFTWARDS HARPOON WITH BARB DOWN ABOVE RIGHTWARDS HARPOON WITH BARB DOWN
+U+02968           ⥨            \\rightleftharpoonsup                          RIGHTWARDS HARPOON WITH BARB UP ABOVE LEFTWARDS HARPOON WITH BARB UP
+U+02969           ⥩            \\rightleftharpoonsdown                        RIGHTWARDS HARPOON WITH BARB DOWN ABOVE LEFTWARDS HARPOON WITH BARB DOWN
+U+0296A           ⥪            \\leftharpoonupdash                            LEFTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
+U+0296B           ⥫            \\dashleftharpoondown                          LEFTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
+U+0296C           ⥬            \\rightharpoonupdash                           RIGHTWARDS HARPOON WITH BARB UP ABOVE LONG DASH
+U+0296D           ⥭            \\dashrightharpoondown                         RIGHTWARDS HARPOON WITH BARB DOWN BELOW LONG DASH
+U+0296E           ⥮            \\UpEquilibrium                                UPWARDS HARPOON WITH BARB LEFT BESIDE DOWNWARDS HARPOON WITH BARB RIGHT
+U+0296F           ⥯            \\ReverseUpEquilibrium                         DOWNWARDS HARPOON WITH BARB LEFT BESIDE UPWARDS HARPOON WITH BARB RIGHT
+U+02970           ⥰            \\RoundImplies                                 RIGHT DOUBLE ARROW WITH ROUNDED HEAD
 U+02980           ⦀            \\Vvert                                        TRIPLE VERTICAL BAR DELIMITER
 U+02986           ⦆            \\Elroang                                      RIGHT WHITE PARENTHESIS
 U+02999           ⦙            \\Elzddfnc                                     DOTTED FENCE
-U+0299B           ⦛           \\measuredangleleft                            MEASURED ANGLE OPENING LEFT
-U+0299C           ⦜           \\Angle                                        RIGHT ANGLE VARIANT WITH SQUARE
-U+0299D           ⦝           \\rightanglemdot                               MEASURED RIGHT ANGLE WITH DOT
-U+0299E           ⦞           \\angles                                       ANGLE WITH S INSIDE
-U+0299F           ⦟           \\angdnr                                       ACUTE ANGLE
-U+029A0           ⦠           \\Elzlpargt                                    SPHERICAL ANGLE OPENING LEFT
-U+029A1           ⦡           \\sphericalangleup                             SPHERICAL ANGLE OPENING UP
-U+029A2           ⦢           \\turnangle                                    TURNED ANGLE
-U+029A3           ⦣           \\revangle                                     REVERSED ANGLE
-U+029A4           ⦤           \\angleubar                                    ANGLE WITH UNDERBAR
-U+029A5           ⦥           \\revangleubar                                 REVERSED ANGLE WITH UNDERBAR
+U+0299B           ⦛            \\measuredangleleft                            MEASURED ANGLE OPENING LEFT
+U+0299C           ⦜            \\Angle                                        RIGHT ANGLE VARIANT WITH SQUARE
+U+0299D           ⦝            \\rightanglemdot                               MEASURED RIGHT ANGLE WITH DOT
+U+0299E           ⦞            \\angles                                       ANGLE WITH S INSIDE
+U+0299F           ⦟            \\angdnr                                       ACUTE ANGLE
+U+029A0           ⦠            \\Elzlpargt                                    SPHERICAL ANGLE OPENING LEFT
+U+029A1           ⦡            \\sphericalangleup                             SPHERICAL ANGLE OPENING UP
+U+029A2           ⦢            \\turnangle                                    TURNED ANGLE
+U+029A3           ⦣            \\revangle                                     REVERSED ANGLE
+U+029A4           ⦤            \\angleubar                                    ANGLE WITH UNDERBAR
+U+029A5           ⦥            \\revangleubar                                 REVERSED ANGLE WITH UNDERBAR
 U+029A6           ⦦            \\wideangledown                                OBLIQUE ANGLE OPENING UP
 U+029A7           ⦧            \\wideangleup                                  OBLIQUE ANGLE OPENING DOWN
-U+029A8           ⦨           \\measanglerutone                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING UP AND RIGHT
-U+029A9           ⦩           \\measanglelutonw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING UP AND LEFT
-U+029AA           ⦪           \\measanglerdtose                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING DOWN AND RIGHT
-U+029AB           ⦫           \\measangleldtosw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING DOWN AND LEFT
-U+029AC           ⦬           \\measangleurtone                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING RIGHT AND UP
-U+029AD           ⦭           \\measangleultonw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING LEFT AND UP
-U+029AE           ⦮           \\measangledrtose                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING RIGHT AND DOWN
-U+029AF           ⦯           \\measangledltosw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING LEFT AND DOWN
-U+029B0           ⦰           \\revemptyset                                  REVERSED EMPTY SET
-U+029B1           ⦱           \\emptysetobar                                 EMPTY SET WITH OVERBAR
-U+029B2           ⦲           \\emptysetocirc                                EMPTY SET WITH SMALL CIRCLE ABOVE
-U+029B3           ⦳           \\emptysetoarr                                 EMPTY SET WITH RIGHT ARROW ABOVE
-U+029B4           ⦴           \\emptysetoarrl                                EMPTY SET WITH LEFT ARROW ABOVE
-U+029B7           ⦷           \\circledparallel                              CIRCLED PARALLEL
-U+029B8           ⦸           \\obslash                                      CIRCLED REVERSE SOLIDUS
-U+029BC           ⦼           \\odotslashdot                                 CIRCLED ANTICLOCKWISE-ROTATED DIVISION SIGN
-U+029BE           ⦾           \\circledwhitebullet                           CIRCLED WHITE BULLET
-U+029BF           ⦿           \\circledbullet                                CIRCLED BULLET
-U+029C0           ⧀           \\olessthan                                    CIRCLED LESS-THAN
-U+029C1           ⧁           \\ogreaterthan                                 CIRCLED GREATER-THAN
-U+029C4           ⧄           \\boxdiag                                      SQUARED RISING DIAGONAL SLASH
-U+029C5           ⧅           \\boxbslash                                    SQUARED FALLING DIAGONAL SLASH
-U+029C6           ⧆           \\boxast                                       SQUARED ASTERISK
-U+029C7           ⧇           \\boxcircle                                    SQUARED SMALL CIRCLE
-U+029CA           ⧊           \\ElzLap                                       TRIANGLE WITH DOT ABOVE
-U+029CB           ⧋           \\Elzdefas                                     TRIANGLE WITH UNDERBAR
-U+029CF           ⧏           \\LeftTriangleBar                              LEFT TRIANGLE BESIDE VERTICAL BAR
-U+029CF + U+00338 ⧏̸           \\NotLeftTriangleBar                           LEFT TRIANGLE BESIDE VERTICAL BAR + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+029D0           ⧐           \\RightTriangleBar                             VERTICAL BAR BESIDE RIGHT TRIANGLE
-U+029D0 + U+00338 ⧐̸           \\NotRightTriangleBar                          VERTICAL BAR BESIDE RIGHT TRIANGLE + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+029DF           ⧟           \\dualmap                                      DOUBLE-ENDED MULTIMAP
-U+029E1           ⧡           \\lrtriangleeq                                 INCREASES AS
-U+029E2           ⧢           \\shuffle                                      SHUFFLE PRODUCT
-U+029E3           ⧣           \\eparsl                                       EQUALS SIGN AND SLANTED PARALLEL
-U+029E4           ⧤           \\smeparsl                                     EQUALS SIGN AND SLANTED PARALLEL WITH TILDE ABOVE
-U+029E5           ⧥           \\eqvparsl                                     IDENTICAL TO AND SLANTED PARALLEL
+U+029A8           ⦨            \\measanglerutone                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING UP AND RIGHT
+U+029A9           ⦩            \\measanglelutonw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING UP AND LEFT
+U+029AA           ⦪            \\measanglerdtose                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING DOWN AND RIGHT
+U+029AB           ⦫            \\measangleldtosw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING DOWN AND LEFT
+U+029AC           ⦬            \\measangleurtone                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING RIGHT AND UP
+U+029AD           ⦭            \\measangleultonw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING LEFT AND UP
+U+029AE           ⦮            \\measangledrtose                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING RIGHT AND DOWN
+U+029AF           ⦯            \\measangledltosw                              MEASURED ANGLE WITH OPEN ARM ENDING IN ARROW POINTING LEFT AND DOWN
+U+029B0           ⦰            \\revemptyset                                  REVERSED EMPTY SET
+U+029B1           ⦱            \\emptysetobar                                 EMPTY SET WITH OVERBAR
+U+029B2           ⦲            \\emptysetocirc                                EMPTY SET WITH SMALL CIRCLE ABOVE
+U+029B3           ⦳            \\emptysetoarr                                 EMPTY SET WITH RIGHT ARROW ABOVE
+U+029B4           ⦴            \\emptysetoarrl                                EMPTY SET WITH LEFT ARROW ABOVE
+U+029B7           ⦷            \\circledparallel                              CIRCLED PARALLEL
+U+029B8           ⦸            \\obslash                                      CIRCLED REVERSE SOLIDUS
+U+029BC           ⦼            \\odotslashdot                                 CIRCLED ANTICLOCKWISE-ROTATED DIVISION SIGN
+U+029BE           ⦾            \\circledwhitebullet                           CIRCLED WHITE BULLET
+U+029BF           ⦿            \\circledbullet                                CIRCLED BULLET
+U+029C0           ⧀            \\olessthan                                    CIRCLED LESS-THAN
+U+029C1           ⧁            \\ogreaterthan                                 CIRCLED GREATER-THAN
+U+029C4           ⧄            \\boxdiag                                      SQUARED RISING DIAGONAL SLASH
+U+029C5           ⧅            \\boxbslash                                    SQUARED FALLING DIAGONAL SLASH
+U+029C6           ⧆            \\boxast                                       SQUARED ASTERISK
+U+029C7           ⧇            \\boxcircle                                    SQUARED SMALL CIRCLE
+U+029CA           ⧊            \\ElzLap                                       TRIANGLE WITH DOT ABOVE
+U+029CB           ⧋            \\Elzdefas                                     TRIANGLE WITH UNDERBAR
+U+029CF           ⧏            \\LeftTriangleBar                              LEFT TRIANGLE BESIDE VERTICAL BAR
+U+029CF + U+00338 ⧏̸            \\NotLeftTriangleBar                           LEFT TRIANGLE BESIDE VERTICAL BAR + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+029D0           ⧐            \\RightTriangleBar                             VERTICAL BAR BESIDE RIGHT TRIANGLE
+U+029D0 + U+00338 ⧐̸            \\NotRightTriangleBar                          VERTICAL BAR BESIDE RIGHT TRIANGLE + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+029DF           ⧟            \\dualmap                                      DOUBLE-ENDED MULTIMAP
+U+029E1           ⧡            \\lrtriangleeq                                 INCREASES AS
+U+029E2           ⧢            \\shuffle                                      SHUFFLE PRODUCT
+U+029E3           ⧣            \\eparsl                                       EQUALS SIGN AND SLANTED PARALLEL
+U+029E4           ⧤            \\smeparsl                                     EQUALS SIGN AND SLANTED PARALLEL WITH TILDE ABOVE
+U+029E5           ⧥            \\eqvparsl                                     IDENTICAL TO AND SLANTED PARALLEL
 U+029EB           ⧫            \\blacklozenge                                 BLACK LOZENGE
-U+029F4           ⧴           \\RuleDelayed                                  RULE-DELAYED
+U+029F4           ⧴            \\RuleDelayed                                  RULE-DELAYED
 U+029F6           ⧶            \\dsol                                         SOLIDUS WITH OVERBAR
 U+029F7           ⧷            \\rsolbar                                      REVERSE SOLIDUS WITH HORIZONTAL STROKE
 U+029FA           ⧺            \\doubleplus                                   DOUBLE PLUS
 U+029FB           ⧻            \\tripleplus                                   TRIPLE PLUS
-U+02A00           ⨀           \\bigodot                                      N-ARY CIRCLED DOT OPERATOR
-U+02A01           ⨁           \\bigoplus                                     N-ARY CIRCLED PLUS OPERATOR
-U+02A02           ⨂           \\bigotimes                                    N-ARY CIRCLED TIMES OPERATOR
-U+02A03           ⨃           \\bigcupdot                                    N-ARY UNION OPERATOR WITH DOT
-U+02A04           ⨄           \\biguplus                                     N-ARY UNION OPERATOR WITH PLUS
-U+02A05           ⨅           \\bigsqcap                                     N-ARY SQUARE INTERSECTION OPERATOR
-U+02A06           ⨆           \\bigsqcup                                     N-ARY SQUARE UNION OPERATOR
-U+02A07           ⨇           \\conjquant                                    TWO LOGICAL AND OPERATOR
-U+02A08           ⨈           \\disjquant                                    TWO LOGICAL OR OPERATOR
-U+02A09           ⨉           \\bigtimes                                     N-ARY TIMES OPERATOR
-U+02A0A           ⨊           \\modtwosum                                    MODULO TWO SUM
-U+02A0B           ⨋           \\sumint                                       SUMMATION WITH INTEGRAL
-U+02A0C           ⨌           \\iiiint                                       QUADRUPLE INTEGRAL OPERATOR
-U+02A0D           ⨍           \\intbar                                       FINITE PART INTEGRAL
-U+02A0E           ⨎           \\intBar                                       INTEGRAL WITH DOUBLE STROKE
-U+02A0F           ⨏           \\clockoint                                    INTEGRAL AVERAGE WITH SLASH
-U+02A10           ⨐           \\cirfnint                                     CIRCULATION FUNCTION
-U+02A11           ⨑           \\awint                                        ANTICLOCKWISE INTEGRATION
-U+02A12           ⨒           \\rppolint                                     LINE INTEGRATION WITH RECTANGULAR PATH AROUND POLE
-U+02A13           ⨓           \\scpolint                                     LINE INTEGRATION WITH SEMICIRCULAR PATH AROUND POLE
-U+02A14           ⨔           \\npolint                                      LINE INTEGRATION NOT INCLUDING THE POLE
-U+02A15           ⨕           \\pointint                                     INTEGRAL AROUND A POINT OPERATOR
-U+02A16           ⨖           \\sqrint                                       QUATERNION INTEGRAL OPERATOR
-U+02A18           ⨘           \\intx                                         INTEGRAL WITH TIMES SIGN
-U+02A19           ⨙           \\intcap                                       INTEGRAL WITH INTERSECTION
-U+02A1A           ⨚           \\intcup                                       INTEGRAL WITH UNION
-U+02A1B           ⨛           \\upint                                        INTEGRAL WITH OVERBAR
-U+02A1C           ⨜           \\lowint                                       INTEGRAL WITH UNDERBAR
+U+02A00           ⨀            \\bigodot                                      N-ARY CIRCLED DOT OPERATOR
+U+02A01           ⨁            \\bigoplus                                     N-ARY CIRCLED PLUS OPERATOR
+U+02A02           ⨂            \\bigotimes                                    N-ARY CIRCLED TIMES OPERATOR
+U+02A03           ⨃            \\bigcupdot                                    N-ARY UNION OPERATOR WITH DOT
+U+02A04           ⨄            \\biguplus                                     N-ARY UNION OPERATOR WITH PLUS
+U+02A05           ⨅            \\bigsqcap                                     N-ARY SQUARE INTERSECTION OPERATOR
+U+02A06           ⨆            \\bigsqcup                                     N-ARY SQUARE UNION OPERATOR
+U+02A07           ⨇            \\conjquant                                    TWO LOGICAL AND OPERATOR
+U+02A08           ⨈            \\disjquant                                    TWO LOGICAL OR OPERATOR
+U+02A09           ⨉            \\bigtimes                                     N-ARY TIMES OPERATOR
+U+02A0A           ⨊            \\modtwosum                                    MODULO TWO SUM
+U+02A0B           ⨋            \\sumint                                       SUMMATION WITH INTEGRAL
+U+02A0C           ⨌            \\iiiint                                       QUADRUPLE INTEGRAL OPERATOR
+U+02A0D           ⨍            \\intbar                                       FINITE PART INTEGRAL
+U+02A0E           ⨎            \\intBar                                       INTEGRAL WITH DOUBLE STROKE
+U+02A0F           ⨏            \\clockoint                                    INTEGRAL AVERAGE WITH SLASH
+U+02A10           ⨐            \\cirfnint                                     CIRCULATION FUNCTION
+U+02A11           ⨑            \\awint                                        ANTICLOCKWISE INTEGRATION
+U+02A12           ⨒            \\rppolint                                     LINE INTEGRATION WITH RECTANGULAR PATH AROUND POLE
+U+02A13           ⨓            \\scpolint                                     LINE INTEGRATION WITH SEMICIRCULAR PATH AROUND POLE
+U+02A14           ⨔            \\npolint                                      LINE INTEGRATION NOT INCLUDING THE POLE
+U+02A15           ⨕            \\pointint                                     INTEGRAL AROUND A POINT OPERATOR
+U+02A16           ⨖            \\sqrint                                       QUATERNION INTEGRAL OPERATOR
+U+02A18           ⨘            \\intx                                         INTEGRAL WITH TIMES SIGN
+U+02A19           ⨙            \\intcap                                       INTEGRAL WITH INTERSECTION
+U+02A1A           ⨚            \\intcup                                       INTEGRAL WITH UNION
+U+02A1B           ⨛            \\upint                                        INTEGRAL WITH OVERBAR
+U+02A1C           ⨜            \\lowint                                       INTEGRAL WITH UNDERBAR
 U+02A22           ⨢            \\ringplus                                     PLUS SIGN WITH SMALL CIRCLE ABOVE
 U+02A23           ⨣            \\plushat                                      PLUS SIGN WITH CIRCUMFLEX ACCENT ABOVE
 U+02A24           ⨤            \\simplus                                      PLUS SIGN WITH TILDE ABOVE
 U+02A25           ⨥            \\plusdot                                      PLUS SIGN WITH DOT BELOW
 U+02A26           ⨦            \\plussim                                      PLUS SIGN WITH TILDE BELOW
-U+02A27           ⨧           \\plussubtwo                                   PLUS SIGN WITH SUBSCRIPT TWO
+U+02A27           ⨧            \\plussubtwo                                   PLUS SIGN WITH SUBSCRIPT TWO
 U+02A28           ⨨            \\plustrif                                     PLUS SIGN WITH BLACK TRIANGLE
 U+02A29           ⨩            \\commaminus                                   MINUS SIGN WITH COMMA ABOVE
 U+02A2A           ⨪            \\minusdot                                     MINUS SIGN WITH DOT BELOW
 U+02A2B           ⨫            \\minusfdots                                   MINUS SIGN WITH FALLING DOTS
 U+02A2C           ⨬            \\minusrdots                                   MINUS SIGN WITH RISING DOTS
-U+02A2D           ⨭           \\opluslhrim                                   PLUS SIGN IN LEFT HALF CIRCLE
-U+02A2E           ⨮           \\oplusrhrim                                   PLUS SIGN IN RIGHT HALF CIRCLE
+U+02A2D           ⨭            \\opluslhrim                                   PLUS SIGN IN LEFT HALF CIRCLE
+U+02A2E           ⨮            \\oplusrhrim                                   PLUS SIGN IN RIGHT HALF CIRCLE
 U+02A2F           ⨯            \\ElzTimes                                     VECTOR OR CROSS PRODUCT
 U+02A30           ⨰            \\dottimes                                     MULTIPLICATION SIGN WITH DOT ABOVE
 U+02A31           ⨱            \\timesbar                                     MULTIPLICATION SIGN WITH UNDERBAR
 U+02A32           ⨲            \\btimes                                       SEMIDIRECT PRODUCT WITH BOTTOM CLOSED
-U+02A33           ⨳           \\smashtimes                                   SMASH PRODUCT
-U+02A34           ⨴           \\otimeslhrim                                  MULTIPLICATION SIGN IN LEFT HALF CIRCLE
-U+02A35           ⨵           \\otimesrhrim                                  MULTIPLICATION SIGN IN RIGHT HALF CIRCLE
-U+02A36           ⨶           \\otimeshat                                    CIRCLED MULTIPLICATION SIGN WITH CIRCUMFLEX ACCENT
-U+02A37           ⨷           \\Otimes                                       MULTIPLICATION SIGN IN DOUBLE CIRCLE
-U+02A38           ⨸           \\odiv                                         CIRCLED DIVISION SIGN
-U+02A39           ⨹           \\triangleplus                                 PLUS SIGN IN TRIANGLE
-U+02A3A           ⨺           \\triangleminus                                MINUS SIGN IN TRIANGLE
-U+02A3B           ⨻           \\triangletimes                                MULTIPLICATION SIGN IN TRIANGLE
+U+02A33           ⨳            \\smashtimes                                   SMASH PRODUCT
+U+02A34           ⨴            \\otimeslhrim                                  MULTIPLICATION SIGN IN LEFT HALF CIRCLE
+U+02A35           ⨵            \\otimesrhrim                                  MULTIPLICATION SIGN IN RIGHT HALF CIRCLE
+U+02A36           ⨶            \\otimeshat                                    CIRCLED MULTIPLICATION SIGN WITH CIRCUMFLEX ACCENT
+U+02A37           ⨷            \\Otimes                                       MULTIPLICATION SIGN IN DOUBLE CIRCLE
+U+02A38           ⨸            \\odiv                                         CIRCLED DIVISION SIGN
+U+02A39           ⨹            \\triangleplus                                 PLUS SIGN IN TRIANGLE
+U+02A3A           ⨺            \\triangleminus                                MINUS SIGN IN TRIANGLE
+U+02A3B           ⨻            \\triangletimes                                MULTIPLICATION SIGN IN TRIANGLE
 U+02A3C           ⨼            \\intprod                                      INTERIOR PRODUCT
 U+02A3D           ⨽            \\intprodr                                     RIGHTHAND INTERIOR PRODUCT
-U+02A3F           ⨿           \\amalg                                        AMALGAMATION OR COPRODUCT
-U+02A40           ⩀           \\capdot                                       INTERSECTION WITH DOT
-U+02A41           ⩁           \\uminus                                       UNION WITH MINUS SIGN
-U+02A42           ⩂           \\barcup                                       UNION WITH OVERBAR
-U+02A43           ⩃           \\barcap                                       INTERSECTION WITH OVERBAR
-U+02A44           ⩄           \\capwedge                                     INTERSECTION WITH LOGICAL AND
-U+02A45           ⩅           \\cupvee                                       UNION WITH LOGICAL OR
+U+02A3F           ⨿            \\amalg                                        AMALGAMATION OR COPRODUCT
+U+02A40           ⩀            \\capdot                                       INTERSECTION WITH DOT
+U+02A41           ⩁            \\uminus                                       UNION WITH MINUS SIGN
+U+02A42           ⩂            \\barcup                                       UNION WITH OVERBAR
+U+02A43           ⩃            \\barcap                                       INTERSECTION WITH OVERBAR
+U+02A44           ⩄            \\capwedge                                     INTERSECTION WITH LOGICAL AND
+U+02A45           ⩅            \\cupvee                                       UNION WITH LOGICAL OR
 U+02A4A           ⩊            \\twocups                                      UNION BESIDE AND JOINED WITH UNION
 U+02A4B           ⩋            \\twocaps                                      INTERSECTION BESIDE AND JOINED WITH INTERSECTION
-U+02A4C           ⩌           \\closedvarcup                                 CLOSED UNION WITH SERIFS
-U+02A4D           ⩍           \\closedvarcap                                 CLOSED INTERSECTION WITH SERIFS
-U+02A4E           ⩎           \\Sqcap                                        DOUBLE SQUARE INTERSECTION
-U+02A4F           ⩏           \\Sqcup                                        DOUBLE SQUARE UNION
-U+02A50           ⩐           \\closedvarcupsmashprod                        CLOSED UNION WITH SERIFS AND SMASH PRODUCT
-U+02A51           ⩑           \\wedgeodot                                    LOGICAL AND WITH DOT ABOVE
-U+02A52           ⩒           \\veeodot                                      LOGICAL OR WITH DOT ABOVE
-U+02A53           ⩓           \\ElzAnd                                       DOUBLE LOGICAL AND
-U+02A54           ⩔           \\ElzOr                                        DOUBLE LOGICAL OR
-U+02A55           ⩕           \\wedgeonwedge                                 TWO INTERSECTING LOGICAL AND
-U+02A56           ⩖           \\ElOr                                         TWO INTERSECTING LOGICAL OR
-U+02A57           ⩗           \\bigslopedvee                                 SLOPING LARGE OR
-U+02A58           ⩘           \\bigslopedwedge                               SLOPING LARGE AND
-U+02A5A           ⩚           \\wedgemidvert                                 LOGICAL AND WITH MIDDLE STEM
-U+02A5B           ⩛           \\veemidvert                                   LOGICAL OR WITH MIDDLE STEM
-U+02A5C           ⩜           \\midbarwedge                                  LOGICAL AND WITH HORIZONTAL DASH
-U+02A5D           ⩝           \\midbarvee                                    LOGICAL OR WITH HORIZONTAL DASH
-U+02A5E           ⩞           \\perspcorrespond                              LOGICAL AND WITH DOUBLE OVERBAR
-U+02A5F           ⩟           \\Elzminhat                                    LOGICAL AND WITH UNDERBAR
-U+02A60           ⩠           \\wedgedoublebar                               LOGICAL AND WITH DOUBLE UNDERBAR
-U+02A61           ⩡           \\varveebar                                    SMALL VEE WITH UNDERBAR
-U+02A62           ⩢           \\doublebarvee                                 LOGICAL OR WITH DOUBLE OVERBAR
-U+02A63           ⩣           \\veedoublebar                                 LOGICAL OR WITH DOUBLE UNDERBAR
+U+02A4C           ⩌            \\closedvarcup                                 CLOSED UNION WITH SERIFS
+U+02A4D           ⩍            \\closedvarcap                                 CLOSED INTERSECTION WITH SERIFS
+U+02A4E           ⩎            \\Sqcap                                        DOUBLE SQUARE INTERSECTION
+U+02A4F           ⩏            \\Sqcup                                        DOUBLE SQUARE UNION
+U+02A50           ⩐            \\closedvarcupsmashprod                        CLOSED UNION WITH SERIFS AND SMASH PRODUCT
+U+02A51           ⩑            \\wedgeodot                                    LOGICAL AND WITH DOT ABOVE
+U+02A52           ⩒            \\veeodot                                      LOGICAL OR WITH DOT ABOVE
+U+02A53           ⩓            \\ElzAnd                                       DOUBLE LOGICAL AND
+U+02A54           ⩔            \\ElzOr                                        DOUBLE LOGICAL OR
+U+02A55           ⩕            \\wedgeonwedge                                 TWO INTERSECTING LOGICAL AND
+U+02A56           ⩖            \\ElOr                                         TWO INTERSECTING LOGICAL OR
+U+02A57           ⩗            \\bigslopedvee                                 SLOPING LARGE OR
+U+02A58           ⩘            \\bigslopedwedge                               SLOPING LARGE AND
+U+02A5A           ⩚            \\wedgemidvert                                 LOGICAL AND WITH MIDDLE STEM
+U+02A5B           ⩛            \\veemidvert                                   LOGICAL OR WITH MIDDLE STEM
+U+02A5C           ⩜            \\midbarwedge                                  LOGICAL AND WITH HORIZONTAL DASH
+U+02A5D           ⩝            \\midbarvee                                    LOGICAL OR WITH HORIZONTAL DASH
+U+02A5E           ⩞            \\perspcorrespond                              LOGICAL AND WITH DOUBLE OVERBAR
+U+02A5F           ⩟            \\Elzminhat                                    LOGICAL AND WITH UNDERBAR
+U+02A60           ⩠            \\wedgedoublebar                               LOGICAL AND WITH DOUBLE UNDERBAR
+U+02A61           ⩡            \\varveebar                                    SMALL VEE WITH UNDERBAR
+U+02A62           ⩢            \\doublebarvee                                 LOGICAL OR WITH DOUBLE OVERBAR
+U+02A63           ⩣            \\veedoublebar                                 LOGICAL OR WITH DOUBLE UNDERBAR
 U+02A66           ⩦            \\eqdot                                        EQUALS SIGN WITH DOT BELOW
 U+02A67           ⩧            \\dotequiv                                     IDENTICAL WITH DOT ABOVE
 U+02A6A           ⩪            \\dotsim                                       TILDE OPERATOR WITH DOT ABOVE
 U+02A6B           ⩫            \\simrdots                                     TILDE OPERATOR WITH RISING DOTS
 U+02A6C           ⩬            \\simminussim                                  SIMILAR MINUS SIMILAR
 U+02A6D           ⩭            \\congdot                                      CONGRUENT WITH DOT ABOVE
-U+02A6E           ⩮           \\asteq                                        EQUALS WITH ASTERISK
+U+02A6E           ⩮            \\asteq                                        EQUALS WITH ASTERISK
 U+02A6F           ⩯            \\hatapprox                                    ALMOST EQUAL TO WITH CIRCUMFLEX ACCENT
 U+02A70           ⩰            \\approxeqq                                    APPROXIMATELY EQUAL OR EQUAL TO
 U+02A71           ⩱            \\eqqplus                                      EQUALS SIGN ABOVE PLUS SIGN
 U+02A72           ⩲            \\pluseqq                                      PLUS SIGN ABOVE EQUALS SIGN
 U+02A73           ⩳            \\eqqsim                                       EQUALS SIGN ABOVE TILDE OPERATOR
-U+02A74           ⩴           \\Coloneq                                      DOUBLE COLON EQUAL
-U+02A75           ⩵           \\Equal                                        TWO CONSECUTIVE EQUALS SIGNS
-U+02A76           ⩶           \\eqeqeq                                       THREE CONSECUTIVE EQUALS SIGNS
+U+02A74           ⩴            \\Coloneq                                      DOUBLE COLON EQUAL
+U+02A75           ⩵            \\Equal                                        TWO CONSECUTIVE EQUALS SIGNS
+U+02A76           ⩶            \\eqeqeq                                       THREE CONSECUTIVE EQUALS SIGNS
 U+02A77           ⩷            \\ddotseq                                      EQUALS SIGN WITH TWO DOTS ABOVE AND TWO DOTS BELOW
-U+02A78           ⩸           \\equivDD                                      EQUIVALENT WITH FOUR DOTS ABOVE
-U+02A79           ⩹           \\ltcir                                        LESS-THAN WITH CIRCLE INSIDE
-U+02A7A           ⩺           \\gtcir                                        GREATER-THAN WITH CIRCLE INSIDE
-U+02A7B           ⩻           \\ltquest                                      LESS-THAN WITH QUESTION MARK ABOVE
-U+02A7C           ⩼           \\gtquest                                      GREATER-THAN WITH QUESTION MARK ABOVE
-U+02A7D           ⩽           \\leqslant                                     LESS-THAN OR SLANTED EQUAL TO
-U+02A7D + U+00338 ⩽̸           \\nleqslant                                    LESS-THAN OR SLANTED EQUAL TO + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02A7E           ⩾           \\geqslant                                     GREATER-THAN OR SLANTED EQUAL TO
-U+02A7E + U+00338 ⩾̸           \\ngeqslant                                    GREATER-THAN OR SLANTED EQUAL TO + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02A7F           ⩿           \\lesdot                                       LESS-THAN OR SLANTED EQUAL TO WITH DOT INSIDE
-U+02A80           ⪀           \\gesdot                                       GREATER-THAN OR SLANTED EQUAL TO WITH DOT INSIDE
-U+02A81           ⪁           \\lesdoto                                      LESS-THAN OR SLANTED EQUAL TO WITH DOT ABOVE
-U+02A82           ⪂           \\gesdoto                                      GREATER-THAN OR SLANTED EQUAL TO WITH DOT ABOVE
-U+02A83           ⪃           \\lesdotor                                     LESS-THAN OR SLANTED EQUAL TO WITH DOT ABOVE RIGHT
-U+02A84           ⪄           \\gesdotol                                     GREATER-THAN OR SLANTED EQUAL TO WITH DOT ABOVE LEFT
-U+02A85           ⪅           \\lessapprox                                   LESS-THAN OR APPROXIMATE
-U+02A86           ⪆           \\gtrapprox                                    GREATER-THAN OR APPROXIMATE
-U+02A87           ⪇           \\lneq                                         LESS-THAN AND SINGLE-LINE NOT EQUAL TO
-U+02A88           ⪈           \\gneq                                         GREATER-THAN AND SINGLE-LINE NOT EQUAL TO
-U+02A89           ⪉           \\lnapprox                                     LESS-THAN AND NOT APPROXIMATE
-U+02A8A           ⪊           \\gnapprox                                     GREATER-THAN AND NOT APPROXIMATE
+U+02A78           ⩸            \\equivDD                                      EQUIVALENT WITH FOUR DOTS ABOVE
+U+02A79           ⩹            \\ltcir                                        LESS-THAN WITH CIRCLE INSIDE
+U+02A7A           ⩺            \\gtcir                                        GREATER-THAN WITH CIRCLE INSIDE
+U+02A7B           ⩻            \\ltquest                                      LESS-THAN WITH QUESTION MARK ABOVE
+U+02A7C           ⩼            \\gtquest                                      GREATER-THAN WITH QUESTION MARK ABOVE
+U+02A7D           ⩽            \\leqslant                                     LESS-THAN OR SLANTED EQUAL TO
+U+02A7D + U+00338 ⩽̸            \\nleqslant                                    LESS-THAN OR SLANTED EQUAL TO + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02A7E           ⩾            \\geqslant                                     GREATER-THAN OR SLANTED EQUAL TO
+U+02A7E + U+00338 ⩾̸            \\ngeqslant                                    GREATER-THAN OR SLANTED EQUAL TO + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02A7F           ⩿            \\lesdot                                       LESS-THAN OR SLANTED EQUAL TO WITH DOT INSIDE
+U+02A80           ⪀            \\gesdot                                       GREATER-THAN OR SLANTED EQUAL TO WITH DOT INSIDE
+U+02A81           ⪁            \\lesdoto                                      LESS-THAN OR SLANTED EQUAL TO WITH DOT ABOVE
+U+02A82           ⪂            \\gesdoto                                      GREATER-THAN OR SLANTED EQUAL TO WITH DOT ABOVE
+U+02A83           ⪃            \\lesdotor                                     LESS-THAN OR SLANTED EQUAL TO WITH DOT ABOVE RIGHT
+U+02A84           ⪄            \\gesdotol                                     GREATER-THAN OR SLANTED EQUAL TO WITH DOT ABOVE LEFT
+U+02A85           ⪅            \\lessapprox                                   LESS-THAN OR APPROXIMATE
+U+02A86           ⪆            \\gtrapprox                                    GREATER-THAN OR APPROXIMATE
+U+02A87           ⪇            \\lneq                                         LESS-THAN AND SINGLE-LINE NOT EQUAL TO
+U+02A88           ⪈            \\gneq                                         GREATER-THAN AND SINGLE-LINE NOT EQUAL TO
+U+02A89           ⪉            \\lnapprox                                     LESS-THAN AND NOT APPROXIMATE
+U+02A8A           ⪊            \\gnapprox                                     GREATER-THAN AND NOT APPROXIMATE
 U+02A8B           ⪋            \\lesseqqgtr                                   LESS-THAN ABOVE DOUBLE-LINE EQUAL ABOVE GREATER-THAN
 U+02A8C           ⪌            \\gtreqqless                                   GREATER-THAN ABOVE DOUBLE-LINE EQUAL ABOVE LESS-THAN
-U+02A8D           ⪍           \\lsime                                        LESS-THAN ABOVE SIMILAR OR EQUAL
-U+02A8E           ⪎           \\gsime                                        GREATER-THAN ABOVE SIMILAR OR EQUAL
+U+02A8D           ⪍            \\lsime                                        LESS-THAN ABOVE SIMILAR OR EQUAL
+U+02A8E           ⪎            \\gsime                                        GREATER-THAN ABOVE SIMILAR OR EQUAL
 U+02A8F           ⪏            \\lsimg                                        LESS-THAN ABOVE SIMILAR ABOVE GREATER-THAN
 U+02A90           ⪐            \\gsiml                                        GREATER-THAN ABOVE SIMILAR ABOVE LESS-THAN
 U+02A91           ⪑            \\lgE                                          LESS-THAN ABOVE GREATER-THAN ABOVE DOUBLE-LINE EQUAL
 U+02A92           ⪒            \\glE                                          GREATER-THAN ABOVE LESS-THAN ABOVE DOUBLE-LINE EQUAL
 U+02A93           ⪓            \\lesges                                       LESS-THAN ABOVE SLANTED EQUAL ABOVE GREATER-THAN ABOVE SLANTED EQUAL
 U+02A94           ⪔            \\gesles                                       GREATER-THAN ABOVE SLANTED EQUAL ABOVE LESS-THAN ABOVE SLANTED EQUAL
-U+02A95           ⪕           \\eqslantless                                  SLANTED EQUAL TO OR LESS-THAN
-U+02A96           ⪖           \\eqslantgtr                                   SLANTED EQUAL TO OR GREATER-THAN
-U+02A97           ⪗           \\elsdot                                       SLANTED EQUAL TO OR LESS-THAN WITH DOT INSIDE
-U+02A98           ⪘           \\egsdot                                       SLANTED EQUAL TO OR GREATER-THAN WITH DOT INSIDE
-U+02A99           ⪙           \\eqqless                                      DOUBLE-LINE EQUAL TO OR LESS-THAN
-U+02A9A           ⪚           \\eqqgtr                                       DOUBLE-LINE EQUAL TO OR GREATER-THAN
-U+02A9B           ⪛           \\eqqslantless                                 DOUBLE-LINE SLANTED EQUAL TO OR LESS-THAN
-U+02A9C           ⪜           \\eqqslantgtr                                  DOUBLE-LINE SLANTED EQUAL TO OR GREATER-THAN
-U+02A9D           ⪝           \\simless                                      SIMILAR OR LESS-THAN
-U+02A9E           ⪞           \\simgtr                                       SIMILAR OR GREATER-THAN
-U+02A9F           ⪟           \\simlE                                        SIMILAR ABOVE LESS-THAN ABOVE EQUALS SIGN
-U+02AA0           ⪠           \\simgE                                        SIMILAR ABOVE GREATER-THAN ABOVE EQUALS SIGN
-U+02AA1           ⪡           \\NestedLessLess                               DOUBLE NESTED LESS-THAN
-U+02AA1 + U+00338 ⪡̸           \\NotNestedLessLess                            DOUBLE NESTED LESS-THAN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02AA2           ⪢           \\NestedGreaterGreater                         DOUBLE NESTED GREATER-THAN
-U+02AA2 + U+00338 ⪢̸           \\NotNestedGreaterGreater                      DOUBLE NESTED GREATER-THAN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02AA3           ⪣           \\partialmeetcontraction                       DOUBLE NESTED LESS-THAN WITH UNDERBAR
-U+02AA4           ⪤           \\glj                                          GREATER-THAN OVERLAPPING LESS-THAN
-U+02AA5           ⪥           \\gla                                          GREATER-THAN BESIDE LESS-THAN
-U+02AA6           ⪦           \\ltcc                                         LESS-THAN CLOSED BY CURVE
-U+02AA7           ⪧           \\gtcc                                         GREATER-THAN CLOSED BY CURVE
-U+02AA8           ⪨           \\lescc                                        LESS-THAN CLOSED BY CURVE ABOVE SLANTED EQUAL
-U+02AA9           ⪩           \\gescc                                        GREATER-THAN CLOSED BY CURVE ABOVE SLANTED EQUAL
-U+02AAA           ⪪           \\smt                                          SMALLER THAN
-U+02AAB           ⪫           \\lat                                          LARGER THAN
-U+02AAC           ⪬           \\smte                                         SMALLER THAN OR EQUAL TO
-U+02AAD           ⪭           \\late                                         LARGER THAN OR EQUAL TO
-U+02AAE           ⪮           \\bumpeqq                                      EQUALS SIGN WITH BUMPY ABOVE
-U+02AAF           ⪯           \\preceq                                       PRECEDES ABOVE SINGLE-LINE EQUALS SIGN
-U+02AAF + U+00338 ⪯̸           \\npreceq                                      PRECEDES ABOVE SINGLE-LINE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02AB0           ⪰           \\succeq                                       SUCCEEDS ABOVE SINGLE-LINE EQUALS SIGN
-U+02AB0 + U+00338 ⪰̸           \\nsucceq                                      SUCCEEDS ABOVE SINGLE-LINE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02AB1           ⪱           \\precneq                                      PRECEDES ABOVE SINGLE-LINE NOT EQUAL TO
-U+02AB2           ⪲           \\succneq                                      SUCCEEDS ABOVE SINGLE-LINE NOT EQUAL TO
-U+02AB3           ⪳           \\preceqq                                      PRECEDES ABOVE EQUALS SIGN
-U+02AB4           ⪴           \\succeqq                                      SUCCEEDS ABOVE EQUALS SIGN
-U+02AB5           ⪵           \\precneqq                                     PRECEDES ABOVE NOT EQUAL TO
-U+02AB6           ⪶           \\succneqq                                     SUCCEEDS ABOVE NOT EQUAL TO
-U+02AB7           ⪷           \\precapprox                                   PRECEDES ABOVE ALMOST EQUAL TO
-U+02AB8           ⪸           \\succapprox                                   SUCCEEDS ABOVE ALMOST EQUAL TO
-U+02AB9           ⪹           \\precnapprox                                  PRECEDES ABOVE NOT ALMOST EQUAL TO
-U+02ABA           ⪺           \\succnapprox                                  SUCCEEDS ABOVE NOT ALMOST EQUAL TO
-U+02ABB           ⪻           \\Prec                                         DOUBLE PRECEDES
-U+02ABC           ⪼           \\Succ                                         DOUBLE SUCCEEDS
-U+02ABD           ⪽           \\subsetdot                                    SUBSET WITH DOT
-U+02ABE           ⪾           \\supsetdot                                    SUPERSET WITH DOT
+U+02A95           ⪕            \\eqslantless                                  SLANTED EQUAL TO OR LESS-THAN
+U+02A96           ⪖            \\eqslantgtr                                   SLANTED EQUAL TO OR GREATER-THAN
+U+02A97           ⪗            \\elsdot                                       SLANTED EQUAL TO OR LESS-THAN WITH DOT INSIDE
+U+02A98           ⪘            \\egsdot                                       SLANTED EQUAL TO OR GREATER-THAN WITH DOT INSIDE
+U+02A99           ⪙            \\eqqless                                      DOUBLE-LINE EQUAL TO OR LESS-THAN
+U+02A9A           ⪚            \\eqqgtr                                       DOUBLE-LINE EQUAL TO OR GREATER-THAN
+U+02A9B           ⪛            \\eqqslantless                                 DOUBLE-LINE SLANTED EQUAL TO OR LESS-THAN
+U+02A9C           ⪜            \\eqqslantgtr                                  DOUBLE-LINE SLANTED EQUAL TO OR GREATER-THAN
+U+02A9D           ⪝            \\simless                                      SIMILAR OR LESS-THAN
+U+02A9E           ⪞            \\simgtr                                       SIMILAR OR GREATER-THAN
+U+02A9F           ⪟            \\simlE                                        SIMILAR ABOVE LESS-THAN ABOVE EQUALS SIGN
+U+02AA0           ⪠            \\simgE                                        SIMILAR ABOVE GREATER-THAN ABOVE EQUALS SIGN
+U+02AA1           ⪡            \\NestedLessLess                               DOUBLE NESTED LESS-THAN
+U+02AA1 + U+00338 ⪡̸            \\NotNestedLessLess                            DOUBLE NESTED LESS-THAN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02AA2           ⪢            \\NestedGreaterGreater                         DOUBLE NESTED GREATER-THAN
+U+02AA2 + U+00338 ⪢̸            \\NotNestedGreaterGreater                      DOUBLE NESTED GREATER-THAN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02AA3           ⪣            \\partialmeetcontraction                       DOUBLE NESTED LESS-THAN WITH UNDERBAR
+U+02AA4           ⪤            \\glj                                          GREATER-THAN OVERLAPPING LESS-THAN
+U+02AA5           ⪥            \\gla                                          GREATER-THAN BESIDE LESS-THAN
+U+02AA6           ⪦            \\ltcc                                         LESS-THAN CLOSED BY CURVE
+U+02AA7           ⪧            \\gtcc                                         GREATER-THAN CLOSED BY CURVE
+U+02AA8           ⪨            \\lescc                                        LESS-THAN CLOSED BY CURVE ABOVE SLANTED EQUAL
+U+02AA9           ⪩            \\gescc                                        GREATER-THAN CLOSED BY CURVE ABOVE SLANTED EQUAL
+U+02AAA           ⪪            \\smt                                          SMALLER THAN
+U+02AAB           ⪫            \\lat                                          LARGER THAN
+U+02AAC           ⪬            \\smte                                         SMALLER THAN OR EQUAL TO
+U+02AAD           ⪭            \\late                                         LARGER THAN OR EQUAL TO
+U+02AAE           ⪮            \\bumpeqq                                      EQUALS SIGN WITH BUMPY ABOVE
+U+02AAF           ⪯            \\preceq                                       PRECEDES ABOVE SINGLE-LINE EQUALS SIGN
+U+02AAF + U+00338 ⪯̸            \\npreceq                                      PRECEDES ABOVE SINGLE-LINE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02AB0           ⪰            \\succeq                                       SUCCEEDS ABOVE SINGLE-LINE EQUALS SIGN
+U+02AB0 + U+00338 ⪰̸            \\nsucceq                                      SUCCEEDS ABOVE SINGLE-LINE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
+U+02AB1           ⪱            \\precneq                                      PRECEDES ABOVE SINGLE-LINE NOT EQUAL TO
+U+02AB2           ⪲            \\succneq                                      SUCCEEDS ABOVE SINGLE-LINE NOT EQUAL TO
+U+02AB3           ⪳            \\preceqq                                      PRECEDES ABOVE EQUALS SIGN
+U+02AB4           ⪴            \\succeqq                                      SUCCEEDS ABOVE EQUALS SIGN
+U+02AB5           ⪵            \\precneqq                                     PRECEDES ABOVE NOT EQUAL TO
+U+02AB6           ⪶            \\succneqq                                     SUCCEEDS ABOVE NOT EQUAL TO
+U+02AB7           ⪷            \\precapprox                                   PRECEDES ABOVE ALMOST EQUAL TO
+U+02AB8           ⪸            \\succapprox                                   SUCCEEDS ABOVE ALMOST EQUAL TO
+U+02AB9           ⪹            \\precnapprox                                  PRECEDES ABOVE NOT ALMOST EQUAL TO
+U+02ABA           ⪺            \\succnapprox                                  SUCCEEDS ABOVE NOT ALMOST EQUAL TO
+U+02ABB           ⪻            \\Prec                                         DOUBLE PRECEDES
+U+02ABC           ⪼            \\Succ                                         DOUBLE SUCCEEDS
+U+02ABD           ⪽            \\subsetdot                                    SUBSET WITH DOT
+U+02ABE           ⪾            \\supsetdot                                    SUPERSET WITH DOT
 U+02ABF           ⪿            \\subsetplus                                   SUBSET WITH PLUS SIGN BELOW
 U+02AC0           ⫀            \\supsetplus                                   SUPERSET WITH PLUS SIGN BELOW
 U+02AC1           ⫁            \\submult                                      SUBSET WITH MULTIPLICATION SIGN BELOW
@@ -1423,58 +1423,58 @@ U+02AC5           ⫅            \\subseteqq                                    
 U+02AC5 + U+00338 ⫅̸            \\nsubseteqq                                   SUBSET OF ABOVE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
 U+02AC6           ⫆            \\supseteqq                                    SUPERSET OF ABOVE EQUALS SIGN
 U+02AC6 + U+00338 ⫆̸            \\nsupseteqq                                   SUPERSET OF ABOVE EQUALS SIGN + COMBINING LONG SOLIDUS OVERLAY / NON-SPACING LONG SLASH OVERLAY
-U+02AC7           ⫇           \\subsim                                       SUBSET OF ABOVE TILDE OPERATOR
-U+02AC8           ⫈           \\supsim                                       SUPERSET OF ABOVE TILDE OPERATOR
+U+02AC7           ⫇            \\subsim                                       SUBSET OF ABOVE TILDE OPERATOR
+U+02AC8           ⫈            \\supsim                                       SUPERSET OF ABOVE TILDE OPERATOR
 U+02AC9           ⫉            \\subsetapprox                                 SUBSET OF ABOVE ALMOST EQUAL TO
 U+02ACA           ⫊            \\supsetapprox                                 SUPERSET OF ABOVE ALMOST EQUAL TO
 U+02ACB           ⫋            \\subsetneqq                                   SUBSET OF ABOVE NOT EQUAL TO
 U+02ACC           ⫌            \\supsetneqq                                   SUPERSET OF ABOVE NOT EQUAL TO
-U+02ACD           ⫍           \\lsqhook                                      SQUARE LEFT OPEN BOX OPERATOR
-U+02ACE           ⫎           \\rsqhook                                      SQUARE RIGHT OPEN BOX OPERATOR
-U+02ACF           ⫏           \\csub                                         CLOSED SUBSET
-U+02AD0           ⫐           \\csup                                         CLOSED SUPERSET
-U+02AD1           ⫑           \\csube                                        CLOSED SUBSET OR EQUAL TO
-U+02AD2           ⫒           \\csupe                                        CLOSED SUPERSET OR EQUAL TO
+U+02ACD           ⫍            \\lsqhook                                      SQUARE LEFT OPEN BOX OPERATOR
+U+02ACE           ⫎            \\rsqhook                                      SQUARE RIGHT OPEN BOX OPERATOR
+U+02ACF           ⫏            \\csub                                         CLOSED SUBSET
+U+02AD0           ⫐            \\csup                                         CLOSED SUPERSET
+U+02AD1           ⫑            \\csube                                        CLOSED SUBSET OR EQUAL TO
+U+02AD2           ⫒            \\csupe                                        CLOSED SUPERSET OR EQUAL TO
 U+02AD3           ⫓            \\subsup                                       SUBSET ABOVE SUPERSET
 U+02AD4           ⫔            \\supsub                                       SUPERSET ABOVE SUBSET
 U+02AD5           ⫕            \\subsub                                       SUBSET ABOVE SUBSET
 U+02AD6           ⫖            \\supsup                                       SUPERSET ABOVE SUPERSET
-U+02AD7           ⫗           \\suphsub                                      SUPERSET BESIDE SUBSET
-U+02AD8           ⫘           \\supdsub                                      SUPERSET BESIDE AND JOINED BY DASH WITH SUBSET
-U+02AD9           ⫙           \\forkv                                        ELEMENT OF OPENING DOWNWARDS
-U+02ADB           ⫛           \\mlcp                                         TRANSVERSAL INTERSECTION
-U+02ADC           ⫝̸           \\forks                                        FORKING
-U+02ADD           ⫝           \\forksnot                                     NONFORKING
-U+02AE3           ⫣           \\dashV                                        DOUBLE VERTICAL BAR LEFT TURNSTILE
-U+02AE4           ⫤           \\Dashv                                        VERTICAL BAR DOUBLE LEFT TURNSTILE
-U+02AF4           ⫴           \\interleave                                   TRIPLE VERTICAL BAR BINARY RELATION
+U+02AD7           ⫗            \\suphsub                                      SUPERSET BESIDE SUBSET
+U+02AD8           ⫘            \\supdsub                                      SUPERSET BESIDE AND JOINED BY DASH WITH SUBSET
+U+02AD9           ⫙            \\forkv                                        ELEMENT OF OPENING DOWNWARDS
+U+02ADB           ⫛            \\mlcp                                         TRANSVERSAL INTERSECTION
+U+02ADC           ⫝̸            \\forks                                        FORKING
+U+02ADD           ⫝            \\forksnot                                     NONFORKING
+U+02AE3           ⫣            \\dashV                                        DOUBLE VERTICAL BAR LEFT TURNSTILE
+U+02AE4           ⫤            \\Dashv                                        VERTICAL BAR DOUBLE LEFT TURNSTILE
+U+02AF4           ⫴            \\interleave                                   TRIPLE VERTICAL BAR BINARY RELATION
 U+02AF6           ⫶            \\Elztdcol                                     TRIPLE COLON OPERATOR
-U+02AF7           ⫷           \\lllnest                                      TRIPLE NESTED LESS-THAN
-U+02AF8           ⫸           \\gggnest                                      TRIPLE NESTED GREATER-THAN
-U+02AF9           ⫹           \\leqqslant                                    DOUBLE-LINE SLANTED LESS-THAN OR EQUAL TO
-U+02AFA           ⫺           \\geqqslant                                    DOUBLE-LINE SLANTED GREATER-THAN OR EQUAL TO
-U+02B05           ⬅           \\:arrow_left:                                 LEFTWARDS BLACK ARROW
+U+02AF7           ⫷            \\lllnest                                      TRIPLE NESTED LESS-THAN
+U+02AF8           ⫸            \\gggnest                                      TRIPLE NESTED GREATER-THAN
+U+02AF9           ⫹            \\leqqslant                                    DOUBLE-LINE SLANTED LESS-THAN OR EQUAL TO
+U+02AFA           ⫺            \\geqqslant                                    DOUBLE-LINE SLANTED GREATER-THAN OR EQUAL TO
+U+02B05           ⬅            \\:arrow_left:                                 LEFTWARDS BLACK ARROW
 U+02B06           ⬆            \\:arrow_up:                                   UPWARDS BLACK ARROW
 U+02B07           ⬇            \\:arrow_down:                                 DOWNWARDS BLACK ARROW
-U+02B12           ⬒           \\squaretopblack                               SQUARE WITH TOP HALF BLACK
-U+02B13           ⬓           \\squarebotblack                               SQUARE WITH BOTTOM HALF BLACK
-U+02B14           ⬔           \\squareurblack                                SQUARE WITH UPPER RIGHT DIAGONAL HALF BLACK
-U+02B15           ⬕           \\squarellblack                                SQUARE WITH LOWER LEFT DIAGONAL HALF BLACK
-U+02B16           ⬖           \\diamondleftblack                             DIAMOND WITH LEFT HALF BLACK
-U+02B17           ⬗           \\diamondrightblack                            DIAMOND WITH RIGHT HALF BLACK
-U+02B18           ⬘           \\diamondtopblack                              DIAMOND WITH TOP HALF BLACK
-U+02B19           ⬙           \\diamondbotblack                              DIAMOND WITH BOTTOM HALF BLACK
-U+02B1A           ⬚           \\dottedsquare                                 DOTTED SQUARE
-U+02B1B           ⬛           \\lgblksquare, \\:black_large_square:          BLACK LARGE SQUARE
-U+02B1C           ⬜           \\lgwhtsquare, \\:white_large_square:          WHITE LARGE SQUARE
+U+02B12           ⬒            \\squaretopblack                               SQUARE WITH TOP HALF BLACK
+U+02B13           ⬓            \\squarebotblack                               SQUARE WITH BOTTOM HALF BLACK
+U+02B14           ⬔            \\squareurblack                                SQUARE WITH UPPER RIGHT DIAGONAL HALF BLACK
+U+02B15           ⬕            \\squarellblack                                SQUARE WITH LOWER LEFT DIAGONAL HALF BLACK
+U+02B16           ⬖            \\diamondleftblack                             DIAMOND WITH LEFT HALF BLACK
+U+02B17           ⬗            \\diamondrightblack                            DIAMOND WITH RIGHT HALF BLACK
+U+02B18           ⬘            \\diamondtopblack                              DIAMOND WITH TOP HALF BLACK
+U+02B19           ⬙            \\diamondbotblack                              DIAMOND WITH BOTTOM HALF BLACK
+U+02B1A           ⬚            \\dottedsquare                                 DOTTED SQUARE
+U+02B1B           ⬛            \\lgblksquare, \\:black_large_square:          BLACK LARGE SQUARE
+U+02B1C           ⬜            \\lgwhtsquare, \\:white_large_square:          WHITE LARGE SQUARE
 U+02B1D           ⬝            \\vysmblksquare                                BLACK VERY SMALL SQUARE
 U+02B1E           ⬞            \\vysmwhtsquare                                WHITE VERY SMALL SQUARE
-U+02B1F           ⬟           \\pentagonblack                                BLACK PENTAGON
-U+02B20           ⬠           \\pentagon                                     WHITE PENTAGON
-U+02B21           ⬡           \\varhexagon                                   WHITE HEXAGON
-U+02B22           ⬢           \\varhexagonblack                              BLACK HEXAGON
-U+02B23           ⬣           \\hexagonblack                                 HORIZONTAL BLACK HEXAGON
-U+02B24           ⬤           \\lgblkcircle                                  BLACK LARGE CIRCLE
+U+02B1F           ⬟            \\pentagonblack                                BLACK PENTAGON
+U+02B20           ⬠            \\pentagon                                     WHITE PENTAGON
+U+02B21           ⬡            \\varhexagon                                   WHITE HEXAGON
+U+02B22           ⬢            \\varhexagonblack                              BLACK HEXAGON
+U+02B23           ⬣            \\hexagonblack                                 HORIZONTAL BLACK HEXAGON
+U+02B24           ⬤            \\lgblkcircle                                  BLACK LARGE CIRCLE
 U+02B25           ⬥            \\mdblkdiamond                                 BLACK MEDIUM DIAMOND
 U+02B26           ⬦            \\mdwhtdiamond                                 WHITE MEDIUM DIAMOND
 U+02B27           ⬧            \\mdblklozenge                                 BLACK MEDIUM LOZENGE
@@ -1482,52 +1482,52 @@ U+02B28           ⬨            \\mdwhtlozenge                                 
 U+02B29           ⬩            \\smblkdiamond                                 BLACK SMALL DIAMOND
 U+02B2A           ⬪            \\smblklozenge                                 BLACK SMALL LOZENGE
 U+02B2B           ⬫            \\smwhtlozenge                                 WHITE SMALL LOZENGE
-U+02B2C           ⬬           \\blkhorzoval                                  BLACK HORIZONTAL ELLIPSE
-U+02B2D           ⬭           \\whthorzoval                                  WHITE HORIZONTAL ELLIPSE
+U+02B2C           ⬬            \\blkhorzoval                                  BLACK HORIZONTAL ELLIPSE
+U+02B2D           ⬭            \\whthorzoval                                  WHITE HORIZONTAL ELLIPSE
 U+02B2E           ⬮            \\blkvertoval                                  BLACK VERTICAL ELLIPSE
 U+02B2F           ⬯            \\whtvertoval                                  WHITE VERTICAL ELLIPSE
-U+02B30           ⬰           \\circleonleftarrow                            LEFT ARROW WITH SMALL CIRCLE
-U+02B31           ⬱           \\leftthreearrows                              THREE LEFTWARDS ARROWS
-U+02B32           ⬲           \\leftarrowonoplus                             LEFT ARROW WITH CIRCLED PLUS
-U+02B33           ⬳           \\longleftsquigarrow                           LONG LEFTWARDS SQUIGGLE ARROW
-U+02B34           ⬴           \\nvtwoheadleftarrow                           LEFTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
-U+02B35           ⬵           \\nVtwoheadleftarrow                           LEFTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
-U+02B36           ⬶           \\twoheadmapsfrom                              LEFTWARDS TWO-HEADED ARROW FROM BAR
-U+02B37           ⬷           \\twoheadleftdbkarrow                          LEFTWARDS TWO-HEADED TRIPLE DASH ARROW
-U+02B38           ⬸           \\leftdotarrow                                 LEFTWARDS ARROW WITH DOTTED STEM
-U+02B39           ⬹           \\nvleftarrowtail                              LEFTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
-U+02B3A           ⬺           \\nVleftarrowtail                              LEFTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
-U+02B3B           ⬻           \\twoheadleftarrowtail                         LEFTWARDS TWO-HEADED ARROW WITH TAIL
-U+02B3C           ⬼           \\nvtwoheadleftarrowtail                       LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
-U+02B3D           ⬽           \\nVtwoheadleftarrowtail                       LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
-U+02B3E           ⬾           \\leftarrowx                                   LEFTWARDS ARROW THROUGH X
-U+02B3F           ⬿           \\leftcurvedarrow                              WAVE ARROW POINTING DIRECTLY LEFT
-U+02B40           ⭀           \\equalleftarrow                               EQUALS SIGN ABOVE LEFTWARDS ARROW
-U+02B41           ⭁           \\bsimilarleftarrow                            REVERSE TILDE OPERATOR ABOVE LEFTWARDS ARROW
-U+02B42           ⭂           \\leftarrowbackapprox                          LEFTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
-U+02B43           ⭃           \\rightarrowgtr                                RIGHTWARDS ARROW THROUGH GREATER-THAN
-U+02B44           ⭄           \\rightarrowsupset                             RIGHTWARDS ARROW THROUGH SUPERSET
-U+02B45           ⭅           \\LLeftarrow                                   LEFTWARDS QUADRUPLE ARROW
-U+02B46           ⭆           \\RRightarrow                                  RIGHTWARDS QUADRUPLE ARROW
-U+02B47           ⭇           \\bsimilarrightarrow                           REVERSE TILDE OPERATOR ABOVE RIGHTWARDS ARROW
-U+02B48           ⭈           \\rightarrowbackapprox                         RIGHTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
-U+02B49           ⭉           \\similarleftarrow                             TILDE OPERATOR ABOVE LEFTWARDS ARROW
-U+02B4A           ⭊           \\leftarrowapprox                              LEFTWARDS ARROW ABOVE ALMOST EQUAL TO
-U+02B4B           ⭋           \\leftarrowbsimilar                            LEFTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
-U+02B4C           ⭌           \\rightarrowbsimilar                           RIGHTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
-U+02B50           ⭐           \\medwhitestar, \\:star:                       WHITE MEDIUM STAR
-U+02B51           ⭑           \\medblackstar                                 BLACK SMALL STAR
-U+02B52           ⭒           \\smwhitestar                                  WHITE SMALL STAR
-U+02B53           ⭓           \\rightpentagonblack                           BLACK RIGHT-POINTING PENTAGON
-U+02B54           ⭔           \\rightpentagon                                WHITE RIGHT-POINTING PENTAGON
-U+02B55           ⭕           \\:o:                                          HEAVY LARGE CIRCLE
+U+02B30           ⬰            \\circleonleftarrow                            LEFT ARROW WITH SMALL CIRCLE
+U+02B31           ⬱            \\leftthreearrows                              THREE LEFTWARDS ARROWS
+U+02B32           ⬲            \\leftarrowonoplus                             LEFT ARROW WITH CIRCLED PLUS
+U+02B33           ⬳            \\longleftsquigarrow                           LONG LEFTWARDS SQUIGGLE ARROW
+U+02B34           ⬴            \\nvtwoheadleftarrow                           LEFTWARDS TWO-HEADED ARROW WITH VERTICAL STROKE
+U+02B35           ⬵            \\nVtwoheadleftarrow                           LEFTWARDS TWO-HEADED ARROW WITH DOUBLE VERTICAL STROKE
+U+02B36           ⬶            \\twoheadmapsfrom                              LEFTWARDS TWO-HEADED ARROW FROM BAR
+U+02B37           ⬷            \\twoheadleftdbkarrow                          LEFTWARDS TWO-HEADED TRIPLE DASH ARROW
+U+02B38           ⬸            \\leftdotarrow                                 LEFTWARDS ARROW WITH DOTTED STEM
+U+02B39           ⬹            \\nvleftarrowtail                              LEFTWARDS ARROW WITH TAIL WITH VERTICAL STROKE
+U+02B3A           ⬺            \\nVleftarrowtail                              LEFTWARDS ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+U+02B3B           ⬻            \\twoheadleftarrowtail                         LEFTWARDS TWO-HEADED ARROW WITH TAIL
+U+02B3C           ⬼            \\nvtwoheadleftarrowtail                       LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH VERTICAL STROKE
+U+02B3D           ⬽            \\nVtwoheadleftarrowtail                       LEFTWARDS TWO-HEADED ARROW WITH TAIL WITH DOUBLE VERTICAL STROKE
+U+02B3E           ⬾            \\leftarrowx                                   LEFTWARDS ARROW THROUGH X
+U+02B3F           ⬿            \\leftcurvedarrow                              WAVE ARROW POINTING DIRECTLY LEFT
+U+02B40           ⭀            \\equalleftarrow                               EQUALS SIGN ABOVE LEFTWARDS ARROW
+U+02B41           ⭁            \\bsimilarleftarrow                            REVERSE TILDE OPERATOR ABOVE LEFTWARDS ARROW
+U+02B42           ⭂            \\leftarrowbackapprox                          LEFTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
+U+02B43           ⭃            \\rightarrowgtr                                RIGHTWARDS ARROW THROUGH GREATER-THAN
+U+02B44           ⭄            \\rightarrowsupset                             RIGHTWARDS ARROW THROUGH SUPERSET
+U+02B45           ⭅            \\LLeftarrow                                   LEFTWARDS QUADRUPLE ARROW
+U+02B46           ⭆            \\RRightarrow                                  RIGHTWARDS QUADRUPLE ARROW
+U+02B47           ⭇            \\bsimilarrightarrow                           REVERSE TILDE OPERATOR ABOVE RIGHTWARDS ARROW
+U+02B48           ⭈            \\rightarrowbackapprox                         RIGHTWARDS ARROW ABOVE REVERSE ALMOST EQUAL TO
+U+02B49           ⭉            \\similarleftarrow                             TILDE OPERATOR ABOVE LEFTWARDS ARROW
+U+02B4A           ⭊            \\leftarrowapprox                              LEFTWARDS ARROW ABOVE ALMOST EQUAL TO
+U+02B4B           ⭋            \\leftarrowbsimilar                            LEFTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
+U+02B4C           ⭌            \\rightarrowbsimilar                           RIGHTWARDS ARROW ABOVE REVERSE TILDE OPERATOR
+U+02B50           ⭐            \\medwhitestar, \\:star:                       WHITE MEDIUM STAR
+U+02B51           ⭑            \\medblackstar                                 BLACK SMALL STAR
+U+02B52           ⭒            \\smwhitestar                                  WHITE SMALL STAR
+U+02B53           ⭓            \\rightpentagonblack                           BLACK RIGHT-POINTING PENTAGON
+U+02B54           ⭔            \\rightpentagon                                WHITE RIGHT-POINTING PENTAGON
+U+02B55           ⭕            \\:o:                                          HEAVY LARGE CIRCLE
 U+02C7C           ⱼ            \\_j                                           LATIN SUBSCRIPT SMALL LETTER J
 U+02C7D           ⱽ            \\^V                                           MODIFIER LETTER CAPITAL V
-U+03012           〒           \\postalmark                                   POSTAL MARK
-U+03030           〰           \\:wavy_dash:                                  WAVY DASH
-U+0303D           〽           \\:part_alternation_mark:                      PART ALTERNATION MARK
-U+03297           ㊗           \\:congratulations:                            CIRCLED IDEOGRAPH CONGRATULATION
-U+03299           ㊙           \\:secret:                                     CIRCLED IDEOGRAPH SECRET
+U+03012           〒            \\postalmark                                   POSTAL MARK
+U+03030           〰            \\:wavy_dash:                                  WAVY DASH
+U+0303D           〽            \\:part_alternation_mark:                      PART ALTERNATION MARK
+U+03297           ㊗            \\:congratulations:                            CIRCLED IDEOGRAPH CONGRATULATION
+U+03299           ㊙            \\:secret:                                     CIRCLED IDEOGRAPH SECRET
 U+1D400           𝐀            \\mbfA                                         MATHEMATICAL BOLD CAPITAL A
 U+1D401           𝐁            \\mbfB                                         MATHEMATICAL BOLD CAPITAL B
 U+1D402           𝐂            \\mbfC                                         MATHEMATICAL BOLD CAPITAL C
@@ -1580,202 +1580,202 @@ U+1D430           𝐰            \\mbfw                                        
 U+1D431           𝐱            \\mbfx                                         MATHEMATICAL BOLD SMALL X
 U+1D432           𝐲            \\mbfy                                         MATHEMATICAL BOLD SMALL Y
 U+1D433           𝐳            \\mbfz                                         MATHEMATICAL BOLD SMALL Z
-U+1D434           𝐴           \\mitA                                         MATHEMATICAL ITALIC CAPITAL A
-U+1D435           𝐵           \\mitB                                         MATHEMATICAL ITALIC CAPITAL B
-U+1D436           𝐶           \\mitC                                         MATHEMATICAL ITALIC CAPITAL C
-U+1D437           𝐷           \\mitD                                         MATHEMATICAL ITALIC CAPITAL D
-U+1D438           𝐸           \\mitE                                         MATHEMATICAL ITALIC CAPITAL E
-U+1D439           𝐹           \\mitF                                         MATHEMATICAL ITALIC CAPITAL F
-U+1D43A           𝐺           \\mitG                                         MATHEMATICAL ITALIC CAPITAL G
-U+1D43B           𝐻           \\mitH                                         MATHEMATICAL ITALIC CAPITAL H
-U+1D43C           𝐼           \\mitI                                         MATHEMATICAL ITALIC CAPITAL I
-U+1D43D           𝐽           \\mitJ                                         MATHEMATICAL ITALIC CAPITAL J
-U+1D43E           𝐾           \\mitK                                         MATHEMATICAL ITALIC CAPITAL K
-U+1D43F           𝐿           \\mitL                                         MATHEMATICAL ITALIC CAPITAL L
-U+1D440           𝑀           \\mitM                                         MATHEMATICAL ITALIC CAPITAL M
-U+1D441           𝑁           \\mitN                                         MATHEMATICAL ITALIC CAPITAL N
-U+1D442           𝑂           \\mitO                                         MATHEMATICAL ITALIC CAPITAL O
-U+1D443           𝑃           \\mitP                                         MATHEMATICAL ITALIC CAPITAL P
-U+1D444           𝑄           \\mitQ                                         MATHEMATICAL ITALIC CAPITAL Q
-U+1D445           𝑅           \\mitR                                         MATHEMATICAL ITALIC CAPITAL R
-U+1D446           𝑆           \\mitS                                         MATHEMATICAL ITALIC CAPITAL S
-U+1D447           𝑇           \\mitT                                         MATHEMATICAL ITALIC CAPITAL T
-U+1D448           𝑈           \\mitU                                         MATHEMATICAL ITALIC CAPITAL U
-U+1D449           𝑉           \\mitV                                         MATHEMATICAL ITALIC CAPITAL V
-U+1D44A           𝑊           \\mitW                                         MATHEMATICAL ITALIC CAPITAL W
-U+1D44B           𝑋           \\mitX                                         MATHEMATICAL ITALIC CAPITAL X
-U+1D44C           𝑌           \\mitY                                         MATHEMATICAL ITALIC CAPITAL Y
-U+1D44D           𝑍           \\mitZ                                         MATHEMATICAL ITALIC CAPITAL Z
-U+1D44E           𝑎           \\mita                                         MATHEMATICAL ITALIC SMALL A
-U+1D44F           𝑏           \\mitb                                         MATHEMATICAL ITALIC SMALL B
-U+1D450           𝑐           \\mitc                                         MATHEMATICAL ITALIC SMALL C
-U+1D451           𝑑           \\mitd                                         MATHEMATICAL ITALIC SMALL D
-U+1D452           𝑒           \\mite                                         MATHEMATICAL ITALIC SMALL E
-U+1D453           𝑓           \\mitf                                         MATHEMATICAL ITALIC SMALL F
-U+1D454           𝑔           \\mitg                                         MATHEMATICAL ITALIC SMALL G
-U+1D456           𝑖           \\miti                                         MATHEMATICAL ITALIC SMALL I
-U+1D457           𝑗           \\mitj                                         MATHEMATICAL ITALIC SMALL J
-U+1D458           𝑘           \\mitk                                         MATHEMATICAL ITALIC SMALL K
-U+1D459           𝑙           \\mitl                                         MATHEMATICAL ITALIC SMALL L
-U+1D45A           𝑚           \\mitm                                         MATHEMATICAL ITALIC SMALL M
-U+1D45B           𝑛           \\mitn                                         MATHEMATICAL ITALIC SMALL N
-U+1D45C           𝑜           \\mito                                         MATHEMATICAL ITALIC SMALL O
-U+1D45D           𝑝           \\mitp                                         MATHEMATICAL ITALIC SMALL P
-U+1D45E           𝑞           \\mitq                                         MATHEMATICAL ITALIC SMALL Q
-U+1D45F           𝑟           \\mitr                                         MATHEMATICAL ITALIC SMALL R
-U+1D460           𝑠           \\mits                                         MATHEMATICAL ITALIC SMALL S
-U+1D461           𝑡           \\mitt                                         MATHEMATICAL ITALIC SMALL T
-U+1D462           𝑢           \\mitu                                         MATHEMATICAL ITALIC SMALL U
-U+1D463           𝑣           \\mitv                                         MATHEMATICAL ITALIC SMALL V
-U+1D464           𝑤           \\mitw                                         MATHEMATICAL ITALIC SMALL W
-U+1D465           𝑥           \\mitx                                         MATHEMATICAL ITALIC SMALL X
-U+1D466           𝑦           \\mity                                         MATHEMATICAL ITALIC SMALL Y
-U+1D467           𝑧           \\mitz                                         MATHEMATICAL ITALIC SMALL Z
-U+1D468           𝑨           \\mbfitA                                       MATHEMATICAL BOLD ITALIC CAPITAL A
-U+1D469           𝑩           \\mbfitB                                       MATHEMATICAL BOLD ITALIC CAPITAL B
-U+1D46A           𝑪           \\mbfitC                                       MATHEMATICAL BOLD ITALIC CAPITAL C
-U+1D46B           𝑫           \\mbfitD                                       MATHEMATICAL BOLD ITALIC CAPITAL D
-U+1D46C           𝑬           \\mbfitE                                       MATHEMATICAL BOLD ITALIC CAPITAL E
-U+1D46D           𝑭           \\mbfitF                                       MATHEMATICAL BOLD ITALIC CAPITAL F
-U+1D46E           𝑮           \\mbfitG                                       MATHEMATICAL BOLD ITALIC CAPITAL G
-U+1D46F           𝑯           \\mbfitH                                       MATHEMATICAL BOLD ITALIC CAPITAL H
-U+1D470           𝑰           \\mbfitI                                       MATHEMATICAL BOLD ITALIC CAPITAL I
-U+1D471           𝑱           \\mbfitJ                                       MATHEMATICAL BOLD ITALIC CAPITAL J
-U+1D472           𝑲           \\mbfitK                                       MATHEMATICAL BOLD ITALIC CAPITAL K
-U+1D473           𝑳           \\mbfitL                                       MATHEMATICAL BOLD ITALIC CAPITAL L
-U+1D474           𝑴           \\mbfitM                                       MATHEMATICAL BOLD ITALIC CAPITAL M
-U+1D475           𝑵           \\mbfitN                                       MATHEMATICAL BOLD ITALIC CAPITAL N
-U+1D476           𝑶           \\mbfitO                                       MATHEMATICAL BOLD ITALIC CAPITAL O
-U+1D477           𝑷           \\mbfitP                                       MATHEMATICAL BOLD ITALIC CAPITAL P
-U+1D478           𝑸           \\mbfitQ                                       MATHEMATICAL BOLD ITALIC CAPITAL Q
-U+1D479           𝑹           \\mbfitR                                       MATHEMATICAL BOLD ITALIC CAPITAL R
-U+1D47A           𝑺           \\mbfitS                                       MATHEMATICAL BOLD ITALIC CAPITAL S
-U+1D47B           𝑻           \\mbfitT                                       MATHEMATICAL BOLD ITALIC CAPITAL T
-U+1D47C           𝑼           \\mbfitU                                       MATHEMATICAL BOLD ITALIC CAPITAL U
-U+1D47D           𝑽           \\mbfitV                                       MATHEMATICAL BOLD ITALIC CAPITAL V
-U+1D47E           𝑾           \\mbfitW                                       MATHEMATICAL BOLD ITALIC CAPITAL W
-U+1D47F           𝑿           \\mbfitX                                       MATHEMATICAL BOLD ITALIC CAPITAL X
-U+1D480           𝒀           \\mbfitY                                       MATHEMATICAL BOLD ITALIC CAPITAL Y
-U+1D481           𝒁           \\mbfitZ                                       MATHEMATICAL BOLD ITALIC CAPITAL Z
-U+1D482           𝒂           \\mbfita                                       MATHEMATICAL BOLD ITALIC SMALL A
-U+1D483           𝒃           \\mbfitb                                       MATHEMATICAL BOLD ITALIC SMALL B
-U+1D484           𝒄           \\mbfitc                                       MATHEMATICAL BOLD ITALIC SMALL C
-U+1D485           𝒅           \\mbfitd                                       MATHEMATICAL BOLD ITALIC SMALL D
-U+1D486           𝒆           \\mbfite                                       MATHEMATICAL BOLD ITALIC SMALL E
-U+1D487           𝒇           \\mbfitf                                       MATHEMATICAL BOLD ITALIC SMALL F
-U+1D488           𝒈           \\mbfitg                                       MATHEMATICAL BOLD ITALIC SMALL G
-U+1D489           𝒉           \\mbfith                                       MATHEMATICAL BOLD ITALIC SMALL H
-U+1D48A           𝒊           \\mbfiti                                       MATHEMATICAL BOLD ITALIC SMALL I
-U+1D48B           𝒋           \\mbfitj                                       MATHEMATICAL BOLD ITALIC SMALL J
-U+1D48C           𝒌           \\mbfitk                                       MATHEMATICAL BOLD ITALIC SMALL K
-U+1D48D           𝒍           \\mbfitl                                       MATHEMATICAL BOLD ITALIC SMALL L
-U+1D48E           𝒎           \\mbfitm                                       MATHEMATICAL BOLD ITALIC SMALL M
-U+1D48F           𝒏           \\mbfitn                                       MATHEMATICAL BOLD ITALIC SMALL N
-U+1D490           𝒐           \\mbfito                                       MATHEMATICAL BOLD ITALIC SMALL O
-U+1D491           𝒑           \\mbfitp                                       MATHEMATICAL BOLD ITALIC SMALL P
-U+1D492           𝒒           \\mbfitq                                       MATHEMATICAL BOLD ITALIC SMALL Q
-U+1D493           𝒓           \\mbfitr                                       MATHEMATICAL BOLD ITALIC SMALL R
-U+1D494           𝒔           \\mbfits                                       MATHEMATICAL BOLD ITALIC SMALL S
-U+1D495           𝒕           \\mbfitt                                       MATHEMATICAL BOLD ITALIC SMALL T
-U+1D496           𝒖           \\mbfitu                                       MATHEMATICAL BOLD ITALIC SMALL U
-U+1D497           𝒗           \\mbfitv                                       MATHEMATICAL BOLD ITALIC SMALL V
-U+1D498           𝒘           \\mbfitw                                       MATHEMATICAL BOLD ITALIC SMALL W
-U+1D499           𝒙           \\mbfitx                                       MATHEMATICAL BOLD ITALIC SMALL X
-U+1D49A           𝒚           \\mbfity                                       MATHEMATICAL BOLD ITALIC SMALL Y
-U+1D49B           𝒛           \\mbfitz                                       MATHEMATICAL BOLD ITALIC SMALL Z
-U+1D49C           𝒜           \\mscrA                                        MATHEMATICAL SCRIPT CAPITAL A
-U+1D49E           𝒞           \\mscrC                                        MATHEMATICAL SCRIPT CAPITAL C
-U+1D49F           𝒟           \\mscrD                                        MATHEMATICAL SCRIPT CAPITAL D
-U+1D4A2           𝒢           \\mscrG                                        MATHEMATICAL SCRIPT CAPITAL G
-U+1D4A5           𝒥           \\mscrJ                                        MATHEMATICAL SCRIPT CAPITAL J
-U+1D4A6           𝒦           \\mscrK                                        MATHEMATICAL SCRIPT CAPITAL K
-U+1D4A9           𝒩           \\mscrN                                        MATHEMATICAL SCRIPT CAPITAL N
-U+1D4AA           𝒪           \\mscrO                                        MATHEMATICAL SCRIPT CAPITAL O
-U+1D4AB           𝒫           \\mscrP                                        MATHEMATICAL SCRIPT CAPITAL P
-U+1D4AC           𝒬           \\mscrQ                                        MATHEMATICAL SCRIPT CAPITAL Q
-U+1D4AE           𝒮           \\mscrS                                        MATHEMATICAL SCRIPT CAPITAL S
-U+1D4AF           𝒯           \\mscrT                                        MATHEMATICAL SCRIPT CAPITAL T
-U+1D4B0           𝒰           \\mscrU                                        MATHEMATICAL SCRIPT CAPITAL U
-U+1D4B1           𝒱           \\mscrV                                        MATHEMATICAL SCRIPT CAPITAL V
-U+1D4B2           𝒲           \\mscrW                                        MATHEMATICAL SCRIPT CAPITAL W
-U+1D4B3           𝒳           \\mscrX                                        MATHEMATICAL SCRIPT CAPITAL X
-U+1D4B4           𝒴           \\mscrY                                        MATHEMATICAL SCRIPT CAPITAL Y
-U+1D4B5           𝒵           \\mscrZ                                        MATHEMATICAL SCRIPT CAPITAL Z
-U+1D4B6           𝒶           \\mscra                                        MATHEMATICAL SCRIPT SMALL A
-U+1D4B7           𝒷           \\mscrb                                        MATHEMATICAL SCRIPT SMALL B
-U+1D4B8           𝒸           \\mscrc                                        MATHEMATICAL SCRIPT SMALL C
-U+1D4B9           𝒹           \\mscrd                                        MATHEMATICAL SCRIPT SMALL D
-U+1D4BB           𝒻           \\mscrf                                        MATHEMATICAL SCRIPT SMALL F
-U+1D4BD           𝒽           \\mscrh                                        MATHEMATICAL SCRIPT SMALL H
-U+1D4BE           𝒾           \\mscri                                        MATHEMATICAL SCRIPT SMALL I
-U+1D4BF           𝒿           \\mscrj                                        MATHEMATICAL SCRIPT SMALL J
-U+1D4C0           𝓀           \\mscrk                                        MATHEMATICAL SCRIPT SMALL K
-U+1D4C1           𝓁           \\mscrl                                        MATHEMATICAL SCRIPT SMALL L
-U+1D4C2           𝓂           \\mscrm                                        MATHEMATICAL SCRIPT SMALL M
-U+1D4C3           𝓃           \\mscrn                                        MATHEMATICAL SCRIPT SMALL N
-U+1D4C5           𝓅           \\mscrp                                        MATHEMATICAL SCRIPT SMALL P
-U+1D4C6           𝓆           \\mscrq                                        MATHEMATICAL SCRIPT SMALL Q
-U+1D4C7           𝓇           \\mscrr                                        MATHEMATICAL SCRIPT SMALL R
-U+1D4C8           𝓈           \\mscrs                                        MATHEMATICAL SCRIPT SMALL S
-U+1D4C9           𝓉           \\mscrt                                        MATHEMATICAL SCRIPT SMALL T
-U+1D4CA           𝓊           \\mscru                                        MATHEMATICAL SCRIPT SMALL U
-U+1D4CB           𝓋           \\mscrv                                        MATHEMATICAL SCRIPT SMALL V
-U+1D4CC           𝓌           \\mscrw                                        MATHEMATICAL SCRIPT SMALL W
-U+1D4CD           𝓍           \\mscrx                                        MATHEMATICAL SCRIPT SMALL X
-U+1D4CE           𝓎           \\mscry                                        MATHEMATICAL SCRIPT SMALL Y
-U+1D4CF           𝓏           \\mscrz                                        MATHEMATICAL SCRIPT SMALL Z
-U+1D4D0           𝓐           \\mbfscrA                                      MATHEMATICAL BOLD SCRIPT CAPITAL A
-U+1D4D1           𝓑           \\mbfscrB                                      MATHEMATICAL BOLD SCRIPT CAPITAL B
-U+1D4D2           𝓒           \\mbfscrC                                      MATHEMATICAL BOLD SCRIPT CAPITAL C
-U+1D4D3           𝓓           \\mbfscrD                                      MATHEMATICAL BOLD SCRIPT CAPITAL D
-U+1D4D4           𝓔           \\mbfscrE                                      MATHEMATICAL BOLD SCRIPT CAPITAL E
-U+1D4D5           𝓕           \\mbfscrF                                      MATHEMATICAL BOLD SCRIPT CAPITAL F
-U+1D4D6           𝓖           \\mbfscrG                                      MATHEMATICAL BOLD SCRIPT CAPITAL G
-U+1D4D7           𝓗           \\mbfscrH                                      MATHEMATICAL BOLD SCRIPT CAPITAL H
-U+1D4D8           𝓘           \\mbfscrI                                      MATHEMATICAL BOLD SCRIPT CAPITAL I
-U+1D4D9           𝓙           \\mbfscrJ                                      MATHEMATICAL BOLD SCRIPT CAPITAL J
-U+1D4DA           𝓚           \\mbfscrK                                      MATHEMATICAL BOLD SCRIPT CAPITAL K
-U+1D4DB           𝓛           \\mbfscrL                                      MATHEMATICAL BOLD SCRIPT CAPITAL L
-U+1D4DC           𝓜           \\mbfscrM                                      MATHEMATICAL BOLD SCRIPT CAPITAL M
-U+1D4DD           𝓝           \\mbfscrN                                      MATHEMATICAL BOLD SCRIPT CAPITAL N
-U+1D4DE           𝓞           \\mbfscrO                                      MATHEMATICAL BOLD SCRIPT CAPITAL O
-U+1D4DF           𝓟           \\mbfscrP                                      MATHEMATICAL BOLD SCRIPT CAPITAL P
-U+1D4E0           𝓠           \\mbfscrQ                                      MATHEMATICAL BOLD SCRIPT CAPITAL Q
-U+1D4E1           𝓡           \\mbfscrR                                      MATHEMATICAL BOLD SCRIPT CAPITAL R
-U+1D4E2           𝓢           \\mbfscrS                                      MATHEMATICAL BOLD SCRIPT CAPITAL S
-U+1D4E3           𝓣           \\mbfscrT                                      MATHEMATICAL BOLD SCRIPT CAPITAL T
-U+1D4E4           𝓤           \\mbfscrU                                      MATHEMATICAL BOLD SCRIPT CAPITAL U
-U+1D4E5           𝓥           \\mbfscrV                                      MATHEMATICAL BOLD SCRIPT CAPITAL V
-U+1D4E6           𝓦           \\mbfscrW                                      MATHEMATICAL BOLD SCRIPT CAPITAL W
-U+1D4E7           𝓧           \\mbfscrX                                      MATHEMATICAL BOLD SCRIPT CAPITAL X
-U+1D4E8           𝓨           \\mbfscrY                                      MATHEMATICAL BOLD SCRIPT CAPITAL Y
-U+1D4E9           𝓩           \\mbfscrZ                                      MATHEMATICAL BOLD SCRIPT CAPITAL Z
-U+1D4EA           𝓪           \\mbfscra                                      MATHEMATICAL BOLD SCRIPT SMALL A
-U+1D4EB           𝓫           \\mbfscrb                                      MATHEMATICAL BOLD SCRIPT SMALL B
-U+1D4EC           𝓬           \\mbfscrc                                      MATHEMATICAL BOLD SCRIPT SMALL C
-U+1D4ED           𝓭           \\mbfscrd                                      MATHEMATICAL BOLD SCRIPT SMALL D
-U+1D4EE           𝓮           \\mbfscre                                      MATHEMATICAL BOLD SCRIPT SMALL E
-U+1D4EF           𝓯           \\mbfscrf                                      MATHEMATICAL BOLD SCRIPT SMALL F
-U+1D4F0           𝓰           \\mbfscrg                                      MATHEMATICAL BOLD SCRIPT SMALL G
-U+1D4F1           𝓱           \\mbfscrh                                      MATHEMATICAL BOLD SCRIPT SMALL H
-U+1D4F2           𝓲           \\mbfscri                                      MATHEMATICAL BOLD SCRIPT SMALL I
-U+1D4F3           𝓳           \\mbfscrj                                      MATHEMATICAL BOLD SCRIPT SMALL J
-U+1D4F4           𝓴           \\mbfscrk                                      MATHEMATICAL BOLD SCRIPT SMALL K
-U+1D4F5           𝓵           \\mbfscrl                                      MATHEMATICAL BOLD SCRIPT SMALL L
-U+1D4F6           𝓶           \\mbfscrm                                      MATHEMATICAL BOLD SCRIPT SMALL M
-U+1D4F7           𝓷           \\mbfscrn                                      MATHEMATICAL BOLD SCRIPT SMALL N
-U+1D4F8           𝓸           \\mbfscro                                      MATHEMATICAL BOLD SCRIPT SMALL O
-U+1D4F9           𝓹           \\mbfscrp                                      MATHEMATICAL BOLD SCRIPT SMALL P
-U+1D4FA           𝓺           \\mbfscrq                                      MATHEMATICAL BOLD SCRIPT SMALL Q
-U+1D4FB           𝓻           \\mbfscrr                                      MATHEMATICAL BOLD SCRIPT SMALL R
-U+1D4FC           𝓼           \\mbfscrs                                      MATHEMATICAL BOLD SCRIPT SMALL S
-U+1D4FD           𝓽           \\mbfscrt                                      MATHEMATICAL BOLD SCRIPT SMALL T
-U+1D4FE           𝓾           \\mbfscru                                      MATHEMATICAL BOLD SCRIPT SMALL U
-U+1D4FF           𝓿           \\mbfscrv                                      MATHEMATICAL BOLD SCRIPT SMALL V
-U+1D500           𝔀           \\mbfscrw                                      MATHEMATICAL BOLD SCRIPT SMALL W
-U+1D501           𝔁           \\mbfscrx                                      MATHEMATICAL BOLD SCRIPT SMALL X
-U+1D502           𝔂           \\mbfscry                                      MATHEMATICAL BOLD SCRIPT SMALL Y
-U+1D503           𝔃           \\mbfscrz                                      MATHEMATICAL BOLD SCRIPT SMALL Z
+U+1D434           𝐴            \\mitA                                         MATHEMATICAL ITALIC CAPITAL A
+U+1D435           𝐵            \\mitB                                         MATHEMATICAL ITALIC CAPITAL B
+U+1D436           𝐶            \\mitC                                         MATHEMATICAL ITALIC CAPITAL C
+U+1D437           𝐷            \\mitD                                         MATHEMATICAL ITALIC CAPITAL D
+U+1D438           𝐸            \\mitE                                         MATHEMATICAL ITALIC CAPITAL E
+U+1D439           𝐹            \\mitF                                         MATHEMATICAL ITALIC CAPITAL F
+U+1D43A           𝐺            \\mitG                                         MATHEMATICAL ITALIC CAPITAL G
+U+1D43B           𝐻            \\mitH                                         MATHEMATICAL ITALIC CAPITAL H
+U+1D43C           𝐼            \\mitI                                         MATHEMATICAL ITALIC CAPITAL I
+U+1D43D           𝐽            \\mitJ                                         MATHEMATICAL ITALIC CAPITAL J
+U+1D43E           𝐾            \\mitK                                         MATHEMATICAL ITALIC CAPITAL K
+U+1D43F           𝐿            \\mitL                                         MATHEMATICAL ITALIC CAPITAL L
+U+1D440           𝑀            \\mitM                                         MATHEMATICAL ITALIC CAPITAL M
+U+1D441           𝑁            \\mitN                                         MATHEMATICAL ITALIC CAPITAL N
+U+1D442           𝑂            \\mitO                                         MATHEMATICAL ITALIC CAPITAL O
+U+1D443           𝑃            \\mitP                                         MATHEMATICAL ITALIC CAPITAL P
+U+1D444           𝑄            \\mitQ                                         MATHEMATICAL ITALIC CAPITAL Q
+U+1D445           𝑅            \\mitR                                         MATHEMATICAL ITALIC CAPITAL R
+U+1D446           𝑆            \\mitS                                         MATHEMATICAL ITALIC CAPITAL S
+U+1D447           𝑇            \\mitT                                         MATHEMATICAL ITALIC CAPITAL T
+U+1D448           𝑈            \\mitU                                         MATHEMATICAL ITALIC CAPITAL U
+U+1D449           𝑉            \\mitV                                         MATHEMATICAL ITALIC CAPITAL V
+U+1D44A           𝑊            \\mitW                                         MATHEMATICAL ITALIC CAPITAL W
+U+1D44B           𝑋            \\mitX                                         MATHEMATICAL ITALIC CAPITAL X
+U+1D44C           𝑌            \\mitY                                         MATHEMATICAL ITALIC CAPITAL Y
+U+1D44D           𝑍            \\mitZ                                         MATHEMATICAL ITALIC CAPITAL Z
+U+1D44E           𝑎            \\mita                                         MATHEMATICAL ITALIC SMALL A
+U+1D44F           𝑏            \\mitb                                         MATHEMATICAL ITALIC SMALL B
+U+1D450           𝑐            \\mitc                                         MATHEMATICAL ITALIC SMALL C
+U+1D451           𝑑            \\mitd                                         MATHEMATICAL ITALIC SMALL D
+U+1D452           𝑒            \\mite                                         MATHEMATICAL ITALIC SMALL E
+U+1D453           𝑓            \\mitf                                         MATHEMATICAL ITALIC SMALL F
+U+1D454           𝑔            \\mitg                                         MATHEMATICAL ITALIC SMALL G
+U+1D456           𝑖            \\miti                                         MATHEMATICAL ITALIC SMALL I
+U+1D457           𝑗            \\mitj                                         MATHEMATICAL ITALIC SMALL J
+U+1D458           𝑘            \\mitk                                         MATHEMATICAL ITALIC SMALL K
+U+1D459           𝑙            \\mitl                                         MATHEMATICAL ITALIC SMALL L
+U+1D45A           𝑚            \\mitm                                         MATHEMATICAL ITALIC SMALL M
+U+1D45B           𝑛            \\mitn                                         MATHEMATICAL ITALIC SMALL N
+U+1D45C           𝑜            \\mito                                         MATHEMATICAL ITALIC SMALL O
+U+1D45D           𝑝            \\mitp                                         MATHEMATICAL ITALIC SMALL P
+U+1D45E           𝑞            \\mitq                                         MATHEMATICAL ITALIC SMALL Q
+U+1D45F           𝑟            \\mitr                                         MATHEMATICAL ITALIC SMALL R
+U+1D460           𝑠            \\mits                                         MATHEMATICAL ITALIC SMALL S
+U+1D461           𝑡            \\mitt                                         MATHEMATICAL ITALIC SMALL T
+U+1D462           𝑢            \\mitu                                         MATHEMATICAL ITALIC SMALL U
+U+1D463           𝑣            \\mitv                                         MATHEMATICAL ITALIC SMALL V
+U+1D464           𝑤            \\mitw                                         MATHEMATICAL ITALIC SMALL W
+U+1D465           𝑥            \\mitx                                         MATHEMATICAL ITALIC SMALL X
+U+1D466           𝑦            \\mity                                         MATHEMATICAL ITALIC SMALL Y
+U+1D467           𝑧            \\mitz                                         MATHEMATICAL ITALIC SMALL Z
+U+1D468           𝑨            \\mbfitA                                       MATHEMATICAL BOLD ITALIC CAPITAL A
+U+1D469           𝑩            \\mbfitB                                       MATHEMATICAL BOLD ITALIC CAPITAL B
+U+1D46A           𝑪            \\mbfitC                                       MATHEMATICAL BOLD ITALIC CAPITAL C
+U+1D46B           𝑫            \\mbfitD                                       MATHEMATICAL BOLD ITALIC CAPITAL D
+U+1D46C           𝑬            \\mbfitE                                       MATHEMATICAL BOLD ITALIC CAPITAL E
+U+1D46D           𝑭            \\mbfitF                                       MATHEMATICAL BOLD ITALIC CAPITAL F
+U+1D46E           𝑮            \\mbfitG                                       MATHEMATICAL BOLD ITALIC CAPITAL G
+U+1D46F           𝑯            \\mbfitH                                       MATHEMATICAL BOLD ITALIC CAPITAL H
+U+1D470           𝑰            \\mbfitI                                       MATHEMATICAL BOLD ITALIC CAPITAL I
+U+1D471           𝑱            \\mbfitJ                                       MATHEMATICAL BOLD ITALIC CAPITAL J
+U+1D472           𝑲            \\mbfitK                                       MATHEMATICAL BOLD ITALIC CAPITAL K
+U+1D473           𝑳            \\mbfitL                                       MATHEMATICAL BOLD ITALIC CAPITAL L
+U+1D474           𝑴            \\mbfitM                                       MATHEMATICAL BOLD ITALIC CAPITAL M
+U+1D475           𝑵            \\mbfitN                                       MATHEMATICAL BOLD ITALIC CAPITAL N
+U+1D476           𝑶            \\mbfitO                                       MATHEMATICAL BOLD ITALIC CAPITAL O
+U+1D477           𝑷            \\mbfitP                                       MATHEMATICAL BOLD ITALIC CAPITAL P
+U+1D478           𝑸            \\mbfitQ                                       MATHEMATICAL BOLD ITALIC CAPITAL Q
+U+1D479           𝑹            \\mbfitR                                       MATHEMATICAL BOLD ITALIC CAPITAL R
+U+1D47A           𝑺            \\mbfitS                                       MATHEMATICAL BOLD ITALIC CAPITAL S
+U+1D47B           𝑻            \\mbfitT                                       MATHEMATICAL BOLD ITALIC CAPITAL T
+U+1D47C           𝑼            \\mbfitU                                       MATHEMATICAL BOLD ITALIC CAPITAL U
+U+1D47D           𝑽            \\mbfitV                                       MATHEMATICAL BOLD ITALIC CAPITAL V
+U+1D47E           𝑾            \\mbfitW                                       MATHEMATICAL BOLD ITALIC CAPITAL W
+U+1D47F           𝑿            \\mbfitX                                       MATHEMATICAL BOLD ITALIC CAPITAL X
+U+1D480           𝒀            \\mbfitY                                       MATHEMATICAL BOLD ITALIC CAPITAL Y
+U+1D481           𝒁            \\mbfitZ                                       MATHEMATICAL BOLD ITALIC CAPITAL Z
+U+1D482           𝒂            \\mbfita                                       MATHEMATICAL BOLD ITALIC SMALL A
+U+1D483           𝒃            \\mbfitb                                       MATHEMATICAL BOLD ITALIC SMALL B
+U+1D484           𝒄            \\mbfitc                                       MATHEMATICAL BOLD ITALIC SMALL C
+U+1D485           𝒅            \\mbfitd                                       MATHEMATICAL BOLD ITALIC SMALL D
+U+1D486           𝒆            \\mbfite                                       MATHEMATICAL BOLD ITALIC SMALL E
+U+1D487           𝒇            \\mbfitf                                       MATHEMATICAL BOLD ITALIC SMALL F
+U+1D488           𝒈            \\mbfitg                                       MATHEMATICAL BOLD ITALIC SMALL G
+U+1D489           𝒉            \\mbfith                                       MATHEMATICAL BOLD ITALIC SMALL H
+U+1D48A           𝒊            \\mbfiti                                       MATHEMATICAL BOLD ITALIC SMALL I
+U+1D48B           𝒋            \\mbfitj                                       MATHEMATICAL BOLD ITALIC SMALL J
+U+1D48C           𝒌            \\mbfitk                                       MATHEMATICAL BOLD ITALIC SMALL K
+U+1D48D           𝒍            \\mbfitl                                       MATHEMATICAL BOLD ITALIC SMALL L
+U+1D48E           𝒎            \\mbfitm                                       MATHEMATICAL BOLD ITALIC SMALL M
+U+1D48F           𝒏            \\mbfitn                                       MATHEMATICAL BOLD ITALIC SMALL N
+U+1D490           𝒐            \\mbfito                                       MATHEMATICAL BOLD ITALIC SMALL O
+U+1D491           𝒑            \\mbfitp                                       MATHEMATICAL BOLD ITALIC SMALL P
+U+1D492           𝒒            \\mbfitq                                       MATHEMATICAL BOLD ITALIC SMALL Q
+U+1D493           𝒓            \\mbfitr                                       MATHEMATICAL BOLD ITALIC SMALL R
+U+1D494           𝒔            \\mbfits                                       MATHEMATICAL BOLD ITALIC SMALL S
+U+1D495           𝒕            \\mbfitt                                       MATHEMATICAL BOLD ITALIC SMALL T
+U+1D496           𝒖            \\mbfitu                                       MATHEMATICAL BOLD ITALIC SMALL U
+U+1D497           𝒗            \\mbfitv                                       MATHEMATICAL BOLD ITALIC SMALL V
+U+1D498           𝒘            \\mbfitw                                       MATHEMATICAL BOLD ITALIC SMALL W
+U+1D499           𝒙            \\mbfitx                                       MATHEMATICAL BOLD ITALIC SMALL X
+U+1D49A           𝒚            \\mbfity                                       MATHEMATICAL BOLD ITALIC SMALL Y
+U+1D49B           𝒛            \\mbfitz                                       MATHEMATICAL BOLD ITALIC SMALL Z
+U+1D49C           𝒜            \\mscrA                                        MATHEMATICAL SCRIPT CAPITAL A
+U+1D49E           𝒞            \\mscrC                                        MATHEMATICAL SCRIPT CAPITAL C
+U+1D49F           𝒟            \\mscrD                                        MATHEMATICAL SCRIPT CAPITAL D
+U+1D4A2           𝒢            \\mscrG                                        MATHEMATICAL SCRIPT CAPITAL G
+U+1D4A5           𝒥            \\mscrJ                                        MATHEMATICAL SCRIPT CAPITAL J
+U+1D4A6           𝒦            \\mscrK                                        MATHEMATICAL SCRIPT CAPITAL K
+U+1D4A9           𝒩            \\mscrN                                        MATHEMATICAL SCRIPT CAPITAL N
+U+1D4AA           𝒪            \\mscrO                                        MATHEMATICAL SCRIPT CAPITAL O
+U+1D4AB           𝒫            \\mscrP                                        MATHEMATICAL SCRIPT CAPITAL P
+U+1D4AC           𝒬            \\mscrQ                                        MATHEMATICAL SCRIPT CAPITAL Q
+U+1D4AE           𝒮            \\mscrS                                        MATHEMATICAL SCRIPT CAPITAL S
+U+1D4AF           𝒯            \\mscrT                                        MATHEMATICAL SCRIPT CAPITAL T
+U+1D4B0           𝒰            \\mscrU                                        MATHEMATICAL SCRIPT CAPITAL U
+U+1D4B1           𝒱            \\mscrV                                        MATHEMATICAL SCRIPT CAPITAL V
+U+1D4B2           𝒲            \\mscrW                                        MATHEMATICAL SCRIPT CAPITAL W
+U+1D4B3           𝒳            \\mscrX                                        MATHEMATICAL SCRIPT CAPITAL X
+U+1D4B4           𝒴            \\mscrY                                        MATHEMATICAL SCRIPT CAPITAL Y
+U+1D4B5           𝒵            \\mscrZ                                        MATHEMATICAL SCRIPT CAPITAL Z
+U+1D4B6           𝒶            \\mscra                                        MATHEMATICAL SCRIPT SMALL A
+U+1D4B7           𝒷            \\mscrb                                        MATHEMATICAL SCRIPT SMALL B
+U+1D4B8           𝒸            \\mscrc                                        MATHEMATICAL SCRIPT SMALL C
+U+1D4B9           𝒹            \\mscrd                                        MATHEMATICAL SCRIPT SMALL D
+U+1D4BB           𝒻            \\mscrf                                        MATHEMATICAL SCRIPT SMALL F
+U+1D4BD           𝒽            \\mscrh                                        MATHEMATICAL SCRIPT SMALL H
+U+1D4BE           𝒾            \\mscri                                        MATHEMATICAL SCRIPT SMALL I
+U+1D4BF           𝒿            \\mscrj                                        MATHEMATICAL SCRIPT SMALL J
+U+1D4C0           𝓀            \\mscrk                                        MATHEMATICAL SCRIPT SMALL K
+U+1D4C1           𝓁            \\mscrl                                        MATHEMATICAL SCRIPT SMALL L
+U+1D4C2           𝓂            \\mscrm                                        MATHEMATICAL SCRIPT SMALL M
+U+1D4C3           𝓃            \\mscrn                                        MATHEMATICAL SCRIPT SMALL N
+U+1D4C5           𝓅            \\mscrp                                        MATHEMATICAL SCRIPT SMALL P
+U+1D4C6           𝓆            \\mscrq                                        MATHEMATICAL SCRIPT SMALL Q
+U+1D4C7           𝓇            \\mscrr                                        MATHEMATICAL SCRIPT SMALL R
+U+1D4C8           𝓈            \\mscrs                                        MATHEMATICAL SCRIPT SMALL S
+U+1D4C9           𝓉            \\mscrt                                        MATHEMATICAL SCRIPT SMALL T
+U+1D4CA           𝓊            \\mscru                                        MATHEMATICAL SCRIPT SMALL U
+U+1D4CB           𝓋            \\mscrv                                        MATHEMATICAL SCRIPT SMALL V
+U+1D4CC           𝓌            \\mscrw                                        MATHEMATICAL SCRIPT SMALL W
+U+1D4CD           𝓍            \\mscrx                                        MATHEMATICAL SCRIPT SMALL X
+U+1D4CE           𝓎            \\mscry                                        MATHEMATICAL SCRIPT SMALL Y
+U+1D4CF           𝓏            \\mscrz                                        MATHEMATICAL SCRIPT SMALL Z
+U+1D4D0           𝓐            \\mbfscrA                                      MATHEMATICAL BOLD SCRIPT CAPITAL A
+U+1D4D1           𝓑            \\mbfscrB                                      MATHEMATICAL BOLD SCRIPT CAPITAL B
+U+1D4D2           𝓒            \\mbfscrC                                      MATHEMATICAL BOLD SCRIPT CAPITAL C
+U+1D4D3           𝓓            \\mbfscrD                                      MATHEMATICAL BOLD SCRIPT CAPITAL D
+U+1D4D4           𝓔            \\mbfscrE                                      MATHEMATICAL BOLD SCRIPT CAPITAL E
+U+1D4D5           𝓕            \\mbfscrF                                      MATHEMATICAL BOLD SCRIPT CAPITAL F
+U+1D4D6           𝓖            \\mbfscrG                                      MATHEMATICAL BOLD SCRIPT CAPITAL G
+U+1D4D7           𝓗            \\mbfscrH                                      MATHEMATICAL BOLD SCRIPT CAPITAL H
+U+1D4D8           𝓘            \\mbfscrI                                      MATHEMATICAL BOLD SCRIPT CAPITAL I
+U+1D4D9           𝓙            \\mbfscrJ                                      MATHEMATICAL BOLD SCRIPT CAPITAL J
+U+1D4DA           𝓚            \\mbfscrK                                      MATHEMATICAL BOLD SCRIPT CAPITAL K
+U+1D4DB           𝓛            \\mbfscrL                                      MATHEMATICAL BOLD SCRIPT CAPITAL L
+U+1D4DC           𝓜            \\mbfscrM                                      MATHEMATICAL BOLD SCRIPT CAPITAL M
+U+1D4DD           𝓝            \\mbfscrN                                      MATHEMATICAL BOLD SCRIPT CAPITAL N
+U+1D4DE           𝓞            \\mbfscrO                                      MATHEMATICAL BOLD SCRIPT CAPITAL O
+U+1D4DF           𝓟            \\mbfscrP                                      MATHEMATICAL BOLD SCRIPT CAPITAL P
+U+1D4E0           𝓠            \\mbfscrQ                                      MATHEMATICAL BOLD SCRIPT CAPITAL Q
+U+1D4E1           𝓡            \\mbfscrR                                      MATHEMATICAL BOLD SCRIPT CAPITAL R
+U+1D4E2           𝓢            \\mbfscrS                                      MATHEMATICAL BOLD SCRIPT CAPITAL S
+U+1D4E3           𝓣            \\mbfscrT                                      MATHEMATICAL BOLD SCRIPT CAPITAL T
+U+1D4E4           𝓤            \\mbfscrU                                      MATHEMATICAL BOLD SCRIPT CAPITAL U
+U+1D4E5           𝓥            \\mbfscrV                                      MATHEMATICAL BOLD SCRIPT CAPITAL V
+U+1D4E6           𝓦            \\mbfscrW                                      MATHEMATICAL BOLD SCRIPT CAPITAL W
+U+1D4E7           𝓧            \\mbfscrX                                      MATHEMATICAL BOLD SCRIPT CAPITAL X
+U+1D4E8           𝓨            \\mbfscrY                                      MATHEMATICAL BOLD SCRIPT CAPITAL Y
+U+1D4E9           𝓩            \\mbfscrZ                                      MATHEMATICAL BOLD SCRIPT CAPITAL Z
+U+1D4EA           𝓪            \\mbfscra                                      MATHEMATICAL BOLD SCRIPT SMALL A
+U+1D4EB           𝓫            \\mbfscrb                                      MATHEMATICAL BOLD SCRIPT SMALL B
+U+1D4EC           𝓬            \\mbfscrc                                      MATHEMATICAL BOLD SCRIPT SMALL C
+U+1D4ED           𝓭            \\mbfscrd                                      MATHEMATICAL BOLD SCRIPT SMALL D
+U+1D4EE           𝓮            \\mbfscre                                      MATHEMATICAL BOLD SCRIPT SMALL E
+U+1D4EF           𝓯            \\mbfscrf                                      MATHEMATICAL BOLD SCRIPT SMALL F
+U+1D4F0           𝓰            \\mbfscrg                                      MATHEMATICAL BOLD SCRIPT SMALL G
+U+1D4F1           𝓱            \\mbfscrh                                      MATHEMATICAL BOLD SCRIPT SMALL H
+U+1D4F2           𝓲            \\mbfscri                                      MATHEMATICAL BOLD SCRIPT SMALL I
+U+1D4F3           𝓳            \\mbfscrj                                      MATHEMATICAL BOLD SCRIPT SMALL J
+U+1D4F4           𝓴            \\mbfscrk                                      MATHEMATICAL BOLD SCRIPT SMALL K
+U+1D4F5           𝓵            \\mbfscrl                                      MATHEMATICAL BOLD SCRIPT SMALL L
+U+1D4F6           𝓶            \\mbfscrm                                      MATHEMATICAL BOLD SCRIPT SMALL M
+U+1D4F7           𝓷            \\mbfscrn                                      MATHEMATICAL BOLD SCRIPT SMALL N
+U+1D4F8           𝓸            \\mbfscro                                      MATHEMATICAL BOLD SCRIPT SMALL O
+U+1D4F9           𝓹            \\mbfscrp                                      MATHEMATICAL BOLD SCRIPT SMALL P
+U+1D4FA           𝓺            \\mbfscrq                                      MATHEMATICAL BOLD SCRIPT SMALL Q
+U+1D4FB           𝓻            \\mbfscrr                                      MATHEMATICAL BOLD SCRIPT SMALL R
+U+1D4FC           𝓼            \\mbfscrs                                      MATHEMATICAL BOLD SCRIPT SMALL S
+U+1D4FD           𝓽            \\mbfscrt                                      MATHEMATICAL BOLD SCRIPT SMALL T
+U+1D4FE           𝓾            \\mbfscru                                      MATHEMATICAL BOLD SCRIPT SMALL U
+U+1D4FF           𝓿            \\mbfscrv                                      MATHEMATICAL BOLD SCRIPT SMALL V
+U+1D500           𝔀            \\mbfscrw                                      MATHEMATICAL BOLD SCRIPT SMALL W
+U+1D501           𝔁            \\mbfscrx                                      MATHEMATICAL BOLD SCRIPT SMALL X
+U+1D502           𝔂            \\mbfscry                                      MATHEMATICAL BOLD SCRIPT SMALL Y
+U+1D503           𝔃            \\mbfscrz                                      MATHEMATICAL BOLD SCRIPT SMALL Z
 U+1D504           𝔄             \\mfrakA                                       MATHEMATICAL FRAKTUR CAPITAL A
 U+1D505           𝔅             \\mfrakB                                       MATHEMATICAL FRAKTUR CAPITAL B
 U+1D507           𝔇             \\mfrakD                                       MATHEMATICAL FRAKTUR CAPITAL D
@@ -2024,164 +2024,164 @@ U+1D604           𝘄            \\mbfsansw                                    
 U+1D605           𝘅            \\mbfsansx                                     MATHEMATICAL SANS-SERIF BOLD SMALL X
 U+1D606           𝘆            \\mbfsansy                                     MATHEMATICAL SANS-SERIF BOLD SMALL Y
 U+1D607           𝘇            \\mbfsansz                                     MATHEMATICAL SANS-SERIF BOLD SMALL Z
-U+1D608           𝘈           \\mitsansA                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL A
-U+1D609           𝘉           \\mitsansB                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL B
-U+1D60A           𝘊           \\mitsansC                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL C
-U+1D60B           𝘋           \\mitsansD                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL D
-U+1D60C           𝘌           \\mitsansE                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL E
-U+1D60D           𝘍           \\mitsansF                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL F
-U+1D60E           𝘎           \\mitsansG                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL G
-U+1D60F           𝘏           \\mitsansH                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL H
-U+1D610           𝘐           \\mitsansI                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL I
-U+1D611           𝘑           \\mitsansJ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL J
-U+1D612           𝘒           \\mitsansK                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL K
-U+1D613           𝘓           \\mitsansL                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL L
-U+1D614           𝘔           \\mitsansM                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL M
-U+1D615           𝘕           \\mitsansN                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL N
-U+1D616           𝘖           \\mitsansO                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL O
-U+1D617           𝘗           \\mitsansP                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL P
-U+1D618           𝘘           \\mitsansQ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Q
-U+1D619           𝘙           \\mitsansR                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL R
-U+1D61A           𝘚           \\mitsansS                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL S
-U+1D61B           𝘛           \\mitsansT                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL T
-U+1D61C           𝘜           \\mitsansU                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL U
-U+1D61D           𝘝           \\mitsansV                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL V
-U+1D61E           𝘞           \\mitsansW                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL W
-U+1D61F           𝘟           \\mitsansX                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL X
-U+1D620           𝘠           \\mitsansY                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Y
-U+1D621           𝘡           \\mitsansZ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Z
-U+1D622           𝘢           \\mitsansa                                     MATHEMATICAL SANS-SERIF ITALIC SMALL A
-U+1D623           𝘣           \\mitsansb                                     MATHEMATICAL SANS-SERIF ITALIC SMALL B
-U+1D624           𝘤           \\mitsansc                                     MATHEMATICAL SANS-SERIF ITALIC SMALL C
-U+1D625           𝘥           \\mitsansd                                     MATHEMATICAL SANS-SERIF ITALIC SMALL D
-U+1D626           𝘦           \\mitsanse                                     MATHEMATICAL SANS-SERIF ITALIC SMALL E
-U+1D627           𝘧           \\mitsansf                                     MATHEMATICAL SANS-SERIF ITALIC SMALL F
-U+1D628           𝘨           \\mitsansg                                     MATHEMATICAL SANS-SERIF ITALIC SMALL G
-U+1D629           𝘩           \\mitsansh                                     MATHEMATICAL SANS-SERIF ITALIC SMALL H
-U+1D62A           𝘪           \\mitsansi                                     MATHEMATICAL SANS-SERIF ITALIC SMALL I
-U+1D62B           𝘫           \\mitsansj                                     MATHEMATICAL SANS-SERIF ITALIC SMALL J
-U+1D62C           𝘬           \\mitsansk                                     MATHEMATICAL SANS-SERIF ITALIC SMALL K
-U+1D62D           𝘭           \\mitsansl                                     MATHEMATICAL SANS-SERIF ITALIC SMALL L
-U+1D62E           𝘮           \\mitsansm                                     MATHEMATICAL SANS-SERIF ITALIC SMALL M
-U+1D62F           𝘯           \\mitsansn                                     MATHEMATICAL SANS-SERIF ITALIC SMALL N
-U+1D630           𝘰           \\mitsanso                                     MATHEMATICAL SANS-SERIF ITALIC SMALL O
-U+1D631           𝘱           \\mitsansp                                     MATHEMATICAL SANS-SERIF ITALIC SMALL P
-U+1D632           𝘲           \\mitsansq                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Q
-U+1D633           𝘳           \\mitsansr                                     MATHEMATICAL SANS-SERIF ITALIC SMALL R
-U+1D634           𝘴           \\mitsanss                                     MATHEMATICAL SANS-SERIF ITALIC SMALL S
-U+1D635           𝘵           \\mitsanst                                     MATHEMATICAL SANS-SERIF ITALIC SMALL T
-U+1D636           𝘶           \\mitsansu                                     MATHEMATICAL SANS-SERIF ITALIC SMALL U
-U+1D637           𝘷           \\mitsansv                                     MATHEMATICAL SANS-SERIF ITALIC SMALL V
-U+1D638           𝘸           \\mitsansw                                     MATHEMATICAL SANS-SERIF ITALIC SMALL W
-U+1D639           𝘹           \\mitsansx                                     MATHEMATICAL SANS-SERIF ITALIC SMALL X
-U+1D63A           𝘺           \\mitsansy                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Y
-U+1D63B           𝘻           \\mitsansz                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Z
-U+1D63C           𝘼           \\mbfitsansA                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL A
-U+1D63D           𝘽           \\mbfitsansB                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL B
-U+1D63E           𝘾           \\mbfitsansC                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL C
-U+1D63F           𝘿           \\mbfitsansD                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL D
-U+1D640           𝙀           \\mbfitsansE                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL E
-U+1D641           𝙁           \\mbfitsansF                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL F
-U+1D642           𝙂           \\mbfitsansG                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL G
-U+1D643           𝙃           \\mbfitsansH                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL H
-U+1D644           𝙄           \\mbfitsansI                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL I
-U+1D645           𝙅           \\mbfitsansJ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL J
-U+1D646           𝙆           \\mbfitsansK                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL K
-U+1D647           𝙇           \\mbfitsansL                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL L
-U+1D648           𝙈           \\mbfitsansM                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL M
-U+1D649           𝙉           \\mbfitsansN                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL N
-U+1D64A           𝙊           \\mbfitsansO                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL O
-U+1D64B           𝙋           \\mbfitsansP                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL P
-U+1D64C           𝙌           \\mbfitsansQ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Q
-U+1D64D           𝙍           \\mbfitsansR                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL R
-U+1D64E           𝙎           \\mbfitsansS                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL S
-U+1D64F           𝙏           \\mbfitsansT                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL T
-U+1D650           𝙐           \\mbfitsansU                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL U
-U+1D651           𝙑           \\mbfitsansV                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL V
-U+1D652           𝙒           \\mbfitsansW                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL W
-U+1D653           𝙓           \\mbfitsansX                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL X
-U+1D654           𝙔           \\mbfitsansY                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Y
-U+1D655           𝙕           \\mbfitsansZ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Z
-U+1D656           𝙖           \\mbfitsansa                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL A
-U+1D657           𝙗           \\mbfitsansb                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL B
-U+1D658           𝙘           \\mbfitsansc                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL C
-U+1D659           𝙙           \\mbfitsansd                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL D
-U+1D65A           𝙚           \\mbfitsanse                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL E
-U+1D65B           𝙛           \\mbfitsansf                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL F
-U+1D65C           𝙜           \\mbfitsansg                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL G
-U+1D65D           𝙝           \\mbfitsansh                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL H
-U+1D65E           𝙞           \\mbfitsansi                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL I
-U+1D65F           𝙟           \\mbfitsansj                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL J
-U+1D660           𝙠           \\mbfitsansk                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL K
-U+1D661           𝙡           \\mbfitsansl                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL L
-U+1D662           𝙢           \\mbfitsansm                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL M
-U+1D663           𝙣           \\mbfitsansn                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL N
-U+1D664           𝙤           \\mbfitsanso                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL O
-U+1D665           𝙥           \\mbfitsansp                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL P
-U+1D666           𝙦           \\mbfitsansq                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Q
-U+1D667           𝙧           \\mbfitsansr                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL R
-U+1D668           𝙨           \\mbfitsanss                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL S
-U+1D669           𝙩           \\mbfitsanst                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL T
-U+1D66A           𝙪           \\mbfitsansu                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL U
-U+1D66B           𝙫           \\mbfitsansv                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL V
-U+1D66C           𝙬           \\mbfitsansw                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL W
-U+1D66D           𝙭           \\mbfitsansx                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL X
-U+1D66E           𝙮           \\mbfitsansy                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Y
-U+1D66F           𝙯           \\mbfitsansz                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Z
-U+1D670           𝙰           \\mttA                                         MATHEMATICAL MONOSPACE CAPITAL A
-U+1D671           𝙱           \\mttB                                         MATHEMATICAL MONOSPACE CAPITAL B
-U+1D672           𝙲           \\mttC                                         MATHEMATICAL MONOSPACE CAPITAL C
-U+1D673           𝙳           \\mttD                                         MATHEMATICAL MONOSPACE CAPITAL D
-U+1D674           𝙴           \\mttE                                         MATHEMATICAL MONOSPACE CAPITAL E
-U+1D675           𝙵           \\mttF                                         MATHEMATICAL MONOSPACE CAPITAL F
-U+1D676           𝙶           \\mttG                                         MATHEMATICAL MONOSPACE CAPITAL G
-U+1D677           𝙷           \\mttH                                         MATHEMATICAL MONOSPACE CAPITAL H
-U+1D678           𝙸           \\mttI                                         MATHEMATICAL MONOSPACE CAPITAL I
-U+1D679           𝙹           \\mttJ                                         MATHEMATICAL MONOSPACE CAPITAL J
-U+1D67A           𝙺           \\mttK                                         MATHEMATICAL MONOSPACE CAPITAL K
-U+1D67B           𝙻           \\mttL                                         MATHEMATICAL MONOSPACE CAPITAL L
-U+1D67C           𝙼           \\mttM                                         MATHEMATICAL MONOSPACE CAPITAL M
-U+1D67D           𝙽           \\mttN                                         MATHEMATICAL MONOSPACE CAPITAL N
-U+1D67E           𝙾           \\mttO                                         MATHEMATICAL MONOSPACE CAPITAL O
-U+1D67F           𝙿           \\mttP                                         MATHEMATICAL MONOSPACE CAPITAL P
-U+1D680           𝚀           \\mttQ                                         MATHEMATICAL MONOSPACE CAPITAL Q
-U+1D681           𝚁           \\mttR                                         MATHEMATICAL MONOSPACE CAPITAL R
-U+1D682           𝚂           \\mttS                                         MATHEMATICAL MONOSPACE CAPITAL S
-U+1D683           𝚃           \\mttT                                         MATHEMATICAL MONOSPACE CAPITAL T
-U+1D684           𝚄           \\mttU                                         MATHEMATICAL MONOSPACE CAPITAL U
-U+1D685           𝚅           \\mttV                                         MATHEMATICAL MONOSPACE CAPITAL V
-U+1D686           𝚆           \\mttW                                         MATHEMATICAL MONOSPACE CAPITAL W
-U+1D687           𝚇           \\mttX                                         MATHEMATICAL MONOSPACE CAPITAL X
-U+1D688           𝚈           \\mttY                                         MATHEMATICAL MONOSPACE CAPITAL Y
-U+1D689           𝚉           \\mttZ                                         MATHEMATICAL MONOSPACE CAPITAL Z
-U+1D68A           𝚊           \\mtta                                         MATHEMATICAL MONOSPACE SMALL A
-U+1D68B           𝚋           \\mttb                                         MATHEMATICAL MONOSPACE SMALL B
-U+1D68C           𝚌           \\mttc                                         MATHEMATICAL MONOSPACE SMALL C
-U+1D68D           𝚍           \\mttd                                         MATHEMATICAL MONOSPACE SMALL D
-U+1D68E           𝚎           \\mtte                                         MATHEMATICAL MONOSPACE SMALL E
-U+1D68F           𝚏           \\mttf                                         MATHEMATICAL MONOSPACE SMALL F
-U+1D690           𝚐           \\mttg                                         MATHEMATICAL MONOSPACE SMALL G
-U+1D691           𝚑           \\mtth                                         MATHEMATICAL MONOSPACE SMALL H
-U+1D692           𝚒           \\mtti                                         MATHEMATICAL MONOSPACE SMALL I
-U+1D693           𝚓           \\mttj                                         MATHEMATICAL MONOSPACE SMALL J
-U+1D694           𝚔           \\mttk                                         MATHEMATICAL MONOSPACE SMALL K
-U+1D695           𝚕           \\mttl                                         MATHEMATICAL MONOSPACE SMALL L
-U+1D696           𝚖           \\mttm                                         MATHEMATICAL MONOSPACE SMALL M
-U+1D697           𝚗           \\mttn                                         MATHEMATICAL MONOSPACE SMALL N
-U+1D698           𝚘           \\mtto                                         MATHEMATICAL MONOSPACE SMALL O
-U+1D699           𝚙           \\mttp                                         MATHEMATICAL MONOSPACE SMALL P
-U+1D69A           𝚚           \\mttq                                         MATHEMATICAL MONOSPACE SMALL Q
-U+1D69B           𝚛           \\mttr                                         MATHEMATICAL MONOSPACE SMALL R
-U+1D69C           𝚜           \\mtts                                         MATHEMATICAL MONOSPACE SMALL S
-U+1D69D           𝚝           \\mttt                                         MATHEMATICAL MONOSPACE SMALL T
-U+1D69E           𝚞           \\mttu                                         MATHEMATICAL MONOSPACE SMALL U
-U+1D69F           𝚟           \\mttv                                         MATHEMATICAL MONOSPACE SMALL V
-U+1D6A0           𝚠           \\mttw                                         MATHEMATICAL MONOSPACE SMALL W
-U+1D6A1           𝚡           \\mttx                                         MATHEMATICAL MONOSPACE SMALL X
-U+1D6A2           𝚢           \\mtty                                         MATHEMATICAL MONOSPACE SMALL Y
-U+1D6A3           𝚣           \\mttz                                         MATHEMATICAL MONOSPACE SMALL Z
-U+1D6A4           𝚤           \\imath                                        MATHEMATICAL ITALIC SMALL DOTLESS I
-U+1D6A5           𝚥           \\jmath                                        MATHEMATICAL ITALIC SMALL DOTLESS J
+U+1D608           𝘈            \\mitsansA                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL A
+U+1D609           𝘉            \\mitsansB                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL B
+U+1D60A           𝘊            \\mitsansC                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL C
+U+1D60B           𝘋            \\mitsansD                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL D
+U+1D60C           𝘌            \\mitsansE                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL E
+U+1D60D           𝘍            \\mitsansF                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL F
+U+1D60E           𝘎            \\mitsansG                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL G
+U+1D60F           𝘏            \\mitsansH                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL H
+U+1D610           𝘐            \\mitsansI                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL I
+U+1D611           𝘑            \\mitsansJ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL J
+U+1D612           𝘒            \\mitsansK                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL K
+U+1D613           𝘓            \\mitsansL                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL L
+U+1D614           𝘔            \\mitsansM                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL M
+U+1D615           𝘕            \\mitsansN                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL N
+U+1D616           𝘖            \\mitsansO                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL O
+U+1D617           𝘗            \\mitsansP                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL P
+U+1D618           𝘘            \\mitsansQ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Q
+U+1D619           𝘙            \\mitsansR                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL R
+U+1D61A           𝘚            \\mitsansS                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL S
+U+1D61B           𝘛            \\mitsansT                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL T
+U+1D61C           𝘜            \\mitsansU                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL U
+U+1D61D           𝘝            \\mitsansV                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL V
+U+1D61E           𝘞            \\mitsansW                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL W
+U+1D61F           𝘟            \\mitsansX                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL X
+U+1D620           𝘠            \\mitsansY                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Y
+U+1D621           𝘡            \\mitsansZ                                     MATHEMATICAL SANS-SERIF ITALIC CAPITAL Z
+U+1D622           𝘢            \\mitsansa                                     MATHEMATICAL SANS-SERIF ITALIC SMALL A
+U+1D623           𝘣            \\mitsansb                                     MATHEMATICAL SANS-SERIF ITALIC SMALL B
+U+1D624           𝘤            \\mitsansc                                     MATHEMATICAL SANS-SERIF ITALIC SMALL C
+U+1D625           𝘥            \\mitsansd                                     MATHEMATICAL SANS-SERIF ITALIC SMALL D
+U+1D626           𝘦            \\mitsanse                                     MATHEMATICAL SANS-SERIF ITALIC SMALL E
+U+1D627           𝘧            \\mitsansf                                     MATHEMATICAL SANS-SERIF ITALIC SMALL F
+U+1D628           𝘨            \\mitsansg                                     MATHEMATICAL SANS-SERIF ITALIC SMALL G
+U+1D629           𝘩            \\mitsansh                                     MATHEMATICAL SANS-SERIF ITALIC SMALL H
+U+1D62A           𝘪            \\mitsansi                                     MATHEMATICAL SANS-SERIF ITALIC SMALL I
+U+1D62B           𝘫            \\mitsansj                                     MATHEMATICAL SANS-SERIF ITALIC SMALL J
+U+1D62C           𝘬            \\mitsansk                                     MATHEMATICAL SANS-SERIF ITALIC SMALL K
+U+1D62D           𝘭            \\mitsansl                                     MATHEMATICAL SANS-SERIF ITALIC SMALL L
+U+1D62E           𝘮            \\mitsansm                                     MATHEMATICAL SANS-SERIF ITALIC SMALL M
+U+1D62F           𝘯            \\mitsansn                                     MATHEMATICAL SANS-SERIF ITALIC SMALL N
+U+1D630           𝘰            \\mitsanso                                     MATHEMATICAL SANS-SERIF ITALIC SMALL O
+U+1D631           𝘱            \\mitsansp                                     MATHEMATICAL SANS-SERIF ITALIC SMALL P
+U+1D632           𝘲            \\mitsansq                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Q
+U+1D633           𝘳            \\mitsansr                                     MATHEMATICAL SANS-SERIF ITALIC SMALL R
+U+1D634           𝘴            \\mitsanss                                     MATHEMATICAL SANS-SERIF ITALIC SMALL S
+U+1D635           𝘵            \\mitsanst                                     MATHEMATICAL SANS-SERIF ITALIC SMALL T
+U+1D636           𝘶            \\mitsansu                                     MATHEMATICAL SANS-SERIF ITALIC SMALL U
+U+1D637           𝘷            \\mitsansv                                     MATHEMATICAL SANS-SERIF ITALIC SMALL V
+U+1D638           𝘸            \\mitsansw                                     MATHEMATICAL SANS-SERIF ITALIC SMALL W
+U+1D639           𝘹            \\mitsansx                                     MATHEMATICAL SANS-SERIF ITALIC SMALL X
+U+1D63A           𝘺            \\mitsansy                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Y
+U+1D63B           𝘻            \\mitsansz                                     MATHEMATICAL SANS-SERIF ITALIC SMALL Z
+U+1D63C           𝘼            \\mbfitsansA                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL A
+U+1D63D           𝘽            \\mbfitsansB                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL B
+U+1D63E           𝘾            \\mbfitsansC                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL C
+U+1D63F           𝘿            \\mbfitsansD                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL D
+U+1D640           𝙀            \\mbfitsansE                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL E
+U+1D641           𝙁            \\mbfitsansF                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL F
+U+1D642           𝙂            \\mbfitsansG                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL G
+U+1D643           𝙃            \\mbfitsansH                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL H
+U+1D644           𝙄            \\mbfitsansI                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL I
+U+1D645           𝙅            \\mbfitsansJ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL J
+U+1D646           𝙆            \\mbfitsansK                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL K
+U+1D647           𝙇            \\mbfitsansL                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL L
+U+1D648           𝙈            \\mbfitsansM                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL M
+U+1D649           𝙉            \\mbfitsansN                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL N
+U+1D64A           𝙊            \\mbfitsansO                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL O
+U+1D64B           𝙋            \\mbfitsansP                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL P
+U+1D64C           𝙌            \\mbfitsansQ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Q
+U+1D64D           𝙍            \\mbfitsansR                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL R
+U+1D64E           𝙎            \\mbfitsansS                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL S
+U+1D64F           𝙏            \\mbfitsansT                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL T
+U+1D650           𝙐            \\mbfitsansU                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL U
+U+1D651           𝙑            \\mbfitsansV                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL V
+U+1D652           𝙒            \\mbfitsansW                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL W
+U+1D653           𝙓            \\mbfitsansX                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL X
+U+1D654           𝙔            \\mbfitsansY                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Y
+U+1D655           𝙕            \\mbfitsansZ                                   MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL Z
+U+1D656           𝙖            \\mbfitsansa                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL A
+U+1D657           𝙗            \\mbfitsansb                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL B
+U+1D658           𝙘            \\mbfitsansc                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL C
+U+1D659           𝙙            \\mbfitsansd                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL D
+U+1D65A           𝙚            \\mbfitsanse                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL E
+U+1D65B           𝙛            \\mbfitsansf                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL F
+U+1D65C           𝙜            \\mbfitsansg                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL G
+U+1D65D           𝙝            \\mbfitsansh                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL H
+U+1D65E           𝙞            \\mbfitsansi                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL I
+U+1D65F           𝙟            \\mbfitsansj                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL J
+U+1D660           𝙠            \\mbfitsansk                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL K
+U+1D661           𝙡            \\mbfitsansl                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL L
+U+1D662           𝙢            \\mbfitsansm                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL M
+U+1D663           𝙣            \\mbfitsansn                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL N
+U+1D664           𝙤            \\mbfitsanso                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL O
+U+1D665           𝙥            \\mbfitsansp                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL P
+U+1D666           𝙦            \\mbfitsansq                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Q
+U+1D667           𝙧            \\mbfitsansr                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL R
+U+1D668           𝙨            \\mbfitsanss                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL S
+U+1D669           𝙩            \\mbfitsanst                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL T
+U+1D66A           𝙪            \\mbfitsansu                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL U
+U+1D66B           𝙫            \\mbfitsansv                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL V
+U+1D66C           𝙬            \\mbfitsansw                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL W
+U+1D66D           𝙭            \\mbfitsansx                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL X
+U+1D66E           𝙮            \\mbfitsansy                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Y
+U+1D66F           𝙯            \\mbfitsansz                                   MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL Z
+U+1D670           𝙰            \\mttA                                         MATHEMATICAL MONOSPACE CAPITAL A
+U+1D671           𝙱            \\mttB                                         MATHEMATICAL MONOSPACE CAPITAL B
+U+1D672           𝙲            \\mttC                                         MATHEMATICAL MONOSPACE CAPITAL C
+U+1D673           𝙳            \\mttD                                         MATHEMATICAL MONOSPACE CAPITAL D
+U+1D674           𝙴            \\mttE                                         MATHEMATICAL MONOSPACE CAPITAL E
+U+1D675           𝙵            \\mttF                                         MATHEMATICAL MONOSPACE CAPITAL F
+U+1D676           𝙶            \\mttG                                         MATHEMATICAL MONOSPACE CAPITAL G
+U+1D677           𝙷            \\mttH                                         MATHEMATICAL MONOSPACE CAPITAL H
+U+1D678           𝙸            \\mttI                                         MATHEMATICAL MONOSPACE CAPITAL I
+U+1D679           𝙹            \\mttJ                                         MATHEMATICAL MONOSPACE CAPITAL J
+U+1D67A           𝙺            \\mttK                                         MATHEMATICAL MONOSPACE CAPITAL K
+U+1D67B           𝙻            \\mttL                                         MATHEMATICAL MONOSPACE CAPITAL L
+U+1D67C           𝙼            \\mttM                                         MATHEMATICAL MONOSPACE CAPITAL M
+U+1D67D           𝙽            \\mttN                                         MATHEMATICAL MONOSPACE CAPITAL N
+U+1D67E           𝙾            \\mttO                                         MATHEMATICAL MONOSPACE CAPITAL O
+U+1D67F           𝙿            \\mttP                                         MATHEMATICAL MONOSPACE CAPITAL P
+U+1D680           𝚀            \\mttQ                                         MATHEMATICAL MONOSPACE CAPITAL Q
+U+1D681           𝚁            \\mttR                                         MATHEMATICAL MONOSPACE CAPITAL R
+U+1D682           𝚂            \\mttS                                         MATHEMATICAL MONOSPACE CAPITAL S
+U+1D683           𝚃            \\mttT                                         MATHEMATICAL MONOSPACE CAPITAL T
+U+1D684           𝚄            \\mttU                                         MATHEMATICAL MONOSPACE CAPITAL U
+U+1D685           𝚅            \\mttV                                         MATHEMATICAL MONOSPACE CAPITAL V
+U+1D686           𝚆            \\mttW                                         MATHEMATICAL MONOSPACE CAPITAL W
+U+1D687           𝚇            \\mttX                                         MATHEMATICAL MONOSPACE CAPITAL X
+U+1D688           𝚈            \\mttY                                         MATHEMATICAL MONOSPACE CAPITAL Y
+U+1D689           𝚉            \\mttZ                                         MATHEMATICAL MONOSPACE CAPITAL Z
+U+1D68A           𝚊            \\mtta                                         MATHEMATICAL MONOSPACE SMALL A
+U+1D68B           𝚋            \\mttb                                         MATHEMATICAL MONOSPACE SMALL B
+U+1D68C           𝚌            \\mttc                                         MATHEMATICAL MONOSPACE SMALL C
+U+1D68D           𝚍            \\mttd                                         MATHEMATICAL MONOSPACE SMALL D
+U+1D68E           𝚎            \\mtte                                         MATHEMATICAL MONOSPACE SMALL E
+U+1D68F           𝚏            \\mttf                                         MATHEMATICAL MONOSPACE SMALL F
+U+1D690           𝚐            \\mttg                                         MATHEMATICAL MONOSPACE SMALL G
+U+1D691           𝚑            \\mtth                                         MATHEMATICAL MONOSPACE SMALL H
+U+1D692           𝚒            \\mtti                                         MATHEMATICAL MONOSPACE SMALL I
+U+1D693           𝚓            \\mttj                                         MATHEMATICAL MONOSPACE SMALL J
+U+1D694           𝚔            \\mttk                                         MATHEMATICAL MONOSPACE SMALL K
+U+1D695           𝚕            \\mttl                                         MATHEMATICAL MONOSPACE SMALL L
+U+1D696           𝚖            \\mttm                                         MATHEMATICAL MONOSPACE SMALL M
+U+1D697           𝚗            \\mttn                                         MATHEMATICAL MONOSPACE SMALL N
+U+1D698           𝚘            \\mtto                                         MATHEMATICAL MONOSPACE SMALL O
+U+1D699           𝚙            \\mttp                                         MATHEMATICAL MONOSPACE SMALL P
+U+1D69A           𝚚            \\mttq                                         MATHEMATICAL MONOSPACE SMALL Q
+U+1D69B           𝚛            \\mttr                                         MATHEMATICAL MONOSPACE SMALL R
+U+1D69C           𝚜            \\mtts                                         MATHEMATICAL MONOSPACE SMALL S
+U+1D69D           𝚝            \\mttt                                         MATHEMATICAL MONOSPACE SMALL T
+U+1D69E           𝚞            \\mttu                                         MATHEMATICAL MONOSPACE SMALL U
+U+1D69F           𝚟            \\mttv                                         MATHEMATICAL MONOSPACE SMALL V
+U+1D6A0           𝚠            \\mttw                                         MATHEMATICAL MONOSPACE SMALL W
+U+1D6A1           𝚡            \\mttx                                         MATHEMATICAL MONOSPACE SMALL X
+U+1D6A2           𝚢            \\mtty                                         MATHEMATICAL MONOSPACE SMALL Y
+U+1D6A3           𝚣            \\mttz                                         MATHEMATICAL MONOSPACE SMALL Z
+U+1D6A4           𝚤            \\imath                                        MATHEMATICAL ITALIC SMALL DOTLESS I
+U+1D6A5           𝚥            \\jmath                                        MATHEMATICAL ITALIC SMALL DOTLESS J
 U+1D6A8           𝚨            \\mbfAlpha                                     MATHEMATICAL BOLD CAPITAL ALPHA
 U+1D6A9           𝚩            \\mbfBeta                                      MATHEMATICAL BOLD CAPITAL BETA
 U+1D6AA           𝚪            \\mbfGamma                                     MATHEMATICAL BOLD CAPITAL GAMMA
@@ -2240,122 +2240,122 @@ U+1D6DE           𝛞            \\mbfvarkappa                                 
 U+1D6DF           𝛟            \\mbfphi                                       MATHEMATICAL BOLD PHI SYMBOL
 U+1D6E0           𝛠            \\mbfvarrho                                    MATHEMATICAL BOLD RHO SYMBOL
 U+1D6E1           𝛡            \\mbfvarpi                                     MATHEMATICAL BOLD PI SYMBOL
-U+1D6E2           𝛢           \\mitAlpha                                     MATHEMATICAL ITALIC CAPITAL ALPHA
-U+1D6E3           𝛣           \\mitBeta                                      MATHEMATICAL ITALIC CAPITAL BETA
-U+1D6E4           𝛤           \\mitGamma                                     MATHEMATICAL ITALIC CAPITAL GAMMA
-U+1D6E5           𝛥           \\mitDelta                                     MATHEMATICAL ITALIC CAPITAL DELTA
-U+1D6E6           𝛦           \\mitEpsilon                                   MATHEMATICAL ITALIC CAPITAL EPSILON
-U+1D6E7           𝛧           \\mitZeta                                      MATHEMATICAL ITALIC CAPITAL ZETA
-U+1D6E8           𝛨           \\mitEta                                       MATHEMATICAL ITALIC CAPITAL ETA
-U+1D6E9           𝛩           \\mitTheta                                     MATHEMATICAL ITALIC CAPITAL THETA
-U+1D6EA           𝛪           \\mitIota                                      MATHEMATICAL ITALIC CAPITAL IOTA
-U+1D6EB           𝛫           \\mitKappa                                     MATHEMATICAL ITALIC CAPITAL KAPPA
-U+1D6EC           𝛬           \\mitLambda                                    MATHEMATICAL ITALIC CAPITAL LAMDA
-U+1D6ED           𝛭           \\mitMu                                        MATHEMATICAL ITALIC CAPITAL MU
-U+1D6EE           𝛮           \\mitNu                                        MATHEMATICAL ITALIC CAPITAL NU
-U+1D6EF           𝛯           \\mitXi                                        MATHEMATICAL ITALIC CAPITAL XI
-U+1D6F0           𝛰           \\mitOmicron                                   MATHEMATICAL ITALIC CAPITAL OMICRON
-U+1D6F1           𝛱           \\mitPi                                        MATHEMATICAL ITALIC CAPITAL PI
-U+1D6F2           𝛲           \\mitRho                                       MATHEMATICAL ITALIC CAPITAL RHO
-U+1D6F3           𝛳           \\mitvarTheta                                  MATHEMATICAL ITALIC CAPITAL THETA SYMBOL
-U+1D6F4           𝛴           \\mitSigma                                     MATHEMATICAL ITALIC CAPITAL SIGMA
-U+1D6F5           𝛵           \\mitTau                                       MATHEMATICAL ITALIC CAPITAL TAU
-U+1D6F6           𝛶           \\mitUpsilon                                   MATHEMATICAL ITALIC CAPITAL UPSILON
-U+1D6F7           𝛷           \\mitPhi                                       MATHEMATICAL ITALIC CAPITAL PHI
-U+1D6F8           𝛸           \\mitChi                                       MATHEMATICAL ITALIC CAPITAL CHI
-U+1D6F9           𝛹           \\mitPsi                                       MATHEMATICAL ITALIC CAPITAL PSI
-U+1D6FA           𝛺           \\mitOmega                                     MATHEMATICAL ITALIC CAPITAL OMEGA
-U+1D6FB           𝛻           \\mitnabla                                     MATHEMATICAL ITALIC NABLA
-U+1D6FC           𝛼           \\mitalpha                                     MATHEMATICAL ITALIC SMALL ALPHA
-U+1D6FD           𝛽           \\mitbeta                                      MATHEMATICAL ITALIC SMALL BETA
-U+1D6FE           𝛾           \\mitgamma                                     MATHEMATICAL ITALIC SMALL GAMMA
-U+1D6FF           𝛿           \\mitdelta                                     MATHEMATICAL ITALIC SMALL DELTA
-U+1D700           𝜀           \\mitepsilon                                   MATHEMATICAL ITALIC SMALL EPSILON
-U+1D701           𝜁           \\mitzeta                                      MATHEMATICAL ITALIC SMALL ZETA
-U+1D702           𝜂           \\miteta                                       MATHEMATICAL ITALIC SMALL ETA
-U+1D703           𝜃           \\mittheta                                     MATHEMATICAL ITALIC SMALL THETA
-U+1D704           𝜄           \\mitiota                                      MATHEMATICAL ITALIC SMALL IOTA
-U+1D705           𝜅           \\mitkappa                                     MATHEMATICAL ITALIC SMALL KAPPA
-U+1D706           𝜆           \\mitlambda                                    MATHEMATICAL ITALIC SMALL LAMDA
-U+1D707           𝜇           \\mitmu                                        MATHEMATICAL ITALIC SMALL MU
-U+1D708           𝜈           \\mitnu                                        MATHEMATICAL ITALIC SMALL NU
-U+1D709           𝜉           \\mitxi                                        MATHEMATICAL ITALIC SMALL XI
-U+1D70A           𝜊           \\mitomicron                                   MATHEMATICAL ITALIC SMALL OMICRON
-U+1D70B           𝜋           \\mitpi                                        MATHEMATICAL ITALIC SMALL PI
-U+1D70C           𝜌           \\mitrho                                       MATHEMATICAL ITALIC SMALL RHO
-U+1D70D           𝜍           \\mitvarsigma                                  MATHEMATICAL ITALIC SMALL FINAL SIGMA
-U+1D70E           𝜎           \\mitsigma                                     MATHEMATICAL ITALIC SMALL SIGMA
-U+1D70F           𝜏           \\mittau                                       MATHEMATICAL ITALIC SMALL TAU
-U+1D710           𝜐           \\mitupsilon                                   MATHEMATICAL ITALIC SMALL UPSILON
-U+1D711           𝜑           \\mitphi                                       MATHEMATICAL ITALIC SMALL PHI
-U+1D712           𝜒           \\mitchi                                       MATHEMATICAL ITALIC SMALL CHI
-U+1D713           𝜓           \\mitpsi                                       MATHEMATICAL ITALIC SMALL PSI
-U+1D714           𝜔           \\mitomega                                     MATHEMATICAL ITALIC SMALL OMEGA
-U+1D715           𝜕           \\mitpartial                                   MATHEMATICAL ITALIC PARTIAL DIFFERENTIAL
-U+1D716           𝜖           \\mitvarepsilon                                MATHEMATICAL ITALIC EPSILON SYMBOL
+U+1D6E2           𝛢            \\mitAlpha                                     MATHEMATICAL ITALIC CAPITAL ALPHA
+U+1D6E3           𝛣            \\mitBeta                                      MATHEMATICAL ITALIC CAPITAL BETA
+U+1D6E4           𝛤            \\mitGamma                                     MATHEMATICAL ITALIC CAPITAL GAMMA
+U+1D6E5           𝛥            \\mitDelta                                     MATHEMATICAL ITALIC CAPITAL DELTA
+U+1D6E6           𝛦            \\mitEpsilon                                   MATHEMATICAL ITALIC CAPITAL EPSILON
+U+1D6E7           𝛧            \\mitZeta                                      MATHEMATICAL ITALIC CAPITAL ZETA
+U+1D6E8           𝛨            \\mitEta                                       MATHEMATICAL ITALIC CAPITAL ETA
+U+1D6E9           𝛩            \\mitTheta                                     MATHEMATICAL ITALIC CAPITAL THETA
+U+1D6EA           𝛪            \\mitIota                                      MATHEMATICAL ITALIC CAPITAL IOTA
+U+1D6EB           𝛫            \\mitKappa                                     MATHEMATICAL ITALIC CAPITAL KAPPA
+U+1D6EC           𝛬            \\mitLambda                                    MATHEMATICAL ITALIC CAPITAL LAMDA
+U+1D6ED           𝛭            \\mitMu                                        MATHEMATICAL ITALIC CAPITAL MU
+U+1D6EE           𝛮            \\mitNu                                        MATHEMATICAL ITALIC CAPITAL NU
+U+1D6EF           𝛯            \\mitXi                                        MATHEMATICAL ITALIC CAPITAL XI
+U+1D6F0           𝛰            \\mitOmicron                                   MATHEMATICAL ITALIC CAPITAL OMICRON
+U+1D6F1           𝛱            \\mitPi                                        MATHEMATICAL ITALIC CAPITAL PI
+U+1D6F2           𝛲            \\mitRho                                       MATHEMATICAL ITALIC CAPITAL RHO
+U+1D6F3           𝛳            \\mitvarTheta                                  MATHEMATICAL ITALIC CAPITAL THETA SYMBOL
+U+1D6F4           𝛴            \\mitSigma                                     MATHEMATICAL ITALIC CAPITAL SIGMA
+U+1D6F5           𝛵            \\mitTau                                       MATHEMATICAL ITALIC CAPITAL TAU
+U+1D6F6           𝛶            \\mitUpsilon                                   MATHEMATICAL ITALIC CAPITAL UPSILON
+U+1D6F7           𝛷            \\mitPhi                                       MATHEMATICAL ITALIC CAPITAL PHI
+U+1D6F8           𝛸            \\mitChi                                       MATHEMATICAL ITALIC CAPITAL CHI
+U+1D6F9           𝛹            \\mitPsi                                       MATHEMATICAL ITALIC CAPITAL PSI
+U+1D6FA           𝛺            \\mitOmega                                     MATHEMATICAL ITALIC CAPITAL OMEGA
+U+1D6FB           𝛻            \\mitnabla                                     MATHEMATICAL ITALIC NABLA
+U+1D6FC           𝛼            \\mitalpha                                     MATHEMATICAL ITALIC SMALL ALPHA
+U+1D6FD           𝛽            \\mitbeta                                      MATHEMATICAL ITALIC SMALL BETA
+U+1D6FE           𝛾            \\mitgamma                                     MATHEMATICAL ITALIC SMALL GAMMA
+U+1D6FF           𝛿            \\mitdelta                                     MATHEMATICAL ITALIC SMALL DELTA
+U+1D700           𝜀            \\mitepsilon                                   MATHEMATICAL ITALIC SMALL EPSILON
+U+1D701           𝜁            \\mitzeta                                      MATHEMATICAL ITALIC SMALL ZETA
+U+1D702           𝜂            \\miteta                                       MATHEMATICAL ITALIC SMALL ETA
+U+1D703           𝜃            \\mittheta                                     MATHEMATICAL ITALIC SMALL THETA
+U+1D704           𝜄            \\mitiota                                      MATHEMATICAL ITALIC SMALL IOTA
+U+1D705           𝜅            \\mitkappa                                     MATHEMATICAL ITALIC SMALL KAPPA
+U+1D706           𝜆            \\mitlambda                                    MATHEMATICAL ITALIC SMALL LAMDA
+U+1D707           𝜇            \\mitmu                                        MATHEMATICAL ITALIC SMALL MU
+U+1D708           𝜈            \\mitnu                                        MATHEMATICAL ITALIC SMALL NU
+U+1D709           𝜉            \\mitxi                                        MATHEMATICAL ITALIC SMALL XI
+U+1D70A           𝜊            \\mitomicron                                   MATHEMATICAL ITALIC SMALL OMICRON
+U+1D70B           𝜋            \\mitpi                                        MATHEMATICAL ITALIC SMALL PI
+U+1D70C           𝜌            \\mitrho                                       MATHEMATICAL ITALIC SMALL RHO
+U+1D70D           𝜍            \\mitvarsigma                                  MATHEMATICAL ITALIC SMALL FINAL SIGMA
+U+1D70E           𝜎            \\mitsigma                                     MATHEMATICAL ITALIC SMALL SIGMA
+U+1D70F           𝜏            \\mittau                                       MATHEMATICAL ITALIC SMALL TAU
+U+1D710           𝜐            \\mitupsilon                                   MATHEMATICAL ITALIC SMALL UPSILON
+U+1D711           𝜑            \\mitphi                                       MATHEMATICAL ITALIC SMALL PHI
+U+1D712           𝜒            \\mitchi                                       MATHEMATICAL ITALIC SMALL CHI
+U+1D713           𝜓            \\mitpsi                                       MATHEMATICAL ITALIC SMALL PSI
+U+1D714           𝜔            \\mitomega                                     MATHEMATICAL ITALIC SMALL OMEGA
+U+1D715           𝜕            \\mitpartial                                   MATHEMATICAL ITALIC PARTIAL DIFFERENTIAL
+U+1D716           𝜖            \\mitvarepsilon                                MATHEMATICAL ITALIC EPSILON SYMBOL
 U+1D717           𝜗            \\mitvartheta                                  MATHEMATICAL ITALIC THETA SYMBOL
-U+1D718           𝜘           \\mitvarkappa                                  MATHEMATICAL ITALIC KAPPA SYMBOL
-U+1D719           𝜙           \\mitvarphi                                    MATHEMATICAL ITALIC PHI SYMBOL
-U+1D71A           𝜚           \\mitvarrho                                    MATHEMATICAL ITALIC RHO SYMBOL
-U+1D71B           𝜛           \\mitvarpi                                     MATHEMATICAL ITALIC PI SYMBOL
-U+1D71C           𝜜           \\mbfitAlpha                                   MATHEMATICAL BOLD ITALIC CAPITAL ALPHA
-U+1D71D           𝜝           \\mbfitBeta                                    MATHEMATICAL BOLD ITALIC CAPITAL BETA
-U+1D71E           𝜞           \\mbfitGamma                                   MATHEMATICAL BOLD ITALIC CAPITAL GAMMA
-U+1D71F           𝜟           \\mbfitDelta                                   MATHEMATICAL BOLD ITALIC CAPITAL DELTA
-U+1D720           𝜠           \\mbfitEpsilon                                 MATHEMATICAL BOLD ITALIC CAPITAL EPSILON
-U+1D721           𝜡           \\mbfitZeta                                    MATHEMATICAL BOLD ITALIC CAPITAL ZETA
-U+1D722           𝜢           \\mbfitEta                                     MATHEMATICAL BOLD ITALIC CAPITAL ETA
-U+1D723           𝜣           \\mbfitTheta                                   MATHEMATICAL BOLD ITALIC CAPITAL THETA
-U+1D724           𝜤           \\mbfitIota                                    MATHEMATICAL BOLD ITALIC CAPITAL IOTA
-U+1D725           𝜥           \\mbfitKappa                                   MATHEMATICAL BOLD ITALIC CAPITAL KAPPA
-U+1D726           𝜦           \\mbfitLambda                                  MATHEMATICAL BOLD ITALIC CAPITAL LAMDA
-U+1D727           𝜧           \\mbfitMu                                      MATHEMATICAL BOLD ITALIC CAPITAL MU
-U+1D728           𝜨           \\mbfitNu                                      MATHEMATICAL BOLD ITALIC CAPITAL NU
-U+1D729           𝜩           \\mbfitXi                                      MATHEMATICAL BOLD ITALIC CAPITAL XI
-U+1D72A           𝜪           \\mbfitOmicron                                 MATHEMATICAL BOLD ITALIC CAPITAL OMICRON
-U+1D72B           𝜫           \\mbfitPi                                      MATHEMATICAL BOLD ITALIC CAPITAL PI
-U+1D72C           𝜬           \\mbfitRho                                     MATHEMATICAL BOLD ITALIC CAPITAL RHO
-U+1D72D           𝜭           \\mbfitvarTheta                                MATHEMATICAL BOLD ITALIC CAPITAL THETA SYMBOL
-U+1D72E           𝜮           \\mbfitSigma                                   MATHEMATICAL BOLD ITALIC CAPITAL SIGMA
-U+1D72F           𝜯           \\mbfitTau                                     MATHEMATICAL BOLD ITALIC CAPITAL TAU
-U+1D730           𝜰           \\mbfitUpsilon                                 MATHEMATICAL BOLD ITALIC CAPITAL UPSILON
-U+1D731           𝜱           \\mbfitPhi                                     MATHEMATICAL BOLD ITALIC CAPITAL PHI
-U+1D732           𝜲           \\mbfitChi                                     MATHEMATICAL BOLD ITALIC CAPITAL CHI
-U+1D733           𝜳           \\mbfitPsi                                     MATHEMATICAL BOLD ITALIC CAPITAL PSI
-U+1D734           𝜴           \\mbfitOmega                                   MATHEMATICAL BOLD ITALIC CAPITAL OMEGA
-U+1D735           𝜵           \\mbfitnabla                                   MATHEMATICAL BOLD ITALIC NABLA
-U+1D736           𝜶           \\mbfitalpha                                   MATHEMATICAL BOLD ITALIC SMALL ALPHA
-U+1D737           𝜷           \\mbfitbeta                                    MATHEMATICAL BOLD ITALIC SMALL BETA
-U+1D738           𝜸           \\mbfitgamma                                   MATHEMATICAL BOLD ITALIC SMALL GAMMA
-U+1D739           𝜹           \\mbfitdelta                                   MATHEMATICAL BOLD ITALIC SMALL DELTA
-U+1D73A           𝜺           \\mbfitepsilon                                 MATHEMATICAL BOLD ITALIC SMALL EPSILON
-U+1D73B           𝜻           \\mbfitzeta                                    MATHEMATICAL BOLD ITALIC SMALL ZETA
-U+1D73C           𝜼           \\mbfiteta                                     MATHEMATICAL BOLD ITALIC SMALL ETA
-U+1D73D           𝜽           \\mbfittheta                                   MATHEMATICAL BOLD ITALIC SMALL THETA
-U+1D73E           𝜾           \\mbfitiota                                    MATHEMATICAL BOLD ITALIC SMALL IOTA
-U+1D73F           𝜿           \\mbfitkappa                                   MATHEMATICAL BOLD ITALIC SMALL KAPPA
-U+1D740           𝝀           \\mbfitlambda                                  MATHEMATICAL BOLD ITALIC SMALL LAMDA
-U+1D741           𝝁           \\mbfitmu                                      MATHEMATICAL BOLD ITALIC SMALL MU
-U+1D742           𝝂           \\mbfitnu                                      MATHEMATICAL BOLD ITALIC SMALL NU
-U+1D743           𝝃           \\mbfitxi                                      MATHEMATICAL BOLD ITALIC SMALL XI
-U+1D744           𝝄           \\mbfitomicron                                 MATHEMATICAL BOLD ITALIC SMALL OMICRON
-U+1D745           𝝅           \\mbfitpi                                      MATHEMATICAL BOLD ITALIC SMALL PI
-U+1D746           𝝆           \\mbfitrho                                     MATHEMATICAL BOLD ITALIC SMALL RHO
-U+1D747           𝝇           \\mbfitvarsigma                                MATHEMATICAL BOLD ITALIC SMALL FINAL SIGMA
-U+1D748           𝝈           \\mbfitsigma                                   MATHEMATICAL BOLD ITALIC SMALL SIGMA
-U+1D749           𝝉           \\mbfittau                                     MATHEMATICAL BOLD ITALIC SMALL TAU
-U+1D74A           𝝊           \\mbfitupsilon                                 MATHEMATICAL BOLD ITALIC SMALL UPSILON
-U+1D74B           𝝋           \\mbfitphi                                     MATHEMATICAL BOLD ITALIC SMALL PHI
-U+1D74C           𝝌           \\mbfitchi                                     MATHEMATICAL BOLD ITALIC SMALL CHI
-U+1D74D           𝝍           \\mbfitpsi                                     MATHEMATICAL BOLD ITALIC SMALL PSI
-U+1D74E           𝝎           \\mbfitomega                                   MATHEMATICAL BOLD ITALIC SMALL OMEGA
-U+1D74F           𝝏           \\mbfitpartial                                 MATHEMATICAL BOLD ITALIC PARTIAL DIFFERENTIAL
-U+1D750           𝝐           \\mbfitvarepsilon                              MATHEMATICAL BOLD ITALIC EPSILON SYMBOL
-U+1D751           𝝑           \\mbfitvartheta                                MATHEMATICAL BOLD ITALIC THETA SYMBOL
-U+1D752           𝝒           \\mbfitvarkappa                                MATHEMATICAL BOLD ITALIC KAPPA SYMBOL
-U+1D753           𝝓           \\mbfitvarphi                                  MATHEMATICAL BOLD ITALIC PHI SYMBOL
-U+1D754           𝝔           \\mbfitvarrho                                  MATHEMATICAL BOLD ITALIC RHO SYMBOL
-U+1D755           𝝕           \\mbfitvarpi                                   MATHEMATICAL BOLD ITALIC PI SYMBOL
+U+1D718           𝜘            \\mitvarkappa                                  MATHEMATICAL ITALIC KAPPA SYMBOL
+U+1D719           𝜙            \\mitvarphi                                    MATHEMATICAL ITALIC PHI SYMBOL
+U+1D71A           𝜚            \\mitvarrho                                    MATHEMATICAL ITALIC RHO SYMBOL
+U+1D71B           𝜛            \\mitvarpi                                     MATHEMATICAL ITALIC PI SYMBOL
+U+1D71C           𝜜            \\mbfitAlpha                                   MATHEMATICAL BOLD ITALIC CAPITAL ALPHA
+U+1D71D           𝜝            \\mbfitBeta                                    MATHEMATICAL BOLD ITALIC CAPITAL BETA
+U+1D71E           𝜞            \\mbfitGamma                                   MATHEMATICAL BOLD ITALIC CAPITAL GAMMA
+U+1D71F           𝜟            \\mbfitDelta                                   MATHEMATICAL BOLD ITALIC CAPITAL DELTA
+U+1D720           𝜠            \\mbfitEpsilon                                 MATHEMATICAL BOLD ITALIC CAPITAL EPSILON
+U+1D721           𝜡            \\mbfitZeta                                    MATHEMATICAL BOLD ITALIC CAPITAL ZETA
+U+1D722           𝜢            \\mbfitEta                                     MATHEMATICAL BOLD ITALIC CAPITAL ETA
+U+1D723           𝜣            \\mbfitTheta                                   MATHEMATICAL BOLD ITALIC CAPITAL THETA
+U+1D724           𝜤            \\mbfitIota                                    MATHEMATICAL BOLD ITALIC CAPITAL IOTA
+U+1D725           𝜥            \\mbfitKappa                                   MATHEMATICAL BOLD ITALIC CAPITAL KAPPA
+U+1D726           𝜦            \\mbfitLambda                                  MATHEMATICAL BOLD ITALIC CAPITAL LAMDA
+U+1D727           𝜧            \\mbfitMu                                      MATHEMATICAL BOLD ITALIC CAPITAL MU
+U+1D728           𝜨            \\mbfitNu                                      MATHEMATICAL BOLD ITALIC CAPITAL NU
+U+1D729           𝜩            \\mbfitXi                                      MATHEMATICAL BOLD ITALIC CAPITAL XI
+U+1D72A           𝜪            \\mbfitOmicron                                 MATHEMATICAL BOLD ITALIC CAPITAL OMICRON
+U+1D72B           𝜫            \\mbfitPi                                      MATHEMATICAL BOLD ITALIC CAPITAL PI
+U+1D72C           𝜬            \\mbfitRho                                     MATHEMATICAL BOLD ITALIC CAPITAL RHO
+U+1D72D           𝜭            \\mbfitvarTheta                                MATHEMATICAL BOLD ITALIC CAPITAL THETA SYMBOL
+U+1D72E           𝜮            \\mbfitSigma                                   MATHEMATICAL BOLD ITALIC CAPITAL SIGMA
+U+1D72F           𝜯            \\mbfitTau                                     MATHEMATICAL BOLD ITALIC CAPITAL TAU
+U+1D730           𝜰            \\mbfitUpsilon                                 MATHEMATICAL BOLD ITALIC CAPITAL UPSILON
+U+1D731           𝜱            \\mbfitPhi                                     MATHEMATICAL BOLD ITALIC CAPITAL PHI
+U+1D732           𝜲            \\mbfitChi                                     MATHEMATICAL BOLD ITALIC CAPITAL CHI
+U+1D733           𝜳            \\mbfitPsi                                     MATHEMATICAL BOLD ITALIC CAPITAL PSI
+U+1D734           𝜴            \\mbfitOmega                                   MATHEMATICAL BOLD ITALIC CAPITAL OMEGA
+U+1D735           𝜵            \\mbfitnabla                                   MATHEMATICAL BOLD ITALIC NABLA
+U+1D736           𝜶            \\mbfitalpha                                   MATHEMATICAL BOLD ITALIC SMALL ALPHA
+U+1D737           𝜷            \\mbfitbeta                                    MATHEMATICAL BOLD ITALIC SMALL BETA
+U+1D738           𝜸            \\mbfitgamma                                   MATHEMATICAL BOLD ITALIC SMALL GAMMA
+U+1D739           𝜹            \\mbfitdelta                                   MATHEMATICAL BOLD ITALIC SMALL DELTA
+U+1D73A           𝜺            \\mbfitepsilon                                 MATHEMATICAL BOLD ITALIC SMALL EPSILON
+U+1D73B           𝜻            \\mbfitzeta                                    MATHEMATICAL BOLD ITALIC SMALL ZETA
+U+1D73C           𝜼            \\mbfiteta                                     MATHEMATICAL BOLD ITALIC SMALL ETA
+U+1D73D           𝜽            \\mbfittheta                                   MATHEMATICAL BOLD ITALIC SMALL THETA
+U+1D73E           𝜾            \\mbfitiota                                    MATHEMATICAL BOLD ITALIC SMALL IOTA
+U+1D73F           𝜿            \\mbfitkappa                                   MATHEMATICAL BOLD ITALIC SMALL KAPPA
+U+1D740           𝝀            \\mbfitlambda                                  MATHEMATICAL BOLD ITALIC SMALL LAMDA
+U+1D741           𝝁            \\mbfitmu                                      MATHEMATICAL BOLD ITALIC SMALL MU
+U+1D742           𝝂            \\mbfitnu                                      MATHEMATICAL BOLD ITALIC SMALL NU
+U+1D743           𝝃            \\mbfitxi                                      MATHEMATICAL BOLD ITALIC SMALL XI
+U+1D744           𝝄            \\mbfitomicron                                 MATHEMATICAL BOLD ITALIC SMALL OMICRON
+U+1D745           𝝅            \\mbfitpi                                      MATHEMATICAL BOLD ITALIC SMALL PI
+U+1D746           𝝆            \\mbfitrho                                     MATHEMATICAL BOLD ITALIC SMALL RHO
+U+1D747           𝝇            \\mbfitvarsigma                                MATHEMATICAL BOLD ITALIC SMALL FINAL SIGMA
+U+1D748           𝝈            \\mbfitsigma                                   MATHEMATICAL BOLD ITALIC SMALL SIGMA
+U+1D749           𝝉            \\mbfittau                                     MATHEMATICAL BOLD ITALIC SMALL TAU
+U+1D74A           𝝊            \\mbfitupsilon                                 MATHEMATICAL BOLD ITALIC SMALL UPSILON
+U+1D74B           𝝋            \\mbfitphi                                     MATHEMATICAL BOLD ITALIC SMALL PHI
+U+1D74C           𝝌            \\mbfitchi                                     MATHEMATICAL BOLD ITALIC SMALL CHI
+U+1D74D           𝝍            \\mbfitpsi                                     MATHEMATICAL BOLD ITALIC SMALL PSI
+U+1D74E           𝝎            \\mbfitomega                                   MATHEMATICAL BOLD ITALIC SMALL OMEGA
+U+1D74F           𝝏            \\mbfitpartial                                 MATHEMATICAL BOLD ITALIC PARTIAL DIFFERENTIAL
+U+1D750           𝝐            \\mbfitvarepsilon                              MATHEMATICAL BOLD ITALIC EPSILON SYMBOL
+U+1D751           𝝑            \\mbfitvartheta                                MATHEMATICAL BOLD ITALIC THETA SYMBOL
+U+1D752           𝝒            \\mbfitvarkappa                                MATHEMATICAL BOLD ITALIC KAPPA SYMBOL
+U+1D753           𝝓            \\mbfitvarphi                                  MATHEMATICAL BOLD ITALIC PHI SYMBOL
+U+1D754           𝝔            \\mbfitvarrho                                  MATHEMATICAL BOLD ITALIC RHO SYMBOL
+U+1D755           𝝕            \\mbfitvarpi                                   MATHEMATICAL BOLD ITALIC PI SYMBOL
 U+1D756           𝝖            \\mbfsansAlpha                                 MATHEMATICAL SANS-SERIF BOLD CAPITAL ALPHA
 U+1D757           𝝗            \\mbfsansBeta                                  MATHEMATICAL SANS-SERIF BOLD CAPITAL BETA
 U+1D758           𝝘            \\mbfsansGamma                                 MATHEMATICAL SANS-SERIF BOLD CAPITAL GAMMA
@@ -2414,64 +2414,64 @@ U+1D78C           𝞌            \\mbfsansvarkappa                             
 U+1D78D           𝞍            \\mbfsansvarphi                                MATHEMATICAL SANS-SERIF BOLD PHI SYMBOL
 U+1D78E           𝞎            \\mbfsansvarrho                                MATHEMATICAL SANS-SERIF BOLD RHO SYMBOL
 U+1D78F           𝞏            \\mbfsansvarpi                                 MATHEMATICAL SANS-SERIF BOLD PI SYMBOL
-U+1D790           𝞐           \\mbfitsansAlpha                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ALPHA
-U+1D791           𝞑           \\mbfitsansBeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL BETA
-U+1D792           𝞒           \\mbfitsansGamma                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL GAMMA
-U+1D793           𝞓           \\mbfitsansDelta                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL DELTA
-U+1D794           𝞔           \\mbfitsansEpsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL EPSILON
-U+1D795           𝞕           \\mbfitsansZeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ZETA
-U+1D796           𝞖           \\mbfitsansEta                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ETA
-U+1D797           𝞗           \\mbfitsansTheta                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL THETA
-U+1D798           𝞘           \\mbfitsansIota                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL IOTA
-U+1D799           𝞙           \\mbfitsansKappa                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL KAPPA
-U+1D79A           𝞚           \\mbfitsansLambda                              MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL LAMDA
-U+1D79B           𝞛           \\mbfitsansMu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL MU
-U+1D79C           𝞜           \\mbfitsansNu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL NU
-U+1D79D           𝞝           \\mbfitsansXi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL XI
-U+1D79E           𝞞           \\mbfitsansOmicron                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL OMICRON
-U+1D79F           𝞟           \\mbfitsansPi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PI
-U+1D7A0           𝞠           \\mbfitsansRho                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL RHO
-U+1D7A1           𝞡           \\mbfitsansvarTheta                            MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL THETA SYMBOL
-U+1D7A2           𝞢           \\mbfitsansSigma                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL SIGMA
-U+1D7A3           𝞣           \\mbfitsansTau                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL TAU
-U+1D7A4           𝞤           \\mbfitsansUpsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL UPSILON
-U+1D7A5           𝞥           \\mbfitsansPhi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PHI
-U+1D7A6           𝞦           \\mbfitsansChi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL CHI
-U+1D7A7           𝞧           \\mbfitsansPsi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PSI
-U+1D7A8           𝞨           \\mbfitsansOmega                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL OMEGA
-U+1D7A9           𝞩           \\mbfitsansnabla                               MATHEMATICAL SANS-SERIF BOLD ITALIC NABLA
-U+1D7AA           𝞪           \\mbfitsansalpha                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ALPHA
-U+1D7AB           𝞫           \\mbfitsansbeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL BETA
-U+1D7AC           𝞬           \\mbfitsansgamma                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL GAMMA
-U+1D7AD           𝞭           \\mbfitsansdelta                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL DELTA
-U+1D7AE           𝞮           \\mbfitsansepsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL EPSILON
-U+1D7AF           𝞯           \\mbfitsanszeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ZETA
-U+1D7B0           𝞰           \\mbfitsanseta                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ETA
-U+1D7B1           𝞱           \\mbfitsanstheta                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL THETA
-U+1D7B2           𝞲           \\mbfitsansiota                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL IOTA
-U+1D7B3           𝞳           \\mbfitsanskappa                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL KAPPA
-U+1D7B4           𝞴           \\mbfitsanslambda                              MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL LAMDA
-U+1D7B5           𝞵           \\mbfitsansmu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL MU
-U+1D7B6           𝞶           \\mbfitsansnu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL NU
-U+1D7B7           𝞷           \\mbfitsansxi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL XI
-U+1D7B8           𝞸           \\mbfitsansomicron                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL OMICRON
-U+1D7B9           𝞹           \\mbfitsanspi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PI
-U+1D7BA           𝞺           \\mbfitsansrho                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL RHO
-U+1D7BB           𝞻           \\mbfitsansvarsigma                            MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL FINAL SIGMA
-U+1D7BC           𝞼           \\mbfitsanssigma                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL SIGMA
-U+1D7BD           𝞽           \\mbfitsanstau                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL TAU
-U+1D7BE           𝞾           \\mbfitsansupsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL UPSILON
-U+1D7BF           𝞿           \\mbfitsansphi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PHI
-U+1D7C0           𝟀           \\mbfitsanschi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL CHI
-U+1D7C1           𝟁           \\mbfitsanspsi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PSI
-U+1D7C2           𝟂           \\mbfitsansomega                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL OMEGA
-U+1D7C3           𝟃           \\mbfitsanspartial                             MATHEMATICAL SANS-SERIF BOLD ITALIC PARTIAL DIFFERENTIAL
-U+1D7C4           𝟄           \\mbfitsansvarepsilon                          MATHEMATICAL SANS-SERIF BOLD ITALIC EPSILON SYMBOL
-U+1D7C5           𝟅           \\mbfitsansvartheta                            MATHEMATICAL SANS-SERIF BOLD ITALIC THETA SYMBOL
-U+1D7C6           𝟆           \\mbfitsansvarkappa                            MATHEMATICAL SANS-SERIF BOLD ITALIC KAPPA SYMBOL
-U+1D7C7           𝟇           \\mbfitsansvarphi                              MATHEMATICAL SANS-SERIF BOLD ITALIC PHI SYMBOL
-U+1D7C8           𝟈           \\mbfitsansvarrho                              MATHEMATICAL SANS-SERIF BOLD ITALIC RHO SYMBOL
-U+1D7C9           𝟉           \\mbfitsansvarpi                               MATHEMATICAL SANS-SERIF BOLD ITALIC PI SYMBOL
+U+1D790           𝞐            \\mbfitsansAlpha                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ALPHA
+U+1D791           𝞑            \\mbfitsansBeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL BETA
+U+1D792           𝞒            \\mbfitsansGamma                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL GAMMA
+U+1D793           𝞓            \\mbfitsansDelta                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL DELTA
+U+1D794           𝞔            \\mbfitsansEpsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL EPSILON
+U+1D795           𝞕            \\mbfitsansZeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ZETA
+U+1D796           𝞖            \\mbfitsansEta                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL ETA
+U+1D797           𝞗            \\mbfitsansTheta                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL THETA
+U+1D798           𝞘            \\mbfitsansIota                                MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL IOTA
+U+1D799           𝞙            \\mbfitsansKappa                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL KAPPA
+U+1D79A           𝞚            \\mbfitsansLambda                              MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL LAMDA
+U+1D79B           𝞛            \\mbfitsansMu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL MU
+U+1D79C           𝞜            \\mbfitsansNu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL NU
+U+1D79D           𝞝            \\mbfitsansXi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL XI
+U+1D79E           𝞞            \\mbfitsansOmicron                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL OMICRON
+U+1D79F           𝞟            \\mbfitsansPi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PI
+U+1D7A0           𝞠            \\mbfitsansRho                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL RHO
+U+1D7A1           𝞡            \\mbfitsansvarTheta                            MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL THETA SYMBOL
+U+1D7A2           𝞢            \\mbfitsansSigma                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL SIGMA
+U+1D7A3           𝞣            \\mbfitsansTau                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL TAU
+U+1D7A4           𝞤            \\mbfitsansUpsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL UPSILON
+U+1D7A5           𝞥            \\mbfitsansPhi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PHI
+U+1D7A6           𝞦            \\mbfitsansChi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL CHI
+U+1D7A7           𝞧            \\mbfitsansPsi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL PSI
+U+1D7A8           𝞨            \\mbfitsansOmega                               MATHEMATICAL SANS-SERIF BOLD ITALIC CAPITAL OMEGA
+U+1D7A9           𝞩            \\mbfitsansnabla                               MATHEMATICAL SANS-SERIF BOLD ITALIC NABLA
+U+1D7AA           𝞪            \\mbfitsansalpha                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ALPHA
+U+1D7AB           𝞫            \\mbfitsansbeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL BETA
+U+1D7AC           𝞬            \\mbfitsansgamma                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL GAMMA
+U+1D7AD           𝞭            \\mbfitsansdelta                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL DELTA
+U+1D7AE           𝞮            \\mbfitsansepsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL EPSILON
+U+1D7AF           𝞯            \\mbfitsanszeta                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ZETA
+U+1D7B0           𝞰            \\mbfitsanseta                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL ETA
+U+1D7B1           𝞱            \\mbfitsanstheta                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL THETA
+U+1D7B2           𝞲            \\mbfitsansiota                                MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL IOTA
+U+1D7B3           𝞳            \\mbfitsanskappa                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL KAPPA
+U+1D7B4           𝞴            \\mbfitsanslambda                              MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL LAMDA
+U+1D7B5           𝞵            \\mbfitsansmu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL MU
+U+1D7B6           𝞶            \\mbfitsansnu                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL NU
+U+1D7B7           𝞷            \\mbfitsansxi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL XI
+U+1D7B8           𝞸            \\mbfitsansomicron                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL OMICRON
+U+1D7B9           𝞹            \\mbfitsanspi                                  MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PI
+U+1D7BA           𝞺            \\mbfitsansrho                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL RHO
+U+1D7BB           𝞻            \\mbfitsansvarsigma                            MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL FINAL SIGMA
+U+1D7BC           𝞼            \\mbfitsanssigma                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL SIGMA
+U+1D7BD           𝞽            \\mbfitsanstau                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL TAU
+U+1D7BE           𝞾            \\mbfitsansupsilon                             MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL UPSILON
+U+1D7BF           𝞿            \\mbfitsansphi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PHI
+U+1D7C0           𝟀            \\mbfitsanschi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL CHI
+U+1D7C1           𝟁            \\mbfitsanspsi                                 MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL PSI
+U+1D7C2           𝟂            \\mbfitsansomega                               MATHEMATICAL SANS-SERIF BOLD ITALIC SMALL OMEGA
+U+1D7C3           𝟃            \\mbfitsanspartial                             MATHEMATICAL SANS-SERIF BOLD ITALIC PARTIAL DIFFERENTIAL
+U+1D7C4           𝟄            \\mbfitsansvarepsilon                          MATHEMATICAL SANS-SERIF BOLD ITALIC EPSILON SYMBOL
+U+1D7C5           𝟅            \\mbfitsansvartheta                            MATHEMATICAL SANS-SERIF BOLD ITALIC THETA SYMBOL
+U+1D7C6           𝟆            \\mbfitsansvarkappa                            MATHEMATICAL SANS-SERIF BOLD ITALIC KAPPA SYMBOL
+U+1D7C7           𝟇            \\mbfitsansvarphi                              MATHEMATICAL SANS-SERIF BOLD ITALIC PHI SYMBOL
+U+1D7C8           𝟈            \\mbfitsansvarrho                              MATHEMATICAL SANS-SERIF BOLD ITALIC RHO SYMBOL
+U+1D7C9           𝟉            \\mbfitsansvarpi                               MATHEMATICAL SANS-SERIF BOLD ITALIC PI SYMBOL
 U+1D7CA           𝟊            \\mbfDigamma                                   MATHEMATICAL BOLD CAPITAL DIGAMMA
 U+1D7CB           𝟋            \\mbfdigamma                                   MATHEMATICAL BOLD SMALL DIGAMMA
 U+1D7CE           𝟎            \\mbfzero                                      MATHEMATICAL BOLD DIGIT ZERO
@@ -2514,726 +2514,726 @@ U+1D7F2           𝟲            \\mbfsanssix                                  
 U+1D7F3           𝟳            \\mbfsansseven                                 MATHEMATICAL SANS-SERIF BOLD DIGIT SEVEN
 U+1D7F4           𝟴            \\mbfsanseight                                 MATHEMATICAL SANS-SERIF BOLD DIGIT EIGHT
 U+1D7F5           𝟵            \\mbfsansnine                                  MATHEMATICAL SANS-SERIF BOLD DIGIT NINE
-U+1D7F6           𝟶           \\mttzero                                      MATHEMATICAL MONOSPACE DIGIT ZERO
-U+1D7F7           𝟷           \\mttone                                       MATHEMATICAL MONOSPACE DIGIT ONE
-U+1D7F8           𝟸           \\mtttwo                                       MATHEMATICAL MONOSPACE DIGIT TWO
-U+1D7F9           𝟹           \\mttthree                                     MATHEMATICAL MONOSPACE DIGIT THREE
-U+1D7FA           𝟺           \\mttfour                                      MATHEMATICAL MONOSPACE DIGIT FOUR
-U+1D7FB           𝟻           \\mttfive                                      MATHEMATICAL MONOSPACE DIGIT FIVE
-U+1D7FC           𝟼           \\mttsix                                       MATHEMATICAL MONOSPACE DIGIT SIX
-U+1D7FD           𝟽           \\mttseven                                     MATHEMATICAL MONOSPACE DIGIT SEVEN
-U+1D7FE           𝟾           \\mtteight                                     MATHEMATICAL MONOSPACE DIGIT EIGHT
-U+1D7FF           𝟿           \\mttnine                                      MATHEMATICAL MONOSPACE DIGIT NINE
-U+1F004           🀄           \\:mahjong:                                    MAHJONG TILE RED DRAGON
-U+1F0CF           🃏           \\:black_joker:                                PLAYING CARD BLACK JOKER
-U+1F170           🅰           \\:a:                                          NEGATIVE SQUARED LATIN CAPITAL LETTER A
-U+1F171           🅱           \\:b:                                          NEGATIVE SQUARED LATIN CAPITAL LETTER B
-U+1F17E           🅾           \\:o2:                                         NEGATIVE SQUARED LATIN CAPITAL LETTER O
-U+1F17F           🅿           \\:parking:                                    NEGATIVE SQUARED LATIN CAPITAL LETTER P
-U+1F18E           🆎           \\:ab:                                         NEGATIVE SQUARED AB
-U+1F191           🆑           \\:cl:                                         SQUARED CL
-U+1F192           🆒           \\:cool:                                       SQUARED COOL
-U+1F193           🆓           \\:free:                                       SQUARED FREE
-U+1F194           🆔           \\:id:                                         SQUARED ID
-U+1F195           🆕           \\:new:                                        SQUARED NEW
-U+1F196           🆖           \\:ng:                                         SQUARED NG
-U+1F197           🆗           \\:ok:                                         SQUARED OK
-U+1F198           🆘           \\:sos:                                        SQUARED SOS
-U+1F199           🆙           \\:up:                                         SQUARED UP WITH EXCLAMATION MARK
-U+1F19A           🆚           \\:vs:                                         SQUARED VS
-U+1F201           🈁           \\:koko:                                       SQUARED KATAKANA KOKO
-U+1F202           🈂           \\:sa:                                         SQUARED KATAKANA SA
-U+1F21A           🈚           \\:u7121:                                      SQUARED CJK UNIFIED IDEOGRAPH-7121
-U+1F22F           🈯           \\:u6307:                                      SQUARED CJK UNIFIED IDEOGRAPH-6307
-U+1F232           🈲           \\:u7981:                                      SQUARED CJK UNIFIED IDEOGRAPH-7981
-U+1F233           🈳           \\:u7a7a:                                      SQUARED CJK UNIFIED IDEOGRAPH-7A7A
-U+1F234           🈴           \\:u5408:                                      SQUARED CJK UNIFIED IDEOGRAPH-5408
-U+1F235           🈵           \\:u6e80:                                      SQUARED CJK UNIFIED IDEOGRAPH-6E80
-U+1F236           🈶           \\:u6709:                                      SQUARED CJK UNIFIED IDEOGRAPH-6709
-U+1F237           🈷           \\:u6708:                                      SQUARED CJK UNIFIED IDEOGRAPH-6708
-U+1F238           🈸           \\:u7533:                                      SQUARED CJK UNIFIED IDEOGRAPH-7533
-U+1F239           🈹           \\:u5272:                                      SQUARED CJK UNIFIED IDEOGRAPH-5272
-U+1F23A           🈺           \\:u55b6:                                      SQUARED CJK UNIFIED IDEOGRAPH-55B6
-U+1F250           🉐           \\:ideograph_advantage:                        CIRCLED IDEOGRAPH ADVANTAGE
-U+1F251           🉑           \\:accept:                                     CIRCLED IDEOGRAPH ACCEPT
-U+1F300           🌀           \\:cyclone:                                    CYCLONE
-U+1F301           🌁           \\:foggy:                                      FOGGY
-U+1F302           🌂           \\:closed_umbrella:                            CLOSED UMBRELLA
-U+1F303           🌃           \\:night_with_stars:                           NIGHT WITH STARS
-U+1F304           🌄           \\:sunrise_over_mountains:                     SUNRISE OVER MOUNTAINS
-U+1F305           🌅           \\:sunrise:                                    SUNRISE
-U+1F306           🌆           \\:city_sunset:                                CITYSCAPE AT DUSK
-U+1F307           🌇           \\:city_sunrise:                               SUNSET OVER BUILDINGS
-U+1F308           🌈           \\:rainbow:                                    RAINBOW
-U+1F309           🌉           \\:bridge_at_night:                            BRIDGE AT NIGHT
-U+1F30A           🌊           \\:ocean:                                      WATER WAVE
-U+1F30B           🌋           \\:volcano:                                    VOLCANO
-U+1F30C           🌌           \\:milky_way:                                  MILKY WAY
-U+1F30D           🌍           \\:earth_africa:                               EARTH GLOBE EUROPE-AFRICA
-U+1F30E           🌎           \\:earth_americas:                             EARTH GLOBE AMERICAS
-U+1F30F           🌏           \\:earth_asia:                                 EARTH GLOBE ASIA-AUSTRALIA
-U+1F310           🌐           \\:globe_with_meridians:                       GLOBE WITH MERIDIANS
-U+1F311           🌑           \\:new_moon:                                   NEW MOON SYMBOL
-U+1F312           🌒           \\:waxing_crescent_moon:                       WAXING CRESCENT MOON SYMBOL
-U+1F313           🌓           \\:first_quarter_moon:                         FIRST QUARTER MOON SYMBOL
-U+1F314           🌔           \\:moon:                                       WAXING GIBBOUS MOON SYMBOL
-U+1F315           🌕           \\:full_moon:                                  FULL MOON SYMBOL
-U+1F316           🌖           \\:waning_gibbous_moon:                        WANING GIBBOUS MOON SYMBOL
-U+1F317           🌗           \\:last_quarter_moon:                          LAST QUARTER MOON SYMBOL
-U+1F318           🌘           \\:waning_crescent_moon:                       WANING CRESCENT MOON SYMBOL
-U+1F319           🌙           \\:crescent_moon:                              CRESCENT MOON
-U+1F31A           🌚           \\:new_moon_with_face:                         NEW MOON WITH FACE
-U+1F31B           🌛           \\:first_quarter_moon_with_face:               FIRST QUARTER MOON WITH FACE
-U+1F31C           🌜           \\:last_quarter_moon_with_face:                LAST QUARTER MOON WITH FACE
-U+1F31D           🌝           \\:full_moon_with_face:                        FULL MOON WITH FACE
-U+1F31E           🌞           \\:sun_with_face:                              SUN WITH FACE
-U+1F31F           🌟           \\:star2:                                      GLOWING STAR
-U+1F320           🌠           \\:stars:                                      SHOOTING STAR
-U+1F330           🌰           \\:chestnut:                                   CHESTNUT
-U+1F331           🌱           \\:seedling:                                   SEEDLING
-U+1F332           🌲           \\:evergreen_tree:                             EVERGREEN TREE
-U+1F333           🌳           \\:deciduous_tree:                             DECIDUOUS TREE
-U+1F334           🌴           \\:palm_tree:                                  PALM TREE
-U+1F335           🌵           \\:cactus:                                     CACTUS
-U+1F337           🌷           \\:tulip:                                      TULIP
-U+1F338           🌸           \\:cherry_blossom:                             CHERRY BLOSSOM
-U+1F339           🌹           \\:rose:                                       ROSE
-U+1F33A           🌺           \\:hibiscus:                                   HIBISCUS
-U+1F33B           🌻           \\:sunflower:                                  SUNFLOWER
-U+1F33C           🌼           \\:blossom:                                    BLOSSOM
-U+1F33D           🌽           \\:corn:                                       EAR OF MAIZE
-U+1F33E           🌾           \\:ear_of_rice:                                EAR OF RICE
-U+1F33F           🌿           \\:herb:                                       HERB
-U+1F340           🍀           \\:four_leaf_clover:                           FOUR LEAF CLOVER
-U+1F341           🍁           \\:maple_leaf:                                 MAPLE LEAF
-U+1F342           🍂           \\:fallen_leaf:                                FALLEN LEAF
-U+1F343           🍃           \\:leaves:                                     LEAF FLUTTERING IN WIND
-U+1F344           🍄           \\:mushroom:                                   MUSHROOM
-U+1F345           🍅           \\:tomato:                                     TOMATO
-U+1F346           🍆           \\:eggplant:                                   AUBERGINE
-U+1F347           🍇           \\:grapes:                                     GRAPES
-U+1F348           🍈           \\:melon:                                      MELON
-U+1F349           🍉           \\:watermelon:                                 WATERMELON
-U+1F34A           🍊           \\:tangerine:                                  TANGERINE
-U+1F34B           🍋           \\:lemon:                                      LEMON
-U+1F34C           🍌           \\:banana:                                     BANANA
-U+1F34D           🍍           \\:pineapple:                                  PINEAPPLE
-U+1F34E           🍎           \\:apple:                                      RED APPLE
-U+1F34F           🍏           \\:green_apple:                                GREEN APPLE
-U+1F350           🍐           \\:pear:                                       PEAR
-U+1F351           🍑           \\:peach:                                      PEACH
-U+1F352           🍒           \\:cherries:                                   CHERRIES
-U+1F353           🍓           \\:strawberry:                                 STRAWBERRY
-U+1F354           🍔           \\:hamburger:                                  HAMBURGER
-U+1F355           🍕           \\:pizza:                                      SLICE OF PIZZA
-U+1F356           🍖           \\:meat_on_bone:                               MEAT ON BONE
-U+1F357           🍗           \\:poultry_leg:                                POULTRY LEG
-U+1F358           🍘           \\:rice_cracker:                               RICE CRACKER
-U+1F359           🍙           \\:rice_ball:                                  RICE BALL
-U+1F35A           🍚           \\:rice:                                       COOKED RICE
-U+1F35B           🍛           \\:curry:                                      CURRY AND RICE
-U+1F35C           🍜           \\:ramen:                                      STEAMING BOWL
-U+1F35D           🍝           \\:spaghetti:                                  SPAGHETTI
-U+1F35E           🍞           \\:bread:                                      BREAD
-U+1F35F           🍟           \\:fries:                                      FRENCH FRIES
-U+1F360           🍠           \\:sweet_potato:                               ROASTED SWEET POTATO
-U+1F361           🍡           \\:dango:                                      DANGO
-U+1F362           🍢           \\:oden:                                       ODEN
-U+1F363           🍣           \\:sushi:                                      SUSHI
-U+1F364           🍤           \\:fried_shrimp:                               FRIED SHRIMP
-U+1F365           🍥           \\:fish_cake:                                  FISH CAKE WITH SWIRL DESIGN
-U+1F366           🍦           \\:icecream:                                   SOFT ICE CREAM
-U+1F367           🍧           \\:shaved_ice:                                 SHAVED ICE
-U+1F368           🍨           \\:ice_cream:                                  ICE CREAM
-U+1F369           🍩           \\:doughnut:                                   DOUGHNUT
-U+1F36A           🍪           \\:cookie:                                     COOKIE
-U+1F36B           🍫           \\:chocolate_bar:                              CHOCOLATE BAR
-U+1F36C           🍬           \\:candy:                                      CANDY
-U+1F36D           🍭           \\:lollipop:                                   LOLLIPOP
-U+1F36E           🍮           \\:custard:                                    CUSTARD
-U+1F36F           🍯           \\:honey_pot:                                  HONEY POT
-U+1F370           🍰           \\:cake:                                       SHORTCAKE
-U+1F371           🍱           \\:bento:                                      BENTO BOX
-U+1F372           🍲           \\:stew:                                       POT OF FOOD
-U+1F373           🍳           \\:egg:                                        COOKING
-U+1F374           🍴           \\:fork_and_knife:                             FORK AND KNIFE
-U+1F375           🍵           \\:tea:                                        TEACUP WITHOUT HANDLE
-U+1F376           🍶           \\:sake:                                       SAKE BOTTLE AND CUP
-U+1F377           🍷           \\:wine_glass:                                 WINE GLASS
-U+1F378           🍸           \\:cocktail:                                   COCKTAIL GLASS
-U+1F379           🍹           \\:tropical_drink:                             TROPICAL DRINK
-U+1F37A           🍺           \\:beer:                                       BEER MUG
-U+1F37B           🍻           \\:beers:                                      CLINKING BEER MUGS
-U+1F37C           🍼           \\:baby_bottle:                                BABY BOTTLE
-U+1F380           🎀           \\:ribbon:                                     RIBBON
-U+1F381           🎁           \\:gift:                                       WRAPPED PRESENT
-U+1F382           🎂           \\:birthday:                                   BIRTHDAY CAKE
-U+1F383           🎃           \\:jack_o_lantern:                             JACK-O-LANTERN
-U+1F384           🎄           \\:christmas_tree:                             CHRISTMAS TREE
-U+1F385           🎅           \\:santa:                                      FATHER CHRISTMAS
-U+1F386           🎆           \\:fireworks:                                  FIREWORKS
-U+1F387           🎇           \\:sparkler:                                   FIREWORK SPARKLER
-U+1F388           🎈           \\:balloon:                                    BALLOON
-U+1F389           🎉           \\:tada:                                       PARTY POPPER
-U+1F38A           🎊           \\:confetti_ball:                              CONFETTI BALL
-U+1F38B           🎋           \\:tanabata_tree:                              TANABATA TREE
-U+1F38C           🎌           \\:crossed_flags:                              CROSSED FLAGS
-U+1F38D           🎍           \\:bamboo:                                     PINE DECORATION
-U+1F38E           🎎           \\:dolls:                                      JAPANESE DOLLS
-U+1F38F           🎏           \\:flags:                                      CARP STREAMER
-U+1F390           🎐           \\:wind_chime:                                 WIND CHIME
-U+1F391           🎑           \\:rice_scene:                                 MOON VIEWING CEREMONY
-U+1F392           🎒           \\:school_satchel:                             SCHOOL SATCHEL
-U+1F393           🎓           \\:mortar_board:                               GRADUATION CAP
-U+1F3A0           🎠           \\:carousel_horse:                             CAROUSEL HORSE
-U+1F3A1           🎡           \\:ferris_wheel:                               FERRIS WHEEL
-U+1F3A2           🎢           \\:roller_coaster:                             ROLLER COASTER
-U+1F3A3           🎣           \\:fishing_pole_and_fish:                      FISHING POLE AND FISH
-U+1F3A4           🎤           \\:microphone:                                 MICROPHONE
-U+1F3A5           🎥           \\:movie_camera:                               MOVIE CAMERA
-U+1F3A6           🎦           \\:cinema:                                     CINEMA
-U+1F3A7           🎧           \\:headphones:                                 HEADPHONE
-U+1F3A8           🎨           \\:art:                                        ARTIST PALETTE
-U+1F3A9           🎩           \\:tophat:                                     TOP HAT
-U+1F3AA           🎪           \\:circus_tent:                                CIRCUS TENT
-U+1F3AB           🎫           \\:ticket:                                     TICKET
-U+1F3AC           🎬           \\:clapper:                                    CLAPPER BOARD
-U+1F3AD           🎭           \\:performing_arts:                            PERFORMING ARTS
-U+1F3AE           🎮           \\:video_game:                                 VIDEO GAME
-U+1F3AF           🎯           \\:dart:                                       DIRECT HIT
-U+1F3B0           🎰           \\:slot_machine:                               SLOT MACHINE
-U+1F3B1           🎱           \\:8ball:                                      BILLIARDS
-U+1F3B2           🎲           \\:game_die:                                   GAME DIE
-U+1F3B3           🎳           \\:bowling:                                    BOWLING
-U+1F3B4           🎴           \\:flower_playing_cards:                       FLOWER PLAYING CARDS
-U+1F3B5           🎵           \\:musical_note:                               MUSICAL NOTE
-U+1F3B6           🎶           \\:notes:                                      MULTIPLE MUSICAL NOTES
-U+1F3B7           🎷           \\:saxophone:                                  SAXOPHONE
-U+1F3B8           🎸           \\:guitar:                                     GUITAR
-U+1F3B9           🎹           \\:musical_keyboard:                           MUSICAL KEYBOARD
-U+1F3BA           🎺           \\:trumpet:                                    TRUMPET
-U+1F3BB           🎻           \\:violin:                                     VIOLIN
-U+1F3BC           🎼           \\:musical_score:                              MUSICAL SCORE
-U+1F3BD           🎽           \\:running_shirt_with_sash:                    RUNNING SHIRT WITH SASH
-U+1F3BE           🎾           \\:tennis:                                     TENNIS RACQUET AND BALL
-U+1F3BF           🎿           \\:ski:                                        SKI AND SKI BOOT
-U+1F3C0           🏀           \\:basketball:                                 BASKETBALL AND HOOP
-U+1F3C1           🏁           \\:checkered_flag:                             CHEQUERED FLAG
-U+1F3C2           🏂           \\:snowboarder:                                SNOWBOARDER
-U+1F3C3           🏃           \\:runner:                                     RUNNER
-U+1F3C4           🏄           \\:surfer:                                     SURFER
-U+1F3C6           🏆           \\:trophy:                                     TROPHY
-U+1F3C7           🏇           \\:horse_racing:                               HORSE RACING
-U+1F3C8           🏈           \\:football:                                   AMERICAN FOOTBALL
-U+1F3C9           🏉           \\:rugby_football:                             RUGBY FOOTBALL
-U+1F3CA           🏊           \\:swimmer:                                    SWIMMER
-U+1F3E0           🏠           \\:house:                                      HOUSE BUILDING
-U+1F3E1           🏡           \\:house_with_garden:                          HOUSE WITH GARDEN
-U+1F3E2           🏢           \\:office:                                     OFFICE BUILDING
-U+1F3E3           🏣           \\:post_office:                                JAPANESE POST OFFICE
-U+1F3E4           🏤           \\:european_post_office:                       EUROPEAN POST OFFICE
-U+1F3E5           🏥           \\:hospital:                                   HOSPITAL
-U+1F3E6           🏦           \\:bank:                                       BANK
-U+1F3E7           🏧           \\:atm:                                        AUTOMATED TELLER MACHINE
-U+1F3E8           🏨           \\:hotel:                                      HOTEL
-U+1F3E9           🏩           \\:love_hotel:                                 LOVE HOTEL
-U+1F3EA           🏪           \\:convenience_store:                          CONVENIENCE STORE
-U+1F3EB           🏫           \\:school:                                     SCHOOL
-U+1F3EC           🏬           \\:department_store:                           DEPARTMENT STORE
-U+1F3ED           🏭           \\:factory:                                    FACTORY
-U+1F3EE           🏮           \\:izakaya_lantern:                            IZAKAYA LANTERN
-U+1F3EF           🏯           \\:japanese_castle:                            JAPANESE CASTLE
-U+1F3F0           🏰           \\:european_castle:                            EUROPEAN CASTLE
+U+1D7F6           𝟶            \\mttzero                                      MATHEMATICAL MONOSPACE DIGIT ZERO
+U+1D7F7           𝟷            \\mttone                                       MATHEMATICAL MONOSPACE DIGIT ONE
+U+1D7F8           𝟸            \\mtttwo                                       MATHEMATICAL MONOSPACE DIGIT TWO
+U+1D7F9           𝟹            \\mttthree                                     MATHEMATICAL MONOSPACE DIGIT THREE
+U+1D7FA           𝟺            \\mttfour                                      MATHEMATICAL MONOSPACE DIGIT FOUR
+U+1D7FB           𝟻            \\mttfive                                      MATHEMATICAL MONOSPACE DIGIT FIVE
+U+1D7FC           𝟼            \\mttsix                                       MATHEMATICAL MONOSPACE DIGIT SIX
+U+1D7FD           𝟽            \\mttseven                                     MATHEMATICAL MONOSPACE DIGIT SEVEN
+U+1D7FE           𝟾            \\mtteight                                     MATHEMATICAL MONOSPACE DIGIT EIGHT
+U+1D7FF           𝟿            \\mttnine                                      MATHEMATICAL MONOSPACE DIGIT NINE
+U+1F004           🀄            \\:mahjong:                                    MAHJONG TILE RED DRAGON
+U+1F0CF           🃏            \\:black_joker:                                PLAYING CARD BLACK JOKER
+U+1F170           🅰            \\:a:                                          NEGATIVE SQUARED LATIN CAPITAL LETTER A
+U+1F171           🅱            \\:b:                                          NEGATIVE SQUARED LATIN CAPITAL LETTER B
+U+1F17E           🅾            \\:o2:                                         NEGATIVE SQUARED LATIN CAPITAL LETTER O
+U+1F17F           🅿            \\:parking:                                    NEGATIVE SQUARED LATIN CAPITAL LETTER P
+U+1F18E           🆎            \\:ab:                                         NEGATIVE SQUARED AB
+U+1F191           🆑            \\:cl:                                         SQUARED CL
+U+1F192           🆒            \\:cool:                                       SQUARED COOL
+U+1F193           🆓            \\:free:                                       SQUARED FREE
+U+1F194           🆔            \\:id:                                         SQUARED ID
+U+1F195           🆕            \\:new:                                        SQUARED NEW
+U+1F196           🆖            \\:ng:                                         SQUARED NG
+U+1F197           🆗            \\:ok:                                         SQUARED OK
+U+1F198           🆘            \\:sos:                                        SQUARED SOS
+U+1F199           🆙            \\:up:                                         SQUARED UP WITH EXCLAMATION MARK
+U+1F19A           🆚            \\:vs:                                         SQUARED VS
+U+1F201           🈁            \\:koko:                                       SQUARED KATAKANA KOKO
+U+1F202           🈂            \\:sa:                                         SQUARED KATAKANA SA
+U+1F21A           🈚            \\:u7121:                                      SQUARED CJK UNIFIED IDEOGRAPH-7121
+U+1F22F           🈯            \\:u6307:                                      SQUARED CJK UNIFIED IDEOGRAPH-6307
+U+1F232           🈲            \\:u7981:                                      SQUARED CJK UNIFIED IDEOGRAPH-7981
+U+1F233           🈳            \\:u7a7a:                                      SQUARED CJK UNIFIED IDEOGRAPH-7A7A
+U+1F234           🈴            \\:u5408:                                      SQUARED CJK UNIFIED IDEOGRAPH-5408
+U+1F235           🈵            \\:u6e80:                                      SQUARED CJK UNIFIED IDEOGRAPH-6E80
+U+1F236           🈶            \\:u6709:                                      SQUARED CJK UNIFIED IDEOGRAPH-6709
+U+1F237           🈷            \\:u6708:                                      SQUARED CJK UNIFIED IDEOGRAPH-6708
+U+1F238           🈸            \\:u7533:                                      SQUARED CJK UNIFIED IDEOGRAPH-7533
+U+1F239           🈹            \\:u5272:                                      SQUARED CJK UNIFIED IDEOGRAPH-5272
+U+1F23A           🈺            \\:u55b6:                                      SQUARED CJK UNIFIED IDEOGRAPH-55B6
+U+1F250           🉐            \\:ideograph_advantage:                        CIRCLED IDEOGRAPH ADVANTAGE
+U+1F251           🉑            \\:accept:                                     CIRCLED IDEOGRAPH ACCEPT
+U+1F300           🌀            \\:cyclone:                                    CYCLONE
+U+1F301           🌁            \\:foggy:                                      FOGGY
+U+1F302           🌂            \\:closed_umbrella:                            CLOSED UMBRELLA
+U+1F303           🌃            \\:night_with_stars:                           NIGHT WITH STARS
+U+1F304           🌄            \\:sunrise_over_mountains:                     SUNRISE OVER MOUNTAINS
+U+1F305           🌅            \\:sunrise:                                    SUNRISE
+U+1F306           🌆            \\:city_sunset:                                CITYSCAPE AT DUSK
+U+1F307           🌇            \\:city_sunrise:                               SUNSET OVER BUILDINGS
+U+1F308           🌈            \\:rainbow:                                    RAINBOW
+U+1F309           🌉            \\:bridge_at_night:                            BRIDGE AT NIGHT
+U+1F30A           🌊            \\:ocean:                                      WATER WAVE
+U+1F30B           🌋            \\:volcano:                                    VOLCANO
+U+1F30C           🌌            \\:milky_way:                                  MILKY WAY
+U+1F30D           🌍            \\:earth_africa:                               EARTH GLOBE EUROPE-AFRICA
+U+1F30E           🌎            \\:earth_americas:                             EARTH GLOBE AMERICAS
+U+1F30F           🌏            \\:earth_asia:                                 EARTH GLOBE ASIA-AUSTRALIA
+U+1F310           🌐            \\:globe_with_meridians:                       GLOBE WITH MERIDIANS
+U+1F311           🌑            \\:new_moon:                                   NEW MOON SYMBOL
+U+1F312           🌒            \\:waxing_crescent_moon:                       WAXING CRESCENT MOON SYMBOL
+U+1F313           🌓            \\:first_quarter_moon:                         FIRST QUARTER MOON SYMBOL
+U+1F314           🌔            \\:moon:                                       WAXING GIBBOUS MOON SYMBOL
+U+1F315           🌕            \\:full_moon:                                  FULL MOON SYMBOL
+U+1F316           🌖            \\:waning_gibbous_moon:                        WANING GIBBOUS MOON SYMBOL
+U+1F317           🌗            \\:last_quarter_moon:                          LAST QUARTER MOON SYMBOL
+U+1F318           🌘            \\:waning_crescent_moon:                       WANING CRESCENT MOON SYMBOL
+U+1F319           🌙            \\:crescent_moon:                              CRESCENT MOON
+U+1F31A           🌚            \\:new_moon_with_face:                         NEW MOON WITH FACE
+U+1F31B           🌛            \\:first_quarter_moon_with_face:               FIRST QUARTER MOON WITH FACE
+U+1F31C           🌜            \\:last_quarter_moon_with_face:                LAST QUARTER MOON WITH FACE
+U+1F31D           🌝            \\:full_moon_with_face:                        FULL MOON WITH FACE
+U+1F31E           🌞            \\:sun_with_face:                              SUN WITH FACE
+U+1F31F           🌟            \\:star2:                                      GLOWING STAR
+U+1F320           🌠            \\:stars:                                      SHOOTING STAR
+U+1F330           🌰            \\:chestnut:                                   CHESTNUT
+U+1F331           🌱            \\:seedling:                                   SEEDLING
+U+1F332           🌲            \\:evergreen_tree:                             EVERGREEN TREE
+U+1F333           🌳            \\:deciduous_tree:                             DECIDUOUS TREE
+U+1F334           🌴            \\:palm_tree:                                  PALM TREE
+U+1F335           🌵            \\:cactus:                                     CACTUS
+U+1F337           🌷            \\:tulip:                                      TULIP
+U+1F338           🌸            \\:cherry_blossom:                             CHERRY BLOSSOM
+U+1F339           🌹            \\:rose:                                       ROSE
+U+1F33A           🌺            \\:hibiscus:                                   HIBISCUS
+U+1F33B           🌻            \\:sunflower:                                  SUNFLOWER
+U+1F33C           🌼            \\:blossom:                                    BLOSSOM
+U+1F33D           🌽            \\:corn:                                       EAR OF MAIZE
+U+1F33E           🌾            \\:ear_of_rice:                                EAR OF RICE
+U+1F33F           🌿            \\:herb:                                       HERB
+U+1F340           🍀            \\:four_leaf_clover:                           FOUR LEAF CLOVER
+U+1F341           🍁            \\:maple_leaf:                                 MAPLE LEAF
+U+1F342           🍂            \\:fallen_leaf:                                FALLEN LEAF
+U+1F343           🍃            \\:leaves:                                     LEAF FLUTTERING IN WIND
+U+1F344           🍄            \\:mushroom:                                   MUSHROOM
+U+1F345           🍅            \\:tomato:                                     TOMATO
+U+1F346           🍆            \\:eggplant:                                   AUBERGINE
+U+1F347           🍇            \\:grapes:                                     GRAPES
+U+1F348           🍈            \\:melon:                                      MELON
+U+1F349           🍉            \\:watermelon:                                 WATERMELON
+U+1F34A           🍊            \\:tangerine:                                  TANGERINE
+U+1F34B           🍋            \\:lemon:                                      LEMON
+U+1F34C           🍌            \\:banana:                                     BANANA
+U+1F34D           🍍            \\:pineapple:                                  PINEAPPLE
+U+1F34E           🍎            \\:apple:                                      RED APPLE
+U+1F34F           🍏            \\:green_apple:                                GREEN APPLE
+U+1F350           🍐            \\:pear:                                       PEAR
+U+1F351           🍑            \\:peach:                                      PEACH
+U+1F352           🍒            \\:cherries:                                   CHERRIES
+U+1F353           🍓            \\:strawberry:                                 STRAWBERRY
+U+1F354           🍔            \\:hamburger:                                  HAMBURGER
+U+1F355           🍕            \\:pizza:                                      SLICE OF PIZZA
+U+1F356           🍖            \\:meat_on_bone:                               MEAT ON BONE
+U+1F357           🍗            \\:poultry_leg:                                POULTRY LEG
+U+1F358           🍘            \\:rice_cracker:                               RICE CRACKER
+U+1F359           🍙            \\:rice_ball:                                  RICE BALL
+U+1F35A           🍚            \\:rice:                                       COOKED RICE
+U+1F35B           🍛            \\:curry:                                      CURRY AND RICE
+U+1F35C           🍜            \\:ramen:                                      STEAMING BOWL
+U+1F35D           🍝            \\:spaghetti:                                  SPAGHETTI
+U+1F35E           🍞            \\:bread:                                      BREAD
+U+1F35F           🍟            \\:fries:                                      FRENCH FRIES
+U+1F360           🍠            \\:sweet_potato:                               ROASTED SWEET POTATO
+U+1F361           🍡            \\:dango:                                      DANGO
+U+1F362           🍢            \\:oden:                                       ODEN
+U+1F363           🍣            \\:sushi:                                      SUSHI
+U+1F364           🍤            \\:fried_shrimp:                               FRIED SHRIMP
+U+1F365           🍥            \\:fish_cake:                                  FISH CAKE WITH SWIRL DESIGN
+U+1F366           🍦            \\:icecream:                                   SOFT ICE CREAM
+U+1F367           🍧            \\:shaved_ice:                                 SHAVED ICE
+U+1F368           🍨            \\:ice_cream:                                  ICE CREAM
+U+1F369           🍩            \\:doughnut:                                   DOUGHNUT
+U+1F36A           🍪            \\:cookie:                                     COOKIE
+U+1F36B           🍫            \\:chocolate_bar:                              CHOCOLATE BAR
+U+1F36C           🍬            \\:candy:                                      CANDY
+U+1F36D           🍭            \\:lollipop:                                   LOLLIPOP
+U+1F36E           🍮            \\:custard:                                    CUSTARD
+U+1F36F           🍯            \\:honey_pot:                                  HONEY POT
+U+1F370           🍰            \\:cake:                                       SHORTCAKE
+U+1F371           🍱            \\:bento:                                      BENTO BOX
+U+1F372           🍲            \\:stew:                                       POT OF FOOD
+U+1F373           🍳            \\:egg:                                        COOKING
+U+1F374           🍴            \\:fork_and_knife:                             FORK AND KNIFE
+U+1F375           🍵            \\:tea:                                        TEACUP WITHOUT HANDLE
+U+1F376           🍶            \\:sake:                                       SAKE BOTTLE AND CUP
+U+1F377           🍷            \\:wine_glass:                                 WINE GLASS
+U+1F378           🍸            \\:cocktail:                                   COCKTAIL GLASS
+U+1F379           🍹            \\:tropical_drink:                             TROPICAL DRINK
+U+1F37A           🍺            \\:beer:                                       BEER MUG
+U+1F37B           🍻            \\:beers:                                      CLINKING BEER MUGS
+U+1F37C           🍼            \\:baby_bottle:                                BABY BOTTLE
+U+1F380           🎀            \\:ribbon:                                     RIBBON
+U+1F381           🎁            \\:gift:                                       WRAPPED PRESENT
+U+1F382           🎂            \\:birthday:                                   BIRTHDAY CAKE
+U+1F383           🎃            \\:jack_o_lantern:                             JACK-O-LANTERN
+U+1F384           🎄            \\:christmas_tree:                             CHRISTMAS TREE
+U+1F385           🎅            \\:santa:                                      FATHER CHRISTMAS
+U+1F386           🎆            \\:fireworks:                                  FIREWORKS
+U+1F387           🎇            \\:sparkler:                                   FIREWORK SPARKLER
+U+1F388           🎈            \\:balloon:                                    BALLOON
+U+1F389           🎉            \\:tada:                                       PARTY POPPER
+U+1F38A           🎊            \\:confetti_ball:                              CONFETTI BALL
+U+1F38B           🎋            \\:tanabata_tree:                              TANABATA TREE
+U+1F38C           🎌            \\:crossed_flags:                              CROSSED FLAGS
+U+1F38D           🎍            \\:bamboo:                                     PINE DECORATION
+U+1F38E           🎎            \\:dolls:                                      JAPANESE DOLLS
+U+1F38F           🎏            \\:flags:                                      CARP STREAMER
+U+1F390           🎐            \\:wind_chime:                                 WIND CHIME
+U+1F391           🎑            \\:rice_scene:                                 MOON VIEWING CEREMONY
+U+1F392           🎒            \\:school_satchel:                             SCHOOL SATCHEL
+U+1F393           🎓            \\:mortar_board:                               GRADUATION CAP
+U+1F3A0           🎠            \\:carousel_horse:                             CAROUSEL HORSE
+U+1F3A1           🎡            \\:ferris_wheel:                               FERRIS WHEEL
+U+1F3A2           🎢            \\:roller_coaster:                             ROLLER COASTER
+U+1F3A3           🎣            \\:fishing_pole_and_fish:                      FISHING POLE AND FISH
+U+1F3A4           🎤            \\:microphone:                                 MICROPHONE
+U+1F3A5           🎥            \\:movie_camera:                               MOVIE CAMERA
+U+1F3A6           🎦            \\:cinema:                                     CINEMA
+U+1F3A7           🎧            \\:headphones:                                 HEADPHONE
+U+1F3A8           🎨            \\:art:                                        ARTIST PALETTE
+U+1F3A9           🎩            \\:tophat:                                     TOP HAT
+U+1F3AA           🎪            \\:circus_tent:                                CIRCUS TENT
+U+1F3AB           🎫            \\:ticket:                                     TICKET
+U+1F3AC           🎬            \\:clapper:                                    CLAPPER BOARD
+U+1F3AD           🎭            \\:performing_arts:                            PERFORMING ARTS
+U+1F3AE           🎮            \\:video_game:                                 VIDEO GAME
+U+1F3AF           🎯            \\:dart:                                       DIRECT HIT
+U+1F3B0           🎰            \\:slot_machine:                               SLOT MACHINE
+U+1F3B1           🎱            \\:8ball:                                      BILLIARDS
+U+1F3B2           🎲            \\:game_die:                                   GAME DIE
+U+1F3B3           🎳            \\:bowling:                                    BOWLING
+U+1F3B4           🎴            \\:flower_playing_cards:                       FLOWER PLAYING CARDS
+U+1F3B5           🎵            \\:musical_note:                               MUSICAL NOTE
+U+1F3B6           🎶            \\:notes:                                      MULTIPLE MUSICAL NOTES
+U+1F3B7           🎷            \\:saxophone:                                  SAXOPHONE
+U+1F3B8           🎸            \\:guitar:                                     GUITAR
+U+1F3B9           🎹            \\:musical_keyboard:                           MUSICAL KEYBOARD
+U+1F3BA           🎺            \\:trumpet:                                    TRUMPET
+U+1F3BB           🎻            \\:violin:                                     VIOLIN
+U+1F3BC           🎼            \\:musical_score:                              MUSICAL SCORE
+U+1F3BD           🎽            \\:running_shirt_with_sash:                    RUNNING SHIRT WITH SASH
+U+1F3BE           🎾            \\:tennis:                                     TENNIS RACQUET AND BALL
+U+1F3BF           🎿            \\:ski:                                        SKI AND SKI BOOT
+U+1F3C0           🏀            \\:basketball:                                 BASKETBALL AND HOOP
+U+1F3C1           🏁            \\:checkered_flag:                             CHEQUERED FLAG
+U+1F3C2           🏂            \\:snowboarder:                                SNOWBOARDER
+U+1F3C3           🏃            \\:runner:                                     RUNNER
+U+1F3C4           🏄            \\:surfer:                                     SURFER
+U+1F3C6           🏆            \\:trophy:                                     TROPHY
+U+1F3C7           🏇            \\:horse_racing:                               HORSE RACING
+U+1F3C8           🏈            \\:football:                                   AMERICAN FOOTBALL
+U+1F3C9           🏉            \\:rugby_football:                             RUGBY FOOTBALL
+U+1F3CA           🏊            \\:swimmer:                                    SWIMMER
+U+1F3E0           🏠            \\:house:                                      HOUSE BUILDING
+U+1F3E1           🏡            \\:house_with_garden:                          HOUSE WITH GARDEN
+U+1F3E2           🏢            \\:office:                                     OFFICE BUILDING
+U+1F3E3           🏣            \\:post_office:                                JAPANESE POST OFFICE
+U+1F3E4           🏤            \\:european_post_office:                       EUROPEAN POST OFFICE
+U+1F3E5           🏥            \\:hospital:                                   HOSPITAL
+U+1F3E6           🏦            \\:bank:                                       BANK
+U+1F3E7           🏧            \\:atm:                                        AUTOMATED TELLER MACHINE
+U+1F3E8           🏨            \\:hotel:                                      HOTEL
+U+1F3E9           🏩            \\:love_hotel:                                 LOVE HOTEL
+U+1F3EA           🏪            \\:convenience_store:                          CONVENIENCE STORE
+U+1F3EB           🏫            \\:school:                                     SCHOOL
+U+1F3EC           🏬            \\:department_store:                           DEPARTMENT STORE
+U+1F3ED           🏭            \\:factory:                                    FACTORY
+U+1F3EE           🏮            \\:izakaya_lantern:                            IZAKAYA LANTERN
+U+1F3EF           🏯            \\:japanese_castle:                            JAPANESE CASTLE
+U+1F3F0           🏰            \\:european_castle:                            EUROPEAN CASTLE
 U+1F3FB           🏻             \\:skin-tone-2:                                (No Unicode name)
 U+1F3FC           🏼             \\:skin-tone-3:                                (No Unicode name)
 U+1F3FD           🏽             \\:skin-tone-4:                                (No Unicode name)
 U+1F3FE           🏾             \\:skin-tone-5:                                (No Unicode name)
 U+1F3FF           🏿             \\:skin-tone-6:                                (No Unicode name)
-U+1F400           🐀           \\:rat:                                        RAT
-U+1F401           🐁           \\:mouse2:                                     MOUSE
-U+1F402           🐂           \\:ox:                                         OX
-U+1F403           🐃           \\:water_buffalo:                              WATER BUFFALO
-U+1F404           🐄           \\:cow2:                                       COW
-U+1F405           🐅           \\:tiger2:                                     TIGER
-U+1F406           🐆           \\:leopard:                                    LEOPARD
-U+1F407           🐇           \\:rabbit2:                                    RABBIT
-U+1F408           🐈           \\:cat2:                                       CAT
-U+1F409           🐉           \\:dragon:                                     DRAGON
-U+1F40A           🐊           \\:crocodile:                                  CROCODILE
-U+1F40B           🐋           \\:whale2:                                     WHALE
-U+1F40C           🐌           \\:snail:                                      SNAIL
-U+1F40D           🐍           \\:snake:                                      SNAKE
-U+1F40E           🐎           \\:racehorse:                                  HORSE
-U+1F40F           🐏           \\:ram:                                        RAM
-U+1F410           🐐           \\:goat:                                       GOAT
-U+1F411           🐑           \\:sheep:                                      SHEEP
-U+1F412           🐒           \\:monkey:                                     MONKEY
-U+1F413           🐓           \\:rooster:                                    ROOSTER
-U+1F414           🐔           \\:chicken:                                    CHICKEN
-U+1F415           🐕           \\:dog2:                                       DOG
-U+1F416           🐖           \\:pig2:                                       PIG
-U+1F417           🐗           \\:boar:                                       BOAR
-U+1F418           🐘           \\:elephant:                                   ELEPHANT
-U+1F419           🐙           \\:octopus:                                    OCTOPUS
-U+1F41A           🐚           \\:shell:                                      SPIRAL SHELL
-U+1F41B           🐛           \\:bug:                                        BUG
-U+1F41C           🐜           \\:ant:                                        ANT
-U+1F41D           🐝           \\:bee:                                        HONEYBEE
-U+1F41E           🐞           \\:beetle:                                     LADY BEETLE
-U+1F41F           🐟           \\:fish:                                       FISH
-U+1F420           🐠           \\:tropical_fish:                              TROPICAL FISH
-U+1F421           🐡           \\:blowfish:                                   BLOWFISH
-U+1F422           🐢           \\:turtle:                                     TURTLE
-U+1F423           🐣           \\:hatching_chick:                             HATCHING CHICK
-U+1F424           🐤           \\:baby_chick:                                 BABY CHICK
-U+1F425           🐥           \\:hatched_chick:                              FRONT-FACING BABY CHICK
-U+1F426           🐦           \\:bird:                                       BIRD
-U+1F427           🐧           \\:penguin:                                    PENGUIN
-U+1F428           🐨           \\:koala:                                      KOALA
-U+1F429           🐩           \\:poodle:                                     POODLE
-U+1F42A           🐪           \\:dromedary_camel:                            DROMEDARY CAMEL
-U+1F42B           🐫           \\:camel:                                      BACTRIAN CAMEL
-U+1F42C           🐬           \\:dolphin:                                    DOLPHIN
-U+1F42D           🐭           \\:mouse:                                      MOUSE FACE
-U+1F42E           🐮           \\:cow:                                        COW FACE
-U+1F42F           🐯           \\:tiger:                                      TIGER FACE
-U+1F430           🐰           \\:rabbit:                                     RABBIT FACE
-U+1F431           🐱           \\:cat:                                        CAT FACE
-U+1F432           🐲           \\:dragon_face:                                DRAGON FACE
-U+1F433           🐳           \\:whale:                                      SPOUTING WHALE
-U+1F434           🐴           \\:horse:                                      HORSE FACE
-U+1F435           🐵           \\:monkey_face:                                MONKEY FACE
-U+1F436           🐶           \\:dog:                                        DOG FACE
-U+1F437           🐷           \\:pig:                                        PIG FACE
-U+1F438           🐸           \\:frog:                                       FROG FACE
-U+1F439           🐹           \\:hamster:                                    HAMSTER FACE
-U+1F43A           🐺           \\:wolf:                                       WOLF FACE
-U+1F43B           🐻           \\:bear:                                       BEAR FACE
-U+1F43C           🐼           \\:panda_face:                                 PANDA FACE
-U+1F43D           🐽           \\:pig_nose:                                   PIG NOSE
-U+1F43E           🐾           \\:feet:                                       PAW PRINTS
-U+1F440           👀           \\:eyes:                                       EYES
-U+1F442           👂           \\:ear:                                        EAR
-U+1F443           👃           \\:nose:                                       NOSE
-U+1F444           👄           \\:lips:                                       MOUTH
-U+1F445           👅           \\:tongue:                                     TONGUE
-U+1F446           👆           \\:point_up_2:                                 WHITE UP POINTING BACKHAND INDEX
-U+1F447           👇           \\:point_down:                                 WHITE DOWN POINTING BACKHAND INDEX
-U+1F448           👈           \\:point_left:                                 WHITE LEFT POINTING BACKHAND INDEX
-U+1F449           👉           \\:point_right:                                WHITE RIGHT POINTING BACKHAND INDEX
-U+1F44A           👊           \\:facepunch:                                  FISTED HAND SIGN
-U+1F44B           👋           \\:wave:                                       WAVING HAND SIGN
-U+1F44C           👌           \\:ok_hand:                                    OK HAND SIGN
-U+1F44D           👍           \\:+1:                                         THUMBS UP SIGN
-U+1F44E           👎           \\:-1:                                         THUMBS DOWN SIGN
-U+1F44F           👏           \\:clap:                                       CLAPPING HANDS SIGN
-U+1F450           👐           \\:open_hands:                                 OPEN HANDS SIGN
-U+1F451           👑           \\:crown:                                      CROWN
-U+1F452           👒           \\:womans_hat:                                 WOMANS HAT
-U+1F453           👓           \\:eyeglasses:                                 EYEGLASSES
-U+1F454           👔           \\:necktie:                                    NECKTIE
-U+1F455           👕           \\:shirt:                                      T-SHIRT
-U+1F456           👖           \\:jeans:                                      JEANS
-U+1F457           👗           \\:dress:                                      DRESS
-U+1F458           👘           \\:kimono:                                     KIMONO
-U+1F459           👙           \\:bikini:                                     BIKINI
-U+1F45A           👚           \\:womans_clothes:                             WOMANS CLOTHES
-U+1F45B           👛           \\:purse:                                      PURSE
-U+1F45C           👜           \\:handbag:                                    HANDBAG
-U+1F45D           👝           \\:pouch:                                      POUCH
-U+1F45E           👞           \\:mans_shoe:                                  MANS SHOE
-U+1F45F           👟           \\:athletic_shoe:                              ATHLETIC SHOE
-U+1F460           👠           \\:high_heel:                                  HIGH-HEELED SHOE
-U+1F461           👡           \\:sandal:                                     WOMANS SANDAL
-U+1F462           👢           \\:boot:                                       WOMANS BOOTS
-U+1F463           👣           \\:footprints:                                 FOOTPRINTS
-U+1F464           👤           \\:bust_in_silhouette:                         BUST IN SILHOUETTE
-U+1F465           👥           \\:busts_in_silhouette:                        BUSTS IN SILHOUETTE
-U+1F466           👦           \\:boy:                                        BOY
-U+1F467           👧           \\:girl:                                       GIRL
-U+1F468           👨           \\:man:                                        MAN
-U+1F469           👩           \\:woman:                                      WOMAN
-U+1F46A           👪           \\:family:                                     FAMILY
-U+1F46B           👫           \\:couple:                                     MAN AND WOMAN HOLDING HANDS
-U+1F46C           👬           \\:two_men_holding_hands:                      TWO MEN HOLDING HANDS
-U+1F46D           👭           \\:two_women_holding_hands:                    TWO WOMEN HOLDING HANDS
-U+1F46E           👮           \\:cop:                                        POLICE OFFICER
-U+1F46F           👯           \\:dancers:                                    WOMAN WITH BUNNY EARS
-U+1F470           👰           \\:bride_with_veil:                            BRIDE WITH VEIL
-U+1F471           👱           \\:person_with_blond_hair:                     PERSON WITH BLOND HAIR
-U+1F472           👲           \\:man_with_gua_pi_mao:                        MAN WITH GUA PI MAO
-U+1F473           👳           \\:man_with_turban:                            MAN WITH TURBAN
-U+1F474           👴           \\:older_man:                                  OLDER MAN
-U+1F475           👵           \\:older_woman:                                OLDER WOMAN
-U+1F476           👶           \\:baby:                                       BABY
-U+1F477           👷           \\:construction_worker:                        CONSTRUCTION WORKER
-U+1F478           👸           \\:princess:                                   PRINCESS
-U+1F479           👹           \\:japanese_ogre:                              JAPANESE OGRE
-U+1F47A           👺           \\:japanese_goblin:                            JAPANESE GOBLIN
-U+1F47B           👻           \\:ghost:                                      GHOST
-U+1F47C           👼           \\:angel:                                      BABY ANGEL
-U+1F47D           👽           \\:alien:                                      EXTRATERRESTRIAL ALIEN
-U+1F47E           👾           \\:space_invader:                              ALIEN MONSTER
-U+1F47F           👿           \\:imp:                                        IMP
-U+1F480           💀           \\:skull:                                      SKULL
-U+1F481           💁           \\:information_desk_person:                    INFORMATION DESK PERSON
-U+1F482           💂           \\:guardsman:                                  GUARDSMAN
-U+1F483           💃           \\:dancer:                                     DANCER
-U+1F484           💄           \\:lipstick:                                   LIPSTICK
-U+1F485           💅           \\:nail_care:                                  NAIL POLISH
-U+1F486           💆           \\:massage:                                    FACE MASSAGE
-U+1F487           💇           \\:haircut:                                    HAIRCUT
-U+1F488           💈           \\:barber:                                     BARBER POLE
-U+1F489           💉           \\:syringe:                                    SYRINGE
-U+1F48A           💊           \\:pill:                                       PILL
-U+1F48B           💋           \\:kiss:                                       KISS MARK
-U+1F48C           💌           \\:love_letter:                                LOVE LETTER
-U+1F48D           💍           \\:ring:                                       RING
-U+1F48E           💎           \\:gem:                                        GEM STONE
-U+1F48F           💏           \\:couplekiss:                                 KISS
-U+1F490           💐           \\:bouquet:                                    BOUQUET
-U+1F491           💑           \\:couple_with_heart:                          COUPLE WITH HEART
-U+1F492           💒           \\:wedding:                                    WEDDING
-U+1F493           💓           \\:heartbeat:                                  BEATING HEART
-U+1F494           💔           \\:broken_heart:                               BROKEN HEART
-U+1F495           💕           \\:two_hearts:                                 TWO HEARTS
-U+1F496           💖           \\:sparkling_heart:                            SPARKLING HEART
-U+1F497           💗           \\:heartpulse:                                 GROWING HEART
-U+1F498           💘           \\:cupid:                                      HEART WITH ARROW
-U+1F499           💙           \\:blue_heart:                                 BLUE HEART
-U+1F49A           💚           \\:green_heart:                                GREEN HEART
-U+1F49B           💛           \\:yellow_heart:                               YELLOW HEART
-U+1F49C           💜           \\:purple_heart:                               PURPLE HEART
-U+1F49D           💝           \\:gift_heart:                                 HEART WITH RIBBON
-U+1F49E           💞           \\:revolving_hearts:                           REVOLVING HEARTS
-U+1F49F           💟           \\:heart_decoration:                           HEART DECORATION
-U+1F4A0           💠           \\:diamond_shape_with_a_dot_inside:            DIAMOND SHAPE WITH A DOT INSIDE
-U+1F4A1           💡           \\:bulb:                                       ELECTRIC LIGHT BULB
-U+1F4A2           💢           \\:anger:                                      ANGER SYMBOL
-U+1F4A3           💣           \\:bomb:                                       BOMB
-U+1F4A4           💤           \\:zzz:                                        SLEEPING SYMBOL
-U+1F4A5           💥           \\:boom:                                       COLLISION SYMBOL
-U+1F4A6           💦           \\:sweat_drops:                                SPLASHING SWEAT SYMBOL
-U+1F4A7           💧           \\:droplet:                                    DROPLET
-U+1F4A8           💨           \\:dash:                                       DASH SYMBOL
-U+1F4A9           💩           \\:hankey:                                     PILE OF POO
-U+1F4AA           💪           \\:muscle:                                     FLEXED BICEPS
-U+1F4AB           💫           \\:dizzy:                                      DIZZY SYMBOL
-U+1F4AC           💬           \\:speech_balloon:                             SPEECH BALLOON
-U+1F4AD           💭           \\:thought_balloon:                            THOUGHT BALLOON
-U+1F4AE           💮           \\:white_flower:                               WHITE FLOWER
-U+1F4AF           💯           \\:100:                                        HUNDRED POINTS SYMBOL
-U+1F4B0           💰           \\:moneybag:                                   MONEY BAG
-U+1F4B1           💱           \\:currency_exchange:                          CURRENCY EXCHANGE
-U+1F4B2           💲           \\:heavy_dollar_sign:                          HEAVY DOLLAR SIGN
-U+1F4B3           💳           \\:credit_card:                                CREDIT CARD
-U+1F4B4           💴           \\:yen:                                        BANKNOTE WITH YEN SIGN
-U+1F4B5           💵           \\:dollar:                                     BANKNOTE WITH DOLLAR SIGN
-U+1F4B6           💶           \\:euro:                                       BANKNOTE WITH EURO SIGN
-U+1F4B7           💷           \\:pound:                                      BANKNOTE WITH POUND SIGN
-U+1F4B8           💸           \\:money_with_wings:                           MONEY WITH WINGS
-U+1F4B9           💹           \\:chart:                                      CHART WITH UPWARDS TREND AND YEN SIGN
-U+1F4BA           💺           \\:seat:                                       SEAT
-U+1F4BB           💻           \\:computer:                                   PERSONAL COMPUTER
-U+1F4BC           💼           \\:briefcase:                                  BRIEFCASE
-U+1F4BD           💽           \\:minidisc:                                   MINIDISC
-U+1F4BE           💾           \\:floppy_disk:                                FLOPPY DISK
-U+1F4BF           💿           \\:cd:                                         OPTICAL DISC
-U+1F4C0           📀           \\:dvd:                                        DVD
-U+1F4C1           📁           \\:file_folder:                                FILE FOLDER
-U+1F4C2           📂           \\:open_file_folder:                           OPEN FILE FOLDER
-U+1F4C3           📃           \\:page_with_curl:                             PAGE WITH CURL
-U+1F4C4           📄           \\:page_facing_up:                             PAGE FACING UP
-U+1F4C5           📅           \\:date:                                       CALENDAR
-U+1F4C6           📆           \\:calendar:                                   TEAR-OFF CALENDAR
-U+1F4C7           📇           \\:card_index:                                 CARD INDEX
-U+1F4C8           📈           \\:chart_with_upwards_trend:                   CHART WITH UPWARDS TREND
-U+1F4C9           📉           \\:chart_with_downwards_trend:                 CHART WITH DOWNWARDS TREND
-U+1F4CA           📊           \\:bar_chart:                                  BAR CHART
-U+1F4CB           📋           \\:clipboard:                                  CLIPBOARD
-U+1F4CC           📌           \\:pushpin:                                    PUSHPIN
-U+1F4CD           📍           \\:round_pushpin:                              ROUND PUSHPIN
-U+1F4CE           📎           \\:paperclip:                                  PAPERCLIP
-U+1F4CF           📏           \\:straight_ruler:                             STRAIGHT RULER
-U+1F4D0           📐           \\:triangular_ruler:                           TRIANGULAR RULER
-U+1F4D1           📑           \\:bookmark_tabs:                              BOOKMARK TABS
-U+1F4D2           📒           \\:ledger:                                     LEDGER
-U+1F4D3           📓           \\:notebook:                                   NOTEBOOK
-U+1F4D4           📔           \\:notebook_with_decorative_cover:             NOTEBOOK WITH DECORATIVE COVER
-U+1F4D5           📕           \\:closed_book:                                CLOSED BOOK
-U+1F4D6           📖           \\:book:                                       OPEN BOOK
-U+1F4D7           📗           \\:green_book:                                 GREEN BOOK
-U+1F4D8           📘           \\:blue_book:                                  BLUE BOOK
-U+1F4D9           📙           \\:orange_book:                                ORANGE BOOK
-U+1F4DA           📚           \\:books:                                      BOOKS
-U+1F4DB           📛           \\:name_badge:                                 NAME BADGE
-U+1F4DC           📜           \\:scroll:                                     SCROLL
-U+1F4DD           📝           \\:memo:                                       MEMO
-U+1F4DE           📞           \\:telephone_receiver:                         TELEPHONE RECEIVER
-U+1F4DF           📟           \\:pager:                                      PAGER
-U+1F4E0           📠           \\:fax:                                        FAX MACHINE
-U+1F4E1           📡           \\:satellite:                                  SATELLITE ANTENNA
-U+1F4E2           📢           \\:loudspeaker:                                PUBLIC ADDRESS LOUDSPEAKER
-U+1F4E3           📣           \\:mega:                                       CHEERING MEGAPHONE
-U+1F4E4           📤           \\:outbox_tray:                                OUTBOX TRAY
-U+1F4E5           📥           \\:inbox_tray:                                 INBOX TRAY
-U+1F4E6           📦           \\:package:                                    PACKAGE
-U+1F4E7           📧           \\:e-mail:                                     E-MAIL SYMBOL
-U+1F4E8           📨           \\:incoming_envelope:                          INCOMING ENVELOPE
-U+1F4E9           📩           \\:envelope_with_arrow:                        ENVELOPE WITH DOWNWARDS ARROW ABOVE
-U+1F4EA           📪           \\:mailbox_closed:                             CLOSED MAILBOX WITH LOWERED FLAG
-U+1F4EB           📫           \\:mailbox:                                    CLOSED MAILBOX WITH RAISED FLAG
-U+1F4EC           📬           \\:mailbox_with_mail:                          OPEN MAILBOX WITH RAISED FLAG
-U+1F4ED           📭           \\:mailbox_with_no_mail:                       OPEN MAILBOX WITH LOWERED FLAG
-U+1F4EE           📮           \\:postbox:                                    POSTBOX
-U+1F4EF           📯           \\:postal_horn:                                POSTAL HORN
-U+1F4F0           📰           \\:newspaper:                                  NEWSPAPER
-U+1F4F1           📱           \\:iphone:                                     MOBILE PHONE
-U+1F4F2           📲           \\:calling:                                    MOBILE PHONE WITH RIGHTWARDS ARROW AT LEFT
-U+1F4F3           📳           \\:vibration_mode:                             VIBRATION MODE
-U+1F4F4           📴           \\:mobile_phone_off:                           MOBILE PHONE OFF
-U+1F4F5           📵           \\:no_mobile_phones:                           NO MOBILE PHONES
-U+1F4F6           📶           \\:signal_strength:                            ANTENNA WITH BARS
-U+1F4F7           📷           \\:camera:                                     CAMERA
-U+1F4F9           📹           \\:video_camera:                               VIDEO CAMERA
-U+1F4FA           📺           \\:tv:                                         TELEVISION
-U+1F4FB           📻           \\:radio:                                      RADIO
-U+1F4FC           📼           \\:vhs:                                        VIDEOCASSETTE
-U+1F500           🔀           \\:twisted_rightwards_arrows:                  TWISTED RIGHTWARDS ARROWS
-U+1F501           🔁           \\:repeat:                                     CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS
-U+1F502           🔂           \\:repeat_one:                                 CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS WITH CIRCLED ONE OVERLAY
-U+1F503           🔃           \\:arrows_clockwise:                           CLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS
-U+1F504           🔄           \\:arrows_counterclockwise:                    ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS
-U+1F505           🔅           \\:low_brightness:                             LOW BRIGHTNESS SYMBOL
-U+1F506           🔆           \\:high_brightness:                            HIGH BRIGHTNESS SYMBOL
-U+1F507           🔇           \\:mute:                                       SPEAKER WITH CANCELLATION STROKE
-U+1F508           🔈           \\:speaker:                                    SPEAKER
-U+1F509           🔉           \\:sound:                                      SPEAKER WITH ONE SOUND WAVE
-U+1F50A           🔊           \\:loud_sound:                                 SPEAKER WITH THREE SOUND WAVES
-U+1F50B           🔋           \\:battery:                                    BATTERY
-U+1F50C           🔌           \\:electric_plug:                              ELECTRIC PLUG
-U+1F50D           🔍           \\:mag:                                        LEFT-POINTING MAGNIFYING GLASS
-U+1F50E           🔎           \\:mag_right:                                  RIGHT-POINTING MAGNIFYING GLASS
-U+1F50F           🔏           \\:lock_with_ink_pen:                          LOCK WITH INK PEN
-U+1F510           🔐           \\:closed_lock_with_key:                       CLOSED LOCK WITH KEY
-U+1F511           🔑           \\:key:                                        KEY
-U+1F512           🔒           \\:lock:                                       LOCK
-U+1F513           🔓           \\:unlock:                                     OPEN LOCK
-U+1F514           🔔           \\:bell:                                       BELL
-U+1F515           🔕           \\:no_bell:                                    BELL WITH CANCELLATION STROKE
-U+1F516           🔖           \\:bookmark:                                   BOOKMARK
-U+1F517           🔗           \\:link:                                       LINK SYMBOL
-U+1F518           🔘           \\:radio_button:                               RADIO BUTTON
-U+1F519           🔙           \\:back:                                       BACK WITH LEFTWARDS ARROW ABOVE
-U+1F51A           🔚           \\:end:                                        END WITH LEFTWARDS ARROW ABOVE
-U+1F51B           🔛           \\:on:                                         ON WITH EXCLAMATION MARK WITH LEFT RIGHT ARROW ABOVE
-U+1F51C           🔜           \\:soon:                                       SOON WITH RIGHTWARDS ARROW ABOVE
-U+1F51D           🔝           \\:top:                                        TOP WITH UPWARDS ARROW ABOVE
-U+1F51E           🔞           \\:underage:                                   NO ONE UNDER EIGHTEEN SYMBOL
-U+1F51F           🔟           \\:keycap_ten:                                 KEYCAP TEN
-U+1F520           🔠           \\:capital_abcd:                               INPUT SYMBOL FOR LATIN CAPITAL LETTERS
-U+1F521           🔡           \\:abcd:                                       INPUT SYMBOL FOR LATIN SMALL LETTERS
-U+1F522           🔢           \\:1234:                                       INPUT SYMBOL FOR NUMBERS
-U+1F523           🔣           \\:symbols:                                    INPUT SYMBOL FOR SYMBOLS
-U+1F524           🔤           \\:abc:                                        INPUT SYMBOL FOR LATIN LETTERS
-U+1F525           🔥           \\:fire:                                       FIRE
-U+1F526           🔦           \\:flashlight:                                 ELECTRIC TORCH
-U+1F527           🔧           \\:wrench:                                     WRENCH
-U+1F528           🔨           \\:hammer:                                     HAMMER
-U+1F529           🔩           \\:nut_and_bolt:                               NUT AND BOLT
-U+1F52A           🔪           \\:hocho:                                      HOCHO
-U+1F52B           🔫           \\:gun:                                        PISTOL
-U+1F52C           🔬           \\:microscope:                                 MICROSCOPE
-U+1F52D           🔭           \\:telescope:                                  TELESCOPE
-U+1F52E           🔮           \\:crystal_ball:                               CRYSTAL BALL
-U+1F52F           🔯           \\:six_pointed_star:                           SIX POINTED STAR WITH MIDDLE DOT
-U+1F530           🔰           \\:beginner:                                   JAPANESE SYMBOL FOR BEGINNER
-U+1F531           🔱           \\:trident:                                    TRIDENT EMBLEM
-U+1F532           🔲           \\:black_square_button:                        BLACK SQUARE BUTTON
-U+1F533           🔳           \\:white_square_button:                        WHITE SQUARE BUTTON
-U+1F534           🔴           \\:red_circle:                                 LARGE RED CIRCLE
-U+1F535           🔵           \\:large_blue_circle:                          LARGE BLUE CIRCLE
-U+1F536           🔶           \\:large_orange_diamond:                       LARGE ORANGE DIAMOND
-U+1F537           🔷           \\:large_blue_diamond:                         LARGE BLUE DIAMOND
-U+1F538           🔸           \\:small_orange_diamond:                       SMALL ORANGE DIAMOND
-U+1F539           🔹           \\:small_blue_diamond:                         SMALL BLUE DIAMOND
-U+1F53A           🔺           \\:small_red_triangle:                         UP-POINTING RED TRIANGLE
-U+1F53B           🔻           \\:small_red_triangle_down:                    DOWN-POINTING RED TRIANGLE
-U+1F53C           🔼           \\:arrow_up_small:                             UP-POINTING SMALL RED TRIANGLE
-U+1F53D           🔽           \\:arrow_down_small:                           DOWN-POINTING SMALL RED TRIANGLE
-U+1F550           🕐           \\:clock1:                                     CLOCK FACE ONE OCLOCK
-U+1F551           🕑           \\:clock2:                                     CLOCK FACE TWO OCLOCK
-U+1F552           🕒           \\:clock3:                                     CLOCK FACE THREE OCLOCK
-U+1F553           🕓           \\:clock4:                                     CLOCK FACE FOUR OCLOCK
-U+1F554           🕔           \\:clock5:                                     CLOCK FACE FIVE OCLOCK
-U+1F555           🕕           \\:clock6:                                     CLOCK FACE SIX OCLOCK
-U+1F556           🕖           \\:clock7:                                     CLOCK FACE SEVEN OCLOCK
-U+1F557           🕗           \\:clock8:                                     CLOCK FACE EIGHT OCLOCK
-U+1F558           🕘           \\:clock9:                                     CLOCK FACE NINE OCLOCK
-U+1F559           🕙           \\:clock10:                                    CLOCK FACE TEN OCLOCK
-U+1F55A           🕚           \\:clock11:                                    CLOCK FACE ELEVEN OCLOCK
-U+1F55B           🕛           \\:clock12:                                    CLOCK FACE TWELVE OCLOCK
-U+1F55C           🕜           \\:clock130:                                   CLOCK FACE ONE-THIRTY
-U+1F55D           🕝           \\:clock230:                                   CLOCK FACE TWO-THIRTY
-U+1F55E           🕞           \\:clock330:                                   CLOCK FACE THREE-THIRTY
-U+1F55F           🕟           \\:clock430:                                   CLOCK FACE FOUR-THIRTY
-U+1F560           🕠           \\:clock530:                                   CLOCK FACE FIVE-THIRTY
-U+1F561           🕡           \\:clock630:                                   CLOCK FACE SIX-THIRTY
-U+1F562           🕢           \\:clock730:                                   CLOCK FACE SEVEN-THIRTY
-U+1F563           🕣           \\:clock830:                                   CLOCK FACE EIGHT-THIRTY
-U+1F564           🕤           \\:clock930:                                   CLOCK FACE NINE-THIRTY
-U+1F565           🕥           \\:clock1030:                                  CLOCK FACE TEN-THIRTY
-U+1F566           🕦           \\:clock1130:                                  CLOCK FACE ELEVEN-THIRTY
-U+1F567           🕧           \\:clock1230:                                  CLOCK FACE TWELVE-THIRTY
-U+1F5FB           🗻           \\:mount_fuji:                                 MOUNT FUJI
-U+1F5FC           🗼           \\:tokyo_tower:                                TOKYO TOWER
-U+1F5FD           🗽           \\:statue_of_liberty:                          STATUE OF LIBERTY
-U+1F5FE           🗾           \\:japan:                                      SILHOUETTE OF JAPAN
-U+1F5FF           🗿           \\:moyai:                                      MOYAI
-U+1F600           😀           \\:grinning:                                   GRINNING FACE
-U+1F601           😁           \\:grin:                                       GRINNING FACE WITH SMILING EYES
-U+1F602           😂           \\:joy:                                        FACE WITH TEARS OF JOY
-U+1F603           😃           \\:smiley:                                     SMILING FACE WITH OPEN MOUTH
-U+1F604           😄           \\:smile:                                      SMILING FACE WITH OPEN MOUTH AND SMILING EYES
-U+1F605           😅           \\:sweat_smile:                                SMILING FACE WITH OPEN MOUTH AND COLD SWEAT
-U+1F606           😆           \\:laughing:                                   SMILING FACE WITH OPEN MOUTH AND TIGHTLY-CLOSED EYES
-U+1F607           😇           \\:innocent:                                   SMILING FACE WITH HALO
-U+1F608           😈           \\:smiling_imp:                                SMILING FACE WITH HORNS
-U+1F609           😉           \\:wink:                                       WINKING FACE
-U+1F60A           😊           \\:blush:                                      SMILING FACE WITH SMILING EYES
-U+1F60B           😋           \\:yum:                                        FACE SAVOURING DELICIOUS FOOD
-U+1F60C           😌           \\:relieved:                                   RELIEVED FACE
-U+1F60D           😍           \\:heart_eyes:                                 SMILING FACE WITH HEART-SHAPED EYES
-U+1F60E           😎           \\:sunglasses:                                 SMILING FACE WITH SUNGLASSES
-U+1F60F           😏           \\:smirk:                                      SMIRKING FACE
-U+1F610           😐           \\:neutral_face:                               NEUTRAL FACE
-U+1F611           😑           \\:expressionless:                             EXPRESSIONLESS FACE
-U+1F612           😒           \\:unamused:                                   UNAMUSED FACE
-U+1F613           😓           \\:sweat:                                      FACE WITH COLD SWEAT
-U+1F614           😔           \\:pensive:                                    PENSIVE FACE
-U+1F615           😕           \\:confused:                                   CONFUSED FACE
-U+1F616           😖           \\:confounded:                                 CONFOUNDED FACE
-U+1F617           😗           \\:kissing:                                    KISSING FACE
-U+1F618           😘           \\:kissing_heart:                              FACE THROWING A KISS
-U+1F619           😙           \\:kissing_smiling_eyes:                       KISSING FACE WITH SMILING EYES
-U+1F61A           😚           \\:kissing_closed_eyes:                        KISSING FACE WITH CLOSED EYES
-U+1F61B           😛           \\:stuck_out_tongue:                           FACE WITH STUCK-OUT TONGUE
-U+1F61C           😜           \\:stuck_out_tongue_winking_eye:               FACE WITH STUCK-OUT TONGUE AND WINKING EYE
-U+1F61D           😝           \\:stuck_out_tongue_closed_eyes:               FACE WITH STUCK-OUT TONGUE AND TIGHTLY-CLOSED EYES
-U+1F61E           😞           \\:disappointed:                               DISAPPOINTED FACE
-U+1F61F           😟           \\:worried:                                    WORRIED FACE
-U+1F620           😠           \\:angry:                                      ANGRY FACE
-U+1F621           😡           \\:rage:                                       POUTING FACE
-U+1F622           😢           \\:cry:                                        CRYING FACE
-U+1F623           😣           \\:persevere:                                  PERSEVERING FACE
-U+1F624           😤           \\:triumph:                                    FACE WITH LOOK OF TRIUMPH
-U+1F625           😥           \\:disappointed_relieved:                      DISAPPOINTED BUT RELIEVED FACE
-U+1F626           😦           \\:frowning:                                   FROWNING FACE WITH OPEN MOUTH
-U+1F627           😧           \\:anguished:                                  ANGUISHED FACE
-U+1F628           😨           \\:fearful:                                    FEARFUL FACE
-U+1F629           😩           \\:weary:                                      WEARY FACE
-U+1F62A           😪           \\:sleepy:                                     SLEEPY FACE
-U+1F62B           😫           \\:tired_face:                                 TIRED FACE
-U+1F62C           😬           \\:grimacing:                                  GRIMACING FACE
-U+1F62D           😭           \\:sob:                                        LOUDLY CRYING FACE
-U+1F62E           😮           \\:open_mouth:                                 FACE WITH OPEN MOUTH
-U+1F62F           😯           \\:hushed:                                     HUSHED FACE
-U+1F630           😰           \\:cold_sweat:                                 FACE WITH OPEN MOUTH AND COLD SWEAT
-U+1F631           😱           \\:scream:                                     FACE SCREAMING IN FEAR
-U+1F632           😲           \\:astonished:                                 ASTONISHED FACE
-U+1F633           😳           \\:flushed:                                    FLUSHED FACE
-U+1F634           😴           \\:sleeping:                                   SLEEPING FACE
-U+1F635           😵           \\:dizzy_face:                                 DIZZY FACE
-U+1F636           😶           \\:no_mouth:                                   FACE WITHOUT MOUTH
-U+1F637           😷           \\:mask:                                       FACE WITH MEDICAL MASK
-U+1F638           😸           \\:smile_cat:                                  GRINNING CAT FACE WITH SMILING EYES
-U+1F639           😹           \\:joy_cat:                                    CAT FACE WITH TEARS OF JOY
-U+1F63A           😺           \\:smiley_cat:                                 SMILING CAT FACE WITH OPEN MOUTH
-U+1F63B           😻           \\:heart_eyes_cat:                             SMILING CAT FACE WITH HEART-SHAPED EYES
-U+1F63C           😼           \\:smirk_cat:                                  CAT FACE WITH WRY SMILE
-U+1F63D           😽           \\:kissing_cat:                                KISSING CAT FACE WITH CLOSED EYES
-U+1F63E           😾           \\:pouting_cat:                                POUTING CAT FACE
-U+1F63F           😿           \\:crying_cat_face:                            CRYING CAT FACE
-U+1F640           🙀           \\:scream_cat:                                 WEARY CAT FACE
-U+1F645           🙅           \\:no_good:                                    FACE WITH NO GOOD GESTURE
-U+1F646           🙆           \\:ok_woman:                                   FACE WITH OK GESTURE
-U+1F647           🙇           \\:bow:                                        PERSON BOWING DEEPLY
-U+1F648           🙈           \\:see_no_evil:                                SEE-NO-EVIL MONKEY
-U+1F649           🙉           \\:hear_no_evil:                               HEAR-NO-EVIL MONKEY
-U+1F64A           🙊           \\:speak_no_evil:                              SPEAK-NO-EVIL MONKEY
-U+1F64B           🙋           \\:raising_hand:                               HAPPY PERSON RAISING ONE HAND
-U+1F64C           🙌           \\:raised_hands:                               PERSON RAISING BOTH HANDS IN CELEBRATION
-U+1F64D           🙍           \\:person_frowning:                            PERSON FROWNING
-U+1F64E           🙎           \\:person_with_pouting_face:                   PERSON WITH POUTING FACE
-U+1F64F           🙏           \\:pray:                                       PERSON WITH FOLDED HANDS
-U+1F680           🚀           \\:rocket:                                     ROCKET
-U+1F681           🚁           \\:helicopter:                                 HELICOPTER
-U+1F682           🚂           \\:steam_locomotive:                           STEAM LOCOMOTIVE
-U+1F683           🚃           \\:railway_car:                                RAILWAY CAR
-U+1F684           🚄           \\:bullettrain_side:                           HIGH-SPEED TRAIN
-U+1F685           🚅           \\:bullettrain_front:                          HIGH-SPEED TRAIN WITH BULLET NOSE
-U+1F686           🚆           \\:train2:                                     TRAIN
-U+1F687           🚇           \\:metro:                                      METRO
-U+1F688           🚈           \\:light_rail:                                 LIGHT RAIL
-U+1F689           🚉           \\:station:                                    STATION
-U+1F68A           🚊           \\:tram:                                       TRAM
-U+1F68B           🚋           \\:train:                                      TRAM CAR
-U+1F68C           🚌           \\:bus:                                        BUS
-U+1F68D           🚍           \\:oncoming_bus:                               ONCOMING BUS
-U+1F68E           🚎           \\:trolleybus:                                 TROLLEYBUS
-U+1F68F           🚏           \\:busstop:                                    BUS STOP
-U+1F690           🚐           \\:minibus:                                    MINIBUS
-U+1F691           🚑           \\:ambulance:                                  AMBULANCE
-U+1F692           🚒           \\:fire_engine:                                FIRE ENGINE
-U+1F693           🚓           \\:police_car:                                 POLICE CAR
-U+1F694           🚔           \\:oncoming_police_car:                        ONCOMING POLICE CAR
-U+1F695           🚕           \\:taxi:                                       TAXI
-U+1F696           🚖           \\:oncoming_taxi:                              ONCOMING TAXI
-U+1F697           🚗           \\:car:                                        AUTOMOBILE
-U+1F698           🚘           \\:oncoming_automobile:                        ONCOMING AUTOMOBILE
-U+1F699           🚙           \\:blue_car:                                   RECREATIONAL VEHICLE
-U+1F69A           🚚           \\:truck:                                      DELIVERY TRUCK
-U+1F69B           🚛           \\:articulated_lorry:                          ARTICULATED LORRY
-U+1F69C           🚜           \\:tractor:                                    TRACTOR
-U+1F69D           🚝           \\:monorail:                                   MONORAIL
-U+1F69E           🚞           \\:mountain_railway:                           MOUNTAIN RAILWAY
-U+1F69F           🚟           \\:suspension_railway:                         SUSPENSION RAILWAY
-U+1F6A0           🚠           \\:mountain_cableway:                          MOUNTAIN CABLEWAY
-U+1F6A1           🚡           \\:aerial_tramway:                             AERIAL TRAMWAY
-U+1F6A2           🚢           \\:ship:                                       SHIP
-U+1F6A3           🚣           \\:rowboat:                                    ROWBOAT
-U+1F6A4           🚤           \\:speedboat:                                  SPEEDBOAT
-U+1F6A5           🚥           \\:traffic_light:                              HORIZONTAL TRAFFIC LIGHT
+U+1F400           🐀            \\:rat:                                        RAT
+U+1F401           🐁            \\:mouse2:                                     MOUSE
+U+1F402           🐂            \\:ox:                                         OX
+U+1F403           🐃            \\:water_buffalo:                              WATER BUFFALO
+U+1F404           🐄            \\:cow2:                                       COW
+U+1F405           🐅            \\:tiger2:                                     TIGER
+U+1F406           🐆            \\:leopard:                                    LEOPARD
+U+1F407           🐇            \\:rabbit2:                                    RABBIT
+U+1F408           🐈            \\:cat2:                                       CAT
+U+1F409           🐉            \\:dragon:                                     DRAGON
+U+1F40A           🐊            \\:crocodile:                                  CROCODILE
+U+1F40B           🐋            \\:whale2:                                     WHALE
+U+1F40C           🐌            \\:snail:                                      SNAIL
+U+1F40D           🐍            \\:snake:                                      SNAKE
+U+1F40E           🐎            \\:racehorse:                                  HORSE
+U+1F40F           🐏            \\:ram:                                        RAM
+U+1F410           🐐            \\:goat:                                       GOAT
+U+1F411           🐑            \\:sheep:                                      SHEEP
+U+1F412           🐒            \\:monkey:                                     MONKEY
+U+1F413           🐓            \\:rooster:                                    ROOSTER
+U+1F414           🐔            \\:chicken:                                    CHICKEN
+U+1F415           🐕            \\:dog2:                                       DOG
+U+1F416           🐖            \\:pig2:                                       PIG
+U+1F417           🐗            \\:boar:                                       BOAR
+U+1F418           🐘            \\:elephant:                                   ELEPHANT
+U+1F419           🐙            \\:octopus:                                    OCTOPUS
+U+1F41A           🐚            \\:shell:                                      SPIRAL SHELL
+U+1F41B           🐛            \\:bug:                                        BUG
+U+1F41C           🐜            \\:ant:                                        ANT
+U+1F41D           🐝            \\:bee:                                        HONEYBEE
+U+1F41E           🐞            \\:beetle:                                     LADY BEETLE
+U+1F41F           🐟            \\:fish:                                       FISH
+U+1F420           🐠            \\:tropical_fish:                              TROPICAL FISH
+U+1F421           🐡            \\:blowfish:                                   BLOWFISH
+U+1F422           🐢            \\:turtle:                                     TURTLE
+U+1F423           🐣            \\:hatching_chick:                             HATCHING CHICK
+U+1F424           🐤            \\:baby_chick:                                 BABY CHICK
+U+1F425           🐥            \\:hatched_chick:                              FRONT-FACING BABY CHICK
+U+1F426           🐦            \\:bird:                                       BIRD
+U+1F427           🐧            \\:penguin:                                    PENGUIN
+U+1F428           🐨            \\:koala:                                      KOALA
+U+1F429           🐩            \\:poodle:                                     POODLE
+U+1F42A           🐪            \\:dromedary_camel:                            DROMEDARY CAMEL
+U+1F42B           🐫            \\:camel:                                      BACTRIAN CAMEL
+U+1F42C           🐬            \\:dolphin:                                    DOLPHIN
+U+1F42D           🐭            \\:mouse:                                      MOUSE FACE
+U+1F42E           🐮            \\:cow:                                        COW FACE
+U+1F42F           🐯            \\:tiger:                                      TIGER FACE
+U+1F430           🐰            \\:rabbit:                                     RABBIT FACE
+U+1F431           🐱            \\:cat:                                        CAT FACE
+U+1F432           🐲            \\:dragon_face:                                DRAGON FACE
+U+1F433           🐳            \\:whale:                                      SPOUTING WHALE
+U+1F434           🐴            \\:horse:                                      HORSE FACE
+U+1F435           🐵            \\:monkey_face:                                MONKEY FACE
+U+1F436           🐶            \\:dog:                                        DOG FACE
+U+1F437           🐷            \\:pig:                                        PIG FACE
+U+1F438           🐸            \\:frog:                                       FROG FACE
+U+1F439           🐹            \\:hamster:                                    HAMSTER FACE
+U+1F43A           🐺            \\:wolf:                                       WOLF FACE
+U+1F43B           🐻            \\:bear:                                       BEAR FACE
+U+1F43C           🐼            \\:panda_face:                                 PANDA FACE
+U+1F43D           🐽            \\:pig_nose:                                   PIG NOSE
+U+1F43E           🐾            \\:feet:                                       PAW PRINTS
+U+1F440           👀            \\:eyes:                                       EYES
+U+1F442           👂            \\:ear:                                        EAR
+U+1F443           👃            \\:nose:                                       NOSE
+U+1F444           👄            \\:lips:                                       MOUTH
+U+1F445           👅            \\:tongue:                                     TONGUE
+U+1F446           👆            \\:point_up_2:                                 WHITE UP POINTING BACKHAND INDEX
+U+1F447           👇            \\:point_down:                                 WHITE DOWN POINTING BACKHAND INDEX
+U+1F448           👈            \\:point_left:                                 WHITE LEFT POINTING BACKHAND INDEX
+U+1F449           👉            \\:point_right:                                WHITE RIGHT POINTING BACKHAND INDEX
+U+1F44A           👊            \\:facepunch:                                  FISTED HAND SIGN
+U+1F44B           👋            \\:wave:                                       WAVING HAND SIGN
+U+1F44C           👌            \\:ok_hand:                                    OK HAND SIGN
+U+1F44D           👍            \\:+1:                                         THUMBS UP SIGN
+U+1F44E           👎            \\:-1:                                         THUMBS DOWN SIGN
+U+1F44F           👏            \\:clap:                                       CLAPPING HANDS SIGN
+U+1F450           👐            \\:open_hands:                                 OPEN HANDS SIGN
+U+1F451           👑            \\:crown:                                      CROWN
+U+1F452           👒            \\:womans_hat:                                 WOMANS HAT
+U+1F453           👓            \\:eyeglasses:                                 EYEGLASSES
+U+1F454           👔            \\:necktie:                                    NECKTIE
+U+1F455           👕            \\:shirt:                                      T-SHIRT
+U+1F456           👖            \\:jeans:                                      JEANS
+U+1F457           👗            \\:dress:                                      DRESS
+U+1F458           👘            \\:kimono:                                     KIMONO
+U+1F459           👙            \\:bikini:                                     BIKINI
+U+1F45A           👚            \\:womans_clothes:                             WOMANS CLOTHES
+U+1F45B           👛            \\:purse:                                      PURSE
+U+1F45C           👜            \\:handbag:                                    HANDBAG
+U+1F45D           👝            \\:pouch:                                      POUCH
+U+1F45E           👞            \\:mans_shoe:                                  MANS SHOE
+U+1F45F           👟            \\:athletic_shoe:                              ATHLETIC SHOE
+U+1F460           👠            \\:high_heel:                                  HIGH-HEELED SHOE
+U+1F461           👡            \\:sandal:                                     WOMANS SANDAL
+U+1F462           👢            \\:boot:                                       WOMANS BOOTS
+U+1F463           👣            \\:footprints:                                 FOOTPRINTS
+U+1F464           👤            \\:bust_in_silhouette:                         BUST IN SILHOUETTE
+U+1F465           👥            \\:busts_in_silhouette:                        BUSTS IN SILHOUETTE
+U+1F466           👦            \\:boy:                                        BOY
+U+1F467           👧            \\:girl:                                       GIRL
+U+1F468           👨            \\:man:                                        MAN
+U+1F469           👩            \\:woman:                                      WOMAN
+U+1F46A           👪            \\:family:                                     FAMILY
+U+1F46B           👫            \\:couple:                                     MAN AND WOMAN HOLDING HANDS
+U+1F46C           👬            \\:two_men_holding_hands:                      TWO MEN HOLDING HANDS
+U+1F46D           👭            \\:two_women_holding_hands:                    TWO WOMEN HOLDING HANDS
+U+1F46E           👮            \\:cop:                                        POLICE OFFICER
+U+1F46F           👯            \\:dancers:                                    WOMAN WITH BUNNY EARS
+U+1F470           👰            \\:bride_with_veil:                            BRIDE WITH VEIL
+U+1F471           👱            \\:person_with_blond_hair:                     PERSON WITH BLOND HAIR
+U+1F472           👲            \\:man_with_gua_pi_mao:                        MAN WITH GUA PI MAO
+U+1F473           👳            \\:man_with_turban:                            MAN WITH TURBAN
+U+1F474           👴            \\:older_man:                                  OLDER MAN
+U+1F475           👵            \\:older_woman:                                OLDER WOMAN
+U+1F476           👶            \\:baby:                                       BABY
+U+1F477           👷            \\:construction_worker:                        CONSTRUCTION WORKER
+U+1F478           👸            \\:princess:                                   PRINCESS
+U+1F479           👹            \\:japanese_ogre:                              JAPANESE OGRE
+U+1F47A           👺            \\:japanese_goblin:                            JAPANESE GOBLIN
+U+1F47B           👻            \\:ghost:                                      GHOST
+U+1F47C           👼            \\:angel:                                      BABY ANGEL
+U+1F47D           👽            \\:alien:                                      EXTRATERRESTRIAL ALIEN
+U+1F47E           👾            \\:space_invader:                              ALIEN MONSTER
+U+1F47F           👿            \\:imp:                                        IMP
+U+1F480           💀            \\:skull:                                      SKULL
+U+1F481           💁            \\:information_desk_person:                    INFORMATION DESK PERSON
+U+1F482           💂            \\:guardsman:                                  GUARDSMAN
+U+1F483           💃            \\:dancer:                                     DANCER
+U+1F484           💄            \\:lipstick:                                   LIPSTICK
+U+1F485           💅            \\:nail_care:                                  NAIL POLISH
+U+1F486           💆            \\:massage:                                    FACE MASSAGE
+U+1F487           💇            \\:haircut:                                    HAIRCUT
+U+1F488           💈            \\:barber:                                     BARBER POLE
+U+1F489           💉            \\:syringe:                                    SYRINGE
+U+1F48A           💊            \\:pill:                                       PILL
+U+1F48B           💋            \\:kiss:                                       KISS MARK
+U+1F48C           💌            \\:love_letter:                                LOVE LETTER
+U+1F48D           💍            \\:ring:                                       RING
+U+1F48E           💎            \\:gem:                                        GEM STONE
+U+1F48F           💏            \\:couplekiss:                                 KISS
+U+1F490           💐            \\:bouquet:                                    BOUQUET
+U+1F491           💑            \\:couple_with_heart:                          COUPLE WITH HEART
+U+1F492           💒            \\:wedding:                                    WEDDING
+U+1F493           💓            \\:heartbeat:                                  BEATING HEART
+U+1F494           💔            \\:broken_heart:                               BROKEN HEART
+U+1F495           💕            \\:two_hearts:                                 TWO HEARTS
+U+1F496           💖            \\:sparkling_heart:                            SPARKLING HEART
+U+1F497           💗            \\:heartpulse:                                 GROWING HEART
+U+1F498           💘            \\:cupid:                                      HEART WITH ARROW
+U+1F499           💙            \\:blue_heart:                                 BLUE HEART
+U+1F49A           💚            \\:green_heart:                                GREEN HEART
+U+1F49B           💛            \\:yellow_heart:                               YELLOW HEART
+U+1F49C           💜            \\:purple_heart:                               PURPLE HEART
+U+1F49D           💝            \\:gift_heart:                                 HEART WITH RIBBON
+U+1F49E           💞            \\:revolving_hearts:                           REVOLVING HEARTS
+U+1F49F           💟            \\:heart_decoration:                           HEART DECORATION
+U+1F4A0           💠            \\:diamond_shape_with_a_dot_inside:            DIAMOND SHAPE WITH A DOT INSIDE
+U+1F4A1           💡            \\:bulb:                                       ELECTRIC LIGHT BULB
+U+1F4A2           💢            \\:anger:                                      ANGER SYMBOL
+U+1F4A3           💣            \\:bomb:                                       BOMB
+U+1F4A4           💤            \\:zzz:                                        SLEEPING SYMBOL
+U+1F4A5           💥            \\:boom:                                       COLLISION SYMBOL
+U+1F4A6           💦            \\:sweat_drops:                                SPLASHING SWEAT SYMBOL
+U+1F4A7           💧            \\:droplet:                                    DROPLET
+U+1F4A8           💨            \\:dash:                                       DASH SYMBOL
+U+1F4A9           💩            \\:hankey:                                     PILE OF POO
+U+1F4AA           💪            \\:muscle:                                     FLEXED BICEPS
+U+1F4AB           💫            \\:dizzy:                                      DIZZY SYMBOL
+U+1F4AC           💬            \\:speech_balloon:                             SPEECH BALLOON
+U+1F4AD           💭            \\:thought_balloon:                            THOUGHT BALLOON
+U+1F4AE           💮            \\:white_flower:                               WHITE FLOWER
+U+1F4AF           💯            \\:100:                                        HUNDRED POINTS SYMBOL
+U+1F4B0           💰            \\:moneybag:                                   MONEY BAG
+U+1F4B1           💱            \\:currency_exchange:                          CURRENCY EXCHANGE
+U+1F4B2           💲            \\:heavy_dollar_sign:                          HEAVY DOLLAR SIGN
+U+1F4B3           💳            \\:credit_card:                                CREDIT CARD
+U+1F4B4           💴            \\:yen:                                        BANKNOTE WITH YEN SIGN
+U+1F4B5           💵            \\:dollar:                                     BANKNOTE WITH DOLLAR SIGN
+U+1F4B6           💶            \\:euro:                                       BANKNOTE WITH EURO SIGN
+U+1F4B7           💷            \\:pound:                                      BANKNOTE WITH POUND SIGN
+U+1F4B8           💸            \\:money_with_wings:                           MONEY WITH WINGS
+U+1F4B9           💹            \\:chart:                                      CHART WITH UPWARDS TREND AND YEN SIGN
+U+1F4BA           💺            \\:seat:                                       SEAT
+U+1F4BB           💻            \\:computer:                                   PERSONAL COMPUTER
+U+1F4BC           💼            \\:briefcase:                                  BRIEFCASE
+U+1F4BD           💽            \\:minidisc:                                   MINIDISC
+U+1F4BE           💾            \\:floppy_disk:                                FLOPPY DISK
+U+1F4BF           💿            \\:cd:                                         OPTICAL DISC
+U+1F4C0           📀            \\:dvd:                                        DVD
+U+1F4C1           📁            \\:file_folder:                                FILE FOLDER
+U+1F4C2           📂            \\:open_file_folder:                           OPEN FILE FOLDER
+U+1F4C3           📃            \\:page_with_curl:                             PAGE WITH CURL
+U+1F4C4           📄            \\:page_facing_up:                             PAGE FACING UP
+U+1F4C5           📅            \\:date:                                       CALENDAR
+U+1F4C6           📆            \\:calendar:                                   TEAR-OFF CALENDAR
+U+1F4C7           📇            \\:card_index:                                 CARD INDEX
+U+1F4C8           📈            \\:chart_with_upwards_trend:                   CHART WITH UPWARDS TREND
+U+1F4C9           📉            \\:chart_with_downwards_trend:                 CHART WITH DOWNWARDS TREND
+U+1F4CA           📊            \\:bar_chart:                                  BAR CHART
+U+1F4CB           📋            \\:clipboard:                                  CLIPBOARD
+U+1F4CC           📌            \\:pushpin:                                    PUSHPIN
+U+1F4CD           📍            \\:round_pushpin:                              ROUND PUSHPIN
+U+1F4CE           📎            \\:paperclip:                                  PAPERCLIP
+U+1F4CF           📏            \\:straight_ruler:                             STRAIGHT RULER
+U+1F4D0           📐            \\:triangular_ruler:                           TRIANGULAR RULER
+U+1F4D1           📑            \\:bookmark_tabs:                              BOOKMARK TABS
+U+1F4D2           📒            \\:ledger:                                     LEDGER
+U+1F4D3           📓            \\:notebook:                                   NOTEBOOK
+U+1F4D4           📔            \\:notebook_with_decorative_cover:             NOTEBOOK WITH DECORATIVE COVER
+U+1F4D5           📕            \\:closed_book:                                CLOSED BOOK
+U+1F4D6           📖            \\:book:                                       OPEN BOOK
+U+1F4D7           📗            \\:green_book:                                 GREEN BOOK
+U+1F4D8           📘            \\:blue_book:                                  BLUE BOOK
+U+1F4D9           📙            \\:orange_book:                                ORANGE BOOK
+U+1F4DA           📚            \\:books:                                      BOOKS
+U+1F4DB           📛            \\:name_badge:                                 NAME BADGE
+U+1F4DC           📜            \\:scroll:                                     SCROLL
+U+1F4DD           📝            \\:memo:                                       MEMO
+U+1F4DE           📞            \\:telephone_receiver:                         TELEPHONE RECEIVER
+U+1F4DF           📟            \\:pager:                                      PAGER
+U+1F4E0           📠            \\:fax:                                        FAX MACHINE
+U+1F4E1           📡            \\:satellite:                                  SATELLITE ANTENNA
+U+1F4E2           📢            \\:loudspeaker:                                PUBLIC ADDRESS LOUDSPEAKER
+U+1F4E3           📣            \\:mega:                                       CHEERING MEGAPHONE
+U+1F4E4           📤            \\:outbox_tray:                                OUTBOX TRAY
+U+1F4E5           📥            \\:inbox_tray:                                 INBOX TRAY
+U+1F4E6           📦            \\:package:                                    PACKAGE
+U+1F4E7           📧            \\:e-mail:                                     E-MAIL SYMBOL
+U+1F4E8           📨            \\:incoming_envelope:                          INCOMING ENVELOPE
+U+1F4E9           📩            \\:envelope_with_arrow:                        ENVELOPE WITH DOWNWARDS ARROW ABOVE
+U+1F4EA           📪            \\:mailbox_closed:                             CLOSED MAILBOX WITH LOWERED FLAG
+U+1F4EB           📫            \\:mailbox:                                    CLOSED MAILBOX WITH RAISED FLAG
+U+1F4EC           📬            \\:mailbox_with_mail:                          OPEN MAILBOX WITH RAISED FLAG
+U+1F4ED           📭            \\:mailbox_with_no_mail:                       OPEN MAILBOX WITH LOWERED FLAG
+U+1F4EE           📮            \\:postbox:                                    POSTBOX
+U+1F4EF           📯            \\:postal_horn:                                POSTAL HORN
+U+1F4F0           📰            \\:newspaper:                                  NEWSPAPER
+U+1F4F1           📱            \\:iphone:                                     MOBILE PHONE
+U+1F4F2           📲            \\:calling:                                    MOBILE PHONE WITH RIGHTWARDS ARROW AT LEFT
+U+1F4F3           📳            \\:vibration_mode:                             VIBRATION MODE
+U+1F4F4           📴            \\:mobile_phone_off:                           MOBILE PHONE OFF
+U+1F4F5           📵            \\:no_mobile_phones:                           NO MOBILE PHONES
+U+1F4F6           📶            \\:signal_strength:                            ANTENNA WITH BARS
+U+1F4F7           📷            \\:camera:                                     CAMERA
+U+1F4F9           📹            \\:video_camera:                               VIDEO CAMERA
+U+1F4FA           📺            \\:tv:                                         TELEVISION
+U+1F4FB           📻            \\:radio:                                      RADIO
+U+1F4FC           📼            \\:vhs:                                        VIDEOCASSETTE
+U+1F500           🔀            \\:twisted_rightwards_arrows:                  TWISTED RIGHTWARDS ARROWS
+U+1F501           🔁            \\:repeat:                                     CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS
+U+1F502           🔂            \\:repeat_one:                                 CLOCKWISE RIGHTWARDS AND LEFTWARDS OPEN CIRCLE ARROWS WITH CIRCLED ONE OVERLAY
+U+1F503           🔃            \\:arrows_clockwise:                           CLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS
+U+1F504           🔄            \\:arrows_counterclockwise:                    ANTICLOCKWISE DOWNWARDS AND UPWARDS OPEN CIRCLE ARROWS
+U+1F505           🔅            \\:low_brightness:                             LOW BRIGHTNESS SYMBOL
+U+1F506           🔆            \\:high_brightness:                            HIGH BRIGHTNESS SYMBOL
+U+1F507           🔇            \\:mute:                                       SPEAKER WITH CANCELLATION STROKE
+U+1F508           🔈            \\:speaker:                                    SPEAKER
+U+1F509           🔉            \\:sound:                                      SPEAKER WITH ONE SOUND WAVE
+U+1F50A           🔊            \\:loud_sound:                                 SPEAKER WITH THREE SOUND WAVES
+U+1F50B           🔋            \\:battery:                                    BATTERY
+U+1F50C           🔌            \\:electric_plug:                              ELECTRIC PLUG
+U+1F50D           🔍            \\:mag:                                        LEFT-POINTING MAGNIFYING GLASS
+U+1F50E           🔎            \\:mag_right:                                  RIGHT-POINTING MAGNIFYING GLASS
+U+1F50F           🔏            \\:lock_with_ink_pen:                          LOCK WITH INK PEN
+U+1F510           🔐            \\:closed_lock_with_key:                       CLOSED LOCK WITH KEY
+U+1F511           🔑            \\:key:                                        KEY
+U+1F512           🔒            \\:lock:                                       LOCK
+U+1F513           🔓            \\:unlock:                                     OPEN LOCK
+U+1F514           🔔            \\:bell:                                       BELL
+U+1F515           🔕            \\:no_bell:                                    BELL WITH CANCELLATION STROKE
+U+1F516           🔖            \\:bookmark:                                   BOOKMARK
+U+1F517           🔗            \\:link:                                       LINK SYMBOL
+U+1F518           🔘            \\:radio_button:                               RADIO BUTTON
+U+1F519           🔙            \\:back:                                       BACK WITH LEFTWARDS ARROW ABOVE
+U+1F51A           🔚            \\:end:                                        END WITH LEFTWARDS ARROW ABOVE
+U+1F51B           🔛            \\:on:                                         ON WITH EXCLAMATION MARK WITH LEFT RIGHT ARROW ABOVE
+U+1F51C           🔜            \\:soon:                                       SOON WITH RIGHTWARDS ARROW ABOVE
+U+1F51D           🔝            \\:top:                                        TOP WITH UPWARDS ARROW ABOVE
+U+1F51E           🔞            \\:underage:                                   NO ONE UNDER EIGHTEEN SYMBOL
+U+1F51F           🔟            \\:keycap_ten:                                 KEYCAP TEN
+U+1F520           🔠            \\:capital_abcd:                               INPUT SYMBOL FOR LATIN CAPITAL LETTERS
+U+1F521           🔡            \\:abcd:                                       INPUT SYMBOL FOR LATIN SMALL LETTERS
+U+1F522           🔢            \\:1234:                                       INPUT SYMBOL FOR NUMBERS
+U+1F523           🔣            \\:symbols:                                    INPUT SYMBOL FOR SYMBOLS
+U+1F524           🔤            \\:abc:                                        INPUT SYMBOL FOR LATIN LETTERS
+U+1F525           🔥            \\:fire:                                       FIRE
+U+1F526           🔦            \\:flashlight:                                 ELECTRIC TORCH
+U+1F527           🔧            \\:wrench:                                     WRENCH
+U+1F528           🔨            \\:hammer:                                     HAMMER
+U+1F529           🔩            \\:nut_and_bolt:                               NUT AND BOLT
+U+1F52A           🔪            \\:hocho:                                      HOCHO
+U+1F52B           🔫            \\:gun:                                        PISTOL
+U+1F52C           🔬            \\:microscope:                                 MICROSCOPE
+U+1F52D           🔭            \\:telescope:                                  TELESCOPE
+U+1F52E           🔮            \\:crystal_ball:                               CRYSTAL BALL
+U+1F52F           🔯            \\:six_pointed_star:                           SIX POINTED STAR WITH MIDDLE DOT
+U+1F530           🔰            \\:beginner:                                   JAPANESE SYMBOL FOR BEGINNER
+U+1F531           🔱            \\:trident:                                    TRIDENT EMBLEM
+U+1F532           🔲            \\:black_square_button:                        BLACK SQUARE BUTTON
+U+1F533           🔳            \\:white_square_button:                        WHITE SQUARE BUTTON
+U+1F534           🔴            \\:red_circle:                                 LARGE RED CIRCLE
+U+1F535           🔵            \\:large_blue_circle:                          LARGE BLUE CIRCLE
+U+1F536           🔶            \\:large_orange_diamond:                       LARGE ORANGE DIAMOND
+U+1F537           🔷            \\:large_blue_diamond:                         LARGE BLUE DIAMOND
+U+1F538           🔸            \\:small_orange_diamond:                       SMALL ORANGE DIAMOND
+U+1F539           🔹            \\:small_blue_diamond:                         SMALL BLUE DIAMOND
+U+1F53A           🔺            \\:small_red_triangle:                         UP-POINTING RED TRIANGLE
+U+1F53B           🔻            \\:small_red_triangle_down:                    DOWN-POINTING RED TRIANGLE
+U+1F53C           🔼            \\:arrow_up_small:                             UP-POINTING SMALL RED TRIANGLE
+U+1F53D           🔽            \\:arrow_down_small:                           DOWN-POINTING SMALL RED TRIANGLE
+U+1F550           🕐            \\:clock1:                                     CLOCK FACE ONE OCLOCK
+U+1F551           🕑            \\:clock2:                                     CLOCK FACE TWO OCLOCK
+U+1F552           🕒            \\:clock3:                                     CLOCK FACE THREE OCLOCK
+U+1F553           🕓            \\:clock4:                                     CLOCK FACE FOUR OCLOCK
+U+1F554           🕔            \\:clock5:                                     CLOCK FACE FIVE OCLOCK
+U+1F555           🕕            \\:clock6:                                     CLOCK FACE SIX OCLOCK
+U+1F556           🕖            \\:clock7:                                     CLOCK FACE SEVEN OCLOCK
+U+1F557           🕗            \\:clock8:                                     CLOCK FACE EIGHT OCLOCK
+U+1F558           🕘            \\:clock9:                                     CLOCK FACE NINE OCLOCK
+U+1F559           🕙            \\:clock10:                                    CLOCK FACE TEN OCLOCK
+U+1F55A           🕚            \\:clock11:                                    CLOCK FACE ELEVEN OCLOCK
+U+1F55B           🕛            \\:clock12:                                    CLOCK FACE TWELVE OCLOCK
+U+1F55C           🕜            \\:clock130:                                   CLOCK FACE ONE-THIRTY
+U+1F55D           🕝            \\:clock230:                                   CLOCK FACE TWO-THIRTY
+U+1F55E           🕞            \\:clock330:                                   CLOCK FACE THREE-THIRTY
+U+1F55F           🕟            \\:clock430:                                   CLOCK FACE FOUR-THIRTY
+U+1F560           🕠            \\:clock530:                                   CLOCK FACE FIVE-THIRTY
+U+1F561           🕡            \\:clock630:                                   CLOCK FACE SIX-THIRTY
+U+1F562           🕢            \\:clock730:                                   CLOCK FACE SEVEN-THIRTY
+U+1F563           🕣            \\:clock830:                                   CLOCK FACE EIGHT-THIRTY
+U+1F564           🕤            \\:clock930:                                   CLOCK FACE NINE-THIRTY
+U+1F565           🕥            \\:clock1030:                                  CLOCK FACE TEN-THIRTY
+U+1F566           🕦            \\:clock1130:                                  CLOCK FACE ELEVEN-THIRTY
+U+1F567           🕧            \\:clock1230:                                  CLOCK FACE TWELVE-THIRTY
+U+1F5FB           🗻            \\:mount_fuji:                                 MOUNT FUJI
+U+1F5FC           🗼            \\:tokyo_tower:                                TOKYO TOWER
+U+1F5FD           🗽            \\:statue_of_liberty:                          STATUE OF LIBERTY
+U+1F5FE           🗾            \\:japan:                                      SILHOUETTE OF JAPAN
+U+1F5FF           🗿            \\:moyai:                                      MOYAI
+U+1F600           😀            \\:grinning:                                   GRINNING FACE
+U+1F601           😁            \\:grin:                                       GRINNING FACE WITH SMILING EYES
+U+1F602           😂            \\:joy:                                        FACE WITH TEARS OF JOY
+U+1F603           😃            \\:smiley:                                     SMILING FACE WITH OPEN MOUTH
+U+1F604           😄            \\:smile:                                      SMILING FACE WITH OPEN MOUTH AND SMILING EYES
+U+1F605           😅            \\:sweat_smile:                                SMILING FACE WITH OPEN MOUTH AND COLD SWEAT
+U+1F606           😆            \\:laughing:                                   SMILING FACE WITH OPEN MOUTH AND TIGHTLY-CLOSED EYES
+U+1F607           😇            \\:innocent:                                   SMILING FACE WITH HALO
+U+1F608           😈            \\:smiling_imp:                                SMILING FACE WITH HORNS
+U+1F609           😉            \\:wink:                                       WINKING FACE
+U+1F60A           😊            \\:blush:                                      SMILING FACE WITH SMILING EYES
+U+1F60B           😋            \\:yum:                                        FACE SAVOURING DELICIOUS FOOD
+U+1F60C           😌            \\:relieved:                                   RELIEVED FACE
+U+1F60D           😍            \\:heart_eyes:                                 SMILING FACE WITH HEART-SHAPED EYES
+U+1F60E           😎            \\:sunglasses:                                 SMILING FACE WITH SUNGLASSES
+U+1F60F           😏            \\:smirk:                                      SMIRKING FACE
+U+1F610           😐            \\:neutral_face:                               NEUTRAL FACE
+U+1F611           😑            \\:expressionless:                             EXPRESSIONLESS FACE
+U+1F612           😒            \\:unamused:                                   UNAMUSED FACE
+U+1F613           😓            \\:sweat:                                      FACE WITH COLD SWEAT
+U+1F614           😔            \\:pensive:                                    PENSIVE FACE
+U+1F615           😕            \\:confused:                                   CONFUSED FACE
+U+1F616           😖            \\:confounded:                                 CONFOUNDED FACE
+U+1F617           😗            \\:kissing:                                    KISSING FACE
+U+1F618           😘            \\:kissing_heart:                              FACE THROWING A KISS
+U+1F619           😙            \\:kissing_smiling_eyes:                       KISSING FACE WITH SMILING EYES
+U+1F61A           😚            \\:kissing_closed_eyes:                        KISSING FACE WITH CLOSED EYES
+U+1F61B           😛            \\:stuck_out_tongue:                           FACE WITH STUCK-OUT TONGUE
+U+1F61C           😜            \\:stuck_out_tongue_winking_eye:               FACE WITH STUCK-OUT TONGUE AND WINKING EYE
+U+1F61D           😝            \\:stuck_out_tongue_closed_eyes:               FACE WITH STUCK-OUT TONGUE AND TIGHTLY-CLOSED EYES
+U+1F61E           😞            \\:disappointed:                               DISAPPOINTED FACE
+U+1F61F           😟            \\:worried:                                    WORRIED FACE
+U+1F620           😠            \\:angry:                                      ANGRY FACE
+U+1F621           😡            \\:rage:                                       POUTING FACE
+U+1F622           😢            \\:cry:                                        CRYING FACE
+U+1F623           😣            \\:persevere:                                  PERSEVERING FACE
+U+1F624           😤            \\:triumph:                                    FACE WITH LOOK OF TRIUMPH
+U+1F625           😥            \\:disappointed_relieved:                      DISAPPOINTED BUT RELIEVED FACE
+U+1F626           😦            \\:frowning:                                   FROWNING FACE WITH OPEN MOUTH
+U+1F627           😧            \\:anguished:                                  ANGUISHED FACE
+U+1F628           😨            \\:fearful:                                    FEARFUL FACE
+U+1F629           😩            \\:weary:                                      WEARY FACE
+U+1F62A           😪            \\:sleepy:                                     SLEEPY FACE
+U+1F62B           😫            \\:tired_face:                                 TIRED FACE
+U+1F62C           😬            \\:grimacing:                                  GRIMACING FACE
+U+1F62D           😭            \\:sob:                                        LOUDLY CRYING FACE
+U+1F62E           😮            \\:open_mouth:                                 FACE WITH OPEN MOUTH
+U+1F62F           😯            \\:hushed:                                     HUSHED FACE
+U+1F630           😰            \\:cold_sweat:                                 FACE WITH OPEN MOUTH AND COLD SWEAT
+U+1F631           😱            \\:scream:                                     FACE SCREAMING IN FEAR
+U+1F632           😲            \\:astonished:                                 ASTONISHED FACE
+U+1F633           😳            \\:flushed:                                    FLUSHED FACE
+U+1F634           😴            \\:sleeping:                                   SLEEPING FACE
+U+1F635           😵            \\:dizzy_face:                                 DIZZY FACE
+U+1F636           😶            \\:no_mouth:                                   FACE WITHOUT MOUTH
+U+1F637           😷            \\:mask:                                       FACE WITH MEDICAL MASK
+U+1F638           😸            \\:smile_cat:                                  GRINNING CAT FACE WITH SMILING EYES
+U+1F639           😹            \\:joy_cat:                                    CAT FACE WITH TEARS OF JOY
+U+1F63A           😺            \\:smiley_cat:                                 SMILING CAT FACE WITH OPEN MOUTH
+U+1F63B           😻            \\:heart_eyes_cat:                             SMILING CAT FACE WITH HEART-SHAPED EYES
+U+1F63C           😼            \\:smirk_cat:                                  CAT FACE WITH WRY SMILE
+U+1F63D           😽            \\:kissing_cat:                                KISSING CAT FACE WITH CLOSED EYES
+U+1F63E           😾            \\:pouting_cat:                                POUTING CAT FACE
+U+1F63F           😿            \\:crying_cat_face:                            CRYING CAT FACE
+U+1F640           🙀            \\:scream_cat:                                 WEARY CAT FACE
+U+1F645           🙅            \\:no_good:                                    FACE WITH NO GOOD GESTURE
+U+1F646           🙆            \\:ok_woman:                                   FACE WITH OK GESTURE
+U+1F647           🙇            \\:bow:                                        PERSON BOWING DEEPLY
+U+1F648           🙈            \\:see_no_evil:                                SEE-NO-EVIL MONKEY
+U+1F649           🙉            \\:hear_no_evil:                               HEAR-NO-EVIL MONKEY
+U+1F64A           🙊            \\:speak_no_evil:                              SPEAK-NO-EVIL MONKEY
+U+1F64B           🙋            \\:raising_hand:                               HAPPY PERSON RAISING ONE HAND
+U+1F64C           🙌            \\:raised_hands:                               PERSON RAISING BOTH HANDS IN CELEBRATION
+U+1F64D           🙍            \\:person_frowning:                            PERSON FROWNING
+U+1F64E           🙎            \\:person_with_pouting_face:                   PERSON WITH POUTING FACE
+U+1F64F           🙏            \\:pray:                                       PERSON WITH FOLDED HANDS
+U+1F680           🚀            \\:rocket:                                     ROCKET
+U+1F681           🚁            \\:helicopter:                                 HELICOPTER
+U+1F682           🚂            \\:steam_locomotive:                           STEAM LOCOMOTIVE
+U+1F683           🚃            \\:railway_car:                                RAILWAY CAR
+U+1F684           🚄            \\:bullettrain_side:                           HIGH-SPEED TRAIN
+U+1F685           🚅            \\:bullettrain_front:                          HIGH-SPEED TRAIN WITH BULLET NOSE
+U+1F686           🚆            \\:train2:                                     TRAIN
+U+1F687           🚇            \\:metro:                                      METRO
+U+1F688           🚈            \\:light_rail:                                 LIGHT RAIL
+U+1F689           🚉            \\:station:                                    STATION
+U+1F68A           🚊            \\:tram:                                       TRAM
+U+1F68B           🚋            \\:train:                                      TRAM CAR
+U+1F68C           🚌            \\:bus:                                        BUS
+U+1F68D           🚍            \\:oncoming_bus:                               ONCOMING BUS
+U+1F68E           🚎            \\:trolleybus:                                 TROLLEYBUS
+U+1F68F           🚏            \\:busstop:                                    BUS STOP
+U+1F690           🚐            \\:minibus:                                    MINIBUS
+U+1F691           🚑            \\:ambulance:                                  AMBULANCE
+U+1F692           🚒            \\:fire_engine:                                FIRE ENGINE
+U+1F693           🚓            \\:police_car:                                 POLICE CAR
+U+1F694           🚔            \\:oncoming_police_car:                        ONCOMING POLICE CAR
+U+1F695           🚕            \\:taxi:                                       TAXI
+U+1F696           🚖            \\:oncoming_taxi:                              ONCOMING TAXI
+U+1F697           🚗            \\:car:                                        AUTOMOBILE
+U+1F698           🚘            \\:oncoming_automobile:                        ONCOMING AUTOMOBILE
+U+1F699           🚙            \\:blue_car:                                   RECREATIONAL VEHICLE
+U+1F69A           🚚            \\:truck:                                      DELIVERY TRUCK
+U+1F69B           🚛            \\:articulated_lorry:                          ARTICULATED LORRY
+U+1F69C           🚜            \\:tractor:                                    TRACTOR
+U+1F69D           🚝            \\:monorail:                                   MONORAIL
+U+1F69E           🚞            \\:mountain_railway:                           MOUNTAIN RAILWAY
+U+1F69F           🚟            \\:suspension_railway:                         SUSPENSION RAILWAY
+U+1F6A0           🚠            \\:mountain_cableway:                          MOUNTAIN CABLEWAY
+U+1F6A1           🚡            \\:aerial_tramway:                             AERIAL TRAMWAY
+U+1F6A2           🚢            \\:ship:                                       SHIP
+U+1F6A3           🚣            \\:rowboat:                                    ROWBOAT
+U+1F6A4           🚤            \\:speedboat:                                  SPEEDBOAT
+U+1F6A5           🚥            \\:traffic_light:                              HORIZONTAL TRAFFIC LIGHT
 U+1F6A6           🚦            \\:vertical_traffic_light:                     VERTICAL TRAFFIC LIGHT
-U+1F6A7           🚧           \\:construction:                               CONSTRUCTION SIGN
-U+1F6A8           🚨           \\:rotating_light:                             POLICE CARS REVOLVING LIGHT
-U+1F6A9           🚩           \\:triangular_flag_on_post:                    TRIANGULAR FLAG ON POST
-U+1F6AA           🚪           \\:door:                                       DOOR
-U+1F6AB           🚫           \\:no_entry_sign:                              NO ENTRY SIGN
-U+1F6AC           🚬           \\:smoking:                                    SMOKING SYMBOL
-U+1F6AD           🚭           \\:no_smoking:                                 NO SMOKING SYMBOL
-U+1F6AE           🚮           \\:put_litter_in_its_place:                    PUT LITTER IN ITS PLACE SYMBOL
-U+1F6AF           🚯           \\:do_not_litter:                              DO NOT LITTER SYMBOL
-U+1F6B0           🚰           \\:potable_water:                              POTABLE WATER SYMBOL
-U+1F6B1           🚱           \\:non-potable_water:                          NON-POTABLE WATER SYMBOL
-U+1F6B2           🚲           \\:bike:                                       BICYCLE
-U+1F6B3           🚳           \\:no_bicycles:                                NO BICYCLES
-U+1F6B4           🚴           \\:bicyclist:                                  BICYCLIST
-U+1F6B5           🚵           \\:mountain_bicyclist:                         MOUNTAIN BICYCLIST
-U+1F6B6           🚶           \\:walking:                                    PEDESTRIAN
-U+1F6B7           🚷           \\:no_pedestrians:                             NO PEDESTRIANS
-U+1F6B8           🚸           \\:children_crossing:                          CHILDREN CROSSING
-U+1F6B9           🚹           \\:mens:                                       MENS SYMBOL
-U+1F6BA           🚺           \\:womens:                                     WOMENS SYMBOL
-U+1F6BB           🚻           \\:restroom:                                   RESTROOM
-U+1F6BC           🚼           \\:baby_symbol:                                BABY SYMBOL
-U+1F6BD           🚽           \\:toilet:                                     TOILET
-U+1F6BE           🚾           \\:wc:                                         WATER CLOSET
-U+1F6BF           🚿           \\:shower:                                     SHOWER
-U+1F6C0           🛀           \\:bath:                                       BATH
-U+1F6C1           🛁           \\:bathtub:                                    BATHTUB
-U+1F6C2           🛂           \\:passport_control:                           PASSPORT CONTROL
-U+1F6C3           🛃           \\:customs:                                    CUSTOMS
-U+1F6C4           🛄           \\:baggage_claim:                              BAGGAGE CLAIM
-U+1F6C5           🛅           \\:left_luggage:                               LEFT LUGGAGE
+U+1F6A7           🚧            \\:construction:                               CONSTRUCTION SIGN
+U+1F6A8           🚨            \\:rotating_light:                             POLICE CARS REVOLVING LIGHT
+U+1F6A9           🚩            \\:triangular_flag_on_post:                    TRIANGULAR FLAG ON POST
+U+1F6AA           🚪            \\:door:                                       DOOR
+U+1F6AB           🚫            \\:no_entry_sign:                              NO ENTRY SIGN
+U+1F6AC           🚬            \\:smoking:                                    SMOKING SYMBOL
+U+1F6AD           🚭            \\:no_smoking:                                 NO SMOKING SYMBOL
+U+1F6AE           🚮            \\:put_litter_in_its_place:                    PUT LITTER IN ITS PLACE SYMBOL
+U+1F6AF           🚯            \\:do_not_litter:                              DO NOT LITTER SYMBOL
+U+1F6B0           🚰            \\:potable_water:                              POTABLE WATER SYMBOL
+U+1F6B1           🚱            \\:non-potable_water:                          NON-POTABLE WATER SYMBOL
+U+1F6B2           🚲            \\:bike:                                       BICYCLE
+U+1F6B3           🚳            \\:no_bicycles:                                NO BICYCLES
+U+1F6B4           🚴            \\:bicyclist:                                  BICYCLIST
+U+1F6B5           🚵            \\:mountain_bicyclist:                         MOUNTAIN BICYCLIST
+U+1F6B6           🚶            \\:walking:                                    PEDESTRIAN
+U+1F6B7           🚷            \\:no_pedestrians:                             NO PEDESTRIANS
+U+1F6B8           🚸            \\:children_crossing:                          CHILDREN CROSSING
+U+1F6B9           🚹            \\:mens:                                       MENS SYMBOL
+U+1F6BA           🚺            \\:womens:                                     WOMENS SYMBOL
+U+1F6BB           🚻            \\:restroom:                                   RESTROOM
+U+1F6BC           🚼            \\:baby_symbol:                                BABY SYMBOL
+U+1F6BD           🚽            \\:toilet:                                     TOILET
+U+1F6BE           🚾            \\:wc:                                         WATER CLOSET
+U+1F6BF           🚿            \\:shower:                                     SHOWER
+U+1F6C0           🛀            \\:bath:                                       BATH
+U+1F6C1           🛁            \\:bathtub:                                    BATHTUB
+U+1F6C2           🛂            \\:passport_control:                           PASSPORT CONTROL
+U+1F6C3           🛃            \\:customs:                                    CUSTOMS
+U+1F6C4           🛄            \\:baggage_claim:                              BAGGAGE CLAIM
+U+1F6C5           🛅            \\:left_luggage:                               LEFT LUGGAGE
 ================= ============ ============================================== ========================================================================================================
