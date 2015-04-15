@@ -6,7 +6,7 @@ import Base.LinAlg: (\), A_mul_Bc, A_mul_Bt, Ac_ldiv_B, Ac_mul_B, At_ldiv_B, At_
                  cholfact, cholfact!, det, diag, ishermitian, isposdef,
                  issym, ldltfact, logdet
 
-import Base.SparseMatrix: sparse
+import Base.SparseMatrix: sparse, nnz
 
 export
     Dense,
@@ -884,13 +884,15 @@ eltype{T<:VTypes}(A::Dense{T}) = T
 eltype{T<:VTypes}(A::Factor{T}) = T
 eltype{T<:VTypes}(A::Sparse{T}) = T
 
+nnz(F::Factor) = nnz(Sparse(F))
+
 function show(io::IO, F::Factor)
     s = unsafe_load(F.p)
     println(io, typeof(F))
     @printf(io, "type: %12s\n", Bool(s.is_ll) ? "LLt" : "LDLt")
     @printf(io, "method: %10s\n", Bool(s.is_super) ? "supernodal" : "simplicial")
     @printf(io, "maxnnz: %10d\n", Int(s.nzmax))
-    @printf(io, "nnz: %13d\n", nnz(Sparse(F)))
+    @printf(io, "nnz: %13d\n", nnz(F))
 end
 
 isvalid(A::Dense) = check_dense(A)
