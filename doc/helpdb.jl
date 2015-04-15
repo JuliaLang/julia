@@ -39,30 +39,37 @@ Any[
 
 ("Base","eachindex","eachindex(A)
 
-   Creates an iterable object for visiting each multi-dimensional
-   index of the AbstractArray \"A\".  Example for a 2-d array:
+   Creates an iterable object for visiting each index of an
+   AbstractArray \"A\" in an efficient manner. For array types that
+   have opted into fast linear indexing (like \"Array\"), this is
+   simply the range \"1:length(A)\". For other array types, this
+   returns a specialized Cartesian range to efficiently index into the
+   array with indices specified for every dimension. Example for a
+   sparse 2-d array:
 
-      julia> A = rand(2,3)
-      2x3 Array{Float64,2}:
-       0.960084  0.629326  0.625155
-       0.432588  0.955903  0.991614
+      julia> A = sprand(2, 3, 0.5)
+      2x3 sparse matrix with 4 Float64 entries:
+          [1, 1]  =  0.598888
+          [1, 2]  =  0.0230247
+          [1, 3]  =  0.486499
+          [2, 3]  =  0.809041
 
       julia> for iter in eachindex(A)
                  @show iter.I_1, iter.I_2
                  @show A[iter]
              end
       (iter.I_1,iter.I_2) = (1,1)
-      A[iter] = 0.9600836263003063
+      A[iter] = 0.5988881393454597
       (iter.I_1,iter.I_2) = (2,1)
-      A[iter] = 0.4325878255452178
+      A[iter] = 0.0
       (iter.I_1,iter.I_2) = (1,2)
-      A[iter] = 0.6293256402775211
+      A[iter] = 0.02302469881746183
       (iter.I_1,iter.I_2) = (2,2)
-      A[iter] = 0.9559027084099654
+      A[iter] = 0.0
       (iter.I_1,iter.I_2) = (1,3)
-      A[iter] = 0.6251548453735303
+      A[iter] = 0.4864987874354343
       (iter.I_1,iter.I_2) = (2,3)
-      A[iter] = 0.9916142534546522
+      A[iter] = 0.8090413606455655
 
 "),
 
@@ -254,15 +261,14 @@ Any[
 
 ("Base","linspace","linspace(start, stop, n=100)
 
-   Construct a vector of \"n\" linearly-spaced elements from \"start\"
-   to \"stop\". See also: \"linrange()\" that constructs a range
-   object.
+   Construct a range of \"n\" linearly spaced elements from \"start\"
+   to \"stop\".
 
 "),
 
 ("Base","logspace","logspace(start, stop, n=50)
 
-   Construct a vector of \"n\" logarithmically-spaced numbers from
+   Construct a vector of \"n\" logarithmically spaced numbers from
    \"10^start\" to \"10^stop\".
 
 "),
@@ -2638,6 +2644,9 @@ Any[
 
    Prints the LLVM bitcodes generated for running the method matching
    the given generic function and type signature to \"STDOUT\".
+
+   All metadata and dbg.* calls are removed from the printed bitcode.
+   Use code_llvm_raw for the full IR.
 
 "),
 
@@ -6768,6 +6777,13 @@ popdisplay(d::Display)
 
 "),
 
+("Base","full","full(F)
+
+   Reconstruct the matrix \"A\" from the factorization
+   \"F=factorize(A)\".
+
+"),
+
 ("Base","lu","lu(A) -> L, U, p
 
    Compute the LU factorization of \"A\", such that \"A[p,:] = L*U\".
@@ -7388,9 +7404,23 @@ popdisplay(d::Display)
 
 "),
 
+("Base","triu","triu(M, k)
+
+   Returns the upper triangle of \"M\" starting from the \"k\"th
+   superdiagonal.
+
+"),
+
 ("Base","triu!","triu!(M)
 
    Upper triangle of a matrix, overwriting \"M\" in the process.
+
+"),
+
+("Base","triu!","triu!(M, k)
+
+   Returns the upper triangle of \"M\" starting from the \"k\"th
+   superdiagonal, overwriting \"M\" in the process.
 
 "),
 
@@ -7400,29 +7430,43 @@ popdisplay(d::Display)
 
 "),
 
+("Base","tril","tril(M, k)
+
+   Returns the lower triangle of \"M\" starting from the \"k\"th
+   subdiagonal.
+
+"),
+
 ("Base","tril!","tril!(M)
 
    Lower triangle of a matrix, overwriting \"M\" in the process.
 
 "),
 
+("Base","tril!","tril!(M, k)
+
+   Returns the lower triangle of \"M\" starting from the \"k\"th
+   subdiagonal, overwriting \"M\" in the process.
+
+"),
+
 ("Base","diagind","diagind(M[, k])
 
-   A \"Range\" giving the indices of the \"k\"-th diagonal of the
+   A \"Range\" giving the indices of the \"k\"th diagonal of the
    matrix \"M\".
 
 "),
 
 ("Base","diag","diag(M[, k])
 
-   The \"k\"-th diagonal of a matrix, as a vector. Use \"diagm\" to
+   The \"k\"th diagonal of a matrix, as a vector. Use \"diagm\" to
    construct a diagonal matrix.
 
 "),
 
 ("Base","diagm","diagm(v[, k])
 
-   Construct a diagonal matrix and place \"v\" on the \"k\"-th
+   Construct a diagonal matrix and place \"v\" on the \"k\"th
    diagonal.
 
 "),
@@ -8448,12 +8492,6 @@ popdisplay(d::Display)
 
    Construct a range by length, given a starting value and optional
    step (defaults to 1).
-
-"),
-
-("Base","linrange","linrange(start, end, length)
-
-   Construct a range by length, given a starting and ending value.
 
 "),
 
@@ -11309,6 +11347,30 @@ golden
 
    Block the current task for a specified number of seconds. The
    minimum sleep time is 1 millisecond or input of \"0.001\".
+
+"),
+
+("Base","ReentrantLock","ReentrantLock()
+
+   Creates a reentrant lock. The same task can acquire the lock as
+   many times as required. Each lock must be matched with an unlock.
+
+"),
+
+("Base","lock","lock(l::ReentrantLock)
+
+   Associates \"l\" with the current task. If \"l\" is already locked
+   by a different task, waits for it to become available. The same
+   task can acquire the lock multiple times. Each \"lock\" must be
+   matched by an \"unlock\"
+
+"),
+
+("Base","unlock","unlock(l::ReentrantLock)
+
+   Releases ownership of the lock by the current task. If the lock had
+   been acquired before, it just decrements an internal counter and
+   returns immediately.
 
 "),
 
