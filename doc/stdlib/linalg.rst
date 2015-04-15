@@ -393,7 +393,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: triu(M, k)
 
-   Returns the upper triangle of ``M`` starting from the ``k``th superdiagonal.
+   Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal.
 
 .. function:: triu!(M)
 
@@ -401,7 +401,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: triu!(M, k)
 
-   Returns the upper triangle of ``M`` starting from the ``k``th superdiagonal, overwriting ``M`` in the process.
+   Returns the upper triangle of ``M`` starting from the ``k``\ th superdiagonal, overwriting ``M`` in the process.
 
 .. function:: tril(M)
 
@@ -409,7 +409,7 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: tril(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``th subdiagonal.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal.
 
 .. function:: tril!(M)
 
@@ -417,19 +417,19 @@ Linear algebra functions in Julia are largely implemented by calling functions f
 
 .. function:: tril!(M, k)
 
-   Returns the lower triangle of ``M`` starting from the ``k``th subdiagonal, overwriting ``M`` in the process.
+   Returns the lower triangle of ``M`` starting from the ``k``\ th subdiagonal, overwriting ``M`` in the process.
 
 .. function:: diagind(M[, k])
 
-   A ``Range`` giving the indices of the ``k``-th diagonal of the matrix ``M``.
+   A ``Range`` giving the indices of the ``k``\ th diagonal of the matrix ``M``.
 
 .. function:: diag(M[, k])
 
-   The ``k``-th diagonal of a matrix, as a vector. Use ``diagm`` to construct a diagonal matrix.
+   The ``k``\ th diagonal of a matrix, as a vector. Use ``diagm`` to construct a diagonal matrix.
 
 .. function:: diagm(v[, k])
 
-   Construct a diagonal matrix and place ``v`` on the ``k``-th diagonal.
+   Construct a diagonal matrix and place ``v`` on the ``k``\ th diagonal.
 
 .. function:: scale(A, b)
 .. function:: scale(b, A)
