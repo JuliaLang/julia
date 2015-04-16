@@ -34,7 +34,6 @@ systemerror(p, b::Bool) = b ? throw(SystemError(string(p))) : nothing
 ## assertion functions and macros ##
 
 assert(x) = x ? nothing : throw(AssertionError())
-assert(x, msgs...) = x ? nothing : throw(AssertionError(msgs[1]))
 macro assert(ex, msgs...)
     msg = isempty(msgs) ? ex : msgs[1]
     if !isempty(msgs) && isa(msg, Expr)
