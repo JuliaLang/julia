@@ -36,9 +36,9 @@ Language changes
       to the third element of an array. A `Ref` can be automatically converted to a
       native pointer when passed to a `ccall`.
 
-    * When passing a by-reference argument to `ccall`, you can now write `Ref(x)`
-      instead of `&x`. Alternatively, you can declare the argument type to be
-      `Ref{T}` instead of `T`, and just pass `x`.
+    * When passing a by-reference argument to `ccall`, you can declare
+      the argument type to be `Ref{T}` instead of `Ptr{T}`, and just
+      pass `x` instead of `&x`.
 
     * `ccall` is now lowered to call `unsafe_convert(T, cconvert(T, x))` on each
       argument. `cconvert` falls back to `convert`, but can be used to convert an
@@ -46,21 +46,17 @@ Language changes
       to C. `unsafe_convert` then handles conversions to `Ptr`.
 
     * `ccall` and `cfunction` now support correctly passing and returning structs,
-      following the platform ABI.
-      It is essential to declare argument and return types accurately.
-      For example, a C `int` must be passed as a 32-bit integer type (e.g. `Int32`,
-      or another 32-bit `bitstype`).
-      A `Float32` or an `immutable` struct with a size of 32 bits is not equivalent.
+      following the platform ABI (assuming the C types are mirrored accurately in Julia).
 
     * `cfunction` arguments of struct-like Julia types are now passed by value.
       If `Ref{T}` is used as a `cfunction` argument type, it will look up the
       method applicable to `T`, but pass the argument by reference (as Julia functions
-      usually do). However, this should only be used for objects allocated by Julia,
+      usually do). However, this should only be used for objects allocated by Julia
       and for `isbits` types.
 
-  * `convert(Ptr,x)` is deprecated for most types, replaced by `unsafe_convert`.
-    You can still `convert` between pointer types, and between pointers and `Int`
-    or `UInt`.
+  * `convert(Ptr,x)` is deprecated for most types, replaced by
+    `unsafe_convert`. You can still `convert` between pointer types,
+    and between pointers and `Int` or `UInt`.
 
   * `[x,y]` constructs a vector of `x` and `y` instead of concatenating them
     ([#3737], [#2488], [#8599]).
@@ -68,9 +64,9 @@ Language changes
   * `error(::Exception)` and `error(::Type{Exception})` have been deprecated
      in favor of using an explicit `throw` ([#9690]).
 
-  * `Uint` et al. are now spelled `UInt` ([#8905]).
+  * `Uint` etcetera are renamed to `UInt` ([#8905]).
 
-  * `String` has been renamed to `AbstractString` ([#8872]).
+  * `String` is renamed to `AbstractString` ([#8872]).
 
   * `None` is deprecated; use `Union()` instead ([#8423]).
 
@@ -78,9 +74,9 @@ Language changes
 
   * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075])
 
-  * `Dict` literal syntax `[a=>b,c=>d]` is replaced with `Dict(a=>b,c=>d)`.
-    `{a=>b}` is replaced with `Dict{Any,Any}(a=>b)`.
-    `(K=>V)[...]` is replaced with `Dict{K,V}(...)`.
+  * `Dict` literal syntax `[a=>b,c=>d]` is replaced by `Dict(a=>b,c=>d)`,
+    `{a=>b}` is replaced by `Dict{Any,Any}(a=>b)`, and 
+    `(K=>V)[...]` is replaced by `Dict{K,V}(...)`.
     The new syntax has many advantages: all of its components are first-class,
     it generalizes to other types of containers, it is easier to guess how to
     specify key and value types, and the syntaxes for empty and pre-populated
@@ -95,7 +91,7 @@ Language changes
       * `Char` - `Char` = `Int`
 
   * `round` rounds to the nearest integer using the default rounding mode,
-    which is ties to even by default ([#8750]).
+    which is ties-to-even by default ([#8750]).
 
   * A custom triple-quoted string like `x"""..."""` no longer invokes an `x_mstr`
     macro. Instead, the string is first unindented and then `x_str` is invoked,
@@ -112,43 +108,42 @@ Compiler improvements
 
   * Accessing fields that are always initialized no longer produces undefined checks ([#8827]).
 
-  * `--depwarn={yes|no}` command line flag added to enable / disable syntax and method deprecation warnings ([#9294]).
+  * A `--depwarn={yes|no}` command line flag enables/disables syntax and method deprecation warnings ([#9294]).
 
 Library improvements
 --------------------
 
-  * New multidimensional iterators and index types for efficient
-    iteration over general AbstractArrays
-
-  * Enums are now supported through the `@enum EnumName EnumValue1 EnumValue2` syntax. Enum member values also support abitrary value assignment by the `@enum EnumName EnumValue1=1 EnumValue2=10 EnumValue3=20` syntax.
-
-  * `LinAlg` improvements
+  * Linear algebra
 
     * The `LinAlg` module is now exported.
 
-    * `sparse(A)` now takes any `AbstractMatrix` A as an argument. ([#10031])
+    * `sparse(A)` now takes any `AbstractMatrix` A as an argument ([#10031]).
 
-    * Factorization api is now type-stable, functions dispatch on `Val{false}` or `Val{true}` instead of a boolean value ([#9575]).
+    * Factorization API is now type-stable; functions dispatch on `Val{false}` or `Val{true}` instead of a boolean value ([#9575]).
 
-    * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
+    * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized by the matrix type ([#7236]).
 
     * Sparse `cholfact` and `ldltfact` functions now accept a `perm` keyword
       for user-provided permutations and a `shift` keyword to factorize
       a shifted matrix ([#10844]).
 
-    * Add `svds` for sparse truncated SVD. ([#9425])
+    * New `svds` function for the sparse truncated SVD ([#9425]).
 
-    * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
+    * `Symmetric` and `Hermitian` immutables are now parametrized by the matrix type ([#7992]).
 
-    * New `ordschur` and `ordschur!` functions for sorting a schur factorization by the eigenvalues. ([#8467],[#9701])
+    * New `ordschur` and `ordschur!` functions for sorting a Schur factorization by the eigenvalues ([#8467],[#9701]).
 
-    * Givens type doesn't have a size anymore and is no longer a subtype of AbstractMatrix ([#8660])
+    * `Givens` type doesn't have a size anymore and is no longer a subtype of `AbstractMatrix` ([#8660]).
 
-    * Large speedup in sparse ``\`` and splitting of Cholesky and LDLt factorizations into ``cholfact`` and ``ldltfact`` ([#10117])
+    * Large speedup in sparse ``\`` and splitting of Cholesky and LDLᵀ factorizations into ``cholfact`` and ``ldltfact`` ([#10117]).
 
     * Add sparse least squares to ``\`` by adding ``qrfact`` for sparse matrices based on the SPQR library. ([#10180])
 
-  * String improvements
+    * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
+
+    * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
+
+  * Strings
 
     * `graphemes(s)` returns an iterator over grapheme substrings of `s` ([#9261]).
 
@@ -161,15 +156,49 @@ Library improvements
       reversed regex searches) to indices in the original string ([#9249]).
 
     * `charwidth(c)` and `strwidth(s)` now return up-to-date cross-platform
-      results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]).
+      results (via utf8proc) ([#10659]): Julia now likes pizza ([#3721]), but some terminals still don't.
 
-  * Other improvements
+  * Data-structure processing
 
-    * You can now tab complete Emoji characters from the REPL, with `\:name:<tab>` ([#10709])
+    * New multidimensional iterators and index types for efficient iteration over `AbstractArray`s ([#8432]).
 
-    * `gc_enable`, `gc_disable` returns previous GC state.
+    * New implementation of SubArrays with substantial performance and functionality improvements ([#8501]).
 
-    * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
+    * New `sortperm!` function for pre-allocated index arrays ([#8792]).
+
+    * Switch from `O(N)` to `O(log N)` algorithm for `dequeue!(pq, key)`
+    with `PriorityQueue`. This provides major speedups for large
+    queues ([#8011]).
+
+    * `PriorityQueue` now includes the order type among its
+      parameters, `PriorityQueue{KeyType,ValueType,OrderType}`. An
+      empty queue can be constructed as `pq =
+      PriorityQueue(KeyType,ValueType)`, if you intend to use the
+      default `Forward` order, or `pq = PriorityQueue(KeyType,
+      ValueType, OrderType)` otherwise ([#8011]).
+
+    * Efficient `mean` and `median` for ranges ([#8089]).
+
+    * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
+
+    * copy(DArray) will now make a copy of the DArray ([#9745])
+
+  * New types
+
+    * Enums are now supported through the `@enum EnumName EnumValue1
+      EnumValue2` syntax. Enum member values also support abitrary
+      value assignment by the `@enum EnumName EnumValue1=1
+      EnumValue2=10 EnumValue3=20` syntax ([#10168]).
+
+    * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
+
+    * New `Nullable` type for missing data ([#8152]).
+
+    * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
+
+    * `linspace` now returns a `LinSpace` object which lazily computes linear interpolation of values between the start and stop values. It "lifts" endpoints which are approximately rational in the same manner as the `colon` operator.
+
+  * Arithmetic
 
     * `convert` now checks for overflow when truncating integers or converting between
     signed and unsigned ([#5413]).
@@ -179,37 +208,14 @@ Library improvements
 
     * Reductions (e.g. `reduce`, `sum`) widen small types (integers smaller than `Int`, and `Float16`).
 
-    * New `Dates` module for calendar dates and other time-interval calculations ([#7654]).
-
-    * New implementation of SubArrays with substantial performance and functionality improvements ([#8501]).
-
-    * OpenBLAS 64-bit (ILP64) interface is now compiled with a `64_` suffix ([#8734]) to avoid conflicts with external libraries using a 32-bit BLAS ([#4923]).
-
-    * New `sortperm!` function for pre-allocated index arrays ([#8792]).
-
-    * Switch from `O(N)` to `O(logN)` algorithm for `dequeue!(pq, key)`
-    with `PriorityQueue`. This provides major speedups for large
-    queues ([#8011]).
-
-    * `PriorityQueue` now includes the order type among its parameters,
-    `PriorityQueue{KeyType,ValueType,OrderType}`. An empty queue can
-    be constructed as `pq = PriorityQueue(KeyType,ValueType)`, if you
-    intend to use the default `Forward` order, or
-    `pq = PriorityQueue(KeyType, ValueType, OrderType)` otherwise ([#8011]).
-
-    * Efficient `mean` and `median` for ranges ([#8089]).
-
-    * New `Nullable` type for missing data ([#8152]).
-
-    * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
-
-    * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
-
-    * The `machinefile` now supports a host count ([#7616]).
-
     * Added optional rounding argument to floating-point constructors ([#8845]).
 
-    * `code_native` now outputs branch labels ([#8897]).
+    * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
+      across all numeric types ([#9133], [#9198]).
+
+    * Rational arithmetic throws errors on overflow ([#8672]).
+
+  * Random numbers
 
     * Streamlined random number generation APIs [#8246].
     The default `rand` no longer uses global state in the underlying C library,
@@ -224,32 +230,33 @@ Library improvements
 
     * The `randexp` and `randexp!` functions are exported ([#9144])
 
-    * A new `Val{T}` type allows one to dispatch on bits-type values ([#9452])
+  * Other improvements
 
-    * Added `recvfrom` to get source address of UDP packets ([#9418])
+    * You can now tab-complete Emoji characters via their [short names](http://www.emoji-cheat-sheet.com/), using `\:name:<tab>` ([#10709]).
 
-    * copy(DArray) will now make a copy of the DArray ([#9745])
+    * The `gc_enable` and `gc_disable` functions now return the previous GC state.
 
-    * Split `Triangular` type into `UpperTriangular`, `LowerTriangular`, `UnitUpperTriagular` and `UnitLowerTriangular` ([#9779])
+    * `assert`, `@assert` now throws an `AssertionError` exception type ([#9734]).
 
-    * ClusterManager - Performance improvements([#9309]) and support for changing transports([#9434])
+    * `@simd` now rejects invalid control flow (`@goto` / break / continue) in the inner loop body at compile time ([#8624]).
 
-    * Equality (`==`) and inequality (`<`/`<=`) comparisons are now correct
-      across all numeric types ([#9133], [#9198]).
+    * The `machinefile` now supports a host count ([#7616]).
 
-    * Rational arithmetic throws errors on overflow ([#8672]).
+    * `code_native` now outputs branch labels ([#8897]).
 
-    * Added Base.get_process_title / Base.set_process_title. ([#9957])
+    * Added `recvfrom` to get source address of UDP packets ([#9418]).
 
-    * `readavailable` returns a byte vector instead of a string.
+    * ClusterManager performance improvements ([#9309]) and support for changing transports([#9434]).
 
-    * `lock` and `unlock` which operate on `ReentrantLock`. Useful to lock a stream during
-      concurrent writes from multiple tasks
+    * Added Base.get_process_title / Base.set_process_title ([#9957]).
+
+    * `readavailable` now returns a byte vector instead of a string.
+
+    * New `lock` and `unlock` functions, operating on `ReentrantLock`, to lock a stream during
+      concurrent writes from multiple tasks ([#10679]).
 
     * `code_llvm` now outputs stripped IR without debug info or other attached metadata.
       Use `code_llvm_raw` for the unstripped output ([#10747]).
-
-    * `linspace` now returns a `LinSpace` object which lazily computes linear interpolation of values between the start and stop values. It "lifts" endpoints which are approximately rational in the same manner as the `colon` operator.
 
 Deprecated or removed
 ---------------------
@@ -292,7 +299,7 @@ Deprecated or removed
 
   * `beginswith` is renamed to `startswith` ([#9578]).
 
-  * `null` is renamed to `nullspace`.
+  * `null` is renamed to `nullspace` ([#9714]).
 
   * The operators `|>`, `.>`, `>>`, and `.>>` as used for process I/O redirection
     are replaced with the `pipe` function ([#5349]).
@@ -313,9 +320,9 @@ Deprecated or removed
     have been replaced by `parse` and `tryparse` with a type argument
     ([#3631], [#5704], [#9487], [#10543]).
 
-  * the --int-literals compiler option is no longer accepted.
+  * the `--int-literals` compiler option is no longer accepted ([#9597]).
 
-  * Instead of `linrange` use `linspace`.
+  * Instead of `linrange`, use `linspace` ([#9666]).
 
 Julia v0.3.0 Release Notes
 ==========================
@@ -1265,6 +1272,7 @@ Too numerous to mention.
 [#8297]: https://github.com/JuliaLang/julia/issues/8297
 [#8399]: https://github.com/JuliaLang/julia/issues/8399
 [#8423]: https://github.com/JuliaLang/julia/issues/8423
+[#8432]: https://github.com/JuliaLang/julia/issues/8432
 [#8467]: https://github.com/JuliaLang/julia/issues/8467
 [#8501]: https://github.com/JuliaLang/julia/issues/8501
 [#8560]: https://github.com/JuliaLang/julia/issues/8560
@@ -1315,8 +1323,11 @@ Too numerous to mention.
 [#9569]: https://github.com/JuliaLang/julia/issues/9569
 [#9575]: https://github.com/JuliaLang/julia/issues/9575
 [#9578]: https://github.com/JuliaLang/julia/issues/9578
+[#9597]: https://github.com/JuliaLang/julia/issues/9597
+[#9666]: https://github.com/JuliaLang/julia/issues/9666
 [#9690]: https://github.com/JuliaLang/julia/issues/9690
 [#9701]: https://github.com/JuliaLang/julia/issues/9701
+[#9714]: https://github.com/JuliaLang/julia/issues/9714
 [#9734]: https://github.com/JuliaLang/julia/issues/9734
 [#9745]: https://github.com/JuliaLang/julia/issues/9745
 [#9779]: https://github.com/JuliaLang/julia/issues/9779
@@ -1327,6 +1338,7 @@ Too numerous to mention.
 [#10075]: https://github.com/JuliaLang/julia/issues/10075
 [#10117]: https://github.com/JuliaLang/julia/issues/10117
 [#10150]: https://github.com/JuliaLang/julia/issues/10150
+[#10168]: https://github.com/JuliaLang/julia/issues/10168
 [#10180]: https://github.com/JuliaLang/julia/issues/10180
 [#10228]: https://github.com/JuliaLang/julia/issues/10228
 [#10328]: https://github.com/JuliaLang/julia/issues/10328
@@ -1337,6 +1349,7 @@ Too numerous to mention.
 [#10458]: https://github.com/JuliaLang/julia/issues/10458
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
+[#10679]: https://github.com/JuliaLang/julia/issues/10679
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
 [#10747]: https://github.com/JuliaLang/julia/issues/10747
 [#10844]: https://github.com/JuliaLang/julia/issues/10844
