@@ -26,7 +26,7 @@ case ``i`` is interpreted as a cartesian index for the first
 dimension, and ``j`` is a linear index over dimensions 2 and 3.
 
 For ``Array``\s, linear indexing appeals to the underlying storage
-format: an array is laid out as a contiguous block of memory, and
+format: an array is laid out as a continuous block of memory, and
 hence the linear index is just the offset (+1) of the corresponding
 entry relative to the beginning of the array.  However, this is not
 true for many other ``AbstractArray`` types: examples include
