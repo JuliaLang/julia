@@ -89,6 +89,7 @@ type WorkerConfig
     count::Nullable{Union(Int, Symbol)}
     exename::Nullable{AbstractString}
     exeflags::Nullable{Cmd}
+    affinity::Nullable{Symbol}
 
     # External cluster managers can use this to store information at a per-worker level
     # Can be a dict if multiple fields need to be stored.
@@ -1133,8 +1134,9 @@ function start_cluster_workers(manager, params, rr_launched)
                     wait(rr)  # :cpu_cores below is set only after we get a setup complete
                               # message from the new worker.
                     cnt = get(w.config.count)
+                    cores_on_host = get(w.config.environ)[:cpu_cores]
                     if cnt == :auto
-                        cnt = get(w.config.environ)[:cpu_cores]
+                        cnt = cores_on_host
                     end
                     cnt = cnt - 1   # Removing self from the requested number
 
@@ -1143,7 +1145,21 @@ function start_cluster_workers(manager, params, rr_launched)
                     cmd = `$exename $exeflags`
 
                     npids = [get_next_pid() for x in 1:cnt]
-                    new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, cmd)
+
+                    if !isnull(w.config.affinity)
+                        # pass cnt+1 as we want the affinities distributed across all workers, including the
+                        # launcher worker.
+                        affinities = calc_affinities(get(w.config.affinity), cnt+1, cores_on_host)
+
+                        # remove launcher worker from affinities- its affinity has been previously set to 0
+                        first0 = findfirst(affinities, 0)
+                        splice!(affinities, first0 > 0 ? first0 : 1)
+                    else
+                        affinities = []
+                    end
+
+
+                    new_workers = remotecall_fetch(w.id, launch_additional, cnt, npids, cmd, affinities)
                     push!(additional_workers, (w, new_workers))
                 end
             end
@@ -1244,14 +1260,18 @@ end
 
 # Called on the first worker on a remote host. Used to optimize launching
 # of multiple workers on a remote host (to leverage multi-core)
-function launch_additional(np::Integer, pids::Array, cmd::Cmd)
+function launch_additional(np::Integer, pids::Array, cmd::Cmd, affinities::Array)
     assert(np == length(pids))
 
     io_objs = cell(np)
     addresses = cell(np)
 
     for i in 1:np
-        io, pobj = open(detach(cmd), "r")
+        if length(affinities) > 0
+            io, pobj = open(detach(`taskset -c $(affinities[i]) $cmd`), "r")
+        else
+            io, pobj = open(detach(cmd), "r")
+        end
         io_objs[i] = io
     end
 

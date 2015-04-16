@@ -636,6 +636,7 @@ object (with appropriate fields initialized) to ``launched`` ::
      count::Nullable{Union(Int, Symbol)}
      exename::Nullable{AbstractString}
      exeflags::Nullable{Cmd}
+     affinity::Nullable{Symbol}
 
      # External cluster managers can use this to store information at a per-worker level
      # Can be a dict if multiple fields need to be stored.
@@ -662,12 +663,15 @@ to be configured manually.
 
 If ``io`` is not specified, ``host`` and ``port`` are used to connect.
 
-``count``, ``exename`` and ``exeflags`` are relevant for launching additional workers from a worker.
-For example, a cluster manager may launch a single worker per node, and use that to launch
-additional workers. ``count`` with an integer value ``n`` will launch a total of ``n`` workers,
-while a value of ``:auto`` will launch as many workers as cores on that machine.
+``count``, ``exename``, ``exeflags`` and ``affinity`` are relevant for launching additional workers
+from an initial worker. For example, a cluster manager may launch a single worker per node, and
+use that to launch additional workers. ``count`` with an integer value ``n`` will launch a total
+of ``n`` workers, while a value of ``:auto`` will launch as many workers as cores on that machine.
 ``exename`` is the name of the julia executable including the full path.
 ``exeflags`` should be set to the required command line arguments for new workers.
+``affinity``, if set, should be either ``:compact`` or ``:balanced``. If ``:compact``, launched
+workers are associated with specific cores in a serial manner. If ``:balanced``, the workers
+are distributed across available cores.
 
 ``tunnel``, ``bind_addr``, ``sshflags`` and ``max_parallel`` are used when a ssh tunnel is
 required to connect to the workers from the master process.

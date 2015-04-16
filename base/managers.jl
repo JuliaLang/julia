@@ -34,7 +34,12 @@ end
 
 function check_addprocs_args(kwargs)
     for keyname in kwargs
-        !(keyname[1] in [:dir, :exename, :exeflags]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+        !(keyname[1] in [:dir, :exename, :exeflags, :affinity]) && throw(ArgumentError("Invalid keyword argument $(keyname[1])"))
+        if (keyname[1] == :affinity)
+            if (keyname[2] != :compact) && (keyname[2] != :balanced)
+                throw(ArgumentError("Valid values for affinity keyword argument are [:compact, :balanced]"))
+            end
+        end
     end
 end
 
@@ -81,6 +86,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
+    affinity = get(params, :affinity, nothing)
 
     # machine could be of the format [user@]host[:port] bind_addr[:bind_port]
     machine_bind = split(machine)
@@ -97,7 +103,11 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     host = machine_def[1]
 
     # Build up the ssh command
-    cmd = `cd $dir && $exename $exeflags` # launch julia
+    affinity_cmd = ``
+    if affinity != nothing
+        affinity_cmd = `taskset -c 0`
+    end
+    cmd = `cd $dir && $affinity_cmd $exename $exeflags` # launch julia
     cmd = `sh -l -c $(shell_escape(cmd))` # shell to launch under
     cmd = `ssh -T -a -x -o ClearAllForwardings=yes -n $sshflags $host $(shell_escape(cmd))` # use ssh to remote launch
 
@@ -112,6 +122,7 @@ function launch_on_machine(manager::SSHManager, machine, cnt, params, launched, 
     wconfig.exename = exename
     wconfig.count = cnt
     wconfig.max_parallel = get(params, :max_parallel, Nullable{Integer}())
+    wconfig.affinity = affinity
 
     push!(launched, wconfig)
     notify(launch_ntfy)
@@ -177,14 +188,51 @@ end
 
 show(io::IO, manager::LocalManager) = println(io, "LocalManager()")
 
+function calc_affinities(affinity, np, nc)
+    if affinity == :compact
+        affinities = [i%nc for i in 1:np]
+    elseif affinity == :balanced
+        if np > 1
+            affinities = [Int(floor(i)) for i in linrange(0, nc - 1e-3, np)]
+        else
+            affinities = [1%nc]
+        end
+    else
+        throw(ArgumentError("Unknown affinity $affinity"))
+    end
+    affinities
+end
+
+function mk_affinity_fun(affinity, np, cores_on_host)
+    if Sys.OS_NAME == :Linux
+        if affinity == :compact
+            fn_affinity(i) = `taskset -c $(i%cores_on_host)`
+        elseif affinity == :balanced
+            if np > 1
+                allocation = [Int(floor(i)) for i in linrange(0, cores_on_host - 1e-3, np)]
+                fn_affinity(i) = let allocation=allocation
+                    `taskset -c $(allocation[i])`
+                end
+            else
+                fn_affinity(i) = `taskset -c 0`
+            end
+        else
+            fn_affinity(i) = ``
+        end
+    else
+        fn_affinity(i) = ``
+    end
+end
+
 function launch(manager::LocalManager, params::Dict, launched::Array, c::Condition)
     dir = params[:dir]
     exename = params[:exename]
     exeflags = params[:exeflags]
 
+    fn_affinity = mk_affinity_fun(get(params, :affinity, nothing), manager.np, Sys.CPU_CORES)
     for i in 1:manager.np
         io, pobj = open(detach(
-            setenv(`$(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
+            setenv(`$(fn_affinity(i)) $(julia_cmd(exename)) $exeflags --bind-to $(LPROC.bind_addr) --worker`, dir=dir)), "r")
         wconfig = WorkerConfig()
         wconfig.process = pobj
         wconfig.io = io
