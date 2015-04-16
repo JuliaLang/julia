@@ -1,23 +1,39 @@
 #############################################
 # Create some temporary files & directories #
 #############################################
-
 starttime = time()
+pwd_ = pwd()
 dir = mktempdir()
 file = joinpath(dir, "afile.txt")
 close(open(file,"w")) # like touch, but lets the operating system update the timestamp for greater precision on some platforms (windows)
 
-@unix_only begin
-    link = joinpath(dir, "afilelink.txt")
-    symlink(file, link)
-end
-
 subdir = joinpath(dir, "adir")
 mkdir(subdir)
+subdir2 = joinpath(dir, "adir2")
+mkdir(subdir2)
+
 @non_windowsxp_only begin
     dirlink = joinpath(dir, "dirlink")
     symlink(subdir, dirlink)
+    # relative link
+    cd(subdir)
+    relsubdirlink = joinpath(subdir, "rel_subdirlink")
+    reldir = joinpath("..", "adir2")
+    symlink(reldir, relsubdirlink)
+    cd(pwd_)
 end
+
+@unix_only begin
+    link = joinpath(dir, "afilelink.txt")
+    symlink(file, link)
+    # relative link
+    cd(subdir)
+    rellink = joinpath(subdir, "rel_afilelink.txt")
+    relfile = joinpath("..", "afile.txt")
+    symlink(relfile, rellink)
+    cd(pwd_)
+end
+
 
 #######################################################################
 # This section tests some of the features of the stat-based file info #
@@ -50,9 +66,12 @@ end
 
 # test links
 @unix_only @test islink(link) == true
+@unix_only @test readlink(link) == file
+
 @non_windowsxp_only begin
     @test islink(dirlink) == true
     @test isdir(dirlink) == true
+    @test readlink(dirlink) == subdir * @windows? "\\" : ""
 end
 
 # rename file
@@ -412,11 +431,17 @@ test_LibcFILE(Libc.FILE(f,Libc.modestr(true,false)))
 ############
 # Clean up #
 ############
-@unix_only rm(link)
-@non_windowsxp_only rm(dirlink)
-
+@unix_only begin
+    rm(link)
+    rm(rellink)
+end
+@non_windowsxp_only begin
+    rm(dirlink)
+    rm(relsubdirlink)
+end
 rm(file)
 rm(subdir)
+rm(subdir2)
 rm(dir)
 
 # The following fail on Windows with "stat: operation not permitted (EPERM)"
