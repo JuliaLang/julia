@@ -309,6 +309,22 @@ sparse(I,J,V::AbstractVector{Bool},m,n) = sparse(I, J, V, Int(m), Int(n), OrFun(
 
 sparse(I,J,v::Number,m,n,combine::Union(Function,Func)) = sparse(I, J, fill(v,length(I)), Int(m), Int(n), combine)
 
+function sparse(T::SymTridiagonal)
+    m = length(T.dv)
+    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.dv;T.ev;T.ev], Int(m), Int(m))
+end
+
+function sparse(T::Tridiagonal)
+    m = length(T.d)
+    return sparse([1:m;2:m;1:m-1],[1:m;1:m-1;2:m],[T.d;T.dl;T.du], Int(m), Int(m))
+end
+
+function sparse(B::Bidiagonal)
+    m = length(B.dv)
+    B.isupper || return sparse([1:m;2:m],[1:m;1:m-1],[B.dv;B.ev], Int(m), Int(m)) # lower bidiagonal
+    return sparse([1:m;1:m-1],[1:m;2:m],[B.dv;B.ev], Int(m), Int(m)) # upper bidiagonal
+end
+
 function find(S::SparseMatrixCSC)
     sz = size(S)
     I, J = findn(S)
