@@ -181,7 +181,7 @@ Library improvements
 
     * `deepcopy` recurses through immutable types and makes copies of their mutable fields ([#8560]).
 
-    * copy(DArray) will now make a copy of the DArray ([#9745])
+    * `copy(a::DArray)` will now make a copy of a `DArray` ([#9745])
 
   * New types
 
