@@ -71,7 +71,7 @@ function _show(io::IO, x::FloatingPoint, mode, n::Int, typed, nanstr, infstr)
         end
     end
     neg && write(io,'-')
-    if pt <= -4 || pt > 6 # .00001 to 100000.
+    if pt <= -4 || pt > 6 || pt >= n # .00001 to 100000.
         # => #.#######e###
         write(io, pdigits, 1)
         write(io, '.')
