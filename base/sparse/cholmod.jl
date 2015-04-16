@@ -33,6 +33,8 @@ const common_final_ll = (1:4) + cholmod_com_offsets[7]
 const common_print = (1:4) + cholmod_com_offsets[13]
 const common_itype = (1:4) + cholmod_com_offsets[18]
 const common_dtype = (1:4) + cholmod_com_offsets[19]
+const common_nmethods = (1:4) + cholmod_com_offsets[15]
+const common_postorder = (1:4) + cholmod_com_offsets[17]
 
 ## macro to generate the name of the C function according to the integer type
 macro cholmod_name(nm,typ) string("cholmod_", eval(typ) == SuiteSparse_long ? "l_" : "", nm) end
@@ -283,7 +285,7 @@ function allocate_dense(nrow::Integer, ncol::Integer, d::Integer, ::Type{Complex
     d
 end
 
-free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_l_free_dense, :libcholmod), Cint, (Ptr{Ptr{C_Dense{T}}}, Ptr{Void}), &p, common(Cint))
+free_dense!{T}(p::Ptr{C_Dense{T}}) = ccall((:cholmod_l_free_dense, :libcholmod), Cint, (Ref{Ptr{C_Dense{T}}}, Ptr{Void}), p, common(Cint))
 
 function zeros{T<:VTypes}(m::Integer, n::Integer, ::Type{T})
     d = Dense(ccall((:cholmod_l_zeros, :libcholmod), Ptr{C_Dense{T}},
@@ -568,7 +570,7 @@ for Ti in IndexTypes
             A
         end
 
-        function sdmult!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, transpose::Bool, α::Tv, β::Tv, X::Dense{Tv}, Y::Dense{Tv})
+        function sdmult!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, transpose::Bool, α::Number, β::Number, X::Dense{Tv}, Y::Dense{Tv})
             m, n = size(A)
             nc = transpose ? m : n
             nr = transpose ? n : m
@@ -576,10 +578,10 @@ for Ti in IndexTypes
                 throw(DimensionMismatch("incompatible dimensions, $nc and $(size(X,1))"))
             end
             @isok ccall((@cholmod_name("sdmult", $Ti),:libcholmod), Cint,
-                    (Ptr{C_Sparse{Tv,$Ti}}, Cint, Ptr{Cdouble}, Ptr{Cdouble},
-                        Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
-                            A.p, transpose, &α, &β,
-                                X.p, Y.p, common($Ti))
+                    (Ptr{C_Sparse{Tv,$Ti}}, Cint,
+                     Ref{Complex128}, Ref{Complex128},
+                     Ptr{C_Dense{Tv}}, Ptr{C_Dense{Tv}}, Ptr{UInt8}),
+                        A.p, transpose, α, β, X.p, Y.p, common($Ti))
             Y
         end
 
@@ -605,7 +607,7 @@ for Ti in IndexTypes
         end
 
         # cholmod_cholesky.h
-        # For analyze, factorize and factorize_p, the Common argument must be
+        # For analyze, analyze_p, and factorize_p!, the Common argument must be
         # supplied in order to control if the factorization is LLt or LDLt
         function analyze{Tv<:VTypes}(A::Sparse{Tv,$Ti}, cmmn::Vector{UInt8})
             f = Factor(ccall((@cholmod_name("analyze", $Ti),:libcholmod), Ptr{C_Factor{Tv,$Ti}},
@@ -614,18 +616,22 @@ for Ti in IndexTypes
             finalizer(f, free!)
             f
         end
-        function factorize!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, F::Factor{Tv,$Ti}, cmmn::Vector{UInt8})
-            @isok ccall((@cholmod_name("factorize", $Ti),:libcholmod), Cint,
-                    (Ptr{C_Sparse{Tv,$Ti}}, Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
-                        A.p, F.p, cmmn)
-            F
+        function analyze_p{Tv<:VTypes}(A::Sparse{Tv,$Ti}, perm::Vector{$Ti},
+                                       cmmn::Vector{UInt8})
+            length(perm) != size(A,1) && throw(BoundsError())
+            f = Factor(ccall((@cholmod_name("analyze_p", $Ti),:libcholmod), Ptr{C_Factor{Tv,$Ti}},
+                             (Ptr{C_Sparse{Tv,$Ti}}, Ptr{$Ti}, Ptr{$Ti}, Csize_t, Ptr{UInt8}),
+                             A.p, perm, C_NULL, 0, cmmn))
+            finalizer(f, free!)
+            f
         end
-        function factorize_p!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, β::Tv, fset::Vector{$Ti}, F::Factor{Tv,$Ti}, cmmn::Vector{UInt8})
+        function factorize_p!{Tv<:VTypes}(A::Sparse{Tv,$Ti}, β::Real, F::Factor{Tv,$Ti}, cmmn::Vector{UInt8})
+            # note that β is passed as a complex number (double beta[2]),
+            # but the CHOLMOD manual says that only beta[0] (real part) is used
             @isok ccall((@cholmod_name("factorize_p", $Ti),:libcholmod), Cint,
-                    (Ptr{C_Sparse{Tv,$Ti}}, Ptr{Cdouble}, Ptr{$Ti}, Csize_t,
+                    (Ptr{C_Sparse{Tv,$Ti}}, Ref{Complex128}, Ptr{$Ti}, Csize_t,
                         Ptr{C_Factor{Tv,$Ti}}, Ptr{UInt8}),
-                            A.p, &β, fset, length(fset),
-                                F.p, cmmn)
+                        A.p, β, C_NULL, 0, F.p, cmmn)
             F
         end
 
@@ -984,42 +990,45 @@ Ac_mul_B(A::Sparse, B::VecOrMat) =  Ac_mul_B(A, Dense(B))
 
 
 ## Factorization methods
-function cholfact(A::Sparse)
+
+function fact_{Tv<:VTypes,Ti<:ITypes,Ti2<:Integer}(A::Sparse{Tv,Ti}, cm::Array{UInt8};
+                                          shift::Real=0.0,
+                                          perm::AbstractVector{Ti2}=Int[],
+                                          postorder::Bool=true,
+                                          userperm_only::Bool=true)
     sA = unsafe_load(A.p)
     sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
 
+    if !postorder
+        cm[common_postorder] = reinterpret(UInt8, [zero(Cint)])
+    end
+
+    if isempty(perm)
+        F = analyze(A, cm)
+    else # user permutation provided
+        if userperm_only # use perm even if it is worse than AMD
+            cm[common_nmethods] = reinterpret(UInt8, [one(Cint)])
+        end
+        F = analyze_p(A, Ti[p-1 for p in perm], cm)
+    end
+
+    factorize_p!(A, shift, F, cm)
+    return F
+end
+
+function cholfact(A::Sparse; kws...)
     cm = common(indtype(A))
 
     # Hack! makes it a llt
     cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
-    F = analyze(A, cm)
-    factorize!(A, F, cm)
+
+    F = fact_(A, cm; kws...)
     s = unsafe_load(F.p)
     s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
     return F
 end
 
-function cholfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
-    sA = unsafe_load(A.p)
-    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
-
-    cm = common(Ti)
-
-    # Hack! makes it a llt
-    cm[common_final_ll] = reinterpret(UInt8, [one(Cint)])
-
-    F = analyze(A, cm)
-    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
-
-    s = unsafe_load(F.p)
-    s.minor < size(A, 1) && throw(Base.LinAlg.PosDefException(s.minor))
-    return F
-end
-
-function ldltfact(A::Sparse)
-    sA = unsafe_load(A.p)
-    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
-
+function ldltfact(A::Sparse; kws...)
     cm = common(indtype(A))
 
     # Hack! makes it a ldlt
@@ -1028,72 +1037,29 @@ function ldltfact(A::Sparse)
     # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
     cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
 
-    F = analyze(A, cm)
-    factorize!(A, F, cm)
-
-    # Check if decomposition failed
+    F = fact_(A, cm; kws...)
     s = unsafe_load(F.p)
     s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
-
     return F
 end
 
-function ldltfact{Tv<:VTypes,Ti<:ITypes}(A::Sparse{Tv,Ti}, β::Tv)
-    sA = unsafe_load(A.p)
-    sA.stype == 0 && throw(ArgumentError("sparse matrix is not symmetric/Hermitian"))
-
-    cm = common(Ti)
-
-    # Hack! makes it a ldlt
-    cm[common_final_ll] = reinterpret(UInt8, [zero(Cint)])
-
-    # Hack! really make sure it's a ldlt by avoiding supernodal factorisation
-    cm[common_supernodal] = reinterpret(UInt8, [zero(Cint)])
-
-    F = analyze(A, cm)
-    factorize_p!(A, β, Ti[0:sA.ncol - 1;], F, cm)
-
-    # Check if decomposition failed
-    s = unsafe_load(F.p)
-    s.minor < size(A, 1) && throw(Base.LinAlg.ArgumentError("matrix has one or more zero pivots"))
-
-    return F
+for f in (:cholfact, :ldltfact)
+    @eval begin
+        $f(A::SparseMatrixCSC; kws...) = $f(Sparse(A); kws...)
+        $f{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}; kws...) = $f(Sparse(A); kws...)
+        $f{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}; kws...) = $f(Sparse(A); kws...)
+    end
 end
 
-cholfact{T<:VTypes}(A::Sparse{T}, β::Number) = cholfact(A, convert(T, β))
-cholfact(A::SparseMatrixCSC) = cholfact(Sparse(A))
-cholfact(A::SparseMatrixCSC, β::Number) = cholfact(Sparse(A), β)
-cholfact{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) = cholfact(Sparse(A))
-cholfact{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, β::Number) = cholfact(Sparse(A), β)
-cholfact{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) = cholfact(Sparse(A))
-cholfact{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, β::Number) = cholfact(Sparse(A), β)
-
-ldltfact{T<:VTypes}(A::Sparse{T}, β::Number) = ldltfact(A, convert(T, β))
-ldltfact(A::SparseMatrixCSC) = ldltfact(Sparse(A))
-ldltfact(A::SparseMatrixCSC, β::Number) = ldltfact(Sparse(A), β)
-ldltfact{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}) = ldltfact(Sparse(A))
-ldltfact{Ti}(A::Symmetric{Float64,SparseMatrixCSC{Float64,Ti}}, β::Number) = ldltfact(Sparse(A), β)
-ldltfact{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}) = ldltfact(Sparse(A))
-ldltfact{Ti}(A::Hermitian{Complex{Float64},SparseMatrixCSC{Complex{Float64},Ti}}, β::Number) = ldltfact(Sparse(A), β)
-
-function update!{Tv<:VTypes,Ti<:ITypes}(F::Factor{Tv,Ti}, A::Sparse{Tv,Ti})
+function update!{Tv<:VTypes,Ti<:ITypes}(F::Factor{Tv,Ti}, A::Sparse{Tv,Ti}; shift::Real=0.0)
     cm = common(Ti)
     s = unsafe_load(F.p)
     if Bool(s.is_ll)
         cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
     end
-    factorize!(A, F, cm)
+    factorize_p!(A, shift, F, cm)
 end
-function update!{Tv<:VTypes,Ti<:ITypes}(F::Factor{Tv,Ti}, A::Sparse{Tv,Ti}, β::Tv)
-    cm = common(Ti)
-    s = unsafe_load(F.p)
-    if Bool(s.is_ll)
-        cm[common_final_ll] = reinterpret(UInt8, [one(Cint)]) # Hack! makes it a llt
-    end
-    factorize_p!(A, β, Ti[0:size(F, 1) - 1;], F, cm)
-end
-update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}) = update!(F, Sparse(A))
-update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}, β::Number) = update!(F, Sparse(A), convert(T, β))
+update!{T<:VTypes}(F::Factor{T}, A::SparseMatrixCSC{T}; kws...) = update!(F, Sparse(A); kws...)
 
 ## Solvers
 
