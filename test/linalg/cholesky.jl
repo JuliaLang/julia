@@ -44,6 +44,8 @@ debug && println("\ntype of a: ", eltya, " type of b: ", eltyb, "\n")
 
 debug && println("(Automatic) upper Cholesky factor")
 
+        @inferred cholfact(apd)
+        @inferred chol(apd)
         capd  = factorize(apd)
         r     = capd[:U]
         κ     = cond(apd, 1) #condition number
@@ -67,7 +69,7 @@ debug && println("(Automatic) upper Cholesky factor")
         @test_approx_eq apd * inv(capd) eye(n)
         @test norm(a*(capd\(a'*b)) - b,1)/norm(b,1) <= ε*κ*n # Ad hoc, revisit
         @test abs((det(capd) - det(apd))/det(capd)) <= ε*κ*n # Ad hoc, but statistically verified, revisit
-        @test_approx_eq logdet(capd) log(det(capd)) # logdet is less likely to overflow
+        @test_approx_eq @inferred(logdet(capd)) log(det(capd)) # logdet is less likely to overflow
 
         apos = apd[1,1]            # test chol(x::Number), needs x>0
         @test_approx_eq cholfact(apos).factors √apos

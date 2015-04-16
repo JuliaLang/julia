@@ -37,7 +37,7 @@ debug && println("(Automatic) Square LU decomposition")
         @test_approx_eq full(lua) a
 
 debug && println("Thin LU")
-        lua   = lufact(a[:,1:n1])
+        lua   = @inferred lufact(a[:,1:n1])
         @test_approx_eq lua[:L]*lua[:U] lua[:P]*a[:,1:n1]
 
 debug && println("Fat LU")
@@ -50,6 +50,7 @@ end
 ## Integrate in general tests when more linear algebra is implemented in julia
 a = convert(Matrix{Rational{BigInt}}, rand(1:10//1,n,n))/n
 b = rand(1:10,n,2)
+@inferred lufact(a)
 lua   = factorize(a)
 l,u,p = lua[:L], lua[:U], lua[:p]
 @test_approx_eq l*u a[p,:]
@@ -80,4 +81,4 @@ for elty in (Float32, Float64, Complex64, Complex128)
     # @test norm(F[:vectors]*Diagonal(F[:values])/F[:vectors] - A) > 0.01
 end
 
-@test logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0]) === 0.22314355f0 + 3.1415927f0im
+@test @inferred(logdet(Complex64[1.0f0 0.5f0; 0.5f0 -1.0f0])) === 0.22314355f0 + 3.1415927f0im
