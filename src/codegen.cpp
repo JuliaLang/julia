@@ -427,7 +427,6 @@ void jl_dump_objfile(char *fname, int jit_model)
     std::string err;
     raw_fd_ostream OS(fname, err);
 #endif
-    formatted_raw_ostream FOS(OS);
 
     // We don't want to use MCJIT's target machine because
     // it uses the large code model and we may potentially
@@ -472,6 +471,14 @@ void jl_dump_objfile(char *fname, int jit_model)
 #else
     PM.add(new DataLayout(*jl_ExecutionEngine->getDataLayout()));
 #endif
+
+
+#ifdef LLVM37 // 3.7 simplified formatted output; just use the raw stream alone
+    raw_fd_ostream& FOS(OS);
+#else
+    formatted_raw_ostream FOS(OS);
+#endif
+
     if (TM->addPassesToEmitFile(PM, FOS, TargetMachine::CGFT_ObjectFile, false)) {
         jl_error("Could not generate obj file for this target");
     }
