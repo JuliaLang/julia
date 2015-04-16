@@ -690,7 +690,13 @@
                        (loop (append ex (list argument)) #t)))))
             ((eq? t '...)
              (take-token s)
-             (list '... ex))
+             (let ((tnxt (peek-token s)))
+               (if (and (or (number? tnxt) (symbol? tnxt)) (not (ts:space? s)))
+                   (begin
+                     (take-token s)
+                     (set! t (list t tnxt))
+                     )))
+             (list t ex))
             (else ex)))))
 
 ; the principal non-terminals follow, in increasing precedence order
@@ -779,6 +785,9 @@
 (define (parse-comparison s)
   (let loop ((ex (parse-in s))
              (first #t))
+    ;; convert (('... N) var) into ('... var N)
+    (if (and (pair? ex) (pair? (car ex)) (eq? (car (car ex)) '...))
+        (set! ex (list '... (cadr ex) (cadr (car ex)))))
     (let ((t (peek-token s)))
       (if (not (is-prec-comparison? t))
           ex

@@ -110,7 +110,9 @@
          (bad-formal-argument v))
         (else
          (case (car v)
-           ((...)         `(... ,(decl-type (cadr v))))
+           ((...) (if (eq? (length v) 3)
+                      `(... ,(decl-type (cadr v)) ,(caddr v))
+                      `(... ,(decl-type (cadr v)))))
            ((|::|)
             (if (not (symbol? (cadr v)))
                 (bad-formal-argument (cadr v)))
@@ -384,8 +386,12 @@
                     (cons (replace-end (expand-index-colon idx) a n tuples last)
                           ret)))))))
 
+(define (make-vararg t) (if (eq? (length t) 3)
+                            `(curly Vararg ,(cadr t) ,(caddr t))
+                            `(curly Vararg ,(cadr t))))
+
 (define (make-decl n t) `(|::| ,n ,(if (and (pair? t) (eq? (car t) '...))
-                                       `(curly Vararg ,(cadr t))
+                                       (make-vararg t)
                                        t)))
 
 (define (function-expr argl body)
@@ -401,9 +407,13 @@
 ;; except for rest arg
 (define (method-lambda-expr argl body)
   (let ((argl (map (lambda (x)
-                     (if (and (pair? x) (eq? (car x) '...))
+                     (if (vararg? x)
                          (make-decl (arg-name x) (arg-type x))
-                         (arg-name x)))
+                         (if (varargexpr? x)
+                             (if (pair? (caddr x))
+                                 x
+                                 `(|::| ,(arg-name x) (curly Vararg Any)))
+                             (arg-name x))))
                    argl)))
     `(lambda ,argl
        (scope-block ,body))))
@@ -476,6 +486,15 @@
                     ,body ,isstaged))))))
 
 (define (vararg? x) (and (pair? x) (eq? (car x) '...)))
+(define (varargexpr? x) (and
+                         (pair? x)
+                         (eq? (car x) '::)
+                         (or
+                          (eq? (caddr x) 'Vararg)
+                          (and
+                           (pair? (caddr x))
+                           (length> (caddr x) 1)
+                           (eq? (cadr (caddr x)) 'Vararg)))))
 (define (trans?  x) (and (pair? x) (eq? (car x) '|.'|)))
 (define (ctrans? x) (and (pair? x) (eq? (car x) '|'|)))
 
@@ -1809,7 +1828,7 @@
                          (error "assignment not allowed inside tuple"))
                      (expand-forms
                       (if (vararg? x)
-                          `(curly Vararg ,(cadr x))
+                          (make-vararg x)
                           x)))
                    (cdr e))))
 

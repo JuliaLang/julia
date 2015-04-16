@@ -750,7 +750,7 @@ int jl_is_rest_arg(jl_value_t *ex)
     if (((jl_expr_t*)ex)->head != colons_sym) return 0;
     jl_expr_t *atype = (jl_expr_t*)jl_exprarg(ex,1);
     if (!jl_is_expr(atype)) return 0;
-    if (atype->head != call_sym || jl_array_len(atype->args) != 3)
+    if (atype->head != call_sym || jl_array_len(atype->args) < 3 || jl_array_len(atype->args) > 4)
         return 0;
     if ((jl_sym_t*)jl_exprarg(atype,1) != dots_sym)
         return 0;

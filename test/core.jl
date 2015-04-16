@@ -530,6 +530,45 @@ begin
     @test firstlast(Val{false}) == "Last"
 end
 
+# x::Vararg{Any} declarations
+begin
+    local f1, f2, f3
+    f1(x...) = [x...]
+    f2(x::Vararg{Any}) = [x...]
+    f3(x::Vararg) = [x...]
+    @test f1(1,2,3) == [1,2,3]
+    @test f2(1,2,3) == [1,2,3]
+    @test f3(1,2,3) == [1,2,3]
+end
+
+# dispatch with fixed-length varargs
+begin
+    local gi, mysum, mysum2
+    function gi{T,N}(A::AbstractArray{T,N}, indexes...N)
+        return true
+    end
+    @test_throws MethodError gi(zeros(2,2), 1)
+    @test gi(zeros(2,2), 1, 1)
+    @test_throws MethodError gi(zeros(2,2), 1, 1, 1)
+    @test gi(zeros(2,2,2), 1, 1, 1)
+    @test_throws MethodError gi(zeros(2,2,2), 1, 1)
+    function mysum{N}(x::Int...N)
+        s = 0
+        for i = 1:N
+            s += x[i]
+        end
+        s
+    end
+    @test mysum(1,2,3) == 6
+    @test mysum(1,2,3,4) == 10
+    function mysum2(x::Int...3)
+        x[1] + x[2] + x[3]
+    end
+    @test_throws MethodError mysum2(1,2)
+    @test mysum2(1,2,3) == 6
+    @test_throws MethodError mysum2(1,2,3,4)
+end
+
 # try/finally
 begin
     after = 0

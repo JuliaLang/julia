@@ -1319,6 +1319,7 @@ size_t jl_static_show_x(JL_STREAM *out, jl_value_t *v, int depth)
     else if (jl_is_vararg_type(v)) {
         n += jl_static_show_x(out, jl_tparam0(v), depth);
         n += jl_printf(out, "...");
+        n += jl_static_show_x(out, jl_tparam1(v), depth);
     }
     else if (jl_is_datatype(v)) {
         jl_datatype_t *dv = (jl_datatype_t*)v;
