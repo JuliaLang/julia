@@ -4765,9 +4765,11 @@ static Function *emit_function(jl_lambda_info_t *lam)
 
     // step 17, Apply LLVM level inlining
     for(std::vector<CallInst*>::iterator it = ctx.to_inline.begin(); it != ctx.to_inline.end(); ++it) {
+        Function *inlinef = (*it)->getCalledFunction();
         InlineFunctionInfo info;
         if (!InlineFunction(*it,info))
             jl_error("Inlining Pass failed");
+        inlinef->eraseFromParent();
     }
 
     // step 18. Perform any delayed instantiations

@@ -672,7 +672,7 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
         std::string ir_name;
         while(true) {
             std::stringstream name;
-            name << (ctx->f->getName().str()) << i++;
+            name << (ctx->f->getName().str()) << "u" << i++;
             ir_name = name.str();
             if (jl_Module->getFunction(ir_name) == NULL)
                 break;
@@ -755,7 +755,8 @@ static Value *emit_llvmcall(jl_value_t **args, size_t nargs, jl_codectx_t *ctx)
     f->setLinkage(GlobalValue::LinkOnceODRLinkage);
 
     // the actual call
-    CallInst *inst = builder.CreateCall(prepare_call(f),ArrayRef<Value*>(&argvals[0],nargt));
+    assert(f->getParent() == jl_Module); // no prepare_call(f) is needed below, since this was just emitted into the same module
+    CallInst *inst = builder.CreateCall(f,ArrayRef<Value*>(&argvals[0],nargt));
     ctx->to_inline.push_back(inst);
 
     JL_GC_POP();
