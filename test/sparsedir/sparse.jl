@@ -741,5 +741,22 @@ for (m,n) in ((2,-2),(-2,2),(-2,-2))
     @test_throws ArgumentError sprand(m,n,0.2)
 end
 
+# issue #10837
+# test sparse constructors from special matrices
+T = Tridiagonal(randn(4),randn(5),randn(4))
+S = sparse(T)
+@test norm(full(T) - full(S)) == 0.0
+T = SymTridiagonal(randn(5),rand(4))
+S = sparse(T)
+@test norm(full(T) - full(S)) == 0.0
+B = Bidiagonal(randn(5),randn(4),true)
+S = sparse(B)
+@test norm(full(B) - full(S)) == 0.0
+B = Bidiagonal(randn(5),randn(4),false)
+S = sparse(B)
+@test norm(full(B) - full(S)) == 0.0
+
 # promotion in spdiagm
 @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
+
+
