@@ -223,7 +223,7 @@ prod(A::AbstractArray{Bool}) =
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::MaxFun, A::AbstractArray{Bool}, first::Int, last::Int)
+function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -241,7 +241,7 @@ function mapreduce_impl(f, op::MaxFun, A::AbstractArray{Bool}, first::Int, last:
     v
 end
 
-function mapreduce_impl(f, op::MinFun, A::AbstractArray{Bool}, first::Int, last::Int)
+function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -310,7 +310,7 @@ function mapfoldl(f, ::OrFun, itr)
     return false
 end
 
-function mapreduce_impl(f, op::AndFun, A::AbstractArray, ifirst::Int, ilast::Int)
+function mapreduce_impl(f, op::AndFun, A::AbstractArray{Bool}, ifirst::Int, ilast::Int)
     while ifirst <= ilast
         @inbounds x = A[ifirst]
         !f(x) && return false
@@ -319,7 +319,7 @@ function mapreduce_impl(f, op::AndFun, A::AbstractArray, ifirst::Int, ilast::Int
     return true
 end
 
-function mapreduce_impl(f, op::OrFun, A::AbstractArray, ifirst::Int, ilast::Int)
+function mapreduce_impl(f, op::OrFun, A::AbstractArray{Bool}, ifirst::Int, ilast::Int)
     while ifirst <= ilast
         @inbounds x = A[ifirst]
         f(x) && return true
