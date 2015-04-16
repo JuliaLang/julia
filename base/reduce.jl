@@ -223,7 +223,7 @@ prod(A::AbstractArray{Bool}) =
 
 ## maximum & minimum
 
-function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::MaxFun, A::AbstractArray{Bool}, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
@@ -241,7 +241,7 @@ function mapreduce_impl(f, op::MaxFun, A::AbstractArray, first::Int, last::Int)
     v
 end
 
-function mapreduce_impl(f, op::MinFun, A::AbstractArray, first::Int, last::Int)
+function mapreduce_impl(f, op::MinFun, A::AbstractArray{Bool}, first::Int, last::Int)
     # locate the first non NaN number
     v = f(A[first])
     i = first + 1
