@@ -98,6 +98,7 @@ chma = ldltfact(A)                      # LDL' form
 @test unsafe_load(chma.p).is_ll == 0    # check that it is in fact an LDLt
 x = chma\B
 @test_approx_eq x ones(size(x))
+@test nnz(ldltfact(A, perm=1:size(A,1))) > nnz(chma)
 
 chma = cholfact(A)                      # LL' form
 @test CHOLMOD.isvalid(chma)
@@ -105,6 +106,7 @@ chma = cholfact(A)                      # LL' form
 x = chma\B
 @test_approx_eq x ones(size(x))
 @test nnz(chma) == 489
+@test nnz(cholfact(A, perm=1:size(A,1))) > nnz(chma)
 
 #lp_afiro example
 afiro = CHOLMOD.Sparse(27, 51,
@@ -360,13 +362,13 @@ for elty in (Float64, Complex{Float64})
     # Factor
     @test_throws ArgumentError cholfact(A1)
     @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1' - 2eigmax(full(A1 + A1'))I)
-    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', -2eigmax(full(A1 + A1')))
+    @test_throws Base.LinAlg.PosDefException cholfact(A1 + A1', shift=-2eigmax(full(A1 + A1')))
     @test_throws ArgumentError ldltfact(A1 + A1' - 2real(A1[1,1])I)
-    @test_throws ArgumentError ldltfact(A1 + A1', -2real(A1[1,1]))
+    @test_throws ArgumentError ldltfact(A1 + A1', shift=-2real(A1[1,1]))
     @test_throws ArgumentError cholfact(A1)
-    @test_throws ArgumentError cholfact(A1, 1.0)
+    @test_throws ArgumentError cholfact(A1, shift=1.0)
     @test_throws ArgumentError ldltfact(A1)
-    @test_throws ArgumentError ldltfact(A1, 1.0)
+    @test_throws ArgumentError ldltfact(A1, shift=1.0)
     F = cholfact(A1pd)
     tmp = IOBuffer()
     show(tmp, F)
@@ -391,16 +393,16 @@ for elty in (Float64, Complex{Float64})
     if elty <: Real
         @test CHOLMOD.issym(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), 2)) == CHOLMOD.Sparse(cholfact(A1pd, 2))
+        @test CHOLMOD.Sparse(cholfact(Symmetric(A1pd, :L), shift=2)) == CHOLMOD.Sparse(cholfact(A1pd, shift=2))
         @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L), 2)) == CHOLMOD.Sparse(ldltfact(A1pd, 2))
+        @test CHOLMOD.Sparse(ldltfact(Symmetric(A1pd, :L), shift=2)) == CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
     else
         @test !CHOLMOD.issym(Sparse(A1pd, 0))
         @test CHOLMOD.ishermitian(Sparse(A1pd, 0))
         @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(cholfact(A1pd))
-        @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), 2)) == CHOLMOD.Sparse(cholfact(A1pd, 2))
+        @test CHOLMOD.Sparse(cholfact(Hermitian(A1pd, :L), shift=2)) == CHOLMOD.Sparse(cholfact(A1pd, shift=2))
         @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L))) == CHOLMOD.Sparse(ldltfact(A1pd))
-        @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L), 2)) == CHOLMOD.Sparse(ldltfact(A1pd, 2))
+        @test CHOLMOD.Sparse(ldltfact(Hermitian(A1pd, :L), shift=2)) == CHOLMOD.Sparse(ldltfact(A1pd, shift=2))
     end
 
 
@@ -414,17 +416,17 @@ for elty in (Float64, Complex{Float64})
     @test size(F, 3) == 1
     @test_throws ArgumentError size(F, 0)
 
-    F = cholfact(A1pdSparse, 2)
+    F = cholfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     F = ldltfact(A1pd)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
     @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
-    F = ldltfact(A1pdSparse, 2)
+    F = ldltfact(A1pdSparse, shift=2)
     @test isa(CHOLMOD.Sparse(F), CHOLMOD.Sparse{elty, CHOLMOD.SuiteSparse_long})
-    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, 2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
+    @test_approx_eq CHOLMOD.Sparse(CHOLMOD.update!(copy(F), A1pd, shift=2.0)) CHOLMOD.Sparse(F) # surprisingly, this can cause small ulp size changes so we cannot test exact equality
 
     @test isa(CHOLMOD.factor_to_sparse!(F), CHOLMOD.Sparse)
     @test_throws CHOLMOD.CHOLMODException CHOLMOD.factor_to_sparse!(F)

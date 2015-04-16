@@ -439,6 +439,9 @@ end
 @deprecate dlsym_e      Libdl.dlsym_e
 @deprecate find_library Libdl.find_library
 
+@deprecate cholfact(A::AbstractMatrix, β::Number) cholfact(A, shift=β)
+@deprecate ldltfact(A::AbstractMatrix, β::Number) ldltfact(A, shift=β)
+
 # 0.4 discontinued functions
 
 @noinline function subtypetree(x::DataType, level=-1)
