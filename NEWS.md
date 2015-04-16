@@ -75,7 +75,7 @@ Language changes
   * Arrays can be constructed with the syntax `Array{T}(m,n)` ([#3214], [#10075])
 
   * `Dict` literal syntax `[a=>b,c=>d]` is replaced by `Dict(a=>b,c=>d)`,
-    `{a=>b}` is replaced by `Dict{Any,Any}(a=>b)`, and 
+    `{a=>b}` is replaced by `Dict{Any,Any}(a=>b)`, and
     `(K=>V)[...]` is replaced by `Dict{K,V}(...)`.
     The new syntax has many advantages: all of its components are first-class,
     it generalizes to other types of containers, it is easier to guess how to
