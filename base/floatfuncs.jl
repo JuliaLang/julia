@@ -30,9 +30,9 @@ num2hex(x::Float64) = hex(box(UInt64,unbox(Float64,x)),16)
 
 function hex2num(s::AbstractString)
     if length(s) <= 8
-        return box(Float32,unbox(Int32,parse(Int32,s,16)))
+        return box(Float32,unbox(UInt32,parse(UInt32,s,16)))
     end
-    return box(Float64,unbox(Int64,parse(Int64,s,16)))
+    return box(Float64,unbox(UInt64,parse(UInt64,s,16)))
 end
 
 @vectorize_1arg Number abs
