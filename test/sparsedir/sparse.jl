@@ -759,4 +759,49 @@ S = sparse(B)
 # promotion in spdiagm
 @test spdiagm(([1,2],[3.5],[4+5im]), (0,1,-1), 2,2) == [1 3.5; 4+5im 2]
 
+#Test broadcasting of sparse matrixes
+let  A = sprand(10,10,0.3), B = sprand(10,10,0.3), AF = full(A), BF = full(B)
+    @test A .* B == AF .* BF
+    @test A[1,:] .* B == AF[1,:] .* BF
+    @test A[:,1] .* B == AF[:,1] .* BF
+    @test A .* B[1,:] == AF .*  BF[1,:]
+    @test A .* B[:,1] == AF .*  BF[:,1]
 
+    @test A .* B == AF .* BF
+    @test A[1,:] .* BF == AF[1,:] .* BF
+    @test A[:,1] .* BF == AF[:,1] .* BF
+    @test A .* BF[1,:] == AF .*  BF[1,:]
+    @test A .* BF[:,1] == AF .*  BF[:,1]
+
+    @test A .* B == AF .* BF
+    @test AF[1,:] .* B == AF[1,:] .* BF
+    @test AF[:,1] .* B == AF[:,1] .* BF
+    @test AF .* B[1,:] == AF .*  BF[1,:]
+    @test AF .* B[:,1] == AF .*  BF[:,1]
+
+    @test A .* B == AF .* BF
+    @test A[1,:] .* B == AF[1,:] .* BF
+    @test A[:,1] .* B == AF[:,1] .* BF
+    @test A .* B[1,:] == AF .*  BF[1,:]
+    @test A .* B[:,1] == AF .*  BF[:,1]
+
+    @test A .* 3 == AF .* 3
+    @test 3 .* A == 3 .* AF
+    #@test A[1,:] .* 3 == AF[1,:] .* 3
+    @test all(A[1,:] .* 3 .== AF[1,:] .* 3)
+    #@test A[:,1] .* 3 == AF[:,1] .* 3
+    @test all(A[:,1] .* 3 .== AF[:,1] .* 3)
+    #TODO: simple comparation with == returns false because the left side is a (two-dimensional) SparseMatrixCSC
+    #      while the right side is a Vector
+
+
+    @test A .- B == AF .- BF
+    @test A[1,:] .- B == AF[1,:] .- BF
+    @test A[:,1] .- B == AF[:,1] .- BF
+    @test A .- B[1,:] == AF .-  BF[1,:]
+    @test A .- B[:,1] == AF .-  BF[:,1]
+
+    @test A .+ B == AF .+ BF
+    @test (A .< B) == (AF .< BF)
+    @test (A .!= B) == (AF .!= BF)
+end
