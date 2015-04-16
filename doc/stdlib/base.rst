@@ -805,7 +805,7 @@ Errors
    Get the backtrace of the current exception, for use within ``catch``
    blocks.
 
-.. function:: assert(cond, [text])
+.. function:: assert(cond)
 
    Throw an ``AssertionError`` if ``cond`` is false. Also available as the macro ``@assert expr``.
 

@@ -40,15 +40,6 @@ let
         @test isempty(ex.msg)
     end
 end
-let
-    try
-        assert(false, "this is a test")
-        error("unexpected")
-    catch ex
-        @test isa(ex, AssertionError)
-        @test ex.msg == "this is a test"
-    end
-end
 
 # test @assert macro
 @test_throws AssertionError (@assert 1 == 2)
