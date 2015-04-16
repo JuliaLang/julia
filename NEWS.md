@@ -132,6 +132,10 @@ Library improvements
 
     * Added generic Cholesky factorization, and the Cholesky factorization is now parametrized on the matrix type ([#7236]).
 
+    * Sparse `cholfact` and `ldltfact` functions now accept a `perm` keyword
+      for user-provided permutations and a `shift` keyword to factorize
+      a shifted matrix ([#10844]).
+
     * Add `svds` for sparse truncated SVD. ([#9425])
 
     * Symmetric and Hermitian immutables are now parametrized on matrix type ([#7992]).
@@ -1334,3 +1338,5 @@ Too numerous to mention.
 [#10543]: https://github.com/JuliaLang/julia/issues/10543
 [#10659]: https://github.com/JuliaLang/julia/issues/10659
 [#10709]: https://github.com/JuliaLang/julia/issues/10709
+[#10747]: https://github.com/JuliaLang/julia/issues/10747
+[#10844]: https://github.com/JuliaLang/julia/issues/10844
