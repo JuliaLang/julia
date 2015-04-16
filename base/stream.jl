@@ -502,6 +502,8 @@ function _uv_hook_asynccb(async::AsyncWork)
 end
 
 function start_timer(timer::Timer, timeout::Real, repeat::Real)
+    timeout ≤ 0 && (timeout = 0)
+    repeat ≤ 0 && (repeat = 0)
     associate_julia_struct(timer.handle, timer)
     preserve_handle(timer)
     ccall(:uv_update_time,Void,(Ptr{Void},),eventloop())
