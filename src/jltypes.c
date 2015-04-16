@@ -1517,9 +1517,12 @@ static int extensionally_same_type(jl_value_t *a, jl_value_t *b)
     return jl_subtype(a, b, 0) && jl_subtype(b, a, 0);
 }
 
-static int type_eqv_(jl_value_t *a, jl_value_t *b)
+static int type_eqv_(jl_value_t *a, jl_value_t *b);
+
+static int type_eqv__(jl_value_t *a, jl_value_t *b, int distinguish_tctor)
 {
     if (a == b) return 1;
+    if (distinguish_tctor && jl_is_typector(a) != jl_is_typector(b)) return 0;
     if (jl_is_typector(a)) a = (jl_value_t*)((jl_typector_t*)a)->body;
     if (jl_is_typector(b)) b = (jl_value_t*)((jl_typector_t*)b)->body;
     if (jl_is_typevar(a)) {
@@ -1554,10 +1557,15 @@ static int type_eqv_(jl_value_t *a, jl_value_t *b)
         jl_value_t *api = jl_svecref(ap,i);
         jl_value_t *bpi = jl_svecref(bp,i);
         if (api == bpi) continue;
-        if (!type_eqv_(api, bpi))
+        if (!type_eqv__(api, bpi, distinguish_tctor))
             return 0;
     }
     return 1;
+}
+
+static int type_eqv_(jl_value_t *a, jl_value_t *b)
+{
+    return type_eqv__(a, b, 0);
 }
 
 int jl_types_equal(jl_value_t *a, jl_value_t *b)
@@ -1720,15 +1728,11 @@ static int typekey_compare(jl_datatype_t *tt, jl_value_t **key, size_t n)
     size_t tnp = jl_nparams(tt);
     if (n < tnp) return -1;
     if (n > tnp) return 1;
-    if (tt->name == jl_type_type->name &&
-        (jl_is_typector(key[0]) != jl_is_typector(jl_tparam0(tt)))) {
-        return jl_is_typector(key[0]) ? 1 : -1;
-    }
     for(j=0; j < n; j++) {
         jl_value_t *tj = jl_svecref(tt->parameters,j);
         jl_value_t *kj = key[j];
         if (tj != kj) {
-            if (!type_eqv_(tj, kj)) {
+            if (!type_eqv__(tj, kj, 1)) {
                 uptrint_t tid =
                     (jl_is_datatype(tj) && ((jl_datatype_t*)tj)->uid) ? ((jl_datatype_t*)tj)->uid : jl_object_id(tj);
                 uptrint_t kid =
