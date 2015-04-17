@@ -1405,8 +1405,15 @@ void gc_queue_binding(jl_binding_t *bnd)
 }
 
 static int push_root(jl_value_t *v, int d, int);
+#ifdef JL_DEBUG_BUILD
+static void *volatile gc_findval; // for usage from gdb, for finding the gc-root for a value
+#endif
 static inline int gc_push_root(void *v, int d) // v isa jl_value_t*
 {
+#ifdef JL_DEBUG_BUILD
+    if (v == gc_findval)
+        jl_raise_debugger();
+#endif
     assert(v != NULL);
     jl_taggedvalue_t* o = jl_astaggedvalue(v);
     verify_val(o);
