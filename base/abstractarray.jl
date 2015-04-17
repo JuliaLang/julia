@@ -111,6 +111,11 @@ linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
 linearindexing{T<:Array}(::Type{T}) = LinearFast()
 linearindexing{T<:Range}(::Type{T}) = LinearFast()
 
+*(::LinearFast, ::LinearFast) = LinearFast()
+*(::LinearSlow, ::LinearFast) = LinearSlow()
+*(::LinearFast, ::LinearSlow) = LinearSlow()
+*(::LinearSlow, ::LinearSlow) = LinearSlow()
+
 ## Bounds checking ##
 checkbounds(sz::Int, ::Colon) = nothing
 checkbounds(sz::Int, i::Int) = 1 <= i <= sz || throw(BoundsError())
@@ -350,8 +355,14 @@ next(A::AbstractArray,i) = (@_inline_meta(); (idx, s) = next(i[1], i[2]); (A[idx
 done(A::AbstractArray,i) = done(i[1], i[2])
 
 # eachindex iterates over all indices. LinearSlow definitions are later.
-eachindex(A::AbstractArray) = (@_inline_meta; eachindex(linearindexing(A), A))
+eachindex(A::AbstractArray) = (@_inline_meta(); eachindex(linearindexing(A), A))
 eachindex(::LinearFast, A::AbstractArray) = 1:length(A)
+
+function eachindex(A::AbstractArray, B::AbstractArray)
+    @_inline_meta
+    eachindex(linearindexing(A)*linearindexing(B), A, B)
+end
+eachindex(::LinearFast, A::AbstractArray, B::AbstractArray) = 1:max(length(A),length(B))
 
 isempty(a::AbstractArray) = (length(a) == 0)
 
@@ -431,7 +442,7 @@ getindex(t::AbstractArray, i::Real) = error("indexing not defined for ", typeof(
 # linear indexing with a single multi-dimensional index
 function getindex(A::AbstractArray, I::AbstractArray)
     x = similar(A, size(I))
-    for i=1:length(I)
+    for i in eachindex(I)
         x[i] = A[I[i]]
     end
     return x
@@ -856,7 +867,7 @@ function isequal(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i = 1:length(A)
+    for i in eachindex(A)
         if !isequal(A[i], B[i])
             return false
         end
@@ -880,7 +891,7 @@ function (==)(A::AbstractArray, B::AbstractArray)
     if isa(A,Range) != isa(B,Range)
         return false
     end
-    for i = 1:length(A)
+    for i in eachindex(A)
         if !(A[i]==B[i])
             return false
         end

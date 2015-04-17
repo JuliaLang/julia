@@ -241,7 +241,7 @@ end
 function frexp{T<:FloatingPoint}(A::Array{T})
     f = similar(A)
     e = Array(Int, size(A))
-    for i = 1:length(A)
+    for i in eachindex(A)
         f[i], e[i] = frexp(A[i])
     end
     return (f, e)

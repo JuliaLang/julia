@@ -204,7 +204,7 @@ function fill!{T<:Union(Integer,FloatingPoint)}(a::Array{T}, x)
         ccall(:memset, Ptr{Void}, (Ptr{Void}, Cint, Csize_t),
               a, 0, length(a)*sizeof(T))
     else
-        for i = 1:length(a)
+        for i in eachindex(a)
             @inbounds a[i] = xT
         end
     end
@@ -703,7 +703,7 @@ end
 ## Unary operators ##
 
 function conj!{T<:Number}(A::AbstractArray{T})
-    for i=1:length(A)
+    for i in eachindex(A)
         A[i] = conj(A[i])
     end
     return A
@@ -713,7 +713,7 @@ for f in (:-, :~, :conj, :sign)
     @eval begin
         function ($f)(A::StridedArray)
             F = similar(A)
-            for i=1:length(A)
+            for i in eachindex(A)
                 F[i] = ($f)(A[i])
             end
             return F
@@ -721,7 +721,7 @@ for f in (:-, :~, :conj, :sign)
     end
 end
 
-(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i=1:length(A) ], size(A))
+(-)(A::StridedArray{Bool}) = reshape([ -A[i] for i in eachindex(A) ], size(A))
 
 real(A::StridedArray) = reshape([ real(x) for x in A ], size(A))
 imag(A::StridedArray) = reshape([ imag(x) for x in A ], size(A))
@@ -730,7 +730,7 @@ imag{T<:Real}(x::StridedArray{T}) = zero(x)
 
 function !(A::StridedArray{Bool})
     F = similar(A)
-    for i=1:length(A)
+    for i in eachindex(A)
         F[i] = !A[i]
     end
     return F
@@ -789,7 +789,7 @@ for f in (:+, :-, :div, :mod, :&, :|, :$)
         end
         function ($f){S,T}(A::AbstractArray{S}, B::AbstractArray{T})
             F = similar(A, promote_type(S,T), promote_shape(size(A),size(B)))
-            for i=1:length(A)
+            for i in eachindex(A,B)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
             return F
@@ -800,14 +800,14 @@ for f in (:.+, :.-, :.*, :.%, :.<<, :.>>, :div, :mod, :rem, :&, :|, :$)
     @eval begin
         function ($f){T}(A::Number, B::AbstractArray{T})
             F = similar(B, promote_array_type(typeof(A),T))
-            for i=1:length(B)
+            for i in eachindex(B)
                 @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f){T}(A::AbstractArray{T}, B::Number)
             F = similar(A, promote_array_type(typeof(B),T))
-            for i=1:length(A)
+            for i in eachindex(A)
                 @inbounds F[i] = ($f)(A[i], B)
             end
             return F
@@ -830,14 +830,14 @@ for f in (:.+, :.-)
     @eval begin
         function ($f)(A::Bool, B::StridedArray{Bool})
             F = similar(B, Int, size(B))
-            for i=1:length(B)
+            for i in eachindex(B)
                 @inbounds F[i] = ($f)(A, B[i])
             end
             return F
         end
         function ($f)(A::StridedArray{Bool}, B::Bool)
             F = similar(A, Int, size(A))
-            for i=1:length(A)
+            for i in eachindex(A)
                 @inbounds F[i] = ($f)(A[i], B)
             end
             return F
@@ -848,7 +848,7 @@ for f in (:+, :-)
     @eval begin
         function ($f)(A::StridedArray{Bool}, B::StridedArray{Bool})
             F = similar(A, Int, promote_shape(size(A), size(B)))
-            for i=1:length(A)
+            for i in eachindex(A,B)
                 @inbounds F[i] = ($f)(A[i], B[i])
             end
             return F
@@ -861,7 +861,7 @@ end
 function complex{S<:Real,T<:Real}(A::Array{S}, B::Array{T})
     if size(A) != size(B); throw(DimensionMismatch()); end
     F = similar(A, typeof(complex(zero(S),zero(T))))
-    for i=1:length(A)
+    for i in eachindex(A)
         @inbounds F[i] = complex(A[i], B[i])
     end
     return F
@@ -869,7 +869,7 @@ end
 
 function complex{T<:Real}(A::Real, B::Array{T})
     F = similar(B, typeof(complex(A,zero(T))))
-    for i=1:length(B)
+    for i in eachindex(B)
         @inbounds F[i] = complex(A, B[i])
     end
     return F
@@ -877,7 +877,7 @@ end
 
 function complex{T<:Real}(A::Array{T}, B::Real)
     F = similar(A, typeof(complex(zero(T),B)))
-    for i=1:length(A)
+    for i in eachindex(A)
         @inbounds F[i] = complex(A[i], B)
     end
     return F
