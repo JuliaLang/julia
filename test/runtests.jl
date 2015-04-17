@@ -209,3 +209,11 @@ Compat.unsafe_convert(::Ptr{A}, x) = x
 
 # Test Ptr{T}(0)
 @test @compat(Ptr{Int}(0)) == C_NULL
+
+# Test Tuple{} syntax
+if VERSION < v"0.4.0-dev+4319"
+    @test @compat Tuple{1} == (1,)
+    @test @compat Tuple{:a, :b} == (:a, :b)
+    @test @compat Tuple{:a, Tuple{:b}} == (:a, (:b,))
+    @test @compat Tuple{:a, Tuple{:b, :c}} == (:a, (:b, :c))
+end
