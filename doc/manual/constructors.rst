@@ -550,8 +550,7 @@ Thus, although the :obj:`//` operator usually returns an instance of
 return an instance of ``Complex{Rational}`` instead. The interested
 reader should consider perusing the rest of
 `rational.jl <https://github.com/JuliaLang/julia/blob/master/base/rational.jl>`_:
-it is short, self-contained, and implements an entire basic Julia type
-in just a little over a hundred lines of code.
+it is short, self-contained, and implements an entire basic Julia type.
 
 Constructors, Call, and Conversion
 ----------------------------------
