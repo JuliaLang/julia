@@ -1053,6 +1053,12 @@ val, state = next(itr, state)
 @test r[val] == 8
 @test done(itr, state)
 
+R = CartesianRange((1,3))
+@test done(R, start(R)) == false
+R = CartesianRange((0,3))
+@test done(R, start(R)) == true
+R = CartesianRange((3,0))
+@test done(R, start(R)) == true
 
 #rotates
 

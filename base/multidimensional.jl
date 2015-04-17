@@ -160,7 +160,16 @@ end
 eltype{I}(::Type{CartesianRange{I}}) = I
 eltype{I}(::CartesianRange{I}) = I
 
-start(iter::CartesianRange) = iter.start
+stagedfunction start{I<:CartesianIndex}(iter::CartesianRange{I})
+    N = length(I)
+    cmp = [:(iter.start[$d] > iter.stop[$d]) for d = 1:N]
+    extest = Expr(:||, cmp...)
+    inc = [d < N ? :(iter.start[$d]) : :(iter.stop[$N]+1) for d = 1:N]
+    exstop = :(CartesianIndex{$N}($(inc...)))
+    quote
+        $extest ? $exstop : iter.start
+    end
+end
 stagedfunction next{I<:CartesianIndex}(iter::CartesianRange{I}, state)
     N = length(I)
     meta = Expr(:meta, :inline)
