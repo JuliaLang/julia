@@ -1888,7 +1888,7 @@ endif
 	echo 1 > $@
 $(LIBGIT2_OBJ_TARGET): $(LIBGIT2_OBJ_SOURCE) | $(build_shlibdir)
 	cp $< $@
-	#$(call make-install,libgit2-$(LIBGIT2_VER)/build,)
+	#$$(call make-install,libgit2-$(LIBGIT2_VER)/build,)
 ifeq ($(OS),Linux)
 	# If we're on linux, copy over libssl and libcrypto for libgit2
 	-LIBGIT_LIBS=$$(ldd "$@" | tail -n +2 | awk '{print $$(NF-1)}'); \
