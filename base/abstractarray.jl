@@ -106,12 +106,10 @@ abstract LinearIndexing
 immutable LinearFast <: LinearIndexing end
 immutable LinearSlow <: LinearIndexing end
 
-linearindexing(::AbstractArray) = LinearSlow()
-linearindexing(::Array) = LinearFast()
-linearindexing(::Range) = LinearFast()
-linearindexing{A<:AbstractArray}(::Type{A}) = LinearSlow()
-linearindexing{A<:Array}(::Type{A}) = LinearFast()
-linearindexing{A<:Range}(::Type{A}) = LinearFast()
+linearindexing(A::AbstractArray) = linearindexing(typeof(A))
+linearindexing{T<:AbstractArray}(::Type{T}) = LinearSlow()
+linearindexing{T<:Array}(::Type{T}) = LinearFast()
+linearindexing{T<:Range}(::Type{T}) = LinearFast()
 
 ## Bounds checking ##
 checkbounds(sz::Int, ::Colon) = nothing

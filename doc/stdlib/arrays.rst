@@ -59,6 +59,14 @@ Basic functions
     (iter.I_1,iter.I_2) = (2,3)
     A[iter] = 0.8090413606455655
 
+.. function:: Base.linearindexing(A)
+
+   ``linearindexing`` defines how an AbstractArray most efficiently accesses its elements.  If ``Base.linearindexing(A)`` returns ``Base.LinearFast()``, this means that linear indexing with only one index is an efficient operation.  If it instead returns ``Base.LinearSlow()`` (by default), this means that the array intrinsically accesses its elements with indices specified for every dimension.  Since converting a linear index to multiple indexing subscripts is typically very expensive, this provides a traits-based mechanism to enable efficient generic code for all array types.
+
+   An abstract array subtype ``MyArray`` that wishes to opt into fast linear indexing behaviors should define ``linearindexing`` in the type-domain::
+
+   Base.linearindexing{T<:MyArray}(::Type{T}) = Base.LinearFast()
+
 .. function:: countnz(A)
 
    Counts the number of nonzero values in array A (dense or sparse). Note that this is not a constant-time operation. For sparse matrices, one should usually use ``nnz``, which returns the number of stored values.
