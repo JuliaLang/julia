@@ -119,7 +119,7 @@ static inline int cache_match(jl_value_t **args, size_t n, jl_tupletype_t *sig,
             jl_datatype_t *ta = (jl_datatype_t*)jl_typeof(a);
             if (!jl_is_tuple_type(ta) || //!jl_subtype(a, decl, 1))
                 !jl_tuple_subtype(jl_svec_data(ta->parameters), jl_datatype_nfields(ta),
-                                  (jl_datatype_t*)decl, 1))
+                                  (jl_datatype_t*)decl, 0))
                 return 0;
         }
         else if (jl_is_type_type(decl) && jl_is_type(a)) {
