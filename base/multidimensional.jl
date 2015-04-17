@@ -8,7 +8,6 @@ import Base: @nref, @ncall, @nif, @nexprs, LinearFast, LinearSlow, to_index
 export CartesianIndex, CartesianRange
 
 # Traits for linear indexing
-linearindexing(::BitArray) = LinearFast()
 linearindexing{A<:BitArray}(::Type{A}) = LinearFast()
 
 # CartesianIndex
