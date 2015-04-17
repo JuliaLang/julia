@@ -5021,6 +5021,12 @@ Millisecond(v)
 
 "),
 
+("Base","readlink","readlink(path) -> AbstractString
+
+    Returns the value of a symbolic link \"path\".
+
+"),
+
 ("Base","chmod","chmod(path, mode)
 
    Change the permissions mode of \"path\" to \"mode\". Only integer
