@@ -526,7 +526,7 @@ end
 
 ## get (getindex with a default value) ##
 
-typealias RangeVecIntList{A<:AbstractVector{Int}} Union(Tuple{Union(Range, AbstractVector{Int}),...}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
+typealias RangeVecIntList{A<:AbstractVector{Int}} Union(Tuple{Vararg{Union(Range, AbstractVector{Int})}}, AbstractVector{UnitRange{Int}}, AbstractVector{Range{Int}}, AbstractVector{A})
 
 get(A::AbstractArray, i::Integer, default) = in_bounds(length(A), i) ? A[i] : default
 get(A::AbstractArray, I::Tuple{}, default) = similar(A, typeof(default), 0)
@@ -727,7 +727,7 @@ function hvcat(nbc::Integer, as...)
     hvcat(ntuple(nbr, i->nbc), as...)
 end
 
-function hvcat{T}(rows::Tuple{Int,...}, as::AbstractMatrix{T}...)
+function hvcat{T}(rows::Tuple{Vararg{Int}}, as::AbstractMatrix{T}...)
     nbr = length(rows)  # number of block rows
 
     nc = 0
@@ -770,9 +770,9 @@ function hvcat{T}(rows::Tuple{Int,...}, as::AbstractMatrix{T}...)
     out
 end
 
-hvcat(rows::Tuple{Int,...}) = []
+hvcat(rows::Tuple{Vararg{Int}}) = []
 
-function hvcat{T<:Number}(rows::Tuple{Int,...}, xs::T...)
+function hvcat{T<:Number}(rows::Tuple{Vararg{Int}}, xs::T...)
     nr = length(rows)
     nc = rows[1]
 
@@ -805,7 +805,7 @@ function hvcat_fill(a, xs)
     a
 end
 
-function typed_hvcat(T::Type, rows::Tuple{Int,...}, xs::Number...)
+function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, xs::Number...)
     nr = length(rows)
     nc = rows[1]
     for i = 2:nr
@@ -820,13 +820,13 @@ function typed_hvcat(T::Type, rows::Tuple{Int,...}, xs::Number...)
     hvcat_fill(Array(T, nr, nc), xs)
 end
 
-function hvcat(rows::Tuple{Int,...}, xs::Number...)
+function hvcat(rows::Tuple{Vararg{Int}}, xs::Number...)
     T = promote_typeof(xs...)
     typed_hvcat(T, rows, xs...)
 end
 
 # fallback definition of hvcat in terms of hcat and vcat
-function hvcat(rows::Tuple{Int,...}, as...)
+function hvcat(rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
     rs = cell(nbr)
     a = 1
@@ -837,7 +837,7 @@ function hvcat(rows::Tuple{Int,...}, as...)
     vcat(rs...)
 end
 
-function typed_hvcat(T::Type, rows::Tuple{Int,...}, as...)
+function typed_hvcat(T::Type, rows::Tuple{Vararg{Int}}, as...)
     nbr = length(rows)  # number of block rows
     rs = cell(nbr)
     a = 1
@@ -1021,7 +1021,7 @@ end
 sub2ind{T<:Integer}(dims, I::AbstractVector{T}...) =
     [ sub2ind(dims, map(X->X[i], I)...)::Int for i=1:length(I[1]) ]
 
-function ind2sub(dims::Tuple{Integer,Integer,...}, ind::Int)
+function ind2sub(dims::Tuple{Integer,Vararg{Integer}}, ind::Int)
     ndims = length(dims)
     stride = dims[1]
     for i=2:ndims-1
@@ -1038,7 +1038,7 @@ function ind2sub(dims::Tuple{Integer,Integer,...}, ind::Int)
     return tuple(ind, sub...)
 end
 
-ind2sub(dims::Tuple{Integer,...}, ind::Integer) = ind2sub(dims, Int(ind))
+ind2sub(dims::Tuple{Vararg{Integer}}, ind::Integer) = ind2sub(dims, Int(ind))
 ind2sub(dims::Tuple{}, ind::Integer) = ind==1 ? () : throw(BoundsError())
 ind2sub(dims::Tuple{Integer,}, ind::Int) = (ind,)
 ind2sub(dims::Tuple{Integer,Integer}, ind::Int) =
@@ -1048,7 +1048,7 @@ ind2sub(dims::Tuple{Integer,Integer,Integer}, ind::Int) =
      div(rem(ind-1,dims[1]*dims[2]*dims[3]), dims[1]*dims[2])+1)
 ind2sub(a::AbstractArray, ind::Integer) = ind2sub(size(a), Int(ind))
 
-function ind2sub{T<:Integer}(dims::Tuple{Integer,Integer,...}, ind::AbstractVector{T})
+function ind2sub{T<:Integer}(dims::Tuple{Integer,Vararg{Integer}}, ind::AbstractVector{T})
     n = length(dims)
     l = length(ind)
     t = ntuple(n, x->Array(Int, l))
@@ -1131,7 +1131,7 @@ end
 ## iteration utilities ##
 
 # slow, but useful
-function cartesianmap(body, t::Tuple{Int,...}, it...)
+function cartesianmap(body, t::Tuple{Vararg{Int}}, it...)
     idx = length(t)-length(it)
     if idx == 1
         for i = 1:t[1]

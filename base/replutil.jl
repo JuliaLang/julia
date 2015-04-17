@@ -170,7 +170,7 @@ function showerror(io::IO, ex::MethodError)
 end
 
 const UNSHOWN_METHODS = ObjectIdDict(
-    which(call, Tuple{Type, Any, ...}) => true
+    which(call, Tuple{Type, Vararg{Any}}) => true
 )
 function show_method_candidates(io::IO, ex::MethodError)
     # Displays the closest candidates of the given function by looping over the

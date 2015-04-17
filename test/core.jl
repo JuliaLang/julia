@@ -8,14 +8,14 @@ const Bottom = Union()
 @test Tuple{Int8,Int8} <: Tuple{Integer,Integer}
 @test !(AbstractArray{Float64,2} <: AbstractArray{Number,2})
 @test !(AbstractArray{Float64,1} <: AbstractArray{Float64,2})
-@test Tuple{Integer,Integer,...} <: Tuple{Integer,Real,...}
-@test Tuple{Integer,Float64,Integer,...} <: Tuple{Integer,Number,...}
-@test Tuple{Integer,Float64} <: Tuple{Integer,Number,...}
-@test Tuple{Int32,} <: Tuple{Number,...}
-@test Tuple{} <: Tuple{Number,...}
-@test !(Tuple{Int32,...} <: Tuple{Int32,})
-@test !(Tuple{Int32,...} <: Tuple{Number,Integer})
-@test !(Tuple{Integer,...} <: Tuple{Integer,Integer,Integer,...})
+@test Tuple{Integer,Vararg{Integer}} <: Tuple{Integer,Vararg{Real}}
+@test Tuple{Integer,Float64,Vararg{Integer}} <: Tuple{Integer,Vararg{Number}}
+@test Tuple{Integer,Float64} <: Tuple{Integer,Vararg{Number}}
+@test Tuple{Int32,} <: Tuple{Vararg{Number}}
+@test Tuple{} <: Tuple{Vararg{Number}}
+@test !(Tuple{Vararg{Int32}} <: Tuple{Int32,})
+@test !(Tuple{Vararg{Int32}} <: Tuple{Number,Integer})
+@test !(Tuple{Vararg{Integer}} <: Tuple{Integer,Integer,Vararg{Integer}})
 @test !(Array{Int8,1} <: Array{Any,1})
 @test !(Array{Any,1} <: Array{Int8,1})
 @test Array{Int8,1} <: Array{Int8,1}
@@ -66,8 +66,8 @@ let T = TypeVar(:T,true)
 
     @test typeintersect(Type{Array{T}}, Type{AbstractArray{T}}) === Bottom
 
-    @test typeintersect(Type{Tuple{Bool,Int,...}}, Type{Tuple{T,...}}) === Bottom
-    @test typeintersect(Type{Tuple{Bool,Int,...}}, Type{Tuple{T,T,...}}) === Bottom
+    @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{Vararg{T}}}) === Bottom
+    @test typeintersect(Type{Tuple{Bool,Vararg{Int}}}, Type{Tuple{T,Vararg{T}}}) === Bottom
 
     @test typeintersect(Tuple{Rational{T},T}, Tuple{Rational{Integer},Int}) === Tuple{Rational{Integer},Int}
 
@@ -76,17 +76,17 @@ let T = TypeVar(:T,true)
 end
 let N = TypeVar(:N,true)
     @test isequal(typeintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
-                                Tuple{Tuple{Integer,Integer}, Tuple{Integer,...}}),
+                                Tuple{Tuple{Integer,Integer}, Tuple{Vararg{Integer}}}),
                   Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
     @test isequal(typeintersect(Tuple{NTuple{N,Integer},NTuple{N,Integer}},
-                                Tuple{Tuple{Integer,...}, Tuple{Integer,Integer}}),
+                                Tuple{Tuple{Vararg{Integer}}, Tuple{Integer,Integer}}),
                   Tuple{Tuple{Integer,Integer}, Tuple{Integer,Integer}})
     local A = typeintersect(Tuple{NTuple{N,Any},Array{Int,N}},
-                            Tuple{Tuple{Int,Int,...},Array})
-    local B = Tuple{Tuple{Int,Int,...},Array{Int,N}}
+                            Tuple{Tuple{Int,Vararg{Int}},Array})
+    local B = Tuple{Tuple{Int,Vararg{Int}},Array{Int,N}}
     @test A<:B && B<:A
     @test isequal(typeintersect(Tuple{NTuple{N,Any},Array{Int,N}},
-                                Tuple{Tuple{Int,Int,...},Array{Int,2}}),
+                                Tuple{Tuple{Int,Vararg{Int}},Array{Int,2}}),
                   Tuple{Tuple{Int,Int}, Array{Int,2}})
 end
 @test is(Bottom, typeintersect(Type{Any},Type{Complex}))
@@ -102,9 +102,9 @@ end
 @test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Int)}))
 @test !is(Bottom, typeintersect(DataType, Type{TypeVar(:T,Integer)}))
 
-@test typeintersect(Tuple{Int,...}, Tuple{Bool,...}) === Tuple{}
-@test typeintersect(Type{Tuple{Int,...}}, Type{Tuple{Bool,...}}) === Bottom
-@test typeintersect(Tuple{Bool,Int,...}, Tuple{Bool,...}) === Tuple{Bool,}
+@test typeintersect(Tuple{Vararg{Int}}, Tuple{Vararg{Bool}}) === Tuple{}
+@test typeintersect(Type{Tuple{Vararg{Int}}}, Type{Tuple{Vararg{Bool}}}) === Bottom
+@test typeintersect(Tuple{Bool,Vararg{Int}}, Tuple{Vararg{Bool}}) === Tuple{Bool,}
 
 let T = TypeVar(:T,Union(Float32,Float64))
     @test typeintersect(AbstractArray, Matrix{T}) == Matrix{T}
@@ -131,8 +131,8 @@ end
 
 # issue #6561
 @test issubtype(Array{Tuple}, Array{NTuple})
-@test issubtype(Array{Tuple{Any,...}}, Array{NTuple})
-@test !issubtype(Array{Tuple{Int,...}}, Array{NTuple})
+@test issubtype(Array{Tuple{Vararg{Any}}}, Array{NTuple})
+@test !issubtype(Array{Tuple{Vararg{Int}}}, Array{NTuple})
 @test !issubtype(Array{Tuple{Int,Int}}, Array{NTuple})
 @test !issubtype(Type{Tuple{Void}}, Tuple{Type{Void}})
 
@@ -155,13 +155,13 @@ end
 @test typejoin(Tuple{Int,Int8},Tuple{Int8,Float64}) === Tuple{Signed,Real}
 @test Base.typeseq(typejoin(Tuple{ASCIIString,ASCIIString},Tuple{UTF8String,ASCIIString},
                             Tuple{ASCIIString,UTF8String},Tuple{Int,ASCIIString,Int}),
-                   Tuple{Any,AbstractString,Int,...})
-@test Base.typeseq(typejoin(Tuple{Int8,Int,...},Tuple{Int8,Int8}),
-                   Tuple{Int8,Signed,...})
-@test Base.typeseq(typejoin(Tuple{Int8,Int,...},Tuple{Int8,Int8,...}),
-                   Tuple{Int8,Signed,...})
-@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Int,...},Tuple{Int8,Int8,...}),
-                   Tuple{Int8,Integer,...})
+                   Tuple{Any,AbstractString,Vararg{Int}})
+@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Int8}),
+                   Tuple{Int8,Vararg{Signed}})
+@test Base.typeseq(typejoin(Tuple{Int8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
+                   Tuple{Int8,Vararg{Signed}})
+@test Base.typeseq(typejoin(Tuple{Int8,UInt8,Vararg{Int}},Tuple{Int8,Vararg{Int8}}),
+                   Tuple{Int8,Vararg{Integer}})
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int), Union(Int,AbstractString))
 @test Base.typeseq(typejoin(Union(Int,AbstractString),Int8), Any)
 
@@ -183,10 +183,10 @@ nttest1{n}(x::NTuple{n,Int}) = n
 @test nttest1(()) == 0
 @test nttest1((1,2)) == 2
 @test NTuple <: Tuple
-@test NTuple{TypeVar(:T),Int32} <: Tuple{Int32,...}
-@test !(NTuple{TypeVar(:T),Int32} <: Tuple{Int32,Int32,...})
-@test Tuple{Int32,...} <: NTuple{TypeVar(:T),Int32}
-@test Tuple{Int32,Int32,...} <: NTuple{TypeVar(:T),Int32}
+@test NTuple{TypeVar(:T),Int32} <: Tuple{Vararg{Int32}}
+@test !(NTuple{TypeVar(:T),Int32} <: Tuple{Int32,Vararg{Int32}})
+@test Tuple{Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
+@test Tuple{Int32,Vararg{Int32}} <: NTuple{TypeVar(:T),Int32}
 
 # type declarations
 
@@ -454,8 +454,8 @@ end
 # dispatch
 begin
     local foo, bar, baz
-    foo(x::Tuple{Any,...})=0
-    foo(x::Tuple{Integer,...})=1
+    foo(x::Tuple{Vararg{Any}})=0
+    foo(x::Tuple{Vararg{Integer}})=1
     @test foo((:a,))==0
     @test foo(( 2,))==1
 
@@ -1690,14 +1690,14 @@ f5577(::Type) = true
 
 # issue #6426
 f6426(x,args...) = f6426(x,map(a->(isa(a,Type) ? Type{a} : typeof(a)), args))
-f6426(x,t::Tuple{Type,...}) = string(t)
+f6426(x,t::Tuple{Vararg{Type}}) = string(t)
 @test f6426(1, (1.,2.)) == "(Tuple{Float64,Float64},)"
 
 # issue #6502
-f6502() = convert(Tuple{Int,...}, (10,))
+f6502() = convert(Tuple{Vararg{Int}}, (10,))
 @test f6502() === (10,)
-@test convert(Tuple{Bool,Int,...,}, (true,10)) === (true,10)
-@test convert(Tuple{Int,Bool,...}, (true,1,0)) === (1,true,false)
+@test convert(Tuple{Bool,Vararg{Int}}, (true,10)) === (true,10)
+@test convert(Tuple{Int,Vararg{Bool}}, (true,1,0)) === (1,true,false)
 
 # issue on the flight from DFW
 # (type inference deducing Type{:x} rather than Symbol)

@@ -775,7 +775,7 @@ function abstract_apply(af, fargs, aargtypes::Vector{Any}, vtypes, sv, e)
                 if is(aat.name, tn)
                     et = aat.parameters[1]
                     if !isa(et,TypeVar)
-                        return Tuple{et, ...}
+                        return Tuple{Vararg{et}}
                     end
                 end
                 if is(aat, Any)
@@ -3236,9 +3236,16 @@ function replace_getfield!(ast, e::ANY, tupname, vals, sv, i0)
     end
 end
 
-code_typed(f, types::ANY; optimize=true) =
+function code_typed(f, types::ANY; optimize=true)
+    if isa(types,Tuple)
+        types = Tuple{types...}
+    end
     code_typed(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...}, optimize=optimize)
+end
 function code_typed(f::Function, types::ANY; optimize=true)
+    if isa(types,Tuple)
+        types = Tuple{types...}
+    end
     asts = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])
@@ -3256,8 +3263,16 @@ function code_typed(f::Function, types::ANY; optimize=true)
     asts
 end
 
-return_types(f, types::ANY) = return_types(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...})
+function return_types(f, types::ANY)
+    if isa(types,Tuple)
+        types = Tuple{types...}
+    end
+    return_types(call, Tuple{isa(f,Type)?Type{f}:typeof(f), types.parameters...})
+end
 function return_types(f::Function, types::ANY)
+    if isa(types,Tuple)
+        types = Tuple{types...}
+    end
     rt = []
     for x in _methods(f,types,-1)
         linfo = func_for_method(x[3],types,x[2])

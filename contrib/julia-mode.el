@@ -209,7 +209,7 @@ This function provides equivalent functionality, but makes no efforts to optimis
      "Char" "ASCIIString" "UTF8String" "ByteString" "SubString"
      "Array" "DArray" "AbstractArray" "AbstractVector" "AbstractMatrix" "AbstractSparseMatrix" "SubArray" "StridedArray" "StridedVector" "StridedMatrix" "VecOrMat" "StridedVecOrMat" "DenseArray" "SparseMatrixCSC" "BitArray"
      "Range" "OrdinalRange" "StepRange" "UnitRange" "FloatRange"
-     "Tuple" "NTuple"
+     "Tuple" "NTuple" "Vararg"
      "DataType" "Symbol" "Function" "Vector" "Matrix" "Union" "Type" "Any" "Complex" "String" "Ptr" "Void" "Exception" "Task" "Signed" "Unsigned" "Associative" "Dict" "IO" "IOStream" "Rational" "Regex" "RegexMatch" "Set" "IntSet" "Expr" "WeakRef" "ObjectIdDict"
      "AbstractRNG" "MersenneTwister"
      )

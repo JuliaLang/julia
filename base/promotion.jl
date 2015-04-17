@@ -139,7 +139,7 @@ end
 function promote(x, y, zs...)
     (convert(promote_typeof(x,y,zs...), x),
      convert(promote_typeof(x,y,zs...), y),
-     convert(Tuple{promote_typeof(x,y,zs...),...}, zs)...)
+     convert(Tuple{Vararg{promote_typeof(x,y,zs...)}}, zs)...)
 end
 # TODO: promote{T}(x::T, ys::T...) here to catch all circularities?
 

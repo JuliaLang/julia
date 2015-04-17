@@ -92,11 +92,15 @@ function_name(f::Function) = isgeneric(f) ? f.env.name : (:anonymous)
 
 tt_cons(t::ANY, tup::ANY) = Tuple{t, tup.parameters...}
 
-code_lowered{T<:Tuple}(f::Function, t::Type{T}) = map(m->uncompressed_ast(m.func.code), methods(f,t))
+code_lowered(f::Function, t::ANY) = map(m->uncompressed_ast(m.func.code), methods(f,t))
 methods(f::Function,t::ANY) = Any[m[3] for m in _methods(f,t,-1)]
 methods(f::ANY,t::ANY) = methods(call, tt_cons(isa(f,Type) ? Type{f} : typeof(f), t))
 function _methods(f::ANY,t::ANY,lim)
-    _methods(f, Any[t.parameters...], length(t.parameters), lim, [])
+    if isa(t,Type)
+        _methods(f, Any[t.parameters...], length(t.parameters), lim, [])
+    else
+        _methods(f, Any[t...], length(t), lim, [])
+    end
 end
 function _methods(f::ANY,t::Array,i,lim::Integer,matching::Array{Any,1})
     if i == 0
@@ -130,7 +134,7 @@ function methods(f::Function)
     f.env
 end
 
-methods(x::ANY) = methods(call, Tuple{isa(x,Type) ? Type{x} : typeof(x), Any, ...})
+methods(x::ANY) = methods(call, Tuple{isa(x,Type) ? Type{x} : typeof(x), Vararg{Any}})
 
 function length(mt::MethodTable)
     n = 0
@@ -151,6 +155,8 @@ uncompressed_ast(l::LambdaStaticData) =
     isa(l.ast,Expr) ? l.ast : ccall(:jl_uncompress_ast, Any, (Any,Any), l, l.ast)
 
 # Printing code representations in IR and assembly
+_dump_function(f, t::Tuple{Vararg{Type}}, native, wrapper, strip_ir_metadata) =
+    _dump_function(f, Tuple{t...}, native, wrapper, strip_ir_metadata)
 function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
     llvmf = ccall(:jl_get_llvmf, Ptr{Void}, (Any, Any, Bool), f, t, wrapper)
 
@@ -168,15 +174,16 @@ function _dump_function(f, t::ANY, native, wrapper, strip_ir_metadata)
     return str
 end
 
-code_llvm(io::IO, f::Function, types::Type, strip_ir_metadata = true) =
+code_llvm(io::IO, f::Function, types::ANY, strip_ir_metadata = true) =
     print(io, _dump_function(f, types, false, false, strip_ir_metadata))
-code_llvm(f::Function, types::Type) = code_llvm(STDOUT, f, types)
-code_llvm_raw(f::Function, types::Type) = code_llvm(STDOUT, f, types, false)
+code_llvm(f::Function, types::ANY) = code_llvm(STDOUT, f, types)
+code_llvm_raw(f::Function, types::ANY) = code_llvm(STDOUT, f, types, false)
 
-code_native(io::IO, f::Function, types::Type) = print(io, _dump_function(f, types, true, false, false))
-code_native(f::Function, types::Type) = code_native(STDOUT, f, types)
+code_native(io::IO, f::Function, types::ANY) = print(io, _dump_function(f, types, true, false, false))
+code_native(f::Function, types::ANY) = code_native(STDOUT, f, types)
 
-function which(f::ANY, t::Type)
+which(f::ANY, t::Tuple{Vararg{Type}}) = which(f, Tuple{t...})
+function which(f::ANY, t::ANY)
     if isleaftype(t)
         ms = methods(f, t)
         isempty(ms) && error("no method found for the specified argument types")
@@ -206,7 +213,7 @@ function functionloc(m::Method)
     (find_source_file(string(lsd.file)), ln)
 end
 
-functionloc(f::ANY, types) = functionloc(which(f,types))
+functionloc(f::ANY, types::ANY) = functionloc(which(f,types))
 
 function functionloc(f)
     m = methods(f)
@@ -216,7 +223,7 @@ function functionloc(f)
     functionloc(m.defs)
 end
 
-function function_module(f, types)
+function function_module(f, types::ANY)
     m = methods(f, types)
     if isempty(m)
         error("no matching methods")

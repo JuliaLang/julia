@@ -448,15 +448,14 @@
            (pair? (caddr e)) (memq (car (caddr e)) '(quote inert))
            (symbol? (cadr (caddr e))))))
 
-;; convert (a (... b)) to (a b ...), optionally quoting the dots
-(define (va->dots arglist . quoted)
-  (if (length> arglist 0)
-      (let ((l (last arglist)))
-	(if (vararg? l)
-	    `(,@(butlast arglist) ,(cadr l) ,(if (or (null? quoted) (not (car quoted)))
-						 '... ''...))
-	    arglist))
-      arglist))
+;; convert final (... x) to (curly Vararg x)
+(define (dots->vararg a)
+  (if (null? a) a
+      (let ((head (butlast a))
+	    (las  (last a)))
+	(if (vararg? las)
+	    `(,@head (curly Vararg ,(cadr las)))
+	    `(,@head ,las)))))
 
 (define (method-def-expr- name sparams argl body isstaged)
   (receive
@@ -476,11 +475,11 @@
      (let* ((types (llist-types argl))
             (body  (method-lambda-expr argl body)))
        (if (null? sparams)
-           `(method ,name (call (top svec) (curly Tuple ,@(va->dots types)) (call (top svec)))
+           `(method ,name (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec)))
 		    ,body ,isstaged)
            `(method ,name
                     (call (lambda ,names
-                            (call (top svec) (curly Tuple ,@(va->dots types)) (call (top svec) ,@names)))
+                            (call (top svec) (curly Tuple ,@(dots->vararg types)) (call (top svec) ,@names)))
                           ,@(symbols->typevars names bounds #t))
                     ,body ,isstaged))))))
 
@@ -999,14 +998,6 @@
       ((pattern-lambda (|<:| (curly (-- name (-s)) . params) super)
                        (values name params super)) ex)
       (error "invalid type signature")))
-
-(define (dots->vararg a)
-  (if (null? a) a
-      (let ((head (butlast a))
-	    (las  (last a)))
-	(if (vararg? las)
-	    `(,@head (curly Vararg ,(cadr las)))
-	    `(,@head ,las)))))
 
 ;; insert calls to convert() in ccall, and pull out expressions that might
 ;; need to be rooted before conversion.
@@ -1761,13 +1752,7 @@
 
    'curly
    (lambda (e)
-     (expand-forms
-      (if (and (length> e 2) (eq? (last e) '...))
-	  (let ((e (butlast (cdr e))))
-	    (if (vararg? (last e))
-		(error "cannot combine splatting with \"...\" vararg type syntax"))
-	    `(call (top apply_type) ,@(butlast e) (curly Vararg ,(last e))))
-	  `(call (top apply_type) ,@(cdr e)))))
+     (expand-forms `(call (top apply_type) ,@(cdr e))))
 
    'call
    (lambda (e)

@@ -116,14 +116,14 @@ reverse(t::Tuple) = revargs(t...)
 
 # TODO: these definitions cannot yet be combined, since +(x...)
 # where x might be any tuple matches too many methods.
-sum(x::Tuple{Any, Any,...}) = +(x...)
+sum(x::Tuple{Any, Vararg{Any}}) = +(x...)
 
 # NOTE: should remove, but often used on array sizes
 prod(x::Tuple{}) = 1
-prod(x::Tuple{Any, Any,...}) = *(x...)
+prod(x::Tuple{Any, Vararg{Any}}) = *(x...)
 
 all(x::Tuple{}) = true
-all(x::Tuple{Any, Any,...}) = (&)(x...)
+all(x::Tuple{Any, Vararg{Any}}) = (&)(x...)
 
 any(x::Tuple{}) = false
-any(x::Tuple{Any, Any,...}) = |(x...)
+any(x::Tuple{Any, Vararg{Any}}) = |(x...)
