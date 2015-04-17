@@ -8,9 +8,9 @@ typealias DenseVector{T} DenseArray{T,1}
 typealias DenseMatrix{T} DenseArray{T,2}
 typealias DenseVecOrMat{T} Union(DenseVector{T}, DenseMatrix{T})
 
-typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{RangeIndex,...}} Union(DenseArray{T,N}, SubArray{T,N,A,I})
-typealias StridedVector{T,A<:DenseArray,I<:Tuple{RangeIndex,...}}  Union(DenseArray{T,1}, SubArray{T,1,A,I})
-typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{RangeIndex,...}}  Union(DenseArray{T,2}, SubArray{T,2,A,I})
+typealias StridedArray{T,N,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}} Union(DenseArray{T,N}, SubArray{T,N,A,I})
+typealias StridedVector{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union(DenseArray{T,1}, SubArray{T,1,A,I})
+typealias StridedMatrix{T,A<:DenseArray,I<:Tuple{Vararg{RangeIndex}}}  Union(DenseArray{T,2}, SubArray{T,2,A,I})
 typealias StridedVecOrMat{T} Union(StridedVector{T}, StridedMatrix{T})
 
 call{T}(::Type{Vector{T}}, m::Integer) = Array{T}(m)
@@ -215,7 +215,7 @@ fill(v, dims::Dims)       = fill!(Array(typeof(v), dims), v)
 fill(v, dims::Integer...) = fill!(Array(typeof(v), dims...), v)
 
 cell(dims::Integer...)   = Array(Any, dims...)
-cell(dims::Tuple{Integer,...}) = Array(Any, convert(Tuple{Int,...}, dims))
+cell(dims::Tuple{Vararg{Integer}}) = Array(Any, convert(Tuple{Vararg{Int}}, dims))
 
 for (fname, felt) in ((:zeros,:zero), (:ones,:one))
     @eval begin
@@ -1286,7 +1286,7 @@ function indcopy(sz::Dims, I::Vector)
     dst, src
 end
 
-function indcopy(sz::Dims, I::Tuple{RangeIndex,...})
+function indcopy(sz::Dims, I::Tuple{Vararg{RangeIndex}})
     n = length(I)
     s = sz[n]
     for i = n+1:length(sz)

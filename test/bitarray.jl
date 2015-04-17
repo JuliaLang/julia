@@ -67,7 +67,7 @@ for (sz,T) in allsizes
 
     @check_bit_operation length(b1) Int
     @check_bit_operation ndims(b1)  Int
-    @check_bit_operation size(b1)   Tuple{Int,...}
+    @check_bit_operation size(b1)   Tuple{Vararg{Int}}
 
     b2 = similar(b1)
     @check_bit_operation copy!(b2, b1) T

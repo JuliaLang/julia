@@ -27,6 +27,12 @@ New language features
 Language changes
 ----------------
 
+  * Tuple types are now written as `Tuple{A, B}` instead of as `(A, B)`.
+    Tuples of bits types are inlined into structs and arrays, like other
+    immutable types.
+    `...` now does splatting inside parentheses, instead of constructing a
+    vararg tuple type. ([#10380])
+
   * Significant improvements to `ccall` and `cfunction`
 
     * As a safer alternative to creating pointers (`Ptr`), the managed reference type
@@ -1344,6 +1350,7 @@ Too numerous to mention.
 [#10328]: https://github.com/JuliaLang/julia/issues/10328
 [#10332]: https://github.com/JuliaLang/julia/issues/10332
 [#10333]: https://github.com/JuliaLang/julia/issues/10333
+[#10380]: https://github.com/JuliaLang/julia/issues/10380
 [#10400]: https://github.com/JuliaLang/julia/issues/10400
 [#10446]: https://github.com/JuliaLang/julia/issues/10446
 [#10458]: https://github.com/JuliaLang/julia/issues/10458

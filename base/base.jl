@@ -39,7 +39,7 @@ convert{T}(::Type{T}, x::T) = x
 
 convert(::Type{Tuple{}}, ::Tuple{}) = ()
 convert(::Type{Tuple}, x::Tuple) = x
-convert{T}(::Type{Tuple{T,...}}, x::Tuple) = cnvt_all(T, x...)
+convert{T}(::Type{Tuple{Vararg{T}}}, x::Tuple) = cnvt_all(T, x...)
 cnvt_all(T) = ()
 cnvt_all(T, x, rest...) = tuple(convert(T,x), cnvt_all(T, rest...)...)
 
@@ -61,7 +61,7 @@ end
 argtail(x, rest...) = rest
 tail(x::Tuple) = argtail(x...)
 
-convert{T<:Tuple{Any,Any,...}}(::Type{T}, x::Tuple{Any, Any, ...}) =
+convert{T<:Tuple{Any,Vararg{Any}}}(::Type{T}, x::Tuple{Any, Vararg{Any}}) =
     tuple(convert(tuple_type_head(T),x[1]), convert(tuple_type_tail(T), tail(x))...)
 
 oftype(x,c) = convert(typeof(x),c)
@@ -264,7 +264,7 @@ end
 
 call{T,N}(::Type{Array{T}}, d::NTuple{N,Int}) =
     ccall(:jl_new_array, Array{T,N}, (Any,Any), Array{T,N}, d)
-call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert(Tuple{Int,...}, d))
+call{T}(::Type{Array{T}}, d::Integer...) = Array{T}(convert(Tuple{Vararg{Int}}, d))
 
 call{T}(::Type{Array{T}}, m::Integer) =
     ccall(:jl_alloc_array_1d, Array{T,1}, (Any,Int), Array{T,1}, m)
@@ -275,7 +275,7 @@ call{T}(::Type{Array{T}}, m::Integer, n::Integer, o::Integer) =
 
 # TODO: possibly turn these into deprecations
 Array{T,N}(::Type{T}, d::NTuple{N,Int}) = Array{T}(d)
-Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert(Tuple{Int,...}, d))
+Array{T}(::Type{T}, d::Integer...)      = Array{T}(convert(Tuple{Vararg{Int}}, d))
 Array{T}(::Type{T}, m::Integer)                       = Array{T}(m)
 Array{T}(::Type{T}, m::Integer,n::Integer)            = Array{T}(m,n)
 Array{T}(::Type{T}, m::Integer,n::Integer,o::Integer) = Array{T}(m,n,o)

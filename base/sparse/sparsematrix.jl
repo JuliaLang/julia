@@ -2328,7 +2328,7 @@ function hcat(X::SparseMatrixCSC...)
     SparseMatrixCSC(m, n, colptr, rowval, nzval)
 end
 
-function hvcat(rows::Tuple{Int,...}, X::SparseMatrixCSC...)
+function hvcat(rows::Tuple{Vararg{Int}}, X::SparseMatrixCSC...)
     nbr = length(rows)  # number of block rows
 
     tmp_rows = Array(SparseMatrixCSC, nbr)
