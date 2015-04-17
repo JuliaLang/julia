@@ -188,10 +188,9 @@ function search(s::AbstractString, c::Chars, i::Integer)
         return 1 <= i <= nextind(s,endof(s)) ? i :
                throw(BoundsError(s, i))
     end
-    if i < 1
+    if i < 1 || i > nextind(s,endof(s))
         throw(BoundsError(s, i))
     end
-    i = nextind(s,i-1)
     while !done(s,i)
         d, j = next(s,i)
         if d in c
@@ -655,7 +654,7 @@ prevind(s::SubString, i::Integer) = prevind(s.string, i+s.offset)-s.offset
 
 convert{T<:AbstractString}(::Type{SubString{T}}, s::T) = SubString(s, 1, endof(s))
 
-bytestring{T <: ByteString}(p::SubString{T}) = bytestring(pointer(p.string.data)+p.offset, nextind(p, p.endof)-1)
+bytestring{T <: ByteString}(p::SubString{T}) = bytestring(p.string.data[1+p.offset:p.offset+nextind(p, p.endof)-1])
 
 function getindex(s::AbstractString, r::UnitRange{Int})
     if first(r) < 1 || endof(s) < last(r)
