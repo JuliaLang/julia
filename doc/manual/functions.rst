@@ -304,6 +304,8 @@ You can also return multiple values via an explicit usage of the
 
 This has the exact same effect as the previous definition of ``foo``.
 
+.. _man-varargs-functions:
+
 Varargs Functions
 -----------------
 
