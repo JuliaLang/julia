@@ -53,7 +53,7 @@ their own licenses:
 - [OPENSPECFUN](https://github.com/JuliaLang/openspecfun) [MIT, public domain]
 - [FADDEEVA](http://ab-initio.mit.edu/Faddeeva) [MIT]
 - [FFTW](http://fftw.org/doc/License-and-Copyright.html) [GPL2+]
-- [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+, GPL2+]
+- [GMP](http://gmplib.org/manual/Copying.html#Copying) [LGPL3+ or GPL2+]
 - [LIBGIT2](https://github.com/libgit2/libgit2/blob/development/COPYING) [GPL2+ with unlimited linking exception]
 - [MPFR](http://www.mpfr.org/mpfr-current/mpfr.html#Copying) [LGPL3+]
 - [OPENBLAS](https://raw.github.com/xianyi/OpenBLAS/master/LICENSE) [BSD-3]
