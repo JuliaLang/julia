@@ -272,7 +272,7 @@ However, not all object fields are references. Julia considers some
 types to be "plain data", meaning all of their data is self-contained
 and does not reference other objects. The plain data types consist of bits
 types (e.g. ``Int``) and immutable structs of other plain data types.
-The initial contents of a plain data type is undefined::
+The initial contents of a plain data type are undefined::
 
     julia> type HasPlain
              n::Int
