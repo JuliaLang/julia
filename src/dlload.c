@@ -63,14 +63,10 @@ DLLEXPORT int jl_uv_dlopen(const char *filename, jl_uv_libhandle lib_, unsigned 
 #endif
                          );
     if (lib->handle) {
-        if (lib->errmsg)
-            free(lib->errmsg);
         lib->errmsg = NULL;
         return 0;
     }
     else {
-        if (lib->errmsg)
-            free(lib->errmsg);
         lib->errmsg = strdup(dlerror());
         return -1;
     }
@@ -124,6 +120,10 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
                         snprintf(path, PATHBUF, "%s%s%s", dl_path, modname, ext);
                     else
                         snprintf(path, PATHBUF, "%s" PATHSEPSTRING "%s%s", dl_path, modname, ext);
+                    if (handle->errmsg) {
+                        free(handle->errmsg);
+                        handle->errmsg = NULL;
+                    }
                     error = jl_uv_dlopen(path, handle, flags);
                     if (!error) goto done;
                 }
@@ -136,6 +136,10 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
         handle->handle = NULL;
         /* try loading from standard library path */
         snprintf(path, PATHBUF, "%s%s", modname, ext);
+        if (handle->errmsg) {
+            free(handle->errmsg);
+            handle->errmsg = NULL;
+        }
         error = jl_uv_dlopen(path, handle, flags);
         if (!error) goto done;
     }
@@ -143,6 +147,10 @@ static uv_lib_t *jl_load_dynamic_library_(const char *modname, unsigned flags, i
 #if defined(__linux__) || defined(__FreeBSD__)
     {
         const char *soname = jl_lookup_soname(modname, strlen(modname));
+        if (handle->errmsg) {
+            free(handle->errmsg);
+            handle->errmsg = NULL;
+        }
         error = (soname==NULL) || jl_uv_dlopen(soname, handle, flags);
         if (!error) goto done;
     }
