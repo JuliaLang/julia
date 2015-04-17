@@ -2020,7 +2020,10 @@
            (begin
              (if (not (and (pair? argtypes)
                            (eq? (car argtypes) 'tuple)))
-                 (error "ccall argument types must be a tuple; try \"(T,)\""))
+	       (if (and (pair? RT)
+			(eq? (car RT) 'tuple))
+                 (error "ccall argument types must be a tuple; try \"(T,)\" and check if you specified a correct return type")
+                 (error "ccall argument types must be a tuple; try \"(T,)\"")))
              (expand-forms
               (lower-ccall name RT (cdr argtypes) args))))
          e))
