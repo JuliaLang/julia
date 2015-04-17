@@ -425,7 +425,7 @@ by ``1`` input vector::
 
     julia> fmt(f) = println(rpad(string(f)*": ", 14, ' '), @elapsed f(x))
 
-    julia> map(fmt, {copy_cols, copy_rows, copy_col_row, copy_row_col});
+    julia> map(fmt, Any[copy_cols, copy_rows, copy_col_row, copy_row_col]);
     copy_cols:    0.331706323
     copy_rows:    1.799009911
     copy_col_row: 0.415630047
@@ -753,7 +753,7 @@ example::
       x::Float64
       y::UNION(INT64,FLOAT64)
       _var0::Float64
-      _var3::(Int64,)
+      _var3::Tuple{Int64}
       _var4::UNION(INT64,FLOAT64)
       _var1::Float64
       _var2::Float64

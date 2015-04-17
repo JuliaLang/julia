@@ -288,8 +288,8 @@ Syntax / Keyword                Example                         Description
 ``type ...; end``               ``nothing``                     "Singleton" :: a Leaf Type or Immutable with no fields.
 
 ``(...)`` or ``tuple(...)```    ``(1,2,3)``                     "Tuple" :: an immutable data-structure similar to an
-                                                                anonymous immutable type, or a constant array. Its
-                                                                storage semantics are TBD.
+                                                                anonymous immutable type, or a constant array.
+                                                                Represented as either an array or a struct.
 
 ``typealias``                   Not applicable here             Type aliases, and other similar mechanisms of
                                                                 doing type indirection, are resolved to their base
