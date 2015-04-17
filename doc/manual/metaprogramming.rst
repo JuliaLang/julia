@@ -906,7 +906,7 @@ function ``foo`` as
 
     julia> stagedfunction foo(x)
                println(x)
-               :(x*x)
+               return :(x*x)
            end
     foo (generic function with 1 method)
 
@@ -950,15 +950,17 @@ is re-used as the method body.
 
 The reason for the disclaimer above is that the number of times a staged
 function is staged is really an implementation detail; it *might* be only
-once, but it *might* also be more often. As a consequence, you should 
+once, but it *might* also be more often. As a consequence, you should
 *never* write a staged function with side effects - when, and how often,
-the side effects occur is undefined.
+the side effects occur is undefined. (This is true for macros too - and just
+like for macros, the use of `eval` in a staged function is a sign that
+you're doing something the wrong way.)
 
 The example staged function ``foo`` above did not do anything a normal
 function ``foo(x)=x*x`` could not do, except printing the the type on the
-first invocation. However, the power of a staged function lies in its
-ability to compute different quoted expression depending on the types
-passed to it:
+first invocation and incurring a higher compile-time cost. However, the
+power of a staged function lies in its ability to compute different quoted
+expression depending on the types passed to it:
 
 .. doctest::
 
@@ -988,16 +990,27 @@ We can, of course, abuse this to produce some interesting behavior::
 
 Since the body of the staged function is non-deterministic, its behavior
 is undefined; the expression returned on the *first* invocation will be
-used for *all* subsequent invocations with the same type. When we call
-the staged function with ``x`` of a new type, ``rand()`` will be called
-again to see which method body to use for the new type. In this case, for
-one *type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
-In short: don't do this.
+used for *all* subsequent invocations with the same type (again, with the
+exception covered by the disclaimer above). When we call the staged
+function with ``x`` of a new type, ``rand()`` will be called again to
+see which method body to use for the new type. In this case, for one
+*type* out of ten, ``baz(x)`` will return the string ``"boo!"``.
 
-While these examples are perhaps not so interesting, they have hopefully
-helped to illustrate how staged functions work, both in the definition end
-and at the call site. Next, let's build some more advanced functionality
-using staged functions...
+*Don't copy these examples!*
+
+These examples are hopefully helpful to illustrate how staged functions
+work, both in the definition end and at the call site; however, *don't
+copy them*, for the following reasons:
+
+* the `foo` function has side-effects, and it is undefined exactly when,
+  how often or how many times these side-effects will occur
+* the `bar` function solves a problem that is better solved with multiple
+  dispatch - defining `bar(x) = x` and `bar(x::Integer) = x^2` will do
+  the same thing, but it is both simpler and faster.
+* the `baz` function is pathologically insane
+
+Instead, now that we have a better understanding for how staged functions
+work, let's use them to build some more advanced functionality...
 
 An advanced example
 ~~~~~~~~~~~~~~~~~~~
@@ -1013,17 +1026,17 @@ possible implementation is the following::
         for i = N-1:-1:1
             ind = I[i]-1 + dims[i]*ind
         end
-        ind + 1
+        return ind + 1
     end
 
 The same thing can be done using recursion::
 
     sub2ind_rec(dims::()) = 1
     sub2ind_rec(dims::(),i1::Integer, I::Integer...) =
-        i1==1 ? sub2ind(dims,I...) : throw(BoundsError())
+        i1==1 ? sub2ind_rec(dims,I...) : throw(BoundsError())
     sub2ind_rec(dims::(Integer,Integer...), i1::Integer) = i1
     sub2ind_rec(dims::(Integer,Integer...), i1::Integer, I::Integer...) =
-        i1 + dims[1]*(sub2ind(tail(dims),I...)-1)
+        i1 + dims[1]*(sub2ind_rec(tail(dims),I...)-1)
 
 Both these implementations, although different, do essentially the same
 thing: a runtime loop over the dimensions of the array, collecting the
@@ -1031,7 +1044,8 @@ offset in each dimension into the final index.
 
 However, all the information we need for the loop is embedded in the type
 information of the arguments. Thus, we can utilize staged functions to
-move the iteration to compile-time. The body becomes almost identical,
+move the iteration to compile-time; in compiler parlance, we use staged
+functions to manually unroll the loop. The body becomes almost identical,
 but instead of calculating the linear index, we build up an *expression*
 that calculates the index::
 
@@ -1040,7 +1054,7 @@ that calculates the index::
         for i = N-1:-1:1
             ex = :(I[$i] - 1 + dims[$i]*$ex)
         end
-        :($ex + 1)
+        return :($ex + 1)
     end
 
 **What code will this staged function generate?**
@@ -1055,20 +1069,20 @@ function::
     function sub2ind_staged_impl{N}(dims::NTuple{N}, I...)
         ex = :(I[$N] - 1)
         for i = N-1:-1:1
-            ex = :(I[$i] - 1 + dims[$i]*ex)
+            ex = :(I[$i] - 1 + dims[$i]*$ex)
         end
-        :($ex + 1)
+        return :($ex + 1)
     end
 
 We can now execute ``sub2ind_staged_impl`` and examine the expression it
 returns::
 
     julia> sub2ind_staged_impl((Int,Int), Int, Int)
-    :(((I[1] - 1) + dims[1] * ex) + 1)    
+    :(((I[1] - 1) + dims[1] * ex) + 1)
 
 So, the method body that will be used here doesn't include a loop at all
 - just indexing into the two tuples, multiplication and addition/subtraction.
 All the looping is performed compile-time, and we avoid looping during execution
-entirely. Thus, we only loop *once per type*, in this case once per ``N`` 
+entirely. Thus, we only loop *once per type*, in this case once per ``N``
 (except in edge cases where the function is staged more than once - see
 disclaimer above).
