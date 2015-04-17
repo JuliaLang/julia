@@ -2766,3 +2766,7 @@ immutable Array_512_Uint8
     d512::Uint8
 end
 gc()
+
+# issue #10867
+@test collect(enumerate((Tuple,Int))) == [(1,Tuple), (2,Int)]
+@test collect(enumerate((Tuple,3))) == [(1,Tuple), (2,3)]
