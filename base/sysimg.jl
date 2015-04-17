@@ -261,9 +261,11 @@ include("sparse.jl")
 importall .SparseMatrix
 
 # signal processing
-include("fftw.jl")
-include("dsp.jl")
-importall .DSP
+if USE_GPL_LIBS
+    include("fftw.jl")
+    include("dsp.jl")
+    importall .DSP
+end
 
 # system information
 include("sysinfo.jl")
