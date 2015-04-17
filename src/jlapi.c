@@ -66,13 +66,13 @@ DLLEXPORT void *jl_eval_string(const char *str)
 
 DLLEXPORT jl_value_t *jl_exception_occurred(void)
 {
-    return jl_is_null(jl_exception_in_transit) ? NULL :
+    return jl_exception_in_transit == jl_nothing ? NULL :
         jl_exception_in_transit;
 }
 
 DLLEXPORT void jl_exception_clear(void)
 {
-    jl_exception_in_transit = (jl_value_t*)jl_null;
+    jl_exception_in_transit = jl_nothing;
 }
 
 // get the name of a type as a string

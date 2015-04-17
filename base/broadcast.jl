@@ -13,9 +13,9 @@ export broadcast_getindex, broadcast_setindex!
 
 droparg1(a, args...) = args
 
-longer_tuple(x::(), retx::Tuple, y::(), rety::Tuple) = retx
-longer_tuple(x::(), retx::Tuple, y::Tuple, rety::Tuple) = rety
-longer_tuple(x::Tuple, retx::Tuple, y::(), rety::Tuple) = retx
+longer_tuple(x::Tuple{}, retx::Tuple, y::Tuple{}, rety::Tuple) = retx
+longer_tuple(x::Tuple{}, retx::Tuple, y::Tuple, rety::Tuple) = rety
+longer_tuple(x::Tuple, retx::Tuple, y::Tuple{}, rety::Tuple) = retx
 longer_tuple(x::Tuple, retx::Tuple, y::Tuple, rety::Tuple) =
     longer_tuple(droparg1(x...), retx, droparg1(y...), rety)
 longer_tuple(x::Tuple, y::Tuple) = longer_tuple(x, x, y, y)

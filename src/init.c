@@ -1301,8 +1301,7 @@ void jl_get_builtin_hooks(void)
     jl_weakref_type = (jl_datatype_t*)core("WeakRef");
 
     jl_array_uint8_type = jl_apply_type((jl_value_t*)jl_array_type,
-                                        jl_tuple2(jl_uint8_type,
-                                                  jl_box_long(1)));
+                                        jl_svec2(jl_uint8_type, jl_box_long(1)));
 }
 
 DLLEXPORT void jl_get_system_hooks(void)

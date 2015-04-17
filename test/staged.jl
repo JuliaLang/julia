@@ -70,11 +70,12 @@ stagedfunction mygetindex(S::SubArray, indexes::Real...)
     if N != length(indexes)
         error("Wrong number of indexes supplied")
     end
-    NP = length(I)
+    Ip = I.parameters
+    NP = length(Ip)
     indexexprs = Array(Expr, NP)
     j = 1
     for i = 1:NP
-        if I[i] == Int
+        if Ip[i] == Int
             indexexprs[i] = :(S.indexes[$i])
         else
             indexexprs[i] = :(S.indexes[$i][indexes[$j]])

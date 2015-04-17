@@ -67,7 +67,7 @@ for (sz,T) in allsizes
 
     @check_bit_operation length(b1) Int
     @check_bit_operation ndims(b1)  Int
-    @check_bit_operation size(b1)   (Int...)
+    @check_bit_operation size(b1)   Tuple{Int,...}
 
     b2 = similar(b1)
     @check_bit_operation copy!(b2, b1) T
@@ -838,7 +838,7 @@ for i = 3:v1-1
 end
 
 b1 = bitrand(n1, n2)
-@check_bit_operation findnz(b1) (Vector{Int}, Vector{Int}, BitArray)
+@check_bit_operation findnz(b1) Tuple{Vector{Int}, Vector{Int}, BitArray}
 
 timesofar("nnz&find")
 

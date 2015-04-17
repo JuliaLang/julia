@@ -468,7 +468,7 @@ function del_client(pg, id, client)
     nothing
 end
 
-function del_clients(pairs::(Any,Any)...)
+function del_clients(pairs::Tuple{Any,Any}...)
     for p in pairs
         del_client(p[1], p[2])
     end
@@ -504,7 +504,7 @@ function add_client(id, client)
     nothing
 end
 
-function add_clients(pairs::(Any,Any)...)
+function add_clients(pairs::Tuple{Any,Any}...)
     for p in pairs
         add_client(p[1], p[2])
     end

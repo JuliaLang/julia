@@ -192,18 +192,18 @@ globalRNG() = GLOBAL_RNG
 
 @inline rand() = rand(GLOBAL_RNG, CloseOpen)
 @inline rand(T::Type) = rand(GLOBAL_RNG, T)
-rand(::()) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
+rand(::Tuple{}) = rand(GLOBAL_RNG, ()) # needed to resolve ambiguity
 rand(dims::Dims) = rand(GLOBAL_RNG, dims)
-rand(dims::Integer...) = rand(convert((Int...), dims))
+rand(dims::Integer...) = rand(convert(Tuple{Int,...}, dims))
 rand(T::Type, dims::Dims) = rand(GLOBAL_RNG, T, dims)
-rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert((Int...), dims)...))
+rand(T::Type, d1::Integer, dims::Integer...) = rand(T, tuple(Int(d1), convert(Tuple{Int,...}, dims)...))
 rand!(A::AbstractArray) = rand!(GLOBAL_RNG, A)
 
 rand(r::AbstractArray) = rand(GLOBAL_RNG, r)
 rand!(A::AbstractArray, r::AbstractArray) = rand!(GLOBAL_RNG, A, r)
 
 rand(r::AbstractArray, dims::Dims) = rand(GLOBAL_RNG, r, dims)
-rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert((Int...), dims))
+rand(r::AbstractArray, dims::Integer...) = rand(GLOBAL_RNG, r, convert(Tuple{Int,...}, dims))
 
 ## random floating point values
 
@@ -255,10 +255,10 @@ rand{T<:Real}(r::AbstractRNG, ::Type{Complex{T}}) = complex(rand(r, T), rand(r, 
 ## Arrays of random numbers
 
 rand(r::AbstractRNG, dims::Dims) = rand(r, Float64, dims)
-rand(r::AbstractRNG, dims::Integer...) = rand(r, convert((Int...), dims))
+rand(r::AbstractRNG, dims::Integer...) = rand(r, convert(Tuple{Int,...}, dims))
 
 rand(r::AbstractRNG, T::Type, dims::Dims) = rand!(r, Array(T, dims))
-rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert((Int...), dims)...))
+rand(r::AbstractRNG, T::Type, d1::Integer, dims::Integer...) = rand(r, T, tuple(Int(d1), convert(Tuple{Int,...}, dims)...))
 # note: the above method would trigger an ambiguity warning if d1 was not separated out:
 # rand(r, ()) would match both this method and rand(r, dims::Dims)
 # moreover, a call like rand(r, NotImplementedType()) would be an infinite loop

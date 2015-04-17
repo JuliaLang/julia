@@ -131,14 +131,14 @@ end
 
 @windows_only begin
 start(hash::EnvHash) = (pos = ccall(:GetEnvironmentStringsW,stdcall,Ptr{UInt16},()); (pos,pos))
-function done(hash::EnvHash, block::(Ptr{UInt16},Ptr{UInt16}))
+function done(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     if unsafe_load(block[1])==0
         ccall(:FreeEnvironmentStringsW,stdcall,Int32,(Ptr{UInt16},),block[2])
         return true
     end
     false
 end
-function next(hash::EnvHash, block::(Ptr{UInt16},Ptr{UInt16}))
+function next(hash::EnvHash, block::Tuple{Ptr{UInt16},Ptr{UInt16}})
     pos = block[1]
     blk = block[2]
     len = ccall(:wcslen, UInt, (Ptr{UInt16},), pos)+1
