@@ -591,10 +591,14 @@ static Type *julia_struct_to_llvm(jl_value_t *jt)
             else {
                 if (isvector && lasttype != T_int1 && lasttype != T_void) {
                     // TODO: currently we get LLVM assertion failures for other vector sizes
+                    // TODO: DataTypes do not yet support vector alignment requirements,
+                    //       so only use array ABI for tuples for now.
+                    /*
                     bool validVectorSize = ntypes <= 6 || (ntypes&1)==0;
                     if (lasttype->isSingleValueType() && !lasttype->isVectorTy() && validVectorSize)
                         jst->struct_decl = VectorType::get(lasttype,ntypes);
                     else
+                    */
                         jst->struct_decl = ArrayType::get(lasttype,ntypes);
                 }
                 else {
@@ -1155,7 +1159,7 @@ static Value *emit_getfield_unknownidx(Value *strct, Value *idx, jl_datatype_t *
             jl_value_t *jt = jl_field_type(stt, 0);
             idx = emit_bounds_check(strct, NULL, idx, ConstantInt::get(T_size, nfields), ctx);
             Value *ptr = data_pointer(strct);
-            return typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut, 1);
+            return typed_load(ptr, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
         }
         else {
             idx = builder.CreateSub(idx, ConstantInt::get(T_size, 1));
@@ -1186,7 +1190,7 @@ static Value *emit_getfield_unknownidx(Value *strct, Value *idx, jl_datatype_t *
             }
             // TODO: pass correct thing to emit_bounds_check ?
             idx = emit_bounds_check(tempSpace, (jl_value_t*)stt, idx, ConstantInt::get(T_size, nfields), ctx);
-            fld = typed_load(tempSpace, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut, 1);
+            fld = typed_load(tempSpace, idx, jt, ctx, stt->mutabl ? tbaa_user : tbaa_immut);
             builder.CreateCall(Intrinsic::getDeclaration(jl_Module,Intrinsic::stackrestore),
                                stacksave);
         }
@@ -1215,7 +1219,7 @@ static Value *emit_getfield_knownidx(Value *strct, unsigned idx, jl_datatype_t *
             return fldv;
         }
         else {
-            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa, 1);
+            return typed_load(addr, ConstantInt::get(T_size, 0), jfty, ctx, tbaa);
         }
     }
     else {
@@ -1429,7 +1433,7 @@ static Value *init_bits_value(Value *newv, Value *jt, Type *t, Value *v)
 {
     builder.CreateStore(jt, builder.CreateBitCast(emit_typeptr_addr(newv), jl_ppvalue_llvmt));
     // TODO: stricter alignment if possible
-    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)), 1);
+    builder.CreateAlignedStore(v, builder.CreateBitCast(data_pointer(newv), PointerType::get(t,0)), sizeof(void*));
     return newv;
 }
 
@@ -1708,7 +1712,7 @@ static Value *emit_setfield(jl_datatype_t *sty, Value *strct, size_t idx0,
             if (wb) emit_checked_write_barrier(ctx, strct, rhs);
         }
         else {
-            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx, sty->mutabl ? tbaa_user : tbaa_immut, strct, 1);
+            typed_store(addr, ConstantInt::get(T_size, 0), rhs, jfty, ctx, sty->mutabl ? tbaa_user : tbaa_immut, strct);
         }
     }
     else {

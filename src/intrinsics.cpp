@@ -296,7 +296,7 @@ static Value *emit_unbox(Type *to, Value *x, jl_value_t *jt)
         return UndefValue::get(to);
     }
     // TODO: stricter alignment if possible
-    return builder.CreateAlignedLoad(builder.CreateBitCast(p, to->getPointerTo()), 1, false);
+    return builder.CreateAlignedLoad(builder.CreateBitCast(p, to->getPointerTo()), sizeof(void*), false);
 }
 
 // unbox trying to determine type automatically
