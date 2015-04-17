@@ -110,6 +110,23 @@ static uv_lib_t *get_library(char *lib)
     return hnd;
 }
 
+extern "C"
+void jl_ccall_cleanup(void)
+{
+    for (std::map<std::string, uv_lib_t*>::iterator it = libMap.begin(); it != libMap.end(); ++it) {
+        uv_lib_t *hnd = it->second;
+        // NOTE: Calling dlclose on a library that uses openmp can lead to a
+        // segfault (see discussion at
+        // https://github.com/JuliaLang/julia/issues/10938), which we want to
+        // avoid.  So we set hnd->handle to NULL and then call uv_dlclose.
+        // This cleans up hnd->errmsg without actually calling dlclose.
+        hnd->handle = NULL;
+        uv_dlclose(hnd);
+        free(hnd);
+    }
+    libMap.clear();
+}
+
 extern "C" DLLEXPORT
 void *jl_load_and_lookup(char *f_lib, char *f_name, uv_lib_t **hnd)
 {
